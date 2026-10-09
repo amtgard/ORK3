@@ -131,6 +131,31 @@ class Model_Court extends Model
         return $this->_court()->reorderAwards($court_id, $order);
     }
 
+    public function get_court_notes($court_id)
+    {
+        return $this->_court()->getCourtNotes($court_id);
+    }
+
+    public function add_note($court_id, $title, $details, $position, $created_by)
+    {
+        return $this->_court()->addNote($court_id, $title, $details, $position, $created_by);
+    }
+
+    public function update_note($court_note_id, $title, $details)
+    {
+        return $this->_court()->updateNote($court_note_id, $title, $details);
+    }
+
+    public function remove_note($court_note_id)
+    {
+        return $this->_court()->removeNote($court_note_id);
+    }
+
+    public function get_court_note_court_id($court_note_id)
+    {
+        return $this->_court()->getCourtNoteCourtId($court_note_id);
+    }
+
     public function get_court_award_court_id($court_award_id)
     {
         return $this->_court()->getCourtAwardCourtId($court_award_id);

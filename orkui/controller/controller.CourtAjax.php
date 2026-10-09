@@ -516,8 +516,87 @@ class Controller_CourtAjax extends Controller
     }
 
     // -----------------------------------------------------------------------
+    // Court notes — non-award line items on the running order (announcements,
+    // officer changeover). They share the order with awards but are never part
+    // of the grant pipeline. All three writes are refused on a completed court,
+    // like every other edit to its running order.
+    // -----------------------------------------------------------------------
+    private function requireNoteAuth()
+    {
+        $court_note_id = (int)($_POST['CourtNoteId'] ?? 0);
+        $court_id      = valid_id($court_note_id) ? $this->Court->get_court_note_court_id($court_note_id) : 0;
+        if (!$court_id) {
+            $this->jsonOut(['status' => 1, 'error' => 'Note not found.']);
+        }
+        [, $court] = $this->requireCourtAuth($court_id);
+        $this->refuseNoteOnCompleteCourt($court);
+        return $court_note_id;
+    }
+
+    private function refuseNoteOnCompleteCourt($court)
+    {
+        if ($court['Status'] === 'complete') {
+            $this->jsonOut([
+                'status' => 1,
+                'error'  => 'This court is complete. Its running order can no longer be changed.',
+            ]);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // add_note
+    // POST: CourtId, Title, Details (opt), Position ('top' | 'bottom')
+    // -----------------------------------------------------------------------
+    public function add_note($p = null)
+    {
+        $court_id = (int)($_POST['CourtId'] ?? 0);
+        [$uid, $court] = $this->requireCourtAuth($court_id);
+        $this->refuseNoteOnCompleteCourt($court);
+
+        $note = $this->Court->add_note(
+            $court_id,
+            $_POST['Title'] ?? '',
+            $_POST['Details'] ?? '',
+            ($_POST['Position'] ?? '') === 'top' ? 'top' : 'bottom',
+            $uid
+        );
+        if ($note === false) {
+            $this->jsonOut(['status' => 1, 'error' => 'A note needs a title.']);
+        }
+
+        $this->jsonOut(['status' => 0, 'note' => $note]);
+    }
+
+    // -----------------------------------------------------------------------
+    // update_note
+    // POST: CourtNoteId, Title, Details
+    // -----------------------------------------------------------------------
+    public function update_note($p = null)
+    {
+        $court_note_id = $this->requireNoteAuth();
+
+        if (!$this->Court->update_note($court_note_id, $_POST['Title'] ?? '', $_POST['Details'] ?? '')) {
+            $this->jsonOut(['status' => 1, 'error' => 'A note needs a title.']);
+        }
+
+        $this->jsonOut(['status' => 0]);
+    }
+
+    // -----------------------------------------------------------------------
+    // remove_note
+    // POST: CourtNoteId
+    // -----------------------------------------------------------------------
+    public function remove_note($p = null)
+    {
+        $court_note_id = $this->requireNoteAuth();
+        $this->Court->remove_note($court_note_id);
+        $this->jsonOut(['status' => 0]);
+    }
+
+    // -----------------------------------------------------------------------
     // reorder_awards
-    // POST: CourtId, Order (JSON array of court_award_ids in display order)
+    // POST: CourtId, Order (JSON array, display order: an integer is a
+    //       court_award_id, a string 'n<id>' is a court_note_id)
     // -----------------------------------------------------------------------
     public function reorder_awards($p = null)
     {
@@ -933,6 +1012,7 @@ class Controller_CourtAjax extends Controller
     //   court_status draft|published|complete
     //   awards       light per-row state (court_award_id/status/sort_order/
     //                given_by/row_version) folded into the version stamp
+    //   notes_full   the court's notes (non-award line items), sent with awards_full
     //   awards_full  FULL per-award payload (same shape as the initial render) so the
     //                client can do a full-field reconcile — add/remove rows plus
     //                notes/public_comment/pass_to_local/makers/status/giver/row_version
@@ -963,6 +1043,7 @@ class Controller_CourtAjax extends Controller
         // that sends no SinceVersion still gets the complete payload every poll.
         if (!$unchanged) {
             $state['awards_full'] = $this->Court->get_court_awards($court_id);
+            $state['notes_full']  = $this->Court->get_court_notes($court_id);
         }
         $state['unchanged'] = $unchanged;
 

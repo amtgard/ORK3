@@ -1,6 +1,17 @@
 <?php
 $court       = $Court        ?? [];
 $courtAwards = $CourtAwards  ?? [];
+$courtNotes  = $CourtNotes   ?? [];
+// The running order is the awards and the notes (non-award line items) together,
+// by their shared sort_order — an award ahead of a note on a tie, same as the
+// client merge in cpApplyServerOrderFull.
+$cpLines = array_merge($courtAwards, $courtNotes);
+usort($cpLines, function ($a, $b) {
+    $an = isset($a['CourtNoteId']);
+    $bn = isset($b['CourtNoteId']);
+    return [$a['SortOrder'], (int)$an, $an ? $a['CourtNoteId'] : $a['CourtAwardId']]
+       <=> [$b['SortOrder'], (int)$bn, $bn ? $b['CourtNoteId'] : $b['CourtAwardId']];
+});
 $pendingRecs = $PendingRecs  ?? [];
 $awardOpts   = $AwardOptions ?? [];
 $statusFlow  = $StatusFlow   ?? [];
@@ -1066,6 +1077,67 @@ html[data-theme="dark"] .cp-script-park { color: #97a3b4; }
 
 
 
+/* ---- Court notes: non-award line items on the running order ----
+   A note shares the list with the award rows but none of their columns, so it gets
+   its own narrow grid: the same order + # tracks as .cp-row-grid (so the arrows and
+   the note mark line up with the award rows above and below), then the text, then
+   its two actions. */
+.cp-cn-row { border-bottom: 1px solid #edf2f7; background: #f7fafc; }
+.cp-cn-row:last-child { border-bottom: none; }
+.cp-cn-main {
+    display: grid; grid-template-columns: 28px 32px minmax(0, 1fr) auto;
+    align-items: center; column-gap: 8px;
+    padding: var(--cp-row-py, 6px) var(--cp-row-px, 12px);
+    font-size: var(--cp-row-font, 13px);
+}
+.cp-cn-row .cp-cell-order::before { content: ''; position: absolute; left: -12px; top: 0; bottom: 0; width: 3px; background: #a0aec0; }
+.cp-cn-main .cp-reorder-btns { gap: 0; }
+.cp-cn-main .cp-reorder-btn { width: 18px; height: 13px; font-size: 8px; }
+.cp-cn-row .cp-cn-mark { color: #a0aec0; font-size: 12px; text-align: right; padding-right: 2px; }
+.cp-cn-body { min-width: 0; padding: 2px 0; }
+.cp-cn-title { font-weight: 700; color: #2d3748; overflow-wrap: anywhere; }
+.cp-cn-details { margin-top: 2px; font-size: 12px; line-height: 1.45; color: #4a5568; white-space: pre-line; overflow-wrap: anywhere; }
+.cp-cn-actions { display: flex; align-items: center; gap: 2px; }
+.cp-cn-act { background: none; border: none; border-radius: 4px; width: 26px; height: 26px; color: #a0aec0; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+.cp-cn-act:hover { background: #edf2f7; color: #4a5568; }
+.cp-cn-act-danger:hover { color: #c53030; }
+.cp-cn-row.cp-cp-dragging { opacity: .5; background: #ebf8ff !important; }
+#cp-cn-details { resize: vertical; }
+/* Three actions in a 420px modal: let them wrap rather than squeeze. */
+.cp-cn-footer { flex-wrap: wrap; }
+html[data-theme="dark"] .cp-cn-row { background: #1a2030; border-color: #1f2733; }
+html[data-theme="dark"] .cp-cn-row .cp-cell-order::before { background: #4a5568; }
+html[data-theme="dark"] .cp-cn-row .cp-cn-mark { color: #718096; }
+html[data-theme="dark"] .cp-cn-title { color: #e2e8f0; }
+html[data-theme="dark"] .cp-cn-details { color: #a0aec0; }
+html[data-theme="dark"] .cp-cn-act { color: #718096; }
+html[data-theme="dark"] .cp-cn-act:hover { background: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-cn-act-danger:hover { color: #fc8181; }
+html[data-theme="dark"] .cp-cn-row.cp-cp-dragging { background: #1f2733 !important; }
+/* Order of Court sheet: a note prints in place, unnumbered and without a tick box. */
+.cp-script-note-title { font-weight: 700; }
+.cp-script-note .cp-script-cite-text { white-space: pre-line; }
+html[data-theme="dark"] .cp-script-note-title { color: #e2e8f0; }
+@media print {
+    body.cp-script-open .cp-script-note-title { color: #000; }
+}
+@media (max-width: 600px) {
+    .cp-cn-main { grid-template-columns: auto auto minmax(0, 1fr); align-items: start; gap: 6px 8px; padding: 12px 14px; }
+    /* The stacked award card reorders its cells with `order`, which applies to grid
+       items too — unset here or the arrows drop below the note's text. */
+    .cp-cn-main .cp-cell-order { order: 0; }
+    .cp-cn-row .cp-cn-mark { padding-top: 3px; }
+    .cp-cn-title { font-size: 15px; }
+    .cp-cn-details { font-size: 14px; }
+    .cp-cn-actions { grid-column: 1 / -1; justify-content: flex-end; gap: 8px; }
+    .cp-cn-act { width: 44px; height: 44px; font-size: 15px; }
+    .cp-cn-main .cp-reorder-btns { gap: 8px; }
+    .cp-cn-main .cp-reorder-btn { width: 44px; height: 36px; font-size: 13px; }
+    /* The shared footer stacks column-reverse so a trailing primary lands on top.
+       This footer is authored primary-first, so it stacks in source order. */
+    .cp-cn-footer { flex-direction: column; }
+}
+
 /* QW#1 / S3 — mobile stacked-card award list (also the run-mode touch layout).
    House breakpoint (600px); the module's only other breakpoint is 768px above. */
 @media (max-width: 600px) {
@@ -1425,6 +1497,9 @@ $_total_awards = count($courtAwards ?? []);
             <button class="cp-btn-primary cp-btn-sm" onclick="cpOpenAdhocModal('title')">
                 <i class="fas fa-plus"></i> Add Title
             </button>
+            <button class="cp-btn-primary cp-btn-sm" onclick="cpCnOpen()" data-tip="Put a non-award line item on the order, such as autocrat announcements, officer changeover, etc.">
+                <i class="fas fa-plus"></i> Add Note
+            </button>
         </div>
         <?php elseif ($courtSt === 'published'): ?>
         <!-- QW#6: walk-on adds while published — new rows insert as 'planned' at the end. -->
@@ -1439,6 +1514,9 @@ $_total_awards = count($courtAwards ?? []);
             </button>
             <button class="cp-btn-primary cp-btn-sm" onclick="cpOpenAdhocModal('title')" data-tip="Add a walk-on title (inserts as Planned)">
                 <i class="fas fa-plus"></i> Add Title
+            </button>
+            <button class="cp-btn-primary cp-btn-sm" onclick="cpCnOpen()" data-tip="Put a non-award line item on the order, such as autocrat announcements, officer changeover, etc.">
+                <i class="fas fa-plus"></i> Add Note
             </button>
         </div>
         <?php endif; ?>
@@ -1474,13 +1552,40 @@ $_total_awards = count($courtAwards ?? []);
             <div class="cp-hdr-chev"></div>
         </div>
 
-        <?php if (empty($courtAwards)): ?>
+        <?php if (empty($cpLines)): ?>
         <div class="cp-award-empty" id="cp-award-empty">
             <i class="fas fa-award" style="font-size:28px;opacity:.3;margin-bottom:10px;display:block"></i>
             No awards planned yet. Add from recommendations or create an ad-hoc entry.
         </div>
         <?php else: ?>
-        <?php $_rowIndex = 0; foreach ($courtAwards as $aw): $_rowIndex++; ?>
+        <?php $_rowIndex = 0; foreach ($cpLines as $cpLine): ?>
+        <?php if (isset($cpLine['CourtNoteId'])): $cnId = (int)$cpLine['CourtNoteId']; ?>
+        <?php /* A note: a non-award line item. Mirrors the JS twin cpCnRowHtml. */ ?>
+        <div class="cp-cn-row" id="cp-cn-<?= $cnId ?>" data-court-note-id="<?= $cnId ?>">
+            <div class="cp-cn-main">
+                <div class="cp-cell cp-cell-order">
+                    <?php if ($courtSt === 'draft'): ?>
+                    <span class="cp-award-drag" data-tip="Drag to reorder" aria-label="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>
+                    <?php endif; ?>
+                    <div class="cp-reorder-btns">
+                        <button class="cp-reorder-btn" data-tip="Move up" aria-label="Move note up" onclick="cpCnMove(<?= $cnId ?>,-1)">&#9650;</button>
+                        <button class="cp-reorder-btn" data-tip="Move down" aria-label="Move note down" onclick="cpCnMove(<?= $cnId ?>,1)">&#9660;</button>
+                    </div>
+                </div>
+                <div class="cp-cell cp-cn-mark" data-tip="Note — a line on the order that is not an award"><i class="fas fa-sticky-note"></i></div>
+                <div class="cp-cn-body">
+                    <div class="cp-cn-title"><?= htmlspecialchars($cpLine['Title']) ?></div>
+                    <?php if ($cpLine['Details'] !== ''): ?><div class="cp-cn-details"><?= htmlspecialchars($cpLine['Details']) ?></div><?php endif; ?>
+                </div>
+                <?php if ($courtSt !== 'complete'): ?>
+                <div class="cp-cn-actions">
+                    <button class="cp-cn-act" data-tip="Edit note" aria-label="Edit note" onclick="cpCnOpen(<?= $cnId ?>)"><i class="fas fa-pen"></i></button>
+                    <button class="cp-cn-act cp-cn-act-danger" data-tip="Remove note" aria-label="Remove note" onclick="cpCnRemove(<?= $cnId ?>)"><i class="fas fa-trash"></i></button>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php continue; endif; $aw = $cpLine; $_rowIndex++; ?>
         <?php
             $ast  = $aw['Status'];
             // Cycle 2 MUST FIX 1: one string for BOTH guarded-row tooltips (Pass to Local
@@ -2025,6 +2130,33 @@ $_total_awards = count($courtAwards ?? []);
     </div>
 </div>
 
+<!-- Add / Edit Note Modal — a non-award line item on the running order -->
+<div class="cp-overlay" id="cp-cn-modal">
+    <div class="cp-modal cp-modal-sm" role="dialog" aria-modal="true" aria-labelledby="cp-cn-modal-title">
+        <div class="cp-modal-header">
+            <h3 id="cp-cn-modal-title"><i class="fas fa-sticky-note" style="margin-right:8px;color:#4a5568"></i><span id="cp-cn-modal-title-text">Add Note to Court</span></h3>
+            <button class="cp-modal-close" onclick="cpCnClose()" aria-label="Close">&times;</button>
+        </div>
+        <div class="cp-modal-body">
+            <div class="cp-field">
+                <label for="cp-cn-title">Note Title <span style="color:#e53e3e">*</span></label>
+                <input type="text" id="cp-cn-title" maxlength="150" placeholder="Autocrat announcements, officer changeover…" autocomplete="off" aria-required="true">
+            </div>
+            <div class="cp-field">
+                <label for="cp-cn-details">Note Details</label>
+                <textarea id="cp-cn-details" rows="4" placeholder="What happens at this point in court…"></textarea>
+            </div>
+            <div class="cp-error" id="cp-cn-error"></div>
+        </div>
+        <div class="cp-modal-footer cp-cn-footer">
+            <button class="cp-btn-primary cp-cn-add" onclick="cpCnSubmit('top')"><i class="fas fa-arrow-up"></i> Add to Top</button>
+            <button class="cp-btn-primary cp-cn-add" onclick="cpCnSubmit('bottom')"><i class="fas fa-arrow-down"></i> Add to Bottom</button>
+            <button class="cp-btn-primary" id="cp-cn-save" onclick="cpCnSubmit()"><i class="fas fa-save"></i> Save</button>
+            <button class="cp-btn-outline" onclick="cpCnClose()">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <!-- Grant Award Modal (stage on confirm — spec §6.1) -->
 <div class="cp-overlay" id="cp-grant-modal">
     <div class="cp-modal cp-modal-sm" role="dialog" aria-modal="true" aria-labelledby="cp-grant-modal-title">
@@ -2147,6 +2279,9 @@ $_total_awards = count($courtAwards ?? []);
     window.cpAcConfig = { uir: uir, kingdomId: kidId };
     var courtStatus = <?= json_encode($court['Status'] ?? 'draft') ?>;
     var courtAwards = window.courtAwards = <?= json_encode($courtAwards) ?>;
+    // Non-award line items. They share the running order with courtAwards (one
+    // SortOrder number space) but never enter the grant pipeline.
+    var courtNotes  = window.courtNotes  = <?= json_encode($courtNotes) ?>;
     var courtMeta   = window.courtMeta   = {
         name: <?= json_encode($court['Name'] ?? '') ?>,
         date: <?= json_encode($court['CourtDate'] ?? '') ?>,
@@ -2573,19 +2708,51 @@ $_total_awards = count($courtAwards ?? []);
     cpSetDensity(cpReadDensity());
     cpInitSidebar();
 
-    // ---- Reorder ----
-    window.cpMoveAward = function(caid, dir) {
-        if (cpReorderBlocked()) return;
+    // ---- Lines: an award row or a note row ----
+    // The running order is the awards and the notes together. A line's key is what
+    // reorder_awards takes on the wire: the integer court_award_id for an award, the
+    // string 'n<court_note_id>' for a note.
+    var CP_LINE_SEL = '.cp-award-row, .cp-cn-row';
+    function cpLineRows() {
+        var list = gid('cp-award-list');
+        return list ? Array.from(list.querySelectorAll(CP_LINE_SEL)) : [];
+    }
+    function cpIsNoteRow(row) { return row.classList.contains('cp-cn-row'); }
+    function cpLineKey(row) {
+        return cpIsNoteRow(row) ? 'n' + row.dataset.courtNoteId : parseInt(row.dataset.courtAwardId, 10);
+    }
+    function cpLineRow(key) {
+        return (typeof key === 'string' && key.charAt(0) === 'n') ? gid('cp-cn-' + key.slice(1)) : gid('cp-aw-' + key);
+    }
+    // Re-lay the list with the award rows in the given order while every note row
+    // keeps the line position it already holds: a note that was the third line is
+    // still the third line, and the awards fill the slots around it. This is what
+    // lets a sort rearrange the awards without dragging the announcements along.
+    // Award rows the caller does not name keep their relative order at the end.
+    function cpLayAwardsAroundNotes(awardRows) {
         var list  = gid('cp-award-list');
-        var rows  = Array.from(list.querySelectorAll('.cp-award-row'));
-        var idx   = rows.findIndex(function(r) { return parseInt(r.dataset.courtAwardId, 10) === caid; });
-        var swap  = idx + dir;
-        if (swap < 0 || swap >= rows.length) return;
+        var lines = cpLineRows();
+        var named = awardRows.filter(function(r) { return r && lines.indexOf(r) !== -1; });
+        lines.forEach(function(r) { if (!cpIsNoteRow(r) && named.indexOf(r) === -1) named.push(r); });
+        var next = 0;
+        lines.map(function(r) { return cpIsNoteRow(r) ? r : named[next++]; })
+             .forEach(function(r) { list.appendChild(r); });
+    }
+
+    // ---- Reorder ----
+    function cpMoveLine(row, dir) {
+        if (!row || cpReorderBlocked()) return;
+        var rows = cpLineRows();
+        var idx  = rows.indexOf(row);
+        var swap = idx + dir;
+        if (idx < 0 || swap < 0 || swap >= rows.length) return;
         if (dir === -1) rows[swap].before(rows[idx]);
         else            rows[idx].before(rows[swap]);
         cpSaveOrder();
         cpRenumberRows();
-    };
+    }
+    window.cpMoveAward = function(caid, dir) { cpMoveLine(gid('cp-aw-' + caid), dir); };
+    window.cpCnMove    = function(noteId, dir) { cpMoveLine(gid('cp-cn-' + noteId), dir); };
 
     // ---- Precedence sort (one button; replaces "Orders Low → High" + "Titles Last") ----
     // The old sort compared bare Rank across DIFFERENT awards, so a Dragon 3 outranked a
@@ -2627,14 +2794,13 @@ $_total_awards = count($courtAwards ?? []);
         var people = order.map(function(k) { return byMundane[k]; });
         people.sort(function(a, b) { return a.top - b.top; });
 
-        var list = gid('cp-award-list');
+        var sorted = [];
         people.forEach(function(person) {
             person.awards.slice().sort(function(a, b) { return cpPrecedenceKey(a) - cpPrecedenceKey(b); })
-                .forEach(function(aw) {
-                    var row = gid('cp-aw-' + aw.CourtAwardId);
-                    if (row) list.appendChild(row);
-                });
+                .forEach(function(aw) { sorted.push(gid('cp-aw-' + aw.CourtAwardId)); });
         });
+        // Notes are not awards and have no precedence: each stays on the line it was on.
+        cpLayAwardsAroundNotes(sorted);
         cpSaveOrder();
         cpRenumberRows();
     };
@@ -2663,8 +2829,7 @@ $_total_awards = count($courtAwards ?? []);
 
         if (cpPrintingListActive) {
             // Snapshot current DOM order so we can restore it
-            cpPrintingListSavedOrder = Array.from(list.querySelectorAll('.cp-award-row'))
-                .map(function(r) { return parseInt(r.dataset.courtAwardId, 10); });
+            cpPrintingListSavedOrder = cpLineRows().map(cpLineKey);
 
             // Get all rows with their scroll status
             var rows = Array.from(list.querySelectorAll('.cp-award-row'));
@@ -2677,8 +2842,8 @@ $_total_awards = count($courtAwards ?? []);
                 else noScroll.push(row);                     // gray — not tracked
             });
 
-            // Show only scroll-tracked rows, sorted red then green
-            rows.forEach(function(r) { r.style.display = 'none'; });
+            // Show only scroll-tracked rows, sorted red then green. A note has no scroll.
+            cpLineRows().forEach(function(r) { r.style.display = 'none'; });
             withScroll.forEach(function(r) { r.style.display = ''; list.appendChild(r); });
 
             // If nothing to show, show a hint inside the list
@@ -2695,11 +2860,10 @@ $_total_awards = count($courtAwards ?? []);
             if (hint) hint.remove();
 
             // Restore all rows visible, in saved order
-            var rows = Array.from(list.querySelectorAll('.cp-award-row'));
-            rows.forEach(function(r) { r.style.display = ''; });
+            cpLineRows().forEach(function(r) { r.style.display = ''; });
             if (cpPrintingListSavedOrder) {
-                cpPrintingListSavedOrder.forEach(function(caid) {
-                    var row = gid('cp-aw-' + caid);
+                cpPrintingListSavedOrder.forEach(function(key) {
+                    var row = cpLineRow(key);
                     if (row) list.appendChild(row);
                 });
             }
@@ -2819,15 +2983,26 @@ $_total_awards = count($courtAwards ?? []);
     // moved, and leaving the model behind would recreate exactly the screen-vs-paper
     // mismatch this guards against. The existing failure path tells the officer to
     // refresh, which reloads DOM and model together from the server's canonical order.
+    //
+    // `order` is the whole running order as line keys (see cpLineKey), notes included.
+    // SortOrder is restamped by position in THAT list for awards and notes alike, so
+    // the two models stay in one number space and the Order of Court sheet can merge
+    // them. A caller that left the notes out would strand them on stale numbers.
     function cpSyncAwardOrder(order) {
         var awards = window.courtAwards;
         if (!Array.isArray(awards)) return;
         var byId = {};
         awards.forEach(function(a) { byId[String(a.CourtAwardId)] = a; });
+        var noteByKey = {};
+        (window.courtNotes || []).forEach(function(n) { noteByKey['n' + n.CourtNoteId] = n; });
         var ordered = [];
+        var pos = 0;
         order.forEach(function(id) {
+            pos++;
+            var n = noteByKey[String(id)];
+            if (n) { n.SortOrder = pos; return; }
             var a = byId[String(id)];
-            if (a && ordered.indexOf(a) === -1) ordered.push(a);
+            if (a && ordered.indexOf(a) === -1) { a.SortOrder = pos; ordered.push(a); }
         });
         // Anything the caller's id list does not name keeps its relative order at the
         // end. Both removal paths (cpDoRemoveAward and cpRemoveAwardRow/Send-to-Local)
@@ -2835,15 +3010,13 @@ $_total_awards = count($courtAwards ?? []);
         // here. What can still reach it is the legacy light reconcile payload, which
         // has no removal handling of its own — not a filtered view: cpSaveOrder reads
         // querySelectorAll, which includes the rows the Printing List hides.
-        awards.forEach(function(a) { if (ordered.indexOf(a) === -1) ordered.push(a); });
-        ordered.forEach(function(a, i) { a.SortOrder = i + 1; });
+        awards.forEach(function(a) { if (ordered.indexOf(a) === -1) { a.SortOrder = ++pos; ordered.push(a); } });
         awards.length = 0;
         Array.prototype.push.apply(awards, ordered);
     }
 
     function cpSaveOrder() {
-        var rows  = Array.from(document.querySelectorAll('#cp-award-list .cp-award-row'));
-        var order = rows.map(function(r) { return parseInt(r.dataset.courtAwardId, 10); });
+        var order = cpLineRows().map(cpLineKey);
         cpSyncAwardOrder(order);
         var fd    = new FormData();
         fd.append('CourtId', courtId);
@@ -2963,19 +3136,25 @@ $_total_awards = count($courtAwards ?? []);
             '<span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span></label>';
     }
 
+    // The "No awards planned yet" placeholder shows only while the list has no lines
+    // at all — a court holding nothing but notes is not empty.
+    function cpSyncEmptyState() {
+        var empty = gid('cp-award-empty');
+        if (cpLineRows().length > 0) { if (empty) empty.remove(); return; }
+        if (empty) return;
+        empty = document.createElement('div');
+        empty.className = 'cp-award-empty';
+        empty.id = 'cp-award-empty';
+        empty.innerHTML = '<i class="fas fa-award" style="font-size:28px;opacity:.3;margin-bottom:10px;display:block"></i>No awards planned yet.';
+        gid('cp-award-list').appendChild(empty);
+    }
+
     function cpRemoveAwardRow(caid) {
         var row = gid('cp-aw-' + caid);
         if (row) row.remove();
         cpDropAwardFromModel(caid);
         var remaining = document.querySelectorAll('#cp-award-list .cp-award-row').length;
-        if (remaining === 0 && !gid('cp-award-empty')) {
-            var list = gid('cp-award-list');
-            var empty = document.createElement('div');
-            empty.className = 'cp-award-empty';
-            empty.id = 'cp-award-empty';
-            empty.innerHTML = '<i class="fas fa-award" style="font-size:28px;opacity:.3;margin-bottom:10px;display:block"></i>No awards planned yet.';
-            list.appendChild(empty);
-        }
+        cpSyncEmptyState();
         var cnt = gid('cp-award-count');
         if (cnt) cnt.textContent = '(' + remaining + ')';
         if (typeof cpRenumberRows === 'function') cpRenumberRows();
@@ -3413,14 +3592,7 @@ $_total_awards = count($courtAwards ?? []);
                 if (row) row.remove();
                 cpDropAwardFromModel(caid);
                 var remaining = document.querySelectorAll('#cp-award-list .cp-award-row').length;
-                if (remaining === 0 && !gid('cp-award-empty')) {
-                    var list = gid('cp-award-list');
-                    var empty = document.createElement('div');
-                    empty.className = 'cp-award-empty';
-                    empty.id = 'cp-award-empty';
-                    empty.innerHTML = '<i class="fas fa-award" style="font-size:28px;opacity:.3;margin-bottom:10px;display:block"></i>No awards planned yet.';
-                    list.appendChild(empty);
-                }
+                cpSyncEmptyState();
                 var cnt = gid('cp-award-count');
                 if (cnt) cnt.textContent = '(' + remaining + ')';
                 cpRenumberRows();
@@ -3981,6 +4153,182 @@ $_total_awards = count($courtAwards ?? []);
         cpRenumberRows();
     }
 
+    // ---- Court notes: non-award line items on the running order ----
+    function cpCnFind(noteId) {
+        for (var i = 0; i < courtNotes.length; i++) {
+            if (String(courtNotes[i].CourtNoteId) === String(noteId)) return courtNotes[i];
+        }
+        return null;
+    }
+    function cpCnBodyHtml(n) {
+        return '<div class="cp-cn-title">' + esc(n.Title || '') + '</div>' +
+            (n.Details ? '<div class="cp-cn-details">' + esc(n.Details) + '</div>' : '');
+    }
+    // JS twin of the PHP note row. Only ever called on a draft or published court
+    // (a complete court refuses note writes and does not poll), so the actions
+    // always render; the drag handle is draft-only, as it is for award rows.
+    function cpCnRowHtml(n) {
+        var id = parseInt(n.CourtNoteId, 10);
+        return '<div class="cp-cn-row" id="cp-cn-' + id + '" data-court-note-id="' + id + '">' +
+            '<div class="cp-cn-main">' +
+                '<div class="cp-cell cp-cell-order">' +
+                    (courtStatus === 'draft' ? '<span class="cp-award-drag" data-tip="Drag to reorder" aria-label="Drag to reorder"><i class="fas fa-grip-vertical"></i></span>' : '') +
+                    '<div class="cp-reorder-btns">' +
+                        '<button class="cp-reorder-btn" data-tip="Move up" aria-label="Move note up" onclick="cpCnMove(' + id + ',-1)">&#9650;</button>' +
+                        '<button class="cp-reorder-btn" data-tip="Move down" aria-label="Move note down" onclick="cpCnMove(' + id + ',1)">&#9660;</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="cp-cell cp-cn-mark" data-tip="Note — a line on the order that is not an award"><i class="fas fa-sticky-note"></i></div>' +
+                '<div class="cp-cn-body">' + cpCnBodyHtml(n) + '</div>' +
+                '<div class="cp-cn-actions">' +
+                    '<button class="cp-cn-act" data-tip="Edit note" aria-label="Edit note" onclick="cpCnOpen(' + id + ')"><i class="fas fa-pen"></i></button>' +
+                    '<button class="cp-cn-act cp-cn-act-danger" data-tip="Remove note" aria-label="Remove note" onclick="cpCnRemove(' + id + ')"><i class="fas fa-trash"></i></button>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }
+    // Put a note row on screen at the top or bottom of the running order. Idempotent,
+    // like cpAppendAwardRow: the heartbeat can replay an add this officer just made.
+    function cpCnInsertRow(n, position) {
+        if (gid('cp-cn-' + n.CourtNoteId)) return;
+        var first = position === 'top' ? cpLineRows()[0] : null;
+        if (first) first.insertAdjacentHTML('beforebegin', cpCnRowHtml(n));
+        else       gid('cp-award-list').insertAdjacentHTML('beforeend', cpCnRowHtml(n));
+        // The Printing List is a filtered, reordered view that snapshots the real
+        // order and restores it on exit. A note added meanwhile joins that snapshot
+        // at the end it was added to, and stays hidden like every other note.
+        if (cpPrintingListSavedOrder) {
+            if (position === 'top') cpPrintingListSavedOrder.unshift('n' + n.CourtNoteId);
+            else                    cpPrintingListSavedOrder.push('n' + n.CourtNoteId);
+            gid('cp-cn-' + n.CourtNoteId).style.display = 'none';
+        }
+        cpSyncEmptyState();
+    }
+    function cpCnRemoveRow(noteId) {
+        var row = gid('cp-cn-' + noteId);
+        if (row) row.remove();
+        for (var i = courtNotes.length - 1; i >= 0; i--) {
+            if (String(courtNotes[i].CourtNoteId) === String(noteId)) courtNotes.splice(i, 1);
+        }
+        cpSyncEmptyState();
+    }
+    // Heartbeat: bring the note rows in line with the server's list. Placement is
+    // left to cpApplyServerOrderFull, which runs straight after.
+    function cpCnReconcile(serverNotes) {
+        var seen = {};
+        serverNotes.forEach(function(sn) {
+            seen[String(sn.CourtNoteId)] = true;
+            var n = cpCnFind(sn.CourtNoteId);
+            if (!n) {
+                courtNotes.push({ CourtNoteId: sn.CourtNoteId, Title: sn.Title, Details: sn.Details || '', SortOrder: sn.SortOrder });
+                cpCnInsertRow(sn, 'bottom');
+                return;
+            }
+            if (n.Title !== sn.Title || n.Details !== (sn.Details || '')) {
+                n.Title = sn.Title;
+                n.Details = sn.Details || '';
+                var body = document.querySelector('#cp-cn-' + sn.CourtNoteId + ' .cp-cn-body');
+                if (body) body.innerHTML = cpCnBodyHtml(n);
+            }
+            n.SortOrder = sn.SortOrder;
+        });
+        courtNotes.slice().forEach(function(n) {
+            if (!seen[String(n.CourtNoteId)]) cpCnRemoveRow(n.CourtNoteId);
+        });
+    }
+
+    var cpCnEditingId = 0;   // 0 = adding a new note
+    window.cpCnOpen = function(noteId) {
+        var n = noteId ? cpCnFind(noteId) : null;
+        cpCnEditingId = n ? n.CourtNoteId : 0;
+        gid('cp-cn-modal-title-text').textContent = n ? 'Edit Note' : 'Add Note to Court';
+        gid('cp-cn-title').value   = n ? n.Title : '';
+        gid('cp-cn-details').value = n ? n.Details : '';
+        // Adding offers the two ends of the order; editing leaves the note where it is.
+        document.querySelectorAll('#cp-cn-modal .cp-cn-add').forEach(function(b) { b.style.display = n ? 'none' : ''; });
+        gid('cp-cn-save').style.display  = n ? '' : 'none';
+        gid('cp-cn-error').style.display = 'none';
+        gid('cp-cn-modal').style.display = 'flex';
+        cpSyncScrollLock();
+        setTimeout(function() { gid('cp-cn-title').focus(); }, 50);
+    };
+    window.cpCnClose = function() {
+        gid('cp-cn-modal').style.display = 'none';
+        cpSyncScrollLock();
+        if (typeof window.cpRestoreFocus === 'function') window.cpRestoreFocus();
+    };
+    // position: 'top' | 'bottom' when adding; ignored when saving an edit.
+    window.cpCnSubmit = function(position) {
+        var errEl   = gid('cp-cn-error');
+        var title   = gid('cp-cn-title').value.trim();
+        var details = gid('cp-cn-details').value.trim();
+        if (!title) {
+            errEl.textContent = 'Give the note a title.';
+            errEl.style.display = 'block';
+            gid('cp-cn-title').focus();
+            return;
+        }
+        var buttons = document.querySelectorAll('#cp-cn-modal .cp-modal-footer button');
+        function lock(on) { buttons.forEach(function(b) { b.disabled = on; }); }
+        var editingId = cpCnEditingId;
+        var fd = new FormData();
+        fd.append('Title', title);
+        fd.append('Details', details);
+        if (editingId) {
+            fd.append('CourtNoteId', editingId);
+        } else {
+            fd.append('CourtId', courtId);
+            fd.append('Position', position === 'top' ? 'top' : 'bottom');
+        }
+        lock(true);
+        post('CourtAjax/' + (editingId ? 'update_note' : 'add_note'), fd).then(function(d) {
+            lock(false);
+            if (!d || d._postFailed) return;
+            if (d.status !== 0) {
+                errEl.textContent = d.error || 'Could not save the note.';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (editingId) {
+                var n = cpCnFind(editingId);
+                if (n) {
+                    n.Title = title;
+                    n.Details = details;
+                    var body = document.querySelector('#cp-cn-' + editingId + ' .cp-cn-body');
+                    if (body) body.innerHTML = cpCnBodyHtml(n);
+                }
+            } else {
+                // Stamp the new note against the CLIENT's numbers, not the server's:
+                // a local reorder restamps every line 1..N, so the server's sort_order
+                // for the new row is not comparable until the next full reconcile.
+                var sorts = courtAwards.concat(courtNotes).map(function(l) { return l.SortOrder; });
+                var note  = d.note;
+                if (sorts.length) {
+                    note.SortOrder = position === 'top' ? Math.min.apply(null, sorts) - 1 : Math.max.apply(null, sorts) + 1;
+                }
+                courtNotes.push(note);
+                cpCnInsertRow(note, position === 'top' ? 'top' : 'bottom');
+            }
+            cpCnClose();
+        });
+    };
+    window.cpCnRemove = function(noteId) {
+        cpConfirm({
+            title: 'Remove note',
+            body: 'Remove this note from the court plan?',
+            confirmLabel: 'Remove',
+            danger: true,
+            onConfirm: function() {
+                var fd = new FormData();
+                fd.append('CourtNoteId', noteId);
+                post('CourtAjax/remove_note', fd).then(function(d) {
+                    if (d.status === 0) cpCnRemoveRow(noteId);
+                    else if (!d._postFailed) cpAlert(d.error || 'Could not remove the note.');
+                });
+            }
+        });
+    };
+
     // ---- Artisan modal ----
     window.cpOpenArtisanModal = function(caid) {
         currentArtisanCourtAwardId = caid;
@@ -4309,7 +4657,7 @@ $_total_awards = count($courtAwards ?? []);
 
     // ---- Live heartbeat (spec §6.4) ----
     function cpAnyModalOpen() {
-        var ids = ['cp-rec-modal', 'cp-adhoc-modal', 'cp-artisan-modal', 'cp-grant-modal', 'cp-publish-modal', 'cp-complete-modal'];
+        var ids = ['cp-rec-modal', 'cp-adhoc-modal', 'cp-artisan-modal', 'cp-cn-modal', 'cp-grant-modal', 'cp-publish-modal', 'cp-complete-modal'];
         for (var i = 0; i < ids.length; i++) {
             var e = gid(ids[i]);
             if (e && e.style.display && e.style.display !== 'none') return true;
@@ -4326,20 +4674,25 @@ $_total_awards = count($courtAwards ?? []);
         else                 { b.className = 'cp-mode-badge cp-mode-run';  b.innerHTML = '<i class="fas fa-bullhorn"></i> Run at Court'; }
     }
     // Reorder DOM rows to match the server sort (full-payload PascalCase fields).
-    function cpApplyServerOrderFull(full) {
+    // Awards and notes are merged on their shared sort_order, an award ahead of a
+    // note on a tie — the same rule the PHP render uses.
+    function cpApplyServerOrderFull(full, notes) {
         var list = gid('cp-award-list');
         if (!list) return;
-        var ordered = full.slice().sort(function(a, b) {
-            return (a.SortOrder - b.SortOrder) || (a.CourtAwardId - b.CourtAwardId);
-        });
-        ordered.forEach(function(sa) {
-            var row = gid('cp-aw-' + sa.CourtAwardId);
+        var lines = full.map(function(sa) {
+            return { key: sa.CourtAwardId, sort: sa.SortOrder, kind: 0, id: sa.CourtAwardId };
+        }).concat((notes || []).map(function(sn) {
+            return { key: 'n' + sn.CourtNoteId, sort: sn.SortOrder, kind: 1, id: sn.CourtNoteId };
+        }));
+        lines.sort(function(a, b) { return (a.sort - b.sort) || (a.kind - b.kind) || (a.id - b.id); });
+        lines.forEach(function(l) {
+            var row = cpLineRow(l.key);
             if (row) list.appendChild(row);
         });
         // The sheet builders number by array index, so the model has to follow the
         // canonical order too — otherwise an officer who did not perform the reorder
         // sees the new DOM order on screen but prints the stale one.
-        cpSyncAwardOrder(ordered.map(function(sa) { return sa.CourtAwardId; }));
+        cpSyncAwardOrder(lines.map(function(l) { return l.key; }));
         cpRenumberRows();
     }
 
@@ -4456,7 +4809,12 @@ $_total_awards = count($courtAwards ?? []);
                 courtAwards.splice(i, 1);
             }
         }
-        cpApplyServerOrderFull(full);
+        // Notes another officer added, edited or removed — before the order is
+        // applied, so a new note row exists to be placed.
+        var notesFull = Array.isArray(d.notes_full) ? d.notes_full : courtNotes.slice();
+        cpCnReconcile(notesFull);
+        cpApplyServerOrderFull(full, notesFull);
+        cpSyncEmptyState();
         if (d.mode && d.mode !== cpMode) { cpMode = window.cpMode = d.mode; cpUpdateModeBadge(d.mode); }
         cpUpdateStagedIndicator(staged);
         // Keep the header/toolbar/status-bar counts honest after add/remove.
@@ -4484,12 +4842,10 @@ $_total_awards = count($courtAwards ?? []);
             var ordered = (d.awards || []).slice().sort(function(a, b) {
                 return (a.sort_order - b.sort_order) || (a.court_award_id - b.court_award_id);
             });
-            ordered.forEach(function(sa) {
-                var row = gid('cp-aw-' + sa.court_award_id);
-                if (row) list.appendChild(row);
-            });
+            // The light payload carries no notes, so they hold their lines.
+            cpLayAwardsAroundNotes(ordered.map(function(sa) { return gid('cp-aw-' + sa.court_award_id); }));
             // Keep the model in step with the DOM — the sheet builders read array order.
-            cpSyncAwardOrder(ordered.map(function(sa) { return sa.court_award_id; }));
+            cpSyncAwardOrder(cpLineRows().map(cpLineKey));
             cpRenumberRows();
         }
         cpUpdateStagedIndicator(staged);
@@ -4566,7 +4922,7 @@ $_total_awards = count($courtAwards ?? []);
         list.addEventListener('pointerdown', function(e) {
             var handle = e.target.closest('.cp-award-drag');
             if (!handle) return;
-            var row = handle.closest('.cp-award-row');
+            var row = handle.closest(CP_LINE_SEL);
             if (!row) return;
             e.preventDefault();
             cpDrag = { row: row, list: list, pointerId: e.pointerId, handle: handle, moved: false };
@@ -4576,7 +4932,7 @@ $_total_awards = count($courtAwards ?? []);
         list.addEventListener('pointermove', function(e) {
             if (!cpDrag || e.pointerId !== cpDrag.pointerId) return;
             cpDrag.moved = true;
-            var rows = Array.prototype.slice.call(list.querySelectorAll('.cp-award-row:not(.cp-cp-dragging)'));
+            var rows = cpLineRows().filter(function(r) { return !r.classList.contains('cp-cp-dragging'); });
             var after = null;
             for (var i = 0; i < rows.length; i++) {
                 var rect = rows[i].getBoundingClientRect();
@@ -4661,7 +5017,7 @@ $_total_awards = count($courtAwards ?? []);
     window.cpRestoreFocus = cpRestoreFocus;
 
     // Close modals on backdrop / Escape
-    ['cp-rec-modal','cp-adhoc-modal','cp-artisan-modal','cp-grant-modal','cp-publish-modal','cp-complete-modal'].forEach(function(id) {
+    ['cp-rec-modal','cp-adhoc-modal','cp-artisan-modal','cp-cn-modal','cp-grant-modal','cp-publish-modal','cp-complete-modal'].forEach(function(id) {
         var el = gid(id);
         if (el) el.addEventListener('click', function(e) {
             if (e.target !== this) return;
@@ -4674,7 +5030,7 @@ $_total_awards = count($courtAwards ?? []);
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             cpDismissNote();
-            ['cp-rec-modal','cp-adhoc-modal','cp-artisan-modal','cp-grant-modal','cp-publish-modal','cp-complete-modal'].forEach(function(id) {
+            ['cp-rec-modal','cp-adhoc-modal','cp-artisan-modal','cp-cn-modal','cp-grant-modal','cp-publish-modal','cp-complete-modal'].forEach(function(id) {
                 var el = gid(id); if (el) el.style.display = 'none';
             });
             cpHideAcDropdowns();
@@ -4802,8 +5158,24 @@ window.cpApplyHeroColor = function(img) {
     // length. Existing citation density plus the checkbox it dropped, and skipped
     // rows stay struck through and marked rather than omitted (spec 0.3).
     function cpSheetOrder(awards) {
-        if (!awards.length) return '<p class="cp-script-empty">No awards to present.</p>';
-        return '<div class="cp-sheet-order">' + awards.map(function (a, i) {
+        // Notes print here and only here: this is the sheet read from, start to
+        // finish, so it carries the announcements between the awards. They take no
+        // number and no tick box — an award's number is its row on Sheet 2 and in
+        // Record Court, and a numbered note would push every later award off by one.
+        var lines = awards.map(function (a, i) { return { award: a, num: i, sort: a.SortOrder, kind: 0 }; })
+            .concat((window.courtNotes || []).map(function (n) {
+                return { note: n, num: n.CourtNoteId, sort: n.SortOrder, kind: 1 };
+            }));
+        lines.sort(function (x, y) { return (x.sort - y.sort) || (x.kind - y.kind) || (x.num - y.num); });
+        if (!lines.length) return '<p class="cp-script-empty">No awards to present.</p>';
+        return '<div class="cp-sheet-order">' + lines.map(function (line) {
+            if (line.note) {
+                return '<div class="cp-script-cite cp-script-note">' +
+                    '<div class="cp-script-cite-head"><span class="cp-script-note-title">' + esc(line.note.Title || '') + '</span></div>' +
+                    (line.note.Details ? '<div class="cp-script-cite-text">' + esc(line.note.Details) + '</div>' : '') +
+                    '</div>';
+            }
+            var a = line.award, i = line.num;
             var skipped = a.Status === 'cancelled';
             var html = '<div class="cp-script-cite' + (skipped ? ' cp-script-skipped' : '') + '">' +
                 '<div class="cp-script-cite-head">' +

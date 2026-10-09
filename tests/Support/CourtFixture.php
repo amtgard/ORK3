@@ -267,8 +267,40 @@ final class CourtFixture
         return $st->fetch(PDO::FETCH_ASSOC) ?: [];
     }
 
+    public function fetchNote(int $courtNoteId): array
+    {
+        $st = $this->pdo->prepare('SELECT * FROM ' . DB_PREFIX . 'court_note WHERE court_note_id = ?');
+        $st->execute([$courtNoteId]);
+
+        return $st->fetch(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * The court's running order across BOTH line tables, read straight from the
+     * database: 'a:<court_award_id>' for an award, 'n:<court_note_id>' for a note.
+     *
+     * @return list<string>
+     */
+    public function lineOrder(int $courtId): array
+    {
+        $st = $this->pdo->prepare(
+            "SELECT CONCAT('a:', court_award_id) AS line, sort_order, 0 AS kind, court_award_id AS id
+               FROM " . DB_PREFIX . "court_award WHERE court_id = ?
+             UNION ALL
+             SELECT CONCAT('n:', court_note_id), sort_order, 1, court_note_id
+               FROM " . DB_PREFIX . 'court_note WHERE court_id = ?
+             ORDER BY sort_order, kind, id'
+        );
+        $st->execute([$courtId, $courtId]);
+
+        return $st->fetchAll(PDO::FETCH_COLUMN, 0);
+    }
+
     public function cleanup(): void
     {
+        // Notes are created through Court::addNote, so they are swept by court.
+        $this->deleteIn('court_note', 'court_id', $this->courtIds);
+        $this->deleteIn('court_award', 'court_id', $this->courtIds);
         $this->deleteIn('court_award', 'court_award_id', $this->awardIds);
         $this->deleteIn('court', 'court_id', $this->courtIds);
         $this->deleteIn('recommendations', 'recommendations_id', $this->recIds);

@@ -508,11 +508,9 @@ class Court
             $scroll_status  = $existing['scroll_status'];
             $regalia_status = $existing['regalia_status'];
         } else {
-            // Next sort_order
-            $this->db->Clear();
-            $sor = $this->db->DataSet('SELECT MAX(sort_order) AS m FROM ' . DB_PREFIX . 'court_award
-                              WHERE court_id = ' . $court_id);
-            $sort = ($sor && $sor->Next()) ? (int)$sor->m + 10 : 10;
+            // Next sort_order — the bottom of the whole running order, notes included,
+            // so a new award never lands above a trailing note.
+            $sort = $this->edgeSortOrder($court_id, 'bottom');
 
             $rec_val   = $rec_id > 0 ? $rec_id : 'NULL';
             $notes_val = "'" . $this->esc($notes) . "'";
@@ -883,8 +881,10 @@ class Court
     }
 
     /**
-     * Persist a new display order in a single statement. $order is a list of
-     * court_award_ids; only rows on $court_id are touched.
+     * Persist a new display order. $order is the running order top to bottom: an
+     * integer is a court_award_id, a string 'n<id>' is a court_note_id. Awards and
+     * notes share one sort_order number space, so each entry takes the next slot
+     * whichever table it lives in. Only rows on $court_id are touched.
      *
      * INTERIM GATE: rows already committed to the permanent record ('given') are
      * excluded. Their order is the running order of a ceremony that has already
@@ -896,35 +896,185 @@ class Court
      */
     public function reorderAwards($court_id, $order)
     {
-        $court_id = (int)$court_id;
-        $cases    = '';
-        $ids      = [];
-        $sort     = 10;
-        foreach ($order as $caid) {
-            $caid = (int)$caid;
-            if ($caid <= 0) {
+        $court_id  = (int)$court_id;
+        $cases     = '';
+        $ids       = [];
+        $noteCases = '';
+        $noteIds   = [];
+        $sort      = 10;
+        foreach ($order as $entry) {
+            $isNote = is_string($entry) && isset($entry[0]) && $entry[0] === 'n';
+            $id     = (int)($isNote ? substr($entry, 1) : $entry);
+            if ($id <= 0) {
                 continue;
             }
-            $cases .= ' WHEN ' . $caid . ' THEN ' . $sort;
-            $ids[]  = $caid;
-            $sort  += 10;
+            if ($isNote) {
+                $noteCases .= ' WHEN ' . $id . ' THEN ' . $sort;
+                $noteIds[]  = $id;
+            } else {
+                $cases .= ' WHEN ' . $id . ' THEN ' . $sort;
+                $ids[]  = $id;
+            }
+            $sort += 10;
         }
-        if (empty($ids)) {
-            return;
+        if (!empty($ids)) {
+            $idCsv = implode(',', $ids);
+            $this->db->Clear();
+            $this->db->Execute(
+                'UPDATE ' . DB_PREFIX . 'court_award
+                    SET sort_order = CASE court_award_id' . $cases . ' END,
+                        row_version = row_version + 1
+                  WHERE court_id = ' . $court_id . '
+                    AND court_award_id IN (' . $idCsv . ')
+                    AND status <> \'given\''
+            );
         }
-        $idCsv = implode(',', $ids);
-        $this->db->Clear();
-        $this->db->Execute(
-            'UPDATE ' . DB_PREFIX . 'court_award
-                SET sort_order = CASE court_award_id' . $cases . ' END,
-                    row_version = row_version + 1
-              WHERE court_id = ' . $court_id . '
-                AND court_award_id IN (' . $idCsv . ')
-                AND status <> \'given\''
-        );
+        if (!empty($noteIds)) {
+            $this->db->Clear();
+            $this->db->Execute(
+                'UPDATE ' . DB_PREFIX . 'court_note
+                    SET sort_order = CASE court_note_id' . $noteCases . ' END,
+                        row_version = row_version + 1
+                  WHERE court_id = ' . $court_id . '
+                    AND court_note_id IN (' . implode(',', $noteIds) . ')'
+            );
+        }
     }
 
-    /** Insert an artisan on a court_award and return its payload. */
+    // -----------------------------------------------------------------------
+    // Court notes — non-award line items on the running order ("autocrat
+    // announcements", "officer changeover"). Stored in court_note, NOT
+    // court_award: every court_award row is a candidate for the stage/finalize
+    // pipeline that writes the permanent player-award record, so a note kept
+    // there would be one missed filter away from being granted as an award.
+    // court_note.sort_order shares one number space with court_award.sort_order.
+    // -----------------------------------------------------------------------
+
+    /**
+     * The sort_order that puts a new line at the 'top' or 'bottom' of a court's
+     * whole running order (awards and notes together). 10 on an empty court.
+     *
+     * Two queries, not a UNION: the award half is the one addAward has always
+     * depended on, and it must keep answering on a database where court_note does
+     * not exist yet — there the note half simply contributes nothing.
+     */
+    private function edgeSortOrder($court_id, $position)
+    {
+        $court_id = (int)$court_id;
+        $lo = null;
+        $hi = null;
+        foreach (['court_award', 'court_note'] as $table) {
+            $this->db->Clear();
+            $rs = $this->db->DataSet(
+                'SELECT MIN(sort_order) AS lo, MAX(sort_order) AS hi
+                   FROM ' . DB_PREFIX . $table . ' WHERE court_id = ' . $court_id
+            );
+            if ($rs && $rs->Next() && $rs->hi !== null) {
+                $lo = $lo === null ? (int)$rs->lo : min($lo, (int)$rs->lo);
+                $hi = $hi === null ? (int)$rs->hi : max($hi, (int)$rs->hi);
+            }
+        }
+        if ($hi === null) {
+            return 10;
+        }
+        return $position === 'top' ? $lo - 10 : $hi + 10;
+    }
+
+    /**
+     * Add a note at the 'top' or 'bottom' of a court's running order. Returns the
+     * note payload, or false when the title is blank.
+     */
+    public function addNote($court_id, $title, $details, $position, $created_by)
+    {
+        $court_id = (int)$court_id;
+        $title    = mb_substr(trim((string)$title), 0, 150);
+        $details  = trim((string)$details);
+        if (!valid_id($court_id) || $title === '') {
+            return false;
+        }
+        $sort = $this->edgeSortOrder($court_id, $position === 'top' ? 'top' : 'bottom');
+
+        $this->db->Clear();
+        $this->db->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'court_note (court_id, title, details, sort_order, created_by)
+             VALUES (' . $court_id . ', \'' . $this->esc($title) . '\', \'' . $this->esc($details) . '\',
+                     ' . $sort . ', ' . (int)$created_by . ')'
+        );
+        // Connection-scoped id (see addAward) — never a "highest id for this court".
+        $this->db->Clear();
+        $idr = $this->db->DataSet('SELECT LAST_INSERT_ID() AS court_note_id');
+        $court_note_id = ($idr && $idr->Next()) ? (int)$idr->court_note_id : 0;
+        if ($court_note_id <= 0) {
+            return false;
+        }
+
+        return [
+            'CourtNoteId' => $court_note_id,
+            'Title'       => $title,
+            'Details'     => $details,
+            'SortOrder'   => $sort,
+        ];
+    }
+
+    /** A court's notes in running order: [CourtNoteId, Title, Details, SortOrder]. */
+    public function getCourtNotes($court_id)
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT court_note_id, title, details, sort_order
+               FROM ' . DB_PREFIX . 'court_note
+              WHERE court_id = ' . (int)$court_id . '
+              ORDER BY sort_order, court_note_id'
+        );
+        $notes = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $notes[] = [
+                    'CourtNoteId' => (int)$rs->court_note_id,
+                    'Title'       => $rs->title,
+                    'Details'     => $rs->details ?? '',
+                    'SortOrder'   => (int)$rs->sort_order,
+                ];
+            }
+        }
+        return $notes;
+    }
+
+    /** Rewrite a note's title and details. False when the title is blank or the note is gone. */
+    public function updateNote($court_note_id, $title, $details)
+    {
+        $court_note_id = (int)$court_note_id;
+        $title         = mb_substr(trim((string)$title), 0, 150);
+        if (!valid_id($court_note_id) || $title === '') {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_note
+                SET title = \'' . $this->esc($title) . '\',
+                    details = \'' . $this->esc(trim((string)$details)) . '\',
+                    row_version = row_version + 1
+              WHERE court_note_id = ' . $court_note_id
+        );
+        return $rs && $rs->Size() == 1;
+    }
+
+    public function removeNote($court_note_id)
+    {
+        $this->db->Clear();
+        $this->db->Execute('DELETE FROM ' . DB_PREFIX . 'court_note
+                       WHERE court_note_id = ' . (int)$court_note_id);
+    }
+
+    /** court_id that owns a note, or 0 if absent (for requireCourtAuth). */
+    public function getCourtNoteCourtId($court_note_id)
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet('SELECT court_id FROM ' . DB_PREFIX . 'court_note
+                            WHERE court_note_id = ' . (int)$court_note_id . ' LIMIT 1');
+        return ($r && $r->Next()) ? (int)$r->court_id : 0;
+    }
+
     public function addArtisan($court_award_id, $mundane_id, $contribution)
     {
         $court_award_id = (int)$court_award_id;
@@ -2054,6 +2204,20 @@ class Court
                 // into the heartbeat stamp so any mutating write flips `version`.
                 $stampParts[] = $caid . ':' . $rs->status . ':' . $sortOrd . ':'
                     . $givenBy . ':' . $rowVer . ':' . ($rs->modified ?? '');
+            }
+        }
+        // Notes share the running order, so a peer's note add/edit/move/remove has to
+        // flip `version` too or the heartbeat would never re-send the payload.
+        $this->db->Clear();
+        $ns = $this->db->DataSet(
+            'SELECT court_note_id, sort_order, row_version
+             FROM ' . DB_PREFIX . 'court_note
+             WHERE court_id = ' . $court_id . '
+             ORDER BY court_note_id'
+        );
+        if ($ns) {
+            while ($ns->Next()) {
+                $stampParts[] = 'n' . (int)$ns->court_note_id . ':' . (int)$ns->sort_order . ':' . (int)$ns->row_version;
             }
         }
         $version = md5($court_status . '|' . $mode . '|' . implode(',', $stampParts));

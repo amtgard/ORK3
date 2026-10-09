@@ -105,6 +105,7 @@
     "2026-09-09-recommendation-snooze-scope.sql": { "class": "S", "render": "full", "notes": "Records which kingdom/park throne a recommendation snooze was taken against" },
     "2026-09-09-court-planner-review-fixes.sql": { "class": "S", "render": "full", "notes": "Unique court/recommendation pair, finalize-error column, giver snapshot, cleared-citation flag" },
     "2026-09-09-recommendations-cluster-index.sql": { "class": "S", "render": "full", "notes": "Composite index backing the Recommendations Manager cluster paging query" },
+    "2026-10-09-court-notes.sql": { "class": "S", "render": "full", "notes": "Court Planner non-award line items (ork_court_note); CREATE TABLE IF NOT EXISTS, idempotent" },
     "dev-set-test-logins.php": { "class": "ES", "render": "skip", "notes": "Local-dev credential helper; not a schema migration" },
     "2026-08-22-signin-tally.sql": { "class": "S", "render": "full", "notes": "Anonymous per-day/per-client sign-in counters (no player attribution); CREATE TABLE IF NOT EXISTS, idempotent" }
   }
