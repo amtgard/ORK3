@@ -128,6 +128,17 @@ class Authorization extends Ork3
 		$this->mundane->username = trim($request['UserName']);
 		$this->mundane->email = trim($request['Email']);
 		if ($this->mundane->find()) {
+			// Bail out before touching the account if there is nowhere to send the
+			// temporary password to. The reset rewrites the stored password, so
+			// sending nothing would lock the player out of an account they could
+			// still get into a moment ago. Only dev/dist hit this -- prod
+			// config.php defines all three.
+			if (!(defined('AMAZON_SES_HOST') && AMAZON_SES_HOST !== ''
+				&& defined('AMAZON_SES_USERNAME') && AMAZON_SES_USERNAME !== ''
+				&& defined('AMAZON_SES_PASSWORD') && AMAZON_SES_PASSWORD !== '')) {
+				error_log('ResetPassword: outbound mail is not configured (AMAZON_SES_* empty); no mail sent, account left unchanged.');
+				return InvalidParameter(null, 'Password reset is unavailable: outbound mail is not configured on this server.');
+			}
 			$password = substr(md5(microtime()), 2, 11);
 			$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 1);
 			/* Only salt on password change or first password
