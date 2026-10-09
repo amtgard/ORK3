@@ -184,4 +184,80 @@ class Notification
             }
         }
     }
+
+    // Domain helper: a kingdom (or principality) officer has passed a recommendation
+    // down, so tell the officers of the recipient's park that there is something on
+    // their Recommendations tab to act on. Reads + inserts only.
+    //
+    // One notice covers "one or more": an officer who already has an unread notice
+    // for this park is not sent another, so passing down twenty recommendations in
+    // one sitting is one notification, not twenty. Once they have read it, the next
+    // pass-down tells them again.
+    public function notifyRecommendationPassedDown($recId, $passedById)
+    {
+        $recId      = (int)$recId;
+        $passedById = (int)$passedById;
+        if ($recId <= 0) {
+            return;
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT m.park_id, k.parent_kingdom_id
+               FROM ' . DB_PREFIX . 'recommendations r
+               JOIN ' . DB_PREFIX . 'mundane m      ON m.mundane_id = r.mundane_id
+               LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = m.kingdom_id
+              WHERE r.recommendations_id = ' . $recId . ' LIMIT 1'
+        );
+        if (!$rs || !$rs->Next()) {
+            return;
+        }
+        $parkId = (int)$rs->park_id;
+        if ($parkId <= 0) {
+            return;
+        }
+        // The park's own realm did the delegating: a principality's parks answer to
+        // the principality, everyone else's to the kingdom.
+        $realm   = (int)$rs->parent_kingdom_id > 0 ? 'Principality' : 'Kingdom';
+        $message = 'Your ' . $realm . ' has authorized you to give out one or more higher level awards. '
+            . 'Check your Park Recommendations tab for details.';
+        $link    = (defined('UIR') ? UIR : '') . 'Park/index/' . $parkId . '&tab=recommendations';
+
+        // The seats that act on a park's recommendations. The role is normalised
+        // before comparing so the seat is found whether it is stored as the title
+        // ('Prime Minister') or as a slug ('prime_minister').
+        $this->db->Clear();
+        $os = $this->db->DataSet(
+            'SELECT DISTINCT o.mundane_id
+               FROM ' . DB_PREFIX . 'officer o
+              WHERE o.park_id = ' . $parkId . '
+                AND o.mundane_id > 0
+                AND REPLACE(LOWER(o.role), \'_\', \' \') IN (\'monarch\', \'regent\', \'prime minister\')'
+        );
+        $officers = [];
+        if ($os) {
+            while ($os->Next()) {
+                $officers[] = (int)$os->mundane_id;
+            }
+        }
+
+        foreach ($officers as $officerId) {
+            if ($officerId === $passedById) {
+                continue;
+            }
+            $this->db->Clear();
+            $pending = $this->db->DataSet(
+                'SELECT 1 FROM ' . DB_PREFIX . 'notification
+                  WHERE mundane_id = ' . $officerId . '
+                    AND type = \'recs_passed_down\'
+                    AND link = \'' . $this->esc($link) . '\'
+                    AND read_at IS NULL AND dismissed_at IS NULL
+                  LIMIT 1'
+            );
+            if ($pending && $pending->Next()) {
+                continue;
+            }
+            $this->Add($officerId, 'recs_passed_down', $message, $link);
+        }
+    }
 }

@@ -4453,11 +4453,21 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
+        // Read before the write: only a recommendation that was not already passed
+        // down is news to the park's officers.
+        $wasPassed = (int)$awardRec->passed_to_local === 1;
+
         $this->db->Clear();
         if ($passed) {
             $this->db->query("UPDATE " . DB_PREFIX . "recommendations
 				SET passed_to_local = 1, passed_to_local_by = " . (int)$mundane_id . ", passed_to_local_at = NOW()
 				WHERE recommendations_id = " . $rec_id);
+            if (!$wasPassed) {
+                try {
+                    Ork3::$Lib->notification->notifyRecommendationPassedDown($rec_id, (int)$mundane_id);
+                } catch (\Throwable $e) { /* best-effort */
+                }
+            }
         } else {
             $this->db->query("UPDATE " . DB_PREFIX . "recommendations
 				SET passed_to_local = 0, passed_to_local_by = NULL, passed_to_local_at = NULL
