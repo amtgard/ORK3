@@ -8071,12 +8071,14 @@ class Report extends Ork3
         $this->db->Clear();
         $awardResult = $this->db->DataSet($kSql);
         $awardCols = [];
+        $realAwardIds = [];
         if ($awardResult) {
             while ($awardResult->Next()) {
                 if (!$awardResult->award_id) {
                     continue;
                 }
                 $name = $awardResult->award_name;
+                $realAwardIds[] = (int) $awardResult->award_id;
                 $awardCols[(int) $awardResult->award_id] = [
                     'Name' => $name,
                     'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
@@ -8085,11 +8087,125 @@ class Report extends Ork3
             }
         }
 
+        // Kingdom-original ladders (Order of the Hunter and friends) have no
+        // ork_award row at all, so the join above cannot reach them and
+        // a.is_ladder is never 1 for them. They were silently absent from this
+        // grid -- Northern Lights showed 15 columns and no Hunter, against 455
+        // grants. Add them as their own columns, keyed "k<kingdomaward_id>"
+        // because they all share award_id 0 and would otherwise collide.
+        // The template keys columns opaquely and already has an ungrouped
+        // (KnightGroup = '') bucket, so it needs no change.
+        $pseudoKaIds = [];
+        $pseudoScopeKingdomId = $kingdomId;
+        if ($pseudoScopeKingdomId <= 0 && $parkId > 0) {
+            $this->db->Clear();
+            $pkr = $this->db->DataSet(
+                'SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId . ' LIMIT 1'
+            );
+            if ($pkr && $pkr->Next()) {
+                $pseudoScopeKingdomId = (int) $pkr->kingdom_id;
+            }
+        }
+
+        // Walk up the parent_kingdom_id chain. A principality's members hold the
+        // PARENT kingdom's awards -- 45 active Painted Skies players hold Northern
+        // Lights' Order of the Hunter -- so the parent's kingdom-original ladders
+        // belong on the principality's grid. Real ladders already behave this way
+        // for free, because they resolve through ka.award_id to one shared
+        // ork_award row no matter which kingdom granted them; only these, keyed
+        // per kingdom, needed saying out loud.
+        // Visited set + depth cap, mirroring Authorization::HasAuthority, so a
+        // corrupt or cyclic parent_kingdom_id cannot loop.
+        $scopeKingdomIds = [];
+        $walk = $pseudoScopeKingdomId;
+        while ($walk > 0 && !in_array($walk, $scopeKingdomIds, true) && count($scopeKingdomIds) < 10) {
+            $scopeKingdomIds[] = $walk;
+            $this->db->Clear();
+            $pr = $this->db->DataSet(
+                'SELECT parent_kingdom_id FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $walk . ' LIMIT 1'
+            );
+            $walk = ($pr && $pr->Next()) ? (int) $pr->parent_kingdom_id : 0;
+        }
+
+        // One column per LADDER, not per kingdomaward row. A principality that
+        // splits off keeps running the parent's ladder under a row of its own:
+        // all four Crimson Sands players who hold both Roach rows continue the
+        // numbering rather than restarting (DW 1,2,3 -> CS 4,5,6), and the dates
+        // confirm the order. Splitting those across two columns would cut one
+        // person's progression in half, so rows whose names agree once
+        // "Order of the" is stripped are merged and the grid shows their best.
+        $pseudoCandidates = Award::pseudoLadderKingdomAwardIds();
+        $pseudoGroups = [];
+        if ($scopeKingdomIds !== [] && $pseudoCandidates !== []) {
+            $this->db->Clear();
+            $pseudoResult = $this->db->DataSet(
+                'SELECT ka.kingdomaward_id, ka.kingdom_id, ka.name AS award_name
+                 FROM ' . DB_PREFIX . 'kingdomaward ka
+                 WHERE ka.kingdom_id IN (' . implode(',', $scopeKingdomIds) . ')
+                   AND ka.kingdomaward_id IN (' . implode(',', array_map('intval', $pseudoCandidates)) . ')
+                 ORDER BY ka.name'
+            );
+            if ($pseudoResult) {
+                while ($pseudoResult->Next()) {
+                    $kaId = (int) $pseudoResult->kingdomaward_id;
+                    if (!$kaId) {
+                        continue;
+                    }
+                    $name = $pseudoResult->award_name;
+                    $display = preg_replace('/^Order of (?:the )?/i', '', $name);
+                    $slug = strtolower(trim($display));
+                    $isOwn = (int) $pseudoResult->kingdom_id === $pseudoScopeKingdomId;
+                    if (!isset($pseudoGroups[$slug])) {
+                        $pseudoGroups[$slug] = [
+                            'Name' => $name,
+                            'DisplayName' => $display,
+                            'KaIds' => [],
+                            'OwnKaId' => 0,
+                        ];
+                    }
+                    $pseudoGroups[$slug]['KaIds'][] = $kaId;
+                    // Prefer this kingdom's own row for the column key and label;
+                    // an inherited-only ladder keeps the ancestor's wording.
+                    if ($isOwn && !$pseudoGroups[$slug]['OwnKaId']) {
+                        $pseudoGroups[$slug]['OwnKaId'] = $kaId;
+                        $pseudoGroups[$slug]['Name'] = $name;
+                        $pseudoGroups[$slug]['DisplayName'] = $display;
+                    }
+                }
+            }
+        }
+
+        $pseudoKaIds = [];
+        $pseudoKeyCases = [];
+        foreach ($pseudoGroups as $group) {
+            $primary = $group['OwnKaId'] ?: min($group['KaIds']);
+            $key = 'k' . $primary;
+            $awardCols[$key] = [
+                'Name' => $group['Name'],
+                'DisplayName' => $group['DisplayName'],
+                'KnightGroup' => $knightGroupMap[$group['Name']] ?? '',
+            ];
+            $pseudoKaIds = array_merge($pseudoKaIds, $group['KaIds']);
+            $pseudoKeyCases[] = 'WHEN ka.kingdomaward_id IN (' . implode(',', $group['KaIds'])
+                . ") THEN '" . $key . "'";
+        }
+
         if ($awardCols === []) {
             return ['ScopeName' => $scopeName, 'LadderAwards' => [], 'GridRows' => []];
         }
 
-        $awardIds = implode(',', array_keys($awardCols));
+        $realIdList = $realAwardIds !== [] ? implode(',', $realAwardIds) : '0';
+        $pseudoIdList = $pseudoKaIds !== [] ? implode(',', $pseudoKaIds) : '0';
+        // Maps each kingdomaward row onto its merged column key; falls through to
+        // the numeric award_id for real ladders. Pseudo rows are tested FIRST --
+        // 12 of the 25 point at award_id 94 ("Custom Award"), so testing award_id
+        // would file them under a column that does not exist.
+        $pseudoCaseSql = $pseudoKeyCases !== []
+            ? 'CASE ' . implode(' ', $pseudoKeyCases) . ' ELSE CAST(a.award_id AS CHAR) END'
+            : 'CAST(a.award_id AS CHAR)';
+        // Cache key must cover both sets or a kingdom gaining a pseudo-ladder
+        // would keep serving the old grid.
+        $awardIds = $realIdList . '|k' . $pseudoIdList;
         $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
         $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
         if ($cachedGrid !== false) {
@@ -8104,18 +8220,30 @@ class Report extends Ork3
             ? 'AND m.park_id = ' . $parkId
             : ($kingdomId > 0 ? 'AND m.kingdom_id = ' . $kingdomId : '');
 
-        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, a.award_id,
-                           GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
+        // LEFT JOIN to ork_award, not JOIN: a kingdom-original ladder may have no
+        // row there at all. col_key matches the $awardCols keys built above --
+        // "k<kingdomaward_id>" for pseudo-ladders, the numeric award_id otherwise.
+        //
+        // The pseudo-ladder test comes FIRST and is membership-based, not
+        // "award_id = 0": 12 of the 25 point at award_id 94 ("Custom Award"), so
+        // testing award_id would file Order of the Sharpshooter and friends under
+        // column 94 -- which is not even a column here, so they would vanish again.
+        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name,
+                           {$pseudoCaseSql} AS col_key,
+                           MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count
                     FROM " . DB_PREFIX . 'mundane m
                     LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
                     JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
                     JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-                    JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
-                    WHERE m.active = 1 AND a.is_ladder = 1
-                      AND a.award_id IN (' . $awardIds . ")
+                    LEFT JOIN ' . DB_PREFIX . "award a ON a.award_id = ka.award_id
+                    WHERE m.active = 1
+                      AND (
+                            (a.is_ladder = 1 AND a.award_id IN ({$realIdList}))
+                         OR ka.kingdomaward_id IN ({$pseudoIdList})
+                          )
                       AND (ma.revoked = 0 OR ma.revoked IS NULL)
                       {$locationClause}
-                    GROUP BY m.mundane_id, a.award_id
+                    GROUP BY m.mundane_id, col_key
                     ORDER BY m.persona";
 
         $this->db->Clear();
@@ -8124,8 +8252,10 @@ class Report extends Ork3
         if ($dataResult) {
             while ($dataResult->Next()) {
                 $mid = (int) $dataResult->mundane_id;
-                $aid = (int) $dataResult->award_id;
-                if (!$mid || !$aid) {
+                // Keep as-is: PHP casts "25" to int 25 on array write, while
+                // "k7513" stays a string, matching $awardCols.
+                $aid = $dataResult->col_key;
+                if (!$mid || $aid === null || $aid === '' || $aid === '0') {
                     continue;
                 }
                 if (!isset($playerData[$mid])) {
@@ -8138,7 +8268,20 @@ class Report extends Ork3
                         'Awards' => [],
                     ];
                 }
-                $val = (int) $dataResult->award_count;
+                // Real columns keep the long-standing GREATEST(max rank, grant
+                // count): some ladders are tracked by repeat grants at rank 0,
+                // where the count IS the level.
+                //
+                // Merged kingdom columns cannot use the count. They span two
+                // kingdomaward rows, so a duplicate grant inflates it past the
+                // real rank -- Squire Countess Gemini has 7 Roach rows (a rank 5
+                // recorded twice) but reached 6, and the count would show 7.
+                // Fall back to the count only when no rank was ever recorded.
+                $_max = (int) $dataResult->max_rank;
+                $_count = (int) $dataResult->grant_count;
+                $val = (is_string($aid) && $aid !== '' && $aid[0] === 'k')
+                    ? ($_max > 0 ? $_max : $_count)
+                    : max($_max, $_count);
                 $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
             }
         }

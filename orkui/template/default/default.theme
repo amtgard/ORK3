@@ -527,7 +527,11 @@ document.addEventListener('keydown', function (e) {
 				<!-- SVG injected by JS -->
 			</button>
 <?php if ($this->__session->token == null) : ?>
-			<a href='<?=UIR;?>Login&return=<?=urlencode($_REQUEST['Route'] ?? '')?>' class='nav-login-btn'><i class='fas fa-sign-in-alt'></i> Login</a>
+			<?php /* rel=nofollow: this link points back at the CURRENT page, so every
+			         public page emits a crawlable twin that renders only the login
+			         form. Crawlers followed ~5,250 a day. Nofollow stops them
+			         discovering it; robots.txt Disallow covers ones that already have. */ ?>
+			<a href='<?=UIR;?>Login&return=<?=urlencode($_REQUEST['Route'] ?? '')?>' class='nav-login-btn' rel='nofollow'><i class='fas fa-sign-in-alt'></i> Login</a>
 <?php else : ?>
 <?php
 	$__navUid      = (int)$this->__session->user_id;

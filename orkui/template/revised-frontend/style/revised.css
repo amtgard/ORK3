@@ -6190,8 +6190,31 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
     display: none;
 }
 .pk-ac-results.pk-ac-open { display: block; }
+/* Autocomplete dropdowns inside a modal must be position:fixed, not absolute.
+   These modal boxes/bodies carry overflow-y:auto so their sticky footers stay
+   on screen, which makes them scroll containers -- and a scroll container CLIPS
+   absolutely-positioned descendants no matter how high their z-index. The list
+   is also out of flow, so it adds nothing to the scroll height and you cannot
+   scroll down to reach it; it is simply cut off at the modal's edge.
+
+   position:fixed takes them out of the clipping chain. They then need real
+   viewport coordinates, which tnPositionAcFixed() supplies -- see the observer
+   in revised.js that calls it whenever one of these opens.
+
+   Both class prefixes appear under both page prefixes (e.g. #pk-rec-overlay
+   holds a .kn-ac-results, #kn-rec-overlay holds a .pk-ac-results), so the
+   overlays are listed against both. */
 #pk-award-overlay .pk-ac-results,
-#pk-rec-overlay .pk-ac-results {
+#pk-rec-overlay .pk-ac-results,
+#pk-rec-overlay .kn-ac-results,
+#pk-moveplayer-overlay .pk-ac-results,
+#pk-mergeplayer-overlay .pk-ac-results,
+#kn-award-overlay .kn-ac-results,
+#kn-rec-overlay .pk-ac-results,
+#kn-rec-overlay .kn-ac-results,
+#kn-admin-overlay .kn-ac-results,
+#kn-moveplayer-overlay .kn-ac-results,
+#kn-mergeplayer-overlay .kn-ac-results {
     position: fixed;
     top: auto; left: auto; right: auto;
     z-index: var(--z-modal-top);
