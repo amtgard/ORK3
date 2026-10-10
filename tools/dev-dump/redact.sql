@@ -7,6 +7,8 @@
 -- dropping the audit log. Deliberately NOT redacted, because this dump is for
 -- "getting their teeth wet" and anyone trusted further gets a real backup:
 --   ork_mundane.username / other_name    (usernames are often real names)
+--                                        -- EXCEPT where the username IS an
+--                                        email address; see below
 --   ork_mundane_note.note                (30k officer notes, prose, real names)
 --   ork_recommendations.reason           (44k award write-ups about people)
 --   ork_mundane_design.about_*           (user-written bios)
@@ -24,6 +26,23 @@ DELETE FROM ork_danger_audit;
 -- needs realistic name rendering can ask for a real backup.
 UPDATE ork_mundane        SET given_name = '', surname = '', email = '';
 UPDATE ork_mundane_myisam SET given_name = '', surname = '', email = '';
+
+-- Usernames that are themselves email addresses. Usernames generally stay (see
+-- the header), but 15 people registered using their email as the login name, so
+-- for those rows the address sits on the person record right beside the
+-- given_name/surname/email just blanked above -- three identifiers removed and a
+-- fourth left in place on the same row. Found 2026-10-10 by the export scan.
+--
+-- mundane_id keeps the replacement unique, which matters: ork_mundane.username
+-- carries a UNIQUE index. This must run BEFORE the `logins` step, which hashes
+-- strtoupper(username) . password -- the workflow order (redact, then logins)
+-- already does that.
+UPDATE ork_mundane
+   SET username = CONCAT('redacted-', mundane_id)
+ WHERE username REGEXP '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}';
+UPDATE ork_mundane_myisam
+   SET username = CONCAT('redacted-', mundane_id)
+ WHERE username REGEXP '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}';
 
 -- Stored credentials.
 DELETE FROM ork_credential;
