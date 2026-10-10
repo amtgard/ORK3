@@ -1,6 +1,6 @@
 -- Court Planner: consolidated schema.
 --
--- Run THIS instead of the sixteen 2026-03-16 .. 2026-09-09 Court Planner
+-- Run THIS instead of the seventeen 2026-03-16 .. 2026-10-09 Court Planner
 -- migrations when deploying to a database that has never seen Court Planner --
 -- production. Those files are kept for boxes that are part-way through them;
 -- everything here is IF NOT EXISTS, so running both is harmless, just slower.
@@ -119,6 +119,25 @@ CREATE TABLE IF NOT EXISTS `ork_notification` (
 
 
 -- ---------------------------------------------------------------------------
+-- Court Planner notes: non-award line items on a court's running order. A
+-- separate table from ork_court_award ON PURPOSE -- every court_award row is a
+-- candidate for the stage/finalize pipeline that writes the permanent award
+-- record, so a note stored there would be one missed filter from being granted
+-- as an award. (From 2026-10-09-court-notes.sql, which shipped with the Crown
+-- Notes work after this file was first written.)
+CREATE TABLE IF NOT EXISTS `ork_court_note` (
+  `court_note_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `court_id` int(10) unsigned NOT NULL,
+  `title` varchar(150) NOT NULL DEFAULT '',
+  `details` text DEFAULT NULL,
+  `sort_order` int(11) NOT NULL DEFAULT 0,
+  `row_version` int(11) NOT NULL DEFAULT 0,
+  `created_by` int(10) unsigned NOT NULL DEFAULT 0,
+  `modified` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`court_note_id`),
+  KEY `idx_court` (`court_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 -- Pre-existing tables. These are the only statements here that touch data that
 -- already exists in production.
 -- ---------------------------------------------------------------------------
