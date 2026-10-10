@@ -2278,9 +2278,17 @@ class Player extends Ork3
     // Bust caches affected by a change to this player's recommendation data:
     //   - Report.PlayerAwardRecommendations under the three scopes (player,
     //     kingdom, park) that could hold this player's row.
+    //   - Report.DeletedAwardRecommendations (the Show Dismissed panel) under the
+    //     same three scopes — a dismiss or undelete changes that list too, and
+    //     nothing was clearing it, so the panel disagreed with the DB for 5 minutes.
+    //   - Report.PlayerAwardRecommendationsCount (the profile tab badge), which is
+    //     keyed on the ROLLED-UP kingdom id list, so it is busted per kingdom in the
+    //     rollup rather than by the recipient's own kingdom id alone.
     //   - Player.GetPlayerProfileDetails — recommendation/second changes
     //     show up on the player's awards tab and the 60s cache there
     //     needs invalidating.
+    // Every recommendation cache namespace must be busted from here; adding one
+    // without wiring it in is how the app and the DB drift apart for a whole TTL.
     // Pass kingdom_id/park_id when the caller already knows them (e.g.
     // merge/delete after the row is gone); otherwise we look them up.
     private function bust_player_award_recs_cache($mundane_id, $kingdom_id = null, $park_id = null)
@@ -2305,18 +2313,67 @@ class Player extends Ork3
         $mid = (int)$mundane_id;
         $keys = [['KingdomId' => 0, 'ParkId' => 0, 'PlayerId' => $mid]];
         if ($kid > 0) {
-            $keys[] = ['KingdomId' => $kid, 'ParkId' => 0,    'PlayerId' => 0];
+            // Both list namespaces scope through Kingdom::GetStatsKingdomIds(), so a
+            // parent kingdom that folds this principality into its statistics caches
+            // this player's recs under the PARENT's id. Bust the same id set the badge
+            // does, or the badge count updates and the list it labels does not.
+            foreach ($this->recCountBadgeKingdomIds($kid) as $listKid) {
+                $keys[] = ['KingdomId' => $listKid, 'ParkId' => 0, 'PlayerId' => 0];
+            }
         }
         if ($pid > 0) {
             $keys[] = ['KingdomId' => 0,    'ParkId' => $pid, 'PlayerId' => 0];
         }
         foreach ($keys as $kd) {
+            // Report.PlayerAwardRecommendations keys on the scope PLUS IncludeDismissed
+            // and a schema version; ghettocache->key() is a positional implode, so a
+            // bust that omits either tail field deletes nothing at all. Keep both in
+            // step with class.Report.php's key.
+            foreach ([0, 1] as $incl) {
+                Ork3::$Lib->ghettocache->bust(
+                    'Report.PlayerAwardRecommendations',
+                    Ork3::$Lib->ghettocache->key($kd + ['IncludeDismissed' => $incl, 'V' => Report::REC_CACHE_VERSION])
+                );
+            }
+            // Show Dismissed panel — same three scope shapes, plus the namespace's
+            // trailing Deleted marker.
             Ork3::$Lib->ghettocache->bust(
-                'Report.PlayerAwardRecommendations',
-                Ork3::$Lib->ghettocache->key($kd)
+                'Report.DeletedAwardRecommendations',
+                Ork3::$Lib->ghettocache->key($kd + ['Deleted' => 1, 'V' => Report::REC_CACHE_VERSION])
             );
         }
+        // Profile tab badge. Its key is the ROLLED-UP kingdom id list, so bust it for
+        // the player's own kingdom and for a parent kingdom that folds this one into
+        // its statistics — RecommendedBy 0 is the badge every viewer sees.
+        if ($kid > 0) {
+            foreach ($this->recCountBadgeKingdomIds($kid) as $badgeKid) {
+                $kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($badgeKid)));
+                Ork3::$Lib->ghettocache->bust(
+                    'Report.PlayerAwardRecommendationsCount',
+                    Ork3::$Lib->ghettocache->key([
+                        'KingdomIds'    => $kidList,
+                        'RecommendedBy' => 0,
+                        'V'             => Report::REC_CACHE_VERSION,
+                    ])
+                );
+            }
+        }
         $this->bustPlayerProfileCaches($mid);
+    }
+
+    // The kingdom itself plus its parent, when it is a principality — the two ids whose
+    // rolled-up badge count can include this player's recommendations.
+    private function recCountBadgeKingdomIds($kingdom_id)
+    {
+        $ids = [(int)$kingdom_id];
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT parent_kingdom_id FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . (int)$kingdom_id
+        );
+        if ($rs && $rs->Next() && (int)$rs->parent_kingdom_id > 0) {
+            $ids[] = (int)$rs->parent_kingdom_id;
+        }
+        return $ids;
     }
 
     public function MergePlayer($request)
@@ -3526,9 +3583,32 @@ class Player extends Ork3
 
             $awards->save();
 
-            Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['RecipientId'], $this->get_award($awards));
+            // yapo::save() re-Finds by primary key after an INSERT, so awards_id
+            // now holds the real inserted row id (the awards table has no unique
+            // key that could make LAST_INSERT_ID stale here — each grant is a new
+            // row). Surface it so callers (Court finalize) can link the committed
+            // ork_awards row deterministically instead of guessing by date.
+            $new_award_id = (int)$awards->awards_id;
 
-            return Success('');
+            // Best-effort audit: the ork_awards row is ALREADY committed above. If
+            // auditing throws, it must NOT propagate — Court::commitStagedAward
+            // treats a thrown AddAward as failure and reverts the court line to
+            // 'staged', which on a re-run would double-commit the permanent record.
+            // Swallow post-insert failures so the write stays singular and linked.
+            try {
+                Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['RecipientId'], $this->get_award($awards));
+            } catch (\Throwable $e) {
+                // audit is non-authoritative; the grant already succeeded
+            }
+
+            // Return shape: the usual FLAT Success payload
+            //   ['Status' => 0, 'Error' => …, 'Detail' => '']
+            // (callers read $r['Status'] as an int, 0 = success) PLUS an extra
+            // 'AwardId' key carrying the inserted awards_id. Adding a key leaves
+            // every existing Status/Error/Detail reader untouched.
+            $success = Success('');
+            $success['AwardId'] = $new_award_id;
+            return $success;
         } else {
             return NoAuthorization();
         }
@@ -4186,12 +4266,209 @@ class Player extends Ork3
             $awardRec->date_recommended = date('Y-m-d');
             $awardRec->recommended_by_id = $mundane_id;
             $awardRec->reason = $request['Reason'];
+            $awardRec->mask_giver = !empty($request['Anonymous']) ? 1 : 0;
             $awardRec->save();
             $this->bust_player_award_recs_cache($request['MundaneId']);
             return Success('Recommendation Added!');
         } else {
             return NoAuthorization();
         }
+    }
+
+    public function SnoozeAwardRecommendation($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
+            return NoAuthorization();
+        }
+
+        $rec_id = (int)($request['RecommendationsId'] ?? 0);
+        if (!$rec_id) {
+            return InvalidParameter();
+        }
+
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $rec_id;
+        if (!$awardRec->find()) {
+            return InvalidParameter('Recommendation not found.');
+        }
+
+        // Auth: must be park admin for recipient's park
+        $recipientInfo = $this->player_info($awardRec->mundane_id);
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT)) {
+            return NoAuthorization();
+        }
+
+        // Resolve the monarchy of the scope the officer is MANAGING, not the recipient's
+        // park: a kingdom-scope snooze must be lifted by a Coronation, not by an unrelated
+        // local park election. Callers that know their scope pass it; anything that does
+        // not falls back to the recipient's park (the historical behavior).
+        $scopeParkId    = isset($request['ScopeParkId']) ? (int)$request['ScopeParkId'] : -1;
+        $scopeKingdomId = isset($request['ScopeKingdomId']) ? (int)$request['ScopeKingdomId'] : 0;
+        if ($scopeParkId < 0) {
+            $scopeParkId    = (int)$recipientInfo['ParkId'];
+            $scopeKingdomId = 0;
+        }
+        if ($scopeKingdomId <= 0) {
+            $scopeKingdomId = (int)$recipientInfo['KingdomId'];
+            if ($scopeParkId > 0) {
+                $this->db->Clear();
+                $pk = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$scopeParkId}");
+                if ($pk && $pk->size() > 0 && $pk->next()) {
+                    $scopeKingdomId = (int)$pk->kingdom_id;
+                }
+            }
+        }
+
+        // The scope arrives from the ROUTE, and the auth check above only proves authority
+        // over the RECIPIENT's park — nothing tied the two together, so a caller could pin a
+        // snooze to an unrelated kingdom's Crown, where it would never lift. Validate here
+        // rather than in each controller: this also covers the park route and the bulk
+        // endpoint, which share this one entry point.
+        //
+        // PRINCIPALITY DECISION (concern 4): a parent-kingdom manager sees principality
+        // recipients folded in by GetStatsKingdomIds, and snoozing one pins it to the PARENT
+        // kingdom's Crown. That is deliberate — the snooze means "not for THIS court's next
+        // agenda", and the court doing the reviewing is the parent kingdom's. So the parent
+        // kingdom is an accepted scope alongside the recipient's own kingdom, and nothing
+        // else is.
+        // The READ side is scope-agnostic and follows from this: $snoozedExpr resolves the
+        // seat from the stored scope regardless of who is looking, so a rec the parent
+        // snoozed also reads as snoozed in the PRINCIPALITY's own Manager and lifts only at
+        // the parent's Coronation — which the principality's own officers cannot cycle. That
+        // is not a regression (snooze state was equally global before this change), but it is
+        // the half of the decision a future reader will trip on, so it is written down here.
+        $recipientKingdomId = (int)$recipientInfo['KingdomId'];
+        $allowedKingdomIds  = [$recipientKingdomId];
+        if ($recipientKingdomId > 0) {
+            $this->db->Clear();
+            $pk = $this->db->query("SELECT parent_kingdom_id FROM " . DB_PREFIX . "kingdom WHERE kingdom_id = {$recipientKingdomId}");
+            if ($pk && $pk->size() > 0 && $pk->next() && (int)$pk->parent_kingdom_id > 0) {
+                $allowedKingdomIds[] = (int)$pk->parent_kingdom_id;
+            }
+        }
+        if (!in_array($scopeKingdomId, $allowedKingdomIds, true)) {
+            return InvalidParameter('Snooze scope does not match this recommendation.');
+        }
+        // A park scope must likewise be the recipient's own park; any other park's
+        // monarchy is as unrelated as another kingdom's Crown.
+        if ($scopeParkId > 0 && $scopeParkId !== (int)$recipientInfo['ParkId']) {
+            return InvalidParameter('Snooze scope does not match this recommendation.');
+        }
+
+        // ORDER BY officer_id DESC LIMIT 1: a seat can carry more than one officer row,
+        // and MAX(mundane_id) picked an arbitrary one.
+        $this->db->Clear();
+        $sql = "SELECT
+			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = {$scopeKingdomId} AND o.park_id = {$scopeParkId} AND o.role = 'Monarch' ORDER BY o.officer_id DESC LIMIT 1), 0) AS monarch_id,
+			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = {$scopeKingdomId} AND o.park_id = {$scopeParkId} AND o.role = 'Regent'  ORDER BY o.officer_id DESC LIMIT 1), 0) AS regent_id";
+        $r = $this->db->query($sql);
+        $monarch_id = 0;
+        $regent_id = 0;
+        if ($r && $r->size() > 0 && $r->next()) {
+            $monarch_id = (int)$r->monarch_id;
+            $regent_id  = (int)$r->regent_id;
+        }
+
+        // A snooze lifts when the snapshotted seats change, and the IsSnoozed recompute
+        // COALESCEs a missing seat to 0 — so a snapshot of (0, 0) taken while both seats
+        // are vacant compares equal forever and the snooze can never lift. Refuse it with
+        // a message instead of writing a permanent hide.
+        if ($monarch_id === 0 && $regent_id === 0) {
+            return InvalidParameter('No Monarch or Regent is recorded for this scope, so a snooze could never expire. Record the Crown first.');
+        }
+
+        $awardRec->snoozed_by_id      = $mundane_id;
+        $awardRec->snoozed_monarch_id = $monarch_id;
+        $awardRec->snoozed_regent_id  = $regent_id;
+        // Persist WHICH throne was snapshotted so the IsSnoozed recomputes read the same seat.
+        $awardRec->snoozed_kingdom_id = $scopeKingdomId;
+        $awardRec->snoozed_park_id    = $scopeParkId;
+        $awardRec->save();
+        return Success('Recommendation snoozed.');
+    }
+
+    public function UnsnoozeAwardRecommendation($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
+            return NoAuthorization();
+        }
+
+        $rec_id = (int)($request['RecommendationsId'] ?? 0);
+        if (!$rec_id) {
+            return InvalidParameter();
+        }
+
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $rec_id;
+        if (!$awardRec->find()) {
+            return InvalidParameter('Recommendation not found.');
+        }
+
+        $recipientInfo = $this->player_info($awardRec->mundane_id);
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT)) {
+            return NoAuthorization();
+        }
+
+        // yapo's save() skips null-valued fields (isset() guard in YapoSave), so
+        // assigning null above never cleared these columns and unsnooze silently
+        // no-op'd. Clear them with a direct UPDATE instead.
+        $this->db->Clear();
+        $this->db->query(
+            "UPDATE " . DB_PREFIX . "recommendations
+			 SET snoozed_by_id = NULL, snoozed_monarch_id = NULL, snoozed_regent_id = NULL,
+			     snoozed_kingdom_id = NULL, snoozed_park_id = NULL
+			 WHERE recommendations_id = " . (int)$rec_id
+        );
+        return Success('Recommendation unsnoozed.');
+    }
+
+    // Pass-to-local toggle: a kingdom/principality officer delegates this recommendation to
+    // the recipient's home park to award (intent signal). Authority: AUTH_KINGDOM over the
+    // recipient's kingdom (the principality-auth traversal also lets a parent-kingdom officer
+    // through). Raw UPDATE (not yapo) so we can null the by/at columns on un-pass.
+    public function SetRecommendationPassedToLocal($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
+            return NoAuthorization();
+        }
+
+        $rec_id = (int)($request['RecommendationsId'] ?? 0);
+        if (!$rec_id) {
+            return InvalidParameter();
+        }
+        $passed = !empty($request['Passed']) ? 1 : 0;
+
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $rec_id;
+        if (!$awardRec->find()) {
+            return InvalidParameter('Recommendation not found.');
+        }
+
+        $recipientInfo = $this->player_info($awardRec->mundane_id);
+        $kingdom_id = (int)($recipientInfo['KingdomId'] ?? 0);
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
+
+        $this->db->Clear();
+        if ($passed) {
+            $this->db->query("UPDATE " . DB_PREFIX . "recommendations
+				SET passed_to_local = 1, passed_to_local_by = " . (int)$mundane_id . ", passed_to_local_at = NOW()
+				WHERE recommendations_id = " . $rec_id);
+        } else {
+            $this->db->query("UPDATE " . DB_PREFIX . "recommendations
+				SET passed_to_local = 0, passed_to_local_by = NULL, passed_to_local_at = NULL
+				WHERE recommendations_id = " . $rec_id);
+        }
+
+        $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
+        if (isset(Ork3::$Lib->dangeraudit)) {
+            Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, ['passed_to_local' => $passed]);
+        }
+        return Success('Recommendation pass-to-local updated.');
     }
 
     public function DeleteAwardRecommendation($request)
@@ -4223,6 +4500,16 @@ class Player extends Ork3
                         'reason'             => $awardRec->reason,
                     ];
                     $cascade_at = date('Y-m-d H:i:s');
+                    // Granted-from-Manager: notify advocates BEFORE the rec/seconds soft-delete.
+                    if (!empty($request['Granted'])) {
+                        try {
+                            Ork3::$Lib->notification->notifyRecommendationGranted(
+                                (int)$awardRec->recommendations_id,
+                                (int)$request['RequestedBy']
+                            );
+                        } catch (\Throwable $e) { /* best-effort */
+                        }
+                    }
                     $awardRec->deleted_by = $request['RequestedBy'];
                     $awardRec->deleted_at = $cascade_at;
                     $awardRec->save();
@@ -4241,6 +4528,68 @@ class Player extends Ork3
         } else {
             return NoAuthorization();
         }
+    }
+
+    /**
+     * The one definition of "this recommendation is still live", as a SQL fragment.
+     *
+     * A soft delete stamps deleted_by; historic rows (and any caller that omitted
+     * RequestedBy before the guard above rejected it) carry deleted_by = 0, which is
+     * NOT a deletion. Reading deleted_at instead — as the cluster resolver used to —
+     * makes those rows invisible to the resolver while the Manager still lists them
+     * as pending, so a granted award can be granted again.
+     *
+     * NOT yet the single source of truth: class.Report.php (PlayerAwardRecommendations,
+     * PlayerAwardRecommendationsPage and the two count queries) still inlines the
+     * identical string, and class.Notification.php still filters on deleted_at. Route
+     * new liveness tests through here, and fold those call sites in when they are next
+     * touched.
+     */
+    public static function LiveRecommendationClause($alias = 'recs')
+    {
+        return "({$alias}.deleted_by IS NULL OR {$alias}.deleted_by = 0)";
+    }
+
+    // Resolve every live recommendation in a (recipient, kingdomaward, rank) cluster
+    // as "granted": each member runs through DeleteAwardRecommendation(Granted=1), which
+    // notifies that rec's advocates BEFORE soft-deleting it and cascading its seconds.
+    // Used by the Manager group-grant and CourtAjax::grant_award. No-ops on an empty cluster.
+    public function ResolveRecommendationCluster($request)
+    {
+        $mundane_id = (int)($request['MundaneId'] ?? 0);
+        $ka_id      = (int)($request['KingdomAwardId'] ?? 0);
+        $rank       = (int)($request['Rank'] ?? 0);
+        if (!valid_id($mundane_id) || !valid_id($ka_id)) {
+            return ['Status' => 0, 'Resolved' => 0];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT recommendations_id FROM ' . DB_PREFIX . 'recommendations recs
+			  WHERE mundane_id = ' . $mundane_id . '
+			    AND kingdomaward_id = ' . $ka_id . '
+			    AND COALESCE(recs.rank, 0) = ' . $rank . '
+			    AND ' . self::LiveRecommendationClause('recs')
+        );
+        $ids = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $ids[] = (int)$rs->recommendations_id;
+            }
+        }
+
+        $resolved = 0;
+        foreach ($ids as $rid) {
+            $r = $this->DeleteAwardRecommendation([
+                'Token'             => $request['Token'] ?? '',
+                'RecommendationsId' => $rid,
+                'RequestedBy'       => (int)($request['RequestedBy'] ?? 0),
+                'Granted'           => 1,
+            ]);
+            if ((int)($r['Status'] ?? 1) === 0) {
+                $resolved++;
+            }
+        }
+        return ['Status' => 0, 'Resolved' => $resolved];
     }
 
     public function RestoreAwardRecommendation($request)
@@ -4553,6 +4902,49 @@ class Player extends Ork3
         $awardRec->save();
         $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
         return Success('Reason updated.');
+    }
+
+    /**
+     * Live (non-deleted) recommendations by OTHER people for the same player/award/rank,
+     * used to warn a submitter that someone already recommended this. Anonymous ("mask
+     * giver") recommendations are reported without the recommender's name. Capped at 5.
+     */
+    public function GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id)
+    {
+        $mundane_id         = (int)$mundane_id;
+        $kingdomaward_id    = (int)$kingdomaward_id;
+        $rank               = (int)$rank;
+        $exclude_mundane_id = (int)$exclude_mundane_id;
+
+        // COALESCE, not a bare compare: a non-ladder recommendation may store NULL rank,
+        // and `r.rank = 0` silently drops those rows.
+        $rank_clause = ' AND COALESCE(r.rank, 0) = ' . ($rank > 0 ? $rank : 0);
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT r.date_recommended, r.mask_giver, rbi.persona AS recommender_persona
+			 FROM ' . DB_PREFIX . 'recommendations r
+			 LEFT JOIN ' . DB_PREFIX . 'mundane rbi ON rbi.mundane_id = r.recommended_by_id
+			 WHERE r.mundane_id = ' . $mundane_id .
+             ' AND r.kingdomaward_id = ' . $kingdomaward_id .
+             $rank_clause .
+             ' AND ' . self::LiveRecommendationClause('r') . '
+			 AND r.recommended_by_id != ' . $exclude_mundane_id .
+            ' LIMIT 5'
+        );
+
+        $existing = array();
+        if ($rs && $rs->Size() > 0) {
+            while ($rs->Next()) {
+                $isAnon = (int)$rs->mask_giver === 1;
+                $existing[] = array(
+                    'DateRecommended'   => $rs->date_recommended,
+                    'IsAnonymous'       => $isAnon,
+                    'RecommendedByName' => $isAnon ? null : $rs->recommender_persona,
+                );
+            }
+        }
+        return $existing;
     }
 
     /**

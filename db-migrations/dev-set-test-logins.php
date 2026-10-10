@@ -3,8 +3,14 @@
  * dev-set-test-logins.php  —  LOCAL DEV ONLY
  *
  * Sets a known, simple password on one representative account per permission tier
- * (ORK admin / kingdom officer / regular player) so developers can log in and
- * exercise every access level. Re-run after each fresh database import.
+ * (ORK admin / kingdom officer / park officer / regular player) so developers can
+ * log in and exercise every access level. Re-run after each fresh database import.
+ *
+ * The park-officer tier exists because authority does not simply cascade down: a
+ * park Monarch/Regent/PM may manage that PARK's courts and recommendations but
+ * not the kingdom's (see Court::canManage). Neither the kingdom officer (who
+ * passes every check) nor the regular player (who passes none) can exercise that
+ * boundary, so it needs an account of its own.
  *
  * SAFETY: refuses to run unless it detects the local dev database
  * (DB_HOSTNAME === 'ork3-php8-db'), so it can never touch production even if
@@ -20,6 +26,7 @@
  * Options (env):
  *   DEV_PASSWORD=secret   password to set   (default: "password")
  *   DEV_KINGDOM=31        kingdom to source the officer/regular accounts from
+ *   DEV_PARK=277          park to source the park-officer account from (Felfrost)
  */
 
 if (PHP_SAPI !== 'cli') { http_response_code(403); exit("CLI only\n"); }
@@ -38,6 +45,7 @@ if (!defined('DB_HOSTNAME') || DB_HOSTNAME !== 'ork3-php8-db') {
 
 $PASSWORD = getenv('DEV_PASSWORD') ?: 'password';
 $KID      = (int)(getenv('DEV_KINGDOM') ?: 31);
+$PID      = (int)(getenv('DEV_PARK') ?: 277);
 
 global $DB;
 function firstRow($sql) { global $DB; $r = $DB->DataSet($sql); return ($r && $r->Next()) ? $r : null; }
@@ -55,6 +63,16 @@ $targets = array(
          FROM ork_officer o JOIN ork_mundane m ON m.mundane_id = o.mundane_id
          WHERE o.kingdom_id=$KID AND o.park_id=0 AND o.role IN ('Monarch','Regent','Prime Minister')
            AND LENGTH(m.username) > 0 LIMIT 1"),
+    // ORDER BY, unlike the tiers above: the Monarch is the one worth having, and
+    // an unordered LIMIT 1 would return whichever row the engine reached first.
+    'Park Officer' => firstRow(
+        "SELECT m.mundane_id, m.persona, m.username, CONCAT(p.name, ' ', o.role) AS scope
+         FROM ork_officer o
+           JOIN ork_mundane m ON m.mundane_id = o.mundane_id
+           JOIN ork_park p ON p.park_id = o.park_id
+         WHERE o.park_id=$PID AND o.role IN ('Monarch','Regent','Prime Minister')
+           AND LENGTH(m.username) > 0
+         ORDER BY FIELD(o.role,'Monarch','Regent','Prime Minister') LIMIT 1"),
     'Regular Player' => firstRow(
         "SELECT m.mundane_id, m.persona, m.username, p.name AS scope
          FROM ork_mundane m LEFT JOIN ork_park p ON p.park_id = m.park_id
@@ -82,7 +100,7 @@ function setPassword($mundane_id, $password) {
     return array('username' => $username, 'ok' => $ok);
 }
 
-printf("\nLOCAL DEV test logins  (password: \"%s\",  kingdom id: %d)\n", $PASSWORD, $KID);
+printf("\nLOCAL DEV test logins  (password: \"%s\",  kingdom id: %d,  park id: %d)\n", $PASSWORD, $KID, $PID);
 printf("%-16s %-22s %-16s %-8s %s\n", 'Tier', 'Persona', 'Username', 'Login', 'Scope');
 printf("%s\n", str_repeat('-', 78));
 foreach ($targets as $tier => $row) {

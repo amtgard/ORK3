@@ -12528,905 +12528,905 @@ $.extend($.ui, { timepicker: { version: "0.9.9" } });
    allowing multiple different settings on the same page. */
 
 function Timepicker() {
-	this.regional = []; // Available regional settings, indexed by language code
-	this.regional[''] = { // Default regional settings
-		currentText: 'Now',
-		closeText: 'Done',
-		ampm: false,
-		amNames: ['AM', 'A'],
-		pmNames: ['PM', 'P'],
-		timeFormat: 'hh:mm tt',
-		timeSuffix: '',
-		timeOnlyTitle: 'Choose Time',
-		timeText: 'Time',
-		hourText: 'Hour',
-		minuteText: 'Minute',
-		secondText: 'Second',
-		millisecText: 'Millisecond',
-		timezoneText: 'Time Zone'
-	};
-	this._defaults = { // Global defaults for all the datetime picker instances
-		showButtonPanel: true,
-		timeOnly: false,
-		showHour: true,
-		showMinute: true,
-		showSecond: false,
-		showMillisec: false,
-		showTimezone: false,
-		showTime: true,
-		stepHour: 1,
-		stepMinute: 1,
-		stepSecond: 1,
-		stepMillisec: 1,
-		hour: 0,
-		minute: 0,
-		second: 0,
-		millisec: 0,
-		timezone: '+0000',
-		hourMin: 0,
-		minuteMin: 0,
-		secondMin: 0,
-		millisecMin: 0,
-		hourMax: 23,
-		minuteMax: 59,
-		secondMax: 59,
-		millisecMax: 999,
-		minDateTime: null,
-		maxDateTime: null,
-		onSelect: null,
-		hourGrid: 0,
-		minuteGrid: 0,
-		secondGrid: 0,
-		millisecGrid: 0,
-		alwaysSetTime: true,
-		separator: ' ',
-		altFieldTimeOnly: true,
-		showTimepicker: true,
-		timezoneIso8609: false,
-		timezoneList: null,
-		addSliderAccess: false,
-		sliderAccessArgs: null
-	};
-	$.extend(this._defaults, this.regional['']);
+    this.regional = []; // Available regional settings, indexed by language code
+    this.regional[''] = { // Default regional settings
+        currentText: 'Now',
+        closeText: 'Done',
+        ampm: false,
+        amNames: ['AM', 'A'],
+        pmNames: ['PM', 'P'],
+        timeFormat: 'hh:mm tt',
+        timeSuffix: '',
+        timeOnlyTitle: 'Choose Time',
+        timeText: 'Time',
+        hourText: 'Hour',
+        minuteText: 'Minute',
+        secondText: 'Second',
+        millisecText: 'Millisecond',
+        timezoneText: 'Time Zone'
+    };
+    this._defaults = { // Global defaults for all the datetime picker instances
+        showButtonPanel: true,
+        timeOnly: false,
+        showHour: true,
+        showMinute: true,
+        showSecond: false,
+        showMillisec: false,
+        showTimezone: false,
+        showTime: true,
+        stepHour: 1,
+        stepMinute: 1,
+        stepSecond: 1,
+        stepMillisec: 1,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        millisec: 0,
+        timezone: '+0000',
+        hourMin: 0,
+        minuteMin: 0,
+        secondMin: 0,
+        millisecMin: 0,
+        hourMax: 23,
+        minuteMax: 59,
+        secondMax: 59,
+        millisecMax: 999,
+        minDateTime: null,
+        maxDateTime: null,
+        onSelect: null,
+        hourGrid: 0,
+        minuteGrid: 0,
+        secondGrid: 0,
+        millisecGrid: 0,
+        alwaysSetTime: true,
+        separator: ' ',
+        altFieldTimeOnly: true,
+        showTimepicker: true,
+        timezoneIso8609: false,
+        timezoneList: null,
+        addSliderAccess: false,
+        sliderAccessArgs: null
+    };
+    $.extend(this._defaults, this.regional['']);
 };
 
 $.extend(Timepicker.prototype, {
-	$input: null,
-	$altInput: null,
-	$timeObj: null,
-	inst: null,
-	hour_slider: null,
-	minute_slider: null,
-	second_slider: null,
-	millisec_slider: null,
-	timezone_select: null,
-	hour: 0,
-	minute: 0,
-	second: 0,
-	millisec: 0,
-	timezone: '+0000',
-	hourMinOriginal: null,
-	minuteMinOriginal: null,
-	secondMinOriginal: null,
-	millisecMinOriginal: null,
-	hourMaxOriginal: null,
-	minuteMaxOriginal: null,
-	secondMaxOriginal: null,
-	millisecMaxOriginal: null,
-	ampm: '',
-	formattedDate: '',
-	formattedTime: '',
-	formattedDateTime: '',
-	timezoneList: null,
+    $input: null,
+    $altInput: null,
+    $timeObj: null,
+    inst: null,
+    hour_slider: null,
+    minute_slider: null,
+    second_slider: null,
+    millisec_slider: null,
+    timezone_select: null,
+    hour: 0,
+    minute: 0,
+    second: 0,
+    millisec: 0,
+    timezone: '+0000',
+    hourMinOriginal: null,
+    minuteMinOriginal: null,
+    secondMinOriginal: null,
+    millisecMinOriginal: null,
+    hourMaxOriginal: null,
+    minuteMaxOriginal: null,
+    secondMaxOriginal: null,
+    millisecMaxOriginal: null,
+    ampm: '',
+    formattedDate: '',
+    formattedTime: '',
+    formattedDateTime: '',
+    timezoneList: null,
 
-	/* Override the default settings for all instances of the time picker.
-	   @param  settings  object - the new settings to use as defaults (anonymous object)
-	   @return the manager object */
-	setDefaults: function(settings) {
-		extendRemove(this._defaults, settings || {});
-		return this;
-	},
+    /* Override the default settings for all instances of the time picker.
+       @param  settings  object - the new settings to use as defaults (anonymous object)
+       @return the manager object */
+    setDefaults: function(settings) {
+        extendRemove(this._defaults, settings || {});
+        return this;
+    },
 
-	//########################################################################
-	// Create a new Timepicker instance
-	//########################################################################
-	_newInst: function($input, o) {
-		var tp_inst = new Timepicker(),
-			inlineSettings = {};
-			
-		for (var attrName in this._defaults) {
-			var attrValue = $input.attr('time:' + attrName);
-			if (attrValue) {
-				try {
-					inlineSettings[attrName] = eval(attrValue);
-				} catch (err) {
-					inlineSettings[attrName] = attrValue;
-				}
-			}
-		}
-		tp_inst._defaults = $.extend({}, this._defaults, inlineSettings, o, {
-			beforeShow: function(input, dp_inst) {
-				if ($.isFunction(o.beforeShow))
-					return o.beforeShow(input, dp_inst, tp_inst);
-			},
-			onChangeMonthYear: function(year, month, dp_inst) {
-				// Update the time as well : this prevents the time from disappearing from the $input field.
-				tp_inst._updateDateTime(dp_inst);
-				if ($.isFunction(o.onChangeMonthYear))
-					o.onChangeMonthYear.call($input[0], year, month, dp_inst, tp_inst);
-			},
-			onClose: function(dateText, dp_inst) {
-				if (tp_inst.timeDefined === true && $input.val() != '')
-					tp_inst._updateDateTime(dp_inst);
-				if ($.isFunction(o.onClose))
-					o.onClose.call($input[0], dateText, dp_inst, tp_inst);
-			},
-			timepicker: tp_inst // add timepicker as a property of datepicker: $.datepicker._get(dp_inst, 'timepicker');
-		});
-		tp_inst.amNames = $.map(tp_inst._defaults.amNames, function(val) { return val.toUpperCase() });
-		tp_inst.pmNames = $.map(tp_inst._defaults.pmNames, function(val) { return val.toUpperCase() });
+    //########################################################################
+    // Create a new Timepicker instance
+    //########################################################################
+    _newInst: function($input, o) {
+        var tp_inst = new Timepicker(),
+            inlineSettings = {};
+            
+        for (var attrName in this._defaults) {
+            var attrValue = $input.attr('time:' + attrName);
+            if (attrValue) {
+                try {
+                    inlineSettings[attrName] = eval(attrValue);
+                } catch (err) {
+                    inlineSettings[attrName] = attrValue;
+                }
+            }
+        }
+        tp_inst._defaults = $.extend({}, this._defaults, inlineSettings, o, {
+            beforeShow: function(input, dp_inst) {
+                if ($.isFunction(o.beforeShow))
+                    return o.beforeShow(input, dp_inst, tp_inst);
+            },
+            onChangeMonthYear: function(year, month, dp_inst) {
+                // Update the time as well : this prevents the time from disappearing from the $input field.
+                tp_inst._updateDateTime(dp_inst);
+                if ($.isFunction(o.onChangeMonthYear))
+                    o.onChangeMonthYear.call($input[0], year, month, dp_inst, tp_inst);
+            },
+            onClose: function(dateText, dp_inst) {
+                if (tp_inst.timeDefined === true && $input.val() != '')
+                    tp_inst._updateDateTime(dp_inst);
+                if ($.isFunction(o.onClose))
+                    o.onClose.call($input[0], dateText, dp_inst, tp_inst);
+            },
+            timepicker: tp_inst // add timepicker as a property of datepicker: $.datepicker._get(dp_inst, 'timepicker');
+        });
+        tp_inst.amNames = $.map(tp_inst._defaults.amNames, function(val) { return val.toUpperCase() });
+        tp_inst.pmNames = $.map(tp_inst._defaults.pmNames, function(val) { return val.toUpperCase() });
 
-		if (tp_inst._defaults.timezoneList === null) {
-			var timezoneList = [];
-			for (var i = -11; i <= 12; i++)
-				timezoneList.push((i >= 0 ? '+' : '-') + ('0' + Math.abs(i).toString()).slice(-2) + '00');
-			if (tp_inst._defaults.timezoneIso8609)
-				timezoneList = $.map(timezoneList, function(val) {
-					return val == '+0000' ? 'Z' : (val.substring(0, 3) + ':' + val.substring(3));
-				});
-			tp_inst._defaults.timezoneList = timezoneList;
-		}
+        if (tp_inst._defaults.timezoneList === null) {
+            var timezoneList = [];
+            for (var i = -11; i <= 12; i++)
+                timezoneList.push((i >= 0 ? '+' : '-') + ('0' + Math.abs(i).toString()).slice(-2) + '00');
+            if (tp_inst._defaults.timezoneIso8609)
+                timezoneList = $.map(timezoneList, function(val) {
+                    return val == '+0000' ? 'Z' : (val.substring(0, 3) + ':' + val.substring(3));
+                });
+            tp_inst._defaults.timezoneList = timezoneList;
+        }
 
-		tp_inst.hour = tp_inst._defaults.hour;
-		tp_inst.minute = tp_inst._defaults.minute;
-		tp_inst.second = tp_inst._defaults.second;
-		tp_inst.millisec = tp_inst._defaults.millisec;
-		tp_inst.ampm = '';
-		tp_inst.$input = $input;
+        tp_inst.hour = tp_inst._defaults.hour;
+        tp_inst.minute = tp_inst._defaults.minute;
+        tp_inst.second = tp_inst._defaults.second;
+        tp_inst.millisec = tp_inst._defaults.millisec;
+        tp_inst.ampm = '';
+        tp_inst.$input = $input;
 
-		if (o.altField)
-			tp_inst.$altInput = $(o.altField)
-				.css({ cursor: 'pointer' })
-				.focus(function(){ $input.trigger("focus"); });
-		
-		if(tp_inst._defaults.minDate==0 || tp_inst._defaults.minDateTime==0)
-		{
-			tp_inst._defaults.minDate=new Date();
-		}
-		if(tp_inst._defaults.maxDate==0 || tp_inst._defaults.maxDateTime==0)
-		{
-			tp_inst._defaults.maxDate=new Date();
-		}
-		
-		// datepicker needs minDate/maxDate, timepicker needs minDateTime/maxDateTime..
-		if(tp_inst._defaults.minDate !== undefined && tp_inst._defaults.minDate instanceof Date)
-			tp_inst._defaults.minDateTime = new Date(tp_inst._defaults.minDate.getTime());
-		if(tp_inst._defaults.minDateTime !== undefined && tp_inst._defaults.minDateTime instanceof Date)
-			tp_inst._defaults.minDate = new Date(tp_inst._defaults.minDateTime.getTime());
-		if(tp_inst._defaults.maxDate !== undefined && tp_inst._defaults.maxDate instanceof Date)
-			tp_inst._defaults.maxDateTime = new Date(tp_inst._defaults.maxDate.getTime());
-		if(tp_inst._defaults.maxDateTime !== undefined && tp_inst._defaults.maxDateTime instanceof Date)
-			tp_inst._defaults.maxDate = new Date(tp_inst._defaults.maxDateTime.getTime());
-		return tp_inst;
-	},
+        if (o.altField)
+            tp_inst.$altInput = $(o.altField)
+                .css({ cursor: 'pointer' })
+                .focus(function(){ $input.trigger("focus"); });
+        
+        if(tp_inst._defaults.minDate==0 || tp_inst._defaults.minDateTime==0)
+        {
+            tp_inst._defaults.minDate=new Date();
+        }
+        if(tp_inst._defaults.maxDate==0 || tp_inst._defaults.maxDateTime==0)
+        {
+            tp_inst._defaults.maxDate=new Date();
+        }
+        
+        // datepicker needs minDate/maxDate, timepicker needs minDateTime/maxDateTime..
+        if(tp_inst._defaults.minDate !== undefined && tp_inst._defaults.minDate instanceof Date)
+            tp_inst._defaults.minDateTime = new Date(tp_inst._defaults.minDate.getTime());
+        if(tp_inst._defaults.minDateTime !== undefined && tp_inst._defaults.minDateTime instanceof Date)
+            tp_inst._defaults.minDate = new Date(tp_inst._defaults.minDateTime.getTime());
+        if(tp_inst._defaults.maxDate !== undefined && tp_inst._defaults.maxDate instanceof Date)
+            tp_inst._defaults.maxDateTime = new Date(tp_inst._defaults.maxDate.getTime());
+        if(tp_inst._defaults.maxDateTime !== undefined && tp_inst._defaults.maxDateTime instanceof Date)
+            tp_inst._defaults.maxDate = new Date(tp_inst._defaults.maxDateTime.getTime());
+        return tp_inst;
+    },
 
-	//########################################################################
-	// add our sliders to the calendar
-	//########################################################################
-	_addTimePicker: function(dp_inst) {
-		var currDT = (this.$altInput && this._defaults.altFieldTimeOnly) ?
-				this.$input.val() + ' ' + this.$altInput.val() :
-				this.$input.val();
+    //########################################################################
+    // add our sliders to the calendar
+    //########################################################################
+    _addTimePicker: function(dp_inst) {
+        var currDT = (this.$altInput && this._defaults.altFieldTimeOnly) ?
+                this.$input.val() + ' ' + this.$altInput.val() :
+                this.$input.val();
 
-		this.timeDefined = this._parseTime(currDT);
-		this._limitMinMaxDateTime(dp_inst, false);
-		this._injectTimePicker();
-	},
+        this.timeDefined = this._parseTime(currDT);
+        this._limitMinMaxDateTime(dp_inst, false);
+        this._injectTimePicker();
+    },
 
-	//########################################################################
-	// parse the time string from input value or _setTime
-	//########################################################################
-	_parseTime: function(timeString, withDate) {
-		var regstr = this._defaults.timeFormat.toString()
-				.replace(/h{1,2}/ig, '(\\d?\\d)')
-				.replace(/m{1,2}/ig, '(\\d?\\d)')
-				.replace(/s{1,2}/ig, '(\\d?\\d)')
-				.replace(/l{1}/ig, '(\\d?\\d?\\d)')
-				.replace(/t{1,2}/ig, this._getPatternAmpm())
-				.replace(/z{1}/ig, '(z|[-+]\\d\\d:?\\d\\d)?')
-				.replace(/\s/g, '\\s?') + this._defaults.timeSuffix + '$',
-			order = this._getFormatPositions(),
-			ampm = '',
-			treg;
+    //########################################################################
+    // parse the time string from input value or _setTime
+    //########################################################################
+    _parseTime: function(timeString, withDate) {
+        var regstr = this._defaults.timeFormat.toString()
+                .replace(/h{1,2}/ig, '(\\d?\\d)')
+                .replace(/m{1,2}/ig, '(\\d?\\d)')
+                .replace(/s{1,2}/ig, '(\\d?\\d)')
+                .replace(/l{1}/ig, '(\\d?\\d?\\d)')
+                .replace(/t{1,2}/ig, this._getPatternAmpm())
+                .replace(/z{1}/ig, '(z|[-+]\\d\\d:?\\d\\d)?')
+                .replace(/\s/g, '\\s?') + this._defaults.timeSuffix + '$',
+            order = this._getFormatPositions(),
+            ampm = '',
+            treg;
 
-		if (!this.inst) this.inst = $.datepicker._getInst(this.$input[0]);
+        if (!this.inst) this.inst = $.datepicker._getInst(this.$input[0]);
 
-		if (withDate || !this._defaults.timeOnly) {
-			// the time should come after x number of characters and a space.
-			// x = at least the length of text specified by the date format
-			var dp_dateFormat = $.datepicker._get(this.inst, 'dateFormat');
-			// escape special regex characters in the seperator
-			var specials = new RegExp("[.*+?|()\\[\\]{}\\\\]", "g");
-			regstr = '^.{' + dp_dateFormat.length + ',}?' + this._defaults.separator.replace(specials, "\\$&") + regstr;
-		}
-		
-		treg = timeString.match(new RegExp(regstr, 'i'));
+        if (withDate || !this._defaults.timeOnly) {
+            // the time should come after x number of characters and a space.
+            // x = at least the length of text specified by the date format
+            var dp_dateFormat = $.datepicker._get(this.inst, 'dateFormat');
+            // escape special regex characters in the seperator
+            var specials = new RegExp("[.*+?|()\\[\\]{}\\\\]", "g");
+            regstr = '^.{' + dp_dateFormat.length + ',}?' + this._defaults.separator.replace(specials, "\\$&") + regstr;
+        }
+        
+        treg = timeString.match(new RegExp(regstr, 'i'));
 
-		if (treg) {
-			if (order.t !== -1) {
-				if (treg[order.t] === undefined || treg[order.t].length === 0) {
-					ampm = '';
-					this.ampm = '';
-				} else {
-					ampm = $.inArray(treg[order.t].toUpperCase(), this.amNames) !== -1 ? 'AM' : 'PM';
-					this.ampm = this._defaults[ampm == 'AM' ? 'amNames' : 'pmNames'][0];
-				}
-			}
+        if (treg) {
+            if (order.t !== -1) {
+                if (treg[order.t] === undefined || treg[order.t].length === 0) {
+                    ampm = '';
+                    this.ampm = '';
+                } else {
+                    ampm = $.inArray(treg[order.t].toUpperCase(), this.amNames) !== -1 ? 'AM' : 'PM';
+                    this.ampm = this._defaults[ampm == 'AM' ? 'amNames' : 'pmNames'][0];
+                }
+            }
 
-			if (order.h !== -1) {
-				if (ampm == 'AM' && treg[order.h] == '12')
-					this.hour = 0; // 12am = 0 hour
-				else if (ampm == 'PM' && treg[order.h] != '12')
-					this.hour = (parseFloat(treg[order.h]) + 12).toFixed(0); // 12pm = 12 hour, any other pm = hour + 12
-				else this.hour = Number(treg[order.h]);
-			}
+            if (order.h !== -1) {
+                if (ampm == 'AM' && treg[order.h] == '12')
+                    this.hour = 0; // 12am = 0 hour
+                else if (ampm == 'PM' && treg[order.h] != '12')
+                    this.hour = (parseFloat(treg[order.h]) + 12).toFixed(0); // 12pm = 12 hour, any other pm = hour + 12
+                else this.hour = Number(treg[order.h]);
+            }
 
-			if (order.m !== -1) this.minute = Number(treg[order.m]);
-			if (order.s !== -1) this.second = Number(treg[order.s]);
-			if (order.l !== -1) this.millisec = Number(treg[order.l]);
-			if (order.z !== -1 && treg[order.z] !== undefined) {
-				var tz = treg[order.z].toUpperCase();
-				switch (tz.length) {
-				case 1:	// Z
-					tz = this._defaults.timezoneIso8609 ? 'Z' : '+0000';
-					break;
-				case 5:	// +hhmm
-					if (this._defaults.timezoneIso8609)
-						tz = tz.substring(1) == '0000'
-						   ? 'Z'
-						   : tz.substring(0, 3) + ':' + tz.substring(3);
-					break;
-				case 6:	// +hh:mm
-					if (!this._defaults.timezoneIso8609)
-						tz = tz == 'Z' || tz.substring(1) == '00:00'
-						   ? '+0000'
-						   : tz.replace(/:/, '');
-					else if (tz.substring(1) == '00:00')
-						tz = 'Z';
-					break;
-				}
-				this.timezone = tz;
-			}
-			
-			return true;
+            if (order.m !== -1) this.minute = Number(treg[order.m]);
+            if (order.s !== -1) this.second = Number(treg[order.s]);
+            if (order.l !== -1) this.millisec = Number(treg[order.l]);
+            if (order.z !== -1 && treg[order.z] !== undefined) {
+                var tz = treg[order.z].toUpperCase();
+                switch (tz.length) {
+                case 1:	// Z
+                    tz = this._defaults.timezoneIso8609 ? 'Z' : '+0000';
+                    break;
+                case 5:	// +hhmm
+                    if (this._defaults.timezoneIso8609)
+                        tz = tz.substring(1) == '0000'
+                           ? 'Z'
+                           : tz.substring(0, 3) + ':' + tz.substring(3);
+                    break;
+                case 6:	// +hh:mm
+                    if (!this._defaults.timezoneIso8609)
+                        tz = tz == 'Z' || tz.substring(1) == '00:00'
+                           ? '+0000'
+                           : tz.replace(/:/, '');
+                    else if (tz.substring(1) == '00:00')
+                        tz = 'Z';
+                    break;
+                }
+                this.timezone = tz;
+            }
+            
+            return true;
 
-		}
-		return false;
-	},
+        }
+        return false;
+    },
 
-	//########################################################################
-	// pattern for standard and localized AM/PM markers
-	//########################################################################
-	_getPatternAmpm: function() {
-		var markers = [];
-			o = this._defaults;
-		if (o.amNames)
-			$.merge(markers, o.amNames);
-		if (o.pmNames)
-			$.merge(markers, o.pmNames);
-		markers = $.map(markers, function(val) { return val.replace(/[.*+?|()\[\]{}\\]/g, '\\$&') });
-		return '(' + markers.join('|') + ')?';
-	},
+    //########################################################################
+    // pattern for standard and localized AM/PM markers
+    //########################################################################
+    _getPatternAmpm: function() {
+        var markers = [];
+            o = this._defaults;
+        if (o.amNames)
+            $.merge(markers, o.amNames);
+        if (o.pmNames)
+            $.merge(markers, o.pmNames);
+        markers = $.map(markers, function(val) { return val.replace(/[.*+?|()\[\]{}\\]/g, '\\$&') });
+        return '(' + markers.join('|') + ')?';
+    },
 
-	//########################################################################
-	// figure out position of time elements.. cause js cant do named captures
-	//########################################################################
-	_getFormatPositions: function() {
-		var finds = this._defaults.timeFormat.toLowerCase().match(/(h{1,2}|m{1,2}|s{1,2}|l{1}|t{1,2}|z)/g),
-			orders = { h: -1, m: -1, s: -1, l: -1, t: -1, z: -1 };
+    //########################################################################
+    // figure out position of time elements.. cause js cant do named captures
+    //########################################################################
+    _getFormatPositions: function() {
+        var finds = this._defaults.timeFormat.toLowerCase().match(/(h{1,2}|m{1,2}|s{1,2}|l{1}|t{1,2}|z)/g),
+            orders = { h: -1, m: -1, s: -1, l: -1, t: -1, z: -1 };
 
-		if (finds)
-			for (var i = 0; i < finds.length; i++)
-				if (orders[finds[i].toString().charAt(0)] == -1)
-					orders[finds[i].toString().charAt(0)] = i + 1;
+        if (finds)
+            for (var i = 0; i < finds.length; i++)
+                if (orders[finds[i].toString().charAt(0)] == -1)
+                    orders[finds[i].toString().charAt(0)] = i + 1;
 
-		return orders;
-	},
+        return orders;
+    },
 
-	//########################################################################
-	// generate and inject html for timepicker into ui datepicker
-	//########################################################################
-	_injectTimePicker: function() {
-		var $dp = this.inst.dpDiv,
-			o = this._defaults,
-			tp_inst = this,
-			// Added by Peter Medeiros:
-			// - Figure out what the hour/minute/second max should be based on the step values.
-			// - Example: if stepMinute is 15, then minMax is 45.
-			hourMax = parseInt((o.hourMax - ((o.hourMax - o.hourMin) % o.stepHour)) ,10),
-			minMax  = parseInt((o.minuteMax - ((o.minuteMax - o.minuteMin) % o.stepMinute)) ,10),
-			secMax  = parseInt((o.secondMax - ((o.secondMax - o.secondMin) % o.stepSecond)) ,10),
-			millisecMax  = parseInt((o.millisecMax - ((o.millisecMax - o.millisecMin) % o.stepMillisec)) ,10),
-			dp_id = this.inst.id.toString().replace(/([^A-Za-z0-9_])/g, '');
+    //########################################################################
+    // generate and inject html for timepicker into ui datepicker
+    //########################################################################
+    _injectTimePicker: function() {
+        var $dp = this.inst.dpDiv,
+            o = this._defaults,
+            tp_inst = this,
+            // Added by Peter Medeiros:
+            // - Figure out what the hour/minute/second max should be based on the step values.
+            // - Example: if stepMinute is 15, then minMax is 45.
+            hourMax = parseInt((o.hourMax - ((o.hourMax - o.hourMin) % o.stepHour)) ,10),
+            minMax  = parseInt((o.minuteMax - ((o.minuteMax - o.minuteMin) % o.stepMinute)) ,10),
+            secMax  = parseInt((o.secondMax - ((o.secondMax - o.secondMin) % o.stepSecond)) ,10),
+            millisecMax  = parseInt((o.millisecMax - ((o.millisecMax - o.millisecMin) % o.stepMillisec)) ,10),
+            dp_id = this.inst.id.toString().replace(/([^A-Za-z0-9_])/g, '');
 
-		// Prevent displaying twice
-		//if ($dp.find("div#ui-timepicker-div-"+ dp_id).length === 0) {
-		if ($dp.find("div#ui-timepicker-div-"+ dp_id).length === 0 && o.showTimepicker) {
-			var noDisplay = ' style="display:none;"',
-				html =	'<div class="ui-timepicker-div" id="ui-timepicker-div-' + dp_id + '"><dl>' +
-						'<dt class="ui_tpicker_time_label" id="ui_tpicker_time_label_' + dp_id + '"' +
-						((o.showTime) ? '' : noDisplay) + '>' + o.timeText + '</dt>' +
-						'<dd class="ui_tpicker_time" id="ui_tpicker_time_' + dp_id + '"' +
-						((o.showTime) ? '' : noDisplay) + '></dd>' +
-						'<dt class="ui_tpicker_hour_label" id="ui_tpicker_hour_label_' + dp_id + '"' +
-						((o.showHour) ? '' : noDisplay) + '>' + o.hourText + '</dt>',
-				hourGridSize = 0,
-				minuteGridSize = 0,
-				secondGridSize = 0,
-				millisecGridSize = 0,
-				size;
+        // Prevent displaying twice
+        //if ($dp.find("div#ui-timepicker-div-"+ dp_id).length === 0) {
+        if ($dp.find("div#ui-timepicker-div-"+ dp_id).length === 0 && o.showTimepicker) {
+            var noDisplay = ' style="display:none;"',
+                html =	'<div class="ui-timepicker-div" id="ui-timepicker-div-' + dp_id + '"><dl>' +
+                        '<dt class="ui_tpicker_time_label" id="ui_tpicker_time_label_' + dp_id + '"' +
+                        ((o.showTime) ? '' : noDisplay) + '>' + o.timeText + '</dt>' +
+                        '<dd class="ui_tpicker_time" id="ui_tpicker_time_' + dp_id + '"' +
+                        ((o.showTime) ? '' : noDisplay) + '></dd>' +
+                        '<dt class="ui_tpicker_hour_label" id="ui_tpicker_hour_label_' + dp_id + '"' +
+                        ((o.showHour) ? '' : noDisplay) + '>' + o.hourText + '</dt>',
+                hourGridSize = 0,
+                minuteGridSize = 0,
+                secondGridSize = 0,
+                millisecGridSize = 0,
+                size;
 
  			// Hours
-			html += '<dd class="ui_tpicker_hour"><div id="ui_tpicker_hour_' + dp_id + '"' +
-						((o.showHour) ? '' : noDisplay) + '></div>';
-			if (o.showHour && o.hourGrid > 0) {
-				html += '<div style="padding-left: 1px"><table class="ui-tpicker-grid-label"><tr>';
+            html += '<dd class="ui_tpicker_hour"><div id="ui_tpicker_hour_' + dp_id + '"' +
+                        ((o.showHour) ? '' : noDisplay) + '></div>';
+            if (o.showHour && o.hourGrid > 0) {
+                html += '<div style="padding-left: 1px"><table class="ui-tpicker-grid-label"><tr>';
 
-				for (var h = o.hourMin; h <= hourMax; h += parseInt(o.hourGrid,10)) {
-					hourGridSize++;
-					var tmph = (o.ampm && h > 12) ? h-12 : h;
-					if (tmph < 10) tmph = '0' + tmph;
-					if (o.ampm) {
-						if (h == 0) tmph = 12 +'a';
-						else if (h < 12) tmph += 'a';
-						else tmph += 'p';
-					}
-					html += '<td>' + tmph + '</td>';
-				}
+                for (var h = o.hourMin; h <= hourMax; h += parseInt(o.hourGrid,10)) {
+                    hourGridSize++;
+                    var tmph = (o.ampm && h > 12) ? h-12 : h;
+                    if (tmph < 10) tmph = '0' + tmph;
+                    if (o.ampm) {
+                        if (h == 0) tmph = 12 +'a';
+                        else if (h < 12) tmph += 'a';
+                        else tmph += 'p';
+                    }
+                    html += '<td>' + tmph + '</td>';
+                }
 
-				html += '</tr></table></div>';
-			}
-			html += '</dd>';
+                html += '</tr></table></div>';
+            }
+            html += '</dd>';
 
-			// Minutes
-			html += '<dt class="ui_tpicker_minute_label" id="ui_tpicker_minute_label_' + dp_id + '"' +
-					((o.showMinute) ? '' : noDisplay) + '>' + o.minuteText + '</dt>'+
-					'<dd class="ui_tpicker_minute"><div id="ui_tpicker_minute_' + dp_id + '"' +
-							((o.showMinute) ? '' : noDisplay) + '></div>';
+            // Minutes
+            html += '<dt class="ui_tpicker_minute_label" id="ui_tpicker_minute_label_' + dp_id + '"' +
+                    ((o.showMinute) ? '' : noDisplay) + '>' + o.minuteText + '</dt>'+
+                    '<dd class="ui_tpicker_minute"><div id="ui_tpicker_minute_' + dp_id + '"' +
+                            ((o.showMinute) ? '' : noDisplay) + '></div>';
 
-			if (o.showMinute && o.minuteGrid > 0) {
-				html += '<div style="padding-left: 1px"><table class="ui-tpicker-grid-label"><tr>';
+            if (o.showMinute && o.minuteGrid > 0) {
+                html += '<div style="padding-left: 1px"><table class="ui-tpicker-grid-label"><tr>';
 
-				for (var m = o.minuteMin; m <= minMax; m += parseInt(o.minuteGrid,10)) {
-					minuteGridSize++;
-					html += '<td>' + ((m < 10) ? '0' : '') + m + '</td>';
-				}
+                for (var m = o.minuteMin; m <= minMax; m += parseInt(o.minuteGrid,10)) {
+                    minuteGridSize++;
+                    html += '<td>' + ((m < 10) ? '0' : '') + m + '</td>';
+                }
 
-				html += '</tr></table></div>';
-			}
-			html += '</dd>';
+                html += '</tr></table></div>';
+            }
+            html += '</dd>';
 
-			// Seconds
-			html += '<dt class="ui_tpicker_second_label" id="ui_tpicker_second_label_' + dp_id + '"' +
-					((o.showSecond) ? '' : noDisplay) + '>' + o.secondText + '</dt>'+
-					'<dd class="ui_tpicker_second"><div id="ui_tpicker_second_' + dp_id + '"'+
-							((o.showSecond) ? '' : noDisplay) + '></div>';
+            // Seconds
+            html += '<dt class="ui_tpicker_second_label" id="ui_tpicker_second_label_' + dp_id + '"' +
+                    ((o.showSecond) ? '' : noDisplay) + '>' + o.secondText + '</dt>'+
+                    '<dd class="ui_tpicker_second"><div id="ui_tpicker_second_' + dp_id + '"'+
+                            ((o.showSecond) ? '' : noDisplay) + '></div>';
 
-			if (o.showSecond && o.secondGrid > 0) {
-				html += '<div style="padding-left: 1px"><table><tr>';
+            if (o.showSecond && o.secondGrid > 0) {
+                html += '<div style="padding-left: 1px"><table><tr>';
 
-				for (var s = o.secondMin; s <= secMax; s += parseInt(o.secondGrid,10)) {
-					secondGridSize++;
-					html += '<td>' + ((s < 10) ? '0' : '') + s + '</td>';
-				}
+                for (var s = o.secondMin; s <= secMax; s += parseInt(o.secondGrid,10)) {
+                    secondGridSize++;
+                    html += '<td>' + ((s < 10) ? '0' : '') + s + '</td>';
+                }
 
-				html += '</tr></table></div>';
-			}
-			html += '</dd>';
+                html += '</tr></table></div>';
+            }
+            html += '</dd>';
 
-			// Milliseconds
-			html += '<dt class="ui_tpicker_millisec_label" id="ui_tpicker_millisec_label_' + dp_id + '"' +
-					((o.showMillisec) ? '' : noDisplay) + '>' + o.millisecText + '</dt>'+
-					'<dd class="ui_tpicker_millisec"><div id="ui_tpicker_millisec_' + dp_id + '"'+
-							((o.showMillisec) ? '' : noDisplay) + '></div>';
+            // Milliseconds
+            html += '<dt class="ui_tpicker_millisec_label" id="ui_tpicker_millisec_label_' + dp_id + '"' +
+                    ((o.showMillisec) ? '' : noDisplay) + '>' + o.millisecText + '</dt>'+
+                    '<dd class="ui_tpicker_millisec"><div id="ui_tpicker_millisec_' + dp_id + '"'+
+                            ((o.showMillisec) ? '' : noDisplay) + '></div>';
 
-			if (o.showMillisec && o.millisecGrid > 0) {
-				html += '<div style="padding-left: 1px"><table><tr>';
+            if (o.showMillisec && o.millisecGrid > 0) {
+                html += '<div style="padding-left: 1px"><table><tr>';
 
-				for (var l = o.millisecMin; l <= millisecMax; l += parseInt(o.millisecGrid,10)) {
-					millisecGridSize++;
-					html += '<td>' + ((l < 10) ? '0' : '') + l + '</td>';
-				}
+                for (var l = o.millisecMin; l <= millisecMax; l += parseInt(o.millisecGrid,10)) {
+                    millisecGridSize++;
+                    html += '<td>' + ((l < 10) ? '0' : '') + l + '</td>';
+                }
 
-				html += '</tr></table></div>';
-			}
-			html += '</dd>';
+                html += '</tr></table></div>';
+            }
+            html += '</dd>';
 
-			// Timezone
-			html += '<dt class="ui_tpicker_timezone_label" id="ui_tpicker_timezone_label_' + dp_id + '"' +
-					((o.showTimezone) ? '' : noDisplay) + '>' + o.timezoneText + '</dt>';
-			html += '<dd class="ui_tpicker_timezone" id="ui_tpicker_timezone_' + dp_id + '"'	+
-							((o.showTimezone) ? '' : noDisplay) + '></dd>';
+            // Timezone
+            html += '<dt class="ui_tpicker_timezone_label" id="ui_tpicker_timezone_label_' + dp_id + '"' +
+                    ((o.showTimezone) ? '' : noDisplay) + '>' + o.timezoneText + '</dt>';
+            html += '<dd class="ui_tpicker_timezone" id="ui_tpicker_timezone_' + dp_id + '"'	+
+                            ((o.showTimezone) ? '' : noDisplay) + '></dd>';
 
-			html += '</dl></div>';
-			$tp = $(html);
+            html += '</dl></div>';
+            $tp = $(html);
 
-				// if we only want time picker...
-			if (o.timeOnly === true) {
-				$tp.prepend(
-					'<div class="ui-widget-header ui-helper-clearfix ui-corner-all">' +
-						'<div class="ui-datepicker-title">' + o.timeOnlyTitle + '</div>' +
-					'</div>');
-				$dp.find('.ui-datepicker-header, .ui-datepicker-calendar').hide();
-			}
+                // if we only want time picker...
+            if (o.timeOnly === true) {
+                $tp.prepend(
+                    '<div class="ui-widget-header ui-helper-clearfix ui-corner-all">' +
+                        '<div class="ui-datepicker-title">' + o.timeOnlyTitle + '</div>' +
+                    '</div>');
+                $dp.find('.ui-datepicker-header, .ui-datepicker-calendar').hide();
+            }
 
-			this.hour_slider = $tp.find('#ui_tpicker_hour_'+ dp_id).slider({
-				orientation: "horizontal",
-				value: this.hour,
-				min: o.hourMin,
-				max: hourMax,
-				step: o.stepHour,
-				slide: function(event, ui) {
-					tp_inst.hour_slider.slider( "option", "value", ui.value);
-					tp_inst._onTimeChange();
-				}
-			});
+            this.hour_slider = $tp.find('#ui_tpicker_hour_'+ dp_id).slider({
+                orientation: "horizontal",
+                value: this.hour,
+                min: o.hourMin,
+                max: hourMax,
+                step: o.stepHour,
+                slide: function(event, ui) {
+                    tp_inst.hour_slider.slider( "option", "value", ui.value);
+                    tp_inst._onTimeChange();
+                }
+            });
 
-			
-			// Updated by Peter Medeiros:
-			// - Pass in Event and UI instance into slide function
-			this.minute_slider = $tp.find('#ui_tpicker_minute_'+ dp_id).slider({
-				orientation: "horizontal",
-				value: this.minute,
-				min: o.minuteMin,
-				max: minMax,
-				step: o.stepMinute,
-				slide: function(event, ui) {
-					tp_inst.minute_slider.slider( "option", "value", ui.value);
-					tp_inst._onTimeChange();
-				}
-			});
+            
+            // Updated by Peter Medeiros:
+            // - Pass in Event and UI instance into slide function
+            this.minute_slider = $tp.find('#ui_tpicker_minute_'+ dp_id).slider({
+                orientation: "horizontal",
+                value: this.minute,
+                min: o.minuteMin,
+                max: minMax,
+                step: o.stepMinute,
+                slide: function(event, ui) {
+                    tp_inst.minute_slider.slider( "option", "value", ui.value);
+                    tp_inst._onTimeChange();
+                }
+            });
 
-			this.second_slider = $tp.find('#ui_tpicker_second_'+ dp_id).slider({
-				orientation: "horizontal",
-				value: this.second,
-				min: o.secondMin,
-				max: secMax,
-				step: o.stepSecond,
-				slide: function(event, ui) {
-					tp_inst.second_slider.slider( "option", "value", ui.value);
-					tp_inst._onTimeChange();
-				}
-			});
+            this.second_slider = $tp.find('#ui_tpicker_second_'+ dp_id).slider({
+                orientation: "horizontal",
+                value: this.second,
+                min: o.secondMin,
+                max: secMax,
+                step: o.stepSecond,
+                slide: function(event, ui) {
+                    tp_inst.second_slider.slider( "option", "value", ui.value);
+                    tp_inst._onTimeChange();
+                }
+            });
 
-			this.millisec_slider = $tp.find('#ui_tpicker_millisec_'+ dp_id).slider({
-				orientation: "horizontal",
-				value: this.millisec,
-				min: o.millisecMin,
-				max: millisecMax,
-				step: o.stepMillisec,
-				slide: function(event, ui) {
-					tp_inst.millisec_slider.slider( "option", "value", ui.value);
-					tp_inst._onTimeChange();
-				}
-			});
+            this.millisec_slider = $tp.find('#ui_tpicker_millisec_'+ dp_id).slider({
+                orientation: "horizontal",
+                value: this.millisec,
+                min: o.millisecMin,
+                max: millisecMax,
+                step: o.stepMillisec,
+                slide: function(event, ui) {
+                    tp_inst.millisec_slider.slider( "option", "value", ui.value);
+                    tp_inst._onTimeChange();
+                }
+            });
 
-			this.timezone_select = $tp.find('#ui_tpicker_timezone_'+ dp_id).append('<select></select>').find("select");
-			$.fn.append.apply(this.timezone_select,
-				$.map(o.timezoneList, function(val, idx) {
-					return $("<option />")
-						.val(typeof val == "object" ? val.value : val)
-						.text(typeof val == "object" ? val.label : val);
-				})
-			);
-			this.timezone_select.val((typeof this.timezone != "undefined" && this.timezone != null && this.timezone != "") ? this.timezone : o.timezone);
-			this.timezone_select.change(function() {
-				tp_inst._onTimeChange();
-			});
+            this.timezone_select = $tp.find('#ui_tpicker_timezone_'+ dp_id).append('<select></select>').find("select");
+            $.fn.append.apply(this.timezone_select,
+                $.map(o.timezoneList, function(val, idx) {
+                    return $("<option />")
+                        .val(typeof val == "object" ? val.value : val)
+                        .text(typeof val == "object" ? val.label : val);
+                })
+            );
+            this.timezone_select.val((typeof this.timezone != "undefined" && this.timezone != null && this.timezone != "") ? this.timezone : o.timezone);
+            this.timezone_select.change(function() {
+                tp_inst._onTimeChange();
+            });
 
-			// Add grid functionality
-			if (o.showHour && o.hourGrid > 0) {
-				size = 100 * hourGridSize * o.hourGrid / (hourMax - o.hourMin);
+            // Add grid functionality
+            if (o.showHour && o.hourGrid > 0) {
+                size = 100 * hourGridSize * o.hourGrid / (hourMax - o.hourMin);
 
-				$tp.find(".ui_tpicker_hour table").css({
-					width: size + "%",
-					marginLeft: (size / (-2 * hourGridSize)) + "%",
-					borderCollapse: 'collapse'
-				}).find("td").each( function(index) {
-					$(this).click(function() {
-						var h = $(this).html();
-						if(o.ampm)	{
-							var ap = h.substring(2).toLowerCase(),
-								aph = parseInt(h.substring(0,2), 10);
-							if (ap == 'a') {
-								if (aph == 12) h = 0;
-								else h = aph;
-							} else if (aph == 12) h = 12;
-							else h = aph + 12;
-						}
-						tp_inst.hour_slider.slider("option", "value", h);
-						tp_inst._onTimeChange();
-						tp_inst._onSelectHandler();
-					}).css({
-						cursor: 'pointer',
-						width: (100 / hourGridSize) + '%',
-						textAlign: 'center',
-						overflow: 'hidden'
-					});
-				});
-			}
+                $tp.find(".ui_tpicker_hour table").css({
+                    width: size + "%",
+                    marginLeft: (size / (-2 * hourGridSize)) + "%",
+                    borderCollapse: 'collapse'
+                }).find("td").each( function(index) {
+                    $(this).click(function() {
+                        var h = $(this).html();
+                        if(o.ampm)	{
+                            var ap = h.substring(2).toLowerCase(),
+                                aph = parseInt(h.substring(0,2), 10);
+                            if (ap == 'a') {
+                                if (aph == 12) h = 0;
+                                else h = aph;
+                            } else if (aph == 12) h = 12;
+                            else h = aph + 12;
+                        }
+                        tp_inst.hour_slider.slider("option", "value", h);
+                        tp_inst._onTimeChange();
+                        tp_inst._onSelectHandler();
+                    }).css({
+                        cursor: 'pointer',
+                        width: (100 / hourGridSize) + '%',
+                        textAlign: 'center',
+                        overflow: 'hidden'
+                    });
+                });
+            }
 
-			if (o.showMinute && o.minuteGrid > 0) {
-				size = 100 * minuteGridSize * o.minuteGrid / (minMax - o.minuteMin);
-				$tp.find(".ui_tpicker_minute table").css({
-					width: size + "%",
-					marginLeft: (size / (-2 * minuteGridSize)) + "%",
-					borderCollapse: 'collapse'
-				}).find("td").each(function(index) {
-					$(this).click(function() {
-						tp_inst.minute_slider.slider("option", "value", $(this).html());
-						tp_inst._onTimeChange();
-						tp_inst._onSelectHandler();
-					}).css({
-						cursor: 'pointer',
-						width: (100 / minuteGridSize) + '%',
-						textAlign: 'center',
-						overflow: 'hidden'
-					});
-				});
-			}
+            if (o.showMinute && o.minuteGrid > 0) {
+                size = 100 * minuteGridSize * o.minuteGrid / (minMax - o.minuteMin);
+                $tp.find(".ui_tpicker_minute table").css({
+                    width: size + "%",
+                    marginLeft: (size / (-2 * minuteGridSize)) + "%",
+                    borderCollapse: 'collapse'
+                }).find("td").each(function(index) {
+                    $(this).click(function() {
+                        tp_inst.minute_slider.slider("option", "value", $(this).html());
+                        tp_inst._onTimeChange();
+                        tp_inst._onSelectHandler();
+                    }).css({
+                        cursor: 'pointer',
+                        width: (100 / minuteGridSize) + '%',
+                        textAlign: 'center',
+                        overflow: 'hidden'
+                    });
+                });
+            }
 
-			if (o.showSecond && o.secondGrid > 0) {
-				$tp.find(".ui_tpicker_second table").css({
-					width: size + "%",
-					marginLeft: (size / (-2 * secondGridSize)) + "%",
-					borderCollapse: 'collapse'
-				}).find("td").each(function(index) {
-					$(this).click(function() {
-						tp_inst.second_slider.slider("option", "value", $(this).html());
-						tp_inst._onTimeChange();
-						tp_inst._onSelectHandler();
-					}).css({
-						cursor: 'pointer',
-						width: (100 / secondGridSize) + '%',
-						textAlign: 'center',
-						overflow: 'hidden'
-					});
-				});
-			}
+            if (o.showSecond && o.secondGrid > 0) {
+                $tp.find(".ui_tpicker_second table").css({
+                    width: size + "%",
+                    marginLeft: (size / (-2 * secondGridSize)) + "%",
+                    borderCollapse: 'collapse'
+                }).find("td").each(function(index) {
+                    $(this).click(function() {
+                        tp_inst.second_slider.slider("option", "value", $(this).html());
+                        tp_inst._onTimeChange();
+                        tp_inst._onSelectHandler();
+                    }).css({
+                        cursor: 'pointer',
+                        width: (100 / secondGridSize) + '%',
+                        textAlign: 'center',
+                        overflow: 'hidden'
+                    });
+                });
+            }
 
-			if (o.showMillisec && o.millisecGrid > 0) {
-				$tp.find(".ui_tpicker_millisec table").css({
-					width: size + "%",
-					marginLeft: (size / (-2 * millisecGridSize)) + "%",
-					borderCollapse: 'collapse'
-				}).find("td").each(function(index) {
-					$(this).click(function() {
-						tp_inst.millisec_slider.slider("option", "value", $(this).html());
-						tp_inst._onTimeChange();
-						tp_inst._onSelectHandler();
-					}).css({
-						cursor: 'pointer',
-						width: (100 / millisecGridSize) + '%',
-						textAlign: 'center',
-						overflow: 'hidden'
-					});
-				});
-			}
+            if (o.showMillisec && o.millisecGrid > 0) {
+                $tp.find(".ui_tpicker_millisec table").css({
+                    width: size + "%",
+                    marginLeft: (size / (-2 * millisecGridSize)) + "%",
+                    borderCollapse: 'collapse'
+                }).find("td").each(function(index) {
+                    $(this).click(function() {
+                        tp_inst.millisec_slider.slider("option", "value", $(this).html());
+                        tp_inst._onTimeChange();
+                        tp_inst._onSelectHandler();
+                    }).css({
+                        cursor: 'pointer',
+                        width: (100 / millisecGridSize) + '%',
+                        textAlign: 'center',
+                        overflow: 'hidden'
+                    });
+                });
+            }
 
-			var $buttonPanel = $dp.find('.ui-datepicker-buttonpane');
-			if ($buttonPanel.length) $buttonPanel.before($tp);
-			else $dp.append($tp);
+            var $buttonPanel = $dp.find('.ui-datepicker-buttonpane');
+            if ($buttonPanel.length) $buttonPanel.before($tp);
+            else $dp.append($tp);
 
-			this.$timeObj = $tp.find('#ui_tpicker_time_'+ dp_id);
+            this.$timeObj = $tp.find('#ui_tpicker_time_'+ dp_id);
 
-			if (this.inst !== null) {
-				var timeDefined = this.timeDefined;
-				this._onTimeChange();
-				this.timeDefined = timeDefined;
-			}
+            if (this.inst !== null) {
+                var timeDefined = this.timeDefined;
+                this._onTimeChange();
+                this.timeDefined = timeDefined;
+            }
 
-			//Emulate datepicker onSelect behavior. Call on slidestop.
-			var onSelectDelegate = function() {
-				tp_inst._onSelectHandler();
-			};
-			this.hour_slider.bind('slidestop',onSelectDelegate);
-			this.minute_slider.bind('slidestop',onSelectDelegate);
-			this.second_slider.bind('slidestop',onSelectDelegate);
-			this.millisec_slider.bind('slidestop',onSelectDelegate);
-			
-			// slideAccess integration: http://trentrichardson.com/2011/11/11/jquery-ui-sliders-and-touch-accessibility/
-			if (this._defaults.addSliderAccess){
-				var sliderAccessArgs = this._defaults.sliderAccessArgs;
-				setTimeout(function(){ // fix for inline mode
-					if($tp.find('.ui-slider-access').length == 0){
-						$tp.find('.ui-slider:visible').sliderAccess(sliderAccessArgs);
+            //Emulate datepicker onSelect behavior. Call on slidestop.
+            var onSelectDelegate = function() {
+                tp_inst._onSelectHandler();
+            };
+            this.hour_slider.bind('slidestop',onSelectDelegate);
+            this.minute_slider.bind('slidestop',onSelectDelegate);
+            this.second_slider.bind('slidestop',onSelectDelegate);
+            this.millisec_slider.bind('slidestop',onSelectDelegate);
+            
+            // slideAccess integration: http://trentrichardson.com/2011/11/11/jquery-ui-sliders-and-touch-accessibility/
+            if (this._defaults.addSliderAccess){
+                var sliderAccessArgs = this._defaults.sliderAccessArgs;
+                setTimeout(function(){ // fix for inline mode
+                    if($tp.find('.ui-slider-access').length == 0){
+                        $tp.find('.ui-slider:visible').sliderAccess(sliderAccessArgs);
 
-						// fix any grids since sliders are shorter
-						var sliderAccessWidth = $tp.find('.ui-slider-access:eq(0)').outerWidth(true);
-						if(sliderAccessWidth){
-							$tp.find('table:visible').each(function(){
-								var $g = $(this),
-									oldWidth = $g.outerWidth(),
-									oldMarginLeft = $g.css('marginLeft').toString().replace('%',''),
-									newWidth = oldWidth - sliderAccessWidth,
-									newMarginLeft = ((oldMarginLeft * newWidth)/oldWidth) + '%';
-						
-								$g.css({ width: newWidth, marginLeft: newMarginLeft });
-							});
-						}
-					}
-				},0);
-			}
-			// end slideAccess integration
-			
-		}
-	},
+                        // fix any grids since sliders are shorter
+                        var sliderAccessWidth = $tp.find('.ui-slider-access:eq(0)').outerWidth(true);
+                        if(sliderAccessWidth){
+                            $tp.find('table:visible').each(function(){
+                                var $g = $(this),
+                                    oldWidth = $g.outerWidth(),
+                                    oldMarginLeft = $g.css('marginLeft').toString().replace('%',''),
+                                    newWidth = oldWidth - sliderAccessWidth,
+                                    newMarginLeft = ((oldMarginLeft * newWidth)/oldWidth) + '%';
+                        
+                                $g.css({ width: newWidth, marginLeft: newMarginLeft });
+                            });
+                        }
+                    }
+                },0);
+            }
+            // end slideAccess integration
+            
+        }
+    },
 
-	//########################################################################
-	// This function tries to limit the ability to go outside the
-	// min/max date range
-	//########################################################################
-	_limitMinMaxDateTime: function(dp_inst, adjustSliders){
-		var o = this._defaults,
-			dp_date = new Date(dp_inst.selectedYear, dp_inst.selectedMonth, dp_inst.selectedDay);
+    //########################################################################
+    // This function tries to limit the ability to go outside the
+    // min/max date range
+    //########################################################################
+    _limitMinMaxDateTime: function(dp_inst, adjustSliders){
+        var o = this._defaults,
+            dp_date = new Date(dp_inst.selectedYear, dp_inst.selectedMonth, dp_inst.selectedDay);
 
-		if(!this._defaults.showTimepicker) return; // No time so nothing to check here
+        if(!this._defaults.showTimepicker) return; // No time so nothing to check here
 
-		if($.datepicker._get(dp_inst, 'minDateTime') !== null && $.datepicker._get(dp_inst, 'minDateTime') !== undefined && dp_date){
-			var minDateTime = $.datepicker._get(dp_inst, 'minDateTime'),
-				minDateTimeDate = new Date(minDateTime.getFullYear(), minDateTime.getMonth(), minDateTime.getDate(), 0, 0, 0, 0);
+        if($.datepicker._get(dp_inst, 'minDateTime') !== null && $.datepicker._get(dp_inst, 'minDateTime') !== undefined && dp_date){
+            var minDateTime = $.datepicker._get(dp_inst, 'minDateTime'),
+                minDateTimeDate = new Date(minDateTime.getFullYear(), minDateTime.getMonth(), minDateTime.getDate(), 0, 0, 0, 0);
 
-			if(this.hourMinOriginal === null || this.minuteMinOriginal === null || this.secondMinOriginal === null || this.millisecMinOriginal === null){
-				this.hourMinOriginal = o.hourMin;
-				this.minuteMinOriginal = o.minuteMin;
-				this.secondMinOriginal = o.secondMin;
-				this.millisecMinOriginal = o.millisecMin;
-			}
+            if(this.hourMinOriginal === null || this.minuteMinOriginal === null || this.secondMinOriginal === null || this.millisecMinOriginal === null){
+                this.hourMinOriginal = o.hourMin;
+                this.minuteMinOriginal = o.minuteMin;
+                this.secondMinOriginal = o.secondMin;
+                this.millisecMinOriginal = o.millisecMin;
+            }
 
-			if(dp_inst.settings.timeOnly || minDateTimeDate.getTime() == dp_date.getTime()) {
-				this._defaults.hourMin = minDateTime.getHours();
-				if (this.hour <= this._defaults.hourMin) {
-					this.hour = this._defaults.hourMin;
-					this._defaults.minuteMin = minDateTime.getMinutes();
-					if (this.minute <= this._defaults.minuteMin) {
-						this.minute = this._defaults.minuteMin;
-						this._defaults.secondMin = minDateTime.getSeconds();
-					} else if (this.second <= this._defaults.secondMin){
-						this.second = this._defaults.secondMin;
-						this._defaults.millisecMin = minDateTime.getMilliseconds();
-					} else {
-						if(this.millisec < this._defaults.millisecMin)
-							this.millisec = this._defaults.millisecMin;
-						this._defaults.millisecMin = this.millisecMinOriginal;
-					}
-				} else {
-					this._defaults.minuteMin = this.minuteMinOriginal;
-					this._defaults.secondMin = this.secondMinOriginal;
-					this._defaults.millisecMin = this.millisecMinOriginal;
-				}
-			}else{
-				this._defaults.hourMin = this.hourMinOriginal;
-				this._defaults.minuteMin = this.minuteMinOriginal;
-				this._defaults.secondMin = this.secondMinOriginal;
-				this._defaults.millisecMin = this.millisecMinOriginal;
-			}
-		}
+            if(dp_inst.settings.timeOnly || minDateTimeDate.getTime() == dp_date.getTime()) {
+                this._defaults.hourMin = minDateTime.getHours();
+                if (this.hour <= this._defaults.hourMin) {
+                    this.hour = this._defaults.hourMin;
+                    this._defaults.minuteMin = minDateTime.getMinutes();
+                    if (this.minute <= this._defaults.minuteMin) {
+                        this.minute = this._defaults.minuteMin;
+                        this._defaults.secondMin = minDateTime.getSeconds();
+                    } else if (this.second <= this._defaults.secondMin){
+                        this.second = this._defaults.secondMin;
+                        this._defaults.millisecMin = minDateTime.getMilliseconds();
+                    } else {
+                        if(this.millisec < this._defaults.millisecMin)
+                            this.millisec = this._defaults.millisecMin;
+                        this._defaults.millisecMin = this.millisecMinOriginal;
+                    }
+                } else {
+                    this._defaults.minuteMin = this.minuteMinOriginal;
+                    this._defaults.secondMin = this.secondMinOriginal;
+                    this._defaults.millisecMin = this.millisecMinOriginal;
+                }
+            }else{
+                this._defaults.hourMin = this.hourMinOriginal;
+                this._defaults.minuteMin = this.minuteMinOriginal;
+                this._defaults.secondMin = this.secondMinOriginal;
+                this._defaults.millisecMin = this.millisecMinOriginal;
+            }
+        }
 
-		if($.datepicker._get(dp_inst, 'maxDateTime') !== null && $.datepicker._get(dp_inst, 'maxDateTime') !== undefined && dp_date){
-			var maxDateTime = $.datepicker._get(dp_inst, 'maxDateTime'),
-				maxDateTimeDate = new Date(maxDateTime.getFullYear(), maxDateTime.getMonth(), maxDateTime.getDate(), 0, 0, 0, 0);
+        if($.datepicker._get(dp_inst, 'maxDateTime') !== null && $.datepicker._get(dp_inst, 'maxDateTime') !== undefined && dp_date){
+            var maxDateTime = $.datepicker._get(dp_inst, 'maxDateTime'),
+                maxDateTimeDate = new Date(maxDateTime.getFullYear(), maxDateTime.getMonth(), maxDateTime.getDate(), 0, 0, 0, 0);
 
-			if(this.hourMaxOriginal === null || this.minuteMaxOriginal === null || this.secondMaxOriginal === null){
-				this.hourMaxOriginal = o.hourMax;
-				this.minuteMaxOriginal = o.minuteMax;
-				this.secondMaxOriginal = o.secondMax;
-				this.millisecMaxOriginal = o.millisecMax;
-			}
+            if(this.hourMaxOriginal === null || this.minuteMaxOriginal === null || this.secondMaxOriginal === null){
+                this.hourMaxOriginal = o.hourMax;
+                this.minuteMaxOriginal = o.minuteMax;
+                this.secondMaxOriginal = o.secondMax;
+                this.millisecMaxOriginal = o.millisecMax;
+            }
 
-			if(dp_inst.settings.timeOnly || maxDateTimeDate.getTime() == dp_date.getTime()){
-				this._defaults.hourMax = maxDateTime.getHours();
-				if (this.hour >= this._defaults.hourMax) {
-					this.hour = this._defaults.hourMax;
-					this._defaults.minuteMax = maxDateTime.getMinutes();
-					if (this.minute >= this._defaults.minuteMax) {
-						this.minute = this._defaults.minuteMax;
-						this._defaults.secondMax = maxDateTime.getSeconds();
-					} else if (this.second >= this._defaults.secondMax) {
-						this.second = this._defaults.secondMax;
-						this._defaults.millisecMax = maxDateTime.getMilliseconds();
-					} else {
-						if(this.millisec > this._defaults.millisecMax) this.millisec = this._defaults.millisecMax;
-						this._defaults.millisecMax = this.millisecMaxOriginal;
-					}
-				} else {
-					this._defaults.minuteMax = this.minuteMaxOriginal;
-					this._defaults.secondMax = this.secondMaxOriginal;
-					this._defaults.millisecMax = this.millisecMaxOriginal;
-				}
-			}else{
-				this._defaults.hourMax = this.hourMaxOriginal;
-				this._defaults.minuteMax = this.minuteMaxOriginal;
-				this._defaults.secondMax = this.secondMaxOriginal;
-				this._defaults.millisecMax = this.millisecMaxOriginal;
-			}
-		}
+            if(dp_inst.settings.timeOnly || maxDateTimeDate.getTime() == dp_date.getTime()){
+                this._defaults.hourMax = maxDateTime.getHours();
+                if (this.hour >= this._defaults.hourMax) {
+                    this.hour = this._defaults.hourMax;
+                    this._defaults.minuteMax = maxDateTime.getMinutes();
+                    if (this.minute >= this._defaults.minuteMax) {
+                        this.minute = this._defaults.minuteMax;
+                        this._defaults.secondMax = maxDateTime.getSeconds();
+                    } else if (this.second >= this._defaults.secondMax) {
+                        this.second = this._defaults.secondMax;
+                        this._defaults.millisecMax = maxDateTime.getMilliseconds();
+                    } else {
+                        if(this.millisec > this._defaults.millisecMax) this.millisec = this._defaults.millisecMax;
+                        this._defaults.millisecMax = this.millisecMaxOriginal;
+                    }
+                } else {
+                    this._defaults.minuteMax = this.minuteMaxOriginal;
+                    this._defaults.secondMax = this.secondMaxOriginal;
+                    this._defaults.millisecMax = this.millisecMaxOriginal;
+                }
+            }else{
+                this._defaults.hourMax = this.hourMaxOriginal;
+                this._defaults.minuteMax = this.minuteMaxOriginal;
+                this._defaults.secondMax = this.secondMaxOriginal;
+                this._defaults.millisecMax = this.millisecMaxOriginal;
+            }
+        }
 
-		if(adjustSliders !== undefined && adjustSliders === true){
-			var hourMax = parseInt((this._defaults.hourMax - ((this._defaults.hourMax - this._defaults.hourMin) % this._defaults.stepHour)) ,10),
+        if(adjustSliders !== undefined && adjustSliders === true){
+            var hourMax = parseInt((this._defaults.hourMax - ((this._defaults.hourMax - this._defaults.hourMin) % this._defaults.stepHour)) ,10),
                 minMax  = parseInt((this._defaults.minuteMax - ((this._defaults.minuteMax - this._defaults.minuteMin) % this._defaults.stepMinute)) ,10),
                 secMax  = parseInt((this._defaults.secondMax - ((this._defaults.secondMax - this._defaults.secondMin) % this._defaults.stepSecond)) ,10),
-				millisecMax  = parseInt((this._defaults.millisecMax - ((this._defaults.millisecMax - this._defaults.millisecMin) % this._defaults.stepMillisec)) ,10);
+                millisecMax  = parseInt((this._defaults.millisecMax - ((this._defaults.millisecMax - this._defaults.millisecMin) % this._defaults.stepMillisec)) ,10);
 
-			if(this.hour_slider)
-				this.hour_slider.slider("option", { min: this._defaults.hourMin, max: hourMax }).slider('value', this.hour);
-			if(this.minute_slider)
-				this.minute_slider.slider("option", { min: this._defaults.minuteMin, max: minMax }).slider('value', this.minute);
-			if(this.second_slider)
-				this.second_slider.slider("option", { min: this._defaults.secondMin, max: secMax }).slider('value', this.second);
-			if(this.millisec_slider)
-				this.millisec_slider.slider("option", { min: this._defaults.millisecMin, max: millisecMax }).slider('value', this.millisec);
-		}
+            if(this.hour_slider)
+                this.hour_slider.slider("option", { min: this._defaults.hourMin, max: hourMax }).slider('value', this.hour);
+            if(this.minute_slider)
+                this.minute_slider.slider("option", { min: this._defaults.minuteMin, max: minMax }).slider('value', this.minute);
+            if(this.second_slider)
+                this.second_slider.slider("option", { min: this._defaults.secondMin, max: secMax }).slider('value', this.second);
+            if(this.millisec_slider)
+                this.millisec_slider.slider("option", { min: this._defaults.millisecMin, max: millisecMax }).slider('value', this.millisec);
+        }
 
-	},
+    },
 
-	
-	//########################################################################
-	// when a slider moves, set the internal time...
-	// on time change is also called when the time is updated in the text field
-	//########################################################################
-	_onTimeChange: function() {
-		var hour   = (this.hour_slider) ? this.hour_slider.slider('value') : false,
-			minute = (this.minute_slider) ? this.minute_slider.slider('value') : false,
-			second = (this.second_slider) ? this.second_slider.slider('value') : false,
-			millisec = (this.millisec_slider) ? this.millisec_slider.slider('value') : false,
-			timezone = (this.timezone_select) ? this.timezone_select.val() : false,
-			o = this._defaults;
-
-		if (typeof(hour) == 'object') hour = false;
-		if (typeof(minute) == 'object') minute = false;
-		if (typeof(second) == 'object') second = false;
-		if (typeof(millisec) == 'object') millisec = false;
-		if (typeof(timezone) == 'object') timezone = false;
-
-		if (hour !== false) hour = parseInt(hour,10);
-		if (minute !== false) minute = parseInt(minute,10);
-		if (second !== false) second = parseInt(second,10);
-		if (millisec !== false) millisec = parseInt(millisec,10);
-
-		var ampm = o[hour < 12 ? 'amNames' : 'pmNames'][0];
-
-		// If the update was done in the input field, the input field should not be updated.
-		// If the update was done using the sliders, update the input field.
-		var hasChanged = (hour != this.hour || minute != this.minute
-				|| second != this.second || millisec != this.millisec
-				|| (this.ampm.length > 0
-				    && (hour < 12) != ($.inArray(this.ampm.toUpperCase(), this.amNames) !== -1))
-				|| timezone != this.timezone);
-		
-		if (hasChanged) {
-
-			if (hour !== false)this.hour = hour;
-			if (minute !== false) this.minute = minute;
-			if (second !== false) this.second = second;
-			if (millisec !== false) this.millisec = millisec;
-			if (timezone !== false) this.timezone = timezone;
-			
-			if (!this.inst) this.inst = $.datepicker._getInst(this.$input[0]);
-			
-			this._limitMinMaxDateTime(this.inst, true);
-		}
-		if (o.ampm) this.ampm = ampm;
-		
-		//this._formatTime();
-		this.formattedTime = $.datepicker.formatTime(this._defaults.timeFormat, this, this._defaults);
-		if (this.$timeObj) this.$timeObj.text(this.formattedTime + o.timeSuffix);
-		this.timeDefined = true;
-		if (hasChanged) this._updateDateTime();
-	},
     
-	//########################################################################
-	// call custom onSelect.
-	// bind to sliders slidestop, and grid click.
-	//########################################################################
-	_onSelectHandler: function() {
-		var onSelect = this._defaults.onSelect;
-		var inputEl = this.$input ? this.$input[0] : null;
-		if (onSelect && inputEl) {
-			onSelect.apply(inputEl, [this.formattedDateTime, this]);
-		}
-	},
+    //########################################################################
+    // when a slider moves, set the internal time...
+    // on time change is also called when the time is updated in the text field
+    //########################################################################
+    _onTimeChange: function() {
+        var hour   = (this.hour_slider) ? this.hour_slider.slider('value') : false,
+            minute = (this.minute_slider) ? this.minute_slider.slider('value') : false,
+            second = (this.second_slider) ? this.second_slider.slider('value') : false,
+            millisec = (this.millisec_slider) ? this.millisec_slider.slider('value') : false,
+            timezone = (this.timezone_select) ? this.timezone_select.val() : false,
+            o = this._defaults;
 
-	//########################################################################
-	// left for any backwards compatibility
-	//########################################################################
-	_formatTime: function(time, format) {
-		time = time || { hour: this.hour, minute: this.minute, second: this.second, millisec: this.millisec, ampm: this.ampm, timezone: this.timezone };
-		var tmptime = (format || this._defaults.timeFormat).toString();
+        if (typeof(hour) == 'object') hour = false;
+        if (typeof(minute) == 'object') minute = false;
+        if (typeof(second) == 'object') second = false;
+        if (typeof(millisec) == 'object') millisec = false;
+        if (typeof(timezone) == 'object') timezone = false;
 
-		tmptime = $.datepicker.formatTime(tmptime, time, this._defaults);
-		
-		if (arguments.length) return tmptime;
-		else this.formattedTime = tmptime;
-	},
+        if (hour !== false) hour = parseInt(hour,10);
+        if (minute !== false) minute = parseInt(minute,10);
+        if (second !== false) second = parseInt(second,10);
+        if (millisec !== false) millisec = parseInt(millisec,10);
 
-	//########################################################################
-	// update our input with the new date time..
-	//########################################################################
-	_updateDateTime: function(dp_inst) {
-		dp_inst = this.inst || dp_inst;
-		var dt = $.datepicker._daylightSavingAdjust(new Date(dp_inst.selectedYear, dp_inst.selectedMonth, dp_inst.selectedDay)),
-			dateFmt = $.datepicker._get(dp_inst, 'dateFormat'),
-			formatCfg = $.datepicker._getFormatConfig(dp_inst),
-			timeAvailable = dt !== null && this.timeDefined;
-		this.formattedDate = $.datepicker.formatDate(dateFmt, (dt === null ? new Date() : dt), formatCfg);
-		var formattedDateTime = this.formattedDate;
-		if (dp_inst.lastVal !== undefined && (dp_inst.lastVal.length > 0 && this.$input.val().length === 0))
-			return;
+        var ampm = o[hour < 12 ? 'amNames' : 'pmNames'][0];
 
-		if (this._defaults.timeOnly === true) {
-			formattedDateTime = this.formattedTime;
-		} else if (this._defaults.timeOnly !== true && (this._defaults.alwaysSetTime || timeAvailable)) {
-			formattedDateTime += this._defaults.separator + this.formattedTime + this._defaults.timeSuffix;
-		}
+        // If the update was done in the input field, the input field should not be updated.
+        // If the update was done using the sliders, update the input field.
+        var hasChanged = (hour != this.hour || minute != this.minute
+                || second != this.second || millisec != this.millisec
+                || (this.ampm.length > 0
+                    && (hour < 12) != ($.inArray(this.ampm.toUpperCase(), this.amNames) !== -1))
+                || timezone != this.timezone);
+        
+        if (hasChanged) {
 
-		this.formattedDateTime = formattedDateTime;
+            if (hour !== false)this.hour = hour;
+            if (minute !== false) this.minute = minute;
+            if (second !== false) this.second = second;
+            if (millisec !== false) this.millisec = millisec;
+            if (timezone !== false) this.timezone = timezone;
+            
+            if (!this.inst) this.inst = $.datepicker._getInst(this.$input[0]);
+            
+            this._limitMinMaxDateTime(this.inst, true);
+        }
+        if (o.ampm) this.ampm = ampm;
+        
+        //this._formatTime();
+        this.formattedTime = $.datepicker.formatTime(this._defaults.timeFormat, this, this._defaults);
+        if (this.$timeObj) this.$timeObj.text(this.formattedTime + o.timeSuffix);
+        this.timeDefined = true;
+        if (hasChanged) this._updateDateTime();
+    },
+    
+    //########################################################################
+    // call custom onSelect.
+    // bind to sliders slidestop, and grid click.
+    //########################################################################
+    _onSelectHandler: function() {
+        var onSelect = this._defaults.onSelect;
+        var inputEl = this.$input ? this.$input[0] : null;
+        if (onSelect && inputEl) {
+            onSelect.apply(inputEl, [this.formattedDateTime, this]);
+        }
+    },
 
-		if(!this._defaults.showTimepicker) {
-			this.$input.val(this.formattedDate);
-		} else if (this.$altInput && this._defaults.altFieldTimeOnly === true) {
-			this.$altInput.val(this.formattedTime);
-			this.$input.val(this.formattedDate);
-		} else if(this.$altInput) {
-			this.$altInput.val(formattedDateTime);
-			this.$input.val(formattedDateTime);
-		} else {
-			this.$input.val(formattedDateTime);
-		}
-		
-		this.$input.trigger("change");
-	}
+    //########################################################################
+    // left for any backwards compatibility
+    //########################################################################
+    _formatTime: function(time, format) {
+        time = time || { hour: this.hour, minute: this.minute, second: this.second, millisec: this.millisec, ampm: this.ampm, timezone: this.timezone };
+        var tmptime = (format || this._defaults.timeFormat).toString();
+
+        tmptime = $.datepicker.formatTime(tmptime, time, this._defaults);
+        
+        if (arguments.length) return tmptime;
+        else this.formattedTime = tmptime;
+    },
+
+    //########################################################################
+    // update our input with the new date time..
+    //########################################################################
+    _updateDateTime: function(dp_inst) {
+        dp_inst = this.inst || dp_inst;
+        var dt = $.datepicker._daylightSavingAdjust(new Date(dp_inst.selectedYear, dp_inst.selectedMonth, dp_inst.selectedDay)),
+            dateFmt = $.datepicker._get(dp_inst, 'dateFormat'),
+            formatCfg = $.datepicker._getFormatConfig(dp_inst),
+            timeAvailable = dt !== null && this.timeDefined;
+        this.formattedDate = $.datepicker.formatDate(dateFmt, (dt === null ? new Date() : dt), formatCfg);
+        var formattedDateTime = this.formattedDate;
+        if (dp_inst.lastVal !== undefined && (dp_inst.lastVal.length > 0 && this.$input.val().length === 0))
+            return;
+
+        if (this._defaults.timeOnly === true) {
+            formattedDateTime = this.formattedTime;
+        } else if (this._defaults.timeOnly !== true && (this._defaults.alwaysSetTime || timeAvailable)) {
+            formattedDateTime += this._defaults.separator + this.formattedTime + this._defaults.timeSuffix;
+        }
+
+        this.formattedDateTime = formattedDateTime;
+
+        if(!this._defaults.showTimepicker) {
+            this.$input.val(this.formattedDate);
+        } else if (this.$altInput && this._defaults.altFieldTimeOnly === true) {
+            this.$altInput.val(this.formattedTime);
+            this.$input.val(this.formattedDate);
+        } else if(this.$altInput) {
+            this.$altInput.val(formattedDateTime);
+            this.$input.val(formattedDateTime);
+        } else {
+            this.$input.val(formattedDateTime);
+        }
+        
+        this.$input.trigger("change");
+    }
 
 });
 
 $.fn.extend({
-	//########################################################################
-	// shorthand just to use timepicker..
-	//########################################################################
-	timepicker: function(o) {
-		o = o || {};
-		var tmp_args = arguments;
+    //########################################################################
+    // shorthand just to use timepicker..
+    //########################################################################
+    timepicker: function(o) {
+        o = o || {};
+        var tmp_args = arguments;
 
-		if (typeof o == 'object') tmp_args[0] = $.extend(o, { timeOnly: true });
+        if (typeof o == 'object') tmp_args[0] = $.extend(o, { timeOnly: true });
 
-		return $(this).each(function() {
-			$.fn.datetimepicker.apply($(this), tmp_args);
-		});
-	},
+        return $(this).each(function() {
+            $.fn.datetimepicker.apply($(this), tmp_args);
+        });
+    },
 
-	//########################################################################
-	// extend timepicker to datepicker
-	//########################################################################
-	datetimepicker: function(o) {
-		o = o || {};
-		var $input = this,
-		tmp_args = arguments;
+    //########################################################################
+    // extend timepicker to datepicker
+    //########################################################################
+    datetimepicker: function(o) {
+        o = o || {};
+        var $input = this,
+        tmp_args = arguments;
 
-		if (typeof(o) == 'string'){
-			if(o == 'getDate')
-				return $.fn.datepicker.apply($(this[0]), tmp_args);
-			else
-				return this.each(function() {
-					var $t = $(this);
-					$t.datepicker.apply($t, tmp_args);
-				});
-		}
-		else
-			return this.each(function() {
-				var $t = $(this);
-				$t.datepicker($.timepicker._newInst($t, o)._defaults);
-			});
-	}
+        if (typeof(o) == 'string'){
+            if(o == 'getDate')
+                return $.fn.datepicker.apply($(this[0]), tmp_args);
+            else
+                return this.each(function() {
+                    var $t = $(this);
+                    $t.datepicker.apply($t, tmp_args);
+                });
+        }
+        else
+            return this.each(function() {
+                var $t = $(this);
+                $t.datepicker($.timepicker._newInst($t, o)._defaults);
+            });
+    }
 });
 
 //########################################################################
@@ -13436,45 +13436,45 @@ $.fn.extend({
 // options = essentially the regional[].. amNames, pmNames, ampm
 //########################################################################
 $.datepicker.formatTime = function(format, time, options) {
-	options = options || {};
-	options = $.extend($.timepicker._defaults, options);
-	time = $.extend({hour:0, minute:0, second:0, millisec:0, timezone:'+0000'}, time);
-	
-	var tmptime = format;
-	var ampmName = options['amNames'][0];
+    options = options || {};
+    options = $.extend($.timepicker._defaults, options);
+    time = $.extend({hour:0, minute:0, second:0, millisec:0, timezone:'+0000'}, time);
+    
+    var tmptime = format;
+    var ampmName = options['amNames'][0];
 
-	var hour = parseInt(time.hour, 10);
-	if (options.ampm) {
-		if (hour > 11){
-			ampmName = options['pmNames'][0];
-			if(hour > 12)
-				hour = hour % 12;
-		}
-		if (hour === 0)
-			hour = 12;
-	}
-	tmptime = tmptime.replace(/(?:hh?|mm?|ss?|[tT]{1,2}|[lz])/g, function(match) {
-		switch (match.toLowerCase()) {
-			case 'hh': return ('0' + hour).slice(-2);
-			case 'h':  return hour;
-			case 'mm': return ('0' + time.minute).slice(-2);
-			case 'm':  return time.minute;
-			case 'ss': return ('0' + time.second).slice(-2);
-			case 's':  return time.second;
-			case 'l':  return ('00' + time.millisec).slice(-3);
-			case 'z':  return time.timezone;
-			case 't': case 'tt':
-				if (options.ampm) {
-					if (match.length == 1)
-						ampmName = ampmName.charAt(0);
-					return match.charAt(0) == 'T' ? ampmName.toUpperCase() : ampmName.toLowerCase();
-				}
-				return '';
-		}
-	});
+    var hour = parseInt(time.hour, 10);
+    if (options.ampm) {
+        if (hour > 11){
+            ampmName = options['pmNames'][0];
+            if(hour > 12)
+                hour = hour % 12;
+        }
+        if (hour === 0)
+            hour = 12;
+    }
+    tmptime = tmptime.replace(/(?:hh?|mm?|ss?|[tT]{1,2}|[lz])/g, function(match) {
+        switch (match.toLowerCase()) {
+            case 'hh': return ('0' + hour).slice(-2);
+            case 'h':  return hour;
+            case 'mm': return ('0' + time.minute).slice(-2);
+            case 'm':  return time.minute;
+            case 'ss': return ('0' + time.second).slice(-2);
+            case 's':  return time.second;
+            case 'l':  return ('00' + time.millisec).slice(-3);
+            case 'z':  return time.timezone;
+            case 't': case 'tt':
+                if (options.ampm) {
+                    if (match.length == 1)
+                        ampmName = ampmName.charAt(0);
+                    return match.charAt(0) == 'T' ? ampmName.toUpperCase() : ampmName.toLowerCase();
+                }
+                return '';
+        }
+    });
 
-	tmptime = $.trim(tmptime);
-	return tmptime;
+    tmptime = $.trim(tmptime);
+    return tmptime;
 }
 
 //########################################################################
@@ -13483,19 +13483,19 @@ $.datepicker.formatTime = function(format, time, options) {
 //########################################################################
 $.datepicker._base_selectDate = $.datepicker._selectDate;
 $.datepicker._selectDate = function (id, dateStr) {
-	var inst = this._getInst($(id)[0]),
-		tp_inst = this._get(inst, 'timepicker');
+    var inst = this._getInst($(id)[0]),
+        tp_inst = this._get(inst, 'timepicker');
 
-	if (tp_inst) {
-		tp_inst._limitMinMaxDateTime(inst, true);
-		inst.inline = inst.stay_open = true;
-		//This way the onSelect handler called from calendarpicker get the full dateTime
-		this._base_selectDate(id, dateStr);
-		inst.inline = inst.stay_open = false;
-		this._notifyChange(inst);
-		this._updateDatepicker(inst);
-	}
-	else this._base_selectDate(id, dateStr);
+    if (tp_inst) {
+        tp_inst._limitMinMaxDateTime(inst, true);
+        inst.inline = inst.stay_open = true;
+        //This way the onSelect handler called from calendarpicker get the full dateTime
+        this._base_selectDate(id, dateStr);
+        inst.inline = inst.stay_open = false;
+        this._notifyChange(inst);
+        this._updateDatepicker(inst);
+    }
+    else this._base_selectDate(id, dateStr);
 };
 
 //#############################################################################################
@@ -13505,23 +13505,23 @@ $.datepicker._selectDate = function (id, dateStr) {
 $.datepicker._base_updateDatepicker = $.datepicker._updateDatepicker;
 $.datepicker._updateDatepicker = function(inst) {
 
-	// don't popup the datepicker if there is another instance already opened
-	var input = inst.input[0];
-	if($.datepicker._curInst &&
-	   $.datepicker._curInst != inst &&
-	   $.datepicker._datepickerShowing &&
-	   $.datepicker._lastInput != input) {
-		return;
-	}
+    // don't popup the datepicker if there is another instance already opened
+    var input = inst.input[0];
+    if($.datepicker._curInst &&
+       $.datepicker._curInst != inst &&
+       $.datepicker._datepickerShowing &&
+       $.datepicker._lastInput != input) {
+        return;
+    }
 
-	if (typeof(inst.stay_open) !== 'boolean' || inst.stay_open === false) {
-				
-		this._base_updateDatepicker(inst);
-		
-		// Reload the time control when changing something in the input text field.
-		var tp_inst = this._get(inst, 'timepicker');
-		if(tp_inst) tp_inst._addTimePicker(inst);
-	}
+    if (typeof(inst.stay_open) !== 'boolean' || inst.stay_open === false) {
+                
+        this._base_updateDatepicker(inst);
+        
+        // Reload the time control when changing something in the input text field.
+        var tp_inst = this._get(inst, 'timepicker');
+        if(tp_inst) tp_inst._addTimePicker(inst);
+    }
 };
 
 //#######################################################################################
@@ -13529,34 +13529,34 @@ $.datepicker._updateDatepicker = function(inst) {
 //#######################################################################################
 $.datepicker._base_doKeyPress = $.datepicker._doKeyPress;
 $.datepicker._doKeyPress = function(event) {
-	var inst = $.datepicker._getInst(event.target),
-		tp_inst = $.datepicker._get(inst, 'timepicker');
+    var inst = $.datepicker._getInst(event.target),
+        tp_inst = $.datepicker._get(inst, 'timepicker');
 
-	if (tp_inst) {
-		if ($.datepicker._get(inst, 'constrainInput')) {
-			var ampm = tp_inst._defaults.ampm,
-				dateChars = $.datepicker._possibleChars($.datepicker._get(inst, 'dateFormat')),
-				datetimeChars = tp_inst._defaults.timeFormat.toString()
-								.replace(/[hms]/g, '')
-								.replace(/TT/g, ampm ? 'APM' : '')
-								.replace(/Tt/g, ampm ? 'AaPpMm' : '')
-								.replace(/tT/g, ampm ? 'AaPpMm' : '')
-								.replace(/T/g, ampm ? 'AP' : '')
-								.replace(/tt/g, ampm ? 'apm' : '')
-								.replace(/t/g, ampm ? 'ap' : '') +
-								" " +
-								tp_inst._defaults.separator +
-								tp_inst._defaults.timeSuffix +
-								(tp_inst._defaults.showTimezone ? tp_inst._defaults.timezoneList.join('') : '') +
-								(tp_inst._defaults.amNames.join('')) +
-								(tp_inst._defaults.pmNames.join('')) +
-								dateChars,
-				chr = String.fromCharCode(event.charCode === undefined ? event.keyCode : event.charCode);
-			return event.ctrlKey || (chr < ' ' || !dateChars || datetimeChars.indexOf(chr) > -1);
-		}
-	}
-	
-	return $.datepicker._base_doKeyPress(event);
+    if (tp_inst) {
+        if ($.datepicker._get(inst, 'constrainInput')) {
+            var ampm = tp_inst._defaults.ampm,
+                dateChars = $.datepicker._possibleChars($.datepicker._get(inst, 'dateFormat')),
+                datetimeChars = tp_inst._defaults.timeFormat.toString()
+                                .replace(/[hms]/g, '')
+                                .replace(/TT/g, ampm ? 'APM' : '')
+                                .replace(/Tt/g, ampm ? 'AaPpMm' : '')
+                                .replace(/tT/g, ampm ? 'AaPpMm' : '')
+                                .replace(/T/g, ampm ? 'AP' : '')
+                                .replace(/tt/g, ampm ? 'apm' : '')
+                                .replace(/t/g, ampm ? 'ap' : '') +
+                                " " +
+                                tp_inst._defaults.separator +
+                                tp_inst._defaults.timeSuffix +
+                                (tp_inst._defaults.showTimezone ? tp_inst._defaults.timezoneList.join('') : '') +
+                                (tp_inst._defaults.amNames.join('')) +
+                                (tp_inst._defaults.pmNames.join('')) +
+                                dateChars,
+                chr = String.fromCharCode(event.charCode === undefined ? event.keyCode : event.charCode);
+            return event.ctrlKey || (chr < ' ' || !dateChars || datetimeChars.indexOf(chr) > -1);
+        }
+    }
+    
+    return $.datepicker._base_doKeyPress(event);
 };
 
 //#######################################################################################
@@ -13564,21 +13564,21 @@ $.datepicker._doKeyPress = function(event) {
 //#######################################################################################
 $.datepicker._base_doKeyUp = $.datepicker._doKeyUp;
 $.datepicker._doKeyUp = function (event) {
-	var inst = $.datepicker._getInst(event.target),
-		tp_inst = $.datepicker._get(inst, 'timepicker');
+    var inst = $.datepicker._getInst(event.target),
+        tp_inst = $.datepicker._get(inst, 'timepicker');
 
-	if (tp_inst) {
-		if (tp_inst._defaults.timeOnly && (inst.input.val() != inst.lastVal)) {
-			try {
-				$.datepicker._updateDatepicker(inst);
-			}
-			catch (err) {
-				$.datepicker.log(err);
-			}
-		}
-	}
+    if (tp_inst) {
+        if (tp_inst._defaults.timeOnly && (inst.input.val() != inst.lastVal)) {
+            try {
+                $.datepicker._updateDatepicker(inst);
+            }
+            catch (err) {
+                $.datepicker.log(err);
+            }
+        }
+    }
 
-	return $.datepicker._base_doKeyUp(event);
+    return $.datepicker._base_doKeyUp(event);
 };
 
 //#######################################################################################
@@ -13586,106 +13586,106 @@ $.datepicker._doKeyUp = function (event) {
 //#######################################################################################
 $.datepicker._base_gotoToday = $.datepicker._gotoToday;
 $.datepicker._gotoToday = function(id) {
-	var inst = this._getInst($(id)[0]),
-		$dp = inst.dpDiv;
-	this._base_gotoToday(id);
-	var now = new Date();
-	var tp_inst = this._get(inst, 'timepicker');
-	if (tp_inst && tp_inst._defaults.showTimezone && tp_inst.timezone_select) {
-		var tzoffset = now.getTimezoneOffset(); // If +0100, returns -60
-		var tzsign = tzoffset > 0 ? '-' : '+';
-		tzoffset = Math.abs(tzoffset);
-		var tzmin = tzoffset % 60;
-		tzoffset = tzsign + ('0' + (tzoffset - tzmin) / 60).slice(-2) + ('0' + tzmin).slice(-2);
-		if (tp_inst._defaults.timezoneIso8609)
-			tzoffset = tzoffset.substring(0, 3) + ':' + tzoffset.substring(3);
-		tp_inst.timezone_select.val(tzoffset);
-	}
-	this._setTime(inst, now);
-	$( '.ui-datepicker-today', $dp).click();
+    var inst = this._getInst($(id)[0]),
+        $dp = inst.dpDiv;
+    this._base_gotoToday(id);
+    var now = new Date();
+    var tp_inst = this._get(inst, 'timepicker');
+    if (tp_inst && tp_inst._defaults.showTimezone && tp_inst.timezone_select) {
+        var tzoffset = now.getTimezoneOffset(); // If +0100, returns -60
+        var tzsign = tzoffset > 0 ? '-' : '+';
+        tzoffset = Math.abs(tzoffset);
+        var tzmin = tzoffset % 60;
+        tzoffset = tzsign + ('0' + (tzoffset - tzmin) / 60).slice(-2) + ('0' + tzmin).slice(-2);
+        if (tp_inst._defaults.timezoneIso8609)
+            tzoffset = tzoffset.substring(0, 3) + ':' + tzoffset.substring(3);
+        tp_inst.timezone_select.val(tzoffset);
+    }
+    this._setTime(inst, now);
+    $( '.ui-datepicker-today', $dp).click();
 };
 
 //#######################################################################################
 // Disable & enable the Time in the datetimepicker
 //#######################################################################################
 $.datepicker._disableTimepickerDatepicker = function(target, date, withDate) {
-	var inst = this._getInst(target),
-	tp_inst = this._get(inst, 'timepicker');
-	$(target).datepicker('getDate'); // Init selected[Year|Month|Day]
-	if (tp_inst) {
-		tp_inst._defaults.showTimepicker = false;
-		tp_inst._updateDateTime(inst);
-	}
+    var inst = this._getInst(target),
+    tp_inst = this._get(inst, 'timepicker');
+    $(target).datepicker('getDate'); // Init selected[Year|Month|Day]
+    if (tp_inst) {
+        tp_inst._defaults.showTimepicker = false;
+        tp_inst._updateDateTime(inst);
+    }
 };
 
 $.datepicker._enableTimepickerDatepicker = function(target, date, withDate) {
-	var inst = this._getInst(target),
-	tp_inst = this._get(inst, 'timepicker');
-	$(target).datepicker('getDate'); // Init selected[Year|Month|Day]
-	if (tp_inst) {
-		tp_inst._defaults.showTimepicker = true;
-		tp_inst._addTimePicker(inst); // Could be disabled on page load
-		tp_inst._updateDateTime(inst);
-	}
+    var inst = this._getInst(target),
+    tp_inst = this._get(inst, 'timepicker');
+    $(target).datepicker('getDate'); // Init selected[Year|Month|Day]
+    if (tp_inst) {
+        tp_inst._defaults.showTimepicker = true;
+        tp_inst._addTimePicker(inst); // Could be disabled on page load
+        tp_inst._updateDateTime(inst);
+    }
 };
 
 //#######################################################################################
 // Create our own set time function
 //#######################################################################################
 $.datepicker._setTime = function(inst, date) {
-	var tp_inst = this._get(inst, 'timepicker');
-	if (tp_inst) {
-		var defaults = tp_inst._defaults,
-			// calling _setTime with no date sets time to defaults
-			hour = date ? date.getHours() : defaults.hour,
-			minute = date ? date.getMinutes() : defaults.minute,
-			second = date ? date.getSeconds() : defaults.second,
-			millisec = date ? date.getMilliseconds() : defaults.millisec;
+    var tp_inst = this._get(inst, 'timepicker');
+    if (tp_inst) {
+        var defaults = tp_inst._defaults,
+            // calling _setTime with no date sets time to defaults
+            hour = date ? date.getHours() : defaults.hour,
+            minute = date ? date.getMinutes() : defaults.minute,
+            second = date ? date.getSeconds() : defaults.second,
+            millisec = date ? date.getMilliseconds() : defaults.millisec;
 
-		//check if within min/max times..
-		if ((hour < defaults.hourMin || hour > defaults.hourMax) || (minute < defaults.minuteMin || minute > defaults.minuteMax) || (second < defaults.secondMin || second > defaults.secondMax) || (millisec < defaults.millisecMin || millisec > defaults.millisecMax)) {
-			hour = defaults.hourMin;
-			minute = defaults.minuteMin;
-			second = defaults.secondMin;
-			millisec = defaults.millisecMin;
-		}
+        //check if within min/max times..
+        if ((hour < defaults.hourMin || hour > defaults.hourMax) || (minute < defaults.minuteMin || minute > defaults.minuteMax) || (second < defaults.secondMin || second > defaults.secondMax) || (millisec < defaults.millisecMin || millisec > defaults.millisecMax)) {
+            hour = defaults.hourMin;
+            minute = defaults.minuteMin;
+            second = defaults.secondMin;
+            millisec = defaults.millisecMin;
+        }
 
-		tp_inst.hour = hour;
-		tp_inst.minute = minute;
-		tp_inst.second = second;
-		tp_inst.millisec = millisec;
+        tp_inst.hour = hour;
+        tp_inst.minute = minute;
+        tp_inst.second = second;
+        tp_inst.millisec = millisec;
 
-		if (tp_inst.hour_slider) tp_inst.hour_slider.slider('value', hour);
-		if (tp_inst.minute_slider) tp_inst.minute_slider.slider('value', minute);
-		if (tp_inst.second_slider) tp_inst.second_slider.slider('value', second);
-		if (tp_inst.millisec_slider) tp_inst.millisec_slider.slider('value', millisec);
+        if (tp_inst.hour_slider) tp_inst.hour_slider.slider('value', hour);
+        if (tp_inst.minute_slider) tp_inst.minute_slider.slider('value', minute);
+        if (tp_inst.second_slider) tp_inst.second_slider.slider('value', second);
+        if (tp_inst.millisec_slider) tp_inst.millisec_slider.slider('value', millisec);
 
-		tp_inst._onTimeChange();
-		tp_inst._updateDateTime(inst);
-	}
+        tp_inst._onTimeChange();
+        tp_inst._updateDateTime(inst);
+    }
 };
 
 //#######################################################################################
 // Create new public method to set only time, callable as $().datepicker('setTime', date)
 //#######################################################################################
 $.datepicker._setTimeDatepicker = function(target, date, withDate) {
-	var inst = this._getInst(target),
-		tp_inst = this._get(inst, 'timepicker');
+    var inst = this._getInst(target),
+        tp_inst = this._get(inst, 'timepicker');
 
-	if (tp_inst) {
-		this._setDateFromField(inst);
-		var tp_date;
-		if (date) {
-			if (typeof date == "string") {
-				tp_inst._parseTime(date, withDate);
-				tp_date = new Date();
-				tp_date.setHours(tp_inst.hour, tp_inst.minute, tp_inst.second, tp_inst.millisec);
-			}
-			else tp_date = new Date(date.getTime());
-			if (tp_date.toString() == 'Invalid Date') tp_date = undefined;
-			this._setTime(inst, tp_date);
-		}
-	}
+    if (tp_inst) {
+        this._setDateFromField(inst);
+        var tp_date;
+        if (date) {
+            if (typeof date == "string") {
+                tp_inst._parseTime(date, withDate);
+                tp_date = new Date();
+                tp_date.setHours(tp_inst.hour, tp_inst.minute, tp_inst.second, tp_inst.millisec);
+            }
+            else tp_date = new Date(date.getTime());
+            if (tp_date.toString() == 'Invalid Date') tp_date = undefined;
+            this._setTime(inst, tp_date);
+        }
+    }
 
 };
 
@@ -13694,12 +13694,12 @@ $.datepicker._setTimeDatepicker = function(target, date, withDate) {
 //#######################################################################################
 $.datepicker._base_setDateDatepicker = $.datepicker._setDateDatepicker;
 $.datepicker._setDateDatepicker = function(target, date) {
-	var inst = this._getInst(target),
-	tp_date = (date instanceof Date) ? new Date(date.getTime()) : date;
+    var inst = this._getInst(target),
+    tp_date = (date instanceof Date) ? new Date(date.getTime()) : date;
 
-	this._updateDatepicker(inst);
-	this._base_setDateDatepicker.apply(this, arguments);
-	this._setTimeDatepicker(target, tp_date, true);
+    this._updateDatepicker(inst);
+    this._base_setDateDatepicker.apply(this, arguments);
+    this._setTimeDatepicker(target, tp_date, true);
 };
 
 //#######################################################################################
@@ -13707,16 +13707,16 @@ $.datepicker._setDateDatepicker = function(target, date) {
 //#######################################################################################
 $.datepicker._base_getDateDatepicker = $.datepicker._getDateDatepicker;
 $.datepicker._getDateDatepicker = function(target, noDefault) {
-	var inst = this._getInst(target),
-		tp_inst = this._get(inst, 'timepicker');
+    var inst = this._getInst(target),
+        tp_inst = this._get(inst, 'timepicker');
 
-	if (tp_inst) {
-		this._setDateFromField(inst, noDefault);
-		var date = this._getDate(inst);
-		if (date && tp_inst._parseTime($(target).val(), tp_inst.timeOnly)) date.setHours(tp_inst.hour, tp_inst.minute, tp_inst.second, tp_inst.millisec);
-		return date;
-	}
-	return this._base_getDateDatepicker(target, noDefault);
+    if (tp_inst) {
+        this._setDateFromField(inst, noDefault);
+        var date = this._getDate(inst);
+        if (date && tp_inst._parseTime($(target).val(), tp_inst.timeOnly)) date.setHours(tp_inst.hour, tp_inst.minute, tp_inst.second, tp_inst.millisec);
+        return date;
+    }
+    return this._base_getDateDatepicker(target, noDefault);
 };
 
 //#######################################################################################
@@ -13725,21 +13725,21 @@ $.datepicker._getDateDatepicker = function(target, noDefault) {
 //#######################################################################################
 $.datepicker._base_parseDate = $.datepicker.parseDate;
 $.datepicker.parseDate = function(format, value, settings) {
-	var date;
-	try {
-		date = this._base_parseDate(format, value, settings);
-	} catch (err) {
-		if (err.indexOf(":") >= 0) {
-			// Hack!  The error message ends with a colon, a space, and
-			// the "extra" characters.  We rely on that instead of
-			// attempting to perfectly reproduce the parsing algorithm.
-			date = this._base_parseDate(format, value.substring(0,value.length-(err.length-err.indexOf(':')-2)), settings);
-		} else {
-			// The underlying error was not related to the time
-			throw err;
-		}
-	}
-	return date;
+    var date;
+    try {
+        date = this._base_parseDate(format, value, settings);
+    } catch (err) {
+        if (err.indexOf(":") >= 0) {
+            // Hack!  The error message ends with a colon, a space, and
+            // the "extra" characters.  We rely on that instead of
+            // attempting to perfectly reproduce the parsing algorithm.
+            date = this._base_parseDate(format, value.substring(0,value.length-(err.length-err.indexOf(':')-2)), settings);
+        } else {
+            // The underlying error was not related to the time
+            throw err;
+        }
+    }
+    return date;
 };
 
 //#######################################################################################
@@ -13747,15 +13747,15 @@ $.datepicker.parseDate = function(format, value, settings) {
 //#######################################################################################
 $.datepicker._base_formatDate=$.datepicker._formatDate;
 $.datepicker._formatDate = function(inst, day, month, year){
-	var tp_inst = this._get(inst, 'timepicker');
-	if(tp_inst)
-	{
-		if(day)
-			var b = this._base_formatDate(inst, day, month, year);
-		tp_inst._updateDateTime(inst);
-		return tp_inst.$input.val();
-	}
-	return this._base_formatDate(inst);
+    var tp_inst = this._get(inst, 'timepicker');
+    if(tp_inst)
+    {
+        if(day)
+            var b = this._base_formatDate(inst, day, month, year);
+        tp_inst._updateDateTime(inst);
+        return tp_inst.$input.val();
+    }
+    return this._base_formatDate(inst);
 };
 
 //#######################################################################################
@@ -13763,60 +13763,60 @@ $.datepicker._formatDate = function(inst, day, month, year){
 //#######################################################################################
 $.datepicker._base_optionDatepicker = $.datepicker._optionDatepicker;
 $.datepicker._optionDatepicker = function(target, name, value) {
-	var inst = this._getInst(target),
-		tp_inst = this._get(inst, 'timepicker');
-	if (tp_inst) {
-		var min,max,onselect;
-		if (typeof name == 'string') { // if min/max was set with the string
-			if (name==='minDate' || name==='minDateTime' )
-				min = value;
-			else if (name==='maxDate' || name==='maxDateTime')
-				max = value;
-			else if (name==='onSelect')
-				onselect=value;
-		} else if (typeof name == 'object') { //if min/max was set with the JSON
-			if(name.minDate)
-				min = name.minDate;
-			else if (name.minDateTime)
-				min = name.minDateTime;
-			else if (name.maxDate)
-				max = name.maxDate;
-			else if (name.maxDateTime)
-				max = name.maxDateTime;
-		}
-		if(min){ //if min was set
-			if(min==0)
-				min=new Date();
-			else
-				min= new Date(min);
-			
-			tp_inst._defaults.minDate = min;
-			tp_inst._defaults.minDateTime = min;
-		} else if (max){ //if max was set
-			if(max==0)
-				max=new Date();
-			else
-				max= new Date(max);
-			tp_inst._defaults.maxDate = max;
-			tp_inst._defaults.maxDateTime = max;
-		}
-		else if (onselect)
-			tp_inst._defaults.onSelect=onselect;
-	}
-	if (value === undefined)
-		return this._base_optionDatepicker(target, name);
-	return this._base_optionDatepicker(target, name, value);
+    var inst = this._getInst(target),
+        tp_inst = this._get(inst, 'timepicker');
+    if (tp_inst) {
+        var min,max,onselect;
+        if (typeof name == 'string') { // if min/max was set with the string
+            if (name==='minDate' || name==='minDateTime' )
+                min = value;
+            else if (name==='maxDate' || name==='maxDateTime')
+                max = value;
+            else if (name==='onSelect')
+                onselect=value;
+        } else if (typeof name == 'object') { //if min/max was set with the JSON
+            if(name.minDate)
+                min = name.minDate;
+            else if (name.minDateTime)
+                min = name.minDateTime;
+            else if (name.maxDate)
+                max = name.maxDate;
+            else if (name.maxDateTime)
+                max = name.maxDateTime;
+        }
+        if(min){ //if min was set
+            if(min==0)
+                min=new Date();
+            else
+                min= new Date(min);
+            
+            tp_inst._defaults.minDate = min;
+            tp_inst._defaults.minDateTime = min;
+        } else if (max){ //if max was set
+            if(max==0)
+                max=new Date();
+            else
+                max= new Date(max);
+            tp_inst._defaults.maxDate = max;
+            tp_inst._defaults.maxDateTime = max;
+        }
+        else if (onselect)
+            tp_inst._defaults.onSelect=onselect;
+    }
+    if (value === undefined)
+        return this._base_optionDatepicker(target, name);
+    return this._base_optionDatepicker(target, name, value);
 };
 
 //#######################################################################################
 // jQuery extend now ignores nulls!
 //#######################################################################################
 function extendRemove(target, props) {
-	$.extend(target, props);
-	for (var name in props)
-		if (props[name] === null || props[name] === undefined)
-			target[name] = props[name];
-	return target;
+    $.extend(target, props);
+    for (var name in props)
+        if (props[name] === null || props[name] === undefined)
+            target[name] = props[name];
+    return target;
 };
 
 $.timepicker = new Timepicker(); // singleton instance
@@ -13830,13 +13830,13 @@ function urldecode(url) {
 }
 
 function showLabel(id, ui) {
-	if (ui != null) {
-		if (typeof(ui) == 'string')
-			$( id ).val( ui );
-		else
-			$( id ).val( ui.item.label );
-	}
-	return false;
+    if (ui != null) {
+        if (typeof(ui) == 'string')
+            $( id ).val( ui );
+        else
+            $( id ).val( ui.item.label );
+    }
+    return false;
 }
 
 /**
@@ -13876,12 +13876,12 @@ function array2json(arr) {
 }
 
 function extension_check(val, extensions) {
-	// I stole this shit from StackOverflow ... http://stackoverflow.com/questions/651700/how-to-have-jquery-restrict-file-types-on-upload
-	var ext = val.val().split('.').pop().toLowerCase();
-	if($.inArray(ext, extensions) == -1) {
-		return false;
-	}
-	return true;
+    // I stole this shit from StackOverflow ... http://stackoverflow.com/questions/651700/how-to-have-jquery-restrict-file-types-on-upload
+    var ext = val.val().split('.').pop().toLowerCase();
+    if($.inArray(ext, extensions) == -1) {
+        return false;
+    }
+    return true;
 }
 
 function isNumber(n) {
@@ -13889,49 +13889,49 @@ function isNumber(n) {
 }
 
 function hasExpandMode(url) {
-	if (localStorage.getItem(url) === null) {
-		localStorage.setItem(url, JSON.stringify({ 0: "open", 1: "open" }));
-		return false;
-	}
-	return true;
+    if (localStorage.getItem(url) === null) {
+        localStorage.setItem(url, JSON.stringify({ 0: "open", 1: "open" }));
+        return false;
+    }
+    return true;
 }
 
 function setExpandMode(container, url, nth, mode) {
-	
-	if ($(container).hasClass('skip-fold'))
-		return;
-	
-	hasExpandMode(url);
-	
-	var expand = JSON.parse(localStorage.getItem(url));
-	expand[nth] = mode;
-	localStorage.setItem(url, JSON.stringify(expand));
-	
-	if (mode == "closed") {
-		$(container).children(':not(h3)').each(function(l, noth3) {
-			$(noth3).hide();
-			$(container).addClass('up-container');
-		});
-	} else {
-		$(container).children(':not(h3)').each(function(l, noth3) {
-			$(noth3).show();
-		});
-		$(container).removeClass('up-container');
-	}
+    
+    if ($(container).hasClass('skip-fold'))
+        return;
+    
+    hasExpandMode(url);
+    
+    var expand = JSON.parse(localStorage.getItem(url));
+    expand[nth] = mode;
+    localStorage.setItem(url, JSON.stringify(expand));
+    
+    if (mode == "closed") {
+        $(container).children(':not(h3)').each(function(l, noth3) {
+            $(noth3).hide();
+            $(container).addClass('up-container');
+        });
+    } else {
+        $(container).children(':not(h3)').each(function(l, noth3) {
+            $(noth3).show();
+        });
+        $(container).removeClass('up-container');
+    }
 }
 
 function getExpandMode(container, url, nth) {
-	if ($(container).hasClass('skip-fold'))
-		return;
-	
-	hasExpandMode(url);
-	var expand = JSON.parse(localStorage.getItem(url));
-	if (nth in expand) {
-		return expand[nth];
-	} else {
-		setExpandMode(container, url, nth, "closed");
-		return getExpandMode(container, url, nth);
-	}
+    if ($(container).hasClass('skip-fold'))
+        return;
+    
+    hasExpandMode(url);
+    var expand = JSON.parse(localStorage.getItem(url));
+    if (nth in expand) {
+        return expand[nth];
+    } else {
+        setExpandMode(container, url, nth, "closed");
+        return getExpandMode(container, url, nth);
+    }
 }
 
 function getQueryVar(varName){
@@ -13950,17 +13950,17 @@ function getQueryVar(varName){
 }
 
 function expandUrl() {
-	var ROUTE = getQueryVar("Route");
-	if (ROUTE !== false) {
-		var route = ROUTE.split("/");
-		if (route.length > 1)
-			return route.splice(0,2).join("/");
-		else if (route.length == 1 && route[0].length > 0)
-			return route[0];
-		else
-			return document.URL;
-	} else
-		return document.URL;
+    var ROUTE = getQueryVar("Route");
+    if (ROUTE !== false) {
+        var route = ROUTE.split("/");
+        if (route.length > 1)
+            return route.splice(0,2).join("/");
+        else if (route.length == 1 && route[0].length > 0)
+            return route[0];
+        else
+            return document.URL;
+    } else
+        return document.URL;
 }
 
 /**
@@ -13971,319 +13971,319 @@ function expandUrl() {
  * original File if nothing could be trimmed).
  */
 function trimTransparentEdges(file, onDone, onError) {
-	if (!file || file.type !== 'image/png') { onDone(file); return; }
-	var ALPHA_THRESHOLD = 10; // pixel counts as "content" if alpha > 10
-	var img = new Image();
-	var url = URL.createObjectURL(file);
-	img.onload = function() {
-		URL.revokeObjectURL(url);
-		try {
-			var w = img.naturalWidth, h = img.naturalHeight;
-			if (w < 2 || h < 2) { onDone(file); return; }
-			var c = document.createElement('canvas');
-			c.width = w; c.height = h;
-			var ctx = c.getContext('2d');
-			ctx.drawImage(img, 0, 0);
-			var data;
-			try { data = ctx.getImageData(0, 0, w, h).data; }
-			catch (e) { onDone(file); return; } // tainted canvas, skip
-			var top = -1, bottom = -1, left = w, right = -1;
-			for (var y = 0; y < h; y++) {
-				for (var x = 0; x < w; x++) {
-					if (data[(y * w + x) * 4 + 3] > ALPHA_THRESHOLD) {
-						if (top === -1) top = y;
-						bottom = y;
-						if (x < left)  left  = x;
-						if (x > right) right = x;
-					}
-				}
-			}
-			if (top === -1 || right === -1) { onDone(file); return; } // fully transparent
-			if (top === 0 && left === 0 && bottom === h - 1 && right === w - 1) {
-				onDone(file); return; // already tight
-			}
-			var cw = right - left + 1, ch = bottom - top + 1;
-			var out = document.createElement('canvas');
-			out.width = cw; out.height = ch;
-			var octx = out.getContext('2d');
-			octx.drawImage(c, left, top, cw, ch, 0, 0, cw, ch);
-			out.toBlob(function(blob) {
-				if (!blob) { onDone(file); return; }
-				var outName = file.name || 'heraldry.png';
-				onDone(new File([blob], outName, { type: 'image/png' }));
-			}, 'image/png');
-		} catch (err) {
-			onDone(file);
-		}
-	};
-	img.onerror = function() {
-		URL.revokeObjectURL(url);
-		onDone(file);
-	};
-	img.src = url;
+    if (!file || file.type !== 'image/png') { onDone(file); return; }
+    var ALPHA_THRESHOLD = 10; // pixel counts as "content" if alpha > 10
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+        URL.revokeObjectURL(url);
+        try {
+            var w = img.naturalWidth, h = img.naturalHeight;
+            if (w < 2 || h < 2) { onDone(file); return; }
+            var c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            var ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            var data;
+            try { data = ctx.getImageData(0, 0, w, h).data; }
+            catch (e) { onDone(file); return; } // tainted canvas, skip
+            var top = -1, bottom = -1, left = w, right = -1;
+            for (var y = 0; y < h; y++) {
+                for (var x = 0; x < w; x++) {
+                    if (data[(y * w + x) * 4 + 3] > ALPHA_THRESHOLD) {
+                        if (top === -1) top = y;
+                        bottom = y;
+                        if (x < left)  left  = x;
+                        if (x > right) right = x;
+                    }
+                }
+            }
+            if (top === -1 || right === -1) { onDone(file); return; } // fully transparent
+            if (top === 0 && left === 0 && bottom === h - 1 && right === w - 1) {
+                onDone(file); return; // already tight
+            }
+            var cw = right - left + 1, ch = bottom - top + 1;
+            var out = document.createElement('canvas');
+            out.width = cw; out.height = ch;
+            var octx = out.getContext('2d');
+            octx.drawImage(c, left, top, cw, ch, 0, 0, cw, ch);
+            out.toBlob(function(blob) {
+                if (!blob) { onDone(file); return; }
+                var outName = file.name || 'heraldry.png';
+                onDone(new File([blob], outName, { type: 'image/png' }));
+            }, 'image/png');
+        } catch (err) {
+            onDone(file);
+        }
+    };
+    img.onerror = function() {
+        URL.revokeObjectURL(url);
+        onDone(file);
+    };
+    img.src = url;
 }
 
 function resizeImageToLimit(file, maxBytes, onSuccess, onError, preservePng) {
-	var MAX_ITERATIONS = 5;
-	var targetBytes = maxBytes - 100;
-	var mimeType = preservePng ? 'image/png' : 'image/jpeg';
-	var quality  = preservePng ? undefined : 0.85;
+    var MAX_ITERATIONS = 5;
+    var targetBytes = maxBytes - 100;
+    var mimeType = preservePng ? 'image/png' : 'image/jpeg';
+    var quality  = preservePng ? undefined : 0.85;
 
-	function attempt(sourceBlob, remainingTries) {
-		var img = new Image();
-		var url = URL.createObjectURL(sourceBlob);
-		img.onload = function() {
-			URL.revokeObjectURL(url);
-			var scale = Math.sqrt(targetBytes / sourceBlob.size) * 0.9;
-			scale = Math.min(scale, 1);
-			var canvas = document.createElement('canvas');
-			canvas.width  = Math.max(1, Math.floor(img.width  * scale));
-			canvas.height = Math.max(1, Math.floor(img.height * scale));
-			var ctx = canvas.getContext('2d');
-			if (!preservePng) {
-				ctx.fillStyle = '#ffffff';
-				ctx.fillRect(0, 0, canvas.width, canvas.height);
-			}
-			ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-			canvas.toBlob(function(blob) {
-				if (blob.size <= maxBytes) {
-					onSuccess(blob, canvas.width, canvas.height);
-				} else if (remainingTries > 1) {
-					attempt(blob, remainingTries - 1);
-				} else {
-					onError('Could not resize image to fit within the size limit. Please choose a smaller image.');
-				}
-			}, mimeType, quality);
-		};
-		img.onerror = function() {
-			URL.revokeObjectURL(url);
-			onError('Could not load image for resizing.');
-		};
-		img.src = url;
-	}
+    function attempt(sourceBlob, remainingTries) {
+        var img = new Image();
+        var url = URL.createObjectURL(sourceBlob);
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            var scale = Math.sqrt(targetBytes / sourceBlob.size) * 0.9;
+            scale = Math.min(scale, 1);
+            var canvas = document.createElement('canvas');
+            canvas.width  = Math.max(1, Math.floor(img.width  * scale));
+            canvas.height = Math.max(1, Math.floor(img.height * scale));
+            var ctx = canvas.getContext('2d');
+            if (!preservePng) {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(function(blob) {
+                if (blob.size <= maxBytes) {
+                    onSuccess(blob, canvas.width, canvas.height);
+                } else if (remainingTries > 1) {
+                    attempt(blob, remainingTries - 1);
+                } else {
+                    onError('Could not resize image to fit within the size limit. Please choose a smaller image.');
+                }
+            }, mimeType, quality);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            onError('Could not load image for resizing.');
+        };
+        img.src = url;
+    }
 
-	attempt(file, MAX_ITERATIONS);
+    attempt(file, MAX_ITERATIONS);
 }
 
 $(function() {
-	$('.info-container').each(function(k, container) {
-		setExpandMode(container, expandUrl(), k, getExpandMode(container, expandUrl(), k));
-	});
-	$('body').on('click', '.info-container>h3', function() {
-		setExpandMode($(this).parent(), expandUrl(), $(this).parent().index(), $(this).parent().hasClass('up-container')?"open":"closed");
-	});
-	$( '.hasDatePicker' ).datetimepicker({ dateFormat: "yy-mm-dd", showMinute: false });
-	$( '.restricted-image-type' ).change(function() {
-		var $input = $(this);
-		var generation = ($input.data('resize-gen') || 0) + 1;
-		$input.data('resize-gen', generation);
-		$input.siblings('.image-resize-notice').remove();
-		if (!extension_check($input, ['gif','png','jpg','jpeg'])) {
-			$input.effect("shake", {times: 5}, 50,
-				function() { replaceWith($input.val('').clone(true)); });
-			return;
-		}
-		var file = this.files && this.files[0];
-		if (!file || file.size <= 348836) return;
-		var originalKB = Math.round(file.size / 1024);
-		var isPng = (file.type === 'image/png');
-		$input.after('<div class="image-resize-notice" style="font-size:10px;color:#888;">Resizing\u2026</div>');
-		resizeImageToLimit(file, 348836,
-			function(blob, newW, newH) {
-				if ($input.data('resize-gen') !== generation) return;
-				var resizedKB = Math.round(blob.size / 1024);
-				var dt = new DataTransfer();
-				var outName = isPng ? 'resized.png' : 'resized.jpg';
-				var outType = isPng ? 'image/png' : 'image/jpeg';
-				dt.items.add(new File([blob], outName, {type: outType}));
-				$input[0].files = dt.files;
-				$input.siblings('.image-resize-notice')
-					.css('color', '#555')
-					.text('Resized ' + originalKB + ' KB \u2192 ' + resizedKB + ' KB (' + newW + '\xd7' + newH + ')');
-			},
-			function(errMsg) {
-				if ($input.data('resize-gen') !== generation) return;
-				$input.siblings('.image-resize-notice').css('color', 'red').text(errMsg);
-				$input.val('');
-			},
-			isPng
-		);
-	});
-	$( '.restricted-document-type' ).change(function() {
-		if (!extension_check( $( this ), ['gif','png','jpg','jpeg','pdf'])) {
-			$( this ).effect("shake",{ times: 5 }, 50,
-				function () { replaceWith( $( this ).val('').clone( true ) ) } );
-		}
-	});
-	$( '.numeric-field' ).blur(function() {
-		if (!isNumber($(this).val())) {
-			$( this ).val('0').fadeOut('slow', function() {
-				$( this ).css('background-color', '#fff0f0');
-				$( this ).css('border-color', 'red');
-				$( this ).fadeIn('slow', function() {
-					$( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
-				});
-			});
-		}
-	});
-	$( '.integer-field').blur(function() {
-	    var flash = false;
-	    if (isNumber($(this).val())) {
-	        var ival = Number($(this).val());
-	        var cval = Math.ceil(Number($(this).val()));
-	        $(this).val(cval);
-	        flash = cval != ival;
-	    } else {
-	        flash = true;
-	    }
-	    if (flash)
-	        $( this ).fadeOut('slow', function() {
-				$( this ).css('background-color', '#fff0f0');
-				$( this ).css('border-color', 'red');
-				$( this ).fadeIn('slow', function() {
-					$( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
-				});
-			});
-	});
-	$('.name-field').change(function() {
-		if (!isValidName($(this).val())) {
-			$( this ).val('').fadeOut('slow', function() {
-				$( this ).css('background-color', '#fff0f0');
-				$( this ).css('border-color', 'red');
-				$( this ).fadeIn('slow', function() {
-					$( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
-				});
-			});
-		}
-	});
-	$('.alphanumeric-field').change(function() {
-		if (!isValidUsername($(this).val())) {
-			$( this ).val('').fadeOut('slow', function() {
-				$( this ).css('background-color', '#fff0f0');
-				$( this ).css('border-color', 'red');
-				$( this ).fadeIn('slow', function() {
-					$( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
-				});
-			});
-		}
-	});
-	$('.most-emails-field').change(function() {
-		if (!isValidEmail($(this).val())) {
-			$( this ).val('').fadeOut('slow', function() {
-				$( this ).css('background-color', '#fff0f0');
-				$( this ).css('border-color', 'red');
-				$( this ).fadeIn('slow', function() {
-					$( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
-				});
-			});
-		}
-	});
-	$( "#PlayerSearch" ).autocomplete({
-		source: function( request, response ) {
-			$.getJSON(
-				"../orkservice/Search/SearchService.php",
-				{
-					Action: 'Search/Player',
-					type: 'all',
-					search: request.term,
-					limit: 6
-				},
-				function( data ) {
-					var suggestions = [];
-					$.each(data, function(i, val) {
-						suggestions.push({label: (val.Persona.length>0?val.Persona:"<i>No Persona</i>") + " (" + val.KAbbr + ":" + val.PAbbr + ")", value: val.MundaneId });
-					});
-					response(suggestions);
-				}
-			);
-		},
-		focus: function( event, ui ) {
-			return showLabel('#PlayerSearch', ui);
-		},
-		delay: 1000,
-		minLength: 3,
-		select: function (e, ui) {
-			showLabel('#PlayerSearch', ui);
-			document.location.href = '?Route=Player/profile/' + ui.item.value;
-			return false;
-		}
-	});
-	$( "#PlayerSearch" ).keydown( function () {
+    $('.info-container').each(function(k, container) {
+        setExpandMode(container, expandUrl(), k, getExpandMode(container, expandUrl(), k));
+    });
+    $('body').on('click', '.info-container>h3', function() {
+        setExpandMode($(this).parent(), expandUrl(), $(this).parent().index(), $(this).parent().hasClass('up-container')?"open":"closed");
+    });
+    $( '.hasDatePicker' ).datetimepicker({ dateFormat: "yy-mm-dd", showMinute: false });
+    $( '.restricted-image-type' ).change(function() {
+        var $input = $(this);
+        var generation = ($input.data('resize-gen') || 0) + 1;
+        $input.data('resize-gen', generation);
+        $input.siblings('.image-resize-notice').remove();
+        if (!extension_check($input, ['gif','png','jpg','jpeg'])) {
+            $input.effect("shake", {times: 5}, 50,
+                function() { replaceWith($input.val('').clone(true)); });
+            return;
+        }
+        var file = this.files && this.files[0];
+        if (!file || file.size <= 348836) return;
+        var originalKB = Math.round(file.size / 1024);
+        var isPng = (file.type === 'image/png');
+        $input.after('<div class="image-resize-notice" style="font-size:10px;color:#888;">Resizing\u2026</div>');
+        resizeImageToLimit(file, 348836,
+            function(blob, newW, newH) {
+                if ($input.data('resize-gen') !== generation) return;
+                var resizedKB = Math.round(blob.size / 1024);
+                var dt = new DataTransfer();
+                var outName = isPng ? 'resized.png' : 'resized.jpg';
+                var outType = isPng ? 'image/png' : 'image/jpeg';
+                dt.items.add(new File([blob], outName, {type: outType}));
+                $input[0].files = dt.files;
+                $input.siblings('.image-resize-notice')
+                    .css('color', '#555')
+                    .text('Resized ' + originalKB + ' KB \u2192 ' + resizedKB + ' KB (' + newW + '\xd7' + newH + ')');
+            },
+            function(errMsg) {
+                if ($input.data('resize-gen') !== generation) return;
+                $input.siblings('.image-resize-notice').css('color', 'red').text(errMsg);
+                $input.val('');
+            },
+            isPng
+        );
+    });
+    $( '.restricted-document-type' ).change(function() {
+        if (!extension_check( $( this ), ['gif','png','jpg','jpeg','pdf'])) {
+            $( this ).effect("shake",{ times: 5 }, 50,
+                function () { replaceWith( $( this ).val('').clone( true ) ) } );
+        }
+    });
+    $( '.numeric-field' ).blur(function() {
+        if (!isNumber($(this).val())) {
+            $( this ).val('0').fadeOut('slow', function() {
+                $( this ).css('background-color', '#fff0f0');
+                $( this ).css('border-color', 'red');
+                $( this ).fadeIn('slow', function() {
+                    $( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
+                });
+            });
+        }
+    });
+    $( '.integer-field').blur(function() {
+        var flash = false;
+        if (isNumber($(this).val())) {
+            var ival = Number($(this).val());
+            var cval = Math.ceil(Number($(this).val()));
+            $(this).val(cval);
+            flash = cval != ival;
+        } else {
+            flash = true;
+        }
+        if (flash)
+            $( this ).fadeOut('slow', function() {
+                $( this ).css('background-color', '#fff0f0');
+                $( this ).css('border-color', 'red');
+                $( this ).fadeIn('slow', function() {
+                    $( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
+                });
+            });
+    });
+    $('.name-field').change(function() {
+        if (!isValidName($(this).val())) {
+            $( this ).val('').fadeOut('slow', function() {
+                $( this ).css('background-color', '#fff0f0');
+                $( this ).css('border-color', 'red');
+                $( this ).fadeIn('slow', function() {
+                    $( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
+                });
+            });
+        }
+    });
+    $('.alphanumeric-field').change(function() {
+        if (!isValidUsername($(this).val())) {
+            $( this ).val('').fadeOut('slow', function() {
+                $( this ).css('background-color', '#fff0f0');
+                $( this ).css('border-color', 'red');
+                $( this ).fadeIn('slow', function() {
+                    $( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
+                });
+            });
+        }
+    });
+    $('.most-emails-field').change(function() {
+        if (!isValidEmail($(this).val())) {
+            $( this ).val('').fadeOut('slow', function() {
+                $( this ).css('background-color', '#fff0f0');
+                $( this ).css('border-color', 'red');
+                $( this ).fadeIn('slow', function() {
+                    $( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
+                });
+            });
+        }
+    });
+    $( "#PlayerSearch" ).autocomplete({
+        source: function( request, response ) {
+            $.getJSON(
+                "../orkservice/Search/SearchService.php",
+                {
+                    Action: 'Search/Player',
+                    type: 'all',
+                    search: request.term,
+                    limit: 6
+                },
+                function( data ) {
+                    var suggestions = [];
+                    $.each(data, function(i, val) {
+                        suggestions.push({label: (val.Persona.length>0?val.Persona:"<i>No Persona</i>") + " (" + val.KAbbr + ":" + val.PAbbr + ")", value: val.MundaneId });
+                    });
+                    response(suggestions);
+                }
+            );
+        },
+        focus: function( event, ui ) {
+            return showLabel('#PlayerSearch', ui);
+        },
+        delay: 1000,
+        minLength: 3,
+        select: function (e, ui) {
+            showLabel('#PlayerSearch', ui);
+            document.location.href = '?Route=Player/profile/' + ui.item.value;
+            return false;
+        }
+    });
+    $( "#PlayerSearch" ).keydown( function () {
         $('#PlayerSearch').autocomplete('option', 'delay', Math.max(100, 900 / ($('#PlayerSearch').val().length + 1)) );
     });
-	$('form').submit(function() {
-		var go = true;
-		$(this).find('.required-field').each(function(k, field) {
-			if ($(this).val().trim().length < 1) {
-				$(this).fadeOut('slow', function() {
-					$( this ).css('background-color', '#ffc0c0');
-					$( this ).css('border-color', 'red');
-					$( this ).fadeIn('slow', function() {
-						$( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
-					});
-				});
-				go = false;
-			}
-		});
-		return go;
-	});
-	$('.required-field').blur(function() {
-		if ($(this).val().trim().length < 1) {
-			$(this).fadeOut('slow', function() {
-				$( this ).css('background-color', '#ffc0c0');
-				$( this ).css('border-color', 'red');
-				$( this ).fadeIn('slow', function() {
-					$( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
-				});
-			});
-			return false;
-		}
-	});
-	$( "#ParkSearch" ).autocomplete({
-		source: function( request, response ) {
-			$.getJSON(
-				"../orkservice/Search/SearchService.php",
-				{
-					Action: 'Search/Park',
-					name: request.term,
-					limit: 6
-				},
-				function( data ) {
-					var suggestions = [];
-					$.each(data, function(i, val) {
-						suggestions.push({label: val.Name, value: val.ParkId });
-					});
-					response(suggestions);
-				}
-			);
-		},
-		focus: function( event, ui ) {
-			return showLabel('#ParkSearch', ui);
-		},
-		delay: 1000,
-		minLength: 2,
-		select: function (e, ui) {
-			showLabel('#ParkSearch', ui);
-			document.location.href = '?Route=Park/profile/' + ui.item.value;
-			return false;
-		}
-	});
-	$( "#ParkSearch" ).keydown( function () {
+    $('form').submit(function() {
+        var go = true;
+        $(this).find('.required-field').each(function(k, field) {
+            if ($(this).val().trim().length < 1) {
+                $(this).fadeOut('slow', function() {
+                    $( this ).css('background-color', '#ffc0c0');
+                    $( this ).css('border-color', 'red');
+                    $( this ).fadeIn('slow', function() {
+                        $( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
+                    });
+                });
+                go = false;
+            }
+        });
+        return go;
+    });
+    $('.required-field').blur(function() {
+        if ($(this).val().trim().length < 1) {
+            $(this).fadeOut('slow', function() {
+                $( this ).css('background-color', '#ffc0c0');
+                $( this ).css('border-color', 'red');
+                $( this ).fadeIn('slow', function() {
+                    $( this ).animate({ borderColor: '#CCC', backgroundColor: '#fff8c0' }, 'slow' );
+                });
+            });
+            return false;
+        }
+    });
+    $( "#ParkSearch" ).autocomplete({
+        source: function( request, response ) {
+            $.getJSON(
+                "../orkservice/Search/SearchService.php",
+                {
+                    Action: 'Search/Park',
+                    name: request.term,
+                    limit: 6
+                },
+                function( data ) {
+                    var suggestions = [];
+                    $.each(data, function(i, val) {
+                        suggestions.push({label: val.Name, value: val.ParkId });
+                    });
+                    response(suggestions);
+                }
+            );
+        },
+        focus: function( event, ui ) {
+            return showLabel('#ParkSearch', ui);
+        },
+        delay: 1000,
+        minLength: 2,
+        select: function (e, ui) {
+            showLabel('#ParkSearch', ui);
+            document.location.href = '?Route=Park/profile/' + ui.item.value;
+            return false;
+        }
+    });
+    $( "#ParkSearch" ).keydown( function () {
         $('#ParkSearch').autocomplete('option', 'delay', Math.max(100, 900 / ($('#ParkSearch').val().length + 1)) );
     });
-	// Heraldry image lightbox
-	$('body').append('<div id="ork-lightbox"><img /></div>');
-	$(document).on('click', '.heraldry-img', function() {
-		if ($(this).closest('a').length) return;
-		$('#ork-lightbox img').attr('src', this.src);
-		$('#ork-lightbox').fadeIn(150);
-	});
-	$('#ork-lightbox').on('click', function() {
-		$(this).fadeOut(150);
-	});
-	$(document).on('keydown', function(e) {
-		if (e.key === 'Escape') $('#ork-lightbox').fadeOut(150);
-	});
+    // Heraldry image lightbox
+    $('body').append('<div id="ork-lightbox"><img /></div>');
+    $(document).on('click', '.heraldry-img', function() {
+        if ($(this).closest('a').length) return;
+        $('#ork-lightbox img').attr('src', this.src);
+        $('#ork-lightbox').fadeIn(150);
+    });
+    $('#ork-lightbox').on('click', function() {
+        $(this).fadeOut(150);
+    });
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape') $('#ork-lightbox').fadeOut(150);
+    });
 });
 
 /*!
@@ -16491,113 +16491,113 @@ var ts = $.tablesorter,
 
 printTable = ts.printTable = {
 
-	event      : 'printTable',
-	basicStyle : 'table, tr, td, th { border : solid 1px black; border-collapse : collapse; } td, th { padding: 2px; }',
+    event      : 'printTable',
+    basicStyle : 'table, tr, td, th { border : solid 1px black; border-collapse : collapse; } td, th { padding: 2px; }',
 
-	init : function(c) {
-		c.$table
-			.unbind(printTable.event)
-			.bind(printTable.event, function(){
-				// explicitly use table.config.widgetOptions because we want
-				// the most up-to-date values; not the "wo" from initialization
-				printTable.process(c, c.widgetOptions);
-			});
-	},
+    init : function(c) {
+        c.$table
+            .unbind(printTable.event)
+            .bind(printTable.event, function(){
+                // explicitly use table.config.widgetOptions because we want
+                // the most up-to-date values; not the "wo" from initialization
+                printTable.process(c, c.widgetOptions);
+            });
+    },
 
-	process : function(c, wo) {
-		var $this,
-			$table = $('<div/>').append(c.$table.clone()),
-			printStyle = printTable.basicStyle + 'table { width: 100% }' +
-				// hide filter row
-				'.tablesorter-filter-row { display: none }' +
-				// hide sort arrows
-				'.tablesorter-header { background-image: none !important; }';
+    process : function(c, wo) {
+        var $this,
+            $table = $('<div/>').append(c.$table.clone()),
+            printStyle = printTable.basicStyle + 'table { width: 100% }' +
+                // hide filter row
+                '.tablesorter-filter-row { display: none }' +
+                // hide sort arrows
+                '.tablesorter-header { background-image: none !important; }';
 
-		// replace content with data-attribute content
-		$table.find('[' + wo.print_dataAttrib + ']').each(function(){
-			$this = $(this);
-			$this.text( $this.attr(wo.print_dataAttrib) );
-		});
+        // replace content with data-attribute content
+        $table.find('[' + wo.print_dataAttrib + ']').each(function(){
+            $this = $(this);
+            $this.text( $this.attr(wo.print_dataAttrib) );
+        });
 
-		// === rows ===
-		// Assume "visible" means rows hidden by the pager (rows set to "display:none")
-		// or hidden by a class name which is added to the wo.print_extraCSS definition
-		if (/a/i.test(wo.print_rows)) {
-			// force show of all rows
-			printStyle += 'tbody tr { display: table-row !important; }';
-		} else if (/f/i.test(wo.print_rows)) {
-			// add definition to show all non-filtered rows (cells hidden by the pager)
-			printStyle += 'tbody tr:not(.' + (wo.filter_filteredRow || 'filtered') + ') { display: table-row !important; }';
-		}
+        // === rows ===
+        // Assume "visible" means rows hidden by the pager (rows set to "display:none")
+        // or hidden by a class name which is added to the wo.print_extraCSS definition
+        if (/a/i.test(wo.print_rows)) {
+            // force show of all rows
+            printStyle += 'tbody tr { display: table-row !important; }';
+        } else if (/f/i.test(wo.print_rows)) {
+            // add definition to show all non-filtered rows (cells hidden by the pager)
+            printStyle += 'tbody tr:not(.' + (wo.filter_filteredRow || 'filtered') + ') { display: table-row !important; }';
+        }
 
-		// === columns ===
-		// columnSelector -> c.selector.$style
-		// Assume "visible" means hidden columns have a "display:none" style, or a class name
-		// add the definition to the wo.print_extraCSS option
-		if (/s/i.test(wo.print_columns) && c.selector && c.widgets.indexOf('columnSelector') >= 0) {
-			// show selected (visible) columns; make a copy of the columnSelector widget css (not media queries)
-			printStyle += c.selector.auto ? '' : c.selector.$style.text();
-		} else if (/a/i.test(wo.print_columns)) {
-			// force show all cells
-			printStyle += 'td, th { display: table-cell !important; }';
-		}
+        // === columns ===
+        // columnSelector -> c.selector.$style
+        // Assume "visible" means hidden columns have a "display:none" style, or a class name
+        // add the definition to the wo.print_extraCSS option
+        if (/s/i.test(wo.print_columns) && c.selector && c.widgets.indexOf('columnSelector') >= 0) {
+            // show selected (visible) columns; make a copy of the columnSelector widget css (not media queries)
+            printStyle += c.selector.auto ? '' : c.selector.$style.text();
+        } else if (/a/i.test(wo.print_columns)) {
+            // force show all cells
+            printStyle += 'td, th { display: table-cell !important; }';
+        }
 
-		printStyle += wo.print_extraCSS;
+        printStyle += wo.print_extraCSS;
 
-		// callback function
-		if ( $.isFunction(wo.print_callback) ) {
-			wo.print_callback( c, $table, printStyle );
-		} else {
-			printTable.printOutput(c, $table.html(), printStyle);
-		}
+        // callback function
+        if ( $.isFunction(wo.print_callback) ) {
+            wo.print_callback( c, $table, printStyle );
+        } else {
+            printTable.printOutput(c, $table.html(), printStyle);
+        }
 
-	}, // end process
+    }, // end process
 
-	printOutput : function(c, data, style) {
-		var wo = c.widgetOptions,
-			generator = window.open('', wo.print_title, 'width=500,height=300'),
-			t = wo.print_title || c.$table.find('caption').text() || c.$table[0].id || document.title || 'table';
-		generator.document.write(
-			'<html><head><title>' + t + '</title>' +
-			( wo.print_styleSheet ? '<link rel="stylesheet" href="' + wo.print_styleSheet + '">' : '' ) +
-			'<style>' + style + '</style>' +
-			'</head><body>' + data + '</body></html>'
-		);
-		generator.document.close();
-		generator.print();
-		generator.close();
-		return true;
-	},
+    printOutput : function(c, data, style) {
+        var wo = c.widgetOptions,
+            generator = window.open('', wo.print_title, 'width=500,height=300'),
+            t = wo.print_title || c.$table.find('caption').text() || c.$table[0].id || document.title || 'table';
+        generator.document.write(
+            '<html><head><title>' + t + '</title>' +
+            ( wo.print_styleSheet ? '<link rel="stylesheet" href="' + wo.print_styleSheet + '">' : '' ) +
+            '<style>' + style + '</style>' +
+            '</head><body>' + data + '</body></html>'
+        );
+        generator.document.close();
+        generator.print();
+        generator.close();
+        return true;
+    },
 
-	remove : function(c) {
-		c.$table.off(printTable.event);
-	}
+    remove : function(c) {
+        c.$table.off(printTable.event);
+    }
 
 };
 
 ts.addWidget({
-	id: 'print',
-	options: {
-		print_title      : '',          // this option > caption > table id > "table"
-		print_dataAttrib : 'data-name', // header attrib containing modified header name
-		print_rows       : 'filtered',  // (a)ll, (v)isible or (f)iltered
-		print_columns    : 'selected',  // (a)ll or (s)elected (if columnSelector widget is added)
-		print_extraCSS   : '',          // add any extra css definitions for the popup window here
-		print_styleSheet : '',          // add the url of your print stylesheet
-		// callback executed when processing completes
-		// to continue printing, use the following function:
-		// function( config, $table, printStyle ) {
-		//   // do something to the table or printStyle string
-		//   $.tablesorter.printTable.printOutput( config, $table.html(), printStyle );
-		// }
-		print_callback   : null
-	},
-	init: function(table, thisWidget, c) {
-		printTable.init(c);
-	},
-	remove: function(table, c){
-		printTable.remove(c);
-	}
+    id: 'print',
+    options: {
+        print_title      : '',          // this option > caption > table id > "table"
+        print_dataAttrib : 'data-name', // header attrib containing modified header name
+        print_rows       : 'filtered',  // (a)ll, (v)isible or (f)iltered
+        print_columns    : 'selected',  // (a)ll or (s)elected (if columnSelector widget is added)
+        print_extraCSS   : '',          // add any extra css definitions for the popup window here
+        print_styleSheet : '',          // add the url of your print stylesheet
+        // callback executed when processing completes
+        // to continue printing, use the following function:
+        // function( config, $table, printStyle ) {
+        //   // do something to the table or printStyle string
+        //   $.tablesorter.printTable.printOutput( config, $table.html(), printStyle );
+        // }
+        print_callback   : null
+    },
+    init: function(table, thisWidget, c) {
+        printTable.init(c);
+    },
+    remove: function(table, c){
+        printTable.remove(c);
+    }
 
 });
 
@@ -16626,323 +16626,323 @@ events = 'staticRowsRefresh updateComplete '.split(' ').join('.tsstaticrows '),
 
 // add/refresh row indexes
 addIndexes = function(table){
-	var $tr, wo, v, indx, rows,
-		c = table.config;
-	// "Index" the static rows, saving their current (starting) position in the
-	// table inside a data() param on the <tr> element itself for later use.
-	if (c) {
-		wo = c.widgetOptions;
-		c.$tbodies.each(function(){
-			$tr = $(this).children();
-			rows = $tr.length;
-			$tr.filter(wo.staticRow_class).each(function() {
-				$tr = $(this);
-				indx = $tr.data(wo.staticRow_index);
-				if (typeof indx !== "undefined") {
-					v = parseFloat(indx);
-					// percentage of total rows
-					indx = (/%/.test(indx)) ? Math.round(v/100 * rows) : v;
-				} else {
-					indx = $tr.index();
-				}
-				// row indexing starts over within each tbody
-				$tr.data( wo.staticRow_data, indx );
-			});
-		});
-	}
+    var $tr, wo, v, indx, rows,
+        c = table.config;
+    // "Index" the static rows, saving their current (starting) position in the
+    // table inside a data() param on the <tr> element itself for later use.
+    if (c) {
+        wo = c.widgetOptions;
+        c.$tbodies.each(function(){
+            $tr = $(this).children();
+            rows = $tr.length;
+            $tr.filter(wo.staticRow_class).each(function() {
+                $tr = $(this);
+                indx = $tr.data(wo.staticRow_index);
+                if (typeof indx !== "undefined") {
+                    v = parseFloat(indx);
+                    // percentage of total rows
+                    indx = (/%/.test(indx)) ? Math.round(v/100 * rows) : v;
+                } else {
+                    indx = $tr.index();
+                }
+                // row indexing starts over within each tbody
+                $tr.data( wo.staticRow_data, indx );
+            });
+        });
+    }
 };
 
 ts.addWidget({
-	// Give the new Widget an ID to be used in the tablesorter() call, as follows:
-	// $('#myElement').tablesorter({ widgets: ['zebra', 'staticRow'] });
-	id: 'staticRow',
+    // Give the new Widget an ID to be used in the tablesorter() call, as follows:
+    // $('#myElement').tablesorter({ widgets: ['zebra', 'staticRow'] });
+    id: 'staticRow',
 
-	options: {
-		staticRow_class : '.static',
-		staticRow_data  : 'static-index',
-		staticRow_index : 'row-index'
-	},
+    options: {
+        staticRow_class : '.static',
+        staticRow_data  : 'static-index',
+        staticRow_index : 'row-index'
+    },
 
-	init: function(table, thisWidget, c, wo){
-		addIndexes(table);
-		// refresh static rows after updates
-		c.$table
-			.unbind(events)
-			.bind(events, function(){
-				addIndexes(table);
-				c.$table.trigger('applyWidgets');
-			});
-	},
+    init: function(table, thisWidget, c, wo){
+        addIndexes(table);
+        // refresh static rows after updates
+        c.$table
+            .unbind(events)
+            .bind(events, function(){
+                addIndexes(table);
+                c.$table.trigger('applyWidgets');
+            });
+    },
 
-	format: function(table, c, wo) {
-		// Loop thru static rows, moving them to their original "indexed" position,
-		// & repeat until no more re-shuffling is needed
-		var targetIndex, $thisRow, indx, numRows, $tbody, hasShuffled, $rows, max;
+    format: function(table, c, wo) {
+        // Loop thru static rows, moving them to their original "indexed" position,
+        // & repeat until no more re-shuffling is needed
+        var targetIndex, $thisRow, indx, numRows, $tbody, hasShuffled, $rows, max;
 
-		c.$tbodies.each(function(){
-			$tbody = $.tablesorter.processTbody(table, $(this), true); // remove tbody
-			hasShuffled = true;
-			indx = 0;
-			$rows = $tbody.children(wo.staticRow_class);
-			numRows = $tbody.children('tr').length - 1;
-			max = $rows.length;
+        c.$tbodies.each(function(){
+            $tbody = $.tablesorter.processTbody(table, $(this), true); // remove tbody
+            hasShuffled = true;
+            indx = 0;
+            $rows = $tbody.children(wo.staticRow_class);
+            numRows = $tbody.children('tr').length - 1;
+            max = $rows.length;
 
-			// don't allow the while loop to cycle more times than the set number of static rows
-			while (hasShuffled && indx < max) {
-				hasShuffled = false;
-				/*jshint loopfunc:true */
-				$rows.each(function() {
-					targetIndex = $(this).data(wo.staticRow_data);
-					// allow setting target index >> num rows to always make a row last
-					targetIndex = targetIndex >= numRows ? numRows : targetIndex < 0 ? 0 : targetIndex;
-					if (targetIndex !== $(this).index()) {
-						hasShuffled = true;
-						$thisRow = $(this).detach();
+            // don't allow the while loop to cycle more times than the set number of static rows
+            while (hasShuffled && indx < max) {
+                hasShuffled = false;
+                /*jshint loopfunc:true */
+                $rows.each(function() {
+                    targetIndex = $(this).data(wo.staticRow_data);
+                    // allow setting target index >> num rows to always make a row last
+                    targetIndex = targetIndex >= numRows ? numRows : targetIndex < 0 ? 0 : targetIndex;
+                    if (targetIndex !== $(this).index()) {
+                        hasShuffled = true;
+                        $thisRow = $(this).detach();
 
-						if (targetIndex >= numRows) {
-							// Are we trying to be the last row?
-							$thisRow.appendTo( $tbody );
-						} else if (targetIndex === 0) {
-								// Are we trying to be the first row?
-								$thisRow.prependTo( $tbody );
-						} else {
-							// No, we want to be somewhere in the middle!
-							$thisRow.insertBefore( $tbody.find('tr:eq(' + targetIndex + ')') );
-						}
-					}
-				});
-				indx++;
-			}
+                        if (targetIndex >= numRows) {
+                            // Are we trying to be the last row?
+                            $thisRow.appendTo( $tbody );
+                        } else if (targetIndex === 0) {
+                                // Are we trying to be the first row?
+                                $thisRow.prependTo( $tbody );
+                        } else {
+                            // No, we want to be somewhere in the middle!
+                            $thisRow.insertBefore( $tbody.find('tr:eq(' + targetIndex + ')') );
+                        }
+                    }
+                });
+                indx++;
+            }
 
-			$.tablesorter.processTbody(table, $tbody, false); // restore tbody
-		});
+            $.tablesorter.processTbody(table, $tbody, false); // restore tbody
+        });
 
-		c.$table.trigger('staticRowsComplete', table);
-	},
+        c.$table.trigger('staticRowsComplete', table);
+    },
 
-	remove : function(table, c, wo){
-		c.$table.unbind(events);
-	}
+    remove : function(table, c, wo){
+        c.$table.unbind(events);
+    }
 
 });
 
 })(jQuery);
 
 /*!
-	Copyright (C) 2011 T. Connell & Associates, Inc.
+    Copyright (C) 2011 T. Connell & Associates, Inc.
 
-	Dual-licensed under the MIT and GPL licenses
+    Dual-licensed under the MIT and GPL licenses
 
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-	MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
-	FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-	WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+    FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-	Resizable scroller widget for the jQuery tablesorter plugin
+    Resizable scroller widget for the jQuery tablesorter plugin
 
-	Version 2.0 - modified by Rob Garrison 4/12/2013; updated 6/28/2014 (v2.17.3)
-	Requires jQuery v1.7+
-	Requires the tablesorter plugin, v2.8+, available at http://mottie.github.com/tablesorter/docs/
+    Version 2.0 - modified by Rob Garrison 4/12/2013; updated 6/28/2014 (v2.17.3)
+    Requires jQuery v1.7+
+    Requires the tablesorter plugin, v2.8+, available at http://mottie.github.com/tablesorter/docs/
 
-	Usage:
+    Usage:
 
-		$(function() {
+        $(function() {
 
-			$('table.tablesorter').tablesorter({
-				widgets: ['zebra', 'scroller'],
-				widgetOptions : {
-					scroller_height       : 300,  // height of scroll window
-					scroller_barWidth     : 18,   // scroll bar width
-					scroller_jumpToHeader : true, // header snap to browser top when scrolling the tbody
-					scroller_idPrefix     : 's_'  // cloned thead id prefix (random number added to end)
-				}
-			});
+            $('table.tablesorter').tablesorter({
+                widgets: ['zebra', 'scroller'],
+                widgetOptions : {
+                    scroller_height       : 300,  // height of scroll window
+                    scroller_barWidth     : 18,   // scroll bar width
+                    scroller_jumpToHeader : true, // header snap to browser top when scrolling the tbody
+                    scroller_idPrefix     : 's_'  // cloned thead id prefix (random number added to end)
+                }
+            });
 
-		});
+        });
 
-	Website: www.tconnell.com
+    Website: www.tconnell.com
 */
 /*jshint browser:true, jquery:true, unused:false */
 ;(function($){
 "use strict";
 
 $.fn.hasScrollBar = function(){
-	return this.get(0).scrollHeight > this.height();
+    return this.get(0).scrollHeight > this.height();
 };
 var ts = $.tablesorter;
 
 ts.window_resize = function(){
-	if (this.resize_timer) {
-		clearTimeout(this.resize_timer);
-	}
-	this.resize_timer = setTimeout(function(){
-		$(this).trigger('resizeEnd');
-	}, 250);
+    if (this.resize_timer) {
+        clearTimeout(this.resize_timer);
+    }
+    this.resize_timer = setTimeout(function(){
+        $(this).trigger('resizeEnd');
+    }, 250);
 };
 
 // Add extra scroller css
 $(function(){
-	var s = '<style>' +
-		'.tablesorter-scroller-reset { width: auto !important; } ' +
-		'.tablesorter-scroller { text-align: left; overflow: hidden;  }' +
-		'.tablesorter-scroller-header { overflow: hidden; }' +
-		'.tablesorter-scroller-header table.tablesorter { margin-bottom: 0; }' +
-		'.tablesorter-scroller-table { overflow-y: scroll; }' +
-		'.tablesorter-scroller-table table.tablesorter { margin-top: 0; overflow: scroll; } ' +
-		'.tablesorter-scroller-table .tablesorter-filter-row, .tablesorter-scroller-table tfoot { display: none; }' +
-		'.tablesorter-scroller-table table.tablesorter thead tr.tablesorter-headerRow * {' +
-			'line-height:0;height:0;border:none;background-image:none;padding-top:0;padding-bottom:0;margin-top:0;margin-bottom:0;overflow:hidden;' +
-		'}</style>';
-	$(s).appendTo('body');
+    var s = '<style>' +
+        '.tablesorter-scroller-reset { width: auto !important; } ' +
+        '.tablesorter-scroller { text-align: left; overflow: hidden;  }' +
+        '.tablesorter-scroller-header { overflow: hidden; }' +
+        '.tablesorter-scroller-header table.tablesorter { margin-bottom: 0; }' +
+        '.tablesorter-scroller-table { overflow-y: scroll; }' +
+        '.tablesorter-scroller-table table.tablesorter { margin-top: 0; overflow: scroll; } ' +
+        '.tablesorter-scroller-table .tablesorter-filter-row, .tablesorter-scroller-table tfoot { display: none; }' +
+        '.tablesorter-scroller-table table.tablesorter thead tr.tablesorter-headerRow * {' +
+            'line-height:0;height:0;border:none;background-image:none;padding-top:0;padding-bottom:0;margin-top:0;margin-bottom:0;overflow:hidden;' +
+        '}</style>';
+    $(s).appendTo('body');
 });
 
 ts.addWidget({
-	id: 'scroller',
-	priority: 60, // run after the filter widget
-	options: {
-		scroller_height : 300,
-		scroller_barWidth : 18,
-		scroller_jumpToHeader: true,
-		scroller_upAfterSort: true,
-		scroller_idPrefix : 's_'
-	},
-	init: function(table, thisWidget, c, wo){
-		var $win = $(window);
-		// Setup window.resizeEnd event
-		$win
-			.bind('resize', ts.window_resize)
-			.bind('resizeEnd', function() {
-				// init is run before format, so scroller_resizeWidth
-				// won't be defined within the "c" or "wo" parameters
-				if (typeof table.config.widgetOptions.scroller_resizeWidth === 'function') {
-					// IE calls resize when you modify content, so we have to unbind the resize event
-					// so we don't end up with an infinite loop. we can rebind after we're done.
-					$win.unbind('resize', ts.window_resize);
-					table.config.widgetOptions.scroller_resizeWidth();
-					$win.bind('resize', ts.window_resize);
-				}
-			});
-	},
-	format: function(table, c, wo) {
-		var h, $hdr, id, t, resize, $cells,
-			$win = $(window),
-			$tbl = c.$table;
+    id: 'scroller',
+    priority: 60, // run after the filter widget
+    options: {
+        scroller_height : 300,
+        scroller_barWidth : 18,
+        scroller_jumpToHeader: true,
+        scroller_upAfterSort: true,
+        scroller_idPrefix : 's_'
+    },
+    init: function(table, thisWidget, c, wo){
+        var $win = $(window);
+        // Setup window.resizeEnd event
+        $win
+            .bind('resize', ts.window_resize)
+            .bind('resizeEnd', function() {
+                // init is run before format, so scroller_resizeWidth
+                // won't be defined within the "c" or "wo" parameters
+                if (typeof table.config.widgetOptions.scroller_resizeWidth === 'function') {
+                    // IE calls resize when you modify content, so we have to unbind the resize event
+                    // so we don't end up with an infinite loop. we can rebind after we're done.
+                    $win.unbind('resize', ts.window_resize);
+                    table.config.widgetOptions.scroller_resizeWidth();
+                    $win.bind('resize', ts.window_resize);
+                }
+            });
+    },
+    format: function(table, c, wo) {
+        var h, $hdr, id, t, resize, $cells,
+            $win = $(window),
+            $tbl = c.$table;
 
-		if (!c.isScrolling) {
-			h = wo.scroller_height || 300;
-			t = $tbl.find('tbody').height();
-			if (t !== 0 && h > t) { h = t + 10; }  // Table is less than h px
-			id = wo.scroller_id = wo.scroller_idPrefix + Math.floor(Math.random() * 1001);
+        if (!c.isScrolling) {
+            h = wo.scroller_height || 300;
+            t = $tbl.find('tbody').height();
+            if (t !== 0 && h > t) { h = t + 10; }  // Table is less than h px
+            id = wo.scroller_id = wo.scroller_idPrefix + Math.floor(Math.random() * 1001);
 
-			$hdr = $('<table class="' + $tbl.attr('class') + '" cellpadding=0 cellspacing=0><thead>' + $tbl.find('thead:first').html() + '</thead></table>');
-			$tbl
-				.wrap('<div id="' + id + '" class="tablesorter-scroller" />')
-				.before($hdr)
-				.find('.tablesorter-filter-row').addClass('hideme');
+            $hdr = $('<table class="' + $tbl.attr('class') + '" cellpadding=0 cellspacing=0><thead>' + $tbl.find('thead:first').html() + '</thead></table>');
+            $tbl
+                .wrap('<div id="' + id + '" class="tablesorter-scroller" />')
+                .before($hdr)
+                .find('.tablesorter-filter-row').addClass('hideme');
 
-			$cells = $hdr
-				.wrap('<div class="tablesorter-scroller-header" style="width:' + $tbl.width() + ';" />')
-				.find('.' + ts.css.header);
+            $cells = $hdr
+                .wrap('<div class="tablesorter-scroller-header" style="width:' + $tbl.width() + ';" />')
+                .find('.' + ts.css.header);
 
-			$tbl.wrap('<div class="tablesorter-scroller-table" style="height:' + h + 'px;width:' + $tbl.width() + ';" />');
+            $tbl.wrap('<div class="tablesorter-scroller-table" style="height:' + h + 'px;width:' + $tbl.width() + ';" />');
 
-			// make scroller header sortable
-			ts.bindEvents(table, $cells);
+            // make scroller header sortable
+            ts.bindEvents(table, $cells);
 
-			// look for filter widget
-			if ($tbl.hasClass('hasFilters')) {
-				ts.filter.bindSearch( $tbl, $hdr.find('.' + ts.css.filter) );
-			}
+            // look for filter widget
+            if ($tbl.hasClass('hasFilters')) {
+                ts.filter.bindSearch( $tbl, $hdr.find('.' + ts.css.filter) );
+            }
 
-			resize = function(){
-				var d, b, $h, $th, w,
-					// Hide other scrollers so we can resize
-					$div = $('div.scroller[id != "' + id + '"]').hide();
+            resize = function(){
+                var d, b, $h, $th, w,
+                    // Hide other scrollers so we can resize
+                    $div = $('div.scroller[id != "' + id + '"]').hide();
 
-				$tbl.find('thead').show();
+                $tbl.find('thead').show();
 
-				// Reset sizes so parent can resize.
-				$tbl
-					.addClass('tablesorter-scroller-reset')
-					.find('thead').find('.tablesorter-header-inner').addClass('tablesorter-scroller-reset');
-				d = $tbl.parent();
-				d.addClass('tablesorter-scroller-reset');
+                // Reset sizes so parent can resize.
+                $tbl
+                    .addClass('tablesorter-scroller-reset')
+                    .find('thead').find('.tablesorter-header-inner').addClass('tablesorter-scroller-reset');
+                d = $tbl.parent();
+                d.addClass('tablesorter-scroller-reset');
 
-				d.parent().trigger('resize');
+                d.parent().trigger('resize');
 
-				// Shrink a bit to accommodate scrollbar
-				d.width( d.parent().innerWidth() - ( d.parent().hasScrollBar() ? wo.scroller_barWidth : 0 ) );
-				w = d.innerWidth() - ( d.hasScrollBar() ? wo.scroller_barWidth : 0 );
-				$tbl.width( w );
-				$hdr.width( w );
-				$hdr.parent().width( w );
+                // Shrink a bit to accommodate scrollbar
+                d.width( d.parent().innerWidth() - ( d.parent().hasScrollBar() ? wo.scroller_barWidth : 0 ) );
+                w = d.innerWidth() - ( d.hasScrollBar() ? wo.scroller_barWidth : 0 );
+                $tbl.width( w );
+                $hdr.width( w );
+                $hdr.parent().width( w );
 
-				$tbl.closest('.tablesorter-scroller').find('.tablesorter-scroller-reset').removeClass('tablesorter-scroller-reset');
+                $tbl.closest('.tablesorter-scroller').find('.tablesorter-scroller-reset').removeClass('tablesorter-scroller-reset');
 
-				// include left & right border widths
-				b = parseInt( $tbl.css('border-left-width'), 10 ) + parseInt( $tbl.css('border-right-width'), 10 );
-				$h = $hdr.find('thead').children().children();
+                // include left & right border widths
+                b = parseInt( $tbl.css('border-left-width'), 10 ) + parseInt( $tbl.css('border-right-width'), 10 );
+                $h = $hdr.find('thead').children().children();
 
-				// adjust cloned header to match original table width - includes wrappers, headers, and header inner div
-				$tbl.find('thead').children().children().each(function(i, c){
-					$th = $(c).find('.tablesorter-header-inner');
-					if ($th.length) {
-						// I have no idea why this is in here anymore LOL
-						w = parseInt( $th.css('min-width').replace('auto', '0').replace(/(px|em)/, ''), 10 );
-						if ( $th.width() < w ) {
-							$th.width(w);
-						} else {
-							w = $th.width();
-						}
-						$h.eq(i)
-							.find('.tablesorter-header-inner').width(w - b)
-							// set inner width first
-							.parent()
-							.width( $th.parent().width() - b );
-					}
-				});
+                // adjust cloned header to match original table width - includes wrappers, headers, and header inner div
+                $tbl.find('thead').children().children().each(function(i, c){
+                    $th = $(c).find('.tablesorter-header-inner');
+                    if ($th.length) {
+                        // I have no idea why this is in here anymore LOL
+                        w = parseInt( $th.css('min-width').replace('auto', '0').replace(/(px|em)/, ''), 10 );
+                        if ( $th.width() < w ) {
+                            $th.width(w);
+                        } else {
+                            w = $th.width();
+                        }
+                        $h.eq(i)
+                            .find('.tablesorter-header-inner').width(w - b)
+                            // set inner width first
+                            .parent()
+                            .width( $th.parent().width() - b );
+                    }
+                });
 
-				$div.show();
-			};
+                $div.show();
+            };
 
-			// Expose to external calls
-			wo.scroller_resizeWidth = resize;
+            // Expose to external calls
+            wo.scroller_resizeWidth = resize;
 
-			resize();
+            resize();
 
-			$tbl.find('thead').css('visibility', 'hidden');
-			c.isScrolling = true;
+            $tbl.find('thead').css('visibility', 'hidden');
+            c.isScrolling = true;
 
-			t = $tbl.parent().parent().height();
+            t = $tbl.parent().parent().height();
 
-			// The header will always jump into view if scrolling the table body
-			$tbl.parent().bind('scroll', function(){
-				if (wo.scroller_jumpToHeader) {
-					var pos = $win.scrollTop() - $hdr.offset().top;
-					if ($(this).scrollTop() !== 0 && pos < t && pos > 0) {
-						$win.scrollTop( $hdr.offset().top );
-					}
-				}
-				$hdr.parent().scrollLeft( $(this).scrollLeft() );
-			});
+            // The header will always jump into view if scrolling the table body
+            $tbl.parent().bind('scroll', function(){
+                if (wo.scroller_jumpToHeader) {
+                    var pos = $win.scrollTop() - $hdr.offset().top;
+                    if ($(this).scrollTop() !== 0 && pos < t && pos > 0) {
+                        $win.scrollTop( $hdr.offset().top );
+                    }
+                }
+                $hdr.parent().scrollLeft( $(this).scrollLeft() );
+            });
 
-		}
+        }
 
-		// Sorting, so scroll to top
-		if (wo.scroller_upAfterSort) {
-			$tbl.parent().animate({ scrollTop: 0 }, 'fast');
-		}
+        // Sorting, so scroll to top
+        if (wo.scroller_upAfterSort) {
+            $tbl.parent().animate({ scrollTop: 0 }, 'fast');
+        }
 
-	},
-	remove : function(table, c, wo){
-		var $table = c.$table;
-		$table.closest('.tablesorter-scroller').find('.tablesorter-scroller-header').remove();
-		$table
-				.unwrap()
-				.find('.tablesorter-filter-row').removeClass('hideme').end()
-				.find('thead').show().css('visibility', 'visible');
-		c.isScrolling = false;
-	}
+    },
+    remove : function(table, c, wo){
+        var $table = c.$table;
+        $table.closest('.tablesorter-scroller').find('.tablesorter-scroller-header').remove();
+        $table
+                .unwrap()
+                .find('.tablesorter-filter-row').removeClass('hideme').end()
+                .find('thead').show().css('visibility', 'visible');
+        c.isScrolling = false;
+    }
 });
 
 })(jQuery);
@@ -25138,3 +25138,171 @@ function _typeof(e) {
     jQuery.sidr = b,
     jQuery.fn.sidr = d
 }();
+
+/* ============================================================================
+ * Shared modal dialog helpers — orkConfirm / orkAlert / orkDialogTrap
+ *
+ * Native confirm()/alert()/prompt() are banned app-wide (they freeze the in-app
+ * browser), and the replacement had been hand-rolled per page: cpConfirm/cpAlert
+ * in the Court templates, rmConfirm in the Recommendations Manager. Three copies
+ * meant three places to fix the focus-trap and focus-restore gaps. This is the
+ * one implementation; the per-page helpers are thin aliases over it, which also
+ * makes the rule greppable — `confirm(` with no ork prefix is a violation.
+ *
+ * orkConfirm(opts) -> Promise<boolean>
+ * orkAlert(opts|string) -> Promise<void>
+ *   opts: { title, body, confirmLabel, cancelLabel, danger, onConfirm, onCancel }
+ *   (the union of the two call-site shapes it replaces; onConfirm/onCancel are
+ *   still invoked so existing callers keep working unchanged.)
+ *
+ * orkDialogTrap(element, { onEscape, initialFocus }) -> release()
+ *   Escape + Tab wrapping + focus restore for an ALREADY-RENDERED overlay.
+ *   release() is idempotent and restores focus to whatever was focused on open.
+ *
+ * Styles are injected from here rather than a stylesheet on purpose: the helper
+ * has to work on any page that loads orkui.js, including ones that link no
+ * page-level CSS of their own.
+ * ========================================================================== */
+(function (w, d) {
+    if (w.orkConfirm) { return; }
+
+    var FOCUSABLE = 'a[href],area[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+    function injectStyles() {
+        if (d.getElementById('ork-dialog-styles')) { return; }
+        var st = d.createElement('style');
+        st.id = 'ork-dialog-styles';
+        st.textContent = [
+            '.ork-dialog-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.45);}',
+            '.ork-dialog{width:100%;max-width:440px;box-sizing:border-box;padding:18px 20px 16px;border-radius:8px;border:1px solid #d8d8d8;background:#fff;color:#222;box-shadow:0 10px 40px rgba(0,0,0,.35);font-size:13px;}',
+            '.ork-dialog-title{background:none;border:none;padding:0;border-radius:0;text-shadow:none;margin:0 0 6px;font-size:18px;font-weight:700;color:#222;}',
+            '.ork-dialog-body{font-size:13px;line-height:1.45;color:#555;white-space:pre-line;}',
+            '.ork-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}',
+            '.ork-dialog-btn{cursor:pointer;font-size:13px;font-weight:600;padding:7px 16px;border-radius:4px;border:1px solid #d8d8d8;background:transparent;color:#222;min-height:36px;}',
+            '.ork-dialog-btn:hover{border-color:#2c5f8b;}',
+            '.ork-dialog-ok{background:#2c5f8b;border-color:#2c5f8b;color:#fff;}',
+            '.ork-dialog-ok.ork-dialog-danger{background:#c53030;border-color:#c53030;}',
+            '@media (max-width:1250px){.ork-dialog-btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center;}}',
+            'html[data-theme="dark"] .ork-dialog{background:#23262d;color:#e6e6e6;border-color:#3a3f47;}',
+            'html[data-theme="dark"] .ork-dialog-title{background:none;border:none;padding:0;border-radius:0;text-shadow:none;color:#e6e6e6;}',
+            'html[data-theme="dark"] .ork-dialog-body{color:#c3c8cf;}',
+            'html[data-theme="dark"] .ork-dialog-btn{color:#e6e6e6;border-color:#3a3f47;}',
+            'html[data-theme="dark"] .ork-dialog-ok{background:#2c5f8b;border-color:#2c5f8b;color:#fff;}',
+            'html[data-theme="dark"] .ork-dialog-ok.ork-dialog-danger{background:#c53030;border-color:#c53030;}'
+        ].join('\n');
+        (d.head || d.documentElement).appendChild(st);
+    }
+
+    // Visible, focusable descendants of el, in document order.
+    function focusables(el) {
+        var out = [];
+        var list = el.querySelectorAll(FOCUSABLE);
+        for (var i = 0; i < list.length; i++) {
+            var n = list[i];
+            if (n.offsetParent !== null || n === d.activeElement) { out.push(n); }
+        }
+        return out;
+    }
+
+    // Stack of live traps, innermost last. Every trap listens on document in the
+    // capture phase, so without this a single Escape on a stacked dialog (an
+    // orkConfirm opened over an already-trapped modal) fired BOTH onEscape
+    // handlers and closed both. Tab only worked by accident, because the inner
+    // trap registered last. Only the topmost trap may act on a key.
+    var trapStack = [];
+
+    // Escape + Tab wrapping + focus restore for an already-rendered overlay.
+    function orkDialogTrap(el, opts) {
+        opts = opts || {};
+        var prev = d.activeElement;
+        var released = false;
+        var self = {};
+        trapStack.push(self);
+
+        function onKey(e) {
+            if (trapStack[trapStack.length - 1] !== self) { return; }
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                if (typeof opts.onEscape === 'function') { e.preventDefault(); opts.onEscape(); }
+                return;
+            }
+            if (e.key !== 'Tab') { return; }
+            var f = focusables(el);
+            if (!f.length) { e.preventDefault(); return; }
+            var first = f[0], last = f[f.length - 1];
+            // Tab out of the overlay in either direction wraps back into it —
+            // without this, Tab past the last control walks the page behind.
+            if (!el.contains(d.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); return; }
+            if (e.shiftKey && d.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && d.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+
+        d.addEventListener('keydown', onKey, true);
+        setTimeout(function () {
+            if (released) { return; }
+            var target = opts.initialFocus || focusables(el)[0];
+            if (target && typeof target.focus === 'function') { target.focus(); }
+        }, 30);
+
+        return function release() {
+            if (released) { return; }
+            released = true;
+            var ix = trapStack.indexOf(self);
+            if (ix >= 0) { trapStack.splice(ix, 1); }
+            d.removeEventListener('keydown', onKey, true);
+            if (prev && typeof prev.focus === 'function' && d.contains(prev)) { prev.focus(); }
+        };
+    }
+
+    function esc(s) {
+        var n = d.createElement('div');
+        n.textContent = (s == null) ? '' : String(s);
+        return n.innerHTML;
+    }
+
+    function build(opts, withCancel) {
+        opts = (typeof opts === 'string') ? { body: opts } : (opts || {});
+        injectStyles();
+        var ov = d.createElement('div');
+        ov.className = 'ork-dialog-overlay';
+        ov.setAttribute('role', 'dialog');
+        ov.setAttribute('aria-modal', 'true');
+        var titleId = 'ork-dialog-title-' + Math.random().toString(36).slice(2, 9);
+        ov.setAttribute('aria-labelledby', titleId);
+        ov.innerHTML =
+            '<div class="ork-dialog">' +
+              '<h2 class="ork-dialog-title" id="' + titleId + '">' + esc(opts.title || (withCancel ? 'Confirm' : 'Notice')) + '</h2>' +
+              '<div class="ork-dialog-body">' + esc(opts.body || '') + '</div>' +
+              '<div class="ork-dialog-actions">' +
+                (withCancel ? '<button type="button" class="ork-dialog-btn" data-ork-cancel>' + esc(opts.cancelLabel || 'Cancel') + '</button>' : '') +
+                '<button type="button" class="ork-dialog-btn ork-dialog-ok' + (opts.danger ? ' ork-dialog-danger' : '') + '" data-ork-ok>' + esc(opts.confirmLabel || 'OK') + '</button>' +
+              '</div>' +
+            '</div>';
+
+        return new Promise(function (resolve) {
+            var release = null;
+            var done = false;
+            function finish(result) {
+                if (done) { return; }
+                done = true;
+                if (release) { release(); }
+                ov.remove();
+                if (result && typeof opts.onConfirm === 'function') { opts.onConfirm(); }
+                if (!result && typeof opts.onCancel === 'function') { opts.onCancel(); }
+                resolve(result);
+            }
+            ov.addEventListener('click', function (e) {
+                if (e.target === ov || (e.target.closest && e.target.closest('[data-ork-cancel]'))) { finish(false); return; }
+                if (e.target.closest && e.target.closest('[data-ork-ok]')) { finish(true); }
+            });
+            d.body.appendChild(ov);
+            release = orkDialogTrap(ov, {
+                onEscape: function () { finish(false); },
+                initialFocus: ov.querySelector('[data-ork-ok]')
+            });
+        });
+    }
+
+    w.orkDialogTrap = orkDialogTrap;
+    w.orkConfirm = function (opts) { return build(opts, true); };
+    w.orkAlert = function (opts) { return build(opts, false).then(function () {}); };
+})(window, document);

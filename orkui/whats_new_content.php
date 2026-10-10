@@ -8,17 +8,39 @@
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-08-22');
+    define('WHATS_NEW_VERSION', '2026-10-09');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
 if (!defined('ORK_VERSION')) {
-    define('ORK_VERSION', '3.5.5 Hydra');
+    define('ORK_VERSION', '3.5.6 Crown');
 }
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
+    ['version' => '3.5.6 Crown', 'date' => '2026-10-09', 'items' => [
+        ['icon' => 'fas fa-gavel', 'title' => 'Plan Your Court Before You Hold It', 'body' => 'Monarchs, Regents, Prime Ministers and kingdom or park editors can now plan a court inside the ORK. Open Court Planner under Admin Tasks on your kingdom or park page and build the order: pull awards from pending recommendations, add awards and titles by hand, then drag them into running order or sort by precedence.'],
+        ['icon' => 'fas fa-bullhorn', 'title' => 'Run Court Live, or Record It Afterwards', 'body' => 'When you publish a court you choose how to work it. Run at Court puts Grant and Skip on every line, so you can mark awards from your phone as they are called. Plan is for courts run from paper: print the packet, then type it back in on the Record Court screen. Either way nothing reaches a player\'s permanent record until you press Complete Court.'],
+        ['icon' => 'fas fa-print', 'title' => 'A Printed Packet for Court', 'body' => 'Court Script prints three sheets from one plan: an Order of Court for the herald, with each citation and the artisans to thank; a Court Record with tick boxes and room for walk-on awards; and a Prep Sheet that groups scroll and regalia work by maker.'],
+        ['icon' => 'fas fa-tasks', 'title' => 'A Recommendations Manager', 'body' => 'Click Manage Recs on the Recommendations tab of your kingdom or park to work the whole queue on one page. People recommending the same player for the same award are gathered into one row; you can search, filter, sort and export to CSV; and from any row you can grant the award on the spot or add it to a court.'],
+        ['icon' => 'fas fa-arrow-down', 'title' => 'Pass Down, Snooze, or Dismiss', 'body' => 'Pass down hands a kingdom-level recommendation to the recipient\'s home park, where it appears under Delegated by the Kingdom. Snooze sets one aside until the Monarch or Regent changes. And a dismissed recommendation is kept, not deleted — turn on Show dismissed to bring one back.'],
+
+        // ----- Items flagged notes_only appear on the Release Notes page but NOT in the
+        // What's New modal. Order here is the order both surfaces render in. -----
+        ['icon' => 'fas fa-book-open', 'title' => 'A Public Court Report', 'notes_only' => true, 'body' => 'Completed courts are published on a new Court Report, linked under Reports on every kingdom and park page. Each court lists the awards given, who conferred them, the public comment for each, and the scroll and regalia makers — no login needed. A court only appears once it has been completed, so a plan in progress stays private.'],
+        ['icon' => 'fas fa-quote-left', 'title' => 'Citations That Start From the Recommendation', 'notes_only' => true, 'body' => 'Every award on a court has a Public Comment, which is what goes on the player\'s award record and the Court Report. When the award came from a recommendation you can start from the recommender\'s wording with one click and edit from there, or clear it so that nothing is published.'],
+        ['icon' => 'fas fa-paint-brush', 'title' => 'Scrolls, Regalia and the People Who Made Them', 'notes_only' => true, 'body' => 'Each award on a court can track whether its scroll and regalia are in progress or done, and name the scroll maker, the regalia maker and any other contributing artisans. The herald\'s sheet lists who to thank, the Court Report credits them publicly, and a Printing List view gathers the awards that have scrolls, with the ones still to print first.'],
+        ['icon' => 'fas fa-exclamation-triangle', 'title' => 'A Warning When the Paper Is Out of Date', 'notes_only' => true, 'body' => 'If an award is added to or removed from the plan after you print the packet, the court tells you the paper in your hand no longer matches.'],
+        ['icon' => 'fas fa-edit', 'title' => 'Record a Court in One Pass', 'notes_only' => true, 'body' => 'The Record Court screen is laid out column for column like the printed Court Record. Mark awards given or skipped one at a time or all at once, set who gave an award and apply that to the rest, pick ranks inline, fix a citation in place, and add walk-on awards that were never on the plan.'],
+        ['icon' => 'fas fa-user-clock', 'title' => 'A Named Recorder, and a Reminder', 'notes_only' => true, 'body' => 'Every court has a recorder — the Prime Minister unless you choose someone else when you edit the court\'s details. If a published court is left with nothing recorded, the recorder gets a reminder on their profile, and the Court Planner lists the courts still waiting to be recorded.'],
+        ['icon' => 'fas fa-users', 'title' => 'Several Officers, One Court', 'notes_only' => true, 'body' => 'A published court shows who else has it open and picks up their changes as they make them. If two officers edit the same award at once, the second is told the row has changed instead of silently overwriting the first.'],
+        ['icon' => 'fas fa-shield-alt', 'title' => 'No Accidental Double Grants', 'notes_only' => true, 'body' => 'Granting a recommendation that is already on a court plan updates the court too — you choose whether to leave the line on the court or take it off — so completing that court later does not give the award a second time.'],
+        ['icon' => 'fas fa-bell', 'title' => 'Know When Your Recommendation Is Granted', 'notes_only' => true, 'body' => 'When an award you recommended or seconded is granted, at court or directly, you will find a notice in a new Notifications card on your own profile.'],
+        ['icon' => 'fas fa-user-secret', 'title' => 'Anonymous Recommendations', 'notes_only' => true, 'body' => 'Tick Submit Anonymously when you recommend someone and your name will not be visible to others on that recommendation.'],
+        ['icon' => 'fas fa-layer-group', 'title' => 'Color-Coded Ladder Ranks', 'notes_only' => true, 'body' => 'Ladder award ranks now appear as colored pills that run from rank 1 to rank 10, so you can read a rank at a glance in the Recommendations Manager and Court Planner. When you grant an award, the ranks the player already holds are marked in green.'],
+        ['icon' => 'fas fa-mobile-alt', 'title' => 'Built for a Phone at Court', 'notes_only' => true, 'body' => 'Court Planner, the Recommendations Manager and the Court Report all collapse into cards on a narrow screen, with buttons large enough to hit while you are standing in front of the populace.'],
+    ]],
     ['version' => '3.5.5 Hydra', 'date' => '2026-08-22', 'items' => [
         ['icon' => 'fas fa-bug-slash', 'title' => 'Cutting Off Technical Issues One Head at a Time', 'body' => 'Hydra is all about enhancing the engine underneath the ORK to ensure it runs smoothly. You won\'t notice most of what Hydra has accomplished under the hood, but it will make the system easier to maintain and update over time.'],
         ['icon' => 'fas fa-laptop', 'title' => 'Stay Signed In on Three Devices', 'body' => 'Signing in on your phone no longer signs you out on your laptop. The ORK now keeps up to three devices signed in at once, so you can check the calendar on your phone at the park, take attendance on a tablet, and still have your reeve reports open on a desktop at home — no more getting bounced back to the login page every time you switch.'],

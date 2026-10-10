@@ -22,3 +22,9 @@ ALTER TABLE `ork_attendance` ENGINE=InnoDB;
 ALTER TABLE `ork_awards` ENGINE=InnoDB;
 ALTER TABLE `ork_credential` ENGINE=InnoDB;
 ALTER TABLE `ork_event_calendardetail` ENGINE=InnoDB;
+
+-- ork_class gained class colour/icon on the mirror without a tracked migration.
+-- The class catalog extract emits both columns, so the sandbox needs them too.
+ALTER TABLE `ork_class`
+  ADD COLUMN `color` varchar(255) NOT NULL DEFAULT '' AFTER `active`,
+  ADD COLUMN `icon` varchar(50) NOT NULL DEFAULT '' AFTER `color`;

@@ -227,9 +227,34 @@ class Model_Player extends Model
         return $this->Player->AddAwardRecommendation($request);
     }
 
+    public function resolve_player_recommendation_cluster($request)
+    {
+        return $this->Player->ResolveRecommendationCluster($request);
+    }
+
+    public function snooze_recommendation($request)
+    {
+        return $this->Player->SnoozeAwardRecommendation($request);
+    }
+
+    public function unsnooze_recommendation($request)
+    {
+        return $this->Player->UnsnoozeAwardRecommendation($request);
+    }
+
+    public function set_recommendation_passed_to_local($request)
+    {
+        return $this->Player->SetRecommendationPassedToLocal($request);
+    }
+
     public function delete_player_recommendation($request)
     {
         return $this->Player->DeleteAwardRecommendation($request);
+    }
+
+    public function get_peer_award_recommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id)
+    {
+        return $this->_player()->GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id);
     }
 
     public function restore_player_recommendation($request)
