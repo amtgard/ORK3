@@ -8,8 +8,9 @@
 # the vars into the pool config here. No-op when none are set (local dev);
 # idempotent across container restarts (delete-then-append).
 POOL=/etc/php/8.1/fpm/pool.d/www.conf
-sed -i '/^env\[ORK3_/d; /^env\[CF_/d' "$POOL"
-for v in ORK3_DB_HOST ORK3_DB_USER ORK3_DB_PASSWORD ORK3_DB_DATABASE ORK3_DB_PROFILE CF_API_TOKEN CF_ZONE_ID; do
+sed -i '/^env\[ORK3_/d; /^env\[CF_/d; /^env\[AMAZON_SES_/d' "$POOL"
+for v in ORK3_DB_HOST ORK3_DB_USER ORK3_DB_PASSWORD ORK3_DB_DATABASE ORK3_DB_PROFILE CF_API_TOKEN CF_ZONE_ID \
+	AMAZON_SES_HOST AMAZON_SES_USERNAME AMAZON_SES_PASSWORD AMAZON_SES_FROM_EMAIL AMAZON_SES_PORT; do
 	val=$(printenv "$v") && echo "env[$v] = \"$val\"" >> "$POOL"
 done
 
