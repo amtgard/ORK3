@@ -1495,6 +1495,187 @@ class EventPlanning extends Ork3
         ];
     }
 
+    /**
+     * Create a published one-day event + occurrence on the SYSTEM's behalf
+     * (survey credit events, sharing-and-credits spec §3.4).
+     *
+     * NO TOKEN AND NO AUTHORITY CHECK: the caller (SurveyCredit) has already
+     * authorized it. Raw inserts like CreateEventWithCopy: every NOT NULL column
+     * named (sql_mode=''), no geocoding call, scope caches busted. A park event's
+     * kingdom is always the park's own. The one-day window alone does NOT keep
+     * it off the attendance pages' "currently happening" nudge (it covers its
+     * own start date): Event::GetActiveEventsAtScope() excludes occurrences an
+     * ork_survey_credit config points at. Opens its own transaction: never
+     * call it inside another.
+     *
+     * The snake_case name keeps it off the public JSON service should this
+     * class ever be whitelisted there: JsonServer refuses only names that
+     * contain '_' (see Attendance::add_system_credit()).
+     */
+    public function create_system_event(array $r): array
+    {
+        // Enforced, not just documented: inside a caller's transaction this
+        // commit would be a no-op and the caller's rollback would take the
+        // event with it after the caches were busted.
+        if ($this->db->InTrans()) {
+            error_log('[eventplanning] create_system_event refused: called inside an open transaction');
+            return ['Status' => 1, 'Error' => 'create_system_event cannot run inside another transaction.'];
+        }
+        $parkId    = (int) ($r['ParkId'] ?? 0);
+        $kingdomId = (int) ($r['KingdomId'] ?? 0);
+        $name      = mb_substr(trim((string) ($r['Name'] ?? '')), 0, 100);
+        $ts        = strtotime((string) ($r['Date'] ?? ''));
+        if ($parkId > 0) {
+            $this->db->Clear();
+            $pk = $this->db->DataSet('SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId . ' LIMIT 1');
+            $kingdomId = ($pk && $pk->Next()) ? (int) $pk->kingdom_id : 0;
+        }
+        if ($kingdomId <= 0 || $name === '' || !$ts) {
+            return ['Status' => 1, 'Error' => 'Invalid system event request.'];
+        }
+
+        $day = date('Y-m-d', $ts);
+        $url = trim((string) ($r['Url'] ?? ''));
+        if ($url !== '' && !in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)) {
+            $url = '';
+        }
+
+        $this->db->Clear();
+        $this->db->BeginTrans();
+        if (!$this->db->InTrans()) {
+            // PDO begin failed (BeginTrans() still returns true): unwind the depth, fail closed.
+            $this->db->RollbackTrans();
+            return ['Status' => 1, 'Error' => 'The event could not be created.'];
+        }
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . "event (kingdom_id, park_id, mundane_id, unit_id, name, has_heraldry, status)
+             VALUES (" . $kingdomId . ', ' . $parkId . ", 0, 0, '" . $this->sq($name) . "', 0, 'published')"
+        );
+        $eventId = $ok ? $this->lastId() : 0;
+        if ($eventId <= 0) {
+            $this->db->RollbackTrans();
+            return ['Status' => 1, 'Error' => 'The event could not be created.'];
+        }
+
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . "event_calendardetail
+             (event_id, at_park_id, current, price, event_start, event_end, description, url, url_name,
+              address, province, postal_code, city, country, map_url, map_url_name,
+              google_geocode, location, latitude, longitude, event_type)
+             VALUES (" . $eventId . ', ' . ($parkId > 0 ? $parkId : 'NULL') . ", 1, 0, '"
+            . $day . " 00:00:00', '" . $day . " 23:59:59', '" . $this->sq((string) ($r['Description'] ?? '')) . "', '"
+            . $this->sq($url) . "', '" . $this->sq(mb_substr((string) ($r['UrlName'] ?? ''), 0, 40)) . "',
+              '', '', '', '', '', '', '', '', '', 0, 0, 'Other')"
+        );
+        $detailId = $ok ? $this->lastId() : 0;
+        if ($detailId <= 0) {
+            $this->db->RollbackTrans();
+            return ['Status' => 1, 'Error' => 'The event occurrence could not be created.'];
+        }
+
+        if (!$this->db->CommitTrans()) {
+            return ['Status' => 1, 'Error' => 'The event could not be created.'];
+        }
+        $this->bustEventScopeCaches($eventId);
+
+        return ['Status' => 0, 'Error' => '', 'EventId' => $eventId, 'DetailId' => $detailId];
+    }
+
+    /**
+     * Delete an event create_system_event() made, occurrences and all, on the
+     * SYSTEM's behalf (a survey credit event that lost a creation race, or
+     * the event of a deleted draft survey; sharing-and-credits spec §3.4).
+     *
+     * NO TOKEN AND NO AUTHORITY CHECK: the caller (SurveyCredit, Survey::delete)
+     * has already decided the event is its own to remove. Refused while any
+     * attendance points at the event, the same rule as DeleteEventDetail().
+     * Opens no transaction, so it may run inside the caller's.
+     */
+    public function delete_system_event(int $eventId): array
+    {
+        if ($eventId <= 0) {
+            return ['Status' => 1, 'Error' => 'Invalid system event request.'];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT 1 AS x FROM ' . DB_PREFIX . 'attendance WHERE event_id = ' . $eventId . ' LIMIT 1');
+        if ($rs && $rs->Next()) {
+            return ['Status' => 1, 'Error' => 'This event has attendance and cannot be deleted.'];
+        }
+        // Read the keys before the rows go (they come from the event's scope and
+        // dates); bust only after the DELETEs, so a read in between cannot
+        // re-cache the event. A caller running this inside its own transaction
+        // busts CacheKeys again after its COMMIT (bust_deleted_system_event()).
+        $keys = $this->eventScopeCacheKeys($eventId);
+        $this->db->Clear();
+        $this->db->Execute('UPDATE ' . DB_PREFIX . 'attendance_link SET expires_at = NOW() - INTERVAL 1 SECOND
+                            WHERE event_calendardetail_id IN (SELECT event_calendardetail_id FROM '
+                            . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $eventId . ')');
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked('DELETE FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $eventId);
+        $this->db->Clear();
+        $ok = $ok && $this->db->ExecuteChecked('DELETE FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $eventId);
+        $this->bust_deleted_system_event($eventId, $keys);
+        return $ok ? ['Status' => 0, 'Error' => '', 'CacheKeys' => $keys]
+                   : ['Status' => 1, 'Error' => 'The event could not be deleted.', 'CacheKeys' => $keys];
+    }
+
+    /**
+     * Bust the caches of an event delete_system_event() removed, from the
+     * CacheKeys it returned (the rows are gone, so they cannot be read again).
+     * The '_' keeps it off the token-free JSON surface.
+     */
+    public function bust_deleted_system_event(int $eventId, array $cacheKeys): void
+    {
+        Ork3::$Lib->ghettocache->bust_event_search($eventId);
+        foreach ($cacheKeys as $k) {
+            Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', (string) $k);
+        }
+    }
+
+    /**
+     * Move a one-day system occurrence (create_system_event()) to $date, on the
+     * SYSTEM's behalf: a survey credit event follows its survey's start date.
+     *
+     * NO TOKEN AND NO AUTHORITY CHECK: the caller (SurveyCredit) has already
+     * authorized it. Refused while the occurrence holds attendance: credits
+     * already posted keep the date they were given. Opens no transaction.
+     */
+    public function redate_system_event(int $detailId, string $date): array
+    {
+        $ts = strtotime($date);
+        if ($detailId <= 0 || !$ts) {
+            return ['Status' => 1, 'Error' => 'Invalid system event request.'];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT event_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . $detailId);
+        if (!$rs || !$rs->Next()) {
+            return ['Status' => 1, 'Error' => 'Event occurrence not found.'];
+        }
+        $eventId = (int) $rs->event_id;
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT 1 AS x FROM ' . DB_PREFIX . 'attendance WHERE event_calendardetail_id = ' . $detailId . ' LIMIT 1');
+        if ($rs && $rs->Next()) {
+            return ['Status' => 1, 'Error' => 'This occurrence has attendance and cannot be moved.'];
+        }
+        $day = date('Y-m-d', $ts);
+        $this->bustEventScopeCaches($eventId);   // the old date
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked('UPDATE ' . DB_PREFIX . "event_calendardetail
+                                         SET event_start = '" . $day . " 00:00:00', event_end = '" . $day . " 23:59:59'
+                                         WHERE event_calendardetail_id = " . $detailId);
+        $this->bustEventScopeCaches($eventId);   // the new one
+        return $ok ? ['Status' => 0, 'Error' => ''] : ['Status' => 1, 'Error' => 'The occurrence could not be moved.'];
+    }
+
+    private function lastId(): int
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT LAST_INSERT_ID() AS new_id');
+        return ($rs && $rs->Next()) ? (int) $rs->new_id : 0;
+    }
+
     public function ScheduleFeastAllowed(int $mundaneId, int $eventId, int $detailId, string $category): bool
     {
         $isFeast = ($category === 'Feast and Food');
@@ -2069,14 +2250,19 @@ class EventPlanning extends Ork3
 
     private function bustEventScopeCaches(int $eventId): void
     {
-        Ork3::$Lib->ghettocache->bust_event_search($eventId);
+        $this->bust_deleted_system_event($eventId, $this->eventScopeCacheKeys($eventId));
+    }
 
+    /** The Event.GetActiveEventsAtScope keys an event's upcoming occurrences sit under. */
+    private function eventScopeCacheKeys(int $eventId): array
+    {
+        $keys = [];
         $this->db->Clear();
         $evRow = $this->db->DataSet(
             'SELECT park_id, kingdom_id FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $eventId . ' LIMIT 1'
         );
         if (!$evRow || !$evRow->Next()) {
-            return;
+            return $keys;
         }
 
         $parkId = (int) $evRow->park_id;
@@ -2089,14 +2275,13 @@ class EventPlanning extends Ork3
         while ($dates && $dates->Next()) {
             $d = (string) $dates->d;
             if ($parkId > 0) {
-                $k = Ork3::$Lib->ghettocache->key(['Scope' => 'park', 'ScopeId' => $parkId, 'Date' => $d]);
-                Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', $k);
+                $keys[] = Ork3::$Lib->ghettocache->key(['Scope' => 'park', 'ScopeId' => $parkId, 'Date' => $d]);
             }
             if ($kingdomId > 0) {
-                $k = Ork3::$Lib->ghettocache->key(['Scope' => 'kingdom', 'ScopeId' => $kingdomId, 'Date' => $d]);
-                Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', $k);
+                $keys[] = Ork3::$Lib->ghettocache->key(['Scope' => 'kingdom', 'ScopeId' => $kingdomId, 'Date' => $d]);
             }
         }
+        return $keys;
     }
 
     private function sq(string $s): string

@@ -1,0 +1,988 @@
+/* ============================================================
+   ORK3 Survey — Results surface  (.svr-*)
+
+   Surface-specific rules ONLY. The page frame (header, context
+   strip, stat cards, sidebar, filter card, DataTable chrome)
+   comes from reports.css (.rp-*); nothing from that file — or
+   from survey.css — is duplicated here.
+
+   Colour comes from the global --ork-* tokens (tokens.css) so
+   dark mode mostly follows for free; the explicit
+   html[data-theme="dark"] block below covers the handful of
+   values that cannot be expressed as a token.
+   ============================================================ */
+
+.svr-root {
+    /* Chart surface, handed to Highcharts as the segment-gap colour. */
+    --svr-surface     : var(--ork-card-bg, #fff);
+    --svr-border      : var(--rp-border, #e2e8f0);
+    --svr-text        : var(--ork-text, #2d3748);
+    /* --ork-text-muted (#718096) is only 4.02:1 on the white card — under AA
+       for the 10-13px labels below. Match the darker muted survey.css already
+       uses module-wide (--sv-text-muted); the dark block hands the job back to
+       the global token. The value is repeated rather than referenced because
+       .sv-scope sits on a descendant (.rp-body), not on .svr-root. */
+    --svr-text-muted  : #556270; /* 6.2:1 on white, 5.1:1 on --svr-badge-bg */
+    --svr-accent      : var(--rp-accent, #4338ca);
+    --svr-badge-bg    : var(--rp-bg-tertiary, #e2e8f0);
+    --svr-input-bg    : var(--ork-input-bg, #fff);
+    --svr-chart-height: 300px;
+}
+
+
+/* Several .svr-* blocks below set their own display; the UA's [hidden] rule
+   is weaker than any class, so restate it for everything this page toggles
+   with the hidden attribute. */
+.svr-root [hidden] { display: none !important; }
+
+
+/* ── Status pill in the header ───────────────────────────── */
+
+.svr-status-pill {
+    display       : inline-flex;
+    align-items   : center;
+    border-radius : 20px;
+    padding       : 3px 11px;
+    font-size     : var(--ork-font-size-sm);
+    font-weight   : 600;
+    white-space   : nowrap;
+    background    : rgba(255,255,255,0.15);
+    border        : 1px solid rgba(255,255,255,0.25);
+    color         : rgba(255,255,255,0.92);
+}
+
+.svr-status-open   { background: rgba(72,187,120,0.28); border-color: rgba(72,187,120,0.5); }
+.svr-status-closed { background: rgba(160,174,192,0.28); border-color: rgba(160,174,192,0.5); }
+.svr-status-draft  { background: rgba(237,137,54,0.28); border-color: rgba(237,137,54,0.5); }
+/* 'archived' is the fourth value Survey::set_status accepts; without its own
+   rule it fell through to the bare pill and read identically to 'open'. */
+.svr-status-archived { background: rgba(113,128,150,0.34); border-color: rgba(113,128,150,0.55); }
+
+
+/* ── Shared-viewer lens strip (sharing-and-credits spec §5) ── */
+
+/* A shared viewer's Print button prints the Summary for sharing only (spec §2),
+   so it shows only while that mode is on. */
+.svr-root:not(.svr-summary-mode) .svr-print-summary { display: none; }
+
+/* .rp-context.svr-lens, and --svr-accent (the page accent, which swaps with
+   --rp-accent in dark mode) rather than the undefined --ork-accent. */
+.rp-context.svr-lens { border-left: 3px solid var(--svr-accent); }
+
+
+/* ── Consent split inside a stat card ────────────────────── */
+
+.svr-consent-split {
+    display        : flex;
+    justify-content: center;
+    gap            : 12px;
+    flex-wrap      : wrap;
+    line-height    : 1.2;
+}
+
+.svr-consent-part {
+    font-size: 11px;
+    color    : var(--svr-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.svr-consent-part b {
+    display    : block;
+    font-size  : 18px;
+    font-weight: 700;
+    color      : var(--svr-accent);
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+
+/* ── Filter controls ─────────────────────────────────────── */
+
+.svr-field { margin-bottom: 10px; }
+.svr-field:last-child { margin-bottom: 0; }
+
+/* The kingdom filter is a real <fieldset>/<legend> so the checkbox group is
+   announced as a group; strip the UA chrome so it still looks like a field. */
+.svr-fieldset {
+    border   : 0;
+    margin   : 0 0 10px;
+    padding  : 0;
+    min-width: 0;
+}
+
+.svr-fieldset > legend { display: block; width: 100%; padding: 0; }
+
+.svr-field-label {
+    display       : block;
+    font-size     : 11px;
+    font-weight   : 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color         : var(--svr-text-muted);
+    margin-bottom : 5px;
+}
+
+.svr-field-hint {
+    margin    : 6px 0 0;
+    font-size : 11px;
+    line-height: 1.45;
+    color     : var(--svr-text-muted);
+}
+
+/* Text controls, buttons and notices are reused verbatim from survey.css
+   (.sv-input / .sv-select / .sv-btn / .sv-btn-primary / .sv-notice); the
+   .rp-body carries .sv-scope so their --sv-* tokens resolve. Nothing from
+   that file is restated here. */
+
+.svr-checklist {
+    max-height : 190px;
+    overflow-y : auto;
+    border     : 1px solid var(--svr-border);
+    border-radius: var(--ork-radius-md, 6px);
+    padding    : 4px;
+}
+
+.svr-check {
+    display     : flex;
+    align-items : center;
+    gap         : 8px;
+    min-height  : 28px;
+    padding     : 2px 6px;
+    font-size   : var(--ork-font-size-base);
+    line-height : 1.3;
+    color       : var(--svr-text);
+    cursor      : pointer;
+    border-radius: var(--ork-radius-sm, 4px);
+}
+
+.svr-check:hover { background: var(--ork-surface-hover, #edf2f7); }
+
+.svr-check input[type="checkbox"] {
+    width      : 16px;
+    height     : 16px;
+    flex-shrink: 0;
+    accent-color: var(--svr-accent);
+    margin     : 0;
+}
+
+.svr-filter-actions {
+    display  : flex;
+    gap      : 8px;
+    margin-top: 12px;
+}
+
+/* Kingdom counts beside each name (#33). */
+.svr-count {
+    color      : var(--svr-text-muted);
+    font-size  : 12px;
+    white-space: nowrap;
+}
+
+/* Date filter label + its Clear link on one line. */
+.svr-label-row {
+    display        : flex;
+    align-items    : baseline;
+    justify-content: space-between;
+    gap            : 8px;
+}
+
+.svr-date-clear {
+    border     : 0;
+    background : none;
+    padding    : 0 2px;
+    font       : inherit;
+    font-size  : 12px;
+    font-weight: 600;
+    color      : var(--svr-accent);
+    cursor     : pointer;
+}
+
+.svr-date-clear:hover { text-decoration: underline; }
+.svr-date-clear:focus-visible { outline: 2px solid var(--svr-accent); outline-offset: 2px; border-radius: 3px; }
+
+/* Flatpickr's visible alt input is readonly; keep it looking like a field. */
+.svr-root .svr-date-alt { width: 100%; box-sizing: border-box; cursor: pointer; background: var(--svr-input-bg); }
+
+/* Filters disclosure (#33): the toggle only exists below 900px, where the
+   sidebar stacks above the charts. */
+.svr-filters-toggle { display: none; }
+.svr-filters-toggle .svr-chev { transition: transform 0.15s; }
+.svr-filters-toggle[aria-expanded="false"] .svr-chev { transform: rotate(-90deg); }
+
+/* ── Main column ─────────────────────────────────────────── */
+
+.svr-main {
+    flex     : 1;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.svr-cards {
+    display              : grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap                  : 14px;
+    margin-bottom        : 16px;
+    align-items          : start;
+}
+
+.svr-card {
+    min-width: 0;   /* so a wide chart cannot blow the grid track out */
+}
+
+.svr-card-head {
+    display        : flex;
+    align-items    : flex-start;
+    justify-content: space-between;
+    gap            : 10px;
+    margin-bottom  : 10px;
+}
+
+.svr-root .svr-card-title {
+    /* .rp-chart-card-title is uppercase micro-type; question prompts are prose. */
+    margin        : 0;
+    font-size     : 14px;
+    font-weight   : 700;
+    line-height   : 1.35;
+    text-transform: none;
+    letter-spacing: 0;
+    color         : var(--svr-text);
+    /* Fight the global orkui.css h1–h6 pill box. */
+    background    : transparent;
+    border        : none;
+    padding       : 0;
+    border-radius : 0;
+}
+
+.svr-card-type {
+    display       : block;
+    font-size     : 11px;
+    font-weight   : 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color         : var(--svr-text-muted);
+    margin-top    : 3px;
+}
+
+.svr-badge {
+    flex-shrink   : 0;
+    align-self    : flex-start;
+    font-size     : 11px;
+    font-weight   : 700;
+    padding       : 3px 9px;
+    border-radius : 20px;
+    white-space   : nowrap;
+    background    : var(--svr-badge-bg);
+    color         : var(--svr-text-muted);
+}
+
+.svr-chart { width: 100%; min-height: var(--svr-chart-height); }
+.svr-chart-tall { --svr-chart-height: 360px; }
+
+.svr-empty {
+    padding    : 20px 12px;
+    text-align : center;
+    font-size  : var(--ork-font-size-base);
+    font-style : italic;
+    color      : var(--svr-text-muted);
+}
+
+/* Busy while a results request is in flight (#27). */
+.svr-cards[aria-busy="true"] { opacity: 0.55; transition: opacity 0.15s; }
+
+/* Minimum cell size (#4): a statement in place of the chart. */
+.svr-suppressed {
+    display      : flex;
+    align-items  : center;
+    justify-content: center;
+    gap          : 8px;
+    padding      : 22px 12px;
+    font-size    : var(--ork-font-size-base);
+    color        : var(--svr-text-muted);
+    background   : var(--sv-l2);
+    border       : 1px dashed var(--sv-line-3);
+    border-radius: var(--sv-radius-l2);
+    text-align   : center;
+}
+
+.svr-suppressed-notice { display: flex; align-items: flex-start; gap: 8px; }
+
+/* Zero matches (distinct from the 1-4 minimum-cell case): the notice carries
+   a Reset filters action, which wraps under the text on a narrow screen. The
+   button is an .sv-btn, so its colours already follow the theme tokens. */
+.svr-nomatch-notice { align-items: center; flex-wrap: wrap; }
+.svr-nomatch-notice > span { flex: 1 1 12em; }
+.svr-nomatch-reset { margin-left: auto; }
+.svr-empty-nomatch { font-style: normal; }
+.svr-empty-nomatch > i { margin-right: 4px; }
+/* A held share (fewer than the minimum matched so far): a neutral info
+   statement, not the filtered-out styling. */
+.svr-empty-held {
+    margin       : 8px 0 4px;
+    font-style   : normal;
+    color        : var(--svr-text);
+    background   : var(--sv-l2);
+    border       : 1px solid var(--svr-border);
+    border-left  : 3px solid var(--svr-accent);
+    border-radius: var(--sv-radius-l2);
+}
+.svr-empty-held > i { margin-right: 6px; color: var(--svr-accent); }
+.svr-rule-note { margin: -6px 0 12px; }
+
+/* Cross-tab head: the split question + the % / count switch (#29). */
+.svr-xt-head {
+    display        : flex;
+    flex-wrap      : wrap;
+    align-items    : center;
+    justify-content: space-between;
+    gap            : 6px 10px;
+    margin-bottom  : 6px;
+}
+
+.svr-xt-head .svr-field-hint { margin: 0; }
+
+.svr-xt-toggle {
+    display      : inline-flex;
+    border       : 1px solid var(--sv-line-1);
+    border-radius: var(--ork-radius-md, 6px);
+    overflow     : hidden;
+    flex-shrink  : 0;
+}
+
+.svr-xt-btn {
+    border     : 0;
+    background : var(--sv-l3);
+    color      : var(--svr-text-muted);
+    font       : inherit;
+    font-size  : 12px;
+    font-weight: 600;
+    padding    : 4px 10px;
+    min-height : 28px;
+    cursor     : pointer;
+}
+
+.svr-xt-btn + .svr-xt-btn { border-left: 1px solid var(--sv-line-1); }
+.svr-xt-btn:hover { background: var(--ork-surface-hover, #edf2f7); }
+.svr-xt-btn[aria-pressed="true"] { background: var(--svr-accent); color: #fff; }
+.svr-xt-btn:focus-visible { outline: 2px solid var(--svr-accent); outline-offset: -2px; }
+
+.svr-card-note {
+    margin     : 0 0 8px;
+    font-size  : 12px;
+    line-height: 1.45;
+    color      : var(--svr-text-muted);
+}
+
+/* Summary for sharing (#5): comments counted, never listed. */
+.svr-comment-count {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+    margin     : 4px 0 0;
+    padding    : 12px;
+    font-size  : var(--ork-font-size-base);
+    color      : var(--svr-text);
+    background : var(--sv-l2);
+    border-radius: var(--sv-radius-l2);
+}
+
+.svr-comment-count i { color: var(--svr-accent); }
+
+.svr-caption {
+    margin       : 0 0 14px;
+    padding      : 12px 14px;
+    background   : var(--sv-l1);
+    border       : 1px solid var(--sv-line-1);
+    border-left  : 4px solid var(--svr-accent);
+    border-radius: var(--sv-radius-l2);
+    font-size    : var(--ork-font-size-base);
+    line-height  : 1.5;
+    color        : var(--svr-text);
+}
+
+.svr-caption p { margin: 4px 0 0; }
+
+.svr-caption-title {
+    font-size     : 11px;
+    font-weight   : 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color         : var(--svr-text-muted);
+}
+
+.svr-caption-title i { color: var(--svr-accent); margin-right: 4px; }
+.svr-caption-foot { font-size: 12px; color: var(--svr-text-muted); }
+
+.svr-summary-mode .svr-rows-area { display: none; }
+
+/* Pressed state of the header's Summary toggle (on the indigo header band). */
+.svr-root .rp-header-actions .rp-btn-ghost[aria-pressed="true"] {
+    background  : rgba(255,255,255,0.92);
+    border-color: #fff;
+    color       : #312e81;
+}
+
+/* Clear Results: a destructive ghost on the indigo header band (red-tinted
+   text and edge; the solid red lives on the modal's confirm button). */
+.svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger {
+    color       : #fecaca;
+    border-color: rgba(248, 113, 113, 0.6);
+}
+.svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger:hover,
+.svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger:focus-visible {
+    background  : rgba(220, 38, 38, 0.35);
+    border-color: #f87171;
+    color       : #fff;
+}
+/* The countdown confirm: grayed out (not a faded red) while disabled, with
+   text that still reads, and a fixed width so the ticking number does not
+   shift the footer. */
+#svr-clear-ok { min-width: 148px; font-variant-numeric: tabular-nums; }
+#svr-clear-ok[disabled] { background: #cbd5e0; color: #4a5568; opacity: 1; }
+#svr-clear-body p { margin: 0 0 10px; }
+.svr-cleared-notice { display: flex; align-items: flex-start; gap: 8px; }
+
+/* Security-token notice (#43). */
+/* The Reload link reuses survey.css's .sv-notice-link. */
+.svr-csrf { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 0; }
+
+/* A stat whose value is withheld: the dash explains itself on hover/focus. */
+.svr-stat-na { cursor: help; }
+.svr-stat-na:focus-visible,
+.svr-badge[tabindex]:focus-visible,
+.svr-qhead:focus-visible { outline: 2px solid var(--svr-accent); outline-offset: 2px; border-radius: 3px; }
+.svr-badge[data-tip] { cursor: help; }
+
+
+/* ── Callout figures under a chart ───────────────────────── */
+
+.svr-callouts {
+    display  : flex;
+    flex-wrap: wrap;
+    gap      : 8px;
+    margin-top: 10px;
+}
+
+.svr-callout {
+    flex         : 1 1 92px;
+    min-width    : 0;
+    text-align   : center;
+    padding      : 8px 6px;
+    border       : 1px solid var(--sv-line-2);
+    border-radius: var(--sv-radius-l2);
+    /* L2 — the surface ladder at the top of survey.css. Was
+       --ork-surface-light, which is the card's own colour in dark mode. */
+    background   : var(--sv-l2);
+}
+
+.svr-callout-value {
+    font-size  : 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    color      : var(--svr-text);
+}
+
+.svr-callout-label {
+    margin-top    : 2px;
+    font-size     : 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color         : var(--svr-text-muted);
+}
+
+/* NPS score tile — the headline number for the card. */
+.svr-nps-tile {
+    flex        : 1 1 130px;
+    border-color: var(--svr-accent);
+}
+
+.svr-nps-tile .svr-callout-value {
+    font-size: 24px;
+    color    : var(--svr-accent);
+}
+
+
+/* ── "Other" free text + text-question response list ─────── */
+
+.svr-other {
+    margin-top : 10px;
+    font-size  : var(--ork-font-size-base);
+    border-top : 1px solid var(--svr-border);
+    padding-top: 8px;
+}
+
+.svr-other > summary {
+    cursor     : pointer;
+    min-height : 28px;
+    display    : flex;
+    align-items: center;
+    gap        : 6px;
+    font-weight: 600;
+    color      : var(--svr-accent);
+}
+
+.svr-textlist {
+    margin    : 8px 0 0;
+    padding   : 0;
+    list-style: none;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.svr-textlist li {
+    padding    : 6px 10px;
+    margin     : 0 0 5px;
+    font-size  : var(--ork-font-size-base);
+    line-height: 1.5;
+    color      : var(--svr-text);
+    background : var(--sv-l2);
+    border-left: 3px solid var(--svr-accent);
+    border-radius: 0 var(--sv-radius-l3) var(--sv-radius-l3) 0;
+    overflow-wrap: anywhere;
+}
+
+.svr-textlist li:last-child { margin-bottom: 0; }
+
+.svr-showmore { margin-top: 8px; }
+
+
+/* ── Rows table ──────────────────────────────────────────── */
+
+.svr-rows-area { padding-top: 12px; }
+
+.svr-root .svr-section-title {
+    display       : flex;
+    align-items   : center;
+    gap           : 7px;
+    margin        : 0 0 4px;
+    font-size     : 14px;
+    font-weight   : 700;
+    color         : var(--svr-text);
+    /* Fight the global orkui.css h1–h6 pill box. */
+    background    : transparent;
+    border        : none;
+    padding       : 0;
+    border-radius : 0;
+}
+
+.svr-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 10px;
+}
+
+.svr-cell-anon { color: var(--svr-text-muted); }
+
+/* Row-level table (#31, #36). */
+#svr-rows tbody tr.svr-row { cursor: pointer; }
+#svr-rows tbody tr.svr-row:focus-visible { outline: 2px solid var(--svr-accent); outline-offset: -2px; }
+#svr-rows tbody tr.svr-row-active > td { background: var(--sv-accent-soft) !important; }
+
+.svr-qhead {
+    border-bottom: 1px dotted currentColor;
+    cursor       : help;
+    white-space  : nowrap;
+}
+
+.svr-when { white-space: nowrap; }
+.svr-when-time { display: block; font-size: 12px; color: var(--svr-text-muted); }
+.svr-when-icon { font-size: 11px; color: var(--svr-text-muted); margin-left: 2px; }
+.svr-masked { cursor: help; font-style: italic; }
+
+/* Long answers wrap inside a readable column instead of stretching the table. */
+.svr-cell-answer {
+    display    : inline-block;
+    min-width  : 120px;
+    max-width  : 260px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+
+/* ── Individual response panel (#36) ─────────────────────── */
+
+.svr-panel {
+    position     : fixed;
+    top          : 0;
+    right        : 0;
+    bottom       : 0;
+    z-index      : var(--z-modal, 10100);
+    width        : min(460px, 100vw);
+    box-sizing   : border-box;
+    display      : flex;
+    flex-direction: column;
+    background   : var(--sv-l1);
+    border-left  : 1px solid var(--sv-line-1);
+    box-shadow   : -8px 0 24px rgba(0,0,0,0.14);
+    color        : var(--svr-text);
+}
+
+.svr-panel-head {
+    display        : flex;
+    flex-wrap      : wrap;
+    align-items    : center;
+    justify-content: space-between;
+    gap            : 8px;
+    padding        : 14px 16px;
+    border-bottom  : 1px solid var(--sv-line-1);
+    background     : var(--sv-l1);
+}
+
+.svr-root .svr-panel-title {
+    margin        : 0;
+    font-size     : 14px;
+    font-weight   : 700;
+    color         : var(--svr-text);
+    /* Fight the global orkui.css h1–h6 pill box. */
+    background    : transparent;
+    border        : none;
+    padding       : 0;
+    border-radius : 0;
+}
+
+.svr-panel-title:focus { outline: none; }
+.svr-panel-title:focus-visible { outline: 2px solid var(--svr-accent); outline-offset: 3px; }
+
+.svr-panel-nav { display: flex; gap: 6px; }
+
+.svr-panel-body {
+    flex      : 1;
+    overflow-y: auto;
+    padding   : 14px 16px 24px;
+    background: var(--sv-l0);
+}
+
+.svr-panel-meta {
+    display              : grid;
+    grid-template-columns: 1fr 1fr;
+    gap                  : 8px;
+    margin               : 0 0 14px;
+}
+
+.svr-panel-meta-row {
+    min-width    : 0;
+    padding      : 8px 10px;
+    background   : var(--sv-l1);
+    border       : 1px solid var(--sv-line-2);
+    border-radius: var(--sv-radius-l2);
+}
+
+.svr-panel-meta dt {
+    font-size     : 11px;
+    font-weight   : 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color         : var(--svr-text-muted);
+}
+
+.svr-panel-meta dd {
+    margin       : 3px 0 0;
+    font-size    : var(--ork-font-size-base);
+    overflow-wrap: anywhere;
+}
+
+.svr-panel-answers { list-style: none; margin: 0; padding: 0; }
+
+.svr-panel-qa {
+    padding      : 10px 12px;
+    margin       : 0 0 8px;
+    background   : var(--sv-l2);
+    border       : 1px solid var(--sv-line-2);
+    border-radius: var(--sv-radius-l2);
+}
+
+.svr-panel-q {
+    font-size  : 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    color      : var(--svr-text-muted);
+}
+
+.svr-panel-qnum {
+    display      : inline-block;
+    margin-right : 4px;
+    padding      : 0 6px;
+    border-radius: 20px;
+    background   : var(--svr-badge-bg);
+    font-size    : 11px;
+    font-weight  : 700;
+    color        : var(--svr-text-muted);
+}
+
+.svr-panel-a {
+    margin-top   : 4px;
+    font-size    : var(--ork-font-size-base);
+    line-height  : 1.5;
+    color        : var(--svr-text);
+    white-space  : pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.svr-panel-a.svr-cell-anon { color: var(--svr-text-muted); font-style: italic; }
+
+
+/* ── data-tip tooltip: survey-tip.js and survey.css's .sv-tip ── */
+
+/* If a stylesheet ever ships a global [data-tip]::after tip, this page's JS
+   tip must not be doubled by it. */
+.svr-root [data-tip]::after { content: none !important; }
+
+.svr-tag {
+    display       : inline-block;
+    font-size     : 11px;
+    font-weight    : 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding       : 2px 7px;
+    border-radius : 20px;
+    background    : var(--svr-badge-bg);
+    color         : var(--svr-text-muted);
+    white-space   : nowrap;
+}
+
+
+/* ── Dark mode ───────────────────────────────────────────── */
+
+/* Every --svr-* value above resolves through a token that already flips
+   (tokens.css / orkui.css :root pair, and --rp-* on the same .rp-root element),
+   so the palette needs no restatement here. Only the values that cannot come
+   from a token are repeated. */
+
+/* Light mode pins its own darker muted for contrast (see .svr-root); on the
+   dark card the global token is already well past AA, so hand it back. */
+html[data-theme="dark"] .svr-root { --svr-text-muted: var(--ork-text-muted, #a0aec0); }
+
+html[data-theme="dark"] .svr-status-pill { color: #fff; }
+html[data-theme="dark"] .svr-empty-held { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.14); border-left-color: var(--svr-accent); }
+
+/* reports.css's `html[data-theme="dark"] .rp-context { border-color }` (0,2,1)
+   repaints all four sides grey; restate the accent edge above it (0,3,1).
+   The wash is --rp-accent's dark value (#818cf8) at 10%. */
+html[data-theme="dark"] .rp-context.svr-lens {
+    border-left-color: var(--svr-accent);
+    background       : rgba(129, 140, 248, 0.10);
+}
+
+html[data-theme="dark"] .svr-xt-btn[aria-pressed="true"] { background: var(--svr-accent); color: #1a202c; }
+html[data-theme="dark"] .svr-root .rp-header-actions .rp-btn-ghost[aria-pressed="true"] {
+    background  : #e2e8f0;
+    border-color: #e2e8f0;
+    color       : #1e1b4b;
+}
+html[data-theme="dark"] .svr-panel { box-shadow: -8px 0 24px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger { color: #fca5a5; border-color: rgba(248, 113, 113, 0.5); }
+html[data-theme="dark"] .svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger:hover,
+html[data-theme="dark"] .svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger:focus-visible { background: rgba(220, 38, 38, 0.3); color: #fff; }
+html[data-theme="dark"] #svr-clear-ok[disabled] { background: #4a5568; color: #e2e8f0; }
+@media (prefers-reduced-motion: reduce) {
+    .svr-root .rp-header-actions .rp-btn-ghost.svr-btn-danger { transition: none; }
+}
+
+/* Fight the global html[data-theme="dark"] h1–h6 pill box, which carries more
+   type selectors than a bare class and otherwise wins the tie. */
+html[data-theme="dark"] .svr-card-title,
+html[data-theme="dark"] .svr-root .svr-section-title,
+html[data-theme="dark"] .svr-root .svr-panel-title {
+    background-color: transparent !important;
+    border          : none !important;
+    padding         : 0 !important;
+    color           : var(--svr-text) !important;
+}
+
+/* Same trap, second instance: orkui.css:2106 forces
+   `html[data-theme="dark"] .highcharts-data-label text { fill: … !important }`,
+   which repaints EVERY data label the theme foreground — including the labels
+   printed inside a stacked segment, where survey-results.js has already picked
+   a colour that contrasts with that segment's own fill (near-white on the
+   ramp's lightest steps is illegible). Highcharts writes both `color` and
+   `fill` inline, so handing the fill back to `currentColor` restores the
+   per-segment choice without hardcoding a colour here. */
+html[data-theme="dark"] .svr-card .highcharts-data-label text,
+html[data-theme="dark"] .svr-card .highcharts-data-label tspan {
+    fill: currentColor !important;
+}
+
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+    .svr-cards { grid-template-columns: 1fr; }
+
+    /* Filters collapse behind a "Filters (N active)" disclosure (#33). */
+    .svr-filters-toggle {
+        display        : flex;
+        width          : 100%;
+        justify-content: space-between;
+        margin-bottom  : 10px;
+    }
+    .svr-sidebar .rp-filter-card-header { display: none; }
+    .svr-sidebar.svr-collapsed .rp-filter-card { display: none; }
+}
+
+@media (max-width: 768px) {
+    .svr-consent-part b { font-size: 14px; }
+    .svr-chart { --svr-chart-height: 260px; }
+    .svr-checklist { max-height: 150px; }
+    .svr-filter-actions { flex-wrap: wrap; }
+}
+
+@media (max-width: 420px) {
+    .svr-card-head { flex-direction: column; gap: 6px; }
+    .svr-callout { flex: 1 1 100%; }
+    .svr-panel-meta { grid-template-columns: 1fr; }
+}
+
+
+/* ── Print ───────────────────────────────────────────────── */
+
+@media print {
+    .rp-sidebar,
+    .rp-header-actions,
+    .svr-showmore,
+    .svr-panel,
+    .svr-csrf,
+    .svr-xt-toggle,
+    .svr-rows-area .dataTables_paginate,
+    .svr-rows-area .dataTables_info { display: none !important; }
+
+    /* Summary for sharing (#5): charts and the caption only. */
+    .svr-summary-mode .svr-rows-area,
+    .svr-summary-mode .svr-other,
+    .svr-summary-mode .svr-textlist { display: none !important; }
+    .svr-caption { border-color: #999; border-left-color: #000; background: #fff; }
+    .svr-root .svr-caption,
+    .svr-root .svr-caption-foot,
+    .svr-root .svr-caption-title { color: #000; }
+
+    .svr-cards { grid-template-columns: 1fr; }
+    .svr-card { break-inside: avoid; page-break-inside: avoid; }
+
+    /* Paper is white whatever the screen theme was: browsers drop background
+       colours by default, so the dark palette would print near-white text on
+       white. Restate the light values for both themes. survey-results.js
+       redraws the charts with the light theme on beforeprint for the same
+       reason. */
+    .svr-root {
+        --svr-text       : #000;
+        --svr-text-muted : #333;
+        --svr-border     : #999;
+        --svr-surface    : #fff;
+    }
+
+    /* Same trap on the shared header: its indigo background is dropped while
+       reports.css keeps the text #fff, leaving an invisible title band. */
+    .rp-header {
+        background   : #fff !important;
+        color        : #000 !important;
+        border-bottom: 1px solid #000;
+    }
+
+    .rp-header-icon,
+    .rp-header-title,
+    .rp-scope-chip-label,
+    .rp-scope-chip,
+    .svr-status-pill {
+        color       : #000 !important;
+        background  : none !important;
+        border-color: #999 !important;
+    }
+
+    /* Nothing may be clipped by a scroller on paper. */
+    .svr-textlist {
+        max-height: none !important;
+        overflow  : visible !important;
+    }
+
+    .svr-table-scroll { overflow: visible !important; }
+    .svr-checklist { max-height: none !important; overflow: visible !important; }
+}
+
+/* ── Touch restore (spec §7 "Density", added 2026-09-10) ─────────────────
+   The rules above are the app's compact scale — 28-32px rows, 13px text —
+   which is what this manage surface wants on a desktop. On a coarse pointer
+   (or a phone-width window) the filter rows and the "show more" summaries go
+   back to 44px tap targets; only the hit areas grow, the type stays put. */
+@media (pointer: coarse), (max-width: 700px) {
+    .svr-check { min-height: 44px; }
+    .svr-check input[type="checkbox"] { width: 20px; height: 20px; }
+    .svr-other > summary { min-height: 44px; }
+    /* Apply / Reset, the disclosure, the panel's nav and the cross-tab
+       switch were 28-32px (#33). */
+    .svr-filter-actions .sv-btn,
+    .svr-nomatch-reset,
+    .svr-filters-toggle,
+    .svr-panel-nav .sv-btn,
+    .svr-showmore { min-height: 44px; }
+    .svr-xt-btn { min-height: 44px; padding: 8px 12px; }
+    .svr-date-clear { min-height: 44px; padding: 0 8px; }
+    /* iOS zooms into any control under 16px on focus. */
+    .svr-root .svr-date-alt,
+    .svr-root .sv-select { font-size: 16px; min-height: 44px; }
+}
+
+
+/* Header actions: the .rp-btn-ghost sizing every survey .rp-* page needs is
+   declared once in survey.css, which this page also loads. */
+
+/* Pairwise (pairwise spec §7): the ranking table under the chart, and a
+   long matchup list clamped in the rows table (the response panel shows it all). */
+.svr-pw-tablewrap { margin-top: 12px; overflow-x: auto; }
+.svr-pw-table td:nth-child(n+3),
+.svr-pw-table th:nth-child(n+3) { text-align: right; font-variant-numeric: tabular-nums; }
+.svr-pw-table .svr-pw-abbr { cursor: help; }
+/* DataTables gives every header 10px + a 26px sort-arrow gutter and every cell
+   10px a side: the columns (Rank · Option · Strength · Win % · W · T · L ·
+   Matchups, plus the hidden sort key) outgrew a half-width card and pushed
+   Matchups out of view. Tighter cells, the arrows tucked in, numbers on one
+   line; the Option column takes what is left and wraps.
+   The narrowest card is the 420px grid track less its padding and border
+   (386px). The number columns cannot shrink below their one-line headers, so
+   the Option column must give way: it may break inside a word, so a long
+   word in a label ("Tournament") no longer sets the table's minimum width.
+   The right-aligned number headers need no left padding past 4px, and the
+   arrows sit 3px in with a 14px gutter. These selectors outrank
+   jquery.dataTables.css, which loads after this file. */
+.svr-card table.svr-pw-table.dataTable thead > tr > th,
+.svr-card table.svr-pw-table.dataTable tbody > tr > td { padding: 6px; }
+.svr-card table.svr-pw-table.dataTable thead > tr > th { padding-right: 14px; white-space: nowrap; }
+.svr-card table.svr-pw-table.dataTable thead > tr > th:nth-child(n+3) { padding-left: 4px; }
+.svr-card table.svr-pw-table.dataTable thead > tr > th:before,
+.svr-card table.svr-pw-table.dataTable thead > tr > th:after { right: 3px; }
+.svr-pw-table td:nth-child(2) { overflow-wrap: anywhere; }
+.svr-pw-table td:nth-child(n+3) { white-space: nowrap; }
+/* The sort-key column; DataTables drops it from the DOM, this covers the page without DataTables. */
+.svr-pw-table .svr-pw-sortkey { display: none; }
+/* With the Strength column all eight columns need ~440px (~460px when a Rank
+   cell reads "Too few matchups"), more than the 386px half-width card. A card
+   under 480px drops the W / T / L split (columns 5-7; the chart's tooltip
+   keeps it), leaving Rank, Option, Strength, Win % and Matchups in ~355px. */
+.svr-pw-tablewrap { container-type: inline-size; }
+@container (max-width: 480px) {
+    .svr-card table.svr-pw-table th:nth-child(5),
+    .svr-card table.svr-pw-table th:nth-child(6),
+    .svr-card table.svr-pw-table th:nth-child(7),
+    .svr-card table.svr-pw-table td:nth-child(5),
+    .svr-card table.svr-pw-table td:nth-child(6),
+    .svr-card table.svr-pw-table td:nth-child(7) { display: none; }
+}
+/* Phones: the card is the whole width (~330px), and the one-line number
+   columns left Option one character wide, so nearly every label broke
+   mid-word and the table still overflowed. Rank, Option, Strength, Win % and
+   Matchups carry the ranking; the W / T / L split (columns 5-7) stays in the
+   chart's tooltip, and Option breaks only between words. This repeats the
+   container rule above for browsers without container queries. */
+@media (max-width: 600px) {
+    .svr-card table.svr-pw-table th:nth-child(5),
+    .svr-card table.svr-pw-table th:nth-child(6),
+    .svr-card table.svr-pw-table th:nth-child(7),
+    .svr-card table.svr-pw-table td:nth-child(5),
+    .svr-card table.svr-pw-table td:nth-child(6),
+    .svr-card table.svr-pw-table td:nth-child(7) { display: none; }
+    .svr-card table.svr-pw-table td:nth-child(2) { overflow-wrap: break-word; }
+}
+.svr-cell-clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}

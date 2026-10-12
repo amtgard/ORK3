@@ -8,17 +8,20 @@
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-10-09');
+    define('WHATS_NEW_VERSION', '2026-09-10');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
 if (!defined('ORK_VERSION')) {
-    define('ORK_VERSION', '3.5.6 Crown');
+    define('ORK_VERSION', '3.5.6 Survey');
 }
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
+    ['version' => '3.5.6 Survey', 'date' => '2026-09-10', 'items' => [
+        ['icon' => 'fas fa-square-poll-vertical', 'title' => 'Surveys', 'body' => 'Kingdoms and parks can now build their own mobile-friendly surveys, right down to a welcome screen, branching pages, and a results dashboard with filters and CSV export. A pairwise question type ranks a long list two options at a time, with a progress bar that tells respondents when they\'ve done enough. Every survey ends with a data gate letting the respondent choose how much of their identity is attached to their answers, and reporting always respects that choice. Kingdoms and parks see surveys from every level, and a survey\'s owner can share its results with them for their own players, either as responses come in or 24 hours after the survey ends. Reward respondents with an attendance credit at their home park or a Survey Credit event.'],
+    ]],
     ['version' => '3.5.6 Crown', 'date' => '2026-10-09', 'items' => [
         ['icon' => 'fas fa-gavel', 'title' => 'Plan Your Court in the ORK', 'body' => 'Monarchs, Regents, Prime Ministers and kingdom or park editors can now plan a court before it is held. Open Court Planner under Admin Tasks on your kingdom or park page, pull awards from pending recommendations or add them by hand, and drag them into running order.'],
         ['icon' => 'fas fa-bullhorn', 'title' => 'Run It Live, or From Paper', 'body' => 'Publish the court and work it your way. Run at Court lets you mark each award from your phone as it is called. Or print the packet — an order of court for the herald, a record sheet and a prep sheet — and type it in afterwards on the Record Court screen. Nothing reaches a player\'s record until you press Complete Court.'],

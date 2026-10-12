@@ -293,6 +293,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				<li><a href="<?= UIR ?>Admin/serverhealth"><i class="fas fa-heartbeat"></i><span>Server Health<span class="cp-report-list-desc">PHP-FPM workers, DB metrics &amp; load test</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/stateofamtgard"><i class="fas fa-globe"></i><span>State of Amtgard Report<span class="cp-report-list-desc">Annual recruitment, retention &amp; class data</span></span></a></li>
 				<li><a href="<?= UIR ?>Reports/release_utilization"><i class="fas fa-chart-line"></i><span>Release Feature Utilization<span class="cp-report-list-desc">Adoption metrics by release</span></span></a></li>
+				<li><a href="<?= UIR ?>Survey/index"><i class="fas fa-poll"></i><span>Surveys<span class="cp-report-list-desc">Build and analyse player surveys</span></span></a></li>
 			</ul>
 		</div>
 
