@@ -84,6 +84,10 @@ final class InfrastructureFixture
     {
         $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET token = ? WHERE mundane_id = ?')
             ->execute([$newToken, $mundaneId]);
+        // Keep the authoritative session store in step with the rotated token.
+        $this->pdo->prepare('DELETE FROM ' . DB_PREFIX . 'session WHERE mundane_id = ?')
+            ->execute([$mundaneId]);
+        $this->seedSession($mundaneId, $newToken);
     }
 
     public function setFontPreferences(int $mundaneId, int $basic, int $dyslexia): void
@@ -164,6 +168,7 @@ final class InfrastructureFixture
         foreach ($this->mundaneIds as $id) {
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'whats_new_seen WHERE mundane_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ' . (int) $id);
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'session WHERE mundane_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $id);
         }
     }
@@ -209,7 +214,24 @@ final class InfrastructureFixture
 
         $id = (int) $this->pdo->lastInsertId();
         $this->mundaneIds[] = $id;
+        $this->seedSession($id, $token);
 
         return $id;
+    }
+
+    /**
+     * Multi-device sessions (ork_session) are the authoritative token store;
+     * a token stamped only on ork_mundane.token no longer authorizes. Seed a
+     * session row for fixture tokens, mirroring the migration backfill.
+     */
+    private function seedSession(int $mundaneId, string $token): void
+    {
+        if ($token === '') {
+            return;
+        }
+        $this->pdo->prepare(
+            'INSERT IGNORE INTO ' . DB_PREFIX . 'session (mundane_id, token, created, last_seen, expires)
+             VALUES (?, ?, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 72 HOUR))'
+        )->execute([$mundaneId, $token]);
     }
 }

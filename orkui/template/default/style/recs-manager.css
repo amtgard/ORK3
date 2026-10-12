@@ -1,0 +1,719 @@
+/* Recommendations Manager (Recommendations/manage)
+ *
+ * Lifted verbatim out of the ~676-line inline <style> in
+ * revised-frontend/Recommendations_manage.tpl so it is cacheable, parsed once,
+ * and visible to the CSS boundary tooling. The --rm-* tokens used to be
+ * declared three separate times (.rm-wrap, .rm-modal and their dark twins);
+ * they are now declared once for light and once for dark, with a single
+ * deliberate two-token swap for the raised modal surface in dark mode.
+ */
+/* Tokens — declared ONCE for light and once for dark. .rm-modal-overlay is
+   listed alongside .rm-wrap because an overlay can be appended to <body>,
+   outside .rm-wrap, where it would otherwise inherit nothing. */
+.rm-wrap,
+.rm-modal-overlay {
+    --rm-line: #d8d8d8;
+    --rm-bg: #fff;
+    --rm-bg2: #f6f6f6;
+    --rm-fg: #222;
+    --rm-muted: #777;
+    --rm-accent: #2c5f8b;
+    --rm-danger: #b03030;
+}
+html[data-theme="dark"] .rm-wrap,
+html[data-theme="dark"] .rm-modal-overlay {
+    --rm-line: #3a3f47;
+    --rm-bg: #1e2127;
+    --rm-bg2: #23262d;
+    --rm-fg: #e6e6e6;
+    --rm-muted: #9aa0a8;
+    --rm-accent: #6fb0e6;
+    --rm-danger: #e07070;
+}
+.rm-wrap {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 0 12px 80px;
+    box-sizing: border-box;
+    color: var(--rm-fg);
+}
+
+/* Hero */
+.rm-hero { padding: 14px 4px 10px; }
+.rm-back {
+    display: inline-block;
+    font-size: 13px;
+    color: var(--rm-accent);
+    text-decoration: none;
+    margin-bottom: 6px;
+}
+.rm-back:hover { text-decoration: underline; }
+.rm-sub { font-size: 13px; color: var(--rm-muted); margin-top: 2px; }
+
+/* Filter bar */
+.rm-filterbar {
+    position: sticky;
+    top: 48px; /* below the app's 48px fixed top nav */
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 4px;
+    background: var(--rm-bg);
+    border-bottom: 1px solid var(--rm-line);
+}
+.rm-search, .rm-fsel {
+    font-size: 13px;
+    padding: 5px 8px;
+    border: 1px solid var(--rm-line);
+    border-radius: 4px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+}
+.rm-search { min-width: 200px; }
+.rm-search::placeholder { color: var(--rm-muted); }
+.rm-fcheck { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--rm-fg); cursor: pointer; }
+.rm-fcheck input { margin: 0; }
+/* Export button — right-aligned in the filter bar. */
+.rm-fbtn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 5px 10px;
+    border: 1px solid var(--rm-line);
+    border-radius: 4px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+    white-space: nowrap;
+}
+.rm-fbtn:hover { border-color: var(--rm-accent); color: var(--rm-accent); }
+.rm-fbtn[disabled] { opacity: .6; cursor: default; }
+.rm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rm-chip {
+    cursor: pointer;
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: var(--rm-bg2);
+    border: 1px solid var(--rm-line);
+    color: var(--rm-fg);
+}
+.rm-chip:hover { border-color: var(--rm-accent); }
+
+/* Grid */
+/* NOTE: no overflow here — an overflow context would scope the sticky thead to
+   this wrapper (which never scrolls vertically) and break the frozen header on
+   window scroll. The table is full-width; very narrow viewports scroll the page. */
+.rm-gridwrap { }
+.rm-grid {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 13px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+}
+.rm-grid th, .rm-grid td {
+    border: 1px solid var(--rm-line);
+    padding: 4px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+.rm-grid thead th {
+    position: sticky;
+    top: 94px; /* 48px fixed nav + 46px sticky filter bar */
+    z-index: 4;
+    background: var(--rm-bg2);
+    font-weight: 700;
+    white-space: nowrap;
+}
+.rm-row:nth-child(even) { background: var(--rm-bg2); }
+.rm-row:hover { background: rgba(127, 127, 127, 0.10); }
+
+/* Sticky recipient column */
+.rm-col-recip { position: sticky; left: 0; z-index: 1; background: var(--rm-bg); }
+.rm-row:nth-child(even) .rm-col-recip { background: var(--rm-bg2); }
+thead .rm-col-recip { z-index: 6; background: var(--rm-bg2); }
+
+/* tabular numbers */
+.rm-date, .rm-age, .rm-rank, .rm-supp-chip { font-variant-numeric: tabular-nums; }
+
+.rm-col-sel { width: 28px; text-align: center; }
+thead .rm-col-sel { text-align: center; }
+.rm-col-act { white-space: nowrap; }
+
+.rm-sortable { cursor: pointer; user-select: none; }
+.rm-sort-asc::after { content: " \25B2"; font-size: 9px; }
+.rm-sort-desc::after { content: " \25BC"; font-size: 9px; }
+
+/* Recipient cell */
+.rm-col-recip a { color: var(--rm-accent); text-decoration: none; font-weight: 600; }
+.rm-col-recip a:hover { text-decoration: underline; }
+.rm-park {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 11px;
+    color: var(--rm-muted);
+    border: 1px solid var(--rm-line);
+    border-radius: 3px;
+    padding: 0 4px;
+}
+a.rm-park { text-decoration: none; cursor: pointer; }
+a.rm-park:hover { color: var(--rm-accent); border-color: var(--rm-accent); }
+/* Park column (split out of the Recipient cell) */
+.rm-col-park { white-space: nowrap; }
+.rm-col-park .rm-park { margin-left: 0; }
+
+/* Award cell */
+.rm-rank {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--rm-muted);
+}
+.rm-rank.rm-nonladder { font-style: italic; }
+
+/* Rank column (split out of the Award cell) */
+.rm-col-rank { white-space: nowrap; }
+.rm-col-rank .rm-rank { margin-left: 0; }
+.rm-badge {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 11px;
+    padding: 0 5px;
+    border-radius: 3px;
+    border: 1px solid var(--rm-line);
+}
+.rm-badge-has { color: #8a6d00; background: rgba(240, 200, 0, 0.14); border-color: rgba(240, 200, 0, 0.4); }
+/* Distinct from rm-badge-has on purpose: a Master peerage superseding the order
+   is a different state from having been granted it, and green matches how the
+   Court Planner already shows the same fact. */
+.rm-badge-master { color: #276749; background: rgba(72, 187, 120, 0.14); border-color: rgba(72, 187, 120, 0.45); }
+html[data-theme="dark"] .rm-badge-master { color: #9ae6b4; border-color: rgba(72,187,120,.4); }
+.rm-badge-below { color: var(--rm-danger); background: rgba(176, 48, 48, 0.10); border-color: rgba(176, 48, 48, 0.35); }
+html[data-theme="dark"] .rm-badge-has { color: #e0c860; }
+/* The dark block re-tuned every other badge but left this one on the light-mode
+   --rm-danger: measured rgb(224,112,112) on rgb(30,33,39) = 2.03:1 at 11px.
+   This is the badge that says the recipient has not reached the prerequisite
+   rank, so it is the one that must not fade — lifted to the same treatment its
+   siblings get. */
+html[data-theme="dark"] .rm-badge-below { color: #f0a0a0; background: rgba(224, 112, 112, 0.14); border-color: rgba(224, 112, 112, 0.35); }
+/* Retired/deceased recipient. Distinct hue from "already has" (amber) and
+   "dismissed" (grey) so three badges on one row stay tellable apart. */
+.rm-badge-retired { color: #6b4a9a; background: rgba(107, 74, 154, 0.12); border-color: rgba(107, 74, 154, 0.4); }
+html[data-theme="dark"] .rm-badge-retired { color: #c9b0f0; background: rgba(201, 176, 240, 0.14); border-color: rgba(201, 176, 240, 0.35); }
+.rm-badge-passlocal { color: #2c5f8b; background: rgba(44, 95, 139, 0.12); border-color: rgba(44, 95, 139, 0.4); }
+html[data-theme="dark"] .rm-badge-passlocal { color: #6fb0e6; }
+.rm-act-passlocal.rm-act-active { background: var(--rm-accent); color: #fff; border-color: var(--rm-accent); }
+.rm-row[data-passlocal="1"] { box-shadow: inset 3px 0 0 var(--rm-accent); }
+/* A dismissed cluster is history, not a candidate: muted, with a neutral grey
+   rule that cannot be confused with the blue pass-to-local one above. */
+.rm-row[data-dismissed="1"] { box-shadow: inset 3px 0 0 #9aa0a8; opacity: 0.72; }
+.rm-row[data-dismissed="1"]:hover { opacity: 1; }
+.rm-badge-dismissed { color: #5a6472; background: rgba(90, 100, 114, 0.12); border-color: rgba(90, 100, 114, 0.4); }
+html[data-theme="dark"] .rm-badge-dismissed { color: #b7bec9; background: rgba(183, 190, 201, 0.14); border-color: rgba(183, 190, 201, 0.35); }
+/* Two classes, not one: the base .rm-act rule below also sets color at (0,1,0)
+   and comes later in source order, so a bare .rm-act-undelete silently loses. */
+.rm-act.rm-act-undelete { color: #2f855a; }
+html[data-theme="dark"] .rm-act.rm-act-undelete { color: #68d391; }
+/* Pass-down tooltip: rich (bold title line + body) — data-tip can't bold/format,
+   so this button uses a child tooltip span shown on hover. Right-anchored so it
+   never clips off the right edge. */
+.rm-act-passlocal { position: relative; }
+/* Shared rich-tooltip body — Pass-down (.rm-passlocal-tip) and Snooze
+   (.rm-snooze-tip) render byte-identical tooltips; only the :hover trigger
+   selectors differ. (The spans carry these class names from _rm_row.tpl.) */
+.rm-passlocal-tip, .rm-snooze-tip {
+    display: none;
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 4px);
+    width: max-content;
+    max-width: 240px;
+    background: #222;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.35;
+    text-align: left;
+    padding: 5px 8px;
+    border-radius: 4px;
+    white-space: normal;
+    z-index: 50;
+    pointer-events: none;
+}
+.rm-act-passlocal:hover .rm-passlocal-tip { display: block; }
+.rm-passlocal-tip strong, .rm-snooze-tip strong { display: block; font-weight: 700; margin-bottom: 3px; }
+html[data-theme="dark"] .rm-passlocal-tip, html[data-theme="dark"] .rm-snooze-tip { background: #000; }
+
+/* Recommended cell */
+.rm-by { display: block; }
+.rm-date { display: inline-block; color: var(--rm-muted); }
+.rm-age { display: inline-block; margin-left: 6px; color: var(--rm-muted); font-size: 11px; }
+
+/* Reason + support */
+.rm-empty { color: var(--rm-muted); }
+.rm-reason-trunc {
+    display: inline-block;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+.rm-expand-reason, .rm-supp-chip, .rm-expand-members {
+    cursor: pointer;
+    font-size: 12px;
+    padding: 1px 6px;
+    margin-left: 4px;
+    border: 1px solid var(--rm-line);
+    border-radius: 3px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+}
+.rm-expand-reason:hover, .rm-supp-chip:hover, .rm-expand-members:hover { border-color: var(--rm-accent); }
+
+/* Court badge */
+.rm-courtbadge {
+    display: inline-block;
+    font-size: 12px;
+    /* !important + fixed steel-blue bg: the app's global `a` link color
+       otherwise wins over this class, rendering light-blue-on-light-blue. */
+    color: #fff !important;
+    background: #2c5f8b;
+    border-radius: 3px;
+    padding: 1px 6px;
+    text-decoration: none;
+}
+.rm-courtbadge:hover { opacity: 0.9; }
+.rm-courtmore { font-weight: 700; }
+
+/* Action buttons */
+.rm-act {
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 3px 5px;
+    margin: 0 1px;
+    border: 1px solid var(--rm-line);
+    border-radius: 4px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+}
+.rm-act:hover { border-color: var(--rm-accent); background: var(--rm-bg2); }
+.rm-act-dismiss:hover { border-color: var(--rm-danger); }
+
+.rm-loading { text-align:center; padding:14px; color:var(--rm-muted); font-size:13px; }
+
+/* Footer */
+.rm-foot {
+    padding: 8px 4px;
+    font-size: 12px;
+    color: var(--rm-muted);
+    border-top: 1px solid var(--rm-line);
+}
+/* --rm-muted is already redefined per theme, so the base rule is correct in
+   both; a dark-mode override repeating the same token was a no-op. */
+.rm-loadnote { color: var(--rm-muted); font-style: italic; }
+
+/* Detail rows (Task 5) */
+.rm-detailrow td { background: var(--rm-bg2); }
+.rm-detailrow .rm-col-recip { background: var(--rm-bg2); }
+.rm-seclist {
+    margin: 0;
+    padding: 4px 0 4px 8px;
+    list-style: none;
+    font-size: 13px;
+}
+.rm-seclist li { padding: 1px 0; }
+.rm-reason-full {
+    white-space: pre-wrap;
+    font-size: 13px;
+    padding: 2px 0;
+}
+
+/* data-tip tooltips (no native title) */
+[data-tip] { position: relative; }
+[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 4px);
+    transform: translateX(-50%);
+    /* wrap long tooltips instead of running off-screen: compact for short text
+       (max-content), wraps once it would exceed max-width. */
+    white-space: normal;
+    width: max-content;
+    max-width: 240px;
+    line-height: 1.3;
+    text-align: left;
+    background: #222;
+    color: #fff;
+    font-size: 11px;
+    padding: 4px 7px;
+    border-radius: 4px;
+    z-index: 50;
+    pointer-events: none;
+}
+/* Actions-column buttons sit at the right edge — anchor their tooltip to the
+   button's right so a wrapped tooltip extends leftward and never clips off-screen. */
+.rm-col-act [data-tip]:hover::after {
+    left: auto;
+    right: 0;
+    transform: none;
+}
+html[data-theme="dark"] [data-tip]:hover::after { background: #000; }
+/* Snooze button uses a rich tooltip (bold title + description) rather than the
+   plain data-tip; mirrors .rm-passlocal-tip and right-anchors so it never clips. */
+.rm-act-snooze { position: relative; }
+/* Body/strong/dark styles are shared with .rm-passlocal-tip above; only the
+   distinct :hover trigger lives here. */
+.rm-act-snooze:hover .rm-snooze-tip { display: block; }
+
+/* Bulk action bar (Task 7) */
+.rm-bulkbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 6;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    margin-top: 6px;
+    /* Brand header blue so the bar clearly stands out once rows are selected. */
+    background: #2c5f8b;
+    border: 1px solid #234d73;
+    border-radius: 6px;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.22);
+}
+html[data-theme="dark"] .rm-bulkbar { background: #23557f; border-color: #16344d; }
+.rm-bulkbar[hidden] { display: none; }
+#rm-bulklabel { font-size: 13px; font-weight: 700; color: #fff; margin-right: 4px; }
+.rm-bulk {
+    cursor: pointer;
+    font-size: 13px;
+    padding: 5px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+.rm-bulk:hover { border-color: #fff; background: rgba(255, 255, 255, 0.24); }
+.rm-bulk-dismiss:hover { border-color: #ffd4d4; background: rgba(176, 48, 48, 0.55); color: #fff; }
+/* Disabled while a bulk batch is in flight (same in light and dark: the bar is navy). */
+.rm-bulk:disabled, .rm-bulk:disabled:hover { opacity: 0.5; cursor: default; border-color: rgba(255, 255, 255, 0.55); background: rgba(255, 255, 255, 0.12); }
+
+/* Empty / error state row (a blank tbody is indistinguishable from a failed load) */
+.rm-staterow td {
+    padding: 22px 16px;
+    text-align: center;
+    color: var(--rm-muted);
+    font-size: 13px;
+    background: var(--rm-bg);
+}
+.rm-staterow strong { display: block; font-size: 14px; color: var(--rm-fg); margin-bottom: 4px; }
+.rm-staterow .rm-btn { margin-top: 10px; }
+.rm-staterow-err strong { color: var(--rm-danger); }
+
+/* Toast (Task 8) — a single persistent live region holds the toasts, so an
+   inserted message is announced (a role="status" node added at the same moment
+   as its text is not reliably read out). */
+#rm-toast-region {
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
+}
+.rm-toast {
+    max-width: 320px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #fff;
+    background: #2c3a4a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-left: 4px solid var(--rm-accent, #2c5f8b);
+    border-radius: 5px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    opacity: 1;
+    transition: opacity 0.4s ease;
+}
+.rm-toast-err {
+    background: #4a2c2c;
+    border-left-color: var(--rm-danger, #b03030);
+}
+.rm-toast-out { opacity: 0; }
+html[data-theme="dark"] .rm-toast { background: #2a2f37; }
+html[data-theme="dark"] .rm-toast-err { background: #3a2424; }
+
+.rm-error {
+    padding: 16px;
+    margin: 24px auto;
+    max-width: 480px;
+    border: 1px solid var(--rm-danger, #b03030);
+    border-radius: 6px;
+    color: #b03030;
+    background: rgba(176, 48, 48, 0.08);
+    text-align: center;
+}
+
+/* Add-to-Court modal (Task 10) */
+.rm-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.45);
+}
+.rm-modal-overlay[hidden] { display: none; }
+.rm-modal {
+    width: 100%;
+    max-width: 440px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+    border: 1px solid var(--rm-line);
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    padding: 18px 20px 16px;
+    box-sizing: border-box;
+}
+/* The modal is a raised surface: swap just these two tokens so it reads lighter
+   than the page behind it. (The rest come from the single dark block above.) */
+html[data-theme="dark"] .rm-modal {
+    --rm-bg: #23262d;
+    --rm-bg2: #1e2127;
+}
+.rm-modal-title {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+    margin: 0 0 4px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--rm-fg);
+}
+/* orkui.css styles h1-h6 globally with a gray pill box, and its dark-mode rule
+   (html[data-theme="dark"] h1..h6) carries more type selectors than a bare
+   class, so it wins the tie and the pill returns in dark mode. Repeat the
+   reset at matching specificity for both headings. */
+html[data-theme="dark"] .rm-modal-title {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+    color: var(--rm-fg);
+}
+.rm-modal-sub { font-size: 13px; color: var(--rm-muted); margin-bottom: 12px; }
+.rm-modal-modes {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: var(--rm-fg);
+}
+.rm-modal-modes label { cursor: pointer; }
+#rm-court-existing, #rm-court-new { margin-bottom: 12px; }
+.rm-modal .rm-fsel, .rm-modal .rm-input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 13px;
+    padding: 7px 9px;
+    border: 1px solid var(--rm-line);
+    border-radius: 4px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+}
+.rm-modal .rm-input { margin-bottom: 8px; }
+.rm-modal .rm-input:last-child { margin-bottom: 0; }
+.rm-modal .rm-input::placeholder { color: var(--rm-muted); }
+.rm-modal .rm-empty { font-size: 13px; }
+.rm-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+}
+.rm-modal-actions-stack {
+    flex-direction: column;
+    align-items: stretch;
+}
+.rm-modal-actions-stack .rm-btn { text-align: center; }
+.rm-btn {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 4px;
+    border: 1px solid var(--rm-line);
+}
+.rm-btn-ghost {
+    background: transparent;
+    color: var(--rm-fg);
+}
+.rm-btn-ghost:hover { background: var(--rm-bg2); border-color: var(--rm-accent); }
+.rm-btn-primary {
+    background: var(--rm-accent);
+    border-color: var(--rm-accent);
+    color: #fff;
+}
+.rm-btn-primary:hover { opacity: 0.92; }
+.rm-btn-primary:disabled { opacity: 0.55; cursor: default; }
+/* Grant Award modal fields */
+.rm-field { margin-bottom: 12px; }
+.rm-field > label { display: block; font-size: 12px; font-weight: 600; color: var(--rm-fg); margin-bottom: 4px; }
+.rm-field .rm-input, .rm-field textarea.rm-input { margin-bottom: 0; }
+.rm-field textarea.rm-input { resize: vertical; min-height: 56px; font-family: inherit; }
+.rm-field-hint { font-size: 11px; color: var(--rm-muted); margin-top: 4px; line-height: 1.4; }
+.rm-form-error { background: rgba(176, 48, 48, 0.12); border: 1px solid var(--rm-danger); color: var(--rm-danger); font-size: 13px; padding: 7px 10px; border-radius: 5px; margin-bottom: 12px; }
+.rm-form-error[hidden] { display: none; }
+.rm-radio-row { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 400; color: var(--rm-fg); margin: 4px 0; cursor: pointer; }
+.rm-radio-row input { margin: 0; }
+/* Given-By autocomplete dropdown */
+.rm-ac-wrap { position: relative; }
+.rm-ac-results { position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20; background: var(--rm-bg); border: 1px solid var(--rm-line); border-radius: 5px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); max-height: 220px; overflow-y: auto; display: none; }
+.rm-ac-results.rm-ac-open { display: block; }
+.rm-ac-item { padding: 7px 10px; font-size: 13px; color: var(--rm-fg); cursor: pointer; }
+.rm-ac-item:hover, .rm-ac-item.rm-ac-active { background: var(--rm-bg2); }
+.rm-ac-none { padding: 7px 10px; font-size: 12px; color: var(--rm-muted); }
+/* Officer quick-pick chips (Given By) */
+.rm-officer-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.rm-officer-chip { font-size: 12px; padding: 4px 9px; border: 1px solid var(--rm-line); border-radius: 14px; background: var(--rm-bg2); color: var(--rm-fg); cursor: pointer; }
+.rm-officer-chip span { color: var(--rm-muted); }
+.rm-officer-chip:hover { border-color: var(--rm-accent); }
+.rm-officer-chip.rm-selected { background: var(--rm-accent); border-color: var(--rm-accent); color: #fff; }
+.rm-officer-chip.rm-selected span { color: rgba(255, 255, 255, 0.85); }
+/* Inline field hints */
+.rm-field-hint-inline { color: var(--rm-muted); font-weight: 400; font-size: 11px; }
+/* Rank pills (select the rank being granted; green = already held) */
+.rm-rank-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+.rm-rank-pill { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; border: 1px solid var(--rm-line); border-radius: 6px; background: var(--rm-bg); color: var(--rm-fg); cursor: pointer; user-select: none; }
+.rm-rank-pill:hover { border-color: var(--rm-accent); }
+.rm-rank-pill.rm-rank-held { background: #2f855a; border-color: #2f855a; color: #fff; }
+.rm-rank-pill.rm-rank-forward { background: rgba(44, 95, 139, 0.14); border-color: var(--rm-accent); }
+.rm-rank-pill.rm-rank-selected { outline: 2px solid var(--rm-accent); outline-offset: 1px; }
+html[data-theme="dark"] .rm-rank-pill.rm-rank-held { background: #38a169; border-color: #38a169; }
+
+/* Responsive card collapse (spec 0.8) — below 1250px the grid becomes stacked
+   cards; threads 3, 4 and 6 extend this rather than owning it.
+
+   Breakpoint raised from 700px to 1250px. The desktop <table> lays out at
+   1096-1136px natural width (measured across kingdoms 1/3/5/6/8/10 — it is
+   content-driven, several columns being white-space:nowrap) on top of ~111px of
+   page chrome, so anything under ~1250px overflowed a wrapper with no scroll
+   container, and the sitewide html{overflow-x:hidden} / body{overflow-x:clip}
+   swallowed the overflow — putting the ENTIRE Actions column (Grant / Add to
+   Court / Snooze / Pass down / Dismiss / More), the only mutating controls on
+   the page, out of reach on iPad portrait and landscape, Surface, and any
+   half-screen laptop. 1250 rather than the ~1150 the natural table width alone
+   suggests: at 1160 the widest kingdom still spilled 25px of the last column.
+
+   The obvious fix — overflow-x:auto on .rm-gridwrap for just that band — was
+   built and measured at 900px, and rejected on three counts:
+     1. Making the wrapper a scrollport re-scopes the sticky thead to it. The
+        wrapper never scrolls vertically, so the frozen header stopped freezing:
+        after a 1500px page scroll the header sat at -1114px instead of +94px.
+        (This is exactly what the .rm-gridwrap comment above warns about.)
+     2. It clips the rich hover tooltips. .rm-passlocal-tip / .rm-snooze-tip are
+        absolutely positioned ABOVE their button (bottom: 100% + 4px), so the
+        first row's tooltip rendered at y=250 against a wrapper starting at
+        y=292 — 42px of a 72px tooltip cut off, losing the entire bold title
+        line. Those tooltips live in the very Actions column the fix exists to
+        reach.
+     3. overflow-x:auto forces overflow-y to compute to auto, and the resulting
+        horizontal scrollbar sits at the bottom of a ~15,000px-tall wrapper —
+        an affordance that is never actually on screen.
+   Cards need no scroll container, so the sticky header keeps working at every
+   width and both tooltips fall back to their inline (.rm-act-help) form. */
+/* Base (desktop) state for the mobile-only overflow toggle and its help text.
+   Without this, both inherit the generic .rm-act/div display and appear on the
+   desktop table too, since the media query below only sets their *open* state. */
+.rm-act-more { display: none; }
+.rm-act-help { display: none; }
+@media (max-width: 1250px) {
+  .rm-grid thead { display: none; }
+  .rm-grid, .rm-grid tbody, .rm-grid tr, .rm-grid td { display: block; width: 100%; }
+  .rm-grid tr.rm-row {
+    border: 1px solid var(--rm-line); border-radius: 8px; margin-bottom: 10px;
+    padding: 10px 12px; background: var(--rm-bg); position: relative;
+  }
+  .rm-grid tr.rm-row td { border: none; padding: 2px 0; }
+  /* Tap area is 44px; the glyph stays 22px. House pattern, stated at
+     Court_detail.tpl:1058 — "coarse pointers get >=44px hit area (padding,
+     not larger glyphs)". A literally 44px checkbox looks broken.
+     Padding lives on the wrapping <label>, not the <td>: a <td> has no
+     native click-forwarding to a child checkbox, so padding placed directly
+     on .rm-col-sel would create a visually 44px box whose outer ring does
+     not actually toggle the input on tap. A <label> does forward clicks to
+     the control it wraps, so the label is the element that must be 44px. */
+  /* Specificity note: the generic ".rm-grid td { width: 100% }" rule above
+     would otherwise stretch this absolutely-positioned td across the whole
+     row (and drag the checkbox to the row's left edge with it), so this
+     selector is deliberately ".rm-grid .rm-col-sel" (two classes) rather
+     than the bare ".rm-col-sel" to win that cascade fight and shrink back
+     to fit its content in the top-right corner. */
+  .rm-grid .rm-col-sel { position: absolute; top: 2px; right: 2px; width: auto; }
+  .rm-col-sel label { padding: 11px; box-sizing: content-box; display: inline-flex; align-items: center; justify-content: center; }
+  /* margin:0 — Chrome's UA default on <input> is 3px 3px 3px 4px, which
+     would otherwise pad the label's tap area out past 44px. */
+  .rm-col-sel input { width: 22px; height: 22px; margin: 0; }
+  /* box-sizing: the generic ".rm-grid td { width: 100% }" above is a
+     content-box width here, so the 40px gutter that keeps the name clear of the
+     absolutely-positioned select checkbox was ADDED to a full-width card,
+     pushing the cell's right edge past the viewport. Harmless only because the
+     sitewide overflow clip hid it. */
+  .rm-col-recip { font-size: 16px; font-weight: 700; padding-right: 40px !important; box-sizing: border-box; }
+  .rm-col-park::before  { content: none; }
+  .rm-col-award { font-size: 14px; }
+  .rm-col-rank, .rm-col-rec, .rm-col-supp { display: inline-block !important; width: auto !important; margin-right: 10px; }
+  .rm-col-reason { color: var(--rm-muted); font-size: 13px; }
+
+  /* Actions: primary two inline, the rest behind an overflow toggle. */
+  .rm-col-act { display: flex !important; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .rm-col-act .rm-act { min-height: 44px; min-width: 44px; flex: 0 0 auto; padding: 0 14px; }
+  .rm-col-act .rm-act-grant, .rm-col-act .rm-act-court { flex: 1 1 auto; }
+  .rm-col-act .rm-act-snooze,
+  .rm-col-act .rm-act-passlocal,
+  .rm-col-act .rm-act-dismiss { display: none; }
+  .rm-col-act.rm-act-open .rm-act-snooze,
+  .rm-col-act.rm-act-open .rm-act-passlocal,
+  .rm-col-act.rm-act-open .rm-act-dismiss { display: inline-flex; }
+  .rm-act-more { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; }
+
+  /* Hover-only tooltips have no home on a phone — show the copy inline. */
+  .rm-act .rm-snooze-tip,
+  .rm-act .rm-passlocal-tip { position: static; display: none; }
+  .rm-col-act.rm-act-open .rm-act-help { display: block; font-size: 12px; color: var(--rm-muted); margin-top: 6px; flex: 1 1 100%; }
+
+  .rm-filterbar { flex-wrap: wrap; gap: 8px; }
+  .rm-filterbar .rm-fsel, .rm-filterbar .rm-search { flex: 1 1 100%; min-height: 44px; }
+  .rm-bulkbar { position: fixed; left: 0; right: 0; bottom: 0; border-radius: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); flex-wrap: wrap; }
+  .rm-bulkbar .rm-bulk { min-height: 44px; }
+
+  /* The row action buttons above are already 44px; these were missed. Same
+     house pattern — grow the hit area with padding, leave the glyph alone.
+     The modal buttons matter most: both modals are fully usable on a phone. */
+  .rm-fbtn,
+  .rm-staterow .rm-btn,
+  .rm-modal .rm-btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .rm-expand-members,
+  .rm-supp-chip,
+  .rm-courtbadge,
+  a.rm-park { min-height: 44px; display: inline-flex; align-items: center; }
+}
+@media (max-width: 1250px) {
+  html[data-theme="dark"] .rm-grid tr.rm-row { background: var(--rm-bg2); }
+}

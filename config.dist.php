@@ -87,7 +87,7 @@ define('DB_PREFIX', 'ork_');
 define('CACHE_HOST', 'ork.amtgard.com');
 
 // System Config
-define('LOGIN_TIMEOUT', 72 * 60 * 60);
+define('LOGIN_TIMEOUT', 30 * 24 * 60 * 60);
 define('APP_STAGE', 'DEV');
 define('UI_LOCALITY', 'LOCAL'); // REMOTE
 define('ORK3_SERVICE_URL', HTTP_SERVICE);
@@ -98,8 +98,16 @@ define('DO_SETUP', false);
 define('TRACE', false);
 define('DUMPTRACE', false);
 
+define('GOOGLE_MAPS_API_KEY', '');
 define('GOOGLE_MAPS_ACCESS_API_KEY', '');
 define('SENDGRID_API_KEY', '');
+// Amazon SES SMTP credentials -- the outbound mail path for password reset
+// (Authorization::ResetPassword). Leave empty here; the real values live in
+// prod config.php. With these empty, a reset request fails cleanly and is
+// logged instead of sending mail.
+define('AMAZON_SES_HOST', '');
+define('AMAZON_SES_USERNAME', '');
+define('AMAZON_SES_PASSWORD', '');
 define('BEHOLD_KEY', '');
 // Cloudflare analytics — read-only token + zone tag for the weekly recap's
 // ORK Data section. Leave empty in dev/dist; fill in the real values in prod
@@ -107,9 +115,15 @@ define('BEHOLD_KEY', '');
 define('CF_API_TOKEN', '');
 define('CF_ZONE_ID', '');
 
+// CARTO basemap tile key (Live Attendance + Weather maps). CARTO's free
+// basemaps.cartocdn.com tiles now require a key -- leave empty in dev/dist;
+// fill in the real value in prod config.php.
+define('CARTO_API_KEY', '');
+
 define('IDP_CLIENT_ID', 'ORK_CLIENT_ID');
 define('IDP_CLIENT_SECRET', 'ORK_CLIENT_SECRET');
 define('IDP_BASE_URL', 'https://idp.amtgard.com');
+define('IDP_API_URL', 'https://idp.amtgard.com');
 
 // INCLUDE
 require_once(DIR_LIB . 'mail.php');
