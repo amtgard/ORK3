@@ -189,7 +189,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 	background: #fff;
 	min-width: 160px; max-width: 220px;
 	text-align: left; padding: 7px 12px;
-	border-right: 2px solid var(--rp-border);
+	border-right: 2px solid var(--rp-divider);
 	white-space: normal; word-break: break-word;
 }
 .lg-table th.lg-col-player { z-index: 3; background: var(--rp-bg-light); vertical-align: middle; }
@@ -200,7 +200,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-table td.lg-col-park {
 	min-width: 130px; max-width: 180px;
 	text-align: left; padding: 7px 12px;
-	border-right: 1px solid var(--rp-border);
+	border-right: 1px solid var(--rp-divider);
 	white-space: normal; word-break: break-word;
 	font-size: 0.85rem;
 }
@@ -214,6 +214,21 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-table tbody tr:nth-child(even) td           { background: #f9fafb; }
 .lg-table tbody tr:nth-child(even) td.lg-col-player { background: #f4f5f7; }
 .lg-table tbody tr:hover td                     { background: #eef2ff !important; }
+
+/* Suspended players — tint the identity columns; award cells keep their group colors */
+.lg-table tbody tr.rp-row-suspended td.lg-col-player,
+.lg-table tbody tr.rp-row-suspended td.lg-col-park {
+	background: var(--rp-row-suspended-bg, #fff5f5) !important;
+}
+.lg-table tbody tr.rp-row-suspended td.lg-col-player .lg-player-link,
+.lg-table tbody tr.rp-row-suspended td.lg-col-park,
+.lg-table tbody tr.rp-row-suspended td.lg-col-park .lg-player-link {
+	color: var(--rp-row-suspended-text, #742a2a) !important;
+}
+.lg-table tbody tr.rp-row-suspended:hover td.lg-col-player,
+.lg-table tbody tr.rp-row-suspended:hover td.lg-col-park {
+	background: var(--rp-row-suspended-hover, #fed7d7) !important;
+}
 
 .lg-table td.lg-col-award {
 	text-align: center; padding: 6px 4px;
@@ -238,7 +253,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-pill {
 	display: inline-flex; align-items: center; gap: 5px;
 	padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 500;
-	border: 1px solid var(--rp-border); background: #fff; color: var(--rp-text-muted);
+	border: 1px solid var(--ork-input-border); background: #fff; color: var(--rp-text-muted);
 	text-decoration: none; cursor: pointer; transition: all 0.15s;
 }
 .lg-pill:hover { border-color: var(--rp-accent-mid); color: var(--rp-accent); }
@@ -249,13 +264,14 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-search-bar label { font-size: 0.82rem; color: var(--rp-text-muted); white-space: nowrap; }
 .lg-search-bar input {
 	padding: 5px 9px;
-	border: 1px solid var(--rp-border);
+	border: 1px solid var(--ork-input-border);
+	background: var(--ork-input-bg);
 	border-radius: 5px;
 	font-size: 0.82rem;
 	min-width: 200px;
 	outline: none;
 }
-.lg-search-bar input:focus { border-color: var(--rp-accent-mid); }
+.lg-search-bar input:focus { border-color: var(--rp-accent-mid); background: var(--ork-card-bg); }
 
 /* Dual range slider */
 .lg-rank-range { display: flex; align-items: center; gap: 10px; }
@@ -309,7 +325,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-award-filter {
 	display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
 	margin-bottom: 10px; padding: 8px 10px;
-	background: #f8fafc; border: 1px solid var(--rp-border); border-radius: 6px;
+	background: var(--ork-bg-inset); border: 1px solid var(--rp-border); border-radius: 6px;
 }
 .lg-award-filter-label { font-size: 0.78rem; color: var(--rp-text-muted); white-space: nowrap; margin-right: 2px; }
 .lg-award-pills { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; flex: 1; }
@@ -317,7 +333,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 
 .lg-award-pill {
 	padding: 2px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 500;
-	border: 1px solid var(--rp-border); background: #fff; color: var(--rp-text-muted);
+	border: 1px solid var(--ork-input-border); background: #fff; color: var(--rp-text-muted);
 	cursor: pointer; transition: all 0.12s; white-space: nowrap;
 }
 .lg-award-pill:hover { border-color: var(--rp-accent-mid); color: var(--rp-accent); }
@@ -343,7 +359,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 /* ── Clickable stat card filter ─────────────────────────────── */
 .rp-stat-card-filter { cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; border: 1px dashed var(--rp-border); }
 .rp-stat-card-filter:hover { box-shadow: 0 0 0 2px var(--rp-accent-mid); border-color: var(--rp-accent-mid); }
-.rp-stat-card-filter .rp-stat-label::after { content: ' \f0b0'; font-family: 'Font Awesome 5 Free'; font-weight: 900; font-size: 0.65rem; color: var(--rp-text-hint); margin-left: 4px; }
+.rp-stat-card-filter .rp-stat-label::after { content: ' \f0b0'; font-family: 'Font Awesome 7 Free'; font-weight: 900; font-size: 0.65rem; color: var(--rp-text-hint); margin-left: 4px; }
 .rp-stat-card-filter.lg-stat-active {
 	background: var(--rp-accent);
 	color: #fff;
@@ -603,7 +619,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 		}
 	}
 ?>
-			<tr data-recent="<?= $row['RecentSignIn'] ? '1' : '0' ?>" data-mundane-id="<?= (int)$row['MundaneId'] ?>" data-is-knight="<?= $_isKnight ?>" data-is-master="<?= $_isMaster ?>" data-max-rank="<?= $_maxRank ?>" data-awards="<?= htmlspecialchars(json_encode($_awardRanks), ENT_QUOTES) ?>">
+			<tr<?= !empty($row['Suspended']) ? ' class="rp-row-suspended" title="This player is currently under suspension"' : '' ?> data-recent="<?= $row['RecentSignIn'] ? '1' : '0' ?>" data-mundane-id="<?= (int)$row['MundaneId'] ?>" data-is-knight="<?= $_isKnight ?>" data-is-master="<?= $_isMaster ?>" data-max-rank="<?= $_maxRank ?>" data-awards="<?= htmlspecialchars(json_encode($_awardRanks), ENT_QUOTES) ?>">
 					<td class="lg-col-player">
 						<a class="lg-player-link" href="<?= UIR . 'Player/profile/' . (int)$row['MundaneId'] ?>">
 							<?= htmlspecialchars($row['Persona']) ?>

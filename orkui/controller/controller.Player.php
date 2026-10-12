@@ -69,7 +69,7 @@ class Controller_Player extends Controller
         if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
             $this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
             header('Location: ' . UIR . 'Player/profile/' . $id);
-            return;
+            exit;
         }
 
         if (strlen($action) > 0) {
@@ -77,6 +77,7 @@ class Controller_Player extends Controller
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR."Login/login/Player/profile/$id");
+                exit;
             } else {
                 switch ($action) {
                     case 'updateclasses':
@@ -193,7 +194,7 @@ class Controller_Player extends Controller
                     }
                     $this->request->clear('Player_index');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Player/profile/$id");
+                    $this->no_authorization("Player/profile/$id");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -295,7 +296,6 @@ class Controller_Player extends Controller
         $this->load_model('Event');
         $action    = $params[1] ?? '';
         $roastbeef = $params[2] ?? '';
-
         // Missing row → bail rather than render a mostly-blank profile with
         // sub-fields synthesized from queries against a nonexistent id. Same
         // guard as index() at the top of this file.
@@ -305,12 +305,54 @@ class Controller_Player extends Controller
             exit;
         }
 
+        // Link-preview card: persona, home chapter, bio snippet, and heraldry
+        // (photo fallback). Bio and images are already public on the profile
+        // and Google already quotes the bio in search snippets — Ken's call
+        // 2026-08-23: match that in embeds, revisit on community pushback.
+        $_ogPark = $this->Park->get_park_info((int)($this->data['Player']['ParkId'] ?? 0));
+        $_ogWhere = trim(implode(', ', array_filter(array(
+            (string)($_ogPark['ParkInfo']['ParkName'] ?? ''),
+            (string)($_ogPark['KingdomInfo']['KingdomName'] ?? ''),
+        ))));
+        $_ogBio = trim(preg_replace('/[#*_>`]+/', ' ', strip_tags(html_entity_decode((string)($this->data['Player']['AboutPersona'] ?? '')))));
+        if ($_ogBio !== '') {
+            $_ogBio = function_exists('mb_substr') ? mb_substr($_ogBio, 0, 180) : substr($_ogBio, 0, 180);
+        }
+        $_ogDesc = ($_ogWhere !== '' ? $_ogWhere : 'Amtgard player profile on the ORK')
+            . ($_ogBio !== '' ? ' — ' . $_ogBio : '');
+        $og = array(
+            'title'       => (string)($this->data['Player']['Persona'] ?? 'Amtgard Player'),
+            'url'         => UIR . 'Player/profile/' . (int)$id,
+            'description' => $_ogDesc,
+        );
+        // Profile photo first (Ken's call — the card should show the person,
+        // matching the profile hero), heraldry as fallback. Blank the default
+        // image dimensions — they describe the site logo, not this image.
+        if (!empty($this->data['Player']['HasImage']) && !empty($this->data['Player']['Image'])) {
+            $og['image'] = (string)$this->data['Player']['Image'];
+        } elseif (!empty($this->data['Player']['HasHeraldry']) && !empty($this->data['Player']['Heraldry'])) {
+            $og['image'] = (string)$this->data['Player']['Heraldry'];
+        }
+        if (isset($og['image'])) {
+            $og['image:width'] = '';
+            $og['image:height'] = '';
+        }
+        $this->data['og'] = $og;
+
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+
+        // My Amtgard dashboard notifications (own profile only). Load the snapshot for
+        // this render (unread highlight intact), then mark read so the next visit is clean.
+        $this->data['Notifications'] = [];
+        if ($uid > 0 && $uid === (int)$id) {
+            $this->data['Notifications'] = Ork3::$Lib->notification->GetForUser($uid, 20);
+            Ork3::$Lib->notification->MarkAllRead($uid);
+        }
 
         if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
             $this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
             header('Location: ' . UIR . 'Player/profile/' . $id);
-            return;
+            exit;
         }
 
         $this->data['menu']['kingdom'] = ['url' => UIR . 'Kingdom/profile/' . $this->session->kingdom_id, 'display' => $this->session->kingdom_name];
@@ -331,15 +373,23 @@ class Controller_Player extends Controller
                             'KingdomAwardId' => $this->request->Player_profile->KingdomAwardId,
                             'Rank'           => $this->request->Player_profile->Rank,
                             'Reason'         => $this->request->Player_profile->Reason,
+                            'Anonymous'      => !empty($this->request->Player_profile->Anonymous) ? 1 : 0,
                         ]);
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 0) {
                             header('Location: ' . UIR . "Player/profile/{$id}");
+                            exit;
                         } elseif ($r['Status'] == 5) {
-                            header('Location: ' . UIR . "Login/login/Player/profile/$id");
+                            // This case always ends the request with a redirect, so
+                            // carry the authorization message back on the query string
+                            // rather than setting an Error on a page never rendered.
+                            $_authmsg = $this->no_authorization("Player/profile/$id");
+                            header('Location: ' . UIR . "Player/profile/{$id}&rec_error=" . urlencode($_authmsg));
+                            exit;
                         } else {
                             $msg = urlencode(!empty($r['Detail']) ? $r['Detail'] : $r['Error']);
                             header('Location: ' . UIR . "Player/profile/{$id}&rec_error={$msg}");
+                            exit;
                         }
                         exit;
                     case 'deleterecommendation':
@@ -350,9 +400,12 @@ class Controller_Player extends Controller
                         ]);
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 5) {
-                            header('Location: ' . UIR . "Login/login/Player/profile/$id");
+                            $_authmsg = $this->no_authorization("Player/profile/$id");
+                            header('Location: ' . UIR . "Player/profile/{$id}&rec_error=" . urlencode($_authmsg));
+                            exit;
                         } else {
                             header('Location: ' . UIR . "Player/profile/{$id}");
+                            exit;
                         }
                         exit;
                     case 'quitunit':
@@ -367,8 +420,7 @@ class Controller_Player extends Controller
                     $this->data['Message'] = $r['Detail'] ?: 'Updated successfully.';
                     $this->request->clear('Player_profile');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: ' . UIR . "Login/login/Player/profile/$id");
-                    exit;
+                    $this->no_authorization("Player/profile/$id");
                 } else {
                     $this->data['Error'] = $r['Error'] . ': ' . $r['Detail'];
                 }
@@ -604,6 +656,12 @@ class Controller_Player extends Controller
             exit;
         }
         $this->data['canEditAdmin'] = $canEditAdmin;
+        // Moving a player is a park CREATE power, not EDIT -- see the park
+        // permission help (Admin_permissions.tpl) and Player::MovePlayer, which
+        // checks AUTH_CREATE over either end. canEditAdmin is AUTH_EDIT and is
+        // too loose to gate the Move Player modal with.
+        $this->data['canMovePlayer'] = $uid > 0
+            && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
 
         $this->load_model('Kingdom');
         $preloadOfficers = [];
