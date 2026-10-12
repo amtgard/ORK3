@@ -130,6 +130,13 @@ define('DUMPTRACE', false);
 define('GOOGLE_MAPS_API_KEY', '');
 define('GOOGLE_MAPS_ACCESS_API_KEY', '');
 define('SENDGRID_API_KEY', '');
+// Amazon SES SMTP credentials -- the outbound mail path for password reset
+// (Authorization::ResetPassword). Leave empty here; the real values live in
+// prod config.php. With these empty, a reset request fails cleanly and is
+// logged instead of sending mail.
+define('AMAZON_SES_HOST', '');
+define('AMAZON_SES_USERNAME', '');
+define('AMAZON_SES_PASSWORD', '');
 define('BEHOLD_KEY', '');
 // Cloudflare analytics — keep empty in committed config.dev.php. For local
 // testing pass via docker (-e CF_API_TOKEN=… -e CF_ZONE_ID=…) — the recap

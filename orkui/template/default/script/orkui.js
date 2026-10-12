@@ -25139,3 +25139,171 @@ function _typeof(e) {
     jQuery.sidr = b,
     jQuery.fn.sidr = d
 }();
+
+/* ============================================================================
+ * Shared modal dialog helpers — orkConfirm / orkAlert / orkDialogTrap
+ *
+ * Native confirm()/alert()/prompt() are banned app-wide (they freeze the in-app
+ * browser), and the replacement had been hand-rolled per page: cpConfirm/cpAlert
+ * in the Court templates, rmConfirm in the Recommendations Manager. Three copies
+ * meant three places to fix the focus-trap and focus-restore gaps. This is the
+ * one implementation; the per-page helpers are thin aliases over it, which also
+ * makes the rule greppable — `confirm(` with no ork prefix is a violation.
+ *
+ * orkConfirm(opts) -> Promise<boolean>
+ * orkAlert(opts|string) -> Promise<void>
+ *   opts: { title, body, confirmLabel, cancelLabel, danger, onConfirm, onCancel }
+ *   (the union of the two call-site shapes it replaces; onConfirm/onCancel are
+ *   still invoked so existing callers keep working unchanged.)
+ *
+ * orkDialogTrap(element, { onEscape, initialFocus }) -> release()
+ *   Escape + Tab wrapping + focus restore for an ALREADY-RENDERED overlay.
+ *   release() is idempotent and restores focus to whatever was focused on open.
+ *
+ * Styles are injected from here rather than a stylesheet on purpose: the helper
+ * has to work on any page that loads orkui.js, including ones that link no
+ * page-level CSS of their own.
+ * ========================================================================== */
+(function (w, d) {
+    if (w.orkConfirm) { return; }
+
+    var FOCUSABLE = 'a[href],area[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+    function injectStyles() {
+        if (d.getElementById('ork-dialog-styles')) { return; }
+        var st = d.createElement('style');
+        st.id = 'ork-dialog-styles';
+        st.textContent = [
+            '.ork-dialog-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.45);}',
+            '.ork-dialog{width:100%;max-width:440px;box-sizing:border-box;padding:18px 20px 16px;border-radius:8px;border:1px solid #d8d8d8;background:#fff;color:#222;box-shadow:0 10px 40px rgba(0,0,0,.35);font-size:13px;}',
+            '.ork-dialog-title{background:none;border:none;padding:0;border-radius:0;text-shadow:none;margin:0 0 6px;font-size:18px;font-weight:700;color:#222;}',
+            '.ork-dialog-body{font-size:13px;line-height:1.45;color:#555;white-space:pre-line;}',
+            '.ork-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}',
+            '.ork-dialog-btn{cursor:pointer;font-size:13px;font-weight:600;padding:7px 16px;border-radius:4px;border:1px solid #d8d8d8;background:transparent;color:#222;min-height:36px;}',
+            '.ork-dialog-btn:hover{border-color:#2c5f8b;}',
+            '.ork-dialog-ok{background:#2c5f8b;border-color:#2c5f8b;color:#fff;}',
+            '.ork-dialog-ok.ork-dialog-danger{background:#c53030;border-color:#c53030;}',
+            '@media (max-width:1250px){.ork-dialog-btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center;}}',
+            'html[data-theme="dark"] .ork-dialog{background:#23262d;color:#e6e6e6;border-color:#3a3f47;}',
+            'html[data-theme="dark"] .ork-dialog-title{background:none;border:none;padding:0;border-radius:0;text-shadow:none;color:#e6e6e6;}',
+            'html[data-theme="dark"] .ork-dialog-body{color:#c3c8cf;}',
+            'html[data-theme="dark"] .ork-dialog-btn{color:#e6e6e6;border-color:#3a3f47;}',
+            'html[data-theme="dark"] .ork-dialog-ok{background:#2c5f8b;border-color:#2c5f8b;color:#fff;}',
+            'html[data-theme="dark"] .ork-dialog-ok.ork-dialog-danger{background:#c53030;border-color:#c53030;}'
+        ].join('\n');
+        (d.head || d.documentElement).appendChild(st);
+    }
+
+    // Visible, focusable descendants of el, in document order.
+    function focusables(el) {
+        var out = [];
+        var list = el.querySelectorAll(FOCUSABLE);
+        for (var i = 0; i < list.length; i++) {
+            var n = list[i];
+            if (n.offsetParent !== null || n === d.activeElement) { out.push(n); }
+        }
+        return out;
+    }
+
+    // Stack of live traps, innermost last. Every trap listens on document in the
+    // capture phase, so without this a single Escape on a stacked dialog (an
+    // orkConfirm opened over an already-trapped modal) fired BOTH onEscape
+    // handlers and closed both. Tab only worked by accident, because the inner
+    // trap registered last. Only the topmost trap may act on a key.
+    var trapStack = [];
+
+    // Escape + Tab wrapping + focus restore for an already-rendered overlay.
+    function orkDialogTrap(el, opts) {
+        opts = opts || {};
+        var prev = d.activeElement;
+        var released = false;
+        var self = {};
+        trapStack.push(self);
+
+        function onKey(e) {
+            if (trapStack[trapStack.length - 1] !== self) { return; }
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                if (typeof opts.onEscape === 'function') { e.preventDefault(); opts.onEscape(); }
+                return;
+            }
+            if (e.key !== 'Tab') { return; }
+            var f = focusables(el);
+            if (!f.length) { e.preventDefault(); return; }
+            var first = f[0], last = f[f.length - 1];
+            // Tab out of the overlay in either direction wraps back into it —
+            // without this, Tab past the last control walks the page behind.
+            if (!el.contains(d.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); return; }
+            if (e.shiftKey && d.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && d.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+
+        d.addEventListener('keydown', onKey, true);
+        setTimeout(function () {
+            if (released) { return; }
+            var target = opts.initialFocus || focusables(el)[0];
+            if (target && typeof target.focus === 'function') { target.focus(); }
+        }, 30);
+
+        return function release() {
+            if (released) { return; }
+            released = true;
+            var ix = trapStack.indexOf(self);
+            if (ix >= 0) { trapStack.splice(ix, 1); }
+            d.removeEventListener('keydown', onKey, true);
+            if (prev && typeof prev.focus === 'function' && d.contains(prev)) { prev.focus(); }
+        };
+    }
+
+    function esc(s) {
+        var n = d.createElement('div');
+        n.textContent = (s == null) ? '' : String(s);
+        return n.innerHTML;
+    }
+
+    function build(opts, withCancel) {
+        opts = (typeof opts === 'string') ? { body: opts } : (opts || {});
+        injectStyles();
+        var ov = d.createElement('div');
+        ov.className = 'ork-dialog-overlay';
+        ov.setAttribute('role', 'dialog');
+        ov.setAttribute('aria-modal', 'true');
+        var titleId = 'ork-dialog-title-' + Math.random().toString(36).slice(2, 9);
+        ov.setAttribute('aria-labelledby', titleId);
+        ov.innerHTML =
+            '<div class="ork-dialog">' +
+              '<h2 class="ork-dialog-title" id="' + titleId + '">' + esc(opts.title || (withCancel ? 'Confirm' : 'Notice')) + '</h2>' +
+              '<div class="ork-dialog-body">' + esc(opts.body || '') + '</div>' +
+              '<div class="ork-dialog-actions">' +
+                (withCancel ? '<button type="button" class="ork-dialog-btn" data-ork-cancel>' + esc(opts.cancelLabel || 'Cancel') + '</button>' : '') +
+                '<button type="button" class="ork-dialog-btn ork-dialog-ok' + (opts.danger ? ' ork-dialog-danger' : '') + '" data-ork-ok>' + esc(opts.confirmLabel || 'OK') + '</button>' +
+              '</div>' +
+            '</div>';
+
+        return new Promise(function (resolve) {
+            var release = null;
+            var done = false;
+            function finish(result) {
+                if (done) { return; }
+                done = true;
+                if (release) { release(); }
+                ov.remove();
+                if (result && typeof opts.onConfirm === 'function') { opts.onConfirm(); }
+                if (!result && typeof opts.onCancel === 'function') { opts.onCancel(); }
+                resolve(result);
+            }
+            ov.addEventListener('click', function (e) {
+                if (e.target === ov || (e.target.closest && e.target.closest('[data-ork-cancel]'))) { finish(false); return; }
+                if (e.target.closest && e.target.closest('[data-ork-ok]')) { finish(true); }
+            });
+            d.body.appendChild(ov);
+            release = orkDialogTrap(ov, {
+                onEscape: function () { finish(false); },
+                initialFocus: ov.querySelector('[data-ork-ok]')
+            });
+        });
+    }
+
+    w.orkDialogTrap = orkDialogTrap;
+    w.orkConfirm = function (opts) { return build(opts, true); };
+    w.orkAlert = function (opts) { return build(opts, false).then(function () {}); };
+})(window, document);
