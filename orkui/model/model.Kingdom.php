@@ -152,6 +152,11 @@ class Model_Kingdom extends Model
         return $r['KingdomInfo']['KingdomName'];
     }
 
+    public function get_kingdom_info($kingdom_id)
+    {
+        return $this->Kingdom->GetKingdomShortInfo(array('KingdomId' => $kingdom_id));
+    }
+
     public function get_kingdom_shortinfo($kingdom_id)
     {
         return array(
