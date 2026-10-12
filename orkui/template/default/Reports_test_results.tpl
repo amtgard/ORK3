@@ -78,22 +78,22 @@ html[data-theme="dark"] .rp-expired-row td a {
 .rp-history-child { padding: 10px 8px; }
 .rp-rev-empty { color: #718096; font-size: 0.86rem; padding: 6px 2px; }
 .rp-history-list { display: flex; flex-direction: column; gap: 8px; }
-.rp-history-row { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.rp-history-row { border: 1px solid var(--ork-border); border-radius: 8px; overflow: hidden; }
 .rp-history-row.pass { border-left: 3px solid #48bb78; }
 .rp-history-row.fail { border-left: 3px solid #f56565; }
 .rp-attempt-toggle {
 	display: flex; align-items: center; gap: 14px; width: 100%;
-	padding: 9px 13px; background: #fff; border: 0; cursor: pointer;
+	padding: 9px 13px; background: var(--ork-bg-inset); border: 0; cursor: pointer;
 	font: inherit; text-align: left;
 }
-.rp-attempt-toggle:hover { background: #f7fafc; }
+.rp-attempt-toggle:hover { background: var(--ork-card-bg); }
 .rp-att-badge { font-weight: 700; font-size: 0.85rem; }
 .rp-history-row.pass .rp-att-badge { color: #276749; }
 .rp-history-row.fail .rp-att-badge { color: #9b2c2c; }
 .rp-att-score { font-weight: 600; color: #2d3748; }
 .rp-att-when { margin-left: auto; font-size: 0.8rem; color: #718096; }
-.rp-attempt-detail { padding: 8px 13px 12px; background: #fafbfc; border-top: 1px solid #edf2f7; }
-.rp-rev-q { border: 1px solid #e2e8f0; border-radius: 7px; padding: 9px 11px; margin-bottom: 8px; background: #fff; }
+.rp-attempt-detail { padding: 8px 13px 12px; background: var(--ork-bg-inset); border-top: 1px solid var(--ork-divider); }
+.rp-rev-q { border: 1px solid var(--ork-border); border-radius: 7px; padding: 9px 11px; margin-bottom: 8px; background: var(--ork-card-bg); }
 .rp-rev-q.ok  .rp-rev-qh { color: #276749; }
 .rp-rev-q.bad .rp-rev-qh { color: #9b2c2c; }
 .rp-rev-qh { font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
@@ -127,7 +127,7 @@ html[data-theme="dark"] .rp-rev-q.bad .rp-rev-qh { color: #fc8181; }
 /* Pass/Fail filter pills */
 .rp-filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .rp-filter-label { font-size: 0.82rem; font-weight: 600; color: #718096; }
-.rp-filter-pill { padding: 5px 14px; font-size: 0.84rem; font-weight: 600; color: #4a5568; background: #fff; border: 1px solid #cbd5e0; border-radius: 999px; cursor: pointer; }
+.rp-filter-pill { padding: 5px 14px; font-size: 0.84rem; font-weight: 600; color: #4a5568; background: var(--ork-card-bg); border: 1px solid #cbd5e0; border-radius: 999px; cursor: pointer; }
 .rp-filter-pill:hover { background: #f7fafc; }
 .rp-filter-pill.rp-filter-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
 html[data-theme="dark"] .rp-filter-label { color: var(--ork-text-muted, #a0aec0); }
@@ -153,10 +153,10 @@ html[data-theme="dark"] .rp-filter-pill.rp-filter-active { background: #2b6cb0; 
 
 <?php if (!empty($Error)): ?>
 <div class="rp-root">
-	<div style="max-width:560px;margin:60px auto;padding:32px 28px;text-align:center;background:#fff;border:1px solid #e2e8f0;border-radius:10px;">
+	<div style="max-width:560px;margin:60px auto;padding:32px 28px;text-align:center;background:var(--ork-card-bg);border:1px solid var(--ork-border);border-radius:10px;box-shadow:var(--ork-shadow-card);">
 		<i class="fas fa-lock" style="font-size:2.4rem;color:#a0aec0;margin-bottom:14px;"></i>
-		<h1 style="font-size:1.3rem;color:#2d3748;margin:0 0 8px;"><?= htmlspecialchars($page_title ?? 'Access Denied') ?></h1>
-		<p style="color:#718096;margin:0;"><?= htmlspecialchars($Error) ?></p>
+		<h1 style="font-size:1.3rem;color:var(--ork-text);margin:0 0 8px;background:none;border:0;padding:0;text-shadow:none;"><?= htmlspecialchars($page_title ?? 'Access Denied') ?></h1>
+		<p style="color:var(--ork-text-muted);margin:0;"><?= htmlspecialchars($Error) ?></p>
 	</div>
 </div>
 <?php else: ?>

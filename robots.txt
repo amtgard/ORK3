@@ -1,6 +1,16 @@
 User-agent: *
 Disallow: /orkui/index.php?Route=Reports/
 Disallow: /orkui/index.php?Route=Admin/
+# The header's Login link carries the current page as ?return=, so every public
+# page has a crawlable twin that renders only the login form. Crawlers were
+# fetching ~5,900 of these a day -- second only to player profiles -- for a 52KB
+# page with nothing to index. The link itself is also rel="nofollow" now
+# (default.theme); this catches anything that already knows the URLs.
+#
+# Scoped to "&return=" ON PURPOSE. The bare login page, Login/login,
+# Login/forgotpassword and Login/login_oauth must stay crawlable -- people search
+# for "amtgard ork login" and should find it. Only the per-page twins are blocked.
+Disallow: /orkui/index.php?Route=Login&return=
 
 # Allow public community pages
 Allow: /orkui/index.php?Route=Park/

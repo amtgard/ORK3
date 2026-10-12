@@ -69,19 +69,19 @@ html[data-theme="dark"] .at-header-title,
 html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
 	background:transparent; border:none; color:#e2e8f0; text-shadow:none;
 }
-.at-header-sub { font-size:13px; color:#718096; margin-top:1px; }
+.at-header-sub { font-size:13px; color:var(--ork-text-on-ground); margin-top:1px; }
 
 /* ── Stats bar ── */
 .at-stats-bar {
 	display:flex; gap:0;
-	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px;
 	overflow:hidden; margin-bottom:4px;
 }
 .at-stat {
 	flex:1; display:flex; flex-direction:column;
 	align-items:center; justify-content:center;
 	padding:10px 12px; gap:2px;
-	border-right:1px solid #e2e8f0;
+	border-right:1px solid var(--ork-divider);
 }
 .at-stat:last-child { border-right:none; }
 .at-stat-value { font-size:22px; font-weight:700; color:#2d3748; line-height:1; }
@@ -90,7 +90,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
 /* ── Controls bar ── */
 .at-controls {
 	display:flex; align-items:center; gap:16px;
-	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px;
 	padding:10px 16px;
 }
 .at-toggle-wrap {
@@ -119,7 +119,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
 }
 .at-map-loading {
 	display:flex; align-items:center; justify-content:center;
-	gap:10px; padding:60px 0; color:#718096; font-size:14px;
+	gap:10px; padding:60px 0; color:var(--ork-text-on-ground); font-size:14px;
 }
 .at-map-layout {
 	display:flex; gap:14px; align-items:flex-start;
@@ -129,13 +129,13 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
 }
 #at-map {
 	width:100%; height:72vh; min-height:400px;
-	border-radius:8px; border:1px solid #e2e8f0;
+	border-radius:8px; border:1px solid var(--ork-border);
 }
 .at-sidebar-wrap {
 	width:270px; flex-shrink:0;
 }
 .at-sidebar-card {
-	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px;
 	height:72vh; min-height:400px;
 	overflow-y:auto; box-sizing:border-box;
 	display:flex; flex-direction:column;
@@ -212,7 +212,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
 .at-park-section-text em { font-style:italic; }
 .at-park-section-text a { color:#2b6cb0; }
 .at-park-divider {
-	border:none; border-top:1px solid #e2e8f0; margin:0;
+	border:none; border-top:1px solid var(--ork-divider); margin:0;
 }
 .at-park-profile-btn {
 	display:block; text-align:center;
@@ -225,7 +225,7 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
 
 /* ── Empty ── */
 .at-empty {
-	text-align:center; color:#a0aec0; font-style:italic;
+	text-align:center; color:var(--ork-text-on-ground); font-style:italic;
 	padding:40px 0; font-size:14px;
 }
 

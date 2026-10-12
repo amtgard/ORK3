@@ -57,8 +57,8 @@ html[data-theme="dark"] .info-container > div[style*="background:#ebf8ff"] { bac
 </div>
 
 <div id="uc-legacy-confirm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
-	<div style="background:#fff;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.18);width:400px;max-width:calc(100vw - 40px);overflow:hidden;">
-		<div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;">
+	<div style="background:var(--ork-card-bg);border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.18);width:400px;max-width:calc(100vw - 40px);overflow:hidden;">
+		<div style="padding:16px 20px;border-bottom:1px solid var(--ork-divider);display:flex;align-items:center;gap:8px;">
 			<i class="fas fa-shield-alt" style="color:#3182ce;"></i>
 			<strong style="font-size:15px;">Confirm Creation</strong>
 		</div>
@@ -66,8 +66,8 @@ html[data-theme="dark"] .info-container > div[style*="background:#ebf8ff"] { bac
 			<p style="margin:0 0 8px;font-size:14px;">You are about to create a new <strong id="uc-legacy-confirm-type"></strong> named <strong id="uc-legacy-confirm-name"></strong>.</p>
 			<p style="margin:0;font-size:13px;color:#718096;">You will become its manager. Other players must be added by a manager — they cannot join on their own.</p>
 		</div>
-		<div style="padding:12px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;">
-			<button type="button" id="uc-legacy-confirm-back" style="padding:7px 16px;border:1px solid #e2e8f0;border-radius:6px;background:#f7fafc;cursor:pointer;font-size:13px;">Go Back</button>
+		<div style="padding:12px 20px;border-top:1px solid var(--ork-divider);display:flex;justify-content:flex-end;gap:8px;">
+			<button type="button" id="uc-legacy-confirm-back" style="padding:7px 16px;border:1px solid var(--ork-input-border);border-radius:6px;background:#f7fafc;cursor:pointer;font-size:13px;">Go Back</button>
 			<button type="button" id="uc-legacy-confirm-yes" style="padding:7px 16px;border:none;border-radius:6px;background:#3182ce;color:#fff;cursor:pointer;font-size:13px;font-weight:600;"><i class="fas fa-check"></i> Yes, Create It</button>
 		</div>
 	</div>

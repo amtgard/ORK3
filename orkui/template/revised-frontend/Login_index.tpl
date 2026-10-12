@@ -24,7 +24,7 @@
 /* Left panel — form */
 .lg-form-panel {
 	flex: 0 0 380px;
-	background: #fff;
+	background: var(--ork-card-bg);
 	padding: 44px 40px 36px;
 	display: flex;
 	flex-direction: column;
@@ -79,11 +79,11 @@
 .lg-input {
 	width: 100%;
 	padding: 10px 12px;
-	border: 1px solid #cbd5e0;
+	border: 1px solid var(--ork-input-border);
 	border-radius: 6px;
 	font-size: 14px;
 	color: #2d3748;
-	background: var(--ork-surface-light);
+	background: var(--ork-input-bg);
 	transition: border-color 0.15s, box-shadow 0.15s;
 	box-sizing: border-box;
 }
@@ -91,7 +91,7 @@
 	outline: none;
 	border-color: #4299e1;
 	box-shadow: 0 0 0 3px rgba(66,153,225,0.15);
-	background: #fff;
+	background: var(--ork-card-bg);
 }
 .lg-btn-primary {
 	width: 100%;
@@ -125,7 +125,7 @@
 	content: '';
 	flex: 1;
 	height: 1px;
-	background: var(--ork-border);
+	background: var(--ork-divider);
 }
 .lg-btn-oauth {
 	width: 100%;

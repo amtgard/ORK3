@@ -79,17 +79,20 @@ $_fmt = function ($n) {
 <style>
 .recap-root { max-width: 900px; margin: 1.5em auto 3em; padding: 0 1em;
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-	color: #222; line-height: 1.5; }
+	color: #222; line-height: 1.5;
+	/* White paper surface on the gray page ground (editorial document look) */
+	background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 12px;
+	box-shadow: var(--ork-shadow-card); padding-inline: 1.5em; padding-bottom: 1.5em; }
 .recap-root h1, .recap-root h2 { background: transparent; border: none;
 	text-shadow: none; padding: 0; border-radius: 0; }
 .recap-hero { text-align: center; padding: 1.5em 0 1.8em; margin-bottom: 1.5em;
 	border-bottom: 2px solid #f0e5d0; }
-.recap-hero-eyebrow { color: #c89b3f; font-size: 0.78em; letter-spacing: 0.22em;
+.recap-hero-eyebrow { color: #7a5d1c; font-size: 0.78em; letter-spacing: 0.22em;
 	text-transform: uppercase; font-weight: 700; margin-bottom: 0.4em; }
 .recap-hero-eyebrow .fas { margin-right: 0.4em; }
 .recap-hero h1 { font-size: 1.65em; margin: 0; font-weight: 600; color: #2a2a2a; }
-.recap-hero-sub { color: #999; font-size: 0.82em; margin-top: 0.7em; font-style: italic; }
-.recap-section { background: #fafaf7; border: 1px solid #ececec;
+.recap-hero-sub { color: var(--ork-text-on-ground); font-size: 0.82em; margin-top: 0.7em; font-style: italic; }
+.recap-section { background: var(--ork-bg-inset); border: 1px solid var(--ork-border);
 	border-radius: 10px; padding: 1.1em 1.4em 1em; margin-bottom: 1em; }
 .recap-section h2 { font-size: 1.08em; margin: 0 0 0.6em 0; color: #2a2a2a;
 	font-weight: 600; display: flex; align-items: center; gap: 0.55em; }
@@ -110,11 +113,18 @@ $_fmt = function ($n) {
 .trends-table th, .trends-table td { text-align: right; padding: 3px 8px; border-bottom: 1px solid #eee9dc; }
 .trends-table th:first-child, .trends-table td:first-child { text-align: left; }
 .trends-table th { color: #888; font-weight: 600; }
-.recap-foot { text-align: center; color: #aaa; font-size: 0.8em; margin-top: 1.5em; }
+.recap-foot { text-align: center; color: var(--ork-text-on-ground); font-size: 0.8em; margin-top: 1.5em; }
 .recap-foot a { color: #1a4c8c; text-decoration: none; }
 .recap-foot a:hover { text-decoration: underline; }
 
 html[data-theme="dark"] .recap-root { color: #cbd5e0; }
+html[data-theme="dark"] .recap-root h1, html[data-theme="dark"] .recap-root h2 { background: transparent; border: none; }
+/* Dark keeps its original layout: no paper surface, sections sit on the page */
+html[data-theme="dark"] .recap-root { background: transparent; border-color: transparent; box-shadow: none;
+	padding-inline: 1em; padding-bottom: 0; }
+html[data-theme="dark"] .recap-hero-eyebrow { color: #c89b3f; }
+html[data-theme="dark"] .recap-hero-sub,
+html[data-theme="dark"] .recap-foot { color: #999; }
 html[data-theme="dark"] .recap-hero { border-bottom-color: #3a3325; }
 html[data-theme="dark"] .recap-hero h1 { color: #e2e8f0; }
 html[data-theme="dark"] .recap-section { background: #1e2533; border-color: #2d3748; }
@@ -179,6 +189,39 @@ html[data-theme="dark"] .trends-table th, html[data-theme="dark"] .trends-table 
 <?php endforeach; ?>
 		</table>
 <?php endif; ?>
+
+<?php
+	$_auC = (isset($api_usage['Clients'])   && is_array($api_usage['Clients']))   ? $api_usage['Clients']   : array();
+	$_auE = (isset($api_usage['Endpoints']) && is_array($api_usage['Endpoints'])) ? $api_usage['Endpoints'] : array();
+?>
+<?php if ($_auC !== array()) : ?>
+		<h3 class="trends-subhead">Who calls the web service, last 7 days</h3>
+		<p class="recap-digest recap-muted">
+			Sessions above count logins. A client that signs in once and then works
+			for a month only appears here. Counts only, never who.
+		</p>
+		<table class="trends-table"><tr><th>Client</th><th>Calls</th><th>Endpoints</th><th>Total s</th></tr>
+<?php foreach ($_auC as $_row) : ?>
+			<tr><td><?=htmlspecialchars($_row['Client'])?></td><td><?=number_format($_row['Calls'])?></td><td><?=number_format($_row['Endpoints'])?></td><td><?=number_format($_row['TotalMs'] / 1000, 2)?></td></tr>
+<?php endforeach; ?>
+		</table>
+<?php endif; ?>
+
+<?php if ($_auE !== array()) : ?>
+		<h3 class="trends-subhead">Where the time goes, last 7 days</h3>
+		<p class="recap-digest recap-muted">
+			The ten costliest endpoints, ranked by total server time rather than by
+			how often they are called — a fast endpoint called constantly and a slow
+			one called rarely look alike in a bare tally and are very different
+			problems.
+		</p>
+		<table class="trends-table"><tr><th>Endpoint</th><th>Calls</th><th>Avg ms</th><th>Total s</th></tr>
+<?php foreach ($_auE as $_row) : ?>
+			<tr><td><?=htmlspecialchars($_row['Endpoint'])?></td><td><?=number_format($_row['Calls'])?></td><td><?=number_format($_row['AvgMs'], 1)?></td><td><?=number_format($_row['TotalMs'] / 1000, 2)?></td></tr>
+<?php endforeach; ?>
+		</table>
+<?php endif; ?>
+
 	</section>
 <?php endif; ?>
 
