@@ -105,6 +105,65 @@ final class EventRsvpFixture
         ];
     }
 
+    /**
+     * An occurrence that has already started but has not ended yet -- the case
+     * the My Amtgard RSVP list has to keep showing so a player can reach the
+     * event they are standing at.
+     *
+     * @return array{mundane_id: int, detail_id: int, event_id: int, token: string}
+     */
+    public function createInProgressOccurrence(string $suffix = 'inprogress'): array
+    {
+        return $this->createOccurrenceAt(
+            $suffix,
+            date('Y-m-d H:i:s', strtotime('-2 hours')),
+            date('Y-m-d H:i:s', strtotime('+6 hours')),
+        );
+    }
+
+    /**
+     * A multi-day occurrence whose stored end lands on midnight of its final day
+     * -- still running today as far as the players attending it are concerned.
+     *
+     * @return array{mundane_id: int, detail_id: int, event_id: int, token: string}
+     */
+    public function createMidnightEndTodayOccurrence(string $suffix = 'midnightend'): array
+    {
+        return $this->createOccurrenceAt(
+            $suffix,
+            date('Y-m-d H:i:s', strtotime('-2 days')),
+            date('Y-m-d') . ' 00:00:00',
+        );
+    }
+
+    /**
+     * An occurrence with a zero event_end, as legacy rows carry: the start date
+     * is all we can go on.
+     *
+     * @return array{mundane_id: int, detail_id: int, event_id: int, token: string}
+     */
+    public function createZeroEndOccurrence(string $start, string $suffix = 'zeroend'): array
+    {
+        return $this->createOccurrenceAt($suffix, $start, '0000-00-00 00:00:00');
+    }
+
+    /**
+     * @return array{mundane_id: int, detail_id: int, event_id: int, token: string}
+     */
+    public function createOccurrenceAt(string $suffix, string $start, string $end): array
+    {
+        $mundaneId = $this->insertMundane($suffix);
+        $eventId = $this->insertEvent(1, 1, $mundaneId, $suffix);
+        $detailId = $this->insertDetail($eventId, $start, $end);
+
+        return [
+            'mundane_id' => $mundaneId,
+            'detail_id' => $detailId,
+            'event_id' => $eventId,
+            'token' => $this->mundaneTokens[$mundaneId] ?? '',
+        ];
+    }
+
     public function insertSecondPlayer(int $parkId, int $kingdomId, string $suffix = 'player2'): int
     {
         return $this->insertMundane($suffix, $parkId, $kingdomId);
@@ -209,6 +268,8 @@ final class EventRsvpFixture
                 'DELETE FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ?'
             );
             $stmt->execute([$mundaneId]);
+            $stmt = $this->pdo->prepare('DELETE FROM ' . DB_PREFIX . 'session WHERE mundane_id = ?');
+            $stmt->execute([$mundaneId]);
             $stmt = $this->pdo->prepare('DELETE FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ?');
             $stmt->execute([$mundaneId]);
         }
@@ -292,6 +353,7 @@ final class EventRsvpFixture
         $id = (int) $this->pdo->lastInsertId();
         $this->mundaneIds[] = $id;
         $this->mundaneTokens[$id] = $token;
+        $this->seedSession($id, $token);
 
         return $id;
     }
@@ -344,5 +406,20 @@ final class EventRsvpFixture
         $this->detailIds[] = $id;
 
         return $id;
+    }
+
+    /**
+     * Multi-device sessions (ork_session) are the authoritative token store;
+     * seed a session row for fixture tokens (mirrors the migration backfill).
+     */
+    private function seedSession(int $mundaneId, string $token): void
+    {
+        if ($token === '') {
+            return;
+        }
+        $this->pdo->prepare(
+            'INSERT IGNORE INTO ' . DB_PREFIX . 'session (mundane_id, token, created, last_seen, expires)
+             VALUES (?, ?, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 72 HOUR))'
+        )->execute([$mundaneId, $token]);
     }
 }

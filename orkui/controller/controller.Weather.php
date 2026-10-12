@@ -23,12 +23,14 @@ class Controller_Weather extends Controller
         $this->data['no_index'] = true;
     }
 
+    // PUBLIC (opened 2026-08-23, Ken's call): weather is a decide-before-you-
+    // drive utility. Every read below hits only the cron-warmed
+    // ork_park_weather cache / ghettocache — no Open-Meteo call is reachable
+    // from a page view, so anonymous/bot traffic can't inflate API usage.
+    // The token-gated fetch-capable endpoints (GetForecastForPark,
+    // GetArchiveForPark) remain gated for app use.
     public function index($action = null)
     {
-        if (!isset($this->session->user_id)) {
-            header('Location: ' . UIR . 'Login/login/Weather');
-            exit;
-        }
         $this->template = '../revised-frontend/Weather_index.tpl';
         $this->data['page_title'] = 'Weather Forecast';
         $today = EraPhoenice::todayDateString();
@@ -38,6 +40,28 @@ class Controller_Weather extends Controller
         $this->data['PlayToday']       = $this->Weather->play_for_date($today, $token);
         $this->data['UpcomingEvents']  = $this->Weather->upcoming_events_with_forecast(7, $token);
         $this->data['FreshnessPhrase'] = $this->Weather->freshness_phrase($token);
+
+        // Link-preview card from the same rundown the page shows: how many
+        // parks play today and whether weather is a factor anywhere.
+        $_ogR = is_array($this->data['Rundown']) ? $this->data['Rundown'] : array();
+        $_ogParks = (int)($_ogR['total_parks'] ?? 0);
+        $_ogBadges = is_array($_ogR['badge_counts'] ?? null) ? $_ogR['badge_counts'] : array();
+        arsort($_ogBadges);
+        $_ogWarn = array();
+        foreach (array_slice($_ogBadges, 0, 2, true) as $_ogLabel => $_ogN) {
+            if ((int)$_ogN > 0) {
+                $_ogWarn[] = $_ogN . ' park' . ((int)$_ogN === 1 ? '' : 's') . ' under ' . strtolower($_ogLabel);
+            }
+        }
+        $_ogDesc = !empty($_ogR['no_play_today']) || $_ogParks === 0
+            ? 'Forecasts for every Amtgard park and event — no scheduled park play today.'
+            : 'Forecasts where Amtgard plays today: ' . $_ogParks . ' park' . ($_ogParks === 1 ? '' : 's') . ' on the calendar'
+                . ($_ogWarn !== array() ? ' — ' . implode(', ', $_ogWarn) : ', all looking clear') . '.';
+        $this->data['og'] = array(
+            'title'       => 'Amtgard Weather',
+            'url'         => UIR . 'Weather',
+            'description' => $_ogDesc,
+        );
         // 7-day strip of pills (today + next 6 days), anchored to clock-pinned today.
         $strip = array();
         $todayTs = strtotime($today . ' 12:00:00');
@@ -65,10 +89,6 @@ class Controller_Weather extends Controller
     public function day($p = null)
     {
         header('Content-Type: application/json');
-        if (!isset($this->session->user_id)) {
-            echo json_encode(array('status' => 5, 'error' => 'Not logged in'));
-            exit;
-        }
         $date = trim($p ?? '');
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             echo json_encode(array('status' => 1, 'error' => 'Invalid date'));
