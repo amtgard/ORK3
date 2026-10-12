@@ -21,6 +21,33 @@ class Controller_Search extends Controller
 
     }
 
+    public function advanced($id = null)
+    {
+        $this->template = 'Search_advanced.tpl';
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        // Officer = any create/edit/admin grant anywhere; gates the Banned filter + Real Name column.
+        $isAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, null, null);
+        $isOfficer = $isAdmin;
+        if (!$isOfficer && $_uid > 0) {
+            $grants = Ork3::$Lib->authorization->GetAuthorizations_h($_uid);
+            if (is_array($grants)) {
+                foreach ($grants as $g) {
+                    if (in_array(strtolower($g['Role'] ?? ''), array('create', 'edit', 'admin'), true)) {
+                        $isOfficer = true;
+                        break;
+                    }
+                }
+            }
+        }
+        $this->data['CanSeeRealName'] = $isOfficer ? 1 : 0;
+        $this->data['CanSeeBanned']   = $isOfficer ? 1 : 0;
+        $this->data['IsLoggedIn']     = $_uid > 0 ? 1 : 0;
+        // Prefill from the inline component's "Advanced Search" hand-off (term + scope).
+        $this->data['PrefillQ']         = isset($this->request->q) ? trim((string)$this->request->q) : '';
+        $this->data['PrefillKingdomId'] = isset($this->request->kingdomId) ? (int)$this->request->kingdomId : 0;
+        $this->data['PrefillParkId']    = isset($this->request->parkId) ? (int)$this->request->parkId : 0;
+    }
+
     public function park($id = null)
     {
         $this->template = 'Search_index.tpl';

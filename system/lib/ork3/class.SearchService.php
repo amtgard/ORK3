@@ -66,7 +66,7 @@ class SearchService extends Ork3
 						left join " . DB_PREFIX . "park p on p.park_id = e.park_id
 						left join " . DB_PREFIX . "mundane m on m.mundane_id = e.mundane_id
 						left join " . DB_PREFIX . "event_calendardetail cd on e.event_id = cd.event_id
-					where e.name like '%" . mysql_real_escape_string($name) . "%' and date(cd.event_start) <= date('" . mysql_real_escape_string($date) . "') and date(cd.event_end) >= date('" . mysql_real_escape_string($date) . "') limit 4)
+					where e.name like '%" . $this->likeEscape($name) . "%' and date(cd.event_start) <= date('" . $this->likeEscape($date) . "') and date(cd.event_end) >= date('" . $this->likeEscape($date) . "') limit 4)
 				union
 				(select 
 						k.name as kingdom_name, k.kingdom_id, 
@@ -74,7 +74,7 @@ class SearchService extends Ork3
 						'' as event_name, 0 as event_id,
 						0 as event_calendardetail_id
 					from " . DB_PREFIX . "kingdom k
-					where k.name like '%" . mysql_real_escape_string($name) . "%' limit 4)
+					where k.name like '%" . $this->likeEscape($name) . "%' limit 4)
 				union
 				(select 
 						k.name as kingdom_name, p.kingdom_id, 
@@ -83,7 +83,7 @@ class SearchService extends Ork3
 						0 as event_calendardetail_id
 					from " . DB_PREFIX . "park p
 						left join " . DB_PREFIX . "kingdom k on p.kingdom_id = k.kingdom_id
-					where p.name like '%" . mysql_real_escape_string($name) . "%' limit 4)
+					where p.name like '%" . $this->likeEscape($name) . "%' limit 4)
 				";
         $d = $this->db->query($sql);
         if ($d !== false && $d->size()) {
@@ -195,7 +195,7 @@ class SearchService extends Ork3
 				where ";
 
 
-        $sql .= " e.name like '%" . mysql_real_escape_string($name) . "%' ";
+        $sql .= " e.name like '%" . $this->likeEscape($name) . "%' ";
         $sql .= " and e.kingdom_id != 15 and (p.kingdom_id is null or p.kingdom_id != 15) ";
         // Filter out draft events by default. Admin callers may opt in via $include_drafts=true.
         if (!$include_drafts) {
@@ -394,7 +394,7 @@ class SearchService extends Ork3
             case 'PERSONA':
                 if (count($searchtokens) > 0) {
                     $s = implode(' or ', array_map(function ($t) {
-                        return "`persona` like '%" . mysql_real_escape_string($t) . "%'";
+                        return "`persona` like '%" . $this->likeEscape($t) . "%'";
                     }, $searchtokens));
                 }
                 $order = "order by m.active DESC, persona,surname,given_name";
@@ -403,7 +403,7 @@ class SearchService extends Ork3
             case 'MUNDANE':
                 if (count($searchtokens) > 0) {
                     $s = implode(' or ', array_map(function ($t) use ($_rg_open, $_rg_close) {
-                        return $_rg_open . "`given_name` like '%" . mysql_real_escape_string($t) . "%' or `surname` like '%" . mysql_real_escape_string($t) . "%'" . $_rg_close;
+                        return $_rg_open . "`given_name` like '%" . $this->likeEscape($t) . "%' or `surname` like '%" . $this->likeEscape($t) . "%'" . $_rg_close;
                     }, $searchtokens));
                 }
                 $order = "order by m.active DESC, surname,given_name";
@@ -412,7 +412,7 @@ class SearchService extends Ork3
             case 'USER':
                 if (count($searchtokens) > 0) {
                     $s = implode(' or ', array_map(function ($t) {
-                        return "`username` like '%" . mysql_real_escape_string($t) . "%'";
+                        return "`username` like '%" . $this->likeEscape($t) . "%'";
                     }, $searchtokens));
                 }
                 $order = "order by m.active DESC, username,surname,given_name";
@@ -424,20 +424,20 @@ class SearchService extends Ork3
                 // on underscores — so e.g. `lord_kismet_shenchu` is one token and
                 // `kis*` won't prefix-match it. OR with the LIKE clauses so
                 // substring hits succeed even when fulltext misses.
-                $s = "(match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . mysql_real_escape_string($zztop) . "' in boolean mode)
-				or `username` like '%" . mysql_real_escape_string($search) . "%'
-				or `other_name` like '%" . mysql_real_escape_string($search) . "%' or `persona` like '%" . mysql_real_escape_string($search) . "%'
-				or " . $_rg_open . "`given_name` like '%" . mysql_real_escape_string($search) . "%' or `surname` like '%" . mysql_real_escape_string($search) . "%' or concat(`given_name`,' ',`surname`) like '%" . mysql_real_escape_string($search) . "%'" . $_rg_close . ")";
+                $s = "(match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . $this->likeEscape($zztop) . "' in boolean mode)
+				or `username` like '%" . $this->likeEscape($search) . "%'
+				or `other_name` like '%" . $this->likeEscape($search) . "%' or `persona` like '%" . $this->likeEscape($search) . "%'
+				or " . $_rg_open . "`given_name` like '%" . $this->likeEscape($search) . "%' or `surname` like '%" . $this->likeEscape($search) . "%' or concat(`given_name`,' ',`surname`) like '%" . $this->likeEscape($search) . "%'" . $_rg_close . ")";
                 break;
         }
         if ($persona_required === true) {
             $opt[] = "length(`persona`) > 0";
         }
         if (is_numeric($kingdom_id) && $kingdom_id > 0) {
-            $opt[] = "m.kingdom_id =" . mysql_real_escape_string($kingdom_id);
+            $opt[] = "m.kingdom_id =" . (int)$kingdom_id;
         }
         if (is_numeric($park_id) && $park_id > 0) {
-            $opt[] = "m.park_id =" . mysql_real_escape_string($park_id);
+            $opt[] = "m.park_id =" . (int)$park_id;
         }
         if (is_numeric($waivered) && $waivered > 0) {
             $opt[] = "waivered =".($waivered ? 1 : 0);
@@ -502,6 +502,442 @@ class SearchService extends Ork3
         } else {
             return array();
         }
+    }
+
+    private function likeEscape($s)
+    {
+        // Escape backslash FIRST (so the backslashes we add are not re-escaped), then the single
+        // quote and the LIKE wildcards. NOTE: mysql_real_escape_string is a no-op in this codebase
+        // (startup.php) — never rely on it. This is the canonical literal/LIKE escaper.
+        return str_replace(['\\', "'", '%', '_'], ['\\\\', "''", '\\%', '\\_'], (string)$s);
+    }
+
+    private function resolveAbbrevPrefix($q)
+    {
+        $filterKid = 0;
+        $filterPid = 0;
+        $search = $q;
+        if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
+            $kAbbr = $this->likeEscape($m[1]);
+            $this->db->clear();
+            $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
+            if ($rs !== false && $rs->size() > 0) {
+                $rs->Next();
+                $filterKid = (int)$rs->kingdom_id;
+            }
+            if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
+                $pAbbr = $this->likeEscape($m[2]);
+                $this->db->clear();
+                $rs = $this->db->query("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
+                if ($rs !== false && $rs->size() > 0) {
+                    $rs->Next();
+                    $filterPid = (int)$rs->park_id;
+                }
+            }
+            $search = trim($m[3]);
+        }
+        return [$filterKid, $filterPid, $search];
+    }
+
+    /**
+     * The one ranked player search behind every OrkPlayerSearch surface.
+     *
+     * Canonical call: RankedPlayers(array $opts) where $opts may contain:
+     *   q                  (string, required, >=2 chars)
+     *   parkId, kingdomId  (int)    ring centre — results rank park(0)->kingdom(1)->elsewhere(2)
+     *   restrictTo         ('park'|'kingdom') hard-limit active/inactive results to the centre
+     *   restrictKingdomIds (int[])  hard-limit to this set of kingdoms (family/principality)
+     *   excludeKingdomId   (int)    omit members of this kingdom (move-INTO-kingdom context)
+     *   excludeParkId      (int)    omit members of this park    (move-INTO-park context)
+     *   excludeIds         (int[])  omit specific mundane ids    (already-added / opposite merge field)
+     *   limit              (int, default 15, clamped 1..100), offset (int, default 0)  — paging
+     *   token              (string) session token — gates banned visibility + restricted real names
+     *   bannedScope        ('kingdom'|'all') override for how wide banned players are surfaced
+     *
+     * Tiers (always, every surface): 0 active, 1 inactive (last resort), 2 banned. Banned
+     * (suspended OR penalty_box) is shown ONLY to viewers holding CREATE/EDIT authority relevant
+     * to the surface, and is scoped one level wider than the active centre — a park surface
+     * surfaces the kingdom's banned players; a kingdom or unscoped surface surfaces Amtgard-wide.
+     *
+     * Legacy positional signature ($q, $parkId, $kingdomId, $restrictTo, $includeInactive,
+     * $includeSuspended, $limit, $token, $excludeKingdomId, $excludeParkId, $restrictKingdomIds)
+     * is still accepted (SOAP Search/Players + older callers); the include_* flags are ignored
+     * because inactive is now always a tier and banned is auth-gated.
+     */
+    public function RankedPlayers($opts = [], $parkId = null, $kingdomId = null, $restrictTo = null, $includeInactive = null, $includeSuspended = null, $limit = null, $token = null, $excludeKingdomId = null, $excludeParkId = null, $restrictKingdomIds = null)
+    {
+        if (is_array($opts)) {
+            $o = $opts;
+        } else {
+            $o = [
+                'q'                  => $opts,
+                'parkId'             => $parkId,
+                'kingdomId'          => $kingdomId,
+                'restrictTo'         => $restrictTo,
+                'limit'              => $limit,
+                'token'              => $token,
+                'excludeKingdomId'   => $excludeKingdomId,
+                'excludeParkId'      => $excludeParkId,
+                'restrictKingdomIds' => $restrictKingdomIds,
+            ];
+        }
+
+        $q = trim((string)($o['q'] ?? ''));
+        // A pure-numeric query is a direct database-id lookup (paste the id copied from Advanced
+        // Search). Allowed even at length 1 — otherwise require the usual 2-char minimum.
+        $numeric_id = ($q !== '' && ctype_digit($q)) ? (int)$q : 0;
+        if ($numeric_id <= 0 && strlen($q) < 2) {
+            return [];
+        }
+
+        $park_id            = (int)($o['parkId']           ?? 0);
+        $kingdom_id         = (int)($o['kingdomId']        ?? 0);
+        $exclude_kingdom_id = (int)($o['excludeKingdomId'] ?? 0);
+        $exclude_park_id    = (int)($o['excludeParkId']    ?? 0);
+        $restrict_to        = in_array(($o['restrictTo'] ?? ''), ['park', 'kingdom'], true) ? $o['restrictTo'] : '';
+        $limit              = min(max((int)($o['limit'] ?? 15), 1), 100);
+        $offset             = max((int)($o['offset'] ?? 0), 0);
+        $token              = $o['token'] ?? null;
+        $banned_scope_req   = in_array(($o['bannedScope'] ?? ''), ['kingdom', 'all'], true) ? $o['bannedScope'] : '';
+
+        $restrict_kids = [];
+        if (!empty($o['restrictKingdomIds']) && is_array($o['restrictKingdomIds'])) {
+            foreach ($o['restrictKingdomIds'] as $kid) {
+                if ((int)$kid > 0) {
+                    $restrict_kids[] = (int)$kid;
+                }
+            }
+        }
+        $exclude_ids = [];
+        if (!empty($o['excludeIds']) && is_array($o['excludeIds'])) {
+            foreach ($o['excludeIds'] as $mid) {
+                if ((int)$mid > 0) {
+                    $exclude_ids[] = (int)$mid;
+                }
+            }
+        }
+
+        $this->db->clear();
+        list($filterKid, $filterPid, $search) = $this->resolveAbbrevPrefix($q);
+        $term = $this->likeEscape($search);
+
+        // Derive the ring-centre kingdom from the park when only a park id was supplied.
+        if ($park_id > 0 && $kingdom_id <= 0) {
+            $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
+            if ($rs !== false && $rs->size() > 0) {
+                $rs->Next();
+                $kingdom_id = (int)$rs->kingdom_id;
+            }
+        }
+
+        // Authorisation: only viewers with CREATE/EDIT authority relevant to the surface may see
+        // banned players. HasAuthority(..., AUTH_EDIT) is true for create-, edit-, scoped-admin- and
+        // global-admin-holders (and kingdom officers cascade down onto their parks), so it is the
+        // correct "create-or-edit-or-higher" probe.
+        $uid = 0;
+        $is_admin = false;
+        if (!empty($token)) {
+            $uid = (int)Ork3::$Lib->authorization->IsAuthorized($token);
+            if ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null)) {
+                $is_admin = true;
+            }
+        }
+        $can_see_banned = false;
+        if ($is_admin) {
+            $can_see_banned = true;
+        } elseif ($uid > 0) {
+            if ($park_id > 0) {
+                $can_see_banned = (bool)Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_EDIT);
+            } elseif ($kingdom_id > 0) {
+                $can_see_banned = (bool)Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT);
+            } else {
+                $grants = Ork3::$Lib->authorization->GetAuthorizations_h($uid);
+                if (is_array($grants)) {
+                    foreach ($grants as $g) {
+                        if (in_array(strtolower($g['Role'] ?? ''), ['create', 'edit', 'admin'], true)) {
+                            $can_see_banned = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Banned tier is scoped one level wider than the active centre. On a park surface (no hard
+        // restriction) banned is capped to the park kingdom's family; everywhere else, Amtgard-wide.
+        $banned_family_kids = [];
+        if ($can_see_banned) {
+            $widen_to_family = ($banned_scope_req === 'kingdom')
+                || ($banned_scope_req === '' && $park_id > 0 && empty($restrict_kids) && $restrict_to === '' && $filterPid === 0 && $filterKid === 0);
+            if ($widen_to_family && $kingdom_id > 0) {
+                $banned_family_kids = Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id);
+            }
+        }
+
+        $tier = "CASE WHEN (m.suspended = 1 OR m.penalty_box = 1) THEN 2 WHEN m.active = 0 THEN 1 ELSE 0 END";
+        if ($park_id > 0) {
+            $ring = "CASE WHEN m.park_id = {$park_id} THEN 0 WHEN m.kingdom_id = {$kingdom_id} THEN 1 ELSE 2 END";
+        } elseif ($kingdom_id > 0) {
+            $ring = "CASE WHEN m.kingdom_id = {$kingdom_id} THEN 0 ELSE 1 END";
+        } else {
+            $ring = "0";
+        }
+
+        $where = ["LENGTH(m.persona) > 0"];
+        $where[] = "(m.kingdom_id != 15 AND (p.kingdom_id IS NULL OR p.kingdom_id != 15))";
+
+        if ($numeric_id > 0) {
+            // Direct id lookup: match the exact player and ignore proximity/scope restrictions so a
+            // pasted id resolves on any surface. Tier visibility (active/inactive/banned-auth) and the
+            // kingdom-15 archive exclusion below still apply.
+            $where[] = "m.mundane_id = {$numeric_id}";
+        } else {
+            $name_match = $is_admin
+                ? "OR m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'"
+                : "OR (m.restricted = 0 AND (m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'))";
+            $where[] = "(m.persona LIKE '%{$term}%' OR m.username LIKE '%{$term}%' {$name_match})";
+
+            if ($filterPid > 0) {
+                $where[] = "m.park_id = {$filterPid}";
+            } elseif ($filterKid > 0) {
+                $where[] = "m.kingdom_id = {$filterKid}";
+            } elseif (!empty($restrict_kids)) {
+                $where[] = "m.kingdom_id IN (" . implode(',', $restrict_kids) . ")";
+            } elseif ($restrict_to === 'park' && $park_id > 0) {
+                $where[] = "m.park_id = {$park_id}";
+            } elseif ($restrict_to === 'kingdom' && $kingdom_id > 0) {
+                // Kingdom scope ALWAYS includes child principalities (family), matching the documented
+                // playersearch rule — so a "move within kingdom" / kingdom-merge surface still finds
+                // principality members. (Centralised here so callers just pass restrictTo:'kingdom'.)
+                $fam = array_filter(array_map('intval', (array)Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)));
+                $where[] = "m.kingdom_id IN (" . implode(',', $fam ?: [$kingdom_id]) . ")";
+            }
+            if ($exclude_kingdom_id > 0) {
+                $where[] = "m.kingdom_id != {$exclude_kingdom_id}";
+            }
+            if ($exclude_park_id > 0) {
+                $where[] = "m.park_id != {$exclude_park_id}";
+            }
+        }
+        if (!empty($exclude_ids)) {
+            $where[] = "m.mundane_id NOT IN (" . implode(',', $exclude_ids) . ")";
+        }
+
+        // Tier visibility: active + inactive always; banned only when authorised, capped to its scope.
+        if ($can_see_banned) {
+            $banned_ok = "(m.suspended = 1 OR m.penalty_box = 1)";
+            if (!empty($banned_family_kids)) {
+                $banned_ok .= " AND m.kingdom_id IN (" . implode(',', $banned_family_kids) . ")";
+            }
+            $where[] = "((m.suspended = 0 AND m.penalty_box = 0) OR ({$banned_ok}))";
+        } else {
+            $where[] = "(m.suspended = 0 AND m.penalty_box = 0)";
+        }
+
+        $sql = "SELECT m.mundane_id, m.persona, m.active, m.suspended, m.penalty_box,
+                       k.kingdom_id, k.name AS kingdom_name, k.abbreviation AS k_abbr,
+                       p.park_id, p.name AS park_name, p.abbreviation AS p_abbr,
+                       ({$ring}) AS ring,
+                       ({$tier}) AS tier
+                FROM " . DB_PREFIX . "mundane m
+                LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
+                LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY tier ASC, ring ASC, m.persona ASC, m.mundane_id ASC
+                LIMIT {$limit} OFFSET {$offset}";
+        $this->db->clear();
+        $rs = $this->db->query($sql);
+        $out = [];
+        if ($rs !== false && $rs->size() > 0) {
+            while ($rs->Next()) {
+                $banned = ((int)$rs->suspended === 1 || (int)$rs->penalty_box === 1) ? 1 : 0;
+                $out[] = [
+                    'MundaneId'   => (int)$rs->mundane_id,
+                    'Persona'     => $rs->persona,
+                    'KingdomId'   => (int)$rs->kingdom_id,
+                    'ParkId'      => (int)$rs->park_id,
+                    'KAbbr'       => $rs->k_abbr,
+                    'PAbbr'       => $rs->p_abbr,
+                    'KingdomName' => $rs->kingdom_name,
+                    'ParkName'    => $rs->park_name,
+                    'Active'      => (int)$rs->active,
+                    'Suspended'   => (int)$rs->suspended,
+                    'PenaltyBox'  => (int)$rs->penalty_box,
+                    'Banned'      => $banned,
+                    'Ring'        => (int)$rs->ring,
+                    'Tier'        => (int)$rs->tier,
+                ];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Rich, filterable player search behind the Advanced Search page. Returns a paged envelope
+     * { rows, hasMore, offset, canSeeRealName, canSeeBanned, needFilter } with home + last-attendance
+     * columns. Reuses the same tier/auth model as RankedPlayers.
+     *
+     * $opts: q, kingdomId, parkId, includeActive(bool=true), includeInactive(bool=true),
+     *        includeBanned(bool — honoured only for officers), lastAttendanceFrom/To ('YYYY-MM-DD'),
+     *        limit(=50, max 200), offset, token.
+     * Real names: officers see given/surname; for players flagged restricted, only global admins do.
+     * Banned: Amtgard-wide for officers. A pure-numeric q is a direct mundane_id lookup.
+     * Requires at least one of {q/id, kingdomId, parkId} or returns needFilter (avoids a full scan).
+     */
+    public function AdvancedPlayers($opts = [])
+    {
+        $o = is_array($opts) ? $opts : [];
+        $q          = trim((string)($o['q'] ?? ''));
+        $numeric_id = ($q !== '' && ctype_digit($q)) ? (int)$q : 0;
+        $kingdom_id = (int)($o['kingdomId'] ?? 0);
+        $park_id    = (int)($o['parkId'] ?? 0);
+        $inc_active   = array_key_exists('includeActive', $o) ? !empty($o['includeActive']) : true;
+        $inc_inactive = array_key_exists('includeInactive', $o) ? !empty($o['includeInactive']) : true;
+        $inc_banned_q = !empty($o['includeBanned']);
+        $limit  = min(max((int)($o['limit'] ?? 50), 1), 1000);  // higher cap: page loads one batch into a client DataTable
+        $offset = max((int)($o['offset'] ?? 0), 0);
+        $token  = $o['token'] ?? null;
+
+        // Authorisation: officer (create/edit/admin anywhere) or global admin.
+        $uid = 0;
+        $is_admin = false;
+        if (!empty($token)) {
+            $uid = (int)Ork3::$Lib->authorization->IsAuthorized($token);
+            if ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null)) {
+                $is_admin = true;
+            }
+        }
+        $is_officer = $is_admin;
+        if (!$is_officer && $uid > 0) {
+            $grants = Ork3::$Lib->authorization->GetAuthorizations_h($uid);
+            if (is_array($grants)) {
+                foreach ($grants as $g) {
+                    if (in_array(strtolower($g['Role'] ?? ''), ['create', 'edit', 'admin'], true)) {
+                        $is_officer = true;
+                        break;
+                    }
+                }
+            }
+        }
+        $can_see_banned   = $is_officer;            // Amtgard-wide for officers (power-user tool)
+        $can_see_realname = $is_officer;            // restricted players gated to global admins in output
+        $inc_banned = $inc_banned_q && $can_see_banned;
+
+        $meta = [
+            'canSeeRealName' => $can_see_realname ? 1 : 0,
+            'canSeeBanned'   => $can_see_banned ? 1 : 0,
+        ];
+
+        // Require a narrowing filter so we never run the per-row last-attendance subquery over the
+        // whole mundane table. (Date range alone is not enough — it can't pre-narrow.)
+        if ($numeric_id <= 0 && strlen($q) < 2 && $kingdom_id <= 0 && $park_id <= 0) {
+            return array_merge(['rows' => [], 'hasMore' => false, 'offset' => $offset, 'needFilter' => 1], $meta);
+        }
+
+        $this->db->clear();
+        $where = [
+            "LENGTH(m.persona) > 0",
+            "(m.kingdom_id != 15 AND (p.kingdom_id IS NULL OR p.kingdom_id != 15))",
+        ];
+
+        if ($numeric_id > 0) {
+            $where[] = "m.mundane_id = {$numeric_id}";
+        } elseif (strlen($q) >= 2) {
+            $term = $this->likeEscape($q);
+            $name_match = $is_admin
+                ? "OR m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'"
+                : "OR (m.restricted = 0 AND (m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'))";
+            $where[] = "(m.persona LIKE '%{$term}%' OR m.username LIKE '%{$term}%' {$name_match})";
+        }
+
+        if ($numeric_id <= 0) {
+            if ($park_id > 0) {
+                $where[] = "m.park_id = {$park_id}";
+            } elseif ($kingdom_id > 0) {
+                $fam = array_filter(array_map('intval', (array)Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)));
+                $where[] = "m.kingdom_id IN (" . implode(',', $fam ?: [$kingdom_id]) . ")";
+            }
+        }
+
+        // Status tiers from the include toggles.
+        $tiers = [];
+        if ($inc_active) {
+            $tiers[] = "(m.suspended = 0 AND m.penalty_box = 0 AND m.active = 1)";
+        }
+        if ($inc_inactive) {
+            $tiers[] = "(m.suspended = 0 AND m.penalty_box = 0 AND m.active = 0)";
+        }
+        if ($inc_banned) {
+            $tiers[] = "(m.suspended = 1 OR m.penalty_box = 1)";
+        }
+        if (empty($tiers)) {
+            return array_merge(['rows' => [], 'hasMore' => false, 'offset' => $offset], $meta);
+        }
+        $where[] = "(" . implode(' OR ', $tiers) . ")";
+
+        // Last-attendance date range filters the player's MOST RECENT attendance date.
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($o['lastAttendanceFrom'] ?? ''))) {
+            $where[] = "la.date >= '" . $o['lastAttendanceFrom'] . "'";
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($o['lastAttendanceTo'] ?? ''))) {
+            $where[] = "la.date <= '" . $o['lastAttendanceTo'] . "'";
+        }
+
+        $latest = "(SELECT a.attendance_id FROM " . DB_PREFIX . "attendance a "
+                . "WHERE a.mundane_id = m.mundane_id ORDER BY a.date DESC, a.attendance_id DESC LIMIT 1)";
+        $tier = "CASE WHEN (m.suspended = 1 OR m.penalty_box = 1) THEN 2 WHEN m.active = 0 THEN 1 ELSE 0 END";
+
+        $sql = "SELECT m.mundane_id, m.persona, m.given_name, m.surname, m.restricted,
+                       m.active, m.suspended, m.penalty_box,
+                       k.kingdom_id, k.name AS kingdom_name, k.abbreviation AS k_abbr,
+                       p.park_id, p.name AS park_name, p.abbreviation AS p_abbr,
+                       la.date AS last_att_date, lak.name AS last_att_kingdom, lap.name AS last_att_park,
+                       ({$tier}) AS tier
+                FROM " . DB_PREFIX . "mundane m
+                LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
+                LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
+                LEFT JOIN " . DB_PREFIX . "attendance la ON la.attendance_id = {$latest}
+                LEFT JOIN " . DB_PREFIX . "kingdom lak ON lak.kingdom_id = la.kingdom_id
+                LEFT JOIN " . DB_PREFIX . "park lap ON lap.park_id = la.park_id
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY tier ASC, m.persona ASC, m.mundane_id ASC
+                LIMIT " . ($limit + 1) . " OFFSET {$offset}";
+        $this->db->clear();
+        $rs = $this->db->query($sql);
+        $rows = [];
+        if ($rs !== false && $rs->size() > 0) {
+            while ($rs->Next()) {
+                $banned     = ((int)$rs->suspended === 1 || (int)$rs->penalty_box === 1) ? 1 : 0;
+                $restricted = ((int)$rs->restricted === 1);
+                $show_real  = $can_see_realname && (!$restricted || $is_admin);
+                $rows[] = [
+                    'MundaneId'      => (int)$rs->mundane_id,
+                    'Persona'        => $rs->persona,
+                    'GivenName'      => $show_real ? $rs->given_name : '',
+                    'Surname'        => $show_real ? $rs->surname : '',
+                    'RealNameHidden' => ($can_see_realname && $restricted && !$is_admin) ? 1 : 0,
+                    'KingdomId'      => (int)$rs->kingdom_id,
+                    'KingdomName'    => $rs->kingdom_name,
+                    'KAbbr'          => $rs->k_abbr,
+                    'ParkId'         => (int)$rs->park_id,
+                    'ParkName'       => $rs->park_name,
+                    'PAbbr'          => $rs->p_abbr,
+                    'LastAttDate'    => $rs->last_att_date,
+                    'LastAttKingdom' => $rs->last_att_kingdom,
+                    'LastAttPark'    => $rs->last_att_park,
+                    'Active'         => (int)$rs->active,
+                    'Suspended'      => (int)$rs->suspended,
+                    'PenaltyBox'     => (int)$rs->penalty_box,
+                    'Banned'         => $banned,
+                    'Tier'           => (int)$rs->tier,
+                ];
+            }
+        }
+        $hasMore = count($rows) > $limit;
+        if ($hasMore) {
+            $rows = array_slice($rows, 0, $limit);
+        }
+        return array_merge(['rows' => $rows, 'hasMore' => $hasMore, 'offset' => $offset], $meta);
     }
 
     /** @return array<string, string> */
@@ -587,7 +1023,7 @@ class SearchService extends Ork3
     }
 
     /**
-     * @param array{Query?: string, Kid?: int, Pid?: int, IncludeInactive?: bool, Focus?: string, CallerUserId?: int} $request
+     * @param array{Query?: string, Kid?: int, Pid?: int, IncludeInactive?: bool, Focus?: string, CallerUserId?: int, Token?: string} $request
      * @return array{players: list<array<string, mixed>>, parks: list<array<string, mixed>>, kingdoms: list<array<string, mixed>>, units: list<array<string, mixed>>}
      */
     public function UniversalSearch(array $request): array
@@ -602,6 +1038,8 @@ class SearchService extends Ork3
         $includeInactive = !empty($request['IncludeInactive']);
         $focus           = trim($request['Focus'] ?? '');
         $callerUserId    = (int)($request['CallerUserId'] ?? 0);
+        // RankedPlayers resolves the banned-tier auth gate from a session token, not a user id.
+        $token           = $request['Token'] ?? null;
 
         $filterKid = 0;
         $filterPid = 0;
@@ -708,44 +1146,30 @@ class SearchService extends Ork3
         }
         $playerBudget += $unitBudget - count($units);
 
-        $activeClause    = $includeInactive ? '1' : 'm.active = 1';
-        $suspendedClause = $includeInactive ? '1' : 'm.suspended = 0';
-        $isOrkAdmin      = $callerUserId > 0 && Ork3::$Lib->authorization->HasAuthority($callerUserId, AUTH_ADMIN, null, null);
-        $this->db->clear();
-        $mundaneClause = $isOrkAdmin
-            ? 'OR ' . $fold('m.given_name') . " LIKE '%{$term}%' OR " . $fold('m.surname') . " LIKE '%{$term}%'"
-            : 'OR (m.restricted = 0 AND (' . $fold('m.given_name') . " LIKE '%{$term}%' OR " . $fold('m.surname') . " LIKE '%{$term}%'))";
-        $playerWhere = "{$suspendedClause} AND {$activeClause} AND LENGTH(m.persona) > 0
-			  AND (" . $fold('m.persona') . " LIKE '%{$term}%'
-			    OR m.username LIKE '%{$term}%'
-			    {$mundaneClause})";
-        if ($filterPid > 0) {
-            $playerWhere .= " AND m.park_id = {$filterPid}";
-        } elseif ($filterKid > 0) {
-            $playerWhere .= " AND m.kingdom_id = {$filterKid}";
-        }
-        $playerOrder = valid_id($pid)
-            ? "m.active DESC, CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = {$kid} THEN 1 ELSE 2 END, m.persona"
-            : (valid_id($kid) ? "m.active DESC, CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona" : 'm.active DESC, m.persona');
-        $this->db->clear();
-        $rs = $this->db->query("
-			SELECT m.mundane_id, m.persona, m.active, k.abbreviation AS k_abbr, p.name AS park_name
-			FROM " . DB_PREFIX . "mundane m
-			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
-			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
-			WHERE {$playerWhere}
-			ORDER BY {$playerOrder}
-			LIMIT {$playerBudget}");
+        // Players — delegate to RankedPlayers for the standardized concentric-ring ranking and the
+        // active/inactive/banned tier model. $q is passed as-is; resolveAbbrevPrefix() handles the
+        // "KD:PK term" prefix internally. bannedScope 'all' so an officer's Amtgard-wide header
+        // search surfaces bans (still auth-gated inside RankedPlayers). Skip the query entirely when
+        // a focused non-player search left no budget.
         $players = [];
-        if ($rs !== false && $rs->size() > 0) {
-            while ($rs->next()) {
+        if ($playerBudget > 0) {
+            $rows = $this->RankedPlayers([
+                'q'           => $q,
+                'parkId'      => ($pid > 0 ? $pid : null),
+                'kingdomId'   => ($kid > 0 ? $kid : null),
+                'limit'       => $playerBudget,
+                'bannedScope' => 'all',
+                'token'       => $token,
+            ]);
+            foreach ($rows as $row) {
                 $players[] = [
                     'type'   => 'player',
-                    'id'     => (int)$rs->mundane_id,
-                    'name'   => $rs->persona,
-                    'abbr'   => $rs->k_abbr ?? '',
-                    'park'   => $rs->park_name ?? '',
-                    'active' => (int)$rs->active,
+                    'id'     => $row['MundaneId'],
+                    'name'   => $row['Persona'],
+                    'abbr'   => $row['KAbbr'] ?? '',
+                    'park'   => $row['ParkName'] ?? '',
+                    'active' => $row['Active'],
+                    'banned' => $row['Banned'] ?? 0,
                 ];
             }
         }

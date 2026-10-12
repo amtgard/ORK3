@@ -28,64 +28,24 @@
 			}
 		});
 
-		$( "#PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#SrcParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: park_id.length>0?park_id:null
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
+		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			uir: '<?=UIR ?>',
+			onSelect: function(p) {
+				document.getElementById('MundaneId').value = p.MundaneId;
 			},
-			focus: function( event, ui ) {
-				return showLabel('#PlayerName', ui);
-			}, 
-			delay: 500,
-			select: function (e, ui) {
-				showLabel('#PlayerName', ui);
-				$('#MundaneId').val(ui.item.value);
-				return false;
+			onClear: function() {
+				document.getElementById('MundaneId').value = '';
 			}
 		});
 		
-		$( "#Suspendator" ).autocomplete({
-			source: function( request, response ) {
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						kingdom_id: <?=$this->__session->kingdom_id ?>
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
+		OrkPlayerSearch.attach(document.getElementById('Suspendator'), {
+			uir: '<?=UIR ?>',
+			kingdomId: <?=intval($this->__session->kingdom_id) ?>,
+			onSelect: function(p) {
+				document.getElementById('SuspendatorId').value = p.MundaneId;
 			},
-			focus: function( event, ui ) {
-				return showLabel('#Suspendator', ui);
-			}, 
-			delay: 500,
-			select: function (e, ui) {
-				showLabel('#Suspendator', ui);
-				$('#SuspendatorId').val(ui.item.value);
-				return false;
+			onClear: function() {
+				document.getElementById('SuspendatorId').value = '';
 			}
 		});
 		

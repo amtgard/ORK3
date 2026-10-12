@@ -27,39 +27,19 @@
 				return false;
 			}
 		});
-		$( "#PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#ParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: park_id.length>0?park_id:null
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId + "|" + val.PenaltyBox });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#PlayerName', ui);
-			}, 
-			delay: 500,
-			select: function (e, ui) {
-				showLabel('#PlayerName', ui);
-				$('#MundaneId').val(ui.item.value.split("|")[0]);
-				if (ui.item.value.split("|")[1] == "0") {
+		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			uir: '<?=UIR ?>',
+			includeSuspended: true,
+			onSelect: function(p) {
+				document.getElementById('MundaneId').value = p.MundaneId;
+				if (p.Suspended == 0) {
 					$('input[name=Ban]:eq(0)').attr('checked', 'checked');
 				} else {
 					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
 				}
-				return false;
+			},
+			onClear: function() {
+				document.getElementById('MundaneId').value = '';
 			}
 		});
 	});

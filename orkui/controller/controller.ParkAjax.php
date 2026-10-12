@@ -186,23 +186,29 @@ class Controller_ParkAjax extends Controller
                 exit;
             }
 
-            $scopeKey = 'park_own';
-            if ($scope === 'exclude') {
-                $scopeKey = 'park_exclude';
-            } elseif ($scope === 'all') {
-                $scopeKey = 'park_all';
-            }
+            // Resolve this park's kingdom for ring ranking
+            $pid        = (int)$park_id;
+            $pkKingdom  = (int)$this->Park->get_park_kingdom_id($pid);
 
-            $this->load_model('Search');
-            $results = $this->Search->scoped_player_search([
-                'Query'            => $q,
-                'Scope'            => $scopeKey,
-                'ParkId'           => (int)$park_id,
-                'IncludeInactive'  => $include_inactive,
-                'IncludeSuspended' => $include_suspended,
-                'Prioritize'       => $prioritize,
-                'Limit'            => 15,
-                'Format'           => 'kingdom',
+            // Map scope -> RankedPlayers params
+            $restrictTo      = null;
+            $excludeParkId   = null;
+            if ($scope === 'own') {
+                $restrictTo = 'park';
+            } elseif ($scope === 'exclude') {
+                $excludeParkId = $pid;
+            }
+            // scope=all -> no restrict, no exclude; ring still centers on park/kingdom
+
+            $svc     = new SearchService();
+            $results = $svc->RankedPlayers([
+                'q'            => $q,
+                'parkId'       => $pid,
+                'kingdomId'    => $pkKingdom ?: null,
+                'restrictTo'   => $restrictTo,
+                'excludeParkId' => $excludeParkId,
+                'limit'        => 15,
+                'token'        => $this->session->token ?? null,
             ]);
 
             echo json_encode($results);
