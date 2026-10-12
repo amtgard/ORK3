@@ -115,7 +115,7 @@ $hmWeeklyAvg = $hmTotalAttendance > 0 ? round($hmTotalAttendance / $hmWkCount) :
 	justify-content: center;
 	padding: 11px 12px;
 	gap: 3px;
-	border-right: 1px solid var(--ork-border);
+	border-right: 1px solid var(--ork-divider);
 }
 .hm-stat-item:last-child { border-right: none; }
 .hm-stat-item-link { position: relative; border-radius: 0 7px 7px 0; text-decoration: none; color: inherit; transition: background 0.15s; }
@@ -154,7 +154,7 @@ $hmWeeklyAvg = $hmTotalAttendance > 0 ? round($hmTotalAttendance / $hmWkCount) :
 	border-radius: 0;
 }
 .hm-section-title i { margin-right: 7px; color: var(--ork-text-secondary); }
-.hm-section-hint { font-size: 12px; color: var(--ork-text-muted); font-style: italic; }
+.hm-section-hint { font-size: 12px; color: var(--ork-text-on-ground); font-style: italic; }
 .hm-view-all {
 	font-size: 13px;
 	color: var(--ork-link);
@@ -436,8 +436,8 @@ html[data-theme="dark"] .hm-stat-item-link[data-tip]::after { background: #0b122
 @media (max-width: 600px) {
 	.hm-kingdoms-grid { grid-template-columns: repeat(2, 1fr); }
 	.hm-stats-bar { display: grid; grid-template-columns: 1fr 1fr; }
-	.hm-stat-item { flex: unset; border-right: none; border-bottom: 1px solid var(--ork-border); }
-	.hm-stat-item:nth-child(odd) { border-right: 1px solid var(--ork-border); }
+	.hm-stat-item { flex: unset; border-right: none; border-bottom: 1px solid var(--ork-divider); }
+	.hm-stat-item:nth-child(odd) { border-right: 1px solid var(--ork-divider); }
 	.hm-stat-item:last-child { border-bottom: none; }
 	.hm-stat-item:nth-last-child(2):nth-child(odd) { border-bottom: none; }
 	/* Last item spanning both columns when count is odd */

@@ -70,4 +70,14 @@ class Model_Recap extends Model
         $r = $this->Report->GetCommunityAppVersions();
         return is_array($r) ? $r : array();
     }
+
+    // JSON-service usage: ['Clients'=>[...], 'Endpoints'=>[...]] (30m-cached upstream).
+    public function api_usage($days = 7)
+    {
+        $r = $this->Report->GetApiUsage($days);
+        return array(
+            'Clients'   => (is_array($r) && is_array($r['Clients'] ?? null))   ? $r['Clients']   : array(),
+            'Endpoints' => (is_array($r) && is_array($r['Endpoints'] ?? null)) ? $r['Endpoints'] : array(),
+        );
+    }
 }

@@ -1176,6 +1176,9 @@ _:-ms-lang(x),
 	line-height: 64px;
 	padding: 0 20px;
 	margin-bottom: 10px;
+	background: none;
+	border: 0;
+	text-shadow: none;
 }
 .popup_wrapper .popup p {
 	font-size: 16px;

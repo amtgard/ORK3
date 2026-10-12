@@ -9,10 +9,11 @@
     --rp-accent-dark : #1e1b4b;   /* indigo-950 — header bg      */
     --rp-accent      : #4338ca;   /* indigo-700 — numbers/links  */
     --rp-accent-mid  : #6366f1;   /* indigo-500 — hover tint     */
-    --rp-border        : #e2e8f0;   /* hairline — card + table rules   */
+    --rp-border        : var(--ork-border);   /* hairline — card + table rules   */
     --rp-border-mid    : #cbd5e0;   /* resting border on controls      */
     --rp-border-strong : #a0aec0;   /* hover border on controls        */
-    --rp-bg-light      : #f7fafc;
+    --rp-bg-light      : var(--ork-bg-secondary);
+    --rp-divider       : var(--ork-divider);      /* rules inside cards/tables  */
     --rp-bg-tertiary   : #e2e8f0;   /* filled chip/badge surface       */
     --rp-text          : #2d3748;
     --rp-text-body     : #4a5568;
@@ -33,7 +34,7 @@
     justify-content: space-between;
     border-radius : 8px 8px 0 0;
     border        : 1px solid rgba(0,0,0,0.25);
-    border-bottom : 1px solid var(--rp-border);
+    border-bottom : 1px solid var(--rp-divider);
     gap           : 16px;
 }
 
@@ -135,7 +136,7 @@
 /* ── Context strip ───────────────────────────────────────── */
 
 .rp-context {
-    background : var(--rp-bg-light);
+    background : var(--ork-card-bg);
     border     : 1px solid var(--rp-border);
     border-top : none;
     padding    : 10px 16px;
@@ -165,12 +166,12 @@
 
 .rp-stat-card {
     flex        : 1;
-    background  : #fff;
+    background  : var(--ork-card-bg);
     border      : 1px solid var(--rp-border);
     border-radius: 8px;
     padding     : 14px 12px;
     text-align  : center;
-    box-shadow  : 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow  : var(--ork-shadow-card);
     position    : relative;
 }
 
@@ -260,9 +261,9 @@
     padding: 4px 14px;
     font-size: 12px;
     font-weight: 600;
-    border: 1px solid var(--rp-border-mid);
+    border: 1px solid var(--ork-input-border);
     border-radius: 20px;
-    background: #fff;
+    background: var(--ork-card-bg);
     color: #4a5568;
     cursor: pointer;
     white-space: nowrap;
@@ -274,11 +275,11 @@
 
 .rp-chart-card {
     flex        : 1;
-    background  : #fff;
+    background  : var(--ork-card-bg);
     border      : 1px solid var(--rp-border);
     border-radius: 8px;
     padding     : 16px;
-    box-shadow  : 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow  : var(--ork-shadow-card);
 }
 
 .rp-chart-card-title {
@@ -310,18 +311,18 @@
 }
 
 .rp-filter-card {
-    background   : var(--rp-card-bg, #fff);
+    background   : var(--rp-card-bg, var(--ork-card-bg));
     border       : 1px solid var(--rp-border);
     border-radius: 8px;
     overflow     : hidden;
     margin-bottom: 12px;
-    box-shadow   : 0 1px 3px rgba(0,0,0,0.04);
+    box-shadow   : var(--ork-shadow-card);
 }
 
 .rp-filter-card-header {
     padding       : 9px 14px;
     background    : var(--rp-bg-light);
-    border-bottom : 1px solid var(--rp-border);
+    border-bottom : 1px solid var(--rp-divider);
     font-size     : 11px;
     font-weight   : 700;
     text-transform: uppercase;
@@ -374,9 +375,9 @@
 
 .rp-filter-pill {
     padding       : 4px 11px;
-    border        : 1px solid var(--rp-border-mid);
+    border        : 1px solid var(--ork-input-border);
     border-radius : 20px;
-    background    : #fff;
+    background    : var(--ork-card-bg);
     font-size     : 11px;
     font-weight   : 600;
     color         : var(--rp-text-muted);
@@ -404,11 +405,11 @@
     flex        : 1;
     min-width   : 0;
     max-width   : 100%;
-    background  : var(--rp-bg-table, #fff);
+    background  : var(--rp-bg-table, var(--ork-card-bg));
     border      : 1px solid var(--rp-border);
     border-radius: 8px;
     padding     : 14px 16px;
-    box-shadow  : 0 1px 3px rgba(0,0,0,0.04);
+    box-shadow  : var(--ork-shadow-card);
     overflow-x  : auto;
 }
 
@@ -430,11 +431,12 @@
 
 .rp-table-area .dataTables_wrapper .dataTables_filter input,
 .rp-table-area .dataTables_wrapper .dataTables_length select {
-    border       : 1px solid var(--rp-border);
+    border       : 1px solid var(--ork-input-border);
     border-radius: 5px;
     padding      : 5px 8px;
     font-size    : 13px;
     color        : var(--rp-text);
+    background   : var(--ork-input-bg);
     outline      : none;
     transition   : border-color 0.15s;
 }
@@ -442,6 +444,7 @@
 .rp-table-area .dataTables_wrapper .dataTables_filter input:focus,
 .rp-table-area .dataTables_wrapper .dataTables_length select:focus {
     border-color: var(--rp-accent-mid);
+    background  : var(--ork-card-bg);
 }
 
 /* Table headers */
@@ -454,7 +457,7 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     padding       : 8px 10px;
-    border-bottom : 2px solid var(--rp-border);
+    border-bottom : 2px solid var(--rp-divider);
     white-space   : nowrap;
 }
 
@@ -500,7 +503,7 @@
     padding   : 8px 10px;
     font-size : 12px;
     color     : var(--rp-text-muted);
-    border-top: 2px solid var(--rp-border);
+    border-top: 2px solid var(--rp-divider);
     background: var(--rp-bg-light);
 }
 
@@ -522,7 +525,7 @@
     font-size    : 12px;
     font-weight  : 600;
     color        : var(--rp-text-body) !important;
-    border       : 1px solid var(--rp-border) !important;
+    border       : 1px solid var(--ork-input-border) !important;
     background   : var(--rp-paginate-bg, #fff) !important;
     margin       : 0 2px;
     transition   : background 0.1s, border-color 0.1s;
@@ -530,7 +533,7 @@
 
 .rp-table-area .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
     background  : var(--rp-bg-light) !important;
-    border-color: #cbd5e0 !important;
+    border-color: var(--rp-border-strong) !important;
     color       : var(--rp-text) !important;
 }
 
@@ -546,7 +549,7 @@
     opacity     : 0.4;
     cursor      : default;
     background  : var(--rp-paginate-bg, #fff) !important;
-    border-color: var(--rp-border) !important;
+    border-color: var(--ork-input-border) !important;
     color       : var(--rp-text-muted) !important;
 }
 
@@ -602,7 +605,7 @@
 /* FixedColumns: keep fixed-column cells visually aligned */
 .rp-table-area .DTFC_LeftBodyWrapper table.dataTable tbody td,
 .rp-table-area .DTFC_LeftHeadWrapper table.dataTable thead th {
-    border-right: 2px solid var(--rp-border);
+    border-right: 2px solid var(--rp-divider);
 }
 
 

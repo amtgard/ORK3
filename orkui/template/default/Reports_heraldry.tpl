@@ -135,17 +135,18 @@ $_hr_label = match($_hr_type) {
 #hw-search {
 	width: 100%;
 	padding: 7px 10px 7px 32px;
-	border: 1px solid var(--rp-border);
+	border: 1px solid var(--ork-input-border);
 	border-radius: 6px;
 	font-size: 13px;
 	color: var(--rp-text);
-	background: #fff;
+	background: var(--ork-input-bg);
 	box-sizing: border-box;
 	outline: none;
 	transition: border-color 0.15s;
 }
 #hw-search:focus {
 	border-color: var(--rp-accent-mid);
+	background: var(--ork-card-bg);
 }
 
 /* ── Filter row ──────────────────────────────────────── */

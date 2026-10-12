@@ -189,7 +189,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 	background: #fff;
 	min-width: 160px; max-width: 220px;
 	text-align: left; padding: 7px 12px;
-	border-right: 2px solid var(--rp-border);
+	border-right: 2px solid var(--rp-divider);
 	white-space: normal; word-break: break-word;
 }
 .lg-table th.lg-col-player { z-index: 3; background: var(--rp-bg-light); vertical-align: middle; }
@@ -200,7 +200,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-table td.lg-col-park {
 	min-width: 130px; max-width: 180px;
 	text-align: left; padding: 7px 12px;
-	border-right: 1px solid var(--rp-border);
+	border-right: 1px solid var(--rp-divider);
 	white-space: normal; word-break: break-word;
 	font-size: 0.85rem;
 }
@@ -253,7 +253,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-pill {
 	display: inline-flex; align-items: center; gap: 5px;
 	padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 500;
-	border: 1px solid var(--rp-border); background: #fff; color: var(--rp-text-muted);
+	border: 1px solid var(--ork-input-border); background: #fff; color: var(--rp-text-muted);
 	text-decoration: none; cursor: pointer; transition: all 0.15s;
 }
 .lg-pill:hover { border-color: var(--rp-accent-mid); color: var(--rp-accent); }
@@ -264,13 +264,14 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-search-bar label { font-size: 0.82rem; color: var(--rp-text-muted); white-space: nowrap; }
 .lg-search-bar input {
 	padding: 5px 9px;
-	border: 1px solid var(--rp-border);
+	border: 1px solid var(--ork-input-border);
+	background: var(--ork-input-bg);
 	border-radius: 5px;
 	font-size: 0.82rem;
 	min-width: 200px;
 	outline: none;
 }
-.lg-search-bar input:focus { border-color: var(--rp-accent-mid); }
+.lg-search-bar input:focus { border-color: var(--rp-accent-mid); background: var(--ork-card-bg); }
 
 /* Dual range slider */
 .lg-rank-range { display: flex; align-items: center; gap: 10px; }
@@ -324,7 +325,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-award-filter {
 	display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
 	margin-bottom: 10px; padding: 8px 10px;
-	background: #f8fafc; border: 1px solid var(--rp-border); border-radius: 6px;
+	background: var(--ork-bg-inset); border: 1px solid var(--rp-border); border-radius: 6px;
 }
 .lg-award-filter-label { font-size: 0.78rem; color: var(--rp-text-muted); white-space: nowrap; margin-right: 2px; }
 .lg-award-pills { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; flex: 1; }
@@ -332,7 +333,7 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 
 .lg-award-pill {
 	padding: 2px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 500;
-	border: 1px solid var(--rp-border); background: #fff; color: var(--rp-text-muted);
+	border: 1px solid var(--ork-input-border); background: #fff; color: var(--rp-text-muted);
 	cursor: pointer; transition: all 0.12s; white-space: nowrap;
 }
 .lg-award-pill:hover { border-color: var(--rp-accent-mid); color: var(--rp-accent); }
