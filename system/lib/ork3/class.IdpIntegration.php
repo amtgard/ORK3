@@ -138,10 +138,20 @@ class IdpIntegration extends Ork3
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        // Identify to the IDP the way other integrations identify to the ORK.
+        // idp.amtgard.com sits behind the same Cloudflare zone, so a server-side
+        // POST with no browser fingerprint is challenged (403 "Just a moment")
+        // unless a skip rule matches. The existing OAuth calls slip through only
+        // because they set User-Agent: AmtgardIDP/1.0, which any caller can send.
+        $headers = [
             'Content-Type: application/json',
             'Accept: application/json',
-        ]);
+            'X-ORK-Client: ' . (defined('ORK_IDP_CLIENT_NAME') ? ORK_IDP_CLIENT_NAME : 'AmtgardORK/3.5.6'),
+        ];
+        if (defined('ORK_IDP_API_KEY') && trim((string) ORK_IDP_API_KEY) !== '') {
+            $headers[] = 'X-Ork-Key: ' . ORK_IDP_API_KEY;
+        }
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_USERPWD, $clientId . ':' . $clientSecret);
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         $raw = curl_exec($ch);
