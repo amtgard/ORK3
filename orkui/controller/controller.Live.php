@@ -3,13 +3,15 @@
 /**
  * Live attendance dashboard.
  *
- *   /Live              → HTML page (auth-required)
+ *   /Live              → HTML page (public)
  *   /Live/stats        → JSON: rolling-24h per-park / per-event counts
  *   /Live/recent       → JSON: last ~50 sign-ins for the ticker
  *
- * Both JSON endpoints are session-gated (no auth → 5/Not logged in) so bots
- * can't scrape the aggregated view. Server-side GhettoCache (~30s for stats,
- * ~10s for recent) keeps origin load bounded regardless of viewer count.
+ * PUBLIC (opened 2026-08-23, Ken's call): the feed is park-level aggregates —
+ * mundane_id is deliberately stripped before the wire (see class.Live), so no
+ * player identity is exposed. Server-side GhettoCache (~30s for stats, ~10s
+ * for recent) keeps origin load bounded regardless of viewer count, bots
+ * included.
  */
 class Controller_Live extends Controller
 {
@@ -24,21 +26,27 @@ class Controller_Live extends Controller
 
     public function index($action = null)
     {
-        if (!isset($this->session->user_id)) {
-            header('Location: ' . UIR . 'Login/login/Live');
-            exit;
-        }
         $this->template = '../revised-frontend/Live_index.tpl';
         $this->data['page_title'] = 'Live Attendance';
+
+        // Link-preview card from the same 30s-cached stats the page polls:
+        // the "is anyone playing right now?" answer, right in the embed.
+        $_ogS = $this->Live->stats('');
+        $_ogActive = (int)($_ogS['active_3h'] ?? 0);
+        $_ogParks = is_array($_ogS['parks'] ?? null) ? count($_ogS['parks']) : 0;
+        $this->data['og'] = array(
+            'title'       => 'Amtgard Live Attendance',
+            'url'         => UIR . 'Live',
+            'description' => $_ogActive > 0
+                ? $_ogActive . ' player' . ($_ogActive === 1 ? '' : 's') . ' signed in at '
+                    . $_ogParks . ' park' . ($_ogParks === 1 ? '' : 's') . ' in the last few hours — watch Amtgard light up on the live map.'
+                : 'A live map of Amtgard park activity — parks light up as players sign in, all day, every day.',
+        );
     }
 
     public function stats()
     {
         header('Content-Type: application/json');
-        if (!isset($this->session->user_id)) {
-            echo json_encode(array('status' => 5, 'error' => 'Not logged in'));
-            exit;
-        }
         $data = $this->Live->stats((string) ($this->session->token ?? ''));
         echo json_encode(array('status' => 0) + $data);
         exit;
@@ -47,10 +55,6 @@ class Controller_Live extends Controller
     public function recent()
     {
         header('Content-Type: application/json');
-        if (!isset($this->session->user_id)) {
-            echo json_encode(array('status' => 5, 'error' => 'Not logged in'));
-            exit;
-        }
         $data = $this->Live->recent((string) ($this->session->token ?? ''));
         echo json_encode(array('status' => 0) + $data);
         exit;

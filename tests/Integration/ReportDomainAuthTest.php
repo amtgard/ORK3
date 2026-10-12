@@ -52,31 +52,57 @@ final class ReportDomainAuthTest extends TestCase
         $this->assertArrayNotHasKey('Error', $stats);
     }
 
-    public function testGetAttendanceDatesRequiresScopedAuthority(): void
+    // GetAttendanceDates backs the PUBLIC attendance report: no token or
+    // authority required (C-22 over-gated it; corrected 2026-08-22).
+    public function testGetAttendanceDatesIsPublic(): void
     {
         $kid = $this->fixture->firstKingdomId();
         $parkId = $this->fixture->parkIdInKingdom($kid);
         $player = $this->fixture->createPlayer($parkId, 'c22-dates');
         $this->fixture->insertAttendance($player['mundane_id'], $parkId, $kid, '2025-04-01');
 
+        // Anonymous (no token at all) gets the dates the public report shows.
+        unset($_SESSION['is_authorized_mundane_id']);
+        $anon = $this->report->GetAttendanceDates([
+            'Type' => 'Kingdom',
+            'Id' => $kid,
+        ]);
+        $this->assertSame(0, $anon['Status']['Status']);
+        $this->assertContains('2025-04-01', $anon['Dates']);
+
+        // An ordinary logged-in player (no authority) likewise.
         $stranger = $this->fixture->createPlayer($parkId, 'c22-dates-stranger');
         unset($_SESSION['is_authorized_mundane_id']);
-        $denied = $this->report->GetAttendanceDates([
+        $plain = $this->report->GetAttendanceDates([
             'Type' => 'Kingdom',
             'Id' => $kid,
             'Token' => $stranger['token'],
         ]);
-        $this->assertSame(ServiceErrorIds::NoAuthorization, $denied['Status']['Status'] ?? null);
+        $this->assertSame(0, $plain['Status']['Status']);
+        $this->assertContains('2025-04-01', $plain['Dates']);
+    }
 
-        $editor = $this->fixture->createPlayer($parkId, 'c22-dates-editor');
-        $this->fixture->insertScopedAuth($editor['mundane_id'], 0, $kid, AUTH_CREATE);
+    // GetLadderAwardGrid is offered to every logged-in player by the
+    // kingdom/park Reports tab: any valid session suffices, no officer
+    // authority (C-22 over-gated it; corrected 2026-08-22).
+    public function testGetLadderAwardGridRequiresOnlyValidSession(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $stranger = $this->fixture->createPlayer($parkId, 'c22-grid-stranger');
+
         unset($_SESSION['is_authorized_mundane_id']);
-        $kingdom = $this->report->GetAttendanceDates([
-            'Type' => 'Kingdom',
-            'Id' => $kid,
-            'Token' => $editor['token'],
+        $deniedAnon = $this->report->GetLadderAwardGrid([
+            'KingdomId' => $kid,
         ]);
-        $this->assertSame(0, $kingdom['Status']['Status']);
-        $this->assertContains('2025-04-01', $kingdom['Dates']);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $deniedAnon['Status']['Status'] ?? null);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $grid = $this->report->GetLadderAwardGrid([
+            'KingdomId' => $kid,
+            'Token' => $stranger['token'],
+        ]);
+        $this->assertSame(0, $grid['Status']['Status'] ?? 0);
+        $this->assertArrayHasKey('GridRows', $grid);
     }
 }
