@@ -36,6 +36,14 @@ class Model_KingdomProfile extends Model
         return $this->_profile()->GetKingdomParkDays($kingdomId);
     }
 
+    /**
+     * @return array<int, array{participation: int, residents: int}>
+     */
+    public function heatmap_weights(int $kingdomId): array
+    {
+        return $this->_profile()->GetKingdomHeatmapWeights($kingdomId);
+    }
+
     public function player_count(int $kingdomId): int
     {
         return $this->_profile()->GetKingdomPlayerCount($kingdomId);
