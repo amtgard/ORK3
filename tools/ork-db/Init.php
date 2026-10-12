@@ -33,9 +33,19 @@ final class Init
             throw new \RuntimeException("Schema file not readable: {$schemaPath}");
         }
 
+        $schema = file_get_contents($schemaPath);
+        if ($schema === false) {
+            throw new \RuntimeException("Failed to read schema file: {$schemaPath}");
+        }
+
+        // ork.sql drops and recreates the baseline tables, but dated migrations add
+        // tables that hold foreign keys back into them. Re-running init over a sandbox
+        // left half-built by a failed apply would otherwise die on the first DROP, with
+        // no way back short of dropping the database by hand.
         $this->runProcess(
             ['docker', 'exec', '-i', $container, 'mariadb', '-u', 'root', '-proot', $database],
-            $schemaPath
+            null,
+            "SET FOREIGN_KEY_CHECKS=0;\n" . $schema . "\nSET FOREIGN_KEY_CHECKS=1;\n"
         );
 
         $canarySql = <<<SQL

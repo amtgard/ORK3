@@ -54,19 +54,19 @@ $show_chart = $total > 0;
 <style>
 /* ── Attendance-specific styles ───────────────────── */
 .att-form-card {
-	background: #fff;
-	border: 1px solid #e5e7eb;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
 	border-radius: 10px;
 	overflow: hidden;
 	margin-bottom: 16px;
 }
 .att-form-card-header {
-	background: #f3f4f6;
+	background: var(--ork-bg-secondary);
 	padding: 10px 16px;
 	font-size: 0.82rem;
 	font-weight: 600;
 	color: #374151;
-	border-bottom: 1px solid #e5e7eb;
+	border-bottom: 1px solid var(--ork-divider);
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -94,15 +94,16 @@ $show_chart = $total > 0;
 .att-form-input, .att-form-select {
 	width: 100%;
 	padding: 7px 10px;
-	border: 1px solid #d1d5db;
+	border: 1px solid var(--ork-input-border);
 	border-radius: 6px;
 	font-size: 0.87rem;
 	color: #111827;
-	background: #fff;
+	background: var(--ork-input-bg);
 	box-sizing: border-box;
 }
 .att-form-input:focus, .att-form-select:focus {
 	outline: none;
+	background: var(--ork-card-bg);
 	border-color: #6366f1;
 	box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
 }
@@ -121,8 +122,8 @@ $show_chart = $total > 0;
 .att-form-btn:hover:not(:disabled) { background: #3730a3; }
 .att-form-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .att-chart-card {
-	background: #fff;
-	border: 1px solid #e5e7eb;
+	background: var(--ork-bg-inset);
+	border: 1px solid var(--ork-border);
 	border-radius: 10px;
 	overflow: hidden;
 	margin-bottom: 16px;
@@ -132,15 +133,15 @@ $show_chart = $total > 0;
 	font-size: 0.8rem;
 	font-weight: 600;
 	color: #374151;
-	background: #f9fafb;
-	border-bottom: 1px solid #e5e7eb;
+	background: transparent;
+	border-bottom: 1px solid var(--ork-divider);
 	display: flex;
 	align-items: center;
 	gap: 7px;
 	cursor: pointer;
 	user-select: none;
 }
-.att-chart-title:hover { background: #f1f5f9; }
+.att-chart-title:hover { background: var(--ork-card-bg); }
 .att-chart-chevron { margin-left: auto; transition: transform 0.2s ease; color: #9ca3af; }
 .att-chart-card.att-collapsed .att-chart-chevron { transform: rotate(-90deg); }
 .att-chart-card.att-collapsed .att-chart-body { display: none; }
@@ -160,7 +161,7 @@ $show_chart = $total > 0;
 }
 .att-edit-overlay.att-edit-open { display: flex; }
 .att-edit-modal {
-	background: #fff; border-radius: 10px;
+	background: var(--ork-card-bg); border-radius: 10px;
 	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
 	width: 360px; max-width: 96vw;
 }
@@ -182,12 +183,12 @@ $show_chart = $total > 0;
 	color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
 }
 .att-edit-input, .att-edit-select {
-	width: 100%; padding: 7px 10px; border: 1px solid #d1d5db;
+	width: 100%; padding: 7px 10px; border: 1px solid var(--ork-input-border);
 	border-radius: 6px; font-size: 0.87rem; color: #111827;
-	background: #fff; box-sizing: border-box;
+	background: var(--ork-input-bg); box-sizing: border-box;
 }
 .att-edit-input:focus, .att-edit-select:focus {
-	outline: none; border-color: #6366f1;
+	outline: none; background: var(--ork-card-bg); border-color: #6366f1;
 	box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
 }
 .att-edit-row { display: flex; gap: 12px; }
@@ -198,7 +199,7 @@ $show_chart = $total > 0;
 	border-radius: 6px; padding: 8px 12px; font-size: 0.82rem; margin-bottom: 12px; display: none;
 }
 .att-edit-modal-footer {
-	padding: 12px 18px; border-top: 1px solid #f3f4f6;
+	padding: 12px 18px; border-top: 1px solid var(--ork-divider);
 	display: flex; justify-content: flex-end; gap: 8px;
 }
 .att-edit-btn-cancel {
@@ -273,7 +274,7 @@ $show_chart = $total > 0;
 }
 .att-qa-overlay.att-qa-open { display: flex; }
 .att-qa-modal {
-	background: #fff;
+	background: var(--ork-card-bg);
 	border-radius: 12px;
 	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
 	width: 680px;
@@ -349,7 +350,7 @@ $show_chart = $total > 0;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
 	color: #6b7280;
-	border-bottom: 2px solid #e5e7eb;
+	border-bottom: 2px solid var(--ork-divider);
 	padding: 0 8px 8px;
 }
 .att-qa-table td {
@@ -361,14 +362,16 @@ $show_chart = $total > 0;
 .att-qa-table tr:last-child td { border-bottom: none; }
 .att-qa-select {
 	padding: 5px 6px;
-	border: 1px solid #d1d5db;
+	border: 1px solid var(--ork-input-border);
+	background: var(--ork-input-bg);
 	border-radius: 5px;
 	font-size: 0.84rem;
 	min-width: 140px;
 }
 .att-qa-credits-input {
 	padding: 5px 6px;
-	border: 1px solid #d1d5db;
+	border: 1px solid var(--ork-input-border);
+	background: var(--ork-input-bg);
 	border-radius: 5px;
 	font-size: 0.84rem;
 	width: 56px;

@@ -29,7 +29,7 @@
 html[data-theme="dark"] .qt-derived-value { color:#e2e8f0; }
 html[data-theme="dark"] .qt-derived-empty { color:#718096; }
 html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#a16207; color:#fde68a; }
-.qt-config-card { background: #fff; border: 1px solid var(--rp-border); border-radius: 8px; padding: 20px 22px; margin-bottom: 20px; display: flex; flex-direction: column; }
+.qt-config-card { background: var(--ork-bg-inset); border: 1px solid var(--ork-border); border-radius: 8px; padding: 20px 22px; margin-bottom: 20px; display: flex; flex-direction: column; }
 /* Was an inline style on the wrapper div — inline, no media query could reach it, so the two
    cards stayed on fixed min-content tracks and the second one sat off a phone screen. */
 .qt-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: stretch; }
@@ -41,7 +41,7 @@ html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#
 
 /* ── Form & sections ───────────────────────────────────── */
 .qt-config-form { display: flex; flex-direction: column; flex: 1; }
-.qt-section { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--rp-border); }
+.qt-section { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--rp-divider); }
 .qt-section:first-of-type { padding-top: 0; margin-top: 0; border-top: none; }
 .qt-section-header { font-size: 0.7rem; font-weight: 700; color: var(--rp-text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
 
@@ -49,13 +49,13 @@ html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#
 .qt-form-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .qt-form-row:last-child { margin-bottom: 0; }
 .qt-form-row label { font-size: 0.82rem; font-weight: 600; color: var(--rp-text-muted); min-width: 160px; text-transform: uppercase; letter-spacing: 0.04em; }
-.qt-form-row input[type=number] { width: 80px; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; box-sizing: border-box; }
+.qt-form-row input[type=number] { width: 80px; padding: 5px 8px; border: 1px solid var(--ork-input-border); background: var(--ork-card-bg); border-radius: 4px; font-size: 0.9rem; box-sizing: border-box; }
 .qt-hint-inline { font-size: 0.78rem; color: var(--rp-text-muted); }
 .qt-form-row.qt-stack { align-items: flex-start; }
 .qt-form-row.qt-stack > label { padding-top: 6px; }
 .qt-field-grow { flex: 1; min-width: 0; }
-.qt-text-input { width: 100%; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; }
-.qt-textarea { width: 100%; padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; font-family: inherit; resize: vertical; box-sizing: border-box; }
+.qt-text-input { width: 100%; padding: 5px 8px; border: 1px solid var(--ork-input-border); background: var(--ork-card-bg); border-radius: 4px; font-size: 0.9rem; }
+.qt-textarea { width: 100%; padding: 5px 8px; border: 1px solid var(--ork-input-border); background: var(--ork-card-bg); border-radius: 4px; font-size: 0.9rem; font-family: inherit; resize: vertical; box-sizing: border-box; }
 .qt-help-text { font-size: 0.75rem; color: var(--rp-text-muted); margin-top: 3px; }
 .qt-required { color: #e53e3e; margin-left: 2px; }
 
@@ -68,7 +68,7 @@ html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#
 .qt-segmented label.qt-radio-opt:last-child { border-right: none; }
 .qt-segmented input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
 .qt-segmented label.qt-radio-opt.qt-active { background: #2b6cb0; color: #fff; }
-.qt-validity-days, .qt-validity-until { padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; box-sizing: border-box; }
+.qt-validity-days, .qt-validity-until { padding: 5px 8px; border: 1px solid var(--ork-input-border); background: var(--ork-card-bg); border-radius: 4px; font-size: 0.9rem; box-sizing: border-box; }
 .qt-validity-days { width: 100px; }
 .qt-validity-until { width: 170px; }
 .qt-validity-warn { display: none; align-items: flex-start; gap: 8px; background: #fff8e1; border: 1px solid #ffc107; border-left: 4px solid #f59e0b; border-radius: 4px; padding: 9px 12px; font-size: 0.82rem; line-height: 1.4; color: #78350f; }
@@ -90,11 +90,11 @@ html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#
 .qt-switch-row .qt-switch-help { margin-right: auto; }
 
 /* ── Save / actions ────────────────────────────────────── */
-.qt-save-row { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--rp-border); }
+.qt-save-row { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--rp-divider); }
 .qt-save-btn { padding: 7px 20px; background: #2b6cb0; color: #fff; border: none; border-radius: 4px; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
 .qt-save-btn:hover { background: #2c5282; }
 .qt-saved-msg { font-size: 0.82rem; color: #276749; display: none; }
-.qt-link-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--rp-border); }
+.qt-link-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--rp-divider); }
 .qt-link-btn { display: inline-block; padding: 6px 14px; border-radius: 4px; font-size: 0.82rem; font-weight: 600; text-decoration: none; }
 .qt-link-btn-primary { background: #2b6cb0; color: #fff; }
 .qt-link-btn-primary:hover { background: #2c5282; }
@@ -207,7 +207,7 @@ html[data-theme="dark"] #qt-manager-error { color: #fc8181 !important; }
 /* ── In-product confirm/alert modal (replaces native confirm/alert) ── */
 .qt-confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9500; align-items:center; justify-content:center; }
 .qt-confirm-overlay.qt-open { display:flex; }
-.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; box-sizing:border-box; min-width:0; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+.qt-confirm-modal { background:var(--ork-card-bg); border-radius:8px; padding:22px 24px; box-sizing:border-box; min-width:0; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-confirm-title { margin:0 0 10px; font-size:1rem; font-weight:700; color:#2d3748; }
 /* orkui.css paints every h1..h6 as a grey "chip" (background + border + white text-shadow).
    On a modal title that reads as a pale box — a glaring white box in dark mode. The config-card
@@ -552,9 +552,9 @@ html[data-theme="dark"] .qt-tooltip-icon:focus-visible { outline-color: #63b3ed;
 			<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
 				<div class="qt-manager-search-wrap" style="position:relative;">
 					<input type="text" id="qt-manager-search" placeholder="Search player name&hellip;" autocomplete="off"
-					       style="width:220px;padding:5px 8px;border:1px solid var(--rp-border);border-radius:4px;font-size:0.9rem;">
+					       style="width:220px;padding:5px 8px;border:1px solid var(--ork-input-border);background:var(--ork-card-bg);border-radius:4px;font-size:0.9rem;">
 					<input type="hidden" id="qt-manager-id-input">
-					<div id="qt-manager-ac-results" style="display:none;position:absolute;bottom:100%;left:0;right:0;background:#fff;border:1px solid #cbd5e0;border-radius:4px;box-shadow:0 -2px 8px rgba(0,0,0,0.12);z-index:200;max-height:200px;overflow-y:auto;"></div>
+					<div id="qt-manager-ac-results" style="display:none;position:absolute;bottom:100%;left:0;right:0;background:var(--ork-card-bg);border:1px solid var(--ork-input-border);border-radius:4px;box-shadow:var(--ork-shadow-dropdown);z-index:200;max-height:200px;overflow-y:auto;"></div>
 				</div>
 				<button id="qt-add-manager-btn" class="qt-save-btn" style="white-space:nowrap;"><i class="fas fa-user-plus"></i> Add Manager</button>
 				<span id="qt-manager-error" style="font-size:0.82rem;color:#e53e3e;display:none;"></span>

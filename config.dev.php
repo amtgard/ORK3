@@ -116,7 +116,7 @@ define('CACHE_HOST', 'ork-dev');
 define('CUSTOM_CSS', HTTP_TEMPLATE . 'default/style/custom.css');
 
 // System Config
-define('LOGIN_TIMEOUT', 72 * 60 * 60);
+define('LOGIN_TIMEOUT', 30 * 24 * 60 * 60);
 define('APP_STAGE', 'DEV');
 define('UI_LOCALITY', 'LOCAL'); // REMOTE
 define('ORK3_SERVICE_URL', HTTP_SERVICE);
@@ -130,12 +130,24 @@ define('DUMPTRACE', false);
 define('GOOGLE_MAPS_API_KEY', '');
 define('GOOGLE_MAPS_ACCESS_API_KEY', '');
 define('SENDGRID_API_KEY', '');
+// Amazon SES SMTP credentials -- the outbound mail path for password reset
+// (Authorization::ResetPassword). Leave empty here; the real values live in
+// prod config.php. With these empty, a reset request fails cleanly and is
+// logged instead of sending mail.
+define('AMAZON_SES_HOST', '');
+define('AMAZON_SES_USERNAME', '');
+define('AMAZON_SES_PASSWORD', '');
 define('BEHOLD_KEY', '');
 // Cloudflare analytics — keep empty in committed config.dev.php. For local
 // testing pass via docker (-e CF_API_TOKEN=… -e CF_ZONE_ID=…) — the recap
 // code falls back to getenv() when the constants are empty.
 define('CF_API_TOKEN', '');
 define('CF_ZONE_ID', '');
+
+// CARTO basemap tile key (Live Attendance + Weather maps) — keep empty in
+// committed config.dev.php; set the real value in an untracked local
+// override if you need working maps locally.
+define('CARTO_API_KEY', '');
 
 // INCLUDE
 require_once(DIR_LIB . 'mail.php');

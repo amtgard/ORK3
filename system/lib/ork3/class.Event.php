@@ -453,12 +453,27 @@ class Event extends Ork3
         return $this->_rsvpOkResponse(['RsvpPlayers' => $list]);
     }
 
+    // A player's own RSVPs, from the My Amtgard dashboard and the profile card.
+    // An occurrence stays listed until it has ENDED, not until it starts: players
+    // use this list to jump straight to the event they are standing at today, so
+    // it has to survive the moment the event begins. The window is the end DAY,
+    // not the end instant -- a multi-day occurrence whose last day is stored with
+    // a midnight end time is still running that day -- and an occurrence with a
+    // missing or zero event_end falls back to its start date.
+    //
+    // The cutoff date comes from PHP, NOT from CURDATE(). PHP runs
+    // America/Chicago (config.php) while MySQL runs UTC, so CURDATE() rolls over
+    // to tomorrow at 7 PM Central -- and every event still running that evening
+    // would be compared against tomorrow's date and dropped. That is the exact
+    // window this method exists to cover, so both sides of the comparison have
+    // to be read off the same clock.
     public function GetUpcomingRsvps($request)
     {
         $mundaneId = (int)($request['MundaneId'] ?? 0);
         if (!valid_id($mundaneId)) {
             return InvalidParameter('MundaneId is required.');
         }
+        $today = date('Y-m-d');
         $this->db->Clear();
         $r = $this->db->DataSet(
             "SELECT er.event_calendardetail_id, e.event_id, e.name AS event_name, cd.event_start, cd.event_end
@@ -466,7 +481,7 @@ class Event extends Ork3
 			 JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_calendardetail_id = er.event_calendardetail_id
 			 JOIN " . DB_PREFIX . "event e ON e.event_id = cd.event_id
 			 WHERE er.mundane_id = " . (int)$mundaneId . "
-			   AND cd.event_start > NOW()
+			   AND DATE(CASE WHEN cd.event_end >= cd.event_start THEN cd.event_end ELSE cd.event_start END) >= '" . $today . "'
 			 ORDER BY cd.event_start ASC"
         );
         $list = [];

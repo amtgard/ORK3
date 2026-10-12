@@ -119,9 +119,26 @@ class Authorization extends Ork3
 	{
 		$response = array();
 		$this->mundane->clear();
-		$this->mundane->like('username', trim($request['UserName']));
-		$this->mundane->like('email', trim($request['Email']));
+		// Exact match, not like(): see the note in Authorize_h below. Same
+		// two failure modes here, and this is the flow a locked-out player
+		// would reach for -- an account whose stored username or email
+		// carries a trailing space could neither log in nor reset.
+		// '_' is especially common in email addresses, where like() would
+		// treat it as a single-character wildcard.
+		$this->mundane->username = trim($request['UserName']);
+		$this->mundane->email = trim($request['Email']);
 		if ($this->mundane->find()) {
+			// Bail out before touching the account if there is nowhere to send the
+			// temporary password to. The reset rewrites the stored password, so
+			// sending nothing would lock the player out of an account they could
+			// still get into a moment ago. Only dev/dist hit this -- prod
+			// config.php defines all three.
+			if (!(defined('AMAZON_SES_HOST') && AMAZON_SES_HOST !== ''
+				&& defined('AMAZON_SES_USERNAME') && AMAZON_SES_USERNAME !== ''
+				&& defined('AMAZON_SES_PASSWORD') && AMAZON_SES_PASSWORD !== '')) {
+				error_log('ResetPassword: outbound mail is not configured (AMAZON_SES_* empty); no mail sent, account left unchanged.');
+				return InvalidParameter(null, 'Password reset is unavailable: outbound mail is not configured on this server.');
+			}
 			$password = substr(md5(microtime()), 2, 11);
 			$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 1);
 			/* Only salt on password change or first password
@@ -323,7 +340,23 @@ class Authorization extends Ork3
 		$this->mundane->clear();
 
 		if ($request['Token'] == null) {
-			$this->mundane->like('username', trim($request['UserName']));
+			// Exact match, not like(). like() built a LIKE clause, which
+			// broke logins two ways:
+			//   1. MySQL's PAD SPACE collation makes '=' ignore trailing
+			//      spaces, but LIKE does NOT -- so a stored username of
+			//      'Bunkydoodle ' never matched the typed 'Bunkydoodle',
+			//      and find() failed before the password was ever checked.
+			//      Prod had 69 such accounts, 45 of them active and with no
+			//      SSO fallback: locked out entirely, and no password an
+			//      officer set could ever work.
+			//   2. '_' and '%' in a username were wildcards, so a lookup
+			//      could match a different account and find() take the
+			//      wrong row.
+			// '=' fixes both and changes nothing else: the collation is
+			// utf8mb4_unicode_ci so matching stays case-insensitive, and
+			// internal spaces were always literal. Leading spaces are still
+			// not forgiven by '=', but prod has none.
+			$this->mundane->username = trim($request['UserName']);
 			if ($this->mundane->find()) {
 				$mundane_id = $this->mundane->mundane_id;
 				// Harmonizes old password style with new password style
