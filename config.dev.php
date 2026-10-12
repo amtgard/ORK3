@@ -170,12 +170,15 @@ define('CACHE_ENABLED', true);
 
 // For development purposes due to containerization, the frontend (browser) and backend need different endpoints
 // In production, the same endpoint will suffice (https://idp.amtgard.com)
-// Identification for the ORK's own server-side calls TO the IDP. idp.amtgard.com
-// is behind the same Cloudflare zone, so these are challenged without a skip rule
-// to match. Empty locally (no Cloudflare in front of a local IDP); set the real
-// key in prod config.php.
-define('ORK_IDP_CLIENT_NAME', 'AmtgardORK/3.5.6');
-define('ORK_IDP_API_KEY', getenv('ORK_IDP_API_KEY') ?: '');
+// Who the ORK is when it calls another service. Not destination-specific --
+// reuse this for any future outbound integration.
+define('ORK_CLIENT_NAME', 'AmtgardORK');
+
+// Key the IDP accepts from the ORK. Per-relationship, so it lives with the
+// other IDP_* settings. idp.amtgard.com is behind the same Cloudflare zone as
+// the ORK, and a server-side POST is challenged without a skip rule matching
+// this key. Empty locally (no Cloudflare in front of a local IDP).
+define('IDP_API_KEY', getenv('IDP_API_KEY') ?: '');
 define('IDP_BASE_URL', 'http://localhost:37080');
 define('IDP_API_URL', 'http://host.docker.internal:37080');
 define('IDP_CLIENT_ID', 'ork3_dev');

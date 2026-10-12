@@ -146,10 +146,10 @@ class IdpIntegration extends Ork3
         $headers = [
             'Content-Type: application/json',
             'Accept: application/json',
-            'X-ORK-Client: ' . (defined('ORK_IDP_CLIENT_NAME') ? ORK_IDP_CLIENT_NAME : 'AmtgardORK/3.5.6'),
+            'X-ORK-Client: ' . (defined('ORK_CLIENT_NAME') ? ORK_CLIENT_NAME : 'AmtgardORK'),
         ];
-        if (defined('ORK_IDP_API_KEY') && trim((string) ORK_IDP_API_KEY) !== '') {
-            $headers[] = 'X-Ork-Key: ' . ORK_IDP_API_KEY;
+        if (defined('IDP_API_KEY') && trim((string) IDP_API_KEY) !== '') {
+            $headers[] = 'X-Ork-Key: ' . IDP_API_KEY;
         }
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_USERPWD, $clientId . ':' . $clientSecret);
