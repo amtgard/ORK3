@@ -817,4 +817,42 @@ class Controller_EventAjax extends Controller
             3,
         );
     }
+
+    // Cross-kingdom event sharing. Route: EventAjax/share/{eventId}/{share|unshare}
+    // POST body: KingdomId. Auth is enforced in the DB layer (AUTH_KINGDOM over the
+    // target kingdom); this method is a thin JSON wrapper.
+    public function share($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $params     = explode('/', $p ?? '');
+        $event_id   = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $action     = $params[1] ?? '';
+        $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
+        if (!valid_id($event_id) || !valid_id($kingdom_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid parameters.']);
+            exit;
+        }
+        $this->load_model('Event');
+        $token = $this->session->token;
+        if ($action === 'share') {
+            $r = $this->Event->share_event_to_kingdom($token, $event_id, $kingdom_id);
+        } elseif ($action === 'unshare') {
+            $r = $this->Event->unshare_event_from_kingdom($token, $event_id, $kingdom_id);
+        } else {
+            echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+            exit;
+        }
+        $ok = (isset($r['Status']) && (int)$r['Status'] === 0);
+        if ($ok) {
+            $shared = $this->Event->get_shared_kingdoms_for_event($event_id);
+            echo json_encode(['status' => 0, 'shared' => array_values($shared)]);
+        } else {
+            echo json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? 'Error') . (isset($r['Detail']) ? ': ' . $r['Detail'] : '')]);
+        }
+        exit;
+    }
 }
