@@ -1,0 +1,135 @@
+<?php
+// hero_carousel.tpl — Plain PHP partial (extract()+include). No Smarty.
+// Receives: $blockFields, $ActiveKingdomSummary, $EventSummary, UIR (constant)
+
+// --- Stat ticker computation ---
+$list = (isset($ActiveKingdomSummary['ActiveKingdomsSummaryList']) && is_array($ActiveKingdomSummary['ActiveKingdomsSummaryList']))
+    ? $ActiveKingdomSummary['ActiveKingdomsSummaryList']
+    : [];
+$wkStart  = strtotime('-6 month');
+$wkCount  = max(1, (int)ceil((time() - $wkStart) / (7 * 86400)));
+$kCount   = 0;
+$parks    = 0;
+$att      = 0;
+foreach ($list as $r) {
+    // A principality is not a kingdom, so it is excluded from the kingdom tally.
+    // Its parks/attendance, however, are keyed on the principality's own
+    // kingdom_id and are NOT rolled into the parent — count every row for those.
+    if ((int)$r['ParentKingdomId'] === 0) {
+        $kCount++;
+    }
+    $parks += (int)$r['ParkCount'];
+    $att   += (int)$r['Attendance'];
+}
+$weekly      = $att > 0 ? round($att / $wkCount) : 0;
+// $EventSummary is a LIMIT-15 upcoming-events list (Controller::index), not a
+// count, so at the cap show "15+" rather than presenting the fetch cap as a total.
+$eventsCap   = 15;
+$eventsCount = is_array($EventSummary ?? null) ? count($EventSummary) : 0;
+$eventsMore  = $eventsCount >= $eventsCap;
+
+// --- Field helpers ---
+$autoplayMs = (int)($blockFields['autoplay_ms'] ?? 4500);
+$slides     = $blockFields['slides']      ?? [];
+$ctas       = $blockFields['ctas']        ?? [];
+$slides     = is_array($slides) ? $slides : [];
+$ctas       = is_array($ctas)   ? $ctas   : [];
+
+// Keep only slides that actually have something to show (image, headline,
+// subcopy, or kicker). With no renderable slides, render nothing for visitors;
+// in the author preview (SitePreview) surface a hint so the empty state is
+// discoverable in the editor instead of a blank strip.
+// The filter lives in frontdoor/_helpers.tpl because Site_shell.tpl runs it too,
+// to decide whether this block supplies the page <h1>; the two must not drift.
+$renderSlides = fdHeroRenderableSlides($slides);
+if (empty($renderSlides)) {
+    if ($fdIsPreview) {
+        fdEmptyBlockNotice('This carousel has no slides yet.');
+    }
+    return;
+}
+?>
+<div class="fd-carousel" data-autoplay="<?= $autoplayMs ?>" role="region" aria-roledescription="carousel" aria-label="Featured highlights">
+
+    <?php /* Logo intentionally omitted here — the marketing nav above already shows it. */ ?>
+
+    <?php foreach ($renderSlides as $idx => $slide):
+        $isFirst   = ($idx === 0);
+        // The first slide's headline is the page H1; later slides (alternate
+        // views of the same hero) use H2 so the page keeps a single H1.
+        $hlTag     = $isFirst ? 'h1' : 'h2';
+        // Prefer the mid-size "display" rendition for the hero background.
+        $imgSrc    = htmlspecialchars($slide['image']['display'] ?? $slide['image']['src'] ?? '', ENT_QUOTES, 'UTF-8');
+        $imgAlt    = htmlspecialchars($slide['image']['alt'] ?? '', ENT_QUOTES, 'UTF-8');
+        $kicker    = htmlspecialchars($slide['kicker']   ?? '', ENT_QUOTES, 'UTF-8');
+        $headline  = htmlspecialchars($slide['headline'] ?? '', ENT_QUOTES, 'UTF-8');
+        $subcopy   = htmlspecialchars($slide['subcopy']  ?? '', ENT_QUOTES, 'UTF-8');
+    ?>
+    <div class="fd-slide<?= $isFirst ? ' is-active' : '' ?>">
+        <img class="fd-slide-img" src="<?= $imgSrc ?>" alt="<?= $imgAlt ?>">
+        <div class="fd-slide-scrim"></div>
+        <div class="fd-slide-body">
+            <?php if ($kicker !== ''): ?>
+            <div class="fd-kicker" style="margin-bottom:14px"><?= $kicker ?></div>
+            <?php endif; ?>
+            <?php if ($headline !== ''): ?>
+            <<?= $hlTag ?> class="fd-serif fd-hero-headline" style="font-size:58px;line-height:1.0;text-shadow:0 3px 18px rgba(0,0,0,.6);margin-bottom:16px"><?= $headline ?></<?= $hlTag ?>>
+            <?php endif; ?>
+            <?php if ($subcopy !== ''): ?>
+            <p style="margin:0 0 26px;font-size:18px;color:rgba(255,255,255,.88);max-width:470px"><?= $subcopy ?></p>
+            <?php endif; ?>
+            <?php if (!empty($ctas)): ?>
+            <div style="display:flex;flex-wrap:wrap;gap:10px">
+                <?php foreach ($ctas as $ctaIdx => $cta):
+                    $ctaLabel = htmlspecialchars($cta['label'] ?? '', ENT_QUOTES, 'UTF-8');
+                    $ctaHref  = htmlspecialchars(CmsSanitizer::SafeHrefOrHash($cta['href'] ?? ''), ENT_QUOTES, 'UTF-8');
+                    $ctaClass = ($cta['style'] ?? '') === 'ghost' ? 'fd-btn-ghost' : 'fd-btn-gold';
+                ?>
+                <a class="<?= htmlspecialchars($ctaClass, ENT_QUOTES) ?>" href="<?= $ctaHref ?>"><?= $ctaLabel ?></a>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endforeach; ?>
+
+    <?php if (count($renderSlides) > 1): ?>
+    <div class="fd-dots">
+        <?php foreach ($renderSlides as $idx => $slide): ?>
+        <button type="button" class="fd-dot<?= $idx === 0 ? ' on' : '' ?>"
+                aria-label="Go to slide <?= (int)$idx + 1 ?>"<?= $idx === 0 ? ' aria-current="true"' : '' ?>></button>
+        <?php endforeach; ?>
+    </div>
+    <?php // Auto-advance pause/play toggle (WCAG 2.2.2). JS wires the behaviour
+          // and swaps the icon/label; starts as "Pause" (playing). ?>
+    <button type="button" class="fd-carousel-toggle" aria-label="Pause slideshow" aria-pressed="false">
+        <i class="fas fa-pause"></i>
+    </button>
+    <?php endif; ?>
+
+    <?php /* Live stat ticker: only the real HOME action injects $ActiveKingdomSummary.
+              Sub-page heroes (CMS pages) leave it unset → omit the ticker rather
+              than render zeros. */ ?>
+    <?php if (isset($ActiveKingdomSummary)): ?>
+    <!-- Live stat ticker pinned to carousel base -->
+    <div class="fd-stat-ticker">
+        <div class="fd-stat-ticker-cell">
+            <div class="fd-stat-num"><?= number_format($kCount) ?></div>
+            <div class="fd-stat-label">Kingdoms</div>
+        </div>
+        <div class="fd-stat-ticker-cell">
+            <div class="fd-stat-num"><?= number_format($parks) ?></div>
+            <div class="fd-stat-label">Parks</div>
+        </div>
+        <div class="fd-stat-ticker-cell">
+            <div class="fd-stat-num">~<?= number_format($weekly) ?></div>
+            <div class="fd-stat-label">Players / Week</div>
+        </div>
+        <div class="fd-stat-ticker-cell">
+            <div class="fd-stat-num"><?= number_format($eventsCount) ?><?= $eventsMore ? '+' : '' ?></div>
+            <div class="fd-stat-label">Events</div>
+        </div>
+    </div>
+    <?php endif; ?>
+
+</div>

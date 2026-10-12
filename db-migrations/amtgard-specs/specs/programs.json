@@ -1,0 +1,148 @@
+{
+    "slug": "programs",
+    "type": "composed",
+    "parent_slug": null,
+    "title": "AI Programs",
+    "meta_description": "Amtgard International Programs: quarterly reports, Food Fight, Spring Muster, Olympiad, and other engagement events.",
+    "blocks": [
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "Amtgard International Programs",
+                "body": "<p>Here is a list of Programs that Amtgard International is heading. Click on each Program to view more information for each.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Quarterly Reports",
+                "level": 2,
+                "align": "left"
+            }
+        },
+        {
+            "type": "file_download",
+            "fields": {
+                "files": [
+                    {
+                        "title": "2026 Q1 Report",
+                        "url": "2026-q1-report.pdf",
+                        "filetype": "pdf"
+                    },
+                    {
+                        "title": "2025 Q1 Report",
+                        "url": "2025-q1-report.pdf",
+                        "filetype": "pdf"
+                    },
+                    {
+                        "title": "2025 Q2 Report",
+                        "url": "2025-q2-report.pdf",
+                        "filetype": "pdf"
+                    },
+                    {
+                        "title": "2025 Q3 Report",
+                        "url": "2025-q3-report.pdf",
+                        "filetype": "pdf"
+                    },
+                    {
+                        "title": "2025 Q4 Report",
+                        "url": "2025-q4-report.pdf",
+                        "filetype": "pdf"
+                    }
+                ]
+            },
+            "assets": {
+                "docs": [
+                    {
+                        "file": "2026-q1-report.pdf"
+                    },
+                    {
+                        "file": "2025-q1-report.pdf"
+                    },
+                    {
+                        "file": "2025-q2-report.pdf"
+                    },
+                    {
+                        "file": "2025-q3-report.pdf"
+                    },
+                    {
+                        "file": "2025-q4-report.pdf"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "kicker": "2026",
+                "heading": "",
+                "body": "<p>2026 Q1 Report (see download above), 2026 Q2 Report, 2026 Q3 Report, 2026 Q4 Report — not yet published.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "kicker": "2025",
+                "heading": "",
+                "body": "<p>2025 Q1 Report, 2025 Q2 Report, 2025 Q3 Report, 2025 Q4 Report (see downloads above).</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "card_grid",
+            "fields": {
+                "kicker": "",
+                "heading": "",
+                "subheading": "",
+                "cards": [
+                    {
+                        "title": "Amtgard Food Fight",
+                        "blurb": "Amtgard Food Fight is a month-long fundraising and service event that is celebrated in every Kingdom of our game. We come together and fight hunger in our local communities every September and naturally to compete amongst ourselves to see which Kingdom can do the most good.\n\nContact the Food Fight Team: communityoutreach@amtgard.com",
+                        "href": "UIRPLACEHOLDER/Page/view/foodfight",
+                        "image": "1.jpg"
+                    },
+                    {
+                        "title": "Amtgard Spring Muster",
+                        "blurb": "Spring Muster is a recruitment event that spans from 1 to 3 months. The purpose is to not only recruit new players with a competition between the Kingdoms, but also to revitalize engagement and retention of our existing players and offer some other programming to make our game a better place.\n\nContact the Spring Muster Team: Muster@amtgard.com\n\nPage Coming Soon",
+                        "href": "#",
+                        "image": "2.jpg"
+                    },
+                    {
+                        "title": "Olympiad",
+                        "blurb": "An annual Tourney that tests the best of the best in Arts and Sciences as well as War skills. Hosting of Olympiad rotates among all the Kingdoms. The winner of the War skills is called the War Olympian, the winner of the Arts and Sciences tourney is called the Cultural Olympian, and the overall winner is the Grand Olympian.\n\nContact the Olympiad Team: olympiad@amtgard.com",
+                        "href": "UIRPLACEHOLDER/Page/view/olympiad",
+                        "image": "3.jpg"
+                    },
+                    {
+                        "title": "Other Programs and Engagement",
+                        "blurb": "Amtgard International is always looking to run other large engagement events. These events will be linked.",
+                        "href": "#",
+                        "image": "4.jpg"
+                    }
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": "Amtgard Food Fight"
+                    },
+                    {
+                        "file": "2.jpg",
+                        "alt": "Amtgard Spring Muster"
+                    },
+                    {
+                        "file": "3.jpg",
+                        "alt": "Olympiad"
+                    },
+                    {
+                        "file": "4.jpg",
+                        "alt": "Other Programs and Engagement"
+                    }
+                ]
+            }
+        }
+    ]
+}

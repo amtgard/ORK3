@@ -1,0 +1,61 @@
+{
+    "slug": "join",
+    "type": "composed",
+    "parent_slug": null,
+    "title": "Join Now",
+    "meta_description": "New to Amtgard? Learn the basics, find a chapter near you with the Amtgard Atlas, or start your own chapter today.",
+    "blocks": [
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Join Now",
+                "level": 2,
+                "align": "center"
+            }
+        },
+        {
+            "type": "card_grid",
+            "fields": {
+                "kicker": "",
+                "heading": "",
+                "subheading": "",
+                "cards": [
+                    {
+                        "title": "Learn the Basics",
+                        "blurb": "New to Amtgard? Stop here first to get information on how to participate!",
+                        "href": "UIRPLACEHOLDER/Page/view/learn-the-basics",
+                        "image": "1.jpg"
+                    },
+                    {
+                        "title": "Find a Chapter",
+                        "blurb": "Use the Amtgard Atlas to find the chapter nearest you!",
+                        "href": "UIRPLACEHOLDER/Atlas",
+                        "image": "2.png"
+                    },
+                    {
+                        "title": "Start A Chapter",
+                        "blurb": "Did you move to a new area? Is there no chapter nearby to regularly visit? You can start your own!",
+                        "href": "UIRPLACEHOLDER/Page/view/start-a-chapter",
+                        "image": "3.jpg"
+                    }
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": "Learn the Basics"
+                    },
+                    {
+                        "file": "2.png",
+                        "alt": "Find a Chapter"
+                    },
+                    {
+                        "file": "3.jpg",
+                        "alt": "Start A Chapter"
+                    }
+                ]
+            }
+        }
+    ]
+}

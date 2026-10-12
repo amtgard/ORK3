@@ -1,0 +1,161 @@
+<?php
+/**
+ * Partial: kingdoms_teaser.tpl
+ * Receives: $blockFields (kicker, heading, limit, more_href, show_provinces), $ActiveKingdomSummary (array), UIR
+ * Row keys: KingdomId, ParentKingdomId, KingdomName, ParkCount
+ * Only renders parent kingdoms (ParentKingdomId === 0).
+ */
+$kicker   = $blockFields['kicker']    ?? '';
+$heading  = $blockFields['heading']   ?? '';
+// A cleared number input arrives as 0/blank → fall back to the default
+// rather than emptying the grid under a live heading.
+// Clamp to a hard max so an authored huge value can't blow out the grid.
+$limit    = fdClampLimit(
+    $blockFields['limit'] ?? null,
+    CmsRenderCache::TEASER_LIMIT_DEFAULT,
+    CmsRenderCache::TEASER_LIMIT_MAX
+);
+$moreHref = $blockFields['more_href'] ?? '';
+$moreHref = (is_string($moreHref) && $moreHref !== '' && CmsSanitizer::IsSafeUrl($moreHref)) ? $moreHref : '';
+$showProvinces = !empty($blockFields['show_provinces']);
+
+// Resolve the parent-kingdom teaser list — filter → slice → resolve each
+// heraldry URL (a per-row file_exists() disk probe via resolve_image_ext) — ONCE,
+// then cache the fully-hydrated result in GhettoCache keyed by the clamped limit
+// (mirrors kingdom_parks.tpl $kpResolved/$kpCache). The kingdom set is global and
+// safe to share across viewers; a short TTL keeps it fresh. Cached hits skip the
+// per-row disk probes entirely.
+// $ktResolved = ['shown' => [ ['id','name','heraldry','provinces'], … ], 'total' => int].
+// 'provinces' is the comma-joined distinct states/provinces of the kingdom's
+// active parks (principality parks folded in) — '' unless show_provinces is on,
+// which also selects its own cache key so the two variants never collide.
+//
+// This is the ONE cached block whose key carries no org id — it is the global
+// front door's own. That is why it was invisible to CmsAjax::clearrendercache
+// for so long (the flush loop only ever ran over a kingdom/park id); it is now
+// enumerated there under the global scope, via the same registry.
+// Captured for the closure (which does not inherit template scope): this block
+// is also included from contexts that never inject the summary at all.
+$ktSummary = (isset($ActiveKingdomSummary) && is_array($ActiveKingdomSummary)) ? $ActiveKingdomSummary : [];
+$ktResolved = fdBlockCache(
+    CmsRenderCache::NS_KINGDOMS_TEASER,
+    CmsRenderCache::TeaserKey($limit, $showProvinces),
+    CmsRenderCache::TTL,
+    function () use ($limit, $ktSummary, $showProvinces) {
+        // Filter to parent kingdoms only.
+        $allKingdoms = [];
+        if (is_array($ktSummary['ActiveKingdomsSummaryList'] ?? null)) {
+            foreach ($ktSummary['ActiveKingdomsSummaryList'] as $r) {
+                if ((int)$r['ParentKingdomId'] === 0) {
+                    $allKingdoms[] = $r;
+                }
+            }
+        }
+        $totalParent = count($allKingdoms);
+
+        // One grouped query for every kingdom, only when the author asked for it.
+        $provinceMap = [];
+        if ($showProvinces && $totalParent > 0 && class_exists('APIModel')) {
+            try {
+                $provinceMap = (array) (new APIModel('Report'))->GetActiveKingdomProvinces();
+            } catch (\Throwable $e) {
+                $provinceMap = [];
+            }
+        }
+
+        // The Freeholds (kingdom 8) is a scattered, landless realm with parks in
+        // dozens of states and provinces — a list would be noise, so it gets a
+        // fixed label instead.
+        $provinceOverrides = [8 => 'Various Locations around US and Canada'];
+
+        $shownRows   = [];
+        foreach (array_slice($allKingdoms, 0, $limit) as $r) {
+            $kid = (int)$r['KingdomId'];
+            $shownRows[] = [
+                'id'       => $kid,
+                'name'     => stripslashes($r['KingdomName'] ?? ''),
+                'heraldry' => HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d', $kid)),
+                'provinces' => $showProvinces
+                    ? ($provinceOverrides[$kid] ?? implode(', ', (array) ($provinceMap[$kid] ?? [])))
+                    : '',
+            ];
+        }
+        return ['shown' => $shownRows, 'total' => $totalParent];
+    },
+    // Only cache once we actually have kingdom data — never poison the key with an
+    // empty result from a context that doesn't inject $ActiveKingdomSummary.
+    static function ($built) {
+        return (int)($built['total'] ?? 0) > 0;
+    }
+);
+
+$shown        = $ktResolved['shown'];
+$moreCount    = (int)$ktResolved['total'] - count($shown);
+
+// No kingdoms to show — which is the case on EVERY render path that does not
+// inject $ActiveKingdomSummary (only the global front-door HOME action does).
+// A visitor must never see the internal reason: render nothing at all rather
+// than a full-width banded section containing a diagnostic string. The author,
+// in the CMS editor/preview, still gets told why the block is blank.
+if (empty($shown)) {
+    if ($fdIsPreview) {
+        fdEmptyBlockNotice('This block only lists kingdoms on the global Amtgard front door, so it has nothing to show here.');
+    }
+    return;
+}
+?>
+<div class="fd-pad fd-section-muted">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+        <div>
+            <?php if (!empty($kicker)): ?>
+                <div class="fd-kicker fd-kicker-d">
+                    <?= htmlspecialchars($kicker, ENT_QUOTES) ?>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($heading)): ?>
+                <h2 class="fd-sec-title">
+                    <?= htmlspecialchars($heading, ENT_QUOTES) ?>
+                </h2>
+            <?php endif; ?>
+        </div>
+        <?php if (!empty($moreHref)): ?>
+            <a class="fd-link" href="<?= htmlspecialchars($moreHref, ENT_QUOTES) ?>" style="white-space:nowrap;">Browse the full Kingdoms Directory &rarr;</a>
+        <?php endif; ?>
+    </div>
+
+    <div class="fd-kingdoms-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;">
+        <?php foreach ($shown as $row): ?>
+            <?php
+            $kingdomId   = (int)$row['id'];
+            $kingdomName = htmlspecialchars($row['name'], ENT_QUOTES);
+            $heraldryUrl = htmlspecialchars($row['heraldry'], ENT_QUOTES);
+            $provinces   = $showProvinces ? (string) ($row['provinces'] ?? '') : '';
+            ?>
+            <a class="fd-card" href="<?= UIR ?>Kingdom/profile/<?= $kingdomId ?>"
+               style="padding:12px;text-align:center;text-decoration:none;color:inherit;display:block;">
+                <div style="height:48px;display:flex;align-items:center;justify-content:center;">
+                    <img src="<?= $heraldryUrl ?>"
+                         onerror="this.style.display='none'"
+                         alt="<?= $kingdomName ?> heraldry"
+                         style="max-height:48px;max-width:100%;object-fit:contain;">
+                </div>
+                <div style="font-size:11px;font-weight:600;margin-top:6px;">
+                    <?= $kingdomName ?>
+                </div>
+                <?php if ($provinces !== ''): ?>
+                    <?php $provincesEsc = htmlspecialchars($provinces, ENT_QUOTES); ?>
+                    <div class="fd-kingdom-provinces" title="<?= $provincesEsc ?>"><?= $provincesEsc ?></div>
+                <?php endif; ?>
+            </a>
+        <?php endforeach; ?>
+
+        <?php if ($moreCount > 0 && !empty($moreHref)): ?>
+            <a class="fd-card" href="<?= htmlspecialchars($moreHref, ENT_QUOTES) ?>"
+               style="padding:12px;text-align:center;display:flex;flex-direction:column;align-items:center;
+                      justify-content:center;background:var(--navy);color:var(--fd-primary-contrast);text-decoration:none;
+                      border-color:var(--navy);">
+                <div style="font-size:13px;font-weight:700;">+<?= $moreCount ?> more &rarr;</div>
+            </a>
+        <?php endif; ?>
+    </div>
+</div>

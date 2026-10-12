@@ -1,3 +1,27 @@
 <IfModule mod_rewrite.c>
 RewriteEngine Off
+
+# ---------------------------------------------------------------------------
+# CMS Multi-Site pretty URLs (/k/{slug}) — Apache fallback.
+#
+# The dev/prod container is nginx (see nginx.ork3.config), where the
+# authoritative `location ^~ /k/` block does this rewrite; these Apache rules
+# are INERT there and are provided only so a mod_rewrite host gets the same
+# pretty URLs. They are intentionally left COMMENTED because this file ships
+# with `RewriteEngine Off`; enabling them means flipping RewriteEngine On,
+# which a mod_rewrite deployment must opt into deliberately.
+#
+# The raw routes work without any rewrite:
+#   /orkui/index.php?Route=Site/view/{slug}
+#   /orkui/index.php?Route=Site/page/{slug}/{pageSlug}
+#   /orkui/index.php?Route=Site/blog/{slug}
+#   /orkui/index.php?Route=Site/post/{slug}/{postSlug}
+#
+# To enable on Apache, uncomment:
+# RewriteEngine On
+# RewriteRule ^k/([^/]+)/blog/?$          orkui/index.php?Route=Site/blog/$1          [L,QSA]
+# RewriteRule ^k/([^/]+)/post/([^/]+)/?$  orkui/index.php?Route=Site/post/$1/$2       [L,QSA]
+# RewriteRule ^k/([^/]+)/([^/]+)/?$       orkui/index.php?Route=Site/page/$1/$2       [L,QSA]
+# RewriteRule ^k/([^/]+)/?$               orkui/index.php?Route=Site/view/$1          [L,QSA]
+# ---------------------------------------------------------------------------
 </IfModule>

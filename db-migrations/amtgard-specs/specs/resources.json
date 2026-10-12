@@ -1,0 +1,103 @@
+{
+    "slug": "resources",
+    "type": "resource",
+    "parent_slug": null,
+    "title": "Official Resources",
+    "meta_description": "Official Amtgard resources: rules and documents, AmtWiki, the O.R.K. player database, V9 development, volunteering, and board meeting notes.",
+    "blocks": [
+        {
+            "type": "card_grid",
+            "fields": {
+                "kicker": "",
+                "heading": "Official Resources",
+                "subheading": "",
+                "cards": [
+                    {
+                        "title": "Official Documents",
+                        "blurb": "Official Amtgard documents such as the Rules of Play and Chapter Contract located here",
+                        "href": "UIRPLACEHOLDER/Page/view/documents",
+                        "image": "1.jpg"
+                    },
+                    {
+                        "title": "AmtWiki",
+                        "blurb": "Come learn some history about your chapter or even take time to chronicle them yourself!",
+                        "href": "https://wiki.amtgard.com/",
+                        "image": "2.gif"
+                    },
+                    {
+                        "title": "O.R.K.",
+                        "blurb": "The Online Record Keeper is where player information such as levels and awards are stored",
+                        "href": "https://ork.amtgard.com/",
+                        "image": "3.png"
+                    },
+                    {
+                        "title": "Amtgard V9 Development",
+                        "blurb": "Looking to get involved with the development of the new rules?  The V9 team is waiting for your support here!",
+                        "href": "https://www.amtgard.com/v9",
+                        "image": "4.jpg"
+                    },
+                    {
+                        "title": "Volunteer Portal",
+                        "blurb": "Want to volunteer for Amtgard at the national level?  When opportunities arise the job postings are found here",
+                        "href": "UIRPLACEHOLDER/Page/view/volunteers",
+                        "image": "5.png"
+                    },
+                    {
+                        "title": "Kingdom Portals",
+                        "blurb": "Coming Soon!",
+                        "href": "#",
+                        "image": "6.jpg"
+                    },
+                    {
+                        "title": "AIBoD Meeting Notes",
+                        "blurb": "Meeting notes for the the AIBoD meetings are catalogued here",
+                        "href": "https://www.amtgard.com/bodminuteshub",
+                        "image": "7.jpg"
+                    },
+                    {
+                        "title": "CoM Meeting Records",
+                        "blurb": "Notes on the yearly Circle of Monarchs meeting can be accessed here",
+                        "href": "https://www.amtgard.com/ikcomhub",
+                        "image": "8.jpg"
+                    }
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": "Official Documents"
+                    },
+                    {
+                        "file": "2.gif",
+                        "alt": "AmtWiki"
+                    },
+                    {
+                        "file": "3.png",
+                        "alt": "O.R.K. Logo"
+                    },
+                    {
+                        "file": "4.jpg",
+                        "alt": "Amtgard V9 Development"
+                    },
+                    {
+                        "file": "5.png",
+                        "alt": "Volunteer Portal"
+                    },
+                    {
+                        "file": "6.jpg",
+                        "alt": "Kingdom Portals"
+                    },
+                    {
+                        "file": "7.jpg",
+                        "alt": "AIBoD Meeting Notes"
+                    },
+                    {
+                        "file": "8.jpg",
+                        "alt": "CoM Meeting Records"
+                    }
+                ]
+            }
+        }
+    ]
+}

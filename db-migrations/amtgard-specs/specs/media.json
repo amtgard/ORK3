@@ -1,0 +1,43 @@
+{
+    "slug": "media",
+    "type": "media",
+    "parent_slug": null,
+    "title": "Media",
+    "meta_description": "Explore Amtgard's galleries and articles & blog — photos and stories from chapters around the world.",
+    "blocks": [
+        {
+            "type": "card_grid",
+            "fields": {
+                "kicker": "",
+                "heading": "",
+                "subheading": "",
+                "cards": [
+                    {
+                        "title": "Galleries",
+                        "blurb": "Come on in and see the fun!",
+                        "href": "UIRPLACEHOLDER/Page/view/galleries",
+                        "image": "1.jpg"
+                    },
+                    {
+                        "title": "Articles & Blog",
+                        "blurb": "New articles and blog posts coming soon!",
+                        "href": "UIRPLACEHOLDER/Page/view/writing",
+                        "image": "2.jpg"
+                    }
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": "Painting Brushes"
+                    },
+                    {
+                        "file": "2.jpg",
+                        "alt": "Open Textbook in Library"
+                    }
+                ]
+            }
+        }
+    ]
+}

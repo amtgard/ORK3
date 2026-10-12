@@ -2,6 +2,54 @@
 
 class Park extends Ork3
 {
+    /**
+     * Per-request memo for GetParkDetails(), keyed by park id.
+     *
+     * STATIC on purpose. APIModel::__construct() is `new $APISource`, so every
+     * `new APIModel('Park')` a template writes builds a FRESH Park object — an
+     * INSTANCE memo is therefore never hit twice and buys nothing. A park
+     * org-site page reads this payload from three independently-cached places
+     * (park_hero, park_meeting via GetPublicMeetingSchedule, and _park_strip,
+     * which renders on every page of the site), and GetParkDetails is itself
+     * three queries.
+     *
+     * PHP statics live for exactly one request under mod_php/FPM, so this is a
+     * per-request memo, NOT a cross-request cache. It is cross-instance though,
+     * so EVERY writer that mutates an ork_park row must call BustParkMemo() —
+     * including writers outside this class (Banner, Heraldry).
+     *
+     * @var array<int,array>
+     */
+    private static $parkDetailsMemo = [ ];
+
+    /**
+     * Per-request memo for GetParkDays(), keyed by park id. Same rules as
+     * $parkDetailsMemo; busted by every ork_parkday writer.
+     *
+     * @var array<int,array>
+     */
+    private static $parkDaysMemo = [ ];
+
+    /**
+     * Drop the per-request park memo so the next read re-queries.
+     *
+     * MUST be called by anything that writes an ork_park or ork_parkday row,
+     * wherever it lives, or the rest of the request serves the pre-write row.
+     *
+     * @param int|null $park_id one park, or null for every memoized park
+     * @return void
+     */
+    public static function BustParkMemo($park_id = null)
+    {
+        if (null === $park_id) {
+            self::$parkDetailsMemo = [ ];
+            self::$parkDaysMemo    = [ ];
+            return;
+        }
+        $park_id = (int) $park_id;
+        unset(self::$parkDetailsMemo[ $park_id ], self::$parkDaysMemo[ $park_id ]);
+    }
+
     public function __construct()
     {
         parent::__construct();
@@ -150,6 +198,8 @@ class Park extends Ork3
             return ProcessingError('The migration failed and was rolled back: ' . $e->getMessage());
         }
 
+        self::BustParkMemo($from_park_id);
+        self::BustParkMemo($to_park_id);
         logtrace("Parks Merged", null);
         Ork3::$Lib->dangeraudit->audit(
             __CLASS__ . "::" . __FUNCTION__,
@@ -200,6 +250,7 @@ class Park extends Ork3
                     $this->park->abbreviation = strtoupper($request[ 'Abbreviation' ]);
                 }
                 $this->park->save();
+                self::BustParkMemo($request[ 'ParkId' ]);
                 // Move all players in the park to the new kingdom
                 $sql = "update " . DB_PREFIX . "mundane set kingdom_id = '" . mysql_real_escape_string($request[ 'KingdomId' ]) . "' where park_id = '" . mysql_real_escape_string($request[ 'ParkId' ]) . "'";
                 $this->db->query($sql);
@@ -285,6 +336,7 @@ class Park extends Ork3
             }
             $this->parkday->location_url = $request[ 'LocationUrl' ];
             $this->parkday->save();
+            self::BustParkMemo($request[ 'ParkId' ]);
             $_audit_req = $request;
             unset($_audit_req[ 'Token' ]);
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Park', (int)$request[ 'ParkId' ], null, [
@@ -382,6 +434,7 @@ class Park extends Ork3
             }
             $this->parkday->location_url = $request[ 'LocationUrl' ];
             $this->parkday->save();
+            self::BustParkMemo($park_id);
             $_audit_req = $request;
             unset($_audit_req[ 'Token' ]);
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Park', (int)$park_id, $_audit_prior, [
@@ -428,6 +481,7 @@ class Park extends Ork3
             ];
             $this->parkday->parkday_id = $request[ 'ParkDayId' ];
             $this->parkday->delete();
+            self::BustParkMemo($park_id);
             $_audit_req = $request;
             unset($_audit_req[ 'Token' ]);
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Park', (int)$park_id, $_audit_prior, null);
@@ -524,6 +578,23 @@ class Park extends Ork3
         return $response;
     }
 
+    /**
+     * PUBLIC (anonymous) park officer roster, ready to render.
+     *
+     * Thin adapter: the officer vocabulary and the whole public projection live on
+     * Officer, which owns them for both org scopes — ork_officer.role carries the
+     * same canonical vocabulary at park level as at kingdom level. This stays
+     * because it is the model membrane's entry point and the front-door officer
+     * block calls it.
+     *
+     * @param array $request { ParkId: int, Limit?: int }
+     * @return array list of array{persona:string,role:string,mundane_id:int,avatar:string}
+     */
+    public function GetPublicOfficers($request)
+    {
+        return Officer::PublicRoster('park', (int)($request[ 'ParkId' ] ?? 0), (int)($request[ 'Limit' ] ?? 0));
+    }
+
     public function GetParkKingdomId($pid)
     {
         $this->park->clear();
@@ -562,6 +633,12 @@ class Park extends Ork3
 
     public function GetParkDetails($request)
     {
+        $memo_id = (int) ($request[ 'ParkId' ] ?? 0);
+        // A memo hit returns without loading $this->park. No caller relies on that
+        // side effect today; anything that starts to must re-find() for itself.
+        if ($memo_id > 0 && isset(self::$parkDetailsMemo[ $memo_id ])) {
+            return self::$parkDetailsMemo[ $memo_id ];
+        }
         $this->park->clear();
         $this->park->park_id = $request[ 'ParkId' ];
         $response = [ ];
@@ -598,6 +675,12 @@ class Park extends Ork3
             $response[ 'Description' ] = stripslashes(nl2br($this->park->description));
             $response[ 'GoogleGeocode' ] = $this->park->google_geocode;
             $response[ 'Location' ] = $this->park->location;
+            // Memoize successes only: a transient find() failure (PDO runs in
+            // warning mode, so a blip returns false rather than throwing) must
+            // not be pinned for the rest of the request across every consumer.
+            if ($memo_id > 0) {
+                self::$parkDetailsMemo[ $memo_id ] = $response;
+            }
         } else {
             $response[ 'Status' ] = InvalidParameter();
         }
@@ -689,6 +772,10 @@ class Park extends Ork3
 
     public function GetParkDays($request)
     {
+        $memo_id = (int) ($request[ 'ParkId' ] ?? 0);
+        if ($memo_id > 0 && isset(self::$parkDaysMemo[ $memo_id ])) {
+            return self::$parkDaysMemo[ $memo_id ];
+        }
         $parkday = new yapo($this->db, DB_PREFIX . 'parkday');
         $parkday->clear();
         $parkday->park_id = $request[ 'ParkId' ];
@@ -719,9 +806,194 @@ class Park extends Ork3
                     'Online'            => (int)$parkday->online,
                 ];
             } while ($parkday->next());
+            // Memoize successes only — see GetParkDetails.
+            if ($memo_id > 0) {
+                self::$parkDaysMemo[ $memo_id ] = $response;
+            }
         } else {
             $response[ 'Status' ] = InvalidParameter();
         }
+        return $response;
+    }
+
+    /**
+     * Plain-English recurrence for one park-day row, e.g. "Every Saturday" or
+     * "2nd Sunday of the month". This is the meaning of the recurrence columns
+     * (Recurrence / WeekDay / WeekOfMonth / WeekInterval / MonthDay), so it lives
+     * here rather than in whatever surface happens to be rendering the schedule.
+     */
+    public static function MeetingWhenLabel(array $d)
+    {
+        $day = trim((string) ($d[ 'WeekDay' ] ?? ''));
+        if ('None' == $day) {
+            $day = '';
+        }
+        $recurrence = (string) ($d[ 'Recurrence' ] ?? 'weekly');
+        $ordinals   = [ 1 => '1st', 2 => '2nd', 3 => '3rd', 4 => '4th', 5 => '5th' ];
+
+        switch ($recurrence) {
+            case 'monthly':
+                $md = (int) ($d[ 'MonthDay' ] ?? 0);
+                return $md > 0 ? ('Monthly, on the ' . $md . date('S', mktime(0, 0, 0, 1, $md, 2000))) : 'Monthly';
+            case 'week-of-month':
+                $wom = (int) ($d[ 'WeekOfMonth' ] ?? 0);
+                $ord = $ordinals[ $wom ] ?? '';
+                if ('' !== $ord && '' !== $day) {
+                    return $ord . ' ' . $day . ' of the month';
+                }
+                return '' !== $day ? ('Monthly on ' . $day) : 'Monthly';
+            case 'every-x-weeks':
+                $iv = (int) ($d[ 'WeekInterval' ] ?? 0);
+                if ($iv > 1 && '' !== $day) {
+                    return 'Every ' . $iv . ' weeks on ' . $day;
+                }
+                return '' !== $day ? ('Every ' . $day) : '';
+            case 'weekly':
+            default:
+                return '' !== $day ? ('Every ' . $day) : 'Weekly';
+        }
+    }
+
+    /** "6:00 PM" from a MySQL TIME. Returns '' for the unset 00:00:00 sentinel. */
+    public static function MeetingTimeLabel($raw)
+    {
+        $raw = trim((string) $raw);
+        if ('' === $raw || '00:00:00' === $raw) {
+            return '';
+        }
+        $ts = strtotime('1970-01-01 ' . $raw . ' UTC');
+        return (false === $ts) ? '' : gmdate('g:i A', $ts);
+    }
+
+    /**
+     * The venue NAME is the one genuinely unreliable column here, so it gets its own
+     * guard. Three traps, all hit on live data:
+     *
+     *  1. `alternate_location` is a tinyint FLAG (0/1) — "this park day meets somewhere
+     *     other than the park's usual spot" — NOT a name. Reading it as one printed a
+     *     literal "0", because trim((string) 0) is "0", which is non-empty.
+     *  2. `location` is nominally a venue name but is in practice a geocode cache: of
+     *     806 ork_parkday rows, 522 hold a raw JSON blob ({"location":{"lat":…}) and
+     *     only 33 hold anything human. ork_park.location is worse — 781 JSON to 267
+     *     human. Emitting it verbatim dumps that JSON onto the page.
+     *  3. The column also holds the literal four-character string "null" — a
+     *     stringified null from whatever wrote the row, not a venue called "null". It
+     *     is non-empty, does not start with { or [, and carries no "key": pair, so it
+     *     passes every guard above. 33 ork_parkday and 267 ork_park rows hold it.
+     *
+     * So: take the name from `location` only when it does not look like serialized
+     * data or a stringified empty, rather than migrating 300 rows.
+     */
+    public static function CleanVenueName($raw)
+    {
+        $v = trim((string) $raw);
+        if ('' === $v || '{' === $v[ 0 ] || '[' === $v[ 0 ]) {
+            return '';
+        }
+        if (in_array(strtolower($v), [ 'null', 'nil', 'none', 'undefined', 'n/a' ], true)) {
+            return '';
+        }
+        return preg_match('/"[a-z_]+"\s*:/i', $v) ? '' : $v;
+    }
+
+    /**
+     * Best available address for a park day, falling back to the park's own record.
+     * Returns [ 'VenueName' => string, 'AddressLine' => string, 'MapUrl' => string ].
+     * Pass an empty $d to resolve the park's own address on its own.
+     */
+    public static function MeetingPlace(array $d, array $park)
+    {
+        $street = trim((string) ($d[ 'Address' ] ?? ''));
+        $city   = trim((string) ($d[ 'City' ] ?? ''));
+        $prov   = trim((string) ($d[ 'Province' ] ?? ''));
+        $post   = trim((string) ($d[ 'PostalCode' ] ?? ''));
+        $name   = self::CleanVenueName($d[ 'Location' ] ?? '');
+
+        // A park day with no address of its own inherits the park's — UNLESS it is
+        // flagged as meeting somewhere else, in which case the park's address is the
+        // wrong answer and no address at all is the honest one.
+        $is_alternate = !empty($d[ 'AlternateLocation' ]);
+        if ('' === $street && '' === $city && !$is_alternate) {
+            $street = trim((string) ($park[ 'Address' ] ?? ''));
+            $city   = trim((string) ($park[ 'City' ] ?? ''));
+            $prov   = trim((string) ($park[ 'Province' ] ?? ''));
+            $post   = trim((string) ($park[ 'PostalCode' ] ?? ''));
+            if ('' === $name) {
+                $name = self::CleanVenueName($park[ 'Location' ] ?? '');
+            }
+        }
+
+        $city_bits = array_filter([ $city, $prov ]);
+        $line      = implode(', ', array_filter([ $street, implode(', ', $city_bits), $post ]));
+
+        $map = trim((string) ($d[ 'MapUrl' ] ?? ''));
+        if ('' === $map) {
+            $map = trim((string) ($park[ 'MapUrl' ] ?? ''));
+        }
+        // No stored map link → build a Google Maps search from whatever address we have.
+        if ('' === $map && '' !== $line) {
+            $map = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($line);
+        }
+        // Only ever emit http(s) — a stored javascript: URL must not become an href.
+        if ('' !== $map && !preg_match('#^https?://#i', $map)) {
+            $map = '';
+        }
+
+        return [ 'VenueName' => $name, 'AddressLine' => $line, 'MapUrl' => $map ];
+    }
+
+    /**
+     * "When and where does this park meet", already resolved: recurrence rendered to
+     * plain English, times formatted, venue names cleaned and addresses inherited from
+     * the park record where the park day has none of its own. Any public surface — the
+     * front door's park_meeting block, a mobile app, the SOAP API — gets the same
+     * answer without re-deriving what an ork_parkday row means.
+     *
+     * Request: [ 'ParkId' => int, 'Limit' => int (optional, 0 = all) ].
+     * Returns Meetings (resolved rows), Fallback (the park's own address, for a park
+     * with no park-day records) and Directions (nl2br'd, NOT escaped — see
+     * GetParkDetails).
+     */
+    public function GetPublicMeetingSchedule($request)
+    {
+        $park_id = (int) ($request[ 'ParkId' ] ?? 0);
+        $limit   = (int) ($request[ 'Limit' ] ?? 0);
+        $response = [ 'Status' => Success(), 'Meetings' => [ ], 'Fallback' => [ ], 'Directions' => '' ];
+        if (!valid_id($park_id)) {
+            $response[ 'Status' ] = InvalidParameter();
+            return $response;
+        }
+
+        $park = $this->GetParkDetails([ 'ParkId' => $park_id ]);
+        if (!is_array($park)) {
+            $park = [ ];
+        }
+
+        $days = $this->GetParkDays([ 'ParkId' => $park_id ]);
+        $days = (is_array($days) && is_array($days[ 'ParkDays' ] ?? null)) ? $days[ 'ParkDays' ] : [ ];
+        if ($limit > 0) {
+            $days = array_slice($days, 0, $limit);
+        }
+
+        foreach ($days as $day) {
+            if (!is_array($day)) {
+                continue;
+            }
+            $place = self::MeetingPlace($day, $park);
+            $response[ 'Meetings' ][] = [
+                'WhenLabel'   => self::MeetingWhenLabel($day),
+                'TimeLabel'   => self::MeetingTimeLabel($day[ 'Time' ] ?? ''),
+                'VenueName'   => $place[ 'VenueName' ],
+                'AddressLine' => $place[ 'AddressLine' ],
+                'MapUrl'      => $place[ 'MapUrl' ],
+                'Purpose'     => trim((string) ($day[ 'Purpose' ] ?? '')),
+                'Description' => trim((string) ($day[ 'Description' ] ?? '')),
+                'Online'      => !empty($day[ 'Online' ]),
+            ];
+        }
+
+        $response[ 'Fallback' ]   = self::MeetingPlace([ ], $park);
+        $response[ 'Directions' ] = trim((string) ($park[ 'Directions' ] ?? ''));
         return $response;
     }
 
@@ -865,6 +1137,7 @@ class Park extends Ork3
                 }
             } while ($parkobject->next());
         }
+        self::BustParkMemo($park_id);
     }
 
     public function unique_username($name)
@@ -921,6 +1194,7 @@ class Park extends Ork3
             $this->park->directions     = '';
             $this->park->save();
             $new_park_id = (int)$this->park->park_id;
+            self::BustParkMemo($new_park_id);
             $t = new Treasury();
             $t->create_accounts($mundane_id, 'park', $new_park_id, $request[ 'KingdomId' ]);
             $c = new Common();
@@ -1012,6 +1286,7 @@ class Park extends Ork3
                 $this->park->map_url = isset($request[ 'MapUrl' ]) ? ($request[ 'MapUrl' ]) : $this->park->map_url;
 
                 $this->park->save();
+                self::BustParkMemo($request[ 'ParkId' ]);
                 $this->park->clear();
                 $this->park->park_id = $request[ 'ParkId' ];
                 if ($this->park->find()) {
@@ -1039,6 +1314,7 @@ class Park extends Ork3
                     }
 
                     $this->park->save();
+                    self::BustParkMemo($request[ 'ParkId' ]);
                     $_audit_post = [
                         'name'         => $this->park->name,
                         'abbreviation' => $this->park->abbreviation,
@@ -1202,6 +1478,7 @@ class Park extends Ork3
                 $this->log->Write('Park', $mundane_id, 'Active' == $waffle ? LOG_RESTORE : LOG_RETIRE, $request);
                 $this->park->active = $waffle;
                 $this->park->save();
+                self::BustParkMemo($request[ 'ParkId' ]);
                 $_audit_req = $request;
                 unset($_audit_req[ 'Token' ]);
                 // Synthetic method name so the audit log distinguishes Retire from Restore.

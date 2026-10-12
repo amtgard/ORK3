@@ -1,0 +1,183 @@
+{
+    "slug": "learn-the-basics",
+    "type": "composed",
+    "parent_slug": "join",
+    "title": "Learn The Basics",
+    "meta_description": "A six-step guide to learning Amtgard: core combat rules, the rulebook, building a persona, finding a chapter, and joining the game.",
+    "blocks": [
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Step One: Learn the Basics",
+                "level": 2,
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "",
+                "body": "<p>Amtgard has a rulebook complete with classes, magic, and special abilities. Games and quests often feature charging warriors, sneaking assassins, and spell-hurling magic users battling it out against powerful monsters. The particulars of each game, quest, or scenario can vary quite a bit, but the one constant in all of these activities is the basic Amtgard combat system.</p><p>Here’s an overview of the core combat rules:</p><ol><li>The head and neck are not legal targets. Hitting somebody in that area doesn’t count and other players can’t be struck there purposely.</li><li>A valid hit to the torse causes instant death. The torso includes the top of the shoulders, the chest, somtach, groin, upper and lower back, as well as the buttocks.</li><li>A valid hit to any limb cases a “wound” and the limb cannot be used.</li><li>A wounded arm must be placed behind your back. Hands holding a melee weapon or a shield are not harmed when struck, but otherwise being struck in the hand counts as being struck in the arm. Wrists are part of the arm, not the hand.</li><li>A wounded leg must have the knee on the ground. You are not allowed to hop on the unwounded leg, though you may crawl as long as you keep your wounded knee on the ground. You are allowed short springs from the ground using your good leg to propsel you. Feet on the ground are not harmed when structk, but otherwise being struck in the foot counts as being struck in the leg.</li><li>A leg can only be struck once. Subsequent strikes to the same leg do not count.</li><li>An arm can be struck more than once.</li><li>Two hits to any combination of limbs (arm and leg, arm and arm, leg and leg, same arm twice) results in a death.</li><li>Players may not punch, kick, bash, or grapple each other.</li></ol>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "gallery",
+            "fields": {
+                "columns": 2,
+                "caption": "",
+                "images": [
+                    "1.jpg",
+                    "2.jpg"
+                ]
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": "Amtgard combat action photo"
+                    },
+                    {
+                        "file": "2.jpg",
+                        "alt": "Combat anatomy diagram showing legal target areas"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Step Two: Read the Rules of Play",
+                "level": 2,
+                "align": "left"
+            }
+        },
+        {
+            "type": "image",
+            "fields": {
+                "caption": "",
+                "href": "#",
+                "align": "left",
+                "max_width": 300,
+                "image": "3.jpg"
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "3.jpg",
+                        "alt": "How to join Amtgard"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "",
+                "body": "<p>After you’ve gotten a handle on the basic combat rules, you should read the rulebook. The rulebook covers some of the more detailed aspects of the Amtgard combat system, and also details the class and magic systems. The best way to learn the rules is by playing, so don’t worry about memorizing anything yet. Just get a basic idea of how things work and maybe pick out a class to try in a battlegame.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "file_download",
+            "fields": {
+                "files": [
+                    {
+                        "title": "Amtgard Rulebook",
+                        "url": "rulebook.pdf",
+                        "filetype": "pdf"
+                    }
+                ]
+            },
+            "assets": {
+                "docs": [
+                    {
+                        "file": "rulebook.pdf"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Step Three: Develop a Persona Name and Persona History",
+                "level": 2,
+                "align": "left"
+            }
+        },
+        {
+            "type": "image",
+            "fields": {
+                "caption": "",
+                "href": "#",
+                "align": "left",
+                "max_width": 286,
+                "image": "5.jpg"
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "5.jpg",
+                        "alt": "Amtgard persona and costuming example"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "",
+                "body": "<p>Amtgard doesn’t have a predefined game world like a D&amp;D setting might. Because of this, Amtgard allows for a wide range of rich character backgrounds coming from both historical and fantasy roots. Sword &amp; Sorcery and pre-1650 historical personas fit equally well into the Amtgard world. Just make sure you don’t impersonate a famous historical figure or character from the fantasy setting draw inspiration from.</p><p>Not having a persona complete on your first visit doesn’t mean you can’t play, but you will at least need a persona name. Before you make your first visit think about what you’d like to be called. Don’t worry, if you decide you don’t like your persona name you can change it at any point in the future!</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Step Four: Find a Chapter",
+                "level": 2,
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "",
+                "body": "<p>If you haven’t found a chapter (also called a group, land, holding, or park) to play at, now’s the time! Amtgard has established a strong presence in places all over the country and throughout the world, so it is very likely that you can find a nearby group ready to welcome you.</p><p>To find a nearby chapter, check the <a href=\"UIRPLACEHOLDER/Atlas\">Amtgard Atlas</a>. Some groups also have <a href=\"http://www.meetup.com/find/?keywords=Amtgard&amp;country=us&amp;locationPickerRef=0&amp;dbCo=&amp;dbOutsideUsLink=&amp;zip=&amp;submitButton=Search&amp;op=search\">Meetup Listings</a>.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Step Five: Fill out a Membership Form/Waiver",
+                "level": 2,
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "",
+                "body": "<p>One of the few actual requirements for joining Amtgard is filling out a membership form and waiver before you take the field. The group you visit will have some for you to fill out. If you’re under 18 you will need a parent or legal guardian with you to sign the waiver.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Step Six: Have Fun!",
+                "level": 2,
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "heading": "",
+                "body": "<p>Once you’ve found a chapter, it’s time to go out and have some fun! We suggest you send an email to the contact address listed for the chapter and confirm that they will be meeting. Sometimes, groups will be traveling to visit another group or go to a large, inter-group event, and you don’t want to miss them.</p><p>Don’t worry about bringing out any equipment or the rulebook if you don’t have them yet. The group will have loaner equipment that you can borrow for your first couple visits. When you show up, talk to anyone there and let them know that you’re new and interested in Amtgard. They will help you get involved and up to speed. All chapters have elected officers whose job it is to get you started in the right direction.</p>",
+                "align": "left"
+            }
+        }
+    ]
+}

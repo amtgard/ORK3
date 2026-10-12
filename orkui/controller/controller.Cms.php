@@ -1,0 +1,1848 @@
+<?php
+
+require_once __DIR__ . '/trait.CmsScope.php';
+
+/**
+ * Controller_Cms — OGRE admin (page-rendering surfaces).
+ * OGRE = Online Gallery and Resource Engine, the product name for the CMS; the
+ * `Cms*` class / `ork_cms_*` table names are the internal identifiers for it.
+ *
+ * Routes:
+ *   Cms/index            → page list (any CMS capability / super-admin)
+ *   Cms/edit/{id|new}    → block editor for a page (page.edit, or page.create for new)
+ *   Cms/preview/{id}     → render the page's CURRENT draft blocks with a preview banner (page.edit)
+ *
+ * Auth: every action resolves a PER-REQUEST scope first (_resolveScope() parses the
+ * `k:{id}` / `p:{id}` selector and re-validates it against HasAuthority) and then
+ * gates a capability against that live scope — see _scopeOrDenyWithCap(), which does
+ * both. Global (`scope_type='global'`) is only the fallback when no selector is present.
+ * Unauthorized / not-logged-in → redirect to Login (page surfaces never emit JSON).
+ *
+ * Conventions: thin controller (no raw $DB; all DB work via the CmsPage lib).
+ * Templates are PLAIN PHP (extract()+include), set via $this->template.
+ */
+class Controller_Cms extends Controller
+{
+    use CmsScopeContext;
+
+    /**
+     * Default scope when no ?scope= selector is present — the global front door.
+     * Phase 3 threads a per-request scope via _resolveScope(); this constant is
+     * only the fallback shape and the byte-for-byte legacy behavior.
+     */
+    private static $SCOPE = array('type' => 'global', 'id' => 0);
+
+    /**
+     * Per-request capability cache: ['is_super' => bool, 'caps' => string[]].
+     * Keyed by uid+scope so a single request can't bleed between users or orgs.
+     * @var array
+     */
+    private $_capCache = array();
+
+    /**
+     * Per-request memo of the block catalog. _blockCatalog() is otherwise
+     * recomputed ~15x per Cms/edit — once per _starter() call inside _pageTypes()
+     * (each starter re-derived the dynamic-type set from a fresh catalog build) —
+     * each rebuild doing a file_exists() probe per block type. Cached here so the
+     * whole editor load costs exactly one catalog build. (null = not yet built.)
+     * @var array|null
+     */
+    private $_blockCatalogMemo = null;
+
+    /**
+     * CMS-7: per-request memo of the dynamic block-type set (blockType => true)
+     * derived from the catalog's `dynamic` flags. _pageTypes() fires ~14
+     * _starter() calls per editor load and each one previously re-derived this.
+     * (null = not yet built.)
+     * @var array|null
+     */
+    private $_dynamicTypesMemo = null;
+
+    public function __construct($call = null, $action = null)
+    {
+        parent::__construct($call, $action);
+        // CMS admin is an org-level surface — drop the kingdom/park crumbs.
+        unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
+        $this->load_model('CmsAuth');
+        $this->load_model('CmsPage');
+        $this->load_model('CmsPost');
+        $this->load_model('CmsNav');
+        // CSRF synchronizer token for the editor's state-changing requests.
+        $this->data['CmsCsrf'] = $this->_csrfToken();
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Dashboard — CMS landing / overview
+     * ------------------------------------------------------------------ */
+
+    public function dashboard($action = null)
+    {
+        $uid = $this->_uid();
+        // The dashboard is visible to anyone holding ANY CMS capability (or super-admin).
+        $scope = $this->_scopeOrDenyWithCap($uid, $this->_anyCapabilityGate());
+        if ($scope === false) {
+            return;
+        }
+
+        // Entry point: opening the dashboard in a non-global org scope lazily
+        // provisions the org's site row (status='unbuilt'; seeding is Phase 5).
+        // Idempotent — a second open returns the existing row and no-ops.
+        if (!$this->_scopeIsGlobal($scope)) {
+            $this->_loadSiteContext($uid, $scope, true);
+        }
+
+        $this->template = 'Cms_dashboard.tpl';
+        $this->data['page_title'] = 'OGRE Dashboard';
+
+        $sf = $this->_scopeFilters($scope);
+
+        // ---- Pages/posts overview: status-broken-down counts via a lightweight
+        //      aggregate (GROUP BY status) instead of fetching every row just to
+        //      tally. Each returns an assoc status=>count plus a 'total'; drafts =
+        //      everything not published (matches the prior count semantics).
+        $pageCounts = $this->CmsPage->CountPages($sf['scope_type'], $sf['scope_id']);
+        $pageCounts = is_array($pageCounts) ? $pageCounts : array();
+        $pageCount  = (int)($pageCounts['total'] ?? array_sum(array_map('intval', $pageCounts)));
+        $pageDrafts = max(0, $pageCount - (int)($pageCounts['published'] ?? 0));
+
+        $postCounts = $this->CmsPost->CountPosts($sf['scope_type'], $sf['scope_id']);
+        $postCounts = is_array($postCounts) ? $postCounts : array();
+        $postCount  = (int)($postCounts['total'] ?? array_sum(array_map('intval', $postCounts)));
+        $postDrafts = max(0, $postCount - (int)($postCounts['published'] ?? 0));
+
+        // ---- "Continue editing": newest pages + posts. Fetch only what the card
+        //      renders (6 each, already ORDER BY updated_at DESC) — a bounded read,
+        //      not the whole set. ----
+        $pages = $this->CmsPage->list_pages($sf + array('limit' => 6));
+        $pages = is_array($pages) ? $pages : array();
+
+        $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true, 'limit' => 6) + $sf);
+        $posts    = (is_array($postsRes) && isset($postsRes['rows']) && is_array($postsRes['rows'])) ? $postsRes['rows'] : array();
+
+        // ---- "Continue editing": merge newest pages + posts by updated_at, take ~6 ----
+        $recent = array();
+        foreach (array_slice($pages, 0, 6) as $p) {
+            $recent[] = array(
+                'kind'       => 'page',
+                'id'         => (int)($p['page_id'] ?? 0),
+                'title'      => (string)($p['title'] ?? '(untitled)'),
+                'status'     => (string)($p['status'] ?? 'draft'),
+                'updated_at' => (string)($p['updated_at'] ?? ''),
+                'edit_href'  => UIR . 'Cms/edit/' . (int)($p['page_id'] ?? 0) . $this->_scopeQuery($scope),
+            );
+        }
+        foreach (array_slice($posts, 0, 6) as $p) {
+            $recent[] = array(
+                'kind'       => 'post',
+                'id'         => (int)($p['post_id'] ?? 0),
+                'title'      => (string)($p['title'] ?? '(untitled)'),
+                'status'     => (string)($p['status'] ?? 'draft'),
+                'updated_at' => (string)($p['updated_at'] ?? ''),
+                'edit_href'  => UIR . 'Cms/editpost/' . (int)($p['post_id'] ?? 0) . $this->_scopeQuery($scope),
+            );
+        }
+        // Newest-first across both kinds; keep the 6 most recently touched.
+        usort($recent, function ($a, $b) {
+            return strcmp((string)$b['updated_at'], (string)$a['updated_at']);
+        });
+        $recent = array_slice($recent, 0, 6);
+
+        // ---- Usage analytics: scope rollup + most-viewed content. Reads are
+        //      best-effort in the lib (pre-migration → zeros/empty), so this never
+        //      breaks the dashboard. "Most viewed" links into the editor, mirroring
+        //      the recent-items list, so an officer can act on the feedback. ----
+        $this->load_model('CmsView');
+        $viewSummary = $this->CmsView->get_scope_view_summary($sf['scope_type'], $sf['scope_id']);
+        $viewSummary = is_array($viewSummary) ? $viewSummary : array();
+
+        $topRows = $this->CmsView->get_view_stats($sf['scope_type'], $sf['scope_id'], 8);
+        $topRows = is_array($topRows) ? $topRows : array();
+        $topViewed = array();
+        foreach ($topRows as $tv) {
+            $kind = ((string)($tv['entity_type'] ?? 'page') === 'post') ? 'post' : 'page';
+            $id   = (int)($tv['entity_id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $topViewed[] = array(
+                'kind'      => $kind,
+                'id'        => $id,
+                'title'     => (string)($tv['title'] ?? '(untitled)'),
+                'total'     => (int)($tv['total'] ?? 0),
+                'recent'    => (int)($tv['recent'] ?? 0),
+                'edit_href' => UIR . ($kind === 'post' ? 'Cms/editpost/' : 'Cms/edit/') . $id . $this->_scopeQuery($scope),
+            );
+        }
+
+        $this->data['ViewSummary'] = array(
+            'total'       => (int)($viewSummary['total'] ?? 0),
+            'recent'      => (int)($viewSummary['recent'] ?? 0),
+            'recent_days' => (int)($viewSummary['recent_days'] ?? 30),
+        );
+        $this->data['TopViewed'] = $topViewed;
+
+        // "Top content (30 days)" panel — the most-viewed pages/posts over
+        // the rolling window as {title,url,count}, url deep-linking into the editor
+        // (mirrors TopViewed so an officer can act on it). Best-effort in the lib
+        // (pre-migration → empty), so this never breaks the dashboard.
+        $topContentRows = $this->CmsView->GetTopContent($sf['scope_type'], $sf['scope_id'], 30, 5);
+        $topContent = array();
+        foreach ((is_array($topContentRows) ? $topContentRows : array()) as $tc) {
+            $kind = ((string)($tc['entity_type'] ?? 'page') === 'post') ? 'post' : 'page';
+            $id   = (int)($tc['entity_id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $topContent[] = array(
+                'title' => (string)($tc['title'] ?? '(untitled)'),
+                'url'   => UIR . ($kind === 'post' ? 'Cms/editpost/' : 'Cms/edit/') . $id . $this->_scopeQuery($scope),
+                'count' => (int)($tc['count'] ?? 0),
+            );
+        }
+        $this->data['topContent'] = $topContent;
+
+        $this->data['Recent'] = $recent;
+        $this->data['Stats']  = array(
+            'pages'       => $pageCount,
+            'posts'       => $postCount,
+            'page_drafts' => $pageDrafts,
+            'post_drafts' => $postDrafts,
+            'drafts'      => $pageDrafts + $postDrafts,
+        );
+        $this->data['PageTypes']  = $this->_pageTypes();
+        $this->data['TypeLabels'] = self::_pageTypeLabelMap();
+        $this->data['Greet']      = $this->_greeting();
+
+        // ---- "Finish your site": the starter pages the seeder wrote that nobody
+        //      has touched yet. Org scope only — the global front door has no
+        //      seeded site. An empty list renders no panel at all, so the nudge
+        //      retires itself the moment the last row clears. ----
+        if (!$this->_scopeIsGlobal($scope)) {
+            $this->data['SeedReadiness'] = $this->_seedReadiness($scope, $sf);
+        }
+
+        // Home-page chooser source for the site-settings form on the site card
+        // (org scope only — the global front door has no /k/{slug} site row).
+        // Only loaded for users who can actually see the form — otherwise this is
+        // a 500-row read on every org dashboard render for nothing.
+        if (!$this->_scopeIsGlobal($scope) && !empty($this->data['CanEditSite'])) {
+            $sitePages = $this->CmsPage->list_pages($sf);
+            $sitePages = is_array($sitePages) ? $sitePages : array();
+            // list_pages() is capped (LIMIT 500, updated_at DESC), so a rarely
+            // edited home page can fall off the list — the picker would then show
+            // nothing selected, i.e. "no home page chosen", which is untrue. Pull
+            // that one row by key and inject it so the select states ground truth.
+            $homeId = (int)($this->data['CmsSite']['home_page_id'] ?? 0);
+            if ($homeId > 0) {
+                $found = false;
+                foreach ($sitePages as $sp) {
+                    if ((int)($sp['page_id'] ?? 0) === $homeId) {
+                        $found = true;
+                        break;
+                    }
+                }
+                if (!$found) {
+                    $homeRow = $this->CmsPage->get_page($homeId);
+                    if (
+                        is_array($homeRow)
+                        && (string)($homeRow['scope_type'] ?? '') === (string)$sf['scope_type']
+                        && (int)($homeRow['scope_id'] ?? 0) === (int)$sf['scope_id']
+                    ) {
+                        array_unshift($sitePages, $homeRow);
+                    }
+                }
+            }
+            $this->data['PickerPages'] = $sitePages;
+        }
+    }
+
+    /**
+     * Rows for the dashboard's "Finish your site" panel: starter pages that are
+     * still exactly as the seeder left them, or that still render nothing.
+     *
+     * Contract C-READINESS — CmsSite::SeedContentStatus($scopeType, $scopeId),
+     * read-only (no writes, no cache mutation). model.CmsSite.php declares no
+     * snake_case wrapper for it, so this uses the PascalCase reach-around that
+     * that file's own docblock names as the sanctioned form for a lib method
+     * without one. Model::__call forwards the name verbatim.
+     *
+     * DEFENSIVE BY CONTRACT: the readiness call lands on its own branch, so a
+     * missing method, a thrown error or a malformed return all mean the same
+     * thing — "no readiness information" — and yield an empty list, i.e. no
+     * panel. There is deliberately no second, weaker heuristic (a string match,
+     * a length check): guessing here would let the panel tell an officer their
+     * edited page is untouched, which is worse than saying nothing.
+     *
+     * @param array $scope resolved, authorized non-global scope
+     * @param array $sf    scope filters ['scope_type','scope_id']
+     * @return array list of ['page_id','title','slug','reason','edit_href']
+     */
+    private function _seedReadiness($scope, $sf)
+    {
+        $this->load_model('CmsSite');
+        $status = null;
+        try {
+            if (method_exists('CmsSite', 'SeedContentStatus')) {
+                $status = $this->CmsSite->SeedContentStatus((string)$sf['scope_type'], (int)$sf['scope_id']);
+            }
+        } catch (\Throwable $e) {
+            $status = null;
+        }
+        if (!is_array($status) || !isset($status['pages']) || !is_array($status['pages'])) {
+            return array();
+        }
+
+        $rows = array();
+        foreach ($status['pages'] as $p) {
+            if (!is_array($p)) {
+                continue;
+            }
+            $pageId = (int)($p['page_id'] ?? 0);
+            if ($pageId <= 0) {
+                continue;
+            }
+            $rendersNothing = !empty($p['renders_nothing']);
+            $isUntouched    = !empty($p['is_untouched']);
+            // An officer has been here — the panel has nothing to say about it.
+            if (!$rendersNothing && !$isUntouched) {
+                continue;
+            }
+            $rows[] = array(
+                'page_id'   => $pageId,
+                'title'     => (string)($p['title'] ?? '(untitled)'),
+                'slug'      => (string)($p['slug'] ?? ''),
+                // Two truthful states, and "nothing shows up yet" is the more
+                // concrete of the two when a page is both.
+                'reason'    => $rendersNothing ? 'empty' : 'starter',
+                'edit_href' => UIR . 'Cms/edit/' . $pageId . $this->_scopeQuery($scope),
+            );
+        }
+        return $rows;
+    }
+
+    /**
+     * Load the org site row + publish-gate flag for the dashboard's site card
+     * (non-global scope only). Optionally EnsureSite first (dashboard entry).
+     * Sets $this->data['CmsSite'] and ['CanPublishSite'].
+     *
+     * ALSO distinguishes "no site row because none has been built yet" from "no
+     * site row because this org LEVEL is not switched on". EnsureSite returns
+     * null in the second case, and an empty CmsSite array reads downstream as
+     * status='unbuilt' — i.e. as a site one Publish click away, which it is not.
+     * ['SiteBlocked'] + ['SiteBlockedReason'] give that case its own state so the
+     * dashboard can say what is actually true instead of offering dead controls.
+     *
+     * @param int   $uid
+     * @param array $scope     resolved, authorized non-global scope
+     * @param bool  $ensure    provision the row if missing (idempotent)
+     * @return void
+     */
+    private function _loadSiteContext($uid, $scope, $ensure = false)
+    {
+        $this->load_model('CmsSite');
+        $type = (string)$scope['type'];
+        $id   = (int)$scope['id'];
+        if ($ensure) {
+            $site = $this->CmsSite->ensure_site($type, $id, $uid);
+        } elseif ($this->_scopeSiteMemo !== false) {
+            // Already resolved this request (e.g. by _scopeLiveHome) — reuse it
+            // rather than firing a second get_site_for_scope for the same scope.
+            $site = $this->_scopeSiteMemo;
+        } else {
+            $site = $this->CmsSite->get_site_for_scope($type, $id);
+        }
+        $this->data['CmsSite'] = is_array($site) ? $site : array();
+        // Seed/refresh the _scopeSite() memo with the row resolved here so any
+        // later _scopeSite() in this request is a cache hit. NOTE: this runs
+        // AFTER _applyScopeData (which computed SiteLiveUrl from the PRE-ensure
+        // state, so a never-provisioned org still gets SiteLiveUrl = UIR on its
+        // first dashboard load) — do not reorder the two.
+        $this->_scopeSiteMemo = is_array($site) ? $site : null;
+        // Site publish/unpublish is gated on page.publish (OGRE Editor and up).
+        // Office confers nothing here — a Monarch with no OGRE grant cannot
+        // publish their own site until somebody grants them a role.
+        $this->data['CanPublishSite'] = $this->CmsAuth->cms_can($uid, 'page.publish', $scope);
+        // Site settings (name / home page). Same grant-derived source as the
+        // publish gate above, so the two can never disagree.
+        $this->data['CanEditSite'] = $this->CmsAuth->cms_can($uid, 'page.edit', $scope);
+        // Rollout gate (contract C2): the policy lives in CmsSite::CanCreateSite —
+        // read it, never re-derive the config flags here.
+        $blocked = empty($this->data['CmsSite']) && !$this->CmsSite->can_create_site($type, $id);
+        $this->data['SiteBlocked']       = $blocked;
+        $this->data['SiteBlockedReason'] = $blocked ? $this->_siteBlockedReason($type) : '';
+    }
+
+    /**
+     * Plain-language reason a site cannot be created for this scope yet — which
+     * switch is off, and who can flip it. Mirrors the CanCreateSite() chain
+     * (global kingdom switch / global park switch AND the kingdom's own park
+     * permission) by asking the lib which of the two is missing.
+     *
+     * @param string $type 'kingdom' | 'park'
+     * @return string
+     */
+    private function _siteBlockedReason($type)
+    {
+        if ((string)$type === 'park') {
+            if (!$this->CmsSite->park_sites_enabled()) {
+                return 'Park websites are not switched on yet. An ORK administrator turns them on in the OGRE settings.';
+            }
+            return 'Park websites are not enabled for this park\'s kingdom yet. Your monarch can turn them on in the kingdom\'s OGRE settings.';
+        }
+        return 'Kingdom websites are not switched on yet. An ORK administrator turns them on in the OGRE settings.';
+    }
+
+    /**
+     * Plain time-of-day greeting for the dashboard masthead. No archaic/flavor
+     * copy — this is a straightforward internal CMS.
+     */
+    private function _greeting()
+    {
+        $hr = (int)date('G');
+        if ($hr < 5) {
+            return 'Good evening';
+        }
+        if ($hr < 12) {
+            return 'Good morning';
+        }
+        if ($hr < 17) {
+            return 'Good afternoon';
+        }
+        return 'Good evening';
+    }
+
+    /* ------------------------------------------------------------------ *
+     * All sites — GLOBAL super-admin overview of every started org site
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Cms/sites — the cross-org "CMS Sites" overview. SUPER-ADMIN ONLY: a
+     * non-super-admin is bounced to Login via _denyRedirect() with NO site data
+     * ever assembled (the ListAllSites query is never reached), so there is no
+     * cross-org data leak. This is a GLOBAL page — it deliberately does NOT use
+     * _scopeOrDenyWithCap/_applyScopeData (those thread a single org scope); it lists
+     * every scope at once and builds per-row scope selectors instead.
+     */
+    public function sites($action = null)
+    {
+        $uid = $this->_uid();
+        // Hard gate: only an ORK super-admin (all-zero-scope AUTH_ADMIN row) may
+        // see the cross-org overview. Bounce everyone else before any data load.
+        if (!$this->CmsAuth->IsSuperAdmin($uid)) {
+            return $this->_denyRedirect();
+        }
+
+        $this->load_model('CmsSite');
+
+        $this->template = 'Cms_sites.tpl';
+        $this->data['page_title'] = 'OGRE Sites';
+
+        // ---- Pinned front-door summary (Amtgard International) -------------
+        // The global front door is NOT an ork_cms_site row — its home lives in
+        // ork_cms_page (scope_type='global'). It is always live; its admin is the
+        // scopeless dashboard and its public URL is the site root.
+        $globalCounts = $this->CmsSite->global_page_counts();
+        $globalCounts = is_array($globalCounts) ? $globalCounts : array();
+        $this->data['FrontDoor'] = array(
+            'name'            => 'Amtgard International',
+            'subtitle'       => 'Global front door',
+            'pages_total'     => (int)($globalCounts['pages_total'] ?? 0),
+            'pages_published' => (int)($globalCounts['pages_published'] ?? 0),
+            'posts_total'     => (int)($globalCounts['posts_total'] ?? 0),
+            // Scopeless dashboard = the global front-door CMS admin.
+            'manage_url'      => UIR . 'Cms/dashboard',
+            // Public front door is the site root, not a Site/view route.
+            'visit_url'       => HTTP_UI_REMOTE,
+        );
+
+        // ---- Every started org site, split into Kingdoms / Parks ----------
+        $all = $this->CmsSite->list_all_sites();
+        $all = is_array($all) ? $all : array();
+
+        $kingdoms = array();
+        $parks    = array();
+        $kingdomHasSite = array(); // scope_id => true, to flag the provision picker
+
+        foreach ($all as $row) {
+            $type    = (string)($row['scope_type'] ?? 'kingdom');
+            $scopeId = (int)($row['scope_id'] ?? 0);
+            $slug    = (string)($row['slug'] ?? '');
+            $sel     = (($type === 'park') ? 'p:' : 'k:') . $scopeId;
+
+            $view = array(
+                'site_id'         => (int)($row['site_id'] ?? 0),
+                'scope_type'      => $type,
+                'scope_id'        => $scopeId,
+                'scope_sel'       => $sel,
+                'org_name'        => (string)($row['org_name'] ?? ''),
+                'slug'            => $slug,
+                'status'          => (string)($row['status'] ?? 'unbuilt'),
+                'pages_total'     => (int)($row['pages_total'] ?? 0),
+                'pages_published' => (int)($row['pages_published'] ?? 0),
+                'posts_total'     => (int)($row['posts_total'] ?? 0),
+                'updated_at'      => (string)($row['updated_at'] ?? ''),
+                // Health flags from ListAllSites (contract C4). A site whose
+                // template seeding never completed, and a site whose owning
+                // kingdom/park row is gone, both look entirely normal in this
+                // table otherwise — the template badges them.
+                // CONVENTION — template_seeded_at fails OPEN, in every reader.
+                // CmsSite::EnsureSite() owns this marker and treats an ABSENT
+                // column (the seed-marker migration not run yet) as "seeded",
+                // precisely so a pre-migration site is never re-seeded on a
+                // guess. This badge must read the same NULL the same way, or a
+                // DB that has not run db-migrations/2026-08-09-cms-site-seed-marker.sql
+                // badges every site "Seeding incomplete". Only a column that
+                // EXISTS and is empty means the seed really did not finish.
+                'seeded'          => (!array_key_exists('template_seeded_at', $row) || !empty($row['template_seeded_at'])),
+                'org_missing'     => !empty($row['org_missing']),
+                // Manage = the scoped CMS dashboard for this org.
+                'manage_url'      => UIR . 'Cms/dashboard&scope=' . $sel,
+                // Visit = the org's public site home (empty when no slug yet).
+                'visit_url'       => ($slug !== '') ? UIR . 'Site/view/' . rawurlencode($slug) : '',
+            );
+
+            if ($type === 'park') {
+                $parks[] = $view;
+            } else {
+                $kingdoms[] = $view;
+                $kingdomHasSite[$scopeId] = true;
+            }
+        }
+
+        $this->data['KingdomSites'] = $kingdoms;
+        $this->data['ParkSites']    = $parks;
+
+        // ---- Provisioning picker: every active kingdom, name-sorted, with a
+        //      flag for those that already have a site (so the picker can nudge
+        //      toward un-provisioned orgs). Opening a scoped dashboard auto-fires
+        //      EnsureSite, so provisioning needs no dedicated endpoint. ----
+        // The picker only needs id + name (+ the has_site flag). GetKingdoms()
+        // loads Common::get_configs() per kingdom (an AtlasColor lookup we never
+        // use here) — an N-config fan-out. Kingdom::ListActiveIdName() is the light
+        // lister for exactly this: active kingdoms, id + name, name-ordered in SQL
+        // (so no post-sort here) and no raw $DB in the controller.
+        $this->load_model('Kingdom');
+        $krows = $this->Kingdom->list_active_id_name();
+        $pick  = array();
+        // The global switches are scope-independent — read them ONCE rather than
+        // per kingdom inside the loop below.
+        $parkSwitch    = (bool)$this->CmsSite->park_sites_enabled();
+        $kingdomSwitch = (bool)$this->CmsSite->kingdom_sites_enabled();
+        // FOLLOW-UP (owner: system/lib/ork3/class.CmsSite.php) — add a
+        // kingdom-level batch predicate, e.g.
+        //   CmsSite::KingdomsAllowingParkSites(array $kingdomIds): array
+        // returning the id => bool set in ONE configuration read, and have
+        // CanCreateSite('park', …) resolve through it. That closes both of the
+        // compromises below: (a) the park half of CanCreateSite is re-assembled
+        // here as "global switch AND kingdom permission" because park scope needs
+        // a park id and the picker only has a kingdom id — add a third condition
+        // to CanCreateSite and this picker silently disagrees with the dashboard;
+        // and (b) kingdom_allows_park_sites() is an uncached SELECT per call, so
+        // this loop costs one round trip per active kingdom.
+        $this->data['ProvisionKingdomsOk'] = $kingdomSwitch;
+        foreach ((is_array($krows) ? $krows : array()) as $krow) {
+            $kid = (int)($krow['kingdom_id'] ?? 0);
+            if ($kid <= 0) {
+                continue;
+            }
+            $pick[] = array(
+                'id'       => $kid,
+                'name'     => (string)($krow['name'] ?? ''),
+                'has_site' => !empty($kingdomHasSite[$kid]),
+                // Rollout gate (contract C2), asked of the policy owner rather
+                // than re-derived: offering "Open (and create) this park's site"
+                // for a kingdom that has not enabled park sites hands the admin a
+                // button that cannot work. Park scope needs a park id, so the
+                // kingdom-level half is read directly — the global park switch is
+                // ANDed once below, outside the loop.
+                'parks_ok' => ($parkSwitch && $this->CmsSite->kingdom_allows_park_sites($kid)),
+            );
+        }
+        $this->data['ProvisionKingdoms'] = $pick;
+
+        // Rail flag: this is a super-admin so the "All sites" entry is shown.
+        $this->data['Caps'] = $this->_capFlags($uid);
+        // Held-capability set for window.CMS_CAPS (super-admin → full set).
+        $this->data['CmsCaps'] = $this->_capList($uid);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Media library
+     * ------------------------------------------------------------------ */
+
+    public function media($action = null)
+    {
+        $uid = $this->_uid();
+        // Library access is the UPLOAD tier (Contributor and up), not the manage
+        // tier — $Caps['media'] is upload-or-manage. Kept as a _capFlags() probe
+        // rather than a bare cms_can() so this gate and the rail entry read the
+        // exact same expression and cannot drift apart.
+        $scope = $this->_scopeOrDenyWithCap($uid, function ($uid, $scope) {
+            return !empty($this->_capFlags($uid, $scope)['media']);
+        });
+        if ($scope === false) {
+            return;
+        }
+
+        $this->load_model('CmsMedia');
+
+        $this->template = 'Cms_media.tpl';
+        $this->data['page_title'] = 'Media Library';
+
+        $search = trim((string)($_GET['q'] ?? ''));
+
+        $media = $this->CmsMedia->list_media($scope, 200, ($search === '' ? null : $search));
+        $this->data['Media']  = is_array($media) ? $media : array();
+        $this->data['Search'] = $search;
+        // The viewer, so the grid can mark which tiles are THEIRS. A holder of
+        // media.upload alone may only act on their own uploads, and the template
+        // compares this against each row's uploaded_by. Presentation only — the
+        // authoritative test is CmsAjax::_requireMediaControl on every write.
+        $this->data['ViewerId'] = $uid;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Page list
+     * ------------------------------------------------------------------ */
+
+    public function index($action = null)
+    {
+        $uid = $this->_uid();
+        // The list is visible to anyone holding ANY CMS capability (or super-admin).
+        $scope = $this->_scopeOrDenyWithCap($uid, $this->_anyCapabilityGate());
+        if ($scope === false) {
+            return;
+        }
+
+        $this->template = 'Cms_index.tpl';
+        $this->data['page_title'] = 'OGRE — Pages';
+
+        $filters = $this->_scopeFilters($scope);
+        $search = trim((string)($_GET['q'] ?? ''));
+        if ($search !== '') {
+            $filters['search'] = $search;
+        }
+        $status = trim((string)($_GET['status'] ?? ''));
+        if ($status === 'draft' || $status === 'published') {
+            $filters['status'] = $status;
+        }
+
+        $pages = $this->CmsPage->list_pages($filters);
+        $pages = is_array($pages) ? $pages : array();
+        // Resolve every row's nested slug PATH from the fetched rows ONCE (an
+        // in-memory parent_id walk) instead of a per-row PagePath() DB round-trip
+        // (an N+1). Falls back to PagePath for any row whose ancestry can't be
+        // resolved in memory (e.g. a filtered list missing an ancestor, or rows
+        // that don't carry parent_id), so correctness never regresses.
+        //
+        // With a search/status filter active the fetched set is a SUBSET of the
+        // scope, so a nested row whose ancestor didn't match the filter misses the
+        // in-memory walk and pays a per-row PagePath() DB walk. In that case build
+        // the map from ONE extra scope-only fetch (page_id/parent_id/slug are
+        // already in the SELECT) — a single bounded query instead of N walks. The
+        // unfiltered path is untouched; the displayed rows stay the filtered ones.
+        $isFiltered = ($search !== '' || isset($filters['status']));
+        if ($isFiltered) {
+            $allScoped = $this->CmsPage->list_pages($this->_scopeFilters($scope));
+            $pathMap = $this->_buildScopePathMap(is_array($allScoped) ? $allScoped : $pages);
+        } else {
+            $pathMap = $this->_buildScopePathMap($pages);
+        }
+        // Attach the scope-correct PUBLIC live URL to each row so the list links
+        // to the org site (Site/...) in a scoped context, not the global Page route.
+        foreach ($pages as &$pRow) {
+            $pRow['live_href'] = $this->_pageLiveHref(
+                $scope,
+                (int)($pRow['page_id'] ?? 0),
+                (string)($pRow['slug'] ?? ''),
+                $pathMap
+            );
+        }
+        unset($pRow);
+        $this->data['Pages']      = $pages;
+        $this->data['Search']     = $search;
+        $this->data['StatusFilter'] = $status;
+
+        // Per-row view counts for the list's "Views" column — one batched
+        // read (page_id IN …) for the whole page, not an N+1. Best-effort in the
+        // lib (pre-migration → empty map); the template falls back to ?? [].
+        $this->load_model('CmsView');
+        $pageIds = array();
+        foreach ($pages as $pr) {
+            $pid = (int)($pr['page_id'] ?? 0);
+            if ($pid > 0) {
+                $pageIds[] = $pid;
+            }
+        }
+        $pageViewCounts = $this->CmsView->GetCountsForEntities($filters['scope_type'], $filters['scope_id'], 'page', $pageIds);
+        $this->data['pageViewCounts'] = is_array($pageViewCounts) ? $pageViewCounts : array();
+
+        // Full human label map for the Type column (covers types not present in
+        // PageTypes, e.g. legacy/system page types). Unknown keys → ucwords.
+        $this->data['TypeLabels'] = self::_pageTypeLabelMap();
+        // The New-page chooser on THIS page is the same chooser as the
+        // dashboard's, so it must be fed from the same registry. Without this it
+        // fell through to the template's hard-coded fallback list, which was
+        // missing the 'about' type entirely and carried no descriptions.
+        $this->data['PageTypes']  = $this->_pageTypes();
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Block editor
+     * ------------------------------------------------------------------ */
+
+    public function edit($id = null)
+    {
+        // No id at all (a bare `Route=Cms/edit`) — there is nothing to edit. This
+        // used to fall through to parent::view() with no template set, which
+        // rendered a zero-byte HTTP 200: a blank white page, no error, no log line.
+        //
+        // Unlike Controller_Site::view(), this method is NOT the framework's render
+        // step — index.php calls $C->view() for that, and only a method literally
+        // named view() collides with it. A zero-arg call here can only be a user
+        // hitting the bare URL, so send them somewhere useful.
+        if (func_num_args() === 0) {
+            return $this->_bareRouteRedirect('Cms');
+        }
+
+        $uid    = $this->_uid();
+        $id     = (string)$id;
+        $isNew  = ($id === 'new' || $id === '' || $id === '0');
+        $needed = $isNew ? 'page.create' : 'page.edit';
+
+        $scope = $this->_scopeOrDenyWithCap($uid, $needed);
+        if ($scope === false) {
+            return;
+        }
+
+        $this->template = 'Cms_edit.tpl';
+
+        if ($isNew) {
+            $page   = array(
+                'page_id'          => 0,
+                'slug'             => '',
+                'type'             => 'composed',
+                'title'            => '',
+                'status'           => 'draft',
+                'published_at'     => null,
+                'hero_media_id'    => null,
+                // Prefilled, not blank: an empty meta_description falls through
+                // to a GLOBAL fallback on the public site, which advertises the
+                // ORK app rather than this org. A content-shaped default (never
+                // an instruction to the author) means a page an officer never
+                // touches still describes ITSELF in search results and link
+                // previews, and the officer can overwrite it in the rail.
+                'meta_description' => $this->_defaultMeta(
+                    (string)($_GET['type'] ?? ''),
+                    (string)($this->data['CmsScopeLabel'] ?? '')
+                ),
+                'is_system'        => 0,
+                'scope_type'       => (string)$scope['type'],
+                'scope_id'         => (int)$scope['id'],
+            );
+            $blocks = array();
+            $this->data['page_title'] = 'New Page';
+        } else {
+            $page = $this->CmsPage->get_page((int)$id);
+            // IDOR guard: a page from another scope is treated as not-found so a
+            // scoped officer can neither view nor edit cross-org content.
+            if (empty($page) || !$this->_rowInScope($page, $scope)) {
+                // No such page — fall back to the list with a message.
+                $this->template = 'Cms_index.tpl';
+                $this->data['page_title'] = 'OGRE — Pages';
+                $this->data['Pages']  = $this->CmsPage->list_pages($this->_scopeFilters($scope));
+                $this->data['Search'] = '';
+                $this->data['StatusFilter'] = '';
+                $this->data['Message'] = 'Page not found.';
+                return;
+            }
+            // Editing an existing page returns ALL its blocks (incl. disabled)
+            // via GetBlocksForEditor so the editor can toggle them; the public
+            // CmsPage::GetBlocks()/renderer path stays enabled-only.
+            $blocks = $this->CmsPage->get_blocks_for_editor('page', (int)$page['page_id']);
+            $this->data['page_title'] = 'Edit: ' . $page['title'];
+        }
+
+        $this->data['Page']         = $page;
+        $catalog = $this->_blockCatalog();
+        $this->data['Blocks']       = $blocks;
+        $this->data['IsNew']        = $isNew;
+        $this->data['BlockCatalog'] = $catalog;
+        $this->data['PageTypes']    = $this->_pageTypes();
+        $this->data['BlockAllow']   = $this->_blockAllow($catalog);
+        // The existing-tags library feeds the blog_feed block's validated tag
+        // picker (a free-text tag silently rendered an empty feed on a typo).
+        $this->data['AllTags']      = $this->_tagOptions();
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Draft preview
+     * ------------------------------------------------------------------ */
+
+    public function preview($id = null)
+    {
+        if (func_num_args() === 0) {
+            return $this->_bareRouteRedirect('Cms');
+        }
+        return $this->_renderPreview($id, 'page');
+    }
+
+    /**
+     * Draft preview for a POST. Mirrors preview() but renders a post's CURRENT
+     * (draft) blocks via the shared Cms_preview.tpl renderer so unpublished
+     * drafts can be reviewed without hitting the public route (which 404s on
+     * drafts). PreviewPage carries source='postrow' so the renderer frames it
+     * as a post row rather than a page.
+     */
+    public function previewpost($id = null)
+    {
+        if (func_num_args() === 0) {
+            return $this->_bareRouteRedirect('Cms/posts');
+        }
+        return $this->_renderPreview($id, 'post');
+    }
+
+    /**
+     * Send a bare, id-less admin route (`Route=Cms/edit`, `Cms/preview`, …) back to
+     * the list it belongs to, carrying the active scope so an officer lands in
+     * their own site rather than global.
+     *
+     * These actions all took `$id = null` and, on a zero-arg call, fell through to
+     * parent::view() with no template set — a zero-byte HTTP 200. Blank page, no
+     * error, no log line; the same failure shape as the DEV document-root bug fixed
+     * in e16300b7.
+     *
+     * Only safe because these methods are NOT the framework's render step: index.php
+     * performs that by calling $C->view(), which can only collide with a method
+     * literally named view() (hence Controller_Site::view keeps its own guard). A
+     * zero-arg call here is always a user hitting the bare URL.
+     *
+     * @param string $route intra-admin route to land on, e.g. 'Cms' or 'Cms/posts'
+     * @return void
+     */
+    private function _bareRouteRedirect($route)
+    {
+        // Resolve leniently. There is no id to authorize here and we are only
+        // choosing which list to land on, so a malformed or unauthorized selector
+        // ($scope === false) falls back to global rather than blanking the page —
+        // the destination re-checks authority for real.
+        $scope = $this->_resolveScope($this->_uid());
+        $query = is_array($scope) ? $this->_scopeQuery($scope) : '';
+        header('Location: ' . UIR . $route . $query);
+        // Stop here: index.php calls $C->view() after the action returns, which
+        // would compose and echo a full response body behind the 302.
+        exit;
+    }
+
+    /**
+     * The shared draft-preview body for both preview() and previewpost(): gate on
+     * page.edit in the resolved scope, load the row, enforce the scope IDOR guard,
+     * then hand the row's CURRENT (draft) blocks to Cms_preview.tpl.
+     *
+     * @param mixed  $id   raw route id
+     * @param string $kind 'page' | 'post'
+     * @return void
+     */
+    private function _renderPreview($id, $kind)
+    {
+        $isPost = ($kind === 'post');
+
+        $uid = $this->_uid();
+        $scope = $this->_scopeOrDenyWithCap($uid, 'page.edit');
+        if ($scope === false) {
+            return;
+        }
+
+        $this->template = 'Cms_preview.tpl';
+        $this->data['IsFrontDoor'] = false;
+        // Same flag Controller_Page/Controller_Blog set: default.theme turns it into
+        // <body class="cms-page">, which hides #newmenu and zeroes the shell's
+        // padding-top/margin. Without it the preview was the only in-shell CMS
+        // surface carrying the app navbar plus ~56px of dead space.
+        $this->data['IsCmsPage']   = true;
+        $this->data['no_index']    = true;
+        // Cms_preview.tpl emits window.CMS_CSRF from $CmsCsrf so the preview's
+        // inline editor actions carry the token. The constructor already set it
+        // (see __construct), so the emit is guaranteed non-empty.
+
+        $row = $isPost
+            ? $this->CmsPost->get_post((int)$id)
+            : $this->CmsPage->get_page((int)$id);
+        // IDOR guard: never preview a row belonging to another scope.
+        if (empty($row) || !$this->_rowInScope($row, $scope)) {
+            $this->data['Message']     = $isPost ? 'Post not found.' : 'Page not found.';
+            $this->data['page_title']  = 'Preview — not found';
+            $this->data['FrontDoor']   = array();
+            $this->data['PreviewPage'] = null;
+            return;
+        }
+
+        // Preview renders the CURRENT (draft) enabled blocks via the shared renderer.
+        $this->data['FrontDoor']   = $isPost
+            ? $this->CmsPost->get_post_blocks((int)$row['post_id'])
+            : $this->CmsPage->get_page_blocks((int)$row['page_id']);
+        $this->data['PreviewPage'] = $row;
+        // 'postrow' (not 'post') is a literal contract: Cms_preview.tpl:14 keys on it.
+        $this->data['PreviewKind'] = $isPost ? 'postrow' : 'page';
+        $this->data['CanPublish']  = $this->CmsAuth->cms_can($uid, 'page.publish', $scope);
+        $this->data['page_title']  = 'Preview: ' . $row['title'];
+        // The kingdom_*/park_* live blocks derive their org from the render-time
+        // site scope (Controller_Site::_bootShell publishes these). The preview
+        // never set them, so every one of those blocks previewed as a blank —
+        // an officer could not see their own officer grid or meeting times
+        // until the page was published. The scope is the already-authorized
+        // request scope, so this cannot surface another org's data.
+        $this->data['SiteNavScopeType'] = (string)$scope['type'];
+        $this->data['SiteNavScopeId']   = (int)$scope['id'];
+        // Preview in the ORG'S OWN COLOURS. The saved preview never emitted
+        // the scope's theme tokens, so a themed kingdom previewed its pages
+        // against the default palette and then found a different-looking page
+        // once published. CmsThemeTokens builds the CSS; default.theme emits it
+        // from $fdThemeCss in <style id="fd-theme-tokens">, the one sanctioned
+        // inline-CSS channel. Same call Controller_Site::_bootShell makes.
+        $this->load_model('CmsTheme');
+        $themeCss = (string)$this->CmsTheme->get_active_css((string)$scope['type'], (int)$scope['id']);
+        if ($themeCss !== '') {
+            $this->data['fdThemeCss'] = $themeCss;
+        }
+        // Only the families this scope actually uses (CmsTheme::GetActiveFontQuery).
+        $fontQuery = (string)$this->CmsTheme->get_active_font_query((string)$scope['type'], (int)$scope['id']);
+        if ($fontQuery !== '') {
+            $this->data['fdThemeFontQuery'] = $fontQuery;
+        }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Blog posts — list
+     * ------------------------------------------------------------------ */
+
+    public function posts($action = null)
+    {
+        $uid = $this->_uid();
+        // Same gate as the page list: visible to anyone holding ANY CMS capability.
+        $scope = $this->_scopeOrDenyWithCap($uid, $this->_anyCapabilityGate());
+        if ($scope === false) {
+            return;
+        }
+
+        $this->template = 'Cms_posts.tpl';
+        $this->data['page_title'] = 'Blog Posts';
+
+        $opts = array('includeDrafts' => true) + $this->_scopeFilters($scope);
+        $tag = trim((string)($_GET['tag'] ?? ''));
+        if ($tag !== '') {
+            $opts['tag'] = $tag;
+        }
+
+        $result = $this->CmsPost->list_posts($opts);
+        $rows   = (is_array($result) && isset($result['rows']) && is_array($result['rows'])) ? $result['rows'] : array();
+
+        $this->data['Posts']     = $rows;
+        $this->data['TagFilter'] = $tag;
+        $this->data['AllTags']   = $this->CmsPost->list_all_tags();
+
+        // Per-row view counts for the post list's "Views" column — one
+        // batched read (post_id IN …), best-effort (template falls back to ?? []).
+        $this->load_model('CmsView');
+        $sf = $this->_scopeFilters($scope);
+        $postIds = array();
+        foreach ($rows as $pr) {
+            $pid = (int)($pr['post_id'] ?? 0);
+            if ($pid > 0) {
+                $postIds[] = $pid;
+            }
+        }
+        $postViewCounts = $this->CmsView->GetCountsForEntities($sf['scope_type'], $sf['scope_id'], 'post', $postIds);
+        $this->data['postViewCounts'] = is_array($postViewCounts) ? $postViewCounts : array();
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Navigation management (the 'marketing' menu)
+     * ------------------------------------------------------------------ */
+
+    public function nav($action = null)
+    {
+        $uid = $this->_uid();
+        // Navigation management is an admin-only capability.
+        $scope = $this->_scopeOrDenyWithCap($uid, 'nav.manage');
+        if ($scope === false) {
+            return;
+        }
+
+        $this->template = 'Cms_nav.tpl';
+        $this->data['page_title'] = 'Navigation';
+
+        // The flat item list (incl. disabled) the admin tree is built from.
+        $items = $this->CmsNav->list_items('marketing', (string)$scope['type'], (int)$scope['id']);
+        $this->data['Menu']     = 'marketing';
+        $this->data['NavItems'] = is_array($items) ? $items : array();
+
+        // Link-picker source lists: published + draft pages, and posts (scope-filtered).
+        $pages = $this->CmsPage->list_pages($this->_scopeFilters($scope));
+        $this->data['PickerPages'] = is_array($pages) ? $pages : array();
+
+        $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true) + $this->_scopeFilters($scope));
+        $postRows = (is_array($postsRes) && isset($postsRes['rows']) && is_array($postsRes['rows'])) ? $postsRes['rows'] : array();
+        $this->data['PickerPosts'] = $postRows;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Theme engine editor — global scope, v1
+     * ------------------------------------------------------------------ */
+
+    /** Theme engine editor (global scope, v1). */
+    public function theme($action = null)
+    {
+        $uid = $this->_uid();
+        $scope = $this->_scopeOrDenyWithCap($uid, 'theme.manage');
+        if ($scope === false) {
+            return;
+        }
+        $this->load_model('CmsTheme');
+
+        $active       = $this->CmsTheme->get_active_theme((string)$scope['type'], (int)$scope['id']);
+        $activeTokens = (is_array($active) && isset($active['tokens']) && is_array($active['tokens']))
+            ? $active['tokens']
+            : array();
+
+        $this->template = 'Cms_theme.tpl';
+        $this->data['page_title']    = 'Theme';
+        $this->data['ThemeCatalog']  = $this->CmsTheme->catalog();
+        // Role-split on purpose: a blackletter or script face is a valid heading
+        // and an invalid body, and the picker must offer exactly what the save
+        // path will accept (CmsThemeTokens::Validate is role-aware too).
+        $this->data['ThemeFonts']        = $this->CmsTheme->font_allowlist();
+        $this->data['ThemeFontCatalog']  = $this->CmsTheme->font_catalog();
+        $this->data['ThemeFontsHeading'] = $this->CmsTheme->fonts_for_role('heading');
+        $this->data['ThemeFontsBody']    = $this->CmsTheme->fonts_for_role('body');
+        $this->data['ThemeValues']   = array_merge($this->CmsTheme->base_values(), $activeTokens);
+        $this->data['ThemeActiveId'] = (is_array($active) && isset($active['id'])) ? (int)$active['id'] : 0;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Settings — who can work on this site (OGRE access control)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * OGRE Settings: the access-control surface for the resolved scope.
+     *
+     * Gated on roles.manage, the capability only the top rung (and an ORK
+     * super-admin) holds — see CmsAuth::$ROLE_INCREMENTS. The matching rail
+     * entry is shown off $Caps['roles'], which _capFlags() already computes, so
+     * the rail and this gate cannot disagree.
+     *
+     * Three data sets:
+     *   - Members     people holding OGRE grants IN THIS SCOPE, one row each.
+     *   - RoleCatalog the grantable roles with their real capability lists, so
+     *                 the page documents what it is actually handing out.
+     *   - OrkAdmins   GLOBAL ONLY. ORK Administrators pass every OGRE gate via
+     *                 CmsAuth::IsSuperAdmin()'s short-circuit without holding a
+     *                 grant row, so a roster that listed only grants would be
+     *                 quietly wrong about who can edit this site. Read-only:
+     *                 ORK-level authority is granted in Admin -> Permissions,
+     *                 which stays the one place that role is managed.
+     */
+    public function settings($action = null)
+    {
+        $uid = $this->_uid();
+        $scope = $this->_scopeOrDenyWithCap($uid, 'roles.manage');
+        if ($scope === false) {
+            return;
+        }
+
+        $isGlobal = $this->_scopeIsGlobal($scope);
+
+        $this->template = 'Cms_settings.tpl';
+        $this->data['page_title']  = 'Settings';
+        $this->data['Members']     = $this->CmsAuth->list_scope_members($scope['type'], $scope['id']);
+        $this->data['RoleCatalog'] = $this->CmsAuth->role_catalog();
+        $this->data['SettingsUid'] = $uid;
+
+        // ORK Administrators are a GLOBAL fact, and they are the ONE class of
+        // user holding OGRE rights without a grant row (CmsAuth::IsSuperAdmin).
+        // On a kingdom/park site nobody has implicit access at all, so the list
+        // would be a non-sequitur there.
+        $orkAdmins = array();
+        if ($isGlobal) {
+            $this->load_model('AdminDashboard');
+            $orkAdmins = $this->AdminDashboard->global_admin_grants((string)($this->session->token ?? ''));
+        }
+        // Which kingdom's roster the Add-a-user persona search is scoped to.
+        // Project rule: a player search is scoped to its page's context, with
+        // only two documented global exceptions — so an ORG site searches that
+        // org's kingdom (a park searches its PARENT kingdom, which is why this
+        // is not just $scope['id']), and only the global front door, whose
+        // authors legitimately come from anywhere, searches site-wide.
+        $searchKingdomId = 0;
+        if ((string)$scope['type'] === 'kingdom') {
+            $searchKingdomId = (int)$scope['id'];
+        } elseif ((string)$scope['type'] === 'park') {
+            $this->load_model('Park');
+            $searchKingdomId = (int)$this->Park->GetParkKingdomId((int)$scope['id']);
+        }
+        $this->data['SearchKingdomId'] = $searchKingdomId;
+
+        // --- Site-creation policy toggles -------------------------------------
+        // ORK ADMIN, not OGRE Admin. These two decide whether kingdoms and parks
+        // may build sites at all, so they belong to whoever runs the ORK — an OGRE
+        // Administrator of the front door does NOT get to switch them. The same
+        // test gates the save endpoint; this flag only decides whether the control
+        // renders at all.
+        $this->load_model('CmsSite');
+        $isOrkAdmin = (bool)$this->CmsAuth->is_super_admin($uid);
+        $this->data['IsOrkAdmin'] = $isOrkAdmin;
+
+        if ($isGlobal) {
+            $this->data['KingdomSitesEnabled'] = (bool)$this->CmsSite->kingdom_sites_enabled();
+            $this->data['ParkSitesEnabled']    = (bool)$this->CmsSite->park_sites_enabled();
+        } else {
+            // The kingdom-level control appears only once the GLOBAL park switch
+            // is on — there is nothing for a kingdom to permit while parks are
+            // switched off service-wide, and showing a toggle that grants nothing
+            // reads as broken. Parks themselves have nothing to set: their level
+            // is decided above them.
+            $isKingdomScope = ((string)$scope['type'] === 'kingdom');
+            $this->data['ShowAllowParkSites'] = $isKingdomScope
+                && (bool)$this->CmsSite->park_sites_enabled();
+            $this->data['AllowParkSites'] = $isKingdomScope
+                && (bool)$this->CmsSite->kingdom_allows_park_sites((int)$scope['id']);
+        }
+
+        $this->data['OrkAdmins']      = $orkAdmins;
+        $this->data['ShowOrkAdmins']  = $isGlobal;
+        $this->data['OrkAdminUrl']    = UIR . 'Admin/permissions';
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Blog posts — editor
+     * ------------------------------------------------------------------ */
+
+    public function editpost($id = null)
+    {
+        if (func_num_args() === 0) {
+            return $this->_bareRouteRedirect('Cms/posts');
+        }
+
+        $uid    = $this->_uid();
+        $id     = (string)$id;
+        $isNew  = ($id === 'new' || $id === '' || $id === '0');
+        $needed = $isNew ? 'page.create' : 'page.edit';
+
+        $scope = $this->_scopeOrDenyWithCap($uid, $needed);
+        if ($scope === false) {
+            return;
+        }
+
+        $this->template = 'Cms_editpost.tpl';
+
+        if ($isNew) {
+            $post = array(
+                'post_id'       => 0,
+                'slug'          => '',
+                'title'         => '',
+                'excerpt'       => '',
+                'status'        => 'draft',
+                'published_at'  => null,
+                'hero_media_id' => null,
+                'author_id'     => $uid,
+                'author_name'   => '',
+                'scope_type'    => (string)$scope['type'],
+                'scope_id'      => (int)$scope['id'],
+                'tags'          => array(),
+            );
+            $blocks = array();
+            $heroRef = null;
+            $this->data['page_title'] = 'New Post';
+        } else {
+            $post = $this->CmsPost->get_post((int)$id);
+            // IDOR guard: a post from another scope is treated as not-found.
+            if (empty($post) || !$this->_rowInScope($post, $scope)) {
+                // No such post — fall back to the post list with a message.
+                $this->template = 'Cms_posts.tpl';
+                $this->data['page_title'] = 'Blog Posts';
+                $listed = $this->CmsPost->list_posts(array('includeDrafts' => true) + $this->_scopeFilters($scope));
+                $this->data['Posts']     = (is_array($listed) && isset($listed['rows'])) ? $listed['rows'] : array();
+                $this->data['TagFilter'] = '';
+                $this->data['AllTags']   = $this->CmsPost->list_all_tags();
+                $this->data['Message']   = 'Post not found.';
+                return;
+            }
+            // The editor needs ALL body blocks (incl. disabled) so they can be
+            // toggled; get_post_blocks() is the enabled-only public path.
+            $blocks  = $this->CmsPage->get_blocks_for_editor('post', (int)$post['post_id']);
+            $heroRef = $this->_heroRef($post, $scope);
+            $this->data['page_title'] = 'Edit: ' . $post['title'];
+        }
+
+        $this->data['Post']         = $post;
+        $this->data['Blocks']       = $blocks;
+        $this->data['IsNew']        = $isNew;
+        $this->data['HeroRef']      = $heroRef;
+        $catalog = $this->_blockCatalog();
+        $this->data['BlockCatalog'] = $catalog;
+        $this->data['BlockAllow']   = $this->_blockAllow($catalog);
+        // Existing-tags library for the blog_feed block's validated tag picker.
+        $this->data['AllTags']      = $this->_tagOptions();
+    }
+
+    /**
+     * The existing-tags option list the block editor's blog_feed tag picker binds
+     * to: each ['slug','name','post_count'] so the editor can offer real tags and
+     * warn when a chosen filter currently matches no posts. Thin pass-through to
+     * the CmsPost tag library (never raw $DB in the controller).
+     *
+     * @return array<int,array{slug:string,name:string,post_count:int}>
+     */
+    private function _tagOptions()
+    {
+        $tags = $this->CmsPost->list_all_tags();
+        $out = array();
+        foreach ((is_array($tags) ? $tags : array()) as $t) {
+            $slug = (string)($t['slug'] ?? '');
+            if ($slug === '') {
+                continue;
+            }
+            $out[] = array(
+                'slug'       => $slug,
+                'name'       => (string)($t['name'] ?? $slug),
+                'post_count' => (int)($t['post_count'] ?? 0),
+            );
+        }
+        return $out;
+    }
+
+    /**
+     * Resolve a post's hero image (hero_media_id) to a media-ref the editor's
+     * image picker understands, or null when none is set / cannot be resolved.
+     *
+     * Defense in depth: the write side already drops a cross-scope hero id
+     * (controller.CmsAjax.php::_resolveHeroMediaId), so the read side mirrors that
+     * check — a stored id pointing outside the post's scope resolves to null
+     * rather than surfacing another org's media in the editor.
+     */
+    private function _heroRef($post, $scope = null)
+    {
+        $mediaId = isset($post['hero_media_id']) ? (int)$post['hero_media_id'] : 0;
+        if ($mediaId <= 0) {
+            return null;
+        }
+        $this->load_model('CmsMedia');
+        $row = $this->CmsMedia->get_media($mediaId);
+        if (empty($row)) {
+            return null;
+        }
+        if (is_array($scope) && !$this->_rowInScope($row, $scope)) {
+            return null;
+        }
+        return $this->CmsMedia->to_media_ref($row);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Internal helpers
+     * ------------------------------------------------------------------ */
+
+    /**
+     * True when the user holds at least one CMS capability in the given scope
+     * (covers super-admin via _resolveCapabilities short-circuit). Scope defaults
+     * to the global front door for legacy callers.
+     */
+    private function _hasAnyCmsCapability($uid, $scope = null)
+    {
+        if ($uid <= 0) {
+            return false;
+        }
+        $resolved = $this->_resolveCapabilities($uid, $scope);
+        if ($resolved['is_super']) {
+            return true;
+        }
+        if (!empty($resolved['caps'])) {
+            return true;
+        }
+        // No officer bridge: CMS rights come only from grant rows (plus the ORK
+        // super-admin short-circuit already handled above), so an empty grant set
+        // genuinely means no CMS capability here.
+        return false;
+    }
+
+    /**
+     * The ONE "holds any CMS capability" gate callable shared by the surfaces that
+     * are visible to any CMS-capable officer (dashboard, page list, post list).
+     * Shaped for _scopeOrDenyWithCap's callable form: fn(int $uid, array $scope): bool.
+     *
+     * @return callable
+     */
+    private function _anyCapabilityGate()
+    {
+        return function ($uid, $scope) {
+            return $this->_hasAnyCmsCapability($uid, $scope);
+        };
+    }
+
+    /**
+     * Per-capability boolean map for templates (show/hide editor buttons), for
+     * the given scope (defaults to the global front door).
+     */
+    private function _capFlags($uid, $scope = null)
+    {
+        $resolved = $this->_resolveCapabilities($uid, $scope);
+        $isSuper  = $resolved['is_super'];
+        $caps     = $resolved['caps'];
+        // Grant rows + the ORK super-admin short-circuit ARE the capability set —
+        // there is no officer bridge to union in, so this map and the server-side
+        // cms_can() gates can no longer disagree for any user.
+        $held = function ($cap) use ($isSuper, $caps) {
+            return $isSuper || in_array($cap, $caps, true);
+        };
+        return array(
+            'create'  => $held('page.create'),
+            'edit'    => $held('page.edit'),
+            'publish' => $held('page.publish'),
+            'delete'  => $held('page.delete'),
+            // 'media' is LIBRARY ACCESS (upload-or-manage) — a Contributor holds
+            // media.upload and needs the library to add and remove their own
+            // files. 'media_manage' is the narrower right to act on ANYONE's
+            // upload; the template shows destructive controls off that one.
+            'media'        => $held('media.upload') || $held('media.manage'),
+            'media_manage' => $held('media.manage'),
+            'nav'     => $held('nav.manage'),
+            'roles'   => $held('roles.manage'),
+            'theme'   => $held('theme.manage'),
+            // ORK super-admin only. Gates the global "All sites" rail entry (the
+            // overview is a cross-org, super-admin-only surface). Never true for
+            // an org-scoped officer, so the rail entry stays hidden for them.
+            'super'   => $isSuper,
+        );
+    }
+
+    /**
+     * The FLAT list of capability strings the user actually holds in a
+     * scope, for the shell to emit as window.CMS_CAPS (admin-templates annotates /
+     * disables actions the user lacks). A super-admin holds everything, so return
+     * the full canonical set for them (nothing gets disabled). Never breaks an
+     * empty case — an unauthenticated / capless caller yields [].
+     *
+     * @param int        $uid
+     * @param array|null $scope
+     * @return string[]
+     */
+    private function _capList($uid, $scope = null)
+    {
+        $resolved = $this->_resolveCapabilities($uid, $scope);
+        if (!empty($resolved['is_super'])) {
+            // The RBAC layer already owns the capability vocabulary (the union of
+            // every role increment). Read it from there rather than re-declaring
+            // the list here, where the two could drift. Same 9-string set; the
+            // consumer (_shell_top.tpl's window.CMS_CAPS reader) tests membership
+            // with indexOf, never position, so the emit order is not a contract.
+            return $this->CmsAuth->all_capabilities();
+        }
+        // Grant rows are the whole capability set (the officer bridge is gone), so
+        // window.CMS_CAPS and the server-side cms_can() gates read the same source.
+        $caps = array_map('strval', (array)$resolved['caps']);
+        return array_values(array_unique($caps));
+    }
+
+    /**
+     * Resolve a user's CMS capabilities ONCE per request (cached by uid).
+     *
+     * Issues exactly 2 DB queries total (1 IsSuperAdmin + 1 GetUserGrants),
+     * versus the prior O(N) loop that fired up to ~24 queries (8 caps ×
+     * IsSuperAdmin + GetUserGrants each). All callers do in_array() in memory.
+     *
+     * Big-O: O(G × R) per request, G = grant rows, R = roles/caps (both tiny,
+     * single-digit in practice); previously O(N) DB round-trips where N = caps.
+     *
+     * @param int        $uid   mundane_id
+     * @param array|null $scope resolved request scope (null → global default)
+     * @return array{is_super:bool, caps:string[]}
+     */
+    private function _resolveCapabilities($uid, $scope = null)
+    {
+        $uid = (int)$uid;
+        if (!is_array($scope)) {
+            $scope = self::$SCOPE;
+        }
+        // Cache key MUST include scope: caps differ per org within one request,
+        // so a uid-only key would leak one scope's caps into another.
+        $key = $uid . '|' . (string)($scope['type'] ?? 'global') . ':' . (int)($scope['id'] ?? 0);
+        if (isset($this->_capCache[$key])) {
+            return $this->_capCache[$key];
+        }
+
+        // One HasAuthority query (super-admin short-circuit).
+        $isSuper = ($uid > 0) && (bool)$this->CmsAuth->IsSuperAdmin($uid);
+
+        // One GetUserGrants query + in-memory role expansion, scoped to this org.
+        // Skip for super-admins — they pass every cap already.
+        // Grant rows, PLUS the org-site officer bridge: a create-or-admin officer of
+        // a kingdom/park is an OGRE Administrator of that site (CmsCan step 3), so
+        // they hold the whole capability set there. Resolving that here — rather
+        // than unioning a per-capability probe at each call site — is what keeps
+        // $Caps, window.CMS_CAPS and the server-side cms_can() gates in agreement.
+        $caps = array();
+        if ($uid > 0 && !$isSuper) {
+            $caps = $this->CmsAuth->is_scope_officer($uid, $scope)
+                ? (array)$this->CmsAuth->all_capabilities()
+                : (array)$this->CmsAuth->get_user_capabilities($uid, $scope);
+        }
+
+        $resolved = array('is_super' => $isSuper, 'caps' => $caps);
+        $this->_capCache[$key] = $resolved;
+        return $resolved;
+    }
+
+    /**
+     * The page-surface preamble every scoped action shares: resolve+authorize the
+     * request scope, gate a capability, then publish the scope to the template
+     * layer. Returns the resolved scope on success, or false after arranging the
+     * deny (the caller must `return;` on false — identical to the old inline
+     * three-liner + gate).
+     *
+     * $capability is either a capability string checked via CmsAuth->cms_can(),
+     * or a callable(int $uid, array $scope):bool for the non-cms_can gates
+     * (e.g. _hasAnyCmsCapability, or the media _capFlags check).
+     *
+     * @param int             $uid
+     * @param string|callable $capability
+     * @return array{type:string,id:int}|false
+     */
+    private function _scopeOrDenyWithCap($uid, $capability)
+    {
+        // Resolve + authorize the ?scope= selector first. A present-but-malformed
+        // or unauthorized selector denies outright — never a silent downgrade to
+        // global — before any capability gate or data load runs.
+        $scope = $this->_resolveScope($uid);
+        if ($scope === false) {
+            $this->_denyRedirect();
+            return false;
+        }
+        $ok = is_string($capability)
+            ? (bool)$this->CmsAuth->cms_can($uid, $capability, $scope)
+            : (bool)$capability($uid, $scope);
+        if (!$ok) {
+            // When the gate is a single named capability, pass it through so
+            // the deny page can tell the user exactly what they're missing. A
+            // callable gate (any-of / dashboard "any capability") has no single
+            // name → null.
+            $this->_denyRedirect(is_string($capability) ? $capability : null);
+            return false;
+        }
+        $this->_applyScopeData($scope);
+        return $scope;
+    }
+
+    /**
+     * Publish the resolved scope's context to the template layer: the shell
+     * reads these to thread scope onto rail links, emit window.CMS_SCOPE, and
+     * render the "Editing: {Org} — public site" banner. No-ops to empty for
+     * global so the legacy front-door chrome is unchanged.
+     *
+     * @param array $scope
+     * @return void
+     */
+    private function _applyScopeData($scope)
+    {
+        $this->data['CmsScope']      = $scope;
+        $this->data['CmsScopeQuery'] = $this->_scopeQuery($scope);
+        $this->data['CmsScopeSel']   = $this->_scopeSelector($scope);
+        $this->data['CmsScopeLabel'] = $this->_scopeIsGlobal($scope) ? '' : $this->_scopeOrgLabel($scope);
+        // The org-unit NOUN ('Kingdom' / 'Principality' / 'Park'). Every scoped
+        // admin render funnels through here, so any template that would otherwise
+        // hard-code "kingdom" can say the true thing instead — a principality is
+        // stored as a kingdom row and would otherwise be mislabelled throughout.
+        $this->data['CmsScopeNoun']  = $this->_scopeOrgNoun($scope);
+        // The "View live site" target for THIS scope: the org's own public home
+        // (/k|/p route) for a scoped site, or the global front door otherwise.
+        $this->data['SiteLiveUrl']   = $this->_scopeLiveHome($scope);
+        // The public URL namespace for this scope ('p' for parks, else 'k'), read
+        // from the lib that owns the rule so the dashboard stops re-deriving it.
+        $this->data['SitePrefix']    = CmsSite::UrlPrefixFor($scope['type'] ?? '');
+        // The caller's held capability set, for the shell to emit as
+        // window.CMS_CAPS so the admin UI can annotate/disable actions the user
+        // lacks. Every scoped render path funnels through here.
+        $this->data['CmsCaps']       = $this->_capList($this->_uid(), $scope);
+        // Per-capability boolean map the shell rail and every action's UI read to
+        // show/hide controls. Set HERE rather than in each action for the same
+        // reason as CmsCaps above: every scoped page surface funnels through this
+        // method immediately after its capability gate. _capFlags is memoized per
+        // uid+scope, so this costs no additional DB round-trip.
+        $this->data['Caps']          = $this->_capFlags($this->_uid(), $scope);
+    }
+
+    /**
+     * Auth failure on a page surface (these never emit JSON). Two distinct cases:
+     *
+     *   - GENUINELY UNAUTHENTICATED (no session) → bounce to Login, since there's
+     *     nothing to show and re-authenticating is the actual next step.
+     *   - AUTHENTICATED BUT LACKS CMS RIGHTS (or a malformed/unauthorized scope) →
+     *     a login bounce is baffling ("why is it asking me to log in again?") and
+     *     dead-ends the user. Instead render a plain-language permission page that
+     *     tells them who can grant access, mirroring the dashboard site-card's tone.
+     */
+    private function _denyRedirect($missingCap = null)
+    {
+        if ($this->_uid() > 0) {
+            return $this->_denyPermission($missingCap);
+        }
+        header('X-Robots-Tag: noindex, nofollow');
+        header('Location: ' . UIR . 'Login');
+        // Stop here (matching _denyPermission): without the exit, index.php's
+        // $C->view() would assemble and echo the whole OGRE admin shell behind
+        // the 302 — and emit it for real if headers were already flushed.
+        exit;
+    }
+
+    /**
+     * Render a self-contained "you don't have permission" page for a logged-in
+     * user who lacks CMS access, then stop. The markup lives in the
+     * bare-chrome Cms_deny.tpl; the controller keeps only the 403 + X-Robots-Tag
+     * headers and renders that template directly (the deny page deliberately
+     * bypasses the themed View pipeline — a denied viewer holds no CMS scope to
+     * build the shell chrome from).
+     */
+    private function _denyPermission($missingCap = null)
+    {
+        header('X-Robots-Tag: noindex, nofollow');
+        if (function_exists('http_response_code')) {
+            http_response_code(403);
+        }
+        $HomeUrl = (string)UIR;
+        // The specific capability the user lacked (when the gate was a single
+        // named capability), for the deny page to name. '' when unknown (a scope
+        // failure or an any-of gate) — the template falls back to generic copy.
+        $MissingCapability = ($missingCap !== null) ? (string)$missingCap : '';
+        $tpl = DIR_TEMPLATE . 'default/Cms_deny.tpl';
+        if (is_file($tpl)) {
+            include $tpl;
+        }
+        exit;
+    }
+
+    /**
+     * The block catalog the editor offers. Derived from the partials actually
+     * present in frontdoor/blocks/ (authoritative `available` flag) UNION the
+     * spec's named catalog (so future block types appear as "coming soon").
+     *
+     * Each entry: ['type','label','group','available','dynamic'].
+     */
+    private function _blockCatalog()
+    {
+        // Return the per-request memo when present — the editor load builds
+        // the catalog once instead of ~15 times (see $_blockCatalogMemo).
+        if (is_array($this->_blockCatalogMemo)) {
+            return $this->_blockCatalogMemo;
+        }
+        // The canonical type => def map is the SINGLE source of truth for
+        // block types (CmsBlockRegistry), shared with Controller_CmsAjax (which
+        // derives its save-time allowlist from CanonicalBlockTypes()). Pure data,
+        // so neither the catalog view nor the parser hand-duplicates it. What
+        // stays HERE is the request-dependent half: the filesystem `available`
+        // probe and the per-scope `addable` gating.
+        $known = CmsBlockRegistry::BlockDefs();
+
+        $blockDir = DIR_TEMPLATE . 'default/frontdoor/blocks/';
+
+        // Scope-gate the CHOOSER only. A kingdom_*/park_* block renders nothing
+        // outside its own scope (every partial returns early), so offering one
+        // there is safe but silently produces an invisible block — a confusing
+        // thing to hand an officer. A block already placed on a page keeps
+        // rendering and stays editable regardless, so an org that changes type
+        // never loses content. Read the already-resolved scope memo rather than
+        // re-resolving: every caller of this method runs after the action
+        // resolved its scope, and a null memo means global.
+        $scopeType = is_array($this->_cmsScope) ? (string)($this->_cmsScope['type'] ?? 'global') : 'global';
+
+        $catalog = array();
+        foreach ($known as $type => $def) {
+            $partial   = $blockDir . preg_replace('/[^a-z_]/', '', $type) . '.tpl';
+            $available = file_exists($partial);
+            $addable   = !isset($def['addable']) ? true : (bool)$def['addable'];
+            // A block that cannot render in this scope is not offered for adding.
+            // A null/absent `scopes` means "offered everywhere".
+            $scopes = isset($def['scopes']) ? $def['scopes'] : null;
+            if ($addable && is_array($scopes) && !in_array($scopeType, $scopes, true)) {
+                $addable = false;
+            }
+            $catalog[] = array(
+                'type'        => $type,
+                'label'       => $def['label'],
+                'group'       => $def['group'],
+                'dynamic'     => (bool)$def['dynamic'],
+                'icon'        => $def['icon'],
+                'description' => $def['description'],
+                'available'   => $available,
+                'addable'     => $addable,
+            );
+        }
+        $this->_blockCatalogMemo = $catalog;
+        return $catalog;
+    }
+
+    /**
+     * The canonical list of valid block-type keys — the shared allowlist
+     * Controller_CmsAjax::_parseBlocks() drops forged/unknown types against.
+     * Derived from the ONE registry map so the two can never drift.
+     *
+     * @return string[]
+     */
+    public static function CanonicalBlockTypes()
+    {
+        return array_keys(CmsBlockRegistry::BlockDefs());
+    }
+
+    /**
+     * Page-type presets (editor hint → starting block set). Mirrors the spec's
+     * "Page types are editor presets" decision.
+     *
+     * Each entry: ['type','label','description','blocks'=>[<starter blocks>]], where a
+     * starter block is a fully-formed block: ['type','enabled','source','fields'].
+     * The editor seeds the block list from these when CREATING a new page of the
+     * given type (and re-seeds when the type is switched on an empty new page).
+     * `fields` carry sensible empty defaults matching each block's partial keys.
+     *
+     * SCOPE-AWARE on two axes. A type may declare `starters_by_scope` (the
+     * 'dynamic' type does: a kingdom site seeds its OWN events/parks/officers,
+     * not a grid of every other kingdom), and whatever list is chosen is then
+     * intersected with the catalog's addable set — the SAME gate _blockAllow()
+     * applies to the chooser, via the shared _addableSet() helper. Without that
+     * intersection a starter could seed a block the partial refuses to render in
+     * this scope: an error band or an invisible block on a brand-new page.
+     */
+    private function _pageTypes()
+    {
+        // Build the catalog ONCE and thread it into every _starter() call so
+        // the starters below don't each rebuild it (memoized too, belt-and-
+        // suspenders). The starter only needs the catalog's dynamic-type flags.
+        $catalog = $this->_blockCatalog();
+        $addable = $this->_addableSet($catalog);
+        // The catalog's addable flags are already scope-gated (see
+        // _blockCatalog), but the starter CHOICE needs the scope name itself.
+        $scopeType = is_array($this->_cmsScope) ? (string)($this->_cmsScope['type'] ?? 'global') : 'global';
+
+        $out = array();
+        foreach (CmsBlockRegistry::PageTypeDefs() as $type => $def) {
+            // A def with no starters is not a page-type preset (see the registry
+            // note: 'post' is a chooser-only owner context, not a page type).
+            if (empty($def['starters'])) {
+                continue;
+            }
+            $starters = (isset($def['starters_by_scope'][$scopeType]) && is_array($def['starters_by_scope'][$scopeType]))
+                ? $def['starters_by_scope'][$scopeType]
+                : $def['starters'];
+            $blocks = array();
+            foreach ($starters as $blockType) {
+                // Same gate as the Add-block chooser: a block that cannot be
+                // added in this scope must not be seeded in it either.
+                if (!isset($addable[$blockType])) {
+                    continue;
+                }
+                $blocks[] = $this->_starter($blockType, $catalog);
+            }
+            $out[] = array(
+                'type'        => $type,
+                'label'       => (string)$def['label'],
+                // Author-facing one-liner shown at the point of choice (the
+                // New-page type cards and the editor rail's Type select). Empty
+                // string when the registry carries none, so every consumer can
+                // just test truthiness.
+                'description' => isset($def['description']) ? (string)$def['description'] : '',
+                'blocks'      => $blocks,
+            );
+        }
+        return $out;
+    }
+
+    /**
+     * A sensible starting meta description for a BRAND-NEW page.
+     *
+     * Public copy, not authoring instructions: it is written to appear verbatim
+     * in a search result or a link preview if the officer never edits it. The
+     * alternative is the empty string, which the public renderer falls back out
+     * of to a global, org-agnostic default.
+     *
+     * @param string $type     page type key from the New-page chooser ('' = unknown)
+     * @param string $orgLabel the org's own name ('' for the global front door)
+     * @return string
+     */
+    private function _defaultMeta($type, $orgLabel)
+    {
+        $org = trim((string)$orgLabel);
+        if ($org === '') {
+            $org = 'Amtgard';
+        }
+        $type = trim((string)$type);
+        $byType = array(
+            'composed'   => 'Who we are, where we play and how to get started with ' . $org . '.',
+            'article'    => 'News and information from ' . $org . '.',
+            'media'      => 'Photos from ' . $org . '.',
+            'about'      => 'About ' . $org . ' — our story and the people who run it.',
+            'resource'   => 'Rules, forms and downloads from ' . $org . '.',
+            'blog_index' => 'News and announcements from ' . $org . '.',
+            'dynamic'    => 'Parks, officers and upcoming events for ' . $org . '.',
+            'store'      => 'Merchandise and gear from ' . $org . '.',
+        );
+        return isset($byType[$type]) ? $byType[$type] : $byType['composed'];
+    }
+
+    /**
+     * The scope-gated addable block-type set, as blockType => true.
+     *
+     * ONE definition of "may this block be used in the active scope", shared by
+     * the Add-block chooser (_blockAllow) and the new-page starter presets
+     * (_pageTypes). The catalog's `addable` flag already folds in the per-block
+     * `scopes` gating (see _blockCatalog), so both callers inherit it for free
+     * and cannot drift apart.
+     *
+     * @param array|null $catalog already-built catalog, or null to build it
+     * @return array<string,bool>
+     */
+    private function _addableSet($catalog = null)
+    {
+        if (!is_array($catalog)) {
+            $catalog = $this->_blockCatalog();
+        }
+        $addable = array();
+        foreach ($catalog as $c) {
+            if (!empty($c['addable'])) {
+                $addable[$c['type']] = true;
+            }
+        }
+        return $addable;
+    }
+
+    /**
+     * Which block types are SENSIBLE to add on each page type (and on blog post
+     * bodies, keyed 'post'). The editor surfaces these in the Add-block chooser
+     * by default; everything else is reachable behind a "Show all blocks" toggle.
+     * This only governs the chooser — blocks already placed on a page keep
+     * rendering and stay editable regardless of this list.
+     *
+     * A handful of blocks are universal (sensible on any page); each type then
+     * adds its own thematic extras. `composed` (the landing-page type) is the
+     * kitchen sink — it gets every addable block, so it is computed from the
+     * catalog rather than enumerated here.
+     *
+     * @return array<string,array<int,string>> page-type key => allowed block types
+     */
+    private function _blockAllow($catalog = null)
+    {
+        if (!is_array($catalog)) {
+            $catalog = $this->_blockCatalog();
+        }
+        // Sensible on any page: structure + plain content + a single image.
+        $universal = array('heading', 'rich_text', 'image', 'divider', 'spacer', 'quote', 'raw_html');
+
+        // composed = all addable block types (the full landing-page kit).
+        $addable  = $this->_addableSet($catalog);
+        $composed = array_keys($addable);
+
+        $allow = array('composed' => $composed);
+        foreach (CmsBlockRegistry::PageTypeDefs() as $type => $def) {
+            // 'composed' is computed above, not enumerated; a null extra_blocks
+            // means exactly that.
+            if ($type === 'composed' || !isset($def['extra_blocks']) || !is_array($def['extra_blocks'])) {
+                continue;
+            }
+            // Intersect with the addable set so the enumerated groups inherit the
+            // catalog's scope gating. Without this, the kingdom_* entries in
+            // 'about'/'dynamic' would still be offered on a park site (and the
+            // park_* entries on a kingdom site) even though the partial returns
+            // early there and the officer would get an invisible block.
+            $merged      = array_merge($universal, $def['extra_blocks']);
+            $allow[$type] = array_values(array_unique(array_filter(
+                $merged,
+                static function ($t) use ($addable) {
+                    return isset($addable[$t]);
+                }
+            )));
+        }
+        return $allow;
+    }
+
+    /**
+     * The canonical page-type => label map — the SINGLE source of truth for
+     * which page types exist. Pure static data so both the presets/labels path
+     * (here) and Controller_CmsAjax::_normalizeType's save-time allowlist read the
+     * SAME key set (via CanonicalPageTypes()). Previously the enum was declared
+     * twice; a type added to the presets could be silently clamped back to
+     * 'composed' by a stale allowlist. One list now makes that impossible.
+     *
+     * Also the human label map the Type column and the type chooser render from.
+     * Unknown keys (legacy/system page types absent here) fall back to a
+     * de-underscored ucwords() form at the call site (e.g. "blog_index" →
+     * "Blog Index").
+     *
+     * @return array<string,string>
+     */
+    private static function _pageTypeLabelMap()
+    {
+        $out = array();
+        foreach (CmsBlockRegistry::PageTypeDefs() as $type => $def) {
+            // A null label marks a chooser-only owner context ('post'), which is
+            // NOT a page type — it must never reach the type chooser, the Type
+            // column's label map, or the save-time page-type allowlist.
+            if (!isset($def['label']) || $def['label'] === null) {
+                continue;
+            }
+            $out[$type] = (string)$def['label'];
+        }
+        return $out;
+    }
+
+    /**
+     * The canonical list of valid page-type keys — the shared write-side
+     * allowlist Controller_CmsAjax::_normalizeType clamps unknown types against.
+     * Derived from the ONE label map above so the presets and the save allowlist
+     * can never drift.
+     *
+     * @return string[]
+     */
+    public static function CanonicalPageTypes()
+    {
+        return array_keys(self::_pageTypeLabelMap());
+    }
+
+    /**
+     * Build one starter block for a preset: a fully-formed block object with
+     * sensible empty field defaults matching that block type's partial keys.
+     *
+     * @return array{type:string,enabled:int,source:string,fields:array}
+     */
+    private function _starter($type, $catalog = null)
+    {
+        // Dynamic blocks (pull data at render time) are flagged source=dynamic.
+        // Derive the set from the catalog's `dynamic` flag so it stays in sync
+        // with a single source of truth rather than a duplicated hand-list.
+        // The caller (_pageTypes) passes the already-built catalog so this
+        // isn't rebuilt per starter; fall back to the memoized build otherwise.
+        // CMS-7: the derived set is memoized for the request — _pageTypes fires
+        // ~14 starters per editor load and each one re-derived it.
+        if ($this->_dynamicTypesMemo === null) {
+            if (!is_array($catalog)) {
+                $catalog = $this->_blockCatalog();
+            }
+            $dynamicTypes = array();
+            foreach ($catalog as $c) {
+                if (!empty($c['dynamic'])) {
+                    $dynamicTypes[$c['type']] = true;
+                }
+            }
+            $this->_dynamicTypesMemo = $dynamicTypes;
+        }
+
+        // Empty field defaults keyed to each partial's consumed fields, declared
+        // once per block type in CmsBlockRegistry alongside that type's catalog
+        // entry. A type with no starter_fields (e.g. the non-addable legacy
+        // 'richtext') seeds an empty field set, exactly as before.
+        $defs = CmsBlockRegistry::BlockDefs();
+
+        return array(
+            'type'    => $type,
+            'enabled' => 1,
+            'source'  => isset($this->_dynamicTypesMemo[$type]) ? 'dynamic' : 'authored',
+            'fields'  => (isset($defs[$type]['starter_fields']) && is_array($defs[$type]['starter_fields']))
+                ? $defs[$type]['starter_fields']
+                : array(),
+        );
+    }
+}

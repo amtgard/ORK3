@@ -1,0 +1,108 @@
+{
+    "slug": "mission",
+    "type": "article",
+    "parent_slug": "about",
+    "title": "Mission",
+    "meta_description": "Amtgard's mission: a LARP and boffer combat society, a society without a fixed narrative, a 501(c)(3) nonprofit, and a commitment to inclusivity.",
+    "blocks": [
+        {
+            "type": "heading",
+            "fields": {
+                "text": "ABOUT AMTGARD",
+                "level": 2,
+                "align": "left"
+            }
+        },
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Amtgard as a Game",
+                "level": 3,
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "body": "<p>At it’s core, Amtgard is a Live Action Roleplaying (LARP) and boffer combat society focused on the Sword &amp; Sorcery, Medieval and Ancient genres. Amtgard uses safe, foam-padded replicas of Medieval weaponry to bring to life the tabletop or video game experience many are familiar with. In Amtgard, you don’t just say what you want to do; you do it. You swing the sword or cast the spell. You are the adventurer. More than just a sport combat game, the Amtgard Rules of Play include complete rules for classes, leveling, magic and special abilities. Weekly participation in games allows you to advance in a class, unlocking levels and new powers. The Dor Un Avathar, Amtgard’s “monster manual”, as well as five expansion books are filled with more than 250 monsters, as well as pre-built game scenarios you can use to challenge your friends.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "image",
+            "fields": {
+                "caption": "",
+                "href": "#",
+                "align": "center",
+                "max_width": "720",
+                "image": "1.jpg"
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "1.jpg",
+                        "alt": "Amtgard boffer combat action shot"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "body": "<p>You can use these rules to engage in tactical games against your friends, or to create quests and other roleplaying scenarios for your friends.</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "heading",
+            "fields": {
+                "text": "Amtgard as a Society",
+                "level": 3,
+                "align": "left"
+            }
+        },
+        {
+            "type": "image",
+            "fields": {
+                "caption": "",
+                "href": "#",
+                "align": "center",
+                "max_width": "720",
+                "image": "2.jpg"
+            },
+            "assets": {
+                "images": [
+                    {
+                        "file": "2.jpg",
+                        "alt": "Amtgard members in costume and persona"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "body": "<p>Amtgard has role playing and characters, but it doesn’t have a predefined game world with an ongoing national story-line. Because of this, Amtgard allows for a wide range of rich character backgrounds coming from both historical and Sword &amp; Sorcery roots. We do all use persona names and they run the gamut from very medieval to fantasy to whatever. Don’t worry, if you decide you don’t like your persona name you can change it at any point in the future!</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "kicker": "",
+                "heading": "Amtgard as a Registered Non-Profit",
+                "body": "<p>Amtgard is a registered non profit 501(c)(3) organization. As a non-profit, Amtgard benefits from Organizations that provide credits and/or elevation of capabilities on our third party resources. Some of the Organizations providing this service are <a href=\"https://uptimerobot.com/sponsorship/\">UptimeRobot</a> (Account upgrade for monitoring our web resources), <a href=\"https://aws.amazon.com/government-education/nonprofits/nonprofit-credit-program/\">Amazon Web Services</a> (Credits towards our hosting services), and <a href=\"https://www.cloudflare.com/en-ca/impact-portal/\">CloudFlare</a> (Business account on our Middleware).</p>",
+                "align": "left"
+            }
+        },
+        {
+            "type": "rich_text",
+            "fields": {
+                "kicker": "",
+                "heading": "AMTGARD INCLUSIVITY STATEMENT",
+                "body": "<p>It is the professed belief of the leadership of Amtgard that all people regardless of gender, nationality, race, ethnicity, age, sexual orientation, mental or physical ability, or religious affiliation should find Amtgard to be welcoming and inclusive. To that end, we encourage all members of Amtgard to embrace an appreciation of diversity and to take actions that help those who face systematic discrimination find a home within our community. The leadership of Amtgard recognizes that we must hold our organization to a standard of inclusion. This standard is not merely a required minimum, but rather one that makes us actively appealing to those people who have historically been discriminated against. As such, it falls on us to strive not only for equality in our actions towards our vulnerable membership, but also for equity in order to raise them up to a level of security and acceptance that so many of us enjoy as a matter of course. Therefore, the leadership of Amtgard resolves to dedicate itself as a matter of official policy and public record to ensuring that our publications, communications, governance, and behavior promote and further these stated beliefs so that all of our members can have the Amtgard they deserve.</p>",
+                "align": "left"
+            }
+        }
+    ]
+}
