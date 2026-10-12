@@ -72,9 +72,13 @@
 	// Auth helpers (precomputed in Controller_Player::profile)
 	$isOwnProfile  = !empty($IsOwnProfile);
 	$canEditAdmin  = !empty($canEditAdmin);
+	// Moving a player is a park CREATE power, not EDIT -- see Admin_permissions.tpl
+	// and Player::MovePlayer, which checks AUTH_CREATE over either end.
+	$canMovePlayer = !empty($canMovePlayer);
 	$pnCanManageBanner = !empty($pnCanManageBanner);
 	$canManageAwards = !empty($canManageAwards);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
+	$callerIsOrkAdmin = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_EDIT);
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
 
@@ -88,6 +92,15 @@
 	$showFirstName = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneFirst'] ?? 0));
 	$showLastName  = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneLast']  ?? 0));
 	$showEmail     = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
+
+	// Account-security details (username, password expiry) -- never public.
+	// $canSeePrivate alone is not enough here: $canEditAdmin is a park-scoped
+	// check, and HasAuthority returns false for AUTH_PARK with id 0, so an ORK
+	// admin viewing a player who has no park would be locked out of their own
+	// admin surface. The unscoped-admin check covers that case.
+	$canSeeAccount = $canSeePrivate
+		|| (isset($this->__session->user_id)
+			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN));
 
 	// Historical ladder flags from domain (Controller_Player::profile via get_reconcile_suggestions)
 	$hasHistorical = !empty($HasHistorical);
@@ -177,6 +190,19 @@
 	}
 ?>
 
+<?php if (!function_exists('pnaRelTime')) {
+    function pnaRelTime($ts) {
+        $t = strtotime((string)$ts);
+        if (!$t) return '';
+        $d = time() - $t;
+        if ($d < 60)     return 'just now';
+        if ($d < 3600)   return floor($d / 60) . 'm ago';
+        if ($d < 86400)  return floor($d / 3600) . 'h ago';
+        if ($d < 604800) return floor($d / 86400) . 'd ago';
+        return date('M j', $t);
+    }
+} ?>
+
 <?php
 	$_pnHeroBg = $isSuspended ? '#9b2c2c' : '#2c5282';
 	$_pnIsCustomPrimary = false;
@@ -246,7 +272,7 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-layout{display:flex;gap:16px;align-items:flex-start}
 .pna-sidebar{flex:0 0 260px;display:flex;flex-direction:column;gap:12px}
 .pna-feed{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
-.pna-card{background:#fff;border:1px solid var(--ork-border);border-radius:8px;padding:14px 16px}
+.pna-card{background:var(--ork-bg-inset);border:1px solid var(--ork-border);border-radius:8px;padding:14px 16px}
 .pna-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-muted);margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .pna-card-title a.pna-card-more{margin-left:auto;font-weight:600;font-size:11px;color:#4299e1;text-decoration:none;text-transform:none;letter-spacing:0}
 .pna-card-title a.pna-card-more:hover{text-decoration:underline}
@@ -269,12 +295,12 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-bar-max{background:linear-gradient(90deg,#f6ad55,#dd6b20)}
 .pna-class-credits{font-size:10px;color:var(--ork-text-hint);margin-top:3px}
 .pna-paragon-dot{color:#b7791f;font-size:10px;margin-left:3px}
-.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid var(--ork-surface-light)}
+.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid var(--ork-divider)}
 .pna-officer-row:last-child{border-bottom:none}
 .pna-officer-title{font-size:12px;font-weight:600;color:#2d3748}
 .pna-officer-entity{font-size:11px;color:#4299e1;text-decoration:none}
 .pna-officer-entity:hover{text-decoration:underline}
-.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-hint);padding:8px 0 3px;margin-top:4px;border-top:1px solid var(--ork-surface-hover)}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid var(--ork-surface-light);font-size:12.5px}
+.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-hint);padding:8px 0 3px;margin-top:4px;border-top:1px solid var(--ork-divider)}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid var(--ork-divider);font-size:12.5px}
 .pna-feed-row:last-child{border-bottom:none}
 .pna-feed-date{flex-shrink:0;color:var(--ork-text-hint);font-size:11px;min-width:46px}
 .pna-feed-label{flex:1;color:#2d3748;font-weight:500;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -301,15 +327,15 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-spark-swatch-off{background:var(--ork-surface-hover);border:1px solid #cbd5e0}
 .pna-ev-cols{display:flex;gap:10px}
 .pna-ev-col{flex:1;min-width:0}
-.pna-ev-col-hdr{font-size:11px;font-weight:700;color:var(--ork-text-body);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--ork-border)}
-.pna-ev-park{color:#718096;font-size:11px;font-weight:500;margin-left:2px}
+.pna-ev-col-hdr{font-size:11px;font-weight:700;color:var(--ork-text-body);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--ork-divider)}
+.pna-ev-park{color:var(--ork-text-muted);font-size:11px;font-weight:500;margin-left:2px}
 .pna-spark-months{display:flex;gap:3px;margin-top:2px}
 .pna-spark-month-lbl{flex:1;font-size:9px;color:var(--ork-text-hint);text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
 @media(max-width:700px){
 .pna-layout{flex-direction:column;align-items:stretch}
 .pna-sidebar{flex:none;width:100%}
 .pna-ev-cols{flex-direction:column}
-.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid var(--ork-border)}
+.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid var(--ork-divider)}
 .pna-card{padding:12px 13px}
 .pna-tenure-years{font-size:36px}
 }
@@ -461,7 +487,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-about-content h1,.pn-about-content h2,.pn-about-content h3,.pn-about-content h4,.pn-about-content h5,.pn-about-content h6{background:transparent;border:none;padding:0;border-radius:0;text-shadow:none;color:#2d3748;margin:16px 0 8px}
 .pn-about-content p{margin:0 0 12px}
 .pn-about-content a{color:var(--pn-accent,#4299e1)}
-.pn-about-content blockquote{border-left:3px solid var(--pn-accent,#4299e1);margin:12px 0;padding:8px 16px;color:#718096;background:#f7fafc;border-radius:0 4px 4px 0}
+.pn-about-content blockquote{border-left:3px solid var(--pn-accent,#4299e1);margin:12px 0;padding:8px 16px;color:#718096;background:var(--ork-bg-inset);border-radius:0 4px 4px 0}
 .pn-about-content code{background:#edf2f7;padding:2px 6px;border-radius:3px;font-size:13px}
 .pn-about-content pre{background:#2d3748;color:#e2e8f0;padding:14px;border-radius:6px;overflow-x:auto;margin:12px 0}
 .pn-about-content pre code{background:transparent;padding:0;color:inherit}
@@ -478,12 +504,12 @@ html[data-theme="dark"] .pn-tooltip-trigger .pn-tooltip-text{background:var(--or
 .pn-about-empty{text-align:center;padding:40px 20px;color:#a0aec0;font-size:14px}
 .pn-about-layout{display:flex;gap:24px;align-items:flex-start}
 .pn-about-main{flex:1;min-width:0;position:relative}
-.pn-about-edit-btn{position:absolute;top:0;right:0;width:30px;height:30px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;color:#4299e1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:background 0.15s,color 0.15s;z-index:5}
+.pn-about-edit-btn{position:absolute;top:0;right:0;width:30px;height:30px;border:1px solid var(--ork-input-border);border-radius:6px;background:#fff;color:#4299e1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:background 0.15s,color 0.15s;z-index:5}
 .pn-about-edit-btn:hover,.pn-about-edit-btn:focus{background:#4299e1;color:#fff;border-color:#4299e1;outline:none}
 html[data-theme="dark"] .pn-about-edit-btn{background:var(--ork-card-bg);border-color:var(--ork-border);color:var(--pn-accent,#63b3ed)}
 html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-about-edit-btn:focus{background:var(--pn-accent,#63b3ed);color:var(--ork-card-bg);border-color:var(--pn-accent,#63b3ed)}
 .pn-about-sidebar{flex:0 0 240px}
-.pn-belt-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.pn-belt-card{background:var(--ork-bg-inset);border:1px solid var(--ork-border);border-radius:8px;padding:14px 16px;margin-bottom:12px}
 .pn-belt-card-title{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .pn-belt-card-title i{color:var(--pn-accent,#4299e1);font-size:12px}
 .pn-belt-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#a0aec0;padding:8px 0 3px;margin-top:4px;border-top:1px solid #f7fafc}
@@ -496,10 +522,10 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-hero-belts{display:inline-flex;align-items:center;gap:8px;margin-left:10px;vertical-align:middle}
 .pn-hero-belts .pn-belt-icon-own{height:1.2em;width:auto;display:inline-block;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35))}
 /* Icons tab — design modal preview strip */
-.pn-icons-preview{background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px}
+.pn-icons-preview{background:var(--ork-bg-inset);border:1px solid var(--ork-border);border-radius:6px;padding:14px 16px;display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px}
 .pn-icons-preview img{height:32px;width:auto}
 .pn-icons-preview-empty{font-size:12px;color:#a0aec0;font-style:italic}
-.pn-icons-option{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:8px;cursor:pointer;transition:border-color .12s}
+.pn-icons-option{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--ork-border);border-radius:6px;margin-bottom:8px;cursor:pointer;transition:border-color .12s}
 .pn-icons-option:hover{border-color:var(--pn-accent,#4299e1)}
 .pn-icons-option input[type="radio"]{margin-top:3px;accent-color:var(--pn-accent,#4299e1)}
 .pn-icons-option-body{flex:1;min-width:0}
@@ -507,7 +533,7 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-icons-option-desc{font-size:11px;color:#718096;line-height:1.35}
 @media(max-width:700px){.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}}
 /* ===== Milestones Timeline ===== */
-.pn-timeline-section{margin-top:32px;padding-top:24px;border-top:1px solid #e2e8f0}
+.pn-timeline-section{margin-top:32px;padding-top:24px;border-top:1px solid var(--ork-divider)}
 .pn-timeline-heading{font-size:18px;font-weight:700;color:#2d3748;margin:0 0 20px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none;display:flex;align-items:center;gap:8px}
 .pn-timeline-heading i{color:var(--pn-accent,#4299e1);font-size:16px}
 .pn-timeline{position:relative;padding:10px 0 10px;margin:0}
@@ -543,29 +569,29 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-ms-toggle input[type=checkbox]{width:16px;height:16px;accent-color:var(--pn-accent,#4299e1)}
 .pn-ms-toggle i{width:20px;text-align:center;color:#718096;font-size:14px}
 .pn-ms-custom-list{margin-top:12px;display:flex;flex-direction:column;gap:8px}
-.pn-ms-custom-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px}
+.pn-ms-custom-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--ork-bg-inset);border:1px solid var(--ork-border);border-radius:6px;font-size:12px}
 .pn-ms-custom-row i{color:var(--pn-accent,#4299e1);font-size:14px;width:20px;text-align:center;flex-shrink:0}
 .pn-ms-custom-desc{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#2d3748;font-weight:500}
 .pn-ms-custom-date{color:#718096;font-size:11px;flex-shrink:0}
 .pn-ms-custom-actions{display:flex;gap:4px;flex-shrink:0}
 .pn-ms-custom-actions button{background:none;border:none;cursor:pointer;font-size:12px;color:#718096;padding:2px 4px;border-radius:3px}
 .pn-ms-custom-actions button:hover{background:#e2e8f0;color:#2d3748}
-.pn-ms-add-form{margin-top:16px;padding:14px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px}
+.pn-ms-add-form{margin-top:16px;padding:14px;background:var(--ork-bg-inset);border:1px solid var(--ork-border);border-radius:8px}
 .pn-ms-add-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
 .pn-ms-add-row .pn-ms-field{display:flex;flex-direction:column;gap:3px}
 .pn-ms-add-row .pn-ms-field label{font-size:11px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em}
-.pn-ms-add-row .pn-ms-field input,.pn-ms-add-row .pn-ms-field select{font-size:12px;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;background:#fff}
+.pn-ms-add-row .pn-ms-field input,.pn-ms-add-row .pn-ms-field select{font-size:12px;padding:6px 8px;border:1px solid var(--ork-input-border);border-radius:4px;background:var(--ork-card-bg)}
 .pn-ms-add-row .pn-ms-field input[type=text]{width:180px}
 .pn-ms-add-row .pn-ms-field input[type=date]{width:130px}
 .pn-ms-add-btn{padding:6px 12px;font-size:12px;font-weight:600;background:var(--pn-accent,#4299e1);color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap}
 .pn-ms-add-btn:hover{opacity:.9}
 .pn-ms-error{color:#e53e3e;font-size:12px;margin-top:6px;display:none}
 .pn-ms-icon-grid{display:flex;flex-wrap:wrap;gap:4px}
-.pn-ms-icon-opt{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:2px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:14px;color:#718096;background:#fff;transition:all .15s}
+.pn-ms-icon-opt{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:2px solid var(--ork-input-border);border-radius:6px;cursor:pointer;font-size:14px;color:#718096;background:#fff;transition:all .15s}
 .pn-ms-icon-opt:hover{border-color:#a0aec0;color:#4a5568;background:#f7fafc}
 .pn-ms-icon-opt.pn-ms-icon-active{border-color:var(--pn-accent,#4299e1);color:var(--pn-accent,#4299e1);background:#ebf8ff}
 /* ===== Compact Milestones Sidebar ===== */
-.pn-cms-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-top:12px}
+.pn-cms-card{background:var(--ork-bg-inset);border:1px solid var(--ork-border);border-radius:8px;padding:12px 14px;margin-top:12px}
 .pn-cms-title{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:8px;display:flex;align-items:center;gap:6px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
 .pn-cms-title i{color:var(--pn-accent,#4299e1);font-size:12px}
 .pn-cms-item{display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px solid #f0f4f8;font-size:12px}
@@ -575,7 +601,7 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-cms-line strong{color:#718096;font-weight:500;margin-right:2px}
 /* ===== Design My Profile Modal ===== */
 .pn-design-tabs-wrap{position:relative}
-.pn-design-tabs{display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:18px;gap:0;scrollbar-width:none;-ms-overflow-style:none}
+.pn-design-tabs{display:flex;border-bottom:2px solid var(--ork-divider);margin-bottom:18px;gap:0;scrollbar-width:none;-ms-overflow-style:none}
 .pn-design-tabs::-webkit-scrollbar{display:none}
 .pn-design-tabs-chev{display:none;position:absolute;top:0;bottom:2px;width:36px;align-items:center;justify-content:center;border:none;cursor:pointer;color:#4a5568;font-size:13px;padding:0;z-index:2}
 .pn-design-tabs-chev.pn-show{display:flex}
@@ -589,10 +615,10 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-design-panel.pn-active{display:block}
 .pn-design-field{margin-bottom:16px}
 .pn-design-field label{display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:5px}
-.pn-design-field textarea{width:100%;min-height:100px;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box}
-.pn-design-field textarea:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
-.pn-design-field input[type="text"],.pn-design-field select{width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;font-size:14px;box-sizing:border-box}
-.pn-design-field input[type="text"]:focus,.pn-design-field select:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
+.pn-design-field textarea{width:100%;min-height:100px;background:var(--ork-input-bg);border:1px solid var(--ork-input-border);border-radius:6px;padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box}
+.pn-design-field textarea:focus{background:var(--ork-card-bg);outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
+.pn-design-field input[type="text"],.pn-design-field select{width:100%;background:var(--ork-input-bg);border:1px solid var(--ork-input-border);border-radius:6px;padding:8px 12px;font-size:14px;box-sizing:border-box}
+.pn-design-field input[type="text"]:focus,.pn-design-field select:focus{background:var(--ork-card-bg);outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
 .pn-design-hint{font-size:11px;color:#a0aec0;margin-top:4px}
 .pn-design-preview-label{font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
 .pn-color-presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
@@ -603,8 +629,8 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-color-col{flex:1;min-width:0}
 .pn-color-input-wrap{display:flex;align-items:center;gap:8px}
 .pn-color-input-wrap input[type="color"]{width:40px;height:34px;border:1px solid #e2e8f0;border-radius:6px;padding:2px;cursor:pointer;background:#fff}
-.pn-color-input-wrap input[type="text"]{width:80px;font-family:monospace;font-size:13px;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;box-sizing:border-box;background:#fff;color:#2d3748}
-.pn-color-input-wrap input[type="text"]:focus{outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
+.pn-color-input-wrap input[type="text"]{width:80px;font-family:monospace;font-size:13px;border:1px solid var(--ork-input-border);border-radius:6px;padding:6px 10px;box-sizing:border-box;background:var(--ork-input-bg);color:#2d3748}
+.pn-color-input-wrap input[type="text"]:focus{background:var(--ork-card-bg);outline:none;border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 3px rgba(66,153,225,0.15)}
 .pn-hero-preview{border-radius:8px;padding:16px 20px;color:#fff;margin:12px 0;position:relative;overflow:hidden;min-height:60px}
 .pn-hero-preview-name{font-size:18px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
 /* Amtpride: darken the name drop shadow ~20% (0.4 -> 0.6 alpha) so it stays legible over light flag stops.
@@ -634,22 +660,22 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-preview-vignette .pn-preview-bg-base{-webkit-mask-image:radial-gradient(ellipse at center,rgba(0,0,0,0) 20%,rgba(0,0,0,1) 60%);mask-image:radial-gradient(ellipse at center,rgba(0,0,0,0) 20%,rgba(0,0,0,1) 60%)}
 .pn-preview-vignette .pn-preview-bg-sharp{opacity:0.30;-webkit-mask-image:radial-gradient(ellipse at center,rgba(0,0,0,1) 20%,rgba(0,0,0,0) 60%);mask-image:radial-gradient(ellipse at center,rgba(0,0,0,1) 20%,rgba(0,0,0,0) 60%)}
 .pn-hero-preview-content{position:relative;z-index:1}
-.pn-overlay-btn{padding:8px 20px;border:2px solid #e2e8f0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;color:#4a5568;cursor:pointer;transition:all .15s}
+.pn-overlay-btn{padding:8px 20px;border:2px solid var(--ork-input-border);border-radius:6px;background:#fff;font-size:12px;font-weight:600;color:#4a5568;cursor:pointer;transition:all .15s}
 .pn-overlay-btn:hover{border-color:#a0aec0}
 .pn-overlay-btn.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
 .pn-comma-toggle{width:32px;height:32px;border:2px solid #cbd5e0;border-radius:6px;background:#f7fafc;font-size:16px;font-weight:700;color:#a0aec0;cursor:pointer;transition:all .15s;font-family:inherit;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
-.pn-comma-toggle:hover{border-color:#a0aec0;background:#edf2f7}
+.pn-comma-toggle:hover{border-color:#a0aec0;background:var(--ork-bg-tertiary)}
 .pn-comma-toggle.pn-active{border-color:var(--pn-accent,#4299e1);background:var(--pn-accent,#4299e1);color:#fff}
 .pn-name-parts{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
 .pn-name-part{flex:1;min-width:120px}
 .pn-name-core{flex:1.8;min-width:160px}
 .pn-name-comma-sep{flex:0 0 auto;padding-bottom:4px;align-self:flex-end}
-.pn-name-constructed{margin-top:12px;padding:10px 14px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:15px;font-weight:600;color:#2d3748}
+.pn-name-constructed{margin-top:12px;padding:10px 14px;background:var(--ork-bg-inset);border:1px solid var(--ork-border);border-radius:6px;font-size:15px;font-weight:600;color:#2d3748}
 .pn-focus-canvas-wrap{position:relative;display:inline-block;max-width:100%;margin:10px auto;text-align:center}
 .pn-focus-canvas-wrap canvas{display:block;max-width:100%;cursor:move;border-radius:6px}
 .pn-md-preview-toggle{display:flex;gap:10px;margin-bottom:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .pn-md-toggle-group{display:flex;gap:0}
-.pn-md-toggle-btn{padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0;background:#fff;color:#718096}
+.pn-md-toggle-btn{padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--ork-input-border);background:#fff;color:#718096}
 .pn-md-toggle-group .pn-md-toggle-btn:first-child{border-radius:4px 0 0 4px}
 .pn-md-toggle-group .pn-md-toggle-btn:last-child{border-radius:0 4px 4px 0;border-left:0}
 .pn-md-toggle-btn.pn-active{background:var(--pn-accent,#4299e1);color:#fff;border-color:var(--pn-accent,#4299e1)}
@@ -657,16 +683,16 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-md-quick-add-label{font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.05em}
 .pn-md-quick-btn{padding:5px 10px;font-size:11px;font-weight:600;border:1px solid var(--pn-accent,#4299e1);background:#fff;color:var(--pn-accent,#4299e1);border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .pn-md-quick-btn:hover{background:var(--pn-accent,#4299e1);color:#fff}
-.pn-md-preview{min-height:100px;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:14px;line-height:1.7;color:#4a5568;background:#fafafa}
+.pn-md-preview{min-height:100px;border:1px solid var(--ork-border);border-radius:6px;padding:10px 12px;font-size:14px;line-height:1.7;color:#4a5568;background:var(--ork-bg-inset)}
 .pn-md-preview h1,.pn-md-preview h2,.pn-md-preview h3,.pn-md-preview h4,.pn-md-preview h5,.pn-md-preview h6{background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
 /* ===== Welcome Panel ===== */
-.pn-welcome-hero{display:flex;gap:14px;align-items:flex-start;background:linear-gradient(135deg,#ebf8ff,#faf5ff);border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;margin-bottom:16px}
+.pn-welcome-hero{display:flex;gap:14px;align-items:flex-start;background:linear-gradient(135deg,#ebf8ff,#faf5ff);border:1px solid var(--ork-border);border-radius:10px;padding:16px 18px;margin-bottom:16px}
 .pn-welcome-icon{flex:0 0 auto;width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#4299e1,#9f7aea);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 12px rgba(102,126,234,0.25)}
 .pn-welcome-hero-text h4{margin:0 0 6px 0;font-size:17px;font-weight:700;color:#2d3748;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
 .pn-welcome-hero-text p{margin:0;font-size:13px;line-height:1.55;color:#4a5568}
 .pn-welcome-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:16px}
-.pn-welcome-card{border:1px solid #e2e8f0;border-radius:10px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
-.pn-welcome-card:hover{border-color:var(--pn-accent,#4299e1);box-shadow:0 4px 14px rgba(66,153,225,0.15);transform:translateY(-1px)}
+.pn-welcome-card{border:1px solid var(--ork-border);border-radius:10px;padding:14px;background:var(--ork-bg-inset);display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.pn-welcome-card:hover{background:var(--ork-card-bg);border-color:var(--pn-accent,#4299e1);box-shadow:0 4px 14px rgba(66,153,225,0.15);transform:translateY(-1px)}
 .pn-welcome-card-head{display:flex;align-items:center;gap:10px}
 .pn-welcome-card-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex-shrink:0}
 .pn-wc-blue{background:linear-gradient(135deg,#4299e1,#2c5282)}
@@ -676,7 +702,7 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-wc-rose{background:linear-gradient(135deg,#fc8181,#9b2c2c)}
 .pn-welcome-card-title{font-size:14px;font-weight:700;color:#2d3748}
 .pn-welcome-card-body{font-size:12px;line-height:1.5;color:#4a5568;flex:1}
-.pn-welcome-mock{background:#f7fafc;border:1px solid #edf2f7;border-radius:6px;padding:10px;display:flex;align-items:center;justify-content:center;min-height:48px}
+.pn-welcome-mock{background:var(--ork-card-bg);border:1px solid #edf2f7;border-radius:6px;padding:10px;display:flex;align-items:center;justify-content:center;min-height:48px}
 .pn-wm-about{flex-direction:column;align-items:stretch;gap:5px;padding:10px 12px}
 .pn-wm-line{height:6px;border-radius:3px;background:#cbd5e0}
 .pn-wm-line-h{height:8px;width:55%;background:#a0aec0}
@@ -703,8 +729,8 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-stat-card{border-top:3px solid var(--pn-accent,#4299e1)}
 .pn-tab-nav li.pn-tab-active{color:var(--pn-accent,#4299e1);border-bottom-color:var(--pn-accent,#4299e1)}
 .pn-font-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:4px}
-.pn-font-card{border:2px solid #e2e8f0;border-radius:8px;padding:10px 8px;cursor:pointer;text-align:center;transition:border-color .15s,box-shadow .15s;background:#fff;user-select:none}
-.pn-font-card:hover{border-color:#a0aec0;background:#f7fafc}
+.pn-font-card{border:2px solid var(--ork-border);border-radius:8px;padding:10px 8px;cursor:pointer;text-align:center;transition:border-color .15s,box-shadow .15s;background:var(--ork-bg-inset);user-select:none}
+.pn-font-card:hover{border-color:#a0aec0;background:var(--ork-card-bg)}
 .pn-font-card.pn-active{border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 2px rgba(66,153,225,0.2);background:#ebf8ff}
 .pn-font-card-sample{font-size:16px;line-height:1.3;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}
 .pn-font-card-label{font-size:10px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em}
@@ -720,14 +746,14 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-reconcile-banner > label input[type="checkbox"]{margin-top:3px;flex-shrink:0}
 .pn-reconcile-fields{margin-top:14px;border-top:1px solid #f6e05e;padding-top:12px}
 .pn-ms-custom-heading{font-size:13px;font-weight:700;color:#2d3748;margin-bottom:10px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none}
-.pn-ms-custom-wrap{border-top:1px solid #e2e8f0;padding-top:16px;margin-top:8px}
+.pn-ms-custom-wrap{border-top:1px solid var(--ork-divider);padding-top:16px;margin-top:8px}
 /* Colors-tab custom-color field labels + gradient toggle */
 .pn-color-field-label{font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;display:block}
 .pn-gradient-toggle-col{display:flex;flex-direction:column;justify-content:flex-end}
 .pn-gradient-toggle-label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:#4a5568}
 .pn-gradient-toggle-label input[type="checkbox"]{width:16px;height:16px;accent-color:var(--pn-accent,#4299e1)}
 /* Amtpride Nameplate subsection */
-.pn-amtpride-section{margin-top:14px;border:1px solid #e2e8f0;border-radius:8px;background:#fafbfc}
+.pn-amtpride-section{margin-top:14px;border:1px solid var(--ork-border);border-radius:8px;background:var(--ork-bg-inset)}
 .pn-amtpride-toggle{width:100%;display:flex;align-items:center;gap:8px;padding:10px 12px;background:transparent;border:0;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.04em}
 .pn-amtpride-section.pn-amtpride-open .pn-amtpride-toggle{border-radius:7px 7px 0 0}
 .pn-amtpride-toggle:hover{background:rgba(66,153,225,0.06)}
@@ -760,7 +786,7 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-section-toggle-label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568}
 /* Design modal title icon + About → Show Beltline toggle (theme-aware) */
 .pn-modal-title-icon{margin-right:8px;color:var(--pn-accent,#2c5282)}
-.pn-about-beltline-toggle{margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0}
+.pn-about-beltline-toggle{margin-top:16px;padding-top:16px;border-top:1px solid var(--ork-divider)}
 .pn-about-beltline-toggle > label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:600;color:#4a5568}
 .pn-about-beltline-toggle input[type="checkbox"]{width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)}
 /* Dark-mode heads-up banner (info tone, used inside Design tabs) */
@@ -942,7 +968,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 .dp-section-hdr:first-of-type{margin-top:0}
 .dp-info-btn{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#e2e8f0;color:#718096;font-size:9px;font-weight:700;border:none;cursor:pointer;text-transform:none;letter-spacing:0;line-height:1;transition:background .1s}
 .dp-info-btn:hover{background:#cbd5e0}
-#dp-info-pop{position:fixed;z-index:10300;width:290px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.13);padding:13px 15px;font-size:12px;line-height:1.55;color:#4a5568;display:none}
+#dp-info-pop{position:fixed;z-index:10300;width:290px;background:var(--ork-card-bg);border:1px solid var(--ork-input-border);border-radius:8px;box-shadow:var(--ork-shadow-dropdown);padding:13px 15px;font-size:12px;line-height:1.55;color:#4a5568;display:none}
 #dp-info-pop.dp-pop-open{display:block}
 #dp-info-pop .dp-pop-title{font-size:12.5px;font-weight:700;color:#2d3748;margin:0 0 7px}
 #dp-info-pop p{margin:0 0 8px}
@@ -970,7 +996,7 @@ html[data-theme="dark"] .dp-sl-severe{background:#7f1d1d;color:#fca5a5}
 .dp-toggle-sw::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 .dp-toggle-sw.dp-on{background:#48bb78}
 .dp-toggle-sw.dp-on::after{left:17px}
-.dp-anon-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 10px;border-bottom:1px solid var(--ork-border);margin-bottom:4px}
+.dp-anon-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 10px;border-bottom:1px solid var(--ork-divider);margin-bottom:4px}
 .dp-anon-label{font-size:13px;font-weight:600;color:var(--ork-text)}
 .dp-anon-sub{font-size:11px;color:#a0aec0;margin-top:1px}
 .dp-allergens{display:flex;flex-direction:column;gap:6px}
@@ -993,14 +1019,38 @@ html[data-theme="dark"] .dp-al-seg.dp-active[data-v="1"]{background:#78350f;colo
 html[data-theme="dark"] .dp-al-seg.dp-active[data-v="2"]{background:#7f1d1d;color:#fca5a5}
 html[data-theme="dark"] .dp-anon-label{color:var(--ork-text)}
 html[data-theme="dark"] .dp-anon-row{border-bottom-color:var(--ork-border)}
-.dp-no-restrict-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:#f7fafc;border:1px solid #e2e8f0;margin:8px 0 12px;cursor:pointer;transition:background .15s}
-.dp-no-restrict-row:hover{background:#edf2f7}
+.dp-no-restrict-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:var(--ork-bg-inset);border:1px solid var(--ork-border);margin:8px 0 12px;cursor:pointer;transition:background .15s}
+.dp-no-restrict-row:hover{background:var(--ork-bg-tertiary)}
 .dp-no-restrict-label{font-size:13px;font-weight:600;color:var(--ork-text)}
 .dp-no-restrict-sub{font-size:11px;color:#a0aec0;margin-top:1px}
 #dp-prefs-body{transition:opacity .15s}
 #dp-prefs-body.dp-locked{opacity:.35;pointer-events:none;user-select:none}
 html[data-theme="dark"] .dp-no-restrict-row{background:rgba(255,255,255,.04);border-color:var(--ork-border)}
 html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.08)}
+.pna-notif-card { padding: 0; overflow: hidden; }
+.pna-notif-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e2e8f0; }
+.pna-notif-title { font-weight: 700; font-size: 14px; color: #2d3748; }
+.pna-notif-title i { color: #b7791f; margin-right: 5px; }
+.pna-notif-count { display: inline-block; min-width: 18px; height: 18px; line-height: 18px; text-align: center; background: #c53030; color: #fff; border-radius: 9px; font-size: 11px; font-weight: 700; padding: 0 5px; margin-left: 4px; }
+.pna-notif-clearall { background: none; border: none; color: #718096; font-size: 12px; cursor: pointer; padding: 2px 4px; }
+.pna-notif-clearall:hover { color: #2b6cb0; text-decoration: underline; }
+.pna-notif-list { list-style: none; margin: 0; padding: 0; }
+.pna-notif-item { display: flex; align-items: center; gap: 9px; padding: 10px 14px; border-bottom: 1px solid #edf2f7; font-size: 13px; }
+.pna-notif-item:last-child { border-bottom: none; }
+.pna-notif-unread { background: #ebf8ff; box-shadow: inset 3px 0 0 #2b6cb0; }
+.pna-notif-icon { color: #b7791f; flex-shrink: 0; }
+.pna-notif-msg { flex: 1; color: #2d3748; text-decoration: none; }
+a.pna-notif-msg:hover { text-decoration: underline; }
+.pna-notif-time { color: #a0aec0; font-size: 11px; white-space: nowrap; }
+.pna-notif-x { background: none; border: none; color: #a0aec0; font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.pna-notif-x:hover { color: #c53030; }
+/* dark mode */
+html[data-theme="dark"] .pna-notif-head { border-color: #2d3748; }
+html[data-theme="dark"] .pna-notif-title { color: #e2e8f0; }
+html[data-theme="dark"] .pna-notif-item { border-color: #1f2733; }
+html[data-theme="dark"] .pna-notif-unread { background: #1a2740; box-shadow: inset 3px 0 0 #2b6cb0; }
+html[data-theme="dark"] .pna-notif-msg { color: #e2e8f0; }
+html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -1222,20 +1272,29 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				<span class="pn-detail-label">Persona</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['Persona']) ?></span>
 			</div>
+			<?php if ($canSeeAccount): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Username</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['UserName']) ?></span>
 			</div>
+			<?php endif; ?>
 			<?php if ($showEmail && !empty($Player['Email'])): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Email</span>
 				<span class="pn-detail-value"><a href="mailto:<?= htmlspecialchars($Player['Email']) ?>"><?= htmlspecialchars($Player['Email']) ?></a></span>
 			</div>
 			<?php endif; ?>
+			<?php /* Username and Password Expires are account-security details, not
+			   public profile data. GivenName / Surname / Email on this same panel were
+			   correctly gated; these two rows had no gate at all, so an anonymous
+			   visitor was handed a valid login name plus the fact that its password had
+			   expired. Gated to the player themselves and their monarchy/admin. */ ?>
+			<?php if ($canSeeAccount): ?>
 			<div class="pn-detail-row"<?= ($passwordExpired || $passwordSoon) ? ' style="background:var(--ork-alert-warning-bg,#fffbe6);border-left:3px solid var(--ork-alert-warning-border,#f6ad55);padding-left:6px;margin-left:-6px;"' : '' ?>>
 				<span class="pn-detail-label">Password Expires</span>
 				<span class="pn-detail-value" style="<?= $passwordExpired ? 'color:#c53030;font-weight:600;' : ($passwordSoon ? 'color:#b7791f;font-weight:600;' : '') ?>"><?= $passwordExpiring ?><?= $passwordSoon ? ' <i class="fas fa-exclamation-triangle" style="margin-left:5px;font-size:12px;" title="Expires within 2 weeks"></i>' : '' ?></span>
 			</div>
+			<?php endif; ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Park Member Since</span>
 				<span class="pn-detail-value"><?= (!empty($Player['ParkMemberSince']) && $Player['ParkMemberSince'] !== '0000-00-00') ? htmlspecialchars($Player['ParkMemberSince']) : 'N/A' ?></span>
@@ -1267,7 +1326,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 
 		<!-- Qualifications -->
 		<div class="pn-card">
-			<h4><i class="fas fa-certificate"></i> Qualifications<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenQualModal()" title="Edit qualifications"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
+			<h4><i class="fas fa-certificate"></i> Qualifications<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn pn-qual-edit-btn" onclick="pnOpenQualModal()" title="Edit qualifications" aria-label="Edit qualifications"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button><?php endif; ?></h4>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Reeve</span>
 				<span class="pn-detail-value" id="pn-qual-reeve-val">
@@ -1602,6 +1661,33 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 
 					<!-- Feed -->
 					<div class="pna-feed">
+
+<?php $pnaNotifs = $Notifications ?? []; if (($isOwnProfile ?? false) && count($pnaNotifs)) {
+    $pnaUnread = 0; foreach ($pnaNotifs as $n) { if (empty($n['read_at'])) $pnaUnread++; }
+?>
+<div class="pna-card pna-notif-card" id="pna-notif-card">
+    <div class="pna-notif-head">
+        <span class="pna-notif-title"><i class="fas fa-bell"></i> Notifications<?php if ($pnaUnread) { ?> <span class="pna-notif-count"><?= (int)$pnaUnread ?></span><?php } ?></span>
+        <button type="button" class="pna-notif-clearall" onclick="pnaDismissAllNotifs()">Clear all</button>
+    </div>
+    <ul class="pna-notif-list" id="pna-notif-list">
+        <?php foreach ($pnaNotifs as $n) {
+            $nid    = (int)$n['notification_id'];
+            $unread = empty($n['read_at']);
+            $msg    = htmlspecialchars($n['message']);
+            $lnk    = (string)($n['link'] ?? '');
+            $rel    = htmlspecialchars(pnaRelTime($n['created_at']));
+        ?>
+        <li class="pna-notif-item<?= $unread ? ' pna-notif-unread' : '' ?>" data-nid="<?= $nid ?>">
+            <i class="fas fa-award pna-notif-icon"></i>
+            <?php if ($lnk) { ?><a class="pna-notif-msg" href="<?= htmlspecialchars($lnk) ?>"><?= $msg ?></a><?php } else { ?><span class="pna-notif-msg"><?= $msg ?></span><?php } ?>
+            <span class="pna-notif-time"><?= $rel ?></span>
+            <button type="button" class="pna-notif-x" data-tip="Dismiss" onclick="pnaDismissNotif(<?= $nid ?>)">&times;</button>
+        </li>
+        <?php } ?>
+    </ul>
+</div>
+<?php } ?>
 
 						<!-- 26-week sparkline -->
 						<div class="pna-card">
@@ -2722,7 +2808,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 		</div>
 
 		<div class="pn-modal-footer">
-			<?php if ($canEditAdmin): ?><button class="pn-btn pn-btn-ghost" id="pn-acct-move-player-btn" style="margin-right:auto;color:#c53030;border-color:#feb2b2;"><i class="fas fa-arrows-alt"></i> Move Player</button><?php endif; ?>
+			<?php if ($canMovePlayer): ?><button class="pn-btn pn-btn-ghost" id="pn-acct-move-player-btn" style="margin-right:auto;color:#c53030;border-color:#feb2b2;"><i class="fas fa-arrows-alt"></i> Move Player</button><?php endif; ?>
 			<button class="pn-btn pn-btn-secondary" id="pn-acct-cancel">Cancel</button>
 			<button class="pn-btn pn-btn-primary" id="pn-acct-save"><i class="fas fa-save"></i> Save Changes</button>
 		</div>
@@ -2807,6 +2893,30 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
      Qualifications Modal
      ============================================= -->
 <?php if ($canEditAdmin): ?>
+<style>
+/* Dark mode renders the native date picker and its radios as light widgets on
+   the navy form; color-scheme is scoped to this modal rather than set globally. */
+html[data-theme="dark"] #pn-qual-overlay { color-scheme: dark; }
+html[data-theme="dark"] #pn-qual-overlay input[type="radio"],
+html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b3ed; }
+@media (max-width: 600px) {
+	/* Yes/No were 19px tall and 15px apart — the control that grants or revokes
+	   a qualification. Box them so each is a 44px target. */
+	#pn-qual-overlay .pn-acct-radio-group { flex-wrap: wrap; gap: 10px; }
+	#pn-qual-overlay .pn-acct-radio-group label {
+		min-height: 44px; padding: 0 12px; gap: 8px;
+		border: 1px solid var(--ork-border, #e2e8f0); border-radius: 6px;
+	}
+	#pn-qual-overlay .pn-btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+	/* Sole route to editing a qualification on a phone; it measured 17x14. Grow the
+	   hit area with a pseudo-element so the card heading's layout is untouched. */
+	.pn-qual-edit-btn { position: relative; }
+	.pn-qual-edit-btn::after {
+		content: ''; position: absolute; top: 50%; left: 50%;
+		transform: translate(-50%, -50%); width: 44px; height: 44px;
+	}
+}
+</style>
 <div class="pn-overlay" id="pn-qual-overlay">
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
@@ -3512,7 +3622,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 						<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Adds a dark outline and shadow to your persona name, improving legibility over banner images or light-colored backgrounds. Applied automatically when an AmtPride gradient is active.</span></span>
 					</label>
 				</div>
-				<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
+				<div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--ork-divider)">
 					<div class="pn-section-heading">Persona Display Controls</div>
 					<?php if ($_isRestricted): ?>
 					<div class="pn-design-hint" style="margin-bottom:10px;padding:8px 10px;background:#fef5e7;border:1px solid #f6ad55;border-radius:6px;color:#7b341e">
@@ -3566,7 +3676,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 
 			<!-- Milestones Panel -->
 			<div class="pn-design-panel" id="pn-design-milestones">
-				<div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #e2e8f0">
+				<div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--ork-divider)">
 					<label class="pn-section-toggle-label">
 						<input type="checkbox" id="pn-ms-compact" style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
 						Compact Milestones
@@ -3750,6 +3860,13 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					<input type="text" name="Reason" id="pn-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
 					<span class="pn-char-count" id="pn-rec-char-count">400 characters remaining</span>
 				</div>
+				<div style="margin-top:12px">
+					<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+						<input type="checkbox" name="Anonymous" id="pn-rec-anon" value="1" style="width:16px;height:16px;cursor:pointer">
+						<span>Submit Anonymously</span>
+					</label>
+					<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
+				</div>
 			</form>
 		</div>
 		<div class="pn-modal-footer">
@@ -3791,6 +3908,17 @@ if (is_array($Details['Awards'])) {
 		$kaid = (int)($a['KingdomAwardId'] ?? 0);
 		if ($kaid > 0) {
 			$playerHeldKingdomAwardIds[$kaid] = true;
+			// Pseudo-ladder membership decides the key, NOT AwardId === 0: most of
+			// these point at AwardId 94 ("Custom Award"), so keying on AwardId would
+			// file them alongside every genuine Custom Award while the UI looks them
+			// up by KingdomAwardId. Key them "k<KingdomAwardId>", matching
+			// Player::GetAwardMaxRanks() and tnHeldRank() in revised.js.
+			if (!empty($a['IsPseudoLadder']) && $rank > 0) {
+				$_k = 'k' . $kaid;
+				if (!isset($playerAwardRanks[$_k]) || $rank > $playerAwardRanks[$_k]) {
+					$playerAwardRanks[$_k] = $rank;
+				}
+			}
 		}
 	}
 }
@@ -5419,6 +5547,42 @@ pnRenderSparkline();
 	});
 })();
 <?php endif; ?>
+function pnaNotifMaybeHide() {
+    var list = document.getElementById('pna-notif-list');
+    if (list && !list.children.length) {
+        var c = document.getElementById('pna-notif-card');
+        if (c) c.remove();
+    }
+}
+function pnaDismissNotif(nid) {
+    var fd = new FormData(); fd.append('NotificationId', nid);
+    fetch('<?= UIR ?>PlayerAjax/dismiss_notification', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+            if (j && j.status === 0) {
+                var li = document.querySelector('.pna-notif-item[data-nid="' + nid + '"]');
+                if (li) li.remove();
+                pnaNotifMaybeHide();
+            }
+        });
+}
+function pnaDoDismissAllNotifs() {
+    fetch('<?= UIR ?>PlayerAjax/dismiss_all_notifications', { method: 'POST', credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+            if (j && j.status === 0) {
+                var c = document.getElementById('pna-notif-card');
+                if (c) c.remove();
+            }
+        });
+}
+function pnaDismissAllNotifs() {
+    if (typeof tnConfirm === 'function') {
+        tnConfirm({ title: 'Clear all notifications?', body: 'This cannot be undone.', confirmLabel: 'Clear all', danger: true, onConfirm: pnaDoDismissAllNotifs });
+    } else {
+        pnaDoDismissAllNotifs();
+    }
+}
 </script>
 
 <!-- =============================================
@@ -5427,8 +5591,18 @@ pnRenderSparkline();
 <?php if ($isOwnProfile && (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled))): ?>
 <style>
 .pn-qt-cards { display: flex; flex-direction: row; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
-.pn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 18px; flex: 1 1 260px; min-width: 220px; }
-@media (max-width: 600px) { .pn-qt-cards { flex-direction: column; } .pn-qt-card { flex: unset; min-width: 0; } }
+.pn-qt-card { background: var(--ork-bg-inset); border: 1px solid var(--ork-border); border-radius: 8px; padding: 16px 18px; flex: 1 1 260px; min-width: 220px; }
+@media (max-width: 600px) {
+.pn-qt-cards { flex-direction: column; }
+.pn-qt-card { flex: unset; min-width: 0; }
+/* Touch targets — every control in this module measured 19-30px tall on a phone. */
+#pn-qt-chooser-overlay .pn-btn,
+#pn-quiz-overlay .pn-btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+#pn-qt-chooser-overlay .pn-qt-card .pn-btn-sm { display: flex; width: 100%; min-height: 48px; }
+#pn-quiz-close-btn,
+#pn-qt-chooser-close-btn,
+.pn-qt-history-panel-close { min-width: 44px; min-height: 44px; }
+}
 .pn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 8px; }
 .pn-qt-status { font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; }
 .pn-qt-status-pass   { color: #276749; }
@@ -5444,28 +5618,30 @@ pnRenderSparkline();
 /* Past-attempts history (player + manager view) */
 .pn-qt-history { font-size: 0.8rem; }
 /* Full-width review panel below the cards (uses the whole modal width). */
-.pn-qt-history-panel { margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fafbfc; overflow: hidden; font-size: 0.85rem; }
-.pn-qt-history-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #fff; border-bottom: 1px solid #edf2f7; }
+.pn-qt-history-panel { margin-top: 16px; border: 1px solid var(--ork-border); border-radius: 10px; background: var(--ork-bg-inset); overflow: hidden; font-size: 0.85rem; }
+.pn-qt-history-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--ork-card-bg); border-bottom: 1px solid #edf2f7; }
 .pn-qt-history-panel-title { font-weight: 700; font-size: 0.92rem; color: #2d3748; }
 .pn-qt-history-panel-close { background: none; border: 0; font-size: 1.4rem; line-height: 1; color: #718096; cursor: pointer; padding: 0 4px; }
 .pn-qt-history-panel-close:hover { color: #2d3748; }
-#pn-qt-history-panel-body { padding: 12px 14px; max-height: 46vh; overflow-y: auto; }
+/* Third nested scroller inside the modal body — give it a floor so it doesn't
+   collapse to 179px in landscape, and a dvh pass for mobile browser chrome. */
+#pn-qt-history-panel-body { padding: 12px 14px; max-height: max(220px, 46vh); max-height: max(220px, 46dvh); overflow-y: auto; overscroll-behavior: contain; }
 html[data-theme="dark"] .pn-qt-history-panel { background: #252d3a; border-color: #4a5568; }
 html[data-theme="dark"] .pn-qt-history-panel-head { background: #2d3748; border-color: #4a5568; }
 html[data-theme="dark"] .pn-qt-history-panel-title { color: #e2e8f0; }
 .pn-qt-hist-empty { color: #718096; padding: 4px 2px; }
-.pn-qt-hist-row { border: 1px solid #e2e8f0; border-radius: 7px; overflow: hidden; margin-bottom: 6px; }
+.pn-qt-hist-row { border: 1px solid var(--ork-border); border-radius: 7px; overflow: hidden; margin-bottom: 6px; }
 .pn-qt-hist-row.pass { border-left: 3px solid #48bb78; }
 .pn-qt-hist-row.fail { border-left: 3px solid #f56565; }
-.pn-qt-hist-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 11px; background: #fff; border: 0; cursor: pointer; font: inherit; text-align: left; }
-.pn-qt-hist-toggle:hover { background: #f7fafc; }
+.pn-qt-hist-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 11px; background: var(--ork-card-bg); border: 0; cursor: pointer; font: inherit; text-align: left; }
+.pn-qt-hist-toggle:hover { background: var(--ork-bg-secondary); }
 .pn-qt-hist-badge { font-weight: 700; font-size: 0.8rem; }
 .pn-qt-hist-row.pass .pn-qt-hist-badge { color: #276749; }
 .pn-qt-hist-row.fail .pn-qt-hist-badge { color: #9b2c2c; }
 .pn-qt-hist-score { font-weight: 600; color: #2d3748; }
 .pn-qt-hist-when { margin-left: auto; font-size: 0.76rem; color: #718096; }
-.pn-qt-hist-detail { padding: 8px 11px 10px; background: #fafbfc; border-top: 1px solid #edf2f7; }
-.pn-qt-rev-q { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; background: #fff; }
+.pn-qt-hist-detail { padding: 8px 11px 10px; background: var(--ork-bg-inset); border-top: 1px solid var(--ork-divider); }
+.pn-qt-rev-q { border: 1px solid var(--ork-border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; background: var(--ork-card-bg); }
 .pn-qt-rev-q.ok  .pn-qt-rev-qh { color: #276749; }
 .pn-qt-rev-q.bad .pn-qt-rev-qh { color: #9b2c2c; }
 .pn-qt-rev-qh { font-weight: 600; margin-bottom: 5px; }
@@ -5535,19 +5711,19 @@ html[data-theme="dark"] .pn-qt-chooser-empty  { color: var(--ork-text-muted, #a0
 .pn-quiz-progress-seg-current { background: #2b6cb0; box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.2); }
 
 /* Question text */
-.pn-quiz-q-text { font-size: 1.08rem; font-weight: 600; color: #2d3748; margin-bottom: 18px; line-height: 1.55; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
+.pn-quiz-q-text { font-size: 1.08rem; font-weight: 600; color: #2d3748; margin-bottom: 18px; line-height: 1.55; padding-bottom: 14px; border-bottom: 1px solid var(--ork-divider); }
 
 /* Answer labels — card style with radio indicator */
 .pn-quiz-answers { list-style: none; padding: 0; margin: 0 0 16px; }
 .pn-quiz-answer-item { margin-bottom: 8px; }
 .pn-quiz-answer-label { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px;
-                         border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer;
-                         font-size: 0.92rem; color: #2d3748; transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s; line-height: 1.45; }
+                         border: 2px solid var(--ork-border); border-radius: 8px; cursor: pointer;
+                         font-size: 0.92rem; color: #2d3748; background: var(--ork-bg-inset); transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s; line-height: 1.45; }
 .pn-quiz-answer-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #cbd5e0; flex-shrink: 0; margin-top: 1px;
                          display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, background 0.15s; }
 .pn-quiz-answer-radio-inner { width: 9px; height: 9px; border-radius: 50%; background: transparent; transition: background 0.15s; }
 .pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) {
-    background: #f7fafc; border-color: #bee3f8; box-shadow: 0 2px 6px rgba(0,0,0,0.05); transform: translateY(-1px); }
+    background: var(--ork-card-bg); border-color: #bee3f8; box-shadow: 0 2px 6px rgba(0,0,0,0.05); transform: translateY(-1px); }
 .pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #2b6cb0; }
 .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) { border-color: #2b6cb0; background: #ebf8ff; }
 .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #2b6cb0; }
@@ -5564,10 +5740,13 @@ html[data-theme="dark"] .pn-qt-chooser-empty  { color: var(--ork-text-muted, #a0
 /* Feedback bar with slide animation */
 .pn-quiz-feedback { padding: 0; border-radius: 6px; font-size: 0.92rem; font-weight: 600; margin-top: 0;
                      overflow: hidden; max-height: 0; opacity: 0; transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease, margin 0.3s ease; }
-.pn-quiz-feedback.pn-quiz-feedback-show { max-height: 70px; opacity: 1; padding: 10px 14px; margin-top: 12px; }
+/* Cap in em, not px — at 200% text zoom a 70px cap clipped 52px of the message. */
+.pn-quiz-feedback.pn-quiz-feedback-show { max-height: 8em; opacity: 1; padding: 10px 14px; margin-top: 12px; }
 .pn-quiz-fb-correct { background: #c6f6d5; color: #276749; }
 .pn-quiz-fb-wrong   { background: #fed7d7; color: #9b2c2c; }
 .pn-quiz-nav { display: flex; justify-content: flex-end; align-items: center; margin-top: 12px; gap: 8px; }
+/* Spacing moved off the inline style so the sticky rule below can override it. */
+#pn-quiz-multi-submit-row { margin: 0 0 12px; }
 
 /* Result view */
 .pn-quiz-result { text-align: center; padding: 28px 0 20px; }
@@ -5605,6 +5784,16 @@ html[data-theme="dark"] .pn-quiz-progress-seg     { background: #4a5568; }
    question you're on. */
 html[data-theme="dark"] .pn-quiz-progress-seg-done    { background: #48bb78; }
 html[data-theme="dark"] .pn-quiz-progress-seg-current { background: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.5); }
+/* Answered segments also carry a hatch, so progress isn't signalled by colour alone.
+   This has to sit after every `background:` shorthand above (light and dark), or the
+   shorthand resets background-image back to none. */
+@media (max-width: 600px) {
+	.pn-quiz-progress-seg-done,
+	html[data-theme="dark"] .pn-quiz-progress-seg-done {
+		background-image: linear-gradient(45deg, rgba(255,255,255,.35) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.35) 50%, rgba(255,255,255,.35) 75%, transparent 75%);
+		background-size: 6px 6px;
+	}
+}
 /* "Select all that apply" hint — color moved off the inline style so dark mode
    can lift it off the too-dark #4a5568 it used to hard-code. */
 .pn-quiz-multi-hint { color: #4a5568; }
@@ -5667,11 +5856,63 @@ html[data-theme="dark"] .pn-quiz-instructions-body {
 }
 html[data-theme="dark"] .pn-quiz-instructions-meta { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .pn-quiz-instructions-meta strong { color: var(--ork-text, #e2e8f0); }
-/* Report-question form inside the quiz modal */
+/* Report-question form inside the quiz modal. Styling lives here rather than
+   inline so the mobile block immediately below can override it — same specificity,
+   so it only wins by coming later in this stylesheet. */
+#pn-quiz-report-reason { padding: 5px 8px; background: var(--ork-input-bg); border: 1px solid var(--ork-input-border); border-radius: 4px; font-size: 0.85rem;
+                         max-width: 100%; min-width: 0; box-sizing: border-box; }
+#pn-quiz-report-reason:focus { background: var(--ork-card-bg); }
+#pn-quiz-report-submit { margin-left: 6px; font-size: 0.82rem; }
+#pn-quiz-report-cancel { margin-left: 4px; font-size: 0.82rem; }
+#pn-quiz-report-thanks { font-size: 0.82rem; color: #276749; }
 html[data-theme="dark"] #pn-quiz-report-reason {
 	background: var(--ork-input-bg, #374151);
 	border-color: var(--ork-input-border, #4a5568);
 	color: var(--ork-text, #e2e8f0);
+}
+/* #276749 on the dark card is 1.80:1 — the only success signal for a report. */
+html[data-theme="dark"] #pn-quiz-report-thanks { color: #68d391; }
+@media (max-width: 600px) {
+	/* Report form — a native select takes its width from its longest option, which
+	   ran 105px past the modal on a 320px viewport; 16px also stops iOS zooming on focus. */
+	#pn-quiz-report-reason { width: 100%; font-size: 16px; min-height: 44px; }
+	#pn-quiz-report-submit,
+	#pn-quiz-report-cancel { margin: 8px 6px 0 0; min-height: 44px; }
+}
+
+/* Non-visual answer markers (item 18) — correct/incorrect must not be colour-only. */
+.pn-quiz-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+                   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.pn-quiz-answer-mark { margin-left: auto; padding-left: 10px; flex-shrink: 0; }
+
+/* The quiz action rows lived inside the scroller, so Submit/Next sat 63-149px
+   below the modal fold on a phone and in landscape. Pin them to the bottom of
+   the scroller on those viewports only — at the 640px desktop width the modal
+   body doesn't scroll and nothing moves. */
+@media (max-width: 600px), (max-height: 600px) {
+	#pn-quiz-overlay #pn-quiz-multi-submit-row {
+		position: sticky; bottom: 0; z-index: 3;
+		margin: 0 -20px; padding: 10px 20px 12px;
+		background: var(--ork-card-bg); box-shadow: 0 -2px 8px rgba(0,0,0,0.10);
+	}
+	#pn-quiz-overlay .pn-quiz-nav.pn-quiz-nav-pinned {
+		position: sticky; bottom: 0; z-index: 3;
+		margin: 12px -20px -20px; padding: 10px 20px 20px;
+		background: var(--ork-card-bg); box-shadow: 0 -2px 8px rgba(0,0,0,0.10);
+	}
+	html[data-theme="dark"] #pn-quiz-overlay #pn-quiz-multi-submit-row,
+	html[data-theme="dark"] #pn-quiz-overlay .pn-quiz-nav.pn-quiz-nav-pinned { background: var(--ork-card-bg, #2d3748); }
+	/* Don't nest a third scroll region inside a 291px modal body. */
+	#pn-qt-history-panel-body { max-height: none; overflow-y: visible; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pn-quiz-feedback,
+	.pn-quiz-answer-label,
+	.pn-quiz-answer-radio,
+	.pn-quiz-answer-radio-inner,
+	.pn-quiz-progress-seg { transition: none !important; animation: none !important; }
+	.pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) { transform: none !important; }
 }
 </style>
 
@@ -5689,10 +5930,10 @@ html[data-theme="dark"] #pn-quiz-report-reason {
 	// rather than skip it.
 	$_qualOnlyOne   = (count($_qualTypes) === 1);
 ?>
-<div class="pn-overlay" id="pn-qt-chooser-overlay">
+<div class="pn-overlay" id="pn-qt-chooser-overlay" role="dialog" aria-modal="true" aria-labelledby="pn-qt-chooser-title" aria-hidden="true" inert>
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i><?= $_qualOnlyOne ? 'Qualification Test' : 'Which test would you like to take?' ?></h3>
+			<h3 class="pn-modal-title" id="pn-qt-chooser-title" tabindex="-1"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i><?= $_qualOnlyOne ? 'Qualification Test' : 'Which test would you like to take?' ?></h3>
 			<button class="pn-modal-close-btn" id="pn-qt-chooser-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -5805,6 +6046,73 @@ html[data-theme="dark"] #pn-quiz-report-reason {
 	</div>
 </div>
 <script>
+/* Shared modal plumbing for the two qualification-test overlays: background
+   scroll lock (matching pnOpenDesignModal's pattern, but depth-counted because
+   pnConfirm stacks over these), focus capture/restore and a Tab trap. Nothing
+   here is width-dependent. */
+window.PnQtModal = window.PnQtModal || (function() {
+	var depth = 0, prevOverflow = null;
+	function lock() {
+		if (depth === 0) { prevOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden'; }
+		depth++;
+	}
+	function unlock() {
+		depth = Math.max(0, depth - 1);
+		if (depth === 0) { document.body.style.overflow = prevOverflow || ''; prevOverflow = null; }
+	}
+	var FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+	function visibleFocusable(ov) {
+		var out = [];
+		ov.querySelectorAll(FOCUSABLE).forEach(function(el) {
+			if (el.offsetWidth || el.offsetHeight || el === document.activeElement) out.push(el);
+		});
+		return out;
+	}
+	function trap(ov, e) {
+		if (e.key !== 'Tab' && e.keyCode !== 9) return;
+		if (!ov.classList.contains('pn-open')) return;
+		var f = visibleFocusable(ov);
+		if (!f.length) return;
+		var first = f[0], last = f[f.length - 1];
+		if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+		else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+	}
+	return {
+		open: function(ov, focusTarget) {
+			if (!ov || ov.classList.contains('pn-open')) return;
+			ov._pnReturnFocus = document.activeElement;
+			ov.classList.add('pn-open');
+			ov.setAttribute('aria-hidden', 'false');
+			// A closed .pn-overlay is only opacity:0/pointer-events:none — its buttons
+			// stay in the tab order. inert takes them out while it's shut.
+			ov.removeAttribute('inert');
+			lock();
+			if (!ov._pnTrapBound) {
+				ov._pnTrapBound = true;
+				ov.addEventListener('keydown', function(e) { trap(ov, e); });
+			}
+			var t = focusTarget || ov.querySelector('.pn-modal-title') || ov.querySelector('.pn-modal-close-btn');
+			if (t && t.focus) { try { t.focus({ preventScroll: true }); } catch (err) { t.focus(); } }
+		},
+		close: function(ov) {
+			if (!ov || !ov.classList.contains('pn-open')) return;
+			ov.classList.remove('pn-open');
+			ov.setAttribute('aria-hidden', 'true');
+			ov.setAttribute('inert', '');
+			unlock();
+			var back = ov._pnReturnFocus;
+			ov._pnReturnFocus = null;
+			if (back && back.focus && document.contains(back)) { try { back.focus({ preventScroll: true }); } catch (err) { back.focus(); } }
+		},
+		// Move focus to an element that isn't normally focusable (a heading, the
+		// feedback bar) after a view swap that would otherwise dump focus on <body>.
+		focusRegion: function(el) {
+			if (!el) return;
+			if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+			try { el.focus({ preventScroll: true }); } catch (err) { el.focus(); }
+		}
+	};
+})();
 function pnOpenTestChooser() {
 	var ov = document.getElementById('pn-qt-chooser-overlay');
 	if (!ov) return;
@@ -5817,14 +6125,15 @@ function pnOpenTestChooser() {
 	ov.querySelectorAll('.pn-qt-history-btn').forEach(function(btn) {
 		btn.setAttribute('aria-expanded', 'false');
 	});
-	ov.classList.add('pn-open');
+	window.PnQtModal.open(ov, document.getElementById('pn-qt-chooser-title'));
 }
 (function() {
 	var ov = document.getElementById('pn-qt-chooser-overlay');
 	if (!ov) return;
+	function closeChooser() { window.PnQtModal.close(ov); }
 	var closeBtn = document.getElementById('pn-qt-chooser-close-btn');
-	if (closeBtn) closeBtn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
-	ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('pn-open'); });
+	if (closeBtn) closeBtn.addEventListener('click', closeChooser);
+	ov.addEventListener('click', function(e) { if (e.target === ov) closeChooser(); });
 	// Escape closes the chooser — but if the full-width history panel is open, close
 	// that first (one layer at a time).
 	document.addEventListener('keydown', function(e) {
@@ -5835,19 +6144,19 @@ function pnOpenTestChooser() {
 			else panel.style.display = 'none';
 			return;
 		}
-		ov.classList.remove('pn-open');
+		closeChooser();
 	});
 	// When a take button is clicked inside the chooser, close the chooser so the quiz modal isn't behind it.
 	ov.querySelectorAll('.pn-qt-take-btn').forEach(function(btn) {
-		btn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
+		btn.addEventListener('click', closeChooser);
 	});
 })();
 </script>
 
-<div class="pn-overlay" id="pn-quiz-overlay">
+<div class="pn-overlay" id="pn-quiz-overlay" role="dialog" aria-modal="true" aria-labelledby="pn-quiz-modal-title" aria-hidden="true" inert>
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title" id="pn-quiz-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>Take Test</h3>
+			<h3 class="pn-modal-title" id="pn-quiz-modal-title" tabindex="-1"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>Take Test</h3>
 			<button class="pn-modal-close-btn" id="pn-quiz-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body" id="pn-quiz-body">
@@ -5868,33 +6177,35 @@ function pnOpenTestChooser() {
 
 			<!-- Question view -->
 			<div id="pn-quiz-question-view" style="display:none">
-				<div class="pn-quiz-progress-header">
+				<div class="pn-quiz-progress-header" role="status" aria-live="polite" aria-atomic="true">
 					<div class="pn-quiz-progress" id="pn-quiz-progress-text"></div>
 					<div class="pn-quiz-progress-score" id="pn-quiz-progress-score"></div>
 				</div>
-				<div class="pn-quiz-progress-segments" id="pn-quiz-progress-segments"></div>
-				<div class="pn-quiz-q-text" id="pn-quiz-q-text"></div>
+				<div class="pn-quiz-progress-segments" id="pn-quiz-progress-segments" role="img" aria-label=""></div>
+				<div class="pn-quiz-q-text" id="pn-quiz-q-text" tabindex="-1"></div>
 				<ul class="pn-quiz-answers" id="pn-quiz-answers"></ul>
 				<!-- Multi-correct affordances: hidden for single-answer questions. -->
 				<div class="pn-quiz-multi-hint" id="pn-quiz-multi-hint" style="display:none;font-size:0.82rem;margin:6px 0 10px;"><i class="fas fa-check-square" style="margin-right:5px;color:#2b6cb0;"></i>Select all that apply, then submit.</div>
-				<div id="pn-quiz-multi-submit-row" style="display:none;margin:0 0 12px;">
+				<div id="pn-quiz-multi-submit-row" style="display:none;">
 					<button class="pn-btn pn-btn-primary" id="pn-quiz-multi-submit-btn" disabled><i class="fas fa-check"></i> Submit Answer</button>
 				</div>
-				<div class="pn-quiz-feedback" id="pn-quiz-feedback"></div>
+				<div class="pn-quiz-feedback" id="pn-quiz-feedback" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 				<div id="pn-quiz-report-area" style="display:none;margin-top:10px;">
 					<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-quiz-report-btn" style="font-size:0.8rem;"><i class="fas fa-flag" style="color:#e53e3e;margin-right:5px;"></i>Report Question</button>
-					<div id="pn-quiz-report-form" style="display:none;margin-top:8px;display:none;">
-						<select id="pn-quiz-report-reason" style="padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.85rem;">
+					<div id="pn-quiz-report-form" style="display:none;margin-top:8px;">
+						<label class="pn-quiz-sr-only" for="pn-quiz-report-reason">Reason for reporting this question</label>
+						<select id="pn-quiz-report-reason">
 							<option value="">— Select a reason —</option>
 							<option value="wording">Question is worded poorly</option>
 							<option value="correct">My answer was correct</option>
 							<option value="outdated">This has not been updated for recent changes</option>
 							<option value="other">Other</option>
 						</select>
-						<button class="pn-btn pn-btn-sm pn-btn-primary" id="pn-quiz-report-submit" style="margin-left:6px;font-size:0.82rem;">Submit</button>
-						<button class="pn-btn pn-btn-sm pn-btn-ghost" id="pn-quiz-report-cancel" style="margin-left:4px;font-size:0.82rem;">Cancel</button>
-						<span id="pn-quiz-report-thanks" style="display:none;font-size:0.82rem;color:#276749;margin-left:8px;"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
+						<button class="pn-btn pn-btn-sm pn-btn-primary" id="pn-quiz-report-submit">Submit</button>
+						<button class="pn-btn pn-btn-sm pn-btn-ghost" id="pn-quiz-report-cancel">Cancel</button>
 					</div>
+					<!-- Outside the form: a successful submit hides the form. -->
+					<span id="pn-quiz-report-thanks" style="display:none;"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
 				</div>
 				<div class="pn-quiz-nav">
 					<span></span>
@@ -5907,7 +6218,7 @@ function pnOpenTestChooser() {
 			<div id="pn-quiz-result-view" style="display:none">
 				<div class="pn-quiz-result">
 					<div class="pn-quiz-result-icon" id="pn-quiz-result-icon"></div>
-					<h3 class="pn-quiz-result-heading" id="pn-quiz-result-heading"></h3>
+					<h3 class="pn-quiz-result-heading" id="pn-quiz-result-heading" tabindex="-1"></h3>
 					<div class="pn-quiz-result-score" id="pn-quiz-result-score"></div>
 					<div class="pn-quiz-result-breakdown" id="pn-quiz-result-breakdown"></div>
 					<div class="pn-quiz-result-detail" id="pn-quiz-result-detail"></div>
@@ -5929,6 +6240,8 @@ function pnOpenTestChooser() {
 <script>
 (function() {
 	var overlay        = document.getElementById('pn-quiz-overlay');
+	var quizBody       = document.getElementById('pn-quiz-body');
+	var navEl          = overlay ? overlay.querySelector('.pn-quiz-nav') : null;
 	var closeBtn       = document.getElementById('pn-quiz-close-btn');
 	var modalTitle     = document.getElementById('pn-quiz-modal-title');
 	var loading        = document.getElementById('pn-quiz-loading');
@@ -5986,6 +6299,14 @@ function pnOpenTestChooser() {
 	var currentLabel   = '';
 	var isChecking     = false;
 
+	// The modal body is the only scroller, so every view swap has to put it back
+	// at the top — otherwise the new question renders above the visible band.
+	function resetQuizScroll() { if (quizBody) quizBody.scrollTop = 0; }
+
+	function prefersReducedMotion() {
+		return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+	}
+
 	function openModal(type, kingdom, label) {
 		currentType    = type;
 		currentKingdom = kingdom;
@@ -5998,7 +6319,11 @@ function pnOpenTestChooser() {
 		quizInProgress = false;
 
 		modalTitle.innerHTML = '<i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>' + label;
-		overlay.classList.add('pn-open');
+		window.PnQtModal.open(overlay, modalTitle);
+		// Also covers Retake, which re-enters openModal with the overlay already open
+		// after hiding the button that held focus.
+		window.PnQtModal.focusRegion(modalTitle);
+		resetQuizScroll();
 		showLoading(true);
 		errorMsg.style.display = 'none';
 		instrView.style.display = 'none';
@@ -6047,15 +6372,19 @@ function pnOpenTestChooser() {
 
 	function updateProgressSegments() {
 		var segs = progressSegs.querySelectorAll('.pn-quiz-progress-seg');
+		var done = 0;
 		for (var i = 0; i < segs.length; i++) {
 			segs[i].className = 'pn-quiz-progress-seg';
 			if (answers.hasOwnProperty(questions[i].QualQuestionId)) {
 				segs[i].classList.add('pn-quiz-progress-seg-done');
+				done++;
 			}
 			if (i === currentIdx && !answers.hasOwnProperty(questions[i].QualQuestionId)) {
 				segs[i].classList.add('pn-quiz-progress-seg-current');
 			}
 		}
+		// The strip is otherwise pure colour — give it a text equivalent.
+		progressSegs.setAttribute('aria-label', done + ' of ' + segs.length + ' answered');
 	}
 
 	function renderQuestion(idx) {
@@ -6073,8 +6402,11 @@ function pnOpenTestChooser() {
 		feedbackEl.className = 'pn-quiz-feedback';
 		nextBtn.style.display   = 'none';
 		submitBtn.style.display = 'none';
+		if (navEl) navEl.classList.remove('pn-quiz-nav-pinned');
 		reportArea.style.display = 'none';
 		reportForm.style.display = 'none';
+		// A report submitted on the previous question leaves the button hidden.
+		reportBtn.style.display  = 'inline-block';
 		reportReason.value = '';
 		if (reportCorrectOpt) reportCorrectOpt.hidden = false;
 		reportThanks.style.display = 'none';
@@ -6089,15 +6421,22 @@ function pnOpenTestChooser() {
 		singleSelected = null;
 
 		answersList.innerHTML = '';
-		q.Answers.forEach(function(a) {
+		// role=radio is only valid inside a radiogroup; without it a screen reader
+		// gives no group name and no set position.
+		answersList.setAttribute('role', isMulti ? 'group' : 'radiogroup');
+		answersList.setAttribute('aria-labelledby', 'pn-quiz-q-text');
+		q.Answers.forEach(function(a, aIdx) {
 			var li    = document.createElement('li');
 			li.className = 'pn-quiz-answer-item';
 			var label = document.createElement('label');
 			label.className = 'pn-quiz-answer-label';
 			label.dataset.answerId = a.QualAnswerId;
-			label.setAttribute('tabindex', '0');
+			// Roving tabindex for the radio pattern: one tab stop for the group.
+			// Checkboxes are individually tabbable, which is the correct pattern there.
+			label.setAttribute('tabindex', (isMulti || aIdx === 0) ? '0' : '-1');
 			label.setAttribute('role', isMulti ? 'checkbox' : 'radio');
 			label.setAttribute('aria-checked', 'false');
+			label.setAttribute('aria-label', (aIdx + 1) + ' of ' + q.Answers.length + ': ' + a.AnswerText);
 
 			var radio = document.createElement('span');
 			radio.className = 'pn-quiz-answer-radio';
@@ -6113,7 +6452,7 @@ function pnOpenTestChooser() {
 			if (isMulti) {
 				// Multi: clicking toggles selection; scoring waits for Submit Answer.
 				var toggle = function() {
-					if (isChecking) return;
+					if (isChecking || answers.hasOwnProperty(q.QualQuestionId)) return;
 					if (multiSelected[a.QualAnswerId]) {
 						delete multiSelected[a.QualAnswerId];
 						label.classList.remove('pn-quiz-selected');
@@ -6133,20 +6472,37 @@ function pnOpenTestChooser() {
 				// Single: clicking selects; scoring waits for Submit Answer so a
 				// mis-tap can be changed.
 				var selectSingle = function() {
-					if (isChecking) return;
+					if (isChecking || answers.hasOwnProperty(q.QualQuestionId)) return;
 					// Radio behaviour: clear any prior pick, then select this one.
 					answersList.querySelectorAll('.pn-quiz-answer-label').forEach(function(l) {
 						l.classList.remove('pn-quiz-selected');
 						l.setAttribute('aria-checked', 'false');
+						l.setAttribute('tabindex', '-1');
 					});
 					label.classList.add('pn-quiz-selected');
 					label.setAttribute('aria-checked', 'true');
+					label.setAttribute('tabindex', '0');
 					singleSelected = a.QualAnswerId;
 					multiSubmitBtn.disabled = false;
 				};
 				label.addEventListener('click', selectSingle);
 				label.addEventListener('keydown', function(e) {
-					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); }
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); return; }
+					// Arrow keys move and select, per the ARIA radiogroup pattern.
+					var move = 0, home = false, end = false;
+					if (e.key === 'ArrowDown'  || e.key === 'ArrowRight') move = 1;
+					else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') move = -1;
+					else if (e.key === 'Home') home = true;
+					else if (e.key === 'End')  end  = true;
+					else return;
+					e.preventDefault();
+					if (answers.hasOwnProperty(q.QualQuestionId)) return;
+					var all = Array.prototype.slice.call(answersList.querySelectorAll('.pn-quiz-answer-label'));
+					var at  = all.indexOf(label);
+					var to  = home ? 0 : (end ? all.length - 1 : (at + move + all.length) % all.length);
+					if (!all[to]) return;
+					all[to].focus();
+					all[to].click();
 				});
 			}
 			li.appendChild(label);
@@ -6154,6 +6510,28 @@ function pnOpenTestChooser() {
 		});
 
 		questionView.style.display = 'block';
+		// Next kept the previous question's scroll offset, so the question text and
+		// progress bar rendered above the visible band of the modal body.
+		resetQuizScroll();
+		window.PnQtModal.focusRegion(qText);
+	}
+
+	// Correct/incorrect was signalled by colour alone (and in dark mode by hue
+	// alone, on an identical background) — add an icon and a screen-reader label.
+	function markOption(l, kind) {
+		if (!l || l.querySelector('.pn-quiz-answer-mark')) return;
+		var mark = document.createElement('span');
+		mark.className = 'pn-quiz-answer-mark';
+		mark.innerHTML = (kind === 'correct')
+			? '<i class="fas fa-check" aria-hidden="true"></i><span class="pn-quiz-sr-only">Correct answer</span>'
+			: '<i class="fas fa-times" aria-hidden="true"></i><span class="pn-quiz-sr-only">Your answer &mdash; incorrect</span>';
+		l.appendChild(mark);
+		// The option carries an aria-label, which would suppress the marker text
+		// above — fold the outcome into the label itself.
+		var name = l.getAttribute('aria-label');
+		if (name) {
+			l.setAttribute('aria-label', name + (kind === 'correct' ? ' — correct answer' : ' — your answer, incorrect'));
+		}
 	}
 
 	// `selected` is a number for single-select, or an array of ids for multi.
@@ -6213,7 +6591,7 @@ function pnOpenTestChooser() {
 					correctCount++;
 					pickedIds.forEach(function(id) {
 						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
-						if (l) { l.classList.remove('pn-quiz-selected'); l.classList.add('pn-quiz-correct'); }
+						if (l) { l.classList.remove('pn-quiz-selected'); l.classList.add('pn-quiz-correct'); markOption(l, 'correct'); }
 					});
 					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-correct';
 					feedbackEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> Correct!';
@@ -6223,14 +6601,14 @@ function pnOpenTestChooser() {
 						if (!l) return;
 						l.classList.remove('pn-quiz-selected');
 						// A picked id that's also correct = partially right; show green.
-						if (correctIds.indexOf(id) !== -1) l.classList.add('pn-quiz-correct');
-						else                               l.classList.add('pn-quiz-wrong');
+						if (correctIds.indexOf(id) !== -1) { l.classList.add('pn-quiz-correct'); markOption(l, 'correct'); }
+						else                               { l.classList.add('pn-quiz-wrong');   markOption(l, 'wrong'); }
 					});
 					// Reveal correct answers the player missed.
 					correctIds.forEach(function(id) {
 						if (pickedIds.indexOf(id) !== -1) return;
 						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
-						if (l) { l.classList.remove('pn-quiz-disabled'); l.classList.add('pn-quiz-correct'); }
+						if (l) { l.classList.remove('pn-quiz-disabled'); l.classList.add('pn-quiz-correct'); markOption(l, 'correct'); }
 					});
 					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-wrong';
 					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
@@ -6245,7 +6623,15 @@ function pnOpenTestChooser() {
 				if (reportCorrectOpt) reportCorrectOpt.hidden = !!j.is_correct;
 
 				isChecking = false;
-				requestAnimationFrame(function() { feedbackEl.classList.add('pn-quiz-feedback-show'); });
+				requestAnimationFrame(function() {
+					feedbackEl.classList.add('pn-quiz-feedback-show');
+					// Submitting hides the button that held focus, so focus fell to
+					// <body> and nothing scrolled — the result was off-screen.
+					if (feedbackEl.scrollIntoView) {
+						feedbackEl.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+					}
+					window.PnQtModal.focusRegion(feedbackEl);
+				});
 				progressScore.textContent = correctCount + ' correct so far';
 				updateProgressSegments();
 
@@ -6258,6 +6644,7 @@ function pnOpenTestChooser() {
 				} else {
 					submitBtn.style.display = 'inline-block';
 				}
+				if (navEl) navEl.classList.add('pn-quiz-nav-pinned');
 			})
 			.catch(function() {
 				allLabels.forEach(function(l) { l.classList.remove('pn-quiz-disabled'); l.classList.remove('pn-quiz-selected'); });
@@ -6344,6 +6731,7 @@ function pnOpenTestChooser() {
 	});
 
 	function animateScore(target, duration) {
+		if (prefersReducedMotion()) { resultScore.textContent = target + '%'; return; }
 		var start = null;
 		function step(ts) {
 			if (!start) start = ts;
@@ -6357,6 +6745,8 @@ function pnOpenTestChooser() {
 
 	function fireConfetti() {
 		if (typeof window.confetti !== 'function') return;
+		// A 2s full-viewport particle burst is exactly what reduced-motion asks to skip.
+		if (prefersReducedMotion()) return;
 		var end = Date.now() + 2000;
 		var colors = ['#276749', '#48bb78', '#f6e05e', '#ffffff'];
 		(function frame() {
@@ -6395,7 +6785,12 @@ function pnOpenTestChooser() {
 			retakeBtn.style.display = 'inline-block';
 		}
 		resultView.style.display = 'block';
+		if (navEl) navEl.classList.remove('pn-quiz-nav-pinned');
 		resultScore.textContent = '0%';
+		// The result renders at the top of the scroller the question view left
+		// mid-scroll, and focus was on a button that has just been hidden.
+		resetQuizScroll();
+		window.PnQtModal.focusRegion(resultHeading);
 		setTimeout(function() { animateScore(j.score_percent, 800); }, 200);
 
 		if (j.passed) {
@@ -6425,7 +6820,7 @@ function pnOpenTestChooser() {
 	// matching Submit Test etc.) before discarding answers.
 	function requestCloseQuiz() {
 		if (!quizInProgress) {
-			overlay.classList.remove('pn-open');
+			window.PnQtModal.close(overlay);
 			return;
 		}
 		pnConfirm({
@@ -6435,12 +6830,12 @@ function pnOpenTestChooser() {
 			danger: true
 		}, function() {
 			quizInProgress = false;
-			overlay.classList.remove('pn-open');
+			window.PnQtModal.close(overlay);
 		});
 	}
 	closeBtn.addEventListener('click', requestCloseQuiz);
 	// The result-view "Close" is a finished test — no guard needed.
-	doneBtn.addEventListener('click',  function() { overlay.classList.remove('pn-open'); });
+	doneBtn.addEventListener('click',  function() { window.PnQtModal.close(overlay); });
 	retakeBtn.addEventListener('click', function() {
 		resultView.style.display = 'none';
 		openModal(currentType, currentKingdom, currentLabel);
@@ -6526,6 +6921,12 @@ function pnOpenTestChooser() {
 			if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
 			activeBtn = null;
 		}
+		// Called once the panel actually has content — scrolling the "Loading…" stub
+		// moved the modal body 23px and left the real panel 114-137px below the fold.
+		function revealPanel() {
+			if (!panel || !panel.scrollIntoView) return;
+			panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+		}
 		// Exposed so pnOpenTestChooser can reset the panel each time the modal opens.
 		window._pnResetQualHistory = function() { if (panelBody) panelBody.innerHTML = ''; closePanel(); };
 		if (panelClose) panelClose.addEventListener('click', closePanel);
@@ -6556,13 +6957,15 @@ function pnOpenTestChooser() {
 				panelTitle.textContent = (btn.dataset.label || 'Test') + ' — Past attempts';
 				panel.style.display = 'block';
 				panelBody.innerHTML = '<div class="pn-qt-hist-empty">Loading…</div>';
-				if (panel.scrollIntoView) panel.scrollIntoView({ block: 'nearest' });
+				// Scrolling here would scroll the ~60px "Loading…" stub, which is
+				// already on screen — the filled panel then lands below the fold.
+				// revealPanel() runs once the content is in.
 				post('QualTestAjax/attempts', {
 					PlayerId: btn.dataset.player, KingdomId: btn.dataset.kingdom, TestType: btn.dataset.type
 				}, function(j) {
 					if (activeBtn !== btn) return; // switched away before this load returned
-					if (!j || j.status !== 0) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">Could not load history.</div>'; return; }
-					if (!j.attempts.length) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">No attempts recorded yet.</div>'; return; }
+					if (!j || j.status !== 0) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">Could not load history.</div>'; revealPanel(); return; }
+					if (!j.attempts.length) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">No attempts recorded yet.</div>'; revealPanel(); return; }
 					panelBody.innerHTML = '';
 					j.attempts.forEach(function(a) {
 						var when = a.TakenAt ? new Date(a.TakenAt.replace(' ', 'T')).toLocaleString() : '';
@@ -6577,6 +6980,7 @@ function pnOpenTestChooser() {
 							'<div class="pn-qt-hist-detail" style="display:none;"></div>';
 						panelBody.appendChild(row);
 					});
+					revealPanel();
 				});
 			});
 		});
@@ -6752,18 +7156,19 @@ function pnOpenTestChooser() {
 <?php endif; ?>
 
 <!-- Move Player Modal -->
-<?php if ($canEditAdmin): ?>
+<?php if ($canMovePlayer): ?>
 <style>
 .pn-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
-.pn-mp-toggle-btn { flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; background:#fff; color:#4a5568; white-space:nowrap; }
+.pn-mp-toggle-btn { flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:var(--ork-radius-md); font-size:var(--ork-font-size-sm); font-weight:var(--ork-font-weight-semibold); cursor:pointer; background:#fff; color:var(--ork-text-body); white-space:nowrap; }
 .pn-mp-toggle-btn:hover { border-color:#a0aec0; }
 .pn-mp-toggle-btn.pn-mp-active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
 .pn-mp-cascade { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
-.pn-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#4a5568; }
-.pn-mp-cascade-sel:disabled { background:#edf2f7; color:#718096; cursor:not-allowed; }
+.pn-mp-cascade-sel { flex:1 1 140px; min-width:0; font-size:var(--ork-font-size-sm); padding:6px 8px; border:1px solid var(--ork-input-border); border-radius:var(--ork-radius-md); background:var(--ork-input-bg); color:var(--ork-text-body); }
+.pn-mp-cascade-sel:focus { background:var(--ork-card-bg); }
+.pn-mp-cascade-sel:disabled { background:var(--ork-surface-hover); color:var(--ork-text-muted); cursor:not-allowed; }
 #pn-moveplayer-overlay .pn-modal-body { overflow:visible; }
 #pn-moveplayer-overlay .pn-acct-field { position:relative; }
-.pn-mp-player-locked { background:var(--ork-surface-light); border:1px solid var(--ork-border); border-radius:4px; padding:8px 12px; color:var(--ork-text-body); font-size:0.95rem; }
+.pn-mp-player-locked { background:var(--ork-bg-inset); border:1px solid var(--ork-border); border-radius:4px; padding:8px 12px; color:var(--ork-text-body); font-size:0.95rem; }
 </style>
 <div class="pn-overlay" id="pn-moveplayer-overlay">
 	<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px);">
@@ -6874,7 +7279,7 @@ function pnOpenTestChooser() {
 			<h3 class="pn-modal-title"><i class="fas fa-shield-alt pn-modal-title-icon"></i>Create Company or Household</h3>
 			<button class="pn-modal-close-btn" id="pn-unit-create-close-btn" aria-label="Close" onclick="pnCloseUnitCreateModal()">&times;</button>
 		</div>
-		<div style="background:var(--ork-bg-secondary,#ebf8ff);border-bottom:1px solid var(--ork-border,#bee3f8);padding:10px 16px;display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ork-text-secondary,#2c5282);line-height:1.5;">
+		<div style="background:var(--ork-bg-secondary,#ebf8ff);border-bottom:1px solid var(--ork-divider,#bee3f8);padding:10px 16px;display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ork-text-secondary,#2c5282);line-height:1.5;">
 			<i class="fas fa-info-circle" style="margin-top:2px;flex-shrink:0;color:#3182ce;"></i>
 			<span>This creates a <strong>brand new</strong> Company or Household with you as the manager. To join an existing unit, ask its manager to add you.</span>
 		</div>

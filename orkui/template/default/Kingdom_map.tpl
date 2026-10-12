@@ -109,4 +109,4 @@
 //]]>
 </script>
 
-<script src="//maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&loading=async&callback=initMap&v=weekly&libraries=marker" type="text/javascript"></script>
+<script src="//maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&loading=async&callback=initMap&v=weekly&libraries=marker&region=CA" type="text/javascript"></script>

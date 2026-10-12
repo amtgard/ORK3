@@ -11,6 +11,28 @@ class Controller
     public $session = null;
     public $template = null;
 
+    // Status 5 is NoAuthorization -- "you are not allowed to do that". It is NOT
+    // "your session expired". Controllers uniformly mapped it to a redirect to
+    // Login/login/..., so a still-logged-in officer who hit a permission boundary
+    // was dropped on a bare login page with no message and read it as having been
+    // logged out. It paired especially badly with pages that render every control
+    // and only reject the click server-side.
+    //
+    // Only genuinely unauthenticated visitors are sent to log in; everyone else
+    // gets told what actually happened.
+    public function no_authorization($login_route, $detail = null)
+    {
+        if (!isset($this->session->user_id) || (int) $this->session->user_id <= 0) {
+            header('Location: ' . UIR . 'Login/login/' . ltrim($login_route, '/'));
+            exit;
+        }
+        $message = (is_string($detail) && trim($detail) !== '')
+            ? trim($detail)
+            : 'You do not have permission to perform that action.';
+        $this->data[ 'Error' ] = $message;
+        return $message;
+    }
+
     public function __construct($method = null, $action = null)
     {
         $this->method = is_null($method) ? 'index' : $method;
@@ -26,6 +48,11 @@ class Controller
         $this->Report = new APIModel('Report');
         $this->Search = new JSONModel('Search');
         $this->data[ 'no_index' ] = false;
+        // Per-page OpenGraph overrides for link-preview cards (Discord etc.);
+        // rendered by ork_og_meta_tags() in the theme head.
+        $this->data[ 'og' ] = array();
+        // Per-page schema.org JSON-LD (search-engine structured data).
+        $this->data[ 'jsonld' ] = null;
 
         if (get_class($this) == "Controller") {
             $this->data[ 'page_title' ] = "Home";
@@ -51,8 +78,11 @@ class Controller
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
             $_uid_check = (int)$this->session->user_id;
             $_tok_check = $this->session->token;
-            $this->load_model('SessionToken');
-            if (!$this->SessionToken->validate_session_token($_uid_check, $_tok_check)) {
+            // Multi-device: per-request validation runs against ork_session (up to 3
+            // concurrent device sessions), not the single vestigial ork_mundane.token
+            // slot. ValidateSessionByToken also enforces expiry and slides last_seen.
+            $_owner = Ork3::$Lib->authorization->ValidateSessionByToken($_tok_check);
+            if ($_owner === 0 || $_owner !== $_uid_check) {
                 $_returnRoute = trim($_GET['Route'] ?? '');
                 unset($_SESSION['is_authorized_mundane_id']);
                 session_unset();

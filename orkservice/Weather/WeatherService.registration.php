@@ -45,6 +45,16 @@ $server->Register([
 ]);
 
 $server->Register([
+    'Weather/GetForecastForPark',
+    ['WeatherService', 'GetForecastForPark'],
+    [
+        ['Token', 'request', false, 'string', true],
+        ['parkId', 'request', false, 'numeric', true],
+        ['date', 'request', false, 'string', false],
+    ],
+]);
+
+$server->Register([
     'Weather/GetArchiveForPark',
     ['WeatherService', 'GetArchiveForPark'],
     [
