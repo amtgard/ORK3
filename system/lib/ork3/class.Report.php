@@ -13,6 +13,14 @@ I have no apologies for the following code.  It works well enough.
 class Report extends Ork3
 {
     /**
+     * Schema version folded into every recommendation cache key. Bump it whenever the
+     * selected predicate or the row shape changes, so entries written under the old
+     * rule are not served for the rest of their TTL. Player::bust_player_award_recs_cache
+     * reads this constant, so the bust keys can never drift out of step with the reads.
+     */
+    public const REC_CACHE_VERSION = 3;
+
+    /**
      * Ladder-terminal masterhoods that ork_award.peerage still records as 'None'.
      *
      * Every Order ladder ends in a masterhood, and most are classified correctly
@@ -557,6 +565,118 @@ class Report extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
     }
 
+    /**
+     * Collapse parallel recommendations into one row per (recipient, kingdomaward, rank)
+     * cluster. Pure transform of the row array returned by PlayerAwardRecommendations.
+     * Returns array_values of the grouped rows (same shape the Manager template expects).
+     */
+    public function groupRecommendations($recs)
+    {
+        // Dismissal is a CLUSTER-level property, not a member-level one. Several
+        // people can recommend the same honor, and each of those recommendations can
+        // be dismissed independently — but the honor is still live while any one of
+        // them stands. So: a cluster counts as dismissed only when EVERY member is,
+        // and the dismissed members of a still-live cluster are dropped rather than
+        // folded in, leaving live rows (and their support counts) exactly as they
+        // look without the flag. Without IncludeDismissed no dismissed rows reach
+        // here at all, so this is inert on the default path.
+        $liveByKey = [];
+        foreach ((array)$recs as $rec) {
+            if (empty($rec['IsDismissed'])) {
+                $liveByKey[(int)($rec['MundaneId'] ?? 0) . ':'
+                    . (int)($rec['KingdomAwardId'] ?? 0) . ':'
+                    . (int)($rec['Rank'] ?? 0)] = true;
+            }
+        }
+
+        $groups = [];
+        foreach ((array)$recs as $rec) {
+            $mid  = (int)($rec['MundaneId'] ?? 0);
+            $kaid = (int)($rec['KingdomAwardId'] ?? 0);
+            $rank = (int)($rec['Rank'] ?? 0);
+            $key  = $mid . ':' . $kaid . ':' . $rank;
+            if (!empty($rec['IsDismissed']) && isset($liveByKey[$key])) {
+                continue;
+            }
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'MundaneId'      => $mid,
+                    'KingdomAwardId' => $kaid,
+                    'Rank'           => $rank,
+                    'Persona'        => $rec['Persona'] ?? '',
+                    'AwardName'      => $rec['AwardName'] ?? '',
+                    'ParkId'         => (int)($rec['ParkId'] ?? 0),
+                    // Retirement is a property of the RECIPIENT and the cluster key
+                    // already includes MundaneId, so every member shares it — no
+                    // aggregation needed, just carry it through to the template layer.
+                    'IsRetired'      => !empty($rec['IsRetired']),
+                    'AlreadyHas'     => !empty($rec['AlreadyHas']),
+                    // Why AlreadyHas is set, not just that it is. A Master peerage that
+                    // supersedes the order is not the same thing as having been granted
+                    // it, and a reviewer triaging a long queue treats the two
+                    // differently. The Court Planner's picker already draws the
+                    // distinction; without carrying the flag this far the Recommendations
+                    // Manager could only ever say "already has" for both.
+                    'CoveredByMaster' => !empty($rec['CoveredByMaster']),
+                    'CurrentRank'    => isset($rec['CurrentRank']) ? (int)$rec['CurrentRank'] : null,
+                    'HeldRank'       => (int)($rec['HeldRank'] ?? 0),
+                    'Members'        => [],
+                    'MemberRecIds'   => [],
+                    'OldestAgeDays'  => 0,
+                    'OldestDate'     => $rec['DateRecommended'] ?? '',
+                    'RepRecId'       => (int)($rec['RecommendationsId'] ?? 0),
+                    'IsDismissed'        => false,
+                    'DismissedAt'        => null,
+                    'DismissedByPersona' => '',
+                    '_advocates'     => [],
+                    '_hasNamedRec'   => false,
+                    '_allSnoozed'    => true,
+                    '_allPassed'     => true,
+                ];
+            }
+            $g = &$groups[$key];
+            $g['Members'][]      = $rec;
+            $g['MemberRecIds'][] = (int)($rec['RecommendationsId'] ?? 0);
+            $age = (int)($rec['AgeDays'] ?? 0);
+            if ($age >= $g['OldestAgeDays']) {
+                $g['OldestAgeDays'] = $age;
+                $g['OldestDate']    = $rec['DateRecommended'] ?? '';
+                $g['RepRecId']      = (int)($rec['RecommendationsId'] ?? 0);
+            }
+            if (!empty($rec['IsDismissed'])
+                && ($g['DismissedAt'] === null || (string)($rec['DismissedAt'] ?? '') > (string)$g['DismissedAt'])
+            ) {
+                $g['DismissedAt']        = $rec['DismissedAt'] ?? null;
+                $g['DismissedByPersona'] = $rec['DismissedByPersona'] ?? '';
+            }
+            if (!empty($rec['RecommendedById'])) {
+                $g['_advocates'][(int)$rec['RecommendedById']] = true;
+                $g['_hasNamedRec'] = true;
+            }
+            foreach (($rec['Seconds'] ?? []) as $s) {
+                if (!empty($s['SupporterMundaneId'])) {
+                    $g['_advocates'][(int)$s['SupporterMundaneId']] = true;
+                }
+            }
+            if (empty($rec['IsSnoozed'])) {
+                $g['_allSnoozed'] = false;
+            }
+            if (empty($rec['PassedToLocal'])) {
+                $g['_allPassed'] = false;
+            }
+            unset($g);
+        }
+        foreach ($groups as $k => $g) {
+            unset($g['_advocates'][$g['MundaneId']]);
+            $groups[$k]['SupportCount']  = max(0, count($g['_advocates']) - ($g['_hasNamedRec'] ? 1 : 0));
+            $groups[$k]['IsDismissed']   = !isset($liveByKey[$k]);
+            $groups[$k]['IsSnoozed']     = $g['_allSnoozed'];
+            $groups[$k]['PassedToLocal'] = $g['_allPassed'];
+            unset($groups[$k]['_advocates'], $groups[$k]['_hasNamedRec'], $groups[$k]['_allSnoozed'], $groups[$k]['_allPassed']);
+        }
+        return array_values($groups);
+    }
+
     public function PlayerAwardRecommendations($request)
     {
 
@@ -564,12 +684,27 @@ class Report extends Ork3
         // Viewer-specific flags (ViewerCanSecond, ViewerCanEditReason, IsMine) are
         // computed after the cache hit so one bust clears the data for everyone.
         $viewer_id = (int)($request['RequestedBy'] ?? 0);
+        $recIdList = isset($request['RecommendationsIdIn']) ? (array)$request['RecommendationsIdIn'] : null;
+        $skipCache = !empty($request['SkipCache']) || $recIdList !== null;
+        // Opt-in: fold soft-deleted (dismissed) recommendations back in. Off by
+        // default, so every existing caller keeps the live-only view.
+        $includeDismissed = !empty($request['IncludeDismissed']);
+        $dismissedClause  = $includeDismissed
+            ? '1 = 1'
+            : '(recs.deleted_by IS NULL OR recs.deleted_by = 0)';
         $key = Ork3::$Lib->ghettocache->key([
-            'KingdomId' => (int)($request['KingdomId'] ?? 0),
-            'ParkId'    => (int)($request['ParkId']    ?? 0),
-            'PlayerId'  => (int)($request['PlayerId']  ?? 0),
+            'KingdomId'        => (int)($request['KingdomId'] ?? 0),
+            'ParkId'           => (int)($request['ParkId']    ?? 0),
+            'PlayerId'         => (int)($request['PlayerId']  ?? 0),
+            // Two different row sets must never share a cache entry.
+            'IncludeDismissed' => $includeDismissed ? 1 : 0,
+            // Bumped when the selected predicate changes, so entries cached under the
+            // previous rule are not served for the rest of their TTL. Kept in step with
+            // PlayerAwardRecommendationsCount's key or the badge and the list disagree
+            // for a whole TTL after deploy.
+            'V'                => self::REC_CACHE_VERSION,
         ]);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
+        if (!$skipCache && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
             return $this->applyViewerFlags($cache, $viewer_id);
         }
 
@@ -588,6 +723,12 @@ class Report extends Ork3
             $location_clause = " AND recs.mundane_id = $request[PlayerId]";
         }
 
+        $idClause = '';
+        if ($recIdList !== null) {
+            $ids = array_filter(array_map('intval', $recIdList));
+            $idClause = empty($ids) ? ' AND 1=0 ' : ' AND recs.recommendations_id IN (' . implode(',', $ids) . ') ';
+        }
+
         $sql = "select
 			a.peerage, ifnull(ka.name, a.name) as award_name,
 			a.is_ladder as a_is_ladder,
@@ -597,6 +738,7 @@ class Report extends Ork3
 			m.mundane_id,
 			m.park_id,
 			m.kingdom_id,
+			m.active as m_active,
 			p.name as park_name,
 			k.name as kingdom_name,
 			recs.rank,
@@ -607,7 +749,18 @@ class Report extends Ork3
 			recs.mask_giver,
 			recs.deleted_at,
 			recs.deleted_by,
+			dbm.persona as deleted_by_persona,
+			recs.snoozed_monarch_id,
+			recs.snoozed_regent_id,
+			recs.passed_to_local,
+			recs.passed_to_local_by,
+			recs.passed_to_local_at,
+			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id) AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id) AND o.role = 'Monarch' ORDER BY o.officer_id DESC LIMIT 1), 0) AS current_monarch_id,
+			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id) AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id) AND o.role = 'Regent'  ORDER BY o.officer_id DESC LIMIT 1), 0) AS current_regent_id,
+			(SELECT COUNT(*) FROM " . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.status != 'cancelled') AS on_court_count,
 			ka.award_id as ka_award_id,
+			ka.is_title as ka_is_title,
+			ka.is_ladder as ka_is_ladder,
 			ka.kingdomaward_id as ka_kaward_id,
 			(SELECT COUNT(suboa.awards_id) FROM " . DB_PREFIX . "awards suboa WHERE suboa.mundane_id = recs.mundane_id AND suboa.kingdomaward_id = ka.kingdomaward_id AND suboa.rank >= COALESCE(recs.rank, 0)) as kacount,
 			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND suboa2.rank >= COALESCE(recs.rank, 0)) as awcount,
@@ -624,9 +777,13 @@ class Report extends Ork3
 			LEFT JOIN " . DB_PREFIX . "award a on a.award_id = ka.award_id
 			LEFT join " . DB_PREFIX . "mundane m on m.mundane_id = recs.mundane_id
 			LEFT join " . DB_PREFIX . "mundane rbi on rbi.mundane_id = recs.recommended_by_id
+			LEFT join " . DB_PREFIX . "mundane dbm on dbm.mundane_id = recs.deleted_by
 			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
 			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
-			WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0) $location_clause
+			WHERE $dismissedClause
+			  AND (m.suspended IS NULL OR m.suspended = 0)
+			  $location_clause
+			  $idClause
 			order by m.persona, a.name, recs.rank, m.persona";
         $r = $this->db->query($sql);
         $response = array();
@@ -661,6 +818,10 @@ class Report extends Ork3
                     'recs_award_id'      => (int)$r->award_id,
                     'park_id'            => $r->park_id,
                     'kingdom_id'         => $r->kingdom_id,
+                    // Recipient is inactive (Retired). Retirement/memorial honors are
+                    // precisely the awards given to players who have stopped playing, so
+                    // these rows stay visible; the flag lets the UI badge them.
+                    'm_active'           => (int)$r->m_active,
                     'park_name'          => $r->park_name,
                     'kingdom_name'       => $r->kingdom_name,
                     'kacount'            => (int)$r->kacount,
@@ -669,6 +830,27 @@ class Report extends Ork3
                     'player_ka_date'     => $r->player_ka_date,
                     'a_is_ladder'        => (int)$r->a_is_ladder,
                     'a_is_title'         => (int)$r->a_is_title,
+                    // Per-kingdom title flag. `tinyint(1) NOT NULL DEFAULT 0`, and the
+                    // award LEFT JOIN hangs off ka.award_id, so ka missing means a is
+                    // missing too — there is no "kingdom said nothing" state to preserve.
+                    // Combined with a_is_title by GREATEST, never COALESCE, below.
+                    'ka_is_title'        => (int)$r->ka_is_title,
+                    // Whitelist snapshot: a column selected but not copied here is
+                    // silently invisible downstream.
+                    'ka_is_ladder'       => (int)$r->ka_is_ladder,
+                    'snoozed_monarch_id' => $r->snoozed_monarch_id,
+                    'snoozed_regent_id'  => $r->snoozed_regent_id,
+                    'passed_to_local'    => (int)$r->passed_to_local,
+                    'passed_to_local_by' => $r->passed_to_local_by,
+                    'passed_to_local_at' => $r->passed_to_local_at,
+                    'current_monarch_id' => (int)$r->current_monarch_id,
+                    'current_regent_id'  => (int)$r->current_regent_id,
+                    'on_court_count'     => (int)$r->on_court_count,
+                    // This snapshot is an explicit whitelist — a column added to the
+                    // SELECT but not copied here is silently invisible downstream.
+                    'deleted_by'         => $r->deleted_by,
+                    'deleted_at'         => $r->deleted_at,
+                    'deleted_by_persona' => $r->deleted_by_persona,
                 ];
                 $recAwardId = $row->ka_award_id ?: $row->recs_award_id;
                 if (isset($ladderMap[$recAwardId])) {
@@ -702,12 +884,22 @@ class Report extends Ork3
             }
 
             // Final pass: build response, flipping AlreadyHas when a Master peerage covers a ladder rec.
-            // Custom awards (base Award with is_ladder=0 AND is_title=0) can legitimately be held many
-            // times, so they must never be filtered out as "already has".
+            // Custom awards (is_ladder=0 AND is_title=0) can legitimately be held many
+            // times, so they must never be filtered out as "already has". The title flag
+            // is read through the per-kingdom override: a kingdom that flags its own
+            // award as a title otherwise looked infinitely repeatable here and never got
+            // an AlreadyHas / green-rank signal in the Manager.
             $response['AwardRecommendations'] = array();
             foreach ($rawRows as $row) {
                 $recAwardId = $row->ka_award_id ?: $row->recs_award_id;
-                $isCustom   = ($row->a_is_ladder === 0 && $row->a_is_title === 0);
+                // Effective title flag is GREATEST, not COALESCE: ork_kingdomaward.is_title
+                // is `tinyint(1) NOT NULL DEFAULT 0`, so COALESCE(ka.is_title, a.is_title)
+                // never falls through to the catalog and a base-catalog title whose kingdom
+                // row still reads 0 would look infinitely repeatable here. "Either side says
+                // so" — the same reading as Court::SQL_EFFECTIVE_IS_TITLE.
+                $effIsTitle  = max((int)$row->ka_is_title, (int)$row->a_is_title);
+                $effIsLadder = max((int)$row->ka_is_ladder, (int)$row->a_is_ladder);
+                $isCustom    = ($effIsLadder === 0 && $effIsTitle === 0);
                 $alreadyHas = $isCustom ? false : ($row->kacount > 0 || $row->awcount > 0);
                 $coveredByMaster = false;
                 if (!$isCustom && !$alreadyHas && isset($ladderMap[$recAwardId])) {
@@ -719,6 +911,23 @@ class Report extends Ork3
                         }
                     }
                 }
+                // NOTE: masking is deliberately NOT applied here. This response is
+                // cached for 300s under a key with no viewer dimension, so folding a
+                // per-viewer decision into it leaks across viewers: an admin warming
+                // the cache would expose every anonymous recommender to non-admins for
+                // the life of the entry. The unmasked identity is cached and
+                // applyViewerFlags() masks per call, alongside the other viewer flags.
+                $isAnon = ((int)$row->mask_giver === 1);
+                $isSnoozed     = $row->snoozed_monarch_id !== null
+                    && (int)$row->snoozed_monarch_id === (int)$row->current_monarch_id
+                    && (int)$row->snoozed_regent_id  === (int)$row->current_regent_id;
+                $ageDays = 0;
+                if (!empty($row->date_recommended)) {
+                    try {
+                        $ageDays = (int)(new DateTime())->diff(new DateTime($row->date_recommended))->days;
+                    } catch (\Throwable $e) {
+                    }
+                }
                 $response['AwardRecommendations'][] = array(
                     'RecommendationsId' => $row->recommendations_id,
                     'MundaneId' => $row->mundane_id,
@@ -727,8 +936,14 @@ class Report extends Ork3
                     'Rank' => $row->rank,
                     'AwardName' => $row->award_name,
                     'Reason' => $row->reason,
+                    'IsAnonymous' => $isAnon,
+                    // Dismissal is surfaced only when the caller asked for it; a
+                    // live-only page never carries these.
+                    'IsDismissed'        => !empty($row->deleted_by),
+                    'DismissedAt'        => $row->deleted_at,
+                    'DismissedByPersona' => $row->deleted_by_persona,
                     'RecommendedByName' => $row->recommended_by_persona,
-                    'RecommendedById' => $row->recommended_by_id,
+                    'RecommendedById'   => $row->recommended_by_id,
                     'MaskGiver' => $row->mask_giver,
                     'KingdomAwardId' => $row->ka_kaward_id,
                     'AwardId' => $recAwardId,
@@ -736,14 +951,24 @@ class Report extends Ork3
                     'KingdomId' => $row->kingdom_id,
                     'ParkName' => $row->park_name,
                     'KingdomName' => $row->kingdom_name,
+                    'IsRetired' => ((int)$row->m_active !== 1),
                     'AlreadyHas' => $alreadyHas,
                     'CoveredByMaster' => $coveredByMaster,
                     'CurrentRank' => $alreadyHas ? ($row->player_ka_rank ?: null) : null,
                     'CurrentRankDate' => $alreadyHas ? $row->player_ka_date : null,
+                    // Actual highest held rank for this award (always — not gated on AlreadyHas),
+                    // so the Grant modal's rank pills can shade already-earned ranks green.
+                    'HeldRank' => (int)$row->player_ka_rank,
                     'Seconds' => array(),
                     'SecondsCount' => 0,
                     'ViewerCanSecond' => false,
                     'ViewerCanEditReason' => false,
+                    'IsSnoozed' => $isSnoozed,
+                    'IsOnCourt' => $row->on_court_count > 0,
+                    'AgeDays'   => $ageDays,
+                    'PassedToLocal'   => (int)$row->passed_to_local === 1,
+                    'PassedToLocalBy' => $row->passed_to_local_by ? (int)$row->passed_to_local_by : null,
+                    'PassedToLocalAt' => $row->passed_to_local_at,
                 );
             }
 
@@ -762,16 +987,292 @@ class Report extends Ork3
         } else {
             $response['Status'] = InvalidParameter();
         }
-        $cached = Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+        if ($skipCache) {
+            $cached = $response;
+        } else {
+            $cached = Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+        }
         return $this->applyViewerFlags($cached, $viewer_id);
+    }
+
+    /**
+     * One 500-row (cluster) page of Manager recommendations, fully server-side
+     * filtered/sorted. Never selects the full set. Returns:
+     *   ['Groups' => [...≤Limit grouped rows...], 'Total' => int, 'HasMore' => bool]
+     *
+     * SkipCount (optional): the caller has established that the filter set is unchanged
+     * since it last got a Total — an offset-only infinite-scroll batch. The grouped
+     * COUNT (the same correlated subqueries as the page query, over the whole scope) is
+     * then not run at all and Total comes back NULL, meaning "keep the one you have";
+     * HasMore falls back to "this page came back full". Pass KnownTotal instead to have
+     * that previous total echoed back in place of a recomputed one.
+     */
+    public function PlayerAwardRecommendationsPage($request)
+    {
+        $limit  = max(1, (int)($request['Limit']  ?? 500));
+        $offset = max(0, (int)($request['Offset'] ?? 0));
+        $knownTotal = (isset($request['KnownTotal']) && $request['KnownTotal'] !== '' && is_numeric($request['KnownTotal']))
+            ? max(0, (int)$request['KnownTotal'])
+            : null;
+        $skipCount = ($knownTotal === null) && !empty($request['SkipCount']);
+
+        // "Show dismissed": relax the soft-delete filter. It has to move in BOTH the
+        // paging query and the hydration id lookup below, or dismissed clusters would
+        // be counted and paged but then hydrate to nothing.
+        $includeDismissed     = !empty($request['IncludeDismissed']);
+        $pageDismissedClause  = $includeDismissed
+            ? '1 = 1'
+            : '(recs.deleted_by IS NULL OR recs.deleted_by = 0)';
+
+        $scope = '';
+        if (valid_id($request['KingdomId'] ?? 0)) {
+            $kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+            $scope = " AND m.kingdom_id IN ($kidList)";
+        } elseif (valid_id($request['ParkId'] ?? 0)) {
+            $scope = ' AND m.park_id = ' . (int)$request['ParkId'];
+        }
+
+        $where = [];
+        $search = trim((string)($request['Search'] ?? ''));
+        if ($search !== '') {
+            $where[] = "m.persona LIKE '%" . addslashes($search) . "%'";
+        }
+        if (($request['Park'] ?? 'all') !== 'all' && valid_id($request['Park'] ?? 0)) {
+            $where[] = 'm.park_id = ' . (int)$request['Park'];
+        }
+        if (!empty($request['PassLocal'])) {
+            $where[] = 'recs.passed_to_local = 1';
+        }
+        $court = (string)($request['Court'] ?? 'all');
+        if ($court === 'none') {
+            $where[] = '(SELECT COUNT(*) FROM ' . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.status != 'cancelled') = 0";
+        } elseif ($court === 'any') {
+            $where[] = '(SELECT COUNT(*) FROM ' . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.status != 'cancelled') > 0";
+        } elseif (strpos($court, 'court:') === 0) {
+            $cid = (int)substr($court, 6);
+            $where[] = 'EXISTS (SELECT 1 FROM ' . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.court_id = $cid AND ca.status != 'cancelled')";
+        }
+        // Read the snoozed seat back from the scope the snooze was TAKEN at
+        // (snoozed_kingdom_id/snoozed_park_id); pre-scope snoozes stored NULL there and
+        // fall back to the recipient's own park, which is what they were written against.
+        $seatSub = function ($role) {
+            return "COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o"
+                . " WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id)"
+                . " AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id)"
+                . " AND o.role = '" . $role . "' ORDER BY o.officer_id DESC LIMIT 1), 0)";
+        };
+        $snoozedExpr = "(recs.snoozed_monarch_id IS NOT NULL"
+            . " AND recs.snoozed_monarch_id = " . $seatSub('Monarch')
+            . " AND recs.snoozed_regent_id  = " . $seatSub('Regent') . ")";
+        // Master-peerage coverage: holding a Master/peerage award covers its ladder. Mirror the
+        // PHP AlreadyHas refinement (Award::GetLadderMasterMap) in SQL so the page count is EXACT
+        // (no over-count of open/ator, no short batches).
+        $lmRows = [];
+        foreach (Award::GetLadderMasterMap() as $ladderAwardId => $lmInfo) {
+            foreach ((array)($lmInfo['MasterAwardIds'] ?? []) as $mAid) {
+                $lmRows[] = 'SELECT ' . (int)$ladderAwardId . ' AS la, ' . (int)$mAid . ' AS ma';
+            }
+        }
+        $masterCoverExpr = $lmRows
+            ? "EXISTS (SELECT 1 FROM (" . implode(' UNION ALL ', $lmRows) . ") lmx"
+                . " JOIN " . DB_PREFIX . "awards mo ON mo.mundane_id = recs.mundane_id AND mo.award_id = lmx.ma"
+                . " WHERE lmx.la = IF(IFNULL(ka.award_id,0)=0, recs.award_id, ka.award_id))"
+            : '0';
+        $alreadyExpr = "((SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa WHERE oa.mundane_id = recs.mundane_id AND oa.kingdomaward_id = ka.kingdomaward_id AND oa.rank >= COALESCE(recs.rank,0)) > 0"
+            . " OR (SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa2 WHERE oa2.mundane_id = recs.mundane_id AND oa2.award_id = recs.award_id AND oa2.rank >= COALESCE(recs.rank,0)) > 0"
+            . " OR " . $masterCoverExpr . ")";
+        // Must stay the exact SQL twin of the $isCustom test in PlayerAwardRecommendations
+        // (per-kingdom title override folded in), or the count/paging prefilter and the PHP
+        // post-filter disagree and batches come back short.
+        // Both axes use GREATEST, not COALESCE, and both must — matching class.Court.php.
+        // ork_kingdomaward.is_ladder/.is_title are tinyint NOT NULL DEFAULT 0, so
+        // COALESCE(ka.x, a.x) can never fall through to the base award. Measured on the
+        // dev snapshot: 9 kingdomawards mark a non-ladder base award as their own ladder,
+        // and those were classified "custom" (infinitely repeatable) while the title axis
+        // was already fixed. A custom award is one that is neither, under either reading.
+        $customExpr = '(GREATEST(COALESCE(ka.is_ladder, 0), COALESCE(a.is_ladder, 0)) = 0'
+            . ' AND GREATEST(COALESCE(ka.is_title, 0), COALESCE(a.is_title, 0)) = 0)';
+
+        $elig = (string)($request['Eligibility'] ?? 'open');
+        if ($elig === 'snoozed') {
+            $where[] = $snoozedExpr;
+        } elseif ($elig === 'nonladder') {
+            $where[] = 'COALESCE(recs.rank,0) = 0';
+            $where[] = "NOT $snoozedExpr";
+        } elseif ($elig === 'ator') {
+            $where[] = "NOT $customExpr AND $alreadyExpr";
+            $where[] = "NOT $snoozedExpr";
+        } elseif ($elig === 'below') {
+            $where[] = "(COALESCE(recs.rank,0) > 0) AND ($customExpr OR NOT $alreadyExpr)";
+            $where[] = "NOT $snoozedExpr";
+        } elseif ($elig === 'open') {
+            $where[] = "($customExpr OR NOT $alreadyExpr)";
+            $where[] = "NOT $snoozedExpr";
+        }
+
+        $whereSql = $where ? (' AND ' . implode(' AND ', $where)) : '';
+
+        // Advocate count for the 'supp' sort tiebreaker only (the displayed SupportCount is
+        // computed authoritatively in PHP by groupRecommendations()). MariaDB cannot correlate
+        // the outer `recs` alias through a derived table (UNION-in-FROM → "Unknown column
+        // recs.mundane_id"), so count distinct recommenders + distinct seconders as two
+        // single-level correlated subqueries summed, each excluding the recipient.
+        $supportSub = "("
+            . "(SELECT COUNT(DISTINCT r2.recommended_by_id) FROM " . DB_PREFIX . "recommendations r2 WHERE r2.mundane_id = recs.mundane_id AND r2.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r2.rank,0)=COALESCE(recs.rank,0) AND r2.recommended_by_id IS NOT NULL AND r2.recommended_by_id <> recs.mundane_id AND (r2.deleted_by IS NULL OR r2.deleted_by=0))"
+            . " + "
+            . "(SELECT COUNT(DISTINCT s.supporter_mundane_id) FROM " . DB_PREFIX . "recommendation_seconds s JOIN " . DB_PREFIX . "recommendations r3 ON r3.recommendations_id = s.recommendations_id WHERE r3.mundane_id = recs.mundane_id AND r3.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r3.rank,0)=COALESCE(recs.rank,0) AND s.supporter_mundane_id <> recs.mundane_id AND s.deleted_at IS NULL)"
+            . ")";
+
+        $dir = (strtolower((string)($request['SortDir'] ?? 'desc')) === 'asc') ? 'ASC' : 'DESC';
+        switch ((string)($request['SortKey'] ?? 'date')) {
+            case 'recip': $order = "m.persona $dir, award_name ASC, COALESCE(recs.rank,0) ASC";
+                break;
+            case 'award': $order = "award_name $dir, COALESCE(recs.rank,0) $dir, m.persona ASC";
+                break;
+            case 'rank':  $order = "COALESCE(recs.rank,0) $dir, award_name ASC, m.persona ASC";
+                break;
+            case 'supp':  $order = "support_count $dir, MIN(recs.date_recommended) DESC";
+                break;
+            case 'date':
+            default:      $order = "MIN(recs.date_recommended) $dir, m.persona ASC";
+                break;
+        }
+
+        $base = " FROM " . DB_PREFIX . "recommendations recs"
+            . " LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = recs.kingdomaward_id"
+            . " LEFT JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id"
+            . " LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id"
+            . " WHERE $pageDismissedClause"
+            . " AND (m.suspended IS NULL OR m.suspended = 0)"
+            . $scope . $whereSql;
+
+        if ($knownTotal !== null) {
+            $total = $knownTotal;
+        } elseif ($skipCount) {
+            // NULL, not 0: "not recomputed", so the caller keeps the count it has.
+            $total = null;
+        } else {
+            $this->db->Clear();
+            $cnt = $this->db->query("SELECT COUNT(*) AS n FROM (SELECT recs.mundane_id $base GROUP BY recs.mundane_id, recs.kingdomaward_id, COALESCE(recs.rank,0)) t");
+            $total = ($cnt !== false && $cnt->next()) ? (int)$cnt->n : 0;
+        }
+
+        $this->db->Clear();
+        $pageSql = "SELECT recs.mundane_id, recs.kingdomaward_id, COALESCE(recs.rank,0) AS rk,"
+            . " MIN(ifnull(ka.name, a.name)) AS award_name, MIN(recs.date_recommended) AS oldest,"
+            . " $supportSub AS support_count,"
+            . " MIN(recs.recommendations_id) AS any_rec_id"
+            . " $base"
+            . " GROUP BY recs.mundane_id, recs.kingdomaward_id, COALESCE(recs.rank,0)"
+            . " ORDER BY $order"
+            . " LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+        $pr = $this->db->query($pageSql);
+        $clusters = [];
+        if ($pr !== false) {
+            while ($pr->next()) {
+                $clusters[] = [(int)$pr->mundane_id, (int)$pr->kingdomaward_id, (int)$pr->rk];
+            }
+        }
+        if (empty($clusters)) {
+            return ['Groups' => [], 'Total' => $total, 'HasMore' => false, 'NextOffset' => $offset];
+        }
+
+        $orParts = [];
+        foreach ($clusters as $c) {
+            $orParts[] = '(recs.mundane_id = ' . $c[0] . ' AND recs.kingdomaward_id = ' . $c[1] . ' AND COALESCE(recs.rank,0) = ' . $c[2] . ')';
+        }
+        $this->db->Clear();
+        $ir = $this->db->query("SELECT recs.recommendations_id FROM " . DB_PREFIX . "recommendations recs LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE $pageDismissedClause AND (" . implode(' OR ', $orParts) . ")");
+        $pageRecIds = [];
+        if ($ir !== false) {
+            while ($ir->next()) {
+                $pageRecIds[] = (int)$ir->recommendations_id;
+            }
+        }
+
+        $hyd = $this->PlayerAwardRecommendations([
+            'KingdomId'   => (int)($request['KingdomId'] ?? 0),
+            'ParkId'      => (int)($request['ParkId'] ?? 0),
+            'PlayerId'    => 0,
+            'RequestedBy' => (int)($request['RequestedBy'] ?? 0),
+            'RecommendationsIdIn' => $pageRecIds,
+            'SkipCache'   => true,
+            'IncludeDismissed' => $includeDismissed,
+        ]);
+        $rows = is_array($hyd) && isset($hyd['AwardRecommendations']) ? $hyd['AwardRecommendations'] : [];
+
+        $groups = $this->groupRecommendations($rows);
+
+        $groups = array_values(array_filter($groups, function ($g) use ($elig) {
+            $already = !empty($g['AlreadyHas']);
+            $snoozed = !empty($g['IsSnoozed']);
+            $rank    = (int)$g['Rank'];
+            switch ($elig) {
+                case 'all':       return true;
+                case 'snoozed':   return $snoozed;
+                case 'nonladder': return $rank === 0 && !$snoozed;
+                case 'ator':      return $already && !$snoozed;
+                case 'below':     return $rank > 0 && !$already && !$snoozed;
+                case 'open':
+                default:          return !$already && !$snoozed;
+            }
+        }));
+
+        $pos = [];
+        foreach ($clusters as $i => $c) {
+            $pos[$c[0] . ':' . $c[1] . ':' . $c[2]] = $i;
+        }
+        usort($groups, function ($x, $y) use ($pos) {
+            $kx = $x['MundaneId'] . ':' . $x['KingdomAwardId'] . ':' . $x['Rank'];
+            $ky = $y['MundaneId'] . ':' . $y['KingdomAwardId'] . ':' . $y['Rank'];
+            return ($pos[$kx] ?? 1000000000) <=> ($pos[$ky] ?? 1000000000);
+        });
+
+        $nextOffset = $offset + count($clusters);   // advance by SQL page size, not post-filtered count
+        // With the count skipped there is no total to compare against, so a page that
+        // came back full is the "there is probably more" signal.
+        $hasMore = ($total === null) ? (count($clusters) >= $limit) : ($nextOffset < $total);
+        return ['Groups' => $groups, 'Total' => $total, 'HasMore' => $hasMore, 'NextOffset' => $nextOffset];
     }
 
     // Compute viewer-specific flags on top of a cached (viewer-agnostic) recommendations
     // response. IsMine and ViewerCanEditReason need no DB queries. ViewerCanSecond needs
     // two lightweight IN-list lookups.
+    /**
+     * Hide an anonymous recommender's identity from everyone but an admin.
+     *
+     * Must run per REQUEST, never at cache-write time: the recommendations response
+     * is cached under a viewer-agnostic key, so a decision made for whoever warmed
+     * the cache would be served to every other viewer for the rest of the TTL.
+     * Callers must derive any viewer flag that depends on the recommender's identity
+     * (ViewerCanEditReason, ViewerCanSecond) BEFORE calling this — afterwards the id
+     * is gone. Consumers treat a null RecommendedById as "masked" and render a dash.
+     */
+    private function maskAnonymousRecommender(array &$rec, bool $viewerIsAdmin): void
+    {
+        if (empty($rec['IsAnonymous']) || $viewerIsAdmin) {
+            return;
+        }
+        $rec['RecommendedByName'] = null;
+        $rec['RecommendedById']   = null;
+    }
+
     private function applyViewerFlags(array $response, int $viewer_id): array
     {
-        if ($viewer_id <= 0 || empty($response['AwardRecommendations'])) {
+        if (empty($response['AwardRecommendations'])) {
+            return $response;
+        }
+
+        $viewerIsAdmin = $viewer_id > 0
+            && Ork3::$Lib->authorization->HasAuthority($viewer_id, AUTH_ADMIN, 0, AUTH_EDIT);
+
+        // Logged-out / no viewer: skip the per-viewer lookups, but masking still has
+        // to happen — a signed-out visitor is emphatically not an admin.
+        if ($viewer_id <= 0) {
+            foreach ($response['AwardRecommendations'] as &$anonRec) {
+                $this->maskAnonymousRecommender($anonRec, $viewerIsAdmin);
+            }
+            unset($anonRec);
             return $response;
         }
 
@@ -816,6 +1317,9 @@ class Report extends Ork3
         foreach ($response['AwardRecommendations'] as &$rec) {
             $rid    = (int)$rec['RecommendationsId'];
             $ownKey = $rec['MundaneId'] . '|' . $rec['KingdomAwardId'] . '|' . (int)($rec['Rank'] ?? 0);
+            // Derived from the UNMASKED id on purpose: the person who filed an
+            // anonymous recommendation is still its author and may edit their own
+            // reason. Masking below then removes the id from what the viewer sees.
             $rec['ViewerCanEditReason'] = ($viewer_id === (int)$rec['RecommendedById']);
             $rec['ViewerCanSecond'] = (
                 $viewer_id !== (int)$rec['MundaneId']
@@ -827,6 +1331,7 @@ class Report extends Ork3
                 $second['IsMine'] = ((int)$second['SupporterMundaneId'] === $viewer_id);
             }
             unset($second);
+            $this->maskAnonymousRecommender($rec, $viewerIsAdmin);
         }
         unset($rec);
         return $response;
@@ -849,12 +1354,19 @@ class Report extends Ork3
         $key = Ork3::$Lib->ghettocache->key([
             'KingdomIds'    => $kidList,
             'RecommendedBy' => (int)($request['RecommendedBy'] ?? 0),
+            // Bumped when the counted predicate changes, so entries cached under the
+            // previous rule are not served for the rest of their TTL.
+            'V'             => self::REC_CACHE_VERSION,
         ]);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
             return (int)$cache;
         }
 
-        $where = "m.kingdom_id IN ($kidList) AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)";
+        // Must carry the same recipient-status predicate as PlayerAwardRecommendations and
+        // PlayerAwardRecommendationsPage, or the badge counts rows the Manager can never
+        // show and the counter can never be worked down to zero.
+        $where = "m.kingdom_id IN ($kidList) AND (m.suspended IS NULL OR m.suspended = 0)"
+            . " AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)";
         if (!empty($request['RecommendedBy'])) {
             $rb = (int)$request['RecommendedBy'];
             $where .= " AND recs.recommended_by_id = $rb";
@@ -871,15 +1383,32 @@ class Report extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $n);
     }
 
+    /**
+     * Soft-deleted (dismissed) recommendations for a scope, most recently dismissed
+     * first. Dismissals are never purged, so this is PAGED: Limit defaults to 200 and
+     * Offset walks back through the history, mirroring PlayerAwardRecommendationsPage.
+     * The response carries NextOffset; a total is deliberately NOT computed. The only
+     * consumers reach this through Model_Reports::deleted_recommended_awards, which
+     * returns just the rows, and the Kingdom/Park AJAX panels derive hasMore from a
+     * short batch — a COUNT(*) here would be a full scan nothing can read.
+     */
     public function DeletedAwardRecommendations($request)
     {
+        $limit  = max(1, min(1000, (int)($request['Limit'] ?? 200)));
+        $offset = max(0, (int)($request['Offset'] ?? 0));
+        // Only the default first page is cached. Deeper slices are rare (someone
+        // walking back through years of dismissals) and there is no wildcard bust, so
+        // caching them would leave entries no dismiss/undelete could ever clear —
+        // Player::bust_player_award_recs_cache busts this exact key shape.
+        $cacheable = ($offset === 0 && $limit === 200);
         $key = Ork3::$Lib->ghettocache->key([
             'KingdomId' => (int)($request['KingdomId'] ?? 0),
             'ParkId'    => (int)($request['ParkId']    ?? 0),
             'PlayerId'  => (int)($request['PlayerId']  ?? 0),
             'Deleted'   => 1,
+            'V'         => self::REC_CACHE_VERSION,
         ]);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
+        if ($cacheable && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
             return $cache;
         }
 
@@ -924,7 +1453,8 @@ class Report extends Ork3
 			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
 			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 			WHERE recs.deleted_at IS NOT NULL $location_clause
-			order by recs.deleted_at DESC";
+			order by recs.deleted_at DESC
+			LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
         $this->db->Clear();
         $r = $this->db->query($sql);
         $response = ['AwardRecommendations' => []];
@@ -955,6 +1485,10 @@ class Report extends Ork3
             $response['Status'] = Success();
         } else {
             $response['Status'] = Success();
+        }
+        $response['NextOffset'] = $offset + count($response['AwardRecommendations']);
+        if (!$cacheable) {
+            return $response;
         }
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
     }
@@ -5581,6 +6115,394 @@ class Report extends Ork3
             ),
         );
 
+        // ====================================================================
+        // RELEASE 3.5.6 — Crown  (Court Planner + Recommendations workflow)
+        // ====================================================================
+        // Every Crown table/column below is new this release, so these are pure
+        // post-launch adoption counts. A before/after activity-impact pass is
+        // deferred for the same reason as Rose: with ~0 days of "after" window
+        // the comparison would be noise, not signal.
+        //
+        // ork_court has no creation timestamp (only `modified`), so nothing here
+        // is windowed by when a court was made. The one time axis available is
+        // court_date — the day the ceremony is held.
+        $activeParks = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}park` WHERE active = 'Active'"
+        );
+        // Share of an arbitrary base, for KPIs that are not player-scoped.
+        $share = function ($value, $of) {
+            if ($of <= 0) {
+                return null;
+            }
+            return round(($value / $of) * 100, 1);
+        };
+
+        // --- Court Planner ----------------------------------------------------
+        $courts        = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court`");
+        $courtsKingdom = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court` WHERE park_id = 0");
+        $courtsPark    = $courts - $courtsKingdom;
+        // A park court carries its kingdom_id too, so this is "kingdoms where a
+        // court has been planned at either level". Joined to active kingdoms so
+        // the numerator can never exceed the denominator.
+        $courtKingdoms = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT c.kingdom_id) AS c
+               FROM `{$p}court` c
+               JOIN `{$p}kingdom` k ON k.kingdom_id = c.kingdom_id AND k.active = 'Active'"
+        );
+        $courtParks = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT c.park_id) AS c
+               FROM `{$p}court` c
+               JOIN `{$p}park` pk ON pk.park_id = c.park_id AND pk.active = 'Active'
+              WHERE c.park_id > 0"
+        );
+        $courtAwards = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id"
+        );
+        $courtAwardAvg = ($courts > 0) ? round($courtAwards / $courts, 1) : 0;
+        $courtFromRec  = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              WHERE ca.recommendations_id IS NOT NULL AND ca.recommendations_id > 0"
+        );
+        $courtPlanners = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT created_by) AS c FROM `{$p}court` WHERE created_by > 0"
+        );
+        $courtStatusBreak = $this->_rfuBreakdown(
+            "SELECT CASE status
+                        WHEN 'draft'     THEN 'Planning (draft)'
+                        WHEN 'published' THEN 'Published'
+                        ELSE 'Complete'
+                    END AS k, COUNT(*) AS c
+               FROM `{$p}court`
+              GROUP BY status ORDER BY FIELD(status, 'draft', 'published', 'complete')"
+        );
+        $courtMonthBreak = $this->_rfuBreakdown(
+            "SELECT DATE_FORMAT(MIN(court_date), '%b %Y') AS k, COUNT(*) AS c
+               FROM `{$p}court`
+              WHERE court_date IS NOT NULL
+                AND court_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+              GROUP BY DATE_FORMAT(court_date, '%Y-%m') ORDER BY MIN(court_date) ASC"
+        );
+        $featCourtPlanner = array(
+            'key'         => 'court_planner',
+            'title'       => 'Court Planner',
+            'description' => 'Kingdom and park officers plan a court as an ordered list of awards — drawn from recommendations or added directly — before it is held.',
+            'kpis' => array(
+                $this->_rfuKpi('Courts planned', $courts, null, null, $courtsKingdom . ' kingdom courts, ' . $courtsPark . ' park courts — every court created, whatever its status'),
+                $this->_rfuKpi('Kingdoms with a court planned', $courtKingdoms, $activeKingdoms, $kPct($courtKingdoms), 'active kingdoms where at least one court has been planned, at kingdom or park level', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Parks with a court planned', $courtParks, $activeParks, $share($courtParks, $activeParks), 'active parks with at least one park-level court', null, null, 'of active parks'),
+                $this->_rfuKpi('Officers planning courts', $courtPlanners, null, null, 'distinct players who have created a court'),
+                $this->_rfuKpi('Awards placed on a court', $courtAwards, null, null, 'award lines across every court, in any state'),
+                $this->_rfuKpi('Average awards per court', $courtAwardAvg, null, null, 'award lines ÷ courts planned', null, null, null, null, 1),
+                $this->_rfuKpi('Court awards drawn from a recommendation', $courtFromRec, $courtAwards, $share($courtFromRec, $courtAwards), 'lines added from a pending recommendation rather than as a walk-on award or title', null, null, 'of court awards'),
+            ),
+            'charts' => array(
+                $this->_rfuChartFromBreakdown('rfu-court-status', 'bar', 'Courts by status', $courtStatusBreak, 'Courts'),
+                $this->_rfuChartFromBreakdown('rfu-court-month', 'column', 'Courts by court date (last 12 months and upcoming)', $courtMonthBreak, 'Courts'),
+            ),
+            'links' => array(
+                $this->_rfuKingdomTileFromSql(
+                    'Kingdoms with a court planned',
+                    "SELECT k.kingdom_id, k.name, COUNT(*) AS c
+                       FROM `{$p}court` c
+                       JOIN `{$p}kingdom` k ON k.kingdom_id = c.kingdom_id AND k.active = 'Active'
+                      GROUP BY k.kingdom_id, k.name ORDER BY k.name ASC",
+                    'court',
+                    'courts'
+                ),
+            ),
+        );
+
+        // --- Running & recording court ---------------------------------------
+        // Granting at court only STAGES a line; nothing reaches the permanent
+        // award record until the court is finalized. 'given' is therefore the
+        // honest "awarded through a court" count, and 'staged' is reported
+        // beside it rather than folded in.
+        $courtsComplete = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court` WHERE status = 'complete'");
+        $courtsPrinted  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court` WHERE last_printed_at IS NOT NULL");
+        $courtsOverdue  = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}court`
+              WHERE status = 'published' AND court_date IS NOT NULL AND court_date < CURDATE()"
+        );
+        $awardsGiven    = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              WHERE ca.status = 'given'"
+        );
+        $awardsStaged   = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              WHERE ca.status = 'staged'"
+        );
+        $awardsSkipped  = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              WHERE ca.status = 'cancelled'"
+        );
+        $recordReminders = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}notification` WHERE type = 'court_awaiting_record'"
+        );
+        $courtLineBreak = $this->_rfuBreakdown(
+            "SELECT CASE ca.status
+                        WHEN 'planned'   THEN 'Planned'
+                        WHEN 'announced' THEN 'Announced'
+                        WHEN 'staged'    THEN 'Granted, awaiting finalize'
+                        WHEN 'given'     THEN 'Given (on the record)'
+                        ELSE 'Skipped'
+                    END AS k, COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              GROUP BY ca.status
+              ORDER BY FIELD(ca.status, 'planned', 'announced', 'staged', 'given', 'cancelled')"
+        );
+        // Mode is chosen when a court is published, so drafts (which only carry
+        // the column default) are left out.
+        $courtModeBreak = $this->_rfuBreakdown(
+            "SELECT CASE mode WHEN 'plan' THEN 'Plan (record afterwards)' ELSE 'Run at Court (live)' END AS k,
+                    COUNT(*) AS c
+               FROM `{$p}court`
+              WHERE status IN ('published', 'complete')
+              GROUP BY mode ORDER BY c DESC"
+        );
+        $recentCourtRows = array();
+        $this->db->Clear();
+        $r = $this->db->query(
+            "SELECT court_id, name, court_date
+               FROM `{$p}court`
+              WHERE status = 'complete' AND name <> ''
+              ORDER BY court_date DESC, court_id DESC LIMIT 5"
+        );
+        if ($r !== false) {
+            while ($r->next()) {
+                $recentCourtRows[] = array(
+                    'label' => $r->name,
+                    'route' => 'Reports/court&CourtId=' . (int)$r->court_id,
+                    'sub'   => $this->_rfuNiceDate($r->court_date),
+                );
+            }
+        }
+        $featCourtRun = array(
+            'key'         => 'court_run',
+            'title'       => 'Running & Recording Court',
+            'description' => 'A published court is run live or recorded afterwards from the printed packet. Grants are staged at court and written to the permanent award record when the court is completed.',
+            'kpis' => array(
+                $this->_rfuKpi('Courts completed', $courtsComplete, $courts, $share($courtsComplete, $courts), 'finalized — every grant on them is on the permanent award record', null, null, 'of courts planned'),
+                $this->_rfuKpi('Awards granted through a court', $awardsGiven, null, null, 'court lines committed to a player\'s award record at Finalize; ' . $awardsStaged . ' more granted at court and awaiting Finalize'),
+                $this->_rfuKpi('Awards skipped at court', $awardsSkipped, $courtAwards, $share($awardsSkipped, $courtAwards), 'planned lines marked skipped rather than given', null, null, 'of court awards'),
+                $this->_rfuKpi('Court packets printed', $courtsPrinted, $courts, $share($courtsPrinted, $courts), 'courts whose Order of Court / Court Record / Prep Sheet packet has been printed at least once', null, null, 'of courts planned'),
+                $this->_rfuKpi('Published courts past their date', $courtsOverdue, null, null, 'published, dated before today and not yet completed — held but still waiting to be recorded'),
+                $this->_rfuKpi('Unrecorded-court reminders sent', $recordReminders, null, null, 'in-app nudges sent to a court\'s recorder when a published court has nothing recorded'),
+            ),
+            'charts' => array(
+                $this->_rfuChartFromBreakdown('rfu-court-lines', 'bar', 'Court award lines by status', $courtLineBreak, 'Award lines'),
+                $this->_rfuChartFromBreakdown('rfu-court-mode', 'pie', 'Published courts: run live vs record afterwards', $courtModeBreak),
+            ),
+            'links' => array(
+                $this->_rfuLinkTile('Most recent completed courts (public Court Report)', $recentCourtRows),
+            ),
+        );
+
+        // --- Scrolls, regalia & artisan credit --------------------------------
+        // Tracking status: 0 = not tracked, 1 = in progress, 2 = done.
+        $scrollTracked  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_status > 0");
+        $scrollDone     = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_status = 2");
+        $regaliaTracked = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_status > 0");
+        $regaliaDone    = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_status = 2");
+        $scrollMakers   = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_maker_id > 0");
+        $regaliaMakers  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_maker_id > 0");
+        $artisanCredits = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award_artisan` WHERE mundane_id > 0");
+        $artisanPeople  = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT who) AS c FROM (
+                    SELECT scroll_maker_id AS who FROM `{$p}court_award` WHERE scroll_maker_id > 0
+                    UNION
+                    SELECT regalia_maker_id FROM `{$p}court_award` WHERE regalia_maker_id > 0
+                    UNION
+                    SELECT mundane_id FROM `{$p}court_award_artisan` WHERE mundane_id > 0
+                ) credited"
+        );
+        $featCourtArtisans = array(
+            'key'         => 'court_artisans',
+            'title'       => 'Scrolls, Regalia & Artisans',
+            'description' => 'Each court award can track whether its scroll and regalia are ready, and credit the people who made them — credit the herald reads out and the public Court Report prints.',
+            'kpis' => array(
+                $this->_rfuKpi('Awards with scroll tracking', $scrollTracked, $courtAwards, $share($scrollTracked, $courtAwards), $scrollDone . ' marked done, ' . ($scrollTracked - $scrollDone) . ' in progress', null, null, 'of court awards'),
+                $this->_rfuKpi('Awards with regalia tracking', $regaliaTracked, $courtAwards, $share($regaliaTracked, $courtAwards), $regaliaDone . ' marked done, ' . ($regaliaTracked - $regaliaDone) . ' in progress', null, null, 'of court awards'),
+                $this->_rfuKpi('Awards with a scroll maker credited', $scrollMakers, $courtAwards, $share($scrollMakers, $courtAwards), 'court awards naming the scribe who made the scroll', null, null, 'of court awards'),
+                $this->_rfuKpi('Awards with a regalia maker credited', $regaliaMakers, $courtAwards, $share($regaliaMakers, $courtAwards), 'court awards naming who made the belt, medallion or other regalia', null, null, 'of court awards'),
+                $this->_rfuKpi('Contributing artisan credits', $artisanCredits, null, null, 'additional "artisans to thank" entries beyond the scroll and regalia makers'),
+                $this->_rfuKpi('Artisans credited', $artisanPeople, $denom, $pct($artisanPeople), 'distinct players credited as a scroll maker, regalia maker or contributing artisan'),
+            ),
+            'charts' => array(
+                array(
+                    'id'         => 'rfu-court-tracking',
+                    'type'       => 'column',
+                    'title'      => 'Scroll and regalia readiness on tracked awards',
+                    'categories' => array('In progress', 'Done'),
+                    'series'     => array(
+                        array('name' => 'Scrolls', 'data' => array($scrollTracked - $scrollDone, $scrollDone)),
+                        array('name' => 'Regalia', 'data' => array($regaliaTracked - $regaliaDone, $regaliaDone)),
+                    ),
+                ),
+            ),
+        );
+
+        // --- Recommendations Manager workflow --------------------------------
+        // All four counts are of OPEN recommendations (deleted_at IS NULL): a
+        // recommendation that has since been granted or dismissed is resolved,
+        // so its flags no longer describe anything an officer is working with.
+        // The base is the same open-recommendation total the page header shows.
+        $recsPassed = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}recommendations`
+              WHERE deleted_at IS NULL AND passed_to_local = 1"
+        );
+        $recsPassedKingdoms = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT m.kingdom_id) AS c
+               FROM `{$p}recommendations` recs
+               JOIN `{$p}mundane` m ON m.mundane_id = recs.mundane_id
+               JOIN `{$p}kingdom` k ON k.kingdom_id = m.kingdom_id AND k.active = 'Active'
+              WHERE recs.deleted_at IS NULL AND recs.passed_to_local = 1"
+        );
+        // snoozed_by_id is the mark that an officer snoozed a recommendation; only
+        // an explicit un-snooze clears it. A snooze stops hiding the recommendation
+        // on its own once the throne it was taken against changes hands, and a
+        // scope with a vacant throne stores no snoozed_monarch_id at all — so this
+        // is "open recommendations an officer has snoozed", lapsed ones included.
+        // A usage count, not a count of what is hidden right now.
+        $recsSnoozed = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}recommendations`
+              WHERE deleted_at IS NULL AND snoozed_by_id > 0"
+        );
+        $recsSnoozers = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT snoozed_by_id) AS c FROM `{$p}recommendations`
+              WHERE deleted_at IS NULL AND snoozed_by_id > 0"
+        );
+        // Skipped court lines do not count: the recommendation is no longer
+        // actually queued for a court.
+        $recsOnCourt = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT ca.recommendations_id) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}recommendations` recs
+                 ON recs.recommendations_id = ca.recommendations_id AND recs.deleted_at IS NULL
+              WHERE ca.status <> 'cancelled'"
+        );
+        $recsGrantedAtCourt = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c
+               FROM `{$p}court_award` ca
+               JOIN `{$p}court` c ON c.court_id = ca.court_id
+              WHERE ca.status = 'given'
+                AND ca.recommendations_id IS NOT NULL AND ca.recommendations_id > 0"
+        );
+        $recsAnonymous = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}recommendations`
+              WHERE deleted_at IS NULL AND mask_giver = 1"
+        );
+        $recsPassedByKingdom = $this->_rfuBreakdown(
+            "SELECT k.name AS k, COUNT(*) AS c
+               FROM `{$p}recommendations` recs
+               JOIN `{$p}mundane` m ON m.mundane_id = recs.mundane_id
+               JOIN `{$p}kingdom` k ON k.kingdom_id = m.kingdom_id
+              WHERE recs.deleted_at IS NULL AND recs.passed_to_local = 1
+              GROUP BY k.kingdom_id, k.name ORDER BY c DESC, k.name ASC LIMIT 10"
+        );
+        $featRecsWorkflow = array(
+            'key'         => 'recs_workflow',
+            'title'       => 'Recommendations Manager',
+            'description' => 'Officers work the recommendation queue from one page: pass a recommendation down to the recipient\'s park, snooze it until the next monarchy, put it on a court, or grant it directly.',
+            'kpis' => array(
+                $this->_rfuKpi('Recommendations passed to a local park', $recsPassed, $activeRecommendations, $share($recsPassed, $activeRecommendations), 'open recommendations a kingdom has approved and handed down for the recipient\'s park to give', null, null, 'of open recommendations'),
+                $this->_rfuKpi('Kingdoms passing recommendations down', $recsPassedKingdoms, $activeKingdoms, $kPct($recsPassedKingdoms), 'active kingdoms with at least one open passed-down recommendation', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Recommendations snoozed', $recsSnoozed, $activeRecommendations, $share($recsSnoozed, $activeRecommendations), 'open recommendations an officer has set aside until the next monarchy — includes snoozes that have since lapsed with a change of throne', null, null, 'of open recommendations'),
+                $this->_rfuKpi('Officers who have snoozed', $recsSnoozers, null, null, 'distinct officers behind those snoozes'),
+                $this->_rfuKpi('Recommendations on a court plan', $recsOnCourt, $activeRecommendations, $share($recsOnCourt, $activeRecommendations), 'open recommendations currently queued on a court (skipped lines excluded)', null, null, 'of open recommendations'),
+                $this->_rfuKpi('Recommendations granted through a court', $recsGrantedAtCourt, $awardsGiven, $share($recsGrantedAtCourt, $awardsGiven), 'finalized court awards that began as a recommendation', null, null, 'of awards granted through a court'),
+                $this->_rfuKpi('Anonymous recommendations', $recsAnonymous, $activeRecommendations, $share($recsAnonymous, $activeRecommendations), 'open recommendations submitted with the recommender\'s name hidden', null, null, 'of open recommendations'),
+            ),
+            'charts' => array(
+                array(
+                    'id'         => 'rfu-recs-actions',
+                    'type'       => 'bar',
+                    'title'      => 'Open recommendations by workflow state',
+                    'categories' => array('Passed to local park', 'Snoozed', 'On a court plan', 'Anonymous'),
+                    'series'     => array(
+                        array('name' => 'Recommendations', 'data' => array($recsPassed, $recsSnoozed, $recsOnCourt, $recsAnonymous)),
+                    ),
+                ),
+                $this->_rfuChartFromBreakdown('rfu-recs-passed-kingdom', 'bar', 'Passed-down recommendations by kingdom (top 10)', $recsPassedByKingdom, 'Recommendations'),
+            ),
+            'links' => array(
+                $this->_rfuKingdomTileFromSql(
+                    'Kingdoms passing recommendations down',
+                    "SELECT k.kingdom_id, k.name, COUNT(*) AS c
+                       FROM `{$p}recommendations` recs
+                       JOIN `{$p}mundane` m ON m.mundane_id = recs.mundane_id
+                       JOIN `{$p}kingdom` k ON k.kingdom_id = m.kingdom_id AND k.active = 'Active'
+                      WHERE recs.deleted_at IS NULL AND recs.passed_to_local = 1
+                      GROUP BY k.kingdom_id, k.name ORDER BY k.name ASC",
+                    'passed down',
+                    'passed down'
+                ),
+            ),
+        );
+
+        // --- Grant notifications ---------------------------------------------
+        // ork_notification is a general store, so every count is pinned to the
+        // two types this release writes when a recommendation is granted.
+        $notifRecommender = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}notification` WHERE type = 'rec_granted'"
+        );
+        $notifSeconder = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}notification` WHERE type = 'second_granted'"
+        );
+        $notifPlayers = $this->_rfuScalar(
+            "SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}notification`
+              WHERE type IN ('rec_granted', 'second_granted')"
+        );
+        $notifRead = $this->_rfuScalar(
+            "SELECT COUNT(*) AS c FROM `{$p}notification`
+              WHERE type IN ('rec_granted', 'second_granted') AND read_at IS NOT NULL"
+        );
+        $notifSent = $notifRecommender + $notifSeconder;
+        $featRecNotifications = array(
+            'key'         => 'rec_notifications',
+            'title'       => 'Grant Notifications',
+            'description' => 'When a recommendation is granted — at court or straight from the manager — the people who recommended and seconded it are told on their own profile.',
+            'kpis' => array(
+                $this->_rfuKpi('Recommenders told their recommendation was granted', $notifRecommender, null, null, 'notifications to the player who wrote the recommendation'),
+                $this->_rfuKpi('Seconders told the recommendation was granted', $notifSeconder, null, null, 'notifications to players who seconded it'),
+                $this->_rfuKpi('Players notified', $notifPlayers, $denom, $pct($notifPlayers), 'distinct players who have received at least one grant notification'),
+                $this->_rfuKpi('Grant notifications read', $notifRead, $notifSent, $share($notifRead, $notifSent), 'marked read by opening the Notifications card on the player\'s own profile', null, null, 'of grant notifications sent'),
+            ),
+            'charts' => array(
+                array(
+                    'id'         => 'rfu-rec-notif',
+                    'type'       => 'pie',
+                    'title'      => 'Grant notifications by recipient',
+                    'categories' => array('Recommenders', 'Seconders'),
+                    'data'       => array($notifRecommender, $notifSeconder),
+                ),
+            ),
+        );
+
+        $release356 = array(
+            'version' => '3.5.6',
+            'name'    => 'Crown',
+            'date'    => '2026-10-09',
+            'blurb'   => 'Court Planner and the Recommendations Manager: plan a court, run it or record it from the printed packet, credit the artisans, and work the recommendation queue — pass down, snooze, queue for court or grant — from one page.',
+            'features' => array(
+                $featCourtPlanner,
+                $featCourtRun,
+                $featCourtArtisans,
+                $featRecsWorkflow,
+                $featRecNotifications,
+            ),
+        );
+
         $release355 = array(
             'version' => '3.5.5',
             'name'    => 'Hydra',
@@ -6505,7 +7427,7 @@ class Report extends Ork3
                 'players_with_design'    => (int)$playersWithDesign,
                 'active_recommendations' => (int)$activeRecommendations,
             ),
-            'releases' => array($release355, $release354, $release353, $release352, $release351, $release350),
+            'releases' => array($release356, $release355, $release354, $release353, $release352, $release351, $release350),
         );
     }
 
@@ -6764,6 +7686,33 @@ class Report extends Ork3
                 $rows[] = array(
                     'label' => $r->name,
                     'route' => 'Kingdom/index/' . (int)$r->kingdom_id,
+                );
+            }
+        }
+        return $this->_rfuLinkTile($title, $rows);
+    }
+
+    /**
+     * Build a link tile listing kingdoms from a caller-supplied query. The query
+     * must select kingdom_id, name and a count aliased `c`; each tile row links to
+     * the kingdom and carries "<c> <noun>" as its subtitle. $sql is assembled from
+     * code constants by the caller, never from user input.
+     *
+     * @param string $singular Subtitle noun when c is 1 (e.g. 'court').
+     * @param string $plural   Subtitle noun otherwise (e.g. 'courts').
+     */
+    private function _rfuKingdomTileFromSql($title, $sql, $singular, $plural)
+    {
+        $this->db->Clear();
+        $rows = array();
+        $r = $this->db->query($sql);
+        if ($r !== false) {
+            while ($r->next()) {
+                $count  = (int)$r->c;
+                $rows[] = array(
+                    'label' => $r->name,
+                    'route' => 'Kingdom/index/' . (int)$r->kingdom_id,
+                    'sub'   => number_format($count) . ' ' . ($count === 1 ? $singular : $plural),
                 );
             }
         }
@@ -7122,12 +8071,14 @@ class Report extends Ork3
         $this->db->Clear();
         $awardResult = $this->db->DataSet($kSql);
         $awardCols = [];
+        $realAwardIds = [];
         if ($awardResult) {
             while ($awardResult->Next()) {
                 if (!$awardResult->award_id) {
                     continue;
                 }
                 $name = $awardResult->award_name;
+                $realAwardIds[] = (int) $awardResult->award_id;
                 $awardCols[(int) $awardResult->award_id] = [
                     'Name' => $name,
                     'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
@@ -7136,11 +8087,125 @@ class Report extends Ork3
             }
         }
 
+        // Kingdom-original ladders (Order of the Hunter and friends) have no
+        // ork_award row at all, so the join above cannot reach them and
+        // a.is_ladder is never 1 for them. They were silently absent from this
+        // grid -- Northern Lights showed 15 columns and no Hunter, against 455
+        // grants. Add them as their own columns, keyed "k<kingdomaward_id>"
+        // because they all share award_id 0 and would otherwise collide.
+        // The template keys columns opaquely and already has an ungrouped
+        // (KnightGroup = '') bucket, so it needs no change.
+        $pseudoKaIds = [];
+        $pseudoScopeKingdomId = $kingdomId;
+        if ($pseudoScopeKingdomId <= 0 && $parkId > 0) {
+            $this->db->Clear();
+            $pkr = $this->db->DataSet(
+                'SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId . ' LIMIT 1'
+            );
+            if ($pkr && $pkr->Next()) {
+                $pseudoScopeKingdomId = (int) $pkr->kingdom_id;
+            }
+        }
+
+        // Walk up the parent_kingdom_id chain. A principality's members hold the
+        // PARENT kingdom's awards -- 45 active Painted Skies players hold Northern
+        // Lights' Order of the Hunter -- so the parent's kingdom-original ladders
+        // belong on the principality's grid. Real ladders already behave this way
+        // for free, because they resolve through ka.award_id to one shared
+        // ork_award row no matter which kingdom granted them; only these, keyed
+        // per kingdom, needed saying out loud.
+        // Visited set + depth cap, mirroring Authorization::HasAuthority, so a
+        // corrupt or cyclic parent_kingdom_id cannot loop.
+        $scopeKingdomIds = [];
+        $walk = $pseudoScopeKingdomId;
+        while ($walk > 0 && !in_array($walk, $scopeKingdomIds, true) && count($scopeKingdomIds) < 10) {
+            $scopeKingdomIds[] = $walk;
+            $this->db->Clear();
+            $pr = $this->db->DataSet(
+                'SELECT parent_kingdom_id FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $walk . ' LIMIT 1'
+            );
+            $walk = ($pr && $pr->Next()) ? (int) $pr->parent_kingdom_id : 0;
+        }
+
+        // One column per LADDER, not per kingdomaward row. A principality that
+        // splits off keeps running the parent's ladder under a row of its own:
+        // all four Crimson Sands players who hold both Roach rows continue the
+        // numbering rather than restarting (DW 1,2,3 -> CS 4,5,6), and the dates
+        // confirm the order. Splitting those across two columns would cut one
+        // person's progression in half, so rows whose names agree once
+        // "Order of the" is stripped are merged and the grid shows their best.
+        $pseudoCandidates = Award::pseudoLadderKingdomAwardIds();
+        $pseudoGroups = [];
+        if ($scopeKingdomIds !== [] && $pseudoCandidates !== []) {
+            $this->db->Clear();
+            $pseudoResult = $this->db->DataSet(
+                'SELECT ka.kingdomaward_id, ka.kingdom_id, ka.name AS award_name
+                 FROM ' . DB_PREFIX . 'kingdomaward ka
+                 WHERE ka.kingdom_id IN (' . implode(',', $scopeKingdomIds) . ')
+                   AND ka.kingdomaward_id IN (' . implode(',', array_map('intval', $pseudoCandidates)) . ')
+                 ORDER BY ka.name'
+            );
+            if ($pseudoResult) {
+                while ($pseudoResult->Next()) {
+                    $kaId = (int) $pseudoResult->kingdomaward_id;
+                    if (!$kaId) {
+                        continue;
+                    }
+                    $name = $pseudoResult->award_name;
+                    $display = preg_replace('/^Order of (?:the )?/i', '', $name);
+                    $slug = strtolower(trim($display));
+                    $isOwn = (int) $pseudoResult->kingdom_id === $pseudoScopeKingdomId;
+                    if (!isset($pseudoGroups[$slug])) {
+                        $pseudoGroups[$slug] = [
+                            'Name' => $name,
+                            'DisplayName' => $display,
+                            'KaIds' => [],
+                            'OwnKaId' => 0,
+                        ];
+                    }
+                    $pseudoGroups[$slug]['KaIds'][] = $kaId;
+                    // Prefer this kingdom's own row for the column key and label;
+                    // an inherited-only ladder keeps the ancestor's wording.
+                    if ($isOwn && !$pseudoGroups[$slug]['OwnKaId']) {
+                        $pseudoGroups[$slug]['OwnKaId'] = $kaId;
+                        $pseudoGroups[$slug]['Name'] = $name;
+                        $pseudoGroups[$slug]['DisplayName'] = $display;
+                    }
+                }
+            }
+        }
+
+        $pseudoKaIds = [];
+        $pseudoKeyCases = [];
+        foreach ($pseudoGroups as $group) {
+            $primary = $group['OwnKaId'] ?: min($group['KaIds']);
+            $key = 'k' . $primary;
+            $awardCols[$key] = [
+                'Name' => $group['Name'],
+                'DisplayName' => $group['DisplayName'],
+                'KnightGroup' => $knightGroupMap[$group['Name']] ?? '',
+            ];
+            $pseudoKaIds = array_merge($pseudoKaIds, $group['KaIds']);
+            $pseudoKeyCases[] = 'WHEN ka.kingdomaward_id IN (' . implode(',', $group['KaIds'])
+                . ") THEN '" . $key . "'";
+        }
+
         if ($awardCols === []) {
             return ['ScopeName' => $scopeName, 'LadderAwards' => [], 'GridRows' => []];
         }
 
-        $awardIds = implode(',', array_keys($awardCols));
+        $realIdList = $realAwardIds !== [] ? implode(',', $realAwardIds) : '0';
+        $pseudoIdList = $pseudoKaIds !== [] ? implode(',', $pseudoKaIds) : '0';
+        // Maps each kingdomaward row onto its merged column key; falls through to
+        // the numeric award_id for real ladders. Pseudo rows are tested FIRST --
+        // 12 of the 25 point at award_id 94 ("Custom Award"), so testing award_id
+        // would file them under a column that does not exist.
+        $pseudoCaseSql = $pseudoKeyCases !== []
+            ? 'CASE ' . implode(' ', $pseudoKeyCases) . ' ELSE CAST(a.award_id AS CHAR) END'
+            : 'CAST(a.award_id AS CHAR)';
+        // Cache key must cover both sets or a kingdom gaining a pseudo-ladder
+        // would keep serving the old grid.
+        $awardIds = $realIdList . '|k' . $pseudoIdList;
         $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
         $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
         if ($cachedGrid !== false) {
@@ -7155,18 +8220,30 @@ class Report extends Ork3
             ? 'AND m.park_id = ' . $parkId
             : ($kingdomId > 0 ? 'AND m.kingdom_id = ' . $kingdomId : '');
 
-        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name, a.award_id,
-                           GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
+        // LEFT JOIN to ork_award, not JOIN: a kingdom-original ladder may have no
+        // row there at all. col_key matches the $awardCols keys built above --
+        // "k<kingdomaward_id>" for pseudo-ladders, the numeric award_id otherwise.
+        //
+        // The pseudo-ladder test comes FIRST and is membership-based, not
+        // "award_id = 0": 12 of the 25 point at award_id 94 ("Custom Award"), so
+        // testing award_id would file Order of the Sharpshooter and friends under
+        // column 94 -- which is not even a column here, so they would vanish again.
+        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name,
+                           {$pseudoCaseSql} AS col_key,
+                           MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count
                     FROM " . DB_PREFIX . 'mundane m
                     LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
                     JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
                     JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-                    JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
-                    WHERE m.active = 1 AND a.is_ladder = 1
-                      AND a.award_id IN (' . $awardIds . ")
+                    LEFT JOIN ' . DB_PREFIX . "award a ON a.award_id = ka.award_id
+                    WHERE m.active = 1
+                      AND (
+                            (a.is_ladder = 1 AND a.award_id IN ({$realIdList}))
+                         OR ka.kingdomaward_id IN ({$pseudoIdList})
+                          )
                       AND (ma.revoked = 0 OR ma.revoked IS NULL)
                       {$locationClause}
-                    GROUP BY m.mundane_id, a.award_id
+                    GROUP BY m.mundane_id, col_key
                     ORDER BY m.persona";
 
         $this->db->Clear();
@@ -7175,8 +8252,10 @@ class Report extends Ork3
         if ($dataResult) {
             while ($dataResult->Next()) {
                 $mid = (int) $dataResult->mundane_id;
-                $aid = (int) $dataResult->award_id;
-                if (!$mid || !$aid) {
+                // Keep as-is: PHP casts "25" to int 25 on array write, while
+                // "k7513" stays a string, matching $awardCols.
+                $aid = $dataResult->col_key;
+                if (!$mid || $aid === null || $aid === '' || $aid === '0') {
                     continue;
                 }
                 if (!isset($playerData[$mid])) {
@@ -7189,7 +8268,20 @@ class Report extends Ork3
                         'Awards' => [],
                     ];
                 }
-                $val = (int) $dataResult->award_count;
+                // Real columns keep the long-standing GREATEST(max rank, grant
+                // count): some ladders are tracked by repeat grants at rank 0,
+                // where the count IS the level.
+                //
+                // Merged kingdom columns cannot use the count. They span two
+                // kingdomaward rows, so a duplicate grant inflates it past the
+                // real rank -- Squire Countess Gemini has 7 Roach rows (a rank 5
+                // recorded twice) but reached 6, and the count would show 7.
+                // Fall back to the count only when no rank was ever recorded.
+                $_max = (int) $dataResult->max_rank;
+                $_count = (int) $dataResult->grant_count;
+                $val = (is_string($aid) && $aid !== '' && $aid[0] === 'k')
+                    ? ($_max > 0 ? $_max : $_count)
+                    : max($_max, $_count);
                 $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
             }
         }
