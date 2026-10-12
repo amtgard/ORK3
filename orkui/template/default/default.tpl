@@ -530,6 +530,8 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 }
 </style>
 
+<?php include __DIR__ . '/Home_idp_nudge.tpl'; ?>
+
 <!-- =============================================
      Downtime Info Box
      ============================================= -->
