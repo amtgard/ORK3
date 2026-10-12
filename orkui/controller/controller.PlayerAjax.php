@@ -167,6 +167,115 @@ class Controller_PlayerAjax extends Controller
                 ? json_encode(['status' => 0])
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
+        } elseif ($action === 'grantaward') {
+            // JSON grant path for the Recommendations Manager's Grant Award modal.
+            // Thin wrapper over add_player_award so the modal can surface real
+            // validation/auth errors instead of the HTML Admin/addaward page.
+            $kingdomaward_id = (int)($_POST['KingdomAwardId'] ?? 0);
+            $given_by_id     = (int)($_POST['GivenById']      ?? 0);
+            $rank            = (int)($_POST['Rank']           ?? 0);
+            $date            = trim($_POST['Date'] ?? '');
+            $note            = trim($_POST['Note'] ?? '');
+            if (!valid_id($kingdomaward_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid award.']);
+                exit;
+            }
+            if (!valid_id($given_by_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Choose who granted this award.']);
+                exit;
+            }
+            if ($date === '') {
+                echo json_encode(['status' => 1, 'error' => 'A date is required.']);
+                exit;
+            }
+            // Ledger duplicate probe. The Manager's Grant has no guard at all, and its
+            // rows are stale 500-row batches, so two officers triaging the same backlog
+            // write two identical ork_awards rows. Predicate: same kingdomaward, same
+            // normalized rank, same date, and the award is non-repeatable (ladder or
+            // title) — a CUSTOM award (neither flag) is legitimately repeatable and is
+            // never flagged.
+            //
+            // ADVISORY ONLY — this can never refuse a grant. It is read BEFORE the
+            // write (afterwards the new row would match itself) and reported ALONGSIDE
+            // the successful grant on the normal status:0 payload, exactly like
+            // courtWarning below. There is deliberately NO confirm flag: a two-step
+            // "grant anyway?" needs a client that can send the override, and any path
+            // where the client cannot is a hard block sitting on the correction path
+            // (grant -> revoke a typo -> re-grant on the same date). Advisory keeps the
+            // officer informed without a dead end, and needs nothing from the client.
+            $dupDate = $this->ledgerDuplicateAwardDate($player_id, $kingdomaward_id, $rank, $date);
+            $r = $this->Player->add_player_award([
+                'Token'          => $this->session->token,
+                'RecipientId'    => $player_id,
+                'KingdomAwardId' => $kingdomaward_id,
+                'CustomName'     => '',
+                'AliasAwardId'   => 0,
+                'Rank'           => $rank,
+                'Date'           => $date,
+                'GivenById'      => $given_by_id,
+                'Note'           => $note,
+                'ParkId'         => (int)($_POST['ParkId']    ?? 0),
+                'KingdomId'      => (int)($_POST['KingdomId'] ?? 0),
+                'EventId'        => (int)($_POST['EventId']   ?? 0),
+            ]);
+            // add_player_award returns the flat SOAP status shape ($r['Status'] int,
+            // 0 = success), mirroring CourtAjax::grant_award.
+            if (($r['Status'] ?? 1) != 0) {
+                echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => rtrim(($r['Error'] ?? 'Could not grant the award.') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+                exit;
+            }
+            // S1 cross-path reconcile: mark/link any court line still OPEN for this
+            // recommendation 'given' + award_id in the SAME request, so a later
+            // finalize sees it committed and cannot re-grant it. Tolerates a missing
+            // RecommendationsId (rec_id 0 => skip) — the Recs-Manager Grant modal
+            // starts POSTing it in Phase 3.
+            $new_award_id = (int)($r['AwardId'] ?? 0);
+            $rec_id       = (int)($_POST['RecommendationsId'] ?? 0);
+            // The officer's "leave on court" / "remove from court" choice decides the
+            // terminal status of the reconciled lines. Whitelisted; anything else
+            // (including a missing value) means leave-on-court.
+            $court_action = ($_POST['CourtAction'] ?? '') === 'remove' ? 'remove' : 'leave';
+            $court_lines  = 0;
+            $courtWarning = '';
+            if ($rec_id > 0) {
+                // Best-effort reconcile: the permanent ork_awards row is ALREADY
+                // committed above. If this throws the request would 500, the client
+                // would never set its `granted` flag, the modal would say "Grant
+                // failed." and re-enable Submit — and AddAward has no duplicate guard,
+                // so the second click writes a SECOND permanent award row. Swallow it
+                // (mirroring the audit try/catch inside AddAward), report the money
+                // write as the success it was, and surface the court miss separately.
+                try {
+                    // Inside the try: load_model can itself throw, and a throw here is
+                    // the same 500-after-the-money-write this catch exists to prevent.
+                    // Pass the cluster key too so a court line under a sibling/older
+                    // representative rec id (or an ad-hoc line for the same
+                    // person+award+rank) is still reconciled and can't re-grant.
+                    $this->load_model('Court');
+                    // The acting officer's id scopes the reconcile: only court lines on
+                    // courts they can manage, and never on a completed court.
+                    $court_lines = $this->Court->reconcile_grant_for_recommendation($rec_id, $new_award_id, $given_by_id, $rank, $player_id, $kingdomaward_id, $court_action, (int)$this->session->user_id);
+                } catch (\Throwable $e) {
+                    error_log('PlayerAjax::grantaward court reconcile failed (award ' . $new_award_id . ', rec ' . $rec_id . '): ' . $e->getMessage());
+                    $courtWarning = 'The award was recorded, but its court line could not be updated. Check the court plan.';
+                }
+            }
+            // courtLines lets the client repaint the row's court badges from what the
+            // server actually did, instead of issuing its own follow-up court calls.
+            $out = ['status' => 0, 'awardId' => $new_award_id, 'courtLines' => $court_lines, 'courtAction' => $court_action];
+            if ($courtWarning !== '') {
+                $out['courtWarning'] = $courtWarning;
+            }
+            // Advisory, not a refusal: the grant above already succeeded. The client
+            // shows this next to the confirmation so the officer can revoke the
+            // duplicate if it really was one.
+            if ($dupDate !== '') {
+                $out['duplicateDate']    = $dupDate;
+                $out['duplicateWarning'] = 'Heads up: this player already had this award recorded on ' . $dupDate . '. The grant was saved — revoke one of them if it is a duplicate.';
+            }
+            echo json_encode($out);
+            exit;
+
         } elseif ($action === 'addnote') {
             $note     = trim($_POST['Note']         ?? '');
             $desc     = trim($_POST['Description']  ?? '');
@@ -692,6 +801,86 @@ class Controller_PlayerAjax extends Controller
         ]);
         $persona = (int)($r['Status'] ?? 1) === 0 ? (string)($r['SupporterPersona'] ?? '') : '';
         echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '', 'supporter_persona' => $persona]);
+        exit;
+    }
+
+    /**
+     * Ledger duplicate probe for the Recs Manager's Grant Award path.
+     *
+     * Reads the recipient's committed awards through the existing model membrane
+     * (Model_Player::fetch_player_details) — no SQL here — and applies the same
+     * predicate the Court path's private ledger probe uses: a non-repeatable award
+     * (ladder or title) already recorded for this kingdomaward at this normalized
+     * rank on this exact date. Returns the matching date, or '' when clear.
+     *
+     * REVOKED ROWS: Player::revoke_award moves the row off the player entirely
+     * (mundane_id = 0, stripped_from = the original recipient), so a revoked award is
+     * already absent from this seam — 2,797 of the 2,856 revoked rows on the
+     * prod-derived DB. The remaining 59 are legacy rows that kept mundane_id with
+     * stripped_from = 0; AwardsForPlayer emits no `revoked` key and no other
+     * controller-reachable seam exposes them, so those can still produce a stale
+     * notice. Harmless here precisely BECAUSE this is advisory: the caller has already
+     * committed the grant when it reads this, so a grant -> revoke -> re-grant
+     * correction on the same date always goes through. Filtering them exactly needs
+     * the court predicate (oa.revoked = 0 OR oa.revoked IS NULL) pushed into the lib
+     * query, which is outside this change's file scope.
+     */
+    private function ledgerDuplicateAwardDate($mundane_id, $kingdomaward_id, $rank, $date)
+    {
+        $mundane_id      = (int)$mundane_id;
+        $kingdomaward_id = (int)$kingdomaward_id;
+        $rank            = (int)$rank;
+        $date            = trim((string)$date);
+        if ($mundane_id <= 0 || $kingdomaward_id <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return '';
+        }
+        $details = $this->Player->fetch_player_details($mundane_id);
+        foreach ((array)($details['Awards'] ?? []) as $a) {
+            if ((int)($a['KingdomAwardId'] ?? 0) !== $kingdomaward_id) {
+                continue;
+            }
+            if ((int)($a['Rank'] ?? 0) !== $rank) {
+                continue;
+            }
+            // Custom award (neither ladder nor title) is legitimately repeatable.
+            if (empty($a['IsLadder']) && empty($a['IsTitle'])) {
+                continue;
+            }
+            if (trim((string)($a['Date'] ?? '')) === $date) {
+                return $date;
+            }
+        }
+        return '';
+    }
+
+    public function dismiss_notification($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $nid = (int)($_POST['NotificationId'] ?? $p ?? 0);
+        if (!valid_id($nid)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid notification']);
+            exit;
+        }
+        $this->load_model('Notification');
+        $this->Notification->dismiss($nid, (int)$this->session->user_id);
+        echo json_encode(['status' => 0]);
+        exit;
+    }
+
+    public function dismiss_all_notifications($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $this->load_model('Notification');
+        $this->Notification->dismiss_all((int)$this->session->user_id);
+        echo json_encode(['status' => 0]);
         exit;
     }
 

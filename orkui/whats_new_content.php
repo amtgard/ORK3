@@ -8,17 +8,30 @@
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-08-22');
+    define('WHATS_NEW_VERSION', '2026-10-09');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
 if (!defined('ORK_VERSION')) {
-    define('ORK_VERSION', '3.5.5 Hydra');
+    define('ORK_VERSION', '3.5.6 Crown');
 }
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
+    ['version' => '3.5.6 Crown', 'date' => '2026-10-09', 'items' => [
+        ['icon' => 'fas fa-gavel', 'title' => 'Plan Your Court in the ORK', 'body' => 'Monarchs, Regents, Prime Ministers and kingdom or park editors can now plan a court before it is held. Open Court Planner under Admin Tasks on your kingdom or park page, pull awards from pending recommendations or add them by hand, and drag them into running order.'],
+        ['icon' => 'fas fa-bullhorn', 'title' => 'Run It Live, or From Paper', 'body' => 'Publish the court and work it your way. Run at Court lets you mark each award from your phone as it is called. Or print the packet — an order of court for the herald, a record sheet and a prep sheet — and type it in afterwards on the Record Court screen. Nothing reaches a player\'s record until you press Complete Court.'],
+        ['icon' => 'fas fa-tasks', 'title' => 'A Recommendations Manager', 'body' => 'Click Manage Recs on the Recommendations tab of your kingdom or park to work the whole queue on one page. Matching recommendations are gathered into one row, and from any row you can grant the award, add it to a court, pass it down to the recipient\'s park, snooze it until the Monarch or Regent changes, or dismiss it.'],
+
+        // ----- Items flagged notes_only appear on the Release Notes page but NOT in the
+        // What's New modal. Order here is the order both surfaces render in. -----
+        ['icon' => 'fas fa-book-open', 'title' => 'A Public Court Report', 'notes_only' => true, 'body' => 'Completed courts are published on a new Court Report, linked under Reports on every kingdom and park page. Each one lists the awards given, who conferred them and the public comment for each — which you can start from the recommendation\'s wording, rewrite, or clear. No login is needed, and a court only appears once it is complete.'],
+        ['icon' => 'fas fa-paint-brush', 'title' => 'Scrolls, Regalia and Artisans', 'notes_only' => true, 'body' => 'Each award on a court can track whether its scroll and regalia are in progress or done, and name the people who made them. The herald\'s sheet lists who to thank and the Court Report credits them publicly.'],
+        ['icon' => 'fas fa-users', 'title' => 'Working a Court Together', 'notes_only' => true, 'body' => 'Several officers can have a published court open at once and see each other\'s changes as they happen. Every court has a recorder — the Prime Minister unless you choose someone else — who is reminded if it is left unrecorded, and the court warns you when the plan has changed since the packet was printed.'],
+        ['icon' => 'fas fa-bell', 'title' => 'For Everyone Who Recommends', 'notes_only' => true, 'body' => 'Tick Submit Anonymously to keep your name off a recommendation. And when an award you recommended or seconded is granted, you will find a notice in a new Notifications card on your own profile.'],
+        ['icon' => 'fas fa-plus-circle', 'title' => 'Also in Crown', 'notes_only' => true, 'body' => 'A passed-down recommendation appears on the park\'s Recommendations tab under Delegated by the Kingdom, and the park\'s officers are notified. Dismissed recommendations are kept, and Show dismissed lets you undelete one. The manager searches, filters, sorts and exports to CSV. Ladder ranks appear as colored pills. And Court Planner, the manager and the Court Report all work on a phone.'],
+    ]],
     ['version' => '3.5.5 Hydra', 'date' => '2026-08-22', 'items' => [
         ['icon' => 'fas fa-bug-slash', 'title' => 'Cutting Off Technical Issues One Head at a Time', 'body' => 'Hydra is all about enhancing the engine underneath the ORK to ensure it runs smoothly. You won\'t notice most of what Hydra has accomplished under the hood, but it will make the system easier to maintain and update over time.'],
         ['icon' => 'fas fa-laptop', 'title' => 'Stay Signed In on Three Devices', 'body' => 'Signing in on your phone no longer signs you out on your laptop. The ORK now keeps up to three devices signed in at once, so you can check the calendar on your phone at the park, take attendance on a tablet, and still have your reeve reports open on a desktop at home — no more getting bounced back to the login page every time you switch.'],
