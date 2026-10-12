@@ -35,6 +35,14 @@ $avg_attendance = $total_events > 0 ? round($total_attendance / $total_events, 1
 	filter: grayscale(0.5);
 	transition: opacity 0.2s, filter 0.2s;
 }
+/* Table sits in .rp-main (no .rp-table-area) — give its wrapper the report card surface */
+#ea-table-wrap {
+	background: var(--rp-bg-table, var(--ork-card-bg));
+	border: 1px solid var(--rp-border);
+	border-radius: 8px;
+	padding: 14px 16px;
+	box-shadow: var(--ork-shadow-card);
+}
 html[data-theme="dark"] .rp-stats-filter-notice { background: #2d2b0e; border-color: #854d0e; color: #fde68a; }
 html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_filter input,
 html[data-theme="dark"] .rp-main .dataTables_wrapper .dataTables_length select {
@@ -119,7 +127,7 @@ html[data-theme="dark"] .rp-main table.dataTable tbody tr.even > td { background
 	<!-- ── Table ──────────────────────────────────────────────── -->
 	<div class="rp-body">
 		<div class="rp-main" style="flex:1;min-width:0">
-			<div id="ea-table-loading" style="text-align:center;padding:40px 0;color:#a0aec0">
+			<div id="ea-table-loading" style="text-align:center;padding:40px 0;color:var(--ork-text-on-ground)">
 				<i class="fas fa-spinner fa-spin" style="font-size:28px;display:block;margin-bottom:10px"></i>
 				Loading&hellip;
 			</div>

@@ -383,19 +383,19 @@ function ecCancelAndReturn(ev, eventId) {
 }
 .ev-img-overlay.ev-open { display: flex; }
 .ev-img-modal {
-	background: #fff; border-radius: 10px; width: min(520px, 96vw);
+	background: var(--ork-card-bg); border-radius: 10px; width: min(520px, 96vw);
 	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
 }
 .ev-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
-	padding: 14px 18px; border-bottom: 1px solid #e2e8f0; background: #f7fafc;
+	padding: 14px 18px; border-bottom: 1px solid var(--ork-divider); background: var(--ork-bg-secondary);
 }
 .ev-img-modal-title { font-size: 15px; font-weight: 700; color: #2d3748; margin: 0; }
 .ev-img-close-btn { background: none; border: none; font-size: 20px; color: #718096; cursor: pointer; padding: 0 4px; }
 .ev-img-modal-body { padding: 20px 22px; }
 .ev-upload-area {
 	display: flex; flex-direction: column; align-items: center; gap: 8px;
-	border: 2px dashed #cbd5e0; border-radius: 8px; padding: 28px 20px;
+	border: 2px dashed var(--ork-input-border); border-radius: 8px; padding: 28px 20px;
 	cursor: pointer; color: #4a5568; font-size: 14px; text-align: center;
 	transition: border-color .15s, background .15s;
 }
@@ -410,6 +410,11 @@ function ecCancelAndReturn(ev, eventId) {
 .ev-btn-outline:hover { background: #f7fafc; }
 .ev-btn-white { background: #4299e1; color: #fff; }
 .ev-btn-white:hover { background: #2c5282; }
+/* revised.css dark .ev-btn-white / .ev-btn-outline are hero-bar styles: Upload lost its fill on the dark modal */
+html[data-theme="dark"] .ev-img-modal .ev-btn-outline { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
+html[data-theme="dark"] .ev-img-modal .ev-btn-outline:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ev-img-modal .ev-btn-white { background: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .ev-img-modal .ev-btn-white:hover { background: #2c5282; }
 </style>
 
 <!-- EvConfig stub for revised.js (image modal needs uir + eventId + canManage) -->
