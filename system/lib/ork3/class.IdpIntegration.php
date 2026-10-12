@@ -224,6 +224,11 @@ class IdpIntegration extends Ork3
         ];
         if ((getenv('ENVIRONMENT') ?: '') === 'DEV') {
             $logDetail['dev_claim_code'] = $code;
+            // Log::Write() is a no-op -- its first statement is `return;` -- so
+            // passing the code there alone makes it unrecoverable. error_log
+            // reaches the container's nginx error log, which is where the rest
+            // of this flow's diagnostics already go.
+            error_log('IdpIntegration DEV claim code for mundane ' . $mundaneId . ': ' . $code);
         }
         $this->log->Write('IdpIntegration BeginClaimOrkMail mailed', 0, LOG_EDIT, $logDetail);
 
