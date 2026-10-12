@@ -488,10 +488,15 @@ class KingdomProfile extends Ork3
 
     public function AuthorizeMovePlayer(int $uid, int $playerKingdomId, int $destKingdomId): bool
     {
+        // AUTH_CREATE, not AUTH_EDIT: moving a player is a CREATE power at both
+        // park and kingdom scope per the permission help (Admin_permissions.tpl),
+        // and Player::MovePlayer -- the real gate -- checks AUTH_CREATE. This
+        // pre-check exists only to return a friendlier error, so it must not be
+        // looser than the library or it waves through moves that then fail.
         $canSource = $playerKingdomId > 0
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_EDIT);
+            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_CREATE);
         $canDest = $destKingdomId > 0
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $destKingdomId, AUTH_EDIT);
+            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $destKingdomId, AUTH_CREATE);
 
         return $canSource || $canDest;
     }

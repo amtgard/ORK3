@@ -750,9 +750,13 @@ html, body {
        full scrollable width — pushing its right-side controls (Login / View
        Profile / theme toggle) off the right edge. iOS clamps fixed elements to
        the visual viewport so it doesn't show there. Clamping here keeps the
-       fixed nav pinned to the device width on every platform. */
+       fixed nav pinned to the device width on every platform.
+       overflow-x:hidden lives on <html> ONLY: putting it on <body> too makes
+       BOTH html and body vertical scroll containers (overflow-x:hidden coerces
+       overflow-y to auto) → DUPLICATE scrollbars. <body> uses overflow-x:clip. */
     overflow-x: hidden;
     max-width: 100%;
+    scrollbar-gutter: stable;
 }
 html {
     height: 100%;
@@ -766,6 +770,11 @@ body {
     min-height: 100%;
 }
 body {
+    min-height: 100%;
+    max-width: 100%;
+    /* clip (NOT hidden): clips sideways overflow without turning body into a
+       second vertical scroll container — see the html rule above. */
+    overflow-x: clip;
     /*
   background-attachment: fixed;
     background-image: linear-gradient(bottom, #EEE 0%, white 75%);
