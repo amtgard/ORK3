@@ -6,6 +6,7 @@ class Model_Reports extends Model
     {
         parent::__construct();
         $this->Report = new APIModel('Report');
+        $this->TournamentReport = new APIModel('TournamentReport');
     }
 
     public function ReleaseFeatureUtilization()
@@ -13,15 +14,41 @@ class Model_Reports extends Model
         return $this->Report->ReleaseFeatureUtilization();
     }
 
-    public function get_tournaments($limit = 10, $kingdom_id = null, $park_id = null, $event_id = null, $event_calendardetail_id = null)
+    public function get_tournaments($limit = 10, $kingdom_id = null, $park_id = null, $event_id = null, $event_calendardetail_id = null, $since = null)
     {
         return $this->Report->TournamentReport(array(
             'KingdomId' => $kingdom_id,
             'ParkId' => $park_id,
             'EventId' => $event_id,
             'EventCalendarDetailId' => $event_calendardetail_id,
-            'Limit' => $limit
+            'Limit' => $limit,
+            'Since' => $since
         ));
+    }
+
+    public function tournament_program_stats($request)
+    {
+        return $this->TournamentReport->GetTournamentProgramStats($request);
+    }
+    public function tournament_fighter_leaderboard($request)
+    {
+        return $this->TournamentReport->GetFighterLeaderboard($request);
+    }
+    public function tournament_award_candidates($request, $precomputedBoard = null)
+    {
+        return $this->TournamentReport->GetTournamentAwardCandidates($request, $precomputedBoard);
+    }
+    public function tournament_park_comparison($request)
+    {
+        return $this->TournamentReport->GetTournamentParkComparison($request);
+    }
+    public function tournament_list($request)
+    {
+        return $this->TournamentReport->GetTournamentList($request);
+    }
+    public function team_champions($request)
+    {
+        return $this->TournamentReport->GetTeamChampions($request);
     }
 
     public function get_heraldry_report($request)
