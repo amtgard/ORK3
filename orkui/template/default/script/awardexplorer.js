@@ -587,7 +587,7 @@
             // whole era has been left out -- which reads as missing data, not as a
             // filter doing its job.
             var applied = [];
-            if (state.months) { applied.push('last ' + state.months + ' months'); }
+            if (state.months) { applied.push('last ' + windowWords(state.months)); }
             if (state.includeRevoked) { applied.push('including revoked'); }
             if (state.includeStripped) { applied.push('including stripped'); }
             if (applied.length) { msg += ' · ' + applied.join(' · '); }
@@ -837,10 +837,23 @@
         });
     });
 
+    // Says what the chips will search, in the present tense: the hint is read
+    // before Run as often as after it, so "Showing" was wrong half the time.
+    // It deliberately does NOT mention the handful of mis-typed future dates in
+    // the data -- that is a note to whoever maintains the ORK, not something to
+    // put in front of everyone who wants to search more than a year back.
+    /** "12 months" / "5 years" -- say it the way the chip does, not in raw months. */
+    function windowWords(months) {
+        var n = Number(months) || 0;
+        if (n % 12 === 0 && n >= 24) { return (n / 12) + ' years'; }
+        if (n === 12) { return '12 months'; }
+        return n + (n === 1 ? ' month' : ' months');
+    }
+
     function windowHint() {
         $('ae-window-hint').textContent = state.months
-            ? 'Showing awards from the last ' + state.months + ' months. Switch to Everything for the full history.'
-            : 'Showing the whole history — slower, and the newest rows include a handful of mis-typed future dates.';
+            ? 'Awards from the last ' + windowWords(state.months) + '. Choose Everything for the full history.'
+            : 'Every award the ORK has recorded. This can take a few seconds.';
     }
 
     $('ae-share').addEventListener('click', function () {
