@@ -158,8 +158,14 @@ class AwardExplorer extends Ork3
                 'max' => self::MAX_RANK,
                 'note' => 'Rank 0 means unranked, not "rank zero".',
             ]),
-            'kingdom' => $this->_crit('Kingdom', 'Where', 'enum_set', ['set' => 'kingdom']),
-            'park' => $this->_crit('Park', 'Where', 'enum_set', ['set' => 'park']),
+            'kingdom' => $this->_crit('Kingdom (on the award)', 'Where', 'enum_set', [
+                'set' => 'kingdom',
+                'note' => 'The kingdom recorded on the award, not where the recipient is today.',
+            ]),
+            'park' => $this->_crit('Park (on the award)', 'Where', 'enum_set', [
+                'set' => 'park',
+                'note' => 'The park recorded on the award. Someone who has since moved still matches here.',
+            ]),
             'recipient' => $this->_crit('Recipient', 'Who', 'enum_set', [
                 'set' => 'mundane',
                 'note' => 'By player id. Use the search box to find awards by persona text.',
@@ -182,16 +188,23 @@ class AwardExplorer extends Ork3
     private function _columnDefs(): array
     {
         return [
+            // Order here is the order of the columns in the table, so the defaults
+            // read as a sentence: on this date, this person, of this park, received
+            // this award at this rank, from this person.
             'date'              => $this->_col('Date', 'When', true),
             'recipient'         => $this->_col('Recipient', 'Who', true),
-            'recipient_park'    => $this->_col('Recipient park', 'Who', true),
-            'recipient_kingdom' => $this->_col('Recipient kingdom', 'Who'),
+            // Default, because the Park filter matches on THIS. Filtering on Park and
+            // then being shown the recipient's CURRENT park looks like a broken filter
+            // when in fact the person has simply transferred since.
+            'park'              => $this->_col('Park (on the award)', 'Where', true),
             'award_name'        => $this->_col('Award', 'Which award', true),
             'rank'              => $this->_col('Rank', 'Which award', true),
-            'award_type'        => $this->_col('Type', 'Which award'),
             'given_by'          => $this->_col('Given by', 'Who', true),
-            'kingdom'           => $this->_col('Kingdom', 'Where'),
-            'park'              => $this->_col('Park', 'Where'),
+            'kingdom'           => $this->_col('Kingdom (on the award)', 'Where'),
+            // "today" vs "on the award" is the whole point of these two labels.
+            'recipient_park'    => $this->_col('Recipient park today', 'Who'),
+            'recipient_kingdom' => $this->_col('Recipient kingdom today', 'Who'),
+            'award_type'        => $this->_col('Type', 'Which award'),
             'note'              => $this->_col('Note', 'Detail'),
             'revoked'           => $this->_col('Revoked', 'Status'),
             'entered_at'        => $this->_col('Entered at', 'Detail'),

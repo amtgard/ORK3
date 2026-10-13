@@ -202,6 +202,35 @@ final class AwardExplorerTest extends TestCase
         }
     }
 
+    /**
+     * The Park filter matches the park recorded ON THE AWARD, while "Recipient park
+     * today" is where that person is now. They disagree for anyone who transferred,
+     * which reads as a broken filter unless the column the filter acts on is the one
+     * on screen. So Park must be a default column, and the labels must say which is
+     * which.
+     */
+    public function testParkFilterAndDefaultColumnDescribeTheSameThing(): void
+    {
+        $this->assertContains('park', $this->ae->ResolveColumns([]), 'Park must be shown by default');
+
+        $cols = $this->ae->Registry($this->known)['columns'];
+        $this->assertStringContainsString('on the award', $cols['park']['label']);
+        $this->assertStringContainsString('on the award', $cols['kingdom']['label']);
+        $this->assertStringContainsString('today', $cols['recipient_park']['label']);
+        $this->assertStringContainsString('today', $cols['recipient_kingdom']['label']);
+
+        // The filter reads the award's own park, never the recipient's current one.
+        // Take a real id from the loaded set: the fixture database numbers its parks
+        // from 1000001, so a hardcoded 1 is correctly rejected as unknown.
+        $parkId = (int)reset($this->known['park']);
+        $this->assertGreaterThan(0, $parkId, 'no parks in the fixture database');
+        $r = $this->ae->NormalizeTree($this->tree([['c' => 'park', 'o' => 'is', 'v' => $parkId]]), $this->known);
+        $this->assertTrue($r['ok']);
+        $sql = $this->ae->CompileTree($r['tree'], $this->known);
+        $this->assertStringContainsString('a.park_id', $sql);
+        $this->assertStringNotContainsString('m.park_id', $sql);
+    }
+
     public function testEmptyTreeCompilesToATruth(): void
     {
         $r = $this->ae->NormalizeTree($this->tree([]), $this->known);
