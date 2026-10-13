@@ -580,7 +580,39 @@
             var msg = (d.total != null ? d.total.toLocaleString() : shown) + ' grants';
             // Say so when the cap bit, rather than quietly showing a partial answer.
             if (d.has_more) { msg = 'showing the first ' + shown.toLocaleString() + ' of ' + msg + ' — narrow your filter'; }
-            setStatus(msg + (d.elapsed_ms ? ' · ' + d.elapsed_ms + ' ms' : ''));
+
+            // Name the filters that are NOT rules in the builder. The date window
+            // is a chip at the top of the page and the exclusions are checkboxes,
+            // so by the time you are reading the table there is nothing saying a
+            // whole era has been left out -- which reads as missing data, not as a
+            // filter doing its job.
+            var applied = [];
+            if (state.months) { applied.push('last ' + state.months + ' months'); }
+            if (state.includeRevoked) { applied.push('including revoked'); }
+            if (state.includeStripped) { applied.push('including stripped'); }
+            if (applied.length) { msg += ' · ' + applied.join(' · '); }
+            if (d.elapsed_ms) { msg += ' · ' + d.elapsed_ms + ' ms'; }
+            setStatus(msg);
+
+            // And offer the way out, since "why is my 2019 award missing" is the
+            // first thing a date window makes someone ask.
+            var st = $('ae-status');
+            if (state.months && st) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'ae-linkbtn';
+                b.textContent = 'search all time';
+                b.addEventListener('click', function () {
+                    state.months = 0;
+                    Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
+                        c.classList.toggle('ae-chip-on', Number(c.dataset.months) === 0);
+                    });
+                    windowHint();
+                    run();
+                });
+                st.appendChild(document.createTextNode(' · '));
+                st.appendChild(b);
+            }
         }).catch(function (err) {
             btn.disabled = false;
             setStatus('');
