@@ -1722,7 +1722,10 @@
 					<?php endif; ?>
 				</div>
 				<?php endif; ?>
-				<?php if (empty($AwardRecommendations)): ?>
+				<?php include __DIR__ . '/_recs_hidden_notice.tpl'; ?>
+				<?php if (empty($AwardRecommendations) && !empty($RecsHiddenBySetting)): ?>
+				<div class="pk-recs-empty"><?= htmlspecialchars(ork_recs_hidden_notice(!empty($IsLoggedIn))) ?></div>
+				<?php elseif (empty($AwardRecommendations)): ?>
 				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>.</div>
 				<?php else: ?>
 				<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
@@ -1783,7 +1786,7 @@
 							data-rec-id="<?= (int)$rec['RecommendationsId'] ?>" data-award-id="<?= (int)$rec['AwardId'] ?>"
 							data-snoozed="<?= !empty($rec['IsSnoozed']) ? '1' : '0' ?>"
 							data-passlocal="<?= !empty($rec['PassedToLocal']) ? '1' : '0' ?>"
-							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
+							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((array_key_exists('IsLadder', $rec) ? !empty($rec['IsLadder']) : (int)$rec['Rank'] > 0) ? 'below' : 'nonladder') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 							<td><?= htmlspecialchars(preg_replace('/^Order of(?:\\s+the)?\\s+/i', '', $rec['AwardName'])) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="pk-rec-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?></td>
 							<td style="white-space:nowrap">
@@ -1888,6 +1891,7 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
      JavaScript
      ============================================= -->
 <script>
+window.tnPseudoLadderInfo = <?= json_encode(is_array($PseudoLadderSiblings ?? null) ? $PseudoLadderSiblings : (object)[]) ?>;
 var PkConfig = {
 	uir:            '<?= UIR ?>',
 	httpService:    '<?= HTTP_SERVICE ?>',

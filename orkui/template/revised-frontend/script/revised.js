@@ -40,6 +40,58 @@ function tnHeldRank(ranks, opt, baseAwardId) {
 }
 if (typeof window !== 'undefined') { window.tnHeldRank = tnHeldRank; }
 
+/* Note the player's rank on the SAME ladder in another kingdom.
+
+   Held ranks for kingdom-original ladders are keyed "k<kingdomaward_id>", so a
+   principality's row of a ladder and its parent kingdom's row never see each
+   other -- Painted Skies' "Hunter" and Northern Lights' "Order of the Hunter"
+   are separate buckets. The State of Amtgard grid DOES merge them by slug
+   ("a principality that splits off keeps running the parent's ladder").
+
+   This does not merge the buckets: on production only 2 of the 5 multi-kingdom
+   slug groups are parent/child and only 9 players are affected, so merging would
+   move suggested ranks far more widely than the problem warrants. It states the
+   fact under the pills and leaves every default alone.
+
+   tnPseudoLadderInfo is kaid -> {Slug, Name, Kingdom}, emitted per page. Absent
+   (older page, or none configured) -> renders nothing. The note element is
+   created on demand right after `wrap`, so no template needs a placeholder. */
+function tnSiblingLadderNote(wrap, ranks, kaid, prefix) {
+    if (!wrap || !wrap.parentNode) return;
+    var id   = prefix + '-ladder-peers';
+    var box  = document.getElementById(id);
+    if (!box) {
+        box = document.createElement('div');
+        box.id = id;
+        box.className = 'tn-ladder-peers';
+        wrap.parentNode.insertBefore(box, wrap.nextSibling);
+    }
+    box.style.display = 'none';
+    box.textContent   = '';
+    var info = (typeof window !== 'undefined') ? window.tnPseudoLadderInfo : null;
+    if (!info || !ranks) return;
+    var self = info[String(kaid)];
+    if (!self || !self.Slug) return;              // not a kingdom-original ladder
+    var found = [];
+    for (var k in info) {
+        if (!Object.prototype.hasOwnProperty.call(info, k)) continue;
+        if (String(k) === String(kaid)) continue;
+        if (!info[k] || info[k].Slug !== self.Slug) continue;
+        var r = parseInt(ranks['k' + k], 10) || 0;
+        if (r > 0) found.push({ name: info[k].Name, kingdom: info[k].Kingdom, rank: r });
+    }
+    if (!found.length) return;
+    found.sort(function(a, b) { return b.rank - a.rank; });
+    var esc = function(x) {
+        return String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    };
+    box.innerHTML = 'Also holds ' + found.map(function(f) {
+        return esc(f.name) + (f.kingdom ? ' (' + esc(f.kingdom) + ')' : '') + ' at rank ' + f.rank;
+    }).join('; ') + '. That is a separate ladder in the ORK \u2014 shown in case the ranks should continue.';
+    box.style.display = '';
+}
+if (typeof window !== 'undefined') { window.tnSiblingLadderNote = tnSiblingLadderNote; }
+
 /* ============================================================
    Viewport-safe positioner for position:fixed autocomplete dropdowns.
    Anchors `el` to `inputEl`, but (a) clamps width + left so the list
@@ -54,26 +106,45 @@ function tnPositionAcFixed(inputEl, el, opts) {
     opts = opts || {};
     var rect   = inputEl.getBoundingClientRect();
     var vw     = window.innerWidth;
-    var vh     = window.innerHeight;
+    var frame  = tnFixedFrame(el);
     var w      = Math.min(rect.width || opts.width || 300, vw - 16);
     el.style.width = w + 'px';
-    el.style.left  = Math.max(8, Math.min(rect.left, vw - w - 8)) + 'px';
+    el.style.left  = (Math.max(8, Math.min(rect.left, vw - w - 8)) - frame.left) + 'px';
     el.style.right = 'auto';
 
-    var spaceBelow = vh - rect.bottom;
-    var spaceAbove = rect.top;
+    // An on-screen keyboard shrinks the visual viewport but not innerHeight, so
+    // measure the room against what is actually showing.
+    var vv         = window.visualViewport;
+    var viewTop    = vv ? vv.offsetTop : 0;
+    var viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    var spaceBelow = viewBottom - rect.bottom;
+    var spaceAbove = rect.top - viewTop;
     var flipAbove  = spaceBelow < 200 && spaceAbove > spaceBelow;
     var avail      = flipAbove ? spaceAbove : spaceBelow;
 
     if (flipAbove) {
         el.style.top    = 'auto';
-        el.style.bottom = (vh - rect.top + 2) + 'px';
+        el.style.bottom = (frame.bottom - rect.top + 2) + 'px';
     } else {
         el.style.bottom = 'auto';
-        el.style.top    = (rect.bottom + 2) + 'px';
+        el.style.top    = (rect.bottom + 2 - frame.top) + 'px';
     }
     el.style.maxHeight = Math.max(140, avail - 12) + 'px';
     el.style.overflowY = 'auto';
+}
+/* The box a position:fixed element is really measured from. That is the
+   viewport unless an ancestor has a transform (or filter/perspective), which
+   makes that ancestor the containing block instead -- .pn-modal-box keeps its
+   open-state transform, so fixed coordinates inside it start at the box. */
+function tnFixedFrame(el) {
+    for (var p = el.parentElement; p; p = p.parentElement) {
+        var cs = window.getComputedStyle(p);
+        if (cs.transform !== 'none' || cs.perspective !== 'none' || cs.filter !== 'none') {
+            var r = p.getBoundingClientRect();
+            return { left: r.left + p.clientLeft, top: r.top + p.clientTop, bottom: r.top + p.clientTop + p.clientHeight };
+        }
+    }
+    return { left: 0, top: 0, bottom: window.innerHeight };
 }
 if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixed; }
 
@@ -92,11 +163,11 @@ if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixe
 (function () {
     if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
 
-    var AC_SELECTOR = '.pk-ac-results, .kn-ac-results';
+    var AC_SELECTOR = '.pk-ac-results, .kn-ac-results, .pn-ac-results';
     var open = [];
 
     function isOpen(el) {
-        return el.classList.contains('pk-ac-open') || el.classList.contains('kn-ac-open');
+        return el.classList.contains('pk-ac-open') || el.classList.contains('kn-ac-open') || el.classList.contains('pn-ac-open');
     }
 
     /* Nearest preceding text input, else the first one in the same field. */
@@ -142,6 +213,8 @@ if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixe
         Array.prototype.forEach.call(document.querySelectorAll(AC_SELECTOR), watch);
         window.addEventListener('scroll', sync, true); // capture: inner scrolls do not bubble
         window.addEventListener('resize', sync);
+        // The keyboard sliding in or out resizes the visual viewport only.
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', sync);
     });
 })();
 
@@ -976,6 +1049,8 @@ if (PnConfig.recError) {
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(pnAwardRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, pnAwardRanks, opt.value, 'pn-rec');
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('div');
@@ -2053,6 +2128,8 @@ if (PnConfig.recError) {
             var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
             var held      = tnHeldRank(playerRanks, opt, awardId);
             var suggested = Math.min(held + 1, maxRank);
+            // Informational only: never changes the suggested rank above.
+            tnSiblingLadderNote(gid('pn-rank-pills'), playerRanks, opt ? opt.value : 0, 'pn-add');
             var hint = gid('pn-rank-hint');
             if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
             var html = '';
@@ -2823,14 +2900,19 @@ function knPageRange(current, total) {
 
 function knPaginate($table, page) {
     var pageSize = 25;
-    var $rows = $table.find('tbody tr').filter(function() { return $(this).css('display') !== 'none'; });
+    // Paging hides rows with a class and the type filters with inline display,
+    // so clearing the class first leaves only filtered-out rows reading as
+    // hidden. Sharing inline display dropped every row past page 1 from the
+    // list the next time this ran.
+    var $rows = $table.find('tbody tr').removeClass('kn-page-hidden')
+        .filter(function() { return $(this).css('display') !== 'none'; });
     var total = $rows.length;
     if (total === 0) { $table.next('.kn-pagination').empty().hide(); return; }
     var totalPages = Math.max(1, Math.ceil(total / pageSize));
     page = Math.max(1, Math.min(page, totalPages));
     $table.data('kn-page', page);
     $rows.each(function(i) {
-        $(this).toggle(i >= (page - 1) * pageSize && i < page * pageSize);
+        $(this).toggleClass('kn-page-hidden', i < (page - 1) * pageSize || i >= page * pageSize);
     });
     var $pg = $table.next('.kn-pagination');
     if ($pg.length === 0) $pg = $('<div class="kn-pagination"></div>').insertAfter($table);
@@ -3285,6 +3367,8 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(knPlayerRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, knPlayerRanks, opt.value, 'kn-add');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -4089,6 +4173,8 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(knRecRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, knRecRanks, opt.value, 'kn-rec');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -4488,6 +4574,8 @@ $(document).ready(function() {
         row.className = 'kn-row-link' + (officerOnly ? ' kn-officer-only' : '') + (localsOnly ? ' kn-locals-only' : '');
         row.innerHTML = knCiRowCellsHtml(name, parkName, startVal, officerOnly, localsOnly, color);
         if (typeof knFilters !== 'undefined' && knFilters['calendar-item'] === false) row.style.display = 'none';
+        // Replacing className dropped the paging class, so put the current page back.
+        if (window.jQuery) knPaginate(jQuery('#kn-events-table'), jQuery('#kn-events-table').data('kn-page') || 1);
         return true;
     }
 
@@ -6916,6 +7004,7 @@ function pkToggleFilter(btn, type) {
     var isOn = pkFilters[type];
     $(btn).toggleClass('pk-filter-on', isOn);
     $('#pk-events-table').find('tr[data-type="' + type + '"]').css('display', isOn ? '' : 'none');
+    pkPaginate($('#pk-events-table'), 1);
     if (pkCalendar) pkCalendar.refetchEvents();
 }
 
@@ -7036,11 +7125,15 @@ function pkRenderPagination($table, current, total, containerId) {
 
 function pkPaginate($table, page) {
     var perPage = 10;
-    var $rows = $table.find('tbody tr');
-    var total = Math.ceil($rows.length / perPage);
-    if (total <= 1) return;
-    $rows.hide();
-    $rows.slice((page-1)*perPage, page*perPage).show();
+    // Paging hides rows with a class and the type filters with inline display,
+    // so a page turn neither reveals a filtered-out row nor counts it.
+    var $rows = $table.find('tbody tr').removeClass('pk-page-hidden')
+        .filter(function() { return $(this).css('display') !== 'none'; });
+    var total = Math.max(1, Math.ceil($rows.length / perPage));
+    page = Math.max(1, Math.min(page, total));
+    $rows.each(function(i) {
+        $(this).toggleClass('pk-page-hidden', i < (page - 1) * perPage || i >= page * perPage);
+    });
     var containerId = $table.attr('id') + '-pages';
     pkRenderPagination($table, page, total, containerId);
     $table.data('pk-page', page);
@@ -7364,6 +7457,8 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(pkPlayerRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, pkPlayerRanks, opt.value, 'pk-add');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -7880,6 +7975,8 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held     = tnHeldRank(pkRecRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, pkRecRanks, opt.value, 'pk-rec');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -8336,6 +8433,8 @@ $(document).ready(function() {
         row.className = pkCiClassName(officerOnly, localsOnly);
         row.innerHTML = pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color);
         if (typeof pkFilters !== 'undefined' && pkFilters['calendar-item'] === false) row.style.display = 'none';
+        // Replacing className dropped the paging class, so put the current page back.
+        if (window.jQuery) pkPaginate(jQuery('#pk-events-table'), jQuery('#pk-events-table').data('pk-page') || 1);
         return true;
     }
 
@@ -8575,8 +8674,12 @@ $(document).ready(function() {
 
         function evAttendedIds() {
             var ids = {};
-            document.querySelectorAll('#ev-attendance-table tbody tr[data-mundane-id]').forEach(function(tr) {
-                ids[parseInt(tr.dataset.mundaneId, 10)] = true;
+            // DataTables only keeps the current page in the DOM — ask it for every row.
+            var trs = window._evAttDt
+                ? window._evAttDt.rows().nodes().toArray()
+                : document.querySelectorAll('#ev-attendance-table tbody tr[data-mundane-id]');
+            Array.prototype.forEach.call(trs, function(tr) {
+                if (tr.dataset.mundaneId) ids[parseInt(tr.dataset.mundaneId, 10)] = true;
             });
             return ids;
         }

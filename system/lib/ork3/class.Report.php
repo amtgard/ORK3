@@ -603,6 +603,10 @@ class Report extends Ork3
                     'MundaneId'      => $mid,
                     'KingdomAwardId' => $kaid,
                     'Rank'           => $rank,
+                    // Carried from PlayerAwardRecommendations, which resolves it via
+                    // Award::effectiveIsLadder. The row templates used to recompute it
+                    // as `Rank > 0`, which is circular for a rank-less ladder rec.
+                    'IsLadder'       => !empty($rec['IsLadder']),
                     'Persona'        => $rec['Persona'] ?? '',
                     'AwardName'      => $rec['AwardName'] ?? '',
                     'ParkId'         => (int)($rec['ParkId'] ?? 0),
@@ -898,9 +902,26 @@ class Report extends Ork3
                 // row still reads 0 would look infinitely repeatable here. "Either side says
                 // so" — the same reading as Court::SQL_EFFECTIVE_IS_TITLE.
                 $effIsTitle  = max((int)$row->ka_is_title, (int)$row->a_is_title);
-                $effIsLadder = max((int)$row->ka_is_ladder, (int)$row->a_is_ladder);
+                // Third case: a kingdom-original ladder has no catalog row, so neither
+                // is_ladder column can ever be 1 for it. Award::effectiveIsLadder adds
+                // the curated list. This also corrects $isCustom below -- such an award
+                // was being treated as a repeatable custom award, which suppressed its
+                // AlreadyHas detection entirely.
+                $effIsLadder = Award::effectiveIsLadder(
+                    (int)$row->ka_kaward_id,
+                    (int)$row->ka_is_ladder,
+                    (int)$row->a_is_ladder
+                ) ? 1 : 0;
                 $isCustom    = ($effIsLadder === 0 && $effIsTitle === 0);
-                $alreadyHas = $isCustom ? false : ($row->kacount > 0 || $row->awcount > 0);
+                // A ladder recommendation with no rank means "rank unspecified", NOT
+                // "rank 0" -- and AlreadyHas compares held_rank >= rec_rank, which any
+                // held rank satisfies against 0. So every such rec for someone who
+                // already holds the award would read "already has" and drop out of the
+                // Open list: exactly the recs an officer needs to see, hidden. Until a
+                // rank is chosen the question is undecidable, so answer no, which is
+                // also what these recs did before their award was recognised as a ladder.
+                $rankUnset   = ($effIsLadder === 1 && (int)$row->rank === 0);
+                $alreadyHas = ($isCustom || $rankUnset) ? false : ($row->kacount > 0 || $row->awcount > 0);
                 $coveredByMaster = false;
                 if (!$isCustom && !$alreadyHas && isset($ladderMap[$recAwardId])) {
                     foreach ((array)$ladderMap[$recAwardId]['MasterAwardIds'] as $mAid) {
@@ -946,6 +967,8 @@ class Report extends Ork3
                     'RecommendedById'   => $row->recommended_by_id,
                     'MaskGiver' => $row->mask_giver,
                     'KingdomAwardId' => $row->ka_kaward_id,
+                    // Authoritative ladder flag. Consumers must use this, never `Rank > 0`.
+                    'IsLadder' => (bool)$effIsLadder,
                     'AwardId' => $recAwardId,
                     'ParkId' => $row->park_id,
                     'KingdomId' => $row->kingdom_id,
@@ -1090,23 +1113,35 @@ class Report extends Ork3
         // dev snapshot: 9 kingdomawards mark a non-ladder base award as their own ladder,
         // and those were classified "custom" (infinitely repeatable) while the title axis
         // was already fixed. A custom award is one that is neither, under either reading.
-        $customExpr = '(GREATEST(COALESCE(ka.is_ladder, 0), COALESCE(a.is_ladder, 0)) = 0'
+        // Third case folded in via Award::sqlEffectiveIsLadder: a kingdom-original
+        // ladder has no catalog row, so neither is_ladder column is ever 1 for it.
+        $ladderExpr = Award::sqlEffectiveIsLadder('ka', 'a');
+        $customExpr = '(' . $ladderExpr . ' = 0'
             . ' AND GREATEST(COALESCE(ka.is_title, 0), COALESCE(a.is_title, 0)) = 0)';
+        // Mirrors $rankUnset in PlayerAwardRecommendations: for a ladder rec with no
+        // rank, "already has" is undecidable (held_rank >= 0 is always true), so it is
+        // treated like a custom award -- never filtered out as already held. Keep these
+        // two definitions in step or the prefilter and the PHP post-filter disagree and
+        // batches come back short.
+        $undecidableExpr = '(' . $customExpr . ' OR (' . $ladderExpr . ' = 1 AND COALESCE(recs.rank,0) = 0))';
 
         $elig = (string)($request['Eligibility'] ?? 'open');
         if ($elig === 'snoozed') {
             $where[] = $snoozedExpr;
         } elseif ($elig === 'nonladder') {
-            $where[] = 'COALESCE(recs.rank,0) = 0';
+            // Was 'COALESCE(recs.rank,0) = 0' -- i.e. "has no rank", which swept every
+            // rank-less LADDER recommendation in here and was exactly what hid them
+            // from the officer who needed to set their rank.
+            $where[] = $ladderExpr . ' = 0';
             $where[] = "NOT $snoozedExpr";
         } elseif ($elig === 'ator') {
-            $where[] = "NOT $customExpr AND $alreadyExpr";
+            $where[] = "NOT $undecidableExpr AND $alreadyExpr";
             $where[] = "NOT $snoozedExpr";
         } elseif ($elig === 'below') {
-            $where[] = "(COALESCE(recs.rank,0) > 0) AND ($customExpr OR NOT $alreadyExpr)";
+            $where[] = "($ladderExpr = 1) AND ($undecidableExpr OR NOT $alreadyExpr)";
             $where[] = "NOT $snoozedExpr";
         } elseif ($elig === 'open') {
-            $where[] = "($customExpr OR NOT $alreadyExpr)";
+            $where[] = "($undecidableExpr OR NOT $alreadyExpr)";
             $where[] = "NOT $snoozedExpr";
         }
 
@@ -1206,13 +1241,15 @@ class Report extends Ork3
         $groups = array_values(array_filter($groups, function ($g) use ($elig) {
             $already = !empty($g['AlreadyHas']);
             $snoozed = !empty($g['IsSnoozed']);
-            $rank    = (int)$g['Rank'];
+            // Must mirror the SQL prefilter above exactly, or batches come back
+            // short. Both now key on the ladder flag, not on `Rank > 0`.
+            $isLadder = !empty($g['IsLadder']);
             switch ($elig) {
                 case 'all':       return true;
                 case 'snoozed':   return $snoozed;
-                case 'nonladder': return $rank === 0 && !$snoozed;
+                case 'nonladder': return !$isLadder && !$snoozed;
                 case 'ator':      return $already && !$snoozed;
-                case 'below':     return $rank > 0 && !$already && !$snoozed;
+                case 'below':     return $isLadder && !$already && !$snoozed;
                 case 'open':
                 default:          return !$already && !$snoozed;
             }

@@ -1300,7 +1300,11 @@ function rmBuildRankPills(rec) {
     var wrap = rmGid('rm-grant-rank-pills'), row = rmGid('rm-grant-rank-wrap'), input = rmGid('rm-grant-rank-val');
     wrap.innerHTML = ''; input.value = '';
     var recRank = parseInt(rec.Rank, 10) || 0;
-    if (recRank <= 0) { row.hidden = true; return; } // non-ladder award → no rank selector
+    // Gate on whether the AWARD is a ladder, not on whether this rec already has a
+    // rank. The old `recRank <= 0` test meant a rank-less ladder rec could never be
+    // given a rank: the only control for setting one was hidden by the absence of one.
+    var isLadder = (rec.IsLadder != null) ? !!Number(rec.IsLadder) : (recRank > 0);
+    if (!isLadder) { row.hidden = true; return; }   // genuinely not a ladder → no rank selector
     row.hidden = false;
     var maxRank = /zodiac/i.test(rec.AwardName || '') ? 12 : 10;
     var held = parseInt(rec.HeldRank, 10) || 0;
