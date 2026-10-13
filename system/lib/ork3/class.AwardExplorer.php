@@ -82,6 +82,7 @@ class AwardExplorer extends Ork3
             'criteria' => $this->_criteria($known),
             'columns'  => $this->_columnDefs(),
             'options'  => $this->LoadOptions(),
+            'awardGroupOrder' => self::AWARD_GROUP_ORDER,
         ];
     }
 
@@ -520,7 +521,6 @@ class AwardExplorer extends Ork3
             $out['peerage'][] = ['id' => $p, 'name' => $p === 'None' ? 'None (ordinary award)' : $p];
         }
         $sets = [
-            'award'   => 'SELECT award_id AS id, name FROM ' . $this->_t('award') . ' WHERE deprecate = 0 ORDER BY name',
             'kingdom' => 'SELECT kingdom_id AS id, name FROM ' . $this->_t('kingdom') . ' ORDER BY name',
             'park'    => 'SELECT park_id AS id, name FROM ' . $this->_t('park') . ' ORDER BY name',
         ];
@@ -535,6 +535,30 @@ class AwardExplorer extends Ork3
                 // the whole page over.
                 logtrace('AwardExplorer::LoadOptions ' . $key . ' failure', $e->getMessage());
             }
+        }
+
+        // Awards are grouped the way Add Award and Recommend an Award group them,
+        // so the picker reads the same wherever you meet it.
+        try {
+            $rs = $this->_select(
+                'SELECT award_id AS id, name, is_ladder, is_title, title_class, peerage'
+                . ' FROM ' . $this->_t('award') . ' WHERE deprecate = 0 ORDER BY name'
+            );
+            while ($rs->next()) {
+                $out['award'][] = [
+                    'id'    => (int)$rs->id,
+                    'name'  => stripslashes((string)$rs->name),
+                    'group' => $this->_awardGroup([
+                        'name'        => (string)$rs->name,
+                        'is_ladder'   => (int)$rs->is_ladder,
+                        'is_title'    => (int)$rs->is_title,
+                        'title_class' => (int)$rs->title_class,
+                        'peerage'     => (string)$rs->peerage,
+                    ]),
+                ];
+            }
+        } catch (Throwable $e) {
+            logtrace('AwardExplorer::LoadOptions award failure', $e->getMessage());
         }
         return $out;
     }
@@ -993,6 +1017,62 @@ class AwardExplorer extends Ork3
         }
         return ['rows' => $rows, 'columns' => $cols, 'capped' => $capped, 'total' => null];
     }
+
+    /**
+     * Group label for one CATALOG award, mirroring how Award::GetAwardOptionListHtml
+     * buckets the per-kingdom lists that Add Award and Recommend an Award show.
+     *
+     * Mirrored rather than shared because the inputs differ: that code classifies
+     * ork_kingdomaward rows and leans on pseudoLadderKingdomAwardIds(), which is
+     * keyed by kingdomaward_id and means nothing for a catalog row. Keep the labels
+     * and the order here in step with that method; they are what make the two
+     * pickers read alike.
+     */
+    private function _awardGroup(array $a): string
+    {
+        $name = $a['name'];
+        if ($name === 'Custom Award' || $name === 'Custom Title') {
+            return 'Custom';
+        }
+        if (!empty($a['is_ladder'])) {
+            return 'Ladder Awards';
+        }
+        if ($name === 'Defender' || $name === 'Master') {
+            return 'Noble Titles';
+        }
+        if ($name === 'Weaponmaster') {
+            return 'Other';
+        }
+        switch ($a['peerage']) {
+            case 'Knight':
+                return 'Knighthoods';
+            case 'Paragon':
+                return 'Paragons';
+            case 'Master':
+                return 'Masterhoods';
+            case 'Squire':
+            case 'Man-At-Arms':
+            case 'Page':
+            case 'Lords-Page':
+                return 'Associate Titles';
+        }
+        if ($name === 'Apprentice') {
+            return 'Associate Titles';
+        }
+        if (!empty($a['is_title']) && (int)$a['title_class'] === 10) {
+            return 'Masterhoods';
+        }
+        if ((!empty($a['is_title']) && (int)$a['title_class'] >= 30) || $name === 'Esquire') {
+            return 'Noble Titles';
+        }
+        return 'Other';
+    }
+
+    /** Group order for the award picker, matching the Add Award dropdown. */
+    public const AWARD_GROUP_ORDER = [
+        'Ladder Awards', 'Knighthoods', 'Masterhoods', 'Paragons',
+        'Noble Titles', 'Associate Titles', 'Other', 'Custom',
+    ];
 
     // ---------------------------------------------------------------- service entry
 

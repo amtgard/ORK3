@@ -255,6 +255,36 @@ final class AwardExplorerTest extends TestCase
         $this->assertStringContainsString('given in', $cols['kingdom']['label']);
     }
 
+    /**
+     * The award picker is grouped the way Add Award and Recommend an Award group
+     * theirs, so it reads the same wherever you meet it. The labels are mirrored
+     * from Award::GetAwardOptionListHtml rather than shared (different inputs), so
+     * this guards the mirror.
+     */
+    public function testAwardOptionsAreGroupedLikeTheAddAwardDropdown(): void
+    {
+        $reg = $this->ae->Registry($this->known);
+        $awards = $reg['options']['award'] ?? [];
+        if (!$awards) {
+            $this->markTestSkipped('No catalog awards in the fixture database.');
+        }
+        $this->assertSame(AwardExplorer::AWARD_GROUP_ORDER, $reg['awardGroupOrder']);
+
+        $seen = [];
+        foreach ($awards as $o) {
+            $this->assertArrayHasKey('group', $o, 'every award option needs a group');
+            $this->assertNotSame('', $o['group']);
+            $seen[$o['group']] = true;
+        }
+        // Nothing may fall into a bucket the UI has no order for, or it would be
+        // appended after "Custom" in whatever order the database happened to return.
+        $this->assertSame(
+            [],
+            array_diff(array_keys($seen), AwardExplorer::AWARD_GROUP_ORDER),
+            'an award was grouped under a label the picker does not order'
+        );
+    }
+
     public function testEmptyTreeCompilesToATruth(): void
     {
         $r = $this->ae->NormalizeTree($this->tree([]), $this->known);

@@ -155,12 +155,29 @@
         // what someone hunting a known award actually wants.
         if (list && list.length) {
             var chosen = Array.isArray(r.v) ? r.v.map(String) : (r.v == null || r.v === '' ? [] : [String(r.v)]);
-            return '<select class="ae-v ae-v-pick" data-k="v"' + (many ? ' multiple size="5"' : '') + '>'
-                + (many ? '' : '<option value="">choose…</option>')
-                + list.map(function (o) {
-                    return '<option value="' + esc(o.id) + '"'
-                        + (chosen.indexOf(String(o.id)) !== -1 ? ' selected' : '') + '>' + esc(o.name) + '</option>';
-                }).join('') + '</select>';
+            var opt = function (o) {
+                return '<option value="' + esc(o.id) + '"'
+                    + (chosen.indexOf(String(o.id)) !== -1 ? ' selected' : '') + '>' + esc(o.name) + '</option>';
+            };
+
+            // Awards arrive carrying a group, so the picker reads like the one in
+            // Add Award and Recommend an Award: Ladder Awards, Knighthoods,
+            // Masterhoods, Paragons, and so on. Anything ungrouped is a plain list.
+            var body;
+            if (list[0] && list[0].group) {
+                var buckets = {};
+                list.forEach(function (o) { (buckets[o.group] = buckets[o.group] || []).push(o); });
+                var order = (AE.registry.awardGroupOrder || []).slice();
+                Object.keys(buckets).forEach(function (g) { if (order.indexOf(g) === -1) { order.push(g); } });
+                body = order.filter(function (g) { return buckets[g]; }).map(function (g) {
+                    return '<optgroup label="' + esc(g) + '">' + buckets[g].map(opt).join('') + '</optgroup>';
+                }).join('');
+            } else {
+                body = list.map(opt).join('');
+            }
+
+            return '<select class="ae-v ae-v-pick" data-k="v"' + (many ? ' multiple size="8"' : '') + '>'
+                + (many ? '' : '<option value="">choose…</option>') + body + '</select>';
         }
 
         // No list for this set: an id, which the server rejects if it does not exist.
