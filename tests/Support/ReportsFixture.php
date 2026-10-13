@@ -27,6 +27,9 @@ final class ReportsFixture
     /** @var list<int> */
     private array $authIds = [];
 
+    /** @var list<int> */
+    private array $kingdomAwardIds = [];
+
     public function __construct(
         private readonly PDO $pdo,
     ) {
@@ -193,15 +196,25 @@ final class ReportsFixture
         $stmt->execute([$memberSince, $mundaneId]);
     }
 
-    public function insertDues(int $mundaneId, int $parkId, int $kingdomId): int
-    {
+    /**
+     * A row in ork_dues (the live dues ledger Report::GetDuesPaidList reads).
+     * Defaults: paid through one year from today, not lifetime, not revoked.
+     */
+    public function insertDues(
+        int $mundaneId,
+        int $parkId,
+        int $kingdomId,
+        ?string $duesUntil = null,
+        bool $forLife = false,
+        bool $revoked = false,
+    ): int {
         $stmt = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'dues
              (mundane_id, kingdom_id, park_id, created_on, created_by, dues_from, terms, dues_until,
               dues_for_life, revoked)
-             VALUES (?, ?, ?, CURDATE(), ?, CURDATE(), 6, DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 0, 0)'
+             VALUES (?, ?, ?, CURDATE(), ?, CURDATE(), 6, COALESCE(?, DATE_ADD(CURDATE(), INTERVAL 1 YEAR)), ?, ?)'
         );
-        $stmt->execute([$mundaneId, $kingdomId, $parkId, $mundaneId]);
+        $stmt->execute([$mundaneId, $kingdomId, $parkId, $mundaneId, $duesUntil, $forLife ? 1 : 0, $revoked ? 1 : 0]);
         $id = (int) $this->pdo->lastInsertId();
         $this->duesIds[] = $id;
 
@@ -274,6 +287,38 @@ final class ReportsFixture
         return $id;
     }
 
+    /**
+     * A kingdom-specific order with no ork_award row (ork_kingdomaward.award_id = 0),
+     * like the Order of the Raider. Returns the kingdomaward id; cleaned up.
+     */
+    public function insertKingdomOnlyAward(int $kingdomId, string $name): int
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'kingdomaward (is_title, title_class, kingdom_id, award_id, name, reign_limit, month_limit)
+             VALUES (0, 0, ?, 0, ?, 0, 0)'
+        )->execute([$kingdomId, self::MARKER . ' ' . $name]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->kingdomAwardIds[] = $id;
+
+        return $id;
+    }
+
+    /**
+     * A kingdom's own row for a global award (ork_kingdomaward.award_id = $awardId),
+     * e.g. a kingdom renaming a ladder. Returns the kingdomaward id; cleaned up.
+     */
+    public function insertKingdomAward(int $kingdomId, int $awardId, string $name): int
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'kingdomaward (is_title, title_class, kingdom_id, award_id, name, reign_limit, month_limit)
+             VALUES (0, 0, ?, ?, ?, 0, 0)'
+        )->execute([$kingdomId, $awardId, $name]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->kingdomAwardIds[] = $id;
+
+        return $id;
+    }
+
     public function insertParkOfficer(int $kingdomId, int $parkId, int $mundaneId, string $role): int
     {
         $stmt = $this->pdo->prepare(
@@ -322,6 +367,13 @@ final class ReportsFixture
             $in = implode(',', array_map('intval', $this->awardIds));
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "awards WHERE awards_id IN ({$in})");
             $this->awardIds = [];
+        }
+
+        if ($this->kingdomAwardIds !== []) {
+            $in = implode(',', array_map('intval', $this->kingdomAwardIds));
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "awards WHERE kingdomaward_id IN ({$in})");
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "kingdomaward WHERE kingdomaward_id IN ({$in})");
+            $this->kingdomAwardIds = [];
         }
 
         if ($this->duesIds !== []) {
