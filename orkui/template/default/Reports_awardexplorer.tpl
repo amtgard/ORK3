@@ -21,6 +21,7 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 	}
 }
 ?>
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/reports.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/awardexplorer.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/awardexplorer.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/rank-pill.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/rank-pill.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -29,21 +30,46 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 
 <div class="ae-page">
 
-	<div class="ae-head">
-		<button type="button" class="ae-btn ae-help-open" id="ae-help-open" aria-haspopup="dialog">
-			<i class="fas fa-circle-question" aria-hidden="true"></i> Help
-		</button>
-		<h1><i class="fas fa-award" aria-hidden="true"></i> Award Explorer</h1>
-		<p class="ae-sub">Every award the ORK has recorded, newest first.</p>
+	<!-- The shared report header (reports.css), as the other 48 report templates
+	     use. A bespoke one here looked out of place next to its own siblings. -->
+	<div class="rp-header">
+		<div class="rp-header-left">
+			<div class="rp-header-icon-title">
+				<i class="fas fa-award rp-header-icon" aria-hidden="true"></i>
+				<h1 class="rp-header-title">Award Explorer</h1>
+			</div>
 <?php if ($ae_scope['Type'] !== null): ?>
-		<p class="ae-scope">
-			Filters start on <strong><?= htmlspecialchars($ae_scope['Name']) ?></strong> &mdash;
-			awards held by players there now. Press <strong>Run</strong> to see them, or
-			remove the <?= strtolower(htmlspecialchars($ae_scope['Type'])) ?> filter below
-			to search everywhere.
-		</p>
+			<div class="rp-header-scope">
+				<a class="rp-scope-chip" href="<?= UIR ?><?= $ae_scope['Type'] === 'Park' ? 'Park' : 'Kingdom' ?>/profile/<?= (int)$ae_scope['Id'] ?>">
+					<i class="fas <?= $ae_scope['Type'] === 'Park' ? 'fa-tree' : 'fa-chess-rook' ?>" aria-hidden="true"></i>
+					<?= htmlspecialchars($ae_scope['Name']) ?>
+				</a>
+			</div>
+<?php endif; ?>
+		</div>
+<?php if ($ae_ready): ?>
+		<div class="rp-header-actions">
+			<button type="button" class="rp-btn-ghost" id="ae-help-open" aria-haspopup="dialog" aria-controls="ae-help" aria-expanded="false">
+				<i class="fas fa-circle-question" aria-hidden="true"></i> Help
+			</button>
+		</div>
 <?php endif; ?>
 	</div>
+
+	<div class="ae-intro">
+		<i class="fas fa-circle-info" aria-hidden="true"></i>
+		<span>One row per award ever given, newest first. Build a filter from rules joined by
+		AND&nbsp;/&nbsp;OR, choose your columns, then Run. Copy link shares the exact search.</span>
+	</div>
+
+<?php if ($ae_scope['Type'] !== null): ?>
+	<p class="ae-scope">
+		Filters start on <strong><?= htmlspecialchars($ae_scope['Name']) ?></strong> &mdash;
+		awards held by players there now. Press <strong>Run</strong> to see them, or
+		remove the <?= strtolower(htmlspecialchars($ae_scope['Type'])) ?> filter below
+		to search everywhere.
+	</p>
+<?php endif; ?>
 
 <?php if ($ae_logged_out): ?>
 	<div class="ae-notice ae-notice-info">
@@ -159,13 +185,27 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 		</div>
 		<div class="ae-help-body" id="ae-help-body" tabindex="0">
 
-			<h3>What this report does</h3>
+			<nav class="ae-help-toc" aria-label="Contents">
+				<ol>
+					<li><a href="#ae-h-what">What this report does</a></li>
+					<li><a href="#ae-h-start">Quick start</a></li>
+					<li><a href="#ae-h-picks">Quick picks</a></li>
+					<li><a href="#ae-h-window">The date window</a></li>
+					<li><a href="#ae-h-rules">Rules and groups</a></li>
+					<li><a href="#ae-h-left">What is left out unless you ask</a></li>
+					<li><a href="#ae-h-results">Results, columns and export</a></li>
+					<li><a href="#ae-h-share">Share links and starting over</a></li>
+					<li><a href="#ae-h-ref">Criteria reference</a></li>
+				</ol>
+			</nav>
+
+			<h3 class="ae-help-h" id="ae-h-what">What this report does</h3>
 			<p>It lists <strong>award grants</strong> &mdash; one row for every award ever given. A player
 			who holds five awards appears five times. That is the difference from Population Explorer,
 			which lists <em>players</em>, one row each.</p>
 			<p>Award records are public, but the report needs you signed in.</p>
 
-			<h3>Quick start</h3>
+			<h3 class="ae-help-h" id="ae-h-start">Quick start</h3>
 			<ol>
 				<li>Press a <strong>Quick pick</strong>, or add rules yourself under <strong>Filters</strong>.</li>
 				<li>Tick the <strong>Columns</strong> you want.</li>
@@ -174,18 +214,18 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 			<p>Opening the page does not run anything. Arriving from a kingdom or park page starts you
 			filtered to it, but still waits for Run.</p>
 
-			<h3>Quick picks</h3>
+			<h3 class="ae-help-h" id="ae-h-picks">Quick picks</h3>
 			<p>Knights, Masterhoods, Paragons, Ladder awards, Titles and Kingdom-level each replace your
 			rules and run, keeping whichever kingdom or park you are in. Whatever they set is an ordinary
 			rule you can then change. The peerage ones also clear the date window, since knightings are
 			rare enough that twelve months usually shows nothing.</p>
 
-			<h3>The date window</h3>
+			<h3 class="ae-help-h" id="ae-h-window">The date window</h3>
 			<p>New searches start on the <strong>last 12 months</strong>, so an older award will not appear
 			until you widen it. The chips write an ordinary date rule into Filters that you can edit or
 			delete; <strong>Everything</strong> removes it.</p>
 
-			<h3>Rules and groups</h3>
+			<h3 class="ae-help-h" id="ae-h-rules">Rules and groups</h3>
 			<p>Rules join with the <strong>AND</strong>/<strong>OR</strong> button between them. For
 			&ldquo;this kingdom, and either of two awards&rdquo;, you have two options:</p>
 			<ul>
@@ -195,7 +235,7 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 			<p>Both give the same answer. Groups earn their place when the alternatives are on
 			<em>different</em> criteria.</p>
 
-			<h3>What is left out unless you ask</h3>
+			<h3 class="ae-help-h" id="ae-h-left">What is left out unless you ask</h3>
 			<ul>
 				<li><strong>Revoked awards</strong> &mdash; honours later withdrawn.</li>
 				<li><strong>Awards stripped from a player</strong> &mdash; where the recipient was removed from the record.</li>
@@ -205,7 +245,7 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 			<p>Awards with <strong>no recorded date</strong> are never matched by a date rule. Use
 			&ldquo;Date is unknown&rdquo; to find them.</p>
 
-			<h3>Results, columns and export</h3>
+			<h3 class="ae-help-h" id="ae-h-results">Results, columns and export</h3>
 			<p>Newest first, 25 to a page. The line above the table says the whole search in plain
 			English, including the filters that are not rules.</p>
 			<p>Columns always appear in a fixed order, whatever order you tick them. <strong>CSV</strong>
@@ -213,12 +253,12 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 			<p>Very large results are capped; the status line says so when that happens, and the answer
 			is to narrow the filter.</p>
 
-			<h3>Share links and starting over</h3>
+			<h3 class="ae-help-h" id="ae-h-share">Share links and starting over</h3>
 			<p><strong>Copy link</strong> captures the filters, columns and date rule exactly. Whoever
 			opens it sees the same rows you did, and the report says so at the top with a
 			<strong>Start over</strong> button that clears everything back to a blank report.</p>
 
-			<h3>Criteria reference</h3>
+			<h3 class="ae-help-h" id="ae-h-ref">Criteria reference</h3>
 			<p>Every filter available, with what it matches.</p>
 			<dl id="ae-help-ref"></dl>
 
