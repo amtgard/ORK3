@@ -33,8 +33,9 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 		<p class="ae-sub">Every award the ORK has recorded, newest first.</p>
 <?php if ($ae_scope['Type'] !== null): ?>
 		<p class="ae-scope">
-			Starting with <strong><?= htmlspecialchars($ae_scope['Name']) ?></strong>.
-			Remove the <?= strtolower(htmlspecialchars($ae_scope['Type'])) ?> filter below to search every kingdom.
+			Filters start on <strong><?= htmlspecialchars($ae_scope['Name']) ?></strong>.
+			Press <strong>Run</strong> to see them, or remove the
+			<?= strtolower(htmlspecialchars($ae_scope['Type'])) ?> filter below to search every kingdom.
 		</p>
 <?php endif; ?>
 	</div>

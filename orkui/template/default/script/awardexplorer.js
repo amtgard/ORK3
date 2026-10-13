@@ -474,6 +474,10 @@
         renderTree();
         renderColumns();
         windowHint();
-        if (AE.initial || AE.scope.Type) { run(); }   // arriving scoped or by link shows results, not a blank page
+        // Run on a SHARED LINK only, as Population Explorer does. Arriving from a
+        // kingdom's Reports tab prefills the scope rule but does not fire a query:
+        // opening the page to see what it can do should not cost a scan of 397k
+        // rows, and the person may well want to change the filter before running.
+        if (AE.initial) { run(); }
     })();
 })();
