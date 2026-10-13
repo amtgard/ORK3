@@ -1279,6 +1279,7 @@
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Ladder Award Grid</a></li>
 							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
+							<li><a href="<?= UIR ?>Reports/award_explorer&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>"><i class="fas fa-award"></i> Award Explorer</a></li>
 						</ul>
 					</div>
 					<?php endif; ?>

@@ -1,0 +1,460 @@
+/* ============================================================
+   Award Explorer
+   Visual language follows populationexplorer.css so the two
+   reports feel like siblings, with its own ae- namespace so a
+   change to one never silently moves the other.
+   ============================================================ */
+
+.ae-page { max-width: 1200px; margin: 0 auto; padding: 0 16px 48px; }
+
+/* The header itself is reports.css's shared rp-header. Only the strip under it
+   belongs to this report. */
+.ae-intro {
+    display: flex; gap: 10px; align-items: flex-start;
+    margin: 0 0 16px; padding: 11px 15px; font-size: 13px; line-height: 1.5;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; color: #4a5568;
+}
+.ae-intro i { color: #2c5282; margin-top: 2px; }
+
+/* Screen-reader-only label text. */
+.ae-vh {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.ae-card {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 14px;
+}
+
+/* ---- search + window ------------------------------------- */
+.ae-searchrow { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.ae-srch { position: relative; flex: 1 1 280px; display: flex; align-items: center; }
+.ae-srch i { position: absolute; left: 12px; color: #a0aec0; pointer-events: none; }
+.ae-srch input {
+    width: 100%; padding: 10px 12px 10px 34px; font-size: 14px;
+    border: 1px solid #cbd5e0; border-radius: 6px;
+}
+.ae-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ae-chip {
+    padding: 8px 12px; min-height: 36px; font-size: 13px; cursor: pointer;
+    background: #f7fafc; border: 1px solid #cbd5e0; border-radius: 999px; color: #4a5568;
+}
+.ae-chip-on { background: #2c5282; border-color: #2c5282; color: #fff; font-weight: 600; }
+.ae-hint { margin: 10px 0 0; font-size: 12px; color: #718096; }
+
+/* ---- quick picks ----------------------------------------- */
+.ae-quicklabel { margin: 0 0 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #718096; }
+.ae-quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.ae-quickbtn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 14px; min-height: 40px; font-size: 13px; font-weight: 600; cursor: pointer;
+    background: #fff; border: 1px solid #cbd5e0; border-radius: 6px; color: #2d3748;
+}
+.ae-quickbtn:hover { background: #ebf8ff; border-color: #90cdf4; color: #2c5282; }
+.ae-quickbtn i { color: #b7791f; }
+.ae-v-pick { max-width: 320px; }
+select.ae-v-pick[multiple] { min-width: 220px; padding: 4px; }
+
+/* ---- opening scope --------------------------------------- */
+.ae-scope {
+    margin: -10px 0 16px; padding: 8px 12px; font-size: 13px;
+    background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 6px; color: #2c5282;
+}
+
+/* ---- DataTables chrome ----------------------------------- */
+.ae-dt-top, .ae-dt-bottom { padding: 10px 2px; font-size: 13px; }
+.ae-dt-btn {
+    padding: 7px 12px; font-size: 13px; cursor: pointer;
+    background: #fff; border: 1px solid #cbd5e0; border-radius: 6px; color: #2d3748;
+}
+.ae-dt-btn:hover { background: #f7fafc; }
+table.ae-table.dataTable { border-collapse: collapse !important; }
+
+/* ---- folding cards --------------------------------------- */
+.ae-fold summary {
+    cursor: pointer; font-weight: 600; font-size: 14px; display: flex;
+    align-items: center; gap: 8px; list-style: none;
+}
+.ae-fold summary::-webkit-details-marker { display: none; }
+.ae-fold summary::before { content: '\25B8'; color: #a0aec0; transition: transform .15s; }
+.ae-fold[open] summary::before { transform: rotate(90deg); }
+.ae-count { color: #a0aec0; font-weight: 400; }
+.ae-foldbody { padding-top: 14px; }
+
+/* ---- rules ------------------------------------------------ */
+.ae-rule {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 10px; border: 1px solid #edf2f7; border-radius: 6px; margin-bottom: 8px;
+    background: #fafcfe;
+}
+.ae-rule select, .ae-rule input {
+    padding: 7px 9px; font-size: 13px; border: 1px solid #cbd5e0; border-radius: 5px; background: #fff;
+}
+.ae-rule .ae-v { min-width: 120px; }
+.ae-rule .ae-p { width: 92px; }
+.ae-join { font-size: 12px; font-weight: 700; color: #4a5568; min-width: 50px; }
+.ae-joinbtn {
+    cursor: pointer; background: #edf2f7; border: 1px solid #cbd5e0;
+    border-radius: 5px; padding: 6px 10px; min-height: 32px;
+}
+.ae-join-first { color: #a0aec0; font-weight: 600; }
+.ae-and { font-size: 12px; color: #718096; }
+.ae-x {
+    margin-left: auto; cursor: pointer; background: none; border: 0;
+    color: #a0aec0; font-size: 20px; line-height: 1; padding: 4px 8px; min-height: 32px;
+}
+.ae-x:hover { color: #c53030; }
+.ae-chosen { flex-basis: 100%; margin: 6px 0 0; font-size: 12px; color: #2c5282; font-weight: 600; }
+.ae-note { flex-basis: 100%; margin: 4px 0 0; font-size: 12px; color: #718096; }
+.ae-rule-error { flex-basis: 100%; margin: 4px 0 0; font-size: 12px; color: #c53030; font-weight: 600; }
+
+.ae-treeactions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+/* A nested group is boxed and tinted so the bracketing is visible: the whole
+   point of a group is that you can see what is inside it. */
+.ae-group {
+    flex: 1 1 auto; min-width: 0;
+    border: 1px solid #cbd5e0; border-left: 3px solid #90cdf4;
+    border-radius: 6px; padding: 10px; margin-bottom: 8px; background: #f7fafc;
+}
+.ae-group .ae-group { background: #fff; }
+.ae-grouprow { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+.ae-grouprow > .ae-join { margin-top: 14px; }
+.ae-check { display: block; font-size: 13px; color: #4a5568; margin-top: 8px; }
+
+/* ---- columns ---------------------------------------------- */
+.ae-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+.ae-colpick { font-size: 13px; color: #4a5568; display: flex; align-items: center; gap: 6px; padding: 4px 0; }
+
+/* ---- actions ---------------------------------------------- */
+.ae-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 14px; }
+.ae-btn {
+    padding: 9px 14px; min-height: 40px; font-size: 13px; font-weight: 600; cursor: pointer;
+    background: #fff; border: 1px solid #cbd5e0; border-radius: 6px; color: #2d3748;
+    display: inline-flex; align-items: center; gap: 7px;
+}
+.ae-btn:hover { background: #f7fafc; }
+.ae-btn-primary { background: #2c5282; border-color: #2c5282; color: #fff; }
+.ae-btn-primary:hover { background: #2a4e7c; }
+.ae-btn-primary:disabled { opacity: .6; cursor: default; }
+.ae-btn-quiet { color: #718096; }
+.ae-status { font-size: 13px; color: #4a5568; margin-left: 4px; }
+
+/* ---- results ---------------------------------------------- */
+/* The search, in words. Reads as a caption above the table rather than as a
+   control, because it is the one thing on the page that explains the rest. */
+.ae-summary {
+    margin: 0 0 12px; padding: 10px 14px; font-size: 13px; line-height: 1.5;
+    background: #f7fafc; border-left: 3px solid #90cdf4; border-radius: 0 6px 6px 0; color: #2d3748;
+}
+.ae-tablewrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+.ae-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; }
+.ae-table th {
+    text-align: left; padding: 10px 12px; background: #f7fafc; color: #4a5568;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
+    border-bottom: 1px solid #e2e8f0; white-space: nowrap; position: sticky; top: 0;
+}
+.ae-table td { padding: 9px 12px; border-bottom: 1px solid #edf2f7; vertical-align: middle; }
+.ae-table tr:last-child td { border-bottom: 0; }
+.ae-table tbody tr:hover { background: #f7fafc; }
+.ae-table a { color: #2c5282; text-decoration: none; }
+.ae-table a:hover { text-decoration: underline; }
+.ae-muted { color: #a0aec0; }
+.ae-revoked {
+    font-size: 11px; font-weight: 700; color: #c53030;
+    background: #fff5f5; border: 1px solid #feb2b2; border-radius: 4px; padding: 1px 6px;
+}
+.ae-empty { color: #718096; font-size: 14px; margin: 10px 0; }
+.ae-linkbtn {
+    background: none; border: 0; padding: 0; margin-left: 4px; cursor: pointer;
+    color: #2c5282; font-size: 14px; font-weight: 600; text-decoration: underline;
+}
+.ae-linkbtn:hover { color: #2a4e7c; }
+.ae-more { text-align: center; margin: 14px 0; }
+
+/* ============================================================
+   HELP GUIDE DIALOG (.ae-help-*)
+   Deliberately a mirror of populationexplorer.css's .pe-help-*
+   block: the two guides open side by side often enough that any
+   divergence reads as one of them being broken.
+
+   The script moves the overlay to <body>, so nothing here may
+   depend on .ae-page or .rp-root -- only --ork-* and the --ae-help-*
+   tokens, which are declared on the overlay itself for that reason.
+   ============================================================ */
+
+/* The page keeps its own blue; the dialog follows Population Explorer's
+   indigo so the pair match. Declared on the overlay because it is reparented
+   out of .ae-page. */
+.ae-help-overlay {
+    --ae-help-accent     : #4338ca;
+    --ae-help-accent-text: #3730a3;
+}
+html[data-theme="dark"] .ae-help-overlay {
+    --ae-help-accent     : #6366f1;
+    --ae-help-accent-text: #c7d2fe;
+}
+
+/* <html> only: it is the one page scroller. --ae-help-gutter is the width of a
+   classic (space-taking) scrollbar, measured by the script; padding it back keeps
+   the page behind from shifting sideways. Padding rather than scrollbar-gutter, so
+   the viewport stays full width and the fixed backdrop dims all of it -- a stable
+   gutter would be left undimmed. */
+html.ae-help-lock { overflow: hidden; padding-right: var(--ae-help-gutter, 0px); }
+/* The fixed top nav spans the viewport: a transparent border (its background still
+   paints under it) keeps its items where they were. */
+html.ae-help-lock #newmenu { border-right: var(--ae-help-gutter, 0px) solid transparent; }
+
+.ae-help-overlay {
+    position           : fixed;
+    inset              : 0;
+    z-index            : var(--z-modal, 10100);
+    display            : flex;
+    align-items        : center;
+    justify-content    : center;
+    padding            : 16px;
+    box-sizing         : border-box;
+    background         : rgba(0, 0, 0, 0.5);
+    opacity            : 0;
+    transition         : opacity 0.2s ease;
+    overscroll-behavior: contain;
+}
+.ae-help-overlay[hidden] { display: none; }
+.ae-help-overlay.is-open { opacity: 1; }
+.ae-help-box {
+    display       : flex;
+    flex-direction: column;
+    width         : 760px;
+    max-width     : 100%;
+    max-height    : calc(100vh - 32px);
+    max-height    : calc(100dvh - 32px);
+    box-sizing    : border-box;
+    background    : var(--ork-card-bg);
+    color         : var(--ork-text);
+    border-radius : 12px;
+    box-shadow    : 0 25px 60px rgba(0, 0, 0, 0.25);
+    font-size     : 14px;
+    line-height   : 1.55;
+    text-align    : left;
+    transform     : translateY(-16px) scale(0.98);
+    transition    : transform 0.2s ease;
+}
+.ae-help-overlay.is-open .ae-help-box { transform: none; }
+.ae-help-header {
+    display        : flex;
+    align-items    : center;
+    justify-content: space-between;
+    gap            : 12px;
+    padding        : 16px 20px;
+    border-bottom  : 1px solid var(--ork-divider);
+    flex-shrink    : 0;
+}
+.ae-help-close {
+    display        : flex;
+    align-items    : center;
+    justify-content: center;
+    width          : 36px;
+    height         : 36px;
+    flex-shrink    : 0;
+    padding        : 0;
+    border         : none;
+    border-radius  : 50%;
+    background     : none;
+    color          : var(--ork-text-muted);
+    font-size      : 20px;
+    line-height    : 1;
+    cursor         : pointer;
+    transition     : background 0.15s, color 0.15s;
+}
+.ae-help-close:hover { background: var(--ork-bg-secondary); color: var(--ork-text); }
+.ae-help-close:focus-visible { outline: 2px solid var(--ae-help-accent); outline-offset: 2px; }
+.ae-help-body {
+    flex                      : 1 1 auto;
+    min-height                : 0;
+    overflow-y                : auto;
+    padding                   : 4px 20px 24px;
+    overscroll-behavior       : contain;
+    -webkit-overflow-scrolling: touch;
+}
+/* Focus moves to the title on open, not here, so the scroll container never draws
+   a ring around the whole guide -- it reads as an error state. The rule stays for
+   the keyboard user who tabs to it deliberately. */
+.ae-help-body:focus { outline: none; }
+.ae-help-body:focus-visible { outline: 2px solid var(--ae-help-accent); outline-offset: -2px; }
+.ae-help-body p { margin: 0 0 10px; text-align: left; }
+.ae-help-body ul,
+.ae-help-body ol { margin: 0 0 10px; padding-left: 22px; }
+.ae-help-body li { margin: 0 0 6px; }
+.ae-help-body em { font-style: normal; font-weight: 600; color: var(--ae-help-accent-text); }
+
+/* orkui.css paints a pill box, border and text-shadow on every bare heading, and
+   its dark-mode rule outranks a plain class -- so the reset must be repeated under
+   html[data-theme="dark"] or the guide turns into a stack of grey bars there while
+   looking correct in light mode. */
+.ae-help-overlay h2.ae-help-title,
+.ae-help-overlay h3.ae-help-h,
+html[data-theme="dark"] .ae-help-overlay h2.ae-help-title,
+html[data-theme="dark"] .ae-help-overlay h3.ae-help-h {
+    background   : transparent;
+    border       : none;
+    border-radius: 0;
+    box-shadow   : none;
+    text-shadow  : none;
+    padding      : 0;
+    font-family  : inherit;
+    color        : var(--ork-text);
+    outline      : none; /* focus targets (tabindex -1), not controls */
+}
+.ae-help-overlay h2.ae-help-title,
+html[data-theme="dark"] .ae-help-overlay h2.ae-help-title {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+    margin     : 0;
+    font-size  : 17px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+.ae-help-title i { color: var(--ae-help-accent); }
+.ae-help-overlay h3.ae-help-h,
+html[data-theme="dark"] .ae-help-overlay h3.ae-help-h {
+    margin     : 0 0 8px;
+    font-size  : 16px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+.ae-help-section { padding-top: 16px; scroll-margin-top: 12px; }
+.ae-help-section + .ae-help-section { margin-top: 10px; border-top: 1px solid var(--ork-divider); }
+
+/* Contents. Two columns so nine entries do not push the first section off the
+   fold, which is the whole use of a table of contents in a dialog. */
+.ae-help-toc {
+    margin       : 14px 0 2px;
+    padding      : 12px 16px;
+    border-radius: 8px;
+    background   : var(--ork-bg-secondary);
+}
+.ae-help-body .ae-help-toc ol { columns: 2; column-gap: 28px; margin: 0; padding-left: 22px; }
+.ae-help-body .ae-help-toc li { margin: 0 0 4px; break-inside: avoid; }
+.ae-help-toc a { color: var(--ae-help-accent-text); font-weight: 600; text-decoration: none; }
+.ae-help-toc a:hover { text-decoration: underline; }
+.ae-help-toc a:focus-visible { outline: 2px solid var(--ae-help-accent); outline-offset: 2px; border-radius: 2px; }
+
+/* Criteria reference */
+.ae-help-body dl { margin: 0 0 10px; }
+.ae-help-body dt { margin: 10px 0 2px; font-weight: 700; }
+.ae-help-body dd { margin: 0 0 0 14px; color: var(--ork-text-secondary); }
+.ae-help-body dt.ae-help-refgroup {
+    margin        : 18px 0 6px;
+    font-size     : 12px;
+    font-weight   : 700;
+    line-height   : 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color         : var(--ork-text-muted);
+    border-bottom : 1px solid var(--ork-divider);
+    padding-bottom: 4px;
+}
+.ae-help-body dt.ae-help-refgroup:first-child { margin-top: 4px; }
+
+@media (max-width: 640px) {
+    .ae-help-overlay { padding: 0; align-items: stretch; }
+    .ae-help-box {
+        width        : 100%;
+        max-height   : 100vh;
+        max-height   : 100dvh;
+        border-radius: 0;
+    }
+    .ae-help-header { padding: 10px 12px 10px 16px; }
+    .ae-help-close { width: 44px; height: 44px; }
+    .ae-help-body { padding: 4px 16px 24px; }
+    .ae-help-body .ae-help-toc ol { columns: 1; }
+    .ae-help-toc a { display: inline-flex; align-items: center; min-height: 44px; padding: 0; }
+}
+
+/* ---- notices ---------------------------------------------- */
+.ae-notice { padding: 12px 16px; border-radius: 6px; font-size: 14px; margin-bottom: 14px; }
+.ae-notice-info  { background: #ebf8ff; border: 1px solid #bee3f8; color: #2c5282; }
+.ae-notice-warn  { background: #fffaf0; border: 1px solid #fbd38d; color: #975a16; }
+.ae-notice-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; }
+
+/* ---- dark mode -------------------------------------------- */
+html[data-theme="dark"] .ae-card,
+html[data-theme="dark"] .ae-table { background: #161b22; border-color: #2d3748; }
+html[data-theme="dark"] .ae-hint,
+html[data-theme="dark"] .ae-empty { color: #a0aec0; }
+html[data-theme="dark"] .ae-rule { background: #1a202c; border-color: #2d3748; }
+html[data-theme="dark"] .ae-group { background: #0d1117; border-color: #2d3748; border-left-color: #2c5282; }
+html[data-theme="dark"] .ae-group .ae-group { background: #161b22; }
+html[data-theme="dark"] .ae-rule select,
+html[data-theme="dark"] .ae-rule input,
+html[data-theme="dark"] .ae-srch input { background: #0d1117; border-color: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .ae-btn { background: #1a202c; border-color: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .ae-btn-primary { background: #2c5282; border-color: #2c5282; color: #fff; }
+html[data-theme="dark"] .ae-chip { background: #1a202c; border-color: #2d3748; color: #a0aec0; }
+html[data-theme="dark"] .ae-chip-on { background: #2c5282; border-color: #2c5282; color: #fff; }
+html[data-theme="dark"] .ae-table th { background: #1a202c; color: #a0aec0; border-color: #2d3748; }
+html[data-theme="dark"] .ae-table td { border-color: #21262d; }
+html[data-theme="dark"] .ae-table tbody tr:hover { background: #1a202c; }
+html[data-theme="dark"] .ae-tablewrap { border-color: #2d3748; }
+html[data-theme="dark"] .ae-notice-info  { background: rgba(66,153,225,.12); border-color: rgba(66,153,225,.4); color: #90cdf4; }
+html[data-theme="dark"] .ae-notice-warn  { background: rgba(236,201,75,.12); border-color: rgba(236,201,75,.4); color: #f6e05e; }
+html[data-theme="dark"] .ae-notice-error { background: rgba(229,62,62,.12); border-color: rgba(229,62,62,.4); color: #fc8181; }
+html[data-theme="dark"] .ae-scope { background: rgba(66,153,225,.12); border-color: rgba(66,153,225,.4); color: #90cdf4; }
+html[data-theme="dark"] .ae-quickbtn { background: #1a202c; border-color: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .ae-quickbtn:hover { background: rgba(66,153,225,.12); border-color: rgba(66,153,225,.4); color: #90cdf4; }
+html[data-theme="dark"] .ae-quicklabel { color: #a0aec0; }
+html[data-theme="dark"] .ae-linkbtn { color: #90cdf4; }
+html[data-theme="dark"] .ae-chosen { color: #90cdf4; }
+html[data-theme="dark"] .ae-summary { background: #161b22; border-left-color: #2c5282; color: #cbd5e0; }
+html[data-theme="dark"] .ae-intro { background: #161b22; border-color: #2d3748; color: #a0aec0; }
+html[data-theme="dark"] .ae-intro i { color: #90cdf4; }
+
+/* Body-text greys. #4a5568 and #718096 read fine on white and almost vanish on
+   #161b22, which is what made the Columns list unreadable in dark mode. */
+html[data-theme="dark"] .ae-colpick,
+html[data-theme="dark"] .ae-check,
+html[data-theme="dark"] .ae-status,
+html[data-theme="dark"] .ae-join { color: #cbd5e0; }
+html[data-theme="dark"] .ae-note,
+html[data-theme="dark"] .ae-and,
+html[data-theme="dark"] .ae-btn-quiet,
+html[data-theme="dark"] .ae-count,
+html[data-theme="dark"] .ae-join-first { color: #8b949e; }
+html[data-theme="dark"] .ae-joinbtn { background: #21262d; border-color: #2d3748; color: #cbd5e0; }
+
+/* Reds and the gold accent need lifting off a dark background, not reusing. */
+html[data-theme="dark"] .ae-rule-error { color: #fc8181; }
+html[data-theme="dark"] .ae-revoked {
+    color: #fc8181; background: rgba(229, 62, 62, .12); border-color: rgba(229, 62, 62, .4);
+}
+html[data-theme="dark"] .ae-quickbtn i { color: #d69e2e; }
+
+/* DataTables' own chrome is injected outside our markup, so it has to be named
+   explicitly or the length menu, filter box and pager stay black-on-black. */
+html[data-theme="dark"] .dataTables_wrapper .dataTables_length,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_filter,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_info,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate { color: #cbd5e0; }
+html[data-theme="dark"] .dataTables_wrapper .dataTables_length select,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_filter input {
+    background: #0d1117; border: 1px solid #2d3748; color: #e2e8f0;
+}
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button { color: #cbd5e0 !important; }
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: #21262d !important; border-color: #2d3748 !important; color: #fff !important;
+}
+html[data-theme="dark"] .ae-table a { color: #90cdf4; }
+html[data-theme="dark"] .ae-dt-btn { background: #1a202c; border-color: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .dataTables_wrapper { color: #a0aec0; }
+
+/* ---- phone ------------------------------------------------ */
+@media (max-width: 640px) {
+    .ae-page { padding: 0 12px 40px; }
+    .ae-rule { flex-direction: column; align-items: stretch; }
+    .ae-rule select, .ae-rule input { width: 100%; }
+    .ae-x { margin-left: 0; align-self: flex-end; min-height: 44px; min-width: 44px; }
+    .ae-chip, .ae-btn { min-height: 44px; }
+    .ae-actions .ae-btn { flex: 1 1 auto; justify-content: center; }
+}

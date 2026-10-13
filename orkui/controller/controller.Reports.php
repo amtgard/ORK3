@@ -5,6 +5,10 @@ class Controller_Reports extends Controller
     public function __construct($call = null, $method = null)
     {
         parent::__construct($call, $method);
+        // Reports reachable without logging in. 'courts' and 'court' were here and
+        // were not meant to be (2026-10-13, Ken): a court report names every
+        // recipient of every honour at a court, which is members' business, and
+        // leaving it open also let crawlers walk it.
         $public_reports = [
             'roster',
             'kingdom_officer_directory',
@@ -14,12 +18,15 @@ class Controller_Reports extends Controller
             'attendance',
             'event_attendance',
             'suspended',
-            'courts',
-            'court',
             // Checks login itself and answers JSON status:5 (a redirect would break fetch()).
             'population_explorer_json',
             // Download: answers plain-text 401/403 itself (a redirect would be a poor download).
             'population_explorer_export',
+            // Same reason as population_explorer_json: fetch() cannot follow a redirect
+            // to a login page and still parse JSON, so this answers status:5 itself.
+            // The PAGE (award_explorer) is NOT listed, so it redirects to Login like
+            // every other gated report -- which is the whole point of gating it.
+            'award_explorer_json',
         ];
         if (!isset($this->session->user_id) && !in_array($this->method, $public_reports)) {
             header('Location: ' . UIR . 'Login');
@@ -256,78 +263,89 @@ class Controller_Reports extends Controller
         }
     }
 
-	public function courts($params = null) {
-		$kingdom_id = isset($this->request->KingdomId) ? (int)$this->request->KingdomId : 0;
-		$park_id    = isset($this->request->ParkId)    ? (int)$this->request->ParkId    : 0;
+    public function courts($params = null)
+    {
+        $kingdom_id = isset($this->request->KingdomId) ? (int)$this->request->KingdomId : 0;
+        $park_id    = isset($this->request->ParkId) ? (int)$this->request->ParkId : 0;
 
-		$from  = (isset($this->request->From)  && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->From))
-			? $this->request->From  : date('Y-m-d', strtotime('-6 months'));
-		$until = (isset($this->request->Until) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->Until))
-			? $this->request->Until : date('Y-m-d');
+        $from  = (isset($this->request->From)  && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->From))
+            ? $this->request->From : date('Y-m-d', strtotime('-6 months'));
+        $until = (isset($this->request->Until) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->Until))
+            ? $this->request->Until : date('Y-m-d');
 
-		if (!valid_id($kingdom_id) && !valid_id($park_id)) {
-			header('Location: ' . UIR);
-			exit;
-		}
+        if (!valid_id($kingdom_id) && !valid_id($park_id)) {
+            header('Location: ' . UIR);
+            exit;
+        }
 
-		$this->load_model('Court');
-		$scope         = $this->Court->get_court_report_scope($kingdom_id, $park_id);
-		$location_name = $scope['Name'];
-		$kingdom_id    = $scope['KingdomId'];
+        $this->load_model('Court');
+        $scope         = $this->Court->get_court_report_scope($kingdom_id, $park_id);
+        $location_name = $scope['Name'];
+        $kingdom_id    = $scope['KingdomId'];
 
-		$this->template = 'Reports_courts.tpl';
-		$this->data['Courts']       = $this->Court->get_court_report_list($kingdom_id, $park_id, $from, $until);
-		$this->data['ScopeType']    = $park_id > 0 ? 'park' : 'kingdom';
-		$this->data['KingdomId']    = $kingdom_id;
-		$this->data['ParkId']       = $park_id;
-		$this->data['From']         = $from;
-		$this->data['Until']        = $until;
-		$this->data['LocationName'] = $location_name;
-		$this->data['page_title']   = 'Court Report';
+        $this->template = 'Reports_courts.tpl';
+        $this->data['Courts']       = $this->Court->get_court_report_list($kingdom_id, $park_id, $from, $until);
+        $this->data['ScopeType']    = $park_id > 0 ? 'park' : 'kingdom';
+        $this->data['KingdomId']    = $kingdom_id;
+        $this->data['ParkId']       = $park_id;
+        $this->data['From']         = $from;
+        $this->data['Until']        = $until;
+        $this->data['LocationName'] = $location_name;
+        $this->data['page_title']   = 'Court Report';
 
-		if ($park_id > 0) {
-			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . (int)$park_id . '&tab=reports';
-		} else {
-			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . (int)$kingdom_id . '&tab=reports';
-		}
-	}
+        if ($park_id > 0) {
+            $this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . (int)$park_id . '&tab=reports';
+        } else {
+            $this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . (int)$kingdom_id . '&tab=reports';
+        }
+    }
 
-	public function court($params = null) {
-		$court_id = isset($this->request->CourtId) ? (int)$this->request->CourtId : 0;
-		if (!valid_id($court_id)) {
-			header('Location: ' . UIR);
-			exit;
-		}
+    public function court($params = null)
+    {
+        $court_id = isset($this->request->CourtId) ? (int)$this->request->CourtId : 0;
+        if (!valid_id($court_id)) {
+            header('Location: ' . UIR);
+            exit;
+        }
 
-		$this->load_model('Court');
-		$report = $this->Court->get_court_report_detail($court_id);
-		if (!$report) {
-			header('Location: ' . UIR);
-			exit;
-		}
+        $this->load_model('Court');
+        $report = $this->Court->get_court_report_detail($court_id);
+        if (!$report) {
+            header('Location: ' . UIR);
+            exit;
+        }
 
-		$kingdom_id = isset($this->request->KingdomId) ? (int)$this->request->KingdomId : 0;
-		$park_id    = isset($this->request->ParkId)    ? (int)$this->request->ParkId    : 0;
-		$from       = (isset($this->request->From)  && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->From))  ? $this->request->From  : '';
-		$until      = (isset($this->request->Until) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->Until)) ? $this->request->Until : '';
-		if (!$kingdom_id && !$park_id) { $kingdom_id = $report['Court']['KingdomId']; $park_id = $report['Court']['ParkId']; }
-		if (!valid_id($kingdom_id) && !valid_id($park_id)) {
-			header('Location: ' . UIR);
-			exit;
-		}
+        $kingdom_id = isset($this->request->KingdomId) ? (int)$this->request->KingdomId : 0;
+        $park_id    = isset($this->request->ParkId) ? (int)$this->request->ParkId : 0;
+        $from       = (isset($this->request->From)  && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->From)) ? $this->request->From : '';
+        $until      = (isset($this->request->Until) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->Until)) ? $this->request->Until : '';
+        if (!$kingdom_id && !$park_id) {
+            $kingdom_id = $report['Court']['KingdomId'];
+            $park_id = $report['Court']['ParkId'];
+        }
+        if (!valid_id($kingdom_id) && !valid_id($park_id)) {
+            header('Location: ' . UIR);
+            exit;
+        }
 
-		$back = UIR . 'Reports/courts&' . ($park_id > 0 ? 'ParkId=' . $park_id : 'KingdomId=' . $kingdom_id);
-		if ($park_id > 0 && $kingdom_id) $back .= '&KingdomId=' . $kingdom_id;
-		if ($from)  $back .= '&From='  . $from;
-		if ($until) $back .= '&Until=' . $until;
+        $back = UIR . 'Reports/courts&' . ($park_id > 0 ? 'ParkId=' . $park_id : 'KingdomId=' . $kingdom_id);
+        if ($park_id > 0 && $kingdom_id) {
+            $back .= '&KingdomId=' . $kingdom_id;
+        }
+        if ($from) {
+            $back .= '&From='  . $from;
+        }
+        if ($until) {
+            $back .= '&Until=' . $until;
+        }
 
-		$this->template = 'Reports_court.tpl';
-		$this->data['Court']      = $report['Court'];
-		$this->data['Awards']     = $report['Awards'];
-		$this->data['BackUrl']    = $back;
-		$this->data['page_title'] = 'Court Report — ' . $report['Court']['Name'];
-		$this->data['menu']['reports']['url'] = $back;
-	}
+        $this->template = 'Reports_court.tpl';
+        $this->data['Court']      = $report['Court'];
+        $this->data['Awards']     = $report['Awards'];
+        $this->data['BackUrl']    = $back;
+        $this->data['page_title'] = 'Court Report — ' . $report['Court']['Name'];
+        $this->data['menu']['reports']['url'] = $back;
+    }
 
     public function _kam($params, $template, $knights, $masters)
     {
@@ -1154,6 +1172,165 @@ class Controller_Reports extends Controller
         $this->data['KnightTypes']  = $result['KnightTypes']  ?? array();
     }
 
+
+    // ---------------------------------------------------------------- Award Explorer
+
+    public function award_explorer($params = null)
+    {
+        $this->template = 'Reports_awardexplorer.tpl';
+        $this->data['page_title'] = 'Award Explorer';
+
+        $this->data['ae_link_param'] = AwardExplorer::LINK_PARAM;
+        $this->data['ae_registry'] = [];
+        $this->data['ae_initial'] = null;
+        $this->data['ae_link_error'] = null;
+        $this->data['ae_default_months'] = AwardExplorer::DEFAULT_WINDOW_MONTHS;
+        $this->data['ae_logged_out'] = false;
+        $this->data['ae_load_error'] = false;
+
+        // Opening scope, same courtesy as Population Explorer: arriving from a
+        // kingdom or park page starts you filtered to it. Unlike that report this
+        // is a STARTING FILTER, not a boundary -- the whole point here is to be
+        // able to look at everything, so the rule can be removed like any other.
+        $scope = ['Type' => null, 'Id' => 0, 'Name' => ''];
+        if (isset($this->request->ParkId) && valid_id($this->request->ParkId)) {
+            $scope['Type'] = 'Park';
+            $scope['Id'] = (int)$this->request->ParkId;
+        } elseif (isset($this->request->KingdomId) && valid_id($this->request->KingdomId)) {
+            $scope['Type'] = 'Kingdom';
+            $scope['Id'] = (int)$this->request->KingdomId;
+        } elseif (isset($this->session->park_id) && valid_id($this->session->park_id)) {
+            $scope['Type'] = 'Park';
+            $scope['Id'] = (int)$this->session->park_id;
+        } elseif (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id)) {
+            $scope['Type'] = 'Kingdom';
+            $scope['Id'] = (int)$this->session->kingdom_id;
+        }
+        $this->data['ae_scope'] = $scope;
+
+        // Login gate. Award data is public, but 397k rows behind a filter builder is
+        // what a crawler would walk, so the page itself needs a session.
+        $token = isset($this->session->token) ? (string)$this->session->token : '';
+        if ($this->Reports->award_authorize($token) !== null) {
+            $this->data['ae_logged_out'] = true;
+            return;
+        }
+
+        $registry = $this->Reports->award_registry($token);
+        if (!$registry) {
+            $this->data['ae_load_error'] = true;
+            return;
+        }
+        // The SQL builders are closures; they are the server's business and cannot
+        // be JSON-encoded. Publish labels, groups, types and operands only.
+        foreach ($registry['criteria'] as $id => &$def) {
+            unset($def['sql']);
+        }
+        unset($def);
+        $this->data['ae_registry'] = $registry;
+
+        if ($scope['Type'] !== null) {
+            $scope['Name'] = (string)$this->Reports->award_scope_name($scope['Type'], $scope['Id']);
+            // An id that names nothing is not an error worth a banner: drop the
+            // opening filter and show everything, which is the report's default.
+            if ($scope['Name'] === '') {
+                $scope = ['Type' => null, 'Id' => 0, 'Name' => ''];
+            }
+            $this->data['ae_scope'] = $scope;
+            $this->data['menu']['reports']['url'] = UIR
+                . ($scope['Type'] === 'Park' ? 'Park' : 'Kingdom') . '/profile/' . $scope['Id'] . '&tab=reports';
+        }
+
+        $link = $this->request->{AwardExplorer::LINK_PARAM} ?? null;
+        if (is_string($link) && $link !== '') {
+            $decoded = $this->_ae_decode_link($link);
+            if ($decoded === null) {
+                $this->data['ae_link_error'] = 'That shared link could not be read. Starting from an empty filter.';
+            } else {
+                $this->data['ae_initial'] = $decoded;
+            }
+        }
+    }
+
+    /**
+     * Share link: base64url of the JSON state. Size-capped before decoding, because
+     * the cost of a hostile link must not scale with its length.
+     */
+    private function _ae_decode_link(string $link): ?array
+    {
+        if (strlen($link) > AwardExplorer::MAX_LINK_BYTES) {
+            return null;
+        }
+        $json = base64_decode(strtr($link, '-_', '+/'), true);
+        if ($json === false || $json === '' || strlen($json) > AwardExplorer::MAX_LINK_BYTES) {
+            return null;
+        }
+        $state = json_decode($json, true);
+        if (!is_array($state)) {
+            return null;
+        }
+        return $state;
+    }
+
+    public function award_explorer_json()
+    {
+        header('Content-Type: application/json');
+        $pre = $this->_pe_preflight();
+        if ($pre !== null) {
+            if ($pre[0] !== 401) {
+                http_response_code($pre[0]); // 401 stays 200 + status 5: the JS reads the body
+            }
+            echo json_encode(['status' => $pre[1], 'error' => $pre[2]]);
+            exit;
+        }
+        $token = $this->_pe_release_session();
+        $body = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($body)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid request body']);
+            exit;
+        }
+        $r = $this->Reports->award_run([
+            'Token'           => $token,
+            'Tree'            => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
+            'Columns'         => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+            'Search'          => is_string($body['Search'] ?? null) ? $body['Search'] : '',
+            'IncludeRevoked'  => !empty($body['IncludeRevoked']),
+            'IncludeStripped' => !empty($body['IncludeStripped']),
+            'Limit'           => (int)($body['Limit'] ?? 200),
+            'Offset'          => (int)($body['Offset'] ?? 0),
+            'WithTotal'       => !empty($body['WithTotal']),
+        ]);
+        if ((int)($r['Status']['Status'] ?? 1) !== 0) {
+            echo json_encode($this->_ae_json_error($r));
+            exit;
+        }
+        echo json_encode([
+            'status'     => 0,
+            'columns'    => $r['Columns'] ?? [],
+            'rows'       => $r['Rows'] ?? [],
+            'has_more'   => !empty($r['HasMore']),
+            'total'      => $r['Total'],
+            'elapsed_ms' => (int)($r['ElapsedMs'] ?? 0),
+        ]);
+        exit;
+    }
+
+    /** Map a domain failure onto the JSON shape, keeping the HTTP code meaningful. */
+    private function _ae_json_error(array $r): array
+    {
+        $msg = (string)($r['Status']['Message'] ?? 'The awards could not be read.');
+        if (!empty($r['Timeout'])) {
+            http_response_code(503);
+        } elseif (!empty($r['Busy'])) {
+            http_response_code(429);
+            header('Retry-After: ' . self::PE_BUSY_RETRY_AFTER);
+        }
+        $out = ['status' => 1, 'error' => $msg];
+        if (isset($r['Path'])) {
+            $out['path'] = $r['Path'];
+        }
+        return $out;
+    }
 
     public function population_explorer($params = null)
     {
