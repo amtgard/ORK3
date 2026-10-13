@@ -255,7 +255,7 @@ html[data-theme="dark"] .rp-rec-filter-help-default { color:#718096; }
 				<tbody>
 <?php if (is_array($AwardRecommendations)) : ?>
 <?php 	foreach ($AwardRecommendations as $rec) : ?>
-				<tr data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
+				<tr data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((array_key_exists('IsLadder', $rec) ? !empty($rec['IsLadder']) : (int)$rec['Rank'] > 0) ? 'below' : 'nonladder') ?>">
 <?php if ($_showKingdom) : ?>
 					<td><a href="<?=UIR.'Kingdom/profile/'.(int)$rec['KingdomId']?>"><?=htmlspecialchars($rec['KingdomName'])?></a></td>
 <?php endif; ?>

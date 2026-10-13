@@ -1639,7 +1639,7 @@ $_total_awards = count($courtAwards ?? []);
                 </div>
                 <div class="cp-cell cp-cell-award">
                     <span class="cp-award-name-text"><?= htmlspecialchars($aw['AwardName']) ?></span>
-                    <?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span class="ladder-rank cp-award-rank" data-lvl="<?= min((int)$aw['Rank'], 10) ?>">Rank <?= (int)$aw['Rank'] ?></span><?php endif; ?>
+                    <?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span class="ladder-rank cp-award-rank" data-lvl="<?= min((int)$aw['Rank'], 10) ?>">Rank <?= (int)$aw['Rank'] ?></span><?php elseif ($aw['IsLadder']): ?><span class="ladder-rank ladder-rank-unset cp-award-rank" title="Ladder award — the rank is chosen when this line is granted.">Rank at grant</span><?php endif; ?>
                 </div>
                 <div class="cp-cell cp-cell-type">
                     <span class="<?= $typeClass ?>" data-tip="<?= htmlspecialchars($typeTip) ?>"><?= $typeLabel ?></span>
@@ -2173,15 +2173,22 @@ $_total_awards = count($courtAwards ?? []);
                     <div class="cp-grant-ro-award" id="cp-grant-award"></div>
                 </div>
             </div>
-            <div class="cp-row-2">
-                <div class="cp-field" id="cp-grant-rank-wrap">
-                    <label for="cp-grant-rank">Rank</label>
-                    <input type="number" id="cp-grant-rank" min="1" max="99" value="1">
-                </div>
-                <div class="cp-field">
-                    <label for="cp-grant-date">Date</label>
-                    <input type="text" id="cp-grant-date" readonly>
-                </div>
+            <!-- Rank gets its own full-width row: ten pills do not fit in half the
+                 modal, and the ad-hoc Add Award modal already lays it out this way. -->
+            <div class="cp-field" id="cp-grant-rank-wrap">
+                <label>Rank <span id="cp-grant-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">&mdash; select the rank being awarded</span></label>
+                <div class="cp-rank-pills" id="cp-grant-rank-pills"></div>
+                <!-- Informational only. Fires when the recipient holds the same ladder
+                     in another kingdom (e.g. a principality's own row vs its parent's).
+                     It suggests nothing and changes no default -- the officer decides. -->
+                <div class="cp-grant-related" id="cp-grant-rank-related" style="display:none"></div>
+                <!-- Kept as #cp-grant-rank so cpSubmitGrant reads the value exactly as
+                     it did when this was a number input. -->
+                <input type="hidden" id="cp-grant-rank" value="1">
+            </div>
+            <div class="cp-field">
+                <label for="cp-grant-date">Date</label>
+                <input type="text" id="cp-grant-date" readonly>
             </div>
             <div class="cp-field">
                 <label for="cp-grant-giver-text">Given By <span style="color:#e53e3e">*</span></label>
@@ -2320,6 +2327,14 @@ $_total_awards = count($courtAwards ?? []);
         }
         return $flat;
     })($awardOpts, is_array($PseudoLadderKingdomAwardIds ?? null) ? $PseudoLadderKingdomAwardIds : [])) ?>;
+    // Kingdom-original ladder ids. The Grant modal needs these to pick the right
+    // key into the held-ranks map: those awards are keyed "k<KingdomAwardId>", and
+    // membership of this list is the only reliable test -- most of them carry
+    // AwardId 94 ("Custom Award"), so "has no catalog row" does not identify them.
+    var cpPseudoLadderIds = <?= json_encode(array_map('intval', is_array($PseudoLadderKingdomAwardIds ?? null) ? $PseudoLadderKingdomAwardIds : [])) ?>;
+    // kaid -> {Slug, Name, Kingdom} for the same awards, so the Grant modal can say
+    // what the recipient holds on the equivalent ladder elsewhere.
+    var cpPseudoLadderInfo = <?= json_encode(is_array($PseudoLadderSiblings ?? null) ? $PseudoLadderSiblings : (object)[]) ?>;
     // Group sets per modal mode, in canonical display order (skip-empty at render).
     var CP_AWARD_GROUPS = ['Ladder Awards', 'Other', 'Custom Award'];
     var CP_TITLE_GROUPS = ['Knighthoods', 'Masterhoods', 'Paragons', 'Noble Titles', 'Associate Titles', 'Custom Title'];
@@ -3444,8 +3459,14 @@ $_total_awards = count($courtAwards ?? []);
         gid('cp-grant-recipient').textContent = aw.Persona + (aw.ParkAbbrev ? ' (' + aw.ParkAbbrev + ')' : '');
         gid('cp-grant-award').textContent = aw.AwardName + (isLadder && aw.Rank ? ' — Rank ' + aw.Rank : '');
         var rankWrap = gid('cp-grant-rank-wrap');
-        if (isLadder) { rankWrap.style.display = ''; gid('cp-grant-rank').value = aw.Rank || 1; }
-        else          { rankWrap.style.display = 'none'; gid('cp-grant-rank').value = aw.Rank || 0; }
+        if (isLadder) {
+            rankWrap.style.display = '';
+            cpBuildGrantRankPills(aw);
+        } else {
+            rankWrap.style.display = 'none';
+            gid('cp-grant-rank').value = aw.Rank || 0;
+            gid('cp-grant-rank-pills').innerHTML = '';
+        }
         gid('cp-grant-date').value = cpCourtDateHuman || 'Today';
         // Reason precedence: saved public comment → originating rec reason → blank.
         // Precedence must mirror commitStagedAward: an explicitly CLEARED line inherits
@@ -3774,6 +3795,16 @@ $_total_awards = count($courtAwards ?? []);
         cpRmUpdateCount();
     };
 
+    // Show a recommendation-modal error so it cannot be missed: the box sits below
+    // a height-capped scroll list, so it is scrolled into view rather than just shown.
+    function cpRmShowError(msg) {
+        var box = gid('cp-rec-error');
+        if (!box) return;
+        box.textContent = msg;
+        box.style.display = 'block';
+        if (box.scrollIntoView) { box.scrollIntoView({ block: 'nearest' }); }
+    }
+
     window.cpSubmitRecs = function() {
         if (selectedRecs.length === 0) {
             gid('cp-rec-error').textContent = 'Select at least one recommendation.';
@@ -3826,12 +3857,24 @@ $_total_awards = count($courtAwards ?? []);
             selectedRecs = failed.map(function(x) { return x.rid; });
             cpRmUpdateCount();
             if (failed.length) {
-                gid('cp-rec-error').textContent = failed[0].d.error || 'Some awards could not be added.';
-                gid('cp-rec-error').style.display = 'block';
+                // Say how many, not just the first reason: adding five and having two
+                // refused used to render one line of 13px red text under a 460px
+                // scroll list, which reads as "the button did nothing".
+                var msg = failed[0].d.error || 'Some awards could not be added.';
+                if (failed.length !== results.length) {
+                    msg = failed.length + ' of ' + results.length + ' could not be added. ' + msg;
+                }
+                cpRmShowError(msg);
             } else {
                 cpCloseRecModal();
             }
-        }).catch(function() { cpRecsDone(); });
+        }).catch(function(err) {
+            // Never swallow: a throw in here (a render failure on an appended row,
+            // say) left the modal untouched and silent while the adds had already
+            // been written server-side.
+            cpRecsDone();
+            cpRmShowError('Something went wrong while adding. Some lines may have been added — close this and check the Order of Court before retrying.');
+        });
     };
 
     // ---- Ad-hoc award modal ----
@@ -4055,6 +4098,112 @@ $_total_awards = count($courtAwards ?? []);
         cpSelectAdhocRank(Math.min(Math.max(held, planned) + 1, maxRank));
     };
 
+    // ---- Grant modal rank pills -------------------------------------------
+    // Same control as the ad-hoc Add Award modal, for the same reason: a bare
+    // number input asks the officer to remember what the recipient already holds.
+    // It was also the only ladder control in the Court Planner that did not show
+    // it, which is how a rank-less ladder line defaulted silently to Rank 1.
+    //
+    // Held ranks come from the same PlayerAjax/player/{id}/awardranks map the
+    // ad-hoc modal uses, via the shared cpAdhocHeldRanks cache. "Planned" has no
+    // meaning here -- this line is already on the court, it is the thing being
+    // granted -- so only the held shading applies.
+    window.cpBuildGrantRankPills = function(aw) {
+        var maxRank = /zodiac/i.test(aw.AwardName || '') ? 12 : 10;
+        var mid     = String(aw.MundaneId || '');
+        var held    = cpGrantHeldRank(aw);
+        var current = parseInt(aw.Rank, 10) || 0;
+        var html = '';
+        for (var i = 1; i <= maxRank; i++) {
+            var cls = 'ladder-rank cp-rank-pill';
+            var tip = '';
+            if (i <= held) { cls += ' cp-rank-pill-held'; tip = ' data-tip="Already awarded"'; }
+            html += '<button type="button" class="' + cls + '" data-lvl="' + Math.min(i, 10) + '" data-rank="' + i + '"' + tip + ' onclick="cpSelectGrantRank(' + i + ')">' + i + '</button>';
+        }
+        gid('cp-grant-rank-pills').innerHTML = html;
+        var hint = gid('cp-grant-rank-hint');
+        if (hint) {
+            hint.innerHTML = held
+                ? '\u2014 green ranks have already been awarded (to ' + held + ').'
+                : '\u2014 select the rank being awarded';
+        }
+        cpShowRelatedLadders(aw);
+        // An existing rank on the line is the officer's own earlier choice, so keep
+        // it. Otherwise land on the first rank not already held.
+        cpSelectGrantRank(current > 0 ? Math.min(current, maxRank) : Math.min(held + 1, maxRank));
+        // Held ranks are fetched once per recipient; repaint when they land.
+        if (mid && !cpAdhocHeldRanks[mid]) {
+            fetch(uir + 'PlayerAjax/player/' + mid + '/awardranks')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    cpAdhocHeldRanks[mid] = d || {};
+                    // Only repaint if this is still the award on screen.
+                    if (String(gid('cp-grant-caid').value) === String(aw.CourtAwardId)) { cpBuildGrantRankPills(aw); }
+                })
+                .catch(function() { cpAdhocHeldRanks[mid] = {}; });
+        }
+    };
+
+    // Mirrors cpAdhocLedgerRank's key rules: kingdom-original ladders have no
+    // catalog row, so they are keyed "k<KingdomAwardId>"; everything else by base
+    // award_id. No falling back between the two -- most kingdom-original ladders
+    // carry AwardId 94 ("Custom Award"), so a miss would read the player's
+    // Custom Award rank and shade ranks they never earned.
+    function cpGrantHeldRank(aw) {
+        var mid = String(aw.MundaneId || '');
+        var map = cpAdhocHeldRanks[mid];
+        if (!map) { return 0; }
+        var key = (!aw.AwardId || cpPseudoLadderIds.indexOf(Number(aw.KingdomAwardId)) !== -1)
+            ? 'k' + (aw.KingdomAwardId || 0)
+            : String(aw.AwardId);
+        return parseInt(map[key], 10) || 0;
+    }
+
+    // What the recipient holds on the SAME ladder in another kingdom.
+    //
+    // Held ranks are keyed "k<kingdomaward_id>", so a principality's row of a ladder
+    // and its parent kingdom's row are separate buckets, while the State of Amtgard
+    // grid merges them by slug. Rather than merge the buckets -- which would change
+    // suggested ranks for every split-off principality to fix a handful of cases --
+    // this just states the fact and leaves the decision alone. Deliberately NOT
+    // limited to the parent chain: a player who transferred between unrelated
+    // kingdoms is worth mentioning too, and mentioning is all this does.
+    function cpShowRelatedLadders(aw) {
+        var box = gid('cp-grant-rank-related');
+        if (!box) { return; }
+        box.style.display = 'none';
+        box.textContent = '';
+        var meta = cpPseudoLadderInfo && cpPseudoLadderInfo[String(aw.KingdomAwardId)];
+        if (!meta || !meta.Slug) { return; }          // not a kingdom-original ladder
+        var map = cpAdhocHeldRanks[String(aw.MundaneId || '')];
+        if (!map) { return; }                          // held ranks not fetched yet
+        var found = [];
+        for (var kaid in cpPseudoLadderInfo) {
+            if (!Object.prototype.hasOwnProperty.call(cpPseudoLadderInfo, kaid)) { continue; }
+            if (String(kaid) === String(aw.KingdomAwardId)) { continue; }
+            var sib = cpPseudoLadderInfo[kaid];
+            if (!sib || sib.Slug !== meta.Slug) { continue; }
+            var r = parseInt(map['k' + kaid], 10) || 0;
+            if (r > 0) { found.push({ name: sib.Name, kingdom: sib.Kingdom, rank: r }); }
+        }
+        if (!found.length) { return; }
+        found.sort(function(a, b) { return b.rank - a.rank; });
+        var parts = found.map(function(f) {
+            return esc(f.name) + (f.kingdom ? ' (' + esc(f.kingdom) + ')' : '') + ' at rank ' + f.rank;
+        });
+        box.innerHTML = '<i class="fas fa-circle-info" style="margin-right:6px"></i>Also holds ' + parts.join('; ')
+            + '. This is a separate ladder in the ORK &mdash; shown in case the ranks should continue.';
+        box.style.display = '';
+    }
+
+    window.cpSelectGrantRank = function(rank) {
+        gid('cp-grant-rank').value = rank;
+        var pills = gid('cp-grant-rank-pills').querySelectorAll('.cp-rank-pill');
+        for (var i = 0; i < pills.length; i++) {
+            pills[i].classList.toggle('cp-rank-pill-selected', String(pills[i].dataset.rank) === String(rank));
+        }
+    };
+
     window.cpSelectAdhocRank = function(rank) {
         gid('cp-adhoc-rank-val').value = rank;
         var pills = gid('cp-adhoc-rank-pills').querySelectorAll('.cp-rank-pill');
@@ -4117,7 +4266,13 @@ $_total_awards = count($courtAwards ?? []);
         }
         var ptlBadge = aw.PassToLocal ? '<span class="cp-flag-local" data-tip="Pass to Local — this award will be handed down to the recipient\'s home park to grant at their court."><i class="fas fa-arrow-down"></i></span>' : '';
         var recBadge = aw.RecommendationsId ? '<span class="cp-flag-rec" data-tip="This award came from a submitted recommendation."><i class="fas fa-star"></i></span>' : '';
-        var rankStr  = (aw.IsLadder && aw.Rank > 0) ? '<span class="ladder-rank cp-award-rank" data-lvl="' + Math.min(aw.Rank, 10) + '">Rank ' + aw.Rank + '</span>' : '';
+        // Mirror of the server-rendered row above: a ladder line with no rank yet
+        // gets a placeholder chip, not blank -- blank made it read as a one-off award.
+        var rankStr  = aw.IsLadder
+            ? (aw.Rank > 0
+                ? '<span class="ladder-rank cp-award-rank" data-lvl="' + Math.min(aw.Rank, 10) + '">Rank ' + aw.Rank + '</span>'
+                : '<span class="ladder-rank ladder-rank-unset cp-award-rank" title="Ladder award — the rank is chosen when this line is granted.">Rank at grant</span>')
+            : '';
         var noteBtn  = aw.Notes ? '<button class="cp-note-btn" data-note="' + esc(aw.Notes) + '" onclick="event.stopPropagation();cpShowNote(this)" data-tip="View note" aria-label="View internal note"><i class="fas fa-comment-alt"></i></button>' : '';
         var typeClass = aw.IsTitle ? 'cp-type-title' : (aw.IsLadder ? 'cp-type-ladder' : 'cp-type-award');
         var typeLabel = aw.IsTitle ? 'Title' : (aw.IsLadder ? 'Ladder' : 'Award');

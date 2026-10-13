@@ -1340,6 +1340,7 @@
      JavaScript
      ============================================= -->
 <script>
+window.tnPseudoLadderInfo = <?= json_encode(is_array($PseudoLadderSiblings ?? null) ? $PseudoLadderSiblings : (object)[]) ?>;
 var KnConfig = {
 	uir:              '<?= UIR ?>',
 	httpService:      '<?= HTTP_SERVICE ?>',

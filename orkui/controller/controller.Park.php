@@ -59,6 +59,10 @@ class Controller_Park extends Controller
 
     public function profile($park_id = null)
     {
+        // Same-slug kingdom-original ladders, so the rank pickers can say when the
+        // recipient already holds the equivalent ladder in another kingdom.
+        // Informational only -- see Award::pseudoLadderSiblings().
+        $this->data['PseudoLadderSiblings'] = (new Award())->pseudoLadderSiblings();
         $this->template = '../revised-frontend/Parknew_index.tpl';
         $park_id = preg_replace('/[^0-9]/', '', $park_id);
         if (!valid_id($park_id)) {
@@ -299,6 +303,8 @@ class Controller_Park extends Controller
 
         $this->data['AwardRecommendations'] = [];
         $canManagePark = $this->data['CanManagePark'] ?? false;
+        // An empty list may only mean the viewer isn't allowed to see it.
+        $this->data['RecsHiddenBySetting'] = !$recsPublic && !$canManagePark;
         if ($recsPublic || $canManagePark) {
             $this->data['ShowRecsTab'] = true;
             $recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid]);
@@ -310,7 +316,9 @@ class Controller_Park extends Controller
                 return (int)$r['RecommendedById'] === $uid;
             }));
             $this->data['AwardRecommendations'] = $myRecs;
-            $this->data['ShowRecsTab'] = !empty($myRecs);
+            // Shown even with none of their own: the tab then says why it is
+            // empty and still offers the Recommend button.
+            $this->data['ShowRecsTab'] = true;
         } else {
             $this->data['ShowRecsTab'] = false;
         }
