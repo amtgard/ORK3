@@ -57,11 +57,29 @@
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    // Operand wording depends on what is being compared. One shared map read
+    // "is after / more than" for every comparison, which is nonsense on a Rank
+    // and clutter on a date.
     var OPLABEL = {
-        eq: 'is', ne: 'is not', gt: 'is after / more than', gte: 'is on or after / at least',
-        lt: 'is before / less than', lte: 'is on or before / at most', between: 'is between',
-        is: 'is', is_not: 'is not', in: 'is any of', not_in: 'is none of'
+        date: {
+            eq: 'is', ne: 'is not',
+            gt: 'is after', gte: 'is on or after',
+            lt: 'is before', lte: 'is on or before',
+            between: 'is between'
+        },
+        number: {
+            eq: 'is', ne: 'is not',
+            gt: 'is more than', gte: 'is at least',
+            lt: 'is less than', lte: 'is at most',
+            between: 'is between'
+        },
+        set: { is: 'is', is_not: 'is not', in: 'is any of', not_in: 'is none of' }
     };
+
+    function opLabel(op, type) {
+        var table = (type === 'date' || type === 'number') ? OPLABEL[type] : OPLABEL.set;
+        return table[op] || OPLABEL.set[op] || OPLABEL.number[op] || op;
+    }
 
     // ---- state -------------------------------------------------------------
     var state = {
@@ -104,6 +122,9 @@
     function critOptions(selected) {
         var groups = {};
         Object.keys(CRIT).forEach(function (id) {
+            // Hidden criteria stay valid on the wire -- the date chips send one, and
+            // older share links carry others -- they are just not offered by hand.
+            if (CRIT[id].hidden) { return; }
             var g = CRIT[id].group || 'Other';
             (groups[g] = groups[g] || []).push(id);
         });
@@ -202,7 +223,7 @@
                 if (def) {
                     html += '<select class="ae-o" data-k="o">' + (def.operands || []).map(function (o) {
                         return '<option value="' + esc(o) + '"' + (o === r.o ? ' selected' : '') + '>'
-                            + esc(OPLABEL[o] || o) + '</option>';
+                            + esc(opLabel(o, def.type)) + '</option>';
                     }).join('') + '</select>';
                     if (def.param) {
                         html += '<input type="number" class="ae-p" data-k="p" min="1" placeholder="months" value="'

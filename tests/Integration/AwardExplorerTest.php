@@ -285,6 +285,42 @@ final class AwardExplorerTest extends TestCase
         );
     }
 
+    /**
+     * Hidden criteria stay valid on the wire. The date chips send months_ago on
+     * every run, and older share links can carry revoked / stripped, so hiding
+     * them from the picker must not make them unusable.
+     */
+    public function testHiddenCriteriaAreStillAccepted(): void
+    {
+        $cases = [
+            ['c' => 'months_ago', 'o' => 'is', 'v' => 1, 'p' => 12],
+            ['c' => 'revoked', 'o' => 'is', 'v' => 'yes'],
+            ['c' => 'stripped', 'o' => 'is', 'v' => 'no'],
+        ];
+        foreach ($cases as $leaf) {
+            $r = $this->ae->NormalizeTree($this->tree([$leaf]), $this->known);
+            $this->assertTrue($r['ok'], $leaf['c'] . ' must still validate: ' . ($r['error'] ?? ''));
+            $this->assertNotSame('', $this->ae->CompileTree($r['tree'], $this->known));
+        }
+    }
+
+    /**
+     * revoked and stripped must not be offered by hand: Run applies their defaults
+     * OUTSIDE the tree, so "Revoked is yes" as a rule ANDs revoked=1 with revoked=0
+     * and can never match. The checkboxes are the supported route.
+     */
+    public function testUnsatisfiableCriteriaAreHiddenFromThePicker(): void
+    {
+        $crit = $this->ae->Registry($this->known)['criteria'];
+        foreach (['revoked', 'stripped', 'months_ago'] as $id) {
+            $this->assertArrayHasKey($id, $crit);
+            $this->assertTrue(!empty($crit[$id]['hidden']), $id . ' should be hidden from the picker');
+        }
+        foreach (['date', 'peerage', 'rank', 'home_park', 'award'] as $id) {
+            $this->assertTrue(empty($crit[$id]['hidden']), $id . ' should be offered');
+        }
+    }
+
     public function testEmptyTreeCompilesToATruth(): void
     {
         $r = $this->ae->NormalizeTree($this->tree([]), $this->known);

@@ -132,11 +132,16 @@ class AwardExplorer extends Ork3
             'date_unknown' => $this->_crit('Date is unknown', 'When', 'bool', [
                 'note' => 'The ORK stores 0000-00-00 when no date was recorded.',
             ]),
+            // The date-window chips' own criterion. Still valid -- every run sends it
+            // and share links carry it -- but hidden from the picker: chosen by hand
+            // it renders as two unexplained number boxes, and the chips already say
+            // it better.
             'months_ago' => $this->_crit('Awarded in the last N months', 'When', 'number', [
                 'param' => true,
                 'operands' => ['is'],
                 'min' => 1,
                 'max' => self::MAX_MONTHS,
+                'hidden' => true,
             ]),
             'award' => $this->_crit('Award', 'Which award', 'enum_set', [
                 'set' => 'kingdomaward',
@@ -185,11 +190,19 @@ class AwardExplorer extends Ork3
                 'note' => 'By player id. Use the search box to find awards by persona text.',
             ]),
             'given_by' => $this->_crit('Given by', 'Who', 'enum_set', ['set' => 'mundane']),
+            // Hidden from the picker because as RULES they contradict their own
+            // defaults: Run excludes revoked rows outside the tree, so a
+            // "Revoked is yes" rule ANDs revoked=1 with revoked=0 and can never
+            // match -- an empty result that looks like a broken report. The two
+            // checkboxes are the supported way, and they set the opts instead.
+            // Kept valid so an older share link still resolves.
             'revoked' => $this->_crit('Revoked', 'Status', 'bool', [
-                'note' => 'Revoked awards are excluded unless you ask for them.',
+                'note' => 'Use the "Include revoked awards" checkbox instead.',
+                'hidden' => true,
             ]),
             'stripped' => $this->_crit('Stripped from a player', 'Status', 'bool', [
-                'note' => 'revoke_award clears the recipient and records them in stripped_from.',
+                'note' => 'Use the "Include awards stripped from a player" checkbox instead.',
+                'hidden' => true,
             ]),
         ];
     }
