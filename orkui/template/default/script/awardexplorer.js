@@ -16,6 +16,28 @@
     var OPTS = AE.registry.options || {};
     var $ = function (id) { return document.getElementById(id); };
 
+    // Criteria that say WHERE, in both readings: where the award was given, and
+    // where the recipient is now. A quick pick keeps these and replaces the rest.
+    var SCOPE_CRIT = ['kingdom', 'park', 'home_kingdom', 'home_park'];
+    // Filtering on one of these without its column on screen is what made
+    // "Park is Felfrost" look broken, so the builder turns the matching one on.
+    var CRIT_COLUMN = {
+        park: 'park',
+        kingdom: 'kingdom',
+        home_park: 'recipient_park',
+        home_kingdom: 'recipient_kingdom',
+        given_by: 'given_by',
+        rank: 'rank'
+    };
+
+    function showColumnFor(critId) {
+        var col = CRIT_COLUMN[critId];
+        if (col && COLS[col] && state.columns.indexOf(col) === -1) {
+            state.columns.push(col);
+            renderColumns();
+        }
+    }
+
     function esc(s) {
         return String(s == null ? '' : s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -189,7 +211,7 @@
             // has no knightings of its own, so "Knights" from Painted Skies is
             // correctly zero and unhelpfully blank. Offer the obvious next move
             // rather than leaving it looking broken.
-            var scoped = state.rules.filter(function (r) { return r.c === 'kingdom' || r.c === 'park'; });
+            var scoped = state.rules.filter(function (r) { return SCOPE_CRIT.indexOf(r.c) !== -1; });
             el.innerHTML = '<p class="ae-empty">No awards match those filters.'
                 + (scoped.length
                     ? ' <button type="button" class="ae-linkbtn" id="ae-drop-scope">Search every kingdom instead</button>'
@@ -198,7 +220,7 @@
             var drop = $('ae-drop-scope');
             if (drop) {
                 drop.addEventListener('click', function () {
-                    state.rules = state.rules.filter(function (r) { return r.c !== 'kingdom' && r.c !== 'park'; });
+                    state.rules = state.rules.filter(function (r) { return SCOPE_CRIT.indexOf(r.c) === -1; });
                     renderTree();
                     run();
                 });
@@ -394,6 +416,7 @@
         if (!r || !k) { return; }
         if (k === 'c') {
             r.c = e.target.value;
+            showColumnFor(r.c);
             var def = CRIT[r.c];
             r.o = def && def.operands ? def.operands[0] : '';
             r.v = ''; r.p = null; delete r.error;
@@ -460,7 +483,7 @@
             // Knights from a kingdom's Reports tab means "this kingdom's knightings",
             // not "every knighting in Amtgard" -- wiping the scope rule threw away the
             // one thing the person had already told us.
-            var scope = state.rules.filter(function (r) { return r.c === 'kingdom' || r.c === 'park'; });
+            var scope = state.rules.filter(function (r) { return SCOPE_CRIT.indexOf(r.c) !== -1; });
             state.rules = scope.concat(preset.rules.map(function (r) { return Object.assign({}, r); }));
             if (preset.months !== undefined) {
                 state.months = preset.months;
@@ -556,7 +579,7 @@
         // is the point of the report. A shared link wins: it already says what it wants.
         if (!AE.initial && AE.scope && AE.scope.Type && AE.scope.Id) {
             state.rules.push({
-                c: AE.scope.Type === 'Park' ? 'park' : 'kingdom',
+                c: AE.scope.Type === 'Park' ? 'home_park' : 'home_kingdom',
                 o: 'is',
                 v: String(AE.scope.Id)
             });

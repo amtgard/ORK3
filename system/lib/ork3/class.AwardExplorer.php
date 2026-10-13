@@ -158,13 +158,26 @@ class AwardExplorer extends Ork3
                 'max' => self::MAX_RANK,
                 'note' => 'Rank 0 means unranked, not "rank zero".',
             ]),
-            'kingdom' => $this->_crit('Kingdom (on the award)', 'Where', 'enum_set', [
+            // Two different questions, and the common one is the second.
+            //   "Knighthoods given at Felfrost"  -> park        (a.park_id)   17 grants
+            //   "Knights who are in Felfrost"    -> home_park   (m.park_id)   11 grants
+            // A park officer asking "who are my knights" means the second, so that is
+            // what the opening scope uses and what the default columns show.
+            'kingdom' => $this->_crit('Kingdom the award was given in', 'Where', 'enum_set', [
                 'set' => 'kingdom',
-                'note' => 'The kingdom recorded on the award, not where the recipient is today.',
+                'note' => 'Recorded on the award. For members of a kingdom now, use "Recipient\'s kingdom".',
             ]),
-            'park' => $this->_crit('Park (on the award)', 'Where', 'enum_set', [
+            'park' => $this->_crit('Park the award was given in', 'Where', 'enum_set', [
                 'set' => 'park',
-                'note' => 'The park recorded on the award. Someone who has since moved still matches here.',
+                'note' => 'Recorded on the award. For players at a park now, use "Recipient\'s park".',
+            ]),
+            'home_kingdom' => $this->_crit("Recipient's kingdom", 'Who', 'enum_set', [
+                'set' => 'kingdom',
+                'note' => 'Where the recipient belongs today, wherever the award was given.',
+            ]),
+            'home_park' => $this->_crit("Recipient's park", 'Who', 'enum_set', [
+                'set' => 'park',
+                'note' => 'Where the recipient plays today. This is the one for "the knights at my park".',
             ]),
             'recipient' => $this->_crit('Recipient', 'Who', 'enum_set', [
                 'set' => 'mundane',
@@ -193,17 +206,16 @@ class AwardExplorer extends Ork3
             // this award at this rank, from this person.
             'date'              => $this->_col('Date', 'When', true),
             'recipient'         => $this->_col('Recipient', 'Who', true),
-            // Default, because the Park filter matches on THIS. Filtering on Park and
-            // then being shown the recipient's CURRENT park looks like a broken filter
-            // when in fact the person has simply transferred since.
-            'park'              => $this->_col('Park (on the award)', 'Where', true),
+            // The recipient's park today, which is what the opening scope filters on
+            // and what "the knights at my park" means. The award's own park is the
+            // column below, and the builder turns on whichever one you filter by.
+            'recipient_park'    => $this->_col("Recipient's park", 'Who', true),
             'award_name'        => $this->_col('Award', 'Which award', true),
             'rank'              => $this->_col('Rank', 'Which award', true),
             'given_by'          => $this->_col('Given by', 'Who', true),
-            'kingdom'           => $this->_col('Kingdom (on the award)', 'Where'),
-            // "today" vs "on the award" is the whole point of these two labels.
-            'recipient_park'    => $this->_col('Recipient park today', 'Who'),
-            'recipient_kingdom' => $this->_col('Recipient kingdom today', 'Who'),
+            'park'              => $this->_col('Park it was given in', 'Where'),
+            'kingdom'           => $this->_col('Kingdom it was given in', 'Where'),
+            'recipient_kingdom' => $this->_col("Recipient's kingdom", 'Who'),
             'award_type'        => $this->_col('Type', 'Which award'),
             'note'              => $this->_col('Note', 'Detail'),
             'revoked'           => $this->_col('Revoked', 'Status'),
@@ -694,6 +706,14 @@ class AwardExplorer extends Ork3
             case 'park':
                 return function (string $o, $v) {
                     return $this->_set('COALESCE(a.park_id, 0)', $o, $v);
+                };
+            case 'home_kingdom':
+                return function (string $o, $v) {
+                    return $this->_set('COALESCE(m.kingdom_id, 0)', $o, $v);
+                };
+            case 'home_park':
+                return function (string $o, $v) {
+                    return $this->_set('COALESCE(m.park_id, 0)', $o, $v);
                 };
             case 'recipient':
                 return function (string $o, $v) {

@@ -203,32 +203,56 @@ final class AwardExplorerTest extends TestCase
     }
 
     /**
-     * The Park filter matches the park recorded ON THE AWARD, while "Recipient park
-     * today" is where that person is now. They disagree for anyone who transferred,
-     * which reads as a broken filter unless the column the filter acts on is the one
-     * on screen. So Park must be a default column, and the labels must say which is
-     * which.
+     * "The knights at my park" and "knighthoods given at my park" are different
+     * questions with different answers (Felfrost: 11 and 17 on the dev restore).
+     * Both must exist, each must compile against its own column, and the labels
+     * must make clear which is which.
      */
-    public function testParkFilterAndDefaultColumnDescribeTheSameThing(): void
+    public function testParkHasBothReadingsAndTheyCompileDifferently(): void
     {
-        $this->assertContains('park', $this->ae->ResolveColumns([]), 'Park must be shown by default');
-
-        $cols = $this->ae->Registry($this->known)['columns'];
-        $this->assertStringContainsString('on the award', $cols['park']['label']);
-        $this->assertStringContainsString('on the award', $cols['kingdom']['label']);
-        $this->assertStringContainsString('today', $cols['recipient_park']['label']);
-        $this->assertStringContainsString('today', $cols['recipient_kingdom']['label']);
-
-        // The filter reads the award's own park, never the recipient's current one.
-        // Take a real id from the loaded set: the fixture database numbers its parks
-        // from 1000001, so a hardcoded 1 is correctly rejected as unknown.
         $parkId = (int)reset($this->known['park']);
         $this->assertGreaterThan(0, $parkId, 'no parks in the fixture database');
-        $r = $this->ae->NormalizeTree($this->tree([['c' => 'park', 'o' => 'is', 'v' => $parkId]]), $this->known);
-        $this->assertTrue($r['ok']);
-        $sql = $this->ae->CompileTree($r['tree'], $this->known);
-        $this->assertStringContainsString('a.park_id', $sql);
-        $this->assertStringNotContainsString('m.park_id', $sql);
+
+        // Where the recipient is now -- the one a park officer means.
+        $home = $this->ae->NormalizeTree($this->tree([['c' => 'home_park', 'o' => 'is', 'v' => $parkId]]), $this->known);
+        $this->assertTrue($home['ok']);
+        $homeSql = $this->ae->CompileTree($home['tree'], $this->known);
+        $this->assertStringContainsString('m.park_id', $homeSql);
+        $this->assertStringNotContainsString('a.park_id', $homeSql);
+
+        // Where the award was given.
+        $given = $this->ae->NormalizeTree($this->tree([['c' => 'park', 'o' => 'is', 'v' => $parkId]]), $this->known);
+        $this->assertTrue($given['ok']);
+        $givenSql = $this->ae->CompileTree($given['tree'], $this->known);
+        $this->assertStringContainsString('a.park_id', $givenSql);
+        $this->assertStringNotContainsString('m.park_id', $givenSql);
+
+        $this->assertNotSame($homeSql, $givenSql, 'the two readings must not compile the same');
+    }
+
+    public function testKingdomAlsoHasBothReadings(): void
+    {
+        $kid = (int)reset($this->known['kingdom']);
+        $home = $this->ae->NormalizeTree($this->tree([['c' => 'home_kingdom', 'o' => 'is', 'v' => $kid]]), $this->known);
+        $given = $this->ae->NormalizeTree($this->tree([['c' => 'kingdom', 'o' => 'is', 'v' => $kid]]), $this->known);
+        $this->assertTrue($home['ok']);
+        $this->assertTrue($given['ok']);
+        $this->assertStringContainsString('m.kingdom_id', $this->ae->CompileTree($home['tree'], $this->known));
+        $this->assertStringContainsString('a.kingdom_id', $this->ae->CompileTree($given['tree'], $this->known));
+    }
+
+    /**
+     * The default view must show the park the opening scope filters on, or
+     * filtering by park appears to return other parks' rows.
+     */
+    public function testDefaultColumnsShowTheRecipientsPark(): void
+    {
+        $this->assertContains('recipient_park', $this->ae->ResolveColumns([]));
+
+        $cols = $this->ae->Registry($this->known)['columns'];
+        $this->assertSame("Recipient's park", $cols['recipient_park']['label']);
+        $this->assertStringContainsString('given in', $cols['park']['label']);
+        $this->assertStringContainsString('given in', $cols['kingdom']['label']);
     }
 
     public function testEmptyTreeCompilesToATruth(): void
