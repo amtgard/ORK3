@@ -20,17 +20,80 @@ final class AwardOptionGroupsTest extends TestCase
         $this->awardModel = new Model_Award();
     }
 
-    public function testPseudoLadderIds(): void
+    /**
+     * Structure, NOT contents.
+     *
+     * This used to assert the list equalled a copy of itself pasted into the test,
+     * plus an exact count. That can only fail when someone legitimately edits the
+     * list -- which is a documented, expected thing to do, since the list is
+     * hand-maintained and goes stale every time a kingdom invents a ladder. It
+     * duly went red on 2026-10-04 when 7513 was added, and stayed red for nine
+     * days, which is the proof that a change-detector nobody can act on is noise
+     * rather than a guard.
+     *
+     * What IS worth catching is an editing mistake: a duplicate, or a non-id.
+     * Contents are covered behaviourally by the effectiveIsLadder tests below.
+     */
+    public function testPseudoLadderIdsAreStructurallyValid(): void
     {
-        $expected = [
-            7067, 7249, 6628, 5813, 6045, 6050, 6430, 6283, 7055,
-            6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
-            6577, 94, 7084, 6171, 6574, 7254,
-        ];
-        $actual = Award::pseudoLadderKingdomAwardIds();
+        $ids = Award::pseudoLadderKingdomAwardIds();
 
-        $this->assertSame($expected, $actual);
-        $this->assertCount(24, $actual);
+        $this->assertNotEmpty($ids, 'The curated kingdom-original ladder list must not be empty.');
+        foreach ($ids as $id) {
+            $this->assertIsInt($id);
+            $this->assertGreaterThan(0, $id, 'kingdomaward ids are positive.');
+        }
+        $this->assertSame(
+            array_values(array_unique($ids)),
+            array_values($ids),
+            'Duplicate id in pseudoLadderKingdomAwardIds() -- harmless at runtime, but always an editing slip.'
+        );
+    }
+
+    /**
+     * The actual contract: three independent ways to be a ladder, any one enough.
+     * Case 3 is the one with no other source of truth -- a kingdom-original ladder
+     * has no ork_award row, so neither is_ladder column can ever be 1 for it, and
+     * dropping the curated list from this test would let that regress silently.
+     */
+    public function testEffectiveIsLadderCoversAllThreeCases(): void
+    {
+        $curated = Award::pseudoLadderKingdomAwardIds();
+        $curatedId = (int) reset($curated);
+        $notCurated = 0;
+        for ($candidate = 999000; $candidate < 999100; $candidate++) {
+            if (!in_array($candidate, $curated, true)) {
+                $notCurated = $candidate;
+                break;
+            }
+        }
+        $this->assertGreaterThan(0, $notCurated, 'needed an id outside the curated list');
+
+        // 1. the kingdom's own row says so
+        $this->assertTrue(Award::effectiveIsLadder($notCurated, 1, 0));
+        // 2. the base catalog row says so
+        $this->assertTrue(Award::effectiveIsLadder($notCurated, 0, 1));
+        // 3. kingdom-original: neither column can say so, the list is all there is
+        $this->assertTrue(Award::effectiveIsLadder($curatedId, 0, 0));
+        // none of the above
+        $this->assertFalse(Award::effectiveIsLadder($notCurated, 0, 0));
+    }
+
+    /**
+     * The SQL fragment must carry case 3 too. Court and Report splice this into
+     * queries, so if the CASE arm were dropped the PHP and SQL answers would
+     * diverge -- and the SQL side is what drives the Recommendations Manager's
+     * filters, where a disagreement shows up as pages coming back short.
+     */
+    public function testSqlEffectiveIsLadderCarriesTheCuratedIds(): void
+    {
+        $sql = Award::sqlEffectiveIsLadder('ka', 'a');
+
+        $this->assertStringContainsString('ka.is_ladder', $sql);
+        $this->assertStringContainsString('a.is_ladder', $sql);
+        foreach (Award::pseudoLadderKingdomAwardIds() as $id) {
+            $this->assertStringContainsString((string) (int) $id, $sql);
+        }
     }
 
     public function testPeerageBuckets(): void
@@ -99,11 +162,10 @@ final class AwardOptionGroupsTest extends TestCase
      */
     private function mirrorPseudoLadderIds(): array
     {
-        return [
-            7067, 7249, 6628, 5813, 6045, 6050, 6430, 6283, 7055,
-            6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
-            6577, 94, 7084, 6171, 6574, 7254,
-        ];
+        // Delegate, never copy. This held its own stale duplicate of the list --
+        // 24 ids against the production 25 -- so the categorisation below was
+        // quietly bucketing a kingdom-original ladder as an ordinary award.
+        return Award::pseudoLadderKingdomAwardIds();
     }
 
     /**

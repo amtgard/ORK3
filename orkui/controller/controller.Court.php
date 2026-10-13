@@ -193,6 +193,10 @@ class Controller_Court extends Controller
         // map (see Player::GetAwardMaxRanks). Membership of this list is the only
         // reliable test -- most of them carry AwardId 94 ("Custom Award"), not 0.
         $this->data['PseudoLadderKingdomAwardIds'] = Award::pseudoLadderKingdomAwardIds();
+        // Same awards grouped by slug, so the Grant modal can tell the officer when
+        // the recipient already holds the equivalent ladder in another kingdom --
+        // informational only, it changes no default. See Award::pseudoLadderSiblings.
+        $this->data['PseudoLadderSiblings'] = (new Award())->pseudoLadderSiblings();
         $this->data['StatusFlow']   = $statusFlow;
         $this->data['CanManage']    = $canManage;
         $this->data['Uid']          = $uid;

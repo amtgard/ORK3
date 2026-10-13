@@ -40,6 +40,58 @@ function tnHeldRank(ranks, opt, baseAwardId) {
 }
 if (typeof window !== 'undefined') { window.tnHeldRank = tnHeldRank; }
 
+/* Note the player's rank on the SAME ladder in another kingdom.
+
+   Held ranks for kingdom-original ladders are keyed "k<kingdomaward_id>", so a
+   principality's row of a ladder and its parent kingdom's row never see each
+   other -- Painted Skies' "Hunter" and Northern Lights' "Order of the Hunter"
+   are separate buckets. The State of Amtgard grid DOES merge them by slug
+   ("a principality that splits off keeps running the parent's ladder").
+
+   This does not merge the buckets: on production only 2 of the 5 multi-kingdom
+   slug groups are parent/child and only 9 players are affected, so merging would
+   move suggested ranks far more widely than the problem warrants. It states the
+   fact under the pills and leaves every default alone.
+
+   tnPseudoLadderInfo is kaid -> {Slug, Name, Kingdom}, emitted per page. Absent
+   (older page, or none configured) -> renders nothing. The note element is
+   created on demand right after `wrap`, so no template needs a placeholder. */
+function tnSiblingLadderNote(wrap, ranks, kaid, prefix) {
+    if (!wrap || !wrap.parentNode) return;
+    var id   = prefix + '-ladder-peers';
+    var box  = document.getElementById(id);
+    if (!box) {
+        box = document.createElement('div');
+        box.id = id;
+        box.className = 'tn-ladder-peers';
+        wrap.parentNode.insertBefore(box, wrap.nextSibling);
+    }
+    box.style.display = 'none';
+    box.textContent   = '';
+    var info = (typeof window !== 'undefined') ? window.tnPseudoLadderInfo : null;
+    if (!info || !ranks) return;
+    var self = info[String(kaid)];
+    if (!self || !self.Slug) return;              // not a kingdom-original ladder
+    var found = [];
+    for (var k in info) {
+        if (!Object.prototype.hasOwnProperty.call(info, k)) continue;
+        if (String(k) === String(kaid)) continue;
+        if (!info[k] || info[k].Slug !== self.Slug) continue;
+        var r = parseInt(ranks['k' + k], 10) || 0;
+        if (r > 0) found.push({ name: info[k].Name, kingdom: info[k].Kingdom, rank: r });
+    }
+    if (!found.length) return;
+    found.sort(function(a, b) { return b.rank - a.rank; });
+    var esc = function(x) {
+        return String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    };
+    box.innerHTML = 'Also holds ' + found.map(function(f) {
+        return esc(f.name) + (f.kingdom ? ' (' + esc(f.kingdom) + ')' : '') + ' at rank ' + f.rank;
+    }).join('; ') + '. That is a separate ladder in the ORK \u2014 shown in case the ranks should continue.';
+    box.style.display = '';
+}
+if (typeof window !== 'undefined') { window.tnSiblingLadderNote = tnSiblingLadderNote; }
+
 /* ============================================================
    Viewport-safe positioner for position:fixed autocomplete dropdowns.
    Anchors `el` to `inputEl`, but (a) clamps width + left so the list
@@ -997,6 +1049,8 @@ if (PnConfig.recError) {
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(pnAwardRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, pnAwardRanks, opt.value, 'pn-rec');
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('div');
@@ -2074,6 +2128,8 @@ if (PnConfig.recError) {
             var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
             var held      = tnHeldRank(playerRanks, opt, awardId);
             var suggested = Math.min(held + 1, maxRank);
+            // Informational only: never changes the suggested rank above.
+            tnSiblingLadderNote(gid('pn-rank-pills'), playerRanks, opt ? opt.value : 0, 'pn-add');
             var hint = gid('pn-rank-hint');
             if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
             var html = '';
@@ -3311,6 +3367,8 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(knPlayerRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, knPlayerRanks, opt.value, 'kn-add');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -4115,6 +4173,8 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(knRecRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, knRecRanks, opt.value, 'kn-rec');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -7397,6 +7457,8 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(pkPlayerRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, pkPlayerRanks, opt.value, 'pk-add');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -7913,6 +7975,8 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held     = tnHeldRank(pkRecRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, pkRecRanks, opt.value, 'pk-rec');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {

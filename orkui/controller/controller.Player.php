@@ -280,6 +280,10 @@ class Controller_Player extends Controller
 
     public function profile($id = null)
     {
+        // Same-slug kingdom-original ladders, so the rank pickers can say when the
+        // recipient already holds the equivalent ladder in another kingdom.
+        // Informational only -- see Award::pseudoLadderSiblings().
+        $this->data['PseudoLadderSiblings'] = (new Award())->pseudoLadderSiblings();
         $this->template = '../revised-frontend/Playernew_index.tpl';
         $this->load_model('QualTest');
 

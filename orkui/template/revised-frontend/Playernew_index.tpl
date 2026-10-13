@@ -3939,6 +3939,7 @@ $ladderMasterMap           = is_array($LadderMasterMap ?? null) ? $LadderMasterM
 })();
 
 <?php include __DIR__ . '/_recs_hidden_notice.tpl'; ?>
+window.tnPseudoLadderInfo = <?= json_encode(is_array($PseudoLadderSiblings ?? null) ? $PseudoLadderSiblings : (object)[]) ?>;
 var PnConfig = {
 	uir:            '<?= UIR ?>',
 	httpService:    '<?= HTTP_SERVICE ?>',

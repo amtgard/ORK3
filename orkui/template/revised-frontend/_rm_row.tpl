@@ -2,7 +2,12 @@
         $gMid    = (int)$group['MundaneId'];
         $gKaid   = (int)$group['KingdomAwardId'];
         $gRank   = (int)$group['Rank'];
-        $isLad   = $gRank > 0;
+        // Authoritative flag from Report (Award::effectiveIsLadder), NOT `Rank > 0`.
+        // The old test was circular: a ladder rec saved before its award was
+        // recognised has no rank, so it read as non-ladder, so the rank picker was
+        // hidden, so the rank could never be set. Fall back to the rank only when
+        // the flag is absent (an older cached payload).
+        $isLad   = array_key_exists('IsLadder', $group) ? !empty($group['IsLadder']) : ($gRank > 0);
         // Eligibility from the authoritative AlreadyHas flag — CurrentRank is null
         // for every not-yet-earned rec, so the old $cur comparison never yielded 'below'.
         $elig    = !$isLad ? 'nonladder' : (!empty($group['AlreadyHas']) ? 'ator' : 'below');
@@ -44,6 +49,9 @@
             // Retirement is a property of the recipient; the Grant and Add-to-Court
             // modals read this payload, so the flag has to reach them too.
             'IsRetired'      => !empty($group['IsRetired']),
+            // The Grant modal gates its rank pills on this. It must be the real
+            // ladder flag, not Rank > 0 -- see $isLad above.
+            'IsLadder'       => $isLad,
             // No 'Reason' here: it is already carried in data-membersfull and the
             // client reads it from there at click time (one copy per row, not two).
         ]), ENT_QUOTES);

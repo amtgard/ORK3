@@ -451,7 +451,11 @@ class Controller_Recommendations extends Controller
     {
         foreach ($groups as $g) {
             $rank      = (int)($g['Rank'] ?? 0);
-            $rankLabel = $rank > 0 ? (string)$rank : 'non-ladder';
+            // "non-ladder" is a statement about the AWARD, so it must come from the
+            // ladder flag. Keyed off the rank it used to label a rank-less ladder
+            // recommendation non-ladder, which is the thing the officer needs to fix.
+            $isLadder  = array_key_exists('IsLadder', $g) ? !empty($g['IsLadder']) : ($rank > 0);
+            $rankLabel = $isLadder ? ($rank > 0 ? (string)$rank : 'no rank set') : 'non-ladder';
             $parkName  = $parks[(int)($g['ParkId'] ?? 0)]['Name'] ?? '';
 
             // Recommenders across the cluster (unique, anonymous shown as "Anonymous").
