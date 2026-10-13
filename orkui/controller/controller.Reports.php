@@ -5,6 +5,10 @@ class Controller_Reports extends Controller
     public function __construct($call = null, $method = null)
     {
         parent::__construct($call, $method);
+        // Reports reachable without logging in. 'courts' and 'court' were here and
+        // were not meant to be (2026-10-13, Ken): a court report names every
+        // recipient of every honour at a court, which is members' business, and
+        // leaving it open also let crawlers walk it.
         $public_reports = [
             'roster',
             'kingdom_officer_directory',
@@ -14,8 +18,6 @@ class Controller_Reports extends Controller
             'attendance',
             'event_attendance',
             'suspended',
-            'courts',
-            'court',
             // Checks login itself and answers JSON status:5 (a redirect would break fetch()).
             'population_explorer_json',
             // Download: answers plain-text 401/403 itself (a redirect would be a poor download).
