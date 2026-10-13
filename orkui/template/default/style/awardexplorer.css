@@ -167,6 +167,44 @@ table.ae-table.dataTable { border-collapse: collapse !important; }
 .ae-linkbtn:hover { color: #2a4e7c; }
 .ae-more { text-align: center; margin: 14px 0; }
 
+/* ---- help dialog ------------------------------------------ */
+.ae-head { position: relative; }
+.ae-help-open { position: absolute; top: 18px; right: 0; }
+.ae-help-overlay {
+    position: fixed; inset: 0; z-index: 9000; display: flex;
+    align-items: flex-start; justify-content: center;
+    background: rgba(0, 0, 0, .5); padding: 24px 16px; overflow: auto;
+}
+.ae-help-overlay[hidden] { display: none; }
+.ae-help-box {
+    background: #fff; border-radius: 10px; width: min(820px, 100%);
+    max-height: calc(100vh - 48px); display: flex; flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .3);
+}
+.ae-help-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+}
+.ae-help-head h2 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 9px; }
+.ae-help-head h2 i { color: #2c5282; }
+.ae-help-close {
+    background: none; border: 0; font-size: 26px; line-height: 1; cursor: pointer;
+    color: #a0aec0; padding: 4px 10px; min-height: 44px; min-width: 44px;
+}
+.ae-help-close:hover { color: #2d3748; }
+.ae-help-body { padding: 4px 22px 22px; overflow-y: auto; font-size: 14px; line-height: 1.6; color: #2d3748; }
+.ae-help-body h3 { font-size: 15px; margin: 22px 0 6px; color: #1a202c; }
+.ae-help-body p, .ae-help-body ul, .ae-help-body ol { margin: 0 0 10px; }
+.ae-help-body ul, .ae-help-body ol { padding-left: 22px; }
+.ae-help-body li { margin-bottom: 4px; }
+.ae-help-body dl { margin: 8px 0 0; }
+.ae-help-body dt { font-weight: 600; margin-top: 8px; }
+.ae-help-body dd { margin: 0 0 2px; color: #718096; font-size: 13px; }
+.ae-help-refgroup {
+    margin-top: 18px !important; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .5px; color: #a0aec0; border-bottom: 1px solid #edf2f7; padding-bottom: 4px;
+}
+
 /* ---- notices ---------------------------------------------- */
 .ae-notice { padding: 12px 16px; border-radius: 6px; font-size: 14px; margin-bottom: 14px; }
 .ae-notice-info  { background: #ebf8ff; border: 1px solid #bee3f8; color: #2c5282; }
@@ -203,6 +241,16 @@ html[data-theme="dark"] .ae-quicklabel { color: #a0aec0; }
 html[data-theme="dark"] .ae-linkbtn { color: #90cdf4; }
 html[data-theme="dark"] .ae-chosen { color: #90cdf4; }
 html[data-theme="dark"] .ae-summary { background: #161b22; border-left-color: #2c5282; color: #cbd5e0; }
+html[data-theme="dark"] .ae-help-box { background: #161b22; }
+html[data-theme="dark"] .ae-help-head { border-color: #2d3748; }
+html[data-theme="dark"] .ae-help-head h2 { color: #e2e8f0; }
+html[data-theme="dark"] .ae-help-head h2 i { color: #90cdf4; }
+html[data-theme="dark"] .ae-help-body { color: #cbd5e0; }
+html[data-theme="dark"] .ae-help-body h3 { color: #e2e8f0; }
+html[data-theme="dark"] .ae-help-body dd { color: #8b949e; }
+html[data-theme="dark"] .ae-help-refgroup { color: #8b949e; border-color: #2d3748; }
+html[data-theme="dark"] .ae-help-close { color: #8b949e; }
+html[data-theme="dark"] .ae-help-close:hover { color: #e2e8f0; }
 
 /* Body-text greys. #4a5568 and #718096 read fine on white and almost vanish on
    #161b22, which is what made the Columns list unreadable in dark mode. */

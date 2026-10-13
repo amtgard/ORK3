@@ -154,7 +154,9 @@ class AwardExplorer extends Ork3
             'is_ladder' => $this->_crit('Is a ladder award', 'Which award', 'bool', [
                 'note' => 'Includes kingdom-original ladders, which carry no catalog row.',
             ]),
-            'is_title' => $this->_crit('Is a title', 'Which award', 'bool'),
+            'is_title' => $this->_crit('Is a title', 'Which award', 'bool', [
+                'note' => 'Titles and peerage ranks, as opposed to ladder awards and one-off awards.',
+            ]),
             'peerage' => $this->_crit('Peerage', 'Which award', 'peerage_set', [
                 'values' => self::PEERAGE,
                 'note' => 'Knighthoods, masterhoods and paragons, by the award\'s peerage class.',
@@ -189,7 +191,12 @@ class AwardExplorer extends Ork3
                 'set' => 'mundane',
                 'note' => 'By player id. Use the search box to find awards by persona text.',
             ]),
-            'given_by' => $this->_crit('Given by', 'Who', 'enum_set', ['set' => 'mundane']),
+            'given_by' => $this->_crit('Given by', 'Who', 'enum_set', [
+                'set' => 'mundane',
+                // given_by_id and by_whom_id disagree on 192,953 rows, so this is a
+                // real distinction, not a pedantic one.
+                'note' => 'The person recorded as giving the award, not whoever entered it into the ORK.',
+            ]),
             // Hidden from the picker because as RULES they contradict their own
             // defaults: Run excludes revoked rows outside the tree, so a
             // "Revoked is yes" rule ANDs revoked=1 with revoked=0 and can never
@@ -229,6 +236,7 @@ class AwardExplorer extends Ork3
             'recipient_kingdom' => $this->_col("Recipient's kingdom", 'Who'),
             'award_name'        => $this->_col('Award', 'Which award', true),
             'rank'              => $this->_col('Rank', 'Which award', true),
+            // The granter, not the person who typed it in -- see the criterion.
             'given_by'          => $this->_col('Given by', 'Who', true),
             'park'              => $this->_col('Park it was given in', 'Where'),
             'kingdom'           => $this->_col('Kingdom it was given in', 'Where'),

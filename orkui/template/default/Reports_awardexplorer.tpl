@@ -30,6 +30,9 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 <div class="ae-page">
 
 	<div class="ae-head">
+		<button type="button" class="ae-btn ae-help-open" id="ae-help-open" aria-haspopup="dialog">
+			<i class="fas fa-circle-question" aria-hidden="true"></i> Help
+		</button>
 		<h1><i class="fas fa-award" aria-hidden="true"></i> Award Explorer</h1>
 		<p class="ae-sub">Every award the ORK has recorded, newest first.</p>
 <?php if ($ae_scope['Type'] !== null): ?>
@@ -144,6 +147,100 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 <?php endif; ?>
 </div>
 
+
+<?php if ($ae_ready): ?>
+<!-- Help guide. Prose lives here; the criteria reference at the end is generated
+     from the registry by awardexplorer-help.js so it cannot drift from the builder. -->
+<div class="ae-help-overlay" id="ae-help" hidden>
+	<div class="ae-help-box" role="dialog" aria-modal="true" aria-labelledby="ae-help-title">
+		<div class="ae-help-head">
+			<h2 id="ae-help-title"><i class="fas fa-circle-question" aria-hidden="true"></i> Award Explorer guide</h2>
+			<button type="button" class="ae-help-close" id="ae-help-close" aria-label="Close">&times;</button>
+		</div>
+		<div class="ae-help-body" id="ae-help-body" tabindex="0">
+
+			<h3>What this report does</h3>
+			<p>It lists <strong>award grants</strong> &mdash; one row for every award ever given. A player
+			who holds five awards appears five times. That is the difference from Population Explorer,
+			which lists <em>players</em>, one row each.</p>
+			<p>Award records are public, but the report needs you signed in.</p>
+
+			<h3>Quick start</h3>
+			<ol>
+				<li>Press a <strong>Quick pick</strong>, or add rules yourself under <strong>Filters</strong>.</li>
+				<li>Tick the <strong>Columns</strong> you want.</li>
+				<li>Press <strong>Run</strong>.</li>
+			</ol>
+			<p>Opening the page does not run anything. Arriving from a kingdom or park page starts you
+			filtered to it, but still waits for Run.</p>
+
+			<h3>Quick picks</h3>
+			<p>Knights, Masterhoods, Paragons, Ladder awards, Titles and Kingdom-level each replace your
+			rules and run. They <strong>keep</strong> your kingdom or park, so pressing Knights from a park
+			gives you that park&rsquo;s knights, not every knight in Amtgard. Whatever a quick pick sets is an
+			ordinary rule you can then change.</p>
+			<p>The peerage ones also clear the date window, because knightings are rare enough that a
+			twelve-month window usually shows nothing.</p>
+
+			<h3>Two kinds of park, and two kinds of kingdom</h3>
+			<p>This catches people out, so it is worth reading once.</p>
+			<ul>
+				<li><strong>Recipient&rsquo;s park</strong> &mdash; where the person plays <em>today</em>.
+					This is the one for &ldquo;the knights at my park&rdquo;.</li>
+				<li><strong>Park the award was given in</strong> &mdash; what is recorded on the award itself.</li>
+			</ul>
+			<p>They differ for anyone who has transferred. Felfrost has 11 knights today and 17 knightings
+			recorded under it. Neither number is wrong; they answer different questions. Whichever you
+			filter on, that column is switched on for you so the table shows what you asked about.</p>
+
+			<h3>The date window</h3>
+			<p>The chips write a real rule &mdash; &ldquo;Award date is on or after &hellip;&rdquo; &mdash; into
+			Filters, where you can edit the date or delete it. <strong>Everything</strong> removes it.</p>
+			<p>New searches start on the last 12 months. If an award you expected is missing, check the
+			date rule first: that is the usual reason.</p>
+
+			<h3>Rules and groups</h3>
+			<p>Rules join with the <strong>AND</strong>/<strong>OR</strong> button between them. For
+			&ldquo;this kingdom, and either of two awards&rdquo;, you have two options:</p>
+			<ul>
+				<li>Set the award rule&rsquo;s operator to <strong>is any of</strong> and pick both &mdash; simplest.</li>
+				<li>Or press <strong>Add group</strong>, which nests a bracketed OR inside the AND.</li>
+			</ul>
+			<p>Both give the same answer. Groups earn their place when the alternatives are on
+			<em>different</em> criteria.</p>
+
+			<h3>What is left out unless you ask</h3>
+			<ul>
+				<li><strong>Revoked awards</strong> &mdash; 2,860 of them.</li>
+				<li><strong>Awards stripped from a player</strong> &mdash; where the recipient was removed from the record.</li>
+			</ul>
+			<p>Both have checkboxes under Filters. They are applied outside your rules, so an OR group
+			cannot pull them back in &mdash; which is why they are not offered as rules.</p>
+			<p>Awards with <strong>no recorded date</strong> are never matched by a date rule. Use
+			&ldquo;Date is unknown&rdquo; to find them.</p>
+
+			<h3>Results, columns and export</h3>
+			<p>Newest first, 25 to a page. The line above the table says the whole search in plain
+			English, including the filters that are not rules.</p>
+			<p>Columns always appear in a fixed order, whatever order you tick them. <strong>CSV</strong>
+			exports every row of the result, not just the page you are looking at.</p>
+			<p>Very large results are capped; the status line says so when that happens, and the answer
+			is to narrow the filter.</p>
+
+			<h3>Share links and starting over</h3>
+			<p><strong>Copy link</strong> captures the filters, columns and date rule exactly. Whoever
+			opens it sees the same rows you did, and the report says so at the top with a
+			<strong>Start over</strong> button that clears everything back to a blank report.</p>
+
+			<h3>Criteria reference</h3>
+			<p>Every filter available, with what it matches.</p>
+			<dl id="ae-help-ref"></dl>
+
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
 <?php if ($ae_ready): ?>
 <script>
 window.AE = {
@@ -164,4 +261,5 @@ window.AE = {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="<?= HTTP_TEMPLATE ?>default/script/awardexplorer.js?v=<?= filemtime(DIR_TEMPLATE . 'default/script/awardexplorer.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>default/script/awardexplorer-help.js?v=<?= filemtime(DIR_TEMPLATE . 'default/script/awardexplorer-help.js') ?>"></script>
 <?php endif; ?>
