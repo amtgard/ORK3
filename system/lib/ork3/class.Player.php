@@ -83,7 +83,7 @@ class Player extends Ork3
     }
 
     /**
-     * @return list<array{role: mixed, entity_type: mixed, entity_name: mixed}>|array{Status: mixed, Error?: mixed, Detail?: mixed}
+     * @return list<array{role: mixed, canonical_key: mixed, DisplayTitle: mixed, entity_type: mixed, entity_name: mixed}>|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
     public function GetOfficerRoles($request)
     {
@@ -96,25 +96,32 @@ class Player extends Ork3
             return [];
         }
         $this->db->Clear();
-        $officerSql = "SELECT o.role, o.park_id,
+        $officerSql = "SELECT o.role, o.park_id, o.position_id,
+            op.canonical_key AS canonical_key,
+            " . OfficerPosition::display_title_sql('op', 'al') . " AS display_title,
             CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park')
                  WHEN k.parent_kingdom_id > 0 THEN 'Principality'
                  ELSE 'Kingdom' END AS entity_type,
             CASE WHEN o.park_id > 0 THEN p.name ELSE k.name END AS entity_name
             FROM " . DB_PREFIX . 'officer o
+            LEFT JOIN ' . DB_PREFIX . 'officer_position op ON op.position_id = o.position_id
+            LEFT JOIN ' . DB_PREFIX . 'officer_position_alias al ON al.kingdom_id = o.kingdom_id AND al.canonical_key = op.canonical_key
             LEFT JOIN ' . DB_PREFIX . 'kingdom k ON o.kingdom_id = k.kingdom_id
             LEFT JOIN ' . DB_PREFIX . 'park p ON o.park_id = p.park_id AND o.park_id > 0
             LEFT JOIN ' . DB_PREFIX . 'parktitle pt ON p.parktitle_id = pt.parktitle_id
             WHERE o.mundane_id = ' . (int) $mundaneId . "
               AND k.active = 'Active'
               AND (o.park_id = 0 OR p.active = 'Active')
-            ORDER BY o.park_id DESC, o.role";
+              AND (op.retired_at IS NULL OR op.position_id IS NULL)
+            ORDER BY o.park_id DESC, op.classification, " . OfficerPosition::sort_order_sql('op', 'al') . "";
         $officerResult = $this->db->DataSet($officerSql);
         $officerRoles = [];
         if ($officerResult && $officerResult->Size() > 0) {
             while ($officerResult->Next()) {
                 $officerRoles[] = [
                     'role' => $officerResult->role,
+                    'canonical_key' => $officerResult->canonical_key !== null ? $officerResult->canonical_key : $officerResult->role,
+                    'DisplayTitle' => $officerResult->display_title !== null ? $officerResult->display_title : $officerResult->role,
                     'entity_type' => $officerResult->entity_type,
                     'entity_name' => $officerResult->entity_name,
                 ];
@@ -337,13 +344,50 @@ class Player extends Ork3
             }
         }
 
+        // Full per-award grant history (both already-reconciled rows and the
+        // still-historical ones being partitioned above) so the max-reached-date
+        // window below sees every ranked grant, not just the unreconciled subset --
+        // otherwise "first reached max" cannot be computed. Mirrors the grouping
+        // GetLadderProgress() builds from the same AwardsForPlayer() shape.
+        $grantsByAwardId = [];
+        $kaMaxLevelByAwardId = [];
+        foreach ($awards as $a) {
+            if (!is_array($a) || (int)($a['IsLadder'] ?? 0) !== 1) {
+                continue;
+            }
+            $aid = (int)($a['AwardId'] ?? 0);
+            $grantsByAwardId[$aid][] = [
+                'Rank' => (int)($a['Rank'] ?? 0),
+                'Date' => (string)($a['Date'] ?? ''),
+            ];
+            if (!isset($kaMaxLevelByAwardId[$aid])) {
+                $kaMaxLevelByAwardId[$aid] = (int)($a['KaMaxLevel'] ?? 0);
+            }
+        }
+        $maxRankByAwardId = [];
+        $maxReachedByAwardId = [];
+        foreach ($grantsByAwardId as $aid => $grantsForAward) {
+            $maxRankByAwardId[$aid] = Award::MaxRankFor($aid, $kaMaxLevelByAwardId[$aid] ?? 0);
+            $maxReachedByAwardId[$aid] = $this->LadderMaxReachedDate($maxRankByAwardId[$aid], $grantsForAward);
+        }
+
         // Keep only ladder awards — non-ladder (Custom Award etc.) are not reconcilable.
         // AwardId > 0 is required too: reconciliation groups and suggests ranks by
-        // AwardId, and kingdom-original pseudo-ladders have AwardId 0, so they would
-        // all collapse into one bogus group. They were excluded before only because
-        // IsLadder read 0 for them; now that it reports correctly, say so explicitly.
+        // AwardId, and a kingdom ladder with no linked ork_award row has AwardId 0, so
+        // those would all collapse into one bogus group. IsLadder is the effective
+        // (kingdom OR official) flag and reads 1 for them, so say so explicitly.
+        // Order of the Zodiac (award_id 30, Award::IsMonthlyLadder()) is granted once
+        // per calendar month, so its reconcilability is decided by ZodiacMonth, not by
+        // rank: a grant that already carries a month is not reconcilable, whatever
+        // legacy rank it carries; a monthless one is, whatever its legacy rank.
         $historicalAwards = array_values(array_filter($historicalAwards, function ($a) {
-            return (int)($a['IsLadder'] ?? 0) === 1 && (int)($a['AwardId'] ?? 0) > 0;
+            if ((int)($a['IsLadder'] ?? 0) !== 1 || (int)($a['AwardId'] ?? 0) <= 0) {
+                return false;
+            }
+            if (Award::IsMonthlyLadder((int)($a['AwardId'] ?? 0))) {
+                return (int)($a['ZodiacMonth'] ?? 0) === 0;
+            }
+            return true;
         }));
 
         // Sort: AwardId ASC, date ASC (missing last)
@@ -359,14 +403,47 @@ class Player extends Ork3
 
         $rankSuggestions = [];
         $groupState = [];
-        foreach ($historicalAwards as $a) {
+        foreach ($historicalAwards as &$a) {
             $aid = (int)$a['AwardId'];
             $awardsId = (int)$a['AwardsId'];
             $isLadder = (int)($a['IsLadder'] ?? 0);
             if (!$isLadder) {
                 $rankSuggestions[$awardsId] = 0;
+                // Dead in practice today ($historicalAwards is already filtered to
+                // IsLadder===1 above), but set defensively so every row carries
+                // these keys regardless of that filter.
+                $a['MaxRank'] = 0;
+                $a['IsBonus'] = false;
                 continue;
             }
+
+            // Resolved in the domain layer so the template never re-derives a
+            // ladder's max rank (the ($aid === 30) ? 12 : 10 duplicate this
+            // replaces). KaMaxLevel is already on the row -- no new query.
+            $a['MaxRank'] = $maxRankByAwardId[$aid] ?? Award::MaxRankFor($aid, (int)($a['KaMaxLevel'] ?? 0));
+
+            if (Award::IsMonthlyLadder($aid)) {
+                // There is no "past max" for a monthly award, so the bonus exclusion
+                // below does not apply to Zodiac -- every monthless grant is reconcilable
+                // regardless of its date.
+                $a['IsBonus'] = false;
+                // Pre-fill suggestion from the grant date -- grant dates are a near-uniform
+                // 254-364 per month (the fingerprint of a genuinely monthly award), while
+                // the legacy rank distribution (1193/339/131/...) is a ladder-decay curve
+                // and worthless as a month signal. Award::ZodiacMonthFromDate() guards the
+                // '0000-00-00' sentinel, returning 0 (no suggestion) rather than a
+                // spurious January. This is a suggestion only -- never written here.
+                $a['SuggestedMonth'] = Award::ZodiacMonthFromDate((string)($a['Date'] ?? ''));
+                $rankSuggestions[$awardsId] = 0;
+                continue;
+            }
+
+            // A bonus grant (unranked, dated after the player first reached max)
+            // is deliberate recognition, not an unmatched record -- it must not
+            // be offered for reconciliation.
+            $a['IsBonus'] = (int)($a['Rank'] ?? 0) === 0
+                && $this->IsBonusLadderGrantDate($maxReachedByAwardId[$aid] ?? null, (string)($a['Date'] ?? ''));
+
             if (!isset($groupState[$aid])) {
                 $real = [];
                 foreach ($realRanksByAwardId[$aid] ?? [] as $r) {
@@ -392,6 +469,7 @@ class Player extends Ork3
                 $groupState[$aid]['usedRanks'][$c] = true;
             }
         }
+        unset($a);
 
         $awardTypeCount = count(array_unique(array_column($historicalAwards, 'AwardId')));
         $totalCount = count($historicalAwards);
@@ -453,14 +531,37 @@ class Player extends Ork3
     }
 
     /**
-     * @return array<int, int> award_id => max_rank
+     * The highest rank this player holds on each ladder, for the rank pickers'
+     * "already awarded" pills and their at-or-above guard.
+     *
+     * Two key spaces in one map, exactly the shape Report::GetLadderAwardGrid
+     * already uses for its columns:
+     *
+     *   int  award_id       -- OFFICIAL ladders. Aggregated across every
+     *                          kingdomaward sharing that award_id, so a player
+     *                          who transferred kingdoms still reads as holding
+     *                          the rank they earned. Only emitted for award_id > 0.
+     *   'k' . kingdomaward_id -- ONE specific kingdomaward, emitted for every row.
+     *                          This is the only usable key for a KINGDOM ladder:
+     *                          17 of 26 kingdom-ladder rows carry award_id = 0 and
+     *                          9 more share the generic 94 "Custom Award"
+     *                          placeholder, so grouping them by award_id put every
+     *                          kingdom ladder a player holds into one bucket. A
+     *                          player at Owl rank 4 opening the Fox picker saw
+     *                          ranks 1-4 green and was hard-blocked with "already
+     *                          has this award at or above the rank selected" for an
+     *                          award they had never held.
+     *
+     * A revoked grant is not a held rank, and never was -- the missing filter is
+     * fixed here rather than left as a second, separate bug.
+     *
+     * @return array<int|string, int> award_id|'k'.kingdomaward_id => max_rank
      */
     public function GetAwardMaxRanks($mundaneId)
     {
         if (!valid_id($mundaneId)) {
             return [];
         }
-        $pseudoLadderIds = Award::pseudoLadderKingdomAwardIds();
         $this->db->Clear();
         // Grouped by BOTH ids: kingdom-original ladders (Order of the Hunter and
         // friends) all carry award_id 0, so keying the map by award_id alone
@@ -468,35 +569,70 @@ class Player extends Ork3
         // "k<kingdomaward_id>" instead; real awards keep their numeric award_id
         // key, so existing callers are unaffected.
         $rs = $this->db->DataSet(
-            'SELECT ka.award_id, ka.kingdomaward_id, MAX(aw.rank) AS max_rank
+            'SELECT ka.kingdomaward_id, ka.award_id, MAX(aw.rank) AS max_rank
              FROM ' . DB_PREFIX . 'awards aw
              INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
-             WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND aw.rank > 0
-             GROUP BY ka.award_id, ka.kingdomaward_id'
+             WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND aw.rank > 0 AND aw.revoked = 0
+             GROUP BY ka.kingdomaward_id, ka.award_id'
         );
         $ranks = [];
         while ($rs && $rs->Next()) {
+            $kingdomAwardId = (int) $rs->kingdomaward_id;
             $awardId = (int) $rs->award_id;
-            $kaId = (int) $rs->kingdomaward_id;
-            $rank = (int) $rs->max_rank;
-            // Pseudo-ladder membership decides the key, NOT award_id > 0. Most of
-            // these point at award_id 94 ("Custom Award"), so keying on award_id
-            // would file them under 94 alongside every genuine Custom Award --
-            // the exact bleed 5d95f55f set out to avoid -- while the UI looks
-            // them up by kingdomaward_id and finds nothing. Checked first, the
-            // same order GetAwardOptionGroups() uses.
-            // Real award_ids can arrive on several rows (one per kingdomaward
-            // pointing at them, e.g. a player who changed kingdoms), so fold to max.
-            $key = in_array($kaId, $pseudoLadderIds, true) ? 'k' . $kaId : $awardId;
-            if ($key === 0) {
-                continue;
+            $maxRank = (int) $rs->max_rank;
+            if ($awardId > 0) {
+                // MAX() across kingdomawards, reproducing the GROUP BY ka.award_id
+                // this replaces -- but only for a real award_id. award_id = 0 no
+                // longer produces a bogus shared bucket.
+                $ranks[$awardId] = max($ranks[$awardId] ?? 0, $maxRank);
             }
-            if (!isset($ranks[$key]) || $rank > $ranks[$key]) {
-                $ranks[$key] = $rank;
+            if ($kingdomAwardId > 0) {
+                $ranks['k' . $kingdomAwardId] = $maxRank;
             }
         }
 
         return $ranks;
+    }
+
+    /**
+     * The distinct calendar months (1-12) this player already holds an Order of
+     * the Zodiac grant for. Reads ork_awards.zodiac_month only -- `rank` is never
+     * consulted, because 1,193 legacy Zodiac grants carry rank 1 and none of them
+     * means January. A grant with zodiac_month = 0 is unmonthed and contributes
+     * nothing.
+     *
+     * The monthly-ladder discriminator is Award::IsMonthlyLadder(), the sole
+     * spelling of that rule, rather than a second copy of the award id here.
+     * A revoked grant is not a held month, and never was -- matching the same
+     * filter GetAwardMaxRanks() applies.
+     *
+     * @return list<int> distinct months held, ascending
+     */
+    public function GetZodiacHeldMonths($mundaneId)
+    {
+        if (!valid_id($mundaneId)) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT DISTINCT ka.award_id, aw.zodiac_month
+             FROM ' . DB_PREFIX . 'awards aw
+             INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
+             WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND aw.revoked = 0 AND aw.zodiac_month > 0'
+        );
+        $months = [];
+        while ($rs && $rs->Next()) {
+            if (!Award::IsMonthlyLadder((int) $rs->award_id)) {
+                continue;
+            }
+            $month = (int) $rs->zodiac_month;
+            if (!in_array($month, $months, true)) {
+                $months[] = $month;
+            }
+        }
+        sort($months);
+
+        return $months;
     }
 
     public function SaveOwnEmail($request)
@@ -657,7 +793,7 @@ class Player extends Ork3
     {
         $mundane = $this->player_info($request['MundaneId']);
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-        if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE) || $requester_id == $request['MundaneId']) {
+        if (valid_id($requester_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.heraldry.manage', 'park', $mundane['ParkId'], AUTH_CREATE) || $requester_id == $request['MundaneId']) {
             //try {
             $json_call = array(
                 "jsonrpc" => "2.0",
@@ -752,7 +888,7 @@ class Player extends Ork3
         $thePlayer = $this->player_info($request['MundaneId']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.note.manage', 'park', $thePlayer['ParkId'], AUTH_EDIT)) {
             // Notes are an officer-facing record: they are how a park's monarchy
             // documents a player. The guard used to also accept
             // "|| $mundane_id == $request['MundaneId']", which let any
@@ -793,7 +929,7 @@ class Player extends Ork3
 
                 // Officer-only: see AddNote.
                 if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                        && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
+                        && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.note.manage', 'park', $thePlayer['ParkId'], AUTH_EDIT)) {
 
                     $note->mundane_note_id = $this->notes->mundane_note_id;
                     $note->mundane_id = $this->notes->mundane_id;
@@ -829,7 +965,7 @@ class Player extends Ork3
         $thePlayer = $this->player_info($this->notes->mundane_id);
         // Officer-only: see AddNote.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.note.manage', 'park', $thePlayer['ParkId'], AUTH_EDIT)) {
             $this->notes->note         = $request['Note'];
             $this->notes->description  = $request['Description'];
             // Same epoch trap AddNote guards against: strtotime('') is false and
@@ -856,7 +992,9 @@ class Player extends Ork3
         }
         $thePlayer = $this->player_info($request['MundaneId']);
         $isOwn  = $uid === (int)$request['MundaneId'];
-        $isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT);
+        // Same permission as AddNote/EditNote/RemoveNote. This is the bulk wipe of the
+        // same records, so gating it lower than the single-note delete made no sense.
+        $isAdmin = Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($uid, 'player.note.manage', 'park', $thePlayer['ParkId'], AUTH_EDIT);
         if (!$isOwn && !$isAdmin) {
             return NoAuthorization();
         }
@@ -896,7 +1034,7 @@ class Player extends Ork3
         $thePlayer = $this->player_info($request['MundaneId']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.reconcile_credits', 'park', $thePlayer['ParkId'], AUTH_EDIT)) {
             $reconciled = new yapo($this->db, DB_PREFIX . 'class_reconciliation');
             foreach ($request['Reconcile'] as $k => $values) {
                 $reconciled->clear();
@@ -930,7 +1068,7 @@ class Player extends Ork3
         $response = array();
         if (valid_id($request['MundaneId']) && $this->mundane->find()) {
             if ((($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                    && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT)) ||
+                    && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.edit', 'park', $this->mundane->park_id, AUTH_EDIT)) ||
                     $mundane_id == $request['MundaneId']) {
                 $fetchprivate = false;
             }
@@ -1153,14 +1291,20 @@ class Player extends Ork3
     public function AwardsForPlayer($request)
     {
         if (valid_id($request['AwardsId'])) {
-            $player_award = "or awards.awards_id = '" . mysql_real_escape_string($request['AwardsId']) . "'";
+            // mysql_real_escape_string() is a no-op shim in this codebase, so ids are
+            // (int)-cast before interpolation -- the house rule, and the only thing
+            // standing between this query and a caller that skips numeric typing.
+            $player_award = 'or awards.awards_id = ' . (int) $request['AwardsId'];
         }
         $sql = "select distinct awards.*, a.*,
 						GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)) as is_title,
 						COALESCE(alias.title_class, a.title_class, ka.title_class) as title_class,
 						COALESCE(alias.peerage, a.peerage) as peerage,
 						COALESCE(alias.officer_role, a.officer_role) as officer_role,
-						COALESCE(alias.is_ladder, a.is_ladder) as is_ladder,
+						" . Award::LadderSql('ka', 'a', 'alias') . " as is_ladder,
+						IFNULL(ka.is_ladder, 0) as ka_is_ladder,
+						" . Award::OfficialLadderSql('a', 'alias') . " as official_is_ladder,
+						IFNULL(ka.max_level, 0) as ka_max_level,
 						alias.award_id as alias_award_id_resolved,
 						alias.name as alias_award_name,
 						alias.peerage as alias_peerage,
@@ -1174,9 +1318,9 @@ class Player extends Ork3
 						left join " . DB_PREFIX . "event e on e.event_id = awards.at_event_id
 						left join " . DB_PREFIX . "mundane m on m.mundane_id = awards.given_by_id
 						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = awards.by_whom_id
-					where awards.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' $player_award
+					where awards.mundane_id = " . (int) $request['MundaneId'] . " $player_award
 					order by
-						COALESCE(alias.is_ladder, a.is_ladder, 0), GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
+						" . Award::LadderSql('ka', 'a', 'alias') . ", GREATEST(IFNULL(a.is_title,0), IFNULL(ka.is_title,0), IFNULL(alias.is_title,0)), COALESCE(alias.title_class, a.title_class, ka.title_class, 0), a.name, awards.rank, awards.date";
 
         $r = $this->db->query($sql);
         $response = array();
@@ -1197,8 +1341,13 @@ class Player extends Ork3
                         'AwardId' => $r->award_id,
                         'KingdomAwardId' => $r->kingdomaward_id,
                         'MundaneId' => $r->mundane_id,
+                        // Additive. Rank above is the raw column and keeps its exact
+                        // meaning: a legacy Zodiac level, or 0. It is never the month.
+                        // Consumers that want the month read ZodiacMonth/ZodiacMonthName.
                         'Rank' => $r->rank,
                         'Date' => $r->date,
+                        'ZodiacMonth' => (int) $r->zodiac_month,
+                        'ZodiacMonthName' => Award::MonthName((int) $r->zodiac_month),
                         'GivenById' => $r->given_by_id,
                         'Note' => $r->note,
                         // "Where given" comes from at_park_id / at_kingdom_id / at_event_id.
@@ -1212,6 +1361,12 @@ class Player extends Ork3
                         'CustomAwardName' => $r->custom_name,
                         'IsLadder' => $_isPseudoLadder ? 1 : $r->is_ladder,
                         'IsPseudoLadder' => $_isPseudoLadder ? 1 : 0,
+                        'KaIsLadder' => (int) $r->ka_is_ladder,
+                        'OfficialIsLadder' => (int) $r->official_is_ladder,
+                        'KaMaxLevel' => (int) $r->ka_max_level,
+                        // Real ladder height for the Edit Award modal's rank pills -- never
+                        // let the client re-derive this by matching the award's NAME.
+                        'MaxRank' => Award::MaxRankFor((int) $r->award_id, (int) $r->ka_max_level),
                         'IsTitle' => $r->is_title,
                         'TitleClass' => $r->title_class,
                         'OfficerRole' => $r->officer_role,
@@ -1572,8 +1727,172 @@ class Player extends Ork3
     }
 
     /**
+     * Classify one award's grants for a player into rank, bonus grants and the ~ marker.
+     *
+     * A bonus grant is an unranked grant dated later than the date the player first
+     * reached max rank — deliberate recognition past the top of the ladder, not a
+     * record whose rank was never captured. Ties on that date count as unreconciled:
+     * a false "needs reconciling" is a dismissible prompt, whereas a false "bonus"
+     * silently hides a genuinely broken record.
+     *
+     * Monthly ladders (Order of the Zodiac, award_id 30) branch out at the top and
+     * return early: their twelve positions are calendar months, not ranks, duplicates
+     * are legitimate, and there is no cap on the total. 'Count' replaces the meaning
+     * of 'Rank' for these; 'BonusCount' is always 0 — there is no "past max" for a
+     * monthly award.
+     *
+     * @param list<array{Rank: int|string, Date: string, ZodiacMonth?: int}> $grants
+     * @return array{Rank: int, MaxRank: int, Approx: bool, BonusCount: int, Count?: int, MonthsHeld?: list<int>, MonthDates?: array<int, list<string>>, Unmonthed?: int}
+     */
+    public function ClassifyLadderGrants(
+        int $awardId,
+        int $kaMaxLevel,
+        array $grants,
+        bool $hasMaster
+    ): array {
+        if (Award::IsMonthlyLadder($awardId)) {
+            $monthsHeld = [];
+            $monthDates = [];
+            $unmonthed  = 0;
+
+            foreach ($grants as $grant) {
+                $month = (int) ($grant['ZodiacMonth'] ?? 0);
+                if (Award::IsValidZodiacMonth($month)) {
+                    $monthsHeld[$month] = true;
+                    // Repeats are kept here even though the strip fills one circle:
+                    // the tooltip lists every grant date for that month.
+                    $monthDates[$month][] = (string) $grant['Date'];
+                } else {
+                    // Never fall back to rank: 1,193 grants carry rank 1 and none of
+                    // them means January.
+                    $unmonthed++;
+                }
+            }
+            ksort($monthsHeld);
+            ksort($monthDates);
+
+            return [
+                // Total granted, uncapped. Not distinct months, not highest rank --
+                // 35 players already hold duplicates and a total can exceed 12.
+                'Count'      => count($grants),
+                'MonthsHeld' => array_keys($monthsHeld),
+                'MonthDates' => $monthDates,
+                'Unmonthed'  => $unmonthed,
+                // ~ keeps its shape but changes its words: for Zodiac it means
+                // "month not recorded", not "rank not recorded".
+                'Approx'     => $unmonthed > 0 && !$hasMaster,
+                'Rank'       => count($grants),
+                'MaxRank'    => 12,
+                'BonusCount' => 0,
+            ];
+        }
+
+        $maxRank = Award::MaxRankFor($awardId, $kaMaxLevel);
+
+        $rankSet = [];
+        $topRank = 0;
+
+        foreach ($grants as $grant) {
+            $rank = (int) $grant['Rank'];
+            if ($rank <= 0) {
+                continue;
+            }
+            $rankSet[$rank] = true;
+            if ($rank > $topRank) {
+                $topRank = $rank;
+            }
+        }
+
+        $maxReached = $this->LadderMaxReachedDate($maxRank, $grants);
+
+        $unrankedCount = 0;
+        $bonusCount    = 0;
+        foreach ($grants as $grant) {
+            if ((int) $grant['Rank'] > 0) {
+                continue;
+            }
+            if ($this->IsBonusLadderGrantDate($maxReached, (string) $grant['Date'])) {
+                $bonusCount++;
+            } else {
+                $unrankedCount++;
+            }
+        }
+
+        $effectiveCount = count($rankSet) + $unrankedCount;
+
+        return [
+            // Identical to the clamp this replaces (was class.Player.php:1623).
+            // Bonus grants are simply absent from $unrankedCount, so they no longer
+            // inflate $effectiveCount. Nothing else about the arithmetic changes.
+            'Rank'       => min($maxRank, max($topRank, $effectiveCount)),
+            'MaxRank'    => $maxRank,
+            'Approx'     => ($effectiveCount > $topRank) && !$hasMaster,
+            'BonusCount' => $bonusCount,
+        ];
+    }
+
+    /**
+     * The earliest date on which a ladder's $maxRank was reached, scanning a
+     * list of ['Rank' => int, 'Date' => string] grants. A grant whose date is
+     * '' or the endemic '0000-00-00' sentinel (3,975 ladder grants carry it;
+     * 28 of those sit at rank >= 10) can never anchor the window -- letting
+     * one through would make every later unranked grant read as bonus,
+     * hiding the very broken records reconciliation exists to surface.
+     *
+     * Sole spelling of the bonus-window anchor. ClassifyLadderGrants() and
+     * GetReconcileSuggestions() both call this rather than re-deriving it.
+     */
+    private function LadderMaxReachedDate(int $maxRank, array $grants): ?string
+    {
+        $maxReached = null;
+        foreach ($grants as $grant) {
+            $rank = (int) ($grant['Rank'] ?? 0);
+            if ($rank < $maxRank) {
+                continue;
+            }
+            $date = (string) ($grant['Date'] ?? '');
+            if ($date === '' || strpos($date, '0000-00-00') === 0) {
+                continue;
+            }
+            if ($maxReached === null || $date < $maxReached) {
+                $maxReached = $date;
+            }
+        }
+
+        return $maxReached;
+    }
+
+    /**
+     * Whether an unranked grant dated $grantDate counts as bonus recognition
+     * relative to $maxReachedDate (from LadderMaxReachedDate()) -- strictly
+     * later than the date the player first reached max rank; a tie is still
+     * unreconciled. A grant with no usable date of its own can never be
+     * bonus either -- "later than" is unanswerable for it.
+     */
+    private function IsBonusLadderGrantDate(?string $maxReachedDate, string $grantDate): bool
+    {
+        if ($grantDate === '' || strpos($grantDate, '0000-00-00') === 0) {
+            return false;
+        }
+
+        return $maxReachedDate !== null && $grantDate > $maxReachedDate;
+    }
+
+    /**
      * Ladder progress tiles for the Awards tab (P3-R2). Uses Award::GetLadderMasterMap only.
      * Skips Walker of the Middle (31). Approx when effective count > Rank and no Master.
+     *
+     * Tiles are bucketed by SCOPE, not by award_id: official ladders on their
+     * award_id (so a transfer between kingdoms still reads as one ladder), kingdom
+     * ladders on 'k' . kingdomaward_id -- the same two key spaces
+     * Report::GetLadderAwardGrid uses for its columns. Bucketing kingdom ladders on
+     * award_id dropped the 17 that carry award_id = 0 (no tile at all) and MERGED
+     * the 9 that share the generic 94 placeholder: Nine Blades' Hardcore and
+     * Sharpshooter rendered as one tile, Sharpshooter vanishing and its grants
+     * inflating Hardcore's count.
+     *
+     * Every tile carries AwardId, KingdomAwardId and Scope ('official'|'kingdom')
+     * so the template can tell two same-award_id ladders apart.
      *
      * @param array{MundaneId?: int, Awards?: ?list} $request
      * @return array{Status: int, Error?: string, Detail: list<array<string, mixed>>}
@@ -1611,9 +1930,29 @@ class Player extends Ork3
                 continue;
             }
             $aid = (int)($a['AwardId'] ?? 0);
+            $kingdomAwardId = (int)($a['KingdomAwardId'] ?? 0);
             $rank = (int)($a['Rank'] ?? 0);
-            if ($aid <= 0 || $aid === 31) {
-                continue; // 31 = Walker of the Middle
+
+            // OfficialIsLadder is the official ork_award.is_ladder column, which
+            // AwardsForPlayer() always emits. A caller that hand-builds the Awards
+            // list and omits the key predates kingdom ladders entirely -- for it,
+            // award_id was the only scope there was, so treat a real award_id as
+            // official rather than silently dropping the row into a kingdom bucket
+            // it has no kingdomaward_id to fill.
+            $isOfficial = array_key_exists('OfficialIsLadder', $a)
+                ? ((int) $a['OfficialIsLadder'] === 1)
+                : ($aid > 0);
+
+            if ($isOfficial) {
+                if ($aid <= 0 || $aid === 31) {
+                    continue; // 31 = Walker of the Middle
+                }
+                $key = $aid;
+            } else {
+                if ($kingdomAwardId <= 0) {
+                    continue;
+                }
+                $key = 'k' . $kingdomAwardId;
             }
 
             $custom = (string)($a['CustomAwardName'] ?? '');
@@ -1627,8 +1966,11 @@ class Player extends Ork3
             }
             $shortName = preg_replace('/^Order of (the )?/i', '', $displayName);
 
+            // The Master-companion map is keyed on official award ids only; a
+            // kingdom ladder has no companion peerage, so the lookup is skipped
+            // rather than allowed to match on a shared placeholder award_id.
             $hasMaster = false;
-            if (isset($ladderMap[$aid])) {
+            if ($isOfficial && isset($ladderMap[$aid])) {
                 foreach ((array)$ladderMap[$aid]['MasterAwardIds'] as $masterId) {
                     if (isset($heldAwardIds[(int)$masterId])) {
                         $hasMaster = true;
@@ -1637,35 +1979,41 @@ class Player extends Ork3
                 }
             }
 
-            $rankKey = $rank;
-            if (!isset($progress[$aid])) {
-                $progress[$aid] = [
+            if (!isset($progress[$key])) {
+                $progress[$key] = [
+                    'AwardId' => $aid,
+                    'KingdomAwardId' => $isOfficial ? 0 : $kingdomAwardId,
+                    'Scope' => $isOfficial ? 'official' : 'kingdom',
                     'Name' => $displayName,
                     'Short' => $shortName,
-                    'Rank' => $rank,
-                    'RankSet' => $rank > 0 ? [$rankKey => true] : [],
-                    'UnrankedCount' => $rank === 0 ? 1 : 0,
                     'HasMaster' => $hasMaster,
+                    'KaMaxLevel' => (int)($a['KaMaxLevel'] ?? 0),
+                    'Grants' => [],
                 ];
-            } else {
-                if ($rank > $progress[$aid]['Rank']) {
-                    $progress[$aid]['Rank'] = $rank;
-                }
-                if ($rank > 0) {
-                    $progress[$aid]['RankSet'][$rankKey] = true;
-                } else {
-                    $progress[$aid]['UnrankedCount']++;
-                }
             }
+            $progress[$key]['Grants'][] = [
+                'Rank' => $rank,
+                'Date' => (string)($a['Date'] ?? ''),
+                'ZodiacMonth' => (int)($a['ZodiacMonth'] ?? 0),
+            ];
         }
 
-        foreach ($progress as $lpAid => &$lp) {
-            $maxRank = (int)($ladderMap[$lpAid]['MaxRank'] ?? (($lpAid === 30) ? 12 : 10));
-            $effectiveCount = count($lp['RankSet']) + $lp['UnrankedCount'];
-            $lp['Approx'] = ($effectiveCount > $lp['Rank']) && empty($lp['HasMaster']);
-            $lp['Rank'] = min($maxRank, max($lp['Rank'], $effectiveCount));
-            $lp['MaxRank'] = $maxRank;
-            unset($lp['RankSet'], $lp['UnrankedCount']);
+        foreach ($progress as &$lp) {
+            $classified = $this->ClassifyLadderGrants(
+                // 0 for a kingdom ladder, so Award::MaxRankFor() falls through to
+                // ka.max_level instead of reading a placeholder award_id's height.
+                $lp['Scope'] === 'official' ? (int) $lp['AwardId'] : 0,
+                $lp['KaMaxLevel'],
+                $lp['Grants'],
+                (bool)$lp['HasMaster']
+            );
+            // Monthly ladders (Zodiac) return extra keys (Count/MonthsHeld/MonthDates/
+            // Unmonthed) alongside the ranked-path ones -- merge everything so both
+            // shapes flow through untouched rather than hand-picking a fixed subset.
+            foreach ($classified as $k => $v) {
+                $lp[$k] = $v;
+            }
+            unset($lp['Grants'], $lp['KaMaxLevel']);
         }
         unset($lp);
 
@@ -1687,26 +2035,51 @@ class Player extends Ork3
             $name = (string)($info['LadderName'] ?? 'Unknown Order');
             $short = preg_replace('/^Order of (the )?/i', '', $name);
             $progress[$orderId] = [
+                // Synthetic tiles are official by construction -- $ladderMap is
+                // keyed on official award ids.
+                'AwardId' => (int) $orderId,
+                'KingdomAwardId' => 0,
+                'Scope' => 'official',
                 'Name' => $name,
                 'Short' => $short,
                 'Rank' => $maxRank,
                 'MaxRank' => $maxRank,
                 'HasMaster' => true,
                 'Approx' => false,
+                // No classified grants back this synthetic tile (held via Master
+                // companion award only), so there is nothing to count as bonus.
+                // Set explicitly rather than relying on the ?? below, so a reader
+                // can see the key is always present on every tile.
+                'BonusCount' => 0,
             ];
         }
 
         $tiles = [];
-        foreach ($progress as $aid => $lp) {
-            $tiles[] = [
-                'AwardId' => (int)$aid,
+        foreach ($progress as $lp) {
+            $tileAwardId = (int)($lp['AwardId'] ?? 0);
+            $tile = [
+                'AwardId' => $tileAwardId,
+                // Scope + KingdomAwardId are what let the client tell two kingdom
+                // ladders sharing an award_id (or both carrying 0) apart.
+                'KingdomAwardId' => (int)($lp['KingdomAwardId'] ?? 0),
+                'Scope' => (string)($lp['Scope'] ?? 'official'),
                 'Name' => $lp['Name'],
                 'Short' => $lp['Short'],
                 'Rank' => (int)$lp['Rank'],
-                'MaxRank' => (int)($lp['MaxRank'] ?? (($aid === 30) ? 12 : 10)),
+                'MaxRank' => (int)($lp['MaxRank'] ?? Award::MaxRankFor($tileAwardId)),
                 'HasMaster' => !empty($lp['HasMaster']),
                 'Approx' => !empty($lp['Approx']),
+                'BonusCount' => (int) ($lp['BonusCount'] ?? 0),
             ];
+            // Monthly ladders (Zodiac) carry these on top of the ranked-path keys
+            // above -- present only when ClassifyLadderGrants took the monthly branch.
+            if (array_key_exists('MonthsHeld', $lp)) {
+                $tile['Count'] = (int) ($lp['Count'] ?? 0);
+                $tile['MonthsHeld'] = $lp['MonthsHeld'];
+                $tile['MonthDates'] = $lp['MonthDates'];
+                $tile['Unmonthed'] = (int) ($lp['Unmonthed'] ?? 0);
+            }
+            $tiles[] = $tile;
         }
         usort($tiles, function ($a, $b) {
             return strcmp($a['Name'], $b['Name']);
@@ -1817,7 +2190,7 @@ class Player extends Ork3
         }
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.create', 'park', $request['ParkId'], AUTH_CREATE)) {
             $park = new yapo($this->db, DB_PREFIX . 'park');
             $park->clear();
             $park->park_id = $request['ParkId'];
@@ -1864,7 +2237,17 @@ class Player extends Ork3
                 $design->mundane_id = $new_mundane_id;
                 $design->save();
 
-                Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
+                // Only create a credential when the officer actually supplied a password.
+                // Login hashes salt + USERNAME + password with this same expression, so an
+                // empty password would store the hash of salt + USERNAME and the account
+                // would authenticate with a blank password box. Self-registration refuses
+                // anything under 8 characters; officer-created accounts hold that same line
+                // by storing no credential at all. An account with no key row is intentional
+                // and simply cannot log in — the officer is expected to send the player a
+                // self-registration link so the player sets their own password.
+                if (strlen(trim((string)($request['Password'] ?? '')))) {
+                    Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($this->mundane->username)) . trim($request['Password']), $this->mundane->password_expires);
+                }
 
                 if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
                     $waiver = @imagecreatefromstring(base64_decode($request['Waiver']));
@@ -1890,7 +2273,7 @@ class Player extends Ork3
                         }
                         $this->mundane->waivered = 1;
                     } else {
-                        $this->mundane->saivered = 0;
+                        $this->mundane->waivered = 0;
                     }
                 } elseif ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::is_pdf_mime_type($request['WaiverMimeType'])) {
                     $waiver = @base64_decode($request['Waiver']);
@@ -1960,7 +2343,10 @@ class Player extends Ork3
         if (!valid_id($mundane_id)) {
             return NoAuthorization();
         }
-        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
+        // A self-registration link is a delegated CreatePlayer: whoever redeems it lands
+        // in this park's roster. Gate it on the same permission rather than on a bare
+        // park authority row.
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.create', 'park', $request['ParkId'], AUTH_CREATE)) {
             return NoAuthorization();
         }
 
@@ -2311,35 +2697,48 @@ class Player extends Ork3
         $kid = (int)$kingdom_id;
         $pid = (int)$park_id;
         $mid = (int)$mundane_id;
-        $keys = [['KingdomId' => 0, 'ParkId' => 0, 'PlayerId' => $mid]];
+        // Keys MUST be composed by Report::RecommendationsCacheKey() — the same
+        // builder the read/write side uses. GhettoCache keys are positional value
+        // joins, so a locally rebuilt array silently drifts and every bust here
+        // becomes a no-op.
+        // Scope triples [KingdomId, ParkId, PlayerId]; each is turned into its cache
+        // keys below.
+        $scopes = [[0, 0, $mid]];
         if ($kid > 0) {
             // Both list namespaces scope through Kingdom::GetStatsKingdomIds(), so a
             // parent kingdom that folds this principality into its statistics caches
             // this player's recs under the PARENT's id. Bust the same id set the badge
             // does, or the badge count updates and the list it labels does not.
             foreach ($this->recCountBadgeKingdomIds($kid) as $listKid) {
-                $keys[] = ['KingdomId' => $listKid, 'ParkId' => 0, 'PlayerId' => 0];
+                $scopes[] = [(int)$listKid, 0, 0];
             }
         }
         if ($pid > 0) {
-            $keys[] = ['KingdomId' => 0,    'ParkId' => $pid, 'PlayerId' => 0];
+            $scopes[] = [0, $pid, 0];
         }
-        foreach ($keys as $kd) {
+        foreach ($scopes as [$scopeKid, $scopePid, $scopeMid]) {
             // Report.PlayerAwardRecommendations keys on the scope PLUS IncludeDismissed
-            // and a schema version; ghettocache->key() is a positional implode, so a
-            // bust that omits either tail field deletes nothing at all. Keep both in
-            // step with class.Report.php's key.
-            foreach ([0, 1] as $incl) {
+            // and the version tokens; ghettocache->key() is a positional implode, so a
+            // bust that omits any tail field deletes nothing at all. The helper is the
+            // read side's own key builder, so the two cannot drift.
+            foreach ([false, true] as $incl) {
                 Ork3::$Lib->ghettocache->bust(
                     'Report.PlayerAwardRecommendations',
-                    Ork3::$Lib->ghettocache->key($kd + ['IncludeDismissed' => $incl, 'V' => Report::REC_CACHE_VERSION])
+                    Report::RecommendationsCacheKey($scopeKid, $scopePid, $scopeMid, $incl)
                 );
             }
             // Show Dismissed panel — same three scope shapes, plus the namespace's
-            // trailing Deleted marker.
+            // trailing Deleted marker. Kept in step with the key
+            // Report::DeletedAwardRecommendations() builds.
             Ork3::$Lib->ghettocache->bust(
                 'Report.DeletedAwardRecommendations',
-                Ork3::$Lib->ghettocache->key($kd + ['Deleted' => 1, 'V' => Report::REC_CACHE_VERSION])
+                Ork3::$Lib->ghettocache->key([
+                    'KingdomId' => $scopeKid,
+                    'ParkId'    => $scopePid,
+                    'PlayerId'  => $scopeMid,
+                    'Deleted'   => 1,
+                    'V'         => Report::REC_CACHE_VERSION,
+                ])
             );
         }
         // Profile tab badge. Its key is the ROLLED-UP kingdom id list, so bust it for
@@ -2389,9 +2788,15 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
+        // Authority scales with how far the merge reaches: across kingdoms it is an
+        // installation-level act (global.player.merge). The two narrower arms stay on the
+        // legacy kingdom/park authority rows on purpose: a merge deletes the source record
+        // with its awards and attendance, so it must NOT be delegable by 'player.edit',
+        // the routine data-entry key that draws the Edit button. Putting these arms on
+        // RBAC needs a dedicated player.merge key, which does not exist yet.
         if (
             (($toMundane['KingdomId'] != $fromMundane['KingdomId'])
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT))
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.player.merge', 'global', 0, AUTH_EDIT))
             || (($toMundane['ParkId'] != $fromMundane['ParkId'] && $toMundane['KingdomId'] == $fromMundane['KingdomId'])
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $toMundane['KingdomId'], AUTH_EDIT))
             || (($toMundane['ParkId'] == $fromMundane['ParkId'])
@@ -2573,8 +2978,8 @@ class Player extends Ork3
         // the requested role up the tree, so this also means a kingdom officer
         // needs kingdom CREATE, which is what the kingdom help text says too.
         $_parkAuthority =
-               Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_CREATE)          // destination
-            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_CREATE); // source
+               Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.move', 'park', $park->park_id, AUTH_CREATE)          // destination
+            || Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.move', 'park', $this->mundane->park_id, AUTH_CREATE); // source
 
         // NO separate cross-kingdom gate. $_parkAuthority above is the whole
         // test: the officer of either park may move the player, and the move
@@ -2613,7 +3018,18 @@ class Player extends Ork3
             $this->mundane->park_id = $request['ParkId'];
             $this->mundane->kingdom_id = $park->kingdom_id;
             $this->mundane->park_member_since = date('Y-m-d');
-            $this->mundane->waivered = $request['Waivered'] ? 1 : 0;
+
+            // Waivers are signed per-kingdom and held by that kingdom, so a player
+            // arriving from another kingdom has no waiver on file at the destination
+            // and must be re-waivered there. A move between two parks inside the SAME
+            // kingdom does not invalidate anything, so the existing waiver state is
+            // left untouched. This is decided from the actual kingdom change rather
+            // than a request flag: no caller passed one, so every move (park-to-park
+            // included) was silently clearing the waiver.
+            if ($_oldKid !== (int)$park->kingdom_id) {
+                $this->mundane->waivered = 0;
+            }
+
             $this->mundane->save();
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], $_oldKid, $_oldPid);
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], (int)$park->kingdom_id, (int)$park->park_id);
@@ -2680,7 +3096,7 @@ class Player extends Ork3
         ];
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT)
+                && (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.suspend', 'park', $this->mundane->park_id, AUTH_EDIT)
                     || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN))) {
             $this->mundane->suspended = $request['Suspended'];
             if (!$request['Suspended']) {
@@ -2830,7 +3246,7 @@ class Player extends Ork3
         }
 
         $notices = '';
-        if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+        if (valid_id($requester_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_EDIT)
             || $requester_id == $request['MundaneId']) {
 
             if (Ork3::$Lib->authorization->HasAuthority($request['MundaneId'], AUTH_ADMIN, 0, AUTH_EDIT)
@@ -2973,7 +3389,7 @@ class Player extends Ork3
 
                 // reeve or corpora qual changes
                 // TODO: add error messaging
-                if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.qualification.edit', 'park', $this->mundane->park_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
                     $this->mundane->reeve_qualified = is_null($request['ReeveQualified']) ? $this->mundane->reeve_qualified : $request['ReeveQualified'];
                     $this->mundane->reeve_qualified_until = is_null($request['ReeveQualifiedUntil']) ? $this->mundane->reeve_qualified_until : ($request['ReeveQualifiedUntil'] === '0000-00-00' ? null : $request['ReeveQualifiedUntil']);
                     $this->mundane->corpora_qualified = is_null($request['CorporaQualified']) ? $this->mundane->corpora_qualified : $request['CorporaQualified'];
@@ -3007,10 +3423,10 @@ class Player extends Ork3
                 $this->mundane->basic_fonts = is_null($request['BasicFonts']) ? $this->mundane->basic_fonts : ($request['BasicFonts'] ? 1 : 0);
                 $this->mundane->dyslexia_fonts = is_null($request['DyslexiaFonts']) ? $this->mundane->dyslexia_fonts : ($request['DyslexiaFonts'] ? 1 : 0);
 
-                if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.active_status.set', 'park', $mundane['ParkId'], AUTH_EDIT)) {
                     $this->mundane->active = is_null($request['Active']) ? $this->mundane->active : ($request['Active'] ? 1 : 0);
                 }
-                if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_EDIT)) {
                     $pms = $request['ParkMemberSince'];
                     $this->mundane->park_member_since = is_null($pms) ? $this->mundane->park_member_since : (($pms === '' || $pms === '0000-00-00') ? null : $pms);
                 }
@@ -3074,7 +3490,7 @@ class Player extends Ork3
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.heraldry.manage', 'park', $mundane['ParkId'], AUTH_EDIT)
                 || $requester_id == $request['MundaneId']) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
@@ -3196,7 +3612,7 @@ class Player extends Ork3
 
         $notices = '';
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.waiver.manage', 'park', $mundane['ParkId'], AUTH_EDIT)) {
             $request = $this->media_fetch('Waiver', $request);
             if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
                 logtrace("set_waiver() - image", $request);
@@ -3260,7 +3676,7 @@ class Player extends Ork3
         $mundane = $this->player_info($request['MundaneId']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_EDIT)) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
             if ($this->mundane->find()) {
@@ -3282,7 +3698,7 @@ class Player extends Ork3
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.heraldry.manage', 'park', $mundane['ParkId'], AUTH_EDIT)
                 || $requester_id == $request['MundaneId']) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
@@ -3311,7 +3727,7 @@ class Player extends Ork3
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.heraldry.manage', 'park', $mundane['ParkId'], AUTH_EDIT)
                 || $requester_id == $request['MundaneId']) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
@@ -3336,7 +3752,7 @@ class Player extends Ork3
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.waiver.manage', 'park', $mundane['ParkId'], AUTH_EDIT)) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
             if ($this->mundane->find()) {
@@ -3426,8 +3842,10 @@ class Player extends Ork3
 
     public function SetBan($request)
     {
+        // penalty_box is installation-wide -- a ban is not scoped to the park that set
+        // it -- so this is a global permission, satisfied by the legacy admin row too.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.player.ban', 'global', 0, AUTH_EDIT)) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
             if ($this->mundane->find()) {
@@ -3448,9 +3866,11 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
+        // Same permission as SetWaiver/set_waiver. This clears every waiver in a park or
+        // kingdom at once, so gating the bulk form below the per-player form was backwards.
         $isGlobalAdmin  = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN);
-        $isParkOfficer  = valid_id($request['ParkId']    ?? 0) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, (int)$request['ParkId'], AUTH_EDIT);
-        $isKingdomOfficer = valid_id($request['KingdomId'] ?? 0) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, (int)$request['KingdomId'], AUTH_EDIT);
+        $isParkOfficer  = valid_id($request['ParkId']    ?? 0) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.waiver.manage', 'park', (int)$request['ParkId'], AUTH_EDIT);
+        $isKingdomOfficer = valid_id($request['KingdomId'] ?? 0) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.waiver.manage', 'kingdom', (int)$request['KingdomId'], AUTH_EDIT);
         if (!$isGlobalAdmin && !$isParkOfficer && !$isKingdomOfficer) {
             return NoAuthorization();
         }
@@ -3527,7 +3947,7 @@ class Player extends Ork3
         }
 
         if (valid_id($mundane_id)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $recipient['ParkId'], AUTH_CREATE)) {
             if (valid_id($request['ParkId'])) {
                 $Park = new Park();
                 $park_info = $Park->GetParkShortInfo($request);
@@ -3581,6 +4001,43 @@ class Player extends Ork3
                 }
             }
 
+            // Zodiac positions are months, not levels: write the month, never the
+            // rank. AddAward is a create, so there is no legacy rank to preserve for
+            // every UI path -- rank is zeroed for this award unless the caller is
+            // the SOAP/JSON API (see the ApiClient carve-out below).
+            if (Award::IsMonthlyLadder((int) $request['AwardId'])) {
+                $zodiacMonth = (int) ($request['ZodiacMonth'] ?? 0);
+                if ($zodiacMonth !== 0 && !Award::IsValidZodiacMonth($zodiacMonth)) {
+                    return InvalidParameter('Choose a month between January and December.');
+                }
+                // yapo drops null from writes; 0 is the "no month recorded" value.
+                $awards->zodiac_month = $zodiacMonth;
+
+                // UI paths never write a Zodiac rank. The SOAP/JSON API keeps accepting
+                // one for backwards compatibility: an integration written before this
+                // change must not start failing. Such a grant is monthless and shows up
+                // in reconciliation, exactly like the 2,024 monthless Zodiacs already in
+                // the corpus. An inbound Rank is stored as a rank and is NEVER
+                // reinterpreted as a month -- a client sending Rank=5 meaning "fifth
+                // Zodiac" must not silently receive May.
+                $awards->rank = empty($request['ApiClient']) ? 0 : (int) ($request['Rank'] ?? 0);
+            }
+
+            // Rule 1: an unranked grant of an effective ladder award is allowed only
+            // when the recipient is already at or past max -- the star path. See
+            // RejectUnrankedLadderGrant()'s docblock. This is a create, so there is
+            // no existing row to exclude from the held-rank check.
+            $rank = (int) ($request['Rank'] ?? 0);
+            $rejection = $this->RejectUnrankedLadderGrant(
+                (int) $request['AwardId'],
+                (int) $request['KingdomAwardId'],
+                (int) $request['RecipientId'],
+                $rank
+            );
+            if ($rejection !== null) {
+                return $rejection;
+            }
+
             $awards->save();
 
             // yapo::save() re-Finds by primary key after an INSERT, so awards_id
@@ -3614,6 +4071,169 @@ class Player extends Ork3
         }
     }
 
+    /**
+     * Ladder context for a kingdomaward row, resolved in one query: whether it is an
+     * effective ladder (Award::LadderSql() -- official OR kingdom-raised, never just
+     * the official flag), its max_level (0 = unspecified, resolved by
+     * Award::MaxRankFor()), and a display name for the Rule 1 rejection message
+     * (the kingdom's own name for the award, falling back to the base award's name).
+     *
+     * `official_award_id` is the award_id to compare ACROSS kingdoms on, or 0 when
+     * this ladder has no cross-kingdom identity. It is ka.award_id -- the
+     * authoritative join, never the caller-supplied AwardId -- and only when the
+     * row is an OFFICIAL ladder (Award::OfficialLadderSql()). "award_id > 0" is
+     * deliberately NOT the test: all nine kingdom-raised ladders on the live
+     * corpus carry ka.award_id = 94, the shared "Custom Award" placeholder that
+     * 130 unrelated kingdomawards also use, so keying them on award_id would pool
+     * every one of those into a single bucket -- the exact defect a048b895 fixed
+     * on the read side. Award::GetAwardOptionGroups() splits its two ladder
+     * optgroups on official-ness for the same reason, and the client picks its
+     * key space from that split (a Kingdom Ladder option carries
+     * data-award-id='0' whatever ka.award_id says), so this must match it.
+     *
+     * @return array{is_ladder: bool, max_level: int, award_name: string, official_award_id: int}
+     */
+    private function GetLadderContext(int $kingdomAwardId): array
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ' . Award::LadderSql('ka', 'a') . ' AS is_ladder, ka.max_level, ka.award_id,
+                    ' . Award::OfficialLadderSql('a') . ' AS official_is_ladder,
+                    COALESCE(NULLIF(ka.name, \'\'), a.name, \'\') AS award_name
+             FROM ' . DB_PREFIX . 'kingdomaward ka
+             LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+             WHERE ka.kingdomaward_id = ' . $kingdomAwardId
+        );
+        if (!$rs || !$rs->Next()) {
+            return ['is_ladder' => false, 'max_level' => 0, 'award_name' => '', 'official_award_id' => 0];
+        }
+
+        $officialAwardId = (int) $rs->official_is_ladder === 1 ? (int) $rs->award_id : 0;
+
+        return [
+            'is_ladder' => (int) $rs->is_ladder === 1,
+            'max_level' => (int) $rs->max_level,
+            'award_name' => (string) $rs->award_name,
+            'official_award_id' => $officialAwardId,
+        ];
+    }
+
+    /**
+     * The recipient's highest currently-held (non-revoked) rank on this ladder
+     * award -- the star test compares this against Award::MaxRankFor().
+     *
+     * SCOPED THE SAME WAY THE CLIENT SCOPES IT. Player::GetAwardMaxRanks() is what
+     * decides whether the "star" pill is offered at all, and it answers in two key
+     * spaces: an OFFICIAL ladder (ka.award_id > 0) is MAX()ed across every
+     * kingdomaward sharing that award_id, while a kingdom ladder (award_id = 0, or
+     * the shared 94 "Custom Award" placeholder) is answered per kingdomaward_id.
+     * This lookup must use the same scope or the two disagree, and they did: a
+     * WHERE kingdomaward_id = N reads only the recipient's CURRENT kingdom's row,
+     * so a player who reached Order of the Rose rank 10 in kingdom A and then
+     * transferred to kingdom B saw the star render (held 10 >= max 10, from the
+     * cross-kingdom map), clicked it, and was refused with "...or use the star if
+     * they have already reached 10" -- which they had. On the live corpus 248
+     * (mundane, official-ladder) pairs are at rank 10+ overall but below 10 under
+     * their current kingdom's row; every one of them was a false rejection the
+     * officer could not argue with, because the UI showed the opposite.
+     *
+     * $officialAwardId comes from GetLadderContext() and is non-zero ONLY for an
+     * official ladder -- see that method for why "ka.award_id > 0" is the wrong
+     * test (nine kingdom-raised ladders share the award_id 94 placeholder with 130
+     * unrelated kingdomawards).
+     *
+     * $excludeAwardsId (0 = none) drops one specific ork_awards row from the
+     * MAX(rank). UpdateAward()/ReconcileAward() pass the row being written so
+     * that row's own pre-write rank can never justify the very write that is
+     * about to change (or zero out) it -- the held rank must come from every
+     * OTHER grant on this ladder. AddAward() has no existing row, so it never
+     * passes one. Widening the scope does not weaken it: the excluded row is
+     * excluded by awards_id, which is unique across every kingdom.
+     */
+    private function CurrentLadderRank(
+        int $recipientId,
+        int $kingdomAwardId,
+        int $officialAwardId = 0,
+        int $excludeAwardsId = 0
+    ): int {
+        // Official ladder -> one Amtgard-wide identity, compared across kingdoms.
+        // Kingdom ladder -> no cross-kingdom identity at all, so its own row is the
+        // only honest scope.
+        $scope = $officialAwardId > 0
+            ? 'ka.award_id = ' . $officialAwardId
+            : 'aw.kingdomaward_id = ' . $kingdomAwardId;
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT MAX(aw.`rank`) AS max_rank
+             FROM ' . DB_PREFIX . 'awards aw
+             INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
+             WHERE aw.mundane_id = ' . $recipientId . '
+               AND aw.revoked = 0
+               AND ' . $scope
+               . ($excludeAwardsId > 0 ? ' AND aw.awards_id != ' . $excludeAwardsId : '')
+        );
+
+        return ($rs && $rs->Next()) ? (int) $rs->max_rank : 0;
+    }
+
+    /**
+     * Rule 1: a ladder grant must carry a rank in 1..max, unless the recipient
+     * already holds a rank at or past max on this ladder -- the star path.
+     * Granting (or leaving) a ladder award unranked for someone below max is
+     * the mistake that produced the rankless ladder grants this feature exists
+     * to stop. Order of the Zodiac (award_id 30) is exempt (Award::IsMonthlyLadder()):
+     * it is granted once per calendar month, so a monthless grant must still be
+     * accepted for the 2,024 that already exist.
+     *
+     * Sole spelling of Rule 1 -- AddAward(), UpdateAward() and ReconcileAward()
+     * all call this rather than re-deriving it, so the check and the message
+     * can never drift into separate copies again.
+     *
+     * $excludeAwardsId lets an edit/reconcile caller exclude the very row being
+     * written from the held-rank lookup (see CurrentLadderRank()) -- on those
+     * paths the operative rank is the one the row is being changed TO, and an
+     * edit that removes the rank which reached max must not be able to use
+     * that about-to-be-overwritten value to justify itself.
+     *
+     * @return array{Status:int,Error:string,Detail:mixed}|null flat
+     *         InvalidParameter() array to return verbatim when the grant must
+     *         be refused, null when the write may proceed.
+     */
+    private function RejectUnrankedLadderGrant(
+        int $awardId,
+        int $kingdomAwardId,
+        int $recipientId,
+        int $submittedRank,
+        int $excludeAwardsId = 0
+    ): ?array {
+        if ($submittedRank !== 0 || Award::IsMonthlyLadder($awardId)) {
+            return null;
+        }
+        $ladder = $this->GetLadderContext($kingdomAwardId);
+        if (!$ladder['is_ladder']) {
+            return null;
+        }
+        $maxRank = Award::MaxRankFor($awardId, $ladder['max_level']);
+        $currentRank = $this->CurrentLadderRank(
+            $recipientId,
+            $kingdomAwardId,
+            $ladder['official_award_id'],
+            $excludeAwardsId
+        );
+        if (Award::OffersStar($awardId, $ladder['max_level'], $currentRank)) {
+            return null;
+        }
+        $awardName = $ladder['award_name'] !== '' ? $ladder['award_name'] : 'This award';
+
+        return InvalidParameter(sprintf(
+            '%s is a ranked award — choose a rank, or use %s if they have already reached %d.',
+            $awardName,
+            "\u{2731}",
+            $maxRank
+        ));
+    }
+
     private function revoke_award(& $awards, $revocation, $revoker_id)
     {
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
@@ -3636,8 +4256,12 @@ class Player extends Ork3
         $awards->mundane_id = $request['MundaneId'];
         if ($awards->find() && valid_id($mundane_id)) {
             $mundane = $this->player_info($awards->mundane_id);
+            // Same permission AND same legacy role as RevokeAward: an AUTH_CREATE row
+            // satisfies any requested role while an AUTH_EDIT row satisfies only EDIT, so
+            // asking for AUTH_EDIT here would let a legacy EDIT-only holder wipe every
+            // award a player has while being unable to revoke a single one.
             if (valid_id($request['MundaneId'])
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_CREATE)) {
 
                 // Collect all IDs first: save() calls Clear()+Find() after each save,
                 // replacing the result set, so next() would exit the loop after one iteration.
@@ -3672,7 +4296,7 @@ class Player extends Ork3
         if (valid_id($request['AwardsId']) && $awards->find() && $mundane_id > 0) {
             $mundane = $this->player_info($awards->mundane_id);
             if (valid_id($mundane_id)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_CREATE)) {
 
                 $this->revoke_award($awards, $request["Revocation"], $mundane_id);
 
@@ -3692,13 +4316,29 @@ class Player extends Ork3
         $awards->clear();
         $awards->awards_id = $request['AwardsId'];
         if (valid_id($request['AwardsId']) && $awards->find() && $mundane_id > 0) {
+            // AUTHORIZE FIRST, then validate the award's state. The order matters: checking
+            // "is this award revoked?" before the gate answered that question for any
+            // logged-in player who could name an awards_id, which is a state disclosure to
+            // someone with no authority over the award at all. It also made the refusal
+            // code depend on the award's state -- InvalidParameter for a live award,
+            // NoAuthorization for a revoked one -- so an unauthorized caller could tell the
+            // two apart. The subject's park is resolvable in EITHER state: a revoked row
+            // parks the original recipient in stripped_from and zeroes mundane_id, a live
+            // row does the reverse.
+            $subject_id = valid_id($awards->stripped_from) ? (int)$awards->stripped_from : (int)$awards->mundane_id;
+            if (!valid_id($subject_id)) {
+                return InvalidParameter('That award has no recipient on file.');
+            }
+            $recipient = $this->player_info($subject_id);
+            // Same permission as RevokeAward, whose effect this undoes. Leaving the undo
+            // on the legacy path meant an Award Manager could revoke and not reinstate.
+            if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $recipient['ParkId'], AUTH_CREATE)) {
+                return NoAuthorization();
+            }
+
             // Must be a currently revoked award with a valid original recipient on file.
             if ((int)$awards->revoked !== 1 || !valid_id($awards->stripped_from)) {
                 return InvalidParameter('That award is not currently revoked.');
-            }
-            $recipient = $this->player_info($awards->stripped_from);
-            if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_CREATE)) {
-                return NoAuthorization();
             }
 
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->stripped_from, $this->get_award($awards));
@@ -3738,7 +4378,7 @@ class Player extends Ork3
         if (valid_id($request['AwardsId']) && $awards->find()) {
             $mundane = $this->player_info($awards->mundane_id);
             if (valid_id($mundane_id)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_CREATE)) {
                 if (valid_id($request['ParkId'])) {
                     $Park = new Park();
                     $info = $Park->GetParkShortInfo(array( 'ParkId' => $request['ParkId'] ));
@@ -3765,10 +4405,16 @@ class Player extends Ork3
                 // updating custom_name, alias_award_id, and kingdomaward_id in the same write.
                 $extra_sql = '';
                 $ctid = $this->getCustomTitleAwardId();
+                // Rule 1 (below) must check the award/kingdomaward the row is being
+                // changed TO, not the one it currently holds -- these track that,
+                // defaulting to the existing row and updated if reclassified.
+                $guardAwardId = (int) $awards->award_id;
+                $guardKingdomAwardId = (int) $awards->kingdomaward_id;
                 if (array_key_exists('AwardId', $request) && valid_id($request['AwardId'])) {
                     $req_award_id = (int)$request['AwardId'];
                     if ($req_award_id === 94 || $req_award_id === $ctid) {
                         $extra_sql .= ', award_id=' . $req_award_id;
+                        $guardAwardId = $req_award_id;
                         // Also rewrite kingdomaward_id so AwardsForPlayer's ka->a join yields the
                         // correct base award (is_title flag, peerage, etc). Find the matching
                         // kingdomaward row in the same kingdom as the existing row.
@@ -3786,6 +4432,7 @@ class Player extends Ork3
                             if ($tq && $tq->size() > 0) {
                                 $tq->next();
                                 $extra_sql .= ', kingdomaward_id=' . (int)$tq->kingdomaward_id;
+                                $guardKingdomAwardId = (int)$tq->kingdomaward_id;
                             }
                         }
                     }
@@ -3815,7 +4462,35 @@ class Player extends Ork3
                     }
                 }
 
-                $sql = 'UPDATE ' . DB_PREFIX . 'awards SET rank=' . $set_rank . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . $extra_sql . ' WHERE awards_id=' . $set_awards_id;
+                // Rule 1: mirrors AddAward's guard, but the operative rank is the one
+                // the row is being changed TO, and the "held rank" that can justify an
+                // unranked write must exclude this row's own (about-to-be-overwritten)
+                // rank -- see RejectUnrankedLadderGrant()'s docblock.
+                $rejection = $this->RejectUnrankedLadderGrant($guardAwardId, $guardKingdomAwardId, (int) $awards->mundane_id, $set_rank, $set_awards_id);
+                if ($rejection !== null) {
+                    return $rejection;
+                }
+
+                // Zodiac positions are months, not levels. Unlike AddAward, an edit
+                // must NEVER write rank here -- a legacy rank (the level it was
+                // before this feature existed) must survive an edit that only adds
+                // or changes a month. Only write zodiac_month when the caller
+                // actually supplied one, so an edit that doesn't touch the month
+                // (e.g. a note-only edit) can't silently clear it.
+                $rank_sql = 'rank=' . $set_rank . ', ';
+                if (Award::IsMonthlyLadder($guardAwardId)) {
+                    $rank_sql = '';
+                    if (array_key_exists('ZodiacMonth', $request)) {
+                        $zodiacMonth = (int) $request['ZodiacMonth'];
+                        if ($zodiacMonth !== 0 && !Award::IsValidZodiacMonth($zodiacMonth)) {
+                            return InvalidParameter('Choose a month between January and December.');
+                        }
+                        // yapo drops null from writes; 0 is the "no month recorded" value.
+                        $extra_sql .= ', zodiac_month=' . $zodiacMonth;
+                    }
+                }
+
+                $sql = 'UPDATE ' . DB_PREFIX . 'awards SET ' . $rank_sql . 'date=\'' . addslashes($set_date) . '\', given_by_id=' . $set_given_by_id . ', note=\'' . $set_note . '\', at_park_id=' . $set_at_park_id . ', at_kingdom_id=' . $set_at_kingdom_id . ', at_event_id=' . $set_at_event_id . $extra_sql . ' WHERE awards_id=' . $set_awards_id;
                 $this->db->query($sql);
 
                 // Re-fetch post-state and audit prior + post so the audit-log diff renderer
@@ -3832,7 +4507,13 @@ class Player extends Ork3
 
                 return Success($set_awards_id);
             } else {
-                return InvalidParamter();
+                // Typo'd InvalidParamter() until now -- no such function exists, so
+                // reaching this branch was a fatal, not a rejection. Long dormant
+                // because the JSON API refused Player/UpdateAward0 at the derived
+                // parameter gate before it could get here; that gate is now fixed,
+                // which makes this reachable. Bare, matching this method's other
+                // rejections.
+                return InvalidParameter();
             }
         } else {
             return NoAuthorization();
@@ -3848,7 +4529,7 @@ class Player extends Ork3
         $found = valid_id($request['AwardsId']) && $awards->find();
         if ($found) {
             $mundane = $this->player_info($awards->mundane_id);
-            $hasAuth = valid_id($mundane_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT);
+            $hasAuth = valid_id($mundane_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_EDIT);
             if ($hasAuth) {
 
                 // Validate park and compute new location values for comparison
@@ -3867,9 +4548,24 @@ class Player extends Ork3
                 $new_at_event_id = valid_id($request['EventId']) ? $request['EventId'] : 0;
                 $new_custom_name = isset($request['CustomName']) ? $request['CustomName'] : (valid_id($request['KingdomAwardId']) ? '' : $awards->custom_name);
 
-                // Skip save and audit if nothing actually changed
+                // Skip save and audit if nothing actually changed.
+                //
+                // ZodiacMonth has to be part of this conjunction. Order of the
+                // Zodiac's reconcilability is decided by zodiac_month = 0 (see the
+                // filter in GetReconcileSuggestions()), NOT by the award mapping --
+                // so a reconcilable Zodiac is already sitting on the right
+                // kingdomaward_id, at rank 0, with the same note and location. Every
+                // other term matched, and the short-circuit returned Success(false)
+                // before the zodiac_month write below ever ran: the UI read
+                // status === 0, painted the row "Reconciled", and the month was never
+                // stored. Safe for every non-Zodiac award: controllers always send
+                // ZodiacMonth = 0 and the stored column is 0, and a caller that omits
+                // the key entirely (the API, or a rank-only reconcile) is exempted by
+                // the array_key_exists() guard, matching the write below.
                 $no_op = ($new_kingdomaward_id == $awards->kingdomaward_id
                     && intval($request['Rank']) == intval($awards->rank)
+                    && (!array_key_exists('ZodiacMonth', $request)
+                        || (int) $request['ZodiacMonth'] === (int) $awards->zodiac_month)
                     && $request['GivenById'] == $awards->given_by_id
                     && $request['Note'] == $awards->note
                     && $new_custom_name == $awards->custom_name
@@ -3893,13 +4589,45 @@ class Player extends Ork3
                 $set_note = $request['Note'];
                 $set_awards_id = intval($request['AwardsId']);
 
+                // Rule 1: mirrors AddAward's guard, but the operative rank is the one
+                // the row is being changed TO (award_id/kingdomaward_id after any
+                // reclassification above), and the "held rank" that can justify an
+                // unranked write must exclude this row's own (about-to-be-overwritten)
+                // rank -- see RejectUnrankedLadderGrant()'s docblock.
+                $rejection = $this->RejectUnrankedLadderGrant((int) $set_award_id, (int) $set_kingdomaward_id, (int) $awards->mundane_id, $set_rank, $set_awards_id);
+                if ($rejection !== null) {
+                    return $rejection;
+                }
+
+                // Order of the Zodiac (Award::IsMonthlyLadder()) reconciles to a month,
+                // not a rank. The legacy rank -- whatever level the old system captured
+                // -- must survive this write untouched, so `rank` is left out of the SQL
+                // below entirely. Mirrors UpdateAward's own Zodiac branch: only write
+                // zodiac_month when the caller actually supplied one, so a reconcile
+                // that doesn't touch the month (or a caller that predates ZodiacMonth,
+                // e.g. LadderGrantRuleTest's Rule-1-exemption coverage) can't be forced
+                // to supply one just to stay a no-op on rank.
+                $rank_sql = 'rank=' . intval($set_rank) . ', ';
+                $zodiac_sql = '';
+                if (Award::IsMonthlyLadder((int) $set_award_id)) {
+                    $rank_sql = '';
+                    if (array_key_exists('ZodiacMonth', $request)) {
+                        $set_zodiac_month = (int) $request['ZodiacMonth'];
+                        if ($set_zodiac_month !== 0 && !Award::IsValidZodiacMonth($set_zodiac_month)) {
+                            return InvalidParameter('Choose a month between January and December.');
+                        }
+                        // yapo drops null from writes; 0 is the "no month recorded" value.
+                        $zodiac_sql = 'zodiac_month=' . $set_zodiac_month . ', ';
+                    }
+                }
+
                 // Snapshot prior state before the write so the audit-log diff renderer
                 // has a real before/after pair for ReconcileAward (shares Player::UpdateAward's
                 // diff case in Admin_auditlog.tpl).
                 $_audit_prior   = $this->get_award($awards);
                 $_audit_mundane = $awards->mundane_id;
 
-                $sql = 'UPDATE ' . DB_PREFIX . 'awards SET kingdomaward_id=' . intval($set_kingdomaward_id) . ', award_id=' . intval($set_award_id) . ', custom_name=\'' . addslashes($set_custom_name) . '\', rank=' . intval($set_rank) . ', date=\'' . addslashes($set_date) . '\', given_by_id=' . intval($set_given_by_id) . ', at_park_id=' . intval($new_at_park_id) . ', at_kingdom_id=' . intval($new_at_kingdom_id) . ', at_event_id=' . intval($new_at_event_id) . ', note=\'' . addslashes($set_note) . '\', by_whom_id=' . intval($mundane_id) . ' WHERE awards_id=' . intval($set_awards_id);
+                $sql = 'UPDATE ' . DB_PREFIX . 'awards SET kingdomaward_id=' . intval($set_kingdomaward_id) . ', award_id=' . intval($set_award_id) . ', custom_name=\'' . addslashes($set_custom_name) . '\', ' . $rank_sql . $zodiac_sql . 'date=\'' . addslashes($set_date) . '\', given_by_id=' . intval($set_given_by_id) . ', at_park_id=' . intval($new_at_park_id) . ', at_kingdom_id=' . intval($new_at_kingdom_id) . ', at_event_id=' . intval($new_at_event_id) . ', note=\'' . addslashes($set_note) . '\', by_whom_id=' . intval($mundane_id) . ' WHERE awards_id=' . intval($set_awards_id);
                 $this->db->query($sql);
 
                 // Re-fetch post-state for the audit diff.
@@ -3955,7 +4683,7 @@ class Player extends Ork3
         if (valid_id($request['AwardsId']) && $awards->find()) {
             $mundane = $this->player_info($awards->mundane_id);
             if (valid_id($mundane_id)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_CREATE)) {
 
                 Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
 
@@ -3990,7 +4718,7 @@ class Player extends Ork3
             return InvalidParameter('Cannot find player.');
         }
 
-        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.dues.manage', 'park', $thePlayer['ParkId'], AUTH_EDIT)) {
             return NoAuthorization();
         }
 
@@ -4104,7 +4832,7 @@ class Player extends Ork3
         if (valid_id($request['DuesId']) && $dues->find()) {
             $mundane = $this->player_info($dues->mundane_id);
             if (valid_id($mundane_id)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.dues.manage', 'park', $mundane['ParkId'], AUTH_EDIT)) {
                 $prior_state = [
                     'dues_id'       => (int)$dues->dues_id,
                     'mundane_id'    => (int)$dues->mundane_id,
@@ -4149,6 +4877,16 @@ class Player extends Ork3
             return InvalidParameter();
         }
 
+        // Zodiac positions are months, not levels. Validate before any of the
+        // rank/dedup checks below, which all assume a nonzero rank means a level.
+        $zodiacMonth = 0;
+        if (Award::IsMonthlyLadder((int) $request['AwardId'])) {
+            $zodiacMonth = (int) ($request['ZodiacMonth'] ?? 0);
+            if ($zodiacMonth !== 0 && !Award::IsValidZodiacMonth($zodiacMonth)) {
+                return InvalidParameter('Choose a month between January and December.');
+            }
+        }
+
         // Block recommendations for a ladder the player has already topped out on
         // (either via the Master-peerage companion award or by holding the ladder's max rank).
         // Also block direct recommendations for a Master peerage the player already holds.
@@ -4177,8 +4915,12 @@ class Player extends Ork3
             }
         }
 
-        // Case B: recommending a ladder where the player has topped out or holds the Master peerage
-        if (isset($ladderMap[$recAwardId])) {
+        // Case B: recommending a ladder where the player has topped out or holds the Master peerage.
+        // Zodiac is exempt: its twelve positions are months, not ranks, so there is no
+        // "top" to reach — a month can be granted or recommended again, indicated, never
+        // blocked. (Case A above still applies to Zodiac: a direct recommendation for
+        // Master Zodiac when the player already holds it is still a genuine duplicate.)
+        if (isset($ladderMap[$recAwardId]) && !Award::IsMonthlyLadder($recAwardId)) {
             $info = $ladderMap[$recAwardId];
 
             $masterIdsCsv = implode(',', array_map('intval', $info['MasterAwardIds']));
@@ -4207,10 +4949,22 @@ class Player extends Ork3
         // their real name is free-text entered at grant time and is never stored
         // on the recommendation row, so the dedup check (which keys on the shared
         // kingdomaward_id) would wrongly block genuinely different customs.
+        //
+        // is_ladder here must be the EFFECTIVE flag (Award::LadderSql()), not the
+        // bare official a.is_ladder column: a kingdom can raise a shared catalog
+        // award (e.g. "Custom Award") to ladder status via ka.is_ladder=1 without
+        // ever touching the official row, and that kingdom ladder must not be
+        // misdetected as a custom award — doing so would exempt it from the
+        // duplicate-recommendation guard every official ladder gets.
         $isCustomAward = false;
         $isCustomTitle = false;
         $this->db->clear();
-        $awardMeta = $this->db->query("SELECT name, is_ladder, is_title FROM " . DB_PREFIX . "award WHERE award_id = " . (int)$request['AwardId'] . " LIMIT 1");
+        $awardMeta = $this->db->query(
+            "SELECT a.name, " . Award::LadderSql('ka', 'a') . " AS is_ladder, a.is_title
+			 FROM " . DB_PREFIX . "award a
+			 LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = " . (int)$request['KingdomAwardId'] . "
+			 WHERE a.award_id = " . (int)$request['AwardId'] . " LIMIT 1"
+        );
         if ($awardMeta && $awardMeta->next()) {
             $isCustomAward = ((int)$awardMeta->is_ladder === 0 && (int)$awardMeta->is_title === 0);
             $isCustomTitle = ((int)$awardMeta->is_title === 1 && $awardMeta->name === 'Custom Title');
@@ -4242,7 +4996,20 @@ class Player extends Ork3
             $dupeRec->kingdomaward_id = $request['KingdomAwardId'];
             $dupeRec->mundane_id = $request['MundaneId'];
             $dupeRec->recommended_by_id = $mundane_id;
-            if (trimlen($request['Rank']) > 0) {
+            // For a monthly ladder the MONTH is the identity, not the rank. The
+            // write below stores rank = 0 for every Zodiac recommendation, so
+            // keying this guard on rank alone collapses all twelve months onto a
+            // single key -- recommend January, then March, and March is refused
+            // with "You already recommended that award and level." Keying on the
+            // month restores the per-month distinction the pre-branch rank
+            // carried. Legacy rows (rank 1..12, zodiac_month 0) cannot false-match
+            // this (rank 0, zodiac_month 1..12) pair, so nothing new is blocked;
+            // and repeating the SAME month is still refused, which is correct --
+            // the dedupe is per-recommender, and repeat GRANTS remain legal.
+            if (Award::IsMonthlyLadder((int) $request['AwardId'])) {
+                $dupeRec->rank = 0;
+                $dupeRec->zodiac_month = $zodiacMonth;
+            } elseif (trimlen($request['Rank']) > 0) {
                 $dupeRec->rank = $request['Rank'];
             } else {
                 $dupeRec->rank = 0;
@@ -4262,7 +5029,14 @@ class Player extends Ork3
             $awardRec->kingdomaward_id = $request['KingdomAwardId'];
             $awardRec->award_id = $request['AwardId'];
             $awardRec->mundane_id = $request['MundaneId'];
-            $awardRec->rank = $check_rank;
+            if (Award::IsMonthlyLadder((int) $request['AwardId'])) {
+                // Zodiac positions are months, not levels. Write the month; never
+                // the rank -- mirrors AddAward's create-path write.
+                $awardRec->rank = 0;
+                $awardRec->zodiac_month = $zodiacMonth;
+            } else {
+                $awardRec->rank = $check_rank;
+            }
             $awardRec->date_recommended = date('Y-m-d');
             $awardRec->recommended_by_id = $mundane_id;
             $awardRec->reason = $request['Reason'];
@@ -4495,10 +5269,13 @@ class Player extends Ork3
 
             if (valid_id($request['RecommendationsId']) && $awardRec->find()) {
                 $recipientInfo = $this->player_info($awardRec->mundane_id);
-                if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.recommendation.manage', 'park', $recipientInfo['ParkId'], AUTH_CREATE)) {
                     $can_delete_recommendation = true;
                 }
-                if ($can_delete_recommendation || $request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {
+                // The self-service arm compares the TOKEN-derived actor, never the
+                // client-supplied RequestedBy: trusting the request body let any
+                // authenticated caller delete someone else's recommendation by naming them.
+                if ($can_delete_recommendation || $mundane_id == $awardRec->recommended_by_id || $mundane_id == $awardRec->mundane_id) {
                     $prior_rec = [
                         'recommendations_id' => (int)$awardRec->recommendations_id,
                         'mundane_id'         => (int)$awardRec->mundane_id,
@@ -4511,22 +5288,24 @@ class Player extends Ork3
                     ];
                     $cascade_at = date('Y-m-d H:i:s');
                     // Granted-from-Manager: notify advocates BEFORE the rec/seconds soft-delete.
+                    // The granting actor is the TOKEN-derived id, like deleted_by below --
+                    // never the client-supplied RequestedBy.
                     if (!empty($request['Granted'])) {
                         try {
                             Ork3::$Lib->notification->notifyRecommendationGranted(
                                 (int)$awardRec->recommendations_id,
-                                (int)$request['RequestedBy']
+                                (int)$mundane_id
                             );
                         } catch (\Throwable $e) { /* best-effort */
                         }
                     }
-                    $awardRec->deleted_by = $request['RequestedBy'];
+                    $awardRec->deleted_by = $mundane_id;
                     $awardRec->deleted_at = $cascade_at;
                     $awardRec->save();
                     Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
                     // Cascade soft-delete to any active seconds on this recommendation.
                     $this->db->Clear();
-                    $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . (int)$request['RequestedBy'] . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
+                    $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . (int)$mundane_id . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
                     $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
                     return Success('Recommendation Removed!');
                 } else {
@@ -4620,7 +5399,9 @@ class Player extends Ork3
         }
 
         $recipientInfo = $this->player_info($awardRec->mundane_id);
-        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+        // Officer-only by design: Delete also has a self-service arm for the giver or
+        // recipient, but restoring a withdrawn recommendation is not self-service.
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.recommendation.manage', 'park', $recipientInfo['ParkId'], AUTH_CREATE)) {
             return NoAuthorization();
         }
 
@@ -4855,7 +5636,9 @@ class Player extends Ork3
         $can_withdraw = ((int)$second->supporter_mundane_id === (int)$mundane_id);
         if (!$can_withdraw && $parent_found) {
             $recipientInfo = $this->player_info($parent->mundane_id);
-            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+            // The officer arm of "the supporter or an admin": same permission that governs
+            // the recommendation this second hangs off.
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.recommendation.manage', 'park', $recipientInfo['ParkId'], AUTH_CREATE)) {
                 $can_withdraw = true;
             }
         }

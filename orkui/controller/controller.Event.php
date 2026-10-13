@@ -26,7 +26,7 @@ class Controller_Event extends Controller
         }
         $this->data['menu']['event'] = array( 'url' => UIR.'Event/index/'.$id, 'display' => $this->data['EventDetails']['Name'] );
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && valid_id($id) && $this->Authorization->has_authority($_uid, AUTH_EVENT, (int)$id, AUTH_EDIT)) {
+        if ($_uid > 0 && valid_id($id) && $this->Authorization->has_permission_or_authority($_uid, 'event.edit', 'event', (int)$id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/event/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
             $this->data['menulist']['admin'] = array(
                 array( 'url' => UIR.'Admin/event/'.$id, 'display' => 'Event' )
@@ -58,7 +58,7 @@ class Controller_Event extends Controller
         }
 
         $can_manage = $uid > 0 && valid_id($event_id)
-            && $this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+            && $this->Authorization->has_permission_or_authority($uid, 'event.edit', 'event', $event_id, AUTH_CREATE);
         $this->data['CanManageEvent'] = $can_manage;
 
         $rsvp_data = [];
@@ -106,7 +106,7 @@ class Controller_Event extends Controller
             'display' => $details['Name'],
         ];
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $can_manage = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+        $can_manage = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'event.detail.manage', 'event', $event_id, AUTH_CREATE);
         if ($can_manage) {
             $this->data['menu']['admin'] = [
                 'url'      => UIR . 'Admin/event/' . $event_id,
@@ -174,7 +174,7 @@ class Controller_Event extends Controller
 
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $this->data['CanManageEvent'] = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+            && $this->Authorization->has_permission_or_authority($uid, 'event.detail.manage', 'event', $event_id, AUTH_CREATE);
     }
 
     public function detail($p = null)
@@ -360,7 +360,7 @@ class Controller_Event extends Controller
         $this->data['DefaultKingdomId']   = $this->session->kingdom_id   ?? 0;
 
         if ($action === 'deletedetail' && $uid > 0) {
-            if ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+            if ($this->Authorization->has_permission_or_authority($uid, 'event.attendance.manage', 'event', $event_id, AUTH_CREATE)) {
                 if (!$this->Event->detail_belongs_to_event($event_id, $detail_id)) {
                     header('Location: ' . UIR . 'Event/index/' . $event_id);
                     exit;
@@ -404,7 +404,7 @@ class Controller_Event extends Controller
         if (strlen($action) > 0 && $uid > 0) {
 
             if ($action === 'edit') {
-                if ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage) {
+                if ($this->Authorization->has_permission_or_authority($uid, 'event.edit', 'event', $event_id, AUTH_EDIT) || $uid_staff_can_manage) {
                     if (!$this->Event->detail_belongs_to_event($event_id, $detail_id)) {
                         header('Location: ' . UIR . 'Event/index/' . $event_id);
                         exit;
@@ -470,7 +470,7 @@ class Controller_Event extends Controller
                 }
 
             } elseif ($action === 'reconcile') {
-                if ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+                if ($this->Authorization->has_permission_or_authority($uid, 'event.attendance.manage', 'event', $event_id, AUTH_CREATE)) {
                     if (!$this->Event->detail_belongs_to_event($event_id, $detail_id)) {
                         header('Location: ' . UIR . 'Event/index/' . $event_id);
                         exit;
@@ -565,13 +565,21 @@ class Controller_Event extends Controller
         $this->data['AttendanceCount'] = count($this->data['AttendanceReport']['Attendance'] ?? []);
 
         $this->data['CanManageEvent'] = $uid > 0
-            && ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage);
+            && ($this->Authorization->has_permission_or_authority($uid, 'event.edit', 'event', $event_id, AUTH_EDIT) || $uid_staff_can_manage);
+        // Each display flag is keyed on the permission its own write arm enforces, so a
+        // control is never shown to someone the endpoint will refuse (or hidden from
+        // someone it would accept): attendance -> event.attendance.manage (the key the
+        // arms above check), schedule and feast -> event.schedule.manage (the key
+        // EventPlanning enforces for both: the feast branches of SaveEventSchedule /
+        // RemoveEventSchedule fall back only on the event_staff can_feast row, never on
+        // event.fees.manage). The bridge still honours the legacy AUTH_EVENT row, so this
+        // is a superset of the old has_authority call.
         $this->data['CanManageAttendance'] = $uid > 0
-            && ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) || $uid_staff_can_attendance);
+            && ($this->Authorization->has_permission_or_authority($uid, 'event.attendance.manage', 'event', $event_id, AUTH_CREATE) || $uid_staff_can_attendance);
         $this->data['CanManageSchedule'] = $uid > 0
-            && ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_schedule);
+            && ($this->Authorization->has_permission_or_authority($uid, 'event.schedule.manage', 'event', $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_schedule);
         $this->data['CanManageFeast'] = $uid > 0
-            && ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_feast);
+            && ($this->Authorization->has_permission_or_authority($uid, 'event.schedule.manage', 'event', $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_feast);
 
         $occurrencePage = $this->Event->get_occurrence_page_data(
             $event_id,
@@ -593,7 +601,10 @@ class Controller_Event extends Controller
         $_evtStatus = (string)($occurrencePage['EventStatus'] ?? 'published');
         $_evtCreator = (int)($occurrencePage['CreatorId'] ?? 0);
         $this->data['EventStatus']        = $_evtStatus;
-        $this->data['EventCanEditStatus'] = $this->data['CanManageEvent'];
+        // Publishing is its own capability (event.publish, see EventPlanning::SetEventStatus);
+        // gate the draft/publish buttons on the same key the backend enforces.
+        $this->data['EventCanEditStatus'] = $uid > 0
+            && ($this->Authorization->has_permission_or_authority($uid, 'event.publish', 'event', $event_id, AUTH_EDIT) || $uid_staff_can_manage);
         if ($this->Event->is_draft_blocked_for_viewer(
             $_evtStatus,
             $_evtCreator,
@@ -687,7 +698,13 @@ class Controller_Event extends Controller
             $this->data['AtParkName'] = $this->Event->get_park_name($at_park_id);
         }
 
-        if (!$uid || !$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+        // Both keys reach this gate on purpose: event.detail.manage is what the page's own
+        // admin affordance is keyed on (see index()/list above), and park.event.create is
+        // the park-scoped grant that resolves here through the event -> park cascade rung.
+        $can_create_occurrence = $uid > 0
+            && ($this->Authorization->has_permission_or_authority($uid, 'event.detail.manage', 'event', $event_id, AUTH_CREATE)
+                || $this->Authorization->has_permission_or_authority($uid, 'park.event.create', 'event', $event_id, AUTH_CREATE));
+        if (!$can_create_occurrence) {
             header('Location: ' . UIR . 'Login');
             exit;
         }

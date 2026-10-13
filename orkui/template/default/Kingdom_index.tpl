@@ -17,7 +17,7 @@
 	<h4>Monarchy</h4>
 		<ul>
 			<?php foreach ($kingdom_officers['Officers'] as $key => $officer): ?>
-				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/profile/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
+				<li><?= htmlspecialchars($officer['DisplayTitle'] ?? $officer['OfficerRole']); ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/profile/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
 			<?php endforeach; ?>
 		</ul>
 	<?php endif; ?>

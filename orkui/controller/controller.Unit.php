@@ -47,6 +47,11 @@ class Controller_Unit extends Controller
         $action = trimlen($this->request->Action) > 0 ? $this->request->Action : '';
         if ($action && $this->data['LoggedIn']) {
             $r = null;
+            // addauth / deleteauth authorize inside Model_Unit -> AuthorizationGate,
+            // which honors unit.auth.manage and falls back to the legacy unit authority
+            // rule (KPM roster bypass included). Deliberately no pre-filter here: this
+            // controller cannot evaluate the KPM bypass, so a local check would refuse
+            // kingdom park monarchs the domain still means to allow.
             switch ($action) {
                 case 'save_details':
                     $req = array(
@@ -225,7 +230,7 @@ class Controller_Unit extends Controller
             exit;
         }
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_canEdit = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT);
+        $_canEdit = $_uid > 0 && $this->Authorization->has_permission_or_authority($_uid, 'unit.edit', 'unit', (int)$unit_id, AUTH_EDIT);
         $this->data['CanEdit'] = $_canEdit;
 
         // ── Retire / Claim / Transfer state ───────────────────────────────

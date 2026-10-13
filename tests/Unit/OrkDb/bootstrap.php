@@ -14,6 +14,8 @@ require_once ORK3_ROOT . '/tools/ork-db/lib/Wiring.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/DeploymentTier.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/MigrationClassifier.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/SchemaIntrospection.php';
+require_once ORK3_ROOT . '/tools/ork-db/lib/SchemaTableIndex.php';
+require_once ORK3_ROOT . '/tools/ork-db/lib/TableReferenceScan.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/LastRender.php';
 require_once ORK3_ROOT . '/tools/ork-db/Validate.php';
 require_once ORK3_ROOT . '/tools/ork-db/Extract.php';
@@ -93,6 +95,32 @@ function ork3_app_base_url(): string
     $base = getenv('ORK3_E2E_BASE_URL') ?: 'http://127.0.0.1:19080/orkui/';
 
     return str_replace('://localhost:', '://127.0.0.1:', $base);
+}
+
+/**
+ * Whether the local app container is serving the SANDBOX (ork_test) rather than the mirror.
+ *
+ * `bin/ork-db use dev|prod` writes .ork3-db.local and restarts ork3app; deploy-sandbox runs
+ * `use dev` as a step, so "app on the sandbox" is a mode you opt into, not the default. The
+ * tests that read app pages for sandbox-namespace rows (kingdom 100001, park 1000001,
+ * mundane 100000000) can only mean anything in that mode — pointed at the mirror they assert
+ * against 183k real players where those ids do not exist, and fail for a reason that has
+ * nothing to do with the code under test.
+ *
+ * So they skip instead. Switch with `bin/ork-db use dev` (and back with `use prod`) to run
+ * them.
+ */
+function ork3_app_serving_sandbox(): bool
+{
+    $profileFile = ORK3_ROOT . '/.ork3-db.local';
+    if (!is_readable($profileFile)) {
+        return false;
+    }
+
+    return preg_match(
+        '/^ORK3_DB_PROFILE\s*=\s*dev\s*$/m',
+        (string) file_get_contents($profileFile)
+    ) === 1;
 }
 
 function ork3_app_reachable(): bool

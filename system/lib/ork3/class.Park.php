@@ -2,6 +2,23 @@
 
 class Park extends Ork3
 {
+    /**
+     * Fallback park title.
+     *
+     * Every park must carry a park title -- ork_park.parktitle_id is NOT NULL with a
+     * schema DEFAULT of 1 -- so an operation that touches the title and cannot honour
+     * what it was given has to land on something. That something is this constant, on
+     * purpose, and never "whatever title happens to sort first", which is how parks
+     * used to be silently reassigned to an unrelated title.
+     */
+    public const DEFAULT_PARKTITLE_ID = 1;
+
+    /**
+     * Park active states. ork_park.active is enum('Active','Retired').
+     */
+    public const ACTIVE_ACTIVE = 'Active';
+    public const ACTIVE_RETIRED = 'Retired';
+
     public function __construct()
     {
         parent::__construct();
@@ -37,6 +54,169 @@ class Park extends Ork3
             return $this->park->park_id;
         }
         return null;
+    }
+
+    /**
+     * Headline numbers and the work queue for the park admin console.
+     *
+     * The park mirror of Kingdom::GetAdminDashboard(), and deliberately the same
+     * shape: "Standing" is how the park is doing, "Queue" is what is waiting on
+     * the officer reading the page, and every Queue entry is a set someone can
+     * actually work. 'Windows' returns the thresholds the counts used so the
+     * template can describe them without restating literals that would drift
+     * away from this SQL.
+     *
+     * Scope is this park and only this park. There is no principality-style
+     * rollup at park level, so unlike the kingdom console both halves share one
+     * scope and cannot disagree.
+     *
+     * Where this deliberately does NOT match the park PROFILE page:
+     *  - 'Members' counts every ork_mundane row homed here, including suspended
+     *    and inactive players, because the admin console's job is the whole
+     *    membership record. ParkProfile::GetParkPlayersRoster() filters to
+     *    active + unsuspended, so it will read lower. That is not a defect.
+     *  - 'ActivePlayers' counts distinct players who signed in AT this park in
+     *    the window regardless of where they are homed -- the attendance-scoped
+     *    question the kingdom console asks -- not "members of this park who
+     *    signed in somewhere", which is what the profile's roster answers.
+     *
+     * One Queue member is not a work queue at all: 'WaiveredMembers' is the
+     * blast radius for the Reset Waivers action, so the confirm modal can say
+     * how many players are about to be cleared. It is scoped exactly like that
+     * UPDATE -- park_id + waivered = 1, with NO active filter. Adding one here
+     * would under-report what the reset is about to clear.
+     *
+     * QuietDays is NULL, never 0 and never an absurd number, when the park has
+     * no usable attendance date: a brand new park genuinely has no "days since
+     * last signin" and a caller must be able to tell that apart from "signed in
+     * today". Zero dates ('0000-00-00') are excluded from the MAX for the same
+     * reason -- they are placeholder rows, and DATEDIFF against one produces
+     * either NULL or nonsense depending on the server's date handling.
+     *
+     * @param int $park_id
+     * @return array ['Standing' => [...], 'Queue' => [...], 'Windows' => [...]]
+     */
+    public function GetAdminDashboard($park_id)
+    {
+        global $DB;
+        $park_id = (int) $park_id;
+        $activeWindowDays = 182;
+        $quietThreshold   = 60;
+
+        $out = [
+            'Standing' => ['Members' => 0, 'ActivePlayers' => 0, 'AttendanceYtd' => 0],
+            'Queue'    => [
+                'UnwaiveredActive'    => 0,
+                'VacantOffices'       => 0,
+                'QuietDays'           => null,
+                'OpenRecommendations' => 0,
+                'WaiveredMembers'     => 0,
+            ],
+            'Windows'  => [
+                'ActiveWindowDays'  => $activeWindowDays,
+                'QuietThreshold'    => $quietThreshold,
+                'OfficeCount'       => 0,
+                'VacantOfficeNames' => [],
+            ],
+        ];
+        if ($park_id <= 0) {
+            return $out;
+        }
+
+        // ---- Standing -------------------------------------------------------
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "mundane m
+                  WHERE m.park_id = " . $park_id . ") AS members,
+                (SELECT COUNT(DISTINCT a.mundane_id) FROM " . DB_PREFIX . "attendance a
+                  WHERE a.park_id = " . $park_id . "
+                    AND a.date >= (CURDATE() - INTERVAL " . $activeWindowDays . " DAY)) AS active_players,
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance a
+                  WHERE a.park_id = " . $park_id . "
+                    AND a.date_year = YEAR(CURDATE())) AS attendance_ytd"
+        );
+        if ($r !== false && $r->Next()) {
+            $out['Standing']['Members']       = (int) $r->members;
+            $out['Standing']['ActivePlayers'] = (int) $r->active_players;
+            $out['Standing']['AttendanceYtd'] = (int) $r->attendance_ytd;
+        }
+
+        // ---- Queue ----------------------------------------------------------
+        // "Open" for a recommendation is deleted_at IS NULL, matching the Recs
+        // Manager; snoozed and passed-to-local rows are somebody else's problem.
+        // Recommendations carry no park column, so the park is resolved through
+        // the recommended player's home park.
+        //
+        // quiet_days is left NULL by MAX() over an empty set -- see the docblock.
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "mundane m
+                  WHERE m.park_id = " . $park_id . "
+                    AND m.waivered = 0 AND m.active = 1) AS unwaivered_active,
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "mundane m
+                  WHERE m.park_id = " . $park_id . "
+                    AND m.waivered = 1) AS waivered_members,
+                (SELECT COUNT(*) FROM " . DB_PREFIX . "recommendations rc
+                    JOIN " . DB_PREFIX . "mundane rm ON rm.mundane_id = rc.mundane_id
+                  WHERE rm.park_id = " . $park_id . "
+                    AND rc.deleted_at IS NULL
+                    AND COALESCE(rc.snoozed_by_id, 0) = 0
+                    AND COALESCE(rc.passed_to_local, 0) = 0) AS open_recs,
+                (SELECT DATEDIFF(CURDATE(), MAX(a.date)) FROM " . DB_PREFIX . "attendance a
+                  WHERE a.park_id = " . $park_id . "
+                    AND a.date > '0000-00-00') AS quiet_days"
+        );
+        if ($r !== false && $r->Next()) {
+            $out['Queue']['UnwaiveredActive']    = (int) $r->unwaivered_active;
+            $out['Queue']['WaiveredMembers']     = (int) $r->waivered_members;
+            $out['Queue']['OpenRecommendations'] = (int) $r->open_recs;
+            // A future-dated signin would make DATEDIFF negative; "quiet for -3
+            // days" is not a thing a queue can say, so clamp at zero. NULL is
+            // preserved untouched -- it means something different.
+            $out['Queue']['QuietDays'] = ($r->quiet_days === null)
+                ? null
+                : max(0, (int) $r->quiet_days);
+        }
+
+        // Vacant park offices. ork_officer holds one row per office per park and
+        // parks a vacancy as mundane_id = 0 rather than deleting the row, so the
+        // seat table is the office roster -- the same source
+        // OfficerPosition::get_officers_for_display() renders on the Manage
+        // Officers panel, filtered the same way, so the count and the list a
+        // click opens cannot disagree.
+        //
+        // Retired positions (officer_position.retired_at) are excluded: a retired
+        // office is not a vacancy anyone is expected to fill. hide_when_vacant
+        // positions stay in OfficeCount but never appear as a vacancy, because
+        // the roster deliberately does not show them when empty and a queue item
+        // that opens to nothing visible is not workable.
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT o.mundane_id, p.hide_when_vacant,
+                    " . OfficerPosition::display_title_sql('p', 'al') . " AS display_title
+               FROM " . DB_PREFIX . "park pk
+               JOIN " . DB_PREFIX . "officer o ON o.park_id = pk.park_id
+               JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id
+               LEFT JOIN " . DB_PREFIX . "officer_position_alias al
+                      ON al.kingdom_id = pk.kingdom_id AND al.canonical_key = p.canonical_key
+              WHERE pk.park_id = " . $park_id . "
+                AND p.retired_at IS NULL
+              ORDER BY p.classification, " . OfficerPosition::sort_order_sql('p', 'al') . ", o.officer_id ASC"
+        );
+        if ($r !== false) {
+            while ($r->Next()) {
+                $out['Windows']['OfficeCount']++;
+                if ((int) $r->mundane_id > 0 || (int) $r->hide_when_vacant === 1) {
+                    continue;
+                }
+                $out['Queue']['VacantOffices']++;
+                $out['Windows']['VacantOfficeNames'][] = (string) $r->display_title;
+            }
+        }
+
+        return $out;
     }
 
     // Migrate every member of one park into another, and clear the source park's
@@ -228,7 +408,7 @@ class Park extends Ork3
     public function AddParkDay($request)
     {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.parkday.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
         ) {
             $this->parkday->clear();
             $this->parkday->park_id = $request[ 'ParkId' ];
@@ -316,7 +496,7 @@ class Park extends Ork3
         }
         $park_id = $this->parkday->park_id;
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.parkday.manage', 'park', $park_id, AUTH_EDIT)
         ) {
             // Snapshot the parkday before mutations so the audit log can show a diff.
             $_audit_prior = [
@@ -415,7 +595,7 @@ class Park extends Ork3
             return InvalidParameter();
         }
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.parkday.manage', 'park', $park_id, AUTH_EDIT)
         ) {
             $_audit_prior = [
                 'parkday_id'         => (int)$this->parkday->parkday_id,
@@ -473,55 +653,14 @@ class Park extends Ork3
     {
         $park_id = mysql_real_escape_string($request['ParkId']);
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-        $is_authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT);
+        $is_authorized = Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer.set', 'park', $park_id, AUTH_EDIT);
 
-        $sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id
-					from " . DB_PREFIX . "officer o
-						left join " . DB_PREFIX . "mundane m on o.mundane_id = m.mundane_id
-						left join " . DB_PREFIX . "authorization a on a.authorization_id = o.authorization_id
-							left join " . DB_PREFIX . "park p on a.park_id = p.park_id
-							left join " . DB_PREFIX . "kingdom k on a.kingdom_id = k.kingdom_id
-							left join " . DB_PREFIX . "event e on a.event_id = e.event_id
-							left join " . DB_PREFIX . "unit u on a.unit_id = u.unit_id
-				where o.park_id = '" . $park_id . "' and o.kingdom_id > 0
-				order by FIELD(o.role, 'Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'), o.role
-			";
-        $r = $this->db->query($sql);
-        $response = [ ];
-        $response[ 'Officers' ] = [ ];
-        if ($r !== false && $r->size() > 0) {
-            $response[ 'Status' ] = Success();
-            while ($r->next()) {
-                $fetchprivate = true;
-                if ($mundane_id > 0 && $is_authorized) {
-                    $fetchprivate = false;
-                }
-                $response[ 'Officers' ][] = [
-                    'AuthorizationId' => $r->authorization_id,
-                    'MundaneId'       => $r->m_mundane_id,
-                    'ParkId'          => $r->park_id,
-                    'KingdomId'       => $r->kingdom_id,
-                    'EventId'         => $r->event_id,
-                    'UnitId'          => $r->unit_id,
-                    'Role'            => $r->role,
-                    'ParkName'        => $r->park_name,
-                    'KingdomName'     => $r->kingdom_name,
-                    'EventName'       => $r->event_name,
-                    'UnitName'        => $r->unit_name,
-                    'Restricted'      => $r->restricted,
-                    'UserName'        => $r->username,
-                    'GivenName'       => $fetchprivate ? "" : $r->given_name,
-                    'Surname'         => $fetchprivate ? "" : $r->surname,
-                    'Persona'         => $r->persona,
-                    'OfficerId'       => $r->officer_id,
-                    'OfficerRole'     => $r->officer_role,
-                ];
-            }
-            $response[ 'Status' ] = Success();
-        } else {
-            $response[ 'Status' ] = InvalidParameter();
-        }
-        return $response;
+        // Park-level officers: scope to this park within a real kingdom, and
+        // resolve title aliases against each row's own kingdom (al.kingdom_id = o.kingdom_id).
+        $aliasKingdomExpr = "o.kingdom_id";
+        $whereClause = "o.park_id = '" . $park_id . "' and o.kingdom_id > 0";
+
+        return Kingdom::build_officer_rows($this->db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized);
     }
 
     public function GetParkKingdomId($pid)
@@ -904,9 +1043,12 @@ class Park extends Ork3
             $this->park->kingdom_id     = $request[ 'KingdomId' ];
             $this->park->name           = $request[ 'Name' ];
             $this->park->abbreviation   = strtoupper($request[ 'Abbreviation' ]);
-            $this->park->active         = 'Active';
+            $this->park->active         = self::ACTIVE_ACTIVE;
             $this->park->modified       = date("Y-m-d H:i:s", time());
-            $this->park->parktitle_id   = $request[ 'ParkTitleId' ];
+            // Same defaulting rule as SetParkDetails: a title that is missing, blank,
+            // nonexistent, or owned by another kingdom lands on DEFAULT_PARKTITLE_ID
+            // instead of being written through unchecked.
+            $this->park->parktitle_id   = $this->ResolveParkTitleId($request[ 'ParkTitleId' ] ?? 0, $kingdom_id);
             $this->park->url            = '';
             $this->park->address        = '';
             $this->park->city           = '';
@@ -935,7 +1077,7 @@ class Park extends Ork3
                 'kingdom_id'   => (int)$request['KingdomId'],
                 'name'         => $request['Name'],
                 'abbreviation' => strtoupper($request['Abbreviation']),
-                'parktitle_id' => (int)$request['ParkTitleId'],
+                'parktitle_id' => (int)$this->park->parktitle_id,
             ]);
             Ork3::$Lib->report->bustKingdomParkAverageCaches((int) $request['KingdomId']);
             $response = Success($new_park_id);
@@ -943,6 +1085,43 @@ class Park extends Ork3
             $response = NoAuthorization();
         }
         return $response;
+    }
+
+    /**
+     * Resolve a requested park title id against the kingdom that owns the park.
+     *
+     * Park titles are per-kingdom rows in ork_parktitle, keyed on parktitle.kingdom_id.
+     * Callers used to check only that the id EXISTED, which let a park be handed a title
+     * defined by some other kingdom -- the park then rendered a title its own kingdom had
+     * never created, and nothing in the UI explained where it came from.
+     *
+     * The rule, implemented once here so every write site in this class inherits it:
+     *   - id exists AND belongs to $kingdom_id  -> use it
+     *   - id is 0 / blank / non-numeric         -> self::DEFAULT_PARKTITLE_ID
+     *   - id does not exist                     -> self::DEFAULT_PARKTITLE_ID
+     *   - id belongs to a different kingdom     -> self::DEFAULT_PARKTITLE_ID
+     *
+     * @param  mixed $requested_id Raw ParkTitleId off a request; may be null, '' or 0.
+     * @param  mixed $kingdom_id   The kingdom the park belongs to AFTER this operation.
+     * @return int                 A parktitle_id safe to write to ork_park.
+     */
+    public function ResolveParkTitleId($requested_id, $kingdom_id)
+    {
+        $requested_id = (int)$requested_id;
+        $kingdom_id   = (int)$kingdom_id;
+        if (!valid_id($requested_id) || !valid_id($kingdom_id)) {
+            return self::DEFAULT_PARKTITLE_ID;
+        }
+        $parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
+        $parktitle->clear();
+        $parktitle->parktitle_id = $requested_id;
+        if (!$parktitle->find()) {
+            return self::DEFAULT_PARKTITLE_ID;
+        }
+        if ((int)$parktitle->kingdom_id !== $kingdom_id) {
+            return self::DEFAULT_PARKTITLE_ID;
+        }
+        return $requested_id;
     }
 
     public function SetParkDetails($request)
@@ -961,7 +1140,7 @@ class Park extends Ork3
         $this->park->park_id = $request[ 'ParkId' ];
         if ($this->park->find()) {
             if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT)
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.details.edit', 'park', $request[ 'ParkId' ], AUTH_EDIT)
             ) {
                 // Snapshot prior park state for the audit log before any field changes.
                 $_audit_prior = [
@@ -982,18 +1161,29 @@ class Park extends Ork3
                 $this->log->Write('Park', $mundane_id, LOG_EDIT, $request);
                 $this->park->modified = date("Y-m-d H:i:s", time());
 
-                if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->park->kingdom_id, AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.details.edit', 'kingdom', $this->park->kingdom_id, AUTH_EDIT)) {
                     $this->park->name = trimlen($request[ 'Name' ]) == 0 ? $this->park->name : $request[ 'Name' ];
                     $this->park->abbreviation = trimlen($request[ 'Abbreviation' ]) == 0 ? strtoupper($this->park->abbreviation) : strtoupper($request[ 'Abbreviation' ]);
-                    $parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
-                    $parktitle->clear();
-                    if (isset($request[ 'ParkTitleId' ]) && $request[ 'ParkTitleId' ] != $this->park->parktitle_id) {
-                        $parktitle->parktitle_id = $request[ 'ParkTitleId' ];
-                        if ($parktitle->find()) {
-                            $this->park->parktitle_id = $request[ 'ParkTitleId' ];
-                        }
+                    // Park title. Only touched when the request actually carries the key:
+                    // several callers (the heraldry-only POST from ParkAjax, the address
+                    // form in Admin) legitimately edit a park without ever showing a title
+                    // picker, and resetting those to the default would be exactly the
+                    // silent reassignment this guard exists to stop.
+                    //
+                    // When the key IS present, ResolveParkTitleId owns the outcome: a title
+                    // that does not exist, or belongs to another kingdom, or was submitted
+                    // as 0/blank, lands on DEFAULT_PARKTITLE_ID rather than being written
+                    // through or silently left as-is.
+                    if (array_key_exists('ParkTitleId', $request)) {
+                        $this->park->parktitle_id = $this->ResolveParkTitleId($request[ 'ParkTitleId' ], $this->park->kingdom_id);
                     }
-                    $this->park->active = trimlen($request[ 'Active' ]) == 0 ? $this->park->active : $request[ 'Active' ];
+                    // NOTE: 'Active' is deliberately NOT read here. Retiring or restoring a
+                    // park is a first-class operation with its own permission
+                    // ('kingdom.park.retire', which 'park.details.edit' does not imply) and
+                    // its own danger-audit row. Honouring an Active field on a details edit
+                    // let any park-details editor retire a park through a plain LOG_EDIT,
+                    // bypassing both. Use RetirePark()/RestorePark() instead; any Active
+                    // value in this request is ignored.
                 }
 
                 $address_change = false;
@@ -1029,6 +1219,13 @@ class Park extends Ork3
                         // AKA Blackspire Code, AKA Golden Plains Exception
                         if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, $request[ 'KingdomId' ], AUTH_ADMIN)) {
                             $this->park->kingdom_id = $request[ 'KingdomId' ];
+                            // The park's title was defined by the kingdom it just left.
+                            // Re-resolve against the destination so the park cannot go on
+                            // displaying a title its new kingdom never created.
+                            $this->park->parktitle_id = $this->ResolveParkTitleId(
+                                $request[ 'ParkTitleId' ] ?? $this->park->parktitle_id,
+                                $this->park->kingdom_id
+                            );
                         } else {
                             $response = Warning('You do not have permissions to move this Park [' . $this->park->park_id . ', ' . $this->park->kingdom_id . '] to another Kingdom [' . $request[ 'KingdomId' ] . '].');
                         }
@@ -1096,7 +1293,7 @@ class Park extends Ork3
         // Check for Principality Details, and create auths for Principality concurrently
         $response = [ ];
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer.set', 'park', $request[ 'ParkId' ], AUTH_EDIT)
         ) {
             if (!isset($request['KingdomId'])) {
                 if (!isset($request['ParkId'])) {
@@ -1109,14 +1306,21 @@ class Park extends Ork3
             // Look up the current officer first so we can suppress the audit when
             // the UI re-submits an unchanged assignment (the Bellhollow form fires
             // SetOfficer once per role on every save).
+            $_positionId = Ork3::$Lib->officerposition->ResolvePositionId((int)$kingdomId, $request[ 'Role' ]);
+            $_canonicalKey = Ork3::$Lib->officerposition->ResolveCanonicalKey((int)$kingdomId, $request[ 'Role' ]);
+
             $_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
             $_priorOfficer->clear();
             $_priorOfficer->park_id = (int)$request[ 'ParkId' ];
-            $_priorOfficer->role    = $request[ 'Role' ];
+            if ($_positionId > 0) {
+                $_priorOfficer->position_id = $_positionId;
+            } else {
+                $_priorOfficer->role = $request[ 'Role' ];
+            }
             $_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
 
             $c = new Common();
-            $c->set_officer($kingdomId, $request[ 'ParkId' ], $request[ 'MundaneId' ], $request[ 'Role' ]);
+            $c->set_officer($kingdomId, $request[ 'ParkId' ], $request[ 'MundaneId' ], $_canonicalKey, 0, $mundane_id, $_positionId);
 
             if ($_priorMundaneId !== (int)$request[ 'MundaneId' ]) {
                 $_audit_req = $request;
@@ -1145,17 +1349,24 @@ class Park extends Ork3
     {
         $response = [ ];
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer.vacate', 'park', $request[ 'ParkId' ], AUTH_EDIT)
         ) {
             $kingdomId = $this->GetParkKingdomId($request[ 'ParkId' ]);
+            $_positionId = Ork3::$Lib->officerposition->ResolvePositionId((int)$kingdomId, $request[ 'Role' ]);
+            $_canonicalKey = Ork3::$Lib->officerposition->ResolveCanonicalKey((int)$kingdomId, $request[ 'Role' ]);
+
             $_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
             $_priorOfficer->clear();
             $_priorOfficer->park_id = (int)$request[ 'ParkId' ];
-            $_priorOfficer->role    = $request[ 'Role' ];
+            if ($_positionId > 0) {
+                $_priorOfficer->position_id = $_positionId;
+            } else {
+                $_priorOfficer->role = $request[ 'Role' ];
+            }
             $_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
 
             $c = new Common();
-            $c->set_officer($kingdomId, $request[ 'ParkId' ], 0, $request[ 'Role' ]);
+            $c->set_officer($kingdomId, $request[ 'ParkId' ], 0, $_canonicalKey, 0, $mundane_id, $_positionId);
 
             if ($_priorMundaneId > 0) {
                 $_audit_req = $request;
@@ -1179,41 +1390,319 @@ class Park extends Ork3
         return $response;
     }
 
-    public function RetirePark($request)
+    public function GetOfficerHistory($request)
     {
-        return $this->WafflePark($request, 'Retired');
-    }
+        $park_id = (int)$request[ 'ParkId' ];
+        $role_filter = isset($request[ 'Role' ]) && strlen(trim($request[ 'Role' ])) > 0 ? trim($request[ 'Role' ]) : null;
 
-    public function RestorePark($request)
-    {
-        return $this->WafflePark($request, 'Active');
-    }
+        // Look up the kingdom_id for this park
+        $kingdom_id = (int)$this->GetParkKingdomId($park_id);
 
-    public function WafflePark($request, $waffle)
-    {
-        $response = [ ];
-        $this->park->clear();
-        $this->park->park_id = $request[ 'ParkId' ];
-        if ($this->park->find()) {
-            if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->park->kingdom_id, AUTH_EDIT)
-            ) {
-                $_prior_active = $this->park->active;
-                $this->log->Write('Park', $mundane_id, 'Active' == $waffle ? LOG_RESTORE : LOG_RETIRE, $request);
-                $this->park->active = $waffle;
-                $this->park->save();
-                $_audit_req = $request;
-                unset($_audit_req[ 'Token' ]);
-                // Synthetic method name so the audit log distinguishes Retire from Restore.
-                $_call = ('Active' == $waffle) ? (__CLASS__ . '::RestorePark') : (__CLASS__ . '::RetirePark');
-                Ork3::$Lib->dangeraudit->audit($_call, $_audit_req, 'Park', (int)$request[ 'ParkId' ], [ 'active' => $_prior_active ], [ 'active' => $waffle ]);
-                $response = Success();
-            } else {
-                $response = NoAuthorization();
+        $sql = "SELECT oh.officer_history_id, oh.kingdom_id, oh.park_id, oh.mundane_id, oh.role,
+		                oh.position_id, oh.display_label,
+		                oh.start_date, oh.end_date, oh.changed_by, oh.notes, oh.created_at,
+		                m.persona, m.username,
+		                cb.persona AS changed_by_persona,
+		                op.classification AS classification
+		         FROM " . DB_PREFIX . "officer_history oh
+		         LEFT JOIN " . DB_PREFIX . "officer_position op ON op.position_id = oh.position_id
+		         LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = oh.mundane_id
+		         LEFT JOIN " . DB_PREFIX . "mundane cb ON cb.mundane_id = oh.changed_by
+		         WHERE oh.park_id = " . $park_id . " AND oh.kingdom_id = " . $kingdom_id;
+
+        if ($role_filter !== null) {
+            // Bound, never interpolated -- mysql_real_escape_string() is a no-op shim here.
+            $sql .= " AND oh.role = :oh_role";
+        }
+
+        $sql .= " ORDER BY oh.role, oh.start_date DESC, oh.officer_history_id DESC";
+
+        global $DB;
+        $DB->Clear();
+        if ($role_filter !== null) {
+            $DB->oh_role = $role_filter;
+        }
+        $r = $DB->DataSet($sql);
+        $response = [ 'Status' => Success(), 'History' => [ ] ];
+        if ($r !== false && $r->size() > 0) {
+            while ($r->next()) {
+                $response[ 'History' ][] = [
+                    'OfficerHistoryId' => (int)$r->officer_history_id,
+                    'KingdomId'        => (int)$r->kingdom_id,
+                    'ParkId'           => (int)$r->park_id,
+                    'MundaneId'        => (int)$r->mundane_id,
+                    'Role'             => $r->role,
+                    // Same three keys, same shapes, as Kingdom::GetOfficerHistory() --
+                    // see the notes there. This is a SEPARATE implementation of the same
+                    // read, so the park officer-history surface only gets an office name
+                    // instead of a raw canonical key if it is fixed here too.
+                    //
+                    // PositionId: plain int, 0 (never null) for a row that predates the
+                    // registry, matching ork_officer_history.position_id INT NOT NULL
+                    // DEFAULT 0 and buildOfficerRows().
+                    'PositionId'       => (int)$r->position_id,
+                    // DisplayLabel: the snapshot of what the office was called at the time.
+                    'DisplayLabel'     => $r->display_label ?? '',
+                    // Classification: null, never defaulted, when the position no longer
+                    // exists or the row predates the registry.
+                    'Classification'   => $r->classification,
+                    'StartDate'        => $r->start_date,
+                    'EndDate'          => $r->end_date,
+                    'ChangedBy'        => (int)$r->changed_by,
+                    'ChangedByPersona' => $r->changed_by_persona ?? '',
+                    'Notes'            => $r->notes ?? '',
+                    'Persona'          => $r->persona ?? '',
+                    'UserName'         => $r->username ?? '',
+                ];
             }
-        } else {
-            $response = InvalidParameter(null, 'Problem processing request.');
         }
         return $response;
+    }
+
+    public function AddOfficerHistory($request)
+    {
+        $response = [ ];
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
+        ) {
+            $pid       = (int)$request[ 'ParkId' ];
+            $kid       = (int)$this->GetParkKingdomId($pid);
+            $mid       = (int)$request[ 'MundaneId' ];
+            $role      = trim($request[ 'Role' ] ?? '');
+            $start     = trim($request[ 'StartDate' ] ?? '');
+            $end       = trim($request[ 'EndDate' ] ?? '');
+            $notes_raw = isset($request[ 'Notes' ]) ? trim($request[ 'Notes' ]) : '';
+
+            if ($mid <= 0 || strlen($role) === 0 || strlen($start) === 0) {
+                return InvalidParameter(null, 'MundaneId, Role, and StartDate are required.');
+            }
+
+            // Bound, not concatenated -- mysql_real_escape_string() is a no-op shim in this
+            // codebase (startup.php: `return $str;`), so the previous form was an injection.
+            global $DB;
+            // Resolve the office this term belongs to, and SNAPSHOT what it was called.
+            // Without this the row lands with position_id = 0 and display_label = '', which the
+            // history UI reads as "office unknown" and files it under a catch-all panel instead
+            // of under the office the user just picked. The three other writers
+            // (Common::record_officer_history and both OfficerPosition backfills) already do
+            // this; only this manual "Add Historical Record" path did not.
+            // display_title_sql gives the EFFECTIVE title, so a kingdom that renamed a shared
+            // office snapshots ITS name -- which is the whole point of storing a snapshot.
+            $DB->Clear();
+            $DB->op_kid = $kid;
+            $DB->op_key = $role;
+            $_ohPos = $DB->DataSet(
+                "SELECT p.position_id, " . OfficerPosition::display_title_sql('p', 'a') . " AS display_title
+				   FROM " . DB_PREFIX . "officer_position p
+				   LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+				     ON a.kingdom_id = :op_kid AND a.canonical_key = p.canonical_key
+				  WHERE p.canonical_key = :op_key AND (p.kingdom_id = 0 OR p.kingdom_id = :op_kid)
+				  ORDER BY p.kingdom_id DESC LIMIT 1"
+            );
+            $_ohPosId = 0;
+            $_ohLabel = '';
+            if ($_ohPos !== false && $_ohPos->Size() > 0 && $_ohPos->Next()) {
+                $_ohPosId = (int) $_ohPos->position_id;
+                $_ohLabel = (string) $_ohPos->display_title;
+            }
+            $DB->Clear();
+            $DB->oh_kid   = $kid;
+            $DB->oh_pid   = $pid;
+            $DB->oh_mid   = $mid;
+            $DB->oh_role  = $role;
+            $DB->oh_start = $start;
+            $DB->oh_end   = strlen($end) > 0 ? $end : null;
+            $DB->oh_cb    = (int)$mundane_id;
+            $DB->oh_notes = strlen($notes_raw) > 0 ? $notes_raw : null;
+            $DB->oh_pos   = $_ohPosId;
+            $DB->oh_label = $_ohLabel;
+            $DB->Execute(
+                "INSERT INTO " . DB_PREFIX . "officer_history
+				 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, notes, created_at)
+				 VALUES (:oh_kid, :oh_pid, :oh_mid, :oh_role, :oh_pos, :oh_label, :oh_start, :oh_end, :oh_cb, :oh_notes, NOW())"
+            );
+            $response = Success();
+        } else {
+            $response = NoAuthorization();
+        }
+        return $response;
+    }
+
+    public function EditOfficerHistory($request)
+    {
+        $response = [ ];
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
+        ) {
+            $ohid      = (int)$request[ 'OfficerHistoryId' ];
+            $pid       = (int)$request[ 'ParkId' ];
+            $role      = trim($request[ 'Role' ] ?? '');
+            $start     = trim($request[ 'StartDate' ] ?? '');
+            $end       = trim($request[ 'EndDate' ] ?? '');
+            $notes_raw = isset($request[ 'Notes' ]) ? trim($request[ 'Notes' ]) : '';
+
+            if ($ohid <= 0 || strlen($role) === 0 || strlen($start) === 0) {
+                return InvalidParameter(null, 'OfficerHistoryId, Role, and StartDate are required.');
+            }
+
+            // Bound, not concatenated -- see AddOfficerHistory.
+            global $DB;
+            $DB->Clear();
+            $DB->oh_role  = $role;
+            $DB->oh_start = $start;
+            $DB->oh_end   = strlen($end) > 0 ? $end : null;
+            $DB->oh_notes = strlen($notes_raw) > 0 ? $notes_raw : null;
+            $DB->oh_id    = $ohid;
+            $DB->oh_pid   = $pid;
+            $DB->Execute(
+                "UPDATE " . DB_PREFIX . "officer_history
+				 SET role = :oh_role, start_date = :oh_start, end_date = :oh_end, notes = :oh_notes
+				 WHERE officer_history_id = :oh_id
+				   AND park_id = :oh_pid"
+            );
+            $response = Success();
+        } else {
+            $response = NoAuthorization();
+        }
+        return $response;
+    }
+
+    public function DeleteOfficerHistory($request)
+    {
+        $response = [ ];
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
+        ) {
+            $ohid = (int)$request[ 'OfficerHistoryId' ];
+            $pid  = (int)$request[ 'ParkId' ];
+
+            if ($ohid <= 0) {
+                return InvalidParameter(null, 'OfficerHistoryId is required.');
+            }
+
+            global $DB;
+            $DB->Clear();
+            $DB->Execute(
+                "DELETE FROM " . DB_PREFIX . "officer_history
+				 WHERE officer_history_id = " . $ohid . "
+				   AND park_id = " . $pid
+            );
+            $response = Success();
+        } else {
+            $response = NoAuthorization();
+        }
+        return $response;
+    }
+
+    /**
+     * Retire one park. FIRST-CLASS ENTRY POINT -- this is the only supported way to
+     * take a park out of service.
+     *
+     * Contract (shared with RestorePark, see WafflePark for the implementation):
+     *   Request  : [ 'Token' => session token, 'ParkId' => int ]
+     *   Permission: 'kingdom.park.retire' on the park's OWN kingdom (read off the park
+     *               row, never off the request), AUTH_EDIT. Note that
+     *               'park.details.edit' does NOT imply this -- retiring a park is not a
+     *               details edit, which is why SetParkDetails no longer honours Active.
+     *   Writes    : ork_park.active = 'Retired', a LOG_RETIRE entry, and a danger-audit
+     *               row recorded under 'Park::RetirePark'.
+     *   Returns   : Success($detail) where $detail is a sentence naming the park, so a
+     *               caller running this per-park across a selection can surface a
+     *               readable per-park result. Errors are NoAuthorization() or
+     *               InvalidParameter() with a naming detail where one is known.
+     *   Idempotent: retiring an already-retired park succeeds and writes nothing.
+     *
+     * @param  array $request
+     * @return array Status array (Status / Error / Detail).
+     */
+    public function RetirePark($request)
+    {
+        return $this->WafflePark($request, self::ACTIVE_RETIRED);
+    }
+
+    /**
+     * Restore one retired park to active service. FIRST-CLASS ENTRY POINT, and the exact
+     * mirror of RetirePark -- same request shape, same 'kingdom.park.retire' permission,
+     * same danger audit (recorded under 'Park::RestorePark'), a LOG_RESTORE entry, and a
+     * Success() detail naming the park. Restoring an already-active park succeeds and
+     * writes nothing.
+     *
+     * @param  array $request [ 'Token' => session token, 'ParkId' => int ]
+     * @return array Status array (Status / Error / Detail).
+     */
+    public function RestorePark($request)
+    {
+        return $this->WafflePark($request, self::ACTIVE_ACTIVE);
+    }
+
+    /**
+     * Shared implementation behind RetirePark() and RestorePark().
+     *
+     * Prefer calling RetirePark()/RestorePark(): they name the direction, they are what
+     * the SOAP surface exposes, and they cannot be handed a bogus state. This stays
+     * public only because it is the historic name; it is not the intended entry point.
+     *
+     * @param  array  $request [ 'Token', 'ParkId' ]
+     * @param  string $waffle  self::ACTIVE_ACTIVE or self::ACTIVE_RETIRED.
+     * @return array  Status array (Status / Error / Detail).
+     */
+    public function WafflePark($request, $waffle)
+    {
+        // ork_park.active is an enum; anything else would be coerced to '' by MySQL.
+        if (self::ACTIVE_ACTIVE !== $waffle && self::ACTIVE_RETIRED !== $waffle) {
+            return InvalidParameter(null, 'Unknown park state requested.');
+        }
+
+        $park_id = (int)($request[ 'ParkId' ] ?? 0);
+        if (!valid_id($park_id)) {
+            return InvalidParameter(null, 'A ParkId is required.');
+        }
+
+        $this->park->clear();
+        $this->park->park_id = $park_id;
+        if (!$this->park->find()) {
+            return InvalidParameter(null, 'Park #' . $park_id . ' could not be found.');
+        }
+
+        // Name the park for the caller's per-park result. Read before any write so the
+        // label is right even when nothing changes.
+        $park_label = trim((string)$this->park->name);
+        if (strlen((string)$this->park->abbreviation)) {
+            $park_label .= ' (' . strtoupper((string)$this->park->abbreviation) . ')';
+        }
+        if (0 === strlen(trim($park_label))) {
+            $park_label = 'Park #' . $park_id;
+        }
+
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ]);
+        // Authorize against the kingdom that actually owns the park, taken off the row,
+        // not off anything the caller supplied.
+        if ($mundane_id <= 0
+            || !Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'kingdom.park.retire', 'kingdom', $this->park->kingdom_id, AUTH_EDIT)
+        ) {
+            return NoAuthorization('You do not have permission to change the status of ' . $park_label . '.');
+        }
+
+        $_prior_active = $this->park->active;
+        $verb = (self::ACTIVE_ACTIVE === $waffle) ? 'restored' : 'retired';
+
+        // Idempotent no-op. Bulk callers hand this whole selections, most of which are
+        // already in the requested state; writing a LOG entry and a danger-audit row for
+        // each of those buries the real changes in noise.
+        if ($_prior_active === $waffle) {
+            return Success($park_label . ' was already ' . $verb . '.');
+        }
+
+        $this->log->Write('Park', $mundane_id, self::ACTIVE_ACTIVE === $waffle ? LOG_RESTORE : LOG_RETIRE, $request);
+        $this->park->active = $waffle;
+        $this->park->save();
+
+        $_audit_req = $request;
+        unset($_audit_req[ 'Token' ]);
+        // Synthetic method name so the audit log distinguishes Retire from Restore.
+        $_call = (self::ACTIVE_ACTIVE === $waffle) ? (__CLASS__ . '::RestorePark') : (__CLASS__ . '::RetirePark');
+        Ork3::$Lib->dangeraudit->audit($_call, $_audit_req, 'Park', $park_id, [ 'active' => $_prior_active ], [ 'active' => $waffle ]);
+
+        return Success($park_label . ' has been ' . $verb . '.');
     }
 }

@@ -1,3 +1,40 @@
+/* Shared: position a fixed kn-ac-results dropdown under its input (modal-safe). */
+if (typeof window.tnFixedAcPosition !== 'function') {
+  window.tnFixedAcPosition = function (input, dropdown) {
+    if (!input || !dropdown) return;
+    var r = input.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = (r.bottom + 2) + 'px';
+    dropdown.style.left = r.left + 'px';
+    dropdown.style.width = r.width + 'px';
+    /* Read the stacking value off the token scale rather than hardcoding a raw
+       number: because this sets position:fixed, the dropdown's inline z-index is
+       what competes with --z-modal (10100) / --z-modal-top (10200), and a literal
+       10001 falls BEHIND any modal raised on that scale (the known tournament
+       modal failure mode). One above --z-modal-top, still below
+       --z-help-overlay (10300). The literal is only a fallback for a page that
+       has not loaded tokens.css. */
+    dropdown.style.zIndex = String(window.tnAcZIndex ? window.tnAcZIndex() : 10201);
+  };
+}
+/* The z-index an autocomplete dropdown must carry to clear the modal scale.
+   Computed once: --z-modal-top + 1, falling back to 10201. */
+if (typeof window.tnAcZIndex !== 'function') {
+  window.tnAcZIndex = (function () {
+    var cached = null;
+    return function () {
+      if (cached !== null) return cached;
+      var top = 0;
+      try {
+        top = parseInt(getComputedStyle(document.documentElement)
+          .getPropertyValue('--z-modal-top'), 10);
+      } catch (e) { top = 0; }
+      cached = (top > 0) ? (top + 1) : 10201;
+      return cached;
+    };
+  })();
+}
+
 /* ============================================================
    Rank pill painter — shared by every "add award" / "recommend"
    surface (player / kingdom / park). Given the player's held rank
@@ -26,7 +63,278 @@ function tnRankPaint(wrap, prefix, held, selected) {
 function tnRankPillInner(prefix, r) {
     return '<span class="' + prefix + '-rank-num">' + r + '</span>';
 }
-if (typeof window !== 'undefined') { window.tnRankPaint = tnRankPaint; window.tnRankPillInner = tnRankPillInner; }
+/* An award's ladder height, from the server. Never guess it from the award's
+   NAME: 82 kingdom awards contain the word "zodiac" (case-insensitively), and
+   a kingdom's own 5-rank ladder whose name happens to contain it is not a
+   twelve-month order. */
+function tnRankMaxFor(optEl) {
+    var m = optEl ? parseInt(optEl.dataset.maxRank, 10) : 0;
+    return (m > 0 && m <= 12) ? m : 10;
+}
+/* Recognition past the top of a ladder. Appended only when the player is already
+   at or above max, and it submits rank 0 — never max + 1, so no grant ever
+   carries a rank above the award's max. Safe to call on every rebuild: any
+   existing star is removed first, so switching the selected award back and
+   forth never leaves two behind. */
+function tnRankStar(wrap, prefix, maxRank, currentRank) {
+    if (!wrap) return;
+    var old = wrap.querySelector('.' + prefix + '-rank-star');
+    if (old) old.parentNode.removeChild(old);
+    if (!(currentRank >= maxRank)) return;
+
+    var star = document.createElement('div');
+    star.className = prefix + '-rank-pill ' + prefix + '-rank-star';
+    star.dataset.rank = '0';
+    star.setAttribute('data-tip', 'The standard cap for this award is ' + maxRank + ' — but don\'t let that stop you from recognizing someone!');
+    star.innerHTML = '<span class="' + prefix + '-rank-num">&#10033;</span>';
+    wrap.appendChild(star);
+}
+/* Order of the Zodiac (award_id 30) is the one monthly-ladder award --
+   Award::IsMonthlyLadder() server-side defines it as this exact id, never a
+   name guess (a name guess is exactly the bug tnRankMaxFor's own comment
+   above retired for max rank: 82 kingdom awards contain the word "zodiac").
+   Accepts EITHER an <option>/element or a bare award id. Given an element it
+   prefers a server-stamped data-monthly attribute -- the same channel
+   data-max-rank already rides, so the client stops guessing the rule -- and
+   only falls back to the id when the server has not stamped one (the templates
+   do not emit data-monthly yet; see the task report). Given a number it is the
+   id comparison it has always been. Either way this is the ONE place the rule
+   is spelled client-side. */
+var ZODIAC_AWARD_ID = 30;
+function tnIsMonthly(awardIdOrEl) {
+    if (awardIdOrEl && typeof awardIdOrEl === 'object' && typeof awardIdOrEl.getAttribute === 'function') {
+        var stamped = awardIdOrEl.getAttribute('data-monthly');
+        if (stamped !== null && stamped !== '') return stamped === '1';
+        return parseInt(awardIdOrEl.getAttribute('data-award-id'), 10) === ZODIAC_AWARD_ID;
+    }
+    return parseInt(awardIdOrEl, 10) === ZODIAC_AWARD_ID;
+}
+/* Whether a ladder <option> should show the "Ladder Award" badge.
+   Keyed off award IDENTITY, never the display string: the old
+   name-substring test ('mask', 'zodiac', 'walker', ...) matched any
+   kingdom-raised ladder whose NAME merely contains one of those words and
+   silently stripped its badge -- the same name-guessing anti-pattern
+   tnRankMaxFor's comment above retired for max rank. A server-stamped
+   data-no-badge="1" wins if it is ever emitted. */
+var TN_NO_BADGE_AWARD_IDS = [28, 29, 30, 31, 32, 33]; // Jovius, Mask, Zodiac, Walker, Hydra, Griffin
+function tnShowLadderBadge(optEl) {
+    if (!optEl) return false;
+    if (optEl.getAttribute('data-is-ladder') !== '1') return false;
+    if (optEl.getAttribute('data-no-badge') === '1') return false;
+    var awardId = parseInt(optEl.getAttribute('data-award-id'), 10) || 0;
+    return TN_NO_BADGE_AWARD_IDS.indexOf(awardId) === -1;
+}
+/* The real system award id of a <select>'s currently chosen <option> --
+   reads .selectedIndex directly rather than re-querying by value/award-id,
+   so it is never subject to the data-award-id="0" trap every Kingdom
+   Ladder Award option shares (see tnRankMaxFor's callers). */
+function tnRealAwardId(selectEl) {
+    var opt = selectEl ? selectEl.options[selectEl.selectedIndex] : null;
+    return opt ? (parseInt(opt.getAttribute('data-award-id'), 10) || 0) : 0;
+}
+/* Held rank for the selected award. Kingdom ladders all carry data-award-id="0",
+   so they must be looked up by kingdomaward id -- the <option>'s own value.
+   Player::GetAwardMaxRanks() returns ONE flat map with two key spaces:
+     int award_id          -- present only when award_id > 0, still MAX()ed
+                              across kingdomawards so a kingdom transfer keeps
+                              the rank
+     'k' . kingdomaward_id -- present for EVERY row
+   There is no key 0 any more: it used to collapse all 17 award_id = 0 kingdom
+   ladders into one bucket, so a player at Owl rank 4 opening the Fox picker
+   saw ranks 1-4 painted green and was hard-blocked for an award they had
+   never held.
+
+   Pass the ALREADY-SELECTED <option>. Never re-look the option up by
+   data-award-id: every kingdom ladder shares "0", so a re-query resolves to
+   the FIRST kingdom ladder in the list rather than the one actually chosen --
+   the same trap tnRankMaxFor's callers document. */
+function tnRankHeldFor(optEl, ranksMap) {
+    if (!optEl || !ranksMap) return 0;
+    var awardId        = parseInt(optEl.getAttribute('data-award-id'), 10) || 0;
+    var kingdomAwardId = parseInt(optEl.value, 10) || 0;
+    // award_id 0 or absent -> the kingdomaward key is the only one that exists.
+    if (awardId <= 0) return parseInt(ranksMap['k' + kingdomAwardId], 10) || 0;
+    return parseInt(ranksMap[awardId], 10) || 0;
+}
+/* ============================================================
+   Month pills -- the shared renderer for a monthly ladder (Zodiac only,
+   see tnIsMonthly above). Order of the Zodiac is granted once per calendar
+   month, so its twelve positions are months, not ranks: this builds
+   J F M A M J J A S O N D into `wrap` (full month name in data-tip) and
+   wires each pill's click to `onSelect(month)`, then returns true.
+   Returns false -- and leaves `wrap` untouched -- for any other award, so
+   every builder uses this as a one-line guard in front of its normal
+   numbered-pill loop:
+       if (tnRankMonths(wrap, prefix, awardIdOrOpt, verb, onSelect)) return;
+       ...existing numbered-pill loop + tnRankStar call...
+   That early return is what suppresses the star pill for Zodiac: a
+   monthly award has no top, so "recognition past the top" is meaningless
+   and the caller's own tnRankStar call is simply never reached.
+
+   A held month stays selectable -- a second December is a legitimate
+   grant (35 players already hold duplicates), so this only ever
+   INDICATES a held month (green pill, repeat-confirmation tip), never
+   disables it. Which months are held is read from `wrap`'s own
+   data-held-months attribute ("3,12,12" -> months 3 and 12, 12 twice).
+   The four Player-profile wraps (grant / recommend / edit / reconcile)
+   are server-stamped with that attribute in Playernew_index.tpl, so they
+   need nothing at runtime. The four Kingdom and Park pickers choose their
+   player at runtime and so fetch the months, then write them through the
+   shared tnRankSetHeldMonths() rather than hand-writing setAttribute.
+   ============================================================ */
+/* Stamp a player's held Zodiac months onto a pill wrap. The ONE place the
+   attribute tnRankMonths reads is written at runtime.
+   null/undefined means the caller has nothing to say, so a server-stamped
+   value (the Playernew_index.tpl wraps) is left alone. An empty ARRAY is a
+   real answer -- the chosen player holds no months -- and MUST be written,
+   because the Kingdom and Park wraps are reused singletons: skipping the
+   write there would leave the previously chosen player's months on screen. */
+function tnRankSetHeldMonths(wrap, months) {
+    if (!wrap) return;
+    if (!Array.isArray(months)) return;
+    wrap.setAttribute('data-held-months', months.join(','));
+}
+/* `awardIdOrOpt` is the selected <option> where the surface has one (so a
+   server-stamped data-monthly wins) or the bare award id where it does not --
+   tnIsMonthly accepts either. */
+function tnRankMonths(wrap, prefix, awardIdOrOpt, verb, onSelect) {
+    if (!wrap) return false;
+    // Every surface's markup is `<label>Rank <span>…hint…</span></label>`
+    // immediately followed by the pill wrap -- calling that field "Rank"
+    // for a monthly award is the exact conflation this task exists to
+    // remove. The label lives in a template (Playernew_index.tpl /
+    // Kingdomnew_index.tpl / Parknew_index.tpl), not owned here, so this
+    // flips only the DOM text node at runtime rather than editing markup.
+    // Guarded to the literal words "Rank"/"Month" so an unexpected
+    // structure is never silently overwritten.
+    var label = wrap.previousElementSibling;
+    var labelText = (label && label.tagName === 'LABEL') ? label.firstChild : null;
+    var monthly = tnIsMonthly(awardIdOrOpt);
+    if (labelText && labelText.nodeType === 3 && /^(Rank|Month)\s*$/.test(labelText.nodeValue)) {
+        labelText.nodeValue = monthly ? 'Month ' : 'Rank ';
+    }
+    // Twelve pills must fit one row (see revised.css for the sizing note);
+    // that layout is scoped to this modifier class so numbered rank-pill
+    // strips elsewhere are never affected.
+    wrap.classList.toggle(prefix + '-rank-pills-monthly', monthly);
+    if (!monthly) return false;
+    var initials = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+    var names = ['January', 'February', 'March', 'April', 'May', 'June',
+                 'July', 'August', 'September', 'October', 'November', 'December'];
+    var heldMonths = {};
+    (wrap.getAttribute('data-held-months') || '').split(',').forEach(function(s) {
+        var n = parseInt(s, 10);
+        if (n >= 1 && n <= 12) heldMonths[n] = (heldMonths[n] || 0) + 1;
+    });
+    verb = verb || wrap.getAttribute('data-verb') || 'Award';
+
+    wrap.innerHTML = '';
+    for (var m = 1; m <= 12; m++) {
+        (function(month) {
+            var pill = document.createElement('div');
+            pill.className = prefix + '-rank-pill ' + prefix + '-month-pill';
+            pill.dataset.zodiacMonth = String(month);
+            pill.textContent = initials[month - 1];
+            if (heldMonths[month]) {
+                pill.classList.add('-held');
+                pill.setAttribute('data-tip',
+                    'Player already has a Zodiac for ' + names[month - 1] + '. ' + verb + ' another?');
+            } else {
+                pill.setAttribute('data-tip', names[month - 1]);
+            }
+            if (typeof onSelect === 'function') {
+                pill.addEventListener('click', function(e) {
+                    // Two builders (pn grant/recommend) also have a delegated
+                    // click listener on an ancestor of `wrap` that reads
+                    // dataset.rank and repaints via tnRankPaint; a month pill
+                    // has no dataset.rank, but tnRankPaint would still strip
+                    // the -rank-selected class just set below on bubble.
+                    // Stop it here so month selection owns its own state.
+                    if (e && e.stopPropagation) e.stopPropagation();
+                    wrap.querySelectorAll('.' + prefix + '-month-pill').forEach(function(p) {
+                        p.classList.remove(prefix + '-rank-selected');
+                    });
+                    pill.classList.add(prefix + '-rank-selected');
+                    onSelect(month);
+                });
+            }
+            wrap.appendChild(pill);
+        })(m);
+    }
+    return true;
+}
+/* ------------------------------------------------------------------
+   Award-save response reader.
+
+   Admin/player/{id}/{addaward,updateaward,reconcileaward} renders the full
+   admin HTML page with HTTP 200 on FAILURE -- an unauthorised officer, a Rule-1
+   rankless-ladder rejection and an invalid-month rejection all came back 200,
+   so every caller that branched on resp.ok alone reported "Award added!" with
+   nothing written to the database.
+
+   Those handlers now send Ajax=1 (see tnAwardSavePayload) and the controller
+   answers with the same {status, error} envelope the *Ajax controllers use --
+   status 0 means the row landed. This reads that envelope defensively: a
+   response that is somehow still HTML (an upstream redirect to the login page,
+   a fatal, a stale cached script) is treated as a FAILURE, never as success.
+
+   Resolves to { ok: bool, error: string }; never rejects.
+------------------------------------------------------------------ */
+function tnAwardSavePayload(fd) {
+    /* The controller's AJAX branch fires on this field and nothing else -- a
+       browser navigation cannot send it. Kept in one function so all four
+       modals stay in step with the server-side check. */
+    fd.append('Ajax', '1');
+    return fd;
+}
+function tnReadAwardSaveResponse(resp, fallbackError) {
+    /* fallbackError is optional and only used when the server reported a
+       failure without a message. It exists because this reader is no longer
+       award-only -- the image-upload, account, dues and qualifications modals
+       route through it too, and "The award could not be saved." is wrong in
+       those. Omitting it keeps the original wording for the four award
+       callers, so their behaviour is unchanged. */
+    var noMessage = (typeof fallbackError === 'string' && fallbackError !== '')
+        ? fallbackError
+        : 'The award could not be saved.';
+    return resp.text().then(function(body) {
+        var d = null;
+        try { d = JSON.parse(body); } catch (e) { d = null; }
+        if (!d || typeof d !== 'object') {
+            return {
+                ok: false,
+                error: resp.ok
+                    ? 'The server did not confirm the save. Reload the page and check before trying again.'
+                    : ('Server returned ' + resp.status + '.')
+            };
+        }
+        if (parseInt(d.status, 10) === 0) {
+            return { ok: true, error: '' };
+        }
+        return {
+            ok: false,
+            error: (typeof d.error === 'string' && d.error.trim() !== '')
+                ? d.error.trim()
+                : noMessage
+        };
+    }).catch(function() {
+        return { ok: false, error: 'The server response could not be read.' };
+    });
+}
+if (typeof window !== 'undefined') {
+    window.tnAwardSavePayload = tnAwardSavePayload;
+    window.tnReadAwardSaveResponse = tnReadAwardSaveResponse;
+    window.tnRankPaint = tnRankPaint;
+    window.tnRankPillInner = tnRankPillInner;
+    window.tnRankMaxFor = tnRankMaxFor;
+    window.tnRankHeldFor = tnRankHeldFor;
+    window.tnRankStar = tnRankStar;
+    window.tnIsMonthly = tnIsMonthly;
+    window.tnRealAwardId = tnRealAwardId;
+    window.tnRankMonths = tnRankMonths;
+    window.tnRankSetHeldMonths = tnRankSetHeldMonths;
+    window.tnShowLadderBadge = tnShowLadderBadge;
+}
 
 /* Highest rank this player already holds of the award behind `opt`.
    Kingdom-original ladders (Order of the Hunter and friends) all carry
@@ -884,8 +1192,7 @@ if (PnConfig.recError) {
     function pnRecHeldRankForSelected() {
         var opt = pnRecSelectedOpt();
         if (!opt) return 0;
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id'), 10) || 0;
-        return tnHeldRank(PnConfig.awardRanks, opt, baseAwardId);
+        return tnRankHeldFor(opt, PnConfig.awardRanks || {});
     }
     function pnRecWarnEl() { return document.getElementById('pn-rec-warn'); }
     function pnRecShowWarn(msg) {
@@ -901,7 +1208,14 @@ if (PnConfig.recError) {
     function pnRecRefreshWarn() {
         var opt = pnRecSelectedOpt();
         var cat = pnRecAwardCategory(opt);
-        if (cat === 'ladder') {
+        var baseAwardId = opt ? (parseInt(opt.getAttribute('data-award-id'), 10) || 0) : 0;
+        // Zodiac has no top -- the "already at or above this rank" guard below
+        // compares against a rank, which a calendar month is not, and a held
+        // month is legitimate to recommend again (see tnRankMonths). Its own
+        // pill already indicates a repeat; this banner would be noise.
+        if (cat === 'ladder' && tnIsMonthly(baseAwardId)) {
+            pnRecHideWarn();
+        } else if (cat === 'ladder') {
             var held = pnRecHeldRankForSelected();
             var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
             if (held > 0 && chosen > 0 && chosen <= held) {
@@ -932,9 +1246,14 @@ if (PnConfig.recError) {
         }
         $('#pn-rec-error').hide();
 
-        // Block ladder submissions where rank is at or below current rank held.
         var opt = pnRecSelectedOpt();
-        if (pnRecAwardCategory(opt) === 'ladder') {
+        var baseAwardId = opt ? (parseInt(opt.getAttribute('data-award-id'), 10) || 0) : 0;
+        var monthly = tnIsMonthly(baseAwardId);
+
+        // Block ladder submissions where rank is at or below current rank held.
+        // Does not apply to Zodiac: it has no top, and a repeat month is a
+        // legitimate recommendation, not a mistake to block.
+        if (pnRecAwardCategory(opt) === 'ladder' && !monthly) {
             var held = pnRecHeldRankForSelected();
             var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
             if (held > 0 && chosen > 0 && chosen <= held) {
@@ -943,6 +1262,28 @@ if (PnConfig.recError) {
             }
         }
         // Title duplicates: warning is informational, submission proceeds.
+
+        // pn-recommend-form is a real <form> (native submit, not FormData) --
+        // its Rank field is name="Rank" in the markup, so a Zodiac month must
+        // travel through a separate ZodiacMonth field instead, created once
+        // here and toggled by award type on every submit.
+        var form = document.getElementById('pn-recommend-form');
+        var rankInput = document.getElementById('pn-rec-rank-val');
+        var monthInput = document.getElementById('pn-rec-zodiac-month-val');
+        if (!monthInput && form) {
+            monthInput = document.createElement('input');
+            monthInput.type = 'hidden';
+            monthInput.name = 'ZodiacMonth';
+            monthInput.id = 'pn-rec-zodiac-month-val';
+            form.appendChild(monthInput);
+        }
+        if (monthly) {
+            if (monthInput) monthInput.value = rankInput.value || '';
+            rankInput.removeAttribute('name'); // submit ZodiacMonth, not Rank
+        } else {
+            if (monthInput) monthInput.value = '';
+            rankInput.setAttribute('name', 'Rank'); // restore for a later non-monthly submit
+        }
 
         $('#pn-rec-submit').prop('disabled', true).text('Submitting…');
         $('#pn-recommend-form').submit();
@@ -970,11 +1311,14 @@ if (PnConfig.recError) {
         var opt = document.querySelector('#pn-rec-award option[value="' + awardId + '"]');
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = document.getElementById('pn-rec-rank-hint');
+        if (tnRankMonths(wrap, 'pn', opt, 'Recommend', function(month) { input.value = month; })) {
+            if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
+            return;
+        }
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
-        var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held      = tnHeldRank(pnAwardRanks, opt, baseAwardId);
+        var maxRank   = tnRankMaxFor(opt);
+        var held      = tnRankHeldFor(opt, pnAwardRanks);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -986,6 +1330,7 @@ if (PnConfig.recError) {
         }
         tnRankPaint(wrap, 'pn', held, suggested);
         input.value = suggested;
+        tnRankStar(wrap, 'pn', maxRank, held); // pn recommend picker (delegated click below handles it)
     }
     var pnRecRankPillsEl = document.getElementById('pn-rec-rank-pills');
     if (pnRecRankPillsEl) pnRecRankPillsEl.addEventListener('click', function(e) {
@@ -1043,7 +1388,7 @@ if (PnConfig.recError) {
         var info = map[baseAwardId];
         if (!info) return;
 
-        var maxRank  = parseInt(info.MaxRank) || (/zodiac/i.test(opt.textContent) ? 12 : 10);
+        var maxRank  = tnRankMaxFor(opt);
         var rankHeld = (PnConfig.awardRanks || {})[baseAwardId] || 0;
 
         // Branch 1 — player already holds the Master peerage
@@ -1184,7 +1529,11 @@ if (PnConfig.recError) {
         function showError(msg) {
             var el = gid('pn-img-error');
             el.textContent = msg;
-            el.style.display = '';
+            // 'block', not '': .pn-form-error is display:none in revised.css, so
+            // clearing the inline value just falls back to the stylesheet and the
+            // box stays hidden. This modal's error affordance was never visible.
+            // The other three modals on this page already use 'block'.
+            el.style.display = 'block';
         }
 
         window.pnOpenImgModal = function(type) {
@@ -1444,15 +1793,31 @@ if (PnConfig.recError) {
             fd.append('Update', 'Update Media');
             var outName = origImgIsPng ? 'image.png' : 'image.jpg';
             fd.append(imgType === 'photo' ? 'PlayerImage' : 'Heraldry', blob, outName);
-            fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            // Admin/player/{id}/update renders the admin HTML page with HTTP 200
+            // on failure, so resp.ok alone said "uploaded" for a rejected file,
+            // an expired session and a permission failure alike -- and then
+            // reloaded the page back onto the old image. Ask for the {status,
+            // error} envelope instead and only claim success on status 0.
+            fetch(UPLOAD_URL, { method: 'POST', body: tnAwardSavePayload(fd) })
                 .then(function(resp) {
-                    if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                    return tnReadAwardSaveResponse(resp, 'The image could not be uploaded.');
+                })
+                .then(function(res) {
+                    if (!res.ok) {
+                        showStep('pn-img-step-select');
+                        showError('Upload failed: ' + res.error);
+                        return;
+                    }
                     showStep('pn-img-step-success');
                     setTimeout(function() { window.location.reload(); }, 1400);
                 })
                 .catch(function(err) {
+                    // tnReadAwardSaveResponse never rejects, so an HTTP-level
+                    // failure can no longer land here -- this is now only the
+                    // transport dying (offline, DNS, connection reset), which
+                    // has no response and therefore no server message.
                     showStep('pn-img-step-select');
-                    showError('Upload failed: ' + err.message);
+                    showError('Upload failed: ' + ((err && err.message) || 'the server could not be reached.'));
                 });
         }
 
@@ -1593,28 +1958,32 @@ if (PnConfig.recError) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving\u2026';
 
-            fetch(SAVE_URL, { method: 'POST', body: fd })
+            function failed(msg) {
+                errEl.textContent = msg;
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+            }
+
+            // Admin/player/{id}/update answers 200-with-the-admin-page on failure.
+            // This used to scrape .error-message out of that HTML, which missed
+            // any failure the page renders differently (and read a login-page
+            // redirect as a clean save). Ask for the {status, error} envelope.
+            fetch(SAVE_URL, { method: 'POST', body: tnAwardSavePayload(fd) })
                 .then(function(resp) {
-                    if (!resp.ok) throw new Error('Server returned ' + resp.status);
-                    return resp.text();
+                    return tnReadAwardSaveResponse(resp, 'The account could not be saved.');
                 })
-                .then(function(html) {
-                    var m = html.match(/<div class=['"]error-message['"][^>]*>([\s\S]*?)<\/div>/i);
-                    if (m) {
-                        var msg = m[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-                        errEl.textContent = msg || 'Save failed.';
-                        errEl.style.display = 'block';
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                .then(function(res) {
+                    if (!res.ok) {
+                        failed(res.error);
                         return;
                     }
                     window.location.reload();
                 })
                 .catch(function(err) {
-                    errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = 'block';
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                    // Only reachable now if fetch() itself rejects: the reader
+                    // resolves on every HTTP outcome, including non-2xx.
+                    failed('Save failed: ' + ((err && err.message) || 'the server could not be reached.'));
                 });
         });
 
@@ -1774,16 +2143,30 @@ if (PnConfig.recError) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving\u2026';
 
-            fetch(DUES_URL, { method: 'POST', body: fd })
+            function failed(msg) {
+                errEl.textContent = msg;
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Add Dues';
+            }
+
+            // adddues rejects an invalid player or Kingdom, and add_dues can
+            // reject on its own -- both render the admin page with HTTP 200, so
+            // resp.ok alone reloaded the profile as though the dues had landed.
+            fetch(DUES_URL, { method: 'POST', body: tnAwardSavePayload(fd) })
                 .then(function(resp) {
-                    if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                    return tnReadAwardSaveResponse(resp, 'The dues could not be added.');
+                })
+                .then(function(res) {
+                    if (!res.ok) {
+                        failed(res.error);
+                        return;
+                    }
                     window.location.reload();
                 })
                 .catch(function(err) {
-                    errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = 'block';
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-save"></i> Add Dues';
+                    // Reader never rejects; this is a dead transport only.
+                    failed('Save failed: ' + ((err && err.message) || 'the server could not be reached.'));
                 });
         });
     })();
@@ -1876,28 +2259,29 @@ if (PnConfig.recError) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving\u2026';
 
-            fetch(SAVE_URL, { method: 'POST', body: fd })
+            function failed(msg) {
+                errEl.textContent = msg;
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+            }
+
+            // Same 200-on-failure page as the account modal, and the same
+            // reason the .error-message scrape was not good enough.
+            fetch(SAVE_URL, { method: 'POST', body: tnAwardSavePayload(fd) })
                 .then(function(resp) {
-                    if (!resp.ok) throw new Error('Server returned ' + resp.status);
-                    return resp.text();
+                    return tnReadAwardSaveResponse(resp, 'The qualifications could not be saved.');
                 })
-                .then(function(html) {
-                    var m = html.match(/<div class=['"]error-message['"][^>]*>([\s\S]*?)<\/div>/i);
-                    if (m) {
-                        var msg = m[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-                        errEl.textContent = msg || 'Save failed.';
-                        errEl.style.display = 'block';
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                .then(function(res) {
+                    if (!res.ok) {
+                        failed(res.error);
                         return;
                     }
                     window.location.reload();
                 })
                 .catch(function(err) {
-                    errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = 'block';
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                    // Reader never rejects; this is a dead transport only.
+                    failed('Save failed: ' + ((err && err.message) || 'the server could not be reached.'));
                 });
         });
     })();
@@ -2006,7 +2390,6 @@ if (PnConfig.recError) {
         if (gid('pn-award-select')) awInitPicker(gid('pn-award-select'));
 
         // ---- Award Select Change ----
-        var pnNoBadgeAwards = ['griffon', 'griffin', 'hydra', 'jovious', 'jovius', 'mask', 'zodiac', 'walker'];
         gid('pn-award-select').addEventListener('change', function() {
             var opt      = this.options[this.selectedIndex];
             var isLadder = (opt.getAttribute('data-is-ladder') == '1');
@@ -2014,8 +2397,8 @@ if (PnConfig.recError) {
             var isCustomAward = opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award';
             var isCustomTitle = opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title';
             var needsCustomName = isCustomAward || isCustomTitle;
-            var optName  = opt.text.toLowerCase();
-            var showBadge = isLadder && !pnNoBadgeAwards.some(function(n) { return optName.indexOf(n) !== -1; });
+            // Identity, not the display string -- see tnShowLadderBadge.
+            var showBadge = tnShowLadderBadge(opt);
 
             gid('pn-award-custom-row').style.display  = needsCustomName ? '' : 'none';
             var labelEl = gid('pn-award-custom-label');
@@ -2034,7 +2417,7 @@ if (PnConfig.recError) {
 
             if (isLadder && this.value) {
                 gid('pn-award-rank-row').style.display = '';
-                buildRankPills(opt);
+                buildRankPills(awardId, opt);
             } else {
                 gid('pn-award-rank-row').style.display = 'none';
                 gid('pn-award-rank-val').value = '';
@@ -2043,25 +2426,36 @@ if (PnConfig.recError) {
         });
 
         // ---- Rank Pills ----
-        /* Takes the selected <option> itself. It used to take the AwardId and
-           re-find the option by [data-award-id], which is ambiguous: every
-           kingdom-original ladder carries data-award-id="0", so that lookup
-           returned whichever such option came first in the list -- the wrong
-           award's name (hence max rank) and the wrong held-rank key. */
-        function buildRankPills(opt) {
-            var awardId  = parseInt(opt ? opt.getAttribute('data-award-id') : 0, 10) || 0;
-            var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
-            var held      = tnHeldRank(playerRanks, opt, awardId);
-            var suggested = Math.min(held + 1, maxRank);
+        // `opt` is the already-selected <option> from the change handler. Do NOT
+        // re-look it up by data-award-id: every Kingdom Ladder Award shares
+        // data-award-id="0" (no official award backs the rung), so a re-query
+        // would silently resolve to the FIRST kingdom ladder in the list rather
+        // than the one actually chosen.
+        function buildRankPills(awardId, opt) {
+            var pills = gid('pn-rank-pills');
             var hint = gid('pn-rank-hint');
+            // Clear the previously chosen rank BEFORE the monthly early return.
+            // Switching Order of the Dragon (auto-selects rank 1) -> Order of the
+            // Zodiac renders the month strip with nothing selected, but a stale
+            // "1" left here is submitted as ZodiacMonth=1 and permanently records
+            // a January nobody chose. The kn and pk builders already clear first;
+            // this matches them.
+            gid('pn-award-rank-val').value = '';
+            if (tnRankMonths(pills, 'pn', opt, 'Award', function(month) { gid('pn-award-rank-val').value = month; })) {
+                if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
+                return;
+            }
+            var maxRank  = tnRankMaxFor(opt);
+            var held      = tnRankHeldFor(opt, playerRanks);
+            var suggested = Math.min(held + 1, maxRank);
             if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
             var html = '';
             for (var i = 1; i <= maxRank; i++) {
                 html += '<div class="pn-rank-pill" data-rank="' + i + '">' + tnRankPillInner('pn', i) + '</div>';
             }
-            var pills = gid('pn-rank-pills');
             pills.dataset.rankHeld = held;
             pills.innerHTML = html;
+            tnRankStar(pills, 'pn', maxRank, held); // pn grant picker (delegated click below handles it)
             selectRankPill(suggested, pills);
         }
         function selectRankPill(rank, container) {
@@ -2331,7 +2725,10 @@ if (PnConfig.recError) {
             fd.append('EventId',        gid('pn-award-event-id').value   || '0');
             fd.append('Note',           gid('pn-award-note').value       || '');
             var rank = gid('pn-award-rank-val').value;
-            if (rank) fd.append('Rank', rank);
+            if (rank) {
+                if (tnIsMonthly(tnRealAwardId(gid('pn-award-select')))) fd.append('ZodiacMonth', rank);
+                else fd.append('Rank', rank);
+            }
             var customName = gid('pn-award-custom-name').value.trim();
             if (customName) fd.append('AwardName', customName);
             var aliasSel = gid('pn-award-alias');
@@ -2342,9 +2739,14 @@ if (PnConfig.recError) {
             btnSame.disabled = true;
             btnSame.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-            fetch(AWARD_URL, { method: 'POST', body: fd })
-                .then(function(resp) {
-                    if (!resp.ok) throw new Error('Server returned ' + resp.status);
+            fetch(AWARD_URL, { method: 'POST', body: tnAwardSavePayload(fd) })
+                .then(tnReadAwardSaveResponse)
+                .then(function(res) {
+                    if (!res.ok) {
+                        errEl.textContent = res.error;
+                        errEl.style.display = 'block';
+                        return;
+                    }
                     onSuccess();
                 })
                 .catch(function(err) {
@@ -3215,6 +3617,7 @@ $(document).ready(function() {
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var knPlayerRanks = {};
+    var knPlayerMonths = []; // distinct Zodiac months held, from awardranks' ZodiacMonths key
 
     function gid(id) { return document.getElementById(id); }
 
@@ -3280,11 +3683,15 @@ $(document).ready(function() {
         var opt = gid('kn-award-select').querySelector('option[value="' + awardId + '"]');
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rank-hint');
+        tnRankSetHeldMonths(wrap, knPlayerMonths);
+        if (tnRankMonths(wrap, 'kn', opt, 'Award', function(month) { input.value = month; })) {
+            if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
+            return;
+        }
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
-        var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held      = tnHeldRank(knPlayerRanks, opt, baseAwardId);
+        var maxRank   = tnRankMaxFor(opt);
+        var held      = tnRankHeldFor(opt, knPlayerRanks);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -3303,6 +3710,12 @@ $(document).ready(function() {
         }
         tnRankPaint(wrap, 'kn', held, suggested);
         input.value = suggested;
+        tnRankStar(wrap, 'kn', maxRank, held); // kn grant picker — no delegated click here, wire the star directly
+        var star = wrap.querySelector('.kn-rank-star');
+        if (star) star.addEventListener('click', function() {
+            input.value = 0;
+            tnRankPaint(wrap, 'kn', held, 0);
+        });
     }
 
     if (gid('kn-award-select')) awInitPicker(gid('kn-award-select'));
@@ -3359,11 +3772,13 @@ $(document).ready(function() {
         this.classList.remove('kn-ac-open');
         checkRequired();
         knPlayerRanks = {};
+        knPlayerMonths = [];
         var pid = item.dataset.id;
         fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
             .then(function(r) { return r.json(); })
             .then(function(ranks) {
                 knPlayerRanks = ranks || {};
+                knPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                 var curAward = gid('kn-award-select').value;
                 if (curAward) buildRankPills(curAward);
             }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
@@ -3467,6 +3882,7 @@ $(document).ready(function() {
     window.knOpenAwardModal = function() {
         var today = new Date();
         knPlayerRanks = {};
+        knPlayerMonths = [];
         gid('kn-award-error').style.display      = 'none';
         gid('kn-award-error').textContent        = '';
         gid('kn-award-success').style.display    = 'none';
@@ -3542,6 +3958,7 @@ $(document).ready(function() {
                 .then(function(r) { return r.json(); })
                 .then(function(ranks) {
                     knPlayerRanks = ranks || {};
+                    knPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                     var curAward = gid('kn-award-select').value;
                     if (curAward) buildRankPills(curAward);
                 }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
@@ -3987,7 +4404,10 @@ $(document).ready(function() {
         fd.append('EventId',        gid('kn-award-event-id').value   || '0');
         fd.append('Note',           gid('kn-award-note').value       || '');
         var rank = gid('kn-award-rank-val').value;
-        if (rank) fd.append('Rank', rank);
+        if (rank) {
+            if (tnIsMonthly(tnRealAwardId(gid('kn-award-select')))) fd.append('ZodiacMonth', rank);
+            else fd.append('Rank', rank);
+        }
         var customName = gid('kn-award-custom-name') ? gid('kn-award-custom-name').value.trim() : '';
         if (customName) fd.append('AwardName', customName);
         var aliasSel = gid('kn-award-alias');
@@ -4003,9 +4423,14 @@ $(document).ready(function() {
         btnNext.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
         var saveUrl = UIR_JS + 'Admin/player/' + playerId + '/addaward';
-        fetch(saveUrl, { method: 'POST', body: fd })
-            .then(function(resp) {
-                if (!resp.ok) throw new Error('Server returned ' + resp.status);
+        fetch(saveUrl, { method: 'POST', body: tnAwardSavePayload(fd) })
+            .then(tnReadAwardSaveResponse)
+            .then(function(res) {
+                if (!res.ok) {
+                    errEl.textContent = res.error;
+                    errEl.style.display = 'block';
+                    return;
+                }
                 onSuccess();
             })
             .catch(function(err) {
@@ -4035,10 +4460,12 @@ $(document).ready(function() {
             var pid = gid('kn-award-player-id').value;
             if (pid) {
                 knPlayerRanks = {};
+                knPlayerMonths = [];
                 fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
                     .then(function(r) { return r.json(); })
                     .then(function(ranks) {
                         knPlayerRanks = ranks || {};
+                        knPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                         var curAward = gid('kn-award-select').value;
                         if (curAward) buildRankPills(curAward);
                     }).catch(function() {});
@@ -4063,6 +4490,7 @@ $(document).ready(function() {
     var KINGDOM_ID = KnConfig.kingdomId;
     var playerTimer;
     var knRecRanks = {};
+    var knRecMonths = []; // distinct Zodiac months held, from awardranks' ZodiacMonths key
 
     function gid(id) { return document.getElementById(id); }
 
@@ -4084,11 +4512,15 @@ $(document).ready(function() {
         var opt = gid('kn-rec-award-select').querySelector('option[value="' + awardId + '"]');
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('kn-rec-rank-hint');
+        tnRankSetHeldMonths(wrap, knRecMonths);
+        if (tnRankMonths(wrap, 'kn', opt, 'Recommend', function(month) { input.value = month; })) {
+            if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
+            return;
+        }
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
-        var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held      = tnHeldRank(knRecRanks, opt, baseAwardId);
+        var maxRank   = tnRankMaxFor(opt);
+        var held      = tnRankHeldFor(opt, knRecRanks);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -4107,6 +4539,12 @@ $(document).ready(function() {
         }
         tnRankPaint(wrap, 'kn', held, suggested);
         input.value = suggested;
+        tnRankStar(wrap, 'kn', maxRank, held); // kn recommend picker — no delegated click here, wire the star directly
+        var star = wrap.querySelector('.kn-rank-star');
+        if (star) star.addEventListener('click', function() {
+            input.value = 0;
+            tnRankPaint(wrap, 'kn', held, 0);
+        });
     }
 
     if (gid('kn-rec-award-select')) {
@@ -4150,10 +4588,12 @@ $(document).ready(function() {
         gid('kn-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
         knRecRanks = {};
+        knRecMonths = [];
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
             .then(function(ranks) {
                 knRecRanks = ranks || {};
+                knRecMonths = (ranks && ranks.ZodiacMonths) || [];
                 var cur = gid('kn-rec-award-select').value;
                 if (cur) buildRecRankPills(cur);
             }).catch(function() {});
@@ -4181,6 +4621,7 @@ $(document).ready(function() {
         gid('kn-rec-char-count').textContent = '400 characters remaining';
         var knAnonEl = gid('kn-rec-anon'); if (knAnonEl) knAnonEl.checked = false;
         knRecRanks = {};
+        knRecMonths = [];
         checkRequired();
         gid('kn-rec-overlay').classList.add('kn-open');
         document.body.style.overflow = 'hidden';
@@ -4204,7 +4645,10 @@ $(document).ready(function() {
         fd.append('KingdomAwardId', gid('kn-rec-award-select').value);
         fd.append('Reason',         gid('kn-rec-reason').value.trim());
         var rank = gid('kn-rec-rank-val').value;
-        if (rank) fd.append('Rank', rank);
+        if (rank) {
+            if (tnIsMonthly(tnRealAwardId(gid('kn-rec-award-select')))) fd.append('ZodiacMonth', rank);
+            else fd.append('Rank', rank);
+        }
         var anonEl = gid('kn-rec-anon');
         if (anonEl && anonEl.checked) fd.append('Anonymous', 1);
         btn.disabled = true;
@@ -4224,6 +4668,7 @@ $(document).ready(function() {
                     gid('kn-rec-char-count').textContent = '400 characters remaining';
                     var knAnonElS = gid('kn-rec-anon'); if (knAnonElS) knAnonElS.checked = false;
                     knRecRanks = {};
+                    knRecMonths = [];
                     setTimeout(function() { gid('kn-rec-success').style.display = 'none'; }, 3000);
                 } else {
                     errEl.textContent = data.error || 'Save failed.';
@@ -4943,230 +5388,6 @@ $(document).ready(function() {
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && gid('kn-editpark-overlay') && gid('kn-editpark-overlay').classList.contains('kn-open'))
                 knCloseEditParkModal();
-        });
-    });
-})();
-
-// ---- Edit Officers Modal ----
-(function() {
-    if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
-
-    var OFFICER_ROLES = ['Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'];
-    var SET_URL    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/setofficers';
-    var VACATE_URL = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/vacateofficer';
-    var SEARCH_URL = KnConfig.httpService + 'Search/SearchService.php';
-
-    function gid(id) { return document.getElementById(id); }
-    function roleSlug(role) { return role.replace(/ /g, '_'); }
-
-    function buildOfficerMap() {
-        var map = {};
-        (KnConfig.officerList || []).forEach(function(o) { map[o.OfficerRole] = o; });
-        return map;
-    }
-
-    function showFeedback(msg, ok) {
-        var el = gid('kn-editoff-feedback');
-        if (!el) return;
-        el.textContent = msg;
-        el.className = 'kn-editoff-feedback ' + (ok ? 'kn-editoff-ok' : 'kn-editoff-err');
-        el.style.display = '';
-    }
-    function hideFeedback() {
-        var el = gid('kn-editoff-feedback');
-        if (el) { el.style.display = 'none'; el.textContent = ''; }
-    }
-
-    // --- Open / Close ---
-    window.knOpenEditOfficersModal = function() {
-        var overlay = gid('kn-editoff-overlay');
-        if (!overlay) return;
-        buildRows();
-        hideFeedback();
-        overlay.classList.add('kn-open');
-        document.body.style.overflow = 'hidden';
-    };
-
-    function knCloseEditOfficersModal() {
-        var overlay = gid('kn-editoff-overlay');
-        if (!overlay) return;
-        overlay.classList.remove('kn-open');
-        document.body.style.overflow = '';
-    }
-
-    // --- Build rows (once; refresh values on re-open) ---
-    var rowsBuilt = false;
-    function buildRows() {
-        var officerMap = buildOfficerMap();
-        if (rowsBuilt) {
-            // Refresh current holder values without rebuilding DOM
-            OFFICER_ROLES.forEach(function(role) {
-                var slug    = roleSlug(role);
-                var o       = officerMap[role];
-                var nameEl  = gid('kn-editoff-name-' + slug);
-                var idEl    = gid('kn-editoff-id-'   + slug);
-                var vacBtn  = gid('kn-editoff-vacate-' + slug);
-                if (nameEl && idEl) {
-                    nameEl.value = (o && o.MundaneId > 0) ? o.Persona   : '';
-                    idEl.value   = (o && o.MundaneId > 0) ? o.MundaneId : '';
-                }
-                if (vacBtn) vacBtn.style.display = (o && o.MundaneId > 0) ? '' : 'none';
-            });
-            return;
-        }
-        rowsBuilt = true;
-        var container = gid('kn-editoff-rows');
-        if (!container) return;
-        container.innerHTML = '';
-
-        OFFICER_ROLES.forEach(function(role) {
-            var slug     = roleSlug(role);
-            var o        = officerMap[role];
-            var occupied = o && o.MundaneId > 0;
-
-            var row = document.createElement('div');
-            row.className = 'kn-editoff-row';
-
-            // Role label
-            var label = document.createElement('div');
-            label.className = 'kn-editoff-role-label';
-            label.textContent = role;
-            row.appendChild(label);
-
-            // Player wrap (autocomplete input + hidden id)
-            var wrap = document.createElement('div');
-            wrap.className = 'kn-editoff-player-wrap';
-
-            var nameInput = document.createElement('input');
-            nameInput.type          = 'text';
-            nameInput.id            = 'kn-editoff-name-' + slug;
-            nameInput.className     = 'kn-editoff-name-input';
-            nameInput.autocomplete  = 'off';
-            nameInput.placeholder   = 'Search players\u2026';
-            if (occupied) nameInput.value = o.Persona;
-            wrap.appendChild(nameInput);
-
-            var hiddenInput = document.createElement('input');
-            hiddenInput.type  = 'hidden';
-            hiddenInput.id    = 'kn-editoff-id-' + slug;
-            if (occupied) hiddenInput.value = o.MundaneId;
-            wrap.appendChild(hiddenInput);
-            row.appendChild(wrap);
-
-            // Vacate button
-            var vacateBtn = document.createElement('button');
-            vacateBtn.type      = 'button';
-            vacateBtn.id        = 'kn-editoff-vacate-' + slug;
-            vacateBtn.className = 'kn-editoff-vacate-btn';
-            vacateBtn.textContent       = 'Vacate';
-            vacateBtn.style.display     = occupied ? '' : 'none';
-            (function(r, btn, ni, hi) {
-                btn.addEventListener('click', function() {
-                    pnConfirm({
-                        title: 'Vacate Position?',
-                        message: 'Remove the current ' + r + '?',
-                        confirmText: 'Vacate',
-                        danger: true
-                    }, function() {
-                        btn.disabled    = true;
-                        btn.textContent = '\u2026';
-                        $.post(VACATE_URL, { Role: r }, function(result) {
-                            if (result && result.status === 0) {
-                                ni.value = '';
-                                hi.value = '';
-                                btn.style.display = 'none';
-                                btn.disabled      = false;
-                                btn.textContent   = 'Vacate';
-                                (KnConfig.officerList || []).forEach(function(off) {
-                                    if (off.OfficerRole === r) { off.MundaneId = 0; off.Persona = ''; }
-                                });
-                                showFeedback(r + ' vacated.', true);
-                            } else {
-                                btn.disabled    = false;
-                                btn.textContent = 'Vacate';
-                                showFeedback((result && result.error) ? result.error : 'Vacate failed.', false);
-                            }
-                        }, 'json').fail(function() {
-                            btn.disabled    = false;
-                            btn.textContent = 'Vacate';
-                            showFeedback('Request failed.', false);
-                        });
-                    });
-                });
-            })(role, vacateBtn, nameInput, hiddenInput);
-            row.appendChild(vacateBtn);
-
-            container.appendChild(row);
-
-            // Autocomplete (kingdom-scoped search)
-            (function(ni, hi, vb) {
-                $(ni).autocomplete({
-                    source: function(req, res) {
-                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: KnConfig.kingdomId, limit: 12 },
-                            function(data) {
-                                res($.map(data || [], function(v) { return { label: v.Persona, value: v.MundaneId }; }));
-                            }
-                        );
-                    },
-                    focus:  function(e, ui) { $(ni).val(ui.item.label); return false; },
-                    select: function(e, ui) {
-                        $(ni).val(ui.item.label);
-                        hi.value          = ui.item.value;
-                        vb.style.display  = '';
-                        return false;
-                    },
-                    change: function(e, ui) { if (!ui.item) hi.value = ''; return false; },
-                    delay: 250, minLength: 2,
-                });
-            })(nameInput, hiddenInput, vacateBtn);
-        });
-    }
-
-    // --- Event listeners (in ready() to guard against null elements) ---
-    $(document).ready(function() {
-        var submitBtn = gid('kn-editoff-submit');
-        if (submitBtn) {
-            submitBtn.addEventListener('click', function() {
-                var data   = {};
-                var hasAny = false;
-                OFFICER_ROLES.forEach(function(role) {
-                    var idEl = gid('kn-editoff-id-' + roleSlug(role));
-                    var mid  = idEl ? parseInt(idEl.value, 10) : 0;
-                    if (mid > 0) { data[roleSlug(role) + 'Id'] = mid; hasAny = true; }
-                });
-                if (!hasAny) { showFeedback('No officers selected. Use Vacate to remove officers.', false); return; }
-                submitBtn.disabled = true;
-                $.post(SET_URL, data, function(result) {
-                    submitBtn.disabled = false;
-                    if (result && result.status === 0) {
-                        showFeedback('Officers saved!', true);
-                        setTimeout(function() { location.reload(); }, 900);
-                    } else {
-                        showFeedback((result && result.error) ? result.error : 'Save failed.', false);
-                    }
-                }, 'json').fail(function() {
-                    submitBtn.disabled = false;
-                    showFeedback('Request failed.', false);
-                });
-            });
-        }
-
-        var cancelBtn = gid('kn-editoff-cancel');
-        if (cancelBtn) cancelBtn.addEventListener('click', knCloseEditOfficersModal);
-
-        var closeBtn = gid('kn-editoff-close-btn');
-        if (closeBtn) closeBtn.addEventListener('click', knCloseEditOfficersModal);
-
-        var overlay = gid('kn-editoff-overlay');
-        if (overlay) {
-            overlay.addEventListener('click', function(e) {
-                if (e.target === this) knCloseEditOfficersModal();
-            });
-        }
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && gid('kn-editoff-overlay') && gid('kn-editoff-overlay').classList.contains('kn-open'))
-                knCloseEditOfficersModal();
         });
     });
 })();
@@ -7291,6 +7512,7 @@ $(document).ready(function() {
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var pkPlayerRanks = {};
+    var pkPlayerMonths = []; // distinct Zodiac months held, from awardranks' ZodiacMonths key
 
     function gid(id) { return document.getElementById(id); }
 
@@ -7359,11 +7581,15 @@ $(document).ready(function() {
         var opt = gid('pk-award-select').querySelector('option[value="' + awardId + '"]');
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rank-hint');
+        tnRankSetHeldMonths(wrap, pkPlayerMonths);
+        if (tnRankMonths(wrap, 'pk', opt, 'Award', function(month) { input.value = month; })) {
+            if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; granting it again is fine.';
+            return;
+        }
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
-        var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held      = tnHeldRank(pkPlayerRanks, opt, baseAwardId);
+        var maxRank   = tnRankMaxFor(opt);
+        var held      = tnRankHeldFor(opt, pkPlayerRanks);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -7383,6 +7609,12 @@ $(document).ready(function() {
         // Auto-select suggested rank
         tnRankPaint(wrap, 'pk', held, suggested);
         input.value = suggested;
+        tnRankStar(wrap, 'pk', maxRank, held); // pk grant picker — no delegated click here, wire the star directly
+        var star = wrap.querySelector('.pk-rank-star');
+        if (star) star.addEventListener('click', function() {
+            input.value = 0;
+            tnRankPaint(wrap, 'pk', held, 0);
+        });
     }
 
     if (gid('pk-award-select')) awInitPicker(gid('pk-award-select'));
@@ -7441,11 +7673,13 @@ $(document).ready(function() {
         checkRequired();
         // Fetch this player's held ladder award ranks, then rebuild pills if an award is selected
         pkPlayerRanks = {};
+        pkPlayerMonths = [];
         var pid = item.dataset.id;
         fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
             .then(function(r) { return r.json(); })
             .then(function(ranks) {
                 pkPlayerRanks = ranks || {};
+                pkPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                 var curAward = gid('pk-award-select').value;
                 if (curAward) buildRankPills(curAward);
             }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
@@ -7551,6 +7785,7 @@ $(document).ready(function() {
     window.pkOpenAwardModal = function() {
         var today = new Date();
         pkPlayerRanks = {};
+        pkPlayerMonths = [];
         gid('pk-award-error').style.display      = 'none';
         gid('pk-award-error').textContent        = '';
         gid('pk-award-success').style.display    = 'none';
@@ -7605,6 +7840,7 @@ $(document).ready(function() {
                 .then(function(r) { return r.json(); })
                 .then(function(ranks) {
                     pkPlayerRanks = ranks || {};
+                    pkPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                     var curAward = gid('pk-award-select').value;
                     if (curAward) buildRankPills(curAward);
                 }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
@@ -7774,7 +8010,10 @@ $(document).ready(function() {
         fd.append('EventId',        gid('pk-award-event-id').value   || '0');
         fd.append('Note',           gid('pk-award-note').value       || '');
         var rank = gid('pk-award-rank-val').value;
-        if (rank) fd.append('Rank', rank);
+        if (rank) {
+            if (tnIsMonthly(tnRealAwardId(gid('pk-award-select')))) fd.append('ZodiacMonth', rank);
+            else fd.append('Rank', rank);
+        }
         var customName = gid('pk-award-custom-name') ? gid('pk-award-custom-name').value.trim() : '';
         if (customName) fd.append('AwardName', customName);
         var aliasSel = gid('pk-award-alias');
@@ -7788,9 +8027,14 @@ $(document).ready(function() {
         btnSame.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
         var saveUrl = UIR_JS + 'Admin/player/' + playerId + '/addaward';
-        fetch(saveUrl, { method: 'POST', body: fd })
-            .then(function(resp) {
-                if (!resp.ok) throw new Error('Server returned ' + resp.status);
+        fetch(saveUrl, { method: 'POST', body: tnAwardSavePayload(fd) })
+            .then(tnReadAwardSaveResponse)
+            .then(function(res) {
+                if (!res.ok) {
+                    errEl.textContent = res.error;
+                    errEl.style.display = 'block';
+                    return;
+                }
                 onSuccess();
             })
             .catch(function(err) {
@@ -7815,10 +8059,12 @@ $(document).ready(function() {
             var pid = gid('pk-award-player-id').value;
             if (pid) {
                 pkPlayerRanks = {};
+                pkPlayerMonths = [];
                 fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
                     .then(function(r) { return r.json(); })
                     .then(function(ranks) {
                         pkPlayerRanks = ranks || {};
+                        pkPlayerMonths = (ranks && ranks.ZodiacMonths) || [];
                         var curAward = gid('pk-award-select').value;
                         if (curAward) buildRankPills(curAward);
                     }).catch(function() {});
@@ -7854,6 +8100,7 @@ $(document).ready(function() {
     var SEARCH_URL  = PkConfig.httpService + 'Search/SearchService.php';
     var playerTimer;
     var pkRecRanks  = {};
+    var pkRecMonths = []; // distinct Zodiac months held, from awardranks' ZodiacMonths key
 
     function gid(id) { return document.getElementById(id); }
 
@@ -7875,11 +8122,15 @@ $(document).ready(function() {
         var opt = gid('pk-rec-award-select').querySelector('option[value="' + awardId + '"]');
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
-        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
         var hint = gid('pk-rec-rank-hint');
+        tnRankSetHeldMonths(wrap, pkRecMonths);
+        if (tnRankMonths(wrap, 'pk', opt, 'Recommend', function(month) { input.value = month; })) {
+            if (hint) hint.textContent = '— Select the calendar month being recognized. A month the player already holds is highlighted green; recommending it again is fine.';
+            return;
+        }
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
-        var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
-        var held     = tnHeldRank(pkRecRanks, opt, baseAwardId);
+        var maxRank  = tnRankMaxFor(opt);
+        var held     = tnRankHeldFor(opt, pkRecRanks);
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
@@ -7898,6 +8149,12 @@ $(document).ready(function() {
         }
         tnRankPaint(wrap, 'pk', held, suggested);
         input.value = suggested;
+        tnRankStar(wrap, 'pk', maxRank, held); // pk recommend picker — no delegated click here, wire the star directly
+        var star = wrap.querySelector('.pk-rank-star');
+        if (star) star.addEventListener('click', function() {
+            input.value = 0;
+            tnRankPaint(wrap, 'pk', held, 0);
+        });
     }
 
     if (gid('pk-rec-award-select')) {
@@ -7942,10 +8199,12 @@ $(document).ready(function() {
         gid('pk-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
         pkRecRanks = {};
+        pkRecMonths = [];
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
             .then(function(ranks) {
                 pkRecRanks = ranks || {};
+                pkRecMonths = (ranks && ranks.ZodiacMonths) || [];
                 var cur = gid('pk-rec-award-select').value;
                 if (cur) buildRecRankPills(cur);
             }).catch(function() {});
@@ -7973,6 +8232,7 @@ $(document).ready(function() {
         gid('pk-rec-char-count').textContent = '400 characters remaining';
         var pkAnonEl = gid('pk-rec-anon'); if (pkAnonEl) pkAnonEl.checked = false;
         pkRecRanks = {};
+        pkRecMonths = [];
         checkRequired();
         gid('pk-rec-overlay').classList.add('pk-open');
         document.body.style.overflow = 'hidden';
@@ -8000,13 +8260,18 @@ $(document).ready(function() {
         var mundaneId = gid('pk-rec-player-id').value;
         var awardId   = gid('pk-rec-award-select').value;
         var rank      = gid('pk-rec-rank-val').value;
+        // Order of the Zodiac's picker value is a calendar month, not a rank.
+        var isMonthly = tnIsMonthly(tnRealAwardId(gid('pk-rec-award-select')));
 
         var doSubmit = function() {
             var fd = new FormData();
             fd.append('MundaneId',      mundaneId);
             fd.append('KingdomAwardId', awardId);
             fd.append('Reason',         gid('pk-rec-reason').value.trim());
-            if (rank) fd.append('Rank', rank);
+            if (rank) {
+                if (isMonthly) fd.append('ZodiacMonth', rank);
+                else fd.append('Rank', rank);
+            }
             var anonEl = gid('pk-rec-anon');
             if (anonEl && anonEl.checked) fd.append('Anonymous', 1);
             btn.disabled = true;
@@ -8027,6 +8292,7 @@ $(document).ready(function() {
                         gid('pk-rec-reason').value = '';
                         gid('pk-rec-char-count').textContent = '400 characters remaining';
                         pkRecRanks = {};
+                        pkRecMonths = [];
                         setTimeout(function() { gid('pk-rec-success').style.display = 'none'; }, 3000);
                     } else {
                         errEl.textContent = data.error || 'Save failed.';
@@ -8052,7 +8318,9 @@ $(document).ready(function() {
         var chkFd = new FormData();
         chkFd.append('MundaneId',      mundaneId);
         chkFd.append('KingdomAwardId', awardId);
-        if (rank) chkFd.append('Rank', rank);
+        // A month is not a rank: the duplicate pre-check matches on Rank, so a monthly
+        // award is checked by award alone.
+        if (rank && !isMonthly) chkFd.append('Rank', rank);
         fetch(UIR_JS + 'ParkAjax/park/' + PARK_ID + '/checkrecommendation', { method: 'POST', body: chkFd })
             .then(function(r) { return r.json(); })
             .then(function(data) {
@@ -8077,454 +8345,11 @@ $(document).ready(function() {
             .catch(function() { doSubmit(); });
     });
 })();
-(function() {
-    if (typeof PkConfig === 'undefined') return;
-
-    var CREATE_URL    = PkConfig.uir + 'EventAjax/create';
-    var CI_CREATE_URL = PkConfig.uir + 'CalendarItemAjax/create';
-    var CI_UPDATE_URL = PkConfig.uir + 'CalendarItemAjax/update';
-    var CI_DELETE_URL = PkConfig.uir + 'CalendarItemAjax/delete';
-    var CI_GET_URL    = PkConfig.uir + 'CalendarItemAjax/get/';
-
-    var pkCiEditingId = 0;
-    var pkCiFlatStart = null, pkCiFlatEnd = null;
-    var pkCiCurrent   = null;
-
-    function pkEvFeedback(msg) {
-        var el = document.getElementById('pk-emod-feedback');
-        el.textContent = msg; el.style.display = '';
-    }
-
-    function pkCiRebuildPickers(startVal, endVal, allDay) {
-        if (pkCiFlatStart) { pkCiFlatStart.destroy(); pkCiFlatStart = null; }
-        if (pkCiFlatEnd)   { pkCiFlatEnd.destroy();   pkCiFlatEnd   = null; }
-        var fmt  = allDay ? 'Y-m-d' : 'Y-m-d H:i';
-        var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
-        var _prevStart = null;
-        pkCiFlatStart = flatpickr('#pk-ci-start', Object.assign({}, opts, {
-            onReady: function(sel) { _prevStart = sel[0] || null; },
-            onChange: function(sel) {
-                if (!sel[0] || !pkCiFlatEnd) return;
-                var endDate = pkCiFlatEnd.selectedDates[0];
-                if (endDate && _prevStart) {
-                    var offset = endDate.getTime() - _prevStart.getTime();
-                    pkCiFlatEnd.setDate(new Date(sel[0].getTime() + offset), true);
-                } else if (!endDate) {
-                    pkCiFlatEnd.setDate(new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000)), true);
-                }
-                _prevStart = sel[0];
-            }
-        }));
-        pkCiFlatEnd = flatpickr('#pk-ci-end', opts);
-        if (startVal) pkCiFlatStart.setDate(startVal, true);
-        if (endVal)   pkCiFlatEnd.setDate(endVal, true);
-        _prevStart = pkCiFlatStart.selectedDates[0] || null;
-    }
-
-    function pkCiResetForm(presetDate) {
-        document.getElementById('pk-ci-description').value = '';
-        document.getElementById('pk-ci-allday').checked = false;
-        var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = false;
-        var loc = document.getElementById('pk-ci-locals-only');  if (loc) loc.checked = false;
-        pkCiSetColor('#64748b');
-        pkCiRebuildPickers(presetDate || '', '', false);
-    }
-
-    // Select a palette swatch and stash the chosen hex in the hidden input.
-    function pkCiSetColor(color) {
-        var input = document.getElementById('pk-ci-color');
-        if (input) input.value = color || '#64748b';
-        var box = document.getElementById('pk-ci-swatches');
-        if (!box) return;
-        box.querySelectorAll('.ci-swatch').forEach(function(b) {
-            b.classList.toggle('selected', b.getAttribute('data-color') === (color || '#64748b'));
-        });
-    }
-
-    function pkGetModalType() {
-        var r = document.querySelector('input[name="pk-emod-type"]:checked');
-        return r ? r.value : 'event';
-    }
-
-    function pkApplyModalType() {
-        var t = pkGetModalType();
-        var isCi = (t === 'calendar-item');
-        document.querySelectorAll('.pk-emod-event-only').forEach(function(el) { el.style.display = isCi ? 'none' : ''; });
-        document.querySelectorAll('.pk-emod-ci-only').forEach(function(el) { el.style.display = isCi ? '' : 'none'; });
-        var dbtn = document.getElementById('pk-emod-draft-btn');
-        if (dbtn) dbtn.style.display = isCi ? 'none' : '';
-        document.getElementById('pk-emod-go-label').textContent = isCi ? (pkCiEditingId > 0 ? 'Save Calendar Item' : 'Create Calendar Item') : 'Create Event';
-        var title = document.getElementById('pk-emod-title');
-        title.innerHTML = isCi
-            ? '<i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>' + (pkCiEditingId > 0 ? 'Edit Calendar Item' : 'New Calendar Item')
-            : '<i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event';
-        pkUpdateGoBtn();
-    }
-
-    function pkUpdateGoBtn() {
-        var t = pkGetModalType();
-        var ok;
-        if (t === 'calendar-item') {
-            ok = !!document.getElementById('pk-event-name').value.trim()
-              && !!document.getElementById('pk-ci-start').value
-              && !!document.getElementById('pk-ci-end').value;
-        } else {
-            ok = !!document.getElementById('pk-event-name').value.trim();
-        }
-        document.getElementById('pk-emod-go-btn').disabled = !ok;
-        var dbtn = document.getElementById('pk-emod-draft-btn');
-        if (dbtn) dbtn.disabled = !ok;
-    }
-
-    window.pkOpenEventModal = function(dateStr) {
-        var modal = document.getElementById('pk-event-modal');
-        modal.dataset.presetDate = dateStr || '';
-        pkCiEditingId = 0;
-        document.querySelectorAll('input[name="pk-emod-type"]').forEach(function(r) { r.disabled = false; r.checked = (r.value === 'event'); });
-        document.getElementById('pk-event-name').value = '';
-        document.getElementById('pk-emod-feedback').style.display = 'none';
-        var dateRow  = document.getElementById('pk-emod-date-row');
-        var dateText = document.getElementById('pk-emod-date-text');
-        if (dateRow && dateText) {
-            if (dateStr) {
-                var d = new Date(dateStr + 'T00:00:00');
-                dateText.textContent = d.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' });
-                dateRow.style.display = '';
-            } else {
-                dateRow.style.display = 'none';
-            }
-        }
-        pkCiResetForm(dateStr || '');
-        pkApplyModalType();
-        modal.classList.add('pk-emod-open');
-        document.body.style.overflow = 'hidden';
-        setTimeout(function() { document.getElementById('pk-event-name').focus(); }, 50);
-    };
-
-    window.pkCloseEventModal = function() {
-        document.getElementById('pk-event-modal').classList.remove('pk-emod-open');
-        document.body.style.overflow = '';
-    };
-
-    window.pkCreateEvent = function(statusOverride) {
-        if (pkGetModalType() === 'calendar-item') return pkSubmitCalendarItem();
-        var name = document.getElementById('pk-event-name').value.trim();
-        if (!name) return;
-        var btn = document.getElementById('pk-emod-go-btn');
-        var dbtn = document.getElementById('pk-emod-draft-btn');
-        btn.disabled = true; if (dbtn) dbtn.disabled = true;
-        var status = (statusOverride === 'draft') ? 'draft' : 'published';
-        $.post(CREATE_URL, { Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId, Status: status },
-            function(r) {
-                if (r && r.status === 0) {
-                    var presetDate = document.getElementById('pk-event-modal').dataset.presetDate || '';
-                    var url = PkConfig.uir + 'Event/create/' + r.eventId + '/' + PkConfig.parkId;
-                    if (presetDate) url += '&date=' + encodeURIComponent(presetDate);
-                    window.location.href = url;
-                } else {
-                    pkEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
-                    btn.disabled = false; if (dbtn) dbtn.disabled = false;
-                }
-            }, 'json'
-        ).fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; if (dbtn) dbtn.disabled = false; });
-    };
-
-    // Reload while preserving the Events tab (reuses the ?tab= auto-activation on load).
-    function pkReloadToEventsTab() {
-        try {
-            var u = new URL(window.location.href);
-            u.searchParams.set('tab', 'events');
-            window.location.href = u.toString();
-        } catch (e) {
-            window.location.reload();
-        }
-    }
-
-    function pkCiEsc(s) {
-        return String(s == null ? '' : s)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    function pkBumpEventsTabCount(delta) {
-        var cnt = document.querySelector('.pk-tab-nav li[data-pktab="events"] .pk-tab-count');
-        if (!cnt) return;
-        var m = cnt.textContent.match(/\d+/);
-        var n = (m ? parseInt(m[0], 10) : 0) + delta;
-        cnt.textContent = '(' + (n < 0 ? 0 : n) + ')';
-    }
-
-    function pkPad2(n) { return String(n).length < 2 ? '0' + n : String(n); }
-
-    // Keep the static calendar-grid array in sync (the Park grid reads pkCalEvents directly,
-    // so unlike the Kingdom page there is no server re-fetch to lean on).
-    function pkGridAddCalendarItem(id, name, startVal, endVal, allDay, color) {
-        if (typeof pkCalEvents === 'undefined' || !pkCalEvents) return;
-        color = color || '#64748b';
-        var sIso = allDay ? String(startVal).substring(0, 10) : String(startVal).replace(' ', 'T');
-        var eIso;
-        if (allDay) {
-            var ed = new Date(String(endVal).substring(0, 10) + 'T00:00:00');
-            if (!isNaN(ed.getTime())) { ed.setDate(ed.getDate() + 1); eIso = ed.getFullYear() + '-' + pkPad2(ed.getMonth() + 1) + '-' + pkPad2(ed.getDate()); }
-        } else {
-            eIso = String(endVal).replace(' ', 'T');
-        }
-        var ev = { title: name, start: sIso, color: color, textColor: orkCiTextColor(color), type: 'calendar-item', allDay: !!allDay, extendedProps: { calendarItemId: id } };
-        if (eIso) ev.end = eIso;
-        pkCalEvents.push(ev);
-        if (pkCalendar) pkCalendar.refetchEvents();
-    }
-
-    function pkGridRemoveCalendarItem(id) {
-        if (typeof pkCalEvents === 'undefined' || !pkCalEvents) return;
-        for (var i = pkCalEvents.length - 1; i >= 0; i--) {
-            var xp = pkCalEvents[i] && pkCalEvents[i].extendedProps;
-            if (xp && String(xp.calendarItemId) === String(id)) pkCalEvents.splice(i, 1);
-        }
-        if (pkCalendar) pkCalendar.refetchEvents();
-    }
-
-    // Insert a new calendar item into the Park events list in place (no reload). Returns false
-    // if the list is currently empty (no table rendered) so the caller can fall back to a reload.
-    function pkCiClassName(officerOnly, localsOnly) {
-        var cls = [];
-        if (officerOnly) cls.push('pk-officer-only');
-        if (localsOnly)  cls.push('pk-locals-only');
-        return cls.join(' ');
-    }
-
-    // Build the cells for a park calendar-item row (shared by insert + edit).
-    function pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color) {
-        var sd = String(startVal || '').substring(0, 10);
-        var dateTxt = '';
-        if (sd && sd !== '0000-00-00') {
-            var d = new Date(sd + 'T00:00:00');
-            if (!isNaN(d.getTime())) dateTxt = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-        }
-        var offPill = officerOnly ? ' <span class="pk-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span>' : '';
-        var locPill = localsOnly ? ' <span class="pk-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span>' : '';
-        color = color || '#64748b';
-        var pillStyle = ' style="background:' + color + ';border-color:' + color + ';color:' + orkCiTextColor(color) + '"';
-        return '<td><span class="pk-ci-pill"' + pillStyle + '><i class="fas fa-calendar-day"></i> Calendar Item</span>' + offPill + locPill + ' ' + pkCiEsc(name) + '</td>' +
-            '<td class="pk-date-col" data-sortval="' + pkCiEsc(sd) + '">' + dateTxt + '</td>' +
-            '<td class="pk-date-col" colspan="2" style="text-align:right;color:#a0aec0;padding-right:8px;">—</td>';
-    }
-
-    function pkInsertCalendarItemRow(id, name, startVal, officerOnly, localsOnly, color) {
-        var table = document.getElementById('pk-events-table');
-        if (!table) return false;
-        var tbody = table.querySelector('tbody');
-        if (!tbody) return false;
-
-        var tr = document.createElement('tr');
-        tr.className = pkCiClassName(officerOnly, localsOnly);
-        tr.setAttribute('data-type', 'calendar-item');
-        tr.setAttribute('onclick', 'pkShowCalendarItemOverlay(' + id + ')');
-        tr.innerHTML = pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color);
-
-        if (typeof pkFilters !== 'undefined' && pkFilters['calendar-item'] === false) tr.style.display = 'none';
-
-        tbody.insertBefore(tr, tbody.firstChild);
-        pkBumpEventsTabCount(1);
-        if (window.jQuery) pkPaginate(jQuery('#pk-events-table'), 1);
-        return true;
-    }
-
-    // Update an existing park calendar-item row in place. Returns false if not found.
-    function pkUpdateCalendarItemRow(id, name, startVal, officerOnly, localsOnly, color) {
-        var row = document.querySelector('#pk-events-table tr[onclick="pkShowCalendarItemOverlay(' + id + ')"]');
-        if (!row) return false;
-        row.className = pkCiClassName(officerOnly, localsOnly);
-        row.innerHTML = pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color);
-        if (typeof pkFilters !== 'undefined' && pkFilters['calendar-item'] === false) row.style.display = 'none';
-        return true;
-    }
-
-    function pkSubmitCalendarItem() {
-        var name   = document.getElementById('pk-event-name').value.trim();
-        var allDay = document.getElementById('pk-ci-allday').checked ? 1 : 0;
-        var start  = document.getElementById('pk-ci-start').value;
-        var end    = document.getElementById('pk-ci-end').value;
-        var desc   = document.getElementById('pk-ci-description').value;
-        if (!name || !start || !end) return;
-
-        var btn = document.getElementById('pk-emod-go-btn');
-        btn.disabled = true;
-
-        var officerOnly = document.getElementById('pk-ci-officer-only');
-        var localsOnly  = document.getElementById('pk-ci-locals-only');
-        var colorEl     = document.getElementById('pk-ci-color');
-        var color       = (colorEl && colorEl.value) || '#64748b';
-        var payload = {
-            Name: name, Description: desc, AllDay: allDay,
-            EventStart: start, EventEnd: end,
-            KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId,
-            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0,
-            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0,
-            Color: color
-        };
-        var url = CI_CREATE_URL;
-        var wasEditing = (pkCiEditingId > 0);
-        if (wasEditing) { payload.CalendarItemId = pkCiEditingId; url = CI_UPDATE_URL; }
-
-        $.post(url, payload, function(r) {
-            if (r && r.status === 0) {
-                pkCloseEventModal();
-                if (wasEditing) {
-                    // Replace the grid entry (remove old, add updated) and update the list row
-                    // in place. Reload only if the row isn't present in the DOM.
-                    pkGridRemoveCalendarItem(payload.CalendarItemId);
-                    pkGridAddCalendarItem(payload.CalendarItemId, name, start, end, allDay == 1, color);
-                    if (!pkUpdateCalendarItemRow(payload.CalendarItemId, name, start, payload.IsOfficerOnly == 1, payload.IsLocalsOnly == 1, color)) {
-                        pkReloadToEventsTab();
-                    }
-                } else {
-                    // New item: update the grid array + list row in place so repeated entry
-                    // never reloads. If the list was empty (no table yet), fall back to reload.
-                    pkGridAddCalendarItem(parseInt(r.id) || 0, name, start, end, allDay == 1, color);
-                    if (!pkInsertCalendarItemRow(parseInt(r.id) || 0, name, start, payload.IsOfficerOnly == 1, payload.IsLocalsOnly == 1, color)) {
-                        pkReloadToEventsTab();
-                    }
-                }
-            } else {
-                pkEvFeedback((r && r.error) ? r.error : 'Failed to save calendar item.');
-                btn.disabled = false;
-            }
-        }, 'json').fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
-    }
-
-    // ---- View / edit / delete overlay ----
-    window.pkShowCalendarItemOverlay = function(id) {
-        $.getJSON(CI_GET_URL + id, function(r) {
-            if (!r || r.status !== 0) { alert((r && r.error) || 'Calendar item not found.'); return; }
-            pkCiCurrent = r;
-            document.getElementById('pk-ci-view-name').textContent = r.Name || '';
-            document.getElementById('pk-ci-view-when').textContent = pkCiFormatWhen(r);
-            document.getElementById('pk-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item')
-                + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '')
-                + (r.IsLocalsOnly  == 1 ? ' &middot; <span style="color:#0d9488"><i class="fas fa-map-marker-alt"></i> Locals-only</span>' : '');
-            var descEl = document.getElementById('pk-ci-view-desc');
-            descEl.textContent = r.Description || '';
-            descEl.style.display = r.Description ? '' : 'none';
-            document.getElementById('pk-ci-edit-btn').style.display   = r.CanEdit ? '' : 'none';
-            document.getElementById('pk-ci-delete-btn').style.display = r.CanEdit ? '' : 'none';
-            document.getElementById('pk-ci-overlay').classList.add('pk-ci-open');
-            document.body.style.overflow = 'hidden';
-        }).fail(function() { alert('Failed to load calendar item.'); });
-    };
-
-    window.pkCloseCalendarItemOverlay = function() {
-        document.getElementById('pk-ci-overlay').classList.remove('pk-ci-open');
-        document.body.style.overflow = '';
-    };
-
-    function pkCiFormatWhen(r) {
-        var s = r.EventStart || '';
-        var e = r.EventEnd   || s;
-        var sd = s.substring(0, 10), ed = e.substring(0, 10);
-        var sdObj = new Date(sd + 'T00:00:00');
-        var edObj = new Date(ed + 'T00:00:00');
-        var fmt = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' };
-        if (r.AllDay == 1 || r.AllDay === true) {
-            return (sd === ed)
-                ? 'All day · ' + sdObj.toLocaleDateString(undefined, fmt)
-                : 'All day · ' + sdObj.toLocaleDateString(undefined, fmt) + ' → ' + edObj.toLocaleDateString(undefined, fmt);
-        }
-        var tfmt = { hour: 'numeric', minute: '2-digit' };
-        var startStr = new Date(s.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
-        var endStr   = new Date(e.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
-        return (sd === ed)
-            ? startStr + ' → ' + new Date(e.replace(' ', 'T')).toLocaleTimeString(undefined, tfmt)
-            : startStr + ' → ' + endStr;
-    }
-
-    window.pkEditCalendarItem = function() {
-        if (!pkCiCurrent) return;
-        pkCloseCalendarItemOverlay();
-        var modal = document.getElementById('pk-event-modal');
-        if (!modal) { alert('You do not have permission to edit this item.'); return; }
-        modal.dataset.presetDate = '';
-        pkCiEditingId = pkCiCurrent.CalendarItemId;
-        document.querySelectorAll('input[name="pk-emod-type"]').forEach(function(r) {
-            r.checked = (r.value === 'calendar-item');
-            r.disabled = true;
-        });
-        document.getElementById('pk-event-name').value = pkCiCurrent.Name || '';
-        document.getElementById('pk-ci-description').value = pkCiCurrent.Description || '';
-        document.getElementById('pk-ci-allday').checked = (pkCiCurrent.AllDay == 1);
-        var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = (pkCiCurrent.IsOfficerOnly == 1);
-        var loc = document.getElementById('pk-ci-locals-only');  if (loc) loc.checked = (pkCiCurrent.IsLocalsOnly  == 1);
-        document.getElementById('pk-emod-feedback').style.display = 'none';
-        document.getElementById('pk-emod-date-row').style.display = 'none';
-        var sVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventStart.substring(0, 10) : pkCiCurrent.EventStart.substring(0, 16).replace('T', ' ');
-        var eVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventEnd.substring(0, 10)   : pkCiCurrent.EventEnd.substring(0, 16).replace('T', ' ');
-        pkCiSetColor(pkCiCurrent.Color || '#64748b');
-        pkCiRebuildPickers(sVal, eVal, (pkCiCurrent.AllDay == 1));
-        pkApplyModalType();
-        modal.classList.add('pk-emod-open');
-        document.body.style.overflow = 'hidden';
-    };
-
-    window.pkDeleteCalendarItem = function() {
-        if (!pkCiCurrent) return;
-        var delId = pkCiCurrent.CalendarItemId;
-        orkConfirm('Delete this calendar item? This cannot be undone.', function() {
-            $.post(CI_DELETE_URL, { CalendarItemId: delId }, function(r) {
-                if (r && r.status === 0) {
-                    pkCloseCalendarItemOverlay();
-                    pkGridRemoveCalendarItem(delId);
-                    // Remove the list row in place; fall back to a tab-preserving reload if not found.
-                    var row = document.querySelector('#pk-events-table tr[onclick="pkShowCalendarItemOverlay(' + delId + ')"]');
-                    if (row) {
-                        var tbody = row.parentNode;
-                        tbody.removeChild(row);
-                        pkBumpEventsTabCount(-1);
-                        if (tbody.children.length === 0) {
-                            pkReloadToEventsTab(); // list now empty — reload to render the empty state
-                            return;
-                        }
-                        if (window.jQuery) pkPaginate(jQuery('#pk-events-table'), 1);
-                    } else {
-                        pkReloadToEventsTab();
-                    }
-                } else {
-                    alert((r && r.error) || 'Failed to delete calendar item.');
-                }
-            }, 'json').fail(function() { alert('Request failed.'); });
-        }, { title: 'Delete calendar item', okLabel: 'Delete', danger: true });
-    };
-
-    $(document).ready(function() {
-        $('#pk-event-name, #pk-ci-start, #pk-ci-end').on('input change', function() { pkUpdateGoBtn(); });
-        $('#pk-ci-swatches').on('click', '.ci-swatch', function() { pkCiSetColor(this.getAttribute('data-color')); });
-        $('#pk-event-name').on('keydown', function(e) {
-            if (e.key === 'Enter' && !document.getElementById('pk-emod-go-btn').disabled) pkCreateEvent();
-        });
-        $(document).on('change', 'input[name="pk-emod-type"]', pkApplyModalType);
-        $('#pk-ci-allday').on('change', function() {
-            var allDay = this.checked;
-            var curS = document.getElementById('pk-ci-start').value;
-            var curE = document.getElementById('pk-ci-end').value;
-            pkCiRebuildPickers(curS ? curS.substring(0, 10) : '', curE ? curE.substring(0, 10) : '', allDay);
-            pkUpdateGoBtn();
-        });
-
-        var pkEvtOverlay = document.getElementById('pk-event-modal');
-        if (pkEvtOverlay) {
-            pkEvtOverlay.addEventListener('click', function(e) { if (e.target === this) pkCloseEventModal(); });
-        }
-        var pkCiOverlayEl = document.getElementById('pk-ci-overlay');
-        if (pkCiOverlayEl) {
-            pkCiOverlayEl.addEventListener('click', function(e) { if (e.target === this) pkCloseCalendarItemOverlay(); });
-        }
-        document.addEventListener('keydown', function(e) {
-            if (e.key !== 'Escape') return;
-            var m = document.getElementById('pk-event-modal');
-            if (m && m.classList.contains('pk-emod-open')) { pkCloseEventModal(); return; }
-            var o = document.getElementById('pk-ci-overlay');
-            if (o && o.classList.contains('pk-ci-open')) { pkCloseCalendarItemOverlay(); }
-        });
-    });
-})();
+/* Park create-event modal + calendar-item overlay moved to
+   orkui/template/revised-frontend/partials/_event_create_modal.tpl, so the Park
+   ADMIN CONSOLE (which does not load this file) can host the same modal. It now
+   keys off EvCreateConfig instead of PkConfig -- see that partial's header for
+   why waking this block by defining PkConfig would have woken fourteen others. */
 
 /* ===========================
    Event Detail (EvConfig)
@@ -12614,8 +12439,23 @@ function setupPronounPicker(cfg) {
 
     var currentAwardsId = 0;
     var currentAwardIsHistorical = false;
+    // The system award id of the record currently open in the modal -- set
+    // in pnOpenAwardEditModal from data.AwardId (already present on every
+    // row) and read by the save handler to decide Rank vs ZodiacMonth,
+    // since this modal has no live <option> to re-derive it from at save time.
+    var currentEditAwardId = 0;
 
-    function buildEditRankPills(isLadder, currentRank, awardName) {
+    // maxRankIn is server-supplied (Award::MaxRankFor, threaded through the row's
+    // data-award JSON as MaxRank) -- this modal has no <option> element to read
+    // data-max-rank from, so the caller passes the resolved number directly.
+    // Never guess it from the award's NAME.
+    // zodiacMonthIn is the record's own recorded month (ork_awards.zodiac_month,
+    // threaded through the row's data-award JSON as ZodiacMonth). The monthly
+    // branch below MUST set pn-edit-rank-val from it: leaving whatever the last
+    // edited record put there rewrites an untouched Zodiac's month (edit a
+    // rank-7 Dragon, then a Zodiac, save -> ZodiacMonth=7), and leaving it blank
+    // when the record has no month is the wipe case.
+    function buildEditRankPills(isLadder, currentRank, maxRankIn, awardId, zodiacMonthIn) {
         var wrap    = gid('pn-edit-rank-pills');
         var rankRow = gid('pn-edit-rank-row');
         if (!wrap) return;
@@ -12625,8 +12465,21 @@ function setupPronounPicker(cfg) {
             gid('pn-edit-rank-val') && (gid('pn-edit-rank-val').value = '');
             return;
         }
-        var maxRank = /zodiac/i.test(awardName || '') ? 12 : 10;
         if (rankRow) rankRow.style.display = '';
+        if (tnRankMonths(wrap, 'pn', awardId, 'Award', function(month) { gid('pn-edit-rank-val').value = month; })) {
+            var curMonth = parseInt(zodiacMonthIn, 10) || 0;
+            var rankValEl = gid('pn-edit-rank-val');
+            // 0 (no month recorded) submits '' -- Player::UpdateAward() only
+            // writes zodiac_month when the caller actually supplies one.
+            if (rankValEl) rankValEl.value = (curMonth >= 1 && curMonth <= 12) ? curMonth : '';
+            var curPill = (curMonth >= 1 && curMonth <= 12)
+                ? wrap.querySelector('.pn-month-pill[data-zodiac-month="' + curMonth + '"]')
+                : null;
+            if (curPill) curPill.classList.add('pn-rank-selected');
+            return;
+        }
+        var maxRank = parseInt(maxRankIn, 10);
+        if (!(maxRank > 0 && maxRank <= 12)) maxRank = 10;
         for (var i = 1; i <= maxRank; i++) {
             var pill = document.createElement('button');
             pill.type        = 'button';
@@ -12644,6 +12497,12 @@ function setupPronounPicker(cfg) {
         var _curRank = parseInt(currentRank, 10) || 0;
         tnRankPaint(wrap, 'pn', _curRank, _curRank);
         gid('pn-edit-rank-val') && (gid('pn-edit-rank-val').value = currentRank || '');
+        tnRankStar(wrap, 'pn', maxRank, _curRank); // edit-award modal — no delegated click here, wire the star directly
+        var star = wrap.querySelector('.pn-rank-star');
+        if (star) star.addEventListener('click', function() {
+            gid('pn-edit-rank-val').value = 0;
+            tnRankPaint(wrap, 'pn', 0, 0);
+        });
     }
 
     window.pnOpenAwardEditModal = function(awardsId, data) {
@@ -12685,7 +12544,8 @@ function setupPronounPicker(cfg) {
 
         var nameEl = gid('pn-edit-award-name');
         if (nameEl) nameEl.textContent = data.displayName || data.Name || '';
-        buildEditRankPills(data.IsLadder == 1, data.Rank, data.displayName || data.Name || '');
+        currentEditAwardId = parseInt(data.AwardId || 0, 10);
+        buildEditRankPills(data.IsLadder == 1, data.Rank, data.MaxRank, currentEditAwardId, data.ZodiacMonth);
         var dateEl = gid('pn-edit-award-date');
         if (dateEl) dateEl.value = data.Date || '';
         var gbText = gid('pn-edit-givenby-text');
@@ -12918,17 +12778,26 @@ function setupPronounPicker(cfg) {
                 if (!rcRankRow || !rcRankPills || !rcRankVal) return;
                 var opt = this.options[this.selectedIndex];
                 var isLadder = opt && opt.getAttribute('data-is-ladder') === '1';
-                var awardId  = opt ? (parseInt(opt.getAttribute('data-award-id')) || 0) : 0;
-                var awardName = opt ? (opt.textContent || '') : '';
                 rcRankRow.style.display = isLadder ? '' : 'none';
                 rcRankPills.innerHTML   = '';
                 rcRankVal.value         = '';
                 if (!isLadder) return;
+                if (tnRankMonths(rcRankPills, 'pn', opt, 'Award', function(month) { rcRankVal.value = month; })) return;
 
                 /* suggest next rank = max held rank + 1, capped at maxRank */
-                var heldMax    = (PnConfig.awardRanks && awardId) ? (PnConfig.awardRanks[awardId] || 0) : 0;
+                /* The fifth picker. PnConfig.awardRanks has no numeric key 0 any more,
+                   and every kingdom ladder <option> carries data-award-id="0" -- so
+                   a bare data-award-id lookup read 0 for all of them: no green held pills, a
+                   "suggest next rank" that always proposed 1, and no star even for a
+                   player already at the top of that ladder. tnRankHeldFor() takes the
+                   ALREADY-SELECTED option and falls back to its 'k' + kingdomaward_id
+                   key, which is exactly what the other four pickers do. `opt` is the
+                   selected option read from this.selectedIndex just above; never
+                   re-look it up by data-award-id, which resolves to the FIRST kingdom
+                   ladder in the list rather than the chosen one. */
+                var heldMax    = tnRankHeldFor(opt, PnConfig.awardRanks || {});
                 var suggested  = heldMax + 1;
-                var maxRank    = /zodiac/i.test(awardName) ? 12 : 10;
+                var maxRank    = tnRankMaxFor(opt);
                 if (suggested > maxRank) suggested = 0;
 
                 for (var i = 1; i <= maxRank; i++) {
@@ -12948,6 +12817,12 @@ function setupPronounPicker(cfg) {
                 rcRankPills.dataset.rankHeld = heldMax;
                 tnRankPaint(rcRankPills, 'pn', heldMax, suggested);
                 if (suggested > 0) { rcRankVal.value = suggested; }
+                tnRankStar(rcRankPills, 'pn', maxRank, heldMax); // reconcile picker — no delegated click here, wire the star directly
+                var rcStar = rcRankPills.querySelector('.pn-rank-star');
+                if (rcStar) rcStar.addEventListener('click', function() {
+                    rcRankVal.value = 0;
+                    tnRankPaint(rcRankPills, 'pn', heldMax, 0);
+                });
             });
         }
 
@@ -13011,10 +12886,23 @@ function setupPronounPicker(cfg) {
                 var endpoint;
                 if (doReconcile) {
                     fd.append('KingdomAwardId', kingdomAwardId);
-                    fd.append('Rank', gid('pn-edit-reconcile-rank-val') ? (gid('pn-edit-reconcile-rank-val').value || 0) : 0);
+                    var rcRankVal = gid('pn-edit-reconcile-rank-val') ? (gid('pn-edit-reconcile-rank-val').value || 0) : 0;
+                    if (tnIsMonthly(tnRealAwardId(gid('pn-edit-reconcile-award')))) {
+                        // The standalone reconcile page (Playernew_reconcile.tpl) refuses
+                        // a monthly reconcile with no month picked; this copy used to post
+                        // ZodiacMonth=0 instead. Same rule, same message.
+                        if (!(parseInt(rcRankVal, 10) >= 1 && parseInt(rcRankVal, 10) <= 12)) {
+                            saveBtn.disabled = false;
+                            showFb('Please select a month.', 'pn-form-error');
+                            return;
+                        }
+                        fd.append('ZodiacMonth', rcRankVal);
+                    } else fd.append('Rank', rcRankVal);
                     endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/reconcileaward/' + currentAwardsId;
                 } else {
-                    fd.append('Rank', gid('pn-edit-rank-val') ? gid('pn-edit-rank-val').value : '');
+                    var editRankVal = gid('pn-edit-rank-val') ? gid('pn-edit-rank-val').value : '';
+                    if (tnIsMonthly(currentEditAwardId)) fd.append('ZodiacMonth', editRankVal);
+                    else fd.append('Rank', editRankVal);
                     // Custom Award/Title reclassification payload
                     var editRadioA = gid('pn-edit-type-award');
                     var editRadioT = gid('pn-edit-type-title');
@@ -13031,22 +12919,21 @@ function setupPronounPicker(cfg) {
                     endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/updateaward/' + currentAwardsId;
                 }
 
-                console.log('[EditAward] POST to endpoint:', endpoint);
                 fetch(endpoint, {
-                    method: 'POST', body: fd
-                }).then(function(r) {
-                    console.log('[EditAward] Response — status:', r.status, 'ok:', r.ok, 'url:', r.url);
-                    return r.clone().text().then(function(body) {
-                        console.log('[EditAward] Response body (first 500 chars):', body.substring(0, 500));
-                        saveBtn.disabled = false;
-                        if (r.ok) {
-                            var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
-                            showFb(msg, 'pn-award-edit-success');
-                            setTimeout(function() { location.reload(); }, 1500);
-                        } else {
-                            showFb('Save failed (server error ' + r.status + ').', 'pn-form-error');
-                        }
-                    });
+                    method: 'POST', body: tnAwardSavePayload(fd)
+                }).then(tnReadAwardSaveResponse).then(function(res) {
+                    saveBtn.disabled = false;
+                    if (!res.ok) {
+                        // A rejected edit used to report "Award updated!" and reload
+                        // the page, so the officer saw their change vanish with no
+                        // explanation. Say what the server actually said, and do not
+                        // reload -- the form still holds what they typed.
+                        showFb(res.error, 'pn-form-error');
+                        return;
+                    }
+                    var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
+                    showFb(msg, 'pn-award-edit-success');
+                    setTimeout(function() { location.reload(); }, 1500);
                 }).catch(function() {
                     saveBtn.disabled = false;
                     showFb('Request failed.', 'pn-form-error');
@@ -13127,222 +13014,36 @@ function setupPronounPicker(cfg) {
             if (!duesId) return;
             pnConfirm({ title: 'Revoke Dues', message: 'Revoke this dues record? This cannot be undone.', confirmText: 'Revoke', danger: true }, function() {
                 btn.disabled = true;
-                fetch(PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/revokedues/' + duesId, {
-                    method: 'POST'
-                }).then(function(r) {
-                    if (!r.ok) throw new Error('Server returned ' + r.status);
-                    window.location.reload();
-                }).catch(function() {
+                // Same 200-on-failure surface as the other Admin/player POSTs on
+                // this page: revoke_dues can reject, and no_authorization() answers
+                // 200 with the admin page, so r.ok alone reloaded the profile as
+                // though the record had been revoked. This POST carried no body at
+                // all, so it needs one purely to carry the Ajax=1 marker.
+                function revokeFailed(msg) {
                     btn.disabled = false;
-                    alert('Request failed.');
-                });
-            });
-        });
-    });
-})();
-
-// ---- Parknew: Edit Officers ----
-(function() {
-    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
-
-    var OFFICER_ROLES = ['Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'];
-    var SET_URL    = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/setofficers';
-    var VACATE_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/vacateofficer';
-    var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
-
-    function gid(id) { return document.getElementById(id); }
-    function roleSlug(role) { return role.replace(/ /g, '_'); }
-
-    function buildOfficerMap() {
-        var map = {};
-        (PkConfig.officerList || []).forEach(function(o) { map[o.OfficerRole] = o; });
-        return map;
-    }
-
-    function showFeedback(msg, ok) {
-        var el = gid('pk-editoff-feedback');
-        if (!el) return;
-        el.textContent = msg;
-        el.className = 'pk-editoff-feedback ' + (ok ? 'pk-editoff-ok' : 'pk-editoff-err');
-        el.style.display = '';
-    }
-    function hideFeedback() {
-        var el = gid('pk-editoff-feedback');
-        if (el) { el.style.display = 'none'; el.textContent = ''; }
-    }
-
-    window.pkOpenEditOfficersModal = function() {
-        var overlay = gid('pk-editoff-overlay');
-        if (!overlay) return;
-        buildRows();
-        hideFeedback();
-        overlay.classList.add('pk-open');
-        document.body.style.overflow = 'hidden';
-    };
-
-    function pkCloseEditOfficersModal() {
-        var overlay = gid('pk-editoff-overlay');
-        if (!overlay) return;
-        overlay.classList.remove('pk-open');
-        document.body.style.overflow = '';
-    }
-
-    var rowsBuilt = false;
-    function buildRows() {
-        var officerMap = buildOfficerMap();
-        if (rowsBuilt) {
-            OFFICER_ROLES.forEach(function(role) {
-                var slug   = roleSlug(role);
-                var o      = officerMap[role];
-                var nameEl = gid('pk-editoff-name-' + slug);
-                var idEl   = gid('pk-editoff-id-'   + slug);
-                var vacBtn = gid('pk-editoff-vacate-' + slug);
-                if (nameEl && idEl) {
-                    nameEl.value = (o && o.MundaneId > 0) ? o.Persona   : '';
-                    idEl.value   = (o && o.MundaneId > 0) ? o.MundaneId : '';
+                    // orkAlert is the house one-button dialog (the alertMode shell
+                    // above) and replaces the native window dialog this used to
+                    // raise -- a native one blocks the page and freezes the
+                    // automation harness. This row lives in the dues-history modal,
+                    // which has no inline error box of its own.
+                    orkAlert(msg, { title: 'Revoke Failed' });
                 }
-                if (vacBtn) vacBtn.style.display = (o && o.MundaneId > 0) ? '' : 'none';
-            });
-            return;
-        }
-        rowsBuilt = true;
-        var container = gid('pk-editoff-rows');
-        if (!container) return;
-        container.innerHTML = '';
-
-        OFFICER_ROLES.forEach(function(role) {
-            var slug     = roleSlug(role);
-            var o        = officerMap[role];
-            var occupied = o && o.MundaneId > 0;
-
-            var row = document.createElement('div');
-            row.className = 'pk-editoff-row';
-
-            var label = document.createElement('div');
-            label.className   = 'pk-editoff-role-label';
-            label.textContent = role;
-            row.appendChild(label);
-
-            var wrap = document.createElement('div');
-            wrap.className = 'pk-editoff-player-wrap';
-
-            var nameInput = document.createElement('input');
-            nameInput.type         = 'text';
-            nameInput.id           = 'pk-editoff-name-' + slug;
-            nameInput.className    = 'pk-editoff-name-input';
-            nameInput.autocomplete = 'off';
-            nameInput.placeholder  = 'Search players\u2026';
-            if (occupied) nameInput.value = o.Persona;
-            wrap.appendChild(nameInput);
-
-            var hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.id   = 'pk-editoff-id-' + slug;
-            if (occupied) hiddenInput.value = o.MundaneId;
-            wrap.appendChild(hiddenInput);
-            row.appendChild(wrap);
-
-            var vacateBtn = document.createElement('button');
-            vacateBtn.type          = 'button';
-            vacateBtn.id            = 'pk-editoff-vacate-' + slug;
-            vacateBtn.className     = 'pk-editoff-vacate-btn';
-            vacateBtn.textContent   = 'Vacate';
-            vacateBtn.style.display = occupied ? '' : 'none';
-            (function(r, btn, ni, hi) {
-                btn.addEventListener('click', function() {
-                    pnConfirm({
-                        title: 'Vacate Position?',
-                        message: 'Remove the current ' + r + '?',
-                        confirmText: 'Vacate',
-                        danger: true
-                    }, function() {
-                        btn.disabled    = true;
-                        btn.textContent = '\u2026';
-                        $.post(VACATE_URL, { Role: r }, function(result) {
-                            if (result && result.status === 0) {
-                                ni.value = ''; hi.value = '';
-                                btn.style.display = 'none';
-                                btn.disabled      = false;
-                                btn.textContent   = 'Vacate';
-                                (PkConfig.officerList || []).forEach(function(off) {
-                                    if (off.OfficerRole === r) { off.MundaneId = 0; off.Persona = ''; }
-                                });
-                                showFeedback(r + ' vacated.', true);
-                            } else {
-                                btn.disabled    = false;
-                                btn.textContent = 'Vacate';
-                                showFeedback((result && result.error) ? result.error : 'Vacate failed.', false);
-                            }
-                        }, 'json').fail(function() {
-                            btn.disabled    = false;
-                            btn.textContent = 'Vacate';
-                            showFeedback('Request failed.', false);
-                        });
-                    });
-                });
-            })(role, vacateBtn, nameInput, hiddenInput);
-            row.appendChild(vacateBtn);
-
-            container.appendChild(row);
-
-            (function(ni, hi, vb) {
-                $(ni).autocomplete({
-                    source: function(req, res) {
-                        // Search all players in the kingdom — do NOT filter by park_id.
-                        // Park officers don't have to already be at this park (the
-                        // Edit Officers flow is the way they get assigned here in
-                        // the first place), and on a freshly-created park with zero
-                        // members, the park-scoped search returns empty for everyone.
-                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: PkConfig.kingdomId, limit: 12 }, function(data) {
-                            res($.map(data || [], function(v) { return { label: v.Persona, value: v.MundaneId }; }));
-                        });
-                    },
-                    focus:  function(e, ui) { $(ni).val(ui.item.label); return false; },
-                    select: function(e, ui) { $(ni).val(ui.item.label); hi.value = ui.item.value; vb.style.display = ''; return false; },
-                    change: function(e, ui) { if (!ui.item) hi.value = ''; return false; },
-                    delay: 250, minLength: 2,
-                });
-            })(nameInput, hiddenInput, vacateBtn);
-        });
-    }
-
-    $(document).ready(function() {
-        var submitBtn = gid('pk-editoff-submit');
-        if (submitBtn) {
-            submitBtn.addEventListener('click', function() {
-                var data   = {};
-                var hasAny = false;
-                OFFICER_ROLES.forEach(function(role) {
-                    var idEl = gid('pk-editoff-id-' + roleSlug(role));
-                    var mid  = idEl ? parseInt(idEl.value, 10) : 0;
-                    if (mid > 0) { data[roleSlug(role) + 'Id'] = mid; hasAny = true; }
-                });
-                if (!hasAny) { showFeedback('No officers selected. Use Vacate to remove officers.', false); return; }
-                submitBtn.disabled = true;
-                $.post(SET_URL, data, function(result) {
-                    submitBtn.disabled = false;
-                    if (result && result.status === 0) {
-                        showFeedback('Officers saved!', true);
-                        setTimeout(function() { location.reload(); }, 900);
-                    } else {
-                        showFeedback((result && result.error) ? result.error : 'Save failed.', false);
+                fetch(PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/revokedues/' + duesId, {
+                    method: 'POST',
+                    body: tnAwardSavePayload(new FormData())
+                }).then(function(resp) {
+                    return tnReadAwardSaveResponse(resp, 'The dues record could not be revoked.');
+                }).then(function(res) {
+                    if (!res.ok) {
+                        revokeFailed(res.error);
+                        return;
                     }
-                }, 'json').fail(function() {
-                    submitBtn.disabled = false;
-                    showFeedback('Request failed.', false);
+                    window.location.reload();
+                }).catch(function(err) {
+                    // Reader never rejects; only a dead transport reaches here.
+                    revokeFailed((err && err.message) || 'The server could not be reached.');
                 });
             });
-        }
-
-        var cancelBtn = gid('pk-editoff-cancel');
-        if (cancelBtn) cancelBtn.addEventListener('click', pkCloseEditOfficersModal);
-        var closeBtn  = gid('pk-editoff-close-btn');
-        if (closeBtn)  closeBtn.addEventListener('click', pkCloseEditOfficersModal);
-        var overlay = gid('pk-editoff-overlay');
-        if (overlay) overlay.addEventListener('click', function(e) { if (e.target === this) pkCloseEditOfficersModal(); });
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && gid('pk-editoff-overlay') && gid('pk-editoff-overlay').classList.contains('pk-open'))
-                pkCloseEditOfficersModal();
         });
     });
 })();
@@ -14728,7 +14429,7 @@ window.pnCloseUnitCreateModal = function() {
     function showFb(msg, ok) {
         var el = gid('kn-moveplayer-feedback');
         el.textContent = msg;
-        el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+        el.className = ok ? 'kn-admin-feedback kn-admin-ok' : 'kn-admin-feedback kn-admin-err';
         el.style.display = '';
     }
 
@@ -14936,7 +14637,7 @@ window.pnCloseUnitCreateModal = function() {
     function showFb(msg, ok) {
         var el = gid('kn-mergeplayer-feedback');
         el.textContent = msg;
-        el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+        el.className = ok ? 'kn-admin-feedback kn-admin-ok' : 'kn-admin-feedback kn-admin-err';
         el.style.display = '';
     }
 
@@ -15100,7 +14801,7 @@ window.pnCloseUnitCreateModal = function() {
         var el = gid('pk-heraldry-feedback');
         if (!el) return;
         el.style.display = 'block';
-        el.className = ok ? 'pk-editoff-feedback pk-editoff-ok' : 'pk-editoff-feedback pk-editoff-err';
+        el.className = ok ? 'pk-addday-feedback pk-addday-ok' : 'pk-addday-feedback pk-addday-err';
         el.textContent = msg;
     }
 
@@ -15242,7 +14943,7 @@ window.pnCloseUnitCreateModal = function() {
         var el = gid('pk-moveplayer-feedback');
         if (!el) return;
         el.style.display = 'block';
-        el.className = ok ? 'pk-editoff-feedback pk-editoff-ok' : 'pk-editoff-feedback pk-editoff-err';
+        el.className = ok ? 'pk-addday-feedback pk-addday-ok' : 'pk-addday-feedback pk-addday-err';
         el.textContent = msg;
     }
 
@@ -15541,7 +15242,7 @@ window.pnCloseUnitCreateModal = function() {
     function showFb(msg, ok) {
         var el = gid('pk-mergeplayer-feedback');
         el.textContent = msg;
-        el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+        el.className = ok ? 'pk-addday-feedback pk-addday-ok' : 'pk-addday-feedback pk-addday-err';
         el.style.display = '';
     }
 
@@ -20202,260 +19903,9 @@ window.evSetEventStatus = function(eventId, status, btn) {
     }, true);
 })();
 
-/* ============================================================================
-   Parknew — Copy From Past Event (pk-cfe-*)
-   Park-scope mirror of the Kingdom block above. Sources are scoped to
-   PkConfig.parkId; the request omits KingdomId so the backend uses pure
-   park scope.
-   ============================================================================ */
-(function() {
-    if (typeof PkConfig === 'undefined' || !PkConfig.parkId) return;
-
-    var SRC_URL = PkConfig.uir + 'EventAjax/copy_source_list';
-    var GO_URL  = PkConfig.uir + 'EventAjax/create_with_copy';
-    var CFE_DEBOUNCE_MS = 200;
-    var DELTA_MS_DEFAULT = 0;
-    var pickerStart = null;
-    var pickerEnd   = null;
-    var debounceTimer = null;
-    var lastQuery = null;
-
-    function gid(id) { return document.getElementById(id); }
-    function fireInput(el) {
-        if (!el) return;
-        try { el.dispatchEvent(new Event('input',  { bubbles: true })); } catch(e) {}
-        try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch(e) {}
-    }
-
-    var _pkCfeReposBound = false;
-    function pkCfePositionResults() {
-        var input = gid('pk-cfe-search');
-        var box   = gid('pk-cfe-results');
-        if (!input || !box) return;
-        box.style.position = 'fixed';
-        box.style.zIndex   = '10000';
-        tnPositionAcFixed(input, box);
-    }
-    function pkCfeBindReposition() {
-        if (_pkCfeReposBound) return;
-        _pkCfeReposBound = true;
-        var handler = function() {
-            var box = gid('pk-cfe-results');
-            if (box && box.classList.contains('kn-ac-open')) pkCfePositionResults();
-        };
-        window.addEventListener('scroll', handler, true);
-        window.addEventListener('resize', handler);
-    }
-
-    window.pkCfeToggleExpander = function() {
-        var body = gid('pk-cfe-body');
-        var btn  = gid('pk-cfe-toggle');
-        if (!body || !btn) return;
-        var open = body.style.display !== 'none';
-        body.style.display = open ? 'none' : '';
-        btn.setAttribute('aria-expanded', open ? 'false' : 'true');
-        if (!open) {
-            setTimeout(function() { var s = gid('pk-cfe-search'); if (s) s.focus(); }, 50);
-        }
-    };
-
-    function fmtDate(s) {
-        if (!s) return '';
-        var d = new Date(s.replace(' ', 'T'));
-        if (isNaN(d.getTime())) return s;
-        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-    }
-
-    function renderResults(rows) {
-        var box = gid('pk-cfe-results');
-        var input = gid('pk-cfe-search');
-        if (!box || !input) return;
-        box.innerHTML = '';
-        if (!rows || rows.length === 0) {
-            box.innerHTML = '<div class="kn-ac-empty">No matching past events</div>';
-            pkCfePositionResults();
-            pkCfeBindReposition();
-            box.classList.add('kn-ac-open');
-            return;
-        }
-        rows.forEach(function(r) {
-            var row = document.createElement('div');
-            row.className = 'kn-ac-row';
-            var occ = r.occurrenceCount > 1 ? (' · ' + r.occurrenceCount + ' occurrences') : '';
-            row.innerHTML = '<div class="kn-ac-row-title"></div><div class="kn-ac-row-meta"></div>';
-            row.querySelector('.kn-ac-row-title').textContent = r.name;
-            row.querySelector('.kn-ac-row-meta').textContent  = fmtDate(r.lastStart) + occ;
-            row.addEventListener('mousedown', function(e) { e.preventDefault(); pkCfePick(r); });
-            box.appendChild(row);
-        });
-        pkCfePositionResults();
-        pkCfeBindReposition();
-        box.classList.add('kn-ac-open');
-    }
-
-    function runSearch(q) {
-        var params = '&ParkId=' + encodeURIComponent(PkConfig.parkId) + '&Query=' + encodeURIComponent(q);
-        fetch(SRC_URL + params, { credentials: 'same-origin' })
-            .then(function(r) { return r.ok ? r.json() : null; })
-            .then(function(d) {
-                if (!d || d.status !== 0) { renderResults([]); return; }
-                var rows = d.results || [];
-                if (q === '') rows = rows.slice(0, 3);
-                renderResults(rows);
-            })
-            .catch(function() { renderResults([]); });
-    }
-
-    function onSearchInput() {
-        var input = gid('pk-cfe-search');
-        var q = input ? input.value.trim() : '';
-        if (debounceTimer) clearTimeout(debounceTimer);
-        if (q === lastQuery) return;
-        lastQuery = q;
-        debounceTimer = setTimeout(function() { runSearch(q); }, CFE_DEBOUNCE_MS);
-    }
-
-    window.pkCfePick = function(srcRow) {
-        gid('pk-cfe-source-id').value    = srcRow.eventId;
-        gid('pk-cfe-source-start').value = srcRow.lastStart || '';
-        gid('pk-cfe-source-end').value   = srcRow.lastEnd   || '';
-        gid('pk-cfe-chip-label').textContent = srcRow.name + ' · ' + fmtDate(srcRow.lastStart);
-        gid('pk-cfe-chip').style.display = '';
-        gid('pk-cfe-picker-wrap').style.display = 'none';
-        gid('pk-cfe-detail').style.display = '';
-        gid('pk-cfe-results').classList.remove('kn-ac-open');
-
-        var nameEl = gid('pk-event-name');
-        if (nameEl && nameEl.value.trim() === '') {
-            var yr = new Date().getFullYear();
-            nameEl.value = srcRow.name + ' ' + yr;
-            fireInput(nameEl);
-        }
-
-        var sStart = srcRow.lastStart ? new Date(srcRow.lastStart.replace(' ', 'T')) : null;
-        var sEnd   = srcRow.lastEnd   ? new Date(srcRow.lastEnd.replace(' ', 'T'))   : null;
-        DELTA_MS_DEFAULT = (sStart && sEnd && !isNaN(sStart) && !isNaN(sEnd)) ? (sEnd.getTime() - sStart.getTime()) : 0;
-        initPickers();
-    };
-
-    window.pkCfeClear = function() {
-        gid('pk-cfe-source-id').value    = '';
-        gid('pk-cfe-source-start').value = '';
-        gid('pk-cfe-source-end').value   = '';
-        gid('pk-cfe-chip').style.display = 'none';
-        gid('pk-cfe-picker-wrap').style.display = '';
-        gid('pk-cfe-detail').style.display = 'none';
-        var s = gid('pk-cfe-search'); if (s) { s.value = ''; lastQuery = null; }
-    };
-
-    function initPickers() {
-        if (typeof flatpickr !== 'function') return;
-        var startEl = gid('pk-cfe-start');
-        var endEl   = gid('pk-cfe-end');
-        if (!startEl || !endEl) return;
-        if (startEl._flatpickr) startEl._flatpickr.destroy();
-        if (endEl._flatpickr)   endEl._flatpickr.destroy();
-        var opts = {
-            enableTime: true, dateFormat: 'Y-m-d H:i',
-            altInput: true,  altFormat: 'F j, Y  h:i K',
-            minuteIncrement: 5, time_24hr: false, allowInput: false
-        };
-        pickerEnd = flatpickr(endEl, opts);
-        pickerStart = flatpickr(startEl, Object.assign({}, opts, {
-            onChange: function(selDates) {
-                if (!selDates[0]) return;
-                var d = new Date(selDates[0].getTime() + DELTA_MS_DEFAULT);
-                pickerEnd.setDate(d, true);
-            }
-        }));
-    }
-
-    window.pkCfeToggleAll = function(masterCb) {
-        document.querySelectorAll('.pk-cfe-mod').forEach(function(cb) { cb.checked = masterCb.checked; });
-    };
-    window.pkCfeSyncAll = function() {
-        var all = gid('pk-cfe-mod-all');
-        if (!all) return;
-        var boxes = Array.from(document.querySelectorAll('.pk-cfe-mod'));
-        var checked = boxes.filter(function(cb) { return cb.checked; }).length;
-        all.checked = (checked === boxes.length);
-        all.indeterminate = (checked > 0 && checked < boxes.length);
-    };
-
-    function pkCfeFeedback(msg) {
-        var el = document.getElementById('pk-emod-feedback');
-        if (el) { el.textContent = msg; el.style.display = ''; }
-        try { console.log('[pkCfe]', msg); } catch(e) {}
-    }
-
-    var _origPkCreateEvent = window.pkCreateEvent;
-    window.pkCreateEvent = function(statusOverride) {
-        var srcEl = gid('pk-cfe-source-id');
-        var srcId = srcEl ? parseInt(srcEl.value || '0', 10) : 0;
-        try { console.log('[pkCfe] create click — srcId:', srcId, 'statusOverride:', statusOverride); } catch(e) {}
-        if (!srcId) { if (_origPkCreateEvent) return _origPkCreateEvent(statusOverride); return; }
-
-        var name  = ((gid('pk-event-name') || {}).value || '').trim();
-        var start = (gid('pk-cfe-start') || {}).value || '';
-        var end   = (gid('pk-cfe-end')   || {}).value || '';
-        try { console.log('[pkCfe] fields — name:', name, 'start:', start, 'end:', end); } catch(e) {}
-        if (!name)  { pkCfeFeedback('Event name is required.'); return; }
-        if (!start || !end) { pkCfeFeedback('Start and end times are required.'); return; }
-
-        var btn  = gid('pk-emod-go-btn');
-        var dbtn = gid('pk-emod-draft-btn');
-        if (btn)  btn.disabled  = true;
-        if (dbtn) dbtn.disabled = true;
-
-        var status = (statusOverride === 'draft') ? 'draft' : 'published';
-        var modules = {
-            details:  gid('pk-cfe-mod-details').checked,
-            schedule: gid('pk-cfe-mod-schedule').checked,
-            staff:    gid('pk-cfe-mod-staff').checked,
-            feast:    gid('pk-cfe-mod-feast').checked,
-            banner:   gid('pk-cfe-mod-banner').checked
-        };
-
-        $.post(GO_URL, {
-            Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId,
-            SourceEventId: srcId, NewStart: start, NewEnd: end,
-            Modules: JSON.stringify(modules), Status: status
-        }, function(r) {
-            if (r && r.status === 0) {
-                if (r.warnings && r.warnings.length) { try { console.log('Copy completed with warnings:', r.warnings); } catch(e) {} }
-                window.location.href = r.url;
-            } else {
-                pkCfeFeedback((r && r.error) ? r.error : 'Failed to copy event.');
-                if (btn)  btn.disabled  = false;
-                if (dbtn) dbtn.disabled = false;
-            }
-        }, 'json').fail(function(xhr) {
-            try { console.error('[pkCfe] POST failed:', xhr && xhr.status, xhr && xhr.responseText); } catch(e) {}
-            pkCfeFeedback('Request failed. Please try again.');
-            if (btn)  btn.disabled  = false;
-            if (dbtn) dbtn.disabled = false;
-        });
-    };
-
-    document.addEventListener('DOMContentLoaded', function() {
-        var s = gid('pk-cfe-search');
-        if (s) {
-            s.addEventListener('input', onSearchInput);
-            s.addEventListener('focus', function() { if (lastQuery === null) runSearch(''); });
-            s.addEventListener('blur',  function() { setTimeout(function() { var b = gid('pk-cfe-results'); if (b) b.classList.remove('kn-ac-open'); }, 150); });
-        }
-    });
-
-    function pkCfeIsInsidePicker(picker, target) {
-        if (!picker) return false;
-        if (picker.altInput && picker.altInput.contains(target)) return true;
-        if (picker.input    && picker.input.contains(target))    return true;
-        if (picker.calendarContainer && picker.calendarContainer.contains(target)) return true;
-        return false;
-    }
-    document.addEventListener('mousedown', function(e) {
-        if (pickerStart && pickerStart.isOpen && !pkCfeIsInsidePicker(pickerStart, e.target)) pickerStart.close();
-        if (pickerEnd   && pickerEnd.isOpen   && !pkCfeIsInsidePicker(pickerEnd,   e.target)) pickerEnd.close();
-    }, true);
-})();
+/* Park — Copy From Past Event (pk-cfe-*) moved to
+   orkui/template/revised-frontend/partials/_event_create_modal.tpl, together with
+   the create-event modal it extends. It wraps window.pkCreateEvent, so the two
+   have to stay adjacent and in that order; the Park admin console needs both and
+   does not load this file. */
 

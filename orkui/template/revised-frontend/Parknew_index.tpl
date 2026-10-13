@@ -34,9 +34,35 @@
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
 	foreach ($officerList as $o) {
-		if ($o['OfficerRole'] === 'Monarch') $monarch = $o;
-		if ($o['OfficerRole'] === 'Regent')  $regent  = $o;
+		$_ck = $o['CanonicalKey'] ?? $o['OfficerRole'] ?? '';
+		if ($_ck === 'monarch') $monarch = $o;
+		if ($_ck === 'regent')  $regent  = $o;
 	}
+
+	// ---- Sidebar shows CROWN offices only ----------------------------------
+	// $officerList keeps the FULL set (crown + supporting) for the Officer
+	// Details modal; the sidebar renders this filtered copy.
+	//
+	// Classification is a NEW key on the buildOfficerRows() row and is null for
+	// an officer with no registry position (ork_officer.position_id = 0). So the
+	// test is deliberately NEGATIVE: hide only what is positively identified as
+	// 'supporting', and show everything else. Writing `=== 'crown'` here would
+	// empty the entire sidebar on any data set where the key is absent or
+	// unmapped -- a far worse failure than one extra row.
+	$crownOfficerList = [];
+	foreach ($officerList as $_o) {
+		if (!is_array($_o)) {
+			continue;
+		}
+		if (strtolower(trim((string)($_o['Classification'] ?? ''))) === 'supporting') {
+			continue;
+		}
+		$crownOfficerList[] = $_o;
+	}
+
+	// Officer-history role options (canonical key => display title) are shaped by the
+	// controller from the position registry -- see Model_OfficerPosition::history_role_options().
+	$ohRoleOptions = is_array($OfficerHistoryRoleOptions ?? null) ? $OfficerHistoryRoleOptions : [];
 
 	// Parse park main location for map links
 	$parkLat = null; $parkLng = null;
@@ -356,9 +382,30 @@
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAwardModal()">
 						<i class="fas fa-medal"></i> Enter Awards
 					</button>
-					<button class="pk-btn pk-btn-outline" onclick="pkOpenAdminModal()">
+				<?php endif; ?>
+				<?php /*
+				   Admin goes to the standalone Park admin console (Admin/park/{id}),
+				   mirroring the kingdom nameplate's Admin link -- it used to open the
+				   pk-admin-overlay edit pad, which is the park's version of the kingdom
+				   edit pad this work replaced. Everything that modal offered lives on the
+				   console: Park Details -> "Configure Park" (Admin/editpark saves the same
+				   Url/Address/City/Province/PostalCode/MapUrl/Description/Directions set),
+				   and Reset Waivers -> the Operations tile.
+
+				   GATED ON $CanManagePark, NOT $CanAdminPark. They are different
+				   permissions: CanAdminPark is park.officer.set @AUTH_CREATE, while
+				   Admin::park()'s front door is park.details.edit @AUTH_EDIT (or kingdom
+				   standing). CanManagePark IS that first disjunct -- same key, scope and
+				   level -- so anyone who sees this link can definitely open the page, and
+				   kingdom officers are covered too because HasAuthority(AUTH_PARK) walks
+				   up to the park's kingdom. Gating on CanAdminPark would have shown the
+				   link to a park officer holding officer.set but not details.edit, who
+				   would then be bounced silently to the home page.
+				*/ ?>
+				<?php if (!empty($CanManagePark)): ?>
+					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Admin/park/<?= (int)($park_id ?? 0) ?>">
 						<i class="fas fa-cog"></i> Admin
-					</button>
+					</a>
 				<?php endif; ?>
 
 			</div>
@@ -503,29 +550,47 @@
 		<!-- Officers -->
 		<?php if (!empty($officerList) || !empty($CanManagePark)): ?>
 		<div class="pk-card">
-			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
+			<?php
+/* The modal collapses officer rows sharing a PositionId into ONE office (an office with
+   three holders is three rows), so counting rows here would advertise a bigger number
+   than the modal lists. Count distinct offices, and fall back to "Details" rather than
+   printing "All 0" when a manager views a group with no officers on record. */
+$_ofOfficeCount = 0;
+if (!empty($officerList) && is_array($officerList)) {
+    $_ofSeen = [];
+    foreach ($officerList as $_ofRow) {
+        if (!is_array($_ofRow)) { continue; }
+        $_ofPid = (int)($_ofRow['PositionId'] ?? 0);
+        $_ofKey = $_ofPid > 0 ? 'p' . $_ofPid : 'r' . count($_ofSeen);
+        $_ofSeen[$_ofKey] = true;
+    }
+    $_ofOfficeCount = count($_ofSeen);
+}
+$_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
+?>
+<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
 				<span><i class="fas fa-crown"></i> Officers</span>
-				<?php if (!empty($CanAdminPark)): ?>
-				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" data-tip="Edit officers">
-					<i class="fas fa-pencil-alt"></i>
-				</button>
-				<?php endif; ?>
+				<span class="pk-officers-bar-actions">
+					<!-- Available to EVERY viewer, not just park admins. -->
+					<a href="#" class="pk-officers-more" data-tip="All officers"
+					   onclick="if (window.ofOpenOfficerModal) { ofOpenOfficerModal(); } return false;"><?= $_ofMoreLabel ?> &rarr;</a>
+				</span>
 			</h4>
 			<ul class="pk-officer-list">
-				<?php foreach ($officerList as $o): ?>
+				<?php foreach ($crownOfficerList as $o): ?>
 				<li>
-					<span class="pk-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
+					<span class="pk-officer-role"><?= htmlspecialchars($o['DisplayTitle'] ?? $o['OfficerRole']) ?></span>
 					<span class="pk-officer-name">
 						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
-							<a href="<?= UIR ?>Player/profile/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
+							<a href="<?= UIR ?>Player/profile/<?= (int)$o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona'] ?? '') ?></a>
 						<?php else: ?>
 							<em style="color:#a0aec0">Vacant</em>
 						<?php endif; ?>
 					</span>
 				</li>
 				<?php endforeach; ?>
-				<?php if (empty($officerList)): ?>
-				<li><em style="color:#a0aec0;font-size:12px">No officers on record</em></li>
+				<?php if (empty($crownOfficerList)): ?>
+				<li><em style="color:#a0aec0;font-size:12px"><?= !empty($officerList) ? 'No crown officers on record' : 'No officers on record' ?></em></li>
 				<?php endif; ?>
 			</ul>
 		</div>
@@ -1285,6 +1350,11 @@
 				</div>
 			</div>
 
+			<!-- Officer History moved into the shared Officer Details modal
+			     (partials/_officer_details_modal.tpl, "Officer History" tab).
+			     The Add/Edit history modals below stay put; the partial calls
+			     through to them. -->
+
 			<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
 			<?php if (!empty($CanAdminPark) || !empty($CanManageCourt)): ?>
 			<div class="pk-tab-panel" id="pk-tab-admin" style="display:none">
@@ -1885,6 +1955,42 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 </div><!-- /pk-layout -->
 
 <!-- =============================================
+     Officer Details Modal (shared with Kingdom)
+     Current Officers tree + the re-homed Officer History tab.
+     Inputs per the partial's docblock; $officerList is the FULL set here
+     (crown + supporting) -- the sidebar above renders $crownOfficerList.
+     ============================================= -->
+<?php
+	$ofScope   = 'park';
+	$ofOrgId   = (int)$park_id;
+	$ofOrgName = (string)($park_name ?? '');
+?>
+<?php include __DIR__ . '/partials/_officer_details_modal.tpl'; ?>
+
+<!-- Officer History Backfill/Edit Modals removed: writes now go through the
+     officer transition console; the public modal is read-only. -->
+
+<style>
+/* ---- Officers sidebar bar: "see more" affordance ----
+   Copies the established .pna-card-more house affordance (Playernew_index.tpl
+   :260-261) rather than inventing a chevron. Sits beside the edit pencil when
+   the viewer can manage; shown to EVERY viewer. */
+.pk-officers-bar-actions {
+	display:inline-flex; align-items:center; gap:8px; flex-shrink:0;
+}
+.pk-officers-bar-actions a.pk-officers-more {
+	font-weight:600; font-size:11px; color:#4299e1; text-decoration:none;
+	text-transform:none; letter-spacing:0; white-space:nowrap;
+}
+.pk-officers-bar-actions a.pk-officers-more:hover { text-decoration:underline; }
+.pk-officers-bar-actions a.pk-officers-more:focus-visible {
+	outline:2px solid var(--ork-blue-link); outline-offset:2px; border-radius:3px;
+}
+html[data-theme="dark"] .pk-officers-bar-actions a.pk-officers-more { color:#63b3ed; }
+
+</style>
+
+<!-- =============================================
      JavaScript
      ============================================= -->
 <script>
@@ -1904,9 +2010,6 @@ var PkConfig = {
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
 	classes:         <?= json_encode(array_values($Classes         ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	recentAttendees: <?= json_encode(array_values($RecentAttendees ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	officerList:     <?= json_encode(!empty($CanAdminPark) ? array_map(function($o) {
-		return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']];
-	}, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkDetails: {
 		url:         <?= json_encode($parkInfo['Url']         ?? '') ?>,
 		address:     <?= json_encode($parkInfo['Address']     ?? '') ?>,
@@ -2341,169 +2444,31 @@ var PkBannerConfig = {
 	</div>
 </div>
 
-<?php if ($CanAdminPark ?? false): ?>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-
-<div class="pk-emod-overlay" id="pk-event-modal">
-	<div class="pk-emod-box">
-		<div class="pk-emod-header">
-			<h3 id="pk-emod-title" class="kn-bare-heading"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
-			<button class="pk-emod-close" onclick="pkCloseEventModal()">&times;</button>
-		</div>
-		<div class="pk-emod-body">
-
-			<div class="pk-emod-typesel">
-				<label class="pk-emod-typeopt">
-					<input type="radio" name="pk-emod-type" value="event" checked>
-					<span><i class="fas fa-flag"></i> Amtgard Event</span>
-				</label>
-				<label class="pk-emod-typeopt">
-					<input type="radio" name="pk-emod-type" value="calendar-item">
-					<span><i class="fas fa-calendar-day"></i> Calendar Item</span>
-				</label>
-			</div>
-
-			<div class="pk-emod-field">
-				<label class="pk-emod-label">Name <span style="color:#e53e3e">*</span></label>
-				<input type="text" class="pk-emod-input" id="pk-event-name" autocomplete="off" placeholder="e.g. Summer Dragonmaster">
-			</div>
-			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
-				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="pk-emod-date-text"></span>
-			</div>
-			<!-- Copy from past event (collapsible, event-mode only) -->
-			<div class="pk-cfe-wrap pk-emod-event-only" id="pk-cfe-wrap" style="margin-top:14px">
-				<button type="button" class="pk-cfe-toggle" id="pk-cfe-toggle" onclick="pkCfeToggleExpander()" aria-expanded="false">
-					<i class="fas fa-clone" style="margin-right:6px;color:#2b6cb0"></i>
-					Copy from past event <span style="color:#a0aec0;font-weight:400">(optional)</span>
-					<i class="fas fa-chevron-down pk-cfe-chev" id="pk-cfe-chev" style="margin-left:auto"></i>
-				</button>
-				<div class="pk-cfe-body" id="pk-cfe-body" style="display:none">
-					<div class="pk-cfe-field" id="pk-cfe-picker-wrap">
-						<label class="pk-emod-label">Source event <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(park-level)</span></label>
-						<div class="kn-ac-wrap">
-							<input type="text" class="pk-emod-input" id="pk-cfe-search" autocomplete="off" placeholder="Search past events…">
-							<div class="kn-ac-results" id="pk-cfe-results"></div>
-						</div>
-						<input type="hidden" id="pk-cfe-source-id" value="">
-						<input type="hidden" id="pk-cfe-source-start" value="">
-						<input type="hidden" id="pk-cfe-source-end" value="">
-					</div>
-					<div class="pk-cfe-chip" id="pk-cfe-chip" style="display:none">
-						<i class="fas fa-bookmark" style="margin-right:6px;color:#2b6cb0"></i>
-						<span id="pk-cfe-chip-label"></span>
-						<button type="button" class="pk-cfe-chip-clear" onclick="pkCfeClear()" aria-label="Clear source">&times;</button>
-					</div>
-					<div class="pk-cfe-detail" id="pk-cfe-detail" style="display:none">
-						<div class="pk-emod-row" style="display:flex;gap:10px;margin-top:12px">
-							<div class="pk-emod-field" style="flex:1">
-								<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
-								<input type="text" class="pk-emod-input" id="pk-cfe-start" autocomplete="off" placeholder="Select start…">
-							</div>
-							<div class="pk-emod-field" style="flex:1">
-								<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
-								<input type="text" class="pk-emod-input" id="pk-cfe-end" autocomplete="off" placeholder="Select end…">
-							</div>
-						</div>
-						<div class="pk-cfe-modules" style="margin-top:12px">
-							<div class="pk-cfe-mod-title">What to copy</div>
-							<label class="pk-cfe-mod-row pk-cfe-mod-all">
-								<input type="checkbox" id="pk-cfe-mod-all" checked onchange="pkCfeToggleAll(this)">
-								<span><strong>Select all</strong></span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-details" checked onchange="pkCfeSyncAll()">
-								<span>Event Details <span class="pk-cfe-mod-hint">description, address, fees, links</span></span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-schedule" checked onchange="pkCfeSyncAll()">
-								<span>Schedule</span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-staff" checked onchange="pkCfeSyncAll()">
-								<span>Staff <span class="pk-cfe-mod-hint">banned/deactivated people are skipped</span></span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-feast" checked onchange="pkCfeSyncAll()">
-								<span>Feast</span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-banner" onchange="pkCfeSyncAll()">
-								<span>Banner <span class="pk-cfe-mod-hint">image + framing config</span></span>
-							</label>
-						</div>
-					</div>
-				</div>
-			</div>
-
-						<p class="pk-emod-hint pk-emod-event-only" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
-
-			<!-- Calendar-item-only fields -->
-			<div class="pk-emod-ci-only" style="display:none">
-				<div class="pk-emod-field" style="margin-top:12px">
-					<label class="pk-emod-check-label">
-						<input type="checkbox" id="pk-ci-allday"> All day
-					</label>
-				</div>
-				<div class="pk-emod-field" style="margin-top:6px">
-					<label class="pk-emod-check-label" data-tip="Officer-only items are visible only to ORK admins and people serving as Monarch / Regent / PM / Champion of this kingdom or park.">
-						<input type="checkbox" id="pk-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Only Display to Officers
-					</label>
-				</div>
-				<div class="pk-emod-field" style="margin-top:6px">
-					<label class="pk-emod-check-label" data-tip="Locals-only items are visible only to ORK admins and to logged-in players whose home park (or kingdom, for kingdom-level items) matches.">
-						<input type="checkbox" id="pk-ci-locals-only"> <i class="fas fa-map-marker-alt" style="margin:0 4px 0 2px;color:#0d9488"></i>Only Display to Local Park/Kingdom Players
-					</label>
-				</div>
-				<div style="display:flex;gap:10px;margin-top:8px">
-					<div class="pk-emod-field" style="flex:1">
-						<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
-						<input type="text" class="pk-emod-input" id="pk-ci-start" autocomplete="off" placeholder="Select start…">
-					</div>
-					<div class="pk-emod-field" style="flex:1">
-						<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
-						<input type="text" class="pk-emod-input" id="pk-ci-end" autocomplete="off" placeholder="Select end…">
-					</div>
-				</div>
-				<div class="pk-emod-field" style="margin-top:10px">
-					<label class="pk-emod-label">Color</label>
-					<div class="ci-swatches" id="pk-ci-swatches">
-						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" title="Slate"></button>
-						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
-						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Purple"></button>
-						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></button>
-						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" title="Green"></button>
-						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" title="Amber"></button>
-						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></button>
-						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" title="Rose"></button>
-					</div>
-					<input type="hidden" id="pk-ci-color" value="#64748b">
-				</div>
-				<div class="pk-emod-field" style="margin-top:10px">
-					<label class="pk-emod-label">Description</label>
-					<textarea class="pk-emod-input" id="pk-ci-description" rows="3" placeholder="Optional details…"></textarea>
-				</div>
-				<div class="pk-emod-ci-note">
-					<i class="fas fa-info-circle" style="margin-right:6px"></i>
-					Calendar Items are lightweight. They do <strong>not</strong> support RSVPs, sign-ins, schedules, attendance, heraldry, pricing, or event authorization lists. Use an Amtgard Event for those.
-				</div>
-			</div>
-
-			<div class="pk-emod-feedback" id="pk-emod-feedback" style="display:none"></div>
-		</div>
-		<div class="pk-emod-footer">
-			<button class="pk-emod-btn-cancel" onclick="pkCloseEventModal()">Cancel</button>
-			<button class="pk-emod-btn-cancel pk-emod-draft-btn" id="pk-emod-draft-btn" onclick="pkCreateEvent('draft')" disabled style="display:none;font-size:12px;">
-				<i class="fas fa-eye-slash"></i> Save as Draft
-			</button>
-			<button class="pk-emod-btn-go" id="pk-emod-go-btn" onclick="pkCreateEvent()" disabled>
-				<span id="pk-emod-go-label">Create Event</span> <i class="fas fa-arrow-right"></i>
-			</button>
-		</div>
-	</div>
-</div>
-
-<?php endif; ?>
+<?php
+/* Create-event modal -- shared with the Park admin console.
+   The MARKUP is admin-only exactly as it was ($evCanCreate below stands in for
+   the `if ($CanAdminPark)` that used to wrap it). The partial's SCRIPT is not:
+   it also owns the calendar-item view overlay, the events-list rows and the
+   calendar-grid sync, which every viewer uses -- and which used to run for
+   every viewer from revised.js, off PkConfig. */
+$evParkId    = (int)($park_id ?? 0);
+// The PARK's kingdom, not $kingdom_id. controller.Park.php:26 sets $kingdom_id from
+// $this->session->kingdom_id -- the VIEWER's kingdom -- so on a park belonging to any
+// other kingdom this passed the wrong id, and EventPlanning::CreateEvent writes
+// kingdom_id straight from the request. An officer viewing another kingdom's park and
+// creating an event there stamped it with their OWN kingdom.
+// $parkInfo is set at the top of this file from $park_info['ParkInfo'], which
+// controller.Park.php already treats as the authoritative source for the park's
+// kingdom (see its OfficerHistoryRoleOptions call).
+// NOTE: $kingdom_id is viewer-scoped everywhere else on this page too -- the kingdom
+// breadcrumb and ~10 Reports links carry it -- which misfilters those views for a
+// cross-kingdom viewer. That is a separate, display-only, pre-existing bug; only the
+// WRITE path is corrected here.
+$evKingdomId = (int)($parkInfo['KingdomId'] ?? 0);
+$evParkName  = (string)($park_name ?? '');
+$evCanCreate = !empty($CanAdminPark);
+include __DIR__ . '/partials/_event_create_modal.tpl';
+?>
 
 <!-- Event Preview Overlay (calendar quick-look) -->
 <div class="evpv-overlay" id="evpv-overlay">
@@ -2870,30 +2835,9 @@ tr:hover .pk-copy-link { opacity: 1; }
 <?php endif; ?>
 
 <!-- =============================================
-     Parknew: Edit Officers Modal
-     ============================================= -->
-<?php if (!empty($CanAdminPark)): ?>
-<div id="pk-editoff-overlay">
-	<div class="pk-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
-		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-crown" style="margin-right:8px;color:#2c5282"></i>Edit Officers</h3>
-			<button class="pk-modal-close-btn" id="pk-editoff-close-btn" aria-label="Close">&times;</button>
-		</div>
-		<div class="pk-modal-body">
-			<div id="pk-editoff-feedback" class="pk-editoff-feedback" style="display:none"></div>
-			<p class="pk-editoff-hint">Search for a player to assign to each role, or click Vacate to remove the current officer.</p>
-			<div id="pk-editoff-rows"></div>
-		</div>
-		<div class="pk-modal-footer">
-			<button class="pk-btn pk-btn-ghost" id="pk-editoff-cancel">Cancel</button>
-			<button class="pk-btn pk-btn-primary" id="pk-editoff-submit"><i class="fas fa-save"></i> Save Officers</button>
-		</div>
-	</div>
-</div>
-
-<!-- =============================================
      Parknew: Add Park Day Modal
      ============================================= -->
+<?php if (!empty($CanAdminPark)): ?>
 <div id="pk-addday-overlay">
 	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
@@ -3230,47 +3174,13 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 
 /* ============================================================
 
-/* ---- Copy from past event (pk-cfe-*) ---- */
-.pk-cfe-wrap { border: 1px solid var(--ork-border); border-radius: 6px; background: var(--ork-bg-inset); overflow: hidden; }
-.pk-cfe-toggle { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 0; cursor: pointer; font-size: 13px; color: #2d3748; text-align: left; }
-.pk-cfe-toggle:hover { background: var(--ork-card-bg); }
-.pk-cfe-chev { transition: transform 0.15s ease; color: #a0aec0; }
-.pk-cfe-toggle[aria-expanded="true"] .pk-cfe-chev { transform: rotate(180deg); }
-.pk-cfe-body { padding: 12px; border-top: 1px solid var(--ork-divider); background: var(--ork-card-bg); }
-.pk-cfe-field { position: relative; }
-.pk-cfe-chip { display: inline-flex; align-items: center; padding: 6px 10px; background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 999px; font-size: 13px; color: #2c5282; margin-top: 4px; max-width: 100%; }
-.pk-cfe-chip-clear { background: transparent; border: 0; margin-left: 8px; font-size: 18px; line-height: 1; color: #2c5282; cursor: pointer; padding: 0 4px; }
-.pk-cfe-chip-clear:hover { color: #1a365d; }
-.pk-cfe-modules .pk-cfe-mod-title { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-.pk-cfe-mod-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 13px; color: #2d3748; }
-.pk-cfe-mod-row input[type="checkbox"] { margin-top: 2px; }
-.pk-cfe-mod-all { border-bottom: 1px solid var(--ork-divider); padding-bottom: 8px; margin-bottom: 4px; }
-.pk-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
-
-#pk-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
-#pk-cfe-results .kn-ac-row:hover, #pk-cfe-results .kn-ac-row.kn-ac-active { background: #ebf8ff; }
-#pk-cfe-results .kn-ac-row:last-child { border-bottom: 0; }
-#pk-cfe-results .kn-ac-row-title { font-size: 13px; color: #2d3748; font-weight: 500; }
-#pk-cfe-results .kn-ac-row-meta { font-size: 11px; color: #718096; margin-top: 1px; }
-#pk-cfe-results .kn-ac-empty { padding: 10px; color: #a0aec0; font-style: italic; font-size: 12px; }
-
-html[data-theme="dark"] .pk-cfe-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-html[data-theme="dark"] .pk-cfe-toggle { color: var(--ork-text); }
-html[data-theme="dark"] .pk-cfe-toggle:hover { background: var(--ork-bg-tertiary); }
-html[data-theme="dark"] .pk-cfe-chev { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pk-cfe-body { background: var(--ork-card-bg); border-top-color: var(--ork-border); }
-html[data-theme="dark"] .pk-cfe-chip { background: #1a365d; border-color: #2c5282; color: #90cdf4; }
-html[data-theme="dark"] .pk-cfe-chip-clear { color: #90cdf4; }
-html[data-theme="dark"] .pk-cfe-chip-clear:hover { color: #ebf8ff; }
-html[data-theme="dark"] .pk-cfe-mod-title { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pk-cfe-mod-row { color: var(--ork-text); }
-html[data-theme="dark"] .pk-cfe-mod-hint { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pk-cfe-mod-all { border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row { border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row:hover, html[data-theme="dark"] #pk-cfe-results .kn-ac-row.kn-ac-active { background: var(--ork-bg-tertiary); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row-title { color: var(--ork-text); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row-meta { color: var(--ork-text-muted); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-empty { color: var(--ork-text-muted); }
+/* The pk-cfe-* (Copy from past event) rules that used to live here now live in
+   revised.css. They styled markup that has since moved into the shared partial
+   partials/_event_create_modal.tpl, so keeping them in THIS page's inline <style>
+   meant the park admin console -- which includes the partial but not this template
+   -- rendered the toggle with no styling at all: a white bar in dark mode. The
+   #pk-cfe-results row rules are gone entirely, superseded by the id-agnostic
+   .kn-ac-results rules in revised.css. */
 
 
 /* ---- Park Day modal: "Every X Weeks" interval + start-date fields ---- */
@@ -3744,6 +3654,9 @@ $(function() {
 window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
 	initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
 });
+
+// The officer-history main-content tab is gone; the Officer Details modal
+// lazy-loads history on its own tab activation, so no hook is needed here.
 window.pkUsernameCheck = initUsernameAvailabilityCheck({
 	inputId:     'pk-addplayer-username',
 	statusId:    'pk-addplayer-username-status',

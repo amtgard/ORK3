@@ -1,0 +1,1098 @@
+<?php
+
+/***
+ * Controller_OfficerAdminAjax
+ *
+ * JSON Ajax endpoint for the Officer Admin Expansion "Manage Officers" UI
+ * (Phase 4 + P5 retire/reinstate). Orchestrates the P2 OfficerPosition service
+ * (Ork3::$Lib->officerposition / Model_OfficerPosition) and RBAC helpers; all DB
+ * logic lives in the lib layer.
+ *
+ * Route shape (mirrors KingdomAjax):
+ *   index.php?Route=OfficerAdminAjax/officer/{kingdom_id}/{action}
+ *
+ * ParkId comes from POST 'ParkId', or GET 'ParkId' for the read-only $.getJSON call
+ * sites (list/roles/permissions) that carry no body (default 0 = kingdom scope).
+ *
+ * Vacating comes in two explicitly-named flavours so "remove this person" and
+ * "clear the whole office" can never be confused at the wire level -- scope is
+ * decided by the ROUTE, never by whether a payload field happens to be present:
+ *   vacateholder — POST MundaneId required; removes that one holder. Routed to
+ *                  OfficerPosition::VacateOfficer, which REQUIRES a MundaneId.
+ *   vacate       — legacy entry point; also requires MundaneId now, same as
+ *                  vacateholder above.
+ *   vacateall    — removes every holder of the position in this scope. This is
+ *                  the ONLY vacate control the console renders for crown
+ *                  offices (the per-holder button is gated to non-crown
+ *                  positions), so it must keep resolving. Routed to
+ *                  OfficerPosition::VacateOffice, which takes no MundaneId.
+ *
+ * Response envelope: success => {status:0, ...}; failure => {status:N, error:'...'}.
+ * Not logged in => {status:5}; invalid kingdom => {status:1}; unauthorized => {status:5}.
+ ***/
+
+class Controller_OfficerAdminAjax extends Controller
+{
+    /**
+     * Officer-facing group headings for the internal permission-category slugs.
+     * The registry's category column is an internal enum ('config', 'auth', ...);
+     * showing it raw put headings reading CONFIG / AUTH in front of a kingdom
+     * officer. Keys mirror PermissionRegistry::GetByCategory()'s documented list;
+     * anything not listed falls back to a title-cased slug rather than vanishing.
+     * The order of this map is also the order the catalogue groups are emitted in.
+     */
+    private static $permissionCategoryLabels = [
+        'config'    => 'Kingdom Settings',
+        'officer'   => 'Officers & Terms',
+        'player'    => 'Players & Records',
+        'award'     => 'Awards',
+        'event'     => 'Events',
+        'heraldry'  => 'Heraldry',
+        'financial' => 'Dues & Finances',
+        'auth'      => 'Access & Permissions',
+    ];
+
+    public function officer($p = null)
+    {
+        header('Content-Type: application/json');
+
+        $parts      = explode('/', $p ?? '');
+        $kingdom_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
+        $action     = strtolower(trim($parts[1] ?? ''));
+
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        if (!valid_id($kingdom_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid kingdom ID']);
+            exit;
+        }
+
+        $uid = (int)$this->session->user_id;
+
+        // Accept ParkId from either transport, explicitly: writes go out as POST
+        // (moPost()), but list/roles/permissions go out as $.getJSON, which is GET-only
+        // and can never carry a POST body. The value is caller-supplied under either
+        // transport -- it grants nothing by itself, since every domain method below
+        // gates on it via the same authority/permission checks -- so accepting it via
+        // $_GET too is not a widened surface, just a widened transport. Deliberately
+        // NOT $_REQUEST: that superglobal's precedence depends on the php.ini
+        // request_order setting, and this code should not be sensitive to that.
+        $park_id = (int)($_POST['ParkId'] ?? $_GET['ParkId'] ?? 0);
+
+        // SECURITY: $kingdom_id above is the URL route segment -- caller-controlled, and
+        // never validated against $park_id. When this request is park-scoped, the gate
+        // below correctly authorizes against the PARK (scope_id=$park_id), but nothing
+        // stopped a caller who legitimately holds authority over THEIR OWN park from
+        // naming a DIFFERENT kingdom in the URL: the gate would still pass, and that
+        // foreign $kingdom_id would flow into GetPositions()/GetAvailableRoles() below,
+        // disclosing another kingdom's position registry and custom RBAC role/permission
+        // names. Every write path already derives the kingdom from the park internally
+        // (OfficerPosition::*, via GetParkKingdomId) rather than trusting a passed
+        // KingdomId, so derive it here too and OVERWRITE the URL value whenever a park is
+        // named -- both the gate and every action method below inherit the corrected id.
+        if ($park_id > 0) {
+            $this->load_model('KingdomProfile');
+            $park_kingdom_id = (int)$this->KingdomProfile->park_kingdom_id($park_id);
+            if ($park_kingdom_id <= 0) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid park']);
+                exit;
+            }
+            $kingdom_id = $park_kingdom_id;
+        }
+
+        // Which permission FAMILY each action belongs to. The concrete key is resolved
+        // per-scope by PermissionKeyFor, so a park-scoped request is checked against
+        // park.officer.* rather than kingdom.officer.* -- checking a kingdom key against
+        // a park id simply fails, which is what refused every park officer before.
+        $action_kind = [
+            'list'             => 'set',
+            'transition'       => 'set',
+            'vacate'           => 'vacate',
+            'vacateholder'     => 'vacate',
+            'vacateall'        => 'vacate',
+            'createposition'   => 'position',
+            'editposition'     => 'position',
+            'reorderpositions' => 'position',
+            'reclassify'       => 'position',
+            'retire'           => 'position',
+            'reinstate'        => 'position',
+            'roles'            => 'position',
+            'permissions'      => 'position',
+            'addhistory'       => 'history',
+            'edithistory'      => 'history',
+            'deletehistory'    => 'history',
+        ];
+
+        if (!isset($action_kind[$action])) {
+            echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+            exit;
+        }
+
+        $scope             = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id          = ($park_id > 0) ? $park_id : $kingdom_id;
+        $permission_park_id = $park_id;
+
+        // SECURITY: ork_officer_position is a per-KINGDOM registry, not per-park.
+        // RetirePosition vacates EVERY holder of a position ACROSS EVERY SCOPE in the
+        // kingdom, so one park officer retiring a shared position would remove officers
+        // from every other park. Gate the 'position' family at KINGDOM scope always,
+        // against the DERIVED $kingdom_id (never the URL value -- see the park/kingdom
+        // derivation above). Occupancy families (set/vacate/history) are genuinely
+        // per-scope and stay exactly as they were.
+        //
+        // PermissionKeyFor() now resolves the 'position' family to the kingdom key on its
+        // own, and park.officer.position.manage no longer exists, so this block is
+        // belt-and-braces rather than the only thing holding the line -- the domain
+        // (reachable through the JSON service, which bypasses this controller entirely)
+        // enforces the same rule in OfficerPosition::authorizePositionFamily().
+        if ($action_kind[$action] === 'position') {
+            $scope              = 'kingdom';
+            $scope_id           = $kingdom_id;
+            $permission_park_id = 0;
+        }
+
+        // SECURITY: the LEGACY authority tier this gate falls back to MIRRORS the tier the
+        // domain method behind each action already demands -- no looser (this gate would
+        // then be decorative) and no STRICTER (the console would refuse an officer work
+        // the same endpoint performs, since OfficerPosition is exposed on the JSON service
+        // and does not pass through this controller at all).
+        //
+        // Verified against system/lib/ork3/class.OfficerPosition.php: CreatePosition
+        // authorizes at AUTH_CREATE -- it mints a new office and binds an arbitrary RBAC
+        // permission set to it, the same weight as the role administration that
+        // KingdomAjax::rbac() and addauth/removeauth bridge at AUTH_CREATE. EditPosition
+        // (also behind 'reclassify'), ReorderPositions, RetirePosition and ReinstatePosition
+        // all authorize at AUTH_EDIT, as do the occupancy families (set/vacate/history).
+        // 'roles'/'permissions' are read-only lists feeding the position editor, so they
+        // ride at the editor's tier.
+        //
+        // That CreatePosition tier predates this branch -- so pinning it here is a cheap
+        // pre-filter and defence in depth, not the closure of a live self-escalation; the
+        // domain already refused it.
+        //
+        // KNOWN GAP, deliberately not papered over here: RetirePosition is the
+        // kingdom-wide destructive verb (it vacates every holder across every scope) and
+        // still authorizes at only AUTH_EDIT in the domain. Raising it belongs in
+        // class.OfficerPosition.php; raising it HERE alone would only hide the button
+        // while leaving the JSON service wide open.
+        $legacy_role = ($action === 'createposition') ? AUTH_CREATE : AUTH_EDIT;
+
+        // edithistory/deletehistory are deliberately looser HERE and stricter in the
+        // domain: their methods authorize against the ROW's own kingdom and park, which
+        // this controller does not know. This gate is a cheap pre-filter, not the
+        // authority. Do not "fix" the apparent inconsistency by trusting the payload.
+        $this->load_model('OfficerPosition');
+        if (!$this->Authorization->has_permission_or_authority(
+            $uid,
+            $this->OfficerPosition->permission_key_for($action_kind[$action], $permission_park_id),
+            $scope,
+            $scope_id,
+            $legacy_role
+        )) {
+            echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
+            exit;
+        }
+
+        $this->load_model('RBACService');
+
+        switch ($action) {
+            case 'list':         $this->actionList($kingdom_id, $park_id, $uid);
+                break;
+            case 'transition':    $this->actionTransition($kingdom_id, $park_id);
+                break;
+            case 'addhistory':    $this->actionAddHistory($kingdom_id, $park_id);
+                break;
+            case 'edithistory':   $this->actionEditHistory();
+                break;
+            case 'deletehistory': $this->actionDeleteHistory();
+                break;
+            case 'vacate':       $this->actionVacate($kingdom_id, $park_id, $uid);
+                break;
+            case 'vacateholder': $this->actionVacate($kingdom_id, $park_id, $uid);
+                break;
+            case 'vacateall':    $this->actionVacateAll($kingdom_id, $park_id);
+                break;
+            case 'createposition': $this->actionCreatePosition($kingdom_id, $park_id);
+                break;
+            case 'editposition': $this->actionEditPosition($kingdom_id, $park_id);
+                break;
+            case 'reorderpositions': $this->actionReorderPositions($kingdom_id, $park_id);
+                break;
+            case 'reclassify':   $this->actionReclassify($kingdom_id, $park_id);
+                break;
+            case 'retire':       $this->actionRetire($kingdom_id, $park_id);
+                break;
+            case 'reinstate':    $this->actionReinstate($kingdom_id, $park_id);
+                break;
+            case 'roles':        $this->actionRoles($kingdom_id);
+                break;
+            case 'permissions':  $this->actionPermissions();
+                break;
+        }
+        exit;
+    }
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    /**
+     * Map a service response array (['Status'=>0,'Error'=>..,'Detail'=>..]) into
+     * the JSON envelope. Status 0 = success. The user-facing rejection text is
+     * carried in 'Error' for these service methods (custom message is passed as
+     * the second InvalidParameter/NoAuthorization arg); fall back to 'Detail'.
+     */
+    private function emitServiceResult($r, $extraOnSuccess = [])
+    {
+        if (is_array($r) && isset($r['Status']) && (int)$r['Status'] === 0) {
+            echo json_encode(array_merge(['status' => 0], $extraOnSuccess));
+            return;
+        }
+        $status = (is_array($r) && isset($r['Status'])) ? (int)$r['Status'] : 1;
+        $msg    = '';
+        if (is_array($r)) {
+            if (isset($r['Error']) && is_string($r['Error']) && $r['Error'] !== '') {
+                $msg = $r['Error'];
+            } elseif (isset($r['Detail']) && is_string($r['Detail']) && $r['Detail'] !== '') {
+                $msg = $r['Detail'];
+            }
+        }
+        if ($msg === '') {
+            $msg = 'The request could not be completed.';
+        }
+        echo json_encode(['status' => $status ?: 1, 'error' => $msg]);
+    }
+
+    /** Normalize a POSTed permission-keys value (array or comma string) into a clean array. */
+    private function parsePermissionKeys($raw)
+    {
+        if (is_array($raw)) {
+            $keys = $raw;
+        } else {
+            $keys = explode(',', (string)$raw);
+        }
+        $out = [];
+        foreach ($keys as $k) {
+            $k = trim((string)$k);
+            if ($k !== '') {
+                $out[] = $k;
+            }
+        }
+        return array_values(array_unique($out));
+    }
+
+    /** Build the rbac_choice array from POST (mode + role_id / permission_keys). */
+    private function buildRbacChoice()
+    {
+        $mode = strtolower(trim($_POST['RbacMode'] ?? ''));
+        if ($mode === 'custom') {
+            return ['mode' => 'custom', 'permission_keys' => $this->parsePermissionKeys($_POST['PermissionKeys'] ?? [])];
+        }
+        if ($mode === 'existing') {
+            return ['mode' => 'existing', 'role_id' => (int)($_POST['RoleId'] ?? 0)];
+        }
+        if ($mode === 'none') {
+            return ['mode' => 'none'];
+        }
+        return null;
+    }
+
+    /** Human-readable date or '' (never raw ISO with a T). */
+    private function humanDate($value)
+    {
+        $value = trim((string)$value);
+        if ($value === '' || $value === '0000-00-00' || $value === '0000-00-00 00:00:00') {
+            return '';
+        }
+        $ts = strtotime($value);
+        if ($ts === false) {
+            return '';
+        }
+        return date('M j, Y', $ts);
+    }
+
+    /** Y-m-d for a date input, or '' — the machine-readable twin of humanDate(). */
+    private function isoDate($value)
+    {
+        $value = trim((string)$value);
+        if ($value === '' || strpos($value, '0000-00-00') === 0) {
+            return '';
+        }
+        $ts = strtotime($value);
+        if ($ts === false) {
+            return '';
+        }
+        return date('Y-m-d', $ts);
+    }
+
+    /** Compose a persona/name display string from a get_officers_for_display row. */
+    private function personaLabel($row)
+    {
+        $persona = trim((string)($row['Persona'] ?? ''));
+        if ($persona !== '') {
+            return $persona;
+        }
+        $name = trim(trim((string)($row['GivenName'] ?? '')) . ' ' . trim((string)($row['Surname'] ?? '')));
+        if ($name !== '') {
+            return $name;
+        }
+        return trim((string)($row['UserName'] ?? ''));
+    }
+
+    // ============================================================
+    // ACTIONS
+    // ============================================================
+
+    private function actionList($kingdom_id, $park_id, $uid = 0)
+    {
+        // P4: two intentionally-separate sources. GetPositions is the full registry
+        // (drives vacant positions + the retired bucket — rows with no occupancy at
+        // all), while get_officers_for_display is scope occupancy (who currently holds
+        // each slot). They cannot be safely collapsed into one query without dropping
+        // vacant/retired registry rows, so they stay distinct.
+        $display = $this->OfficerPosition->get_officers_for_display($kingdom_id, $park_id, false);
+        $positions = $this->OfficerPosition->GetPositions($kingdom_id, true, null);
+
+        // Term dates and the position's bound permission set are both fetched ONCE
+        // for the whole list, never per row — see the two helpers below.
+        $terms   = $this->termIndex($kingdom_id, $park_id);
+        $roleMap = $this->customRoleIndex($kingdom_id);
+
+        // Index the registry rows so we can attach full POS metadata to each entry.
+        $regByPos = [];
+        foreach ($positions as $pos) {
+            $regByPos[(int)$pos['PositionId']] = $pos;
+        }
+
+        // Index display rows by position_id, grouped by classification.
+        $crownOcc = [];      // position_id => single occupant row
+        $supportingOcc = []; // position_id => [occupant rows]
+        foreach (($display['crown'] ?? []) as $row) {
+            $pid = (int)$row['PositionId'];
+            if ((int)$row['MundaneId'] > 0) {
+                $crownOcc[$pid] = $row;
+            } elseif (!isset($crownOcc[$pid])) {
+                $crownOcc[$pid] = null; // vacant placeholder slot present
+            }
+        }
+        foreach (($display['supporting'] ?? []) as $row) {
+            $pid = (int)$row['PositionId'];
+            if (!isset($supportingOcc[$pid])) {
+                $supportingOcc[$pid] = [];
+            }
+            if ((int)$row['MundaneId'] > 0) {
+                $supportingOcc[$pid][] = $row;
+            }
+        }
+
+        $crown = [];
+        $supporting = [];
+        $retired = [];
+
+        foreach ($positions as $pos) {
+            $pid = (int)$pos['PositionId'];
+            $base = $this->posBase($pos, $roleMap);
+
+            if ($pos['RetiredAt'] !== null && $pos['RetiredAt'] !== '') {
+                $retired[] = $base;
+                continue;
+            }
+
+            if ($pos['Classification'] === 'supporting') {
+                // One office holds one person (Plan 1, Task 8). Take the first
+                // occupied row; insertOfficerRow now refuses a second holder, so
+                // there can only be one.
+                $row = null;
+                foreach (($supportingOcc[$pid] ?? []) as $candidate) {
+                    if ((int)$candidate['MundaneId'] > 0) {
+                        $row = $candidate;
+                        break;
+                    }
+                }
+                $base['Occupant'] = $row ? $this->occupant($row, $terms) : null;
+                $supporting[] = $base;
+            } else {
+                $row = $crownOcc[$pid] ?? null;
+                $base['Occupant'] = ($row && (int)$row['MundaneId'] > 0) ? $this->occupant($row, $terms) : null;
+                $crown[] = $base;
+            }
+        }
+
+        // Blocker-2 companion (dead-control cleanup): a park console's $mo_can_manage is
+        // a page-level "you may open this console" gate -- Admin_park.tpl hardcodes it
+        // true because the route already checked park authority -- so a park-ONLY
+        // officer can open Manage Officers and see Create/Edit/Reclassify/Retire/reorder
+        // controls the 'position' family gate above now refuses (that gate is
+        // kingdom-scoped, matching what ork_officer_position actually is). Rather than
+        // let those clicks 400 the console, tell the client whether THIS user actually
+        // holds kingdom-scope position-management authority, via the SAME check the
+        // gate uses, so it can hide rather than disable-on-click. Kingdom console users
+        // are unaffected: Admin_kingdom.tpl already requires kingdom.officer.position.manage
+        // just to reach this partial at all, so this is always true there.
+        //
+        // AUTH_EDIT is deliberate: it is the LOWEST tier any 'position' action bridges at
+        // (only createposition needs AUTH_CREATE -- see the gate above), so this flag
+        // never hides controls the endpoint would honour. It is a hide-the-dead-controls
+        // hint, not the authority; the gate above still decides each request.
+        $can_manage_positions = $uid > 0 && $this->Authorization->has_permission_or_authority(
+            $uid,
+            $this->OfficerPosition->permission_key_for('position', 0),
+            'kingdom',
+            $kingdom_id,
+            AUTH_EDIT
+        );
+
+        echo json_encode(['status' => 0, 'data' => [
+            'crown'      => $crown,
+            'supporting' => $supporting,
+            'retired'    => $retired,
+            'CanManagePositions' => (bool)$can_manage_positions,
+        ]]);
+    }
+
+    /**
+     * Contracted POS object (camelCase keys) from a registry row.
+     *
+     * $roleMap is customRoleIndex()'s role_id => [Name, PermissionKeys] map. It is
+     * what makes the edit form round-trip: without the position's own permission
+     * keys the client cannot preselect the "custom" RBAC mode, and re-saving a
+     * custom office overwrote its permission set with whatever was left in the grid.
+     */
+    private function posBase($pos, $roleMap = [])
+    {
+        $role_id = (int)$pos['RbacRoleId'];
+        $canonical_key = (string)$pos['CanonicalKey'];
+
+        // RbacMode mirrors the three modes the create/edit form posts back:
+        //   none     — no role bound; the holder gains no extra access.
+        //   custom   — bound to the kingdom-owned role this position auto-created
+        //              (CreatePosition names it 'officer:' . canonical_key).
+        //   existing — bound to a shared system role or a reused kingdom role.
+        $rbac_mode = 'existing';
+        $permission_keys = [];
+        if ($role_id <= 0) {
+            $rbac_mode = 'none';
+        } elseif (isset($roleMap[$role_id])) {
+            $permission_keys = $roleMap[$role_id]['PermissionKeys'];
+            if ($roleMap[$role_id]['Name'] === 'officer:' . $canonical_key) {
+                $rbac_mode = 'custom';
+            }
+        }
+
+        return [
+            'PositionId'    => (int)$pos['PositionId'],
+            'CanonicalKey'  => $pos['CanonicalKey'],
+            'DisplayTitle'  => $pos['DisplayTitle'],
+            'Title'         => $pos['Title'],
+            'TitleAlias'    => (string)($pos['TitleAlias'] ?? ''),
+            'Classification' => $pos['Classification'],
+            'IsPinned'      => (int)$pos['IsPinned'],
+            'IsSystem'      => (int)$pos['IsSystem'],
+            'RbacRoleId'    => $role_id,
+            'RbacMode'      => $rbac_mode,
+            'PermissionKeys' => $permission_keys,
+            'SortOrder'     => (int)$pos['SortOrder'],
+            'ParentPositionId' => isset($pos['ParentPositionId']) && $pos['ParentPositionId'] !== null ? (int)$pos['ParentPositionId'] : null,
+            'HideWhenVacant'   => (int)($pos['HideWhenVacant'] ?? 0),
+            'RetiredAt'     => $this->humanDate($pos['RetiredAt'] ?? ''),
+        ];
+    }
+
+    /**
+     * Contracted occupant object from a get_officers_for_display row.
+     *
+     * Term dates come from $terms (termIndex()). The create form makes term start
+     * required, so an officer card that printed an empty term was showing a blank
+     * for a value the user had just been forced to supply. Both a display string
+     * (TermStart/TermEnd, human-formatted, never raw ISO) and the underlying
+     * Y-m-d value (TermStartRaw/TermEndRaw, for date inputs) are returned; an open
+     * term has an empty TermEnd, which the card renders as "(current)".
+     */
+    private function occupant($row, $terms = [])
+    {
+        $mundane_id = (int)$row['MundaneId'];
+        $key = $mundane_id . '|' . (string)($row['CanonicalKey'] ?? '');
+        $term = $terms[$key] ?? ['StartDate' => '', 'EndDate' => ''];
+
+        return [
+            'MundaneId'    => $mundane_id,
+            'Persona'      => $this->personaLabel($row),
+            'TermStart'    => $this->humanDate($term['StartDate']),
+            'TermEnd'      => $this->humanDate($term['EndDate']),
+            'TermStartRaw' => $this->isoDate($term['StartDate']),
+            'TermEndRaw'   => $this->isoDate($term['EndDate']),
+        ];
+    }
+
+    /**
+     * mundane_id|canonical_key => ['StartDate'=>..,'EndDate'=>..] for the scope.
+     *
+     * get_officers_for_display returns occupancy only; the term itself lives in
+     * ork_officer_history, so it is read through the existing Kingdom/Park officer
+     * history model call — ONE query for the whole list rather than one per card,
+     * and no SQL in the controller.
+     *
+     * ork_officer_history stores one row per term, so a person who has held the
+     * same office more than once has several. The current term is the open one
+     * (no end date) with the latest start; if every term is closed, the latest
+     * start wins. History rows are keyed by canonical role key, so an occupant
+     * whose history predates the position registry simply has no term and renders
+     * exactly as it does today rather than borrowing another office's dates.
+     */
+    private function termIndex($kingdom_id, $park_id)
+    {
+        $kingdom_id = (int)$kingdom_id;
+        $park_id    = (int)$park_id;
+
+        if ($park_id > 0) {
+            $this->load_model('Park');
+            $res = $this->Park->get_officer_history($park_id);
+        } else {
+            $this->load_model('Kingdom');
+            $res = $this->Kingdom->get_officer_history($kingdom_id);
+        }
+
+        $rows = (is_array($res) && isset($res['History']) && is_array($res['History'])) ? $res['History'] : [];
+
+        $out = [];
+        foreach ($rows as $row) {
+            $mundane_id = (int)($row['MundaneId'] ?? 0);
+            $role       = trim((string)($row['Role'] ?? ''));
+            if ($mundane_id <= 0 || $role === '') {
+                continue;
+            }
+            $key   = $mundane_id . '|' . $role;
+            $start = $this->isoDate($row['StartDate'] ?? '');
+            $end   = $this->isoDate($row['EndDate'] ?? '');
+
+            if (!isset($out[$key])) {
+                $out[$key] = ['StartDate' => $start, 'EndDate' => $end];
+                continue;
+            }
+
+            $cur = $out[$key];
+            $cur_open = ($cur['EndDate'] === '');
+            $new_open = ($end === '');
+            if ($new_open !== $cur_open) {
+                // An open term always beats a closed one, whatever the start dates.
+                if ($new_open) {
+                    $out[$key] = ['StartDate' => $start, 'EndDate' => $end];
+                }
+                continue;
+            }
+            if (strcmp($start, $cur['StartDate']) > 0) {
+                $out[$key] = ['StartDate' => $start, 'EndDate' => $end];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * role_id => ['Name'=>..,'PermissionKeys'=>[..]] for this kingdom's custom roles.
+     *
+     * GetCustomRolesWithCounts already returns every kingdom-owned role WITH its
+     * permission records in a fixed number of queries, so the whole list costs the
+     * same whether the kingdom has three custom offices or thirty. Shared system
+     * roles are deliberately absent: a position bound to one is 'existing' mode, the
+     * client picks it from the role <select>, and its permission set is not editable
+     * from this screen (EditPosition rejects RBAC edits on pinned/system rows).
+     */
+    private function customRoleIndex($kingdom_id)
+    {
+        $map  = [];
+        $rows = $this->RBACService->GetCustomRolesWithCounts((int)$kingdom_id);
+        if (!is_array($rows)) {
+            return $map;
+        }
+        foreach ($rows as $role) {
+            $keys = [];
+            foreach (($role['Permissions'] ?? []) as $perm) {
+                $k = trim((string)($perm['Key'] ?? ''));
+                if ($k !== '') {
+                    $keys[] = $k;
+                }
+            }
+            $map[(int)$role['RoleId']] = [
+                'Name'           => (string)($role['Name'] ?? ''),
+                'PermissionKeys' => array_values(array_unique($keys)),
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * Move an office from one holder to another, or fill a vacant one.
+     *
+     * The wizard posts here once, from its final step. Every date is optional:
+     * the domain defaults OutgoingEndDate to today and TermStart to that end date,
+     * and skips the ordering check entirely when the office is vacant.
+     */
+    private function actionTransition($kingdom_id, $park_id)
+    {
+        $r = $this->OfficerPosition->TransitionOfficer([
+            'Token'             => $this->session->token,
+            'KingdomId'         => $kingdom_id,
+            'ParkId'            => $park_id,
+            'PositionId'        => (int)($_POST['PositionId'] ?? 0),
+            'MundaneId'         => (int)($_POST['MundaneId'] ?? 0),
+            'OutgoingEndDate'   => trim((string)($_POST['OutgoingEndDate'] ?? '')),
+            'OutgoingStartDate' => trim((string)($_POST['OutgoingStartDate'] ?? '')),
+            'TermStart'         => trim((string)($_POST['TermStart'] ?? '')),
+            'Note'              => trim((string)($_POST['Note'] ?? '')),
+        ]);
+        $this->emitServiceResult($r);
+    }
+
+    private function actionAddHistory($kingdom_id, $park_id)
+    {
+        $r = $this->OfficerPosition->AddHistoryTerm([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => (int)($_POST['PositionId'] ?? 0),
+            'MundaneId'  => (int)($_POST['MundaneId'] ?? 0),
+            'StartDate'  => trim((string)($_POST['StartDate'] ?? '')),
+            'EndDate'    => trim((string)($_POST['EndDate'] ?? '')),
+            'Note'       => trim((string)($_POST['Note'] ?? '')),
+        ]);
+        $this->emitServiceResult($r);
+    }
+
+    /**
+     * Scope is deliberately absent. EditHistoryTerm reads the row's own kingdom and
+     * park and gates on those; passing a caller-supplied scope here would be an
+     * invitation to trust it.
+     *
+     * StartDate/EndDate use array_key_exists semantics in the domain: key present
+     * (even empty) clears the date, key absent leaves it alone. Only forward keys
+     * the client actually sent.
+     */
+    private function actionEditHistory()
+    {
+        $request = [
+            'Token'            => $this->session->token,
+            'OfficerHistoryId' => (int)($_POST['OfficerHistoryId'] ?? 0),
+        ];
+        foreach (['StartDate', 'EndDate', 'Note'] as $field) {
+            if (array_key_exists($field, $_POST)) {
+                $request[$field] = trim((string)$_POST[$field]);
+            }
+        }
+        $this->emitServiceResult($this->OfficerPosition->EditHistoryTerm($request));
+    }
+
+    private function actionDeleteHistory()
+    {
+        $r = $this->OfficerPosition->DeleteHistoryTerm([
+            'Token'            => $this->session->token,
+            'OfficerHistoryId' => (int)($_POST['OfficerHistoryId'] ?? 0),
+        ]);
+        $this->emitServiceResult($r);
+    }
+
+    /**
+     * Vacate a single holder of an office.
+     *
+     * OfficerPosition::VacateOfficer REQUIRES a MundaneId, so both routes below
+     * remove exactly one person -- "clear the whole office" is not reachable
+     * from this console entry point (RetirePosition still uses the all-holders
+     * path internally when a position itself is retired). Both the 'vacate' and
+     * 'vacateholder' routes land here and behave identically -- there is no
+     * per-route parameter, because there is no per-route difference.
+     *
+     * The service rejects a member who does not currently hold the position
+     * with its own message, which reaches the client through the normal
+     * emitServiceResult path.
+     */
+    private function actionVacate($kingdom_id, $park_id, $uid)
+    {
+        $position_id = (int)($_POST['PositionId'] ?? 0);
+        if (!valid_id($position_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A valid position is required.']);
+            return;
+        }
+
+        $mundane_id = (int)($_POST['MundaneId'] ?? 0);
+        if (!valid_id($mundane_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A valid member is required to remove an officer.']);
+            return;
+        }
+
+        $r = $this->OfficerPosition->VacateOfficer([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+            'MundaneId'  => $mundane_id,
+        ]);
+        $this->emitServiceResult($r, ['data' => [
+            'PositionId' => $position_id,
+            'MundaneId'  => $mundane_id,
+            'Scope'      => 'holder',
+        ]]);
+    }
+
+    /**
+     * Clear every holder of an office in this scope. This is the console's
+     * primary Vacate control for crown offices -- the per-holder button is
+     * rendered only for non-crown positions -- so unlike actionVacate() above
+     * it takes no MundaneId at all; routed to OfficerPosition::VacateOffice,
+     * a separate verb from VacateOfficer precisely so a missing/stray
+     * MundaneId can never be what decides whether one person or the whole
+     * office gets cleared.
+     */
+    private function actionVacateAll($kingdom_id, $park_id)
+    {
+        $position_id = (int)($_POST['PositionId'] ?? 0);
+        if (!valid_id($position_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A valid position is required.']);
+            return;
+        }
+
+        $r = $this->OfficerPosition->VacateOffice([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+        ]);
+        $this->emitServiceResult($r, ['data' => [
+            'PositionId' => $position_id,
+            'MundaneId'  => 0,
+            'Scope'      => 'all',
+        ]]);
+    }
+
+    private function actionCreatePosition($kingdom_id, $park_id)
+    {
+        $title          = trim($_POST['Title'] ?? '');
+        $classification = strtolower(trim($_POST['Classification'] ?? ''));
+        $canonical_key  = trim($_POST['CanonicalKey'] ?? '');
+
+        if ($title === '') {
+            echo json_encode(['status' => 1, 'error' => 'A position title is required.']);
+            return;
+        }
+        if ($classification !== 'crown' && $classification !== 'supporting') {
+            echo json_encode(['status' => 1, 'error' => 'Classification must be crown or supporting.']);
+            return;
+        }
+        $rbac_choice = $this->buildRbacChoice();
+        if ($rbac_choice === null) {
+            echo json_encode(['status' => 1, 'error' => 'An RBAC role binding (existing role or custom permissions) is required.']);
+            return;
+        }
+
+        // "Reports To" nesting + hide-when-vacant. 0/'' = no parent (top-level).
+        $parent_raw = $_POST['ParentPositionId'] ?? '';
+        $parent_position_id = ($parent_raw === '' || (int)$parent_raw === 0) ? null : (int)$parent_raw;
+        $hide_when_vacant = (int)($_POST['HideWhenVacant'] ?? 0) ? 1 : 0;
+
+        $r = $this->OfficerPosition->CreatePosition([
+            'Token'            => $this->session->token,
+            'KingdomId'        => $kingdom_id,
+            'ParkId'           => $park_id,
+            'CanonicalKey'     => $canonical_key,
+            'Title'            => $title,
+            'Classification'   => $classification,
+            'RbacChoice'       => $rbac_choice,
+            'ParentPositionId' => $parent_position_id,
+            'HideWhenVacant'   => $hide_when_vacant,
+        ]);
+        // C1: a "success" carrying a non-positive PositionId means the INSERT failed
+        // (the service rolls back any orphaned custom role); surface it as an error.
+        if (is_array($r) && isset($r['Status']) && (int)$r['Status'] === 0) {
+            $new_pid = (int)($r['Detail'] ?? 0);
+            if ($new_pid <= 0) {
+                echo json_encode(['status' => 1, 'error' => 'The position could not be created. Please try again.']);
+                return;
+            }
+            $this->emitServiceResult($r, ['data' => ['PositionId' => $new_pid]]);
+        } else {
+            $this->emitServiceResult($r);
+        }
+    }
+
+    private function actionEditPosition($kingdom_id, $park_id)
+    {
+        $position_id = (int)($_POST['PositionId'] ?? 0);
+        if (!valid_id($position_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A valid position is required.']);
+            return;
+        }
+
+        // changed_by / editor_id are no longer accepted from the client: the
+        // domain forces them to the token-resolved actor.
+        $fields = [];
+
+        if (isset($_POST['Title'])) {
+            $fields['title'] = trim($_POST['Title']);
+        }
+        if (isset($_POST['TitleAlias'])) {
+            // '' clears the alias; never null (yapo/SQL semantics).
+            $fields['title_alias'] = trim($_POST['TitleAlias']);
+        }
+        if (isset($_POST['Classification'])) {
+            $fields['classification'] = strtolower(trim($_POST['Classification']));
+        }
+        if (isset($_POST['SortOrder']) && $_POST['SortOrder'] !== '') {
+            $fields['sort_order'] = (int)$_POST['SortOrder'];
+        }
+        // "Reports To" nesting + hide-when-vacant. Only applied when the POST key
+        // is present, so partial edits don't clobber the stored value.
+        if (isset($_POST['ParentPositionId'])) {
+            $pp = trim((string)$_POST['ParentPositionId']);
+            $fields['parent_position_id'] = ($pp === '' || (int)$pp === 0) ? null : (int)$pp;
+        }
+        if (isset($_POST['HideWhenVacant'])) {
+            $fields['hide_when_vacant'] = (int)$_POST['HideWhenVacant'] ? 1 : 0;
+        }
+        // RBAC rebinding: existing role => rbac_role_id; custom => permission_keys.
+        $mode = strtolower(trim($_POST['RbacMode'] ?? ''));
+        if ($mode === 'existing' && isset($_POST['RoleId'])) {
+            $fields['rbac_role_id'] = (int)$_POST['RoleId'];
+        } elseif ($mode === 'custom' && isset($_POST['PermissionKeys'])) {
+            $fields['permission_keys'] = $this->parsePermissionKeys($_POST['PermissionKeys']);
+        } elseif ($mode === 'none') {
+            $fields['rbac_role_id'] = 0;
+        }
+
+        $r = $this->OfficerPosition->EditPosition([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+            'Fields'     => $fields,
+        ]);
+        $this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
+    }
+
+    /**
+     * Batch reorder one sibling group in a single atomic call.
+     *
+     * The drag-and-drop list used to save as one editposition call per row, each
+     * writing a single SortOrder. A failure partway through left the list scrambled
+     * with no way for the client to know how far it got, so the whole group is now
+     * renumbered server-side in one transaction.
+     *
+     * POST:
+     *   ParentPositionId  int   0 (or absent/'') = the top-level group.
+     *   Order             ids   comma-separated string, or an array; first = topmost.
+     * Response: {status:0, data:{ParentPositionId:N, Order:[ids in applied order]}}
+     *           or the shared {status:N, error:'...'} envelope.
+     */
+    private function actionReorderPositions($kingdom_id, $park_id)
+    {
+        $parent_raw = $_POST['ParentPositionId'] ?? '';
+        $parent_position_id = (is_array($parent_raw) || trim((string)$parent_raw) === '')
+            ? 0 : (int)$parent_raw;
+
+        $raw_order = $_POST['Order'] ?? '';
+        $order = is_array($raw_order) ? $raw_order : explode(',', (string)$raw_order);
+        $position_ids = [];
+        foreach ($order as $value) {
+            if (is_array($value)) {
+                continue;
+            }
+            $value = trim((string)$value);
+            if ($value === '' || (int)$value <= 0) {
+                continue;
+            }
+            $position_ids[] = (int)$value;
+        }
+        if (count($position_ids) === 0) {
+            echo json_encode(['status' => 1, 'error' => 'At least one position is required to reorder.']);
+            return;
+        }
+
+        $r = $this->OfficerPosition->ReorderPositions([
+            'Token'              => $this->session->token,
+            'KingdomId'          => $kingdom_id,
+            'ParkId'             => $park_id,
+            'ParentPositionId'   => $parent_position_id,
+            'OrderedPositionIds' => $position_ids,
+        ]);
+        $this->emitServiceResult($r, ['data' => [
+            'ParentPositionId' => $parent_position_id,
+            'Order'            => $position_ids,
+        ]]);
+    }
+
+    private function actionReclassify($kingdom_id, $park_id)
+    {
+        $position_id    = (int)($_POST['PositionId'] ?? 0);
+        $classification = strtolower(trim($_POST['Classification'] ?? ''));
+        if (!valid_id($position_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A valid position is required.']);
+            return;
+        }
+        if ($classification !== 'crown' && $classification !== 'supporting') {
+            echo json_encode(['status' => 1, 'error' => 'Classification must be crown or supporting.']);
+            return;
+        }
+
+        $r = $this->OfficerPosition->EditPosition([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+            'Fields'     => ['classification' => $classification],
+        ]);
+        $this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
+    }
+
+    private function actionRetire($kingdom_id, $park_id)
+    {
+        $position_id = (int)($_POST['PositionId'] ?? 0);
+        if (!valid_id($position_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A valid position is required.']);
+            return;
+        }
+
+        $r = $this->OfficerPosition->RetirePosition([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+        ]);
+        // On success the service returns the list of vacated occupants in Detail so
+        // the UI can confirm what was cleared.
+        if (is_array($r) && isset($r['Status']) && (int)$r['Status'] === 0) {
+            $vacated = (isset($r['Detail']) && is_array($r['Detail'])) ? $r['Detail'] : [];
+            $this->emitServiceResult($r, ['data' => ['Vacated' => $vacated]]);
+        } else {
+            $this->emitServiceResult($r);
+        }
+    }
+
+    private function actionReinstate($kingdom_id, $park_id)
+    {
+        $position_id = (int)($_POST['PositionId'] ?? 0);
+        if (!valid_id($position_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A valid position is required.']);
+            return;
+        }
+
+        $r = $this->OfficerPosition->ReinstatePosition([
+            'Token'      => $this->session->token,
+            'KingdomId'  => $kingdom_id,
+            'ParkId'     => $park_id,
+            'PositionId' => $position_id,
+        ]);
+        $this->emitServiceResult($r, ['data' => ['PositionId' => $position_id]]);
+    }
+
+    private function actionRoles($kingdom_id)
+    {
+        // System roles (is_system=1, kingdom_id=0) + this kingdom's custom roles.
+        // GetAvailableRoles already returns kingdom_id=0 OR kingdom_id=$kingdom_id.
+        $roles = [];
+        $rows  = $this->RBACService->GetAvailableRoles($kingdom_id);
+        foreach ($rows as $row) {
+            $roles[] = [
+                'RoleId'      => (int)$row['RoleId'],
+                'Name'        => $row['Name'],
+                'DisplayName' => $row['DisplayName'],
+                'Description' => (string)($row['Description'] ?? ''),
+            ];
+        }
+        echo json_encode(['status' => 0, 'data' => $roles]);
+    }
+
+    private function actionPermissions()
+    {
+        // Every permission an officer position can be given, for the custom-permission-set
+        // builder. Each entry carries the registry's own human description (the previous
+        // payload dropped it, leaving the grid as a wall of bare checkbox labels)
+        // and an officer-facing group heading instead of the raw category slug.
+        //
+        // This used to offer GetPermissionsByScope('kingdom') only, which is 23 of the 79
+        // keys -- so the whole park scope (where every player.* permission lives), the
+        // event scope, and the unit scope could not be attached to any officer position.
+        // That restriction did not match how grants resolve: an officer position is held
+        // at kingdom scope, and RBACService::CheckPermissionCascade walks park -> kingdom
+        // and event/unit -> kingdom, so a kingdom-scope grant of player.edit or
+        // park.attendance.manage genuinely applies to every park in the kingdom. The
+        // kingdom's own role builder (Admin::roles) already offered all of them, so the
+        // two surfaces disagreed about what a role could contain.
+        //
+        // Global permissions stay out: they name installation-operator actions with no
+        // per-kingdom meaning, and CheckPermissionCascade deliberately does not route a
+        // scoped check up to global.
+        //
+        // Role-definition authority (kingdom.role.manage / kingdom.role.grant) stays out
+        // too: it is kingdom-scope, so the scope test above passes it, but
+        // OfficerPosition::ValidatePermissionKeys() rejects it on save. Offering a key
+        // the writer refuses would fail every later edit of a position whose role already
+        // carries it, so the offer is filtered from the same list the writer enforces.
+        $excluded = $this->OfficerPosition->excluded_permission_keys();
+        $all = array_filter(
+            $this->RBACService->GetAllPermissions(), // key => [display_name, description, scope_type, category]
+            function ($def, $key) use ($excluded) {
+                if (in_array((string)$key, $excluded, true)) {
+                    return false;
+                }
+
+                return ($def[2] ?? '') !== 'global';
+            },
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        // Bucket by slug first so the groups can be emitted in a deliberate order
+        // (settings/officers/players first, access control last) rather than in
+        // whatever order the registry happens to declare its keys.
+        $buckets = [];
+        foreach ($all as $key => $def) {
+            $slug = (string)($def[3] ?? '');
+            $buckets[$slug][] = [
+                'Key'           => $key,
+                'DisplayName'   => (string)($def[0] ?? $key),
+                'Description'   => (string)($def[1] ?? ''),
+                'CategoryKey'   => $slug,
+                'Category'      => $this->permissionCategoryLabel($slug),
+                // Which org unit the permission acts on. The builder groups by category,
+                // not scope, so this is what tells a reader that "Manage Attendance"
+                // applies to the kingdom's parks rather than to the kingdom itself.
+                'ScopeType'     => (string)($def[2] ?? ''),
+            ];
+        }
+
+        $ordered = array_keys(self::$permissionCategoryLabels);
+        foreach (array_keys($buckets) as $slug) {
+            if (!in_array($slug, $ordered, true)) {
+                $ordered[] = $slug;
+            }
+        }
+
+        $out = [];
+        foreach ($ordered as $slug) {
+            if (!isset($buckets[$slug])) {
+                continue;
+            }
+            $group = $buckets[$slug];
+            usort($group, function ($a, $b) {
+                return strcasecmp($a['DisplayName'], $b['DisplayName']);
+            });
+            foreach ($group as $row) {
+                $out[] = $row;
+            }
+        }
+
+        echo json_encode(['status' => 0, 'data' => $out]);
+    }
+
+    /** Officer-facing heading for an internal permission-category slug. */
+    private function permissionCategoryLabel($slug)
+    {
+        $slug = trim((string)$slug);
+        if ($slug === '') {
+            return 'Other';
+        }
+        if (isset(self::$permissionCategoryLabels[$slug])) {
+            return self::$permissionCategoryLabels[$slug];
+        }
+        return ucwords(str_replace(['_', '.', '-'], ' ', $slug));
+    }
+}

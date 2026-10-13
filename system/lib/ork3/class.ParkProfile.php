@@ -330,7 +330,11 @@ class ParkProfile extends Ork3
         if ($rowStatus === 'published' || $isAdmin || $creatorId === $mundaneId) {
             return true;
         }
-        $canEditRow = $mundaneId > 0 && Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT);
+        // Draft rows are visible to whoever may edit the event -- mirrors
+        // KingdomProfile::canSeeDraftEventRow(). Left on the legacy event grant, an Event
+        // Coordinator holding event.edit through a role could edit a draft they were
+        // never shown.
+        $canEditRow = $mundaneId > 0 && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.edit', 'event', $eventId, AUTH_EDIT);
         if (!$canEditRow && $mundaneId > 0) {
             $this->db->Clear();
             $_staffRow = $this->db->DataSet(

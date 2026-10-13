@@ -1,0 +1,35 @@
+{
+  // Scoped ignore list for `bin/ork-db schema-diff` (mirror vs rendered sandbox).
+  //
+  // The mirror is a shared, constantly-drifting copy of production: a schema-drift audit
+  // found 89 tables in it belonging to branches that have not shipped. Most of that noise
+  // is whole tables, which schema-diff already reports separately as ONLY mirror:. This
+  // file covers the harder case — a COLUMN another branch added to a table the repo does
+  // define. Without it, ork_mundane can never match, and
+  // SchemaDiffIntegrationTest::testSchemaDiffCriticalTablesMatchAfterApply is red no matter
+  // what this repository does.
+  //
+  // This is the "scoped ignore list" that manifests/fingerprints.json5 recommends in place
+  // of baselining a whole-schema hash: narrow, per-column, and each entry carrying a reason.
+  //
+  // Rules SchemaDiff enforces:
+  //   * every entry needs a non-empty `reason` — an entry without one is an error.
+  //   * an entry is STALE, and fails the check, if the column has disappeared from the
+  //     mirror or the repo has since started defining it. An allowance cannot outlive the
+  //     drift it was written for.
+  //   * every allowance is printed as a NOTE on every run, pass or fail, so the list can
+  //     never grow unnoticed.
+  //
+  // Do NOT add an entry for a column the repo SHOULD define. That is a real gap: write the
+  // migration instead.
+  "mirror_only_columns": {
+    "ork_mundane": {
+      "player_since_override": {
+        "reason": "Present on the production mirror only. Nothing in this repository references it — no migration creates it, no query in system/lib/ork3 names it — so it belongs to work that has not merged. Delete this entry when that branch lands with its migration."
+      },
+      "pronoun_freetext": {
+        "reason": "Present on the production mirror only; the free-text pronoun feature has not merged here. No migration in db-migrations/ adds the column and no code in system/lib/ork3 reads it. Delete this entry when that branch lands with its migration."
+      }
+    }
+  }
+}

@@ -1,0 +1,1152 @@
+/* ==========================================================================
+   Kingdom Admin console -- shared chrome
+   ==========================================================================
+   Lifted verbatim out of the inline <style> block in Admin_kingdom.tpl so the
+   browser can cache it instead of re-parsing ~484 lines on every page load, and
+   so the stylesheet is visible to bin/check-css-boundaries.sh.
+   Light-mode values are still literal hex here; that is how they arrived, and
+   converting them to --ork-* tokens is a separate change with its own risk.
+   ========================================================================== */
+
+/* Hero */
+.ka-hero {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    margin-top: 3px;
+    min-height: 140px;
+    background: linear-gradient(135deg, #1a365d 0%, #2d3748 60%, #1a202c 100%);
+}
+.ka-hero-bg {
+    position: absolute;
+    top: -10px; left: -10px; right: -10px; bottom: -10px;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.12;
+    filter: blur(6px);
+}
+.ka-hero-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    padding: 28px 32px;
+    gap: 22px;
+}
+.ka-heraldry-frame {
+    width: 72px; height: 72px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.25);
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.08);
+}
+.ka-heraldry-frame img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    border: none; padding: 0; margin: 0;
+    max-width: none;
+}
+.ka-hero-info { flex: 1; min-width: 0; }
+.ka-hero-title {
+    font-size: 24px; font-weight: 700; color: #fff; margin: 0 0 4px;
+    background: transparent; border: none; padding: 0; border-radius: 0;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+/* Back link + linked title. Matches .ar-hero-back on the roles page so the two
+   admin surfaces get out the same way. */
+.ka-hero-back {
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 4px;
+    color: rgba(255,255,255,0.7); font-size: 12px; text-decoration: none;
+    transition: color 0.15s;
+}
+.ka-hero-back:hover, .ka-hero-back:focus-visible { color: #fff; text-decoration: none; }
+.ka-hero-title a { color: inherit; text-decoration: none; }
+.ka-hero-title a:hover { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.ka-hero-back:focus-visible, .ka-hero-title a:focus-visible {
+    outline: 2px solid rgba(255,255,255,0.85); outline-offset: 3px; border-radius: 3px;
+}
+.ka-hero-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 10px; }
+.ka-hero-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.ka-hero-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
+    color: rgba(255,255,255,0.85); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.05em; text-transform: uppercase; border-radius: 20px; padding: 3px 10px;
+}
+.ka-hero-stats {
+    display: flex; gap: 20px; flex-shrink: 0; align-items: center;
+}
+.ka-hero-stat { text-align: center; }
+.ka-hero-stat-val {
+    display: block; font-size: 28px; font-weight: 700; color: #fff; line-height: 1;
+}
+.ka-hero-stat-lbl {
+    display: block; font-size: 11px; color: rgba(255,255,255,0.55); text-transform: uppercase;
+    letter-spacing: 0.05em; margin-top: 3px;
+}
+.ka-hero-stat-div { width: 1px; height: 40px; background: rgba(255,255,255,0.2); }
+
+/* Trend stats row — reuses cp-ts pattern with ka- prefix */
+.ka-ts-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.ka-ts-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px; display: flex; align-items: flex-start; gap: 14px; }
+.ka-ts-icon { width: 38px; height: 38px; border-radius: 8px; background: #ebf4ff; color: #3182ce; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.ka-ts-body { min-width: 0; }
+.ka-ts-num { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ka-ts-val { font-size: 22px; font-weight: 700; color: #1a202c; line-height: 1; }
+.ka-ts-trend { font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.ka-ts-up   { background: #f0fff4; color: #276749; }
+.ka-ts-down { background: #fff5f5; color: #c53030; }
+.ka-ts-flat { color: #a0aec0; background: #f7fafc; }
+.ka-ts-lbl { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
+.ka-ts-sub { font-size: 11px; color: #a0aec0; margin-top: 2px; }
+/* Queue cards. A card with work on it is a link to the report that lists it; a
+   card that is clear goes quiet so the eye skips it. */
+.ka-ts-card-link { text-decoration: none; color: inherit; transition: border-color 0.15s, box-shadow 0.15s, background 0.15s; }
+.ka-ts-card-link:hover {
+    border-color: #4299e1; background: #ebf8ff;
+    box-shadow: 0 2px 8px rgba(66,153,225,0.15);
+    text-decoration: none; color: inherit;
+}
+.ka-ts-card-clear { background: #fbfdfe; }
+.ka-ts-card-clear .ka-ts-icon { background: #f0fff4; color: var(--ork-badge-green-text); }
+.ka-ts-card-clear .ka-ts-val  { font-size: 18px; color: var(--ork-badge-green-text); }
+.ka-ts-card-clear .ka-ts-lbl  { color: #718096; font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 13px; }
+html[data-theme="dark"] .ka-ts-card-link:hover { background: var(--ork-bg-tertiary); border-color: #4299e1; box-shadow: 0 2px 8px rgba(66,153,225,0.25); }
+/* These three must out-specify the generic dark .ka-ts-* rules ~300 lines below,
+   which carry the same (0,2,1) weight and therefore win on source order alone.
+   Doubling the class on the card, and keeping the descendant overrides for icon
+   and value, is what makes the clear state survive in dark mode -- without them a
+   clear card is pixel-identical to an open one. */
+html[data-theme="dark"] .ka-ts-card.ka-ts-card-clear { background: var(--ork-bg); }
+html[data-theme="dark"] .ka-ts-card-clear .ka-ts-icon { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+html[data-theme="dark"] .ka-ts-card-clear .ka-ts-val  { color: var(--ork-badge-green-text); }
+html[data-theme="dark"] .ka-ts-card-clear .ka-ts-lbl  { color: var(--ork-text-secondary); }
+/* Third queue state: the count could not be computed at all. .ka-ts-card-clear is
+   GREEN and means "done"; a park that has never recorded a single signin has no
+   "days since the last one", and painting that green would report an all-clear for
+   a question nobody answered. Grey, em dash, no tick. Same doubled-class trick as
+   the clear state above so the generic dark .ka-ts-* rules further down do not win
+   on source order -- without it an unknown card is identical to an open one. */
+.ka-ts-card-unknown .ka-ts-icon { background: #f7fafc; color: #a0aec0; }
+.ka-ts-card-unknown .ka-ts-val  { font-size: 18px; color: #a0aec0; }
+.ka-ts-card-unknown .ka-ts-lbl  { color: #718096; font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 13px; }
+html[data-theme="dark"] .ka-ts-card.ka-ts-card-unknown { background: var(--ork-bg); }
+html[data-theme="dark"] .ka-ts-card-unknown .ka-ts-icon { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-ts-card-unknown .ka-ts-val  { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-ts-card-unknown .ka-ts-lbl  { color: var(--ork-text-secondary); }
+@media (max-width: 900px) { .ka-ts-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .ka-ts-row { grid-template-columns: 1fr; } }
+
+/* Layout */
+.ka-layout { display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start; }
+@media (max-width: 900px) { .ka-layout { grid-template-columns: 1fr; } }
+
+/* Sections stack in one column. They used to sit in a 1fr 1fr grid, where every
+   row is as tall as its tallest section -- so a one-tile section beside a
+   five-tile one left a column of dead space, and tiles were squeezed to ~110px
+   inside a half-width column. Full width lets the tile grid below breathe. */
+.ka-sections-grid { display: grid; grid-template-columns: 1fr; gap: 22px; }
+.ka-section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+    color: #718096; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.ka-section-title::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
+/* Tiles within a section. Grid, not flex-grow: with `flex: 1 1 33.333%` a fourth
+   tile wrapped onto its own row and stretched to full width, so Manage Officers,
+   Manage Awards and Corpora Test Results rendered as wide cards purely from wrap
+   arithmetic -- which reads as importance they do not have. */
+.ka-action-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 10px; }
+@media (max-width: 600px) { .ka-action-tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+.ka-action-card {
+    display: flex; flex-direction: column; align-items: flex-start;
+    padding: 14px 16px; background: #fff; border: 1.5px solid #e2e8f0;
+    border-radius: 8px; text-decoration: none; color: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    cursor: pointer; font-family: inherit;
+}
+.ka-action-card:hover {
+    border-color: #4299e1; box-shadow: 0 2px 8px rgba(66,153,225,0.15); background: #ebf8ff;
+    text-decoration: none; color: inherit;
+}
+
+/* Retired action. The feature is GONE, not merely discouraged: commit 28d23853 made
+   the tournament tile an inert <div> with no href and no onclick, because a link
+   would send an officer to a builder that no longer exists. The tile is kept, muted,
+   only so its absence does not read as "the ORK lost tournaments" instead of "this
+   is coming" -- see the template comment beside the markup.
+   (An earlier revision of this comment claimed the feature "still WORKS and stays
+   reachable" and hover kept a border change to read as clickable. Both were true of
+   the deprecated-but-live tile that shipped first, and neither has been true since
+   the tile went inert.)
+   So: muted surface, drained icon, an "In development" chip that says why, the
+   default cursor, and NO hover response at all. A hand cursor or a hover highlight
+   on an element that cannot be activated is an affordance that lies. */
+/* ORK-Administrator-only action (-orkadmin) shares this treatment. It is a
+   different reason -- the feature is alive and someone CAN run it, just not this
+   viewer -- but the same requirement: a tile that this viewer cannot activate must
+   not wear an affordance that says it can. One set of declarations for both so the
+   two inert tiles cannot drift apart. */
+.ka-action-card-deprecated,
+.ka-action-card-orkadmin { background: #f7fafc; border-color: #edf2f7; cursor: default; }
+.ka-action-card-deprecated .ka-action-label,
+.ka-action-card-orkadmin .ka-action-label { color: #718096; }
+.ka-action-card-deprecated .ka-action-desc,
+.ka-action-card-orkadmin .ka-action-desc  { color: #a0aec0; }
+.ka-action-card-deprecated .ka-action-icon,
+.ka-action-card-orkadmin .ka-action-icon  { filter: grayscale(1); opacity: 0.55; }
+/* Restates the resting values rather than being deleted: without it the generic
+   .ka-action-card:hover above would repaint the tile blue on hover. */
+.ka-action-card-deprecated:hover,
+.ka-action-card-orkadmin:hover {
+    background: #f7fafc; border-color: #edf2f7; box-shadow: none;
+}
+.ka-dep-chip,
+.ka-admin-chip {
+    display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 3px;
+    background: #e2e8f0; color: #4a5568; font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* ORK-Administrator-only action, shown to everyone else as an inert tile.
+   The muted surface, drained icon, default cursor and neutralized hover come from
+   the shared -deprecated/-orkadmin rules above; only the tooltip behaviour is
+   specific to this tile. The explanation rides on data-tip (never title: native
+   tooltips are banned project-wide) and the chip names the gate at a glance for
+   anyone who never hovers.
+
+   The tile renders as a focusable <button aria-disabled="true"> carrying the
+   sentence in aria-label, so the people the gate excludes reach it by keyboard and
+   hear why. The generic [data-tip] tooltip in revised.css only matches
+   :hover::after, so the keyboard path has to restate the tip's own styling here.
+   !important on the wrap declarations: that generic rule is
+   [data-tip]:not(...) x5:hover::after -- specificity (0,7,1) -- and sets
+   min-width:max-content, which beats a plain class selector's max-width and would
+   otherwise render this 92-character sentence as one line overhanging the console.
+   Same precedent as .kn-emod-check-label in revised.css. */
+.ka-action-card-orkadmin[data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4;
+    padding: 6px 10px; border-radius: 4px;
+    pointer-events: none; z-index: var(--z-tooltip);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+.ka-action-card-orkadmin[data-tip]:hover::after,
+.ka-action-card-orkadmin[data-tip]:focus-visible::after {
+    min-width: 0 !important;
+    width: max-content;
+    max-width: 260px !important;
+    white-space: normal !important;
+    text-align: left;
+}
+/* Keyboard focus. The cards are <button>/<a> so they were focusable already, but
+   the only indicator was the UA default ring on top of a fully custom card. */
+.ka-action-card:focus-visible,
+.ka-report-list a:focus-visible,
+.ka-ts-card-link:focus-visible {
+    outline: 2px solid #2b6cb0; outline-offset: 2px;
+}
+html[data-theme="dark"] .ka-action-card:focus-visible,
+html[data-theme="dark"] .ka-report-list a:focus-visible,
+html[data-theme="dark"] .ka-ts-card-link:focus-visible {
+    outline-color: var(--ork-link-bright);
+}
+.ka-action-icon {
+    width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; font-size: 15px; margin-bottom: 8px; flex-shrink: 0;
+}
+.ka-action-icon-blue   { background: #ebf8ff; color: #3182ce; }
+.ka-action-icon-green  { background: #f0fff4; color: #276749; }
+.ka-action-icon-orange { background: #fffaf0; color: #c05621; }
+.ka-action-icon-purple { background: #faf5ff; color: #6b46c1; }
+.ka-action-icon-red    { background: #fff5f5; color: #c53030; }
+.ka-action-icon-gray   { background: #f7fafc; color: #4a5568; }
+.ka-action-icon-gold   { background: #fffbeb; color: #b7791f; }
+.ka-action-label { font-size: 13px; font-weight: 600; color: #2d3748; line-height: 1.3; width: 100%; text-align: left; }
+.ka-action-desc { font-size: 11px; color: #718096; margin-top: 3px; line-height: 1.4; width: 100%; text-align: left; }
+
+/* Sidebar cards */
+.ka-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden; margin-bottom: 24px; }
+.ka-card-header { padding: 14px 20px; border-bottom: 1px solid #e2e8f0; background: #f7fafc; display: flex; align-items: center; justify-content: space-between; }
+.ka-card-title {
+    font-size: 14px; font-weight: 700; color: #2d3748; display: flex; align-items: center; gap: 8px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; margin: 0;
+}
+/* Generic padded body for a .ka-card whose content isn't one of the
+   pre-padded list patterns above (.ka-report-list etc.) -- e.g. the Park
+   console's Officers card, which drops the Manage Officers partial's
+   markup straight in. Spacing only, no color, so no dark-mode override. */
+.ka-card-body { padding: 20px; }
+.ka-report-list { list-style: none; padding: 0; margin: 0; }
+.ka-report-list li { border-bottom: 1px solid #edf2f7; }
+.ka-report-list li:last-child { border-bottom: none; }
+.ka-report-list a {
+    display: flex; align-items: center; gap: 10px; padding: 10px 18px;
+    text-decoration: none; color: #2d3748; font-size: 13px; font-weight: 500;
+    transition: background 0.12s;
+}
+.ka-report-list a:hover { background: #ebf8ff; color: #2b6cb0; text-decoration: none; }
+.ka-report-list a i { width: 18px; text-align: center; color: #a0aec0; font-size: 13px; flex-shrink: 0; }
+.ka-report-list a span { flex: 1; }
+.ka-report-list-desc {
+    display: block; font-size: 11px; color: #a0aec0; font-weight: 400; margin-top: 2px;
+}
+.ka-report-filter-wrap { padding: 10px 14px; border-bottom: 1px solid #edf2f7; }
+.ka-report-filter {
+    width: 100%; box-sizing: border-box; padding: 6px 10px;
+    font-size: 12px; font-family: inherit; color: #2d3748;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
+}
+.ka-report-filter:focus { outline: none; border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(66,153,225,0.15); }
+.ka-report-empty { padding: 14px 18px; font-size: 12px; color: #a0aec0; }
+html[data-theme="dark"] .ka-report-filter-wrap { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-report-filter {
+    background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
+}
+html[data-theme="dark"] .ka-report-filter::placeholder { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-report-empty { color: var(--ork-text-muted); }
+
+.ka-report-section-lbl {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #a0aec0; padding: 8px 18px 4px; margin: 0;
+    background: transparent; border: none; border-radius: 0; text-shadow: none;
+}
+
+/* Modal overlay */
+.ka-overlay {
+    display: none; position: fixed; inset: 0; z-index: var(--z-modal);
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+    padding: 16px;
+    overflow: hidden;
+}
+.ka-overlay.ka-open { display: flex; }
+.ka-modal-box {
+    background: #fff; border-radius: 10px; width: 520px; max-width: 100%;
+    max-height: 80vh; height: auto; display: flex; flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: hidden;
+}
+/* Width modifiers. These replace the `style="width:NNNpx"` scattered across the
+   modal markup, and let partials/_manage_officers.tpl drop its private
+   .mo-modal-box copy (its three sub-modals are 560 / 520 / 460). Same (0,1,0)
+   weight as the base rule, so they must stay AFTER it -- source order is what
+   makes them win. The mobile block below still overrides all of them. */
+.ka-modal-box-sm  { width: 460px; }
+.ka-modal-box-md  { width: 520px; }
+.ka-modal-box-lg  { width: 560px; }
+.ka-modal-box-xl  { width: 700px; }
+.ka-modal-box-xxl { width: 760px; }
+/* Overlay stacking modifiers, so a sub-modal that must sit above an already-open
+   modal can use .ka-overlay instead of an inline position/z-index blob. */
+.ka-overlay-top     { z-index: var(--z-modal-top); }
+.ka-overlay-topmost { z-index: var(--z-help-overlay); }
+.ka-modal-header {
+    padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.ka-modal-title {
+    font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.ka-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; line-height: 1; padding: 2px 6px; }
+.ka-modal-close:hover { color: #2d3748; }
+.ka-modal-body { padding: 20px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+/* orkui.css sets a global `p { text-align: justify }` (0,0,1). In a 460-520px
+   modal column that opens word-space rivers through every explanatory paragraph.
+   (0,1,1) here, so it wins on specificity regardless of stylesheet order. Both
+   modal bodies are listed: .ka-modal-body (the thirteen kingdom modals, and
+   the Manage Officers sub-modals, which use the shared .ka-modal-* classes
+   exclusively) and .ka-mo-body (the Manage Officers host modal). */
+.ka-modal-body p,
+.ka-mo-body p { text-align: left; }
+.ka-modal-footer { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: #f7fafc; border-radius: 0 0 10px 10px; }
+
+/* Mobile: full-screen modals */
+@media (max-width: 600px) {
+    .ka-overlay { padding: 0; }
+    .ka-modal-box { width: 100% !important; max-width: 100%; max-height: 100vh; border-radius: 0; }
+    .ka-modal-footer { border-radius: 0; position: sticky; bottom: 0; }
+}
+
+/* Field styles */
+.ka-field { margin-bottom: 14px; }
+.ka-field label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 5px; }
+/* time and date joined the list for the Park Days recurrence form. They were
+   missing, so those two controls rendered as bare native widgets: no border, no
+   padding, wrong font size, and -- because the dark block below mirrors this
+   selector list -- white-on-white in dark mode. */
+.ka-field input[type=text], .ka-field input[type=url], .ka-field input[type=email], .ka-field input[type=password],
+.ka-field input[type=number], .ka-field input[type=time], .ka-field input[type=date],
+.ka-field select, .ka-field textarea {
+    width: 100%; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px;
+    font-size: 13px; color: #2d3748; background: #fff; box-sizing: border-box;
+}
+.ka-field input:focus, .ka-field select:focus, .ka-field textarea:focus {
+    outline: none; border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(66,153,225,0.15);
+}
+.ka-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 600px) { .ka-field-row { grid-template-columns: 1fr; } }
+.ka-field-ac { position: relative; }
+/* Dropdown is positioned with position:fixed by tnFixedAcPosition() so the modal's
+   own stacking/overflow context can't clip it; z-index rides the token scale
+   (matches revised.css's modal autocomplete rule) instead of a magic 9999. */
+.ka-field-ac .kn-ac-results { z-index: var(--z-modal-top); }
+.ka-hint { font-size: 11px; color: #a0aec0; font-weight: 400; }
+
+/* Feedback */
+.ka-feedback { padding: 10px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; margin-bottom: 14px; display: none; }
+.ka-feedback-ok  { background: #c6f6d5; color: #276749; border: 1px solid #9ae6b4; }
+.ka-feedback-err { background: #fed7d7; color: #9b2c2c; border: 1px solid #feb2b2; }
+
+/* Admin tables (reuse kn-admin-table styles inline) */
+.ka-admin-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ka-admin-table th { text-align: left; font-weight: 700; color: #4a5568; padding: 6px 4px; border-bottom: 1.5px solid #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.ka-admin-table td { padding: 5px 4px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+.ka-admin-table input[type=text] { width: 100%; padding: 4px 6px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 12px; box-sizing: border-box; }
+.ka-admin-table input[type=number] { width: 56px; padding: 4px 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 12px; text-align: center; box-sizing: border-box; }
+.ka-admin-table select { padding: 4px 4px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 12px; }
+.ka-admin-table .ka-tdel { background: none; border: none; color: #e53e3e; cursor: pointer; font-size: 12px; padding: 4px; opacity: 0.6; }
+.ka-admin-table .ka-tdel:hover { opacity: 1; }
+.ka-admin-table .ka-tsave { background: none; border: none; color: #3182ce; cursor: pointer; font-size: 12px; padding: 4px; opacity: 0.6; }
+.ka-admin-table .ka-tsave:hover { opacity: 1; }
+/* #3182ce measures ~2.6:1 on the dark table surface and #e53e3e ~2.9:1 -- the two
+   inline row actions would be the least legible controls on the page. Both lift to
+   the tokens the rest of this file's tinted text already uses in dark mode. */
+html[data-theme="dark"] .ka-admin-table .ka-tsave { color: var(--ork-blue-link); }
+html[data-theme="dark"] .ka-admin-table .ka-tdel  { color: var(--ork-badge-red-text); }
+.ka-admin-table-wrap { overflow-x: auto; }
+/* Award group headers */
+.ka-award-group-hdr td {
+    background: #f7fafc; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #4a5568; padding: 8px 6px !important;
+    border-bottom: 1.5px solid #e2e8f0; cursor: pointer; user-select: none;
+}
+.ka-award-group-hdr td:hover { background: #edf2f7; }
+.ka-award-group-chev {
+    display: inline-block; transition: transform 0.15s; font-size: 10px; margin-right: 6px; color: #a0aec0;
+}
+.ka-award-group-hdr.ka-collapsed .ka-award-group-chev { transform: rotate(-90deg); }
+.ka-award-group-count { font-weight: 400; color: #a0aec0; margin-left: 4px; font-size: 10px; text-transform: none; letter-spacing: 0; }
+.ka-admin-park-retired { opacity: 0.45; }
+
+/* Ladder / Max Rank cells in the awards table. Max Rank reuses
+   .ka-admin-table input[type=number]'s sizing/border/dark-mode rule (it is one);
+   only the width and the disabled-state opacity are specific to it. */
+.ka-award-ladder-cell,
+.ka-award-maxrank-cell {
+    text-align: center;
+    white-space: nowrap;
+}
+.ka-admin-table .ka-award-maxrank {
+    width: 60px;
+}
+.ka-award-maxrank:disabled,
+.ka-award-ladder:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Toggle switch */
+.ka-toggle { position: relative; display: inline-block; cursor: pointer; }
+.ka-toggle input { opacity: 0; position: absolute; }
+.ka-toggle-track {
+    display: inline-block; width: 34px; height: 18px; background: #cbd5e0;
+    border-radius: 9px; position: relative; transition: background 0.2s; vertical-align: middle;
+}
+.ka-toggle-track::after {
+    content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px;
+    background: #fff; border-radius: 50%; transition: transform 0.2s;
+}
+.ka-toggle input:checked + .ka-toggle-track { background: #48bb78; }
+.ka-toggle input:checked + .ka-toggle-track::after { transform: translateX(16px); }
+
+/* Save / action buttons */
+.ka-save-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 16px; background: #3182ce; color: #fff; border: none;
+    border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: opacity 0.15s;
+}
+.ka-save-btn:hover:not(:disabled) { opacity: 0.85; }
+.ka-save-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Ops row */
+.ka-ops-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 14px 0; border-bottom: 1px solid #edf2f7;
+}
+.ka-ops-row:last-child { border-bottom: none; }
+.ka-ops-info { flex: 1; }
+.ka-ops-info strong { font-size: 14px; color: #2d3748; }
+.ka-ops-info p { font-size: 12px; color: #718096; margin: 3px 0 0; }
+.ka-ops-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: 1.5px solid #e2e8f0; border-radius: 6px;
+    background: #fff; font-size: 12px; font-weight: 600; color: #4a5568;
+    cursor: pointer; white-space: nowrap; transition: border-color 0.15s, background 0.15s;
+}
+/* Hover gated on :not(:disabled), matching .ka-save-btn above. Without the gate a
+   disabled button still lights up under the cursor, which is exactly the wrong
+   signal for the wait-to-arm destructive buttons at the bottom of this file. */
+.ka-ops-btn:hover:not(:disabled) { border-color: #cbd5e0; background: #f7fafc; }
+.ka-ops-btn-danger { border-color: #fed7d7; color: #c53030; }
+.ka-ops-btn-danger:hover:not(:disabled) { background: #fff5f5; border-color: #feb2b2; }
+@media (max-width: 480px) {
+    .ka-ops-row { flex-direction: column; align-items: stretch; }
+    .ka-ops-btn { justify-content: center; }
+    .ka-award-row-fields { flex-direction: column; }
+    .ka-award-row-fields .ka-field { width: 100%; }
+    .ka-award-row-fields input[style*="width:64px"] { width: 100% !important; }
+}
+
+/* Warning box */
+.ka-warning { background: #fffbeb; border: 1px solid #f6e05e; border-radius: 6px; padding: 10px 14px; font-size: 13px; color: #744210; margin-bottom: 14px; display: flex; gap: 10px; align-items: flex-start; }
+.ka-warning i { flex-shrink: 0; margin-top: 2px; }
+
+/* Radio group */
+.ka-radio-group { display: flex; gap: 16px; }
+.ka-radio-group label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+
+/* Alias dropdown */
+.ka-alias-picker-wrap { position: relative; }
+.ka-alias-trigger {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px;
+    font-size: 13px; color: #2d3748; background: #fff; cursor: pointer; text-align: left;
+}
+.ka-alias-trigger:hover { border-color: #cbd5e0; }
+.ka-alias-dropdown {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 99;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-height: 250px; overflow-y: auto;
+}
+.ka-alias-search { width: 100%; padding: 8px 10px; border: none; border-bottom: 1px solid #edf2f7; font-size: 13px; box-sizing: border-box; outline: none; }
+.ka-alias-list { max-height: 200px; overflow-y: auto; }
+.ka-alias-item { padding: 8px 12px; cursor: pointer; font-size: 13px; }
+.ka-alias-item:hover { background: #ebf8ff; }
+.ka-alias-empty { padding: 12px; color: #a0aec0; font-size: 12px; text-align: center; }
+.ka-alias-hint { color: #a0aec0; font-size: 10px; margin-left: 4px; cursor: help; }
+
+/* Award add buttons row */
+.ka-award-add-btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.ka-add-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 12px; border: 1.5px dashed #cbd5e0; border-radius: 6px;
+    background: transparent; font-size: 12px; font-weight: 600; color: #4a5568;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.ka-add-btn:hover { border-color: #90cdf4; background: #ebf8ff; color: #2b6cb0; }
+/* The inset form panel inside a modal. .ka-add-award-wrap is its original name and
+   the awards modal still uses it; .ka-inset-panel is the same thing under a name
+   that does not claim to be about awards, for the Park console's park-day editor.
+   Alias only -- no declarations of its own, so the two can never diverge. */
+.ka-add-award-wrap, .ka-inset-panel { margin-top: 14px; padding: 14px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+.ka-add-award-title, .ka-inset-panel-title { font-size: 13px; font-weight: 700; color: #2d3748; margin-bottom: 8px; }
+.ka-form-hint { font-size: 12px; color: #718096; margin: 0 0 10px; line-height: 1.5; }
+.ka-award-row-fields { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.ka-field-grow { flex: 1; min-width: 140px; }
+.ka-field-center { text-align: center; }
+
+/* Confirm overlay */
+.ka-confirm-overlay {
+    display: none; position: fixed; inset: 0; z-index: var(--z-modal-top);
+    background: rgba(0,0,0,0.5); align-items: center; justify-content: center;
+}
+.ka-confirm-overlay.ka-open { display: flex; }
+.ka-confirm-box { width: 400px; }
+
+/* Three-button variant (Task 5A): the unsaved-changes guard adds a "Save Changes"
+   option alongside "Discard Changes" / "Go Back". #ka-confirm-alt (Discard Changes,
+   the middle/destructive button) is red via the plain .adm-btn-danger class already
+   on its markup in _kingdom_admin_modals.tpl -- no toggle needed here. #ka-confirm-ok
+   becomes "Save Changes" only in this variant, and needs a colour of its own: green,
+   never .ka-confirm-danger's red (that class styles the two-button "Discard Changes"
+   case instead, and the two are never applied to the overlay at the same time -- see
+   kaCloseModal's guard -- so there is no specificity fight between them). */
+.ka-confirm-triple #ka-confirm-ok { background: #2f855a; color: #fff; }
+.ka-confirm-triple #ka-confirm-ok:hover:not(:disabled) { background: #276749; }
+html[data-theme="dark"] .ka-confirm-triple #ka-confirm-ok {
+    background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text);
+    box-shadow: inset 0 0 0 1.5px var(--ork-badge-green-text);
+}
+
+/* =============================================
+   DARK MODE OVERRIDES (ka-*)
+   ============================================= */
+/* orkui.css paints every h1-h6 as a filled pill and repeats it under
+   html[data-theme="dark"] at a specificity the plain-class resets below cannot
+   beat, so each of these -- all real heading elements -- renders inside a grey
+   slab in dark mode unless the background is cleared here as well.
+   .mo-group-title is the <h4> in partials/_manage_officers.tpl, used solely for the
+   "Retired Positions" section heading since the flat single-list refactor; it lives in
+   that partial's own <style> block but the reset belongs with its siblings, here. */
+html[data-theme="dark"] .ka-hero-title,
+html[data-theme="dark"] .ka-report-section-lbl,
+html[data-theme="dark"] .ka-modal-title,
+html[data-theme="dark"] .ka-mo-title,
+html[data-theme="dark"] .mo-group-title {
+    background-color: transparent;
+    border-color: transparent;
+}
+html[data-theme="dark"] .ka-hero-title { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+/* The hero band is navy in BOTH themes, so its links stay white in both. Needed
+   explicitly because orkui.css's `html[data-theme="dark"] a` is (0,1,2) and beats
+   the plain `.ka-hero-back` (0,1,0) and `.ka-hero-title a` (0,1,1) rules above --
+   without these the back link and title render link-blue on navy. */
+html[data-theme="dark"] .ka-hero-title a { color: #fff; }
+html[data-theme="dark"] .ka-hero-back { color: rgba(255,255,255,0.7); }
+html[data-theme="dark"] .ka-hero-back:hover,
+html[data-theme="dark"] .ka-hero-back:focus-visible { color: #fff; }
+/* Trend stat cards */
+html[data-theme="dark"] .ka-ts-card { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ka-ts-icon { background: var(--ork-badge-blue-bg); color: #90cdf4; }
+html[data-theme="dark"] .ka-ts-val { color: var(--ork-text); }
+html[data-theme="dark"] .ka-ts-lbl { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-ts-sub { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-ts-up   { background: var(--ork-badge-green-bg); color: var(--ork-badge-green-text); }
+html[data-theme="dark"] .ka-ts-down { background: var(--ork-badge-red-bg);   color: var(--ork-badge-red-text); }
+html[data-theme="dark"] .ka-ts-flat { background: var(--ork-bg-tertiary);    color: var(--ork-text-muted); }
+
+/* Section titles */
+html[data-theme="dark"] .ka-section-title { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-section-title::after { background: var(--ork-border); }
+html[data-theme="dark"] .ka-report-section-lbl { color: var(--ork-text-muted); }
+
+/* Action cards */
+html[data-theme="dark"] .ka-action-card { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .ka-action-card:hover { background: var(--ork-bg-tertiary); border-color: #4299e1; box-shadow: 0 2px 8px rgba(66,153,225,0.25); color: var(--ork-text); }
+html[data-theme="dark"] .ka-action-label { color: var(--ork-text); }
+html[data-theme="dark"] .ka-action-desc { color: var(--ork-text-secondary); }
+/* Deprecated action -- dark. Defined alongside the light rules above so the two
+   states cannot drift; a muted card that is not ALSO muted in dark mode reads as
+   a live card there, which is the failure this branch already shipped once with
+   the success/error banners. */
+html[data-theme="dark"] .ka-action-card-deprecated,
+html[data-theme="dark"] .ka-action-card-orkadmin { background: var(--ork-bg); border-color: var(--ork-border); }
+/* Resting values repeated, not deleted: the dark .ka-action-card:hover two lines up
+   would otherwise light the inert tile blue on hover. Same reasoning as the light rule. */
+html[data-theme="dark"] .ka-action-card-deprecated:hover,
+html[data-theme="dark"] .ka-action-card-orkadmin:hover { background: var(--ork-bg); border-color: var(--ork-border); box-shadow: none; }
+html[data-theme="dark"] .ka-action-card-deprecated .ka-action-label,
+html[data-theme="dark"] .ka-action-card-orkadmin .ka-action-label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-action-card-deprecated .ka-action-desc,
+html[data-theme="dark"] .ka-action-card-orkadmin .ka-action-desc  { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-dep-chip,
+html[data-theme="dark"] .ka-admin-chip { background: var(--ork-bg-tertiary); color: var(--ork-text-secondary); }
+/* ORK-admin-only action -- dark. Only its focus tooltip is its own: the surface,
+   label, desc and chip come from the shared selectors above. Inverted to match the
+   dark [data-tip] hover tooltip in revised.css. */
+html[data-theme="dark"] .ka-action-card-orkadmin[data-tip]:focus-visible::after {
+    background: #f7fafc; color: #1a202c;
+}
+html[data-theme="dark"] .ka-action-icon-blue   { background: var(--ork-badge-blue-bg);   color: #90cdf4; }
+html[data-theme="dark"] .ka-action-icon-green  { background: var(--ork-badge-green-bg);  color: #9ae6b4; }
+html[data-theme="dark"] .ka-action-icon-orange { background: var(--ork-badge-orange-bg); color: #fbd38d; }
+html[data-theme="dark"] .ka-action-icon-purple { background: var(--ork-badge-purple-bg); color: #d6bcfa; }
+html[data-theme="dark"] .ka-action-icon-red    { background: var(--ork-badge-red-bg);    color: #feb2b2; }
+html[data-theme="dark"] .ka-action-icon-gray   { background: var(--ork-bg-tertiary);     color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-action-icon-gold   { background: var(--ork-badge-gold-bg);   color: #f6e05e; }
+
+/* Sidebar cards */
+html[data-theme="dark"] .ka-card { background: var(--ork-bg-secondary); border-color: var(--ork-border); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+html[data-theme="dark"] .ka-card-header { background: var(--ork-bg-tertiary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-card-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-report-list li { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-report-list a { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-report-list a:hover { background: var(--ork-bg-tertiary); color: #90cdf4; }
+html[data-theme="dark"] .ka-report-list a i { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-report-list-desc { color: var(--ork-text-muted); }
+
+/* Modal box / overlay */
+html[data-theme="dark"] .ka-modal-box { background: var(--ork-bg-secondary); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .ka-modal-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-modal-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-modal-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-modal-close:hover { color: var(--ork-text); }
+html[data-theme="dark"] .ka-modal-footer { background: var(--ork-bg-tertiary); border-top-color: var(--ork-border); }
+
+/* Form fields */
+html[data-theme="dark"] .ka-field label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-field input[type=text], html[data-theme="dark"] .ka-field input[type=url],
+html[data-theme="dark"] .ka-field input[type=email], html[data-theme="dark"] .ka-field input[type=password],
+html[data-theme="dark"] .ka-field input[type=number], html[data-theme="dark"] .ka-field input[type=time],
+html[data-theme="dark"] .ka-field input[type=date], html[data-theme="dark"] .ka-field select,
+html[data-theme="dark"] .ka-field textarea {
+    background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text);
+}
+html[data-theme="dark"] .ka-field input::placeholder, html[data-theme="dark"] .ka-field textarea::placeholder { color: var(--ork-text-muted); }
+/* The clock / calendar glyph and the drop-down panel inside a native time or
+   date control are painted by the browser, not by us, and they follow
+   color-scheme rather than any colour we set -- so without this they stay dark
+   ink on the dark input. revised.css already does exactly this for
+   input[type=date] globally; scoped to .ka-field here so the console fixes its
+   own controls without changing every date box in the app. */
+html[data-theme="dark"] .ka-field input[type=time],
+html[data-theme="dark"] .ka-field input[type=date] { color-scheme: dark; }
+html[data-theme="dark"] .ka-hint { color: var(--ork-text-muted); }
+
+/* Feedback */
+html[data-theme="dark"] .ka-feedback-ok  { background: var(--ork-alert-success-bg); color: var(--ork-alert-success-text); border-color: var(--ork-alert-success-border); }
+html[data-theme="dark"] .ka-feedback-err { background: var(--ork-alert-error-bg);   color: var(--ork-alert-error-text);   border-color: var(--ork-alert-error-border); }
+
+/* Admin tables */
+html[data-theme="dark"] .ka-admin-table th { color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-admin-table td { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-admin-table input[type=text], html[data-theme="dark"] .ka-admin-table input[type=number],
+html[data-theme="dark"] .ka-admin-table select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .ka-award-group-hdr td { background: var(--ork-bg-tertiary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-award-group-hdr td:hover { background: var(--ork-bg); }
+html[data-theme="dark"] .ka-award-group-chev { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-award-group-count { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-award-maxrank:disabled,
+html[data-theme="dark"] .ka-award-ladder:disabled {
+    opacity: 0.4;
+}
+
+/* Toggle */
+html[data-theme="dark"] .ka-toggle-track { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ka-toggle-track::after { background: #e2e8f0; }
+
+/* Ops rows / buttons */
+html[data-theme="dark"] .ka-ops-row { border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-ops-info strong { color: var(--ork-text); }
+html[data-theme="dark"] .ka-ops-info p { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-ops-btn { background: var(--ork-bg-tertiary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ka-ops-btn:hover:not(:disabled) { background: var(--ork-bg); border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-ops-btn-danger { background: var(--ork-badge-red-bg); border-color: var(--ork-alert-error-border); color: #feb2b2; }
+html[data-theme="dark"] .ka-ops-btn-danger:hover:not(:disabled) { background: #742a2a; border-color: #feb2b2; }
+
+/* Warning box */
+html[data-theme="dark"] .ka-warning { background: var(--ork-alert-warning-bg); border-color: var(--ork-alert-warning-border); color: var(--ork-alert-warning-text); }
+
+/* Radio group */
+html[data-theme="dark"] .ka-radio-group label { color: var(--ork-text); }
+
+/* Alias dropdown */
+html[data-theme="dark"] .ka-alias-trigger { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .ka-alias-trigger:hover { border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-alias-dropdown { background: var(--ork-bg-secondary); border-color: var(--ork-border); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .ka-alias-search { background: var(--ork-input-bg); color: var(--ork-text); border-bottom-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-alias-item { color: var(--ork-text); }
+html[data-theme="dark"] .ka-alias-item:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .ka-alias-empty { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-alias-hint { color: var(--ork-text-muted); }
+
+/* Save button stays accented (fine in dark); add/dashed buttons */
+html[data-theme="dark"] .ka-add-btn { color: var(--ork-text-secondary); border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .ka-add-btn:hover { background: var(--ork-bg-tertiary); border-color: #4299e1; color: #90cdf4; }
+html[data-theme="dark"] .ka-add-award-wrap,
+html[data-theme="dark"] .ka-inset-panel { background: var(--ork-bg-tertiary); border-color: var(--ork-border); }
+html[data-theme="dark"] .ka-add-award-title,
+html[data-theme="dark"] .ka-inset-panel-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-form-hint { color: var(--ork-text-secondary); }
+
+/* =============================================
+   MANAGE OFFICERS HOST MODAL (.ka-mo-*)
+   ============================================= */
+.ka-mo-overlay {
+    display: none; position: fixed; inset: 0; z-index: var(--z-modal);
+    background: rgba(0,0,0,0.5); align-items: flex-start; justify-content: center;
+    padding: 32px 16px; overflow-y: auto;
+}
+.ka-mo-overlay.ka-open { display: flex; }
+.ka-mo-box {
+    background: #fff; border-radius: 10px; width: 1000px; max-width: 100%;
+    max-height: calc(100vh - 64px); display: flex; flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: hidden; margin: auto;
+}
+.ka-mo-header {
+    padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.ka-mo-title {
+    font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
+    display: flex; align-items: center; gap: 8px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.ka-mo-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; line-height: 1; padding: 2px 6px; }
+.ka-mo-close:hover { color: #2d3748; }
+.ka-mo-body { padding: 20px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+@media (max-width: 600px) {
+    .ka-mo-overlay { padding: 0; }
+    .ka-mo-box { width: 100% !important; max-width: 100%; max-height: 100vh; border-radius: 0; }
+}
+html[data-theme="dark"] .ka-mo-box { background: var(--ork-bg-secondary); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .ka-mo-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .ka-mo-title { color: var(--ork-text); }
+html[data-theme="dark"] .ka-mo-close { color: var(--ork-text-muted); }
+html[data-theme="dark"] .ka-mo-close:hover { color: var(--ork-text); }
+
+/* =============================================
+   TOKENISED TEXT COLOURS  (.ka-req / .ka-danger-note / .ka-muted / .ka-notice-warn)
+   =============================================
+   These replace `style="color:#xxxxxx"` in the modal markup. An inline style is
+   (1,0,0,0) and beats every dark-mode rule in this file, so a hardcoded colour is
+   not merely untidy -- it is a guaranteed dark-mode bug. Apply the class, delete
+   the inline style.
+
+   .ka-muted / .ka-muted-strong deliberately have NO html[data-theme="dark"]
+   counterpart: --ork-text-muted and --ork-text-secondary are already redefined
+   per-theme in orkui.css, so a single token reference is correct in both themes
+   and cannot drift out of sync. The light value is still defined outside any
+   [data-theme] block (in :root), which is what the no-dark-only-colour rule is
+   protecting against. The other three DO get explicit dark rules, because their
+   light hexes fail contrast on the dark modal surface and must not simply flip. */
+
+/* Required-field marker. Was inline #e53e3e. */
+.ka-req { color: #e53e3e; font-weight: 700; }
+/* #e53e3e on the dark modal surface (--ork-bg-secondary, #2d3748) measures ~2.9:1
+   -- too thin for a 1-glyph asterisk. --ork-badge-red-text is #feb2b2 there: ~7:1. */
+html[data-theme="dark"] .ka-req { color: var(--ork-badge-red-text); }
+
+/* Danger / severity note -- the "permanently deleted" line in Merge Players and
+   friends. Was inline #c53030, which measures ~2:1 on #2d3748: the least legible
+   text in the most destructive modal. */
+.ka-danger-note {
+    color: #c53030; font-weight: 600; font-size: 12px;
+    display: inline-flex; align-items: center; gap: 5px;
+}
+html[data-theme="dark"] .ka-danger-note { color: var(--ork-badge-red-text); }
+
+/* Danger / warning tinted icons (the <i> in a modal title). Same problem, and
+   an icon glyph is thinner than text, so it needs the same lift. */
+.ka-icon-danger { color: #c53030; }
+.ka-icon-warn   { color: #c05621; }
+html[data-theme="dark"] .ka-icon-danger { color: var(--ork-badge-red-text); }
+html[data-theme="dark"] .ka-icon-warn   { color: var(--ork-badge-orange-text); }
+
+/* Muted body copy inside a modal. Was inline #718096 / #4a5568. Token-driven,
+   so both themes are handled by the one declaration -- see the note above. */
+.ka-muted        { color: var(--ork-text-muted); }
+.ka-muted-strong { color: var(--ork-text-secondary); }
+
+/* Inline warning / notice message (the abbreviation-collision warning, the
+   Convert-to-Kingdom caution). Was inline #c05621 -- ~2.6:1 on the dark surface. */
+.ka-notice-warn {
+    color: #c05621; font-size: 12px; font-weight: 600; margin-top: 4px;
+    display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;
+}
+.ka-notice-warn i { flex-shrink: 0; margin-top: 2px; }
+html[data-theme="dark"] .ka-notice-warn { color: var(--ork-badge-orange-text); }
+
+/* =============================================
+   TABLE MODAL CHROME (sticky header / toolbar / dirty row / empty state)
+   ============================================= */
+
+/* Scroll container that makes a sticky thead possible. .ka-admin-table-wrap on
+   its own only scrolls horizontally, and position:sticky needs a scrollport with
+   a bounded height to stick against. Add this class ALONGSIDE .ka-admin-table-wrap.
+   The height is capped in vh so a 300-row park list does not push the modal
+   footer off-screen; the modal box's own max-height:80vh is the outer bound. */
+.ka-admin-table-wrap-scroll {
+    max-height: 52vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* Sticky header. Goes on the <table>, which must have a real <thead>. th has no
+   background of its own in the base rules, so it MUST get one here or the body
+   rows scroll visibly through the header text. */
+.ka-admin-table-sticky thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fff;
+    /* border-bottom does not paint reliably on a sticky th in every engine
+       (the border scrolls with the cell box in some), so the rule is drawn as a
+       box-shadow, which always tracks the sticky position. */
+    box-shadow: inset 0 -1.5px 0 0 #e2e8f0;
+}
+html[data-theme="dark"] .ka-admin-table-sticky thead th {
+    background: var(--ork-bg-secondary);
+    box-shadow: inset 0 -1.5px 0 0 var(--ork-border);
+}
+/* A sticky header inside .ka-add-award-wrap sits on that panel's tint, not on the
+   modal surface; match it so the header does not read as a floating white strip. */
+.ka-add-award-wrap .ka-admin-table-sticky thead th { background: #f7fafc; }
+html[data-theme="dark"] .ka-add-award-wrap .ka-admin-table-sticky thead th { background: var(--ork-bg-tertiary); }
+
+/* Filter / search row above a table. position:sticky pins it to whichever
+   ancestor scrolls -- .ka-modal-body or .ka-admin-table-wrap-scroll -- so it stays
+   put while rows move underneath. z-index sits above the sticky thead's 2.
+   The INPUT inside this row should carry class="ka-report-filter"; that input
+   style already exists (with its dark counterpart) and is not duplicated here. */
+.ka-table-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 10px 0;
+    margin-bottom: 8px;
+    background: #fff;
+    border-bottom: 1px solid #edf2f7;
+}
+.ka-table-toolbar .ka-report-filter { flex: 1 1 180px; min-width: 0; width: auto; }
+.ka-table-toolbar-spacer { flex: 1 1 auto; }
+.ka-table-count { font-size: 11px; color: var(--ork-text-muted); white-space: nowrap; }
+html[data-theme="dark"] .ka-table-toolbar { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border-dark); }
+/* Full-bleed variant for a toolbar that is the FIRST child of .ka-modal-body:
+   cancels that body's 20px padding so the bar spans edge to edge and content
+   cannot be seen sliding through the side gutters. Only use it as :first-child --
+   the negative top margin would collide with a preceding sibling. */
+.ka-table-toolbar-bleed {
+    /* Full-bleed SIDES only. A negative TOP margin cannot be combined with
+       position:sticky/top:0 above: the margin lifts the bar out of flow, sticky
+       then clamps it back down to the scrollport edge, and the bar ends up
+       overlapping the next element by (20px - margin-bottom) = 12px -- which is
+       what was clipping the awards table's sticky header. Because that negative
+       top margin is gone, the bar no longer has to be :first-child; an
+       instructions box can sit above it. */
+    margin: 0 -20px 8px;
+    padding: 12px 20px;
+}
+@media (max-width: 600px) {
+    .ka-table-toolbar { gap: 6px; }
+    .ka-table-count { flex-basis: 100%; }
+}
+
+/* Collapsible instructions box. Native <details>/<summary>, so it is keyboard
+   operable and announced as expanded/collapsed with no JS and no ARIA of our
+   own. Closed by default: an officer who already knows the screen should not
+   have to scroll past it every time. */
+.ka-help {
+    margin: 0 0 14px;
+    border: 1px solid var(--ork-border);
+    border-radius: var(--ork-radius-md, 6px);
+    background: var(--ork-bg-secondary);
+    font-size: 13px;
+}
+.ka-help > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--ork-text);
+    list-style: none;
+    border-radius: var(--ork-radius-md, 6px);
+}
+.ka-help > summary::-webkit-details-marker { display: none; }
+.ka-help > summary::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    margin-left: auto;
+    border-right: 1.5px solid var(--ork-text-muted);
+    border-bottom: 1.5px solid var(--ork-text-muted);
+    transform: rotate(45deg) translate(-2px, -2px);
+    transition: transform 0.15s;
+}
+.ka-help[open] > summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+.ka-help > summary:focus-visible { outline: 2px solid var(--ork-blue-link); outline-offset: -2px; }
+.ka-help > summary .fas { color: var(--ork-text-muted); font-size: 12px; }
+.ka-help-body {
+    padding: 2px 12px 12px;
+    color: var(--ork-text-secondary);
+    line-height: 1.55;
+}
+.ka-help-body p { margin: 0 0 8px; }
+.ka-help-body p:last-child { margin-bottom: 0; }
+.ka-help-body dl { margin: 0; }
+.ka-help-body dt {
+    font-weight: 600;
+    color: var(--ork-text);
+    margin-top: 9px;
+}
+.ka-help-body dt:first-child { margin-top: 0; }
+.ka-help-body dd { margin: 2px 0 0; }
+.ka-help-note {
+    margin-top: 11px;
+    padding: 8px 10px;
+    border-left: 3px solid var(--ork-text-muted);
+    background: var(--ork-bg-tertiary);
+    border-radius: 0 4px 4px 0;
+    font-size: 12.5px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .ka-help > summary::after { transition: none; }
+}
+
+/* Aliased award nested under the award it renames. The elbow is drawn with
+   borders on a pseudo-element, not a box-drawing character: no font dependency,
+   no DOM node for a screen reader to read out, and it cannot wrap above the
+   full-width name input the way an inline span does. */
+.ka-admin-table tr.ka-award-alias-row > td:first-child {
+    position: relative;
+    padding-left: 24px;
+}
+.ka-admin-table tr.ka-award-alias-row > td:first-child::before {
+    content: "";
+    position: absolute;
+    left: 9px;
+    top: 0;
+    bottom: 50%;
+    width: 8px;
+    border-left: 1px solid #cbd5e0;
+    border-bottom: 1px solid #cbd5e0;
+    border-bottom-left-radius: 3px;
+    pointer-events: none;
+}
+html[data-theme="dark"] .ka-admin-table tr.ka-award-alias-row > td:first-child::before {
+    /* --ork-border-dark is too close to the row fill to read; the muted text
+       token is the same weight the other secondary marks in this table use. */
+    border-left-color: var(--ork-text-muted);
+    border-bottom-color: var(--ork-text-muted);
+}
+
+/* Dirty (unsaved) row. The cue is a left accent BAR -- a geometric change, not a
+   colour swap -- so it survives greyscale, low-vision and colour-blind viewing.
+   Drawn as an inset box-shadow on the first cell rather than a border-left, so it
+   does not shift the cell's content by 3px when the class toggles. The background
+   tint is a secondary, redundant cue only. */
+.ka-admin-table tr.ka-row-dirty > td:first-child {
+    box-shadow: inset 3px 0 0 0 #dd6b20;
+}
+.ka-admin-table tr.ka-row-dirty > td {
+    background: #fffaf0;
+}
+html[data-theme="dark"] .ka-admin-table tr.ka-row-dirty > td:first-child {
+    box-shadow: inset 3px 0 0 0 var(--ork-badge-orange-text);
+}
+html[data-theme="dark"] .ka-admin-table tr.ka-row-dirty > td {
+    background: var(--ork-badge-orange-bg);
+}
+/* Optional text badge for the same row, for a cue that is neither colour nor
+   position-dependent. Drop it in any cell of a dirty row. */
+.ka-row-dirty-flag {
+    display: none;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #9c4221; background: #feebc8; border-radius: 3px; padding: 1px 5px;
+    margin-left: 6px; white-space: nowrap; vertical-align: middle;
+}
+.ka-row-dirty .ka-row-dirty-flag { display: inline-block; }
+html[data-theme="dark"] .ka-row-dirty-flag { color: var(--ork-badge-orange-text); background: var(--ork-badge-orange-bg); }
+
+/* Table empty state ("no matches"). Sits in place of the table, or in a full-width
+   <td> spanning the row. */
+.ka-table-empty {
+    padding: 26px 18px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--ork-text-muted);
+    background: #f7fafc;
+    border: 1px dashed #e2e8f0;
+    border-radius: 8px;
+}
+.ka-table-empty i { display: block; font-size: 20px; margin-bottom: 8px; opacity: 0.5; }
+.ka-table-empty strong { display: block; color: var(--ork-text-secondary); font-size: 13px; margin-bottom: 3px; }
+.ka-table-empty-hint { font-size: 11px; margin-top: 4px; }
+html[data-theme="dark"] .ka-table-empty { background: var(--ork-bg); border-color: var(--ork-border); }
+/* When the empty state is a <td colspan>, the cell's own border/padding fights it. */
+td > .ka-table-empty { border: none; background: transparent; }
+html[data-theme="dark"] td > .ka-table-empty { background: transparent; }
+
+/* =============================================
+   WAIT-TO-ARM DESTRUCTIVE BUTTON (.ka-arm-btn)
+   =============================================
+   A state layer, not a button skin -- compose it onto an existing button:
+       <button class="ka-ops-btn ka-ops-btn-danger ka-arm-btn ka-arm-waiting" disabled>
+           <i class="fas fa-trash"></i> Delete Kingdom
+           <span class="ka-arm-count">5</span>
+       </button>
+   JS contract:
+     - open with .ka-arm-waiting + the disabled attribute, and set the countdown
+       length via `style="--ka-arm-delay:5s"` (default 5s).
+     - update .ka-arm-count's text each second (this is what carries the progress
+       for reduced-motion and screen-reader users).
+     - on expiry: remove .ka-arm-waiting, add .ka-arm-ready, drop `disabled`.
+   Pair it with aria-disabled and an aria-live region on .ka-arm-count. */
+.ka-arm-btn {
+    position: relative;
+    overflow: hidden;
+    transition: opacity 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+/* Disabled / counting down. Visibly inert: dimmed, desaturated, not-allowed. */
+.ka-arm-btn:disabled,
+.ka-arm-btn.ka-arm-waiting {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(0.55);
+    box-shadow: none;
+}
+/* No hover-suppression rule is needed here: .ka-save-btn, .ka-ops-btn and
+   .ka-ops-btn-danger all gate their :hover on :not(:disabled), so a button
+   carrying the disabled attribute simply never picks up a hover appearance.
+   That is why `disabled` (not the .ka-arm-waiting class alone) is the load-bearing
+   half of the JS contract below -- the class dims and adds the progress bar, the
+   attribute is what actually makes the button inert and hover-dead. */
+.ka-arm-count {
+    display: inline-block;
+    min-width: 1.6em;
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 10px;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px; font-weight: 700; line-height: 1.6;
+    background: rgba(0,0,0,0.10);
+    color: inherit;
+}
+html[data-theme="dark"] .ka-arm-count { background: rgba(255,255,255,0.16); }
+/* The count is only meaningful while counting. */
+.ka-arm-btn.ka-arm-ready .ka-arm-count { display: none; }
+
+/* Progress affordance: a fill that sweeps the button's bottom edge over the
+   countdown. Pseudo-element, so it needs no extra markup. */
+.ka-arm-btn.ka-arm-waiting::after {
+    content: '';
+    position: absolute;
+    left: 0; bottom: 0;
+    height: 3px;
+    width: 0;
+    background: #c53030;
+    animation: ka-arm-fill var(--ka-arm-delay, 5s) linear forwards;
+}
+html[data-theme="dark"] .ka-arm-btn.ka-arm-waiting::after { background: var(--ork-badge-red-text); }
+@keyframes ka-arm-fill { from { width: 0; } to { width: 100%; } }
+
+/* Armed. Reads as a different button, not just an un-dimmed one: solid danger
+   fill plus a focus-style ring, so the change of state is unmissable. */
+.ka-arm-btn.ka-arm-ready {
+    opacity: 1;
+    filter: none;
+    cursor: pointer;
+    background: #c53030;
+    border-color: #c53030;
+    color: #fff;
+    box-shadow: 0 0 0 3px rgba(197,48,48,0.22);
+}
+.ka-arm-btn.ka-arm-ready:hover { background: #9b2c2c; border-color: #9b2c2c; color: #fff; }
+html[data-theme="dark"] .ka-arm-btn.ka-arm-ready {
+    background: var(--ork-badge-red-bg);
+    border-color: var(--ork-badge-red-text);
+    color: var(--ork-badge-red-text);
+    box-shadow: 0 0 0 3px rgba(254,178,178,0.22);
+}
+html[data-theme="dark"] .ka-arm-btn.ka-arm-ready:hover {
+    background: #8f3333; border-color: var(--ork-badge-red-text); color: #fff;
+}
+
+/* Reduced motion: no sweep. The bar becomes a static, obviously-unfilled track so
+   the affordance is still visibly present, and .ka-arm-count carries the actual
+   progress. Deliberately NOT a full-width fill, which would read as "finished". */
+@media (prefers-reduced-motion: reduce) {
+    .ka-arm-btn,
+    .ka-arm-btn.ka-arm-waiting::after { transition: none; animation: none; }
+    .ka-arm-btn.ka-arm-waiting::after {
+        width: 100%;
+        height: 2px;
+        background: repeating-linear-gradient(90deg, #c53030 0 4px, transparent 4px 8px);
+    }
+    html[data-theme="dark"] .ka-arm-btn.ka-arm-waiting::after {
+        background: repeating-linear-gradient(90deg, var(--ork-badge-red-text) 0 4px, transparent 4px 8px);
+    }
+}

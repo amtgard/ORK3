@@ -82,13 +82,13 @@ By default, the sandbox database is enriched with known logins for manual and au
 | **`seed-test-credentials`** | Patch known passwords (default both DBs) |
 | **`bootstrap`** | init (if needed) → extract → apply — does **not** switch the app or seed credentials |
 | **`init`** | Load `ork.sql` into sandbox + install test canary (empty of fake data) |
-| **`extract`** | Read-only dump of catalogs/players/events from mirror → `extracted/` |
+| **`extract`** | Read-only dump from mirror: reference catalogs → committed `templates/catalogs/`, players/events/config → gitignored `extracted/` |
 | **`render`** | Compose `rendered/sandbox.sql` from schema, migrations, templates, extracts |
 | **`apply`** | Wipe `ork_test`, load rendered SQL, post-validate (prompt unless `--yes`) |
 | **`validate`** | Safety checks: wiring locks, canaries, kingdom fingerprints, blocklist |
 | **`generate-assets` / `deploy-assets`** | Build heraldry rasters → copy into repo `assets/` |
-| **`drift-check`** | Migration classification coverage + catalog fingerprints (`--strict` for CI) |
-| **`schema-diff`** | Compare `SHOW CREATE TABLE` mirror vs sandbox |
+| **`drift-check`** | Migration classification coverage + committed catalog hashes + code-vs-schema table references (`--strict` for CI) |
+| **`schema-diff`** | Compare `SHOW CREATE TABLE` mirror vs sandbox (member order normalized; mirror-only columns declared in `manifests/schema-diff-allowlist.json5`) |
 
 **Exit codes:** `0` ok · `1` runtime · `2` validation / tier refusal · `3` user cancelled apply confirm.
 
@@ -207,7 +207,19 @@ bin/ork-db init
 
 ### `extract`
 
-Read-only dump from the mirror into `tools/ork-db/extracted/`. Requires the prod canary on the mirror.
+Read-only dump from the mirror. Requires the prod canary on the mirror.
+
+Output splits by whether the data can be committed:
+
+| Source | Destination | Git? |
+|--------|-------------|------|
+| `fixed_extract` reference catalogs (`award`, `class`, `parktitle`, `pronoun`) | `templates/catalogs/<table>.sql` | **committed** |
+| `configuration`, `mundane_real`, `events`, `kingdomaward` clone | `extracted/` | ignored (real player data) |
+
+Extract **overwrites the committed catalogs in place**. That is the supported way to pick up
+a genuine production reference-data change: review it as a `git diff`, then re-record
+`catalog_hashes` in `manifests/fingerprints.json5` in the same commit. `drift-check --strict`
+fails until you do.
 
 ```bash
 # Extract configured catalog/player/event sources.
@@ -298,7 +310,10 @@ bin/ork-db deploy-assets
 
 ### `drift-check`
 
-Migration classification coverage and catalog fingerprint checks (uses `extracted/` when present). Not the same tier gate as `apply`.
+Migration classification coverage, committed catalog hashes, and the code-vs-schema table
+reference scan. Not the same tier gate as `apply`. The catalog hashes cover
+`templates/catalogs/`, which git tracks, so the check is stable across machines — there is no
+`--allow-catalog-drift` opt-out any more.
 
 ```bash
 # Report drift; exit 0 on findings unless --strict.
@@ -307,6 +322,38 @@ bin/ork-db drift-check
 # --strict: non-zero exit on unclassified migrations or fingerprint mismatches (CI).
 bin/ork-db drift-check --strict
 ```
+
+#### Table-reference check
+
+`drift-check` also fails when domain code names a table the repository's **committed**
+schema sources do not create. This is the guard against the recurring failure where code
+ships against schema that only ever existed on prod or in an untracked migrations
+directory — `ork_officer_position` and its seven siblings broke `KingdomProfileTest` for
+weeks that way.
+
+| | |
+|---|---|
+| **Code scanned** | `system/lib/ork3/` (the only layer permitted to touch the DB) |
+| **Schema compared against** | `ork.sql` + `templates/schema/` + every classified migration + `templates/catalogs/` — all committed. **Not** `rendered/sandbox.sql`, which is `.gitignored` and would make the check a silent no-op on a fresh clone |
+| **How references are found** | `token_get_all()`, so comments and commented-out code are structurally excluded rather than filtered |
+| **Granularity** | Tables only |
+
+Recognised forms: `DB_PREFIX . 'name'`, `DB_PREFIX . "name …"`, `$p = DB_PREFIX;` followed
+by `"{$p}name"` or `$p . 'name'`, and bare `ork_*` literals inside SQL strings.
+
+**Not covered**, and reported as a `NOTE` on every run so a green result never implies
+otherwise:
+
+- **Columns.** SQL here is concatenated across statements, so binding a column to its
+  table needs a real SQL parser. The `ork_recommendations.snoozed_by_id` and
+  `ork_kingdomaward.disabled` incidents were column-level and would **not** be caught.
+- **Runtime-computed names** (`DB_PREFIX . $table` in `class.Banner.php`,
+  `class.DangerAudit.php`, `class.Report.php`). Counted, never guessed at.
+
+When a table legitimately lives only on prod or the mirror, record it in
+`manifests/table-reference-allowlist.json5` with a reason — entries without one are
+rejected. Every entry is echoed in `drift-check` output, and an entry whose reference
+disappears is reported as stale and fails until deleted.
 
 ### `schema-diff`
 
@@ -330,7 +377,8 @@ bin/ork-db help
 
 | Path | Git? | Contents |
 |------|------|----------|
-| `tools/ork-db/extracted/` | ignored | SQL dumps + `manifest.json` from mirror extract |
+| `tools/ork-db/extracted/` | ignored | Player/config/event dumps + `manifest.json` from mirror extract (real player data) |
+| `tools/ork-db/templates/catalogs/` | committed | Reference catalogs: `day_convert` hand-maintained, `award`/`class`/`parktitle`/`pronoun` refreshed by `extract` |
 | `tools/ork-db/rendered/` | ignored | `sandbox.sql`, `.last-render.json` |
 | `tools/ork-db/generated-assets/` | committed | Kingdom/park/player heraldry rasters |
 | `tools/ork-db/manifests/` | committed | Wiring, fingerprints, migration classification, extract sources, asset manifest |

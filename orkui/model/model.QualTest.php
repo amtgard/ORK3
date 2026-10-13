@@ -2,9 +2,36 @@
 
 class Model_QualTest extends Model
 {
+    // The capability vocabulary, mirrored from the domain class so controllers name
+    // it through the membrane instead of reaching for QualTest:: directly.
+    public const CAP_CONFIG    = QualTest::CAP_CONFIG;
+    public const CAP_QUESTIONS = QualTest::CAP_QUESTIONS;
+    public const CAP_PUBLISH   = QualTest::CAP_PUBLISH;
+    public const CAP_RESULTS   = QualTest::CAP_RESULTS;
+
     public function can_manage(int $mundaneId, int $kingdomId): bool
     {
         return $this->_qual_test()->canManage($mundaneId, $kingdomId);
+    }
+
+    /**
+     * One qualification-test capability: 'config', 'questions', 'publish' or 'results'.
+     * Use this for the action gates; can_manage() only answers "may they open the door".
+     */
+    public function can(int $mundaneId, int $kingdomId, string $capability): bool
+    {
+        return $this->_qual_test()->can($mundaneId, $kingdomId, $capability);
+    }
+
+    /** All four capability flags at once, for shaping a view. */
+    public function capabilities(int $mundaneId, int $kingdomId): array
+    {
+        return [
+            'Config'    => $this->can($mundaneId, $kingdomId, self::CAP_CONFIG),
+            'Questions' => $this->can($mundaneId, $kingdomId, self::CAP_QUESTIONS),
+            'Publish'   => $this->can($mundaneId, $kingdomId, self::CAP_PUBLISH),
+            'Results'   => $this->can($mundaneId, $kingdomId, self::CAP_RESULTS),
+        ];
     }
 
     public function has_takeable_version(int $kingdomId, string $testType): bool
@@ -348,8 +375,14 @@ class Model_QualTest extends Model
         return $this->_qual_test()->getAttemptDetail($attemptId);
     }
 
+    /** One domain instance per model, so its per-request auth memo actually holds. */
+    private $_qualTest = null;
+
     private function _qual_test(): QualTest
     {
-        return new QualTest();
+        if ($this->_qualTest === null) {
+            $this->_qualTest = new QualTest();
+        }
+        return $this->_qualTest;
     }
 }

@@ -84,7 +84,7 @@
 					<?php foreach ($AwardRecommendations as $rec): ?>
 					<tr class="pk-rec-row"
 						data-rec-id="<?= (int)$rec['RecommendationsId'] ?>" data-award-id="<?= (int)$rec['AwardId'] ?>"
-						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
+						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['IsLadder'] === 1 ? 'below' : 'nonladder') ?>">
 						<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 						<td><?php if (!empty($rec['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$rec['ParkId'] ?>"><?= htmlspecialchars($rec['ParkName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
 						<td><?= htmlspecialchars($rec['AwardName']) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="rm-inline-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?></td>

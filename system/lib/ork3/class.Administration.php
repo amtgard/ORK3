@@ -43,7 +43,7 @@ class Administration
     public function PurgeLogs($Token)
     {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token)) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.maintenance.run', 'global', 0, AUTH_CREATE)) {
             $date = date("Y-m-d H:i:s", time() - 60);
             $continue = true;
             $total = 0;
@@ -70,20 +70,31 @@ class Administration
     {
         $total = 0;
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token)) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
-            if (is_null($Table)) {
-                $tables = $this->db->query('show tables');
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.maintenance.run', 'global', 0, AUTH_CREATE)) {
+            // Identifiers must be backquoted: MySQL only reads "..." as an identifier
+            // under ANSI_QUOTES, so the old double-quoted form was a syntax error that
+            // PDO's ERRMODE_WARNING swallowed while we still counted it as a success.
+            $existing = [];
+            $tables = $this->db->query('show tables');
+            $t = 'Tables_in_' . DB_DATABASE;
+            while ($tables->next()) {
+                $existing[] = $tables->$t;
+            }
 
-                $t = 'Tables_in_' . DB_DATABASE;
-                while ($tables->next()) {
-                    set_time_limit(60 * 60);
-                    $this->db->query('optimize table "' . $tables->$t . '"');
-                    $total++;
-                }
-            } elseif (is_array($Table) && count($Table > 0)) {
-                foreach ($Table as $k => $t) {
-                    set_time_limit(60 * 60);
-                    $this->db->query('optimize table "' . $t . '"');
+            if (is_null($Table)) {
+                $wanted = $existing;
+            } elseif (is_array($Table) && count($Table) > 0) {
+                // Caller-supplied names are not bound parameters, so allowlist them
+                // against the live table list before they reach the statement.
+                $wanted = array_values(array_intersect($existing, $Table));
+            } else {
+                $wanted = [];
+            }
+
+            foreach ($wanted as $name) {
+                set_time_limit(60 * 60);
+                $this->db->Clear();
+                if ($this->db->ExecuteChecked('optimize table `' . str_replace('`', '``', $name) . '`')) {
                     $total++;
                 }
             }
@@ -93,17 +104,33 @@ class Administration
     }
 
     /**
+     * Token + installation-wide access for the admin-only endpoints below.
+     * Mirrors Report::_authorizeGlobalAdmin so the gate lives in one place.
+     *
+     * @return array|null error response, or null when authorized
+     */
+    private function _authorizeGlobal(string $permission_key, $Token): ?array
+    {
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token ?? '');
+        if ($mundane_id <= 0
+            || !Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, $permission_key, 'global', 0, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
+
+        return null;
+    }
+
+    /**
      * SHOW GLOBAL STATUS subset for server health panel (T-ADM-04).
-     * Requires Token + global AUTH_ADMIN (same gate as PurgeLogs).
+     * Requires Token + global.health.view (or legacy global AUTH_ADMIN).
      *
      * @param list<string> $wanted
      * @return array<string, string>|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
     public function GetServerHealthDbStatus(array $wanted, $Token = null): array
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token ?? '')) <= 0
-            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
-            return NoAuthorization();
+        if (($denied = $this->_authorizeGlobal('global.health.view', $Token)) !== null) {
+            return $denied;
         }
 
         $allowed = $this->ListServerHealthDbStatusVariables();
@@ -146,9 +173,8 @@ class Administration
      */
     public function GetServerHealthProcesses(int $limit = 20, $Token = null): array
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token ?? '')) <= 0
-            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
-            return NoAuthorization();
+        if (($denied = $this->_authorizeGlobal('global.health.view', $Token)) !== null) {
+            return $denied;
         }
 
         $this->db->Clear();
@@ -193,9 +219,8 @@ class Administration
      */
     public function GetServerHealthWeatherSummary($Token = null): array
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token ?? '')) <= 0
-            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
-            return NoAuthorization();
+        if (($denied = $this->_authorizeGlobal('global.health.view', $Token)) !== null) {
+            return $denied;
         }
 
         $nowLocal = date('Y-m-d H:i:s');
@@ -290,15 +315,16 @@ class Administration
 
     /**
      * Global ORK admin grants with last login and last credit (T-ADM-02).
-     * Requires Token + global AUTH_ADMIN (same gate as PurgeLogs).
+     * Requires Token + global.admin.grant (or legacy global AUTH_ADMIN).
      *
      * @return list<array<string, mixed>>|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
     public function GetGlobalAdminGrants($Token = null): array
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token ?? '')) <= 0
-            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
-            return NoAuthorization();
+        // Reading who holds installation-wide admin belongs with the permission that
+        // grants it, not with the server-health diagnostics.
+        if (($denied = $this->_authorizeGlobal('global.admin.grant', $Token)) !== null) {
+            return $denied;
         }
 
         $this->db->Clear();
@@ -400,7 +426,8 @@ class Administration
                     'UserName' => $rs->username,
                     'GivenName' => $rs->given_name,
                     'Surname' => $rs->surname,
-                    'OfficerRole' => $rs->officer_role,
+                    'OfficerRole' => PermissionRegistry::OfficerRoleLabel($rs->officer_role),
+                    'OfficerRoleKey' => PermissionRegistry::CanonicalOfficerRole($rs->officer_role),
                     'OfficerId' => $rs->officer_id,
                 ];
             }
@@ -445,7 +472,8 @@ class Administration
                     'UserName' => $rs->username,
                     'GivenName' => $rs->given_name,
                     'Surname' => $rs->surname,
-                    'OfficerRole' => $rs->officer_role,
+                    'OfficerRole' => PermissionRegistry::OfficerRoleLabel($rs->officer_role),
+                    'OfficerRoleKey' => PermissionRegistry::CanonicalOfficerRole($rs->officer_role),
                     'OfficerId' => $rs->officer_id,
                 ];
             }
@@ -526,7 +554,8 @@ class Administration
                         'Persona' => $rs->persona,
                         'GivenName' => $rs->given_name,
                         'Surname' => $rs->surname,
-                        'OfficerRole' => $rs->officer_role,
+                        'OfficerRole' => PermissionRegistry::OfficerRoleLabel($rs->officer_role),
+                        'OfficerRoleKey' => PermissionRegistry::CanonicalOfficerRole($rs->officer_role),
                     ];
                 }
             }
@@ -552,7 +581,8 @@ class Administration
                         'Persona' => $rs->persona,
                         'GivenName' => $rs->given_name,
                         'Surname' => $rs->surname,
-                        'OfficerRole' => $rs->officer_role,
+                        'OfficerRole' => PermissionRegistry::OfficerRoleLabel($rs->officer_role),
+                        'OfficerRoleKey' => PermissionRegistry::CanonicalOfficerRole($rs->officer_role),
                     ];
                 }
             }
@@ -569,6 +599,14 @@ class Administration
         ];
     }
 
+    /**
+     * Read gate for the authorization consoles.
+     *
+     * These three callers list who holds what at a scope -- the read side of the same
+     * capability *.auth.manage governs the writes for. An officer who holds that
+     * permission through a role, and no legacy authority row, could open the console
+     * and manage grants but not see the list they were managing.
+     */
     private function isAdminOrScopedCreate($Token, string $authType, int $scopeId): bool
     {
         $mundaneId = Ork3::$Lib->authorization->IsAuthorized($Token ?? '');
@@ -577,6 +615,23 @@ class Administration
         }
         if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_ADMIN, 0, AUTH_CREATE)) {
             return true;
+        }
+
+        $permissions = [
+            AUTH_KINGDOM => ['kingdom.auth.manage', 'kingdom'],
+            AUTH_PARK    => ['park.auth.manage', 'park'],
+            AUTH_EVENT   => ['event.auth.manage', 'event'],
+            AUTH_UNIT    => ['unit.auth.manage', 'unit'],
+        ];
+        if (isset($permissions[$authType])) {
+            [$permissionKey, $scopeType] = $permissions[$authType];
+            return Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+                $mundaneId,
+                $permissionKey,
+                $scopeType,
+                $scopeId,
+                AUTH_CREATE
+            );
         }
 
         return (bool) Ork3::$Lib->authorization->HasAuthority($mundaneId, $authType, $scopeId, AUTH_CREATE);
