@@ -371,7 +371,12 @@ var AWARD_DESCRIPTIONS = {
 function orkInitTheme() {
     if (orkInitTheme._done) return;
     orkInitTheme._done = true;
-    var stored = localStorage.getItem('ork_theme');
+    // localStorage can THROW, not merely return null: blocked site data, a
+    // private window, some privacy extensions. Unguarded, the exception escaped
+    // before data-theme was set and the page fell through to the OS preference,
+    // showing dark to someone who had chosen light.
+    var stored = null;
+    try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
     if (stored === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
     } else if (stored === 'light') {
@@ -384,19 +389,20 @@ function orkInitTheme() {
     var btn = document.getElementById('ork-theme-toggle');
     if (btn) {
         btn.addEventListener('click', function() {
-            var stored = localStorage.getItem('ork_theme');
+            var stored = null;
+            try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
             // Cycle: auto → dark → light → auto (keyed off stored pref, not data-theme)
             if (!stored) {
                 // auto → dark
                 document.documentElement.setAttribute('data-theme', 'dark');
-                localStorage.setItem('ork_theme', 'dark');
+                try { localStorage.setItem('ork_theme', 'dark'); } catch (e) { /* preference is not persisted */ }
             } else if (stored === 'dark') {
                 // dark → light
                 document.documentElement.setAttribute('data-theme', 'light');
-                localStorage.setItem('ork_theme', 'light');
+                try { localStorage.setItem('ork_theme', 'light'); } catch (e) { /* preference is not persisted */ }
             } else {
                 // light → auto: remove pref, re-apply OS preference live
-                localStorage.removeItem('ork_theme');
+                try { localStorage.removeItem('ork_theme'); } catch (e) { /* nothing to clear */ }
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     document.documentElement.setAttribute('data-theme', 'dark');
                 } else {
@@ -421,7 +427,10 @@ function orkInitTheme() {
     // Live OS preference listener — only fires when user is in auto mode (no stored pref)
     if (window.matchMedia) {
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
-            if (localStorage.getItem('ork_theme')) return; // user has a manual pref, ignore
+            var manual = null;
+            try { manual = null;
+ try { manual = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ } } catch (e) { /* treat as unset */ }
+            if (manual) return; // user has a manual pref, ignore
             if (e.matches) {
                 document.documentElement.setAttribute('data-theme', 'dark');
             } else {
@@ -442,7 +451,8 @@ function orkInitTheme() {
 function orkUpdateThemeIcon() {
     var btn = document.getElementById('ork-theme-toggle');
     if (!btn) return;
-    var stored = localStorage.getItem('ork_theme');
+    var stored = null;
+    try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
     // Sun icon (light mode)
     var sunSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9A9.01 9.01 0 0 0 12 3zm0 16a7 7 0 1 1 7-7 7.008 7.008 0 0 1-7 7z"/><path d="M12 7a5 5 0 1 0 5 5 5.006 5.006 0 0 0-5-5z"/></svg>';
     // Moon icon (dark mode)
@@ -464,7 +474,8 @@ function orkUpdateThemeIcon() {
 // Run theme init on DOMContentLoaded to ensure button is in DOM
 // Theme attr is applied immediately via stored value in case it was already set server-side
 (function() {
-    var stored = localStorage.getItem('ork_theme');
+    var stored = null;
+    try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
     if (stored === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
     } else if (stored === 'light') {
