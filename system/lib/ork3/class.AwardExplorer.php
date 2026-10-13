@@ -56,6 +56,19 @@ class AwardExplorer extends Ork3
     /** A date the ORK stores for "no date recorded". 5,951 rows on production carry it. */
     public const ZERO_DATE = '0000-00-00';
 
+    /**
+     * ork_award.peerage, in the order the enum declares it. This is the answer to
+     * "show me all Knights / Paragons / Masters" without anyone knowing an id.
+     *
+     * The ONLY peerage strings that reach SQL come from this array. A request names
+     * a value, it is matched against this list with a strict comparison, and the
+     * element FROM HERE is what is emitted -- the caller's own string never is.
+     */
+    public const PEERAGE = [
+        'Knight', 'Master', 'Paragon', 'Squire', 'Man-At-Arms',
+        'Page', 'Lords-Page', 'Apprentice', 'Kingdom-Level-Award', 'None',
+    ];
+
     public function __construct()
     {
         parent::__construct();
@@ -65,13 +78,19 @@ class AwardExplorer extends Ork3
 
     public function Registry(array $known = []): array
     {
-        return ['criteria' => $this->_criteria($known), 'columns' => $this->_columnDefs()];
+        return [
+            'criteria' => $this->_criteria($known),
+            'columns'  => $this->_columnDefs(),
+            'options'  => $this->LoadOptions(),
+        ];
     }
 
     private function _opsFor(string $type): array
     {
         switch ($type) {
             case 'enum_set':
+                return self::OPS_SET;
+            case 'peerage_set':
                 return self::OPS_SET;
             case 'bool':
                 return self::OPS_BOOL;
@@ -130,6 +149,10 @@ class AwardExplorer extends Ork3
                 'note' => 'Includes kingdom-original ladders, which carry no catalog row.',
             ]),
             'is_title' => $this->_crit('Is a title', 'Which award', 'bool'),
+            'peerage' => $this->_crit('Peerage', 'Which award', 'peerage_set', [
+                'values' => self::PEERAGE,
+                'note' => 'Knighthoods, masterhoods and paragons, by the award\'s peerage class.',
+            ]),
             'rank' => $this->_crit('Rank', 'Which award', 'number', [
                 'min' => 0,
                 'max' => self::MAX_RANK,
@@ -308,6 +331,8 @@ class AwardExplorer extends Ork3
                 return $this->_normBool($v);
             case 'enum_set':
                 return $this->_normSet($def, $o, $v, $known);
+            case 'peerage_set':
+                return $this->_normPeerage($o, $v);
         }
         return ['error' => 'Unsupported criterion type'];
     }
@@ -368,6 +393,40 @@ class AwardExplorer extends Ork3
         return $this->_normList($v, $allowed, $def['set']);
     }
 
+    /**
+     * Peerage values, matched strictly against self::PEERAGE. Returns the matched
+     * CONSTANT elements, never the caller's strings, so nothing a caller typed can
+     * reach the SQL builder even if the comparison were later loosened.
+     */
+    private function _normPeerage(string $o, $v): array
+    {
+        $single = ($o === 'is' || $o === 'is_not');
+        $list = is_array($v) ? $v : [$v];
+        if ($single && count($list) !== 1) {
+            return ['error' => 'Choose one peerage'];
+        }
+        if (!$list) {
+            return ['error' => 'The peerage list is empty'];
+        }
+        if (count($list) > count(self::PEERAGE)) {
+            return ['error' => 'Too many peerage values'];
+        }
+        $out = [];
+        foreach ($list as $item) {
+            if (!is_string($item)) {
+                return ['error' => 'Each peerage must be one of the known values'];
+            }
+            $i = array_search($item, self::PEERAGE, true);
+            if ($i === false) {
+                return ['error' => 'Unknown peerage: ' . (strlen($item) > 30 ? 'value too long' : htmlspecialchars($item))];
+            }
+            if (!in_array(self::PEERAGE[$i], $out, true)) {
+                $out[] = self::PEERAGE[$i];
+            }
+        }
+        return ['v' => $single ? $out[0] : $out];
+    }
+
     private function _normList($v, ?array $allowed, string $what): array
     {
         if (!is_array($v) || count($v) === 0) {
@@ -415,6 +474,44 @@ class AwardExplorer extends Ork3
             }
         }
         return $known;
+    }
+
+    /**
+     * Named option lists for the pickers, so nobody has to know an id.
+     *
+     * Only the small sets are shipped: base award (149), kingdom (37) and park
+     * (1,101) come to about 40 KB together, which is worth paying once on a
+     * logged-in report page. ork_kingdomaward is NOT here -- 4,874 rows, and the
+     * "Award (any kingdom)" picker answers the same question better anyway, since
+     * someone looking for Order of the Warrior wants every kingdom's row of it.
+     *
+     * Deprecated awards are left out of the picker. They remain valid as ids, so
+     * an old share link still resolves; they are simply not offered as new choices.
+     */
+    public function LoadOptions(): array
+    {
+        $out = ['award' => [], 'kingdom' => [], 'park' => [], 'peerage' => []];
+        foreach (self::PEERAGE as $p) {
+            $out['peerage'][] = ['id' => $p, 'name' => $p === 'None' ? 'None (ordinary award)' : $p];
+        }
+        $sets = [
+            'award'   => 'SELECT award_id AS id, name FROM ' . $this->_t('award') . ' WHERE deprecate = 0 ORDER BY name',
+            'kingdom' => 'SELECT kingdom_id AS id, name FROM ' . $this->_t('kingdom') . ' ORDER BY name',
+            'park'    => 'SELECT park_id AS id, name FROM ' . $this->_t('park') . ' ORDER BY name',
+        ];
+        foreach ($sets as $key => $sql) {
+            try {
+                $rs = $this->_select($sql);
+                while ($rs->next()) {
+                    $out[$key][] = ['id' => (int)$rs->id, 'name' => stripslashes((string)$rs->name)];
+                }
+            } catch (Throwable $e) {
+                // A missing picker degrades to typing an id; it is not worth failing
+                // the whole page over.
+                logtrace('AwardExplorer::LoadOptions ' . $key . ' failure', $e->getMessage());
+            }
+        }
+        return $out;
     }
 
     // ---------------------------------------------------------------- execution helpers
@@ -558,6 +655,20 @@ class AwardExplorer extends Ork3
             case 'is_title':
                 return function (string $o, $v) {
                     return '(' . $this->_isTitleExpr() . ') = ' . ((int)$v === 1 ? '1' : '0');
+                };
+            case 'peerage':
+                return function (string $o, $v) {
+                    // Values were matched against self::PEERAGE during normalisation,
+                    // so these literals are this class's own constants.
+                    $vals = (array)$v;
+                    foreach ($vals as $x) {
+                        if (!in_array($x, self::PEERAGE, true)) {
+                            throw new InvalidArgumentException('bad peerage');
+                        }
+                    }
+                    $list = "'" . implode("','", $vals) . "'";
+                    $neg = ($o === 'is_not' || $o === 'not_in') ? 'NOT ' : '';
+                    return $neg . "(w.peerage IN ($list))";
                 };
             case 'rank':
                 return function (string $o, $v) {

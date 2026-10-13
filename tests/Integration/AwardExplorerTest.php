@@ -127,6 +127,50 @@ final class AwardExplorerTest extends TestCase
         }
     }
 
+    /**
+     * "All Knights / Paragons / Masters" has to work without anyone knowing an id.
+     * Peerage is the criterion that answers it.
+     */
+    public function testPeerageFindsKnighthoodsAndParagons(): void
+    {
+        foreach (['Knight', 'Master', 'Paragon', 'Kingdom-Level-Award'] as $peerage) {
+            $r = $this->ae->NormalizeTree($this->tree([['c' => 'peerage', 'o' => 'is', 'v' => $peerage]]), $this->known);
+            $this->assertTrue($r['ok'], "peerage $peerage should be accepted");
+            $sql = $this->ae->CompileTree($r['tree'], $this->known);
+            $this->assertStringContainsString("w.peerage IN ('" . $peerage . "')", $sql);
+        }
+        $r = $this->ae->NormalizeTree(
+            $this->tree([['c' => 'peerage', 'o' => 'in', 'v' => ['Knight', 'Master']]]),
+            $this->known
+        );
+        $this->assertTrue($r['ok']);
+        $this->assertStringContainsString("w.peerage IN ('Knight','Master')", $this->ae->CompileTree($r['tree'], $this->known));
+    }
+
+    /** Peerage is the only string a caller picks, so it must not be able to carry SQL. */
+    public function testPeerageRejectsAnythingNotInTheConstant(): void
+    {
+        foreach (["Knight' OR 1=1--", 'knight', 'Knights', '', 'DROP TABLE', 1] as $evil) {
+            $r = $this->ae->NormalizeTree($this->tree([['c' => 'peerage', 'o' => 'is', 'v' => $evil]]), $this->known);
+            $this->assertFalse($r['ok'], 'peerage accepted something outside the constant: ' . var_export($evil, true));
+        }
+    }
+
+    /** The pickers only help if the option lists actually arrive with the registry. */
+    public function testRegistryShipsNamedOptionsForThePickers(): void
+    {
+        $reg = $this->ae->Registry($this->known);
+        $this->assertArrayHasKey('options', $reg);
+        foreach (['award', 'kingdom', 'park', 'peerage'] as $set) {
+            $this->assertArrayHasKey($set, $reg['options'], "no option list for $set");
+        }
+        $this->assertSame(count(AwardExplorer::PEERAGE), count($reg['options']['peerage']));
+        foreach ($reg['options']['peerage'] as $o) {
+            $this->assertContains($o['id'], AwardExplorer::PEERAGE);
+            $this->assertNotSame('', $o['name']);
+        }
+    }
+
     public function testEmptyTreeCompilesToATruth(): void
     {
         $r = $this->ae->NormalizeTree($this->tree([]), $this->known);
@@ -138,7 +182,7 @@ final class AwardExplorerTest extends TestCase
     public function testRevokedAndStrippedAreExcludedByDefault(): void
     {
         $r = $this->ae->NormalizeTree($this->tree([]), $this->known);
-        $out = $this->ae->Run($r['tree'], ['date', 'recipient', 'revoked'], ['limit' => 25], $this->known);
+        $out = $this->ae->RunRows($r['tree'], ['date', 'recipient', 'revoked'], ['limit' => 25], $this->known);
         foreach ($out['rows'] as $row) {
             $this->assertSame(0, (int)$row['revoked'], 'a revoked grant leaked into the default view');
             $this->assertNotSame('', (string)$row['recipient'], 'a stripped grant leaked into the default view');
@@ -148,7 +192,7 @@ final class AwardExplorerTest extends TestCase
     public function testRunReturnsOnlyTheRequestedColumns(): void
     {
         $r = $this->ae->NormalizeTree($this->tree([]), $this->known);
-        $out = $this->ae->Run($r['tree'], ['date', 'award_name'], ['limit' => 3], $this->known);
+        $out = $this->ae->RunRows($r['tree'], ['date', 'award_name'], ['limit' => 3], $this->known);
         $this->assertLessThanOrEqual(3, count($out['rows']));
         $this->assertSame(['date', 'award_name'], $out['columns']);
         foreach ($out['rows'] as $row) {
@@ -177,7 +221,7 @@ final class AwardExplorerTest extends TestCase
 
             $seen = [];
             for ($offset = 0; $offset < 6; $offset += 2) {
-                $page = $this->ae->Run($r['tree'], ['date'], ['limit' => 2, 'offset' => $offset], $this->known);
+                $page = $this->ae->RunRows($r['tree'], ['date'], ['limit' => 2, 'offset' => $offset], $this->known);
                 foreach ($page['rows'] as $row) {
                     $seen[] = (int)$row['AwardsId'];
                 }
@@ -227,7 +271,7 @@ final class AwardExplorerTest extends TestCase
     {
         $r = $this->ae->NormalizeTree($this->tree([]), $this->known);
         foreach (["x' OR 1=1 -- ", '%', '_', "'; DROP TABLE ork_awards; --"] as $evil) {
-            $out = $this->ae->Run($r['tree'], ['date'], ['search' => $evil, 'limit' => 2], $this->known);
+            $out = $this->ae->RunRows($r['tree'], ['date'], ['search' => $evil, 'limit' => 2], $this->known);
             $this->assertIsArray($out['rows'], "search survived: $evil");
         }
         // The table is still there.

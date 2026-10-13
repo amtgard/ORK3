@@ -73,6 +73,20 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 		<p class="ae-hint" id="ae-window-hint"></p>
 	</div>
 
+	<!-- ── Quick picks ─────────────────────────────────────── -->
+	<div class="ae-card">
+		<p class="ae-quicklabel">Quick picks</p>
+		<div class="ae-quick" role="group" aria-label="Common searches">
+			<button type="button" class="ae-quickbtn" data-preset="knights"><i class="fas fa-chess-knight" aria-hidden="true"></i> Knights</button>
+			<button type="button" class="ae-quickbtn" data-preset="masters"><i class="fas fa-hat-wizard" aria-hidden="true"></i> Masterhoods</button>
+			<button type="button" class="ae-quickbtn" data-preset="paragons"><i class="fas fa-star" aria-hidden="true"></i> Paragons</button>
+			<button type="button" class="ae-quickbtn" data-preset="ladders"><i class="fas fa-chart-line" aria-hidden="true"></i> Ladder awards</button>
+			<button type="button" class="ae-quickbtn" data-preset="titles"><i class="fas fa-scroll" aria-hidden="true"></i> Titles</button>
+			<button type="button" class="ae-quickbtn" data-preset="kingdomlevel"><i class="fas fa-crown" aria-hidden="true"></i> Kingdom-level</button>
+		</div>
+		<p class="ae-hint">A quick pick replaces your filters and runs. Everything it sets is an ordinary rule you can then change.</p>
+	</div>
+
 	<!-- ── Filters ─────────────────────────────────────────── -->
 	<details class="ae-card ae-fold" id="ae-filters-card">
 		<summary><i class="fas fa-filter" aria-hidden="true"></i> Filters <span class="ae-count" id="ae-filter-count"></span></summary>

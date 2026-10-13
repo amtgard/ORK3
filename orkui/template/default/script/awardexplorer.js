@@ -13,6 +13,7 @@
 
     var CRIT = AE.registry.criteria || {};
     var COLS = AE.registry.columns || {};
+    var OPTS = AE.registry.options || {};
     var $ = function (id) { return document.getElementById(id); };
 
     function esc(s) {
@@ -110,11 +111,25 @@
             }
             return '<input type="number" class="ae-v" data-k="v"' + min + max + ' value="' + esc(r.v == null ? '' : r.v) + '">';
         }
-        // enum_set: ids. No option list is shipped — kingdomaward alone is 4,874
-        // entries and the page would carry all of them. Ids are typed or pasted,
-        // and the server rejects any that do not exist.
-        var val = Array.isArray(r.v) ? r.v.join(', ') : (r.v == null ? '' : r.v);
         var many = (r.o === 'in' || r.o === 'not_in');
+        var list = OPTS[def.set] || (def.type === 'peerage_set' ? OPTS.peerage : null);
+
+        // A real picker whenever an option list was shipped. Only the small sets
+        // are: ork_kingdomaward is 4,874 rows, so "Award" still takes an id while
+        // "Award (any kingdom)" offers all 149 catalog awards by name — which is
+        // what someone hunting a known award actually wants.
+        if (list && list.length) {
+            var chosen = Array.isArray(r.v) ? r.v.map(String) : (r.v == null || r.v === '' ? [] : [String(r.v)]);
+            return '<select class="ae-v ae-v-pick" data-k="v"' + (many ? ' multiple size="5"' : '') + '>'
+                + (many ? '' : '<option value="">choose…</option>')
+                + list.map(function (o) {
+                    return '<option value="' + esc(o.id) + '"'
+                        + (chosen.indexOf(String(o.id)) !== -1 ? ' selected' : '') + '>' + esc(o.name) + '</option>';
+                }).join('') + '</select>';
+        }
+
+        // No list for this set: an id, which the server rejects if it does not exist.
+        var val = Array.isArray(r.v) ? r.v.join(', ') : (r.v == null ? '' : r.v);
         return '<input type="text" class="ae-v" data-k="v" inputmode="numeric" '
             + 'placeholder="' + (many ? 'ids, comma separated' : 'id') + '" value="' + esc(val) + '">';
     }
@@ -352,9 +367,10 @@
             if (!Array.isArray(r.v)) { r.v = ['', '']; }
             r.v[k === 'v0' ? 0 : 1] = e.target.value;
         } else if (k === 'v') {
-            var def2 = CRIT[r.c];
-            if (def2 && def2.type === 'enum_set' && (r.o === 'in' || r.o === 'not_in')) {
-                r.v = e.target.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+            if (e.target.multiple) {
+                r.v = Array.prototype.map.call(e.target.selectedOptions, function (o) { return o.value; });
+            } else if (r.o === 'in' || r.o === 'not_in') {
+                r.v = String(e.target.value).split(',').map(function (x) { return x.trim(); }).filter(Boolean);
             } else {
                 r.v = e.target.value;
             }
@@ -381,6 +397,41 @@
         if (e.target.checked && at === -1) { state.columns.push(id); }
         if (!e.target.checked && at !== -1) { state.columns.splice(at, 1); }
         $('ae-column-count').textContent = '(' + state.columns.length + ')';
+    });
+
+    // ---- quick picks -------------------------------------------------------
+    // The answer to "how do I just see all the Knights". Each one sets ordinary
+    // rules, so the result is a filter the person can read, adjust and share --
+    // not a special mode they then have to escape from.
+    var PRESETS = {
+        knights:      { rules: [{ c: 'peerage', o: 'is', v: 'Knight' }],  months: 0 },
+        masters:      { rules: [{ c: 'peerage', o: 'is', v: 'Master' }],  months: 0 },
+        paragons:     { rules: [{ c: 'peerage', o: 'is', v: 'Paragon' }], months: 0 },
+        kingdomlevel: { rules: [{ c: 'peerage', o: 'is', v: 'Kingdom-Level-Award' }], months: 0 },
+        ladders:      { rules: [{ c: 'is_ladder', o: 'is', v: 'yes' }] },
+        titles:       { rules: [{ c: 'is_title', o: 'is', v: 'yes' }] }
+    };
+
+    Array.prototype.forEach.call(document.querySelectorAll('.ae-quickbtn'), function (b) {
+        b.addEventListener('click', function () {
+            var preset = PRESETS[b.dataset.preset];
+            if (!preset) { return; }
+            // Peerages are rare enough that a 12-month window usually shows nothing,
+            // so those presets open the whole history. Ladders and titles are common,
+            // so they keep whatever window is set.
+            state.rules = preset.rules.map(function (r) { return Object.assign({}, r); });
+            if (preset.months !== undefined) {
+                state.months = preset.months;
+                Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
+                    c.classList.toggle('ae-chip-on', Number(c.dataset.months) === state.months);
+                });
+                windowHint();
+            }
+            var card = $('ae-filters-card');
+            if (card) { card.open = true; }
+            renderTree();
+            run();
+        });
     });
 
     $('ae-add-rule').addEventListener('click', addRule);
