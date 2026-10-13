@@ -1248,7 +1248,6 @@
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/population_explorer&ParkId=<?= $park_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
-							<li><a href="<?= UIR ?>Reports/award_explorer"><i class="fas fa-award"></i> Award Explorer</a></li>
 							<?php endif; ?>
 						</ul>
 					</div>
@@ -1280,6 +1279,7 @@
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Ladder Award Grid</a></li>
 							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
+							<li><a href="<?= UIR ?>Reports/award_explorer"><i class="fas fa-award"></i> Award Explorer</a></li>
 						</ul>
 					</div>
 					<?php endif; ?>
