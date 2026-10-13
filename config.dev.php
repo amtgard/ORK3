@@ -130,13 +130,6 @@ define('DUMPTRACE', false);
 define('GOOGLE_MAPS_API_KEY', '');
 define('GOOGLE_MAPS_ACCESS_API_KEY', '');
 define('SENDGRID_API_KEY', '');
-// Amazon SES SMTP credentials -- the outbound mail path for password reset
-// (Authorization::ResetPassword). Leave empty here; the real values live in
-// prod config.php. With these empty, a reset request fails cleanly and is
-// logged instead of sending mail.
-define('AMAZON_SES_HOST', '');
-define('AMAZON_SES_USERNAME', '');
-define('AMAZON_SES_PASSWORD', '');
 define('BEHOLD_KEY', '');
 // Cloudflare analytics — keep empty in committed config.dev.php. For local
 // testing pass via docker (-e CF_API_TOKEN=… -e CF_ZONE_ID=…) — the recap
@@ -146,6 +139,14 @@ define('CF_ZONE_ID', '');
 
 // Amazon SES SMTP — same env var names as Amtgard IDP (.env / ORK .dev.env).
 // heartbeat.sh passes these into php-fpm when set on the container.
+//
+// This is the outbound mail path for password reset (Authorization::ResetPassword).
+// Leave empty here; the real values live in prod config.php. With these empty a
+// reset request fails cleanly and is logged instead of sending mail.
+//
+// Defined ONCE, here. A second plain-empty block added above these on 2026-10-09
+// re-declared HOST/USERNAME/PASSWORD; PHP keeps the FIRST define() and warns, so
+// the earlier block won and these getenv() reads were dead for those three.
 define('AMAZON_SES_HOST', getenv('AMAZON_SES_HOST') ?: '');
 define('AMAZON_SES_USERNAME', getenv('AMAZON_SES_USERNAME') ?: '');
 define('AMAZON_SES_PASSWORD', getenv('AMAZON_SES_PASSWORD') ?: '');

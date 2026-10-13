@@ -17,9 +17,48 @@ class Court
      * catalog's own flags — see reference_kingdomaward_is_title_authoritative.
      *
      * Both expect the kingdomaward aliased `ka` and the award aliased `a`.
+     *
+     * THIRD CASE for ladders, see sqlEffectiveIsLadder(): a kingdom-original
+     * award has no ork_award row at all, so a.is_ladder can never be 1 for it,
+     * and ka.is_ladder is unset on every one of them in production. Both
+     * readings therefore say "not a ladder" for an award the rest of the ORK
+     * treats as one.
      */
-    private const SQL_EFFECTIVE_IS_LADDER = 'GREATEST(COALESCE(ka.is_ladder, 0), COALESCE(a.is_ladder, 0))';
     private const SQL_EFFECTIVE_IS_TITLE  = 'GREATEST(COALESCE(ka.is_title, 0), COALESCE(a.is_title, 0))';
+
+    /**
+     * Effective is_ladder, including kingdom-original ladders.
+     *
+     * Award::pseudoLadderKingdomAwardIds() is the curated list of kingdom
+     * invented ladders -- awards with no backing ork_award row, which therefore
+     * cannot be detected from either is_ladder column. It is NOT a new source of
+     * truth: Award, Player, Report, model.Award and controller.Court already
+     * consult it, and Court_detail.tpl is handed it for the award picker. This
+     * class was the only ladder-aware consumer that did not, which is why
+     * Order of the Hunter offered a rank picker and then rendered as a one-off
+     * award on the same screen.
+     *
+     * Consequences beyond the pill: ledgerAlreadyHasHonor only runs its
+     * duplicate guard when a row is effectively a ladder or a title, so these
+     * awards previously had no same-day duplicate protection at all.
+     *
+     * Ids are cast to int and inlined rather than bound: this is a SQL fragment
+     * spliced into several queries, there is no parameter list to bind against,
+     * and the values are a hardcoded constant list.
+     *
+     * The list is hardcoded and goes stale whenever a kingdom invents a ladder
+     * (class.Award.php says so, and says it is why Painted Skies' Hunter lost
+     * its ranks). The replacement reads ka.is_ladder and is written but unmerged
+     * on Tobias/feature/kingdom-ladder-awards (be5c0314) -- note its migration
+     * re-adds the is_ladder column, which has existed since 2014. When that
+     * lands, this method collapses back to the two-column GREATEST.
+     *
+     * Expects the kingdomaward aliased `ka` and the award aliased `a`.
+     */
+    private static function sqlEffectiveIsLadder(): string
+    {
+        return Award::sqlEffectiveIsLadder('ka', 'a');
+    }
 
     private $db;
 
@@ -614,7 +653,7 @@ class Court
             $this->db->Clear();
             $info = $this->db->DataSet(
                 'SELECT m.persona, p.abbreviation AS park_abbrev, IFNULL(ka.name, a.name) AS award_name,
-                        ' . self::SQL_EFFECTIVE_IS_LADDER . ' AS is_ladder,
+                        ' . self::sqlEffectiveIsLadder() . ' AS is_ladder,
                         ' . self::SQL_EFFECTIVE_IS_TITLE . ' AS is_title
                  FROM ' . DB_PREFIX . 'mundane m
                  LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
@@ -1711,7 +1750,7 @@ class Court
              FROM ' . DB_PREFIX . 'kingdomaward ka
              LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
              WHERE ka.kingdomaward_id = ' . $kingdomaward_id . '
-               AND (' . self::SQL_EFFECTIVE_IS_LADDER . ' = 1
+               AND (' . self::sqlEffectiveIsLadder() . ' = 1
                     OR ' . self::SQL_EFFECTIVE_IS_TITLE . ' = 1)
                AND EXISTS (
                    SELECT 1 FROM ' . DB_PREFIX . 'awards oa
@@ -2332,6 +2371,7 @@ class Court
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
+                    ka.award_id AS base_award_id,
                     ca.recommendations_id, ca.sort_order, ca.pass_to_local,
                     ca.notes, ca.public_comment, ca.public_comment_cleared, ca.status, ca.scroll_status, ca.regalia_status,
                     ca.scroll_maker_id, ca.regalia_maker_id, ca.row_version,
@@ -2339,7 +2379,7 @@ class Court
                     sm.persona AS scroll_maker_persona, rm.persona AS regalia_maker_persona,
                     m.persona, p.abbreviation AS park_abbrev,
                     IFNULL(ka.name, a.name) AS award_name, a.peerage,
-                    ' . self::SQL_EFFECTIVE_IS_LADDER . ' AS is_ladder,
+                    ' . self::sqlEffectiveIsLadder() . ' AS is_ladder,
                     ' . self::SQL_EFFECTIVE_IS_TITLE . ' AS is_title,
                     rec.reason AS rec_reason, rec.mask_giver,
                     rb.persona AS rec_by_persona
@@ -2366,6 +2406,11 @@ class Court
                     'Persona'           => $rs->persona,
                     'ParkAbbrev'        => $rs->park_abbrev ?? '',
                     'KingdomAwardId'    => (int)$rs->kingdomaward_id,
+                    // Base catalog id, so the Grant modal can look up what the
+                    // recipient already holds via PlayerAjax/player/{id}/awardranks.
+                    // That map is keyed by base award_id, EXCEPT kingdom-original
+                    // ladders which are keyed "k<KingdomAwardId>" (Player::GetAwardMaxRanks).
+                    'AwardId'           => (int)$rs->base_award_id,
                     'AwardName'         => $rs->award_name,
                     'IsLadder'          => (bool)(int)$rs->is_ladder,
                     'IsTitle'           => (bool)(int)$rs->is_title,
@@ -2626,7 +2671,7 @@ class Court
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT ka.kingdomaward_id, IFNULL(ka.name, a.name) AS award_name,
-                    ' . self::SQL_EFFECTIVE_IS_LADDER . ' AS is_ladder,
+                    ' . self::sqlEffectiveIsLadder() . ' AS is_ladder,
                     ' . self::SQL_EFFECTIVE_IS_TITLE . ' AS is_title,
                     a.peerage
              FROM ' . DB_PREFIX . 'kingdomaward ka
@@ -2896,7 +2941,7 @@ class Court
                     ca.given_by_mundane_id,
                     m.persona, p.abbreviation AS park_abbrev,
                     IFNULL(ka.name, a.name) AS award_name,
-                    ' . self::SQL_EFFECTIVE_IS_LADDER . ' AS is_ladder,
+                    ' . self::sqlEffectiveIsLadder() . ' AS is_ladder,
                     gb.persona AS given_by_persona,
                     sm.persona AS scroll_maker_persona, rm.persona AS regalia_maker_persona
              FROM ' . DB_PREFIX . 'court_award ca

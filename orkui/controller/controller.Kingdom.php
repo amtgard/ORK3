@@ -202,6 +202,10 @@ class Controller_Kingdom extends Controller
 
     public function profile($kingdom_id = null)
     {
+        // Same-slug kingdom-original ladders, so the rank pickers can say when the
+        // recipient already holds the equivalent ladder in another kingdom.
+        // Informational only -- see Award::pseudoLadderSiblings().
+        $this->data['PseudoLadderSiblings'] = (new Award())->pseudoLadderSiblings();
         $this->template = '../revised-frontend/Kingdomnew_index.tpl';
         $kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
         if (!valid_id($kingdom_id)) {

@@ -10852,3 +10852,20 @@ html[data-theme="dark"] .banner-confirm-ok:hover { background: #9b2c2c; }
 /* "N at field so far" on the Park Day Today card */
 .pk-field-count { color: #2f9e63; font-weight: 700; margin-top: 3px; cursor: help; }
 html[data-theme="dark"] .pk-field-count { color: #48bb78; }
+
+
+/* ── "Also holds this ladder elsewhere" note (.tn-ladder-peers) ───
+   Created on demand by tnSiblingLadderNote() under any rank picker.
+   Quiet and neutral on purpose: it reports a fact and changes no
+   default, so styling it as a warning would misrepresent it. */
+.tn-ladder-peers {
+    margin-top   : 8px;
+    padding      : 7px 10px;
+    border-radius: 6px;
+    background   : #f7fafc;
+    border       : 1px solid #e2e8f0;
+    color        : #4a5568;
+    font-size    : 12px;
+    line-height  : 1.45;
+}
+html[data-theme="dark"] .tn-ladder-peers { background: #1a202c; border-color: #2d3748; color: #a0aec0; }
