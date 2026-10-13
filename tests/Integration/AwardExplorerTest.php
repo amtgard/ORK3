@@ -321,6 +321,71 @@ final class AwardExplorerTest extends TestCase
         }
     }
 
+    /**
+     * The case the builder was asked for: one kingdom, AND either of two awards.
+     * The server has always taken nested groups; only the UI was flat.
+     */
+    public function testNestedGroupExpressesAndOfAnOr(): void
+    {
+        $kid = (int)reset($this->known['kingdom']);
+        $awards = array_slice(array_values($this->known['award']), 0, 2);
+        $this->assertCount(2, $awards, 'need two catalog awards');
+
+        $r = $this->ae->NormalizeTree([
+            'op' => 'AND',
+            'children' => [
+                ['c' => 'kingdom', 'o' => 'is', 'v' => $kid],
+                ['op' => 'OR', 'children' => [
+                    ['c' => 'base_award', 'o' => 'is', 'v' => $awards[0]],
+                    ['c' => 'base_award', 'o' => 'is', 'v' => $awards[1]],
+                ]],
+            ],
+        ], $this->known);
+        $this->assertTrue($r['ok'], $r['error'] ?? '');
+
+        $sql = $this->ae->CompileTree($r['tree'], $this->known);
+        $this->assertStringContainsString(' AND ', $sql);
+        $this->assertStringContainsString(' OR ', $sql);
+        // The OR must be bracketed, or it would swallow the kingdom condition and
+        // the filter would quietly mean something else. (Operands contain their own
+        // parentheses -- COALESCE(...) -- so this checks the bracketing, not shape.)
+        $this->assertStringContainsString(') AND ((', $sql, 'the OR group is not bracketed');
+        $this->assertStringContainsString(') OR (', $sql);
+
+        // Prove it behaves as A AND (B OR C): swapping to a flat AND of the same
+        // three rules must NOT produce the same SQL.
+        $flat = $this->ae->NormalizeTree($this->tree([
+            ['c' => 'kingdom', 'o' => 'is', 'v' => $kid],
+            ['c' => 'base_award', 'o' => 'is', 'v' => $awards[0]],
+            ['c' => 'base_award', 'o' => 'is', 'v' => $awards[1]],
+        ]), $this->known);
+        $this->assertNotSame($sql, $this->ae->CompileTree($flat['tree'], $this->known));
+    }
+
+    /** A group nested past MAX_DEPTH is refused rather than silently flattened. */
+    public function testGroupsDeeperThanTheLimitAreRefused(): void
+    {
+        $node = ['c' => 'rank', 'o' => 'eq', 'v' => 1];
+        for ($i = 0; $i < AwardExplorer::MAX_DEPTH + 1; $i++) {
+            $node = ['op' => 'OR', 'children' => [$node]];
+        }
+        $this->assertFalse($this->ae->NormalizeTree($node, $this->known)['ok']);
+    }
+
+    /** An empty group contributes nothing rather than becoming a stray "1=1". */
+    public function testEmptyGroupsAreDropped(): void
+    {
+        $r = $this->ae->NormalizeTree([
+            'op' => 'AND',
+            'children' => [
+                ['c' => 'rank', 'o' => 'gte', 'v' => 3],
+                ['op' => 'OR', 'children' => []],
+            ],
+        ], $this->known);
+        $this->assertTrue($r['ok']);
+        $this->assertCount(1, $r['tree']['children']);
+    }
+
     public function testEmptyTreeCompilesToATruth(): void
     {
         $r = $this->ae->NormalizeTree($this->tree([]), $this->known);

@@ -39,7 +39,7 @@
     function syncScopeNote() {
         var note = document.querySelector('.ae-scope');
         if (!note) { return; }
-        var hasScope = state.rules.some(function (r) { return SCOPE_CRIT.indexOf(r.c) !== -1; });
+        var hasScope = leaves(state.tree).some(function (r) { return SCOPE_CRIT.indexOf(r.c) !== -1; });
         if (!hasScope) { note.remove(); }
     }
 
@@ -82,9 +82,13 @@
     }
 
     // ---- state -------------------------------------------------------------
+    // The filter is a TREE, the shape the server already validates: a group has an
+    // op and children, and a child is either a rule or another group. MAX_DEPTH on
+    // the server is 6; this stops one short so the builder cannot construct
+    // something the server would then refuse.
+    var MAX_DEPTH = 5;
     var state = {
-        rules: [],          // flat list; op joins them. Groups are v2 — see note below.
-        op: 'AND',
+        tree: { op: 'AND', children: [] },
         columns: [],
         search: '',
         months: AE.defaultMonths,
@@ -95,20 +99,67 @@
     var lastColumns = [];
     var dt = null;
 
-    // The server's tree takes nested groups (MAX_DEPTH 6). This v1 UI builds one
-    // level — a flat list joined by AND or OR — because that covers the asked-for
-    // cases and a nested builder is most of Population Explorer's front end. The
-    // wire format is already the nested shape, so adding groups later needs no
-    // server change.
+    /** Strip every scope rule, wherever it sits in the tree. */
+    function dropScopeRules(n) {
+        if (!isGroup(n)) { return; }
+        n.children = n.children.filter(function (c) {
+            if (isGroup(c)) { dropScopeRules(c); return c.children.length > 0; }
+            return SCOPE_CRIT.indexOf(c.c) === -1;
+        });
+    }
+
+    function isGroup(n) { return n && Object.prototype.hasOwnProperty.call(n, 'children'); }
+
+    /** The node at a path; [] is the root group. */
+    function nodeAt(path) {
+        var n = state.tree;
+        for (var i = 0; i < path.length; i++) {
+            if (!isGroup(n)) { return null; }
+            n = n.children[path[i]];
+        }
+        return n || null;
+    }
+
+    function removeAt(path) {
+        if (!path.length) { return; }
+        var parent = nodeAt(path.slice(0, -1));
+        if (isGroup(parent)) { parent.children.splice(path[path.length - 1], 1); }
+    }
+
+    function pathOf(el) {
+        var raw = el && el.getAttribute('data-path');
+        if (raw === null || raw === undefined) { return null; }
+        return raw === '' ? [] : raw.split('.').map(Number);
+    }
+
+    /** Every rule in the tree, in order. */
+    function leaves(n, out) {
+        out = out || [];
+        if (!n) { return out; }
+        if (isGroup(n)) { n.children.forEach(function (c) { leaves(c, out); }); }
+        else { out.push(n); }
+        return out;
+    }
+
+    function leafWire(r) {
+        var leaf = { c: r.c, o: r.o, v: r.v };
+        if (r.p != null) { leaf.p = r.p; }
+        return leaf;
+    }
+
+    /**
+     * The tree as the server wants it: finished rules only, and groups that end up
+     * empty dropped. A half-filled row is one the person is still writing, and
+     * sending it would only return a validation error about an unfinished rule.
+     */
+    function pruneTree(n) {
+        if (!isGroup(n)) { return ruleComplete(n) ? leafWire(n) : null; }
+        var kids = n.children.map(pruneTree).filter(Boolean);
+        return kids.length ? { op: n.op, children: kids } : null;
+    }
+
     function buildTree() {
-        return {
-            op: state.op,
-            children: state.rules.filter(ruleComplete).map(function (r) {
-                var leaf = { c: r.c, o: r.o, v: r.v };
-                if (r.p != null) { leaf.p = r.p; }
-                return leaf;
-            })
-        };
+        return pruneTree(state.tree) || { op: state.tree.op, children: [] };
     }
 
     function ruleComplete(r) {
@@ -217,38 +268,76 @@
 
     function renderTree() {
         var el = $('ae-tree');
-        if (!state.rules.length) {
-            el.innerHTML = '<p class="ae-empty">No filters. Every award matches.</p>';
-        } else {
-            var html = '';
-            state.rules.forEach(function (r, i) {
-                var def = CRIT[r.c];
-                html += '<div class="ae-rule" data-i="' + i + '">';
-                html += i === 0
-                    ? '<span class="ae-join ae-join-first">Where</span>'
-                    : '<button type="button" class="ae-join ae-joinbtn" data-act="toggle-op">' + esc(state.op) + '</button>';
-                html += '<select class="ae-c" data-k="c">' + critOptions(r.c) + '</select>';
-                if (def) {
-                    html += '<select class="ae-o" data-k="o">' + (def.operands || []).map(function (o) {
-                        return '<option value="' + esc(o) + '"' + (o === r.o ? ' selected' : '') + '>'
-                            + esc(opLabel(o, def.type)) + '</option>';
-                    }).join('') + '</select>';
-                    if (def.param) {
-                        html += '<input type="number" class="ae-p" data-k="p" min="1" placeholder="months" value="'
-                            + esc(r.p == null ? '' : r.p) + '">';
-                    }
-                    html += valueField(r, def);
-                }
-                html += '<button type="button" class="ae-x" data-act="remove" aria-label="Remove this rule">&times;</button>';
-                if (def && def.note) { html += '<p class="ae-note">' + esc(def.note) + '</p>'; }
-                if (r.error) { html += '<p class="ae-rule-error">' + esc(r.error) + '</p>'; }
-                html += '</div>';
-            });
-            el.innerHTML = html;
-        }
-        $('ae-filter-count').textContent = state.rules.length ? '(' + state.rules.length + ')' : '';
+        el.innerHTML = renderGroup(state.tree, [], 0);
+        var n = leaves(state.tree).length;
+        $('ae-filter-count').textContent = n ? '(' + n + ')' : '';
         syncScopeNote();
         upgradeAwardPickers();
+    }
+
+    /**
+     * A group renders its children, its own AND/OR joiner, and its own Add
+     * buttons. The root has no frame and no Remove: it is the filter itself, not
+     * a group inside one. Nested groups are boxed so the bracketing is visible --
+     * "kingdom AND (Garber OR Master Garber)" has to be readable at a glance, or
+     * the builder is a flat list with extra steps.
+     */
+    function renderGroup(g, path, depth) {
+        var key = path.join('.');
+        var inner = g.children.map(function (child, i) {
+            var p = path.concat(i);
+            var joiner = i === 0
+                ? '<span class="ae-join ae-join-first">Where</span>'
+                : '<button type="button" class="ae-join ae-joinbtn" data-act="toggle-op" data-path="'
+                  + esc(key) + '" title="Switch this group between AND and OR">' + esc(g.op) + '</button>';
+            return isGroup(child)
+                ? '<div class="ae-grouprow">' + joiner + renderGroup(child, p, depth + 1) + '</div>'
+                : renderRule(child, p, joiner);
+        }).join('');
+
+        if (!g.children.length) {
+            inner = depth === 0
+                ? '<p class="ae-empty">No filters. Every award matches.</p>'
+                : '<p class="ae-empty">Empty group \u2014 add a rule, or remove it.</p>';
+        }
+
+        var actions = '<div class="ae-treeactions">'
+            + '<button type="button" class="ae-btn" data-act="add-rule" data-path="' + esc(key) + '">'
+            + '<i class="fas fa-plus" aria-hidden="true"></i> Add rule</button>'
+            + (depth < MAX_DEPTH
+                ? '<button type="button" class="ae-btn" data-act="add-group" data-path="' + esc(key) + '">'
+                  + '<i class="fas fa-object-group" aria-hidden="true"></i> Add group</button>'
+                : '')
+            + (depth > 0
+                ? '<button type="button" class="ae-btn ae-btn-quiet" data-act="remove" data-path="' + esc(key)
+                  + '">Remove group</button>'
+                : '')
+            + '</div>';
+
+        return depth === 0 ? inner + actions : '<div class="ae-group">' + inner + actions + '</div>';
+    }
+
+    function renderRule(r, path, joiner) {
+        var def = CRIT[r.c];
+        var key = esc(path.join('.'));
+        var html = '<div class="ae-rule" data-path="' + key + '">' + joiner;
+        html += '<select class="ae-c" data-k="c">' + critOptions(r.c) + '</select>';
+        if (def) {
+            html += '<select class="ae-o" data-k="o">' + (def.operands || []).map(function (o) {
+                return '<option value="' + esc(o) + '"' + (o === r.o ? ' selected' : '') + '>'
+                    + esc(opLabel(o, def.type)) + '</option>';
+            }).join('') + '</select>';
+            if (def.param) {
+                html += '<input type="number" class="ae-p" data-k="p" min="1" placeholder="months" value="'
+                    + esc(r.p == null ? '' : r.p) + '">';
+            }
+            html += valueField(r, def);
+        }
+        html += '<button type="button" class="ae-x" data-act="remove" data-path="' + key
+             + '" aria-label="Remove this rule">&times;</button>';
+        if (def && def.note) { html += '<p class="ae-note">' + esc(def.note) + '</p>'; }
+        if (r.error) { html += '<p class="ae-rule-error">' + esc(r.error) + '</p>'; }
+        return html + '</div>';
     }
 
     /**
@@ -288,7 +377,7 @@
             // has no knightings of its own, so "Knights" from Painted Skies is
             // correctly zero and unhelpfully blank. Offer the obvious next move
             // rather than leaving it looking broken.
-            var scoped = state.rules.filter(function (r) { return SCOPE_CRIT.indexOf(r.c) !== -1; });
+            var scoped = leaves(state.tree).filter(function (r) { return SCOPE_CRIT.indexOf(r.c) !== -1; });
             el.innerHTML = '<p class="ae-empty">No awards match those filters.'
                 + (scoped.length
                     ? ' <button type="button" class="ae-linkbtn" id="ae-drop-scope">Search everywhere instead</button>'
@@ -297,7 +386,7 @@
             var drop = $('ae-drop-scope');
             if (drop) {
                 drop.addEventListener('click', function () {
-                    state.rules = state.rules.filter(function (r) { return SCOPE_CRIT.indexOf(r.c) === -1; });
+                    dropScopeRules(state.tree);
                     renderTree();
                     run();
                 });
@@ -409,7 +498,7 @@
         btn.disabled = true;
         setStatus('Running…');
         showError('');
-        state.rules.forEach(function (r) { delete r.error; });
+        leaves(state.tree).forEach(function (r) { delete r.error; });
 
         var tree = buildTree();
         var mr = monthsRule();
@@ -441,9 +530,14 @@
                 showError(d.error || 'That query could not be run.');
                 // A path points at the rule the server rejected; the offset of 1 is the
                 // date-window rule this page prepends, which is not one of the user's.
+                // The server's path indexes the tree it was sent; walk the same
+                // path to find the rule, allowing for the date-window rule this
+                // page prepends at the root.
                 if (Array.isArray(d.path) && d.path.length) {
-                    var i = Number(d.path[0]) - (mr ? 1 : 0);
-                    if (state.rules[i]) { state.rules[i].error = d.error; renderTree(); }
+                    var p = d.path.slice();
+                    if (mr) { p[0] = Number(p[0]) - 1; }
+                    var node = p[0] >= 0 ? nodeAt(p) : null;
+                    if (node && !isGroup(node)) { node.error = d.error; renderTree(); }
                 }
                 setStatus('');
                 return;
@@ -466,8 +560,7 @@
     // ---- share link --------------------------------------------------------
     function shareLink() {
         var payload = {
-            rules: state.rules.filter(ruleComplete),
-            op: state.op,
+            tree: buildTree(),
             columns: state.columns,
             search: state.search,
             months: state.months,
@@ -480,16 +573,11 @@
     }
 
     // ---- wiring ------------------------------------------------------------
-    function addRule() {
-        state.rules.push({ c: '', o: '', v: '' });
-        renderTree();
-    }
-
     $('ae-tree').addEventListener('change', function (e) {
         var row = e.target.closest ? e.target.closest('.ae-rule') : null;
         if (!row) { return; }
-        var i = Number(row.dataset.i), r = state.rules[i], k = e.target.dataset.k;
-        if (!r || !k) { return; }
+        var r = nodeAt(pathOf(row) || []), k = e.target.dataset.k;
+        if (!r || isGroup(r) || !k) { return; }
         if (k === 'c') {
             r.c = e.target.value;
             showColumnFor(r.c);
@@ -520,14 +608,28 @@
     $('ae-tree').addEventListener('click', function (e) {
         var btn = e.target.closest ? e.target.closest('[data-act]') : null;
         if (!btn) { return; }
-        var row = btn.closest('.ae-rule');
-        if (btn.dataset.act === 'remove' && row) {
-            state.rules.splice(Number(row.dataset.i), 1);
-            renderTree();
-        } else if (btn.dataset.act === 'toggle-op') {
-            state.op = state.op === 'AND' ? 'OR' : 'AND';
-            renderTree();
+        var path = pathOf(btn);
+        if (path === null) { return; }
+        var act = btn.dataset.act;
+
+        if (act === 'remove') {
+            removeAt(path);
+        } else if (act === 'toggle-op') {
+            var g = nodeAt(path);
+            if (isGroup(g)) { g.op = g.op === 'AND' ? 'OR' : 'AND'; }
+        } else if (act === 'add-rule') {
+            var g2 = nodeAt(path);
+            if (isGroup(g2)) { g2.children.push({ c: '', o: '', v: '' }); }
+        } else if (act === 'add-group') {
+            var g3 = nodeAt(path);
+            // A new group opens on OR. A group that repeats its parent's AND says
+            // nothing, and the reason to reach for one is almost always "any of
+            // these" inside an otherwise ANDed filter.
+            if (isGroup(g3)) { g3.children.push({ op: 'OR', children: [{ c: '', o: '', v: '' }] }); }
+        } else {
+            return;
         }
+        renderTree();
     });
 
     $('ae-columns').addEventListener('change', function (e) {
@@ -559,8 +661,11 @@
             // Knights from a kingdom's Reports tab means "this kingdom's knightings",
             // not "every knighting in Amtgard" -- wiping the scope rule threw away the
             // one thing the person had already told us.
-            var scope = state.rules.filter(function (r) { return SCOPE_CRIT.indexOf(r.c) !== -1; });
-            state.rules = scope.concat(preset.rules.map(function (r) { return Object.assign({}, r); }));
+            var scope = leaves(state.tree).filter(function (r) { return SCOPE_CRIT.indexOf(r.c) !== -1; });
+            state.tree = {
+                op: 'AND',
+                children: scope.concat(preset.rules.map(function (r) { return Object.assign({}, r); }))
+            };
             if (preset.months !== undefined) {
                 state.months = preset.months;
                 Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
@@ -575,13 +680,10 @@
         });
     });
 
-    $('ae-add-rule').addEventListener('click', addRule);
-    $('ae-add-group').addEventListener('click', function () {
-        // Groups are the v2 piece. Say so rather than offering a dead button.
-        showError('Nested groups are not in this version yet — rules are joined by the AND/OR button on each row.');
-    });
     $('ae-clear').addEventListener('click', function () {
-        state.rules = []; renderTree(); showError('');
+        state.tree = { op: 'AND', children: [] };
+        renderTree();
+        showError('');
     });
     $('ae-run').addEventListener('click', function () { run(); });
 
@@ -636,8 +738,12 @@
     (function init() {
         var init = AE.initial;
         if (init && typeof init === 'object') {
-            state.rules = Array.isArray(init.rules) ? init.rules : [];
-            state.op = init.op === 'OR' ? 'OR' : 'AND';
+            // Links made before the builder had groups carry a flat rules list.
+            if (init.tree && Array.isArray(init.tree.children)) {
+                state.tree = init.tree;
+            } else if (Array.isArray(init.rules)) {
+                state.tree = { op: init.op === 'OR' ? 'OR' : 'AND', children: init.rules };
+            }
             state.columns = Array.isArray(init.columns) ? init.columns : [];
             state.search = typeof init.search === 'string' ? init.search : '';
             state.months = Number(init.months) || 0;
@@ -654,7 +760,7 @@
         // rule in the list, so it can be removed -- being able to look at everything
         // is the point of the report. A shared link wins: it already says what it wants.
         if (!AE.initial && AE.scope && AE.scope.Type && AE.scope.Id) {
-            state.rules.push({
+            state.tree.children.push({
                 c: AE.scope.Type === 'Park' ? 'home_park' : 'home_kingdom',
                 o: 'is',
                 v: String(AE.scope.Id)

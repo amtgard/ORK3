@@ -93,11 +93,11 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 	<details class="ae-card ae-fold" id="ae-filters-card">
 		<summary><i class="fas fa-filter" aria-hidden="true"></i> Filters <span class="ae-count" id="ae-filter-count"></span></summary>
 		<div class="ae-foldbody">
+			<!-- Add rule / Add group belong to a GROUP, so they are rendered per
+			     group by renderGroup(); only Clear is global. -->
 			<div id="ae-tree" class="ae-tree"></div>
 			<div class="ae-treeactions">
-				<button type="button" class="ae-btn" id="ae-add-rule"><i class="fas fa-plus" aria-hidden="true"></i> Add rule</button>
-				<button type="button" class="ae-btn" id="ae-add-group"><i class="fas fa-object-group" aria-hidden="true"></i> Add group</button>
-				<button type="button" class="ae-btn ae-btn-quiet" id="ae-clear">Clear</button>
+				<button type="button" class="ae-btn ae-btn-quiet" id="ae-clear">Clear all filters</button>
 			</div>
 			<label class="ae-check"><input type="checkbox" id="ae-include-revoked"> Include revoked awards</label>
 			<label class="ae-check"><input type="checkbox" id="ae-include-stripped"> Include awards stripped from a player</label>
