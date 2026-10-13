@@ -91,7 +91,6 @@
         tree: { op: 'AND', children: [] },
         columns: [],
         search: '',
-        months: AE.defaultMonths,
         includeRevoked: false,
         includeStripped: false
     };
@@ -273,6 +272,7 @@
         var n = leaves(state.tree).length;
         $('ae-filter-count').textContent = n ? '(' + n + ')' : '';
         syncScopeNote();
+        syncChips();
         upgradeAwardPickers();
     }
 
@@ -513,11 +513,56 @@
         if (e.scrollIntoView) { e.scrollIntoView({ block: 'nearest' }); }
     }
 
-    function monthsRule() {
-        // The date window is a chip, not a rule the user has to write. It is added
-        // to the tree at run time so a shared link reproduces exactly what was seen.
-        if (!state.months) { return null; }
-        return { c: 'months_ago', o: 'is', v: 1, p: state.months };
+    /** YYYY-MM-DD, N months before today. */
+    function monthsAgoDate(months) {
+        var d = new Date();
+        d.setMonth(d.getMonth() - Number(months));
+        var p = function (n) { return (n < 10 ? '0' : '') + n; };
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
+
+    function dateRuleIndex() {
+        for (var i = 0; i < state.tree.children.length; i++) {
+            var c = state.tree.children[i];
+            if (!isGroup(c) && c.c === 'date' && c.o === 'gte') { return i; }
+        }
+        return -1;
+    }
+
+    /**
+     * A chip writes an ordinary rule: "Award date is on or after 2025-10-13".
+     *
+     * It used to be a window applied at run time and shown nowhere, which is how
+     * a search for Felfrost's Garbers came back without the ones from 2011-2021.
+     * As a rule it is visible in the builder, editable to any date, removable,
+     * and it travels in a share link as exactly what it is.
+     *
+     * The date is resolved when the chip is clicked rather than at run time, so a
+     * shared link returns the same rows for the person who opens it as it did for
+     * the person who sent it.
+     */
+    function setWindow(months) {
+        var at = dateRuleIndex();
+        if (!months) {
+            if (at !== -1) { state.tree.children.splice(at, 1); }
+        } else {
+            var rule = { c: 'date', o: 'gte', v: monthsAgoDate(months) };
+            if (at === -1) { state.tree.children.unshift(rule); }
+            else { state.tree.children[at] = rule; }
+        }
+        syncChips();
+    }
+
+    /** Light the chip whose date matches the rule; none, once you edit the date. */
+    function syncChips() {
+        var at = dateRuleIndex();
+        var cur = at === -1 ? null : state.tree.children[at].v;
+        Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
+            var m = Number(c.dataset.months) || 0;
+            var on = m === 0 ? (cur === null) : (cur === monthsAgoDate(m));
+            c.classList.toggle('ae-chip-on', on);
+        });
+        windowHint();
     }
 
     function run() {
@@ -532,8 +577,6 @@
         leaves(state.tree).forEach(function (r) { delete r.error; });
 
         var tree = buildTree();
-        var mr = monthsRule();
-        if (mr) { tree = { op: 'AND', children: [mr].concat(tree.children) }; }
 
         var payload = {
             Tree: tree,
@@ -565,9 +608,7 @@
                 // path to find the rule, allowing for the date-window rule this
                 // page prepends at the root.
                 if (Array.isArray(d.path) && d.path.length) {
-                    var p = d.path.slice();
-                    if (mr) { p[0] = Number(p[0]) - 1; }
-                    var node = p[0] >= 0 ? nodeAt(p) : null;
+                    var node = nodeAt(d.path);
                     if (node && !isGroup(node)) { node.error = d.error; renderTree(); }
                 }
                 setStatus('');
@@ -586,8 +627,9 @@
             // so by the time you are reading the table there is nothing saying a
             // whole era has been left out -- which reads as missing data, not as a
             // filter doing its job.
+            // The date window is a visible rule now, so it no longer needs naming
+            // here -- only the two checkboxes are still filters with no row.
             var applied = [];
-            if (state.months) { applied.push('last ' + windowWords(state.months)); }
             if (state.includeRevoked) { applied.push('including revoked'); }
             if (state.includeStripped) { applied.push('including stripped'); }
             if (applied.length) { msg += ' · ' + applied.join(' · '); }
@@ -597,17 +639,14 @@
             // And offer the way out, since "why is my 2019 award missing" is the
             // first thing a date window makes someone ask.
             var st = $('ae-status');
-            if (state.months && st) {
+            if (dateRuleIndex() !== -1 && st) {
                 var b = document.createElement('button');
                 b.type = 'button';
                 b.className = 'ae-linkbtn';
                 b.textContent = 'search all time';
                 b.addEventListener('click', function () {
-                    state.months = 0;
-                    Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
-                        c.classList.toggle('ae-chip-on', Number(c.dataset.months) === 0);
-                    });
-                    windowHint();
+                    setWindow(0);
+                    renderTree();
                     run();
                 });
                 st.appendChild(document.createTextNode(' · '));
@@ -626,7 +665,6 @@
             tree: buildTree(),
             columns: state.columns,
             search: state.search,
-            months: state.months,
             includeRevoked: state.includeRevoked,
             includeStripped: state.includeStripped
         };
@@ -733,13 +771,9 @@
                 op: 'AND',
                 children: scope.concat(preset.rules.map(function (r) { return Object.assign({}, r); }))
             };
-            if (preset.months !== undefined) {
-                state.months = preset.months;
-                Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
-                    c.classList.toggle('ae-chip-on', Number(c.dataset.months) === state.months);
-                });
-                windowHint();
-            }
+            // Peerages are rare enough that a 12-month window usually shows
+            // nothing, so those presets drop the date rule entirely.
+            if (preset.months !== undefined) { setWindow(preset.months); }
             var card = $('ae-filters-card');
             if (card) { card.open = true; }
             renderTree();
@@ -760,7 +794,6 @@
     function startOver() {
         state.tree = { op: 'AND', children: [] };
         state.search = '';
-        state.months = AE.defaultMonths;
         state.includeRevoked = false;
         state.includeStripped = false;
         state.columns = [];
@@ -777,9 +810,7 @@
         $('ae-search').value = '';
         $('ae-include-revoked').checked = false;
         $('ae-include-stripped').checked = false;
-        Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
-            c.classList.toggle('ae-chip-on', Number(c.dataset.months) === state.months);
-        });
+        setWindow(AE.defaultMonths);
 
         if (window.history && history.replaceState) {
             try {
@@ -828,12 +859,8 @@
 
     Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (chip) {
         chip.addEventListener('click', function () {
-            Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
-                c.classList.remove('ae-chip-on');
-            });
-            chip.classList.add('ae-chip-on');
-            state.months = Number(chip.dataset.months) || 0;
-            windowHint();
+            setWindow(Number(chip.dataset.months) || 0);
+            renderTree();   // the rule it wrote has to appear in the builder
         });
     });
 
@@ -851,9 +878,10 @@
     }
 
     function windowHint() {
-        $('ae-window-hint').textContent = state.months
-            ? 'Awards from the last ' + windowWords(state.months) + '. Choose Everything for the full history.'
-            : 'Every award the ORK has recorded. This can take a few seconds.';
+        var at = dateRuleIndex();
+        $('ae-window-hint').textContent = at === -1
+            ? 'Every award the ORK has recorded. This can take a few seconds.'
+            : 'From ' + state.tree.children[at].v + ' onwards — shown as a rule below, which you can edit or remove.';
     }
 
     $('ae-share').addEventListener('click', function () {
@@ -891,15 +919,14 @@
             }
             state.columns = Array.isArray(init.columns) ? init.columns : [];
             state.search = typeof init.search === 'string' ? init.search : '';
-            state.months = Number(init.months) || 0;
+
             state.includeRevoked = !!init.includeRevoked;
             state.includeStripped = !!init.includeStripped;
             $('ae-search').value = state.search;
             $('ae-include-revoked').checked = state.includeRevoked;
             $('ae-include-stripped').checked = state.includeStripped;
-            Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
-                c.classList.toggle('ae-chip-on', Number(c.dataset.months) === state.months);
-            });
+            // Links made while the window was a separate field still carry months.
+            if (init.months && dateRuleIndex() === -1) { setWindow(Number(init.months)); }
         }
         // Arriving from a kingdom or park starts you filtered to it. It is a normal
         // rule in the list, so it can be removed -- being able to look at everything
@@ -914,9 +941,12 @@
         if (!state.columns.length) {
             Object.keys(COLS).forEach(function (id) { if (COLS[id]['default']) { state.columns.push(id); } });
         }
+        // The default window is a rule like any other, written at boot rather than
+        // applied invisibly at run time. A shared link brings its own, so only a
+        // fresh visit gets this one.
+        if (!AE.initial && dateRuleIndex() === -1) { setWindow(AE.defaultMonths); }
         renderTree();
         renderColumns();
-        windowHint();
         // Run on a SHARED LINK only, as Population Explorer does. Arriving from a
         // kingdom's Reports tab prefills the scope rule but does not fire a query:
         // opening the page to see what it can do should not cost a scan of 397k
