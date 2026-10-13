@@ -28,7 +28,10 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 
-<div class="ae-page">
+<!-- rp-root is not decoration: reports.css scopes the whole --rp-* palette to it,
+     so without it the shared header's background resolves to nothing and the
+     white title lands on the page background. -->
+<div class="ae-page rp-root">
 
 	<!-- The shared report header (reports.css), as the other 48 report templates
 	     use. A bespoke one here looked out of place next to its own siblings. -->
