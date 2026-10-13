@@ -783,4 +783,35 @@ class Award extends Ork3
 
         return Ork3::$Lib->ghettocache->cache(self::OPTION_LIST_CACHE_CALL, $cacheKey, $options);
     }
+
+    /**
+     * Legacy hardcoded list of kingdom-original ladder awards (kingdomaward_ids
+     * with no backing official ork_award ladder row).
+     *
+     * NOT the source of truth on this branch. Kingdom ladders are read from
+     * ork_kingdomaward.is_ladder -- see LadderSql() / OfficialLadderSql() above,
+     * GetAwardOptionGroups() and Report::GetLadderAwardGrid() -- so a kingdom
+     * that invents (or re-creates) a ladder award flags the row instead of
+     * editing this list.
+     *
+     * The list is kept, unchanged from upstream, only so the upstream call sites
+     * that still consult it keep working until they are moved onto the column:
+     * the Court Planner (Controller_Court, Court_detail.tpl), Model_Award::
+     * fetch_award_option_groups(), and the IsPseudoLadder flag on
+     * Player::AwardsForPlayer(). Every id here is expected to carry
+     * is_ladder = 1 in ork_kingdomaward as well; an id that is listed but not
+     * flagged (check 7513 after a data reload) is a ladder to those call sites
+     * and a plain award everywhere else.
+     *
+     * @return list<int>
+     */
+    public static function pseudoLadderKingdomAwardIds(): array
+    {
+        return [
+            7067, 7249, 6628, 5813, 6045, 6050, 6430, 6283, 7055,
+            6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
+            6577, 94, 7084, 6171, 6574, 7254,
+            7513, // Hunter (The Painted Skies) -- added 2026-10-04
+        ];
+    }
 }

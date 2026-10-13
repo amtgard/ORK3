@@ -209,6 +209,7 @@ class Controller_Kingdom extends Controller
             exit;
         }
         $this->load_model('Award');
+        $this->load_model('Court');
         $this->load_model('Reports');
         $this->load_model('Pronoun');
         $this->load_model('Recap');
@@ -233,8 +234,9 @@ class Controller_Kingdom extends Controller
         $og = array(
             'title'       => (string)($_ogKi['KingdomName'] ?? 'Amtgard Kingdom'),
             'url'         => UIR . 'Kingdom/profile/' . (int)$kingdom_id,
-            'description' => 'An Amtgard ' . (!empty($_ogKi['IsPrincipality']) ? 'principality' : 'kingdom')
-                . ' — parks, players, events and awards on the ORK.',
+            'description' => (string)($_ogKi['KingdomName'] ?? '') . ' — an Amtgard LARP '
+                . (!empty($_ogKi['IsPrincipality']) ? 'principality' : 'kingdom')
+                . ': parks, players, events and awards on the ORK.',
         );
         if (!empty($_ogKi['HasHeraldry']) && !empty($this->data['kingdom_info']['HeraldryUrl']['Url'])) {
             $og['image'] = (string)$this->data['kingdom_info']['HeraldryUrl']['Url'];
@@ -329,6 +331,13 @@ class Controller_Kingdom extends Controller
             $this->data['StatsParkCount'] = $ownParkCount + $prinzParkCount;
         } else {
             $this->data['StatsParkCount'] = $ownParkCount;
+        }
+        // Fold the chapter count into the search snippet / link card now that
+        // it is known — makes each kingdom's description distinct and useful.
+        if (!empty($this->data['StatsParkCount']) && !empty($this->data['og']['description'])) {
+            $this->data['og']['description'] = rtrim($this->data['og']['description'], '.')
+                . ', with ' . (int)$this->data['StatsParkCount']
+                . ' active chapter' . ($this->data['StatsParkCount'] == 1 ? '' : 's') . '.';
         }
 
         $this->data['park_edit_lookup'] = [];
@@ -504,6 +513,15 @@ class Controller_Kingdom extends Controller
                 });
             }
             $this->data['SystemAwards'] = $sysAwards;
+        }
+
+        $this->data['CallerIsOrkAdmin']    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
+        $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$kingdom_id, 0);
+        $this->data['CourtList']           = [];
+        $this->data['CourtUpcomingEvents'] = [];
+        if ($this->data['CanManageCourt']) {
+            $this->data['CourtList']           = $this->Court->get_court_list((int)$kingdom_id, 0);
+            $this->data['CourtUpcomingEvents'] = $this->Court->get_upcoming_events((int)$kingdom_id);
         }
 
         $this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();

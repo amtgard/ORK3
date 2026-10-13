@@ -122,8 +122,8 @@ final class LadderGridTest extends TestCase
     /**
      * T-RPT-01 kingdom-scoped ladder columns (spec requirement 4: kingdom ladders
      * are not comparable across kingdoms, so a kingdom-scoped grid must show them
-     * as a separate, labelled group after the official columns; the global/park-only
-     * grid must never show them at all).
+     * as a separate, labelled group after the official columns; a request naming
+     * neither a kingdom nor a park must never show them at all).
      */
     public function testKingdomScopedGridAppendsKingdomLadderColumns(): void
     {
@@ -157,11 +157,11 @@ final class LadderGridTest extends TestCase
     {
         // Kingdom ladders are not comparable across kingdoms: columns are keyed on
         // award_id, which kingdom ladders lack (0, or the shared 94 placeholder).
-        // Two kingdoms' "Order of the Hunter" are different rows.
-        $columns = $this->gridColumnsFor([]);
-        foreach ($columns as $column) {
-            $this->assertNotSame('kingdom', $column['Scope'] ?? 'official');
-        }
+        // Two kingdoms' "Order of the Hunter" are different rows. The only request
+        // that could lay two kingdoms side by side names neither a kingdom nor a
+        // park, and it must never carry a kingdom column. (A park-only request is
+        // NOT that case -- see testParkOnlyGridShowsItsKingdomsUnlinkedLadders.)
+        $this->assertGridHasNoKingdomColumns($this->trulyGlobalAssembly());
     }
 
     public function testWalkerRemainsExcluded(): void
@@ -372,11 +372,12 @@ final class LadderGridTest extends TestCase
 
     /**
      * GetLadderAwardGrid caches GridRows per (type, id, awards) -- proves the
-     * kingdom-scoped cache entry is never read back by, or clobbered by, a
-     * Park-only ("global") request against a park in the SAME kingdom, and that
-     * a second (cache-warm) kingdom request still carries its kingdom columns.
+     * kingdom-scoped cache entry is never clobbered by a Park-only request
+     * against a park in the SAME kingdom, and that a second (cache-warm) kingdom
+     * request still carries its kingdom columns. The Park-only request resolves
+     * its park's kingdom, so it carries that kingdom's ladder group too.
      */
-    public function testCacheDoesNotLeakBetweenGlobalAndKingdomScope(): void
+    public function testCacheDoesNotLeakBetweenParkOnlyAndKingdomScope(): void
     {
         $kid = $this->fixture->firstKingdomId();
         $this->fixture->createKingdomAward($kid, 21, 'T10RPT Cache Rose', true);
@@ -390,26 +391,25 @@ final class LadderGridTest extends TestCase
         $kingdomScopes = array_map(fn ($c) => $c['Scope'] ?? 'official', $kingdomAssembly['LadderAwards']);
         $this->assertContains('kingdom', $kingdomScopes, 'kingdom-scoped grid must carry the kingdom group');
 
-        // Global (Park-only) request against a park in the SAME kingdom must never
-        // see those kingdom columns, cache-warm or not.
+        // Park-only request against a park in the SAME kingdom: it resolves the
+        // park's kingdom and carries that kingdom's ladder group, cache-warm or not.
         $parkId = $this->fixture->parkIdInKingdom($kid);
-        $editor = $this->fixture->createPlayer($parkId, 'cache-global');
+        $editor = $this->fixture->createPlayer($parkId, 'cache-park-only');
         $this->fixture->insertScopedAuth($editor['mundane_id'], $parkId, $kid, AUTH_CREATE);
         unset($_SESSION['is_authorized_mundane_id']);
-        $globalAssembly = $report->GetLadderAwardGrid([
+        $parkOnlyAssembly = $report->GetLadderAwardGrid([
             'KingdomId' => 0,
             'ParkId' => $parkId,
             'Token' => $editor['token'],
         ]);
-        foreach ($globalAssembly['LadderAwards'] as $column) {
-            $this->assertNotSame('kingdom', $column['Scope'] ?? 'official', 'global grid must not leak kingdom columns');
-        }
+        $parkOnlyScopes = array_map(fn ($c) => $c['Scope'] ?? 'official', $parkOnlyAssembly['LadderAwards']);
+        $this->assertContains('kingdom', $parkOnlyScopes, "a park-only grid must carry its kingdom's ladder group");
 
         // Re-request the kingdom-scoped grid (now served from cache) and confirm the
-        // intervening global read did not clobber or bleed into its cache entry.
+        // intervening park-only read did not clobber or bleed into its cache entry.
         $kingdomAssembly2 = $report->GetLadderAwardGrid($kingdomRequest);
         $scopes2 = array_map(fn ($c) => $c['Scope'] ?? 'official', $kingdomAssembly2['LadderAwards']);
-        $this->assertContains('kingdom', $scopes2, 'kingdom cache entry must survive an interleaved global read');
+        $this->assertContains('kingdom', $scopes2, 'kingdom cache entry must survive an interleaved park-only read');
     }
 
     /**
@@ -581,8 +581,25 @@ final class LadderGridTest extends TestCase
         $this->fixture->createKingdomAward($kid, 0, 'T10RPT Global Leak Check One', true);
         $this->fixture->createKingdomAward($kid, 0, 'T10RPT Global Leak Check Two', true);
 
+        $this->assertGridHasNoKingdomColumns($this->trulyGlobalAssembly());
+    }
+
+    /**
+     * A Park-only request (ParkId, no KingdomId) is not the unscoped case: a park
+     * sits inside exactly one kingdom, so the grid resolves that kingdom and shows
+     * its ladders, unlinked (award_id = 0) ones included. The official columns of
+     * the same response stay keyed on award_id.
+     */
+    public function testParkOnlyGridShowsItsKingdomsUnlinkedLadders(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $first = $this->fixture->createKingdomAward($kid, 0, 'T10RPT Park-Only Check One', true);
+        $second = $this->fixture->createKingdomAward($kid, 0, 'T10RPT Park-Only Check Two', true);
+
         $parkId = $this->fixture->parkIdInKingdom($kid);
-        $editor = $this->fixture->createPlayer($parkId, 'unlinked-global');
+        $holder = $this->fixture->createPlayer($parkId, 'park-only-holder');
+        $this->fixture->insertLadderAward($holder['mundane_id'], $parkId, $kid, $first, 0, 3);
+        $editor = $this->fixture->createPlayer($parkId, 'unlinked-park-only');
         $this->fixture->insertScopedAuth($editor['mundane_id'], $parkId, $kid, AUTH_CREATE);
         unset($_SESSION['is_authorized_mundane_id']);
 
@@ -592,11 +609,127 @@ final class LadderGridTest extends TestCase
             'ParkId' => $parkId,
             'Token' => $editor['token'],
         ]);
+        $columns = $assembly['LadderAwards'];
 
-        foreach ($assembly['LadderAwards'] as $key => $column) {
-            $this->assertNotSame('kingdom', $column['Scope'] ?? 'official');
-            $this->assertIsInt($key, 'global columns are keyed on award_id, never on k<kingdomaward_id>');
+        foreach ([$first, $second] as $kaid) {
+            $this->assertArrayHasKey('k' . $kaid, $columns, "a park-only grid must show its kingdom's ladders");
+            $this->assertSame('kingdom', $columns['k' . $kaid]['Scope']);
+            $this->assertSame($kaid, $columns['k' . $kaid]['KingdomAwardId']);
         }
+        foreach ($columns as $key => $column) {
+            if (($column['Scope'] ?? 'official') !== 'kingdom') {
+                $this->assertIsInt($key, 'official columns are keyed on award_id, never on k<kingdomaward_id>');
+            }
+        }
+
+        $cell = null;
+        foreach ($assembly['GridRows'] as $row) {
+            if ((int) $row['MundaneId'] === (int) $holder['mundane_id']) {
+                $cell = $row['Awards']['k' . $first] ?? null;
+            }
+        }
+        $this->assertNotNull($cell, 'grants on a kingdom ladder must reach the park-only grid');
+        $this->assertSame(3, (int) $cell['Rank']);
+    }
+
+    /**
+     * One column per LADDER, not per kingdomaward row: rows whose names agree once
+     * a leading "Order of (the)" is stripped are merged. The column is keyed on the
+     * kingdom's own lowest kingdomaward_id, lists every merged row in
+     * KingdomAwardIds, and its cell is GREATEST(MAX(rank), COUNT) across them all.
+     */
+    public function testSameNamedKingdomLadderRowsMergeIntoOneColumn(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $first = $this->fixture->createKingdomAward($kid, 0, 'Order of the T10RPT Twin', true);
+        $second = $this->fixture->createKingdomAward($kid, 94, 'T10RPT Twin', true);
+        $this->assertLessThan($second, $first, 'precondition: ids ascend in creation order');
+
+        $ranked = $this->fixture->createPlayer($parkId, 'twin-ranked');
+        $this->fixture->insertLadderAward($ranked['mundane_id'], $parkId, $kid, $first, 0, 2);
+        $this->fixture->insertLadderAward($ranked['mundane_id'], $parkId, $kid, $second, 94, 5);
+
+        // Three rank-0 grants: the count is the level, summed across both rows.
+        $counted = $this->fixture->createPlayer($parkId, 'twin-counted');
+        $this->fixture->insertLadderAward($counted['mundane_id'], $parkId, $kid, $first, 0, 0);
+        $this->fixture->insertLadderAward($counted['mundane_id'], $parkId, $kid, $second, 94, 0);
+        $this->fixture->insertLadderAward($counted['mundane_id'], $parkId, $kid, $second, 94, 0);
+
+        $report = new Report();
+        $assembly = $report->GetLadderAwardGrid($this->kingdomGridRequest($kid));
+        $columns = $assembly['LadderAwards'];
+
+        $this->assertArrayHasKey('k' . $first, $columns, 'the merged column is keyed on the lowest own kingdomaward_id');
+        $this->assertArrayNotHasKey('k' . $second, $columns, 'a merged row must not also get a column of its own');
+        $this->assertSame('kingdom', $columns['k' . $first]['Scope']);
+        $this->assertSame($first, $columns['k' . $first]['KingdomAwardId']);
+        $this->assertSame([$first, $second], $columns['k' . $first]['KingdomAwardIds']);
+        $this->assertSame('Order of the T10RPT Twin', $columns['k' . $first]['Name']);
+
+        $cells = [];
+        foreach ($assembly['GridRows'] as $row) {
+            $cells[(int) $row['MundaneId']] = $row['Awards']['k' . $first] ?? null;
+        }
+        $this->assertSame(5, (int) ($cells[(int) $ranked['mundane_id']]['Rank'] ?? 0), 'highest rank across both rows');
+        $this->assertSame(3, (int) ($cells[(int) $counted['mundane_id']]['Rank'] ?? 0), 'grant count across both rows');
+    }
+
+    /**
+     * A principality's members hold the PARENT kingdom's ladders, so the parent's
+     * kingdom ladders belong on the principality's grid. An inherited-only ladder
+     * keeps the parent's kingdomaward_id as its key; once the principality has a
+     * same-named row of its own, that row names the merged column instead.
+     */
+    public function testPrincipalityGridInheritsItsParentKingdomsLadders(): void
+    {
+        $row = $this->fixture->pdo()->query(
+            'SELECT k.kingdom_id, k.parent_kingdom_id FROM ' . DB_PREFIX . 'kingdom k
+             INNER JOIN ' . DB_PREFIX . "park p ON p.kingdom_id = k.kingdom_id AND p.active = 'Active'
+             WHERE k.parent_kingdom_id > 0 AND k.active = 'Active'
+             ORDER BY k.kingdom_id ASC LIMIT 1"
+        )->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            $this->markTestSkipped('No active principality with a park in this fixture.');
+        }
+        $principalityId = (int) $row['kingdom_id'];
+        $parentId = (int) $row['parent_kingdom_id'];
+        $parkId = $this->fixture->parkIdInKingdom($principalityId);
+
+        $inherited = $this->fixture->createKingdomAward($parentId, 0, 'T10RPT Order of the Elder', true);
+        $parentTwin = $this->fixture->createKingdomAward($parentId, 0, 'T10RPT Order of the Heir', true);
+        $ownTwin = $this->fixture->createKingdomAward($principalityId, 0, 'T10RPT Order of the Heir', true);
+
+        $holder = $this->fixture->createPlayer($parkId, 'principality-holder');
+        $this->fixture->insertLadderAward($holder['mundane_id'], $parkId, $principalityId, $inherited, 0, 5);
+        $this->fixture->insertLadderAward($holder['mundane_id'], $parkId, $principalityId, $parentTwin, 0, 3);
+        $this->fixture->insertLadderAward($holder['mundane_id'], $parkId, $principalityId, $ownTwin, 0, 4);
+
+        $report = new Report();
+        $assembly = $report->GetLadderAwardGrid($this->kingdomGridRequest($principalityId));
+        $columns = $assembly['LadderAwards'];
+
+        $this->assertArrayHasKey('k' . $inherited, $columns, "the parent kingdom's ladder must appear on the principality grid");
+        $this->assertSame('kingdom', $columns['k' . $inherited]['Scope']);
+
+        $this->assertArrayHasKey('k' . $ownTwin, $columns, "the principality's own row keys the merged column");
+        $this->assertArrayNotHasKey('k' . $parentTwin, $columns);
+        $this->assertSame([$parentTwin, $ownTwin], $columns['k' . $ownTwin]['KingdomAwardIds']);
+
+        $awards = [];
+        foreach ($assembly['GridRows'] as $gridRow) {
+            if ((int) $gridRow['MundaneId'] === (int) $holder['mundane_id']) {
+                $awards = $gridRow['Awards'];
+            }
+        }
+        $this->assertSame(5, (int) ($awards['k' . $inherited]['Rank'] ?? 0));
+        $this->assertSame(4, (int) ($awards['k' . $ownTwin]['Rank'] ?? 0), "progression continues across the parent's and the principality's rows");
+
+        // The parent's own grid is unaffected by its principality's row.
+        $parentColumns = $report->GetLadderAwardGrid($this->kingdomGridRequest($parentId))['LadderAwards'];
+        $this->assertArrayHasKey('k' . $parentTwin, $parentColumns);
+        $this->assertSame([$parentTwin], $parentColumns['k' . $parentTwin]['KingdomAwardIds']);
+        $this->assertArrayNotHasKey('k' . $ownTwin, $parentColumns);
     }
 
     /**
@@ -611,6 +744,48 @@ final class LadderGridTest extends TestCase
         $this->lastAssembly = $report->GetLadderAwardGrid($this->kingdomGridRequest($kid));
 
         return array_values($this->lastAssembly['LadderAwards'] ?? []);
+    }
+
+    /**
+     * The one truly unscoped request: a valid session naming neither a kingdom nor
+     * a park.
+     *
+     * @return array<string, mixed>
+     */
+    private function trulyGlobalAssembly(): array
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $editor = $this->fixture->createPlayer($parkId, 'ladder-grid-unscoped');
+        $this->fixture->insertScopedAuth($editor['mundane_id'], $parkId, $kid, AUTH_CREATE);
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $report = new Report();
+
+        return $report->GetLadderAwardGrid(['KingdomId' => 0, 'ParkId' => 0, 'Token' => $editor['token']]);
+    }
+
+    /**
+     * No kingdom-scope column, and every column key an award_id -- never a
+     * k<kingdomaward_id>. Holds whether the unscoped request is refused outright
+     * (today: no columns at all) or one day served as an official-only grid.
+     *
+     * @param array<string, mixed> $assembly
+     */
+    private function assertGridHasNoKingdomColumns(array $assembly): void
+    {
+        $columns = $assembly['LadderAwards'] ?? [];
+        $this->assertIsArray($columns);
+        $this->assertSame(
+            [],
+            array_values(array_filter(array_keys($columns), 'is_string')),
+            'global columns are keyed on award_id, never on k<kingdomaward_id>'
+        );
+        $this->assertSame(
+            [],
+            array_keys(array_filter($columns, static fn ($c) => ($c['Scope'] ?? 'official') === 'kingdom')),
+            'the unscoped grid must not carry a kingdom ladder column'
+        );
     }
 
     /**
@@ -695,8 +870,9 @@ final class LadderGridTest extends TestCase
      * official-linked kingdomaward row (award 21, "Order of the Rose") and a
      * kingdom-own ladder pointed at the shared "Custom Award" placeholder
      * (award_id=94) -- the exact collision case T-RPT-01 exists to keep separate.
-     * An empty/falsy KingdomId requests the Park-only ("global") grid instead,
-     * which never joins kingdomaward and so is unaffected by kingdom fixtures.
+     * An empty/falsy KingdomId requests the Park-only grid instead: official
+     * columns under their global names, plus whatever ladders the park's kingdom
+     * has flagged (none are seeded on this path).
      *
      * @return list<array<string, mixed>>
      */

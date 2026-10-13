@@ -250,8 +250,13 @@ final class LadderProgressBonusTest extends TestCase
             // Order of the Zodiac (30), official ladder, max 12 -- the map
             // override wins even though a (wrong) ka_max_level of 10 rides along.
             $this->historicalRow(2, 30, 0, '2020-01-01', 10),
-            // A kingdom-raised ladder (award_id 0) with its own max_level of 5.
-            $this->historicalRow(3, 0, 0, '2020-01-01', 5),
+            // A kingdom-raised ladder with its own max_level of 5, hanging off the
+            // shared "Custom Award" placeholder (award_id 94).
+            $this->historicalRow(3, 94, 0, '2020-01-01', 5),
+            // A kingdom-raised ladder linked to no ork_award row at all (award_id 0).
+            // Reconciliation groups and suggests ranks by AwardId, so every such
+            // ladder would collapse into one bogus group -- they are not offered.
+            $this->historicalRow(4, 0, 0, '2020-01-01', 5),
         ]);
 
         $byAwardsId = [];
@@ -262,6 +267,7 @@ final class LadderProgressBonusTest extends TestCase
         $this->assertSame(10, $byAwardsId[1]['MaxRank'], 'Order of the Rose');
         $this->assertSame(12, $byAwardsId[2]['MaxRank'], 'Order of the Zodiac');
         $this->assertSame(5, $byAwardsId[3]['MaxRank'], "a kingdom ladder's own max_level");
+        $this->assertArrayNotHasKey(4, $byAwardsId, 'an award_id = 0 ladder is not reconcilable');
     }
 
     public function testReconcileRowFlagsBonusGrantsAndLeavesPreMaxGrantsAlone(): void

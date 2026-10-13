@@ -58,6 +58,20 @@ class Model_Reports extends Model
         return false;
     }
 
+    // Collapse parallel recommendations into one row per (recipient, kingdomaward, rank)
+    // cluster. Thin passthrough to the shared transform in class.Report.php.
+    public function group_recommendations($recs)
+    {
+        return $this->Report->groupRecommendations($recs);
+    }
+
+    // One 500-row paged batch of grouped Recommendations-Manager rows.
+    // Thin passthrough to the shared paging query in class.Report.php.
+    public function recommended_awards_page($request)
+    {
+        return $this->Report->PlayerAwardRecommendationsPage($request);
+    }
+
     // Cheap count for the Kingdom profile's "Recommendations (N)" tab badge —
     // avoids hydrating every rec just to size the list.
     public function recommended_awards_count($request)
@@ -65,6 +79,8 @@ class Model_Reports extends Model
         return (int)$this->Report->PlayerAwardRecommendationsCount($request);
     }
 
+    // Accepts Limit (default 200) / Offset — dismissals are never purged, so the
+    // underlying query is paged rather than unbounded.
     public function deleted_recommended_awards($request)
     {
         $r = $this->Report->DeletedAwardRecommendations($request);

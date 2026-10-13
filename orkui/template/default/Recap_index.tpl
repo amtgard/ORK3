@@ -75,12 +75,15 @@ $humanize_days = function($days) {
 <style>
 .recap-root { max-width: 900px; margin: 1.5em auto 3em; padding: 0 1em;
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-	color: #222; line-height: 1.5; }
+	color: #222; line-height: 1.5;
+	/* White paper surface on the gray page ground (editorial document look) */
+	background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 12px;
+	box-shadow: var(--ork-shadow-card); padding-inline: 1.5em; padding-bottom: 1.5em; }
 
 /* Hero — eyebrow + the date headline is the focal point */
 .recap-hero { text-align: center; padding: 1.5em 0 1.8em; margin-bottom: 1.5em;
 	border-bottom: 2px solid #f0e5d0; position: relative; }
-.recap-hero-eyebrow { color: #c89b3f; font-size: 0.78em; letter-spacing: 0.22em;
+.recap-hero-eyebrow { color: #7a5d1c; font-size: 0.78em; letter-spacing: 0.22em;
 	text-transform: uppercase; font-weight: 700; margin-bottom: 0.4em; }
 .recap-hero-eyebrow .fas { margin-right: 0.4em; }
 .recap-hero-link { color: #1a4c8c; text-decoration: none; font-style: normal; }
@@ -92,13 +95,13 @@ $humanize_days = function($days) {
 	text-shadow: none; padding: 0; border-radius: 0; }
 .recap-hero h1 { font-size: 1.65em; margin: 0; font-weight: 600; color: #2a2a2a;
 	letter-spacing: -0.01em; line-height: 1.25; }
-.recap-hero-sub { color: #999; font-size: 0.82em; margin-top: 0.7em;
+.recap-hero-sub { color: var(--ork-text-on-ground); font-size: 0.82em; margin-top: 0.7em;
 	font-style: italic; letter-spacing: 0.01em; }
 
 /* Sections rendered as cards */
-.recap-section { background: #fafaf7; border: 1px solid #ececec;
+.recap-section { background: var(--ork-bg-inset); border: 1px solid var(--ork-border);
 	border-radius: 10px; padding: 1.1em 1.4em 1em; margin-bottom: 1em;
-	box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+	box-shadow: none; }
 .recap-section h2 { font-size: 1.08em; margin: 0 0 0.6em 0; color: #2a2a2a;
 	font-weight: 600; display: flex; align-items: center; gap: 0.55em; border: none; padding: 0; }
 .recap-section h2 .recap-section-icon { width: 1.6em; height: 1.6em; display: inline-flex;
@@ -155,32 +158,32 @@ html[data-theme="dark"] .recap-tip-text::before { border-bottom-color: #e2e8f0; 
 .recap-section details ul { margin-top: 0.4em; }
 
 .recap-empty { color: #999; font-style: italic; padding: 3em 0; text-align: center;
-	background: #fafaf7; border-radius: 10px; border: 1px dashed #ddd; }
+	background: var(--ork-bg-inset); border-radius: 10px; border: 1px dashed var(--ork-border); }
 
 /* Navigation strip */
 .recap-nav { display: flex; justify-content: space-between; align-items: center;
-	margin: 0 0 1.5em; padding: 0.7em 1em; background: #fff; border: 1px solid #eee;
+	margin: 0 0 1.5em; padding: 0.7em 1em; background: var(--ork-bg-inset); border: 1px solid var(--ork-border);
 	border-radius: 8px; font-size: 0.9em; }
 .recap-nav a { color: #1a4c8c; text-decoration: none; font-weight: 500; }
 .recap-nav a:hover { text-decoration: underline; }
 .recap-nav .recap-nav-mid { color: #bbb; }
 
-.recap-archive { margin-top: 2em; padding: 0.9em 1.1em; background: #fafafa;
-	border: 1px solid #eee; border-radius: 8px; font-size: 0.85em; color: #777;
+.recap-archive { margin-top: 2em; padding: 0.9em 1.1em; background: var(--ork-bg-inset);
+	border: 1px solid var(--ork-border); border-radius: 8px; font-size: 0.85em; color: #777;
 	line-height: 1.9; }
 .recap-archive a { color: #1a4c8c; text-decoration: none; margin: 0 0.35em;
 	white-space: nowrap; }
 .recap-archive a:hover { text-decoration: underline; }
 .recap-archive a.current { color: #c89b3f; font-weight: 700; }
 
-.recap-foot { margin-top: 1em; font-size: 0.78em; color: #aaa; text-align: center; }
+.recap-foot { margin-top: 1em; font-size: 0.78em; color: var(--ork-text-on-ground); text-align: center; }
 .recap-foot a { color: #888; }
 
 .recap-actions { display: flex; justify-content: center; align-items: center;
 	gap: 1.2em; margin: 0 0 1em; font-size: 0.92em; color: #555; flex-wrap: wrap; }
 .recap-scope-picker { display: inline-flex; align-items: center; gap: 0.5em; }
-.recap-scope-picker select { padding: 0.35em 0.6em; border: 1px solid #ccc;
-	border-radius: 6px; background: #fff; font-size: 0.95em; color: #222;
+.recap-scope-picker select { padding: 0.35em 0.6em; border: 1px solid var(--ork-input-border);
+	border-radius: 6px; background: var(--ork-input-bg); font-size: 0.95em; color: #222;
 	font-family: inherit; cursor: pointer; }
 .recap-scope-picker select:hover { border-color: #999; }
 .recap-share-btn { display: inline-flex; align-items: center; gap: 0.4em;
@@ -201,6 +204,10 @@ html[data-theme="dark"] .recap-share-btn:hover {
 
 /* Dark mode — match the palette used in default.theme (#1a202c body, #2d3748 cards) */
 html[data-theme="dark"] .recap-root { color: #e2e8f0; }
+html[data-theme="dark"] .recap-root h1, html[data-theme="dark"] .recap-root h2 { background: transparent; border: none; }
+/* Dark keeps its original layout: no paper surface, sections sit on the page */
+html[data-theme="dark"] .recap-root { background: transparent; border-color: transparent; box-shadow: none;
+	padding-inline: 1em; padding-bottom: 0; }
 html[data-theme="dark"] .recap-hero { border-bottom-color: #4a3b1f; }
 html[data-theme="dark"] .recap-hero-eyebrow { color: #e0b95a; }
 html[data-theme="dark"] .recap-hero h1 { color: #f1f5f9; }
@@ -567,7 +574,7 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 		}
 ?>
 	<section class="recap-section">
-		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> ORK Data <span class="recap-tip" tabindex="0"><i class="fas fa-info-circle"></i><span class="recap-tip-text">The ORK is a PHP/Database application hosted on Amazon Web Services behind Cloudflare's CDN. Cloudflare caches static assets (images, CSS, JavaScript) at edge locations near visitors — those requests never reach AWS, saving server load, bandwidth, and response time. Cloudflare also absorbs bot traffic and bad actors before they touch the origin. These numbers show how that split played out for US and Canadian traffic this week. Visitor counts come from Google Analytics, which only counts real browsers — bots are excluded.</span></span></h2>
+		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> ORK Data <span class="recap-tip" tabindex="0"><i class="fas fa-info-circle"></i><span class="recap-tip-text">The ORK is a PHP/Database application hosted on Amazon Web Services behind Cloudflare's CDN. Cloudflare caches static assets (images, CSS, JavaScript) at edge locations near visitors — those requests never reach AWS, saving server load, bandwidth, and response time. Cloudflare also absorbs bot traffic and bad actors before they touch the origin. These numbers show how that split played out for US and Canadian traffic to the ORK specifically this week; the worldwide figure below covers every site sharing our Cloudflare zone (ORK, wiki, and the rest), everywhere, for scale. Visitor counts come from Google Analytics, which only counts real browsers — bots are excluded.</span></span></h2>
 <?php   if ($hu !== null) : ?>
 		<p class="recap-digest">
 			<strong><?=$format_count($hu)?></strong> people visited the ORK this week.
@@ -585,14 +592,37 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 			(<?= 100 - $cache_pct ?>%, <?=$origin_gb_str?>) were served by the ORK itself;
 			the remaining <?=$cache_hits_str?>
 			(<?=$cache_pct?>%, <?=$cached_gb_str?>) were served from Cloudflare's cache.
+<?php   if (!empty($ps['BlockedOrChallenged'])) : ?>
+			Cloudflare also blocked or challenged <strong><?=$format_count($ps['BlockedOrChallenged'])?></strong> malicious requests this week.
+<?php   endif; ?>
 		</p>
 <?php   if ($delta_line) : ?>
 		<p class="recap-trend"><em>Total requests <?=$delta_line?></em></p>
 <?php   endif; ?>
-<?php   if (!empty($ps['BlockedOrChallenged'])) : ?>
-		<p class="recap-digest">
-			Cloudflare also blocked or challenged <strong><?=$format_count($ps['BlockedOrChallenged'])?></strong> malicious requests this week.
+<?php   if (!empty($ps['RequestsGlobal'])) :
+			$req_global_str   = $format_count($ps['RequestsGlobal']);
+			$bytes_global_str = $format_bytes($ps['BytesGlobal'] ?? 0);
+			$global_delta_line = '';
+			$prev_ps_global = $prev_recap['PlatformStats'] ?? null;
+			if (is_array($prev_ps_global) && !empty($prev_ps_global['RequestsGlobal'])) {
+				$cur_g  = $ps['RequestsGlobal'];
+				$prev_g = $prev_ps_global['RequestsGlobal'];
+				$pct_g  = round(100 * ($cur_g - $prev_g) / $prev_g);
+				$arrow_g = $pct_g > 0 ? '↑' : ($pct_g < 0 ? '↓' : '·');
+				$global_delta_line = sprintf('%s %s%% from the previous week (%s → %s).',
+					$arrow_g, $pct_g >= 0 ? '+' . $pct_g : $pct_g,
+					$format_count($prev_g), $format_count($cur_g));
+			}
+		?>
+		<p class="recap-digest recap-muted">
+			Worldwide, across every site sharing our Cloudflare zone (not just the ORK),
+			Cloudflare delivered <strong><?=$req_global_str?></strong> requests
+			(<strong><?=$bytes_global_str?></strong>)<?php if (!empty($ps['BlockedGlobal'])) : ?>
+			and blocked or challenged <strong><?=$format_count($ps['BlockedGlobal'])?></strong> malicious requests<?php endif; ?> this week.
 		</p>
+<?php     if ($global_delta_line) : ?>
+		<p class="recap-trend"><em>Worldwide requests <?=$global_delta_line?></em></p>
+<?php     endif; ?>
 <?php   endif; ?>
 <?php   endif; // is_array($ps) ?>
 	</section>

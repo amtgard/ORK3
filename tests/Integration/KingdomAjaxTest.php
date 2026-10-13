@@ -42,7 +42,9 @@ final class KingdomAjaxTest extends TestCase
         $kid = $this->fixture->firstKingdomId();
         $player = $this->fixture->createPlayer('move-src', $kid);
         $editor = $this->fixture->createPlayer('move-editor', $kid);
-        $this->fixture->insertAuthorization($editor['mundane_id'], $kid, AUTH_EDIT);
+        // Moving a player is a CREATE power (see KingdomProfile::AuthorizeMovePlayer
+        // and Player::MovePlayer); an EDIT grant alone does not carry it.
+        $this->fixture->insertAuthorization($editor['mundane_id'], $kid, AUTH_CREATE);
 
         unset($_SESSION['is_authorized_mundane_id']);
         $allowed = $this->profileDomain->AuthorizeMovePlayer($editor['mundane_id'], $player['kingdom_id'], $kid);

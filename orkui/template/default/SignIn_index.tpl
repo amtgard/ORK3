@@ -38,7 +38,7 @@
 .si-wrap {
 	max-width: 480px;
 	margin: 32px auto;
-	background: #fff;
+	background: var(--ork-card-bg);
 	border-radius: 12px;
 	box-shadow: 0 4px 24px rgba(0,0,0,0.12);
 	overflow: hidden;
@@ -119,7 +119,7 @@
 .si-class-picker {
 	margin-top: 16px;
 	padding-top: 16px;
-	border-top: 1px solid #e2e8f0;
+	border-top: 1px solid var(--ork-divider);
 }
 .si-class-picker label {
 	display: block;
@@ -133,7 +133,7 @@
 .si-class-picker select {
 	width: 100%;
 	padding: 10px 36px 10px 12px;
-	border: 1px solid #cbd5e0;
+	border: 1px solid var(--ork-input-border);
 	border-radius: 6px;
 	font-size: 16px;
 	color: #2d3748;
@@ -143,10 +143,11 @@
 	-webkit-appearance: none;
 	-moz-appearance: none;
 	appearance: none;
-	background: #fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%234a5568' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><polyline points='1 1.5 6 6.5 11 1.5'/></svg>") right 12px center / 12px 8px no-repeat;
+	background: var(--ork-input-bg) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%234a5568' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><polyline points='1 1.5 6 6.5 11 1.5'/></svg>") right 12px center / 12px 8px no-repeat;
 }
 .si-class-picker select:focus {
 	outline: none;
+	background-color: var(--ork-card-bg);
 	border-color: #3182ce;
 	box-shadow: 0 0 0 3px rgba(49,130,206,0.15);
 }

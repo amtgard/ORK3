@@ -251,6 +251,67 @@ class JsonServer
      *
      **************************************************************************/
 
+    /**
+     * Anonymous per-day usage counter for the JSON service (ork_api_tally).
+     *
+     * ork_signin_tally only fires at login, so an app that authenticates once
+     * and then calls the service for a month disappears from the stats after
+     * day one. This counts the CALLS.
+     *
+     * Deliberately records no mundane_id, no IP and no token -- the same
+     * principle ork_signin_tally states: usage by class of client, never who it
+     * acted for. Elapsed time is summed so the data can rank endpoints by where
+     * server time actually goes, not merely by how chatty a client is.
+     *
+     * Called ONLY on the dispatched path, after the class+method are known to
+     * exist, so a scanner probing ?call=Nonsense/foo cannot create rows.
+     *
+     * MUST NEVER break a request. Every failure mode -- missing table (code
+     * deployed ahead of the migration), absent label helper, no $DB -- returns
+     * quietly, exactly as the signin tally does.
+     */
+    private function tally_call($class, $method, $seconds)
+    {
+        try {
+            global $DB;
+            if (!isset($DB) || !is_object($DB)) {
+                return;
+            }
+            $endpoint = preg_replace('/[^A-Za-z0-9_]/', '', (string)$class)
+                . '/' . preg_replace('/[^A-Za-z0-9_]/', '', (string)$method);
+            if (strlen($endpoint) > 64) {
+                $endpoint = substr($endpoint, 0, 64);
+            }
+            // Prefer the client's own label over the User-Agent, matching the
+            // precedence Authorization::CreateSession already uses for the
+            // session device label. This is not a nicety: a WebView client's
+            // User-Agent is the platform's browser string and cannot be
+            // overridden from inside the page, so mORK and anything else
+            // embedded would otherwise be tallied as anonymous mobile Chrome,
+            // indistinguishable from someone browsing the website. X-ORK-Client
+            // is the only identification such a client can actually send.
+            $label = preg_replace('/[\x00-\x1F\x7F]+/', ' ', (string)($_SERVER['HTTP_X_ORK_CLIENT'] ?? ''));
+            $ua    = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+            $raw   = trim($label) !== '' ? trim($label) : $ua;
+            $client = function_exists('ork_session_client_label')
+                ? ork_session_client_label($raw)
+                : (($raw === '') ? 'Unknown client' : substr($raw, 0, 40));
+
+            $ms = (int)round(max(0, (float)$seconds) * 1000);
+            $DB->Clear();
+            $DB->client   = substr((string)$client, 0, 40);
+            $DB->endpoint = $endpoint;
+            $DB->ms       = $ms;
+            $DB->Execute(
+                "INSERT INTO " . DB_PREFIX . "api_tally (day, client, endpoint, calls, ms_total) "
+                . "VALUES (CURDATE(), :client, :endpoint, 1, :ms) "
+                . "ON DUPLICATE KEY UPDATE calls = calls + 1, ms_total = ms_total + VALUES(ms_total)"
+            );
+        } catch (Throwable $e) {
+            // Usage statistics must never cost a caller their response.
+        }
+    }
+
     private function call_endpoint($class, $method)
     {
         $c = new $class();
@@ -261,6 +322,7 @@ class JsonServer
         }
         if (method_exists($c, $method_c)) {
             ob_start();
+            $__t0 = microtime(true);
             $args = $this->wrangle_parameters($this->get_call_definition($class, $method), substr($method, -1) == '0');
             // orkservice/Json/index.php is the only caller that ever constructs a
             // JsonServer, so every call reaching this dispatcher is, by definition,
@@ -301,6 +363,7 @@ class JsonServer
                 $args[0][JsonServer::API_CLIENT_FLAG] = true;
             }
             $output = $this->run_call($class, $method_c, $args);
+            $this->tally_call($class, $method_c, microtime(true) - $__t0);
             $trace = ob_get_contents();
             ob_end_clean();
             switch ($this->TRACE) {

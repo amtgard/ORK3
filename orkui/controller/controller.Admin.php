@@ -888,16 +888,23 @@ class Controller_Admin extends Controller
         $_target = $this->Player->fetch_player($id);
         $_target_park = (int)($_target['ParkId'] ?? 0);
         $_target_kingdom = (int)($_target['KingdomId'] ?? 0);
-        // Self-service exception: the Player-profile upload modal posts photo/
-        // heraldry changes HERE (action 'update' + Update='Update Media'), and
-        // the domain layer (SetImage/SetHeraldry) authorizes self-edits itself —
-        // SetWaiver still requires park authority, so the waiver arm of the same
-        // form stays officer-only. Without this carve-out the gate 302s a
-        // non-officer's own upload, fetch() follows the redirect to a 200, and
-        // the modal reports success while uploading nothing.
-        $_is_self_media_post = ($_uid === $id
+        // Self-service exception: the Player-profile modal posts both photo/
+        // heraldry changes (Update='Update Media') and account-detail edits —
+        // persona, username, email, password, pronoun, name-visibility —
+        // (Update='Update Details') HERE. The domain layer authorizes both
+        // self-edits itself: SetImage/SetHeraldry for media, and UpdatePlayer
+        // for details, which re-checks authority per admin-only field
+        // (Active, ParkMemberSince, ReeveQualified/CorporaQualified, dues) so
+        // a self-post can only ever touch its own account's own-editable
+        // fields. SetWaiver still requires park authority, so the waiver arm
+        // of the media form stays officer-only. Without this carve-out the
+        // gate 302s a non-officer's own edit, fetch() follows the redirect to
+        // a 200, and the modal reports success while nothing was saved —
+        // e.g. a password change that "looks" like it took but the old
+        // temporary password (and the expiry banner) never goes away.
+        $_is_self_post = ($_uid === $id
             && isset($action) && $action === 'update'
-            && $this->request->Update === 'Update Media');
+            && in_array($this->request->Update, ['Update Media', 'Update Details'], true));
         //
         // The capability is player.edit, gated the same way KingdomAjax::suspendplayer
         // gates it: the RBAC key first, the legacy authority row as the fallback. Without
@@ -906,7 +913,7 @@ class Controller_Admin extends Controller
         // The global-admin arm is AUTH_ADMIN against AUTH_ADMIN, matching every other
         // global-admin check in this file -- at AUTH_EDIT an EDIT-tier admin row opened
         // any player's admin console.
-        if (!$_is_self_media_post
+        if (!$_is_self_post
             && !$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)
             && !(valid_id($_target_park) && $this->Authorization->has_permission_or_authority($_uid, 'player.edit', 'park', $_target_park, AUTH_EDIT))
             && !(valid_id($_target_kingdom) && $this->Authorization->has_permission_or_authority($_uid, 'player.edit', 'kingdom', $_target_kingdom, AUTH_EDIT))) {
@@ -947,7 +954,7 @@ class Controller_Admin extends Controller
                         // player POST their own photo/heraldry with no officer authority; this
                         // branch is not scoped to Update='Update Details', so without the
                         // guard the same request could also revoke the player's own dues.
-                        if (!$_is_self_media_post && $this->request->RemoveDues == 'Revoke Dues') {
+                        if (!$_is_self_post && $this->request->RemoveDues == 'Revoke Dues') {
                             $this->load_model('Treasury');
                             $this->Treasury->RemoveLastDuesPaid(array(
                                     'MundaneId' => $id,

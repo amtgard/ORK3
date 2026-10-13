@@ -62,6 +62,7 @@ class Controller_Recap extends Controller
         $this->data['players_series'] = $this->Recap->weekly_active_players();
         $this->data['signin_series']  = $this->Recap->signin_series();
         $this->data['app_versions']   = $this->Recap->app_versions();
+        $this->data['api_usage']      = $this->Recap->api_usage(7);
         $this->data['og'] = array(
             'title'       => 'Amtgard Platform Trends',
             'url'         => UIR . 'Recap/trends',

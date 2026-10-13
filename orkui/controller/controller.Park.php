@@ -97,16 +97,72 @@ class Controller_Park extends Controller
 
         // Link-preview card (text-only; image policy pending): park name plus
         // where it is — the question anyone tapping a shared park link has.
+        // Also the search snippet (default.theme reuses og description for
+        // <meta name=description>), so it carries the meeting schedule too:
+        // "where" and "when" are the two things a searcher wants.
         $_ogPi = $this->data['park_info']['ParkInfo'];
         $_ogLoc = trim(implode(', ', array_filter(array(
             (string)($_ogPi['City'] ?? ''),
             (string)($_ogPi['Province'] ?? ''),
         ))));
+        $_ogMeets = array();
+        // Main park day first: rows come in DB order, but the description
+        // should lead with Purpose 'park-day' (Felfrost: Sunday is the park
+        // day, Tue/Wed are practices — Sunday must not fall off the cap).
+        $_ogPdRows = (array)($this->data['park_days']['ParkDays'] ?? array());
+        usort($_ogPdRows, function ($a, $b) {
+            return (($a['Purpose'] ?? '') === 'park-day' ? 0 : 1)
+                <=> (($b['Purpose'] ?? '') === 'park-day' ? 0 : 1);
+        });
+        foreach ($_ogPdRows as $_ogPd) {
+            $_ogWd  = ucfirst(strtolower((string)($_ogPd['WeekDay'] ?? '')));
+            $_ogLbl = '';
+            switch ((string)($_ogPd['Recurrence'] ?? '')) {
+                case 'weekly':
+                    $_ogLbl = $_ogWd !== '' ? $_ogWd . 's' : '';
+                    break;
+                case 'week-of-month':
+                    $_ogOrd = array(1 => '1st', 2 => '2nd', 3 => '3rd', 4 => '4th', 5 => '5th');
+                    $_ogWom = (int)($_ogPd['WeekOfMonth'] ?? 0);
+                    $_ogLbl = ($_ogWd !== '' && isset($_ogOrd[$_ogWom])) ? 'the ' . $_ogOrd[$_ogWom] . ' ' . $_ogWd : '';
+                    break;
+                case 'every-x-weeks':
+                    $_ogN = (int)($_ogPd['WeekInterval'] ?? 0);
+                    $_ogLbl = $_ogN > 1 ? 'every ' . $_ogN . ' weeks' : '';
+                    break;
+            }
+            if ($_ogLbl === '') {
+                continue;
+            }
+            $_ogT = trim((string)($_ogPd['Time'] ?? ''));
+            if ($_ogT !== '' && ($_ogTs = strtotime($_ogT)) !== false) {
+                $_ogLbl .= ' at ' . date('g:i A', $_ogTs);
+            }
+            $_ogMeets[] = $_ogLbl;
+            if (count($_ogMeets) >= 2) {
+                break;
+            }
+        }
+        $_ogParkName = (string)($_ogPi['ParkName'] ?? '') ?: (string)($this->session->park_name ?: 'Amtgard Park');
+        // A defunct park must not advertise a meeting schedule in search
+        // snippets — say what it is (historical record) and point onward.
+        // Ken's call (2026-08-26): defunct parks are also noindexed — the page
+        // stays reachable for community history, but search impressions should
+        // go to active chapters, not retired ones.
+        $_ogInactive = (trim((string)($_ogPi['Active'] ?? 'Active')) !== 'Active');
+        if ($_ogInactive) {
+            $this->data['no_index'] = true;
+        }
         $og = array(
-            'title'       => (string)($this->session->park_name ?: 'Amtgard Park'),
+            'title'       => $_ogParkName,
             'url'         => UIR . 'Park/profile/' . (int)$park_id,
-            'description' => 'Amtgard park' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
-                . ($this->session->kingdom_name ? ' — ' . $this->session->kingdom_name : '') . '.',
+            'description' => $_ogInactive
+                ? $_ogParkName . ' — former Amtgard LARP chapter' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
+                    . ($this->session->kingdom_name ? ' (' . $this->session->kingdom_name . ')' : '')
+                    . '. No longer active; historical roster and awards. Find active chapters on the Amtgard Atlas.'
+                : $_ogParkName . ' — Amtgard LARP chapter' . ($_ogLoc !== '' ? ' in ' . $_ogLoc : '')
+                    . ($this->session->kingdom_name ? ' (' . $this->session->kingdom_name . ')' : '') . '.'
+                    . (!empty($_ogMeets) ? ' Meets ' . implode(' and ', $_ogMeets) . '.' : ''),
         );
         // Park heraldry over the site logo when it exists (Ken's call).
         if (!empty($_ogPi['HasHeraldry']) && !empty($this->data['park_info']['Heraldry']['Url'])) {
@@ -247,6 +303,7 @@ class Controller_Park extends Controller
             ? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
             : true;
         $this->data['AwardRecsPublic'] = $recsPublic;
+        $this->data['CallerIsOrkAdmin'] = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
 
         $this->data['AwardRecommendations'] = [];
         $canManagePark = $this->data['CanManagePark'] ?? false;
@@ -271,6 +328,15 @@ class Controller_Park extends Controller
         $this->load_model('Player');
         $this->data['ViewerCircleAwardIds'] = $uid > 0 ? $this->Player->get_circle_award_ids($uid) : array();
         $this->data['ViewerHasCircle']      = !empty($this->data['ViewerCircleAwardIds']);
+
+        $this->load_model('Court');
+        $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$this->session->kingdom_id, (int)$park_id);
+        $this->data['CourtList']           = [];
+        $this->data['CourtUpcomingEvents'] = [];
+        if ($this->data['CanManageCourt']) {
+            $this->data['CourtList']           = $this->Court->get_court_list((int)$this->session->kingdom_id, (int)$park_id);
+            $this->data['CourtUpcomingEvents'] = $this->Court->get_upcoming_events((int)$this->session->kingdom_id);
+        }
 
         $this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
         $this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
