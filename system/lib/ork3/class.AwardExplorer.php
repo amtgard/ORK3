@@ -224,12 +224,14 @@ class AwardExplorer extends Ork3
             // and what "the knights at my park" means. The award's own park is the
             // column below, and the builder turns on whichever one you filter by.
             'recipient_park'    => $this->_col("Recipient's park", 'Who', true),
+            // Next to the park, not at the far end: a reader scanning "who and
+            // from where" wants them adjacent.
+            'recipient_kingdom' => $this->_col("Recipient's kingdom", 'Who'),
             'award_name'        => $this->_col('Award', 'Which award', true),
             'rank'              => $this->_col('Rank', 'Which award', true),
             'given_by'          => $this->_col('Given by', 'Who', true),
             'park'              => $this->_col('Park it was given in', 'Where'),
             'kingdom'           => $this->_col('Kingdom it was given in', 'Where'),
-            'recipient_kingdom' => $this->_col("Recipient's kingdom", 'Who'),
             'award_type'        => $this->_col('Type', 'Which award'),
             'note'              => $this->_col('Note', 'Detail'),
             'revoked'           => $this->_col('Revoked', 'Status'),
@@ -945,15 +947,27 @@ class AwardExplorer extends Ork3
     public function ResolveColumns(array $wanted): array
     {
         $defs = $this->_columnDefs();
-        $out = [];
+        // Registry order, NOT the order they were ticked. Selection order is an
+        // accident of clicking -- it put Recipient's kingdom after Given by, at the
+        // far end of the table, instead of beside Recipient's park. The order below
+        // is the designed one and there is no way to reorder columns by hand, so
+        // it is the only one that means anything.
+        $pick = [];
         foreach ($wanted as $id) {
-            if (is_string($id) && isset($defs[$id]) && !in_array($id, $out, true)) {
-                $out[] = $id;
+            if (is_string($id) && isset($defs[$id])) {
+                $pick[$id] = true;
             }
         }
-        if ($out) {
+        if ($pick) {
+            $out = [];
+            foreach ($defs as $id => $d) {
+                if (isset($pick[$id])) {
+                    $out[] = $id;
+                }
+            }
             return $out;
         }
+        $out = [];
         foreach ($defs as $id => $d) {
             if (!empty($d['default'])) {
                 $out[] = $id;

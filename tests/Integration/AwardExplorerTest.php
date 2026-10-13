@@ -51,6 +51,30 @@ final class AwardExplorerTest extends TestCase
     }
 
     /**
+     * Columns come out in registry order, never in the order they were ticked.
+     * Ticking Recipient's kingdom last used to put it at the far end of the
+     * table, past Given by, instead of beside Recipient's park -- and there is
+     * no way to reorder columns by hand, so selection order means nothing.
+     */
+    public function testColumnsAreOrderedByTheRegistryNotBySelection(): void
+    {
+        $registry = array_keys($this->ae->Registry($this->known)['columns']);
+        $shuffled = ['entered_at', 'given_by', 'date', 'recipient_kingdom', 'recipient'];
+        $out = $this->ae->ResolveColumns($shuffled);
+
+        $this->assertSame(count($shuffled), count($out), 'no column should be lost');
+        $expected = array_values(array_filter($registry, function ($id) use ($shuffled) {
+            return in_array($id, $shuffled, true);
+        }));
+        $this->assertSame($expected, $out);
+
+        // And the two recipient columns stay adjacent, which is the point.
+        $withBoth = $this->ae->ResolveColumns(['given_by', 'recipient_kingdom', 'recipient_park', 'recipient']);
+        $i = array_search('recipient_park', $withBoth, true);
+        $this->assertSame('recipient_kingdom', $withBoth[$i + 1]);
+    }
+
+    /**
      * @dataProvider badTrees
      */
     public function testUntrustedInputIsRejected(string $why, array $tree): void
