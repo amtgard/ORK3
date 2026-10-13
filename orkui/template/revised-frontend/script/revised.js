@@ -586,7 +586,24 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
             var item = e.target.closest('.aw-pick-item');
             if (!item) return;
             if (!activeSelect) return;
-            activeSelect.value = item.getAttribute('data-value');
+            var val = item.getAttribute('data-value');
+
+            // A multiple select toggles and STAYS OPEN: closing after each pick
+            // would make choosing three awards three trips through the list.
+            if (activeSelect.multiple) {
+                var opt = null, i;
+                for (i = 0; i < activeSelect.options.length; i++) {
+                    if (activeSelect.options[i].value === val) { opt = activeSelect.options[i]; break; }
+                }
+                if (!opt) return;
+                opt.selected = !opt.selected;
+                item.classList.toggle('aw-active', opt.selected);
+                activeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                syncTrigger(activeSelect);
+                return;
+            }
+
+            activeSelect.value = val;
             activeSelect.dispatchEvent(new Event('change', { bubbles: true }));
             syncTrigger(activeSelect);
             closeDropdown();
@@ -617,24 +634,27 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
     }
 
     function buildHTML(sel) {
+        var multi = !!sel.multiple;
         var html = '', cur = sel.value, ch = sel.children;
         for (var i = 0; i < ch.length; i++) {
             if (ch[i].tagName === 'OPTGROUP') {
                 html += '<div class="aw-pick-group"><div class="aw-pick-group-label">' + escHtml(ch[i].label) + '</div>';
-                for (var j = 0; j < ch[i].children.length; j++) html += itemHTML(ch[i].children[j], cur);
+                for (var j = 0; j < ch[i].children.length; j++) html += itemHTML(ch[i].children[j], cur, multi);
                 html += '</div>';
             } else if (ch[i].tagName === 'OPTION' && ch[i].value) {
-                html += '<div class="aw-pick-standalone">' + itemHTML(ch[i], cur) + '</div>';
+                html += '<div class="aw-pick-standalone">' + itemHTML(ch[i], cur, multi) + '</div>';
             }
         }
         return html;
     }
 
-    function itemHTML(opt, cur) {
+    function itemHTML(opt, cur, multi) {
         var aid = parseInt(opt.getAttribute('data-award-id')) || 0;
         var isL = opt.getAttribute('data-is-ladder') === '1';
         var desc = isL && typeof AWARD_DESCRIPTIONS !== 'undefined' ? (AWARD_DESCRIPTIONS[aid] || '') : '';
-        var cls = 'aw-pick-item' + (opt.value === cur && cur ? ' aw-active' : '');
+        // A multiple select has many chosen values, so "active" follows the
+        // option's own selected state rather than one current value.
+        var cls = 'aw-pick-item' + ((multi ? opt.selected : (opt.value === cur && cur)) ? ' aw-active' : '');
         var h = '<div class="' + cls + '" data-value="' + opt.value + '" tabindex="0">';
         h += '<span class="aw-pick-name">' + escHtml(opt.textContent) + '</span>';
         if (desc) h += '<span class="aw-pick-desc">' + escHtml(desc) + '</span>';
@@ -736,6 +756,20 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
 
     function syncTrigger(sel) {
         var btn = sel._awTrigger; if (!btn) return;
+        if (sel.multiple) {
+            var chosen = [], i;
+            for (i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].selected && sel.options[i].value) { chosen.push(sel.options[i].text); }
+            }
+            // One name reads better than "1 selected"; past that a count is the
+            // only thing that fits on a button.
+            var label = chosen.length === 0 ? 'Select awards\u2026'
+                : (chosen.length === 1 ? chosen[0] : chosen.length + ' selected');
+            btn.querySelector('.aw-trigger-label').textContent = label;
+            btn.classList.toggle('aw-has-value', chosen.length > 0);
+            btn.title = chosen.join(', ');
+            return;
+        }
         var opt = sel.options[sel.selectedIndex];
         var hasVal = opt && opt.value;
         btn.querySelector('.aw-trigger-label').textContent = hasVal ? opt.text : 'Select award\u2026';
@@ -746,13 +780,13 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         sel.style.display = 'none';
         var btn = document.createElement('button');
         btn.type = 'button'; btn.className = 'aw-picker-trigger';
-        var opt = sel.options[sel.selectedIndex];
-        var hasVal = opt && opt.value;
-        btn.innerHTML = '<span class="aw-trigger-label">' + (hasVal ? escHtml(opt.text) : 'Select award\u2026') + '</span>' +
+        btn.innerHTML = '<span class="aw-trigger-label"></span>' +
             '<i class="fas fa-chevron-down" style="color:#a0aec0;font-size:11px"></i>';
-        if (hasVal) btn.classList.add('aw-has-value');
         sel.parentNode.insertBefore(btn, sel.nextSibling);
         sel._awTrigger = btn;
+        // One place decides the label, so a multiple select does not start out
+        // saying "Select award..." in the singular.
+        syncTrigger(sel);
         btn.addEventListener('click', function() { openDropdown(sel, btn); });
 
         var desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');

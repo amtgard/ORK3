@@ -252,10 +252,11 @@
                 body = list.map(opt).join('');
             }
 
-            // Only the single-select award list gets the searchable picker: the
-            // widget assumes one value, and a kingdom or park list is short enough
-            // that a plain select is no worse.
-            var fancy = (def.set === 'award' && !many) ? ' data-awpick="1"' : '';
+            // The award list gets the searchable picker whether you are choosing
+            // one or several -- a raw multiple select of 149 awards is the worst
+            // control on the page. Kingdom and park stay plain: short lists, and
+            // the native control is no worse for them.
+            var fancy = (def.set === 'award') ? ' data-awpick="1"' : '';
             return '<select class="ae-v ae-v-pick" data-k="v"' + (many ? ' multiple size="8"' : '') + fancy + '>'
                 + (many ? '' : '<option value="">choose…</option>') + body + '</select>';
         }
@@ -596,7 +597,11 @@
         } else if (k === 'v') {
             if (e.target.multiple) {
                 r.v = Array.prototype.map.call(e.target.selectedOptions, function (o) { return o.value; });
-            } else if (r.o === 'in' || r.o === 'not_in') {
+                // Do NOT re-render: the picker stays open across toggles, and
+                // rebuilding the row would destroy the list being clicked.
+                return;
+            }
+            if (r.o === 'in' || r.o === 'not_in') {
                 r.v = String(e.target.value).split(',').map(function (x) { return x.trim(); }).filter(Boolean);
             } else {
                 r.v = e.target.value;
