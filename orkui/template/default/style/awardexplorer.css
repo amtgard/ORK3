@@ -100,6 +100,7 @@ table.ae-table.dataTable { border-collapse: collapse !important; }
     color: #a0aec0; font-size: 20px; line-height: 1; padding: 4px 8px; min-height: 32px;
 }
 .ae-x:hover { color: #c53030; }
+.ae-chosen { flex-basis: 100%; margin: 6px 0 0; font-size: 12px; color: #2c5282; font-weight: 600; }
 .ae-note { flex-basis: 100%; margin: 4px 0 0; font-size: 12px; color: #718096; }
 .ae-rule-error { flex-basis: 100%; margin: 4px 0 0; font-size: 12px; color: #c53030; font-weight: 600; }
 
@@ -194,6 +195,7 @@ html[data-theme="dark"] .ae-quickbtn { background: #1a202c; border-color: #2d374
 html[data-theme="dark"] .ae-quickbtn:hover { background: rgba(66,153,225,.12); border-color: rgba(66,153,225,.4); color: #90cdf4; }
 html[data-theme="dark"] .ae-quicklabel { color: #a0aec0; }
 html[data-theme="dark"] .ae-linkbtn { color: #90cdf4; }
+html[data-theme="dark"] .ae-chosen { color: #90cdf4; }
 html[data-theme="dark"] .ae-table a { color: #90cdf4; }
 html[data-theme="dark"] .ae-dt-btn { background: #1a202c; border-color: #2d3748; color: #e2e8f0; }
 html[data-theme="dark"] .dataTables_wrapper { color: #a0aec0; }

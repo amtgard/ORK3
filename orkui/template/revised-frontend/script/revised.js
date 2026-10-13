@@ -761,10 +761,16 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
             for (i = 0; i < sel.options.length; i++) {
                 if (sel.options[i].selected && sel.options[i].value) { chosen.push(sel.options[i].text); }
             }
-            // One name reads better than "1 selected"; past that a count is the
-            // only thing that fits on a button.
-            var label = chosen.length === 0 ? 'Select awards\u2026'
-                : (chosen.length === 1 ? chosen[0] : chosen.length + ' selected');
+            // Name them while they fit. A bare "2 selected" hides WHAT is selected,
+            // which matters most on a shared link: the person opening it has to be
+            // able to read the filter, not just see that one exists.
+            var label;
+            if (chosen.length === 0) {
+                label = 'Select awards\u2026';
+            } else {
+                var joined = chosen.join(', ');
+                label = joined.length <= 60 ? joined : chosen.length + ' selected';
+            }
             btn.querySelector('.aw-trigger-label').textContent = label;
             btn.classList.toggle('aw-has-value', chosen.length > 0);
             btn.title = chosen.join(', ');

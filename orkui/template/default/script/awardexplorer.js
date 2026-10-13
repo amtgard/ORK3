@@ -318,6 +318,31 @@
         return depth === 0 ? inner + actions : '<div class="ae-group">' + inner + actions + '</div>';
     }
 
+    // Mirrors the shared picker's own budget: past this it shows "N selected".
+    var TRIGGER_BUDGET = 60;
+
+    /**
+     * Spell out a multi-value choice, but only when the control itself cannot.
+     * The picker names the awards while they fit and collapses to "N selected"
+     * after that, and a filter nobody can read is useless on a shared link --
+     * which is the main way this report gets passed around.
+     */
+    function chosenNames(r, def) {
+        if (!def || !Array.isArray(r.v) || !r.v.length) { return ''; }
+        var list = OPTS[def.set] || (def.type === 'peerage_set' ? OPTS.peerage : null);
+        var names;
+        if (list) {
+            var byId = {};
+            list.forEach(function (o) { byId[String(o.id)] = o.name; });
+            names = r.v.map(function (v) { return byId[String(v)] || v; });
+        } else {
+            names = r.v.slice();
+        }
+        var joined = names.join(', ');
+        if (joined.length <= TRIGGER_BUDGET) { return ''; }   // the trigger already says it
+        return names.length + ' chosen: ' + joined;
+    }
+
     function renderRule(r, path, joiner) {
         var def = CRIT[r.c];
         var key = esc(path.join('.'));
@@ -336,6 +361,11 @@
         }
         html += '<button type="button" class="ae-x" data-act="remove" data-path="' + key
              + '" aria-label="Remove this rule">&times;</button>';
+        // Spell out a multi-value choice under the row. The trigger shortens to a
+        // count once the names get long, and a filter nobody can read is useless
+        // on a shared link -- which is the main way this report gets passed around.
+        var picked = chosenNames(r, def);
+        if (picked) { html += '<p class="ae-chosen">' + esc(picked) + '</p>'; }
         if (def && def.note) { html += '<p class="ae-note">' + esc(def.note) + '</p>'; }
         if (r.error) { html += '<p class="ae-rule-error">' + esc(r.error) + '</p>'; }
         return html + '</div>';
