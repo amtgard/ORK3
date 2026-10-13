@@ -808,6 +808,32 @@ class AwardExplorer extends Ork3
     // ---------------------------------------------------------------- service entry
 
     /**
+     * Display name for an opening scope. '' when the type is not one we know or
+     * the id names nothing, which the caller treats as "no opening filter"
+     * rather than as an error worth a banner.
+     */
+    public function ScopeName(string $scopeType, int $scopeId): string
+    {
+        if (!valid_id($scopeId)) {
+            return '';
+        }
+        if ($scopeType === 'Park') {
+            $sql = 'SELECT name FROM ' . $this->_t('park') . ' WHERE park_id = ' . (int)$scopeId . ' LIMIT 1';
+        } elseif ($scopeType === 'Kingdom') {
+            $sql = 'SELECT name FROM ' . $this->_t('kingdom') . ' WHERE kingdom_id = ' . (int)$scopeId . ' LIMIT 1';
+        } else {
+            return '';
+        }
+        try {
+            $rs = $this->_select($sql);
+            return $rs->next() ? stripslashes((string)$rs->name) : '';
+        } catch (Throwable $e) {
+            logtrace('AwardExplorer::ScopeName failure', $e->getMessage());
+            return '';
+        }
+    }
+
+    /**
      * Login gate. Award data is public, but the report is not open to anonymous
      * callers: 397k rows behind a filter builder is exactly what a crawler would
      * walk. There is no scope to authorize beyond that -- any logged-in viewer may

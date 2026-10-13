@@ -38,6 +38,21 @@
 .ae-chip-on { background: #2c5282; border-color: #2c5282; color: #fff; font-weight: 600; }
 .ae-hint { margin: 10px 0 0; font-size: 12px; color: #718096; }
 
+/* ---- opening scope --------------------------------------- */
+.ae-scope {
+    margin: -10px 0 16px; padding: 8px 12px; font-size: 13px;
+    background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 6px; color: #2c5282;
+}
+
+/* ---- DataTables chrome ----------------------------------- */
+.ae-dt-top, .ae-dt-bottom { padding: 10px 2px; font-size: 13px; }
+.ae-dt-btn {
+    padding: 7px 12px; font-size: 13px; cursor: pointer;
+    background: #fff; border: 1px solid #cbd5e0; border-radius: 6px; color: #2d3748;
+}
+.ae-dt-btn:hover { background: #f7fafc; }
+table.ae-table.dataTable { border-collapse: collapse !important; }
+
 /* ---- folding cards --------------------------------------- */
 .ae-fold summary {
     cursor: pointer; font-weight: 600; font-size: 14px; display: flex;
@@ -142,6 +157,9 @@ html[data-theme="dark"] .ae-tablewrap { border-color: #2d3748; }
 html[data-theme="dark"] .ae-notice-info  { background: rgba(66,153,225,.12); border-color: rgba(66,153,225,.4); color: #90cdf4; }
 html[data-theme="dark"] .ae-notice-warn  { background: rgba(236,201,75,.12); border-color: rgba(236,201,75,.4); color: #f6e05e; }
 html[data-theme="dark"] .ae-notice-error { background: rgba(229,62,62,.12); border-color: rgba(229,62,62,.4); color: #fc8181; }
+html[data-theme="dark"] .ae-scope { background: rgba(66,153,225,.12); border-color: rgba(66,153,225,.4); color: #90cdf4; }
+html[data-theme="dark"] .ae-dt-btn { background: #1a202c; border-color: #2d3748; color: #e2e8f0; }
+html[data-theme="dark"] .dataTables_wrapper { color: #a0aec0; }
 
 /* ---- phone ------------------------------------------------ */
 @media (max-width: 640px) {

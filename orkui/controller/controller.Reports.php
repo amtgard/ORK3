@@ -1186,6 +1186,26 @@ class Controller_Reports extends Controller
         $this->data['ae_logged_out'] = false;
         $this->data['ae_load_error'] = false;
 
+        // Opening scope, same courtesy as Population Explorer: arriving from a
+        // kingdom or park page starts you filtered to it. Unlike that report this
+        // is a STARTING FILTER, not a boundary -- the whole point here is to be
+        // able to look at everything, so the rule can be removed like any other.
+        $scope = ['Type' => null, 'Id' => 0, 'Name' => ''];
+        if (isset($this->request->ParkId) && valid_id($this->request->ParkId)) {
+            $scope['Type'] = 'Park';
+            $scope['Id'] = (int)$this->request->ParkId;
+        } elseif (isset($this->request->KingdomId) && valid_id($this->request->KingdomId)) {
+            $scope['Type'] = 'Kingdom';
+            $scope['Id'] = (int)$this->request->KingdomId;
+        } elseif (isset($this->session->park_id) && valid_id($this->session->park_id)) {
+            $scope['Type'] = 'Park';
+            $scope['Id'] = (int)$this->session->park_id;
+        } elseif (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id)) {
+            $scope['Type'] = 'Kingdom';
+            $scope['Id'] = (int)$this->session->kingdom_id;
+        }
+        $this->data['ae_scope'] = $scope;
+
         // Login gate. Award data is public, but 397k rows behind a filter builder is
         // what a crawler would walk, so the page itself needs a session.
         $token = isset($this->session->token) ? (string)$this->session->token : '';
@@ -1206,6 +1226,18 @@ class Controller_Reports extends Controller
         }
         unset($def);
         $this->data['ae_registry'] = $registry;
+
+        if ($scope['Type'] !== null) {
+            $scope['Name'] = (string)$this->Reports->award_scope_name($scope['Type'], $scope['Id']);
+            // An id that names nothing is not an error worth a banner: drop the
+            // opening filter and show everything, which is the report's default.
+            if ($scope['Name'] === '') {
+                $scope = ['Type' => null, 'Id' => 0, 'Name' => ''];
+            }
+            $this->data['ae_scope'] = $scope;
+            $this->data['menu']['reports']['url'] = UIR
+                . ($scope['Type'] === 'Park' ? 'Park' : 'Kingdom') . '/profile/' . $scope['Id'] . '&tab=reports';
+        }
 
         $link = $this->request->{AwardExplorer::LINK_PARAM} ?? null;
         if (is_string($link) && $link !== '') {

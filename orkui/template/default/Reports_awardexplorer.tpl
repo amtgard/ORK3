@@ -10,6 +10,7 @@ $ae_link_error    = $ae_link_error ?? null;
 $ae_link_param    = (string)($ae_link_param ?? 'ae');
 $ae_default_months = (int)($ae_default_months ?? 12);
 $ae_logged_out    = !empty($ae_logged_out);
+$ae_scope         = is_array($ae_scope ?? null) ? $ae_scope : ['Type' => null, 'Id' => 0, 'Name' => ''];
 $ae_load_error    = !empty($ae_load_error);
 $ae_ready         = !$ae_logged_out && !$ae_load_error && !empty($ae_registry);
 
@@ -22,12 +23,20 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/awardexplorer.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/awardexplorer.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/rank-pill.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/rank-pill.css') ?>">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 
 <div class="ae-page">
 
 	<div class="ae-head">
 		<h1><i class="fas fa-award" aria-hidden="true"></i> Award Explorer</h1>
 		<p class="ae-sub">Every award the ORK has recorded, newest first.</p>
+<?php if ($ae_scope['Type'] !== null): ?>
+		<p class="ae-scope">
+			Starting with <strong><?= htmlspecialchars($ae_scope['Name']) ?></strong>.
+			Remove the <?= strtolower(htmlspecialchars($ae_scope['Type'])) ?> filter below to search every kingdom.
+		</p>
+<?php endif; ?>
 	</div>
 
 <?php if ($ae_logged_out): ?>
@@ -101,10 +110,6 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 		<p class="ae-empty">Choose your filters and press <strong>Run</strong>.</p>
 	</div>
 
-	<div class="ae-more" id="ae-more" hidden>
-		<button type="button" class="ae-btn" id="ae-load-more">Show more</button>
-	</div>
-
 <?php endif; ?>
 </div>
 
@@ -115,8 +120,12 @@ window.AE = {
 	registry:  <?= json_encode($ae_registry) ?>,
 	initial:   <?= json_encode($ae_initial) ?>,
 	linkParam: <?= json_encode($ae_link_param) ?>,
-	defaultMonths: <?= (int)$ae_default_months ?>
+	defaultMonths: <?= (int)$ae_default_months ?>,
+	scope:     <?= json_encode($ae_scope) ?>
 };
 </script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="<?= HTTP_TEMPLATE ?>default/script/awardexplorer.js?v=<?= filemtime(DIR_TEMPLATE . 'default/script/awardexplorer.js') ?>"></script>
 <?php endif; ?>

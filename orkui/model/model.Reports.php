@@ -40,6 +40,12 @@ class Model_Reports extends Model
         }
     }
 
+    /** Display name for the opening scope; '' when the id names nothing. */
+    public function award_scope_name(string $scopeType, int $scopeId): string
+    {
+        return (string)$this->AwardExplorer->ScopeName($scopeType, $scopeId);
+    }
+
     public function award_run(array $request): array
     {
         return $this->AwardExplorer->Run($request);

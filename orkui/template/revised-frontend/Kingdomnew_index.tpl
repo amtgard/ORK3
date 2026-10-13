@@ -851,7 +851,7 @@
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>">Ladder Award Grid</a></li>
 											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>">Custom Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/beltline_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-sitemap"></i> Beltline Explorer</a></li>
-							<li><a href="<?= UIR ?>Reports/award_explorer"><i class="fas fa-award"></i> Award Explorer</a></li>
+							<li><a href="<?= UIR ?>Reports/award_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-award"></i> Award Explorer</a></li>
 							<?php endif; ?>
 						</ul>
 					</div>

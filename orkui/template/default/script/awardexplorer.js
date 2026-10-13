@@ -35,11 +35,11 @@
         search: '',
         months: AE.defaultMonths,
         includeRevoked: false,
-        includeStripped: false,
-        offset: 0
+        includeStripped: false
     };
     var lastRows = [];
     var lastColumns = [];
+    var dt = null;
 
     // The server's tree takes nested groups (MAX_DEPTH 6). This v1 UI builds one
     // level — a flat list joined by AND or OR — because that covers the asked-for
@@ -166,38 +166,72 @@
     }
 
     // ---- results -----------------------------------------------------------
-    function renderResults(rows, columns, append) {
+    function renderResults(rows, columns) {
         var el = $('ae-results');
-        if (!rows.length && !append) {
+        if (dt) { dt.destroy(); dt = null; }
+        if (!rows.length) {
             el.innerHTML = '<p class="ae-empty">No awards match those filters.</p>';
             return;
         }
-        var body = rows.map(function (row) {
-            return '<tr>' + columns.map(function (c) {
-                var v = row[c];
+
+        var cell = function (c) {
+            return function (v, type, row) {
+                if (type !== 'display') { return v == null ? '' : v; }
                 if (c === 'rank') {
                     var n = Number(v) || 0;
-                    return '<td>' + (n > 0
+                    return n > 0
                         ? '<span class="ladder-rank" data-lvl="' + Math.min(n, 10) + '">' + n + '</span>'
-                        : '<span class="ae-muted">—</span>') + '</td>';
+                        : '<span class="ae-muted">\u2014</span>';
                 }
-                if (c === 'revoked') {
-                    return '<td>' + (Number(v) ? '<span class="ae-revoked">revoked</span>' : '') + '</td>';
-                }
+                if (c === 'revoked') { return Number(v) ? '<span class="ae-revoked">revoked</span>' : ''; }
                 if (c === 'date' && !v) {
-                    return '<td><span class="ae-muted" title="No date was recorded for this award">unknown</span></td>';
+                    return '<span class="ae-muted" title="No date was recorded for this award">unknown</span>';
                 }
-                return '<td>' + esc(v) + '</td>';
-            }).join('') + '</tr>';
-        }).join('');
+                return esc(v);
+            };
+        };
 
-        if (append) {
-            var tb = el.querySelector('tbody');
-            if (tb) { tb.insertAdjacentHTML('beforeend', body); return; }
-        }
-        el.innerHTML = '<div class="ae-tablewrap"><table class="ae-table"><thead><tr>'
+        el.innerHTML = '<div class="ae-tablewrap"><table class="ae-table" id="ae-dt"><thead><tr>'
             + columns.map(function (c) { return '<th>' + esc((COLS[c] || {}).label || c) + '</th>'; }).join('')
-            + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+            + '</tr></thead></table></div>';
+        var table = $('ae-dt');
+
+        if (!window.jQuery || !window.jQuery.fn || !window.jQuery.fn.DataTable) {
+            // DataTables did not load: a plain table, still escaped, still readable.
+            var body = rows.map(function (row) {
+                return '<tr>' + columns.map(function (c) {
+                    return '<td>' + cell(c)(row[c], 'display', row) + '</td>';
+                }).join('') + '</tr>';
+            }).join('');
+            table.insertAdjacentHTML('beforeend', '<tbody>' + body + '</tbody>');
+            return;
+        }
+
+        dt = window.jQuery(table).DataTable({
+            data: rows,
+            columns: columns.map(function (c) {
+                return {
+                    data: function (row) { return row[c] === undefined ? null : row[c]; },
+                    render: cell(c),
+                    className: c === 'rank' ? 'dt-body-right' : ''
+                };
+            }),
+            // The server already returned these newest-first and that ordering is
+            // part of what the report means, so do not re-sort on load.
+            order: [],
+            pageLength: 25,
+            lengthMenu: [[25, 50, 100, 250, -1], [25, 50, 100, 250, 'All']],
+            deferRender: true,
+            autoWidth: false,
+            dom: '<"ae-dt-top"lBf>rt<"ae-dt-bottom"ip>',
+            buttons: [{
+                extend: 'print',
+                text: '<i class="fas fa-print"></i> Print',
+                className: 'ae-dt-btn',
+                title: 'Award Explorer' + (AE.scope && AE.scope.Name ? ' \u2014 ' + AE.scope.Name : '')
+            }],
+            language: { search: 'Search results:', emptyTable: 'No awards match these filters.' }
+        });
     }
 
     // ---- run ---------------------------------------------------------------
@@ -216,7 +250,7 @@
         return { c: 'months_ago', o: 'is', v: 1, p: state.months };
     }
 
-    function run(append) {
+    function run() {
         var btn = $('ae-run');
         if (btn.disabled) { return; }
         btn.disabled = true;
@@ -234,9 +268,11 @@
             Search: state.search,
             IncludeRevoked: state.includeRevoked,
             IncludeStripped: state.includeStripped,
-            Limit: 200,
-            Offset: append ? state.offset : 0,
-            WithTotal: !append
+            // One fetch, capped server-side; DataTables paginates what comes back.
+            // That is how every other report in the ORK behaves, and it keeps the
+            // client-side CSV honest -- it exports what you are looking at.
+            Limit: 5000,
+            WithTotal: true
         };
 
         fetch(AE.uir + 'Reports/award_explorer_json', {
@@ -260,15 +296,13 @@
                 return;
             }
             lastColumns = d.columns || [];
-            if (append) { lastRows = lastRows.concat(d.rows || []); }
-            else { lastRows = d.rows || []; state.offset = 0; }
-            state.offset += (d.rows || []).length;
-            renderResults(d.rows || [], lastColumns, append);
-            $('ae-more').hidden = !d.has_more;
-            setStatus(
-                (d.total != null ? d.total.toLocaleString() + ' grants' : lastRows.length + ' shown')
-                + (d.elapsed_ms ? ' · ' + d.elapsed_ms + ' ms' : '')
-            );
+            lastRows = d.rows || [];
+            renderResults(lastRows, lastColumns);
+            var shown = lastRows.length;
+            var msg = (d.total != null ? d.total.toLocaleString() : shown) + ' grants';
+            // Say so when the cap bit, rather than quietly showing a partial answer.
+            if (d.has_more) { msg = 'showing the first ' + shown.toLocaleString() + ' of ' + msg + ' — narrow your filter'; }
+            setStatus(msg + (d.elapsed_ms ? ' · ' + d.elapsed_ms + ' ms' : ''));
         }).catch(function (err) {
             btn.disabled = false;
             setStatus('');
@@ -357,12 +391,11 @@
     $('ae-clear').addEventListener('click', function () {
         state.rules = []; renderTree(); showError('');
     });
-    $('ae-run').addEventListener('click', function () { run(false); });
-    $('ae-load-more').addEventListener('click', function () { run(true); });
+    $('ae-run').addEventListener('click', function () { run(); });
 
     $('ae-search').addEventListener('input', function () { state.search = this.value; });
     $('ae-search').addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); run(false); }
+        if (e.key === 'Enter') { e.preventDefault(); run(); }
     });
     $('ae-include-revoked').addEventListener('change', function () { state.includeRevoked = this.checked; });
     $('ae-include-stripped').addEventListener('change', function () { state.includeStripped = this.checked; });
@@ -425,12 +458,22 @@
                 c.classList.toggle('ae-chip-on', Number(c.dataset.months) === state.months);
             });
         }
+        // Arriving from a kingdom or park starts you filtered to it. It is a normal
+        // rule in the list, so it can be removed -- being able to look at everything
+        // is the point of the report. A shared link wins: it already says what it wants.
+        if (!AE.initial && AE.scope && AE.scope.Type && AE.scope.Id) {
+            state.rules.push({
+                c: AE.scope.Type === 'Park' ? 'park' : 'kingdom',
+                o: 'is',
+                v: String(AE.scope.Id)
+            });
+        }
         if (!state.columns.length) {
             Object.keys(COLS).forEach(function (id) { if (COLS[id]['default']) { state.columns.push(id); } });
         }
         renderTree();
         renderColumns();
         windowHint();
-        if (AE.initial) { run(false); }   // a shared link shows its results, not a blank page
+        if (AE.initial || AE.scope.Type) { run(); }   // arriving scoped or by link shows results, not a blank page
     })();
 })();
