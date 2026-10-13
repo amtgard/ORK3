@@ -134,6 +134,9 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 	<div class="ae-notice ae-notice-error" id="ae-error" hidden></div>
 
 	<!-- ── Results ─────────────────────────────────────────── -->
+	<!-- What this search says, in words. The builder explains the filter to
+	     whoever assembled it; this explains it to whoever was sent the link. -->
+	<p class="ae-summary" id="ae-summary" hidden></p>
 	<div class="ae-results" id="ae-results" aria-live="polite">
 		<p class="ae-empty">Choose your filters and press <strong>Run</strong>.</p>
 	</div>

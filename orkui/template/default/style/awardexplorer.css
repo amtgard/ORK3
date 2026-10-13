@@ -136,6 +136,12 @@ table.ae-table.dataTable { border-collapse: collapse !important; }
 .ae-status { font-size: 13px; color: #4a5568; margin-left: 4px; }
 
 /* ---- results ---------------------------------------------- */
+/* The search, in words. Reads as a caption above the table rather than as a
+   control, because it is the one thing on the page that explains the rest. */
+.ae-summary {
+    margin: 0 0 12px; padding: 10px 14px; font-size: 13px; line-height: 1.5;
+    background: #f7fafc; border-left: 3px solid #90cdf4; border-radius: 0 6px 6px 0; color: #2d3748;
+}
 .ae-tablewrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
 .ae-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; }
 .ae-table th {
@@ -196,6 +202,7 @@ html[data-theme="dark"] .ae-quickbtn:hover { background: rgba(66,153,225,.12); b
 html[data-theme="dark"] .ae-quicklabel { color: #a0aec0; }
 html[data-theme="dark"] .ae-linkbtn { color: #90cdf4; }
 html[data-theme="dark"] .ae-chosen { color: #90cdf4; }
+html[data-theme="dark"] .ae-summary { background: #161b22; border-left-color: #2c5282; color: #cbd5e0; }
 
 /* Body-text greys. #4a5568 and #718096 read fine on white and almost vanish on
    #161b22, which is what made the Columns list unreadable in dark mode. */

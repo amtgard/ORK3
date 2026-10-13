@@ -403,6 +403,73 @@
         $('ae-column-count').textContent = '(' + state.columns.length + ')';
     }
 
+    // ---- plain-English summary ---------------------------------------------
+    /**
+     * Describe the search in words, above the table.
+     *
+     * The builder says what the filter is to someone willing to read a tree of
+     * dropdowns. A sentence says it to everyone else -- which matters most on a
+     * shared link, where the reader did not build the thing and should not have
+     * to reverse-engineer it from the controls.
+     */
+    function valueWords(r, def) {
+        var v = r.v;
+        if (!def) { return String(v); }
+        if (def.type === 'bool') { return String(v) === '1' || v === 'yes' ? 'yes' : 'no'; }
+        if (r.o === 'between' && Array.isArray(v)) { return v[0] + ' and ' + v[1]; }
+        var list = OPTS[def.set] || (def.type === 'peerage_set' ? OPTS.peerage : null);
+        var name = function (x) {
+            if (!list) { return String(x); }
+            for (var i = 0; i < list.length; i++) {
+                if (String(list[i].id) === String(x)) { return list[i].name; }
+            }
+            return String(x);
+        };
+        if (Array.isArray(v)) {
+            var names = v.map(name);
+            if (names.length === 1) { return names[0]; }
+            return names.slice(0, -1).join(', ') + ' or ' + names[names.length - 1];
+        }
+        return name(v);
+    }
+
+    function describeNode(n, depth) {
+        if (!isGroup(n)) {
+            var def = CRIT[n.c];
+            if (!def || !ruleComplete(n)) { return null; }
+            return def.label.toLowerCase() + ' ' + opLabel(n.o, def.type) + ' ' + valueWords(n, def);
+        }
+        var parts = n.children.map(function (c) { return describeNode(c, depth + 1); }).filter(Boolean);
+        if (!parts.length) { return null; }
+        if (parts.length === 1) { return parts[0]; }
+        // "A, B and C", not "A, and B, and C".
+        var last = parts.pop();
+        var joined = parts.join(', ') + (n.op === 'OR' ? ' or ' : ' and ') + last;
+        return depth > 0 ? '(' + joined + ')' : joined;
+    }
+
+    function describeSearch() {
+        var bits = [];
+        var where = describeNode(state.tree, 0);
+        bits.push(where ? 'Award grants where ' + where : 'Every award grant');
+
+        if (state.search) { bits.push('matching “' + state.search + '”'); }
+        if (state.includeRevoked) { bits.push('including revoked awards'); }
+        if (state.includeStripped) { bits.push('including awards stripped from a player'); }
+
+        var cols = state.columns.map(function (c) { return (COLS[c] || {}).label || c; });
+        var sentence = bits.join(', ') + '. Newest first.';
+        if (cols.length) { sentence += ' Showing: ' + cols.join(', ') + '.'; }
+        return sentence;
+    }
+
+    function renderSummary() {
+        var el = $('ae-summary');
+        if (!el) { return; }
+        el.textContent = describeSearch();
+        el.hidden = false;
+    }
+
     // ---- results -----------------------------------------------------------
     function renderResults(rows, columns) {
         var el = $('ae-results');
@@ -620,6 +687,7 @@
             }
             lastColumns = d.columns || [];
             lastRows = d.rows || [];
+            renderSummary();
             renderResults(lastRows, lastColumns);
             var shown = lastRows.length;
             var msg = (d.total != null ? d.total.toLocaleString() : shown) + ' grants';
@@ -826,6 +894,8 @@
 
         var note = $('ae-shared-note');
         if (note) { note.remove(); }
+        var sum = $('ae-summary');
+        if (sum) { sum.hidden = true; sum.textContent = ''; }
         if (dt) { dt.destroy(); dt = null; }
         $('ae-results').innerHTML = '<p class="ae-empty">Choose your filters and press <strong>Run</strong>.</p>';
         setStatus('');
