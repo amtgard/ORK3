@@ -561,6 +561,10 @@ class AwardExplorer extends Ork3
                 $out['award'][] = [
                     'id'    => (int)$rs->id,
                     'name'  => stripslashes((string)$rs->name),
+                    // The shared picker shows a description for ladder awards, keyed
+                    // by base award_id in revised.js's AWARD_DESCRIPTIONS -- which is
+                    // exactly what these option values are.
+                    'ladder' => (int)$rs->is_ladder === 1,
                     'group' => $this->_awardGroup([
                         'name'        => (string)$rs->name,
                         'is_ladder'   => (int)$rs->is_ladder,

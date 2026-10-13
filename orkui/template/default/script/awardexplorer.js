@@ -177,7 +177,11 @@
         if (list && list.length) {
             var chosen = Array.isArray(r.v) ? r.v.map(String) : (r.v == null || r.v === '' ? [] : [String(r.v)]);
             var opt = function (o) {
+                // data-award-id / data-is-ladder are what the shared picker reads to
+                // show a ladder award's description (AWARD_DESCRIPTIONS in revised.js).
                 return '<option value="' + esc(o.id) + '"'
+                    + ' data-award-id="' + esc(o.id) + '"'
+                    + (o.ladder ? ' data-is-ladder="1"' : '')
                     + (chosen.indexOf(String(o.id)) !== -1 ? ' selected' : '') + '>' + esc(o.name) + '</option>';
             };
 
@@ -197,7 +201,11 @@
                 body = list.map(opt).join('');
             }
 
-            return '<select class="ae-v ae-v-pick" data-k="v"' + (many ? ' multiple size="8"' : '') + '>'
+            // Only the single-select award list gets the searchable picker: the
+            // widget assumes one value, and a kingdom or park list is short enough
+            // that a plain select is no worse.
+            var fancy = (def.set === 'award' && !many) ? ' data-awpick="1"' : '';
+            return '<select class="ae-v ae-v-pick" data-k="v"' + (many ? ' multiple size="8"' : '') + fancy + '>'
                 + (many ? '' : '<option value="">choose…</option>') + body + '</select>';
         }
 
@@ -240,6 +248,23 @@
         }
         $('ae-filter-count').textContent = state.rules.length ? '(' + state.rules.length + ')' : '';
         syncScopeNote();
+        upgradeAwardPickers();
+    }
+
+    /**
+     * Turn the award select into the searchable chooser used by Add Award and
+     * Recommend an Award -- grouped, type-to-filter, with ladder descriptions.
+     *
+     * renderTree() rebuilds the rows, so this runs after every render on whatever
+     * selects are now in the DOM. If revised.js did not load, the plain grouped
+     * select is still perfectly usable.
+     */
+    function upgradeAwardPickers() {
+        if (typeof window.awInitPicker !== 'function') { return; }
+        Array.prototype.forEach.call(document.querySelectorAll('#ae-tree select[data-awpick]'), function (sel) {
+            if (sel._awTrigger) { return; }
+            try { window.awInitPicker(sel); } catch (e) { /* plain select remains */ }
+        });
     }
 
     // ---- columns -----------------------------------------------------------
