@@ -30,6 +30,19 @@
         rank: 'rank'
     };
 
+    /**
+     * The opening banner says "filters start on X, press Run". That is only true
+     * while the scope rule is still there and nothing has run yet. Clearing the
+     * filters used to leave it claiming a filter that no longer existed, because
+     * it was only ever removed inside run().
+     */
+    function syncScopeNote() {
+        var note = document.querySelector('.ae-scope');
+        if (!note) { return; }
+        var hasScope = state.rules.some(function (r) { return SCOPE_CRIT.indexOf(r.c) !== -1; });
+        if (!hasScope) { note.remove(); }
+    }
+
     function showColumnFor(critId) {
         var col = CRIT_COLUMN[critId];
         if (col && COLS[col] && state.columns.indexOf(col) === -1) {
@@ -188,6 +201,7 @@
             el.innerHTML = html;
         }
         $('ae-filter-count').textContent = state.rules.length ? '(' + state.rules.length + ')' : '';
+        syncScopeNote();
     }
 
     // ---- columns -----------------------------------------------------------
@@ -214,7 +228,7 @@
             var scoped = state.rules.filter(function (r) { return SCOPE_CRIT.indexOf(r.c) !== -1; });
             el.innerHTML = '<p class="ae-empty">No awards match those filters.'
                 + (scoped.length
-                    ? ' <button type="button" class="ae-linkbtn" id="ae-drop-scope">Search every kingdom instead</button>'
+                    ? ' <button type="button" class="ae-linkbtn" id="ae-drop-scope">Search everywhere instead</button>'
                     : '')
                 + '</p>';
             var drop = $('ae-drop-scope');
@@ -326,8 +340,7 @@
     function run() {
         var btn = $('ae-run');
         if (btn.disabled) { return; }
-        // The opening banner explains the starting state and says to press Run.
-        // Once something has run it is stale instruction, so it goes.
+        // "Press Run" is stale instruction once something has.
         var scopeNote = document.querySelector('.ae-scope');
         if (scopeNote) { scopeNote.remove(); }
         btn.disabled = true;
