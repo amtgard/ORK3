@@ -641,13 +641,17 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         return h + '</div>';
     }
 
-    function openDropdown(sel, trigger) {
-        ensureDOM();
-        if (activeSelect === sel && dropdown.classList.contains('aw-open')) { closeDropdown(); return; }
-        activeSelect = sel; activeTrigger = trigger;
-        body.innerHTML = buildHTML(sel);
-        var empty = body.querySelector('.aw-pick-empty'); if (empty) empty.remove();
-        searchInput.value = '';
+    /**
+     * Place the dropdown against its trigger.
+     *
+     * Split out of openDropdown so it can be re-run: the dropdown is
+     * position:fixed and was measured once at open, so any scroll afterwards left
+     * it floating away from the control it belongs to. That never showed on the
+     * modal pages, where there is nothing behind to scroll, but a full-page report
+     * scrolls freely.
+     */
+    function positionDropdown(trigger) {
+        if (!dropdown || !trigger) { return; }
         var rect = trigger.getBoundingClientRect();
         var vw = window.innerWidth, vh = window.innerHeight;
         var mobile = vw <= 600;
@@ -686,11 +690,42 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
             dropdown.style.maxHeight = maxH + 'px';
             dropdown.style.borderRadius = '6px';
         }
+    }
+
+    function openDropdown(sel, trigger) {
+        ensureDOM();
+        if (activeSelect === sel && dropdown.classList.contains('aw-open')) { closeDropdown(); return; }
+        activeSelect = sel; activeTrigger = trigger;
+        body.innerHTML = buildHTML(sel);
+        var empty = body.querySelector('.aw-pick-empty'); if (empty) empty.remove();
+        searchInput.value = '';
+        positionDropdown(trigger);
         dropdown.classList.add('aw-open');
         searchInput.focus();
         var active = body.querySelector('.aw-active');
         if (active) active.scrollIntoView({ block: 'center' });
     }
+
+    /**
+     * Follow the trigger while open. Capture phase, because the page may scroll
+     * inside a container rather than the window, and those events do not bubble.
+     * Scrolling the dropdown's OWN list must not move it, or the list jumps as you
+     * read it. If the trigger has scrolled out of sight entirely the dropdown
+     * closes, rather than clinging to the edge of the viewport.
+     */
+    function trackTrigger(e) {
+        if (!dropdown || !dropdown.classList.contains('aw-open') || !activeTrigger) { return; }
+        if (e && e.target && e.target.nodeType === 1 && dropdown.contains(e.target)) { return; }
+        // On a phone the dropdown is fullscreen and owes nothing to the trigger's
+        // position, so it must not close just because the trigger scrolled away.
+        if (window.innerWidth > 600) {
+            var rect = activeTrigger.getBoundingClientRect();
+            if (rect.bottom < 0 || rect.top > window.innerHeight) { closeDropdown(); return; }
+        }
+        positionDropdown(activeTrigger);
+    }
+    window.addEventListener('scroll', trackTrigger, true);
+    window.addEventListener('resize', trackTrigger);
 
     function closeDropdown() {
         if (!dropdown) return;
