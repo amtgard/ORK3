@@ -1,0 +1,436 @@
+/* ============================================================
+   Award Explorer — filter builder, run, render, share.
+
+   Reads only window.AE (uir, registry, initial, linkParam,
+   defaultMonths). The server is the authority on what is a valid
+   criterion, operand and value; everything here is convenience.
+   A rule the UI lets you build and the server rejects shows the
+   server's message against the row — the UI never silently drops it.
+   ============================================================ */
+(function () {
+    'use strict';
+    if (!window.AE || !AE.registry) { return; }
+
+    var CRIT = AE.registry.criteria || {};
+    var COLS = AE.registry.columns || {};
+    var $ = function (id) { return document.getElementById(id); };
+
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    var OPLABEL = {
+        eq: 'is', ne: 'is not', gt: 'is after / more than', gte: 'is on or after / at least',
+        lt: 'is before / less than', lte: 'is on or before / at most', between: 'is between',
+        is: 'is', is_not: 'is not', in: 'is any of', not_in: 'is none of'
+    };
+
+    // ---- state -------------------------------------------------------------
+    var state = {
+        rules: [],          // flat list; op joins them. Groups are v2 — see note below.
+        op: 'AND',
+        columns: [],
+        search: '',
+        months: AE.defaultMonths,
+        includeRevoked: false,
+        includeStripped: false,
+        offset: 0
+    };
+    var lastRows = [];
+    var lastColumns = [];
+
+    // The server's tree takes nested groups (MAX_DEPTH 6). This v1 UI builds one
+    // level — a flat list joined by AND or OR — because that covers the asked-for
+    // cases and a nested builder is most of Population Explorer's front end. The
+    // wire format is already the nested shape, so adding groups later needs no
+    // server change.
+    function buildTree() {
+        return {
+            op: state.op,
+            children: state.rules.filter(ruleComplete).map(function (r) {
+                var leaf = { c: r.c, o: r.o, v: r.v };
+                if (r.p != null) { leaf.p = r.p; }
+                return leaf;
+            })
+        };
+    }
+
+    function ruleComplete(r) {
+        if (!r || !r.c || !r.o) { return false; }
+        if (CRIT[r.c] && CRIT[r.c].param && (r.p == null || r.p === '')) { return false; }
+        if (r.o === 'between') { return Array.isArray(r.v) && r.v[0] !== '' && r.v[1] !== ''; }
+        return r.v !== '' && r.v != null && !(Array.isArray(r.v) && r.v.length === 0);
+    }
+
+    // ---- filter UI ---------------------------------------------------------
+    function critOptions(selected) {
+        var groups = {};
+        Object.keys(CRIT).forEach(function (id) {
+            var g = CRIT[id].group || 'Other';
+            (groups[g] = groups[g] || []).push(id);
+        });
+        var html = '<option value="">Choose a filter…</option>';
+        Object.keys(groups).forEach(function (g) {
+            html += '<optgroup label="' + esc(g) + '">';
+            groups[g].forEach(function (id) {
+                html += '<option value="' + esc(id) + '"' + (id === selected ? ' selected' : '') + '>'
+                    + esc(CRIT[id].label) + '</option>';
+            });
+            html += '</optgroup>';
+        });
+        return html;
+    }
+
+    function valueField(r, def) {
+        if (!def) { return ''; }
+        if (def.type === 'bool') {
+            return '<select class="ae-v" data-k="v">'
+                + '<option value="yes"' + (String(r.v) === 'yes' ? ' selected' : '') + '>yes</option>'
+                + '<option value="no"' + (String(r.v) === 'no' ? ' selected' : '') + '>no</option></select>';
+        }
+        if (def.type === 'date') {
+            if (r.o === 'between') {
+                var a = Array.isArray(r.v) ? r.v[0] : '', b = Array.isArray(r.v) ? r.v[1] : '';
+                return '<input type="date" class="ae-v" data-k="v0" value="' + esc(a) + '">'
+                    + '<span class="ae-and">and</span>'
+                    + '<input type="date" class="ae-v" data-k="v1" value="' + esc(b) + '">';
+            }
+            return '<input type="date" class="ae-v" data-k="v" value="' + esc(r.v || '') + '">';
+        }
+        if (def.type === 'number') {
+            var min = def.min != null ? ' min="' + Number(def.min) + '"' : '';
+            var max = def.max != null ? ' max="' + Number(def.max) + '"' : '';
+            if (r.o === 'between') {
+                var x = Array.isArray(r.v) ? r.v[0] : '', y = Array.isArray(r.v) ? r.v[1] : '';
+                return '<input type="number" class="ae-v" data-k="v0"' + min + max + ' value="' + esc(x) + '">'
+                    + '<span class="ae-and">and</span>'
+                    + '<input type="number" class="ae-v" data-k="v1"' + min + max + ' value="' + esc(y) + '">';
+            }
+            return '<input type="number" class="ae-v" data-k="v"' + min + max + ' value="' + esc(r.v == null ? '' : r.v) + '">';
+        }
+        // enum_set: ids. No option list is shipped — kingdomaward alone is 4,874
+        // entries and the page would carry all of them. Ids are typed or pasted,
+        // and the server rejects any that do not exist.
+        var val = Array.isArray(r.v) ? r.v.join(', ') : (r.v == null ? '' : r.v);
+        var many = (r.o === 'in' || r.o === 'not_in');
+        return '<input type="text" class="ae-v" data-k="v" inputmode="numeric" '
+            + 'placeholder="' + (many ? 'ids, comma separated' : 'id') + '" value="' + esc(val) + '">';
+    }
+
+    function renderTree() {
+        var el = $('ae-tree');
+        if (!state.rules.length) {
+            el.innerHTML = '<p class="ae-empty">No filters. Every award matches.</p>';
+        } else {
+            var html = '';
+            state.rules.forEach(function (r, i) {
+                var def = CRIT[r.c];
+                html += '<div class="ae-rule" data-i="' + i + '">';
+                html += i === 0
+                    ? '<span class="ae-join ae-join-first">Where</span>'
+                    : '<button type="button" class="ae-join ae-joinbtn" data-act="toggle-op">' + esc(state.op) + '</button>';
+                html += '<select class="ae-c" data-k="c">' + critOptions(r.c) + '</select>';
+                if (def) {
+                    html += '<select class="ae-o" data-k="o">' + (def.operands || []).map(function (o) {
+                        return '<option value="' + esc(o) + '"' + (o === r.o ? ' selected' : '') + '>'
+                            + esc(OPLABEL[o] || o) + '</option>';
+                    }).join('') + '</select>';
+                    if (def.param) {
+                        html += '<input type="number" class="ae-p" data-k="p" min="1" placeholder="months" value="'
+                            + esc(r.p == null ? '' : r.p) + '">';
+                    }
+                    html += valueField(r, def);
+                }
+                html += '<button type="button" class="ae-x" data-act="remove" aria-label="Remove this rule">&times;</button>';
+                if (def && def.note) { html += '<p class="ae-note">' + esc(def.note) + '</p>'; }
+                if (r.error) { html += '<p class="ae-rule-error">' + esc(r.error) + '</p>'; }
+                html += '</div>';
+            });
+            el.innerHTML = html;
+        }
+        $('ae-filter-count').textContent = state.rules.length ? '(' + state.rules.length + ')' : '';
+    }
+
+    // ---- columns -----------------------------------------------------------
+    function renderColumns() {
+        var html = '';
+        Object.keys(COLS).forEach(function (id) {
+            var on = state.columns.indexOf(id) !== -1;
+            html += '<label class="ae-colpick"><input type="checkbox" value="' + esc(id) + '"'
+                + (on ? ' checked' : '') + '> ' + esc(COLS[id].label) + '</label>';
+        });
+        $('ae-columns').innerHTML = html;
+        $('ae-column-count').textContent = '(' + state.columns.length + ')';
+    }
+
+    // ---- results -----------------------------------------------------------
+    function renderResults(rows, columns, append) {
+        var el = $('ae-results');
+        if (!rows.length && !append) {
+            el.innerHTML = '<p class="ae-empty">No awards match those filters.</p>';
+            return;
+        }
+        var body = rows.map(function (row) {
+            return '<tr>' + columns.map(function (c) {
+                var v = row[c];
+                if (c === 'rank') {
+                    var n = Number(v) || 0;
+                    return '<td>' + (n > 0
+                        ? '<span class="ladder-rank" data-lvl="' + Math.min(n, 10) + '">' + n + '</span>'
+                        : '<span class="ae-muted">—</span>') + '</td>';
+                }
+                if (c === 'revoked') {
+                    return '<td>' + (Number(v) ? '<span class="ae-revoked">revoked</span>' : '') + '</td>';
+                }
+                if (c === 'date' && !v) {
+                    return '<td><span class="ae-muted" title="No date was recorded for this award">unknown</span></td>';
+                }
+                return '<td>' + esc(v) + '</td>';
+            }).join('') + '</tr>';
+        }).join('');
+
+        if (append) {
+            var tb = el.querySelector('tbody');
+            if (tb) { tb.insertAdjacentHTML('beforeend', body); return; }
+        }
+        el.innerHTML = '<div class="ae-tablewrap"><table class="ae-table"><thead><tr>'
+            + columns.map(function (c) { return '<th>' + esc((COLS[c] || {}).label || c) + '</th>'; }).join('')
+            + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+    }
+
+    // ---- run ---------------------------------------------------------------
+    function setStatus(msg) { $('ae-status').textContent = msg || ''; }
+    function showError(msg) {
+        var e = $('ae-error');
+        if (!msg) { e.hidden = true; e.textContent = ''; return; }
+        e.hidden = false; e.textContent = msg;
+        if (e.scrollIntoView) { e.scrollIntoView({ block: 'nearest' }); }
+    }
+
+    function monthsRule() {
+        // The date window is a chip, not a rule the user has to write. It is added
+        // to the tree at run time so a shared link reproduces exactly what was seen.
+        if (!state.months) { return null; }
+        return { c: 'months_ago', o: 'is', v: 1, p: state.months };
+    }
+
+    function run(append) {
+        var btn = $('ae-run');
+        if (btn.disabled) { return; }
+        btn.disabled = true;
+        setStatus('Running…');
+        showError('');
+        state.rules.forEach(function (r) { delete r.error; });
+
+        var tree = buildTree();
+        var mr = monthsRule();
+        if (mr) { tree = { op: 'AND', children: [mr].concat(tree.children) }; }
+
+        var payload = {
+            Tree: tree,
+            Columns: state.columns,
+            Search: state.search,
+            IncludeRevoked: state.includeRevoked,
+            IncludeStripped: state.includeStripped,
+            Limit: 200,
+            Offset: append ? state.offset : 0,
+            WithTotal: !append
+        };
+
+        fetch(AE.uir + 'Reports/award_explorer_json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify(payload)
+        }).then(function (r) {
+            return r.json().catch(function () { throw new Error('The server sent a reply this page could not read.'); });
+        }).then(function (d) {
+            btn.disabled = false;
+            if (d.status === 5) { showError('Your session has ended. Please log in again.'); setStatus(''); return; }
+            if (d.status !== 0) {
+                showError(d.error || 'That query could not be run.');
+                // A path points at the rule the server rejected; the offset of 1 is the
+                // date-window rule this page prepends, which is not one of the user's.
+                if (Array.isArray(d.path) && d.path.length) {
+                    var i = Number(d.path[0]) - (mr ? 1 : 0);
+                    if (state.rules[i]) { state.rules[i].error = d.error; renderTree(); }
+                }
+                setStatus('');
+                return;
+            }
+            lastColumns = d.columns || [];
+            if (append) { lastRows = lastRows.concat(d.rows || []); }
+            else { lastRows = d.rows || []; state.offset = 0; }
+            state.offset += (d.rows || []).length;
+            renderResults(d.rows || [], lastColumns, append);
+            $('ae-more').hidden = !d.has_more;
+            setStatus(
+                (d.total != null ? d.total.toLocaleString() + ' grants' : lastRows.length + ' shown')
+                + (d.elapsed_ms ? ' · ' + d.elapsed_ms + ' ms' : '')
+            );
+        }).catch(function (err) {
+            btn.disabled = false;
+            setStatus('');
+            showError(err && err.message ? err.message : 'Could not reach the server. Please try again.');
+        });
+    }
+
+    // ---- share link --------------------------------------------------------
+    function shareLink() {
+        var payload = {
+            rules: state.rules.filter(ruleComplete),
+            op: state.op,
+            columns: state.columns,
+            search: state.search,
+            months: state.months,
+            includeRevoked: state.includeRevoked,
+            includeStripped: state.includeStripped
+        };
+        var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload))))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        return location.origin + location.pathname + '?Route=Reports/award_explorer&' + AE.linkParam + '=' + b64;
+    }
+
+    // ---- wiring ------------------------------------------------------------
+    function addRule() {
+        state.rules.push({ c: '', o: '', v: '' });
+        renderTree();
+    }
+
+    $('ae-tree').addEventListener('change', function (e) {
+        var row = e.target.closest ? e.target.closest('.ae-rule') : null;
+        if (!row) { return; }
+        var i = Number(row.dataset.i), r = state.rules[i], k = e.target.dataset.k;
+        if (!r || !k) { return; }
+        if (k === 'c') {
+            r.c = e.target.value;
+            var def = CRIT[r.c];
+            r.o = def && def.operands ? def.operands[0] : '';
+            r.v = ''; r.p = null; delete r.error;
+        } else if (k === 'o') {
+            r.o = e.target.value;
+            if (r.o === 'between' && !Array.isArray(r.v)) { r.v = ['', '']; }
+            if (r.o !== 'between' && Array.isArray(r.v)) { r.v = ''; }
+        } else if (k === 'p') {
+            r.p = e.target.value === '' ? null : Number(e.target.value);
+        } else if (k === 'v0' || k === 'v1') {
+            if (!Array.isArray(r.v)) { r.v = ['', '']; }
+            r.v[k === 'v0' ? 0 : 1] = e.target.value;
+        } else if (k === 'v') {
+            var def2 = CRIT[r.c];
+            if (def2 && def2.type === 'enum_set' && (r.o === 'in' || r.o === 'not_in')) {
+                r.v = e.target.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+            } else {
+                r.v = e.target.value;
+            }
+        }
+        renderTree();
+    });
+
+    $('ae-tree').addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('[data-act]') : null;
+        if (!btn) { return; }
+        var row = btn.closest('.ae-rule');
+        if (btn.dataset.act === 'remove' && row) {
+            state.rules.splice(Number(row.dataset.i), 1);
+            renderTree();
+        } else if (btn.dataset.act === 'toggle-op') {
+            state.op = state.op === 'AND' ? 'OR' : 'AND';
+            renderTree();
+        }
+    });
+
+    $('ae-columns').addEventListener('change', function (e) {
+        if (e.target.type !== 'checkbox') { return; }
+        var id = e.target.value, at = state.columns.indexOf(id);
+        if (e.target.checked && at === -1) { state.columns.push(id); }
+        if (!e.target.checked && at !== -1) { state.columns.splice(at, 1); }
+        $('ae-column-count').textContent = '(' + state.columns.length + ')';
+    });
+
+    $('ae-add-rule').addEventListener('click', addRule);
+    $('ae-add-group').addEventListener('click', function () {
+        // Groups are the v2 piece. Say so rather than offering a dead button.
+        showError('Nested groups are not in this version yet — rules are joined by the AND/OR button on each row.');
+    });
+    $('ae-clear').addEventListener('click', function () {
+        state.rules = []; renderTree(); showError('');
+    });
+    $('ae-run').addEventListener('click', function () { run(false); });
+    $('ae-load-more').addEventListener('click', function () { run(true); });
+
+    $('ae-search').addEventListener('input', function () { state.search = this.value; });
+    $('ae-search').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); run(false); }
+    });
+    $('ae-include-revoked').addEventListener('change', function () { state.includeRevoked = this.checked; });
+    $('ae-include-stripped').addEventListener('change', function () { state.includeStripped = this.checked; });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (chip) {
+        chip.addEventListener('click', function () {
+            Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
+                c.classList.remove('ae-chip-on');
+            });
+            chip.classList.add('ae-chip-on');
+            state.months = Number(chip.dataset.months) || 0;
+            windowHint();
+        });
+    });
+
+    function windowHint() {
+        $('ae-window-hint').textContent = state.months
+            ? 'Showing awards from the last ' + state.months + ' months. Switch to Everything for the full history.'
+            : 'Showing the whole history — slower, and the newest rows include a handful of mis-typed future dates.';
+    }
+
+    $('ae-share').addEventListener('click', function () {
+        var link = shareLink();
+        var done = function () { setStatus('Link copied.'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(link).then(done, function () { window.prompt('Copy this link:', link); });
+        } else {
+            window.prompt('Copy this link:', link);
+        }
+    });
+
+    $('ae-csv').addEventListener('click', function () {
+        if (!lastRows.length) { showError('Run the report first — there is nothing to export yet.'); return; }
+        var head = lastColumns.map(function (c) { return (COLS[c] || {}).label || c; });
+        var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+        var csv = head.map(cell).join(',') + '\r\n'
+            + lastRows.map(function (r) { return lastColumns.map(function (c) { return cell(r[c]); }).join(','); }).join('\r\n');
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: 'text/csv;charset=utf-8' }));
+        a.download = 'award-explorer-' + new Date().toISOString().slice(0, 10) + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+    });
+
+    // ---- boot --------------------------------------------------------------
+    (function init() {
+        var init = AE.initial;
+        if (init && typeof init === 'object') {
+            state.rules = Array.isArray(init.rules) ? init.rules : [];
+            state.op = init.op === 'OR' ? 'OR' : 'AND';
+            state.columns = Array.isArray(init.columns) ? init.columns : [];
+            state.search = typeof init.search === 'string' ? init.search : '';
+            state.months = Number(init.months) || 0;
+            state.includeRevoked = !!init.includeRevoked;
+            state.includeStripped = !!init.includeStripped;
+            $('ae-search').value = state.search;
+            $('ae-include-revoked').checked = state.includeRevoked;
+            $('ae-include-stripped').checked = state.includeStripped;
+            Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
+                c.classList.toggle('ae-chip-on', Number(c.dataset.months) === state.months);
+            });
+        }
+        if (!state.columns.length) {
+            Object.keys(COLS).forEach(function (id) { if (COLS[id]['default']) { state.columns.push(id); } });
+        }
+        renderTree();
+        renderColumns();
+        windowHint();
+        if (AE.initial) { run(false); }   // a shared link shows its results, not a blank page
+    })();
+})();

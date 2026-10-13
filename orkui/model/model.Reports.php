@@ -7,6 +7,7 @@ class Model_Reports extends Model
         parent::__construct();
         $this->Report = new APIModel('Report');
         $this->PopulationExplorer = new APIModel('PopulationExplorer');
+        $this->AwardExplorer = new APIModel('AwardExplorer');
     }
 
     /**
@@ -16,6 +17,32 @@ class Model_Reports extends Model
     public function population_authorize(string $token, string $scopeType, int $scopeId): ?array
     {
         return $this->PopulationExplorer->AuthorizeScope($token, $scopeType, $scopeId);
+    }
+
+    // ---------------------------------------------------------------- Award Explorer
+
+    /** Login gate only: award data is public, the report is not open to anonymous callers. */
+    public function award_authorize(string $token): ?array
+    {
+        return $this->AwardExplorer->Authorize($token);
+    }
+
+    /** Criteria + columns. [] when the viewer is not logged in or the DB could not be read. */
+    public function award_registry(string $token): array
+    {
+        if ($this->award_authorize($token) !== null) {
+            return [];
+        }
+        try {
+            return $this->AwardExplorer->Registry($this->AwardExplorer->LoadKnown());
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+
+    public function award_run(array $request): array
+    {
+        return $this->AwardExplorer->Run($request);
     }
 
     /** Whether the viewer is an officer of the scope (unlocks restricted criteria). Fails closed. */

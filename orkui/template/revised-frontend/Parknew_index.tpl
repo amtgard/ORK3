@@ -1248,6 +1248,7 @@
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/population_explorer&ParkId=<?= $park_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
+							<li><a href="<?= UIR ?>Reports/award_explorer"><i class="fas fa-award"></i> Award Explorer</a></li>
 							<?php endif; ?>
 						</ul>
 					</div>

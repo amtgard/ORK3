@@ -753,7 +753,7 @@ class AwardExplorer extends Ork3
      *
      * @return array{rows: list<array<string,mixed>>, columns: list<string>, capped: bool, total: ?int}
      */
-    public function Run(array $normalizedTree, array $columns, array $opts = [], array $known = []): array
+    public function RunRows(array $normalizedTree, array $columns, array $opts = [], array $known = []): array
     {
         $cols = $this->ResolveColumns($columns);
         $where = [$this->CompileTree($normalizedTree, $known)];
@@ -803,6 +803,139 @@ class AwardExplorer extends Ork3
             array_pop($rows);
         }
         return ['rows' => $rows, 'columns' => $cols, 'capped' => $capped, 'total' => null];
+    }
+
+    // ---------------------------------------------------------------- service entry
+
+    /**
+     * Login gate. Award data is public, but the report is not open to anonymous
+     * callers: 397k rows behind a filter builder is exactly what a crawler would
+     * walk. There is no scope to authorize beyond that -- any logged-in viewer may
+     * see any award in any kingdom.
+     */
+    public function Authorize(string $token): ?array
+    {
+        if (!valid_id(Ork3::$Lib->authorization->IsAuthorized($token))) {
+            return BadToken();
+        }
+        return null;
+    }
+
+    /**
+     * Service entry: authorize, take the per-player run lock, validate the tree,
+     * run. Mirrors PopulationExplorer::Run so the controller and the JS speak one
+     * shape across both reports.
+     */
+    public function Run(array $request): array
+    {
+        $started = microtime(true);
+        $token = is_string($request['Token'] ?? null) ? $request['Token'] : '';
+
+        $denied = $this->Authorize($token);
+        if ($denied !== null) {
+            return ['Status' => $denied];
+        }
+
+        // One run at a time per player: a second request while one is still going is
+        // refused at once rather than queued behind it.
+        $lock = $this->_acquireRunLock($token);
+        if ($lock === null) {
+            return ['Status' => ProcessingError(self::BUSY_MESSAGE), 'Busy' => true];
+        }
+        try {
+            return $this->_runAuthorized($request, $started);
+        } finally {
+            $this->_releaseRunLock($lock);
+        }
+    }
+
+    private function _runAuthorized(array $request, float $started): array
+    {
+        try {
+            $known = $this->LoadKnown();
+        } catch (Throwable $e) {
+            logtrace('AwardExplorer::Run known failure', $e->getMessage());
+            return ['Status' => ProcessingError('The award list could not be read. Please try again.')];
+        }
+
+        $tree = is_array($request['Tree'] ?? null) ? $request['Tree'] : ['op' => 'AND', 'children' => []];
+        $norm = $this->NormalizeTree($tree, $known);
+        if (!$norm['ok']) {
+            return ['Status' => InvalidParameter(null, $norm['error']), 'Path' => $norm['path'] ?? []];
+        }
+
+        $opts = [
+            'include_revoked'  => !empty($request['IncludeRevoked']),
+            'include_stripped' => !empty($request['IncludeStripped']),
+            'search'           => is_string($request['Search'] ?? null) ? $request['Search'] : '',
+            'limit'            => $this->_int($request['Limit'] ?? null) ?? 200,
+            'offset'           => $this->_int($request['Offset'] ?? null) ?? 0,
+        ];
+        $columns = is_array($request['Columns'] ?? null) ? $request['Columns'] : [];
+
+        try {
+            $out = $this->RunRows($norm['tree'], $columns, $opts, $known);
+            // Only paid for when asked: a COUNT over 397k rows is the expensive half
+            // of a run, and the "is there another page" answer already comes free
+            // from RunRows asking for one extra row.
+            $total = !empty($request['WithTotal']) ? $this->Count($norm['tree'], $opts, $known) : null;
+        } catch (RuntimeException $e) {
+            if ($e->getCode() === self::TIMEOUT_CODE) {
+                return ['Status' => ProcessingError(self::TIMEOUT_MESSAGE), 'Timeout' => true];
+            }
+            logtrace('AwardExplorer::Run query failure', $e->getMessage());
+            return ['Status' => ProcessingError('The awards could not be read. Please try again.')];
+        } catch (Throwable $e) {
+            logtrace('AwardExplorer::Run failure', $e->getMessage());
+            return ['Status' => ProcessingError('The awards could not be read. Please try again.')];
+        }
+
+        return [
+            'Status'    => Success(),
+            'Columns'   => $out['columns'],
+            'Rows'      => $out['rows'],
+            'HasMore'   => $out['capped'],
+            'Total'     => $total,
+            'ElapsedMs' => (int)round((microtime(true) - $started) * 1000),
+        ];
+    }
+
+    /**
+     * GET_LOCK on this request's connection; MariaDB drops it if the connection
+     * ends. Returns the lock name, null when another connection holds it, or ''
+     * when no lock could be taken (a DB error) -- the run then goes ahead
+     * unguarded, since the lock spares the database, it does not protect data.
+     */
+    private function _acquireRunLock(string $token): ?string
+    {
+        try {
+            $mid = (int)Ork3::$Lib->authorization->IsAuthorized($token);
+            if ($mid <= 0) {
+                return '';
+            }
+            $name = $this->RunLockName($mid);
+            $r = $this->_select("SELECT GET_LOCK('" . $name . "', 0) AS got");
+            $got = $r->next() ? $r->got : null;
+            if ($got === null) {
+                return '';
+            }
+            return (int)$got === 1 ? $name : null;
+        } catch (Throwable $e) {
+            logtrace('AwardExplorer::Run lock failure', $e->getMessage());
+            return '';
+        }
+    }
+
+    private function _releaseRunLock(string $name): void
+    {
+        if ($name === '') {
+            return;
+        }
+        try {
+            $this->_select("SELECT RELEASE_LOCK('" . $name . "') AS r");
+        } catch (Throwable $e) {
+            logtrace('AwardExplorer::Run unlock failure', $e->getMessage());
+        }
     }
 
     /** Total matching grants. Separate from Run: only worth paying for when asked. */
