@@ -251,11 +251,15 @@
                 body = list.map(opt).join('');
             }
 
-            // The award list gets the searchable picker whether you are choosing
-            // one or several -- a raw multiple select of 149 awards is the worst
-            // control on the page. Kingdom and park stay plain: short lists, and
-            // the native control is no worse for them.
-            var fancy = (def.set === 'award') ? ' data-awpick="1"' : '';
+            // Searchable picker for the long lists. Award is 149 and park is
+            // 1,101 -- a native select of 1,101 parks is a wall you scroll, not a
+            // list you choose from. Kingdom is 37 and genuinely fine as it is, so
+            // it keeps the native control rather than gaining a search box for
+            // two screenfuls.
+            var PICKABLE = { award: 'Select awards\u2026', park: 'Search parks\u2026' };
+            var fancy = PICKABLE[def.set]
+                ? ' data-awpick="1" data-aw-placeholder="' + esc(PICKABLE[def.set]) + '"'
+                : '';
             return '<select class="ae-v ae-v-pick" data-k="v"' + (many ? ' multiple size="8"' : '') + fancy + '>'
                 + (many ? '' : '<option value="">choose…</option>') + body + '</select>';
         }

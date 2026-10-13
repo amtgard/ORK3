@@ -754,6 +754,18 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         activeSelect = null; activeTrigger = null;
     }
 
+    /**
+     * The trigger's empty-state wording. The widget started life as the award
+     * chooser and said so; it works on any select, so the caller can name what
+     * is being chosen with data-aw-placeholder. Defaults to the award wording so
+     * every existing call site reads exactly as before.
+     */
+    function placeholderFor(sel, plural) {
+        var custom = sel.getAttribute('data-aw-placeholder');
+        if (custom) { return custom; }
+        return plural ? 'Select awards\u2026' : 'Select award\u2026';
+    }
+
     function syncTrigger(sel) {
         var btn = sel._awTrigger; if (!btn) return;
         if (sel.multiple) {
@@ -766,7 +778,7 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
             // able to read the filter, not just see that one exists.
             var label;
             if (chosen.length === 0) {
-                label = 'Select awards\u2026';
+                label = placeholderFor(sel, true);
             } else {
                 var joined = chosen.join(', ');
                 label = joined.length <= 60 ? joined : chosen.length + ' selected';
@@ -778,7 +790,7 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         }
         var opt = sel.options[sel.selectedIndex];
         var hasVal = opt && opt.value;
-        btn.querySelector('.aw-trigger-label').textContent = hasVal ? opt.text : 'Select award\u2026';
+        btn.querySelector('.aw-trigger-label').textContent = hasVal ? opt.text : placeholderFor(sel, false);
         btn.classList.toggle('aw-has-value', !!hasVal);
     }
 
