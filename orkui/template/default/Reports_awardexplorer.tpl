@@ -176,28 +176,14 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 
 			<h3>Quick picks</h3>
 			<p>Knights, Masterhoods, Paragons, Ladder awards, Titles and Kingdom-level each replace your
-			rules and run. They <strong>keep</strong> your kingdom or park, so pressing Knights from a park
-			gives you that park&rsquo;s knights, not every knight in Amtgard. Whatever a quick pick sets is an
-			ordinary rule you can then change.</p>
-			<p>The peerage ones also clear the date window, because knightings are rare enough that a
-			twelve-month window usually shows nothing.</p>
-
-			<h3>Two kinds of park, and two kinds of kingdom</h3>
-			<p>This catches people out, so it is worth reading once.</p>
-			<ul>
-				<li><strong>Recipient&rsquo;s park</strong> &mdash; where the person plays <em>today</em>.
-					This is the one for &ldquo;the knights at my park&rdquo;.</li>
-				<li><strong>Park the award was given in</strong> &mdash; what is recorded on the award itself.</li>
-			</ul>
-			<p>They differ for anyone who has transferred. Felfrost has 11 knights today and 17 knightings
-			recorded under it. Neither number is wrong; they answer different questions. Whichever you
-			filter on, that column is switched on for you so the table shows what you asked about.</p>
+			rules and run, keeping whichever kingdom or park you are in. Whatever they set is an ordinary
+			rule you can then change. The peerage ones also clear the date window, since knightings are
+			rare enough that twelve months usually shows nothing.</p>
 
 			<h3>The date window</h3>
-			<p>The chips write a real rule &mdash; &ldquo;Award date is on or after &hellip;&rdquo; &mdash; into
-			Filters, where you can edit the date or delete it. <strong>Everything</strong> removes it.</p>
-			<p>New searches start on the last 12 months. If an award you expected is missing, check the
-			date rule first: that is the usual reason.</p>
+			<p>New searches start on the <strong>last 12 months</strong>, so an older award will not appear
+			until you widen it. The chips write an ordinary date rule into Filters that you can edit or
+			delete; <strong>Everything</strong> removes it.</p>
 
 			<h3>Rules and groups</h3>
 			<p>Rules join with the <strong>AND</strong>/<strong>OR</strong> button between them. For
@@ -211,7 +197,7 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 
 			<h3>What is left out unless you ask</h3>
 			<ul>
-				<li><strong>Revoked awards</strong> &mdash; 2,860 of them.</li>
+				<li><strong>Revoked awards</strong> &mdash; honours later withdrawn.</li>
 				<li><strong>Awards stripped from a player</strong> &mdash; where the recipient was removed from the record.</li>
 			</ul>
 			<p>Both have checkboxes under Filters. They are applied outside your rules, so an OR group
