@@ -747,8 +747,73 @@
         });
     });
 
+    /**
+     * Back to the report this page would have shown with no link: default
+     * columns, default window, no search, nothing included, and the opening
+     * scope rule if we arrived from a kingdom or park.
+     *
+     * The share parameter is dropped from the URL as well. Leaving it there
+     * means the next refresh quietly restores the shared filter, which is the
+     * opposite of starting over -- and editing the address bar should not be
+     * the only way out of someone else's report.
+     */
+    function startOver() {
+        state.tree = { op: 'AND', children: [] };
+        state.search = '';
+        state.months = AE.defaultMonths;
+        state.includeRevoked = false;
+        state.includeStripped = false;
+        state.columns = [];
+        Object.keys(COLS).forEach(function (id) { if (COLS[id]['default']) { state.columns.push(id); } });
+
+        if (AE.scope && AE.scope.Type && AE.scope.Id) {
+            state.tree.children.push({
+                c: AE.scope.Type === 'Park' ? 'home_park' : 'home_kingdom',
+                o: 'is',
+                v: String(AE.scope.Id)
+            });
+        }
+
+        $('ae-search').value = '';
+        $('ae-include-revoked').checked = false;
+        $('ae-include-stripped').checked = false;
+        Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {
+            c.classList.toggle('ae-chip-on', Number(c.dataset.months) === state.months);
+        });
+
+        if (window.history && history.replaceState) {
+            try {
+                var u = new URL(window.location.href);
+                u.searchParams.delete(AE.linkParam);
+                history.replaceState(null, '', u.pathname + u.search + u.hash);
+            } catch (e) { /* an old browser keeps the parameter; nothing else breaks */ }
+        }
+
+        var note = $('ae-shared-note');
+        if (note) { note.remove(); }
+        if (dt) { dt.destroy(); dt = null; }
+        $('ae-results').innerHTML = '<p class="ae-empty">Choose your filters and press <strong>Run</strong>.</p>';
+        setStatus('');
+        showError('');
+        renderTree();
+        renderColumns();
+        windowHint();
+    }
+
+    var startBtn = $('ae-start-over');
+    if (startBtn) { startBtn.addEventListener('click', startOver); }
+
+    // Clears everything in the Filters card -- the rules AND the two include
+    // checkboxes beneath them. Leaving the checkboxes set while the rules
+    // vanished was the same kind of invisible filter as the date window.
+    // The window itself lives in its own card and is left alone; Start over
+    // is the one that resets everything.
     $('ae-clear').addEventListener('click', function () {
         state.tree = { op: 'AND', children: [] };
+        state.includeRevoked = false;
+        state.includeStripped = false;
+        $('ae-include-revoked').checked = false;
+        $('ae-include-stripped').checked = false;
         renderTree();
         showError('');
     });

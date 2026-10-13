@@ -58,6 +58,17 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 	<div class="ae-notice ae-notice-warn"><?= htmlspecialchars($ae_link_error) ?></div>
 <?php endif; ?>
 
+<?php if ($ae_initial !== null): ?>
+	<!-- Opened from a shared link: say so, and offer the way back to a blank
+	     report. Without this the only route is editing the URL, because the
+	     share parameter re-applies on every refresh. -->
+	<div class="ae-notice ae-notice-info" id="ae-shared-note">
+		<i class="fas fa-link" aria-hidden="true"></i>
+		You are looking at a <strong>shared filter</strong> — someone else's filters, columns and date range.
+		<button type="button" class="ae-linkbtn" id="ae-start-over">Start over with a blank report</button>
+	</div>
+<?php endif; ?>
+
 	<!-- ── Search + window ─────────────────────────────────── -->
 	<div class="ae-card">
 		<div class="ae-searchrow">
@@ -97,7 +108,7 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 			     group by renderGroup(); only Clear is global. -->
 			<div id="ae-tree" class="ae-tree"></div>
 			<div class="ae-treeactions">
-				<button type="button" class="ae-btn ae-btn-quiet" id="ae-clear">Clear all filters</button>
+				<button type="button" class="ae-btn ae-btn-quiet" id="ae-clear">Clear filters</button>
 			</div>
 			<label class="ae-check"><input type="checkbox" id="ae-include-revoked"> Include revoked awards</label>
 			<label class="ae-check"><input type="checkbox" id="ae-include-stripped"> Include awards stripped from a player</label>
