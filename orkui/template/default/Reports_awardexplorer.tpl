@@ -182,11 +182,11 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
      from the registry by awardexplorer-help.js so it cannot drift from the builder. -->
 <div class="ae-help-overlay" id="ae-help" hidden>
 	<div class="ae-help-box" role="dialog" aria-modal="true" aria-labelledby="ae-help-title">
-		<div class="ae-help-head">
-			<h2 id="ae-help-title"><i class="fas fa-circle-question" aria-hidden="true"></i> Award Explorer guide</h2>
+		<div class="ae-help-header">
+			<h2 class="ae-help-title" id="ae-help-title" tabindex="-1"><i class="fas fa-circle-question" aria-hidden="true"></i> Award Explorer guide</h2>
 			<button type="button" class="ae-help-close" id="ae-help-close" aria-label="Close">&times;</button>
 		</div>
-		<div class="ae-help-body" id="ae-help-body" tabindex="0">
+		<div class="ae-help-body" id="ae-help-body" tabindex="0" role="region" aria-label="Guide text">
 
 			<nav class="ae-help-toc" aria-label="Contents">
 				<ol>
@@ -202,68 +202,86 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 				</ol>
 			</nav>
 
-			<h3 class="ae-help-h" id="ae-h-what">What this report does</h3>
-			<p>It lists <strong>award grants</strong> &mdash; one row for every award ever given. A player
-			who holds five awards appears five times. That is the difference from Population Explorer,
-			which lists <em>players</em>, one row each.</p>
-			<p>Award records are public, but the report needs you signed in.</p>
+			<section class="ae-help-section" aria-labelledby="ae-h-what">
+				<h3 class="ae-help-h" id="ae-h-what" tabindex="-1">What this report does</h3>
+				<p>It lists <strong>award grants</strong> &mdash; one row for every award ever given. A player
+				who holds five awards appears five times. That is the difference from Population Explorer,
+				which lists <em>players</em>, one row each.</p>
+				<p>Award records are public, but the report needs you signed in.</p>
+			</section>
 
-			<h3 class="ae-help-h" id="ae-h-start">Quick start</h3>
-			<ol>
-				<li>Press a <strong>Quick pick</strong>, or add rules yourself under <strong>Filters</strong>.</li>
-				<li>Tick the <strong>Columns</strong> you want.</li>
-				<li>Press <strong>Run</strong>.</li>
-			</ol>
-			<p>Opening the page does not run anything. Arriving from a kingdom or park page starts you
-			filtered to it, but still waits for Run.</p>
+			<section class="ae-help-section" aria-labelledby="ae-h-start">
+				<h3 class="ae-help-h" id="ae-h-start" tabindex="-1">Quick start</h3>
+				<ol>
+					<li>Press a <strong>Quick pick</strong>, or add rules yourself under <strong>Filters</strong>.</li>
+					<li>Tick the <strong>Columns</strong> you want.</li>
+					<li>Press <strong>Run</strong>.</li>
+				</ol>
+				<p>Opening the page does not run anything. Arriving from a kingdom or park page starts you
+				filtered to it, but still waits for Run.</p>
+			</section>
 
-			<h3 class="ae-help-h" id="ae-h-picks">Quick picks</h3>
-			<p>Knights, Masterhoods, Paragons, Ladder awards, Titles and Kingdom-level each replace your
-			rules and run, keeping whichever kingdom or park you are in. Whatever they set is an ordinary
-			rule you can then change. The peerage ones also clear the date window, since knightings are
-			rare enough that twelve months usually shows nothing.</p>
+			<section class="ae-help-section" aria-labelledby="ae-h-picks">
+				<h3 class="ae-help-h" id="ae-h-picks" tabindex="-1">Quick picks</h3>
+				<p>Knights, Masterhoods, Paragons, Ladder awards, Titles and Kingdom-level each replace your
+				rules and run, keeping whichever kingdom or park you are in. Whatever they set is an ordinary
+				rule you can then change. The peerage ones also clear the date window, since knightings are
+				rare enough that twelve months usually shows nothing.</p>
+			</section>
 
-			<h3 class="ae-help-h" id="ae-h-window">The date window</h3>
-			<p>New searches start on the <strong>last 12 months</strong>, so an older award will not appear
-			until you widen it. The chips write an ordinary date rule into Filters that you can edit or
-			delete; <strong>Everything</strong> removes it.</p>
+			<section class="ae-help-section" aria-labelledby="ae-h-window">
+				<h3 class="ae-help-h" id="ae-h-window" tabindex="-1">The date window</h3>
+				<p>New searches start on the <strong>last 12 months</strong>, so an older award will not appear
+				until you widen it. The chips write an ordinary date rule into Filters that you can edit or
+				delete; <strong>Everything</strong> removes it.</p>
+			</section>
 
-			<h3 class="ae-help-h" id="ae-h-rules">Rules and groups</h3>
-			<p>Rules join with the <strong>AND</strong>/<strong>OR</strong> button between them. For
-			&ldquo;this kingdom, and either of two awards&rdquo;, you have two options:</p>
-			<ul>
-				<li>Set the award rule&rsquo;s operator to <strong>is any of</strong> and pick both &mdash; simplest.</li>
-				<li>Or press <strong>Add group</strong>, which nests a bracketed OR inside the AND.</li>
-			</ul>
-			<p>Both give the same answer. Groups earn their place when the alternatives are on
-			<em>different</em> criteria.</p>
+			<section class="ae-help-section" aria-labelledby="ae-h-rules">
+				<h3 class="ae-help-h" id="ae-h-rules" tabindex="-1">Rules and groups</h3>
+				<p>Rules join with the <strong>AND</strong>/<strong>OR</strong> button between them. For
+				&ldquo;this kingdom, and either of two awards&rdquo;, you have two options:</p>
+				<ul>
+					<li>Set the award rule&rsquo;s operator to <strong>is any of</strong> and pick both &mdash; simplest.</li>
+					<li>Or press <strong>Add group</strong>, which nests a bracketed OR inside the AND.</li>
+				</ul>
+				<p>Both give the same answer. Groups earn their place when the alternatives are on
+				<em>different</em> criteria.</p>
+			</section>
 
-			<h3 class="ae-help-h" id="ae-h-left">What is left out unless you ask</h3>
-			<ul>
-				<li><strong>Revoked awards</strong> &mdash; honours later withdrawn.</li>
-				<li><strong>Awards stripped from a player</strong> &mdash; where the recipient was removed from the record.</li>
-			</ul>
-			<p>Both have checkboxes under Filters. They are applied outside your rules, so an OR group
-			cannot pull them back in &mdash; which is why they are not offered as rules.</p>
-			<p>Awards with <strong>no recorded date</strong> are never matched by a date rule. Use
-			&ldquo;Date is unknown&rdquo; to find them.</p>
+			<section class="ae-help-section" aria-labelledby="ae-h-left">
+				<h3 class="ae-help-h" id="ae-h-left" tabindex="-1">What is left out unless you ask</h3>
+				<ul>
+					<li><strong>Revoked awards</strong> &mdash; honours later withdrawn.</li>
+					<li><strong>Awards stripped from a player</strong> &mdash; where the recipient was removed from the record.</li>
+				</ul>
+				<p>Both have checkboxes under Filters. They are applied outside your rules, so an OR group
+				cannot pull them back in &mdash; which is why they are not offered as rules.</p>
+				<p>Awards with <strong>no recorded date</strong> are never matched by a date rule. Use
+				&ldquo;Date is unknown&rdquo; to find them.</p>
+			</section>
 
-			<h3 class="ae-help-h" id="ae-h-results">Results, columns and export</h3>
-			<p>Newest first, 25 to a page. The line above the table says the whole search in plain
-			English, including the filters that are not rules.</p>
-			<p>Columns always appear in a fixed order, whatever order you tick them. <strong>CSV</strong>
-			exports every row of the result, not just the page you are looking at.</p>
-			<p>Very large results are capped; the status line says so when that happens, and the answer
-			is to narrow the filter.</p>
+			<section class="ae-help-section" aria-labelledby="ae-h-results">
+				<h3 class="ae-help-h" id="ae-h-results" tabindex="-1">Results, columns and export</h3>
+				<p>Newest first, 25 to a page. The line above the table says the whole search in plain
+				English, including the filters that are not rules.</p>
+				<p>Columns always appear in a fixed order, whatever order you tick them. <strong>CSV</strong>
+				exports every row of the result, not just the page you are looking at.</p>
+				<p>Very large results are capped; the status line says so when that happens, and the answer
+				is to narrow the filter.</p>
+			</section>
 
-			<h3 class="ae-help-h" id="ae-h-share">Share links and starting over</h3>
-			<p><strong>Copy link</strong> captures the filters, columns and date rule exactly. Whoever
-			opens it sees the same rows you did, and the report says so at the top with a
-			<strong>Start over</strong> button that clears everything back to a blank report.</p>
+			<section class="ae-help-section" aria-labelledby="ae-h-share">
+				<h3 class="ae-help-h" id="ae-h-share" tabindex="-1">Share links and starting over</h3>
+				<p><strong>Copy link</strong> captures the filters, columns and date rule exactly. Whoever
+				opens it sees the same rows you did, and the report says so at the top with a
+				<strong>Start over</strong> button that clears everything back to a blank report.</p>
+			</section>
 
-			<h3 class="ae-help-h" id="ae-h-ref">Criteria reference</h3>
-			<p>Every filter available, with what it matches.</p>
-			<dl id="ae-help-ref"></dl>
+			<section class="ae-help-section" aria-labelledby="ae-h-ref">
+				<h3 class="ae-help-h" id="ae-h-ref" tabindex="-1">Criteria reference</h3>
+				<p>Every filter available, with what it matches.</p>
+				<dl id="ae-help-ref"></dl>
+			</section>
 
 		</div>
 	</div>

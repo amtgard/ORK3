@@ -21,6 +21,7 @@
     if (!AE || !AE.registry || !overlay || !opener) { return; }
 
     var body = document.getElementById('ae-help-body');
+    var title = document.getElementById('ae-help-title');
     var closeBtn = document.getElementById('ae-help-close');
     // A <body> child, so no ancestor's transform or stacking context can trap the
     // fixed overlay — the same trap the award picker's dropdown hits.
@@ -55,8 +56,8 @@
         });
     })();
 
-    /* ── dialog ─────────────────────────────────────────────── */
-    var lastFocus = null;
+    /* ── dialog ────────────────────────────── */
+    var isOpen = false;
 
     function tabbable() {
         return Array.prototype.filter.call(
@@ -66,26 +67,39 @@
     }
 
     function open() {
-        lastFocus = document.activeElement;
+        if (isOpen) { return; }
+        isOpen = true;
+        var root = document.documentElement;
+        // A classic scrollbar takes space: pad its width back while locked so nothing
+        // shifts. Padding, not scrollbar-gutter — a stable gutter narrows the viewport
+        // and the fixed backdrop would leave that strip undimmed.
+        root.style.setProperty('--ae-help-gutter', Math.max(0, window.innerWidth - root.clientWidth) + 'px');
         overlay.hidden = false;
-        // Clamp the page behind, keeping its scrollbar gutter so nothing shifts.
-        document.documentElement.style.overflow = 'hidden';
-        document.documentElement.style.scrollbarGutter = 'stable';
+        root.classList.add('ae-help-lock');
+        opener.setAttribute('aria-expanded', 'true');
         body.scrollTop = 0;
-        body.focus();
+        void overlay.offsetWidth;            // start the fade from the hidden state
+        overlay.classList.add('is-open');
+        // The title, not the body: focusing the scroll container draws a ring around
+        // the whole guide, which reads as an error state.
+        title.focus();
         document.addEventListener('keydown', onKey, true);
     }
 
     function close() {
+        if (!isOpen) { return; }
+        isOpen = false;
+        overlay.classList.remove('is-open');
         overlay.hidden = true;
-        document.documentElement.style.overflow = '';
-        document.documentElement.style.scrollbarGutter = '';
+        document.documentElement.classList.remove('ae-help-lock');
+        document.documentElement.style.removeProperty('--ae-help-gutter');
+        opener.setAttribute('aria-expanded', 'false');
         document.removeEventListener('keydown', onKey, true);
-        if (lastFocus && lastFocus.focus) { lastFocus.focus(); }
+        opener.focus();
     }
 
     function onKey(e) {
-        if (overlay.hidden) { return; }
+        if (!isOpen) { return; }
         if (e.key === 'Escape') { e.preventDefault(); close(); return; }
         if (e.key !== 'Tab') { return; }
         // Trap focus. The list is read on every press, so generated content counts.
@@ -94,6 +108,21 @@
         var first = items[0], last = items[items.length - 1];
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
         else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+
+    // Contents: scroll the dialog body to the section rather than letting the anchor
+    // jump, which would leave #ae-h-... sitting in the page's URL.
+    var toc = overlay.querySelector('.ae-help-toc');
+    if (toc) {
+        toc.addEventListener('click', function (e) {
+            var a = e.target.closest ? e.target.closest('a[href^="#"]') : null;
+            if (!a) { return; }
+            e.preventDefault();
+            var t = document.getElementById(a.getAttribute('href').slice(1));
+            if (!t || !body.contains(t)) { return; }
+            body.scrollTop += t.getBoundingClientRect().top - body.getBoundingClientRect().top - 12;
+            try { t.focus({ preventScroll: true }); } catch (err) { t.focus(); }
+        });
     }
 
     opener.addEventListener('click', open);
