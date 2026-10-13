@@ -171,6 +171,37 @@ final class AwardExplorerTest extends TestCase
         }
     }
 
+    /**
+     * Linkable columns must carry their id, or the Recipient / Park / Kingdom
+     * cells can only be text. Recipient falls back to stripped_from so a stripped
+     * grant still links to whoever held it.
+     */
+    public function testLinkableColumnsCarryTheirIds(): void
+    {
+        $r = $this->ae->NormalizeTree($this->tree([]), $this->known);
+        $cols = ['recipient', 'recipient_park', 'recipient_kingdom', 'given_by', 'kingdom', 'park'];
+        $out = $this->ae->RunRows($r['tree'], $cols, ['limit' => 5], $this->known);
+        if (!$out['rows']) {
+            $this->markTestSkipped('No awards in the fixture database to inspect.');
+        }
+        foreach ($out['rows'] as $row) {
+            foreach (['recipient_id', 'recipient_park_id', 'recipient_kingdom_id', 'given_by_id', 'kingdom_id', 'park_id'] as $k) {
+                $this->assertArrayHasKey($k, $row, "missing link id $k");
+                $this->assertIsInt($row[$k]);
+            }
+        }
+    }
+
+    /** A column that links nowhere must not gain a stray id key. */
+    public function testNonLinkableColumnsGainNoIds(): void
+    {
+        $r = $this->ae->NormalizeTree($this->tree([]), $this->known);
+        $out = $this->ae->RunRows($r['tree'], ['date', 'award_name', 'rank'], ['limit' => 3], $this->known);
+        foreach ($out['rows'] as $row) {
+            $this->assertSame(['AwardsId', 'date', 'award_name', 'rank'], array_keys($row));
+        }
+    }
+
     public function testEmptyTreeCompilesToATruth(): void
     {
         $r = $this->ae->NormalizeTree($this->tree([]), $this->known);

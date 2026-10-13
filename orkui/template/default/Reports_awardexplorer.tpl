@@ -84,7 +84,7 @@ foreach ((array)($ae_registry['criteria'] ?? []) as $_id => $_def) {
 			<button type="button" class="ae-quickbtn" data-preset="titles"><i class="fas fa-scroll" aria-hidden="true"></i> Titles</button>
 			<button type="button" class="ae-quickbtn" data-preset="kingdomlevel"><i class="fas fa-crown" aria-hidden="true"></i> Kingdom-level</button>
 		</div>
-		<p class="ae-hint">A quick pick replaces your filters and runs. Everything it sets is an ordinary rule you can then change.</p>
+		<p class="ae-hint">A quick pick keeps your kingdom or park and replaces the rest, then runs. Everything it sets is an ordinary rule you can then change.</p>
 	</div>
 
 	<!-- ── Filters ─────────────────────────────────────────── -->

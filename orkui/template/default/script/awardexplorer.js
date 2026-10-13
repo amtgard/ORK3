@@ -185,13 +185,49 @@
         var el = $('ae-results');
         if (dt) { dt.destroy(); dt = null; }
         if (!rows.length) {
-            el.innerHTML = '<p class="ae-empty">No awards match those filters.</p>';
+            // An empty result is often the scope, not the question: a principality
+            // has no knightings of its own, so "Knights" from Painted Skies is
+            // correctly zero and unhelpfully blank. Offer the obvious next move
+            // rather than leaving it looking broken.
+            var scoped = state.rules.filter(function (r) { return r.c === 'kingdom' || r.c === 'park'; });
+            el.innerHTML = '<p class="ae-empty">No awards match those filters.'
+                + (scoped.length
+                    ? ' <button type="button" class="ae-linkbtn" id="ae-drop-scope">Search every kingdom instead</button>'
+                    : '')
+                + '</p>';
+            var drop = $('ae-drop-scope');
+            if (drop) {
+                drop.addEventListener('click', function () {
+                    state.rules = state.rules.filter(function (r) { return r.c !== 'kingdom' && r.c !== 'park'; });
+                    renderTree();
+                    run();
+                });
+            }
             return;
         }
 
+        // Columns that point at a profile, and the row key carrying the id.
+        var LINKS = {
+            recipient:         { id: 'recipient_id',         route: 'Player/profile/' },
+            recipient_park:    { id: 'recipient_park_id',    route: 'Park/profile/' },
+            recipient_kingdom: { id: 'recipient_kingdom_id', route: 'Kingdom/profile/' },
+            given_by:          { id: 'given_by_id',          route: 'Player/profile/' },
+            kingdom:           { id: 'kingdom_id',           route: 'Kingdom/profile/' },
+            park:              { id: 'park_id',              route: 'Park/profile/' }
+        };
+
         var cell = function (c) {
             return function (v, type, row) {
+                // Sorting, searching and export get the plain text; only the
+                // rendered cell gets markup, or DataTables would sort on the HTML.
                 if (type !== 'display') { return v == null ? '' : v; }
+                var link = LINKS[c];
+                if (link && v) {
+                    var id = Number(row && row[link.id]) || 0;
+                    if (id > 0) {
+                        return '<a href="' + esc(AE.uir + link.route + id) + '">' + esc(v) + '</a>';
+                    }
+                }
                 if (c === 'rank') {
                     var n = Number(v) || 0;
                     return n > 0
@@ -268,6 +304,10 @@
     function run() {
         var btn = $('ae-run');
         if (btn.disabled) { return; }
+        // The opening banner explains the starting state and says to press Run.
+        // Once something has run it is stale instruction, so it goes.
+        var scopeNote = document.querySelector('.ae-scope');
+        if (scopeNote) { scopeNote.remove(); }
         btn.disabled = true;
         setStatus('Running…');
         showError('');
@@ -416,10 +456,12 @@
         b.addEventListener('click', function () {
             var preset = PRESETS[b.dataset.preset];
             if (!preset) { return; }
-            // Peerages are rare enough that a 12-month window usually shows nothing,
-            // so those presets open the whole history. Ladders and titles are common,
-            // so they keep whatever window is set.
-            state.rules = preset.rules.map(function (r) { return Object.assign({}, r); });
+            // Keep WHERE you are looking, replace WHAT you are looking for. Clicking
+            // Knights from a kingdom's Reports tab means "this kingdom's knightings",
+            // not "every knighting in Amtgard" -- wiping the scope rule threw away the
+            // one thing the person had already told us.
+            var scope = state.rules.filter(function (r) { return r.c === 'kingdom' || r.c === 'park'; });
+            state.rules = scope.concat(preset.rules.map(function (r) { return Object.assign({}, r); }));
             if (preset.months !== undefined) {
                 state.months = preset.months;
                 Array.prototype.forEach.call(document.querySelectorAll('.ae-chip'), function (c) {

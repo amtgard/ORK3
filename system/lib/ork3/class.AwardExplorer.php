@@ -777,6 +777,42 @@ class AwardExplorer extends Ork3
     }
 
     /**
+     * The id a displayed column links to, or null when it links nowhere.
+     *
+     * Selected alongside the column itself so the client can build a profile link
+     * without a second lookup. Recipient falls back to stripped_from: a stripped
+     * grant still names who held it, and that person still has a profile.
+     */
+    private function _columnIdSql(string $colId): ?string
+    {
+        switch ($colId) {
+            case 'recipient':
+                return 'COALESCE(NULLIF(a.mundane_id, 0), a.stripped_from, 0) AS recipient_id';
+            case 'recipient_park':
+                return 'COALESCE(m.park_id, 0) AS recipient_park_id';
+            case 'recipient_kingdom':
+                return 'COALESCE(m.kingdom_id, 0) AS recipient_kingdom_id';
+            case 'given_by':
+                return 'COALESCE(a.given_by_id, 0) AS given_by_id';
+            case 'kingdom':
+                return 'COALESCE(a.kingdom_id, 0) AS kingdom_id';
+            case 'park':
+                return 'COALESCE(a.park_id, 0) AS park_id';
+        }
+        return null;
+    }
+
+    /** Row key the id arrives under for a linkable column. */
+    private function _columnIdKey(string $colId): ?string
+    {
+        $sql = $this->_columnIdSql($colId);
+        if ($sql === null) {
+            return null;
+        }
+        return substr($sql, strrpos($sql, ' ') + 1);
+    }
+
+    /**
      * The joins every query uses. `sm` covers stripped rows: revoke_award sets
      * mundane_id = 0 and records the original holder in stripped_from, so without
      * it those 3,079 rows show an empty recipient.
@@ -886,8 +922,14 @@ class AwardExplorer extends Ork3
         $offset = isset($opts['offset']) ? max(0, (int)$opts['offset']) : 0;
 
         $select = [];
+        $idKeys = [];
         foreach ($cols as $id) {
             $select[] = $this->ColumnSelectSql($id);
+            $idSql = $this->_columnIdSql($id);
+            if ($idSql !== null) {
+                $select[] = $idSql;
+                $idKeys[] = $this->_columnIdKey($id);
+            }
         }
         // awards_id is the tiebreaker, not decoration: `date` is a DATE, so a court
         // that records thirty awards on one day gives thirty identical sort keys and
@@ -904,6 +946,9 @@ class AwardExplorer extends Ork3
             $row = ['AwardsId' => (int)$rs->awards_id];
             foreach ($cols as $id) {
                 $row[$id] = $rs->{$id};
+            }
+            foreach ($idKeys as $k) {
+                $row[$k] = (int)$rs->{$k};
             }
             $rows[] = $row;
         }
