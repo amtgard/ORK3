@@ -125,6 +125,20 @@ html[data-theme="dark"] .cp-jstip { background: #000; }
 /* ---- Rank pill picker (ad-hoc Add Award modal, Record view's rank popover) —
    clickable .ladder-rank pills, dimmed until selected. ---- */
 .cp-rank-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+/* Grant modal: "also holds this ladder elsewhere" note. Informational, so it is
+   quiet -- a neutral tint, not a warning colour. It states a fact and changes
+   no default; styling it as an alert would imply the officer did something wrong. */
+.cp-grant-related {
+    margin-top  : 8px;
+    padding     : 7px 10px;
+    border-radius: 6px;
+    background  : #f7fafc;
+    border      : 1px solid #e2e8f0;
+    color       : #4a5568;
+    font-size   : 12px;
+    line-height : 1.45;
+}
+html[data-theme="dark"] .cp-grant-related { background: #1a202c; border-color: #2d3748; color: #a0aec0; }
 .cp-rank-pill { width: auto; padding: 3px 11px; font-size: 12px; cursor: pointer; opacity: .5; transition: opacity .12s ease, box-shadow .12s ease; }
 .cp-rank-pill:hover { opacity: .85; }
 /* Held / planned marking on the ad-hoc rank picker. Informational only -- a

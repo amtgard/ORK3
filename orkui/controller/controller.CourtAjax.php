@@ -289,7 +289,16 @@ class Controller_CourtAjax extends Controller
             $public_comment
         );
         if ($award === false) {
-            $this->jsonOut(['status' => 1, 'error' => 'That award does not belong to this kingdom.']);
+            // The usual cause is not a mistake by the officer: the pending list is
+            // scoped to players in this kingdom, but a player who transferred carries
+            // their old kingdom's open recommendations with them, and those name a
+            // kingdomaward this court cannot grant. Say so, rather than leaving the
+            // officer to wonder which of their picks was wrong.
+            $this->jsonOut([
+                'status' => 1,
+                'error'  => 'That award belongs to a different kingdom, so it cannot be added to this court. '
+                          . 'This usually means the player was recommended in another kingdom before transferring here.',
+            ]);
         }
 
         $this->jsonOut(['status' => 0, 'award' => $award]);

@@ -26,11 +26,12 @@ final class AwardOptionGroupsTest extends TestCase
             7067, 7249, 6628, 5813, 6045, 6050, 6430, 6283, 7055,
             6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
             6577, 94, 7084, 6171, 6574, 7254,
+            7513, // Hunter (The Painted Skies) -- added 2026-10-04
         ];
         $actual = Award::pseudoLadderKingdomAwardIds();
 
         $this->assertSame($expected, $actual);
-        $this->assertCount(24, $actual);
+        $this->assertCount(25, $actual);
     }
 
     public function testPeerageBuckets(): void

@@ -3938,6 +3938,7 @@ $ladderMasterMap           = is_array($LadderMasterMap ?? null) ? $LadderMasterM
     btn.addEventListener('blur',       hide);
 })();
 
+window.tnPseudoLadderInfo = <?= json_encode(is_array($PseudoLadderSiblings ?? null) ? $PseudoLadderSiblings : (object)[]) ?>;
 var PnConfig = {
 	uir:            '<?= UIR ?>',
 	httpService:    '<?= HTTP_SERVICE ?>',
