@@ -128,7 +128,9 @@ $_show_claim    = !$_is_retired && $_logged_in && $_mgr_count === 0;
 	max-height: none;
 }
 .un-heraldry-edit-btn {
-	position: absolute;
+	/* !important: the generic [data-tip] rule in revised.css sets position:relative
+	   at higher specificity, which dropped the button out of the frame's corner. */
+	position: absolute !important;
 	bottom: 4px;
 	right: 4px;
 	width: 24px;
@@ -146,6 +148,13 @@ $_show_claim    = !$_is_retired && $_logged_in && $_mgr_count === 0;
 }
 .un-heraldry-wrap:hover .un-heraldry-edit-btn { opacity: 1; }
 .un-heraldry-edit-btn i { color: #fff; font-size: 11px; pointer-events: none; }
+/* A touch screen has no hover, so the button never appeared; keep it showing
+   there and give it a finger-sized target. Keyed on the pointer, not the
+   width, so a phone in "desktop site" mode still gets it. */
+@media (hover: none), (pointer: coarse) {
+	.un-heraldry-edit-btn { opacity: 1; width: 32px; height: 32px; }
+	.un-heraldry-edit-btn i { font-size: 13px; }
+}
 
 .un-hero-info {
 	flex: 1;
@@ -361,7 +370,8 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .un-hero-name {
 /* In-product CSS tooltip for [data-tip] — mirrors the revised.css pattern.
    Native title="" causes a 1–2s browser delay and clashes with our dark theme,
    so all Unit buttons use data-tip instead. */
-.un-heraldry-edit-btn[data-tip],
+/* .un-heraldry-edit-btn is left out of this rule: it is absolutely positioned,
+   which already anchors its tooltip. */
 .pn-card-edit-btn[data-tip],
 .pn-btn[data-tip],
 .kn-md-help-btn[data-tip] { position: relative; }

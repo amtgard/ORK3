@@ -4,8 +4,9 @@
  * tab activation — kept out of the initial profile() page load because rendering
  * thousands of <tr> rows inline blew up the browser's DOMContentLoaded handler.
  * Expects $AwardRecommendations, $IsLoggedIn, $CanManageKingdom, $kingdom_name,
- * $kingdom_id to be in scope.
- */ ?>
+ * $kingdom_id, $RecsHiddenBySetting to be in scope.
+ */
+include __DIR__ . '/_recs_hidden_notice.tpl'; ?>
 			<style>
 			.rm-inline-passlocal { display:inline-block; margin-left:6px; font-size:11px; color:#2c5f8b; border:1px solid rgba(44,95,139,.4); border-radius:3px; padding:0 5px; }
 			html[data-theme="dark"] .rm-inline-passlocal { color:#6fb0e6; }
@@ -25,7 +26,9 @@
 				<?php endif; ?>
 			</div>
 			<?php endif; ?>
-			<?php if (empty($AwardRecommendations)): ?>
+			<?php if (empty($AwardRecommendations) && !empty($RecsHiddenBySetting)): ?>
+			<div class="pk-recs-empty"><?= htmlspecialchars(ork_recs_hidden_notice(!empty($IsLoggedIn))) ?></div>
+			<?php elseif (empty($AwardRecommendations)): ?>
 			<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($kingdom_name) ?>.</div>
 			<?php else: ?>
 			<?php if (($CanManageKingdom ?? false) || !empty($ViewerHasCircle)): ?>
