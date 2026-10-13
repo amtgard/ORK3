@@ -196,6 +196,43 @@ html[data-theme="dark"] .ae-quickbtn:hover { background: rgba(66,153,225,.12); b
 html[data-theme="dark"] .ae-quicklabel { color: #a0aec0; }
 html[data-theme="dark"] .ae-linkbtn { color: #90cdf4; }
 html[data-theme="dark"] .ae-chosen { color: #90cdf4; }
+
+/* Body-text greys. #4a5568 and #718096 read fine on white and almost vanish on
+   #161b22, which is what made the Columns list unreadable in dark mode. */
+html[data-theme="dark"] .ae-colpick,
+html[data-theme="dark"] .ae-check,
+html[data-theme="dark"] .ae-status,
+html[data-theme="dark"] .ae-join { color: #cbd5e0; }
+html[data-theme="dark"] .ae-note,
+html[data-theme="dark"] .ae-and,
+html[data-theme="dark"] .ae-btn-quiet,
+html[data-theme="dark"] .ae-count,
+html[data-theme="dark"] .ae-join-first { color: #8b949e; }
+html[data-theme="dark"] .ae-joinbtn { background: #21262d; border-color: #2d3748; color: #cbd5e0; }
+
+/* Reds and the gold accent need lifting off a dark background, not reusing. */
+html[data-theme="dark"] .ae-rule-error { color: #fc8181; }
+html[data-theme="dark"] .ae-revoked {
+    color: #fc8181; background: rgba(229, 62, 62, .12); border-color: rgba(229, 62, 62, .4);
+}
+html[data-theme="dark"] .ae-head h1 i,
+html[data-theme="dark"] .ae-quickbtn i { color: #d69e2e; }
+
+/* DataTables' own chrome is injected outside our markup, so it has to be named
+   explicitly or the length menu, filter box and pager stay black-on-black. */
+html[data-theme="dark"] .dataTables_wrapper .dataTables_length,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_filter,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_info,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate { color: #cbd5e0; }
+html[data-theme="dark"] .dataTables_wrapper .dataTables_length select,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_filter input {
+    background: #0d1117; border: 1px solid #2d3748; color: #e2e8f0;
+}
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button { color: #cbd5e0 !important; }
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: #21262d !important; border-color: #2d3748 !important; color: #fff !important;
+}
 html[data-theme="dark"] .ae-table a { color: #90cdf4; }
 html[data-theme="dark"] .ae-dt-btn { background: #1a202c; border-color: #2d3748; color: #e2e8f0; }
 html[data-theme="dark"] .dataTables_wrapper { color: #a0aec0; }
