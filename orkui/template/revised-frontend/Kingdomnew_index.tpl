@@ -189,6 +189,9 @@
 				<button class="kn-btn kn-btn-outline" onclick="knOpenAwardModal()">
 					<i class="fas fa-medal"></i> Enter Awards
 				</button>
+				<button class="kn-btn kn-btn-outline" onclick="bcOpen()">
+					<i class="fas fa-star"></i> Bonus Credits
+				</button>
 			<?php endif; ?>
 			<a class="kn-btn kn-btn-outline" href="#" onclick="knActivateTab('map');return false;">
 				<i class="fas fa-map"></i> Map
@@ -3558,4 +3561,16 @@ window.OrkRsCfg = {
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php endif; ?>
+<?php if ($CanManageKingdom ?? false): ?>
+<script>
+window.OrkBcCfg = {
+	uir:       '<?= UIR ?>',
+	scopeType: 'kingdom',
+	scopeId:   <?= (int)($kingdom_id ?? 0) ?>,
+	scopeName: <?= json_encode($kingdom_name ?? '') ?>,
+	kingdomId: <?= (int)($kingdom_id ?? 0) ?>
+};
+</script>
+<?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
 <?php endif; ?>

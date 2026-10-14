@@ -530,6 +530,16 @@ class Controller_Player extends Controller
         $this->data['IsOwnProfile']    = $uid === (int)$id;
         $this->data['Player']['ParkName'] = $this->session->park_name;
 
+        // Bonus credits (class credits that are not attendance): listed on the
+        // Class Levels tab so a credit never reads as an unexplained number.
+        // Live ones only; revoked history is kept for a management tool, not
+        // shown here. Officers with authority over the player's park may
+        // remove one.
+        $this->load_model('BonusCredit');
+        $__bcPark = (int)($this->data['Details']['ParkId'] ?? $this->data['Player']['ParkId'] ?? 0);
+        $this->data['CanRevokeBonus'] = $uid > 0 && $__bcPark > 0 && $this->BonusCredit->can_grant($uid, $__bcPark);
+        $this->data['BonusCredits']   = $this->BonusCredit->for_player((int)$id);
+
 
         // Beltline peers, associates, and title list (domain aggregate)
         $beltline = $this->Player->get_beltline_for_player($id, $uid);

@@ -351,6 +351,9 @@
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAttendanceModal()">
 						<i class="fas fa-clipboard-list"></i> Enter Attendance
 					</button>
+					<button class="pk-btn pk-btn-outline" onclick="bcOpen()">
+						<i class="fas fa-star"></i> Bonus Credits
+					</button>
 				<?php endif; ?>
 				<?php if (!empty($CanAdminPark)): ?>
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAwardModal()">
@@ -3780,4 +3783,16 @@ window.OrkRsCfg = {
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php endif; ?>
+<?php if (!empty($CanManagePark)): ?>
+<script>
+window.OrkBcCfg = {
+	uir:       '<?= UIR ?>',
+	scopeType: 'park',
+	scopeId:   <?= (int)($park_id ?? 0) ?>,
+	scopeName: <?= json_encode($park_name ?? '') ?>,
+	kingdomId: <?= (int)($kingdom_id ?? 0) ?>
+};
+</script>
+<?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
 <?php endif; ?>

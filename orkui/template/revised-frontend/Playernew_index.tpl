@@ -734,6 +734,19 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-font-card.pn-active{border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 2px rgba(66,153,225,0.2);background:#ebf8ff}
 .pn-font-card-sample{font-size:16px;line-height:1.3;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}
 .pn-font-card-label{font-size:10px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em}
+/* Bonus credits on the Class Levels tab */
+.pn-bonus-badge{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:600;background:#fefcbf;color:#744210;vertical-align:middle;white-space:nowrap}
+.pn-bonus-badge i{font-size:10px;color:#d69e2e}
+.pn-bonus-section{margin-top:22px}
+.pn-bonus-heading{margin:0 0 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.pn-bonus-heading i{color:#d69e2e}
+.pn-bonus-hint{margin:0 0 10px;font-size:12px;color:var(--ork-text-muted,#718096)}
+.pn-bonus-scope{margin-left:6px;font-size:11px;color:var(--ork-text-muted,#718096)}
+.pn-bonus-note{font-size:12px;color:var(--ork-text-muted,#718096)}
+.pn-bonus-revoke{background:none;border:0;color:#c53030;cursor:pointer;font-size:12px;padding:2px 6px}
+.pn-bonus-revoke:hover{text-decoration:underline}
+html[data-theme="dark"] .pn-bonus-badge{background:#4a3f12;color:#fbd38d}
+
 /* Shared yellow warning banner (about visibility, milestones accuracy, name entitlement, reconcile) */
 .pn-about-visibility-warn,
 .pn-warn-banner{margin-bottom:16px;padding:10px 12px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:12px;color:#744210;line-height:1.5}
@@ -2552,6 +2565,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 										<?php if ($hasParagon): ?>
 											<span class="pn-paragon-badge" title="Paragon title earned"><i class="fas fa-crown"></i> Paragon</span>
 										<?php endif; ?>
+										<?php /* The Credits cell must stay a bare number: revised.js reads it with Number() to compute the level. */ ?>
+										<?php if ((float)($detail['BonusCredits'] ?? 0) > 0): ?>
+											<span class="pn-bonus-badge" title="Includes bonus credits — see Bonus Credits below"><i class="fas fa-star"></i> <?= rtrim(rtrim(number_format((float)$detail['BonusCredits'], 2, '.', ''), '0'), '.') ?> bonus</span>
+										<?php endif; ?>
 									</td>
 									<td class="pn-col-numeric pn-credits"><?= $totalCredits ?></td>
 									<td class="pn-col-numeric pn-level">-</td>
@@ -2561,6 +2578,52 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					</table>
 				<?php else: ?>
 					<div class="pn-empty">No class records</div>
+				<?php endif; ?>
+
+				<?php
+					// Bonus credits: class credits that are not attendance (class.BonusCredit.php).
+					// Each one says what it was for and who granted it. Live credits only; officers
+					// with authority over the player's park can remove one.
+					$pnBonus = is_array($BonusCredits ?? null) ? $BonusCredits : [];
+					$pnCanRevokeBonus = !empty($CanRevokeBonus);
+				?>
+				<?php if (count($pnBonus) > 0): ?>
+				<div class="pn-bonus-section" id="pn-bonus-section">
+					<h4 class="pn-bonus-heading"><i class="fas fa-star"></i> Bonus Credits</h4>
+					<p class="pn-bonus-hint">Credits granted for something other than attendance. They count toward class levels only, never as attendance.</p>
+					<table class="pn-table" id="pn-bonus-table">
+						<thead>
+							<tr>
+								<th>Credit for</th>
+								<th>Class</th>
+								<th class="pn-col-numeric">Credits</th>
+								<th>Date</th>
+								<th>Granted by</th>
+								<?php if ($pnCanRevokeBonus): ?><th></th><?php endif; ?>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($pnBonus as $bc): ?>
+							<tr data-bonus-id="<?= (int)$bc['BonusCreditId'] ?>">
+								<td>
+									<?= htmlspecialchars($bc['ReasonName']) ?>
+									<span class="pn-bonus-scope"><?= htmlspecialchars($bc['ScopeName']) ?></span>
+									<?php if (!empty($bc['Note'])): ?><div class="pn-bonus-note"><?= htmlspecialchars($bc['Note']) ?></div><?php endif; ?>
+								</td>
+								<td><?= htmlspecialchars($bc['ClassName']) ?></td>
+								<td class="pn-col-numeric"><?= rtrim(rtrim(number_format((float)$bc['Credits'], 2, '.', ''), '0'), '.') ?></td>
+								<td><?= htmlspecialchars($bc['Date']) ?></td>
+								<td><?= htmlspecialchars($bc['GrantedByPersona']) ?></td>
+								<?php if ($pnCanRevokeBonus): ?>
+								<td class="pn-col-numeric">
+									<button type="button" class="pn-bonus-revoke" data-id="<?= (int)$bc['BonusCreditId'] ?>" data-who="<?= htmlspecialchars($bc['ReasonName'], ENT_QUOTES) ?>">Remove</button>
+								</td>
+								<?php endif; ?>
+							</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
 				<?php endif; ?>
 			</div>
 
@@ -3871,6 +3934,35 @@ window.OrkRsCfg = {
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php if (!empty($CanRevokeBonus) && !empty($BonusCredits)): ?>
+<script>
+// Remove a bonus credit from the Class Levels tab. The page reloads afterwards so
+// the class totals and levels (computed server-side and by revised.js) agree.
+(function () {
+	var tbl = document.getElementById('pn-bonus-table');
+	if (!tbl) return;
+	tbl.addEventListener('click', function (e) {
+		var btn = e.target.closest ? e.target.closest('.pn-bonus-revoke') : null;
+		if (!btn) return;
+		var who = btn.getAttribute('data-who') || 'this credit';
+		function go() {
+			btn.disabled = true;
+			jQuery.post(<?= json_encode(UIR) ?> + 'BonusCreditAjax/revoke', { BonusCreditId: btn.getAttribute('data-id') }, function (r) {
+				if (!r || r.status !== 0) { btn.disabled = false; alert((r && r.error) || 'Could not remove the credit.'); return; }
+				location.reload();
+			}, 'json').fail(function () { btn.disabled = false; alert('Request failed.'); });
+		}
+		var msg = 'The “' + who + '” credit is removed from this player. It can be granted again.';
+		var oc = window.orkConfirm;
+		// The player page's own pnConfirm first; then revised.js's callback-style orkConfirm; then orkui.js's promise version.
+		if (typeof window.pnConfirm === 'function') { window.pnConfirm({ title: 'Remove this credit?', message: msg, confirmText: 'Remove', danger: true }, go); }
+		else if (typeof oc === 'function' && oc.length >= 2) { oc(msg, go, { title: 'Remove this credit?', okLabel: 'Remove', danger: true }); }
+		else if (typeof oc === 'function') { oc({ title: 'Remove this credit?', body: msg, confirmLabel: 'Remove', danger: true }).then(function (ok) { if (ok) go(); }); }
+		else if (window.confirm(msg)) { go(); }
+	});
+})();
+</script>
+<?php endif; ?>
 <?php endif; ?>
 
 <?php
