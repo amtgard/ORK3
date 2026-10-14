@@ -4298,7 +4298,13 @@ $_total_awards = count($courtAwards ?? []);
         var typeRow   = aw.IsTitle ? 'title'  : (aw.IsLadder ? 'ladder' : 'award');
         var html = '<div class="cp-award-row cp-aw-type-' + typeRow + '" id="cp-aw-' + aw.CourtAwardId + '" data-court-award-id="' + aw.CourtAwardId + '" data-rowversion="' + (aw.RowVersion || 0) + '" data-sort="' + aw.SortOrder + '">' +
             '<div class="cp-award-row-main cp-row-grid" onclick="cpToggleAward(' + aw.CourtAwardId + ')">' +
-            '<div class="cp-cell cp-cell-order"><div class="cp-reorder-btns">' +
+            '<div class="cp-cell cp-cell-order">' +
+            // The drag handle the server row has (draft only). It was missing here, so
+            // every award added without a reload -- ad-hoc, artisan, walk-on, or one
+            // another officer added that arrived through the poll -- could only be
+            // moved with the arrows until the page was reloaded.
+            (courtStatus === 'draft' ? '<span class="cp-award-drag" data-tip="Drag to reorder" aria-label="Drag to reorder" onclick="event.stopPropagation()"><i class="fas fa-grip-vertical"></i></span>' : '') +
+            '<div class="cp-reorder-btns">' +
             '<button class="cp-reorder-btn" data-tip="Move up" aria-label="Move award up" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',-1)">&#9650;</button>' +
             '<button class="cp-reorder-btn" data-tip="Move down" aria-label="Move award down" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',1)">&#9660;</button>' +
             '</div></div>' +
