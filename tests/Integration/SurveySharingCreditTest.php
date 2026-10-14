@@ -54,6 +54,59 @@ final class SurveySharingCreditTest extends TestCase
         $this->assertSame('all', $this->row($ks)['results_share']);
     }
 
+    /** A draft that has never opened may move to another org the actor holds; after open, never. */
+    public function testScopeMovesOnlyWhileDraftAndOnlyToAnOrgTheActorHolds(): void
+    {
+        $s = new Survey();
+        $s->setActor($this->pOfficerA);
+        $r = $s->create($this->pOfficerA, 'park', $this->parkA, 'T11SHARE scope');
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $sid = $this->fx['survey'][] = (int) $r['SurveyId'];
+
+        // No authority on park B or the kingdom: denied, and the row is untouched.
+        $this->assertSame(3, $s->update($sid, ['ScopeType' => 'park', 'ScopeId' => $this->parkB])['Status']);
+        $this->assertSame(3, $s->update($sid, ['ScopeType' => 'kingdom', 'ScopeId' => $this->k])['Status']);
+        $this->assertSame('park', $this->row($sid)['scope_type']);
+        $this->assertSame($this->parkA, (int) $this->row($sid)['scope_id']);
+
+        // A type that is not a scope, and an org that does not exist.
+        $this->assertSame(1, $s->update($sid, ['ScopeType' => 'unit', 'ScopeId' => 1])['Status']);
+        $this->officer($this->pOfficerA, AUTH_PARK, $this->parkB);
+        $this->assertSame(1, $s->update($sid, ['ScopeType' => 'park', 'ScopeId' => 999999999])['Status']);
+
+        // The same scope again is a no-op success; holding park B too, the move lands.
+        $this->assertSame(0, $s->update($sid, ['ScopeType' => 'park', 'ScopeId' => $this->parkA])['Status']);
+        $this->assertSame(0, $s->update($sid, ['ScopeType' => 'park', 'ScopeId' => $this->parkB])['Status']);
+        $this->assertSame($this->parkB, (int) $this->row($sid)['scope_id']);
+
+        // Kingdom -> park resets what only made sense above it: the kingdom list and sharing.
+        $ks = new Survey();
+        $ks->setActor($this->kOfficer);
+        $r = $ks->create($this->kOfficer, 'kingdom', $this->k, 'T11SHARE scope k');
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $kid = $this->fx['survey'][] = (int) $r['SurveyId'];
+        $this->assertSame(0, $ks->update($kid, ['ResultsShare' => 'all'])['Status']);
+        $this->pdo->exec('UPDATE ' . DB_PREFIX . 'survey SET audience_kingdom_ids = \'[' . $this->k . ']\' WHERE survey_id = ' . $kid);
+        $this->officer($this->kOfficer, AUTH_PARK, $this->parkA);
+        $this->assertSame(0, $ks->update($kid, ['ScopeType' => 'park', 'ScopeId' => $this->parkA])['Status']);
+        $row = $this->row($kid);
+        $this->assertSame('park', $row['scope_type']);
+        $this->assertSame($this->parkA, (int) $row['scope_id']);
+        $this->assertSame('none', $row['results_share']);
+        $this->assertNull($row['audience_kingdom_ids']);
+        $this->assertNull($row['audience_event_calendardetail_id']);
+
+        // Once opened the scope is fixed, even for someone who holds both orgs.
+        $page = (int) $this->pdo->query('SELECT page_id FROM ' . DB_PREFIX . 'survey_page WHERE survey_id = ' . $kid . ' LIMIT 1')->fetchColumn();
+        $q = $ks->questionAdd($kid, $page, 'single', null);
+        $ks->questionUpdate((int) $q['Question']['question_id'], ['Prompt' => 'T11SHARE pick one']);
+        $this->assertSame(0, $ks->setStatus($kid, 'open')['Status']);
+        $r = $ks->update($kid, ['ScopeType' => 'kingdom', 'ScopeId' => $this->k]);
+        $this->assertSame(1, $r['Status']);
+        $this->assertStringContainsString('fixed once', (string) $r['Error']);
+        $this->assertSame('park', $this->row($kid)['scope_type']);
+    }
+
     public function testResultsAccessMatrix(): void
     {
         $s = new Survey();

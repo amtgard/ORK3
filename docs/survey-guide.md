@@ -124,7 +124,9 @@ Set these in the **Audience** and **Schedule** sections:
 
 - **Scope.** A park survey reaches players whose home park is that park. A kingdom survey
   reaches the kingdom and its principalities. An ORK-wide survey can be limited to a list of
-  **Kingdoms**; select none to invite every kingdom.
+  **Kingdoms**; select none to invite every kingdom. You can move a survey to another org you
+  hold while it is still a draft; once it has opened the scope is fixed, because respondents
+  agreed to its officers seeing their answers. Clone it to run it elsewhere.
 - **Exclude retired accounts.** Leaves out accounts marked retired. It does *not* check whether
   someone still plays; use the next option for that.
 - **Attended in the last … months.** Only players with a sign-in at your park (for a park

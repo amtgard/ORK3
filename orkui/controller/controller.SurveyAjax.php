@@ -49,6 +49,7 @@ class Controller_SurveyAjax extends Controller
      * separately. SurveyPureTest pins this list to Survey::UPDATE_FIELDS.
      */
     private const UPDATE_SCALAR_FIELDS = [
+        'ScopeType', 'ScopeId',
         'Title', 'Description', 'WelcomeMd', 'WelcomeImageId', 'ThanksMd', 'ThanksImageId',
         'OpenAt', 'CloseAt', 'AudienceActiveOnly', 'AudienceMinTenureMonths',
         'AudienceRecentMonths', 'AudienceEventCalendardetailId',

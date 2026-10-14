@@ -2370,9 +2370,7 @@
         /* NOT .rp-scope-chip: that chip is authored for the dark navy .rp-header
            (translucent white on navy) and is unreadable on the light sidebar.
            The sidebar gets its own chip on the page's own surface tokens. */
-        body  = '<div class="svb-field"><span class="svb-label">Scope</span>' +
-                '<span class="svb-scope-chip"><i class="fas ' + esc(scopeIcon(s.scope_type)) + '" aria-hidden="true"></i> ' +
-                esc(scopeName(s)) + '</span></div>';
+        body  = scopeField(s);
         if (String(s.scope_type) === 'ork') {
             kingdomList = (scopes || []).filter(function (x) { return x.scope_type === 'kingdom'; });
             body += fieldRow(kingdomPicker(s, kingdomList), 'Kingdoms', 'Select none to invite every kingdom.');
@@ -4469,18 +4467,39 @@
         } else if (key === 'AudienceKingdomIds') {
             value = JSON.stringify(els('option', node).filter(function (o) { return o.selected; })
                 .map(function (o) { return parseInt(o.value, 10); }));
+        } else if (key === 'Scope') {
+            // "type:id" from scopeField(); the server takes the pair.
+            value = node.value;
+            fields.ScopeType = value.split(':')[0];
+            fields.ScopeId   = parseInt(value.split(':')[1], 10) || 0;
         } else {
             value = node.value;
         }
 
-        fields[key] = value;
+        if (key !== 'Scope') { fields[key] = value; }
         if (key === 'Title') { S.survey.title = node.value; }
 
         save('survey:' + key, 'update', fields, function (data) {
             S.survey = data.survey || S.survey;
             renderHeader();
             if (key === 'OpenAt' || key === 'CloseAt') { dateClearSync(node, value !== ''); }
+            if (key === 'Scope') {
+                /* Nearly every card reads the scope: the chip and the kingdom
+                   list, the consent wording, the share radios, the event list,
+                   the credit card. Repaint the sidebar from the server's row
+                   (renderSettings skips while the sidebar holds focus, so
+                   drop it first) and refetch what the scope decides. */
+                node.blur();
+                loadScopes();
+                loadEvents();
+                loadCreditState();
+            }
         }, { node: node, onFail: function () {
+            if (key === 'Scope') {
+                // Refused (opened meanwhile, no authority, a credit on it): show the scope it still has.
+                node.value = String(S.survey.scope_type) + ':' + (parseInt(S.survey.scope_id, 10) || 0);
+                return;
+            }
             if (node.type !== 'checkbox') { return; }
             /* A refused toggle (e.g. the data-gate lock while credits are on)
                goes back to the server's value, so nothing is left unsaved:
@@ -4913,6 +4932,25 @@
         window.addEventListener('resize', function () { tocRoom(root, width); }, false);
     }
 
+    /** The editor's manageable scopes and this survey's manager label (the
+        consent wording). Called on load and again after a scope change, when
+        the header chip, the Audience select and the consent quote all move. */
+    function loadScopes() {
+        post('scopes', { SurveyId: SURVEY_ID }, function (data) {
+            var chip = $('svb-scopename'), i, sc;
+            scopes = data.scopes || [];
+            managerLabel = String(data.manager_label || '').trim();
+            for (i = 0; i < scopes.length; i++) {
+                sc = scopes[i];
+                if (sc.scope_type === S.survey.scope_type && parseInt(sc.scope_id, 10) === parseInt(S.survey.scope_id, 10)) {
+                    if (chip) { chip.textContent = sc.name; }
+                    break;
+                }
+            }
+            renderSettings();
+        });
+    }
+
     function init() {
         var canvas   = $('svb-canvas');
         var settings = $('svb-settings');
@@ -4951,19 +4989,7 @@
         }
 
         // Scope name for the header chip, and the kingdom list for an ork-scoped audience.
-        post('scopes', { SurveyId: SURVEY_ID }, function (data) {
-            var chip = $('svb-scopename'), i, sc;
-            scopes = data.scopes || [];
-            managerLabel = String(data.manager_label || '').trim();
-            for (i = 0; i < scopes.length; i++) {
-                sc = scopes[i];
-                if (sc.scope_type === S.survey.scope_type && parseInt(sc.scope_id, 10) === parseInt(S.survey.scope_id, 10)) {
-                    if (chip) { chip.textContent = sc.name; }
-                    break;
-                }
-            }
-            renderSettings();
-        });
+        loadScopes();
 
         // The "Attended an event" audience picker's list (#12).
         loadEvents();

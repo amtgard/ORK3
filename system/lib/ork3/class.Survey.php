@@ -889,6 +889,18 @@ class Survey
         }
 
         $sets = [];
+
+        // Scope (ScopeType + ScopeId). Handled before the field loop so the
+        // event and share cases below validate against the NEW scope.
+        $scopeFrom = (string) $survey['scope_type'] . '/' . (int) $survey['scope_id'];
+        if (array_key_exists('ScopeType', $fields)) {
+            $refused = $this->scopeChange($survey, (string) $fields['ScopeType'], (int) ($fields['ScopeId'] ?? 0), $sets);
+            if ($refused !== null) {
+                return $refused;
+            }
+        }
+        $scopeTo = (string) $survey['scope_type'] . '/' . (int) $survey['scope_id'];
+
         foreach (self::UPDATE_FIELDS as $key => $spec) {
             if (!array_key_exists($key, $fields)) {
                 continue;
@@ -1038,7 +1050,12 @@ class Survey
                 . ', ' . $this->stampSql() . ' WHERE survey_id = ' . $surveyId)) {
                 return $this->fail('Could not save the survey.');
             }
-            $this->logActivity($surveyId, 'update', ['fields' => array_values(array_intersect(array_keys(self::UPDATE_FIELDS), array_keys($fields)))]);
+            $detail = ['fields' => array_values(array_intersect(array_keys(self::UPDATE_FIELDS), array_keys($fields)))];
+            if ($scopeTo !== $scopeFrom) {
+                $detail['fields'][] = 'Scope';
+                $detail['scope']    = ['from' => $scopeFrom, 'to' => $scopeTo];
+            }
+            $this->logActivity($surveyId, 'update', $detail);
         }
 
         // Turning resume off means the saved half-answers can never be resumed;
@@ -1054,6 +1071,62 @@ class Survey
         }
 
         return $this->ok(['Survey' => self::withInstants($this->getRow($surveyId))]);
+    }
+
+    /**
+     * Move a survey to another scope. Only a draft that has never opened may
+     * move: once players have answered under "visible to <org> officers",
+     * moving the survey would change who sees data they consented to, so an
+     * opened survey is cloned instead. The actor must be able to create for
+     * the target (the same test the create modal applies), and the settings
+     * that only made sense under the old scope are reset: the kingdom list is
+     * an ORK-wide setting, the event audience must be an event the owning
+     * scope runs, and a park has no level below it to share results with.
+     *
+     * Adds the column writes to $sets and updates $survey in place, so the
+     * update() cases after it validate against the new scope. Returns a
+     * fail()/denied() envelope, or null when the move is allowed (or a no-op).
+     */
+    private function scopeChange(array &$survey, string $type, int $id, array &$sets): ?array
+    {
+        if (!in_array($type, ['ork', 'kingdom', 'park'], true)) {
+            return $this->fail('Choose a valid scope for this survey.');
+        }
+        $id = ($type === 'ork') ? 0 : $id;
+        if ((string) $survey['scope_type'] === $type && (int) $survey['scope_id'] === $id) {
+            return null;
+        }
+        if ($this->isStructureLocked($survey) || (string) $survey['status'] !== 'draft') {
+            return $this->fail('Scope is fixed once a survey has opened. Clone it to run it elsewhere.');
+        }
+        if ($this->actor <= 0 || !$this->canCreate($this->actor, $type, $id)) {
+            return $this->denied('You do not have permission to create a survey for that org.');
+        }
+        if ($type !== 'ork') {
+            $exists = $type === 'park'
+                ? 'SELECT park_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $id
+                : 'SELECT kingdom_id FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $id;
+            if ($this->fetchRow($exists) === null) {
+                return $this->fail('That org does not exist.');
+            }
+        }
+        // A credit config names the current org as its grantor (sharing spec §3).
+        if ((new SurveyCredit())->hasConfigs((int) $survey['survey_id'])) {
+            return $this->fail('This survey has an attendance credit set up for its current org. Remove that before moving it.');
+        }
+
+        $sets[] = 'scope_type = \'' . $type . '\'';
+        $sets[] = 'scope_id = ' . $id;
+        $sets[] = 'audience_event_calendardetail_id = NULL';
+        if ($type !== 'ork') {
+            $sets[] = 'audience_kingdom_ids = NULL';
+        }
+        if ($type === 'park') {
+            $sets[] = 'results_share = \'none\'';
+        }
+        $survey['scope_type'] = $type;
+        $survey['scope_id']   = $id;
+        return null;
     }
 
     /**
