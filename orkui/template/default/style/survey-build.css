@@ -345,6 +345,68 @@
     padding-bottom: 48px;
 }
 
+/* ── Settings width and the splitter ──────────────────────────────────── */
+
+/* The Reports sidebar is 220px, sized for filter checkboxes. This one holds
+   markdown editors and their previews, and 220px wrapped "Welcome text
+   (markdown)" onto two lines with a toolbar jammed under it. 300px by default,
+   and the handle beside it drags between 240 and 520 (survey-build.js
+   wireSplitter writes --svb-side on .svb-root and remembers it). Only above
+   900px: below that reports.css stacks the sidebar full-width and the
+   Questions | Settings switch takes over. */
+@media (min-width: 901px) {
+    .svb-root .rp-sidebar.svb-settings { width: var(--svb-side, 300px); }
+}
+
+/* Zero-width flex item with -8px margins, so it sits INSIDE the .rp-body's
+   16px gap rather than adding to it; ::before is the 16px hit zone and the
+   2px line in its middle is the only thing drawn. The line is invisible at
+   rest (the gap already reads as a boundary) and shows on hover, focus or
+   drag, in the accent while dragging. */
+.svb-splitter {
+    flex: 0 0 0;
+    width: 0;
+    margin: 0 -8px;
+    position: relative;
+    align-self: stretch;
+    z-index: 1;
+    outline: none;
+}
+.svb-splitter::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: -8px; right: -8px;
+    cursor: col-resize;
+    touch-action: none;
+}
+.svb-splitter::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: -1px;
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background .15s;
+    pointer-events: none;
+}
+.svb-splitter:hover::after,
+.svb-splitter:focus-visible::after { background: var(--sv-line-1); }
+.svb-splitter:focus-visible::after,
+.svb-root.svb-resizing .svb-splitter::after { background: var(--sv-accent); }
+
+/* While dragging, nothing on the page may select or steal the pointer. */
+.svb-root.svb-resizing,
+.svb-root.svb-resizing * { cursor: col-resize !important; user-select: none !important; }
+.svb-root.svb-resizing iframe { pointer-events: none; }
+
+/* The outline rail (below) is only worth its 236px when the canvas still has
+   its full 860 beside a sidebar of whatever width the handle set.
+   survey-build.js measures that on load, resize and drag and writes
+   data-svb-toc-room; the media query is a floor for the moment before it runs. */
+.svb-root[data-svb-toc-room="no"] .svb-toc { display: none; }
+
 
 /* ── Outline (right rail) ─────────────────────────────────────────────── */
 
@@ -1629,7 +1691,9 @@ body:has(#svb-toc) { overflow-x: clip; }
    is 850.5. So the rail shows from 1450px up and steps out below, where the
    canvas needs the whole row. It is an aid, not a control — nothing on the
    page is reachable only through it. */
-@media (max-width: 1449px) {
+/* 300 (sidebar) + 16 + 860 (canvas) + 16 + 220 (rail) + the page gutters.
+   wireSplitter() refines this against the live sidebar width. */
+@media (max-width: 1529px) {
     .svb-toc { display: none; }
 }
 
@@ -1738,6 +1802,9 @@ body:has(#svb-toc) { overflow-x: clip; }
 /* ── Narrow ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 900px) {
+    /* The sidebar is full-width and stacked here; there is nothing to drag. */
+    .svb-splitter { display: none; }
+
     /* reports.css stacks .rp-header with align-items:flex-start, so the header
        column is shrink-to-fit and the input's width:100% resolved against its
        own content — the title was cut mid-word with dead space beside it.

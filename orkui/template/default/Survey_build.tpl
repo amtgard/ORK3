@@ -17,9 +17,11 @@
  *
  *   .rp-root > .rp-header
  *            > .rp-body > .rp-sidebar  (survey settings, collapsible sections)
+ *                       > .svb-splitter (drag handle: resizes the sidebar,
+ *                                       width remembered across surveys)
  *                       > .rp-main     (the canvas column of page cards)
- *                       > .svb-toc     (sticky outline; only above 1450px,
- *                                       where the canvas still gets its 860px)
+ *                       > .svb-toc     (sticky outline; only when the row is
+ *                                       wide enough that the canvas keeps its 860px)
  *
  * The sidebar's sections are painted by survey-build.js (renderSettings), so
  * every field autosaves through the same `update` path the drawer used to.
@@ -147,6 +149,12 @@ $_svShareLink = HTTP_UI_REMOTE . 'index.php?Route=Survey/s/' . rawurlencode((str
 
 		<!-- Survey settings. Sections are painted by survey-build.js. -->
 		<aside class="rp-sidebar svb-settings" id="svb-settings" aria-label="Survey settings"></aside>
+
+		<!-- Drag handle between the settings and the canvas (survey-build.js
+		     wireSplitter). Arrow keys resize it too; double-click resets. -->
+		<div class="svb-splitter" id="svb-splitter" role="separator" aria-orientation="vertical"
+		     aria-label="Resize the settings panel" aria-valuemin="240" aria-valuemax="520" aria-valuenow="300"
+		     tabindex="0" title="Drag to resize the settings panel. Double-click to reset."></div>
 
 		<main class="rp-main svb-canvas" id="svb-canvas" aria-label="Survey canvas"></main>
 

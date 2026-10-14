@@ -4818,6 +4818,101 @@
 
     /* ----------------------------------------------------------------- init */
 
+    /* ── Settings panel width ───────────────────────────────────────────── */
+
+    /* The handle between the settings and the canvas. Drag it (pointer
+       capture, so a fast drag that leaves the 16px gap keeps resizing), or
+       focus it and use the arrow keys; double-click or Enter resets. The width
+       is one preference for every survey, not per survey like the sections,
+       because it is about the person's screen, not the survey. It also decides
+       whether the outline rail fits: the rail only shows while the canvas can
+       still have its full 860px beside the sidebar. */
+    var SIDE_KEY     = 'sv-build-side';
+    var SIDE_DEFAULT = 300, SIDE_MIN = 240, SIDE_MAX = 520, SIDE_STEP = 16;
+    var CANVAS_FULL  = 860, RAIL_WIDTH = 220, BODY_GAP = 16;
+
+    function sideWidth() {
+        var v;
+        try { v = parseInt(window.localStorage.getItem(SIDE_KEY), 10); } catch (e) { v = NaN; }
+        return isNaN(v) ? SIDE_DEFAULT : Math.min(SIDE_MAX, Math.max(SIDE_MIN, v));
+    }
+
+    function applySide(root, handle, w, remember) {
+        w = Math.round(Math.min(SIDE_MAX, Math.max(SIDE_MIN, w)));
+        root.style.setProperty('--svb-side', w + 'px');
+        handle.setAttribute('aria-valuenow', String(w));
+        if (remember) {
+            try { window.localStorage.setItem(SIDE_KEY, String(w)); } catch (e) { /* forgets, still works */ }
+        }
+        tocRoom(root, w);
+        return w;
+    }
+
+    /* Room for the rail = the row minus the sidebar, two gaps, the rail and
+       its own left margin, with the canvas's full width still left over. */
+    function tocRoom(root, side) {
+        var body = el('.rp-body', root);
+        if (!body) { return; }
+        var room = body.clientWidth - side - BODY_GAP - CANVAS_FULL - BODY_GAP - RAIL_WIDTH - BODY_GAP;
+        root.setAttribute('data-svb-toc-room', room >= 0 ? 'yes' : 'no');
+    }
+
+    function wireSplitter() {
+        var root   = $('svb-root');
+        var handle = $('svb-splitter');
+        var side   = $('svb-settings');
+        if (!root || !handle || !side) { return; }
+
+        var width = applySide(root, handle, sideWidth(), false);
+        var startX = 0, startW = 0, dragging = false;
+
+        handle.addEventListener('pointerdown', function (e) {
+            if (isNarrow() || (e.button !== undefined && e.button !== 0)) { return; }
+            dragging = true;
+            startX = e.clientX;
+            startW = side.getBoundingClientRect().width;
+            root.classList.add('svb-resizing');
+            if (handle.setPointerCapture) { try { handle.setPointerCapture(e.pointerId); } catch (err) { /* older WebKit */ } }
+            e.preventDefault();
+        }, false);
+
+        handle.addEventListener('pointermove', function (e) {
+            if (!dragging) { return; }
+            width = applySide(root, handle, startW + (e.clientX - startX), false);
+        }, false);
+
+        function stop(e) {
+            if (!dragging) { return; }
+            dragging = false;
+            root.classList.remove('svb-resizing');
+            if (handle.releasePointerCapture && e && e.pointerId !== undefined) {
+                try { handle.releasePointerCapture(e.pointerId); } catch (err) { /* already released */ }
+            }
+            applySide(root, handle, width, true);
+        }
+        handle.addEventListener('pointerup', stop, false);
+        handle.addEventListener('pointercancel', stop, false);
+        handle.addEventListener('lostpointercapture', stop, false);
+
+        handle.addEventListener('dblclick', function () {
+            width = applySide(root, handle, SIDE_DEFAULT, true);
+        }, false);
+
+        handle.addEventListener('keydown', function (e) {
+            var next = null;
+            if (e.key === 'ArrowLeft')  { next = width - SIDE_STEP; }
+            if (e.key === 'ArrowRight') { next = width + SIDE_STEP; }
+            if (e.key === 'Home')       { next = SIDE_MIN; }
+            if (e.key === 'End')        { next = SIDE_MAX; }
+            if (e.key === 'Enter')      { next = SIDE_DEFAULT; }
+            if (next === null) { return; }
+            e.preventDefault();
+            width = applySide(root, handle, next, true);
+        }, false);
+
+        window.addEventListener('resize', function () { tocRoom(root, width); }, false);
+    }
+
     function init() {
         var canvas   = $('svb-canvas');
         var settings = $('svb-settings');
@@ -4827,6 +4922,7 @@
 
         adopt(CFG.survey || {});
         wireHeader();
+        wireSplitter();
 
         // The question catalogue is the server's (SurveyTypes), so nothing is
         // drawn until it lands — a card cannot offer a type list, an option
