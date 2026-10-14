@@ -1,0 +1,183 @@
+<?php
+
+/**
+ * JSON endpoints for bonus credits (class credits that are not attendance)
+ * and the reasons they are granted for. Backs the Add Bonus Credits modal on
+ * the park and kingdom pages and the credit list on the player page.
+ *
+ * Envelope: {status: 0, ...} ok; {status: 1, error} bad request;
+ * {status: 3, error} not authorized; {status: 5, error} not logged in.
+ * Authority is decided in the domain (BonusCredit::canGrant on the reason's
+ * org); this layer only reads the request and the session.
+ */
+class Controller_BonusCreditAjax extends Controller
+{
+    public function __construct($call = null, $id = null)
+    {
+        parent::__construct($call, $id);
+        $this->load_model('BonusCredit');
+    }
+
+    /**
+     * Everything the modal needs to open. A kingdom host gets the credits it
+     * defines and may create more; a park host gets the credits its kingdom
+     * (and the kingdoms above it) defined, to hand out to its own players.
+     */
+    public function options($p = null)
+    {
+        $uid = $this->requireLogin();
+        [$scopeType, $scopeId] = $this->scope();
+        if ($scopeType === 'kingdom') {
+            if (!$this->BonusCredit->can_define($uid, 'kingdom', $scopeId)) {
+                $this->jsonOut(['status' => 3, 'error' => 'Only kingdom officers can manage credits.']);
+            }
+            $reasons = $this->BonusCredit->reasons('kingdom', $scopeId, !empty($_GET['archived']));
+            $canDefine = true;
+        } else {
+            if (!$this->BonusCredit->can_grant($uid, $scopeId)) {
+                $this->jsonOut(['status' => 3, 'error' => 'You do not have authority over this park.']);
+            }
+            $reasons = $this->BonusCredit->reasons_for_park($scopeId);
+            $canDefine = false;
+        }
+        $this->load_model('Attendance');
+        $classes = array_map(function ($c) {
+            return ['ClassId' => (int) $c['ClassId'], 'ClassName' => (string) $c['Name']];
+        }, $this->Attendance->get_classes()['Classes'] ?? []);
+        $this->jsonOut(['status' => 0, 'reasons' => $reasons, 'classes' => $classes, 'canDefine' => $canDefine]);
+    }
+
+    public function reason_create($p = null)
+    {
+        $uid = $this->requireLogin();
+        [$scopeType, $scopeId] = $this->scope();
+        if ($scopeType !== 'kingdom') {
+            $this->jsonOut(['status' => 1, 'error' => 'Credits are defined by a kingdom.']);
+        }
+        $r = $this->BonusCredit->create_reason($uid, [
+            'ScopeType'      => $scopeType,
+            'ScopeId'        => $scopeId,
+            'Name'           => $_POST['Name'] ?? '',
+            'Description'    => $_POST['Description'] ?? '',
+            'DefaultCredits' => $_POST['DefaultCredits'] ?? 1,
+            'Repeatable'     => $_POST['Repeatable'] ?? 0,
+        ]);
+        $this->envelope($r, ['reason' => $r['Reason'] ?? null, 'restored' => !empty($r['Restored'])]);
+    }
+
+    public function reason_archive($p = null)
+    {
+        $uid = $this->requireLogin();
+        $r = $this->BonusCredit->archive_reason($uid, (int) ($_POST['ReasonId'] ?? 0));
+        $this->envelope($r, ['reason' => $r['Reason'] ?? null]);
+    }
+
+    public function reason_restore($p = null)
+    {
+        $uid = $this->requireLogin();
+        $r = $this->BonusCredit->restore_reason($uid, (int) ($_POST['ReasonId'] ?? 0));
+        $this->envelope($r, ['reason' => $r['Reason'] ?? null]);
+    }
+
+    /**
+     * Who already holds a reason's credit (newest first). A kingdom officer
+     * sees every holder; a park host (ParkId) sees its own players only, and
+     * must be allowed to grant there.
+     */
+    public function reason_credits($p = null)
+    {
+        $uid = $this->requireLogin();
+        $reason = $this->BonusCredit->reason((int) ($_GET['ReasonId'] ?? $_POST['ReasonId'] ?? 0));
+        if ($reason === null) {
+            $this->jsonOut(['status' => 1, 'error' => 'Credit not found.']);
+        }
+        $parkId = (int) ($_GET['ParkId'] ?? $_POST['ParkId'] ?? 0);
+        if ($parkId > 0) {
+            $inScope = $reason['ScopeType'] === 'ork'
+                || in_array($reason['ScopeId'], $this->BonusCredit->kingdom_ancestry($this->BonusCredit->park_kingdom($parkId)), true);
+            if (!$inScope || !$this->BonusCredit->can_grant($uid, $parkId)) {
+                $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
+            }
+        } elseif (!$this->BonusCredit->can_define($uid, $reason['ScopeType'], $reason['ScopeId'])) {
+            $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
+        }
+        $this->jsonOut(['status' => 0, 'reason' => $reason, 'credits' => $this->BonusCredit->for_reason($reason['ReasonId'], $parkId)]);
+    }
+
+    public function grant($p = null)
+    {
+        $uid = $this->requireLogin();
+        $r = $this->BonusCredit->grant($uid, [
+            'MundaneId' => $_POST['MundaneId'] ?? 0,
+            'ClassId'   => $_POST['ClassId'] ?? 0,
+            'ReasonId'  => $_POST['ReasonId'] ?? 0,
+            'Date'      => $_POST['Date'] ?? date('Y-m-d'),
+            'Note'      => $_POST['Note'] ?? '',
+        ]);
+        $this->envelope($r, ['credit' => $r['Credit'] ?? null]);
+    }
+
+    public function revoke($p = null)
+    {
+        $uid = $this->requireLogin();
+        $r = $this->BonusCredit->revoke($uid, (int) ($_POST['BonusCreditId'] ?? 0), (string) ($_POST['Note'] ?? ''));
+        $this->envelope($r, []);
+    }
+
+    /**
+     * A player's bonus credits. The player sees their own; an officer with
+     * authority over the player's park sees them too (and revoked ones).
+     */
+    public function player($p = null)
+    {
+        $uid = $this->requireLogin();
+        $mundaneId = (int) ($_GET['MundaneId'] ?? $_POST['MundaneId'] ?? $p ?? 0);
+        if (!valid_id($mundaneId)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid player.']);
+        }
+        $this->load_model('Player');
+        $info = $this->Player->player_info($mundaneId);
+        $parkId = is_array($info) ? (int) ($info['ParkId'] ?? 0) : 0;
+        $officer = $parkId > 0 && $this->BonusCredit->can_grant($uid, $parkId);
+        if ($uid !== $mundaneId && !$officer) {
+            $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
+        }
+        $this->jsonOut(['status' => 0, 'credits' => $this->BonusCredit->for_player($mundaneId, $officer && !empty($_GET['revoked']))]);
+    }
+
+    // -----------------------------------------------------------------------
+
+    private function requireLogin(): int
+    {
+        if (!isset($this->session->user_id) || (int) $this->session->user_id <= 0) {
+            $this->jsonOut(['status' => 5, 'error' => 'Not logged in']);
+        }
+        return (int) $this->session->user_id;
+    }
+
+    /** @return array{0:string, 1:int} */
+    private function scope(): array
+    {
+        $type = (string) ($_POST['ScopeType'] ?? $_GET['ScopeType'] ?? '');
+        $id   = (int) ($_POST['ScopeId'] ?? $_GET['ScopeId'] ?? 0);
+        if (!in_array($type, ['kingdom', 'park'], true) || !valid_id($id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Choose a kingdom or park.']);
+        }
+        return [$type, $id];
+    }
+
+    private function envelope(array $r, array $extra): void
+    {
+        if ((int) ($r['Status'] ?? 1) !== 0) {
+            $this->jsonOut(['status' => (int) $r['Status'], 'error' => (string) ($r['Error'] ?? 'Request failed.')]);
+        }
+        $this->jsonOut(['status' => 0] + $extra);
+    }
+
+    private function jsonOut(array $payload): void
+    {
+        header('Content-Type: application/json');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+}
