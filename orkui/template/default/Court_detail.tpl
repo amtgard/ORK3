@@ -340,11 +340,26 @@ html[data-theme="dark"] .cp-send-local-btn[data-tip]:hover::after { background: 
     .cp-section-header #cp-script-btn { flex: 0 0 auto; }
 }
 /* ---- Court Script preview modal ---- */
-.cp-script-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.5); display: flex; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow: auto; }
+/* --z-modal sits above the fixed top nav (--ork-z-nav: 9999); at 1000 the nav painted
+   over the top of the sheet and the backdrop stopped at the nav's bottom edge. */
+.cp-script-overlay { position: fixed; inset: 0; z-index: var(--z-modal, 10100); background: rgba(0,0,0,.5); display: flex; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow: auto; }
 .cp-script-overlay[hidden] { display: none; }
 .cp-script-modal { background: #fff; color: #1a202c; width: 100%; max-width: 760px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.3); overflow: hidden; }
-.cp-script-chrome { padding: 18px 22px; border-bottom: 1px solid #e2e8f0; }
-.cp-script-titlebar { text-align: center; margin-bottom: 12px; }
+.cp-script-chrome { position: relative; padding: 18px 22px; border-bottom: 1px solid #e2e8f0; }
+/* Symmetric gutters: the title is centred, so padding only on the right would
+   shift it off centre, and none at all lets a long court name run under the X. */
+.cp-script-titlebar { text-align: center; margin-bottom: 12px; padding: 0 40px; }
+/* Same size, shape and icon as the report guides' close button (.pe-help-close). */
+.cp-script-x {
+    position: absolute; top: 10px; right: 12px;
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; padding: 0;
+    border: none; border-radius: 50%; background: none;
+    color: #718096; font-size: 20px; line-height: 1; cursor: pointer;
+    transition: background .15s, color .15s;
+}
+.cp-script-x:hover { background: #edf2f7; color: #1a202c; }
+.cp-script-x:focus-visible { outline: 2px solid #2c5282; outline-offset: 2px; }
 .cp-script-h1 { font-size: 22px; font-weight: 700; margin: 0; background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; color: #1a202c; }
 .cp-script-date { color: #718096; margin: 4px 0 0; font-size: 13px; }
 .cp-script-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -392,6 +407,8 @@ html[data-theme="dark"] .cp-send-local-btn[data-tip]:hover::after { background: 
 html[data-theme="dark"] .cp-script-modal { background: #161b22; color: #e2e8f0; }
 html[data-theme="dark"] .cp-script-chrome { border-color: #2d3748; }
 html[data-theme="dark"] .cp-script-h1 { color: #e2e8f0; }
+html[data-theme="dark"] .cp-script-x { color: #a0aec0; }
+html[data-theme="dark"] .cp-script-x:hover { background: #2d3748; color: #e2e8f0; }
 html[data-theme="dark"] .cp-script-density { border-color: #2d3748; }
 html[data-theme="dark"] .cp-script-density button { background: #1f2733; color: #cbd5e0; }
 html[data-theme="dark"] .cp-script-density button + button { border-color: #2d3748; }
@@ -478,6 +495,7 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
     body.cp-script-open #cp-script-overlay { position: static; display: block !important; background: #fff; padding: 0; overflow: visible; }
     body.cp-script-open #cp-script-overlay .cp-script-modal { max-width: none; width: auto; margin: 0; box-shadow: none; border-radius: 0; background: #fff; color: #000; }
     body.cp-script-open .cp-script-controls { display: none !important; }
+    body.cp-script-open .cp-script-x { display: none !important; }
     /* Print scope. Default (Print this sheet) prints exactly the previewed sheet — the
        .cp-sheet-active rule above already does that. body.cp-print-all reveals all three
        and forces a page break between them, so the packet comes off the printer as three
@@ -5572,6 +5590,12 @@ window.cpApplyHeroColor = function(img) {
      aria-labelledby="cp-script-title" onclick="if(event.target===this)cpCloseScript()">
     <div class="cp-script-modal">
         <div class="cp-script-chrome">
+            <!-- There is a Close button among the actions below, but it sits in a row of
+                 print buttons and reads as one of them; people look for the corner X and,
+                 not finding one, clicked the backdrop. Esc closes it too, which the title
+                 makes discoverable. -->
+            <button type="button" class="cp-script-x" aria-label="Close" title="Close (Esc)"
+                    onclick="cpCloseScript()"><i class="fas fa-xmark" aria-hidden="true"></i></button>
             <div class="cp-script-titlebar">
                 <h1 id="cp-script-title" class="cp-script-h1"></h1>
                 <p id="cp-script-date" class="cp-script-date"></p>
