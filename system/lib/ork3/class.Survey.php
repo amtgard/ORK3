@@ -413,9 +413,13 @@ class Survey
                                       WHERE active = \'Active\' ORDER BY name') as $k) {
                 $scopes[] = ['scope_type' => 'kingdom', 'scope_id' => (int) $k['kingdom_id'], 'name' => (string) $k['name']];
             }
-            foreach ($this->fetchAll('SELECT park_id, name FROM ' . DB_PREFIX . 'park
-                                      WHERE active = \'Active\' ORDER BY name') as $p) {
-                $scopes[] = ['scope_type' => 'park', 'scope_id' => (int) $p['park_id'], 'name' => (string) $p['name']];
+            // kingdom_id / kingdom let the picker group parks under their kingdom.
+            foreach ($this->fetchAll('SELECT p.park_id, p.name, p.kingdom_id, k.name AS kingdom
+                                      FROM ' . DB_PREFIX . 'park p
+                                      LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = p.kingdom_id
+                                      WHERE p.active = \'Active\' ORDER BY p.name') as $p) {
+                $scopes[] = ['scope_type' => 'park', 'scope_id' => (int) $p['park_id'], 'name' => (string) $p['name'],
+                             'kingdom_id' => (int) $p['kingdom_id'], 'kingdom' => (string) ($p['kingdom'] ?? '')];
             }
             return $scopes;
         }
@@ -482,11 +486,15 @@ class Survey
             $parkWhere[] = 'park_id IN (' . implode(',', array_map('intval', array_keys($parkIds))) . ')';
         }
         if ($parkWhere) {
-            foreach ($this->fetchAll('SELECT park_id, kingdom_id, name FROM ' . DB_PREFIX . 'park
-                                      WHERE (' . implode(' OR ', $parkWhere) . ') AND active = \'Active\' ORDER BY name') as $p) {
+            foreach ($this->fetchAll('SELECT p.park_id, p.kingdom_id, p.name, k.name AS kingdom
+                                      FROM ' . DB_PREFIX . 'park p
+                                      LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = p.kingdom_id
+                                      WHERE (' . implode(' OR ', str_replace(['kingdom_id IN', 'park_id IN'], ['p.kingdom_id IN', 'p.park_id IN'], $parkWhere)) . ')
+                                        AND p.active = \'Active\' ORDER BY p.name') as $p) {
                 $pid = (int) $p['park_id'];
                 if (isset($allowedKingdoms[(int) $p['kingdom_id']]) || $this->canCreate($uid, 'park', $pid)) {
-                    $scopes[] = ['scope_type' => 'park', 'scope_id' => $pid, 'name' => (string) $p['name']];
+                    $scopes[] = ['scope_type' => 'park', 'scope_id' => $pid, 'name' => (string) $p['name'],
+                                 'kingdom_id' => (int) $p['kingdom_id'], 'kingdom' => (string) ($p['kingdom'] ?? '')];
                 }
             }
         }

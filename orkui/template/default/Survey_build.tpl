@@ -206,6 +206,7 @@ window.SvConfig = {
 	crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="<?= HTTP_TEMPLATE ?>default/script/survey-render.js?v=<?= filemtime(__DIR__ . '/script/survey-render.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>default/script/survey-tip.js?v=<?= filemtime(__DIR__ . '/script/survey-tip.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>default/script/survey-scope-picker.js?v=<?= filemtime(__DIR__ . '/script/survey-scope-picker.js') ?>"></script>
 <script>window.SvCreditConfig = { uir: <?=json_encode(UIR, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>, csrf: <?=json_encode((string)($SurveyCsrf ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?> };</script>
 <?php include __DIR__ . '/_survey_credit_modal.tpl'; ?>
 <script src="<?= HTTP_TEMPLATE ?>default/script/survey-build.js?v=<?= filemtime(__DIR__ . '/script/survey-build.js') ?>"></script>

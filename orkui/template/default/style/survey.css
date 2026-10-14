@@ -523,6 +523,14 @@ html[data-theme="dark"] :where(.sv-root, .sv-scope) :is(h1, h2, h3, h4) {
     background-repeat: no-repeat;
 }
 
+/* A list box (multiple / size>1) scrolls; it has no closed state for the
+   chevron above to open, so the arrow is dropped along with the room for it. */
+.sv-select[multiple],
+.sv-select[size]:not([size="1"]) {
+    background-image: none;
+    padding-right: 10px;
+}
+
 .sv-input:focus,
 .sv-textarea:focus,
 .sv-select:focus {
@@ -536,6 +544,15 @@ html[data-theme="dark"] :where(.sv-root, .sv-scope) :is(h1, h2, h3, h4) {
 html[data-theme="dark"] #theme_container :is(.sv-input, .sv-textarea, .sv-select):focus {
     border-color: var(--sv-accent);
 }
+
+/* Scope picker (survey-scope-picker.js): the filter box sits tight above its
+   select, and a search input drops the browser's own rounded search chrome so
+   it matches the other text controls. */
+.sv-scopepick-filter { margin-bottom: 6px; }
+.sv-scopepick-filter[type="search"] { appearance: none; -webkit-appearance: none; }
+.sv-scopepick-filter::-webkit-search-decoration { -webkit-appearance: none; }
+.sv-select optgroup { font-style: normal; font-weight: 600; }
+.sv-select optgroup > option { font-weight: 400; }
 
 .sv-input::placeholder,
 .sv-textarea::placeholder { color: var(--ork-text-hint); }

@@ -2477,6 +2477,7 @@
         destroySchedulePickers();
         box.innerHTML = html;
         initSchedulePickers();
+        initScopePicker();
         if (eventsFailed) { fillEventPicker(); }
         syncMarks();
     }
@@ -2523,6 +2524,40 @@
                '<p class="svb-consent-lead">' + esc(CONSENT_COPY.credit) + '</p>' +
                '<span class="svb-label svb-consent-credit-label">Shown otherwise (only respondents told about credits are ever given one)</span>' +
                '<p class="svb-consent-lead">' + esc(CONSENT_COPY.creditMaybe) + '</p></div>';
+    }
+
+    /* The scope is a select while the survey is a draft that has never opened
+       and the editor has somewhere else to put it; otherwise the chip. Moving
+       an opened survey would change who sees data players consented to under
+       the old org's name, so the server refuses it and the hint says to clone.
+       The options are the editor's own manageable scopes (SurveyAjax/scopes),
+       so nobody can aim a survey at an org they do not hold; the current scope
+       is kept in the list even when it is not among them (an admin moved it). */
+    function scopeField(s) {
+        var cur  = String(s.scope_type) + ':' + (parseInt(s.scope_id, 10) || 0);
+        var list = scopes || [];
+        var chip = '<span class="svb-scope-chip"><i class="fas ' + esc(scopeIcon(s.scope_type)) + '" aria-hidden="true"></i> ' +
+                   esc(scopeName(s)) + '</span>';
+        var opts;
+        if (S.locked || String(s.status) !== 'draft' || list.length < 2) {
+            return '<div class="svb-field"><span class="svb-label">Scope</span>' + chip +
+                   (S.locked ? '<p class="svb-hint">Scope is fixed once a survey has opened. Clone it to run it elsewhere.</p>' : '') +
+                   '</div>';
+        }
+        // A flat list here; initScopePicker() regroups it by kingdom and adds
+        // the filter box once the sidebar is in the page.
+        opts = list.map(function (sc) { return [sc.scope_type + ':' + (parseInt(sc.scope_id, 10) || 0), sc.name]; });
+        if (!opts.some(function (o) { return o[0] === cur; })) { opts.unshift([cur, scopeName(s)]); }
+        return selectRow('Scope', opts, cur, 'data-sv-field="Scope" id="svb-f-scope"', false,
+                         'Who this survey is for, and whose officers manage it. It can change until the survey opens.');
+    }
+
+    /** Group the scope select by kingdom and give a long list its filter box (survey-scope-picker.js). */
+    function initScopePicker() {
+        var sel = $('svb-f-scope');
+        if (sel && window.SvScopePicker && scopes && scopes.length) {
+            window.SvScopePicker.attach(sel, scopes);
+        }
     }
 
     function scopeIcon(type) {

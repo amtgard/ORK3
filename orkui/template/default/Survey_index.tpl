@@ -670,6 +670,7 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="<?=HTTP_TEMPLATE?>default/script/survey-tip.js?v=<?=filemtime(__DIR__.'/script/survey-tip.js')?>"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/survey-scope-picker.js?v=<?=filemtime(__DIR__.'/script/survey-scope-picker.js')?>"></script>
 <script>
 (function() {
 	'use strict';
@@ -865,6 +866,12 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 		el.appendChild(a);
 		el.appendChild(document.createTextNode(' and try again.'));
 		el.style.display = 'block';
+	}
+
+	// Group the scope list by kingdom, with a filter box once it is long
+	// (an admin sees every kingdom and park). The select keeps its value.
+	if (window.SvScopePicker) {
+		window.SvScopePicker.attach(document.getElementById('sv-new-scope'), <?=json_encode($Scopes, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP)?>);
 	}
 
 	document.getElementById('sv-new-ok').addEventListener('click', function() {
