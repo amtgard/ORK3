@@ -7868,7 +7868,7 @@ $(function() {
 						actions += '<button class="pk-btn pk-btn-primary pn-rec-grant-btn" data-rec="' + rd.replace(/"/g, '&quot;') + '"><i class="fas fa-medal"></i> Grant</button> ';
 					}
 					var canDel = PnConfig.canDeleteRec || rec.RecommendedById == PnConfig.loggedInUserId || mid == PnConfig.loggedInUserId;
-					if (canDel) actions += '<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn" data-href="' + PnConfig.uir + 'Player/profile/' + mid + '/deleterecommendation/' + recId + '"><i class="fas fa-times"></i> Delete</button>';
+					if (canDel) actions += '<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn" data-href="' + PnConfig.uir + 'Player/profile/' + mid + '/deleterecommendation/' + recId + '"><i class="fas fa-times"></i> Dismiss</button>';
 					html += '<td class="pk-rec-actions rs-tip-right" style="white-space:nowrap;text-align:right;width:1%">' + actions + '</td>';
 				}
 				html += '</tr>';

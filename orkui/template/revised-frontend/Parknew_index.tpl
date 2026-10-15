@@ -1749,9 +1749,9 @@
 								<dt>Below Rec'd</dt>
 								<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
 								<dt>Non-Ladder</dt>
-								<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Delete as appropriate.</dd>
+								<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Dismiss as appropriate.</dd>
 								<dt>At or Above Rec'd</dt>
-								<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
+								<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Dismiss these to keep the list tidy.</dd>
 								<dt>All</dt>
 								<dd>Every recommendation regardless of status. Use for a full audit.</dd>
 								<?php if (!empty($ViewerHasCircle)): ?>
@@ -1852,12 +1852,12 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 				<div class="pk-deleted-recs" id="pk-deleted-recs" data-loaded="0">
 					<button type="button" class="pk-deleted-recs-toggle" id="pk-deleted-recs-toggle" aria-expanded="false">
 						<span class="pk-deleted-recs-caret">&#9654;</span>
-						<span class="pk-deleted-recs-toggle-label">Show Deleted Recommendations</span>
+						<span class="pk-deleted-recs-toggle-label">Show Dismissed Recommendations</span>
 						<span class="pk-deleted-recs-count" id="pk-deleted-recs-count" style="display:none">0</span>
 					</button>
 					<div class="pk-deleted-recs-body" id="pk-deleted-recs-body" style="display:none">
 						<div class="pk-deleted-recs-loading" id="pk-deleted-recs-loading">Loading&hellip;</div>
-						<div class="pk-deleted-recs-empty" id="pk-deleted-recs-empty" style="display:none">No deleted recommendations.</div>
+						<div class="pk-deleted-recs-empty" id="pk-deleted-recs-empty" style="display:none">No dismissed recommendations.</div>
 						<div class="pk-deleted-recs-table-wrap" id="pk-deleted-recs-table-wrap" style="display:none">
 							<table class="pk-deleted-recs-table">
 								<thead>
@@ -1868,8 +1868,8 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 										<th>Notes</th>
 										<th>Date Rec.</th>
 										<th>Recommended By</th>
-										<th>Deleted At</th>
-										<th>Deleted By</th>
+										<th>Dismissed At</th>
+										<th>Dismissed By</th>
 										<th class="no-export"></th>
 									</tr>
 								</thead>

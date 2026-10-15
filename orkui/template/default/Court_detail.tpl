@@ -3780,7 +3780,7 @@ $_total_awards = count($courtAwards ?? []);
             title: 'Dismiss this recommendation?',
             body: 'It will be removed from the kingdom\'s recommendation list for everyone, not just from this court. '
                 + 'Nothing is deleted permanently \u2014 to bring it back later, open the Kingdom page, go to the '
-                + 'Recommendations tab and expand "Show Deleted Recommendations", then choose Restore.',
+                + 'Recommendations tab and expand "Show Dismissed Recommendations", then choose Restore.',
             confirmLabel: 'Dismiss',
             danger: true,
             onConfirm: doDismiss

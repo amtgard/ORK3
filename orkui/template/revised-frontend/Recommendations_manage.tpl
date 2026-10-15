@@ -74,7 +74,7 @@
     </select>
     <?php } ?>
     <label class="rm-fcheck"><input type="checkbox" id="rm-filter-passlocal"> Passed to local</label>
-    <label class="rm-fcheck" data-tip="Dismissed recommendations are kept, not deleted. Turn this on to see them and undelete any that were retired by mistake."><input type="checkbox" id="rm-filter-dismissed"> Show dismissed</label>
+    <label class="rm-fcheck" data-tip="Dismissed recommendations are kept, not deleted. Turn this on to see them and restore any that were retired by mistake."><input type="checkbox" id="rm-filter-dismissed"> Show dismissed</label>
     <div id="rm-chips" class="rm-chips"></div>
     <button type="button" id="rm-export" class="rm-fbtn" data-tip="Download the full current filtered list as a CSV file"><i class="fas fa-download"></i> Export CSV</button>
   </div>
@@ -116,7 +116,7 @@
     <button type="button" class="rm-bulk rm-bulk-snooze">Snooze</button>
     <?php if (($Context ?? '') === 'kingdom') { ?><button type="button" class="rm-bulk rm-bulk-passlocal" data-tip="For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level.">Pass down</button><?php } ?>
     <button type="button" class="rm-bulk rm-bulk-dismiss" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">Dismiss</button>
-    <button type="button" class="rm-bulk rm-bulk-undelete"><i class="fas fa-trash-can-arrow-up"></i> Undelete</button>
+    <button type="button" class="rm-bulk rm-bulk-undelete"><i class="fas fa-undo"></i> Restore</button>
     <button type="button" class="rm-bulk rm-bulk-clear">Clear</button>
   </div>
 
@@ -717,7 +717,7 @@ function rmRecLabel(tr) {
     return who + ' (' + what + (rank > 0 ? ', rank ' + rank : '') + ')';
 }
 // Both dismiss paths say the same thing about what dismissal is.
-var RM_DISMISS_KEPT = 'Dismissed recommendations are kept, not deleted — turn on “Show dismissed” to see them and undelete any retired by mistake.';
+var RM_DISMISS_KEPT = 'Dismissed recommendations are kept, not deleted — turn on “Show dismissed” to see them and restore any retired by mistake.';
 // The first reason in the cluster (the row no longer duplicates it in data-rec).
 function rmFirstReason(tr) {
     var m = []; try { m = JSON.parse(tr.getAttribute('data-membersfull') || '[]'); } catch (x) {}
@@ -825,16 +825,16 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
         var okN = ids.filter(function (id) { return map[String(id)] === true; }).length;
         if (okN !== ids.length) {
             ud.disabled = false;
-            rmToast(okN ? 'Undeleted ' + okN + ', ' + (ids.length - okN) + ' failed.' : 'Failed.', true);
+            rmToast(okN ? 'Restored ' + okN + ', ' + (ids.length - okN) + ' failed.' : 'Failed.', true);
             return;
         }
         // serverGone=false: with "Show dismissed" on, the row was already part of the
         // current result set — it changes category, it does not leave the set.
         rmRemoveRow(tr, false);
-        rmToast('Undeleted.');
+        rmToast('Restored.');
     }).catch(function () {
         ud.disabled = false;
-        rmToast('Undelete was interrupted — refresh to confirm what landed.', true);
+        rmToast('Restore was interrupted — refresh to confirm what landed.', true);
     });
 });
 
@@ -1500,7 +1500,7 @@ document.querySelector('.rm-bulk-undelete').addEventListener('click', function (
         // The row rejoins the live list. serverGone=false: with "Show dismissed" on
         // it was already inside the current result set, so total must not move.
         apply: function (tr) { rmRemoveRow(tr, false); },
-        msg: function (ok, fail) { return 'Undeleted ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; }
+        msg: function (ok, fail) { return 'Restored ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; }
     });
 });
 // Bulk opener.

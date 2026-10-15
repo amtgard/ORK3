@@ -101,7 +101,7 @@
               $dAt  = rmNiceDate($group['DismissedAt'] ?? '');
               $dWho = $dBy !== '' ? ' by ' . $dBy : '';
               $dWhen = $dAt !== '' ? ' on ' . $dAt : '';
-              $dTip = 'Dismissed' . $dWho . $dWhen . '. Dismissed recommendations are kept, not deleted — undelete returns this to the pending list.';
+              $dTip = 'Dismissed' . $dWho . $dWhen . '. Dismissed recommendations are kept, not deleted — Restore returns this to the pending list.';
           ?><span class="rm-badge rm-badge-dismissed" data-tip="<?= htmlspecialchars($dTip) ?>">dismissed</span><?php } ?>
         </td>
         <td class="rm-col-rank">
@@ -132,7 +132,7 @@
         </td>
         <td class="rm-col-act">
           <?php if ($dismissed) { ?>
-          <button type="button" class="rm-act rm-act-undelete" data-tip="Undelete &mdash; return this recommendation to the pending list" aria-label="Undelete recommendation"><i class="fas fa-trash-can-arrow-up"></i></button>
+          <button type="button" class="rm-act rm-act-undelete" data-tip="Restore &mdash; return this recommendation to the pending list" aria-label="Restore recommendation"><i class="fas fa-undo"></i></button>
           <?php } else { ?>
           <button type="button" class="rm-act rm-act-grant"  data-tip="Grant now" aria-label="Grant this award now">&#9889;</button>
           <button type="button" class="rm-act rm-act-court"  data-tip="Add to court" aria-label="Add to a court plan">&#65291;</button>

@@ -1200,11 +1200,11 @@ if (PnConfig.recError) {
         if (!dimBtn) return;
         if (!dimBtn.dataset.confirm) {
             dimBtn.dataset.confirm = '1';
-            dimBtn.textContent = 'Confirm Delete?';
+            dimBtn.textContent = 'Confirm Dismiss?';
             dimBtn.classList.add('pk-rec-dismiss-confirm');
             dimBtn._confirmTimer = setTimeout(function() {
                 dimBtn.dataset.confirm = '';
-                dimBtn.innerHTML = '<i class="fas fa-times"></i> Delete';
+                dimBtn.innerHTML = '<i class="fas fa-times"></i> Dismiss';
                 dimBtn.classList.remove('pk-rec-dismiss-confirm');
             }, 3000);
             return;
@@ -3678,11 +3678,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#kn-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Delete?';
+                dimBtn.textContent = 'Confirm Dismiss?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Delete';
+                    dimBtn.textContent = 'Dismiss';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -3699,7 +3699,7 @@ $(document).ready(function() {
                     if (d.status === 0) {
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to delete recommendation.');
+                        alert(d.error || 'Failed to dismiss recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -7752,11 +7752,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#pk-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Delete?';
+                dimBtn.textContent = 'Confirm Dismiss?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Delete';
+                    dimBtn.textContent = 'Dismiss';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -7773,7 +7773,7 @@ $(document).ready(function() {
                     if (d.status === 0) {
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to delete recommendation.');
+                        alert(d.error || 'Failed to dismiss recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -16818,7 +16818,7 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 var $delTable = $(panel).find('.pk-deleted-recs-table');
                 panel.__dt = window.orkInitDataTable($delTable, {
                     order: [[6, 'desc']],   // Deleted At, newest first
-                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Deleted Recommendations',
+                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Dismissed Recommendations',
                     columnDefs: [{ targets: 8, orderable: false, searchable: false }]
                 });
                 window.orkAdjustDataTables($(panel));
@@ -16848,7 +16848,7 @@ window.initUsernameAvailabilityCheck = function(opts) {
             var open = panel.classList.toggle('pk-deleted-open');
             toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
             var lbl = toggle.querySelector('.pk-deleted-recs-toggle-label');
-            if (lbl) lbl.textContent = open ? 'Hide Deleted Recommendations' : 'Show Deleted Recommendations';
+            if (lbl) lbl.textContent = open ? 'Hide Dismissed Recommendations' : 'Show Dismissed Recommendations';
             body.style.display = open ? '' : 'none';
             if (open && panel.dataset.loaded !== '1') {
                 loadDeleted(panel, listUrl);
