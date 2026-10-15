@@ -247,6 +247,150 @@ final class RecommendationVisibilityTest extends TestCase
         )->fetchAll(\PDO::FETCH_COLUMN)));
     }
 
+    /** Review 2, item 0: one loader returns exactly what canSee() needs, from the recipient's mundane row. */
+    public function testLoadRecReturnsTheCanSeeShape(): void
+    {
+        $c  = $this->cast();
+        $ka = $this->fx->firstKingdomAwardId($this->k);
+        $id = $this->fx->createRecommendation(
+            $c['recipient'],
+            (int) $ka['kingdomaward_id'],
+            (int) $ka['award_id'],
+            ['monarchy_only' => 2, 'passed_to_local' => 1, 'recommended_by_id' => $c['author']]
+        );
+        $this->assertSame([
+            'RecommendationsId' => $id,
+            'MundaneId'         => $c['recipient'],
+            'RecommendedById'   => $c['author'],
+            'KingdomId'         => $this->k,
+            'ParkId'            => $this->p,
+            'MonarchyOnly'      => 2,
+            'PassedToLocal'     => 1,
+            'Deleted'           => false,
+        ], $this->vis->loadRec($id));
+        $this->assertNull($this->vis->loadRec(0));
+        $this->assertNull($this->vis->loadRec(2147483000));
+
+        // Passed down, so park-level: the park officer sees it, the other park's does not.
+        $this->assertTrue($this->vis->canSeeRecId($c['parkOfficer'], $id));
+        $this->assertFalse($this->vis->canSeeRecId($c['otherParkOfficer'], $id));
+        $this->assertFalse($this->vis->canSeeRecId($c['recipient'], $id));
+        $this->assertTrue($this->vis->canSeeRecId($c['author'], $id));
+        $this->assertFalse($this->vis->canSeeRecId($c['admin'], 2147483000), 'a missing rec is never "visible"');
+
+        $dismissed = $this->fx->createRecommendation(
+            $c['recipient'],
+            (int) $ka['kingdomaward_id'],
+            (int) $ka['award_id'],
+            ['dismissed_by' => $c['author'], 'rank' => 2]
+        );
+        $this->assertTrue($this->vis->loadRec($dismissed)['Deleted']);
+    }
+
+    /**
+     * Review 2, item 9: a "drifted" recipient (mundane.kingdom_id is not the kingdom of
+     * their home park) must get the same verdict from the SQL predicate as from canSee,
+     * for every caller scope that can return the row.
+     */
+    public function testSqlPredicateAgreesWithCanSeeForADriftedRecipient(): void
+    {
+        $k2 = (int) $this->fx->pdo()->query(
+            'SELECT kingdom_id FROM ' . DB_PREFIX . 'kingdom
+              WHERE kingdom_id <> ' . $this->k . ' AND parent_kingdom_id = 0
+                AND kingdom_id <> (SELECT parent_kingdom_id FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $this->k . ')
+              ORDER BY kingdom_id LIMIT 1'
+        )->fetchColumn();
+        if (!$k2) {
+            $this->markTestSkipped('Sandbox needs a second top-level kingdom.');
+        }
+        // Drifted: kingdom K2, home park P (which belongs to K).
+        $recipient = $this->fx->createPlayerWithToken('drift', $k2, $this->p)['mundane_id'];
+        $author    = $this->fx->createPlayerWithToken('dauthor', $this->k, $this->p)['mundane_id'];
+        $kOffK     = $this->fx->createPlayerWithToken('dkoffk', $this->k, $this->p)['mundane_id'];
+        $this->fx->insertScopedAuth($kOffK, 0, $this->k, 'edit');
+        $kOffK2    = $this->fx->createPlayerWithToken('dkoffk2', $k2, 0)['mundane_id'];
+        $this->fx->insertScopedAuth($kOffK2, 0, $k2, 'edit');
+        $parkOff   = $this->fx->createPlayerWithToken('dpoff', $this->k, $this->p)['mundane_id'];
+        $this->fx->insertScopedAuth($parkOff, $this->p, 0, 'edit');
+        $parkSeat  = $this->fx->createPlayerWithToken('dpseat', $this->k, $this->p)['mundane_id'];
+        $this->fx->insertOfficer($parkSeat, $this->k, $this->p, 'Monarch');
+        $kSeat     = $this->fx->createPlayerWithToken('dkseat', $this->k, $this->p)['mundane_id'];
+        $this->fx->insertOfficer($kSeat, $this->k, 0, 'Monarch');
+        $plain     = $this->fx->createPlayerWithToken('dplain', $this->k, $this->p)['mundane_id'];
+        $admin     = $this->fx->createPlayerWithToken('dadmin', $this->k, $this->p)['mundane_id'];
+        $this->fx->insertGlobalAdmin($admin);
+        $viewers = compact('recipient', 'author', 'kOffK', 'kOffK2', 'parkOff', 'parkSeat', 'kSeat', 'plain', 'admin');
+
+        $ka  = $this->fx->firstKingdomAwardId($this->k);
+        $ids = [];
+        foreach ([[0, 0], [1, 0], [2, 0], [2, 1]] as $i => [$lvl, $passed]) {
+            $ids[] = $this->fx->createRecommendation(
+                $recipient,
+                (int) $ka['kingdomaward_id'],
+                (int) $ka['award_id'],
+                ['monarchy_only' => $lvl, 'passed_to_local' => $passed, 'recommended_by_id' => $author, 'rank' => 1 + $i]
+            );
+        }
+        $scopes = [
+            'park-scoped'    => [$this->vis->kingdomOfPark($this->p)],
+            'kingdom-scoped' => [$k2],
+            'player-scoped'  => [$k2],
+        ];
+        foreach ($viewers as $role => $viewer) {
+            $phpSees = [];
+            foreach ($ids as $id) {
+                if ($this->vis->canSee($viewer, $this->vis->loadRec($id))) {
+                    $phpSees[] = $id;
+                }
+            }
+            foreach ($scopes as $scopeName => $kids) {
+                $sqlSees = array_map('intval', $this->fx->pdo()->query(
+                    'SELECT r.recommendations_id FROM ' . DB_PREFIX . 'recommendations r
+                       JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
+                      WHERE r.recommendations_id IN (' . implode(',', $ids) . ')
+                        AND ' . $this->vis->sqlPredicate($viewer, 'r', 'm', $kids) . '
+                      ORDER BY r.recommendations_id'
+                )->fetchAll(\PDO::FETCH_COLUMN));
+                $this->assertSame($phpSees, $sqlSees, "SQL and canSee disagree for $role ($scopeName)");
+            }
+        }
+        // The cases the drift is about, stated outright.
+        $this->assertTrue($this->vis->canSeeRecId($kOffK2, $ids[2]), 'K2 kingdom officer sees a kingdom-level hide on a K2 player');
+        $this->assertFalse($this->vis->canSeeRecId($parkSeat, $ids[1]), 'a park seat filed under kingdom K does not cover a K2 player (canManage)');
+    }
+
+    /** Review 2, item 7: the viewer's authority is resolved once per request, not per call. */
+    public function testSqlPredicateIsMemoizedPerViewer(): void
+    {
+        $c     = $this->cast();
+        $vis   = new RecommendationVisibility();
+        $first = $vis->sqlPredicate($c['parkOfficer'], 'r', 'm', [$this->k]);
+        // Revoke the grant mid-request: a memoized predicate does not re-query it.
+        $this->fx->pdo()->exec('DELETE FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ' . (int) $c['parkOfficer']);
+        $this->assertSame($first, $vis->sqlPredicate($c['parkOfficer'], 'r', 'm', [$this->k]));
+        $this->assertNotSame($first, (new RecommendationVisibility())->sqlPredicate($c['parkOfficer'], 'r', 'm', [$this->k]));
+    }
+
+    /** Review 2, item 5: the Kingdom page offers the checkbox to any officer in the kingdom. */
+    public function testIsOfficerInKingdomCoversParkOfficers(): void
+    {
+        $c = $this->cast();
+        $this->assertTrue($this->vis->isOfficerInKingdom($c['kingdomOfficer'], $this->k));
+        $this->assertTrue($this->vis->isOfficerInKingdom($c['seatMonarch'], $this->k));
+        $this->assertTrue($this->vis->isOfficerInKingdom($c['parkOfficer'], $this->k));
+        $this->assertTrue($this->vis->isOfficerInKingdom($c['otherParkOfficer'], $this->k));
+        $this->assertTrue($this->vis->isOfficerInKingdom($c['admin'], $this->k));
+        $this->assertFalse($this->vis->isOfficerInKingdom($c['plain'], $this->k));
+        $this->assertFalse($this->vis->isOfficerInKingdom(0, $this->k));
+        $seat = $this->fx->createPlayerWithToken('pseat', $this->k, $this->p)['mundane_id'];
+        $this->fx->insertOfficer($seat, $this->k, $this->otherPark, 'Regent');
+        $this->assertTrue($this->vis->isOfficerInKingdom($seat, $this->k), 'a park seat counts');
+        $other = (int) $this->fx->pdo()->query('SELECT kingdom_id FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id <> ' . $this->k . ' AND parent_kingdom_id <> ' . $this->k . ' ORDER BY kingdom_id LIMIT 1')->fetchColumn();
+        if ($other) {
+            $this->assertFalse($this->vis->isOfficerInKingdom($c['parkOfficer'], $other));
+        }
+    }
+
     public function testViewerFromToken(): void
     {
         $p = $this->fx->createPlayerWithToken('tok', $this->k, $this->p);

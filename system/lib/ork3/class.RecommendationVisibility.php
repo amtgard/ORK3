@@ -29,6 +29,10 @@ class RecommendationVisibility extends Ork3
     private $adminMemo = [];
     /** @var array<int,int> */
     private $parentMemo = [];
+    /** @var array<int,array> viewer => viewerGrants(), per request */
+    private $grantMemo = [];
+    /** @var array<string,string> "viewer|recAlias|mundaneAlias|scope" => predicate, per request */
+    private $predicateMemo = [];
 
     /**
      * The stored level, normalised. Anything that is not 0, 1 or 2 is not a level
@@ -157,6 +161,52 @@ class RecommendationVisibility extends Ork3
         return $this->officerLevel($viewer, (int) ($rec['KingdomId'] ?? 0), (int) ($rec['ParkId'] ?? 0)) >= $required;
     }
 
+    /**
+     * The one loader for a single rec's visibility facts: the canSee() input shape,
+     * with KingdomId/ParkId from the RECIPIENT's mundane row, plus its id and whether
+     * it is dismissed. One query. Null when the rec does not exist. Callers that act
+     * on one rec by id use this (or canSeeRecId) instead of assembling the shape.
+     *
+     * Not memoized: write paths change monarchy_only/passed_to_local mid-request.
+     */
+    public function loadRec(int $recId): ?array
+    {
+        if ($recId <= 0) {
+            return null;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT r.recommendations_id, r.mundane_id, r.recommended_by_id, r.monarchy_only, r.passed_to_local,
+                    r.deleted_at, r.deleted_by, IFNULL(m.kingdom_id, 0) AS kingdom_id, IFNULL(m.park_id, 0) AS park_id
+               FROM ' . DB_PREFIX . 'recommendations r
+               LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
+              WHERE r.recommendations_id = ' . $recId . ' LIMIT 1'
+        );
+        if (!$rs || !$rs->Next()) {
+            return null;
+        }
+
+        return [
+            'RecommendationsId' => (int) $rs->recommendations_id,
+            'MundaneId'         => (int) $rs->mundane_id,
+            'RecommendedById'   => (int) $rs->recommended_by_id,
+            'KingdomId'         => (int) $rs->kingdom_id,
+            'ParkId'            => (int) $rs->park_id,
+            'MonarchyOnly'      => (int) $rs->monarchy_only,
+            'PassedToLocal'     => (int) $rs->passed_to_local,
+            // Same liveness reading as Player::LiveRecommendationClause.
+            'Deleted'           => (int) $rs->deleted_by > 0,
+        ];
+    }
+
+    /** canSee() for a rec id. A rec that does not exist is never visible. */
+    public function canSeeRecId(int $viewer, int $recId): bool
+    {
+        $rec = $this->loadRec($recId);
+
+        return $rec !== null && $this->canSee($viewer, $rec);
+    }
+
     public function filterRecommendations(array $response, int $viewer): array
     {
         if (empty($response['AwardRecommendations'])) {
@@ -173,10 +223,120 @@ class RecommendationVisibility extends Ork3
     }
 
     /**
-     * SQL twin of canSee() for paged / counted readers. $kingdomIds is the set of
-     * recipient kingdoms the query can return (its scope); kingdom-officer status is
-     * resolved for exactly those. Park-officer status is resolved from the viewer's
-     * own grants and seats, which is a handful of rows.
+     * The viewer's officer grants, resolved once per request (Report's paged reader
+     * builds three predicates per call, and the kingdom profile builds one per load).
+     *
+     *   officerKingdoms  every kingdom K with officerLevel(viewer, K, 0) = kingdom
+     *   authKingdoms     every kingdom K with HasAuthority(viewer, AUTH_KINGDOM, K):
+     *                    HasAuthority(AUTH_PARK, P) climbs to P's OWN kingdom, so this
+     *                    covers the parks of K whatever the recipient's mundane row says
+     *   authParks        parks with a direct HasAuthority(viewer, AUTH_PARK, P) grant
+     *   seatParks        [kingdom_id, park_id] Monarch/Regent/PM park seats; canManage
+     *                    matches a park seat only on BOTH ids, so these stay pairs
+     *
+     * Candidates come from the viewer's own authorization rows and seats, plus every
+     * descendant principality (parent-kingdom authority covers them); each one is
+     * confirmed through the same functions canSee() uses, so SQL and PHP agree.
+     *
+     * @return array{officerKingdoms:list<int>,authKingdoms:list<int>,authParks:list<int>,seatParks:list<array{0:int,1:int}>}
+     */
+    private function viewerGrants(int $viewer): array
+    {
+        if (isset($this->grantMemo[$viewer])) {
+            return $this->grantMemo[$viewer];
+        }
+        $candKingdoms = [];
+        $candParks    = [];
+        $seatParks    = [];
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT a.kingdom_id, a.park_id, 0 AS seat FROM ' . DB_PREFIX . 'authorization a
+              WHERE a.mundane_id = ' . $viewer . ' AND (a.kingdom_id > 0 OR a.park_id > 0)
+             UNION
+             SELECT o.kingdom_id, o.park_id, 1 AS seat FROM ' . DB_PREFIX . 'officer o
+              WHERE o.mundane_id = ' . $viewer . ' AND o.kingdom_id > 0
+                AND o.role IN (\'Monarch\',\'Regent\',\'Prime Minister\')'
+        );
+        if ($rs) {
+            while ($rs->Next()) {
+                $kid = (int) $rs->kingdom_id;
+                $pid = (int) $rs->park_id;
+                if ((int) $rs->seat === 1) {
+                    if ($pid > 0) {
+                        $seatParks[$kid . ':' . $pid] = [$kid, $pid];
+                    } else {
+                        $candKingdoms[$kid] = $kid;
+                    }
+                    continue;
+                }
+                if ($kid > 0) {
+                    $candKingdoms[$kid] = $kid;
+                }
+                if ($pid > 0) {
+                    $candParks[$pid] = $pid;
+                }
+            }
+        }
+        // Principalities under any candidate (bounded: the hierarchy is shallow, and
+        // a corrupt cycle must not loop).
+        $frontier = $candKingdoms;
+        for ($depth = 0; $frontier && $depth < 10; $depth++) {
+            $this->db->Clear();
+            $ch = $this->db->DataSet(
+                'SELECT kingdom_id FROM ' . DB_PREFIX . 'kingdom WHERE parent_kingdom_id IN (' . implode(',', $frontier) . ')'
+            );
+            $frontier = [];
+            if ($ch) {
+                while ($ch->Next()) {
+                    $kid = (int) $ch->kingdom_id;
+                    if ($kid > 0 && !isset($candKingdoms[$kid])) {
+                        $candKingdoms[$kid] = $kid;
+                        $frontier[$kid]     = $kid;
+                    }
+                }
+            }
+        }
+
+        $auth = Ork3::$Lib->authorization;
+        $officerKingdoms = [];
+        $authKingdoms    = [];
+        foreach ($candKingdoms as $kid) {
+            if ($this->officerLevel($viewer, $kid, 0) === self::LEVEL_KINGDOM) {
+                $officerKingdoms[] = $kid;
+            }
+            if ($auth->HasAuthority($viewer, AUTH_KINGDOM, $kid, AUTH_EDIT)) {
+                $authKingdoms[] = $kid;
+            }
+        }
+        $authParks = [];
+        foreach ($candParks as $pid) {
+            if ($auth->HasAuthority($viewer, AUTH_PARK, $pid, AUTH_EDIT)) {
+                $authParks[] = $pid;
+            }
+        }
+        sort($officerKingdoms);
+        sort($authKingdoms);
+        sort($authParks);
+        ksort($seatParks);
+
+        return $this->grantMemo[$viewer] = [
+            'officerKingdoms' => $officerKingdoms,
+            'authKingdoms'    => $authKingdoms,
+            'authParks'       => $authParks,
+            'seatParks'       => array_values($seatParks),
+        ];
+    }
+
+    /**
+     * SQL twin of canSee() for paged / counted readers: visible iff the row's
+     * effective level is 0, or (viewer is not the recipient AND (admin OR author OR
+     * officerLevel(viewer, m.kingdom_id, m.park_id) >= level)). The officer half
+     * reads the recipient's OWN mundane kingdom and park, exactly as canSee() does, so
+     * a recipient whose mundane.kingdom_id differs from their park's kingdom gets the
+     * same verdict from both. $kingdomIds (the caller's scope) only adds candidate
+     * kingdoms; the viewer's grants are found from their own rows (viewerGrants).
+     *
+     * Memoized per (viewer, aliases, scope) for the request.
      */
     public function sqlPredicate(int $viewer, string $recAlias, string $mundaneAlias, array $kingdomIds): string
     {
@@ -184,18 +344,29 @@ class RecommendationVisibility extends Ork3
         if ($viewer <= 0) {
             return "($eff = 0)";
         }
+        $scope = array_values(array_unique(array_filter(array_map('intval', $kingdomIds), function ($k) {
+            return $k > 0;
+        })));
+        sort($scope);
+        $memoKey = $viewer . '|' . $recAlias . '|' . $mundaneAlias . '|' . implode(',', $scope);
+        if (isset($this->predicateMemo[$memoKey])) {
+            return $this->predicateMemo[$memoKey];
+        }
+
         $notRecipient = "$recAlias.mundane_id <> $viewer";
         $parts = ["$eff = 0"];
         if ($this->isAdmin($viewer)) {
             $parts[] = $notRecipient;
+            $this->db->Clear();
 
-            return '(' . implode(' OR ', $parts) . ')';
+            return $this->predicateMemo[$memoKey] = '(' . implode(' OR ', $parts) . ')';
         }
         $parts[] = "($recAlias.recommended_by_id = $viewer AND $notRecipient)";
 
-        $officerKingdoms = [];
-        foreach (array_unique(array_map('intval', $kingdomIds)) as $kid) {
-            if ($kid > 0 && $this->officerLevel($viewer, $kid, 0) === self::LEVEL_KINGDOM) {
+        $g = $this->viewerGrants($viewer);
+        $officerKingdoms = $g['officerKingdoms'];
+        foreach ($scope as $kid) {
+            if (!in_array($kid, $officerKingdoms, true) && $this->officerLevel($viewer, $kid, 0) === self::LEVEL_KINGDOM) {
                 $officerKingdoms[] = $kid;
             }
         }
@@ -203,30 +374,73 @@ class RecommendationVisibility extends Ork3
             $parts[] = "($notRecipient AND $mundaneAlias.kingdom_id IN (" . implode(',', $officerKingdoms) . '))';
         }
 
-        $officerParks = [];
+        // Park level = Court::canManage(viewer, m.kingdom_id, m.park_id) beyond the
+        // kingdom grants above: a park authorization (direct, or through authority
+        // over the park's own kingdom), or a park seat filed under the recipient's
+        // kingdom. officerLevel() treats kingdom 0 as "no officer", hence the guard.
+        $parkTerms = [];
+        if ($g['authParks']) {
+            $parkTerms[] = "$mundaneAlias.park_id IN (" . implode(',', $g['authParks']) . ')';
+        }
+        if ($g['authKingdoms']) {
+            $parkTerms[] = "$mundaneAlias.park_id IN (SELECT vp.park_id FROM " . DB_PREFIX . 'park vp WHERE vp.kingdom_id IN (' . implode(',', $g['authKingdoms']) . '))';
+        }
+        foreach ($g['seatParks'] as [$sk, $sp]) {
+            $parkTerms[] = "($mundaneAlias.park_id = $sp AND $mundaneAlias.kingdom_id = $sk)";
+        }
+        if ($parkTerms) {
+            $parts[] = "($notRecipient AND $eff = 1 AND $mundaneAlias.kingdom_id > 0 AND (" . implode(' OR ', $parkTerms) . '))';
+        }
+        // Callers build this predicate INLINE, after their own Clear(), on the shared
+        // handle. The authority lookups above (yapo finds) leave bindings on it, which
+        // would silently empty the caller's query — hand the handle back clean.
         $this->db->Clear();
-        $rs = $this->db->DataSet(
-            'SELECT a.park_id, p.kingdom_id FROM ' . DB_PREFIX . 'authorization a
-               JOIN ' . DB_PREFIX . 'park p ON p.park_id = a.park_id
-              WHERE a.mundane_id = ' . $viewer . ' AND a.park_id > 0
-             UNION
-             SELECT o.park_id, o.kingdom_id FROM ' . DB_PREFIX . 'officer o
-              WHERE o.mundane_id = ' . $viewer . ' AND o.park_id > 0
-                AND o.role IN (\'Monarch\',\'Regent\',\'Prime Minister\')'
-        );
-        if ($rs) {
-            while ($rs->Next()) {
-                $pid = (int) $rs->park_id;
-                if ($this->officerLevel($viewer, (int) $rs->kingdom_id, $pid) >= self::LEVEL_PARK) {
-                    $officerParks[$pid] = $pid;
-                }
+
+        return $this->predicateMemo[$memoKey] = '(' . implode(' OR ', $parts) . ')';
+    }
+
+    /**
+     * Is $viewer an officer anywhere in kingdom $kingdomId — of the kingdom itself or
+     * of any park in it? Gates whether the Kingdom page's Add Rec modal OFFERS the
+     * Monarchy Only checkbox; the per-recipient answer is creatorLevel(), and the
+     * server's create path stays the authority.
+     */
+    public function isOfficerInKingdom(int $viewer, int $kingdomId): bool
+    {
+        if ($viewer <= 0 || $kingdomId <= 0) {
+            return false;
+        }
+        if ($this->officerLevel($viewer, $kingdomId, 0) === self::LEVEL_KINGDOM) {
+            return true;
+        }
+        $g = $this->viewerGrants($viewer);
+        $parks = $g['authParks'];
+        foreach ($g['seatParks'] as [$sk, $sp]) {
+            if ($sk === $kingdomId) {
+                $parks[] = $sp;
             }
         }
-        if ($officerParks) {
-            $parts[] = "($notRecipient AND $eff = 1 AND $mundaneAlias.park_id IN (" . implode(',', $officerParks) . '))';
+        if (!$parks) {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT park_id FROM ' . DB_PREFIX . 'park WHERE kingdom_id = ' . $kingdomId
+            . ' AND park_id IN (' . implode(',', array_map('intval', array_unique($parks))) . ')'
+        );
+        $inKingdom = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $inKingdom[] = (int) $rs->park_id;
+            }
+        }
+        foreach ($inKingdom as $pid) {
+            if ($this->officerLevel($viewer, $kingdomId, $pid) >= self::LEVEL_PARK) {
+                return true;
+            }
         }
 
-        return '(' . implode(' OR ', $parts) . ')';
+        return false;
     }
 
     public function creatorLevel(int $creator, int $recipientId): int

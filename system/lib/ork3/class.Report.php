@@ -1439,14 +1439,20 @@ class Report extends Ork3
         // kingdom's IncludePrincipalityInStatistics flag is on, so the badge stays
         // in sync with what the lazy-loaded panel actually shows.
         $kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kid)));
+        // Only the kingdom-wide badge (RecommendedBy 0) is cached. A RecommendedBy-scoped
+        // count is one user's own recs — an indexed, per-user query nothing else shares —
+        // and no write busts its key: the author's entry kept counting a rec as public
+        // after it was hidden, and the uncached hidden half counted it again (the badge
+        // read N+1 for up to the TTL). Not caching it removes that whole class of drift.
+        $cacheable = empty($request['RecommendedBy']);
         $key = Ork3::$Lib->ghettocache->key([
             'KingdomIds'    => $kidList,
-            'RecommendedBy' => (int)($request['RecommendedBy'] ?? 0),
+            'RecommendedBy' => 0,
             // Bumped when the counted predicate changes, so entries cached under the
             // previous rule are not served for the rest of their TTL.
             'V'             => self::REC_CACHE_VERSION,
         ]);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
+        if ($cacheable && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
             return (int)$cache + $this->hiddenRecommendationsCount($kidList, $request);
         }
 
@@ -1472,13 +1478,17 @@ class Report extends Ork3
         if ($r !== false && $r->size() > 0 && $r->next()) {
             $n = (int)$r->n;
         }
-        $n = (int) Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $n);
+        if ($cacheable) {
+            $n = (int) Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $n);
+        }
         return $n + $this->hiddenRecommendationsCount($kidList, $request);
     }
 
     // The viewer-dependent half of the tab badge: Monarchy Only recs this TOKEN's
     // viewer may see. Never cached (the predicate is per viewer); cheap because
-    // idx_recs_monarchy_only narrows to the few hidden rows.
+    // idx_recs_monarchy_only narrows to the few hidden rows. This runs on every
+    // kingdom profile load, so it first asks the index whether the scope has ANY live
+    // hidden rec, and only then resolves the viewer's officer grants.
     private function hiddenRecommendationsCount(string $kidList, array $request): int
     {
         $vis    = Ork3::$Lib->recommendationvisibility;
@@ -1486,12 +1496,17 @@ class Report extends Ork3
         if ($viewer <= 0) {
             return 0;
         }
-        $where = "recs.monarchy_only <> 0 AND m.kingdom_id IN ($kidList) AND (m.suspended IS NULL OR m.suspended = 0)"
-            . " AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)"
-            . ' AND ' . $vis->sqlPredicate($viewer, 'recs', 'm', array_map('intval', explode(',', $kidList)));
+        $base = "recs.monarchy_only <> 0 AND m.kingdom_id IN ($kidList) AND (m.suspended IS NULL OR m.suspended = 0)"
+            . " AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)";
         if (!empty($request['RecommendedBy'])) {
-            $where .= ' AND recs.recommended_by_id = ' . (int)$request['RecommendedBy'];
+            $base .= ' AND recs.recommended_by_id = ' . (int)$request['RecommendedBy'];
         }
+        $this->db->Clear();
+        $any = $this->db->DataSet('SELECT 1 AS x FROM ' . DB_PREFIX . 'recommendations recs JOIN ' . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE $base LIMIT 1");
+        if (!$any || !$any->Next()) {
+            return 0;
+        }
+        $where = $base . ' AND ' . $vis->sqlPredicate($viewer, 'recs', 'm', array_map('intval', explode(',', $kidList)));
         $this->db->Clear();
         $r = $this->db->query('SELECT COUNT(*) AS n FROM ' . DB_PREFIX . 'recommendations recs JOIN ' . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE $where");
 
