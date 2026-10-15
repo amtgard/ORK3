@@ -52,6 +52,10 @@ $_actionLabels = [
 	'BonusCredit::createReason'        => 'Bonus Credit Defined',
 	'BonusCredit::archiveReason'       => 'Bonus Credit Archived',
 	'BonusCredit::restoreReason'       => 'Bonus Credit Restored',
+	'BonusCredit::addGranter'          => 'Bonus Credit Granter Added',
+	'BonusCredit::removeGranter'       => 'Bonus Credit Granter Removed',
+	'BonusCredit::adopt'               => 'Bonus Credit Adopted',
+	'BonusCredit::withdraw'            => 'Bonus Credit Withdrawn',
 ];
 
 // ── JSON helpers (defined early — used in batch collector and render functions) ──
@@ -435,6 +439,16 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$_cls  = ($_c['ClassName'] ?? '') !== '' ? ' (' . $_cr . ' ' . htmlspecialchars($_c['ClassName']) . ($_cr === '1' ? ' credit' : ' credits') . ')' : '';
 			$_note = $method === 'BonusCredit::revoke' && ($_c['RevokeNote'] ?? '') !== '' ? ': "' . htmlspecialchars(mb_strimwidth($_c['RevokeNote'], 0, 60, '…')) . '"' : '';
 			return ($method === 'BonusCredit::grant' ? 'Granted ' : 'Removed ') . $_what . $_cls . $_note;
+		case 'BonusCredit::adopt':
+		case 'BonusCredit::withdraw':
+			$_n = ($a['ReasonName'] ?? $b['ReasonName'] ?? '') !== '' ? '“' . htmlspecialchars($a['ReasonName'] ?? $b['ReasonName']) . '”' : 'an Amtgard-wide credit';
+			return ($method === 'BonusCredit::adopt' ? 'Adopted ' : 'Withdrew ') . $_n . (!empty($p['as_ork_admin']) ? ' (as ORK admin)' : '');
+		case 'BonusCredit::addGranter':
+		case 'BonusCredit::removeGranter':
+			$_m = $a ?: $b;
+			$_who = ($_m['Persona'] ?? '') !== '' ? htmlspecialchars($_m['Persona']) : 'a player';
+			$_for = !empty($_m['AllCredits']) || empty($_m['ReasonName']) ? ' for all credits' : ' for “' . htmlspecialchars($_m['ReasonName']) . '”';
+			return ($method === 'BonusCredit::addGranter' ? 'Appointed ' : 'Removed ') . $_who . ' as a bonus credit granter' . $_for;
 		case 'BonusCredit::createReason':
 		case 'BonusCredit::archiveReason':
 		case 'BonusCredit::restoreReason':
@@ -1288,6 +1302,30 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			}
 			if (!empty($_c['BonusCreditId'])) $html .= '<tr><td class="al-diff-field">Credit ID</td><td colspan="2">' . (int)$_c['BonusCreditId'] . '</td></tr>';
 			if (($_c['ScopeType'] ?? '') === 'kingdom' && !empty($_c['ScopeId'])) $html .= '<tr><td class="al-diff-field">Defined By</td><td colspan="2">' . _auditIdLink('kingdom', (int)$_c['ScopeId'], $kingdomMap + [(int)$_c['ScopeId'] => $_c['ScopeName'] ?? '']) . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'BonusCredit::adopt':
+		case 'BonusCredit::withdraw':
+			$_n = (string)($a['ReasonName'] ?? $b['ReasonName'] ?? '');
+			if ($_n === '') return '<em style="color:#a0aec0">No detail available.</em>';
+			$html = '<table class="al-diff-table"><tbody>';
+			$html .= '<tr><td class="al-diff-field">Credit</td><td colspan="2">' . htmlspecialchars($_n) . ' <span style="color:#a0aec0;font-size:11px">Amtgard-wide</span></td></tr>';
+			if (!empty($p['KingdomId'])) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', (int)$p['KingdomId'], $kingdomMap) . '</td></tr>';
+			$html .= '<tr class="al-diff-changed"><td class="al-diff-field">Status</td><td colspan="2">' . ($method === 'BonusCredit::adopt' ? 'Adopted — may now be granted to this kingdom\'s players' : 'Withdrawn — no longer offered here; credits already granted stay') . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Acting As</td><td colspan="2">' . (!empty($p['as_ork_admin']) ? 'ORK admin, on the kingdom\'s behalf' : 'Kingdom officer') . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'BonusCredit::addGranter':
+		case 'BonusCredit::removeGranter':
+			$_m = $a ?: $b;
+			if (empty($_m)) return '<em style="color:#a0aec0">No detail available.</em>';
+			$html = '<table class="al-diff-table"><tbody>';
+			$html .= '<tr><td class="al-diff-field">Granter</td><td colspan="2">' . _auditIdLink('player', (int)($_m['MundaneId'] ?? 0), $mundaneMap + [(int)($_m['MundaneId'] ?? 0) => $_m['Persona'] ?? '']) . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Can Grant</td><td colspan="2">' . (!empty($_m['AllCredits']) || empty($_m['ReasonName']) ? 'All of the kingdom\'s credits' : htmlspecialchars($_m['ReasonName']) . ' only') . '</td></tr>';
+			if (!empty($p['KingdomId'])) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', (int)$p['KingdomId'], $kingdomMap) . '</td></tr>';
+			$html .= '<tr class="al-diff-changed"><td class="al-diff-field">Status</td><td colspan="2">' . ($method === 'BonusCredit::addGranter' ? 'Appointed — may grant and remove those bonus credits anywhere in the kingdom' : 'Removed — no longer a bonus credit granter for those credits') . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
