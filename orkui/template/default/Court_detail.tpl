@@ -166,6 +166,11 @@ html[data-theme="dark"] .cp-award-row-main:has(+ .cp-award-row-expand.open) { ba
 .cp-pc-cleared { margin-top: 6px; font-size: 11px; line-height: 1.4; color: #744210; background: #fffbeb; border: 1px solid #f6e05e; border-radius: 5px; padding: 6px 8px; }
 .cp-pc-cleared i { margin-right: 4px; color: #b7791f; }
 .cp-pc-cleared .cp-rec-hint-btn { margin-left: 4px; font-size: 11px; }
+/* Monarchy Only rec: its reason is shown to officers for reference but is never a
+   citation — no ghost text, no (Start from Rec), nothing that copies it. */
+.cp-pc-monarchy { margin-top: 6px; font-size: 11px; line-height: 1.4; color: #553c9a; background: #faf5ff; border: 1px solid #d6bcfa; border-radius: 5px; padding: 6px 8px; }
+.cp-pc-monarchy i { margin-right: 4px; color: #6b46c1; }
+.cp-pc-monarchy-reason { margin-top: 4px; color: #4a5568; font-style: italic; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cp-artisan-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
 /* Right-aligned: Save and Remove act on the whole award row, but sitting
    left-aligned directly beneath "Add Artisan" they read as part of the
@@ -953,6 +958,9 @@ html[data-theme="dark"] .cp-notes-area::placeholder { color: #4a5568; }
 html[data-theme="dark"] .cp-rec-hint { color: #a0aec0; }
 html[data-theme="dark"] .cp-rec-hint-btn { color: #63b3ed; }
 html[data-theme="dark"] .cp-pc-cleared { background: rgba(214,158,46,.12); border-color: rgba(214,158,46,.4); color: #f6e05e; }
+html[data-theme="dark"] .cp-pc-monarchy { background: rgba(196,181,253,.10); border-color: rgba(196,181,253,.4); color: #d6bcfa; }
+html[data-theme="dark"] .cp-pc-monarchy i { color: #c4b5fd; }
+html[data-theme="dark"] .cp-pc-monarchy-reason { color: #cbd5e0; }
 html[data-theme="dark"] .cp-pc-cleared i { color: #f6e05e; }
 html[data-theme="dark"] .cp-artisan-row { color: #cbd5e0; }
 html[data-theme="dark"] .cp-maker-ac    { background: #1f2733 !important; border-color: #2d3748 !important; color: #e2e8f0 !important; }
@@ -1698,7 +1706,21 @@ $_total_awards = count($courtAwards ?? []);
                         // cleared end-state the JS clear path produces — marker shown, rec
                         // hint hidden, hint buttons withdrawn, no rehydrating onfocus.
                         $pcCleared   = $pcTriggered && !empty($aw['PublicCommentCleared']);
+                        // Monarchy Only rec: the reason is officer-only and is never the
+                        // public citation, so none of the inherit/restore affordances exist.
+                        $pcMonarchy  = !empty($aw['RecMonarchyOnly']);
                         ?>
+                        <?php if ($pcMonarchy): ?>
+                        <div class="cp-pc-label-row" style="margin-top:10px">
+                            <span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>
+                        </div>
+                        <div class="cp-pubcomment-wrap" id="cp-pcwrap-<?= $pcCaid ?>" data-rec-engaged="1" data-rec-cleared="1" data-rec-monarchy="1">
+                            <textarea class="cp-notes-area" id="cp-pubcomment-<?= $pcCaid ?>"
+                                      aria-label="Public comment (shown on the Court Report)"
+                                      placeholder="Shown on the public Court Report…"><?= htmlspecialchars($pcSaved) ?></textarea>
+                            <div class="cp-pc-monarchy" id="cp-pc-monarchy-<?= $pcCaid ?>"><i class="fas fa-eye-slash" aria-hidden="true"></i> Monarchy Only recommendation &mdash; its reason is never published. Type a public comment above if you want one.<?php if ($pcRecReason !== ''): ?><div class="cp-pc-monarchy-reason">Officers only: <?= htmlspecialchars($pcRecReason) ?></div><?php endif; ?></div>
+                        </div>
+                        <?php else: ?>
                         <div class="cp-pc-label-row" style="margin-top:10px">
                             <span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>
                             <?php if ($pcTriggered && !$pcCleared): ?>
@@ -1722,6 +1744,7 @@ $_total_awards = count($courtAwards ?? []);
                             <div class="cp-pc-cleared" id="cp-pc-cleared-<?= $pcCaid ?>"><i class="fas fa-eye-slash"></i> Marked as cleared &mdash; this row is flagged not to inherit the recommendation&rsquo;s wording. <button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(<?= $pcCaid ?>,'restore')">(Undo clear)</button></div>
                             <?php endif; ?>
                         </div>
+                        <?php endif; ?>
                     </div>
                     <div>
                         <?php if (($court['ParkId'] ?? 0) == 0): ?>
@@ -3198,10 +3221,32 @@ $_total_awards = count($courtAwards ?? []);
     };
 
     // ---- Public Comment: rec-reason helper text ----
-    function cpPubCommentFieldHtml(caid, recReason, publicComment) {
+    // Mirrors the server-rendered field, all three states: untouched (rec text as a
+    // ghost hint + Start/Clear), cleared (marker + Undo), and Monarchy Only (the rec's
+    // reason is officer-only reference text and nothing offers it as the citation).
+    function cpPubCommentFieldHtml(caid, recReason, publicComment, cleared, recMonarchyOnly) {
         recReason     = recReason || '';
         publicComment = publicComment || '';
+        var label = '<div class="cp-pc-label-row" style="margin-top:10px"><span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>';
+        if (recMonarchyOnly) {
+            return label + '</div>' +
+                '<div class="cp-pubcomment-wrap" id="cp-pcwrap-' + caid + '" data-rec-engaged="1" data-rec-cleared="1" data-rec-monarchy="1">' +
+                '<textarea class="cp-notes-area" id="cp-pubcomment-' + caid + '" aria-label="Public comment (shown on the Court Report)" placeholder="Shown on the public Court Report…">' + esc(publicComment) + '</textarea>' +
+                '<div class="cp-pc-monarchy" id="cp-pc-monarchy-' + caid + '"><i class="fas fa-eye-slash" aria-hidden="true"></i> Monarchy Only recommendation \u2014 its reason is never published. Type a public comment above if you want one.' +
+                (recReason !== '' ? '<div class="cp-pc-monarchy-reason">Officers only: ' + esc(recReason) + '</div>' : '') +
+                '</div></div>';
+        }
         var triggered = recReason !== '' && publicComment === '';
+        var isCleared = triggered && !!cleared;
+        if (isCleared) {
+            return label + '</div>' +
+                '<div class="cp-pubcomment-wrap" id="cp-pcwrap-' + caid + '" data-rec-engaged="1" data-rec-cleared="1" data-rec-text="' + esc(recReason) + '">' +
+                '<textarea class="cp-notes-area" id="cp-pubcomment-' + caid + '" placeholder="Shown on the public Court Report…"></textarea>' +
+                '<div class="cp-rec-hint" id="cp-rec-hint-' + caid + '" style="display:none">' + esc(recReason) + '</div>' +
+                '<div class="cp-pc-cleared" id="cp-pc-cleared-' + caid + '"><i class="fas fa-eye-slash"></i> Marked as cleared \u2014 this row is ' +
+                'flagged not to inherit the recommendation\u2019s wording. ' +
+                '<button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(' + caid + ',\'restore\')">(Undo clear)</button></div></div>';
+        }
         var buttons = triggered
             ? '<button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(' + caid + ',\'start\')">(Start from Rec)</button>' +
               '<button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(' + caid + ',\'clear\')">(Clear)</button>'
@@ -3210,7 +3255,7 @@ $_total_awards = count($courtAwards ?? []);
         var hint = triggered
             ? '<div class="cp-rec-hint" id="cp-rec-hint-' + caid + '">' + esc(recReason) + '</div>'
             : '';
-        return '<div class="cp-pc-label-row" style="margin-top:10px"><span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>' + buttons + '</div>' +
+        return label + buttons + '</div>' +
             // data-rec-cleared must be present (not undefined) on every row: the save
             // predicate and the reconcile sync both read dataset.recCleared, and an
             // absent attribute reads as undefined rather than '0'.
@@ -3234,7 +3279,7 @@ $_total_awards = count($courtAwards ?? []);
 
     window.cpRecHintFocus = function(caid) {
         var wrap = gid('cp-pcwrap-' + caid);
-        if (!wrap || wrap.dataset.recEngaged === '1') return;
+        if (!wrap || wrap.dataset.recEngaged === '1' || wrap.dataset.recMonarchy === '1') return;
         var ta   = gid('cp-pubcomment-' + caid);
         var hint = gid('cp-rec-hint-' + caid);
         if (ta && hint && !ta.value) ta.value = hint.textContent;
@@ -3245,6 +3290,8 @@ $_total_awards = count($courtAwards ?? []);
         var ta   = gid('cp-pubcomment-' + caid);
         var hint = gid('cp-rec-hint-' + caid);
         if (!ta) return;
+        var mw = gid('cp-pcwrap-' + caid);
+        if (mw && mw.dataset.recMonarchy === '1') return; // a hidden rec's reason is never offered
         if (action === 'start') {
             if (hint) ta.value = hint.textContent;
             cpRecHintEngage(caid);
@@ -3474,7 +3521,9 @@ $_total_awards = count($courtAwards ?? []);
         // public_comment via stageAward, and commit then takes the PublicComment!==''
         // branch and never re-reads the flag — publishing permanently, on the primary
         // Run-mode path, exactly the text the officer suppressed.
-        gid('cp-grant-reason').value = aw.PublicComment || (aw.PublicCommentCleared ? '' : (aw.RecReason || ''));
+        // A Monarchy Only rec's reason is officer-only: never pre-fill it, whatever the
+        // line's cleared flag says (the rec may have been hidden after it was added).
+        gid('cp-grant-reason').value = aw.PublicComment || ((aw.PublicCommentCleared || aw.RecMonarchyOnly) ? '' : (aw.RecReason || ''));
         cpBuildGiverPills();
         var def = cpGiverOptions && cpGiverOptions.default;
         if (def) {
@@ -4302,7 +4351,7 @@ $_total_awards = count($courtAwards ?? []);
             '</div>' +
             '<div class="cp-award-row-expand" id="cp-aw-expand-' + aw.CourtAwardId + '">' +
             '<div class="cp-expand-grid">' +
-            '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea>' + cpPubCommentFieldHtml(aw.CourtAwardId, aw.RecReason, aw.PublicComment) + '</div>' +
+            '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea>' + cpPubCommentFieldHtml(aw.CourtAwardId, aw.RecReason, aw.PublicComment, aw.PublicCommentCleared, aw.RecMonarchyOnly) + '</div>' +
             '<div>' + cpPtlControlHtml(aw.CourtAwardId, aw.RecommendationsId, aw.PassToLocal) +
             '</div>' +
             '</div>' +
@@ -4710,7 +4759,7 @@ $_total_awards = count($courtAwards ?? []);
         var inherited = 0, none = 0;
         rows.forEach(function(a) {
             if ((a.PublicComment || '') !== '') return;
-            if ((a.RecReason || '') !== '' && !a.PublicCommentCleared) inherited++;
+            if ((a.RecReason || '') !== '' && !a.PublicCommentCleared && !a.RecMonarchyOnly) inherited++;
             else none++;
         });
         if (!inherited && !none) return '';
@@ -4903,7 +4952,18 @@ $_total_awards = count($courtAwards ?? []);
         // field posts PublicCommentCleared=0 under a matching RowVersion — wiping their
         // clear and republishing the confidential recommendation reason at Finalize.
         var pcWrapSync = row.querySelector('[data-rec-cleared]');
-        if (pcWrapSync) pcWrapSync.dataset.recCleared = sa.PublicCommentCleared ? '1' : '0';
+        if (pcWrapSync && sa.RecMonarchyOnly && pcWrapSync.dataset.recMonarchy !== '1') {
+            // The rec was hidden after this row rendered: rebuild the field in its
+            // Monarchy Only form so no (Start from Rec)/ghost text is left on screen.
+            var pcLabel = pcWrapSync.previousElementSibling;
+            var holder = document.createElement('div');
+            holder.innerHTML = cpPubCommentFieldHtml(caid, sa.RecReason, pcEl ? pcEl.value : (sa.PublicComment || ''), true, true);
+            while (holder.firstChild) pcWrapSync.parentNode.insertBefore(holder.firstChild, pcWrapSync);
+            if (pcLabel && pcLabel.classList.contains('cp-pc-label-row')) pcLabel.remove();
+            pcWrapSync.remove();
+            pcWrapSync = gid('cp-pcwrap-' + caid);
+        }
+        if (pcWrapSync) pcWrapSync.dataset.recCleared = (sa.PublicCommentCleared || pcWrapSync.dataset.recMonarchy === '1') ? '1' : '0';
         var flagsEl = row.querySelector('.cp-award-flags');
         if (flagsEl) {
             var localFlag = flagsEl.querySelector('.cp-flag-local');
@@ -4962,6 +5022,8 @@ $_total_awards = count($courtAwards ?? []);
                 a.Notes = sa.Notes || '';
                 a.PublicComment = sa.PublicComment || '';
                 a.PublicCommentCleared = !!sa.PublicCommentCleared;
+                a.RecMonarchyOnly = !!sa.RecMonarchyOnly;
+                a.RecReason = sa.RecReason || '';
                 a.PassToLocal = sa.PassToLocal;
                 a.ScrollMakerId = sa.ScrollMakerId || null;
                 a.ScrollMakerPersona = sa.ScrollMakerPersona || '';
@@ -5366,7 +5428,7 @@ window.cpApplyHeroColor = function(img) {
             // Crown's.
             if (a.PublicComment) {
                 html += '<div class="cp-script-cite-text">' + esc(a.PublicComment) + '</div>';
-            } else if (a.RecReason && !a.PublicCommentCleared) {
+            } else if (a.RecReason && !a.PublicCommentCleared && !a.RecMonarchyOnly) {
                 html += '<div class="cp-script-cite-text cp-script-cite-inherited">' +
                         '<span class="cp-script-cite-src">from recommendation \u2014 unvetted</span> ' +
                         esc(a.RecReason) + '</div>';
