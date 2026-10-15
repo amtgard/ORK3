@@ -2278,9 +2278,6 @@ class Player extends Ork3
     // Bust caches affected by a change to this player's recommendation data:
     //   - Report.PlayerAwardRecommendations under the three scopes (player,
     //     kingdom, park) that could hold this player's row.
-    //   - Report.DeletedAwardRecommendations (the Show Dismissed panel) under the
-    //     same three scopes — a dismiss or undelete changes that list too, and
-    //     nothing was clearing it, so the panel disagreed with the DB for 5 minutes.
     //   - Report.PlayerAwardRecommendationsCount (the profile tab badge), which is
     //     keyed on the ROLLED-UP kingdom id list, so it is busted per kingdom in the
     //     rollup rather than by the recipient's own kingdom id alone.
@@ -2335,12 +2332,6 @@ class Player extends Ork3
                     Ork3::$Lib->ghettocache->key($kd + ['IncludeDismissed' => $incl, 'V' => Report::REC_CACHE_VERSION])
                 );
             }
-            // Show Dismissed panel — same three scope shapes, plus the namespace's
-            // trailing Deleted marker.
-            Ork3::$Lib->ghettocache->bust(
-                'Report.DeletedAwardRecommendations',
-                Ork3::$Lib->ghettocache->key($kd + ['Deleted' => 1, 'V' => Report::REC_CACHE_VERSION])
-            );
         }
         // Profile tab badge. Its key is the ROLLED-UP kingdom id list, so bust it for
         // the player's own kingdom and for a parent kingdom that folds this one into
@@ -4958,11 +4949,35 @@ class Player extends Ork3
     }
 
     /**
+     * JSON-exposed. Drops the seconds of Monarchy Only recommendations: the caller
+     * here is unauthenticated and chooses the ids. In-process readers that have
+     * already applied RecommendationVisibility call secondsForRecommendations().
+     */
+    public function GetSecondsForRecommendations($recommendation_ids, $viewer_id)
+    {
+        $ids = array_filter(array_map('intval', (array)$recommendation_ids));
+        if (!$ids) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT recommendations_id FROM ' . DB_PREFIX . 'recommendations WHERE monarchy_only = 0 AND recommendations_id IN (' . implode(',', $ids) . ')');
+        $public = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $public[] = (int)$rs->recommendations_id;
+            }
+        }
+        return $public ? $this->secondsForRecommendations($public, $viewer_id) : [];
+    }
+
+    /**
      * For a list of recommendation IDs, return active seconds grouped by recommendations_id.
      * Each entry includes the supporter's mundane_id, persona, notes, created_at, and updated_at.
      * The viewer_id is used to compute the IsMine flag and (caller) for masking decisions.
+     * Unfiltered: lowercase on purpose so orkservice/Json refuses it — only in-process
+     * readers that apply RecommendationVisibility themselves may call it.
      */
-    public function GetSecondsForRecommendations($recommendation_ids, $viewer_id)
+    public function secondsForRecommendations($recommendation_ids, $viewer_id)
     {
         if (!is_array($recommendation_ids) || count($recommendation_ids) === 0) {
             return array();

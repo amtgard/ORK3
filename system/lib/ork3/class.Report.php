@@ -17,8 +17,9 @@ class Report extends Ork3
      * selected predicate or the row shape changes, so entries written under the old
      * rule are not served for the rest of their TTL. Player::bust_player_award_recs_cache
      * reads this constant, so the bust keys can never drift out of step with the reads.
+     * v4: the row shape gained monarchy_only, and the badge count became public-only.
      */
-    public const REC_CACHE_VERSION = 3;
+    public const REC_CACHE_VERSION = 4;
 
     /**
      * Ladder-terminal masterhoods that ork_award.peerage still records as 'None'.
@@ -636,6 +637,8 @@ class Report extends Ork3
                     '_hasNamedRec'   => false,
                     '_allSnoozed'    => true,
                     '_allPassed'     => true,
+                    '_moMax'         => 0,
+                    '_moAll'         => true,
                 ];
             }
             $g = &$groups[$key];
@@ -668,6 +671,13 @@ class Report extends Ork3
             if (empty($rec['PassedToLocal'])) {
                 $g['_allPassed'] = false;
             }
+            $moLevel = (int)($rec['MonarchyOnlyLevel'] ?? 0);
+            if ($moLevel > $g['_moMax']) {
+                $g['_moMax'] = $moLevel;
+            }
+            if ($moLevel === 0) {
+                $g['_moAll'] = false;
+            }
             unset($g);
         }
         foreach ($groups as $k => $g) {
@@ -676,7 +686,16 @@ class Report extends Ork3
             $groups[$k]['IsDismissed']   = !isset($liveByKey[$k]);
             $groups[$k]['IsSnoozed']     = $g['_allSnoozed'];
             $groups[$k]['PassedToLocal'] = $g['_allPassed'];
-            unset($groups[$k]['_advocates'], $groups[$k]['_hasNamedRec'], $groups[$k]['_allSnoozed'], $groups[$k]['_allPassed']);
+            $groups[$k]['MonarchyOnlyLevel'] = $g['_moMax'];
+            $groups[$k]['MonarchyOnlyAll']   = $g['_moMax'] > 0 && $g['_moAll'];
+            unset(
+                $groups[$k]['_advocates'],
+                $groups[$k]['_hasNamedRec'],
+                $groups[$k]['_allSnoozed'],
+                $groups[$k]['_allPassed'],
+                $groups[$k]['_moMax'],
+                $groups[$k]['_moAll']
+            );
         }
         return array_values($groups);
     }
@@ -688,6 +707,10 @@ class Report extends Ork3
         // Viewer-specific flags (ViewerCanSecond, ViewerCanEditReason, IsMine) are
         // computed after the cache hit so one bust clears the data for everyone.
         $viewer_id = (int)($request['RequestedBy'] ?? 0);
+        // Monarchy Only visibility keys on the TOKEN, never RequestedBy: JSON callers
+        // choose RequestedBy freely. The cached response keeps every row (it is
+        // viewer-agnostic); hidden rows are dropped per request below.
+        $hideViewer = Ork3::$Lib->recommendationvisibility->viewerFromToken($request['Token'] ?? '');
         $recIdList = isset($request['RecommendationsIdIn']) ? (array)$request['RecommendationsIdIn'] : null;
         $skipCache = !empty($request['SkipCache']) || $recIdList !== null;
         // Opt-in: fold soft-deleted (dismissed) recommendations back in. Off by
@@ -709,7 +732,9 @@ class Report extends Ork3
             'V'                => self::REC_CACHE_VERSION,
         ]);
         if (!$skipCache && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
-            return $this->applyViewerFlags($cache, $viewer_id);
+            // Filter BEFORE applyViewerFlags: masking nulls RecommendedById, which the
+            // author rule in RecommendationVisibility reads.
+            return $this->applyViewerFlags(Ork3::$Lib->recommendationvisibility->filterRecommendations($cache, $hideViewer), $viewer_id);
         }
 
         if (valid_id($request['KingdomId'])) {
@@ -759,6 +784,7 @@ class Report extends Ork3
 			recs.passed_to_local,
 			recs.passed_to_local_by,
 			recs.passed_to_local_at,
+			recs.monarchy_only,
 			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id) AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id) AND o.role = 'Monarch' ORDER BY o.officer_id DESC LIMIT 1), 0) AS current_monarch_id,
 			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id) AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id) AND o.role = 'Regent'  ORDER BY o.officer_id DESC LIMIT 1), 0) AS current_regent_id,
 			(SELECT COUNT(*) FROM " . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.status != 'cancelled') AS on_court_count,
@@ -789,6 +815,7 @@ class Report extends Ork3
 			  $location_clause
 			  $idClause
 			order by m.persona, a.name, recs.rank, m.persona";
+        $this->db->Clear();
         $r = $this->db->query($sql);
         $response = array();
         if ($r !== false && $r->size() > 0) {
@@ -847,6 +874,7 @@ class Report extends Ork3
                     'passed_to_local'    => (int)$r->passed_to_local,
                     'passed_to_local_by' => $r->passed_to_local_by,
                     'passed_to_local_at' => $r->passed_to_local_at,
+                    'monarchy_only'      => (int)$r->monarchy_only,
                     'current_monarch_id' => (int)$r->current_monarch_id,
                     'current_regent_id'  => (int)$r->current_regent_id,
                     'on_court_count'     => (int)$r->on_court_count,
@@ -992,11 +1020,15 @@ class Report extends Ork3
                     'PassedToLocal'   => (int)$row->passed_to_local === 1,
                     'PassedToLocalBy' => $row->passed_to_local_by ? (int)$row->passed_to_local_by : null,
                     'PassedToLocalAt' => $row->passed_to_local_at,
+                    'MonarchyOnly'      => (int)$row->monarchy_only,
+                    'MonarchyOnlyLevel' => RecommendationVisibility::effectiveLevel((int)$row->monarchy_only, (int)$row->passed_to_local === 1),
                 );
             }
 
             // Batch-fetch all active seconds (IsMine = false; applyViewerFlags sets it per-viewer).
-            $seconds_by_rec = Ork3::$Lib->player->GetSecondsForRecommendations($rec_ids, 0);
+            // The unfiltered in-process variant: hidden rows are cached here and dropped
+            // per request, so their seconds must be cached alongside them.
+            $seconds_by_rec = Ork3::$Lib->player->secondsForRecommendations($rec_ids, 0);
 
             // Attach seconds; viewer flags are left false and filled in by applyViewerFlags.
             foreach ($response['AwardRecommendations'] as &$rec) {
@@ -1015,7 +1047,9 @@ class Report extends Ork3
         } else {
             $cached = Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
         }
-        return $this->applyViewerFlags($cached, $viewer_id);
+        // Filter BEFORE applyViewerFlags (masking nulls RecommendedById, which the
+        // author rule reads) and AFTER the cache write, so the cache stays viewer-agnostic.
+        return $this->applyViewerFlags(Ork3::$Lib->recommendationvisibility->filterRecommendations($cached, $hideViewer), $viewer_id);
     }
 
     /**
@@ -1054,6 +1088,17 @@ class Report extends Ork3
         } elseif (valid_id($request['ParkId'] ?? 0)) {
             $scope = ' AND m.park_id = ' . (int)$request['ParkId'];
         }
+
+        // Monarchy Only: the same rule PlayerAwardRecommendations applies per row, as SQL,
+        // so the paging/total and the hydrated rows agree (else batches come back short).
+        $vis        = Ork3::$Lib->recommendationvisibility;
+        $hideViewer = $vis->viewerFromToken($request['Token'] ?? '');
+        if (valid_id($request['KingdomId'] ?? 0)) {
+            $scopeKids = Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId']);
+        } else {
+            $scopeKids = [$vis->kingdomOfPark((int)($request['ParkId'] ?? 0))];
+        }
+        $visClause = ' AND ' . $vis->sqlPredicate($hideViewer, 'recs', 'm', $scopeKids);
 
         $where = [];
         $search = trim((string)($request['Search'] ?? ''));
@@ -1152,10 +1197,15 @@ class Report extends Ork3
         // the outer `recs` alias through a derived table (UNION-in-FROM → "Unknown column
         // recs.mundane_id"), so count distinct recommenders + distinct seconders as two
         // single-level correlated subqueries summed, each excluding the recipient.
+        // Hidden recs the viewer may not see must not leak into the support count either.
+        // r2/r3 share the outer recipient (recs.mundane_id = m.mundane_id), so `m` is the
+        // right mundane alias for the predicate.
+        $visR2 = ' AND ' . $vis->sqlPredicate($hideViewer, 'r2', 'm', $scopeKids);
+        $visR3 = ' AND ' . $vis->sqlPredicate($hideViewer, 'r3', 'm', $scopeKids);
         $supportSub = "("
-            . "(SELECT COUNT(DISTINCT r2.recommended_by_id) FROM " . DB_PREFIX . "recommendations r2 WHERE r2.mundane_id = recs.mundane_id AND r2.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r2.rank,0)=COALESCE(recs.rank,0) AND r2.recommended_by_id IS NOT NULL AND r2.recommended_by_id <> recs.mundane_id AND (r2.deleted_by IS NULL OR r2.deleted_by=0))"
+            . "(SELECT COUNT(DISTINCT r2.recommended_by_id) FROM " . DB_PREFIX . "recommendations r2 WHERE r2.mundane_id = recs.mundane_id AND r2.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r2.rank,0)=COALESCE(recs.rank,0) AND r2.recommended_by_id IS NOT NULL AND r2.recommended_by_id <> recs.mundane_id AND (r2.deleted_by IS NULL OR r2.deleted_by=0)" . $visR2 . ")"
             . " + "
-            . "(SELECT COUNT(DISTINCT s.supporter_mundane_id) FROM " . DB_PREFIX . "recommendation_seconds s JOIN " . DB_PREFIX . "recommendations r3 ON r3.recommendations_id = s.recommendations_id WHERE r3.mundane_id = recs.mundane_id AND r3.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r3.rank,0)=COALESCE(recs.rank,0) AND s.supporter_mundane_id <> recs.mundane_id AND s.deleted_at IS NULL)"
+            . "(SELECT COUNT(DISTINCT s.supporter_mundane_id) FROM " . DB_PREFIX . "recommendation_seconds s JOIN " . DB_PREFIX . "recommendations r3 ON r3.recommendations_id = s.recommendations_id WHERE r3.mundane_id = recs.mundane_id AND r3.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r3.rank,0)=COALESCE(recs.rank,0) AND s.supporter_mundane_id <> recs.mundane_id AND s.deleted_at IS NULL" . $visR3 . ")"
             . ")";
 
         $dir = (strtolower((string)($request['SortDir'] ?? 'desc')) === 'asc') ? 'ASC' : 'DESC';
@@ -1179,7 +1229,7 @@ class Report extends Ork3
             . " LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id"
             . " WHERE $pageDismissedClause"
             . " AND (m.suspended IS NULL OR m.suspended = 0)"
-            . $scope . $whereSql;
+            . $scope . $whereSql . $visClause;
 
         if ($knownTotal !== null) {
             $total = $knownTotal;
@@ -1217,7 +1267,7 @@ class Report extends Ork3
             $orParts[] = '(recs.mundane_id = ' . $c[0] . ' AND recs.kingdomaward_id = ' . $c[1] . ' AND COALESCE(recs.rank,0) = ' . $c[2] . ')';
         }
         $this->db->Clear();
-        $ir = $this->db->query("SELECT recs.recommendations_id FROM " . DB_PREFIX . "recommendations recs LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE $pageDismissedClause AND (" . implode(' OR ', $orParts) . ")");
+        $ir = $this->db->query("SELECT recs.recommendations_id FROM " . DB_PREFIX . "recommendations recs LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE $pageDismissedClause AND (" . implode(' OR ', $orParts) . ")" . $visClause);
         $pageRecIds = [];
         if ($ir !== false) {
             while ($ir->next()) {
@@ -1230,6 +1280,7 @@ class Report extends Ork3
             'ParkId'      => (int)($request['ParkId'] ?? 0),
             'PlayerId'    => 0,
             'RequestedBy' => (int)($request['RequestedBy'] ?? 0),
+            'Token'       => $request['Token'] ?? '',
             'RecommendationsIdIn' => $pageRecIds,
             'SkipCache'   => true,
             'IncludeDismissed' => $includeDismissed,
@@ -1396,14 +1447,17 @@ class Report extends Ork3
             'V'             => self::REC_CACHE_VERSION,
         ]);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
-            return (int)$cache;
+            return (int)$cache + $this->hiddenRecommendationsCount($kidList, $request);
         }
 
         // Must carry the same recipient-status predicate as PlayerAwardRecommendations and
         // PlayerAwardRecommendationsPage, or the badge counts rows the Manager can never
         // show and the counter can never be worked down to zero.
+        // Public recs only: hidden (Monarchy Only) recs are counted per viewer below,
+        // uncached, so the shared cache entry never depends on who warmed it.
         $where = "m.kingdom_id IN ($kidList) AND (m.suspended IS NULL OR m.suspended = 0)"
-            . " AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)";
+            . " AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)"
+            . " AND recs.monarchy_only = 0";
         if (!empty($request['RecommendedBy'])) {
             $rb = (int)$request['RecommendedBy'];
             $where .= " AND recs.recommended_by_id = $rb";
@@ -1412,12 +1466,36 @@ class Report extends Ork3
 				FROM " . DB_PREFIX . "recommendations recs
 				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id
 				WHERE $where";
+        $this->db->Clear();
         $r = $this->db->query($sql);
         $n = 0;
         if ($r !== false && $r->size() > 0 && $r->next()) {
             $n = (int)$r->n;
         }
-        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $n);
+        $n = (int) Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $n);
+        return $n + $this->hiddenRecommendationsCount($kidList, $request);
+    }
+
+    // The viewer-dependent half of the tab badge: Monarchy Only recs this TOKEN's
+    // viewer may see. Never cached (the predicate is per viewer); cheap because
+    // idx_recs_monarchy_only narrows to the few hidden rows.
+    private function hiddenRecommendationsCount(string $kidList, array $request): int
+    {
+        $vis    = Ork3::$Lib->recommendationvisibility;
+        $viewer = $vis->viewerFromToken($request['Token'] ?? '');
+        if ($viewer <= 0) {
+            return 0;
+        }
+        $where = "recs.monarchy_only > 0 AND m.kingdom_id IN ($kidList) AND (m.suspended IS NULL OR m.suspended = 0)"
+            . " AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)"
+            . ' AND ' . $vis->sqlPredicate($viewer, 'recs', 'm', array_map('intval', explode(',', $kidList)));
+        if (!empty($request['RecommendedBy'])) {
+            $where .= ' AND recs.recommended_by_id = ' . (int)$request['RecommendedBy'];
+        }
+        $this->db->Clear();
+        $r = $this->db->query('SELECT COUNT(*) AS n FROM ' . DB_PREFIX . 'recommendations recs JOIN ' . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE $where");
+
+        return ($r !== false && $r->size() > 0 && $r->next()) ? (int)$r->n : 0;
     }
 
     /**
@@ -1428,38 +1506,37 @@ class Report extends Ork3
      * consumers reach this through Model_Reports::deleted_recommended_awards, which
      * returns just the rows, and the Kingdom/Park AJAX panels derive hasMore from a
      * short batch — a COUNT(*) here would be a full scan nothing can read.
+     *
+     * Not cached: Monarchy Only rows are filtered per TOKEN viewer in SQL, so no
+     * entry could be shared between viewers. The panel is officer-only and
+     * click-to-open, so the uncached read is cheap in practice.
      */
     public function DeletedAwardRecommendations($request)
     {
         $limit  = max(1, min(1000, (int)($request['Limit'] ?? 200)));
         $offset = max(0, (int)($request['Offset'] ?? 0));
-        // Only the default first page is cached. Deeper slices are rare (someone
-        // walking back through years of dismissals) and there is no wildcard bust, so
-        // caching them would leave entries no dismiss/undelete could ever clear —
-        // Player::bust_player_award_recs_cache busts this exact key shape.
-        $cacheable = ($offset === 0 && $limit === 200);
-        $key = Ork3::$Lib->ghettocache->key([
-            'KingdomId' => (int)($request['KingdomId'] ?? 0),
-            'ParkId'    => (int)($request['ParkId']    ?? 0),
-            'PlayerId'  => (int)($request['PlayerId']  ?? 0),
-            'Deleted'   => 1,
-            'V'         => self::REC_CACHE_VERSION,
-        ]);
-        if ($cacheable && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
-            return $cache;
-        }
+        $vis    = Ork3::$Lib->recommendationvisibility;
 
+        // $scopeKids is the set of recipient kingdoms the query can return, resolved
+        // with the same last-match-wins precedence as $location_clause.
         $location_clause = '';
-        if (valid_id($request['KingdomId'])) {
-            $kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+        $scopeKids = [];
+        if (valid_id($request['KingdomId'] ?? 0)) {
+            $scopeKids = Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId']);
+            $kidList = implode(',', array_map('intval', $scopeKids));
             $location_clause = " AND m.kingdom_id IN (" . $kidList . ")";
         }
-        if (valid_id($request['ParkId'])) {
+        if (valid_id($request['ParkId'] ?? 0)) {
+            $scopeKids = [$vis->kingdomOfPark((int)$request['ParkId'])];
             $location_clause = " AND m.park_id = " . (int)$request['ParkId'];
         }
-        if (valid_id($request['PlayerId'])) {
+        if (valid_id($request['PlayerId'] ?? 0)) {
+            $this->db->Clear();
+            $kr = $this->db->DataSet('SELECT kingdom_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int)$request['PlayerId']);
+            $scopeKids = ($kr && $kr->Next()) ? [(int)$kr->kingdom_id] : [];
             $location_clause = " AND recs.mundane_id = " . (int)$request['PlayerId'];
         }
+        $visClause = ' AND ' . $vis->sqlPredicate($vis->viewerFromToken($request['Token'] ?? ''), 'recs', 'm', $scopeKids);
 
         $sql = "select
 			a.peerage, ifnull(ka.name, a.name) as award_name,
@@ -1489,7 +1566,7 @@ class Report extends Ork3
 			LEFT join " . DB_PREFIX . "mundane dm on dm.mundane_id = recs.deleted_by
 			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
 			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
-			WHERE recs.deleted_at IS NOT NULL $location_clause
+			WHERE recs.deleted_at IS NOT NULL $location_clause $visClause
 			order by recs.deleted_at DESC
 			LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
         $this->db->Clear();
@@ -1524,10 +1601,7 @@ class Report extends Ork3
             $response['Status'] = Success();
         }
         $response['NextOffset'] = $offset + count($response['AwardRecommendations']);
-        if (!$cacheable) {
-            return $response;
-        }
-        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+        return $response;
     }
 
     public function Guilds($request)
