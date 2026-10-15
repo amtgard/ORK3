@@ -247,14 +247,25 @@ class Model_Player extends Model
         return $this->Player->SetRecommendationPassedToLocal($request);
     }
 
+    public function set_recommendation_monarchy_only($request)
+    {
+        return $this->Player->SetRecommendationMonarchyOnly($request);
+    }
+
+    // Officer level for the Add Rec modal's Monarchy Only checkbox: 2 kingdom, 1 park, 0 none.
+    public function monarchy_only_level($uid, $kingdom_id, $park_id)
+    {
+        return (int) Ork3::$Lib->recommendationvisibility->officerLevel((int)$uid, (int)$kingdom_id, (int)$park_id);
+    }
+
     public function delete_player_recommendation($request)
     {
         return $this->Player->DeleteAwardRecommendation($request);
     }
 
-    public function get_peer_award_recommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id)
+    public function get_peer_award_recommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id, $token = '')
     {
-        return $this->_player()->GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id);
+        return $this->_player()->GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id, $token);
     }
 
     public function restore_player_recommendation($request)

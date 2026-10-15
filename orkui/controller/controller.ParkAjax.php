@@ -318,7 +318,7 @@ class Controller_ParkAjax extends Controller
                 exit;
             }
             $this->load_model('Player');
-            $existing = $this->Player->get_peer_award_recommendations($mundane_id, $award_id, $rank, $caller_uid);
+            $existing = $this->Player->get_peer_award_recommendations($mundane_id, $award_id, $rank, $caller_uid, (string)$this->session->token);
             echo json_encode(['status' => 0, 'existing' => $existing]);
 
         } elseif ($action === 'dismissrecommendation') {

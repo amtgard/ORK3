@@ -4132,6 +4132,17 @@ class Player extends Ork3
         }
         $recipient = array( 'KingdomId' => $this->mundane->kingdom_id, 'ParkId' => $this->mundane->park_id );
 
+        // Monarchy Only: the level comes from the creator's HIGHEST authority over the
+        // recipient (kingdom officer → 2, park officer → 1). A request for it from
+        // anyone else is refused outright rather than silently saved as public.
+        $monarchyOnly = 0;
+        if (!empty($request['MonarchyOnly'])) {
+            $monarchyOnly = Ork3::$Lib->recommendationvisibility->creatorLevel((int)$mundane_id, (int)$request['MundaneId']);
+            if ($monarchyOnly === 0) {
+                return InvalidParameter("Only officers of this player's park or kingdom can mark a recommendation Monarchy Only.");
+            }
+        }
+
         if (valid_id($request['AwardId'])) {
             list($request['KingdomAwardId'], $request['AwardId']) = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
         } elseif (valid_id($request['KingdomAwardId'])) {
@@ -4258,6 +4269,7 @@ class Player extends Ork3
             $awardRec->recommended_by_id = $mundane_id;
             $awardRec->reason = $request['Reason'];
             $awardRec->mask_giver = !empty($request['Anonymous']) ? 1 : 0;
+            $awardRec->monarchy_only = $monarchyOnly;
             $awardRec->save();
             $this->bust_player_award_recs_cache($request['MundaneId']);
             return Success('Recommendation Added!');
@@ -4470,6 +4482,65 @@ class Player extends Ork3
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, ['passed_to_local' => $passed]);
         }
         return Success('Recommendation pass-to-local updated.');
+    }
+
+    // Monarchy Only toggle from the Recommendations Manager. Hide: the level is the
+    // actor's highest authority over the recipient, and never lowers an existing
+    // hide (GREATEST) — a park officer re-hiding a passed-down kingdom rec must not
+    // turn it into a park-level one that un-passing could no longer restore.
+    // Unhide: only an officer at the rec's effective level (authorship is not
+    // enough to lift an officer's hide).
+    public function SetRecommendationMonarchyOnly($request)
+    {
+        if (($mundane_id = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) === 0) {
+            return NoAuthorization();
+        }
+        $rec_id = (int)($request['RecommendationsId'] ?? 0);
+        if (!$rec_id) {
+            return InvalidParameter();
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT r.mundane_id, r.recommended_by_id, r.monarchy_only, r.passed_to_local, m.kingdom_id, m.park_id
+               FROM ' . DB_PREFIX . 'recommendations r
+               JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
+              WHERE r.recommendations_id = ' . $rec_id . ' LIMIT 1'
+        );
+        if (!$rs || !$rs->Next()) {
+            return InvalidParameter('Recommendation not found.');
+        }
+        $rec = [
+            'MundaneId'       => (int)$rs->mundane_id,
+            'RecommendedById' => (int)$rs->recommended_by_id,
+            'KingdomId'       => (int)$rs->kingdom_id,
+            'ParkId'          => (int)$rs->park_id,
+            'MonarchyOnly'    => (int)$rs->monarchy_only,
+            'PassedToLocal'   => (int)$rs->passed_to_local,
+        ];
+        $vis = Ork3::$Lib->recommendationvisibility;
+        if (!empty($request['Hidden'])) {
+            $level = $vis->creatorLevel($mundane_id, $rec['MundaneId']);
+            if ($level === 0 || ($rec['MonarchyOnly'] > 0 && !$vis->canSee($mundane_id, $rec))) {
+                return NoAuthorization("Only officers of this player's park or kingdom can mark a recommendation Monarchy Only.");
+            }
+            $set = 'monarchy_only = GREATEST(monarchy_only, ' . $level . ')';
+        } else {
+            if ($rec['MonarchyOnly'] === 0) {
+                return Success('Recommendation is already visible.');
+            }
+            if (!$vis->canManageHidden($mundane_id, $rec)) {
+                return NoAuthorization('Only an officer who can see this recommendation at its level can make it visible.');
+            }
+            $set = 'monarchy_only = 0';
+        }
+        $this->db->Clear();
+        $this->db->Execute('UPDATE ' . DB_PREFIX . 'recommendations SET ' . $set . ' WHERE recommendations_id = ' . $rec_id);
+
+        $this->bust_player_award_recs_cache($rec['MundaneId']);
+        if (isset(Ork3::$Lib->dangeraudit)) {
+            Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Player', $rec['MundaneId'], ['monarchy_only' => !empty($request['Hidden']) ? 1 : 0]);
+        }
+        return Success('Recommendation visibility updated.');
     }
 
     public function DeleteAwardRecommendation($request)
@@ -4685,6 +4756,17 @@ class Player extends Ork3
         $awardRec->recommendations_id = $request['RecommendationsId'];
         if (!$awardRec->find() || $awardRec->deleted_at) {
             return InvalidParameter('Recommendation not found.');
+        }
+
+        if ((int)$awardRec->monarchy_only > 0) {
+            $recip = $this->player_info((int)$awardRec->mundane_id);
+            if (!Ork3::$Lib->recommendationvisibility->canSee((int)$mundane_id, [
+                'MundaneId' => (int)$awardRec->mundane_id, 'RecommendedById' => (int)$awardRec->recommended_by_id,
+                'KingdomId' => (int)($recip['KingdomId'] ?? 0), 'ParkId' => (int)($recip['ParkId'] ?? 0),
+                'MonarchyOnly' => (int)$awardRec->monarchy_only, 'PassedToLocal' => (int)$awardRec->passed_to_local,
+            ])) {
+                return InvalidParameter('Recommendation not found.');
+            }
         }
 
         if ((int)$awardRec->mundane_id === (int)$mundane_id) {
@@ -4910,7 +4992,7 @@ class Player extends Ork3
      * used to warn a submitter that someone already recommended this. Anonymous ("mask
      * giver") recommendations are reported without the recommender's name. Capped at 5.
      */
-    public function GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id)
+    public function GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id, $token = '')
     {
         $mundane_id         = (int)$mundane_id;
         $kingdomaward_id    = (int)$kingdomaward_id;
@@ -4921,16 +5003,24 @@ class Player extends Ork3
         // and `r.rank = 0` silently drops those rows.
         $rank_clause = ' AND COALESCE(r.rank, 0) = ' . ($rank > 0 ? $rank : 0);
 
+        $vis    = Ork3::$Lib->recommendationvisibility;
+        $viewer = $vis->viewerFromToken($token);
+        $this->db->Clear();
+        $kr = $this->db->DataSet('SELECT kingdom_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id . ' LIMIT 1');
+        $recipKingdom = ($kr && $kr->Next()) ? (int)$kr->kingdom_id : 0;
+
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT r.date_recommended, r.mask_giver, rbi.persona AS recommender_persona
 			 FROM ' . DB_PREFIX . 'recommendations r
 			 LEFT JOIN ' . DB_PREFIX . 'mundane rbi ON rbi.mundane_id = r.recommended_by_id
+			 LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
 			 WHERE r.mundane_id = ' . $mundane_id .
              ' AND r.kingdomaward_id = ' . $kingdomaward_id .
              $rank_clause .
              ' AND ' . self::LiveRecommendationClause('r') . '
 			 AND r.recommended_by_id != ' . $exclude_mundane_id .
+            ' AND ' . $vis->sqlPredicate($viewer, 'r', 'm', [$recipKingdom]) .
             ' LIMIT 5'
         );
 
