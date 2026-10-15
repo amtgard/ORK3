@@ -31,16 +31,20 @@ class Event extends Ork3
         if (!$this->detail->find()) {
             return null;
         }
-        $refDate = $this->detail->event_end ?: $this->detail->event_start;
-        if (!$refDate) {
+        // A zero event_end ('0000-00-00 ...' parses to year 0) or one before the
+        // start (a mistyped year) is not a real end: judge by the start DAY
+        // instead, the same fallback GetUpcomingRsvps uses.
+        $startTs = strtotime((string)$this->detail->event_start);
+        $endTs = strtotime((string)$this->detail->event_end);
+        if (!$startTs || $startTs <= 0) {
             return false;
         }
-        if ($gateMode === 'date_only') {
-            return strtotime(date('Y-m-d', strtotime((string)$refDate))) < strtotime(date('Y-m-d'));
+        $hasRealEnd = $endTs && $endTs >= $startTs;
+        if ($gateMode === 'datetime' && $hasRealEnd) {
+            return $endTs < time();
         }
-        if ($gateMode === 'datetime') {
-            $endTs = strtotime((string)$this->detail->event_end);
-            return $endTs && $endTs < time();
+        if ($gateMode === 'datetime' || $gateMode === 'date_only') {
+            return date('Y-m-d', $hasRealEnd ? $endTs : $startTs) < date('Y-m-d');
         }
         return false;
     }
