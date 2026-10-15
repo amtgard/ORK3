@@ -222,6 +222,17 @@ class Model_Court extends Model
         return $this->_court()->unstageAward($court_award_id, $expectedRowVersion);
     }
 
+    // True when $comment is the text of the line's rec while that rec is Monarchy Only.
+    public function is_hidden_rec_citation($court_award_id, $comment)
+    {
+        return $this->_court()->isHiddenRecCitation($court_award_id, $comment);
+    }
+
+    public function hidden_citation_message()
+    {
+        return Court::HIDDEN_CITATION_MESSAGE;
+    }
+
     public function get_staged_awards($court_id, $caller_uid = 0)
     {
         return $this->_court()->getStagedAwards($court_id, $caller_uid);

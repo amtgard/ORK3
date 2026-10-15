@@ -26,6 +26,9 @@ class Court
      */
     private const SQL_EFFECTIVE_IS_TITLE  = 'GREATEST(COALESCE(ka.is_title, 0), COALESCE(a.is_title, 0))';
 
+    /** The refusal CourtAjax returns when a posted citation is a hidden rec's reason. */
+    public const HIDDEN_CITATION_MESSAGE = 'This citation is the text of a Monarchy Only recommendation, which is never published. Edit or clear it to continue.';
+
     /**
      * Effective is_ladder, including kingdom-original ladders.
      *
@@ -478,12 +481,16 @@ class Court
      * post the reason as the line's PublicComment (Grant modal pre-fill, "(Start from
      * Rec)"), and commitStagedAward publishes a typed comment as-is. So a citation
      * that IS the line's rec's reason (trimmed) is refused while that rec is Monarchy
-     * Only — callers answer with the reload status. Anything the officer actually
-     * wrote, and a public rec's reason, are unaffected.
+     * Only. CourtAjax checks this first and answers HIDDEN_CITATION_MESSAGE (not the
+     * reload status: a reload would never clear it); stageAward/updateAward keep it
+     * as the backstop. Court reads present such a stored citation as empty
+     * (withholdHiddenRecs), so no tab is left holding it. Anything the officer
+     * actually wrote, and a public rec's reason, are unaffected.
      */
-    private function isHiddenRecCitation(int $court_award_id, string $comment): bool
+    public function isHiddenRecCitation($court_award_id, $comment)
     {
-        $comment = trim($comment);
+        $court_award_id = (int)$court_award_id;
+        $comment        = trim((string)$comment);
         if ($court_award_id <= 0 || $comment === '') {
             return false;
         }
@@ -1490,15 +1497,32 @@ class Court
             if (empty($row['RecMonarchyOnly']) || $rid <= 0) {
                 continue;
             }
+            // A stored citation that IS the hidden reason (saved while the rec was
+            // public) is never published, so it is not handed to anyone as the line's
+            // citation: the Grant modal would pre-fill it and Save would re-post it,
+            // and the server refuses that text — a line nobody could save. Presented
+            // empty, the next save clears it. (Commit withholds it independently.)
+            $stored = trim((string)($row['PublicComment'] ?? ''));
+            if ($stored !== '' && $stored === trim((string)($row['RecReason'] ?? ''))) {
+                $rows[$i]['PublicComment'] = '';
+            }
             // A court manager who is this line's RECIPIENT must not learn a hidden rec
-            // backs their own line at all: no notice, no reason, no recommender.
-            // (Nothing is left to inherit, so this cannot leak a citation either; the
-            // commit re-reads the rec's real state for itself.)
+            // backs their own line at all: no notice, no reason, no recommender, and no
+            // rec id (the "from a recommendation" marker and pass-to-local control key on
+            // it). Nothing is left to inherit, so this cannot leak a citation either;
+            // commit and pass-to-local read the rec id from the database.
             if ($caller_uid > 0 && $caller_uid === (int)($row['MundaneId'] ?? 0)) {
                 $rows[$i]['RecMonarchyOnly'] = false;
                 $rows[$i]['RecReason']       = '';
                 if (array_key_exists('RecByPersona', $row)) {
                     $rows[$i]['RecByPersona'] = null;
+                }
+                // getCourtAwards rows say "no rec" as null + IsWalkOn; getStagedAwards as 0.
+                if (array_key_exists('IsWalkOn', $row)) {
+                    $rows[$i]['RecommendationsId'] = null;
+                    $rows[$i]['IsWalkOn']          = true;
+                } else {
+                    $rows[$i]['RecommendationsId'] = 0;
                 }
                 continue;
             }
@@ -1548,12 +1572,16 @@ class Court
      *     was actually published makes the court line the single source of truth.
      *     Never rewrites text an officer typed.
      */
-    public function setAwardId($court_award_id, $award_id, $resolved_citation = null)
+    public function setAwardId($court_award_id, $award_id, $resolved_citation = null, $replace_citation = false)
     {
         $sets = 'award_id = ' . (int)$award_id . ',
                  last_finalize_error = NULL,
                  row_version = row_version + 1';
-        if (is_string($resolved_citation) && $resolved_citation !== '') {
+        if ($replace_citation) {
+            // The stored citation was withheld at commit (a hidden rec's reason):
+            // overwrite it with what was actually published.
+            $sets .= ', public_comment = \'' . $this->esc((string)$resolved_citation) . '\'';
+        } elseif (is_string($resolved_citation) && $resolved_citation !== '') {
             $sets .= ', public_comment = CASE
                            WHEN public_comment IS NULL OR public_comment = \'\'
                            THEN \'' . $this->esc($resolved_citation) . '\'
@@ -1626,6 +1654,7 @@ class Court
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT ca.rank, ca.given_by_mundane_id, ca.public_comment, ca.public_comment_cleared, ca.notes,
+                    ca.recommendations_id, rec.reason AS rec_reason,
                     IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only
                FROM ' . DB_PREFIX . 'court_award ca
                LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
@@ -1641,8 +1670,11 @@ class Court
             'PublicCommentCleared' => (bool)(int)$rs->public_comment_cleared,
             'Notes'            => $rs->notes ?? '',
             // The rec can be hidden after its line was staged; the commit must see
-            // its CURRENT state, not the batch's.
+            // its CURRENT state, not the batch's — and its real reason and id, not
+            // the caller-filtered copies getStagedAwards hands a court manager.
             'RecMonarchyOnly'  => (int)$rs->rec_monarchy_only !== 0,
+            'RecReason'        => $rs->rec_reason ?? '',
+            'RecommendationsId' => $rs->recommendations_id ? (int)$rs->recommendations_id : 0,
         ];
     }
 
@@ -1805,6 +1837,17 @@ class Court
         $note     = $row['PublicComment'] !== ''
             ? $row['PublicComment']
             : ((empty($row['PublicCommentCleared']) && empty($row['RecMonarchyOnly'])) ? $row['RecReason'] : '');
+        // ...and never as a TYPED citation either. A line staged (or saved) while
+        // its rec was public can carry the reason verbatim in public_comment — Grant
+        // modal pre-fill, Record view "Given", "(Start from Rec)" + Save, then Bulk
+        // Record Grants — and the rec can be hidden before finalize. The commit
+        // re-reads both, publishes nothing in that case, and setAwardId blanks the
+        // stored citation so the public Court Report agrees.
+        $withheld = !empty($row['RecMonarchyOnly']) && $note !== ''
+            && trim($note) === trim((string)($row['RecReason'] ?? ''));
+        if ($withheld) {
+            $note = '';
+        }
 
         // (3) Throw-safe player-record write. add_player_award returns the FLAT
         // shape: Status (int, 0=success), Error, Detail (+ our new AwardId).
@@ -1850,7 +1893,7 @@ class Court
         $award_id = (int)($r['AwardId'] ?? 0);
         // Freezes the citation that was actually published and clears any failure
         // recorded by an earlier attempt at this line, in the same statement.
-        $this->setAwardId($court_award_id, $award_id, $note);
+        $this->setAwardId($court_award_id, $award_id, $note, $withheld);
         $row['PublicComment'] = $note;
 
         // Close the line's OWN recommendation now, in the domain. The caller's

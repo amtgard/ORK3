@@ -496,6 +496,148 @@ final class CourtMonarchyOnlyTest extends TestCase
         $this->assertSame('secret reason', $theirs['RecReason']);
     }
 
+    // ---- Re-review 2 (D, E, F) ----------------------------------------------
+
+    /**
+     * Line drawn from a PUBLIC rec on a dated court, with a granting officer who has
+     * kingdom create authority. @return array{0:int,1:int,2:array,3:\Court,4:int,5:int}
+     * line id, rec id, officer, Court, court id, recipient
+     */
+    private function commitableLine(): array
+    {
+        $k     = $this->fx->firstKingdomId();
+        $p     = $this->fx->firstParkId($k);
+        $ka    = $this->fx->firstKingdomAwardId($k);
+        $recip = $this->fx->createPlayer('mo-d', $k, $p)['mundane_id'];
+        $rec   = $this->fx->createRecommendation($recip, (int)$ka['kingdomaward_id'], (int)$ka['award_id'], ['reason' => 'secret reason']);
+        $court = $this->fx->createCourt(['kingdom_id' => $k, 'court_date' => date('Y-m-d')]);
+        $off   = $this->fx->createPlayerWithToken('mo-dg', $k, $p);
+        $this->fx->insertScopedAuth($off['mundane_id'], 0, $k, 'create');
+        $c  = new \Court();
+        $id = (int)$c->addAward($court, $k, $recip, (int)$ka['kingdomaward_id'], 1, $rec, 0, '', '', true, $off['mundane_id'])['CourtAwardId'];
+        return [$id, $rec, $off, $c, $court, $recip];
+    }
+
+    private function commitAndNote(\Court $c, int $id, array $off, ?array $row = null): string
+    {
+        unset($_SESSION['is_authorized_mundane_id']);
+        $ctx = ['Token' => $off['token']];
+        if ($row !== null) {
+            $ctx['Row'] = $row;
+        }
+        $res = $c->commitStagedAward($id, $ctx);
+        $this->assertSame('ok', $res['status'], 'Commit must succeed: ' . json_encode($res));
+        $this->ledgerIds[] = (int)$res['award_id'];
+        $this->assertSame($res['row']['PublicComment'], $this->fx->fetchAward($id)['public_comment'], 'the Court Report shows what was published');
+        return (string)$this->fx->pdo()->query('SELECT note FROM ' . DB_PREFIX . 'awards WHERE awards_id = ' . (int)$res['award_id'])->fetchColumn();
+    }
+
+    private function hide(int $rec): void
+    {
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . 'recommendations SET monarchy_only = 2 WHERE recommendations_id = ' . $rec);
+    }
+
+    /** D: the reviewer's sequence — staged with the reason while public, hidden before finalize. */
+    public function testReasonStagedWhilePublicIsNotPublishedOnceHidden(): void
+    {
+        [$id, $rec, $off, $c] = $this->commitableLine();
+        $this->assertTrue($c->stageAward($id, $off['mundane_id'], 'secret reason', 1));
+        $this->hide($rec);
+        $this->assertSame('', $this->commitAndNote($c, $id, $off));
+    }
+
+    /** D: the batched finalize path (preloaded Row) and the bulk-record path. */
+    public function testBulkRecordedLineWithTheReasonIsNotPublishedOnceHidden(): void
+    {
+        [$id, $rec, $off, $c, $court] = $this->commitableLine();
+        // "(Start from Rec)" + Save while public, then Bulk Record Grants.
+        $this->assertTrue($c->updateAward($id, ['PublicComment' => 'secret reason']));
+        $this->assertSame(1, $c->bulkStagePlanned($court, $off['mundane_id']));
+        $staged = array_column($c->getStagedAwards($court, $off['mundane_id']), null, 'CourtAwardId')[$id];
+        $this->hide($rec);
+        $this->assertSame('', $this->commitAndNote($c, $id, $off, $staged));
+    }
+
+    /** D: what the officer actually wrote is still published, hidden rec or not. */
+    public function testDifferentTypedCitationIsStillPublishedOnceHidden(): void
+    {
+        [$id, $rec, $off, $c] = $this->commitableLine();
+        $this->assertTrue($c->stageAward($id, $off['mundane_id'], 'For service to the realm.', 1));
+        $this->hide($rec);
+        $this->assertSame('For service to the realm.', $this->commitAndNote($c, $id, $off));
+    }
+
+    /**
+     * E: a line whose stored citation is a now-hidden reason must not be stuck. Court
+     * reads present that citation as empty (so Grant does not pre-fill it and Save does
+     * not re-post it), and a post of it gets an honest error, not "reload".
+     */
+    public function testStoredHiddenReasonIsPresentedEmptyAndRefusedHonestly(): void
+    {
+        [$id, $rec, $off, $c, $court] = $this->commitableLine();
+        $this->assertTrue($c->updateAward($id, ['PublicComment' => 'secret reason']));
+        $this->hide($rec);
+
+        foreach ([$off['mundane_id'], 0] as $caller) {
+            $row = array_column($c->getCourtAwards($court, $caller), null, 'CourtAwardId')[$id];
+            $this->assertSame('', $row['PublicComment'], "caller $caller must not be handed the hidden reason as the citation");
+        }
+        $this->assertTrue($c->isHiddenRecCitation($id, ' secret reason '));
+        $this->assertFalse($c->isHiddenRecCitation($id, 'something else'));
+        $this->assertSame(
+            'This citation is the text of a Monarchy Only recommendation, which is never published. Edit or clear it to continue.',
+            \Court::HIDDEN_CITATION_MESSAGE
+        );
+        // What the presented (empty) field saves back unsticks the line.
+        $this->assertTrue($c->updateAward($id, ['PublicComment' => '', 'PublicCommentCleared' => 0]));
+        $this->assertSame('', $this->fx->fetchAward($id)['public_comment']);
+    }
+
+    /** F: a recipient who manages the court gets no rec id on a hidden-rec line — and commit still closes the rec. */
+    public function testRecipientManagerGetsNoRecIdAndCommitStillResolves(): void
+    {
+        $k      = $this->fx->firstKingdomId();
+        $p      = $this->fx->firstParkId($k);
+        $ka     = $this->fx->firstKingdomAwardId($k);
+        $recipOff = $this->fx->createPlayerWithToken('mo-frecip', $k, $p);
+        $this->fx->insertScopedAuth($recipOff['mundane_id'], 0, $k, 'create');
+        $author = $this->fx->createPlayer('mo-fauthor', $k, $p)['mundane_id'];
+        $rec    = $this->fx->createRecommendation($recipOff['mundane_id'], (int)$ka['kingdomaward_id'], (int)$ka['award_id'], [
+            'monarchy_only' => 2, 'reason' => 'secret reason', 'recommended_by_id' => $author,
+        ]);
+        $court  = $this->fx->createCourt(['kingdom_id' => $k, 'court_date' => date('Y-m-d')]);
+        $kOff   = $this->kingdomOfficer($k, $p)['mundane_id'];
+        $c  = new \Court();
+        $id = (int)$c->addAward($court, $k, $recipOff['mundane_id'], (int)$ka['kingdomaward_id'], 1, $rec, 0, '', '', true, $kOff)['CourtAwardId'];
+
+        $mine = array_column($c->getCourtAwards($court, $recipOff['mundane_id']), null, 'CourtAwardId')[$id];
+        $this->assertNull($mine['RecommendationsId']);
+        $this->assertTrue($mine['IsWalkOn'], 'reads like a line with no recommendation behind it');
+        $this->assertNotNull(array_column($c->getCourtAwards($court, $kOff), null, 'CourtAwardId')[$id]['RecommendationsId']);
+
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "court_award SET status = 'staged', given_by_mundane_id = " . (int)$kOff . ' WHERE court_award_id = ' . $id);
+        $staged = array_column($c->getStagedAwards($court, $recipOff['mundane_id']), null, 'CourtAwardId')[$id];
+        $this->assertSame(0, $staged['RecommendationsId']);
+        try {
+            // Finalized by the recipient-manager with their own (blanked) preloaded row:
+            // the rec id must come from the database.
+            $this->commitAndNote($c, $id, $recipOff, $staged);
+            $this->assertNotNull($this->fx->fetchRecommendation($rec)['deleted_at'], 'the line still closes its own rec');
+        } finally {
+            $this->fx->pdo()->exec('DELETE FROM ' . DB_PREFIX . 'notification WHERE mundane_id = ' . (int)$author);
+        }
+    }
+
+    /** Spec: the committed line fulfills its own rec even at a different rank than recommended. */
+    public function testCommitAtADifferentRankStillClosesTheLinesOwnRec(): void
+    {
+        [$id, $rec, $off, $c] = $this->commitableLine();
+        $this->assertTrue($c->stageAward($id, $off['mundane_id'], '', 3));
+        $this->commitAndNote($c, $id, $off);
+        $this->assertSame(1, (int)$this->fx->fetchRecommendation($rec)['rank']);
+        $this->assertNotNull($this->fx->fetchRecommendation($rec)['deleted_at']);
+    }
+
     public function testPendingRecsHonourToken(): void
     {
         $k     = $this->fx->firstKingdomId();

@@ -511,6 +511,13 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Nothing to update.']);
         }
 
+        // A hidden rec's reason is never a citation. Its own honest answer, not the
+        // reload status: reloading would never make this text acceptable.
+        if (array_key_exists('PublicComment', $fields)
+            && $this->Court->is_hidden_rec_citation($court_award_id, $fields['PublicComment'])) {
+            $this->jsonOut(['status' => 1, 'hidden_citation' => true, 'error' => $this->Court->hidden_citation_message()]);
+        }
+
         // QW#4: update_award writes editable FIELDS only — NEVER status. Lifecycle
         // moves solely through stage/unstage/skip/set-status/commit, so a stale
         // field-save can no longer drag a row's status backward.
@@ -724,6 +731,11 @@ class Controller_CourtAjax extends Controller
         $given_by_id    = (int)($_POST['GivenById'] ?? 0);
         $public_comment = trim($_POST['PublicComment'] ?? '');
         $rank           = (int)($_POST['Rank'] ?? $ca['Rank']);
+
+        // A hidden rec's reason is never a citation (see update_award).
+        if ($this->Court->is_hidden_rec_citation($court_award_id, $public_comment)) {
+            $this->jsonOut(['status' => 1, 'hidden_citation' => true, 'error' => $this->Court->hidden_citation_message()]);
+        }
 
         // S5 optimistic lock: honor the client's row_version token when supplied.
         $expectedRowVersion = (isset($_POST['RowVersion']) && $_POST['RowVersion'] !== '')
