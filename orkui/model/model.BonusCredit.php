@@ -46,6 +46,11 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->revoke($uid, $bonusCreditId, $note);
     }
 
+    public function allowance(int $categoryId, int $mundaneId): array
+    {
+        return $this->_bonus()->allowance($categoryId, $mundaneId);
+    }
+
     public function for_player(int $mundaneId, bool $includeRevoked = false): array
     {
         return $this->_bonus()->forPlayer($mundaneId, $includeRevoked);

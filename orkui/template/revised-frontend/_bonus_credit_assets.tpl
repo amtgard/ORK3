@@ -136,14 +136,15 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                         <select id="bc-class"></select>
                     </div>
                     <div class="bc-field bc-sm">
-                        <label>Credits</label>
-                        <div class="bc-amount" id="bc-credits" title="Set by the kingdom when the category was defined">1</div>
+                        <label for="bc-credits">Credits</label>
+                        <input type="number" id="bc-credits" min="0.25" max="10" step="0.25" value="1">
                     </div>
                     <div class="bc-field">
                         <label>&nbsp;</label>
                         <button type="button" class="bc-btn bc-btn-primary" id="bc-add" disabled><i class="fas fa-plus"></i> Add</button>
                     </div>
                 </div>
+                <div class="bc-info" id="bc-allowance" hidden></div>
                 <div class="bc-list-label"><span>Granted</span><span id="bc-count"></span></div>
                 <table class="bc-table" id="bc-table" style="display:none">
                     <thead><tr><th>Player</th><th>Class</th><th class="bc-num">Credits</th><th>Date</th><th>By</th><th></th></tr></thead>
@@ -162,7 +163,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                             <input type="text" id="bc-new-name" maxlength="100" placeholder="e.g. Being purple" autocomplete="off">
                         </div>
                         <div class="bc-field bc-sm">
-                            <label for="bc-new-credits">Credits</label>
+                            <label for="bc-new-credits" title="The most a player may receive for this category in total; granters may split it across classes">Credits per player</label>
                             <input type="number" id="bc-new-credits" min="0.25" max="10" step="0.25" value="1">
                         </div>
                     </div>
@@ -180,7 +181,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                     <label class="bc-check bc-check-sm"><input type="checkbox" id="bc-show-archived"> Show archived</label>
                 </div>
                 <table class="bc-table" id="bc-categories-table" style="display:none">
-                    <thead><tr><th>Category</th><th class="bc-num">Credits</th><th>Earned</th><th class="bc-num">Holders</th><th class="bc-num bc-ork-only">Kingdoms</th><th></th></tr></thead>
+                    <thead><tr><th>Category</th><th class="bc-num">Per player</th><th>Earned</th><th class="bc-num">Holders</th><th class="bc-num bc-ork-only">Kingdoms</th><th></th></tr></thead>
                     <tbody id="bc-categories-tbody"></tbody>
                 </table>
                 <div class="bc-empty" id="bc-categories-empty">No credit categories defined yet.</div>
@@ -190,7 +191,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                     <div class="bc-list-label" style="margin-top:18px"><span>Amtgard-wide credit categories</span></div>
                     <p class="bc-info">Credit categories defined by ORK admins for all of Amtgard. They reach this kingdom's players only once this kingdom adopts them; a parent kingdom's adoption also covers its principalities. The amount is Amtgard's and cannot be changed here.</p>
                     <table class="bc-table" id="bc-ork-table" style="display:none">
-                        <thead><tr><th>Category</th><th class="bc-num">Credits</th><th>Earned</th><th>Status</th><th></th></tr></thead>
+                        <thead><tr><th>Category</th><th class="bc-num">Per player</th><th>Earned</th><th>Status</th><th></th></tr></thead>
                         <tbody id="bc-ork-tbody"></tbody>
                     </table>
                     <div class="bc-empty" id="bc-ork-empty">No Amtgard-wide credit categories have been defined.</div>
@@ -371,10 +372,13 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         if (current) {
             var bits = [];
             if (current.Description) bits.push(esc(current.Description).replace(/[.!?]?$/, '.'));
-            bits.push(current.Repeatable ? 'Can be earned more than once.' : 'Once per player.');
+            bits.push(current.Repeatable
+                ? 'Can be earned more than once; up to ' + fmtCredits(current.DefaultCredits) + ' per grant.'
+                : 'Up to ' + fmtCredits(current.DefaultCredits) + ' per player in total, in any split across classes.');
             info.innerHTML = bits.join(' · ');
             info.hidden = false;
-            gid('bc-credits').textContent = fmtCredits(current.DefaultCredits);
+            // A player may already be picked: their allowance for THIS category.
+            if (gid('bc-player-id').value) loadAllowance(); else setAmountBounds(null);
             loadGranted(current.CategoryId);
         } else {
             info.hidden = true;
@@ -427,13 +431,48 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
             btn.disabled = true;
             jQuery.post(base + 'revoke', { BonusCreditId: id }, function (r) {
                 if (!r || r.status !== 0) { btn.disabled = false; feedback((r && r.error) || 'Could not remove it.', false); return; }
+                var mid = tr.getAttribute('data-mid');
                 tr.remove();
                 setCount(gid('bc-tbody').querySelectorAll('tr').length);
                 if (current) { current.Granted = Math.max(0, (current.Granted || 1) - 1); renderCategories(); }
+                // The removed credit goes back into that player's allowance: refresh the hint and cap if they are the one picked.
+                if (mid && gid('bc-player-id').value === mid) loadAllowance();
                 feedback('Removed ' + who + '’s credit.', true);
             }, 'json').fail(function () { btn.disabled = false; feedback('Request failed.', false); });
         });
     });
+
+    // The amount box: capped at what the picked player has left of the allowance
+    // (or the per-grant maximum for a repeatable category), prefilled with it.
+    function setAmountBounds(info) {
+        var box = gid('bc-credits'), hint = gid('bc-allowance');
+        if (!current) { hint.hidden = true; return; }
+        var cap = current.DefaultCredits;
+        if (info && info.Remaining !== null && info.Remaining !== undefined) cap = info.Remaining;
+        box.max = cap > 0 ? cap : 0.25;
+        box.value = cap > 0 ? fmtCredits(cap) : '';
+        box.disabled = cap <= 0;
+        if (!info) { hint.hidden = true; return; }
+        var name = gid('bc-player').value || 'This player';
+        if (info.Repeatable) {
+            hint.textContent = name + ' has ' + fmtCredits(info.Held) + ' so far for this category; it can be earned more than once, up to ' + fmtCredits(info.Allowance) + ' per grant.';
+        } else if (cap <= 0) {
+            hint.textContent = name + ' already has the full ' + fmtCredits(info.Allowance) + ' for this category.';
+        } else {
+            hint.textContent = name + ' has ' + fmtCredits(info.Held) + ' of ' + fmtCredits(info.Allowance) + ' for this category; ' + fmtCredits(cap) + ' left to give.';
+        }
+        hint.hidden = false;
+        updateAdd();
+    }
+    function loadAllowance() {
+        var mid = gid('bc-player-id').value;
+        if (!current || !mid) { setAmountBounds(null); return; }
+        var cid = current.CategoryId;
+        jQuery.getJSON(base + 'allowance&CategoryId=' + cid + '&MundaneId=' + mid, function (r) {
+            if (!current || current.CategoryId !== cid || gid('bc-player-id').value !== mid) return;
+            if (r && r.status === 0) setAmountBounds(r.allowance);
+        });
+    }
 
     // Player search: the org's own players only (a credit cannot leave its scope).
     // An Amtgard host searches everyone; the server still refuses a player whose
@@ -459,28 +498,35 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
             gid('bc-player').value = ui.item.name;
             gid('bc-player-id').value = ui.item.value;
             updateAdd();
+            loadAllowance();
             // Picking a name only fills the field. Move on to the class if none is
             // set; otherwise stay put so the next Enter is a deliberate Add.
             if (!gid('bc-class').value) gid('bc-class').focus();
         }
     });
-    gid('bc-player').addEventListener('input', function () { gid('bc-player-id').value = ''; updateAdd(); });
+    gid('bc-player').addEventListener('input', function () { gid('bc-player-id').value = ''; setAmountBounds(null); updateAdd(); });
     gid('bc-class').addEventListener('change', updateAdd);
-    function updateAdd() { gid('bc-add').disabled = !(current && gid('bc-player-id').value && gid('bc-class').value); }
+    gid('bc-credits').addEventListener('input', updateAdd);
+    function updateAdd() {
+        var box = gid('bc-credits'), amt = parseFloat(box.value);
+        var ok = current && gid('bc-player-id').value && gid('bc-class').value && !box.disabled && amt >= 0.25 && amt <= parseFloat(box.max) + 0.0001;
+        gid('bc-add').disabled = !ok;
+    }
     gid('bc-add').addEventListener('click', function () {
-        var btn = this, mid = gid('bc-player-id').value, cls = gid('bc-class').value;
+        var btn = this, mid = gid('bc-player-id').value, cls = gid('bc-class').value, amt = gid('bc-credits').value;
         if (!current || !mid) return;
         btn.disabled = true;
-        jQuery.post(base + 'grant', { CategoryId: current.CategoryId, MundaneId: mid, ClassId: cls }, function (r) {
-            if (!r || r.status !== 0) { btn.disabled = false; feedback((r && r.error) || 'Could not add the credit.', false); return; }
+        jQuery.post(base + 'grant', { CategoryId: current.CategoryId, MundaneId: mid, ClassId: cls, Credits: amt }, function (r) {
+            if (!r || r.status !== 0) { updateAdd(); feedback((r && r.error) || 'Could not add the credit.', false); return; }
             lastClass = parseInt(cls, 10);
             gid('bc-tbody').insertAdjacentHTML('afterbegin', rowHtml(r.credit, true));
             setCount(gid('bc-tbody').querySelectorAll('tr').length);
             current.Granted = (current.Granted || 0) + 1; renderCategories();
-            feedback('Added ' + fmtCredits(r.credit.Credits) + ' ' + r.credit.ClassName + ' credit for ' + r.credit.Persona + '.', true);
-            gid('bc-player').value = ''; gid('bc-player-id').value = '';
-            updateAdd();
-            gid('bc-player').focus();
+            var left = (r.remaining === null || r.remaining === undefined) ? '' : (r.remaining > 0 ? ' ' + fmtCredits(r.remaining) + ' left to give.' : ' That is the full allowance.');
+            feedback('Added ' + fmtCredits(r.credit.Credits) + ' ' + r.credit.ClassName + ' credit for ' + r.credit.Persona + '.' + left, true);
+            // Keep the player if some allowance remains, so a split ("2 Bard, then 2 Healer") is two quick adds.
+            if (r.remaining === null || r.remaining === undefined || r.remaining > 0) { loadAllowance(); gid('bc-class').focus(); }
+            else { gid('bc-player').value = ''; gid('bc-player-id').value = ''; setAmountBounds(null); updateAdd(); gid('bc-player').focus(); }
         }, 'json').fail(function () { btn.disabled = false; feedback('Request failed.', false); });
     });
     // Enter adds only when a player is already chosen and the suggestion list is

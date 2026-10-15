@@ -191,10 +191,29 @@ class Controller_BonusCreditAjax extends Controller
             'MundaneId' => $_POST['MundaneId'] ?? 0,
             'ClassId'   => $_POST['ClassId'] ?? 0,
             'CategoryId'  => $_POST['CategoryId'] ?? 0,
+            'Credits'   => $_POST['Credits'] ?? '',
             'Date'      => $_POST['Date'] ?? date('Y-m-d'),
             'Note'      => $_POST['Note'] ?? '',
         ]);
-        $this->envelope($r, ['credit' => $r['Credit'] ?? null]);
+        $this->envelope($r, ['credit' => $r['Credit'] ?? null, 'remaining' => $r['Remaining'] ?? null]);
+    }
+
+    /** How much of a category's allowance a player has left (the Grant tab's hint and amount cap). */
+    public function allowance($p = null)
+    {
+        $uid        = $this->requireLogin();
+        $categoryId = (int) ($_GET['CategoryId'] ?? $_POST['CategoryId'] ?? 0);
+        $mundaneId  = (int) ($_GET['MundaneId'] ?? $_POST['MundaneId'] ?? 0);
+        if (!valid_id($categoryId) || !valid_id($mundaneId)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Choose a category and a player.']);
+        }
+        $this->load_model('Player');
+        $info   = $this->Player->player_info($mundaneId);
+        $parkId = is_array($info) ? (int) ($info['ParkId'] ?? 0) : 0;
+        if ($parkId <= 0 || !$this->BonusCredit->can_grant($uid, $parkId)) {
+            $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
+        }
+        $this->jsonOut(['status' => 0, 'allowance' => $this->BonusCredit->allowance($categoryId, $mundaneId)]);
     }
 
     public function revoke($p = null)

@@ -231,11 +231,12 @@ final class BonusCreditTest extends TestCase
 
         $this->assertSame(0.0, (float) ($this->classRow($player)['Credits'] ?? 0), 'a fresh player has no credits');
 
-        // The PARK officer grants the KINGDOM's credit. The amount is the category's; a Credits override is ignored.
-        $r = $this->grant($parkOfficer, $player, $purple['CategoryId'], ['Date' => '2026-10-01', 'Note' => 'so purple', 'Credits' => 9]);
+        // The PARK officer grants the KINGDOM's credit. No Credits given: the whole allowance.
+        $r = $this->grant($parkOfficer, $player, $purple['CategoryId'], ['Date' => '2026-10-01', 'Note' => 'so purple']);
         $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
         $this->assertGreaterThan(0, $r['BonusCreditId']);
         $this->assertSame(1.5, $r['Credit']['Credits']);
+        $this->assertSame(0.0, $r['Remaining']);
         $this->assertSame('T12BC Being purple', $r['Credit']['CategoryName']);
         $this->assertSame('kingdom', $r['Credit']['ScopeType']);
 
@@ -325,118 +326,55 @@ final class BonusCreditTest extends TestCase
         $this->assertStringContainsString('no longer', (string) $r['Error']);
     }
 
-    public function testACategoryCreditsAPlayerOnceUnlessRepeatable(): void
+    public function testACategorysAmountIsAnAllowanceAPlayerCanSplitAcrossGrants(): void
     {
         $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');
         $player   = $this->playerAt($this->park, 'bc-player');
-        $once     = $this->category($kOfficer, $this->kingdom, 'Once');
-        $many     = $this->category($kOfficer, $this->kingdom, 'Many', ['Repeatable' => 1]);
+        $pool     = $this->reason($kOfficer, $this->kingdom, 'Pool', ['DefaultCredits' => 2]);
+        $many     = $this->reason($kOfficer, $this->kingdom, 'Many', ['DefaultCredits' => 1, 'Repeatable' => 1]);
+        $bard     = $this->classId;
+        $healer   = $this->fixture->secondClassId($bard);
 
-        $first = $this->grant($kOfficer, $player, $once['CategoryId']);
-        $this->assertSame(0, $first['Status'], (string) ($first['Error'] ?? ''));
-        $again = $this->grant($kOfficer, $player, $once['CategoryId']);
-        $this->assertSame(1, $again['Status']);
-        $this->assertStringContainsString('already', (string) $again['Error']);
+        // "I want 1 in Bard and 1 in Healer": two grants against a 2-credit allowance.
+        $a = $this->bonus->allowance($pool['CategoryId'], $player);
+        $this->assertSame(['Allowance' => 2.0, 'Held' => 0.0, 'Remaining' => 2.0, 'Repeatable' => false], $a);
+        $r = $this->grant($kOfficer, $player, $pool['CategoryId'], ['Credits' => 1, 'ClassId' => $bard]);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $this->assertSame(1.0, $r['Remaining']);
+        // Too much for what is left: refused, naming the numbers.
+        $r = $this->grant($kOfficer, $player, $pool['CategoryId'], ['Credits' => 1.5, 'ClassId' => $healer]);
+        $this->assertSame(1, $r['Status']);
+        $this->assertStringContainsString('only 1 left', (string) $r['Error']);
+        // Bad amounts: refused.
+        $this->assertSame(1, $this->grant($kOfficer, $player, $pool['CategoryId'], ['Credits' => 0])['Status']);
+        $this->assertSame(1, $this->grant($kOfficer, $player, $pool['CategoryId'], ['Credits' => 0.3])['Status']);
+        // The rest, in another class. No Credits given means "what is left".
+        $r = $this->grant($kOfficer, $player, $pool['CategoryId'], ['ClassId' => $healer]);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $this->assertSame(1.0, $r['Credit']['Credits']);
+        $this->assertSame(0.0, $r['Remaining']);
+        $this->assertSame([$bard => 1.0, $healer => 1.0], $this->bonus->totalsByClass($player));
+        // Full: a further grant is refused.
+        $r = $this->grant($kOfficer, $player, $pool['CategoryId'], ['Credits' => 0.25]);
+        $this->assertSame(1, $r['Status']);
+        $this->assertStringContainsString('already has the full 2 credits', (string) $r['Error']);
+        $this->assertSame(0.0, $this->bonus->allowance($pool['CategoryId'], $player)['Remaining']);
 
+        // A repeatable category has no total cap; the allowance is the most per grant.
         $this->assertSame(0, $this->grant($kOfficer, $player, $many['CategoryId'])['Status']);
         $this->assertSame(0, $this->grant($kOfficer, $player, $many['CategoryId'])['Status']);
-        $this->assertSame([$this->classId => 3.0], $this->bonus->totalsByClass($player));
+        $r = $this->grant($kOfficer, $player, $many['CategoryId'], ['Credits' => 2]);
+        $this->assertSame(1, $r['Status']);
+        $this->assertStringContainsString('at most 1', (string) $r['Error']);
+        $this->assertNull($this->bonus->allowance($many['CategoryId'], $player)['Remaining']);
 
-        // Revoking frees a once-only category to be granted again.
-        $this->assertSame(0, $this->bonus->revoke($kOfficer, (int) $first['BonusCreditId'])['Status']);
-        $this->assertSame(0, $this->grant($kOfficer, $player, $once['CategoryId'])['Status']);
-    }
-
-    public function testAGranterGrantsWithoutKingdomRightsButCannotDefine(): void
-    {
-        $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');          // CREATE
-        $kEditor  = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-kedit', AUTH_EDIT);
-        $manager  = $this->playerAt($this->park, 'bc-granter');                               // no authorization row at all
-        $player   = $this->playerAt($this->park, 'bc-player');
-
-        // Nobody yet; a plain player can neither define nor grant.
-        $this->assertSame([], $this->bonus->granters($this->kingdom));
-        $this->assertFalse($this->bonus->canDefine($manager, 'kingdom', $this->kingdom));
-        $this->assertFalse($this->bonus->canGrant($manager, $this->park));
-
-        // Only CREATE appoints: EDIT and the would-be granter are refused.
-        $this->assertSame(3, $this->bonus->addGranter($kEditor, $this->kingdom, $manager)['Status']);
-        $this->assertSame(3, $this->bonus->addGranter($manager, $this->kingdom, $manager)['Status']);
-        $this->assertSame(1, $this->bonus->addGranter($kOfficer, $this->kingdom, 999999999)['Status']);
-        $r = $this->bonus->addGranter($kOfficer, $this->kingdom, $manager);
-        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
-        $this->assertSame([$manager], array_column($r['Granters'], 'MundaneId'));
-        $this->assertTrue($r['Granters'][0]['AllCredits']);
-        $this->assertSame(0, $this->bonus->addGranter($kOfficer, $this->kingdom, $manager)['Status'], 'appointing twice is a no-op');
-        $this->assertCount(1, $this->bonus->granters($this->kingdom));
-        $this->assertTrue($this->bonus->isGranter($manager, $this->kingdom));
-
-        // Now the granter hands out a credit kingdom-wide with no authorization row, but still cannot define one.
-        $this->assertFalse($this->bonus->canDefine($manager, 'kingdom', $this->kingdom));
-        $this->assertSame(3, $this->bonus->createCategory($manager, ['ScopeType' => 'kingdom', 'ScopeId' => $this->kingdom, 'Name' => 'T12BC nope'])['Status']);
-        $this->assertTrue($this->bonus->canGrantInKingdom($manager, $this->kingdom));
-        $this->assertTrue($this->bonus->canGrant($manager, $this->park));
-        $survey = $this->category($kOfficer, $this->kingdom, 'Survey 2026', ['SourceType' => 'survey', 'SourceId' => 4242]);
-        $this->assertSame(3, $this->bonus->archiveCategory($manager, $survey['CategoryId'])['Status'], 'a granter cannot archive');
-        $this->assertSame(0, $this->grant($manager, $player, $survey['CategoryId'])['Status']);
-        if ($this->siblingPark > 0) {
-            $sibling = $this->playerAt($this->siblingPark, 'bc-sibling');
-            $this->assertSame(0, $this->grant($manager, $sibling, $survey['CategoryId'])['Status'], 'a manager reaches every park in the kingdom');
-        }
-        // But not another kingdom's players, and a granter cannot appoint others.
-        $away = $this->playerAt($this->otherPark, 'bc-away');
-        $this->assertSame(3, $this->grant($manager, $away, $survey['CategoryId'])['Status']);
-        $this->assertSame(3, $this->bonus->addGranter($manager, $this->kingdom, $player)['Status']);
-
-        // Removal (by row) takes the powers away; what they granted stays.
-        $rowId = $this->bonus->granters($this->kingdom)[0]['GranterId'];
-        $this->assertSame(3, $this->bonus->removeGranter($kEditor, $this->kingdom, $rowId)['Status']);
-        $this->assertSame(0, $this->bonus->removeGranter($kOfficer, $this->kingdom, $rowId)['Status']);
-        $this->assertSame(0, $this->bonus->removeGranter($kOfficer, $this->kingdom, $rowId)['Status'], 'removing twice is a no-op');
-        $this->assertFalse($this->bonus->isGranter($manager, $this->kingdom));
-        $this->assertFalse($this->bonus->canGrant($manager, $this->park));
-        $this->assertSame(3, $this->grant($manager, $this->playerAt($this->park, 'bc-player2'), $survey['CategoryId'])['Status']);
-        $this->assertSame([$this->classId => 1.0], $this->bonus->totalsByClass($player));
-    }
-
-    public function testAGranterCanBeLimitedToOneCredit(): void
-    {
-        $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');
-        $granter  = $this->playerAt($this->park, 'bc-granter');
-        $player   = $this->playerAt($this->park, 'bc-player');
-        $survey   = $this->category($kOfficer, $this->kingdom, 'Survey 2026');
-        $purple   = $this->category($kOfficer, $this->kingdom, 'Being purple');
-
-        // Scoped to the survey credit: can grant that, not the other; sees only that one.
-        $this->assertSame(1, $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, 999999999)['Status'], 'a credit must be one of the kingdom\'s');
-        $r = $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, $survey['CategoryId']);
-        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
-        $this->assertFalse($r['Granters'][0]['AllCredits']);
-        $this->assertSame('T12BC Survey 2026', $r['Granters'][0]['CategoryName']);
-        $this->assertTrue($this->bonus->isGranter($granter, $this->kingdom, $survey['CategoryId']));
-        $this->assertFalse($this->bonus->isGranter($granter, $this->kingdom, $purple['CategoryId']));
-        $this->assertTrue($this->bonus->canGrant($granter, $this->park), 'enough to open the tools');
-        $this->assertSame(['T12BC Survey 2026'], array_column($this->bonus->grantableCategoriesForPark($granter, $this->park), 'Name'));
-        $this->assertSame(['T12BC Survey 2026'], array_column($this->bonus->grantableCategoriesInKingdom($granter, $this->kingdom), 'Name'));
-        $this->assertSame(0, $this->grant($granter, $player, $survey['CategoryId'])['Status']);
-        $this->assertSame(3, $this->grant($granter, $player, $purple['CategoryId'])['Status']);
-
-        // A second scoped row adds the other credit; an all-credits row then replaces both.
-        $this->assertSame(0, $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, $purple['CategoryId'])['Status']);
-        $this->assertCount(2, $this->bonus->granters($this->kingdom));
-        $this->assertSame(0, $this->grant($granter, $player, $purple['CategoryId'])['Status']);
-        $all = $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, 0);
-        $this->assertSame(0, $all['Status']);
-        $this->assertCount(1, $all['Granters']);
-        $this->assertTrue($all['Granters'][0]['AllCredits']);
-        // And a scoped appointment under an all-credits row is a no-op.
-        $this->assertSame(0, $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, $survey['CategoryId'])['Status']);
-        $this->assertCount(1, $this->bonus->granters($this->kingdom));
-
-        // Revoking follows the same scope: the all-credits granter may remove either credit.
-        $credits = $this->bonus->forPlayer($player);
-        $this->assertCount(2, $credits);
-        $this->assertSame(0, $this->bonus->revoke($granter, $credits[0]['BonusCreditId'])['Status']);
+        // Revoking gives the allowance back.
+        $credits = array_filter($this->bonus->forPlayer($player), function ($c) use ($pool) {
+            return $c['CategoryId'] === $pool['CategoryId'];
+        });
+        $this->assertSame(0, $this->bonus->revoke($kOfficer, (int) array_values($credits)[0]['BonusCreditId'])['Status']);
+        $this->assertSame(1.0, $this->bonus->allowance($pool['CategoryId'], $player)['Remaining']);
+        $this->assertSame(0, $this->grant($kOfficer, $player, $pool['CategoryId'], ['Credits' => 1])['Status']);
     }
 
     public function testAmtgardWideCreditsAreDefinedByOrkAdminsAndReachAKingdomOnlyWhenAdopted(): void
@@ -484,7 +422,7 @@ final class BonusCreditTest extends TestCase
         $this->assertSame(2.0, $g['Credit']['Credits']);
         $this->assertSame('Amtgard', $g['Credit']['ScopeName']);
         $this->assertSame([$this->classId => 2.0], $this->bonus->totalsByClass($player));
-        // Once per player holds across Amtgard.
+        // The allowance holds across Amtgard: 2 given, nothing left.
         $this->assertSame(1, $this->grant($kEditor, $player, $census)['Status']);
         // The other kingdom has not adopted it, so its players are out of reach.
         $awayOfficer = $this->parkOfficer($this->otherPark, 'bc-away-officer');

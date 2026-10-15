@@ -799,13 +799,18 @@ class BonusCredit
 
     /**
      * Grant a credit for a category. $r keys: MundaneId, ClassId, CategoryId,
-     * Date (Y-m-d, default today), Note.
+     * Credits (default: whatever is left of the allowance), Date (Y-m-d,
+     * default today), Note.
      *
-     * The amount is the category's, always: the kingdom defined what the credit
-     * is worth, and a grant cannot override it (Ken, 2026-10-14). A different
-     * value is a different credit. Anything sent as Credits is ignored.
+     * The category's amount is an ALLOWANCE per player, not a fixed grant
+     * (Ken, 2026-10-15): "worth 2" means a player may receive up to 2 credits
+     * for it, in any split across classes, over as many grants as it takes --
+     * 2 Bard today, or 1 Bard now and 1 Healer later. A once-only category
+     * caps the player's live total at the allowance; a repeatable one has no
+     * total cap, so there the allowance is the most one grant may be. Revoked
+     * credits do not count against the allowance.
      *
-     * @return array{Status:int, Error?:string, BonusCreditId?:int, Credit?:array}
+     * @return array{Status:int, Error?:string, BonusCreditId?:int, Credit?:array, Remaining?:float}
      */
     public function grant(int $uid, array $r): array
     {
@@ -839,16 +844,29 @@ class BonusCredit
         if (!$this->classActive($classId)) {
             return $this->fail('Choose an active class for the credit.');
         }
-        $credits = self::normalizeCredits($category['DefaultCredits']);
-        if ($credits === null) {
+        $allowance = self::normalizeCredits($category['DefaultCredits']);
+        if ($allowance === null) {
             return $this->fail('This credit has no usable amount; ask a kingdom officer to fix it.');
+        }
+        $who   = $player['persona'] !== '' ? $player['persona'] : 'This player';
+        $held  = $this->liveForCategory($categoryId, $mundaneId);
+        $limit = $category['Repeatable'] ? $allowance : round($allowance - $held, 2);
+        if ($limit <= 0) {
+            return $this->fail($who . ' already has the full ' . self::fmt($allowance) . ' ' . ($allowance == 1 ? 'credit' : 'credits') . ' for “' . $category['Name'] . '”.');
+        }
+        $raw = array_key_exists('Credits', $r) && $r['Credits'] !== '' && $r['Credits'] !== null ? $r['Credits'] : $limit;
+        $credits = self::normalizeCredits($raw);
+        if ($credits === null) {
+            return $this->fail('Credits must be between 0.25 and ' . self::fmt($limit) . ', in quarters.');
+        }
+        if ($credits > $limit + 0.0001) {
+            return $this->fail($category['Repeatable']
+                ? 'A single grant of “' . $category['Name'] . '” can be at most ' . self::fmt($allowance) . '.'
+                : $who . ' has ' . self::fmt($held) . ' of ' . self::fmt($allowance) . ' for “' . $category['Name'] . '” already; only ' . self::fmt($limit) . ' left to give.');
         }
         $date = self::normalizeDate($date);
         if ($date === null) {
             return $this->fail('That date is not usable: use YYYY-MM-DD, not in the future.');
-        }
-        if (!$category['Repeatable'] && $this->liveForCategory($categoryId, $mundaneId) > 0) {
-            return $this->fail(($player['persona'] !== '' ? $player['persona'] : 'This player') . ' already has “' . $category['Name'] . '”, which can only be earned once.');
         }
         $note = mb_substr($note, 0, 200);
 
@@ -865,8 +883,24 @@ class BonusCredit
         }
         $this->bust($mundaneId);
         $credit = $this->credit($id);
-        $this->audit('grant', ['MundaneId' => $mundaneId, 'CategoryId' => $categoryId, 'ClassId' => $classId, 'by_whom_id' => $uid], 'Player', $mundaneId, null, $credit);
-        return ['Status' => 0, 'BonusCreditId' => $id, 'Credit' => $credit];
+        $this->audit('grant', ['MundaneId' => $mundaneId, 'CategoryId' => $categoryId, 'ClassId' => $classId, 'Credits' => $credits, 'by_whom_id' => $uid], 'Player', $mundaneId, null, $credit);
+        return ['Status' => 0, 'BonusCreditId' => $id, 'Credit' => $credit,
+                'Remaining' => $category['Repeatable'] ? null : round(max(0, $allowance - $held - $credits), 2)];
+    }
+
+    /**
+     * How much of a category's allowance a player has left: what the Grant tab
+     * shows once a player is picked. Repeatable categories report no cap.
+     *
+     * @return array{Allowance:float, Held:float, Remaining:?float, Repeatable:bool}
+     */
+    public function allowance(int $categoryId, int $mundaneId): array
+    {
+        $category  = $this->category($categoryId);
+        $allowance = $category ? (float) $category['DefaultCredits'] : 0.0;
+        $held      = $this->liveForCategory($categoryId, $mundaneId);
+        $repeat    = $category ? (bool) $category['Repeatable'] : false;
+        return ['Allowance' => $allowance, 'Held' => $held, 'Remaining' => $repeat ? null : round(max(0, $allowance - $held), 2), 'Repeatable' => $repeat];
     }
 
     /**
@@ -1105,14 +1139,21 @@ class BonusCredit
         return (bool) ($r && $r->Next());
     }
 
-    private function liveForCategory(int $categoryId, int $mundaneId): int
+    /** The player's live credits for a category, summed: what counts against the allowance. */
+    private function liveForCategory(int $categoryId, int $mundaneId): float
     {
         $this->db->Clear();
         $r = $this->db->DataSet(
-            'SELECT COUNT(*) AS n FROM ' . DB_PREFIX . 'bonus_credit
+            'SELECT COALESCE(SUM(credits), 0) AS n FROM ' . DB_PREFIX . 'bonus_credit
              WHERE category_id = ' . (int) $categoryId . ' AND mundane_id = ' . (int) $mundaneId . ' AND revoked_at IS NULL'
         );
-        return ($r && $r->Next()) ? (int) $r->n : 0;
+        return ($r && $r->Next()) ? (float) $r->n : 0.0;
+    }
+
+    /** 1, 1.5, 0.25: no trailing zeros. */
+    private static function fmt(float $v): string
+    {
+        return rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
     }
 
     private function lastInsertId(): int
