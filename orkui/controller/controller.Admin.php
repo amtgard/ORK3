@@ -1112,14 +1112,16 @@ class Controller_Admin extends Controller
                         // reason is never a public award note: a tab opened while the rec
                         // was public pre-filled it, so the one publishing gate blanks it
                         // (a rec id that is not about this recipient is ignored). The
-                        // header lets the form say so without a dialog.
-                        $awardNote = (string)$this->request->Admin_player->Note;
-                        $sourceRec = (int)($_POST['RecommendationsId'] ?? 0);
+                        // header (sent only once the award is saved) lets the form say so
+                        // without a dialog.
+                        $awardNote    = (string)$this->request->Admin_player->Note;
+                        $sourceRec    = (int)($_POST['RecommendationsId'] ?? 0);
+                        $noteWithheld = false;
                         if ($sourceRec > 0 && trim($awardNote) !== '') {
                             $gatedNote = $this->Player->publishable_award_note($awardNote, $sourceRec, (int)$id);
                             if ($gatedNote !== $awardNote) {
-                                header('X-Ork-Note-Withheld: 1');
-                                $awardNote = $gatedNote;
+                                $noteWithheld = true;
+                                $awardNote    = $gatedNote;
                             }
                         }
                         $r = $this->Player->add_player_award(array(
@@ -1136,6 +1138,10 @@ class Controller_Admin extends Controller
                                 'KingdomId' => valid_id($this->request->Admin_player->KingdomId) ? $this->request->Admin_player->KingdomId : 0,
                                 'EventId' => valid_id($this->request->Admin_player->EventId) ? $this->request->Admin_player->EventId : 0
                             ));
+                        // add_player_award returns the FLAT shape: Status 0 = saved.
+                        if ($noteWithheld && (int)($r['Status'] ?? 1) === 0 && !headers_sent()) {
+                            header('X-Ork-Note-Withheld: 1');
+                        }
                         break;
                     case 'deleteaward':
                         $r = $this->Player->delete_player_award(array(
