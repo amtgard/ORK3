@@ -61,8 +61,14 @@ One domain class owns the rule: `system/lib/ork3/class.RecommendationVisibility.
 not whitelisted in `orkservice/Json/index.php`, so not JSON-callable). It is the
 only place the rule is expressed; Report, Player and Court call it. API:
 `viewerFromToken($token): int`, `canSee(int $viewer, array $row): bool`,
-`sqlPredicate(int $viewer, string $recAlias, string $mundaneAlias, array $kingdomIds): string`,
-`creatorLevel(int $creator, int $recipientId): int` (0 = not an officer). For a row with recipient `R` (kingdom `K`, park `P`), author
+`loadRec(int $recId): ?array` (the canSee input — recipient's own mundane
+kingdom/park, author, level, pass-down, dismissed — in one query; null when
+missing), `canSeeRecId(int $viewer, int $recId): bool` (a missing rec is never
+visible), `sqlPredicate(int $viewer, string $recAlias, string $mundaneAlias, array $kingdomIds): string`,
+`creatorLevel(int $creator, int $recipientId): int` (0 = not an officer),
+`isOfficerInKingdom(int $viewer, int $kingdomId): bool` (officer of the kingdom
+or of any park in it). Code that acts on one rec by id uses `loadRec` /
+`canSeeRecId`; nothing else assembles the canSee input. For a row with recipient `R` (kingdom `K`, park `P`), author
 `A`, effective level `L`, and verified viewer `V`:
 
 ```
@@ -80,22 +86,34 @@ including the admin grant, so no hidden rec about a player reaches that player.
 lookup per row.
 
 For SQL readers (paging, counts) the helper precomputes the viewer's authority
-into a predicate:
+into a predicate that reproduces `canManage` against the recipient's OWN
+`m.kingdom_id` / `m.park_id` — the same values `canSee` reads — so a "drifted"
+recipient (mundane kingdom ≠ their park's kingdom) gets the same verdict from
+SQL and PHP:
 
 ```
 ( eff = 0
   OR (r.recommended_by_id = V AND r.mundane_id <> V)
-  OR (r.mundane_id <> V AND eff = 1 AND (m.kingdom_id IN (:officerKingdoms) OR m.park_id IN (:officerParks)))
-  OR (r.mundane_id <> V AND eff = 2 AND m.kingdom_id IN (:officerKingdoms)) )
+  OR (r.mundane_id <> V AND m.kingdom_id IN (:officerKingdoms))
+  OR (r.mundane_id <> V AND eff = 1 AND m.kingdom_id > 0 AND (
+         m.park_id IN (:authParks)
+      OR m.park_id IN (SELECT park_id FROM ork_park WHERE kingdom_id IN (:authKingdoms))
+      OR (m.park_id = :seatPark AND m.kingdom_id = :seatKingdom) ...)) )
 ```
 
-`officerKingdoms` is resolved over the caller-supplied `$kingdomIds` scope (the
-recipient kingdoms the query can return). `officerParks` is resolved from the
-viewer's own park authorization rows and Monarch/Regent/Prime Minister park
-seats — a handful of rows. Each candidate is confirmed with `canManage`. The
-helper takes no separate park-list parameter. The recipient exclusion is applied before the
-admin grant, as in the row rule. Admin → predicate
-`1=1` (after the recipient exclusion). No viewer → `eff = 0`.
+The viewer's grants come from their own authorization rows and
+Monarch/Regent/Prime Minister seats, plus every descendant principality, and
+each is confirmed with the same functions `canSee` uses:
+`officerKingdoms` = kingdoms where `officerLevel(V, K, 0)` is kingdom-level
+(the caller's `$kingdomIds` scope only adds candidates); `authKingdoms` =
+`HasAuthority(V, AUTH_KINGDOM, K)` (park authority climbs to the PARK's own
+kingdom); `authParks` = direct park authority; park seats stay
+`(kingdom_id, park_id)` pairs because `canManage` matches a seat on both.
+Grants and predicates are memoized per request (per viewer / per viewer +
+aliases + scope), and the helper leaves the shared DB handle cleared for
+callers that build it inline. The recipient exclusion is applied before the
+admin grant, as in the row rule. Admin → `eff = 0 OR r.mundane_id <> V`. No
+viewer → `eff = 0`.
 
 ## Viewer identity (security)
 
@@ -131,14 +149,28 @@ The cache of `PlayerAwardRecommendations` stays viewer-agnostic: rows carry
   `max(1, stored)`, out-of-range → kingdom). A kingdom-level hide therefore
   stays the kingdom's to lift even while it is passed down to local.
   Author-only visibility is **not** enough to unhide an officer's hide.
-  Authority is checked before the rec's state: unhiding an already-public rec
-  succeeds only for an officer over the recipient, and anyone else gets the
-  same refusal as for a hidden rec, so the answer is not a hidden-ness oracle.
+  The answer is not an oracle: anyone who could not change the flag — no
+  officer authority over the recipient (non-officers, the recipient, a
+  non-officer author) or unable to see the rec (a park officer facing a
+  kingdom-level hide that is not passed down) — gets exactly the response a
+  nonexistent id gets (`Recommendation not found.`), before the rec's state is
+  consulted. An officer who can see the rec gets real answers (Success,
+  "already visible", or the stored-level refusal for a passed-down kingdom hide).
   Bust caches, `dangeraudit`. Wired as a Recs Manager row action and
   `Recommendations/bulk` actions `monarchyonly` / `unmonarchyonly`.
 - **Pass down** — unchanged write; effective level does the rest. The park
   pass-down notification text stays generic (it already exposes no detail).
-- **Seconds** — `AddSecondToRecommendation` refuses a rec the token viewer can't see.
+- **Acting on a rec by id** — every Player write that takes a rec (or second)
+  id checks visibility for the token's user FIRST and, for a hidden rec they
+  cannot see, returns that method's own "not found" response:
+  `DeleteAwardRecommendation`, `Snooze`/`UnsnoozeAwardRecommendation`,
+  `RestoreAwardRecommendation`, `SetRecommendationPassedToLocal`,
+  `EditAwardRecommendationReason`, `AddSecondToRecommendation`,
+  `EditSecondNotes`, `WithdrawSecond` (the last two even for the second's own
+  supporter). So the recipient cannot dismiss or probe hidden recs about
+  themselves, and a park officer cannot act on a kingdom-level hide.
+  `ResolveRecommendationCluster` skips hidden members the caller cannot see
+  (they stay live; a park court's finalize does not close a kingdom-level hide).
 
 ## Read paths to filter
 
@@ -146,7 +178,7 @@ The cache of `PlayerAwardRecommendations` stays viewer-agnostic: rows carry
 |---|---|
 | `Report::PlayerAwardRecommendations` | carry columns; filter in `applyViewerFlags` by token viewer |
 | `Report::PlayerAwardRecommendationsPage` | SQL predicate in `$base` (rows, `Total`) and in the cluster `SupportCount` |
-| `Report::PlayerAwardRecommendationsCount` (tab badge) | Public count cached (viewer-agnostic); hidden portion counted uncached per request via SQL predicate |
+| `Report::PlayerAwardRecommendationsCount` (tab badge) | Kingdom-wide public count cached (viewer-agnostic); a `RecommendedBy`-scoped count (one user's own recs) is not cached — its key was never busted, so a rec hidden after caching was counted twice. Hidden portion counted uncached per request via SQL predicate, skipped when the scope has no live hidden rec |
 | `Report::DeletedAwardRecommendations` | SQL predicate; no longer cached |
 | `Player::GetPeerAwardRecommendations` (dup pre-check) | SQL predicate |
 | `GetSecondsForRecommendations` | Drops hidden recs; the unfiltered in-process reader is `seconds_for_recommendations`. The underscore is the JSON guard: `JsonServer` refuses any method name containing `_`, while a lowercase first letter is not a guard (PHP method names are case-insensitive, so `Player/SecondsForRecommendations` would dispatch). |
@@ -155,8 +187,14 @@ The cache of `PlayerAwardRecommendations` stays viewer-agnostic: rows carry
 | Recs Manager CSV export | inherits via Page; adds a `Monarchy Only` column (`""`, `Park`, `Kingdom` from the cluster's `MonarchyOnlyLevel`) |
 | `PlayerAjax/recommendations` (profile tab) | pass token → filtered |
 
-Court lines already staged (`getCourtAwards`, `getAwardForCommit`) are inside a
-court the officer can manage. `Court::addAward` takes the caller's uid (threaded
+Court lines are read for the caller: `getCourtAwards` / `getStagedAwards` take
+the session user (threaded from Court detail/record and CourtAjax
+`court_state` / `finalize_court`). A line whose Monarchy Only rec the caller
+cannot see keeps `RecMonarchyOnly` but comes back with no `RecReason` and no
+`RecByPersona` — a kingdom officer may put a kingdom-level hide on a PARK court
+(their choice), and that court's park officers see only the notice ("Its reason
+is visible only to officers at the recommendation's level."). No caller (0)
+sees none. `Court::addAward` takes the caller's uid (threaded
 from `CourtAjax::requireCourtAuth` through `model.Court::add_award`) and refuses
 a recommendation-backed line unless `canUseRecForLine` passes: the rec must be
 about that recipient, and a Monarchy Only rec must be visible to the caller
@@ -165,21 +203,23 @@ answer never reveals a hidden rec.
 
 ## Court citation
 
-`Court::addAward` with a `rec_id` whose rec has `monarchy_only > 0` inserts the
-line with `public_comment_cleared = 1`. `commitStagedAward` then publishes only
-what the officer typed. The planner still shows officers the reason.
+`public_comment_cleared` is only the officer's explicit "(Clear)". A hidden
+rec's reason is withheld by the rec's CURRENT Monarchy Only state wherever the
+reason would be used, never by forcing that flag (a forced flag outlived an
+unhide, and the line then never inherited its reason). So `addAward` (insert,
+revive, reuse) and `updateAward` write the flag as the officer set it, and:
 
-The citation rule applies on every path that creates or reuses a court line:
-insert, revive of a cancelled line, and reuse of an existing line. The commit
-step also re-checks the recommendation's current Monarchy Only state
-(`RecMonarchyOnly`, re-read in `getAwardCommitFields` / `getAwardForCommit`) and
-falls back to the rec reason only when it is `0`, so a rec hidden after its line
-was staged still does not publish its reason. `updateAward` keeps
-`public_comment_cleared = 1` on a hidden rec's line whatever a stale client posts.
+- `commitStagedAward` re-reads `RecMonarchyOnly` (`getAwardCommitFields` /
+  `getAwardForCommit`) and falls back to the rec reason only when it is `0`;
+  `setAwardId` freezes exactly what was published (nothing, for a hidden rec).
+- Hidden at add and at commit → only what the officer typed is published.
+  Unhidden before commit → the reason inherits normally.
 
 **Planner client.** `addAward`'s response and `getCourtAwards` rows carry
-`PublicCommentCleared` and `RecMonarchyOnly`. For a `RecMonarchyOnly` line the
-planner (`Court_detail.tpl`, server- and JS-built rows) shows the reason only as
+`PublicCommentCleared` and `RecMonarchyOnly`. The Monarchy Only field carries
+the line's persisted cleared flag (so a save posts it back unchanged), and the
+heartbeat reconcile rebuilds the field when the rec is hidden or unhidden while
+the page is open. For a `RecMonarchyOnly` line the planner (`Court_detail.tpl`, server- and JS-built rows) shows the reason only as
 officer-only reference text: no ghost hint, no (Start from Rec)/(Undo clear),
 the Grant modal's reason is never pre-filled, the herald sheet and Complete-modal
 count never treat it as an inherited citation, and the Record view
@@ -190,9 +230,15 @@ count never treat it as an inherited citation, and the Record view
 - **Add Rec modals** (`Playernew_index.tpl` `#pn-rec-*`, `Kingdomnew_index.tpl`
   `#kn-rec-*`, `Parknew_index.tpl` `#pk-rec-*`): a "Monarchy Only" checkbox
   beside Anonymous, with helper text "Only officers will see this
-  recommendation; the player will not." Rendered only when the viewer is an
-  officer of the page's park/kingdom (Player page: the recipient's park). The
-  server remains the authority. Dark mode checked.
+  recommendation; the player will not." Offered on the Kingdom page to an
+  officer of the kingdom or of any park in it (`isOfficerInKingdom`), on the
+  Park page to an officer of the park or its kingdom, and on the Player page
+  against the recipient. Because the Kingdom/Park player search can return a
+  player the officer has no authority over, every recipient pick re-checks via
+  `KingdomAjax`/`ParkAjax` `monarchyonlyeligible` (the caller's own
+  `creatorLevel` over that recipient): not eligible → unticked, disabled,
+  `data-tip` and a short inline note (`orkMonarchyOnlyRecheck` in
+  `_monarchy_only_assets.tpl`). The server remains the authority. Dark mode checked.
 - **Badge** `.rm-badge.rm-badge-monarchy` (+ `html[data-theme="dark"]`
   variant), text `Monarchy Only`, `data-tip`: park → "Visible to park and
   kingdom officers"; kingdom → "Visible only to kingdom officers". Markup comes
