@@ -204,6 +204,13 @@ class Controller_PlayerAjax extends Controller
             // (grant -> revoke a typo -> re-grant on the same date). Advisory keeps the
             // officer informed without a dead end, and needs nothing from the client.
             $dupDate = $this->ledgerDuplicateAwardDate($player_id, $kingdomaward_id, $rank, $date);
+            // A Monarchy Only rec's reason is never a public note. A Manager tab opened
+            // while the rec was public may still post it (its pre-fill); the one
+            // court-citation gate blanks it if the rec is hidden now.
+            if ((int)($_POST['RecommendationsId'] ?? 0) > 0 && $note !== '') {
+                $this->load_model('Court');
+                $note = $this->Court->publishable_citation_for_rec($note, (int)$_POST['RecommendationsId']);
+            }
             $r = $this->Player->add_player_award([
                 'Token'          => $this->session->token,
                 'RecipientId'    => $player_id,

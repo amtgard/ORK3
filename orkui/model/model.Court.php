@@ -228,6 +228,13 @@ class Model_Court extends Model
         return $this->_court()->isHiddenRecCitation($court_award_id, $comment);
     }
 
+    // The court-citation gate for rec-derived text published outside a court (the
+    // Recs Manager grant note): '' when it is the reason of a now-hidden rec.
+    public function publishable_citation_for_rec($text, $rec_id)
+    {
+        return $this->_court()->publishableCitationForRec($text, $rec_id);
+    }
+
     public function hidden_citation_message()
     {
         return Court::HIDDEN_CITATION_MESSAGE;

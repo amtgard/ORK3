@@ -638,6 +638,99 @@ final class CourtMonarchyOnlyTest extends TestCase
         $this->assertNotNull($this->fx->fetchRecommendation($rec)['deleted_at']);
     }
 
+    // ---- Re-review 3 (G): one gate for every published / public citation ------
+
+    private function reportCitation(\Court $c, int $court, int $id): ?string
+    {
+        $detail = $c->getCourtReportDetail($court);
+        foreach (($detail['Awards'] ?? $detail['awards'] ?? []) as $a) {
+            if ((int)$a['CourtAwardId'] === $id) {
+                return (string)$a['PublicComment'];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * G: Recs Manager grant with "leave on court" of a now-hidden rec whose line had
+     * the reason saved while public: neither the ledger note nor the login-free Court
+     * Report may show the reason.
+     */
+    public function testManagerGrantLeaveOnCourtOfAHiddenRecPublishesNoReason(): void
+    {
+        [$id, $rec, $off, $c, $court, $recip] = $this->commitableLine();
+        $this->assertTrue($c->updateAward($id, ['PublicComment' => 'secret reason']));
+        $this->hide($rec);
+        $line = $this->fx->fetchAward($id);
+
+        // The Manager's note goes through the same gate (a stale Manager tab could
+        // still hold the reason it pre-filled while the rec was public).
+        $note = $c->publishableCitationForRec('secret reason', $rec);
+        $this->assertSame('', $note);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = \Ork3::$Lib->player->AddAward([
+            'Token' => $off['token'], 'RecipientId' => $recip, 'KingdomAwardId' => (int)$line['kingdomaward_id'],
+            'AwardId' => 0, 'Rank' => 1, 'Date' => date('Y-m-d'), 'GivenById' => $off['mundane_id'],
+            'CustomName' => '', 'Note' => $note, 'ParkId' => 0, 'KingdomId' => $this->fx->firstKingdomId(), 'EventId' => 0,
+        ]);
+        $this->assertSame(0, (int)$r['Status'], json_encode($r));
+        $this->ledgerIds[] = (int)$r['AwardId'];
+        $this->assertSame(1, $c->reconcileGrantForRecommendation($rec, (int)$r['AwardId'], $off['mundane_id'], 1, $recip, (int)$line['kingdomaward_id'], 'leave', $off['mundane_id']));
+
+        $this->assertSame('given', $this->fx->fetchAward($id)['status']);
+        $this->assertSame('', $this->fx->fetchAward($id)['public_comment'], 'the stored citation is blanked on the way to given');
+        $this->assertSame('', (string)$this->fx->pdo()->query('SELECT note FROM ' . DB_PREFIX . 'awards WHERE awards_id = ' . (int)$r['AwardId'])->fetchColumn());
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "court SET status = 'complete' WHERE court_id = " . $court);
+        $this->assertSame('', $this->reportCitation($c, $court, $id));
+    }
+
+    /** G: a row finalized BEFORE this fix (citation = reason, rec hidden since) reads as empty on the Court Report. */
+    public function testCourtReportBlanksAnOldRowWhoseCitationIsANowHiddenReason(): void
+    {
+        [$id, $rec, $off, $c, $court] = $this->commitableLine();
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "court_award SET status = 'given', public_comment = 'secret reason' WHERE court_award_id = " . $id);
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "court SET status = 'complete' WHERE court_id = " . $court);
+        $this->assertSame('secret reason', $this->reportCitation($c, $court, $id), 'public rec: its citation shows');
+        $this->hide($rec);
+        $this->assertSame('', $this->reportCitation($c, $court, $id));
+    }
+
+    /** G: officer-typed text still shows on the Court Report for a hidden rec's line. */
+    public function testCourtReportShowsTypedTextForAHiddenRecsLine(): void
+    {
+        [$id, $rec, $off, $c, $court] = $this->commitableLine();
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "court_award SET status = 'given', public_comment = 'For service to the realm.' WHERE court_award_id = " . $id);
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "court SET status = 'complete' WHERE court_id = " . $court);
+        $this->hide($rec);
+        $this->assertSame('For service to the realm.', $this->reportCitation($c, $court, $id));
+    }
+
+    /** G: prepopulating from the last court does not carry a hidden rec's reason onto the new line. */
+    public function testPrepopulateDoesNotCarryAHiddenReason(): void
+    {
+        $k     = $this->fx->firstKingdomId();
+        $p     = $this->fx->firstParkId($k);
+        $ka    = $this->fx->firstKingdomAwardId($k);
+        $recip = $this->fx->createPlayer('mo-g', $k, $p)['mundane_id'];
+        $rec   = $this->fx->createRecommendation($recip, (int)$ka['kingdomaward_id'], (int)$ka['award_id'], ['reason' => 'secret reason']);
+        $kOff  = $this->kingdomOfficer($k, $p)['mundane_id'];
+        $last  = $this->fx->createCourt(['kingdom_id' => $k, 'park_id' => $p, 'court_date' => '2099-12-30']);
+        $c     = new \Court();
+        $old   = (int)$c->addAward($last, $k, $recip, (int)$ka['kingdomaward_id'], 1, $rec, 0, '', 'secret reason', true, $kOff)['CourtAwardId'];
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "court_award SET status = 'cancelled' WHERE court_award_id = " . $old);
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "court SET status = 'complete' WHERE court_id = " . $last);
+        $this->hide($rec);
+
+        $rows = array_column($c->getUngrantedFromLastCourt($k, $p), null, 'CourtAwardId');
+        $this->assertArrayHasKey($old, $rows);
+        $this->assertSame('', $rows[$old]['PublicComment']);
+
+        // And addAward itself never stores that text on a line drawn from the hidden rec.
+        $next = $this->fx->createCourt(['kingdom_id' => $k, 'park_id' => $p]);
+        $new  = (int)$c->addAward($next, $k, $recip, (int)$ka['kingdomaward_id'], 1, $rec, 0, '', 'secret reason', false, $kOff)['CourtAwardId'];
+        $this->assertSame('', $this->fx->fetchAward($new)['public_comment']);
+    }
+
     public function testPendingRecsHonourToken(): void
     {
         $k     = $this->fx->firstKingdomId();

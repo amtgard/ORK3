@@ -2370,7 +2370,8 @@ $_total_awards = count($courtAwards ?? []);
     var cpGiverOptions = window.cpGiverOptions = <?= json_encode($giverOptions) ?>;
     var cpMode         = window.cpMode         = <?= json_encode($courtMode) ?>;
     var cpStagedCount  = window.cpStagedCount  = <?= (int)$stagedCount ?>;
-    var cpPrevSkipped  = window.cpPrevSkipped  = <?= json_encode($prevSkipped) ?>;
+    <?php /* No cpPrevSkipped dump: nothing in the client read it, and it carried the
+             previous court's raw rows. The banner above uses count($prevSkipped). */ ?>
     var cpStateVersion = <?= json_encode($stateVersion) ?>;
     // Human-readable court date for the grant modal (F j, Y).
     var cpCourtDateHuman = <?= json_encode($court['CourtDate'] ? date('F j, Y', strtotime($court['CourtDate'])) : '') ?>;
