@@ -246,6 +246,18 @@ revive, reuse) and `updateAward` write the flag as the officer set it, and:
   Monarchy Only rec (its effective level changes), bump `row_version` on every
   still-open court line drawn from the rec (`Court::bumpOpenLinesForRec`).
 
+**One citation gate.** Every court citation that is published or shown to the
+public passes through `Court::publishable_citation($publicComment, $recReason,
+$recMonarchyOnly)` (private static): it returns `''` when the line's rec is
+Monarchy Only now and the citation is its reason (trimmed), else the citation
+unchanged. Writers: `commitStagedAward` + `setAwardId`, the Recs Manager grant's
+"leave on court" (`reconcileGrantForRecommendation` blanks the line on its way
+to `given`) and its note (`publishableCitationForRec`), `addAward` (incl.
+prepopulate). Readers: the login-free Court Report (`getCourtReportDetail`, at
+read time — rows finalized earlier are covered too), `getUngrantedFromLastCourt`
+and the planner reads (`withholdHiddenRecs`). The stage/update refusal
+(`isHiddenRecCitation`) is the same test.
+
 **Planner client.** `addAward`'s response and `getCourtAwards` rows carry
 `PublicCommentCleared` and `RecMonarchyOnly`. The Monarchy Only field carries
 the line's persisted cleared flag (so a save posts it back unchanged). The
