@@ -972,7 +972,8 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				<i class="fas fa-map-marked-alt"></i> Map
 			</button>
 			<?php endif; ?>
-			<?php $_mapHref = $mapLink ?: ($mapQueryAddress ? 'https://maps.google.com/maps?q=' . urlencode($mapQueryAddress) : ''); ?>
+			<?php // Prefer the street address: Google Maps shows a named place for it, a bare pin for coordinates. ?>
+			<?php $_mapHref = $mapQueryAddress ? 'https://maps.google.com/maps?q=' . urlencode($mapQueryAddress) : $mapLink; ?>
 			<?php if ($_mapHref): ?>
 			<a href="<?= htmlspecialchars($_mapHref) ?>" target="_blank" rel="noopener" class="ev-stat-action" data-tip="Open in Google Maps">
 				<i class="fas fa-map"></i> Google Maps
@@ -2056,14 +2057,14 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 
 			<?php if ($hasMapTab): ?>
 			<?php
-				$mapOpenUrl  = $mapLink ?: null;
 				$mapQuery    = urlencode($mapQueryAddress);
-				if ($mapLink && strpos($mapLink, 'q=@') !== false) {
-					// lat/lng link — strip @ for embed (Google Maps embed doesn't accept @)
-					$mapEmbedUrl = str_replace('?q=@', '?q=', $mapLink) . '&output=embed&z=14';
-				} else {
-					$mapEmbedUrl = 'https://maps.google.com/maps?q=' . $mapQuery . '&output=embed';
-				}
+				$mapOpenUrl  = $mapQueryAddress ? 'https://maps.google.com/maps?q=' . $mapQuery : ($mapLink ?: null);
+				// Coordinates → JS-API pin map, so touch devices pan with one finger
+				// (embed iframes are locked to two-finger panning). An address-only
+				// event has no coordinates to pin, so it keeps the embed iframe.
+				$mapPin = ($mapLink && preg_match('/q=@(-?[0-9.]+),(-?[0-9.]+)/', $mapLink, $_mapPt))
+					? ['lat' => (float)$_mapPt[1], 'lng' => (float)$_mapPt[2]] : null;
+				$mapEmbedUrl = 'https://maps.google.com/maps?q=' . $mapQuery . '&output=embed';
 				if (!$mapOpenUrl) $mapOpenUrl = 'https://maps.google.com/maps?q=' . $mapQuery;
 			?>
 			<?php // ---- Map Tab ---- ?>
@@ -2074,6 +2075,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					</a>
 				</div>
 				<div style="width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--ork-border)">
+					<?php if ($mapPin): ?>
+					<div class="ork-pin-map" role="region" aria-label="Event location map" data-lat="<?= $mapPin['lat'] ?>" data-lng="<?= $mapPin['lng'] ?>" data-zoom="14" style="height:400px"></div>
+					<?php else: ?>
 					<iframe
 						src="<?= htmlspecialchars($mapEmbedUrl) ?>"
 						width="100%"
@@ -2083,6 +2087,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 						loading="lazy"
 						referrerpolicy="no-referrer-when-downgrade"
 					></iframe>
+					<?php endif; ?>
 				</div>
 			</div><!-- /.ev-tab-panel -->
 			<?php endif; ?>

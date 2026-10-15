@@ -26,6 +26,9 @@ class Court
      */
     private const SQL_EFFECTIVE_IS_TITLE  = 'GREATEST(COALESCE(ka.is_title, 0), COALESCE(a.is_title, 0))';
 
+    /** The refusal CourtAjax returns when a posted citation is a hidden rec's reason. */
+    public const HIDDEN_CITATION_MESSAGE = 'This citation is the text of a Monarchy Only recommendation, which is never published. Edit or clear it to continue.';
+
     /**
      * Effective is_ladder, including kingdom-original ladders.
      *
@@ -448,6 +451,107 @@ class Court
     }
 
     /**
+     * May $caller_uid put recommendation $rec_id on a court line for $mundane_id?
+     * The rec must exist and be ABOUT that recipient — otherwise any officer could
+     * attach another player's rec id and read its reason and recommender back out
+     * of getCourtAwards. A Monarchy Only rec additionally needs a caller who can see
+     * it (RecommendationVisibility::canSee); no caller (0) is refused, fail closed.
+     */
+    public function canUseRecForLine($rec_id, $mundane_id, $caller_uid = 0)
+    {
+        return $this->recUsableForLine(
+            Ork3::$Lib->recommendationvisibility->loadRec((int)$rec_id),
+            (int)$mundane_id,
+            (int)$caller_uid
+        );
+    }
+
+    /** canUseRecForLine() on a rec already loaded by RecommendationVisibility::loadRec(). */
+    private function recUsableForLine(?array $rec, int $mundane_id, int $caller_uid): bool
+    {
+        if ($rec === null || $mundane_id <= 0 || $rec['MundaneId'] !== $mundane_id) {
+            return false;
+        }
+        return Ork3::$Lib->recommendationvisibility->canSee($caller_uid, $rec);
+    }
+
+    /**
+     * The court-side name for THE single publishing gate,
+     * RecommendationVisibility::publishable_citation (one implementation): '' when
+     * the line's rec is Monarchy Only now and the citation is its reason (trimmed),
+     * else the citation unchanged. Used by every publishing writer
+     * (commitStagedAward/setAwardId, reconcileGrantForRecommendation, addAward), the
+     * public reader (getCourtReportDetail) and the officer readers
+     * (withholdHiddenRecs, getUngrantedFromLastCourt).
+     */
+    private static function publishable_citation(string $publicComment, string $recReason, bool $recMonarchyOnly): string
+    {
+        return RecommendationVisibility::publishable_citation($publicComment, $recReason, $recMonarchyOnly);
+    }
+
+    /**
+     * The gate for text tied to recommendation $rec_id (its CURRENT reason and
+     * state), for callers outside Court such as the Recs Manager grant note.
+     */
+    public function publishableCitationForRec($publicComment, $rec_id)
+    {
+        return Ork3::$Lib->recommendationvisibility->publishable_text_for_rec((string)$publicComment, (int)$rec_id);
+    }
+
+    /**
+     * Server-side backstop for a stale planner. A planner opened while a rec was
+     * public holds its reason; if the rec is hidden afterwards, that tab could still
+     * post the reason as the line's PublicComment (Grant modal pre-fill, "(Start from
+     * Rec)"), and commitStagedAward publishes a typed comment as-is. So a citation
+     * that IS the line's rec's reason (trimmed) is refused while that rec is Monarchy
+     * Only. CourtAjax checks this first and answers HIDDEN_CITATION_MESSAGE (not the
+     * reload status: a reload would never clear it); stageAward/updateAward keep it
+     * as the backstop. Court reads present such a stored citation as empty
+     * (withholdHiddenRecs), so no tab is left holding it. Anything the officer
+     * actually wrote, and a public rec's reason, are unaffected.
+     */
+    public function isHiddenRecCitation($court_award_id, $comment)
+    {
+        $court_award_id = (int)$court_award_id;
+        $comment        = trim((string)$comment);
+        if ($court_award_id <= 0 || $comment === '') {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT rec.reason, rec.monarchy_only
+               FROM ' . DB_PREFIX . 'court_award ca
+               JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
+              WHERE ca.court_award_id = ' . $court_award_id . ' LIMIT 1'
+        );
+        return (bool)($rs && $rs->Next()
+            && self::publishable_citation($comment, (string)($rs->reason ?? ''), (int)$rs->monarchy_only !== 0) === '');
+    }
+
+    /**
+     * A rec's effective visibility changed (hide, unhide, pass-down): bump
+     * row_version on every still-open court line drawn from it. The heartbeat's
+     * version stamp is built from court_award rows, so this is what makes open
+     * planners re-fetch the line (and its RecMonarchyOnly / RecReason) — and it
+     * makes any stale write still carrying the old RowVersion fail with the
+     * existing "this row changed — reload" answer. Committed and cancelled lines
+     * are history and are left alone.
+     */
+    public function bumpOpenLinesForRec($rec_id)
+    {
+        $rec_id = (int)$rec_id;
+        if ($rec_id <= 0) {
+            return;
+        }
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'court_award SET row_version = row_version + 1
+              WHERE recommendations_id = ' . $rec_id . '
+                AND status NOT IN (\'given\', \'cancelled\')'
+        );
+    }
+
+    /**
      * Add an award to a court. Enforces object-level authorization: the
      * kingdomaward must belong to $kingdom_id (the court's own kingdom), else
      * an officer could attach another kingdom's award id. Returns the assembled
@@ -458,8 +562,13 @@ class Court
      * artisan load, returning only the identity fields. Bulk callers such as
      * prepopulate_from_last_court check nothing but `!== false`, and paid ~3
      * queries per row for a payload they discarded.
+     *
+     * $caller_uid is the officer making the add. A recommendation-backed line is
+     * refused (false) unless canUseRecForLine() passes: the rec must be about
+     * $mundane_id, and a Monarchy Only rec must be visible to the caller. The
+     * default 0 therefore refuses every hidden rec.
      */
-    public function addAward($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich = true)
+    public function addAward($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich = true, $caller_uid = 0)
     {
         $court_id        = (int)$court_id;
         $kingdom_id      = (int)$kingdom_id;
@@ -477,6 +586,14 @@ class Court
                 AND kingdom_id = ' . $kingdom_id . ' LIMIT 1'
         );
         if (!$chk || !$chk->Next()) {
+            return false;
+        }
+
+        // Object-level authorization for the recommendation itself. Loaded once:
+        // its Monarchy Only state below comes from this same read.
+        $vis = Ork3::$Lib->recommendationvisibility;
+        $rec = $rec_id > 0 ? $vis->loadRec($rec_id) : null;
+        if ($rec_id > 0 && !$this->recUsableForLine($rec, $mundane_id, (int)$caller_uid)) {
             return false;
         }
 
@@ -501,7 +618,7 @@ class Court
             $this->db->Clear();
             $dup = $this->db->DataSet(
                 'SELECT court_award_id, rank, sort_order, pass_to_local, notes,
-                        public_comment, status, scroll_status, regalia_status
+                        public_comment, recommendations_id, public_comment_cleared, status, scroll_status, regalia_status
                    FROM ' . DB_PREFIX . "court_award
                   WHERE court_id = " . $court_id . '
                     AND (recommendations_id = ' . $rec_id . '
@@ -519,6 +636,8 @@ class Court
                     'pass_to_local'  => (int)$dup->pass_to_local,
                     'notes'          => (string)($dup->notes ?? ''),
                     'public_comment' => (string)($dup->public_comment ?? ''),
+                    'rec_id'         => (int)$dup->recommendations_id,
+                    'cleared'        => (int)$dup->public_comment_cleared,
                     'status'         => (string)$dup->status,
                     'scroll_status'  => (int)$dup->scroll_status,
                     'regalia_status' => (int)$dup->regalia_status,
@@ -542,10 +661,12 @@ class Court
             $sort           = $existing['sort_order'];
             $pass_to_local  = $existing['pass_to_local'];
             $notes          = $existing['notes'];
-            $public_comment = $existing['public_comment'];
+            // Echoed back to the planner: never as a hidden rec's reason.
+            $public_comment = $this->publishableCitationForRec($existing['public_comment'], $existing['rec_id']);
             $status         = $existing['status'];
             $scroll_status  = $existing['scroll_status'];
             $regalia_status = $existing['regalia_status'];
+            $cleared        = $existing['cleared'];
         } else {
             // Next sort_order — the bottom of the whole running order, notes included,
             // so a new award never lands above a trailing note.
@@ -554,14 +675,26 @@ class Court
             $rec_val   = $rec_id > 0 ? $rec_id : 'NULL';
             $notes_val = "'" . $this->esc($notes) . "'";
 
+            // public_comment_cleared is ONLY the officer's explicit "(Clear)". A Monarchy
+            // Only rec's reason is withheld by reading the rec's CURRENT state wherever
+            // the reason would be used (commitStagedAward, the planner, the Record view),
+            // not by a flag written here: a flag set at add time went stale when the rec
+            // was later unhidden, and the line then never inherited its reason.
+            $cleared = 0;
+            // Never store a hidden rec's reason as this line's citation (e.g. a
+            // prepopulated copy from the last court).
+            if ($rec !== null && $rec['MonarchyOnly'] !== 0) {
+                $public_comment = $this->publishableCitationForRec($public_comment, $rec_id);
+            }
+
             $this->db->Clear();
             $this->db->Execute(
                 'INSERT INTO ' . DB_PREFIX . 'court_award
              (court_id, mundane_id, kingdomaward_id, rank, recommendations_id,
-              sort_order, pass_to_local, notes, public_comment)
+              sort_order, pass_to_local, notes, public_comment, public_comment_cleared)
              VALUES (' . $court_id . ', ' . $mundane_id . ', ' . $kingdomaward_id . ', ' . $rank . ',
                      ' . $rec_val . ', ' . $sort . ', ' . $pass_to_local . ', ' . $notes_val . ',
-                     \'' . $this->esc($public_comment) . '\')'
+                     \'' . $this->esc($public_comment) . '\', ' . $cleared . ')'
             );
             if ($rec_id > 0) {
                 // uniq_court_rec (court_id, recommendations_id) makes "one
@@ -612,7 +745,7 @@ class Court
                              pass_to_local = ' . $pass_to_local . ',
                              notes = ' . $notes_val . ',
                              public_comment = \'' . $this->esc($public_comment) . '\',
-                             public_comment_cleared = 0,
+                             public_comment_cleared = ' . $cleared . ',
                              award_id = NULL,
                              given_by_mundane_id = NULL,
                              last_finalize_error = NULL,
@@ -625,7 +758,13 @@ class Court
                             AND status = \'cancelled\''
                     );
                 } elseif ($back_status !== '') {
+                    // Lost the insert race: hand back the winner's line as it stands.
                     $status = $back_status;
+                    $this->db->Clear();
+                    $won = $this->db->DataSet('SELECT public_comment_cleared FROM ' . DB_PREFIX . 'court_award WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
+                    if ($won && $won->Next()) {
+                        $cleared = (int)$won->public_comment_cleared;
+                    }
                 }
             } else {
                 // Walk-on line (recommendations_id NULL, so outside the unique
@@ -647,6 +786,7 @@ class Court
         $is_ladder   = false;
         $is_title    = false;
         $rec_reason  = '';
+        $rec_hidden  = false;
 
         if ($enrich) {
             // Fetch persona + award_name for response
@@ -670,12 +810,20 @@ class Court
                 $is_title    = (bool)(int)$info->is_title;
             }
 
-            if ($rec_id) {
+            if ($rec !== null) {
+                // The caller passed recUsableForLine(), so it may see this reason.
                 $this->db->Clear();
                 $rr = $this->db->DataSet('SELECT reason FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . $rec_id . ' LIMIT 1');
                 if ($rr && $rr->Next()) {
                     $rec_reason = $rr->reason ?? '';
                 }
+                $rec_hidden = $rec['MonarchyOnly'] !== 0;
+            }
+            // A repeat add can return a line tied to a SIBLING rec of the same honor;
+            // the flag must describe what that line would publish.
+            if (!$rec_hidden && $existing !== null && $existing['rec_id'] > 0 && $existing['rec_id'] !== $rec_id) {
+                $sibling    = $vis->loadRec($existing['rec_id']);
+                $rec_hidden = $sibling !== null && $sibling['MonarchyOnly'] !== 0;
             }
         }
 
@@ -694,6 +842,11 @@ class Court
             'PassToLocal'       => (bool)$pass_to_local,
             'Notes'             => $notes,
             'PublicComment'     => $public_comment,
+            // The planner builds the new row from this payload, so it must carry the
+            // line's real citation state: without these the row rendered as
+            // "inherits the rec reason" and offered (Start from Rec) on a hidden rec.
+            'PublicCommentCleared' => (bool)$cleared,
+            'RecMonarchyOnly'   => $rec_hidden,
             'RecReason'         => $rec_reason,
             'Status'            => $status,
             'ScrollStatus'      => $scroll_status,
@@ -881,13 +1034,17 @@ class Court
             $sets[] = 'notes = \'' . $this->esc((string)$fields['Notes']) . '\'';
         }
         if (array_key_exists('PublicComment', $fields)) {
+            if ($this->isHiddenRecCitation($court_award_id, (string)$fields['PublicComment'])) {
+                return false;
+            }
             $sets[] = 'public_comment = \'' . $this->esc((string)$fields['PublicComment']) . '\'';
         }
         if (array_key_exists('PublicCommentCleared', $fields)) {
             // The officer's explicit "publish nothing for this line" flag. Only an
             // explicitly cleared line suppresses the inherited recommendation
             // reason at commit; a line that merely happens to be blank still
-            // inherits, exactly as it always has.
+            // inherits, exactly as it always has. A Monarchy Only rec's reason is
+            // withheld by the commit-time re-read of the rec, not by this flag.
             $sets[] = 'public_comment_cleared = ' . ((int)$fields['PublicCommentCleared'] ? 1 : 0);
         }
         if (array_key_exists('PassToLocal', $fields)) {
@@ -1244,6 +1401,9 @@ class Court
      */
     public function stageAward($court_award_id, $given_by_mundane_id, $public_comment, $rank, $expectedRowVersion = null)
     {
+        if ($this->isHiddenRecCitation((int)$court_award_id, (string)$public_comment)) {
+            return false;
+        }
         $where = 'court_award_id = ' . (int)$court_award_id . '
                 AND status NOT IN (\'given\', \'cancelled\', \'staged\')';
         if ($expectedRowVersion !== null) {
@@ -1301,15 +1461,19 @@ class Court
     /**
      * All staged rows on a court with every field finalize needs to call
      * add_player_award, plus the owning court's context (park/kingdom/date/event).
+     *
+     * $caller_uid: RecReason is blanked on lines whose Monarchy Only rec the caller
+     * may not see (see withholdHiddenRecs). The commit never publishes a hidden rec's
+     * reason anyway; this keeps it out of the caller's hands too.
      */
-    public function getStagedAwards($court_id)
+    public function getStagedAwards($court_id, $caller_uid = 0)
     {
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
                     ca.given_by_mundane_id, ca.public_comment, ca.notes,
                     ca.pass_to_local, ca.recommendations_id,
-                    rec.reason AS rec_reason,
+                    rec.reason AS rec_reason, IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only,
                     c.park_id, c.kingdom_id, c.court_date, c.event_calendardetail_id
              FROM ' . DB_PREFIX . 'court_award ca
              JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
@@ -1330,6 +1494,7 @@ class Court
                     'PublicComment'         => $rs->public_comment ?? '',
                     'Notes'                 => $rs->notes ?? '',
                     'RecReason'             => $rs->rec_reason ?? '',
+                    'RecMonarchyOnly'       => (int)$rs->rec_monarchy_only !== 0,
                     'PassToLocal'           => (bool)(int)$rs->pass_to_local,
                     'RecommendationsId'     => $rs->recommendations_id ? (int)$rs->recommendations_id : 0,
                     'ParkId'                => (int)$rs->park_id,
@@ -1337,6 +1502,67 @@ class Court
                     'CourtDate'             => $rs->court_date,
                     'EventCalendarDetailId' => (int)$rs->event_calendardetail_id,
                 ];
+            }
+        }
+        return $this->withholdHiddenRecs($rows, (int)$caller_uid);
+    }
+
+    /**
+     * Monarchy Only on a court line. A court line can carry a rec its court's
+     * managers may not see: a kingdom officer may put a kingdom-level hide on a PARK
+     * court, and a rec can be hidden after its line was staged. Such a caller keeps
+     * RecMonarchyOnly (the planner shows the "Monarchy Only" notice) but gets no
+     * RecReason and no RecByPersona. A caller who is the line's RECIPIENT gets
+     * RecMonarchyOnly = false as well: they must not learn a hidden rec backs it.
+     * Visibility is RecommendationVisibility's rule, for the caller (the session user threaded from the controller); 0 sees none.
+     */
+    private function withholdHiddenRecs(array $rows, int $caller_uid): array
+    {
+        $vis  = Ork3::$Lib->recommendationvisibility;
+        $seen = [];
+        foreach ($rows as $i => $row) {
+            $rid = (int)($row['RecommendationsId'] ?? 0);
+            if (empty($row['RecMonarchyOnly']) || $rid <= 0) {
+                continue;
+            }
+            // A stored citation that IS the hidden reason (saved while the rec was
+            // public) is never published, so it is not handed to anyone as the line's
+            // citation: the Grant modal would pre-fill it and Save would re-post it,
+            // and the server refuses that text — a line nobody could save. Presented
+            // empty, the next save clears it. (Commit withholds it independently.)
+            $rows[$i]['PublicComment'] = self::publishable_citation(
+                (string)($row['PublicComment'] ?? ''),
+                (string)($row['RecReason'] ?? ''),
+                true
+            );
+            // A court manager who is this line's RECIPIENT must not learn a hidden rec
+            // backs their own line at all: no notice, no reason, no recommender, and no
+            // rec id (the "from a recommendation" marker and pass-to-local control key on
+            // it). Nothing is left to inherit, so this cannot leak a citation either;
+            // commit and pass-to-local read the rec id from the database.
+            if ($caller_uid > 0 && $caller_uid === (int)($row['MundaneId'] ?? 0)) {
+                $rows[$i]['RecMonarchyOnly'] = false;
+                $rows[$i]['RecReason']       = '';
+                if (array_key_exists('RecByPersona', $row)) {
+                    $rows[$i]['RecByPersona'] = null;
+                }
+                // getCourtAwards rows say "no rec" as null + IsWalkOn; getStagedAwards as 0.
+                if (array_key_exists('IsWalkOn', $row)) {
+                    $rows[$i]['RecommendationsId'] = null;
+                    $rows[$i]['IsWalkOn']          = true;
+                } else {
+                    $rows[$i]['RecommendationsId'] = 0;
+                }
+                continue;
+            }
+            if (!isset($seen[$rid])) {
+                $seen[$rid] = $vis->canSeeRecId($caller_uid, $rid);
+            }
+            if (!$seen[$rid]) {
+                $rows[$i]['RecReason'] = '';
+                if (array_key_exists('RecByPersona', $row)) {
+                    $rows[$i]['RecByPersona'] = null;
+                }
             }
         }
         return $rows;
@@ -1375,12 +1601,16 @@ class Court
      *     was actually published makes the court line the single source of truth.
      *     Never rewrites text an officer typed.
      */
-    public function setAwardId($court_award_id, $award_id, $resolved_citation = null)
+    public function setAwardId($court_award_id, $award_id, $resolved_citation = null, $replace_citation = false)
     {
         $sets = 'award_id = ' . (int)$award_id . ',
                  last_finalize_error = NULL,
                  row_version = row_version + 1';
-        if (is_string($resolved_citation) && $resolved_citation !== '') {
+        if ($replace_citation) {
+            // The stored citation was withheld at commit (a hidden rec's reason):
+            // overwrite it with what was actually published.
+            $sets .= ', public_comment = \'' . $this->esc((string)$resolved_citation) . '\'';
+        } elseif (is_string($resolved_citation) && $resolved_citation !== '') {
             $sets .= ', public_comment = CASE
                            WHEN public_comment IS NULL OR public_comment = \'\'
                            THEN \'' . $this->esc($resolved_citation) . '\'
@@ -1406,7 +1636,7 @@ class Court
             'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
                     ca.given_by_mundane_id, ca.public_comment, ca.public_comment_cleared,
                     ca.notes, ca.pass_to_local, ca.recommendations_id,
-                    rec.reason AS rec_reason,
+                    rec.reason AS rec_reason, IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only,
                     c.park_id, c.kingdom_id, c.court_date, c.event_calendardetail_id
              FROM ' . DB_PREFIX . 'court_award ca
              JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
@@ -1426,6 +1656,7 @@ class Court
             'PublicCommentCleared'  => (bool)(int)$rs->public_comment_cleared,
             'Notes'                 => $rs->notes ?? '',
             'RecReason'             => $rs->rec_reason ?? '',
+            'RecMonarchyOnly'       => (int)$rs->rec_monarchy_only !== 0,
             'PassToLocal'           => (bool)(int)$rs->pass_to_local,
             'RecommendationsId'     => $rs->recommendations_id ? (int)$rs->recommendations_id : 0,
             'ParkId'                => (int)$rs->park_id,
@@ -1451,9 +1682,12 @@ class Court
     {
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT rank, given_by_mundane_id, public_comment, public_comment_cleared, notes
-               FROM ' . DB_PREFIX . 'court_award
-              WHERE court_award_id = ' . (int)$court_award_id . ' LIMIT 1'
+            'SELECT ca.rank, ca.given_by_mundane_id, ca.public_comment, ca.public_comment_cleared, ca.notes,
+                    ca.recommendations_id, rec.reason AS rec_reason,
+                    IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only
+               FROM ' . DB_PREFIX . 'court_award ca
+               LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
+              WHERE ca.court_award_id = ' . (int)$court_award_id . ' LIMIT 1'
         );
         if (!$rs || !$rs->Next()) {
             return null;
@@ -1464,6 +1698,12 @@ class Court
             'PublicComment'    => $rs->public_comment ?? '',
             'PublicCommentCleared' => (bool)(int)$rs->public_comment_cleared,
             'Notes'            => $rs->notes ?? '',
+            // The rec can be hidden after its line was staged; the commit must see
+            // its CURRENT state, not the batch's — and its real reason and id, not
+            // the caller-filtered copies getStagedAwards hands a court manager.
+            'RecMonarchyOnly'  => (int)$rs->rec_monarchy_only !== 0,
+            'RecReason'        => $rs->rec_reason ?? '',
+            'RecommendationsId' => $rs->recommendations_id ? (int)$rs->recommendations_id : 0,
         ];
     }
 
@@ -1619,9 +1859,22 @@ class Court
         // anyway and published the confidential (often anonymous) recommender's
         // reason to a permanent, un-undoable record. public_comment_cleared
         // carries that intent; a line nobody cleared inherits exactly as before.
+        //
+        // A Monarchy Only rec's reason is never inherited, whatever the line's flag
+        // says: the rec may have been hidden after its line was staged (the flag was
+        // set only at add time), and RecMonarchyOnly is re-read at commit.
         $note     = $row['PublicComment'] !== ''
             ? $row['PublicComment']
-            : (empty($row['PublicCommentCleared']) ? $row['RecReason'] : '');
+            : ((empty($row['PublicCommentCleared']) && empty($row['RecMonarchyOnly'])) ? $row['RecReason'] : '');
+        // ...and never as a TYPED citation either. A line staged (or saved) while
+        // its rec was public can carry the reason verbatim in public_comment — Grant
+        // modal pre-fill, Record view "Given", "(Start from Rec)" + Save, then Bulk
+        // Record Grants — and the rec can be hidden before finalize. The commit
+        // re-reads both, publishes nothing in that case, and setAwardId blanks the
+        // stored citation so the public Court Report agrees.
+        $published = self::publishable_citation($note, (string)($row['RecReason'] ?? ''), !empty($row['RecMonarchyOnly']));
+        $withheld  = $published !== $note;
+        $note      = $published;
 
         // (3) Throw-safe player-record write. add_player_award returns the FLAT
         // shape: Status (int, 0=success), Error, Detail (+ our new AwardId).
@@ -1667,8 +1920,25 @@ class Court
         $award_id = (int)($r['AwardId'] ?? 0);
         // Freezes the citation that was actually published and clears any failure
         // recorded by an earlier attempt at this line, in the same statement.
-        $this->setAwardId($court_award_id, $award_id, $note);
+        $this->setAwardId($court_award_id, $award_id, $note, $withheld);
         $row['PublicComment'] = $note;
+
+        // Close the line's OWN recommendation now, in the domain. The caller's
+        // token-authorized cluster resolve cannot: it answers "not found" for a
+        // Monarchy Only rec the finalizing officer may not see (a kingdom-level
+        // hide on a park court), which left the granted rec live to be granted
+        // again. The court line authorizes acting on its own rec. Best-effort, like
+        // the cluster resolve: a failure here never undoes the committed grant.
+        if (!empty($row['RecommendationsId'])) {
+            try {
+                Ork3::$Lib->player->resolve_court_line_recommendation(
+                    (int)$row['RecommendationsId'],
+                    (int)$row['MundaneId'],
+                    (int)Ork3::$Lib->authorization->IsAuthorized($ctx['Token'] ?? '')
+                );
+            } catch (\Throwable $e) { /* best-effort */
+            }
+        }
 
         return [
             'status'   => 'ok',
@@ -1817,12 +2087,14 @@ class Court
         // Build the match: exact rec id OR the cluster key. At least one must be usable.
         $matches = [];
         if ($recommendations_id > 0) {
-            $matches[] = 'recommendations_id = ' . $recommendations_id;
+            $matches[] = 'ca.recommendations_id = ' . $recommendations_id;
         }
         if ($mundane_id > 0 && $kingdomaward_id > 0) {
-            $clusterMatch = 'mundane_id = ' . $mundane_id . ' AND kingdomaward_id = ' . $kingdomaward_id;
+            // Qualified: the candidate query joins recommendations, which shares
+            // these column names.
+            $clusterMatch = 'ca.mundane_id = ' . $mundane_id . ' AND ca.kingdomaward_id = ' . $kingdomaward_id;
             if ($rank !== null) {
-                $clusterMatch .= ' AND rank = ' . $rank;
+                $clusterMatch .= ' AND ca.rank = ' . $rank;
             }
             $matches[] = '(' . $clusterMatch . ')';
         }
@@ -1839,14 +2111,17 @@ class Court
         // finalized history.
         $this->db->Clear();
         $cand = $this->db->DataSet(
-            'SELECT ca.court_award_id, c.kingdom_id, c.park_id
+            'SELECT ca.court_award_id, c.kingdom_id, c.park_id, ca.public_comment,
+                    rec.reason AS rec_reason, IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only
                FROM ' . DB_PREFIX . 'court_award ca
                JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
+               LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
               WHERE (' . implode(' OR ', $matches) . ')
                 AND ca.status IN (\'planned\', \'announced\', \'staged\')
                 AND c.status <> \'complete\''
         );
-        $ids = [];
+        $ids   = [];
+        $blank = [];
         if ($cand) {
             $authCache = [];
             while ($cand->Next()) {
@@ -1858,6 +2133,12 @@ class Court
                 }
                 if ($authCache[$key]) {
                     $ids[] = (int)$cand->court_award_id;
+                    // A 'given' line's citation is what the public Court Report
+                    // prints: a hidden rec's reason saved while it was public is blanked.
+                    $pc = (string)($cand->public_comment ?? '');
+                    if (self::publishable_citation($pc, (string)($cand->rec_reason ?? ''), (int)$cand->rec_monarchy_only !== 0) !== $pc) {
+                        $blank[] = (int)$cand->court_award_id;
+                    }
                 }
             }
         }
@@ -1875,6 +2156,9 @@ class Court
         }
         if ($giver > 0) {
             $sets .= ', ca.given_by_mundane_id = ' . $giver;
+        }
+        if ($blank) {
+            $sets .= ', ca.public_comment = IF(ca.court_award_id IN (' . implode(',', $blank) . "), '', ca.public_comment)";
         }
 
         // The UPDATE re-asserts every condition the candidate SELECT relied on that
@@ -2159,8 +2443,10 @@ class Court
         $rs = $this->db->DataSet(
             'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
                     ca.recommendations_id, ca.public_comment, ca.pass_to_local, ca.notes,
+                    rec.reason AS rec_reason, IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only,
                     m.persona, IFNULL(ka.name, a.name) AS award_name
              FROM ' . DB_PREFIX . 'court_award ca
+             LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
              LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = ca.mundane_id
              LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ca.kingdomaward_id
              LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
@@ -2186,7 +2472,8 @@ class Court
                     'AwardName'         => $rs->award_name ?? '',
                     'Rank'              => (int)$rs->rank,
                     'RecommendationsId' => $rs->recommendations_id ? (int)$rs->recommendations_id : 0,
-                    'PublicComment'     => $rs->public_comment ?? '',
+                    // Copied onto the next court by prepopulate: never a hidden reason.
+                    'PublicComment'     => self::publishable_citation((string)($rs->public_comment ?? ''), (string)($rs->rec_reason ?? ''), (int)$rs->rec_monarchy_only !== 0),
                     'PassToLocal'       => (bool)(int)$rs->pass_to_local,
                     'Notes'             => $rs->notes ?? '',
                 ];
@@ -2366,7 +2653,12 @@ class Court
     // Court awards
     // -----------------------------------------------------------------------
 
-    public function getCourtAwards($court_id)
+    /**
+     * Every line on a court, for the planner and the Record view. $caller_uid is the
+     * officer viewing it: lines whose Monarchy Only rec they may not see come back
+     * without RecReason / RecByPersona (withholdHiddenRecs). 0 = sees none.
+     */
+    public function getCourtAwards($court_id, $caller_uid = 0)
     {
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -2381,7 +2673,7 @@ class Court
                     IFNULL(ka.name, a.name) AS award_name, a.peerage,
                     ' . self::sqlEffectiveIsLadder() . ' AS is_ladder,
                     ' . self::SQL_EFFECTIVE_IS_TITLE . ' AS is_title,
-                    rec.reason AS rec_reason, rec.mask_giver,
+                    rec.reason AS rec_reason, rec.mask_giver, IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only,
                     rb.persona AS rec_by_persona
              FROM ' . DB_PREFIX . 'court_award ca
              LEFT JOIN ' . DB_PREFIX . 'mundane m      ON m.mundane_id         = ca.mundane_id
@@ -2438,6 +2730,9 @@ class Court
                     'RegaliaMakerId'     => $rs->regalia_maker_id ? (int)$rs->regalia_maker_id : null,
                     'RegaliaMakerPersona' => $rs->regalia_maker_persona ?? '',
                     'RecReason'         => $rs->rec_reason ?? '',
+                    // The planner must never offer, pre-fill or print a hidden rec's
+                    // reason as the public citation (row hint, Grant modal, herald sheet).
+                    'RecMonarchyOnly'   => (int)$rs->rec_monarchy_only !== 0,
                     'RecByPersona'      => (isset($rs->mask_giver) && (int)$rs->mask_giver) ? null : ($rs->rec_by_persona ?? null),
                     'Artisans'          => [],
                 ];
@@ -2471,14 +2766,14 @@ class Court
             }
         }
 
-        return array_values($awards);
+        return $this->withholdHiddenRecs(array_values($awards), (int)$caller_uid);
     }
 
     // -----------------------------------------------------------------------
     // Pending recommendations (for the add-from-rec modal)
     // -----------------------------------------------------------------------
 
-    public function getPendingRecommendations($kingdom_id, $park_id = 0, $caller_uid = 0, $court_id = 0)
+    public function getPendingRecommendations($kingdom_id, $park_id = 0, $caller_uid = 0, $court_id = 0, $caller_token = '')
     {
         // Delegate the heavy lifting (Master-peerage cascade, custom-award carve-out,
         // award_id cross-check, snooze awareness, age, seconds, anon masking) to
@@ -2487,7 +2782,7 @@ class Court
         //   - look up which recs are on THIS court vs SOME OTHER court
         //   - look up the park abbreviation (recommended_awards doesn't return it)
         //   - map the field names to what the Court Planner template expects
-        $req = ['RequestedBy' => (int)$caller_uid];
+        $req = ['RequestedBy' => (int)$caller_uid, 'Token' => (string)$caller_token];
         if ($park_id > 0) {
             $req['ParkId']    = (int)$park_id;
             $req['KingdomId'] = 0;
@@ -2938,6 +3233,7 @@ class Court
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT ca.court_award_id, ca.mundane_id, ca.rank, ca.public_comment,
+                    rec.reason AS rec_reason, IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only,
                     ca.given_by_mundane_id,
                     m.persona, p.abbreviation AS park_abbrev,
                     IFNULL(ka.name, a.name) AS award_name,
@@ -2952,6 +3248,7 @@ class Court
              LEFT JOIN ' . DB_PREFIX . 'mundane gb ON gb.mundane_id      = ca.given_by_mundane_id
              LEFT JOIN ' . DB_PREFIX . 'mundane sm ON sm.mundane_id      = ca.scroll_maker_id
              LEFT JOIN ' . DB_PREFIX . 'mundane rm ON rm.mundane_id      = ca.regalia_maker_id
+             LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
              WHERE ca.court_id = ' . (int)$court_id . ' AND ca.status = \'given\'
                AND NOT EXISTS (
                    SELECT 1 FROM ' . DB_PREFIX . 'awards oa
@@ -2971,7 +3268,9 @@ class Court
                     'AwardName'           => $rs->award_name,
                     'IsLadder'            => (bool)(int)$rs->is_ladder,
                     'Rank'                => (int)$rs->rank,
-                    'PublicComment'       => $rs->public_comment ?? '',
+                    // Login-free page: through the citation gate at read time, so rows
+                    // finalized before the gate existed are covered too.
+                    'PublicComment'       => self::publishable_citation((string)($rs->public_comment ?? ''), (string)($rs->rec_reason ?? ''), (int)$rs->rec_monarchy_only !== 0),
                     'GivenByMundaneId'    => $rs->given_by_mundane_id ? (int)$rs->given_by_mundane_id : 0,
                     'GivenByPersona'      => $rs->given_by_persona ?? '',
                     'ScrollMakerPersona'  => $rs->scroll_maker_persona ?? '',

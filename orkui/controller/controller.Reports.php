@@ -232,7 +232,7 @@ class Controller_Reports extends Controller
             $ladder = $this->request->Ladder;
         }
         $this->template = 'Reports_playerawardrecommendations.tpl';
-        $this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('KingdomId' => 'Kingdom' == $type ? $id : 0, 'ParkId' => 'Park' == $type ? $id : 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
+        $this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('KingdomId' => 'Kingdom' == $type ? $id : 0, 'ParkId' => 'Park' == $type ? $id : 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder, 'Token' => $this->session->token));
         $this->data['ScopeType'] = ($type === 'Park') ? 'park' : (($type === 'Kingdom') ? 'kingdom' : '');
         $this->data['CanDeleteRecommendation'] = $this->award_rec_can_delete($_uid);
         $this->data[ 'page_title' ] = "Award Recommendations";

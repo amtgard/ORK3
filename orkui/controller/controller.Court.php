@@ -118,10 +118,10 @@ class Controller_Court extends Controller
             return;
         }
 
-        $courtAwards  = $this->Court->get_court_awards($court_id);
+        $courtAwards  = $this->Court->get_court_awards($court_id, $uid);
         // Non-award line items that share the running order with the awards.
         $courtNotes   = $this->Court->get_court_notes($court_id);
-        $pendingRecs  = $this->Court->get_pending_recommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id);
+        $pendingRecs  = $this->Court->get_pending_recommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id, (string)$this->session->token);
         // Event options for the Edit Details modal's re-link select (spec 0.1) — mirrors
         // list()'s identical call; scoped to the COURT's kingdom, not the session's.
         $upcomingEvents = $this->Court->get_upcoming_events($court['KingdomId']);
@@ -267,7 +267,7 @@ class Controller_Court extends Controller
         $awardOptions = $this->Award->fetch_award_option_groups($court['KingdomId'], 'Awards');
 
         $this->data['Court']                  = $court;
-        $this->data['CourtAwards']            = $this->Court->get_court_awards($court_id);
+        $this->data['CourtAwards']            = $this->Court->get_court_awards($court_id, $uid);
         $this->data['GiverOptions']           = $this->Court->get_court_giver_options($court_id);
         $this->data['UpcomingEvents']         = $upcomingEvents;
         $this->data['CourtMode']              = $courtState['mode'] ?? 'run';

@@ -1571,6 +1571,15 @@ var KnBannerConfig = {
 				</label>
 				<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
 			</div>
+			<?php if (!empty($CanMonarchyOnlyRec)): ?>
+			<div class="pk-acct-field" style="margin-top:12px">
+				<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+					<input type="checkbox" id="kn-rec-monarchy" value="1" style="width:16px;height:16px;cursor:pointer">
+					<span>Monarchy Only</span>
+				</label>
+				<div class="mo-check-hint">Only officers will see this recommendation; the player will not.</div>
+			</div>
+			<?php endif; ?>
 		</div>
 		<div class="kn-modal-footer">
 			<button class="pk-btn-ghost" id="kn-rec-cancel">Cancel</button>
@@ -3558,4 +3567,5 @@ window.OrkRsCfg = {
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php include __DIR__ . '/_monarchy_only_assets.tpl'; ?>
 <?php endif; ?>

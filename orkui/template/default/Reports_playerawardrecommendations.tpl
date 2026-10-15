@@ -115,7 +115,7 @@ html[data-theme="dark"] .rp-rec-filter-help-default { color:#718096; }
 	<!-- ── Context strip ──────────────────────────────────── -->
 	<div class="rp-context">
 		<i class="fas fa-info-circle rp-context-icon"></i>
-		<span>Pending award recommendations submitted for players within <?=$scope_label ? htmlspecialchars($scope_label) : 'this ' . $scope_noun ?>. Authorized officers and the original recommender may delete recommendations.</span>
+		<span>Pending award recommendations submitted for players within <?=$scope_label ? htmlspecialchars($scope_label) : 'this ' . $scope_noun ?>. Authorized officers and the original recommender may dismiss recommendations.</span>
 	</div>
 
 	<!-- ── Stats row ──────────────────────────────────────── -->
@@ -217,7 +217,7 @@ html[data-theme="dark"] .rp-rec-filter-help-default { color:#718096; }
 <?php if ($this->__session->user_id) : ?>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Actions</span>
-						<span class="rp-col-guide-desc">Delete a recommendation (officers and the original recommender only).</span>
+						<span class="rp-col-guide-desc">Dismiss a recommendation (officers and the original recommender only).</span>
 					</div>
 <?php endif; ?>
 				</div>
@@ -271,7 +271,7 @@ html[data-theme="dark"] .rp-rec-filter-help-default { color:#718096; }
 <?php 		if ($this->__session->user_id) : ?>
 					<td>
 <?php 			if ($can_delete || $this->__session->user_id == $rec['RecommendedById'] || $this->__session->user_id == $rec['MundaneId']) : ?>
-						<a class="rp-action-link confirm-delete-rec" href="<?=UIR.'Player/profile/'.$rec['MundaneId'].'/deleterecommendation/'.$rec['RecommendationsId']?>"><i class="fas fa-trash-alt"></i> Delete</a>
+						<a class="rp-action-link confirm-delete-rec" href="<?=UIR.'Player/profile/'.$rec['MundaneId'].'/deleterecommendation/'.$rec['RecommendationsId']?>"><i class="fas fa-times"></i> Dismiss</a>
 <?php 			endif; ?>
 					</td>
 <?php 		endif; ?>
@@ -321,14 +321,14 @@ html[data-theme="dark"] .rp-rec-filter-help-default { color:#718096; }
 <div id="del-rec-overlay">
 	<div id="del-rec-box">
 		<div id="del-rec-header">
-			<h4>Delete Recommendation?</h4>
+			<h4>Dismiss Recommendation?</h4>
 		</div>
 		<div id="del-rec-body">
-			<p>Are you sure you want to delete this award recommendation? This cannot be undone.</p>
+			<p>This removes the recommendation from the pending list. Dismissed recommendations are kept, not deleted &mdash; restore one from the Recommendations tab on the Kingdom or Park page.</p>
 		</div>
 		<div class="del-rec-actions">
 			<button id="del-rec-cancel">Cancel</button>
-			<button class="del-rec-ok" id="del-rec-ok">Delete</button>
+			<button class="del-rec-ok" id="del-rec-ok">Dismiss</button>
 		</div>
 	</div>
 </div>
@@ -407,7 +407,7 @@ $(function() {
 		if (!_delRecUrl) return;
 		var btn = this;
 		btn.disabled = true;
-		btn.textContent = 'Deleting…';
+		btn.textContent = 'Dismissing…';
 		fetch(_delRecUrl, { redirect: 'follow' })
 			.catch(function() {})
 			.finally(function() { window.location.reload(); });

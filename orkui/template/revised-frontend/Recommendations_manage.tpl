@@ -9,6 +9,7 @@
      default/style/recs-manager.css (cacheable, parsed once, and visible to the
      CSS boundary tooling). -->
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/recs-manager.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/recs-manager.css') ?>">
+<?php include_once __DIR__ . '/_monarchy_only_assets.tpl'; ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/reports.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/rank-pill.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/rank-pill.css') ?>">
@@ -74,7 +75,7 @@
     </select>
     <?php } ?>
     <label class="rm-fcheck"><input type="checkbox" id="rm-filter-passlocal"> Passed to local</label>
-    <label class="rm-fcheck" data-tip="Dismissed recommendations are kept, not deleted. Turn this on to see them and undelete any that were retired by mistake."><input type="checkbox" id="rm-filter-dismissed"> Show dismissed</label>
+    <label class="rm-fcheck" data-tip="Dismissed recommendations are kept, not deleted. Turn this on to see them and restore any that were retired by mistake."><input type="checkbox" id="rm-filter-dismissed"> Show dismissed</label>
     <div id="rm-chips" class="rm-chips"></div>
     <button type="button" id="rm-export" class="rm-fbtn" data-tip="Download the full current filtered list as a CSV file"><i class="fas fa-download"></i> Export CSV</button>
   </div>
@@ -115,8 +116,10 @@
     <button type="button" class="rm-bulk rm-bulk-court">Add to Court</button>
     <button type="button" class="rm-bulk rm-bulk-snooze">Snooze</button>
     <?php if (($Context ?? '') === 'kingdom') { ?><button type="button" class="rm-bulk rm-bulk-passlocal" data-tip="For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level.">Pass down</button><?php } ?>
+    <button type="button" class="rm-bulk rm-bulk-monarchy" data-tip="Hide the selected recommendations from everyone but officers.">Monarchy Only</button>
+    <button type="button" class="rm-bulk rm-bulk-unmonarchy" data-tip="Make the selected recommendations visible again.">Unhide</button>
     <button type="button" class="rm-bulk rm-bulk-dismiss" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">Dismiss</button>
-    <button type="button" class="rm-bulk rm-bulk-undelete"><i class="fas fa-trash-can-arrow-up"></i> Undelete</button>
+    <button type="button" class="rm-bulk rm-bulk-undelete"><i class="fas fa-undo"></i> Restore</button>
     <button type="button" class="rm-bulk rm-bulk-clear">Clear</button>
   </div>
 
@@ -302,7 +305,7 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
     var members = []; try { members = JSON.parse(tr.getAttribute('data-membersfull') || '[]'); } catch (x) {}
     var html = '<ul class="rm-seclist">';
     members.forEach(function (m) {
-        var who = m.By ? rmEsc(m.By) : '(unknown)';
+        var who = (m.By ? rmEsc(m.By) : '(unknown)') + (window.orkMonarchyOnlyBadge ? orkMonarchyOnlyBadge(m.MonarchyOnlyLevel) : '');
         var when = m.Date ? ' <span class="rm-age">' + rmEsc(m.Date) + '</span>' : '';
         html += '<li><strong>' + who + '</strong>' + when +
                 (m.Reason ? '<div class="rm-reason-full">' + rmEsc(m.Reason) + '</div>' : '');
@@ -685,6 +688,34 @@ function rmSetPasslocalBadge(tr, passed) {
     }
 }
 
+// Add/remove the Award-cell Monarchy Only badge and sync the row button (idempotent).
+// The new level is unknown client-side, so a freshly-hidden row is badged level 2 in
+// kingdom scope and level 1 in park scope; the server's GREATEST rule may keep a higher
+// stored level, and the next fetch corrects the badge tip.
+function rmSetMonarchyRow(tr, hidden) {
+    tr.setAttribute('data-monarchyall', hidden ? '1' : '0');
+    tr.setAttribute('data-monarchy', hidden ? (RmConfig.context === 'kingdom' ? '2' : '1') : '0');
+    var btn = tr.querySelector('.rm-act-monarchy');
+    if (btn) {
+        btn.classList.toggle('rm-act-active', hidden);
+        btn.setAttribute('aria-label', hidden ? 'Remove Monarchy Only' : 'Mark Monarchy Only');
+        btn.setAttribute('data-tip', hidden ? 'Make visible \u2014 remove Monarchy Only' : 'Monarchy Only \u2014 hide from everyone but officers');
+        var ico = btn.querySelector('i');
+        if (ico) ico.className = 'fas ' + (hidden ? 'fa-eye' : 'fa-eye-slash');
+    }
+    var awardCell = tr.querySelector('.rm-col-award');
+    if (!awardCell) return;
+    var existing = awardCell.querySelector('.mo-badge');
+    if (existing) existing.remove();
+    if (hidden && window.orkMonarchyOnlyBadge) {
+        var tmp = document.createElement('div');
+        tmp.innerHTML = orkMonarchyOnlyBadge(RmConfig.context === 'kingdom' ? 2 : 1);
+        var badge = tmp.firstChild;
+        var pl = awardCell.querySelector('.rm-badge-passlocal');
+        if (pl && pl.parentNode) pl.parentNode.insertBefore(badge, pl.nextSibling); else awardCell.appendChild(badge);
+    }
+}
+
 // Remove a row (and any open detail row) then re-sync filters/counts.
 // serverGone defaults to true (the dismiss/grant case). Pass false when the row is
 // only leaving the current filter bucket, e.g. a snooze under the 'open' filter.
@@ -717,11 +748,12 @@ function rmRecLabel(tr) {
     return who + ' (' + what + (rank > 0 ? ', rank ' + rank : '') + ')';
 }
 // Both dismiss paths say the same thing about what dismissal is.
-var RM_DISMISS_KEPT = 'Dismissed recommendations are kept, not deleted — turn on “Show dismissed” to see them and undelete any retired by mistake.';
-// The first reason in the cluster (the row no longer duplicates it in data-rec).
-function rmFirstReason(tr) {
+var RM_DISMISS_KEPT = 'Dismissed recommendations are kept, not deleted — turn on “Show dismissed” to see them and restore any retired by mistake.';
+// The first member of the cluster — its reason is the one a grant would offer as
+// the public note (the row no longer duplicates it in data-rec).
+function rmFirstMember(tr) {
     var m = []; try { m = JSON.parse(tr.getAttribute('data-membersfull') || '[]'); } catch (x) {}
-    return (m[0] && m[0].Reason) ? m[0].Reason : '';
+    return m[0] || null;
 }
 
 // Repaint a snooze button for its new state. Both the icon AND the rich tooltip
@@ -825,16 +857,16 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
         var okN = ids.filter(function (id) { return map[String(id)] === true; }).length;
         if (okN !== ids.length) {
             ud.disabled = false;
-            rmToast(okN ? 'Undeleted ' + okN + ', ' + (ids.length - okN) + ' failed.' : 'Failed.', true);
+            rmToast(okN ? 'Restored ' + okN + ', ' + (ids.length - okN) + ' failed.' : 'Failed.', true);
             return;
         }
         // serverGone=false: with "Show dismissed" on, the row was already part of the
         // current result set — it changes category, it does not leave the set.
         rmRemoveRow(tr, false);
-        rmToast('Undeleted.');
+        rmToast('Restored.');
     }).catch(function () {
         ud.disabled = false;
-        rmToast('Undelete was interrupted — refresh to confirm what landed.', true);
+        rmToast('Restore was interrupted — refresh to confirm what landed.', true);
     });
 });
 
@@ -870,6 +902,24 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
     }).catch(function () { rmToast('Update failed.', true); });
 });
 
+// Per-row Monarchy Only toggle (hide/unhide for every filing in the cluster).
+document.getElementById('rm-tbody').addEventListener('click', function (e) {
+    var mo = e.target.closest('.rm-act-monarchy'); if (!mo) return;
+    var tr = mo.closest('tr');
+    var hidden = tr.getAttribute('data-monarchyall') === '1';
+    var ids = rmMemberIds(tr);
+    if (!ids.length) { rmToast('No recommendations found.', true); return; }
+    rmBulkRequest(hidden ? 'unmonarchyonly' : 'monarchyonly', ids).then(function (map) {
+        var okN = ids.filter(function (id) { return map[String(id)] === true; }).length;
+        if (okN !== ids.length) {
+            rmToast(map._firstError || (okN ? 'Updated ' + okN + ', ' + (ids.length - okN) + ' failed.' : 'Update failed.'), true);
+            return;
+        }
+        rmSetMonarchyRow(tr, !hidden);
+        rmToast(hidden ? 'Recommendation is visible again.' : 'Marked Monarchy Only.');
+    }).catch(function () { rmToast('Update failed.', true); });
+});
+
 // Bulk: ONE request for the whole action.
 //
 // This used to fan out N x M POSTs — one per member rec id of every selected row —
@@ -877,7 +927,7 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
 // takes every id at once and answers with a per-id results array, which is also what
 // lets us give each row an individual verdict instead of an all-or-nothing one.
 //
-// Contract: POST RmConfig.bulkUrl with Action (dismiss|snooze|unsnooze|passlocal),
+// Contract: POST RmConfig.bulkUrl with Action (dismiss|snooze|unsnooze|passlocal|monarchyonly|unmonarchyonly),
 // Ids (comma-separated) and, for passlocal only, Passed (0|1). Response:
 // { status:0, ok:N, failed:N, results:[{id, ok, error}, ...] }; 403 on a scope failure.
 function rmBulkRequest(action, ids, passed) {
@@ -994,6 +1044,21 @@ document.querySelector('.rm-bulk-snooze').addEventListener('click', function () 
         msg: function (ok, fail) { return 'Snoozed ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; }
     });
 });
+// Bulk Monarchy Only / Unhide.
+(function () {
+    function wire(sel, action, hide) {
+        var btn = document.querySelector(sel); if (!btn) return;
+        btn.addEventListener('click', function () {
+            var rows = rmSelectedLive();
+            rmBulkRun(action, rows, {
+                apply: function (tr) { rmSetMonarchyRow(tr, hide); },
+                msg: function (ok, fail) { return (hide ? 'Marked ' : 'Unhid ') + ok + (hide ? ' Monarchy Only' : '') + (fail ? ', ' + fail + ' failed' : '') + '.'; }
+            });
+        });
+    }
+    wire('.rm-bulk-monarchy', 'monarchyonly', true);
+    wire('.rm-bulk-unmonarchy', 'unmonarchyonly', false);
+})();
 // Bulk Pass down (kingdom scope only; button absent in park scope).
 (function () {
     var btn = document.querySelector('.rm-bulk-passlocal'); if (!btn) return;
@@ -1075,7 +1140,7 @@ function rmDoGrant(rec, tr, opts) {
         fd.append('ParkId', opts.parkId != null ? opts.parkId : (RmConfig.parkId || '0'));
         fd.append('KingdomId', opts.kingdomId != null ? opts.kingdomId : (RmConfig.kingdomId || '0'));
         fd.append('EventId', opts.eventId != null ? opts.eventId : '0');
-        fd.append('Note', opts.note != null ? opts.note : (rec.Reason || ''));
+        fd.append('Note', opts.note != null ? opts.note : (rec.ReasonMonarchyOnly ? '' : (rec.Reason || '')));
         fd.append('Rank', opts.rank != null ? opts.rank : (rec.Rank || 0));
         // Thread the granted recommendation id so the server can reconcile the matching
         // court line and a later court finalize can't double-grant it.
@@ -1119,6 +1184,8 @@ function rmDoGrant(rec, tr, opts) {
             // the duplicate as a warning, surface it rather than blocking anything.
             if (j.duplicateWarning) { rmToast(j.duplicateWarning, true); }
             else if (j.duplicate && j.duplicateDate) { rmToast('Note: this honor was already recorded on ' + rmNiceDateJS(j.duplicateDate) + '.', true); }
+            // The server's Monarchy Only gate blanked a note that was a hidden rec's reason.
+            if (j.noteWithheld) { rmToast(j.noteWithheldMessage || "The note matched a Monarchy Only recommendation's reason and was not saved.", true); }
             var fd2 = new FormData();
             fd2.append('MundaneId', rec.MundaneId);
             fd2.append('KingdomAwardId', rec.KingdomAwardId);
@@ -1181,7 +1248,8 @@ function rmOpenGrantModal(rec, tr, courts) {
     rmSetGrantDate(rmTodayYMD());
     rmGid('rm-grant-givenby').value = RmConfig.userName || '';
     rmGid('rm-grant-givenby-id').value = RmConfig.userId || '';
-    rmGid('rm-grant-note').value = rec.Reason || '';
+    rmGid('rm-grant-note').value = rec.ReasonMonarchyOnly ? '' : (rec.Reason || '');
+    if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(rmGid('rm-grant-note'), !!rec.ReasonMonarchyOnly);
     rmBuildRankPills(rec);
     var chipsEl = rmGid('rm-grant-officer-chips');
     if (chipsEl) chipsEl.querySelectorAll('.rm-officer-chip').forEach(function (c) { c.classList.remove('rm-selected'); });
@@ -1231,8 +1299,11 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
     var tr = g.closest('tr');
     var rec = rmRecOf(tr);
     // The reason is no longer duplicated into data-rec (it is already in
-    // data-membersfull on every row); read it at click time instead.
-    rec.Reason = rmFirstReason(tr);
+    // data-membersfull on every row); read it at click time instead. A Monarchy Only
+    // member's reason is officer-only and is never offered as the public note.
+    var first = rmFirstMember(tr);
+    rec.ReasonMonarchyOnly = !!(first && (parseInt(first.MonarchyOnlyLevel, 10) || 0) !== 0);
+    rec.Reason = (first && !rec.ReasonMonarchyOnly && first.Reason) ? first.Reason : '';
     var courts = []; try { courts = JSON.parse(tr.getAttribute('data-courts') || '[]'); } catch (x) {}
     rmOpenGrantModal(rec, tr, courts);
 });
@@ -1500,7 +1571,7 @@ document.querySelector('.rm-bulk-undelete').addEventListener('click', function (
         // The row rejoins the live list. serverGone=false: with "Show dismissed" on
         // it was already inside the current result set, so total must not move.
         apply: function (tr) { rmRemoveRow(tr, false); },
-        msg: function (ok, fail) { return 'Undeleted ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; }
+        msg: function (ok, fail) { return 'Restored ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; }
     });
 });
 // Bulk opener.

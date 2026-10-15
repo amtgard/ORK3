@@ -276,7 +276,9 @@ class Controller_CourtAjax extends Controller
         }
 
         // The lib enforces object-level auth: the kingdomaward must belong to this
-        // court's own kingdom (else an officer could attach another kingdom's id).
+        // court's own kingdom (else an officer could attach another kingdom's id),
+        // and a recommendation must be about this recipient and, when Monarchy
+        // Only, visible to this caller.
         $award = $this->Court->add_award(
             $court_id,
             (int)$court['KingdomId'],
@@ -286,8 +288,15 @@ class Controller_CourtAjax extends Controller
             $rec_id,
             $pass_to_local,
             $notes,
-            $public_comment
+            $public_comment,
+            true,
+            $uid
         );
+        if ($award === false && $rec_id > 0 && !$this->Court->can_use_rec_for_line($rec_id, $mundane_id, $uid)) {
+            // One message for "not this player's rec" and "a hidden rec you cannot
+            // see", so the answer never reveals that a hidden rec exists.
+            $this->jsonOut(['status' => 1, 'error' => 'That recommendation cannot be added to this court.']);
+        }
         if ($award === false) {
             // The usual cause is not a mistake by the officer: the pending list is
             // scoped to players in this kingdom, but a player who transferred carries
@@ -500,6 +509,13 @@ class Controller_CourtAjax extends Controller
 
         if (!$fields) {
             $this->jsonOut(['status' => 1, 'error' => 'Nothing to update.']);
+        }
+
+        // A hidden rec's reason is never a citation. Its own honest answer, not the
+        // reload status: reloading would never make this text acceptable.
+        if (array_key_exists('PublicComment', $fields)
+            && $this->Court->is_hidden_rec_citation($court_award_id, $fields['PublicComment'])) {
+            $this->jsonOut(['status' => 1, 'hidden_citation' => true, 'error' => $this->Court->hidden_citation_message()]);
         }
 
         // QW#4: update_award writes editable FIELDS only — NEVER status. Lifecycle
@@ -716,6 +732,11 @@ class Controller_CourtAjax extends Controller
         $public_comment = trim($_POST['PublicComment'] ?? '');
         $rank           = (int)($_POST['Rank'] ?? $ca['Rank']);
 
+        // A hidden rec's reason is never a citation (see update_award).
+        if ($this->Court->is_hidden_rec_citation($court_award_id, $public_comment)) {
+            $this->jsonOut(['status' => 1, 'hidden_citation' => true, 'error' => $this->Court->hidden_citation_message()]);
+        }
+
         // S5 optimistic lock: honor the client's row_version token when supplied.
         $expectedRowVersion = (isset($_POST['RowVersion']) && $_POST['RowVersion'] !== '')
             ? (int)$_POST['RowVersion'] : null;
@@ -809,7 +830,7 @@ class Controller_CourtAjax extends Controller
 
         $this->load_model('Player');
 
-        $staged    = $this->Court->get_staged_awards($court_id);
+        $staged    = $this->Court->get_staged_awards($court_id, $uid);
         $committed = 0;
         $failed    = [];
         // Second line of defence against committing one honor twice. addAward now
@@ -1002,7 +1023,8 @@ class Controller_CourtAjax extends Controller
                 $row['PassToLocal'] ? 1 : 0,
                 $row['Notes'],
                 $row['PublicComment'],
-                false
+                false,
+                $uid
             );
             if ($res !== false) {
                 $added++;
@@ -1051,7 +1073,7 @@ class Controller_CourtAjax extends Controller
         // client has confirmed it is already holding this exact version; a client
         // that sends no SinceVersion still gets the complete payload every poll.
         if (!$unchanged) {
-            $state['awards_full'] = $this->Court->get_court_awards($court_id);
+            $state['awards_full'] = $this->Court->get_court_awards($court_id, $uid);
             $state['notes_full']  = $this->Court->get_court_notes($court_id);
         }
         $state['unchanged'] = $unchanged;

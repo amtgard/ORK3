@@ -207,7 +207,7 @@ html[data-theme="dark"] .rm-badge-below { color: #f0a0a0; background: rgba(224, 
 html[data-theme="dark"] .rm-badge-retired { color: #c9b0f0; background: rgba(201, 176, 240, 0.14); border-color: rgba(201, 176, 240, 0.35); }
 .rm-badge-passlocal { color: #2c5f8b; background: rgba(44, 95, 139, 0.12); border-color: rgba(44, 95, 139, 0.4); }
 html[data-theme="dark"] .rm-badge-passlocal { color: #6fb0e6; }
-.rm-act-passlocal.rm-act-active { background: var(--rm-accent); color: #fff; border-color: var(--rm-accent); }
+.rm-act-passlocal.rm-act-active, .rm-act-monarchy.rm-act-active { background: var(--rm-accent); color: #fff; border-color: var(--rm-accent); }
 .rm-row[data-passlocal="1"] { box-shadow: inset 3px 0 0 var(--rm-accent); }
 /* A dismissed cluster is history, not a candidate: muted, with a neutral grey
    rule that cannot be confused with the blue pass-to-local one above. */

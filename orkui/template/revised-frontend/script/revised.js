@@ -1298,11 +1298,11 @@ if (PnConfig.recError) {
         if (!dimBtn) return;
         if (!dimBtn.dataset.confirm) {
             dimBtn.dataset.confirm = '1';
-            dimBtn.textContent = 'Confirm Delete?';
+            dimBtn.textContent = 'Confirm Dismiss?';
             dimBtn.classList.add('pk-rec-dismiss-confirm');
             dimBtn._confirmTimer = setTimeout(function() {
                 dimBtn.dataset.confirm = '';
-                dimBtn.innerHTML = '<i class="fas fa-times"></i> Delete';
+                dimBtn.innerHTML = '<i class="fas fa-times"></i> Dismiss';
                 dimBtn.classList.remove('pk-rec-dismiss-confirm');
             }, 3000);
             return;
@@ -2378,11 +2378,13 @@ if (PnConfig.recError) {
 
         // ---- Open / Close ----
         window.pnOpenAwardModal = function(type) {
+            pnActiveRecId = null; // set again by pnGiveFromRec when opened from a rec
             // Reset
             gid('pn-award-error').style.display   = 'none';
             gid('pn-award-error').textContent      = '';
             gid('pn-award-success').style.display  = 'none';
             gid('pn-award-note').value            = '';
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), false);
             gid('pn-award-char-count').textContent = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
             gid('pn-award-givenby-text').value    = '';
@@ -2414,21 +2416,29 @@ if (PnConfig.recError) {
         };
         var pnAwardsDirty = false;
         window.pnCloseAwardModal = function() {
+            pnActiveRecId = null;
             gid('pn-award-overlay').classList.remove('pn-open');
             document.body.style.overflow = '';
             if (pnAwardsDirty) { pnAwardsDirty = false; window.location.reload(); }
         };
 
+        // The rec a "Give from rec" opened this modal from: sent with the save so the
+        // server's Monarchy Only gate can check the note (cleared on every other open).
+        var pnActiveRecId = null;
         // Pre-populate the award modal from a recommendation row
         window.pnGiveFromRec = function(rec) {
             pnOpenAwardModal('awards');
+            pnActiveRecId = rec.RecommendationsId || null;
             var sel = gid('pn-award-select');
             sel.value = String(rec.KingdomAwardId || '');
             sel.dispatchEvent(new Event('change'));
             if (rec.Rank) {
                 setTimeout(function() { selectRankPill(parseInt(rec.Rank)); }, 0);
             }
-            if (rec.Reason) {
+            // Monarchy Only: the reason is officer-only and never becomes the public note.
+            var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), recMo);
+            if (rec.Reason && !recMo) {
                 var noteEl = gid('pn-award-note');
                 noteEl.value = rec.Reason;
                 var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -2470,6 +2480,7 @@ if (PnConfig.recError) {
             gid('pn-award-rank-row').style.display   = 'none';
             gid('pn-rank-pills').innerHTML           = '';
             gid('pn-award-note').value               = '';
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), false);
             gid('pn-award-char-count').textContent   = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
             gid('pn-award-info-line').innerHTML      = '';
@@ -2505,6 +2516,7 @@ if (PnConfig.recError) {
             fd.append('KingdomId',      gid('pn-award-kingdom-id').value || '0');
             fd.append('EventId',        gid('pn-award-event-id').value   || '0');
             fd.append('Note',           gid('pn-award-note').value       || '');
+            if (pnActiveRecId) fd.append('RecommendationsId', String(pnActiveRecId));
             var rank = gid('pn-award-rank-val').value;
             if (rank) fd.append('Rank', rank);
             var customName = gid('pn-award-custom-name').value.trim();
@@ -2520,6 +2532,8 @@ if (PnConfig.recError) {
             fetch(AWARD_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                    if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
+                    pnActiveRecId = null;
                     onSuccess();
                 })
                 .catch(function(err) {
@@ -2770,6 +2784,7 @@ window.knInitMap = async function() {
     var map = new google.maps.Map(document.getElementById('kn-map'), {
         center: {lat: 0, lng: 0},
         zoom: 2,
+        gestureHandling: orkMapGestureHandling(),
         mapId: 'ORK3_MAP_ID'
     });
 
@@ -3656,6 +3671,7 @@ $(document).ready(function() {
         gid('kn-award-player-id').value          = '';
         gid('kn-award-player-results').classList.remove('kn-ac-open');
         gid('kn-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), false);
         gid('kn-award-char-count').textContent   = '400 characters remaining';
         gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-givenby-text').value       = '';
@@ -3739,7 +3755,10 @@ $(document).ready(function() {
                 if (pill) pill.click();
             }, 0);
         }
-        if (rec.Reason) {
+        // Monarchy Only: the reason is officer-only and never becomes the public note.
+        var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), recMo);
+        if (rec.Reason && !recMo) {
             var noteEl = gid('kn-award-note');
             noteEl.value = rec.Reason;
             var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -3776,11 +3795,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#kn-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Delete?';
+                dimBtn.textContent = 'Confirm Dismiss?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Delete';
+                    dimBtn.textContent = 'Dismiss';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -3797,7 +3816,7 @@ $(document).ready(function() {
                     if (d.status === 0) {
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to delete recommendation.');
+                        alert(d.error || 'Failed to dismiss recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -4138,6 +4157,7 @@ $(document).ready(function() {
         gid('kn-award-rank-row').style.display   = 'none';
         gid('kn-rank-pills').innerHTML           = '';
         gid('kn-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), false);
         gid('kn-award-char-count').textContent   = '400 characters remaining';
         gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-info-line').innerHTML      = '';
@@ -4168,6 +4188,7 @@ $(document).ready(function() {
         fd.append('KingdomId',      gid('kn-award-kingdom-id').value || '0');
         fd.append('EventId',        gid('kn-award-event-id').value   || '0');
         fd.append('Note',           gid('kn-award-note').value       || '');
+        if (knActiveRecId) fd.append('RecommendationsId', String(knActiveRecId));
         var rank = gid('kn-award-rank-val').value;
         if (rank) fd.append('Rank', rank);
         var customName = gid('kn-award-custom-name') ? gid('kn-award-custom-name').value.trim() : '';
@@ -4188,6 +4209,7 @@ $(document).ready(function() {
         fetch(saveUrl, { method: 'POST', body: fd })
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
                 onSuccess();
             })
             .catch(function(err) {
@@ -4306,8 +4328,15 @@ $(document).ready(function() {
         });
     }
 
+    // Monarchy Only eligibility follows the PICKED recipient, not the page.
+    function knMoRecheck(recipientId) {
+        if (window.orkMonarchyOnlyRecheck) {
+            window.orkMonarchyOnlyRecheck(gid('kn-rec-monarchy'), UIR_JS + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/monarchyonlyeligible', recipientId);
+        }
+    }
     gid('kn-rec-player-text').addEventListener('input', function() {
         gid('kn-rec-player-id').value = '';
+        knMoRecheck(0);
         checkRequired();
         var term = this.value.trim();
         clearTimeout(playerTimer);
@@ -4333,6 +4362,7 @@ $(document).ready(function() {
         gid('kn-rec-player-text').value = decodeURIComponent(item.dataset.name);
         gid('kn-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
+        knMoRecheck(item.dataset.id);
         knRecRanks = {};
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
@@ -4364,6 +4394,8 @@ $(document).ready(function() {
         gid('kn-rec-reason').value          = '';
         gid('kn-rec-char-count').textContent = '400 characters remaining';
         var knAnonEl = gid('kn-rec-anon'); if (knAnonEl) knAnonEl.checked = false;
+        var knMoEl = gid('kn-rec-monarchy'); if (knMoEl) knMoEl.checked = false;
+        knMoRecheck(0);
         knRecRanks = {};
         checkRequired();
         gid('kn-rec-overlay').classList.add('kn-open');
@@ -4391,6 +4423,7 @@ $(document).ready(function() {
         if (rank) fd.append('Rank', rank);
         var anonEl = gid('kn-rec-anon');
         if (anonEl && anonEl.checked) fd.append('Anonymous', 1);
+        var moEl = gid('kn-rec-monarchy'); if (moEl && moEl.checked) fd.append('MonarchyOnly', '1');
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         fetch(UIR_JS + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/addrecommendation', { method: 'POST', body: fd })
@@ -4407,6 +4440,8 @@ $(document).ready(function() {
                     gid('kn-rec-reason').value = '';
                     gid('kn-rec-char-count').textContent = '400 characters remaining';
                     var knAnonElS = gid('kn-rec-anon'); if (knAnonElS) knAnonElS.checked = false;
+                    var knMoElS = gid('kn-rec-monarchy'); if (knMoElS) knMoElS.checked = false;
+                    knMoRecheck(0);
                     knRecRanks = {};
                     setTimeout(function() { gid('kn-rec-success').style.display = 'none'; }, 3000);
                 } else {
@@ -7751,6 +7786,7 @@ $(document).ready(function() {
         gid('pk-award-player-id').value          = '';
         gid('pk-award-player-results').classList.remove('pk-ac-open');
         gid('pk-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), false);
         gid('pk-award-char-count').textContent   = '400 characters remaining';
         gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-givenby-text').value       = '';
@@ -7813,7 +7849,10 @@ $(document).ready(function() {
                 if (pill) pill.click();
             }, 0);
         }
-        if (rec.Reason) {
+        // Monarchy Only: the reason is officer-only and never becomes the public note.
+        var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), recMo);
+        if (rec.Reason && !recMo) {
             var noteEl = gid('pk-award-note');
             noteEl.value = rec.Reason;
             var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -7850,11 +7889,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#pk-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Delete?';
+                dimBtn.textContent = 'Confirm Dismiss?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Delete';
+                    dimBtn.textContent = 'Dismiss';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -7871,7 +7910,7 @@ $(document).ready(function() {
                     if (d.status === 0) {
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to delete recommendation.');
+                        alert(d.error || 'Failed to dismiss recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -7936,6 +7975,7 @@ $(document).ready(function() {
         gid('pk-award-rank-row').style.display   = 'none';
         gid('pk-rank-pills').innerHTML           = '';
         gid('pk-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), false);
         gid('pk-award-char-count').textContent   = '400 characters remaining';
         gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-info-line').innerHTML      = '';
@@ -7966,6 +8006,7 @@ $(document).ready(function() {
         fd.append('KingdomId',      gid('pk-award-kingdom-id').value || '0');
         fd.append('EventId',        gid('pk-award-event-id').value   || '0');
         fd.append('Note',           gid('pk-award-note').value       || '');
+        if (pkActiveRecId) fd.append('RecommendationsId', String(pkActiveRecId));
         var rank = gid('pk-award-rank-val').value;
         if (rank) fd.append('Rank', rank);
         var customName = gid('pk-award-custom-name') ? gid('pk-award-custom-name').value.trim() : '';
@@ -7984,6 +8025,7 @@ $(document).ready(function() {
         fetch(saveUrl, { method: 'POST', body: fd })
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
                 onSuccess();
             })
             .catch(function(err) {
@@ -8109,8 +8151,16 @@ $(document).ready(function() {
     }
 
     // Player search
+    // Monarchy Only eligibility follows the PICKED recipient (this search is
+    // kingdom-wide, so the recipient need not be of this park).
+    function pkMoRecheck(recipientId) {
+        if (window.orkMonarchyOnlyRecheck) {
+            window.orkMonarchyOnlyRecheck(gid('pk-rec-monarchy'), UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/monarchyonlyeligible', recipientId);
+        }
+    }
     gid('pk-rec-player-text').addEventListener('input', function() {
         gid('pk-rec-player-id').value = '';
+        pkMoRecheck(0);
         checkRequired();
         var term = this.value.trim();
         clearTimeout(playerTimer);
@@ -8136,6 +8186,7 @@ $(document).ready(function() {
         gid('pk-rec-player-text').value = decodeURIComponent(item.dataset.name);
         gid('pk-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
+        pkMoRecheck(item.dataset.id);
         pkRecRanks = {};
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
@@ -8167,6 +8218,8 @@ $(document).ready(function() {
         gid('pk-rec-reason').value          = '';
         gid('pk-rec-char-count').textContent = '400 characters remaining';
         var pkAnonEl = gid('pk-rec-anon'); if (pkAnonEl) pkAnonEl.checked = false;
+        var pkMoEl = gid('pk-rec-monarchy'); if (pkMoEl) pkMoEl.checked = false;
+        pkMoRecheck(0);
         pkRecRanks = {};
         checkRequired();
         gid('pk-rec-overlay').classList.add('pk-open');
@@ -8204,6 +8257,7 @@ $(document).ready(function() {
             if (rank) fd.append('Rank', rank);
             var anonEl = gid('pk-rec-anon');
             if (anonEl && anonEl.checked) fd.append('Anonymous', 1);
+            var moEl = gid('pk-rec-monarchy'); if (moEl && moEl.checked) fd.append('MonarchyOnly', '1');
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             if (warnEl) warnEl.style.display = 'none';
@@ -8221,6 +8275,9 @@ $(document).ready(function() {
                         gid('pk-rec-rank-pills').innerHTML = '';
                         gid('pk-rec-reason').value = '';
                         gid('pk-rec-char-count').textContent = '400 characters remaining';
+                        var pkAnonElS = gid('pk-rec-anon'); if (pkAnonElS) pkAnonElS.checked = false;
+                        var pkMoElS = gid('pk-rec-monarchy'); if (pkMoElS) pkMoElS.checked = false;
+                        pkMoRecheck(0);
                         pkRecRanks = {};
                         setTimeout(function() { gid('pk-rec-success').style.display = 'none'; }, 3000);
                     } else {
@@ -16916,7 +16973,7 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 var $delTable = $(panel).find('.pk-deleted-recs-table');
                 panel.__dt = window.orkInitDataTable($delTable, {
                     order: [[6, 'desc']],   // Deleted At, newest first
-                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Deleted Recommendations',
+                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Dismissed Recommendations',
                     columnDefs: [{ targets: 8, orderable: false, searchable: false }]
                 });
                 window.orkAdjustDataTables($(panel));
@@ -16946,7 +17003,7 @@ window.initUsernameAvailabilityCheck = function(opts) {
             var open = panel.classList.toggle('pk-deleted-open');
             toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
             var lbl = toggle.querySelector('.pk-deleted-recs-toggle-label');
-            if (lbl) lbl.textContent = open ? 'Hide Deleted Recommendations' : 'Show Deleted Recommendations';
+            if (lbl) lbl.textContent = open ? 'Hide Dismissed Recommendations' : 'Show Dismissed Recommendations';
             body.style.display = open ? '' : 'none';
             if (open && panel.dataset.loaded !== '1') {
                 loadDeleted(panel, listUrl);
@@ -17982,6 +18039,66 @@ window.evSetEventStatus = function(eventId, status, btn) {
 };
 
 // =============================================================================
+// Google Maps — shared touch gestures, loader, and pin maps
+// =============================================================================
+// Touch devices pan the map with ONE finger ('greedy') instead of Google's
+// default two-finger 'cooperative' mode. Mouse pointers keep 'auto' so the
+// desktop scroll wheel still scrolls the page rather than zooming the map.
+window.orkMapGestureHandling = function() {
+    return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ? 'greedy' : 'auto';
+};
+
+// One Maps JS API load per page, however many maps ask for it.
+window.orkEnsureGoogleMaps = (function() {
+    var loading = false;
+    return function(cb) {
+        if (typeof google !== 'undefined' && google.maps && google.maps.Map) return cb();
+        window.addEventListener('orkGmapsReady', cb, { once: true });
+        if (loading) return;
+        loading = true;
+        window.__orkGmapsCb = function() { window.dispatchEvent(new Event('orkGmapsReady')); };
+        var s = document.createElement('script');
+        // key and region pinned, as in knInitMap's loader.
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=__orkGmapsCb&v=weekly&region=CA';
+        s.async = true; s.defer = true;
+        document.head.appendChild(s);
+    };
+})();
+
+// Single-pin location maps: <div class="ork-pin-map" data-lat data-lng data-zoom>.
+// Built the first time the element is on screen, so a map inside a hidden tab
+// panel waits until the tab opens (Google Maps renders blank at zero size) and
+// pages that never scroll to a map never load the API.
+(function() {
+    function build(el) {
+        var pos = { lat: parseFloat(el.getAttribute('data-lat')), lng: parseFloat(el.getAttribute('data-lng')) };
+        if (isNaN(pos.lat) || isNaN(pos.lng)) return;
+        orkEnsureGoogleMaps(function() {
+            var map = new google.maps.Map(el, {
+                center: pos,
+                zoom: parseInt(el.getAttribute('data-zoom'), 10) || 14,
+                gestureHandling: orkMapGestureHandling(),
+                mapTypeControl: false, streetViewControl: false
+            });
+            new google.maps.Marker({ position: pos, map: map });
+        });
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        var els = document.querySelectorAll('.ork-pin-map');
+        if (!els.length) return;
+        if (!('IntersectionObserver' in window)) { els.forEach(build); return; }
+        var io = new IntersectionObserver(function(entries) {
+            entries.forEach(function(en) {
+                if (!en.isIntersecting) return;
+                io.unobserve(en.target);
+                build(en.target);
+            });
+        });
+        els.forEach(function(el) { io.observe(el); });
+    });
+})();
+
+// =============================================================================
 // Calendar Enhancements R2: RSVP dropdowns, Map view
 // Works on both Kingdomnew (kn-*) and Parknew (pk-*) surfaces.
 // =============================================================================
@@ -18160,28 +18277,9 @@ window.evSetEventStatus = function(eventId, status, btn) {
     });
 
     // ---- Events Map view (lazy Google Maps) ----
-    var GMAPS_API_KEY = 'AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8'; // mirrors knInitMap's key
-    var gmapsLoading  = false;
-    var gmapsReady    = (typeof google !== 'undefined' && google.maps && google.maps.Map);
-
-    function ensureGoogleMaps(cb) {
-        if (gmapsReady) return cb();
-        if (gmapsLoading) {
-            window.addEventListener('orkGmapsReady', cb, { once: true });
-            return;
-        }
-        gmapsLoading = true;
-        window.__orkGmapsCb = function() {
-            gmapsReady = true;
-            window.dispatchEvent(new Event('orkGmapsReady'));
-            cb();
-        };
-        var s = document.createElement('script');
-        // region pinned, as in knInitMap's loader.
-        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_API_KEY + '&callback=__orkGmapsCb&v=weekly&region=CA';
-        s.async = true; s.defer = true;
-        document.head.appendChild(s);
-    }
+    // Shared loader, so a Park page's events map and its sidebar pin map
+    // never pull the API in twice.
+    var ensureGoogleMaps = window.orkEnsureGoogleMaps;
 
     function popoverHtml(loc) {
         // Pre-render the RSVP button's inner HTML rather than leaving the wrap span
@@ -18255,6 +18353,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
         var bounds = new google.maps.LatLngBounds();
         var map = new google.maps.Map(el, {
             zoom: 4, center: { lat: locations[0].lat, lng: locations[0].lng },
+            gestureHandling: orkMapGestureHandling(),
             mapTypeControl: false, streetViewControl: false, fullscreenControl: false
         });
         var infow = new google.maps.InfoWindow();
