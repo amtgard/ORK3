@@ -246,17 +246,26 @@ revive, reuse) and `updateAward` write the flag as the officer set it, and:
   Monarchy Only rec (its effective level changes), bump `row_version` on every
   still-open court line drawn from the rec (`Court::bumpOpenLinesForRec`).
 
-**One citation gate.** Every court citation that is published or shown to the
-public passes through `Court::publishable_citation($publicComment, $recReason,
-$recMonarchyOnly)` (private static): it returns `''` when the line's rec is
-Monarchy Only now and the citation is its reason (trimmed), else the citation
-unchanged. Writers: `commitStagedAward` + `setAwardId`, the Recs Manager grant's
-"leave on court" (`reconcileGrantForRecommendation` blanks the line on its way
-to `given`) and its note (`publishableCitationForRec`), `addAward` (incl.
-prepopulate). Readers: the login-free Court Report (`getCourtReportDetail`, at
-read time — rows finalized earlier are covered too), `getUngrantedFromLastCourt`
-and the planner reads (`withholdHiddenRecs`). The stage/update refusal
-(`isHiddenRecCitation`) is the same test.
+**One publishing gate.** Every citation or award note drawn from a
+recommendation that is published or shown to the public passes through
+`RecommendationVisibility::publishable_citation($text, $recReason,
+$recMonarchyOnly)` (Court's private `publishable_citation` delegates to it):
+it returns `''` when the rec is Monarchy Only now and the text is its reason
+(trimmed), else the text unchanged. `publishable_text_for_rec($text, $recId,
+$recipientId)` applies it to a rec by id, ignoring a rec that is not about
+`$recipientId`. Writers: `commitStagedAward` + `setAwardId`, the Recs Manager
+grant's "leave on court" (`reconcileGrantForRecommendation` blanks the line on
+its way to `given`) and its note (PlayerAjax `grantaward`), the profile "Give
+from rec" award forms (Player/Kingdom/Park modals post the source
+`RecommendationsId`; `Admin/player/{id}/addaward` gates the note), `addAward`
+(incl. prepopulate). Readers: the login-free Court Report
+(`getCourtReportDetail`, at read time — rows finalized earlier are covered
+too), `getUngrantedFromLastCourt` and the planner reads (`withholdHiddenRecs`).
+The stage/update refusal (`isHiddenRecCitation`) is the same test. When a write
+gate blanks a note, the UI says so without a dialog: `grantaward` returns
+`noteWithheld` (Recs Manager toast), `addaward` sends `X-Ork-Note-Withheld: 1`
+(`orkMonarchyOnlyWithheldNotice` toast). A citation equal to a hidden SIBLING
+rec's reason on a line whose own rec is public is out of scope.
 
 **Planner client.** `addAward`'s response and `getCourtAwards` rows carry
 `PublicCommentCleared` and `RecMonarchyOnly`. The Monarchy Only field carries
