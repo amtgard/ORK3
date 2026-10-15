@@ -70,6 +70,7 @@ class Controller_Recommendations extends Controller
         $this->load_model('Reports');
         $page = $this->Reports->recommended_awards_page([
             'RequestedBy' => $uid,
+            'Token'       => $this->session->token,
             'KingdomId'   => $park_id > 0 ? 0 : $kingdom_id,
             'ParkId'      => $park_id,
             'Eligibility' => 'open',
@@ -151,6 +152,7 @@ class Controller_Recommendations extends Controller
 
         $req = [
             'RequestedBy' => $uid,
+            'Token'       => $this->session->token,
             'KingdomId'   => $park_id > 0 ? 0 : $kingdom_id,
             'ParkId'      => $park_id,
             'Search'      => (string)($_GET['search'] ?? ''),
@@ -207,7 +209,7 @@ class Controller_Recommendations extends Controller
     }
 
     // Route: POST ?Route=Recommendations/bulk/kingdom/{id} or /bulk/park/{id}
-    // POST: Action=dismiss|snooze|unsnooze|passlocal, Ids=comma-separated rec ids,
+    // POST: Action=dismiss|snooze|unsnooze|passlocal|undelete|monarchyonly|unmonarchyonly, Ids=comma-separated rec ids,
     // Passed=0|1 (passlocal only).
     //
     // One round trip for a whole bulk selection instead of one POST per rec. Each id
@@ -230,7 +232,7 @@ class Controller_Recommendations extends Controller
         // Ids/Action must be scalar: a stray Ids[]=/Action[]= would make PHP emit an
         // "Array to string conversion" warning INTO the already-started JSON body.
         $action = is_array($_POST['Action'] ?? null) ? '' : (string)($_POST['Action'] ?? '');
-        if (!in_array($action, ['dismiss', 'snooze', 'unsnooze', 'passlocal', 'undelete'], true)) {
+        if (!in_array($action, ['dismiss', 'snooze', 'unsnooze', 'passlocal', 'undelete', 'monarchyonly', 'unmonarchyonly'], true)) {
             echo json_encode(['status' => 1, 'ok' => 0, 'failed' => 0, 'results' => [], 'error' => 'Invalid action.']);
             exit;
         }
@@ -290,6 +292,12 @@ class Controller_Recommendations extends Controller
                     'Token'             => $token,
                     'RecommendationsId' => $rec_id,
                     'RequestedBy'       => $uid,
+                ]);
+            } elseif ($action === 'monarchyonly' || $action === 'unmonarchyonly') {
+                $r = $this->Player->set_recommendation_monarchy_only([
+                    'Token'             => $token,
+                    'RecommendationsId' => $rec_id,
+                    'Hidden'            => $action === 'monarchyonly' ? 1 : 0,
                 ]);
             } else {
                 $r = $this->Player->set_recommendation_passed_to_local([
@@ -363,6 +371,7 @@ class Controller_Recommendations extends Controller
         // can no longer produce a silently truncated (or zero-byte) CSV.
         $req = [
             'RequestedBy' => $uid,
+            'Token'       => $this->session->token,
             'KingdomId'   => $park_id > 0 ? 0 : $kingdom_id,
             'ParkId'      => $park_id,
             'Search'      => (string)($_GET['search'] ?? ''),

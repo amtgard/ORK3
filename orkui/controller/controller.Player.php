@@ -175,7 +175,8 @@ class Controller_Player extends Controller
                                 'KingdomAwardId' => $this->request->Player_index->KingdomAwardId,
                                 'Rank' => $this->request->Player_index->Rank,
                                 'GivenById' => $this->request->Player_index->MundaneId,
-                                'Reason' => $this->request->Player_index->Reason
+                                'Reason' => $this->request->Player_index->Reason,
+                                'MonarchyOnly' => !empty($this->request->Player_index->MonarchyOnly) ? 1 : 0
                             ));
                         break;
                     case 'deleterecommendation':
@@ -245,7 +246,7 @@ class Controller_Player extends Controller
         $this->data['ShowRecsTab']          = $recsPublic || $canEdit;
         $this->data['AwardRecommendations'] = [];
         if ($this->data['ShowRecsTab'] || $uid > 0) {
-            $recs = $this->Reports->recommended_awards(array('PlayerId' => $id, 'KingdomId' => 0, 'ParkId' => 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0));
+            $recs = $this->Reports->recommended_awards(array('PlayerId' => $id, 'KingdomId' => 0, 'ParkId' => 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0, 'Token' => $this->session->token));
             $this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
         }
 
@@ -378,6 +379,7 @@ class Controller_Player extends Controller
                             'Rank'           => $this->request->Player_profile->Rank,
                             'Reason'         => $this->request->Player_profile->Reason,
                             'Anonymous'      => !empty($this->request->Player_profile->Anonymous) ? 1 : 0,
+                            'MonarchyOnly'   => !empty($this->request->Player_profile->MonarchyOnly) ? 1 : 0,
                         ]);
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 0) {
@@ -462,6 +464,7 @@ class Controller_Player extends Controller
             || ($playerKingdomId > 0 && $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_EDIT))
             || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN));
         $this->data['canManageAwards'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
+        $this->data['CanMonarchyOnlyRec'] = $uid > 0 && $this->Player->monarchy_only_level($uid, $playerKingdomId, $playerParkId) > 0;
         $knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
         $this->data['ShowRecsTab']          = $recsPublic || $canEdit;

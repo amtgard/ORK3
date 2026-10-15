@@ -751,6 +751,7 @@ class Controller_PlayerAjax extends Controller
             'PlayerId' => $mundane_id, 'KingdomId' => 0, 'ParkId' => 0,
             'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0,
             'RequestedBy' => (int)$this->session->user_id,
+            'Token' => $this->session->token,
         ]);
         echo json_encode(['status' => 0, 'recs' => is_array($recs) ? $recs : []]);
         exit;

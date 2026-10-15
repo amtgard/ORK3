@@ -132,10 +132,10 @@ class Controller_Kingdom extends Controller
 
         $AwardRecommendations = [];
         if ($recsPublic || $canManageKingdom) {
-            $recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+            $recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid, 'Token' => $this->session->token]);
             $AwardRecommendations = is_array($recs) ? $recs : [];
         } elseif ($uid > 0) {
-            $recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+            $recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid, 'Token' => $this->session->token]);
             $allRecs = is_array($recs) ? $recs : [];
             $AwardRecommendations = array_values(array_filter($allRecs, function ($r) use ($uid) {
                 return (int)$r['RecommendedById'] === $uid;
@@ -440,13 +440,13 @@ class Controller_Kingdom extends Controller
         $canManageKingdom = $this->data['CanManageKingdom'] ?? false;
         if ($recsPublic || $canManageKingdom) {
             $this->data['ShowRecsTab'] = true;
-            $this->data['AwardRecommendationsCount'] = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id]);
+            $this->data['AwardRecommendationsCount'] = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);
         } elseif ($uid > 0) {
             // Logged-in non-admin on a private-recs kingdom — the tab lists only
             // their own recs, and when they have none it says why it is empty
             // and still offers the Recommend button. Cheap COUNT query, no row
             // hydration.
-            $n = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id, 'RecommendedBy' => $uid]);
+            $n = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id, 'RecommendedBy' => $uid, 'Token' => $this->session->token]);
             $this->data['AwardRecommendationsCount'] = $n;
             $this->data['ShowRecsTab'] = true;
         } else {
@@ -530,6 +530,8 @@ class Controller_Kingdom extends Controller
 
         $this->data['CallerIsOrkAdmin']    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
         $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$kingdom_id, 0);
+        $this->load_model('Player');
+        $this->data['CanMonarchyOnlyRec']  = $uid > 0 && $this->Player->monarchy_only_level($uid, (int)$kingdom_id, 0) > 0;
         $this->data['CourtList']           = [];
         $this->data['CourtUpcomingEvents'] = [];
         if ($this->data['CanManageCourt']) {

@@ -307,10 +307,10 @@ class Controller_Park extends Controller
         $this->data['RecsHiddenBySetting'] = !$recsPublic && !$canManagePark;
         if ($recsPublic || $canManagePark) {
             $this->data['ShowRecsTab'] = true;
-            $recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+            $recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid, 'Token' => $this->session->token]);
             $this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
         } elseif ($uid > 0) {
-            $recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+            $recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid, 'Token' => $this->session->token]);
             $allRecs = is_array($recs) ? $recs : [];
             $myRecs = array_values(array_filter($allRecs, function ($r) use ($uid) {
                 return (int)$r['RecommendedById'] === $uid;
@@ -331,6 +331,7 @@ class Controller_Park extends Controller
 
         $this->load_model('Court');
         $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$this->session->kingdom_id, (int)$park_id);
+        $this->data['CanMonarchyOnlyRec']  = $uid > 0 && $this->Player->monarchy_only_level($uid, (int)$this->session->kingdom_id, (int)$park_id) > 0;
         $this->data['CourtList']           = [];
         $this->data['CourtUpcomingEvents'] = [];
         if ($this->data['CanManageCourt']) {

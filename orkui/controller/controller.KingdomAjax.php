@@ -466,6 +466,7 @@ class Controller_KingdomAjax extends Controller
                 'GivenById'      => $this->session->user_id,
                 'Reason'         => $reason,
                 'Anonymous'      => $anonymous,
+                'MonarchyOnly'   => !empty($_POST['MonarchyOnly']) ? 1 : 0,
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
@@ -501,7 +502,7 @@ class Controller_KingdomAjax extends Controller
             $limit  = (int)($_POST['Limit'] ?? $_GET['Limit'] ?? 200);
             $limit  = ($limit > 0 && $limit <= 500) ? $limit : 200;
             $offset = max(0, (int)($_POST['Offset'] ?? $_GET['Offset'] ?? 0));
-            $recs = $this->Reports->deleted_recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'Limit' => $limit, 'Offset' => $offset]);
+            $recs = $this->Reports->deleted_recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'Limit' => $limit, 'Offset' => $offset, 'Token' => $this->session->token]);
             $recs = is_array($recs) ? array_values($recs) : [];
             echo json_encode([
                 'status'          => 0,
