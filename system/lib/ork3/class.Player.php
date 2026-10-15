@@ -4288,6 +4288,9 @@ class Player extends Ork3
         if (!$rec_id) {
             return InvalidParameter();
         }
+        if ($this->rec_hidden_from((int)$mundane_id, $rec_id)) {
+            return InvalidParameter('Recommendation not found.');
+        }
 
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
         $awardRec->clear();
@@ -4401,6 +4404,9 @@ class Player extends Ork3
         if (!$rec_id) {
             return InvalidParameter();
         }
+        if ($this->rec_hidden_from((int)$mundane_id, $rec_id)) {
+            return InvalidParameter('Recommendation not found.');
+        }
 
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
         $awardRec->clear();
@@ -4442,6 +4448,9 @@ class Player extends Ork3
             return InvalidParameter();
         }
         $passed = !empty($request['Passed']) ? 1 : 0;
+        if ($this->rec_hidden_from((int)$mundane_id, $rec_id)) {
+            return InvalidParameter('Recommendation not found.');
+        }
 
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
         $awardRec->clear();
@@ -4490,9 +4499,16 @@ class Player extends Ork3
     // turn it into a park-level one that un-passing could no longer restore.
     // Unhide: only an officer at the rec's STORED level (authorship is not enough
     // to lift an officer's hide, and a passed-down kingdom hide stays the kingdom's).
-    // Authority is checked before the rec's current state is consulted, so a
-    // non-officer gets the same refusal for a public rec as for a hidden one — the
-    // answer must never reveal whether a rec is Monarchy Only.
+    //
+    // What the answer reveals. Only an officer over the recipient (or an ORK admin)
+    // can ever change this flag, and only on a rec they can see. Everyone else — a
+    // non-officer, the recipient, an author who is not an officer, a park officer
+    // facing a kingdom-level hide (not passed down) — gets EXACTLY the response a
+    // nonexistent id gets, before the rec's state is consulted. So the method tells
+    // them nothing: not whether the id exists, not whether it is hidden. An officer
+    // who can see the rec gets real answers (Success, "already visible", or the
+    // stored-level refusal for a passed-down kingdom hide they can see but not lift);
+    // none of those tell them anything their own Recs Manager does not already show.
     public function SetRecommendationMonarchyOnly($request)
     {
         if (($mundane_id = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) === 0) {
@@ -4502,53 +4518,48 @@ class Player extends Ork3
         if (!$rec_id) {
             return InvalidParameter();
         }
-        $this->db->Clear();
-        $rs = $this->db->DataSet(
-            'SELECT r.mundane_id, r.recommended_by_id, r.monarchy_only, r.passed_to_local, m.kingdom_id, m.park_id
-               FROM ' . DB_PREFIX . 'recommendations r
-               JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
-              WHERE r.recommendations_id = ' . $rec_id . ' LIMIT 1'
-        );
-        if (!$rs || !$rs->Next()) {
+        $vis   = Ork3::$Lib->recommendationvisibility;
+        $rec   = $vis->loadRec($rec_id);
+        $level = ($rec === null || $mundane_id === $rec['MundaneId'])
+            ? 0
+            : $vis->officerLevel($mundane_id, $rec['KingdomId'], $rec['ParkId']);
+        if ($rec === null || $level === 0 || !$vis->canSee($mundane_id, $rec)) {
             return InvalidParameter('Recommendation not found.');
         }
-        $rec = [
-            'MundaneId'       => (int)$rs->mundane_id,
-            'RecommendedById' => (int)$rs->recommended_by_id,
-            'KingdomId'       => (int)$rs->kingdom_id,
-            'ParkId'          => (int)$rs->park_id,
-            'MonarchyOnly'    => (int)$rs->monarchy_only,
-            'PassedToLocal'   => (int)$rs->passed_to_local,
-        ];
-        $vis = Ork3::$Lib->recommendationvisibility;
         if (!empty($request['Hidden'])) {
-            $level = $vis->creatorLevel($mundane_id, $rec['MundaneId']);
-            if ($level === 0 || ($rec['MonarchyOnly'] !== 0 && !$vis->canSee($mundane_id, $rec))) {
-                return NoAuthorization("Only officers of this player's park or kingdom can mark a recommendation Monarchy Only.");
-            }
             $set = 'monarchy_only = GREATEST(monarchy_only, ' . $level . ')';
         } else {
-            $refused = 'Only an officer who can see this recommendation at its level can make it visible.';
             if ($rec['MonarchyOnly'] === 0) {
-                // Nothing to lift — but only an officer over the recipient may learn that.
-                if ($vis->creatorLevel($mundane_id, $rec['MundaneId']) === 0) {
-                    return NoAuthorization($refused);
-                }
                 return Success('Recommendation is already visible.');
             }
             if (!$vis->canManageHidden($mundane_id, $rec)) {
-                return NoAuthorization($refused);
+                return NoAuthorization('Only an officer who can see this recommendation at its level can make it visible.');
             }
             $set = 'monarchy_only = 0';
         }
         $this->db->Clear();
         $this->db->Execute('UPDATE ' . DB_PREFIX . 'recommendations SET ' . $set . ' WHERE recommendations_id = ' . $rec_id);
 
-        $this->bust_player_award_recs_cache($rec['MundaneId']);
+        $this->bust_player_award_recs_cache($rec['MundaneId'], $rec['KingdomId'], $rec['ParkId']);
         if (isset(Ork3::$Lib->dangeraudit)) {
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Player', $rec['MundaneId'], ['monarchy_only' => !empty($request['Hidden']) ? 1 : 0]);
         }
         return Success('Recommendation visibility updated.');
+    }
+
+    /**
+     * Monarchy Only gate for a write that acts on ONE recommendation by id: true when
+     * the rec exists, is Monarchy Only, and $viewer (the TOKEN's user) may not see it.
+     * Callers check it first and answer with their own "not found" response, so a
+     * hidden rec is indistinguishable from a missing one to anyone outside its
+     * audience — including the recipient. Private, and underscored: never JSON-callable.
+     */
+    private function rec_hidden_from(int $viewer, int $rec_id): bool
+    {
+        $vis = Ork3::$Lib->recommendationvisibility;
+        $rec = $vis->loadRec($rec_id);
+
+        return $rec !== null && !$vis->canSee($viewer, $rec);
     }
 
     // Authorization and attribution both come from the TOKEN. RequestedBy is
@@ -4562,11 +4573,19 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
+        // A Monarchy Only rec this viewer may not see answers exactly like a missing
+        // one, before any other check: the recipient must not be able to dismiss (or
+        // probe for) a hidden rec about themselves.
+        if (!valid_id($request['RecommendationsId'] ?? 0)
+            || $this->rec_hidden_from($mundane_id, (int)$request['RecommendationsId'])) {
+            return InvalidParameter('There was a problem with the request.');
+        }
+
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
         $awardRec->clear();
         $awardRec->recommendations_id = $request['RecommendationsId'] ?? 0;
 
-        if (!valid_id($request['RecommendationsId'] ?? 0) || !$awardRec->find()) {
+        if (!$awardRec->find()) {
             return InvalidParameter('There was a problem with the request.');
         }
 
@@ -4575,7 +4594,7 @@ class Player extends Ork3
             || $mundane_id === (int)$awardRec->recommended_by_id
             || $mundane_id === (int)$awardRec->mundane_id;
         if (!$can_delete_recommendation) {
-            return InvalidParameter('Only the giver, recipient, or Admin may delete a recommendation.');
+            return InvalidParameter('Only the giver, recipient, or Admin may dismiss a recommendation.');
         }
 
         $prior_rec = [
@@ -4636,6 +4655,9 @@ class Player extends Ork3
     // Used by the Manager group-grant and CourtAjax::grant_award. No-ops on an empty cluster.
     // Authorization is per-rec inside DeleteAwardRecommendation, from the Token alone;
     // RequestedBy is not forwarded (a caller-chosen id must never authorize or attribute).
+    // Monarchy Only members the token's viewer may not see are skipped the same way:
+    // DeleteAwardRecommendation answers "not found" for them, so they are neither
+    // resolved nor counted (a park court cannot close a kingdom-level hide).
     public function ResolveRecommendationCluster($request)
     {
         $mundane_id = (int)($request['MundaneId'] ?? 0);
@@ -4679,7 +4701,8 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
-        if (!valid_id($request['RecommendationsId'])) {
+        if (!valid_id($request['RecommendationsId'] ?? 0)
+            || $this->rec_hidden_from((int)$mundane_id, (int)$request['RecommendationsId'])) {
             return InvalidParameter('There was a problem with the request.');
         }
 
@@ -4760,22 +4783,15 @@ class Player extends Ork3
             return InvalidParameter('Invalid recommendation.');
         }
 
+        if ($this->rec_hidden_from((int)$mundane_id, (int)$request['RecommendationsId'])) {
+            return InvalidParameter('Recommendation not found.');
+        }
+
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
         $awardRec->clear();
         $awardRec->recommendations_id = $request['RecommendationsId'];
         if (!$awardRec->find() || $awardRec->deleted_at) {
             return InvalidParameter('Recommendation not found.');
-        }
-
-        if ((int)$awardRec->monarchy_only !== 0) {
-            $recip = $this->player_info((int)$awardRec->mundane_id);
-            if (!Ork3::$Lib->recommendationvisibility->canSee((int)$mundane_id, [
-                'MundaneId' => (int)$awardRec->mundane_id, 'RecommendedById' => (int)$awardRec->recommended_by_id,
-                'KingdomId' => (int)($recip['KingdomId'] ?? 0), 'ParkId' => (int)($recip['ParkId'] ?? 0),
-                'MonarchyOnly' => (int)$awardRec->monarchy_only, 'PassedToLocal' => (int)$awardRec->passed_to_local,
-            ])) {
-                return InvalidParameter('Recommendation not found.');
-            }
         }
 
         if ((int)$awardRec->mundane_id === (int)$mundane_id) {
@@ -4885,7 +4901,10 @@ class Player extends Ork3
         $second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
         $second->clear();
         $second->recommendation_seconds_id = $request['RecommendationSecondsId'];
-        if (!$second->find() || $second->deleted_at) {
+        // A second on a Monarchy Only rec the viewer may not see reads as missing, even
+        // to its own supporter (the rec may have been hidden after they seconded it).
+        if (!$second->find() || $second->deleted_at
+            || $this->rec_hidden_from((int)$mundane_id, (int)$second->recommendations_id)) {
             return InvalidParameter('Second not found.');
         }
         if ((int)$second->supporter_mundane_id !== (int)$mundane_id) {
@@ -4923,7 +4942,8 @@ class Player extends Ork3
         $second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
         $second->clear();
         $second->recommendation_seconds_id = $request['RecommendationSecondsId'];
-        if (!$second->find() || $second->deleted_at) {
+        if (!$second->find() || $second->deleted_at
+            || $this->rec_hidden_from((int)$mundane_id, (int)$second->recommendations_id)) {
             return InvalidParameter('Second not found.');
         }
 
@@ -4978,6 +4998,9 @@ class Player extends Ork3
 
         if (!valid_id($request['RecommendationsId'])) {
             return InvalidParameter('Invalid recommendation.');
+        }
+        if ($this->rec_hidden_from((int)$mundane_id, (int)$request['RecommendationsId'])) {
+            return InvalidParameter('Recommendation not found.');
         }
 
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');

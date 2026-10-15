@@ -184,6 +184,90 @@ final class RecommendationMonarchyOnlyWritesTest extends TestCase
         $this->assertSame(2, $this->level($hid));
     }
 
+    /**
+     * Review 2, item 3: SetRecommendationMonarchyOnly must not tell a caller who cannot
+     * see a rec that it exists. A park officer probing a kingdom-level hide in their
+     * own park gets exactly what a nonexistent id gets, for Hidden=1 and Hidden=0.
+     */
+    public function testSetMonarchyOnlyAnswersLikeAMissingRecForThoseWhoCannotSeeIt(): void
+    {
+        $c   = $this->cast();
+        $hid = $this->publicRec($c);
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "recommendations SET monarchy_only = 2 WHERE recommendations_id = $hid");
+        $missing = (int)$this->fx->pdo()->query('SELECT MAX(recommendations_id) FROM ' . DB_PREFIX . 'recommendations')->fetchColumn() + 100000;
+        $set = function ($tok, $id, $hidden) {
+            unset($_SESSION['is_authorized_mundane_id']);
+
+            return \Ork3::$Lib->player->SetRecommendationMonarchyOnly(['Token' => $tok, 'RecommendationsId' => $id, 'Hidden' => $hidden]);
+        };
+        foreach (['parkOfficer', 'plain', 'recipient'] as $who) {
+            foreach ([1, 0] as $hidden) {
+                $this->assertSame(
+                    $set($c[$who]['token'], $missing, $hidden),
+                    $set($c[$who]['token'], $hid, $hidden),
+                    "$who Hidden=$hidden on a kingdom-level hide must read as a missing rec"
+                );
+            }
+        }
+        $this->assertSame(2, $this->level($hid));
+        // A rec the caller CAN see keeps the real answers.
+        $this->assertSame(0, $set($c['kingdomOfficer']['token'], $hid, 0)['Status']);
+        $this->assertSame(0, $this->level($hid));
+    }
+
+    /**
+     * Review 2, item 4: the author's private-recs badge (RecommendedBy = author) must
+     * count a rec exactly once across hide and unhide. Exercised with a working
+     * in-test cache: the bootstrap Memcached stub always misses, which hid the bug.
+     */
+    public function testAuthorBadgeCountsARecOnceAcrossHideAndUnhide(): void
+    {
+        $c     = $this->cast();
+        $cache = \Ork3::$Lib->ghettocache;
+        $orig  = $cache->memcache;
+        $cache->memcache = new class () {
+            /** @var array<string,mixed> */
+            public array $d = [];
+            public function get($k)
+            {
+                return $this->d[$k] ?? false;
+            }
+            public function set($k, $v, $e = 0)
+            {
+                $this->d[$k] = $v;
+                return true;
+            }
+            public function delete($k)
+            {
+                unset($this->d[$k]);
+                return true;
+            }
+        };
+        try {
+            $id    = $this->publicRec($c);
+            $count = function () use ($c) {
+                unset($_SESSION['is_authorized_mundane_id']);
+
+                return (new \Report())->PlayerAwardRecommendationsCount([
+                    'KingdomId' => $this->k, 'RecommendedBy' => $c['author']['mundane_id'], 'Token' => $c['author']['token'],
+                ]);
+            };
+            $set = function ($hidden) use ($c, $id) {
+                unset($_SESSION['is_authorized_mundane_id']);
+
+                return \Ork3::$Lib->player->SetRecommendationMonarchyOnly(['Token' => $c['kingdomOfficer']['token'], 'RecommendationsId' => $id, 'Hidden' => $hidden]);
+            };
+            $this->assertSame(1, $count(), 'public rec, cold cache');
+            $this->assertSame(1, $count(), 'public rec, warm cache');
+            $this->assertSame(0, $set(1)['Status']);
+            $this->assertSame(1, $count(), 'hidden: the author still sees it, once');
+            $this->assertSame(0, $set(0)['Status']);
+            $this->assertSame(1, $count(), 'unhidden again');
+        } finally {
+            $cache->memcache = $orig;
+        }
+    }
+
     public function testCannotSecondAnOutOfRangeHiddenRec(): void
     {
         $c  = $this->cast();
