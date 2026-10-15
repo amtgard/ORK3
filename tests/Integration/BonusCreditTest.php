@@ -87,6 +87,12 @@ final class BonusCreditTest extends TestCase
                 $pdo->exec('DELETE FROM ' . DB_PREFIX . 'bonus_credit WHERE reason_id IN (' . implode(',', $this->reasonIds) . ')');
                 $pdo->exec('DELETE FROM ' . DB_PREFIX . 'bonus_credit_reason WHERE reason_id IN (' . implode(',', $this->reasonIds) . ')');
             }
+            if ($this->mundaneIds) {
+                $pdo->exec('DELETE FROM ' . DB_PREFIX . 'bonus_credit_granter WHERE mundane_id IN (' . implode(',', $this->mundaneIds) . ')');
+            }
+            if ($this->reasonIds) {
+                $pdo->exec('DELETE FROM ' . DB_PREFIX . 'bonus_credit_adoption WHERE reason_id IN (' . implode(',', $this->reasonIds) . ')');
+            }
             $this->fixture->cleanup();
         }
         if (isset($this->originalCache)) {
@@ -109,14 +115,29 @@ final class BonusCreditTest extends TestCase
         return (int) $o['mundane_id'];
     }
 
-    /** A kingdom officer: EDIT on the kingdom (the fixture's cleanup removes the row with the player). */
-    private function kingdomOfficer(int $kingdomId, int $homeParkId, string $suffix): int
+    /**
+     * A kingdom officer with the given role on the kingdom (CREATE by default,
+     * the level that defines credits). The fixture's cleanup removes the
+     * authorization row along with the player.
+     */
+    private function kingdomOfficer(int $kingdomId, int $homeParkId, string $suffix, string $role = AUTH_CREATE): int
     {
         $p = $this->fixture->createPlayer($homeParkId, $suffix);
         $uid = (int) $p['mundane_id'];
         $this->mundaneIds[] = $uid;
         $this->pdo()->prepare('INSERT INTO ' . DB_PREFIX . 'authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role) VALUES (?, 0, ?, 0, 0, ?)')
-            ->execute([$uid, $kingdomId, AUTH_EDIT]);
+            ->execute([$uid, $kingdomId, $role]);
+        return $uid;
+    }
+
+    /** A global ORK admin: an unscoped admin authorization row. */
+    private function orkAdmin(string $suffix): int
+    {
+        $p = $this->fixture->createPlayer($this->park, $suffix);
+        $uid = (int) $p['mundane_id'];
+        $this->mundaneIds[] = $uid;
+        $this->pdo()->prepare('INSERT INTO ' . DB_PREFIX . 'authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role) VALUES (?, 0, 0, 0, 0, ?)')
+            ->execute([$uid, AUTH_ADMIN]);
         return $uid;
     }
 
@@ -153,10 +174,13 @@ final class BonusCreditTest extends TestCase
     public function testOnlyKingdomOfficersDefineCreditsAndOnlyForTheirKingdom(): void
     {
         $parkOfficer = $this->parkOfficer($this->park, 'bc-park');
+        $kEditor     = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-kedit', AUTH_EDIT);
         $kOfficer    = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');
 
         // A park officer cannot define one, even naming their own kingdom; a park is not a scope at all.
         $this->assertSame(3, $this->bonus->createReason($parkOfficer, ['ScopeType' => 'kingdom', 'ScopeId' => $this->kingdom, 'Name' => 'T12BC nope'])['Status']);
+        // Kingdom EDIT hands credits out but does not define them: CREATE (or ADMIN) does.
+        $this->assertSame(3, $this->bonus->createReason($kEditor, ['ScopeType' => 'kingdom', 'ScopeId' => $this->kingdom, 'Name' => 'T12BC nope'])['Status']);
         $this->assertSame(1, $this->bonus->createReason($kOfficer, ['ScopeType' => 'park', 'ScopeId' => $this->park, 'Name' => 'T12BC nope'])['Status']);
         // Another kingdom: denied. Bad inputs: refused.
         $this->assertSame(3, $this->bonus->createReason($kOfficer, ['ScopeType' => 'kingdom', 'ScopeId' => $this->otherKingdom, 'Name' => 'T12BC nope'])['Status']);
@@ -179,8 +203,13 @@ final class BonusCreditTest extends TestCase
         $this->assertContains('T12BC Being purple', array_column($this->bonus->reasonsForPark($this->park), 'Name'));
         $this->assertNotContains('T12BC Being purple', array_column($this->bonus->reasonsForPark($this->otherPark), 'Name'));
 
-        // Archiving hides it (from parks too); recreating the name restores it. Only the kingdom may archive.
+        // A kingdom EDIT officer can grant it, though.
+        $kPlayer = $this->playerAt($this->park, 'bc-kplayer');
+        $this->assertSame(0, $this->grant($kEditor, $kPlayer, $purple['ReasonId'])['Status']);
+
+        // Archiving hides it (from parks too); recreating the name restores it. Only kingdom CREATE may archive.
         $this->assertSame(3, $this->bonus->archiveReason($parkOfficer, $purple['ReasonId'])['Status']);
+        $this->assertSame(3, $this->bonus->archiveReason($kEditor, $purple['ReasonId'])['Status']);
         $this->assertSame(0, $this->bonus->archiveReason($kOfficer, $purple['ReasonId'])['Status']);
         $this->assertNotContains('T12BC Being purple', array_column($this->bonus->reasons('kingdom', $this->kingdom), 'Name'));
         $this->assertNotContains('T12BC Being purple', array_column($this->bonus->reasonsForPark($this->park), 'Name'));
@@ -316,6 +345,172 @@ final class BonusCreditTest extends TestCase
         // Revoking frees a once-only reason to be granted again.
         $this->assertSame(0, $this->bonus->revoke($kOfficer, (int) $first['BonusCreditId'])['Status']);
         $this->assertSame(0, $this->grant($kOfficer, $player, $once['ReasonId'])['Status']);
+    }
+
+    public function testAGranterGrantsWithoutKingdomRightsButCannotDefine(): void
+    {
+        $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');          // CREATE
+        $kEditor  = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-kedit', AUTH_EDIT);
+        $manager  = $this->playerAt($this->park, 'bc-granter');                               // no authorization row at all
+        $player   = $this->playerAt($this->park, 'bc-player');
+
+        // Nobody yet; a plain player can neither define nor grant.
+        $this->assertSame([], $this->bonus->granters($this->kingdom));
+        $this->assertFalse($this->bonus->canDefine($manager, 'kingdom', $this->kingdom));
+        $this->assertFalse($this->bonus->canGrant($manager, $this->park));
+
+        // Only CREATE appoints: EDIT and the would-be granter are refused.
+        $this->assertSame(3, $this->bonus->addGranter($kEditor, $this->kingdom, $manager)['Status']);
+        $this->assertSame(3, $this->bonus->addGranter($manager, $this->kingdom, $manager)['Status']);
+        $this->assertSame(1, $this->bonus->addGranter($kOfficer, $this->kingdom, 999999999)['Status']);
+        $r = $this->bonus->addGranter($kOfficer, $this->kingdom, $manager);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $this->assertSame([$manager], array_column($r['Granters'], 'MundaneId'));
+        $this->assertTrue($r['Granters'][0]['AllCredits']);
+        $this->assertSame(0, $this->bonus->addGranter($kOfficer, $this->kingdom, $manager)['Status'], 'appointing twice is a no-op');
+        $this->assertCount(1, $this->bonus->granters($this->kingdom));
+        $this->assertTrue($this->bonus->isGranter($manager, $this->kingdom));
+
+        // Now the granter hands out a credit kingdom-wide with no authorization row, but still cannot define one.
+        $this->assertFalse($this->bonus->canDefine($manager, 'kingdom', $this->kingdom));
+        $this->assertSame(3, $this->bonus->createReason($manager, ['ScopeType' => 'kingdom', 'ScopeId' => $this->kingdom, 'Name' => 'T12BC nope'])['Status']);
+        $this->assertTrue($this->bonus->canGrantInKingdom($manager, $this->kingdom));
+        $this->assertTrue($this->bonus->canGrant($manager, $this->park));
+        $survey = $this->reason($kOfficer, $this->kingdom, 'Survey 2026', ['SourceType' => 'survey', 'SourceId' => 4242]);
+        $this->assertSame(3, $this->bonus->archiveReason($manager, $survey['ReasonId'])['Status'], 'a granter cannot archive');
+        $this->assertSame(0, $this->grant($manager, $player, $survey['ReasonId'])['Status']);
+        if ($this->siblingPark > 0) {
+            $sibling = $this->playerAt($this->siblingPark, 'bc-sibling');
+            $this->assertSame(0, $this->grant($manager, $sibling, $survey['ReasonId'])['Status'], 'a manager reaches every park in the kingdom');
+        }
+        // But not another kingdom's players, and a granter cannot appoint others.
+        $away = $this->playerAt($this->otherPark, 'bc-away');
+        $this->assertSame(3, $this->grant($manager, $away, $survey['ReasonId'])['Status']);
+        $this->assertSame(3, $this->bonus->addGranter($manager, $this->kingdom, $player)['Status']);
+
+        // Removal (by row) takes the powers away; what they granted stays.
+        $rowId = $this->bonus->granters($this->kingdom)[0]['GranterId'];
+        $this->assertSame(3, $this->bonus->removeGranter($kEditor, $this->kingdom, $rowId)['Status']);
+        $this->assertSame(0, $this->bonus->removeGranter($kOfficer, $this->kingdom, $rowId)['Status']);
+        $this->assertSame(0, $this->bonus->removeGranter($kOfficer, $this->kingdom, $rowId)['Status'], 'removing twice is a no-op');
+        $this->assertFalse($this->bonus->isGranter($manager, $this->kingdom));
+        $this->assertFalse($this->bonus->canGrant($manager, $this->park));
+        $this->assertSame(3, $this->grant($manager, $this->playerAt($this->park, 'bc-player2'), $survey['ReasonId'])['Status']);
+        $this->assertSame([$this->classId => 1.0], $this->bonus->totalsByClass($player));
+    }
+
+    public function testAGranterCanBeLimitedToOneCredit(): void
+    {
+        $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');
+        $granter  = $this->playerAt($this->park, 'bc-granter');
+        $player   = $this->playerAt($this->park, 'bc-player');
+        $survey   = $this->reason($kOfficer, $this->kingdom, 'Survey 2026');
+        $purple   = $this->reason($kOfficer, $this->kingdom, 'Being purple');
+
+        // Scoped to the survey credit: can grant that, not the other; sees only that one.
+        $this->assertSame(1, $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, 999999999)['Status'], 'a credit must be one of the kingdom\'s');
+        $r = $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, $survey['ReasonId']);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $this->assertFalse($r['Granters'][0]['AllCredits']);
+        $this->assertSame('T12BC Survey 2026', $r['Granters'][0]['ReasonName']);
+        $this->assertTrue($this->bonus->isGranter($granter, $this->kingdom, $survey['ReasonId']));
+        $this->assertFalse($this->bonus->isGranter($granter, $this->kingdom, $purple['ReasonId']));
+        $this->assertTrue($this->bonus->canGrant($granter, $this->park), 'enough to open the tools');
+        $this->assertSame(['T12BC Survey 2026'], array_column($this->bonus->grantableReasonsForPark($granter, $this->park), 'Name'));
+        $this->assertSame(['T12BC Survey 2026'], array_column($this->bonus->grantableReasonsInKingdom($granter, $this->kingdom), 'Name'));
+        $this->assertSame(0, $this->grant($granter, $player, $survey['ReasonId'])['Status']);
+        $this->assertSame(3, $this->grant($granter, $player, $purple['ReasonId'])['Status']);
+
+        // A second scoped row adds the other credit; an all-credits row then replaces both.
+        $this->assertSame(0, $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, $purple['ReasonId'])['Status']);
+        $this->assertCount(2, $this->bonus->granters($this->kingdom));
+        $this->assertSame(0, $this->grant($granter, $player, $purple['ReasonId'])['Status']);
+        $all = $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, 0);
+        $this->assertSame(0, $all['Status']);
+        $this->assertCount(1, $all['Granters']);
+        $this->assertTrue($all['Granters'][0]['AllCredits']);
+        // And a scoped appointment under an all-credits row is a no-op.
+        $this->assertSame(0, $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, $survey['ReasonId'])['Status']);
+        $this->assertCount(1, $this->bonus->granters($this->kingdom));
+
+        // Revoking follows the same scope: the all-credits granter may remove either credit.
+        $credits = $this->bonus->forPlayer($player);
+        $this->assertCount(2, $credits);
+        $this->assertSame(0, $this->bonus->revoke($granter, $credits[0]['BonusCreditId'])['Status']);
+    }
+
+    public function testAmtgardWideCreditsAreDefinedByOrkAdminsAndReachAKingdomOnlyWhenAdopted(): void
+    {
+        $admin    = $this->orkAdmin('bc-orkadmin');
+        $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');            // CREATE
+        $kEditor  = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-kedit', AUTH_EDIT);
+        $player   = $this->playerAt($this->park, 'bc-player');
+
+        // Only an ORK admin defines one; a kingdom CREATE officer cannot.
+        $this->assertSame(3, $this->bonus->createReason($kOfficer, ['ScopeType' => 'ork', 'ScopeId' => 0, 'Name' => 'T12BC Census'])['Status']);
+        $r = $this->bonus->createReason($admin, ['ScopeType' => 'ork', 'ScopeId' => 0, 'Name' => 'T12BC Census', 'DefaultCredits' => 2]);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $this->reasonIds[] = $census = (int) $r['ReasonId'];
+        $this->assertSame('ork', $r['Reason']['ScopeType']);
+        $this->assertSame('Amtgard', $r['Reason']['ScopeName']);
+        $this->assertSame(0, $r['Reason']['Adoptions']);
+        $this->assertContains('T12BC Census', array_column($this->bonus->reasons('ork', 0), 'Name'));
+
+        // Not adopted: it is offered nowhere in the kingdom, and even the ORK admin cannot grant it here.
+        $this->assertNotContains('T12BC Census', array_column($this->bonus->reasonsForKingdom($this->kingdom), 'Name'));
+        $this->assertNotContains('T12BC Census', array_column($this->bonus->reasonsForPark($this->park), 'Name'));
+        $r = $this->grant($admin, $player, $census);
+        $this->assertSame(3, $r['Status']);
+        $this->assertStringContainsString('not adopted', (string) $r['Error']);
+        $ork = $this->bonus->orkCreditsFor($this->kingdom);
+        $this->assertCount(1, array_filter($ork, function ($x) use ($census) {
+            return $x['ReasonId'] === $census && !$x['Adopted'];
+        }));
+
+        // Adoption: kingdom CREATE or an ORK admin, not kingdom EDIT.
+        $this->assertSame(3, $this->bonus->adopt($kEditor, $census, $this->kingdom)['Status']);
+        $this->assertSame(1, $this->bonus->adopt($kOfficer, 999999999, $this->kingdom)['Status']);
+        $this->assertSame(0, $this->bonus->adopt($kOfficer, $census, $this->kingdom)['Status']);
+        $this->assertSame(0, $this->bonus->adopt($kOfficer, $census, $this->kingdom)['Status'], 'adopting twice is a no-op');
+        $this->assertTrue($this->bonus->isAdoptedIn($census, [$this->kingdom]));
+        $this->assertSame([$this->kingdom], array_column($this->bonus->adoptions($census), 'KingdomId'));
+        $this->assertSame(1, $this->bonus->reason($census)['Adoptions']);
+
+        // Now it is offered in the kingdom and its parks, at Amtgard's amount, and a kingdom EDIT officer can grant it.
+        $this->assertContains('T12BC Census', array_column($this->bonus->reasonsForKingdom($this->kingdom), 'Name'));
+        $this->assertContains('T12BC Census', array_column($this->bonus->reasonsForPark($this->park), 'Name'));
+        $g = $this->grant($kEditor, $player, $census);
+        $this->assertSame(0, $g['Status'], (string) ($g['Error'] ?? ''));
+        $this->assertSame(2.0, $g['Credit']['Credits']);
+        $this->assertSame('Amtgard', $g['Credit']['ScopeName']);
+        $this->assertSame([$this->classId => 2.0], $this->bonus->totalsByClass($player));
+        // Once per player holds across Amtgard.
+        $this->assertSame(1, $this->grant($kEditor, $player, $census)['Status']);
+        // The other kingdom has not adopted it, so its players are out of reach.
+        $awayOfficer = $this->parkOfficer($this->otherPark, 'bc-away-officer');
+        $away        = $this->playerAt($this->otherPark, 'bc-away');
+        $this->assertSame(3, $this->grant($awayOfficer, $away, $census)['Status']);
+        // A kingdom granter can be scoped to the adopted credit.
+        $granter = $this->playerAt($this->park, 'bc-granter');
+        $this->assertSame(0, $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, $census)['Status']);
+        $this->assertSame(0, $this->grant($granter, $this->playerAt($this->park, 'bc-player2'), $census)['Status']);
+
+        // An ORK admin adopts on another kingdom's behalf; then withdrawal stops new grants but keeps old ones.
+        $this->assertSame(0, $this->bonus->adopt($admin, $census, $this->otherKingdom)['Status']);
+        $this->assertSame(0, $this->grant($awayOfficer, $away, $census)['Status']);
+        $this->assertSame(0, $this->bonus->withdraw($kOfficer, $census, $this->kingdom)['Status']);
+        $this->assertFalse($this->bonus->isAdoptedIn($census, [$this->kingdom]));
+        $this->assertNotContains('T12BC Census', array_column($this->bonus->reasonsForPark($this->park), 'Name'));
+        $this->assertSame(3, $this->grant($kEditor, $this->playerAt($this->park, 'bc-player3'), $census)['Status']);
+        $this->assertSame([$this->classId => 2.0], $this->bonus->totalsByClass($player), 'what was granted stays');
+        // Re-adopting clears the withdrawal.
+        $this->assertSame(0, $this->bonus->adopt($admin, $census, $this->kingdom)['Status']);
+        $this->assertTrue($this->bonus->isAdoptedIn($census, [$this->kingdom]));
+
+        // Archiving is the ORK admin's alone, and an archived credit cannot be adopted.
+        $this->assertSame(3, $this->bonus->archiveReason($kOfficer, $census)['Status']);
+        $this->assertSame(0, $this->bonus->archiveReason($admin, $census)['Status']);
+        $this->assertSame(1, $this->bonus->adopt($kOfficer, $census, $this->kingdom)['Status']);
     }
 
     public function testRevokeNeedsAuthorityOverThePlayersParkAndIsIdempotent(): void

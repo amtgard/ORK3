@@ -13,17 +13,29 @@
  * see them.
  *
  * A credit is granted FOR a reason: the named thing an officer picks in the
- * Add Bonus Credits modal. Reasons are defined at KINGDOM level (a
- * principality counts as a kingdom); parks do not create them, they hand
- * them out. The scope column leaves room for an Amtgard-wide level later.
+ * Bonus Credits modal. Reasons are defined at KINGDOM level (a principality
+ * counts as a kingdom) or AMTGARD-WIDE (scope 'ork', by ORK admins); parks do
+ * not create them, they hand them out. An Amtgard-wide credit reaches a
+ * kingdom only once that kingdom ADOPTS it (kingdom CREATE, or an ORK admin on
+ * its behalf; both audited); a parent's adoption covers its principalities.
  *
  * Authority is kingdom-gated at both ends. Creating, archiving or restoring
- * a reason needs EDIT on its kingdom. Granting one needs EDIT on the
+ * a reason needs CREATE on its kingdom (admin-level). Granting one needs EDIT on the
  * player's park (the test entering attendance needs; kingdom officers hold it
  * for every park in their kingdom) AND the player's home must lie inside the
  * reason's kingdom or one of its principalities. So a Kingdom A officer
  * cannot credit a Kingdom B player, a park can only credit its own, and an
  * ORK-wide survey becomes a per-kingdom decision.
+ *
+ * A kingdom can also name GRANTERS (ork_bonus_credit_granter, modelled on the
+ * qualification tests' manager list): people who may grant and remove credits
+ * anywhere in that kingdom without holding a kingdom authorization row, so the
+ * person running a survey need not be given kingdom EDIT. A granter holds the
+ * EDIT-level powers only: they cannot define, archive or restore a credit, and
+ * cannot appoint other granters. A granter row covers either every credit of
+ * the kingdom (reason_id 0, the default) or one specific credit, so the person
+ * running a survey can be limited to that survey's credit. Only kingdom CREATE
+ * appoints or removes one.
  *
  * A reason is granted once per player unless marked repeatable. An automated
  * source (a survey) is a reason with source_type/source_id set, so "once per
@@ -57,22 +69,285 @@ class BonusCredit
     // Authority and coverage
     // -----------------------------------------------------------------------
 
-    /** May $uid define credits for this kingdom? EDIT on it. ORK admins pass. */
-    public function canDefine(int $uid, string $scopeType, int $scopeId): bool
+    /** A global ORK admin: an unscoped admin authorization row. */
+    public function isOrkAdmin(int $uid): bool
     {
-        if ($uid <= 0 || $scopeType !== 'kingdom' || !valid_id($scopeId)) {
-            return false;
-        }
-        return (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $scopeId, AUTH_EDIT);
+        return $uid > 0 && (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
     }
 
-    /** May $uid hand out credits to this park's players? EDIT on the park, as for attendance; kingdom officers inherit it. */
+    /** May $uid appoint or remove this kingdom's granters? CREATE on it (ADMIN passes, EDIT does not). Granters cannot. */
+    public function canAppoint(int $uid, int $kingdomId): bool
+    {
+        if ($uid <= 0 || !valid_id($kingdomId)) {
+            return false;
+        }
+        return (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdomId, AUTH_CREATE);
+    }
+
+    /**
+     * May $uid define credits for this kingdom? CREATE on it (which ADMIN
+     * satisfies, EDIT does not): defining what a credit is worth is an
+     * admin-level call, while handing one out is ordinary EDIT work. Granters
+     * do not qualify.
+     */
+    public function canDefine(int $uid, string $scopeType, int $scopeId): bool
+    {
+        if ($uid <= 0) {
+            return false;
+        }
+        if ($scopeType === 'ork') {
+            return $this->isOrkAdmin($uid);
+        }
+        return $scopeType === 'kingdom' && valid_id($scopeId) && $this->canAppoint($uid, $scopeId);
+    }
+
+    /** May $uid hand out credits anywhere in this kingdom? EDIT on it, or a granter of it. The kingdom page's modal opens on this. */
+    public function canGrantInKingdom(int $uid, int $kingdomId): bool
+    {
+        if ($uid <= 0 || !valid_id($kingdomId)) {
+            return false;
+        }
+        return (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)
+            || $this->isGranter($uid, $kingdomId);
+    }
+
+    /**
+     * May $uid hand out credits to this park's players? EDIT on the park, as
+     * for attendance (kingdom officers inherit it), or a granter of the park's
+     * kingdom or of a kingdom above it.
+     */
     public function canGrant(int $uid, int $parkId): bool
     {
         if ($uid <= 0 || !valid_id($parkId)) {
             return false;
         }
-        return (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_EDIT);
+        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_EDIT)) {
+            return true;
+        }
+        foreach ($this->kingdomAncestry($this->parkKingdom($parkId)) as $kid) {
+            if ($this->isGranter($uid, $kid)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Is $uid a granter for this kingdom? With $reasonId, for that credit in
+     * particular: an all-credits row (reason_id 0) or a row naming the credit.
+     * Without it, any row at all (enough to open the grant tools).
+     */
+    public function isGranter(int $uid, int $kingdomId, int $reasonId = 0): bool
+    {
+        if ($uid <= 0 || !valid_id($kingdomId)) {
+            return false;
+        }
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT 1 AS ok FROM ' . DB_PREFIX . 'bonus_credit_granter
+             WHERE kingdom_id = ' . (int) $kingdomId . ' AND mundane_id = ' . (int) $uid
+             . ($reasonId > 0 ? ' AND reason_id IN (0, ' . (int) $reasonId . ')' : '') . '
+             LIMIT 1'
+        );
+        return (bool) ($r && $r->Next());
+    }
+
+    /**
+     * May $uid grant THIS credit to a player at THIS park? EDIT on the park,
+     * or a granter row for the credit's kingdom that covers the credit.
+     */
+    public function canGrantReason(int $uid, int $parkId, array $reason): bool
+    {
+        if ($uid <= 0 || !valid_id($parkId)) {
+            return false;
+        }
+        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_EDIT)) {
+            return true;
+        }
+        $rid = (int) ($reason['ReasonId'] ?? 0);
+        if (($reason['ScopeType'] ?? '') === 'kingdom') {
+            return $this->isGranter($uid, (int) $reason['ScopeId'], $rid);
+        }
+        if (($reason['ScopeType'] ?? '') === 'ork') {
+            // A kingdom's granters can be scoped to an adopted Amtgard-wide credit.
+            foreach ($this->kingdomAncestry($this->parkKingdom($parkId)) as $kid) {
+                if ($this->isGranter($uid, $kid, $rid)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** The credits $uid may actually grant at this park: all of them with park EDIT, else those their granter rows cover. */
+    public function grantableReasonsForPark(int $uid, int $parkId): array
+    {
+        $all = $this->reasonsForPark($parkId);
+        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_EDIT)) {
+            return $all;
+        }
+        return array_values(array_filter($all, function ($rs) use ($uid, $parkId) {
+            return $this->canGrantReason($uid, $parkId, $rs);
+        }));
+    }
+
+    /**
+     * The credits grantable in a kingdom: its own (archived too on request) plus
+     * the Amtgard-wide ones it or a kingdom above it has adopted. All of them
+     * with kingdom EDIT, else those $uid's granter rows cover.
+     */
+    public function grantableReasonsInKingdom(int $uid, int $kingdomId, bool $includeArchived = false): array
+    {
+        $all = $this->reasonsForKingdom($kingdomId, $includeArchived);
+        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)) {
+            return $all;
+        }
+        return array_values(array_filter($all, function ($rs) use ($uid, $kingdomId) {
+            return $this->isGranter($uid, $kingdomId, (int) $rs['ReasonId']);
+        }));
+    }
+
+    // -----------------------------------------------------------------------
+    // Granters
+    // -----------------------------------------------------------------------
+
+    /** A kingdom's granters, by persona. */
+    public function granters(int $kingdomId): array
+    {
+        if (!valid_id($kingdomId)) {
+            return [];
+        }
+        $out = [];
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT bm.granter_id, bm.mundane_id, bm.reason_id, bm.added_by, bm.added_at, m.persona, p.name AS park_name,
+                    a.persona AS added_by_persona, rs.name AS reason_name, rs.archived_at AS reason_archived_at
+             FROM ' . DB_PREFIX . 'bonus_credit_granter bm
+             LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = bm.mundane_id
+             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+             LEFT JOIN ' . DB_PREFIX . 'mundane a ON a.mundane_id = bm.added_by
+             LEFT JOIN ' . DB_PREFIX . 'bonus_credit_reason rs ON rs.reason_id = bm.reason_id
+             WHERE bm.kingdom_id = ' . (int) $kingdomId . '
+             ORDER BY m.persona, bm.reason_id'
+        );
+        while ($r && $r->Next()) {
+            $out[] = [
+                'GranterId'      => (int) $r->granter_id,
+                'MundaneId'      => (int) $r->mundane_id,
+                'Persona'        => (string) ($r->persona ?? ''),
+                'Park'           => (string) ($r->park_name ?? ''),
+                'ReasonId'       => (int) $r->reason_id,
+                'ReasonName'     => (int) $r->reason_id > 0 ? (string) ($r->reason_name ?? '') : '',
+                'AllCredits'     => (int) $r->reason_id === 0,
+                // A per-credit row whose credit is archived is dormant: shown so it can be removed, live again on restore.
+                'ReasonArchived' => (int) $r->reason_id > 0 && !empty($r->reason_archived_at),
+                'AddedBy'        => (int) $r->added_by,
+                'AddedByPersona' => (string) ($r->added_by_persona ?? ''),
+                'AddedAt'        => (string) $r->added_at,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Appoint a granter for every credit of the kingdom ($reasonId 0) or for
+     * one credit. Kingdom CREATE only. An all-credits appointment replaces the
+     * player's per-credit rows; a per-credit one under an existing all-credits
+     * row is a no-op. Idempotent.
+     */
+    public function addGranter(int $uid, int $kingdomId, int $mundaneId, int $reasonId = 0): array
+    {
+        if (!valid_id($kingdomId) || !$this->orgExists('kingdom', $kingdomId)) {
+            return $this->fail('That kingdom does not exist.');
+        }
+        if ($uid <= 0 || !$this->canAppoint($uid, $kingdomId)) {
+            return $this->denied('Only kingdom officers with CREATE authority can appoint granters.');
+        }
+        $player = $this->playerRow($mundaneId);
+        if ($player === null) {
+            return $this->fail('Player not found.');
+        }
+        $reasonId = max(0, $reasonId);
+        $reason = null;
+        if ($reasonId > 0) {
+            $reason = $this->reason($reasonId);
+            $own     = $reason !== null && $reason['ScopeType'] === 'kingdom' && $reason['ScopeId'] === $kingdomId;
+            $adopted = $reason !== null && $reason['ScopeType'] === 'ork' && $this->isAdoptedIn($reasonId, $this->kingdomAncestry($kingdomId));
+            if (!$own && !$adopted) {
+                return $this->fail('That credit is not one of this kingdom\'s (an Amtgard-wide credit must be adopted first).');
+            }
+        }
+        if ($this->isGranter($mundaneId, $kingdomId, $reasonId > 0 ? $reasonId : 0) && ($reasonId > 0 || $this->hasAllCreditsRow($mundaneId, $kingdomId))) {
+            return ['Status' => 0, 'Granters' => $this->granters($kingdomId)];
+        }
+        if ($reasonId === 0) {
+            // All credits subsumes any per-credit rows this player had.
+            $this->db->Clear();
+            $this->db->ExecuteChecked('DELETE FROM ' . DB_PREFIX . 'bonus_credit_granter WHERE kingdom_id = ' . (int) $kingdomId . ' AND mundane_id = ' . (int) $mundaneId);
+        }
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'bonus_credit_granter (kingdom_id, mundane_id, reason_id, added_by, added_at)
+             VALUES (' . (int) $kingdomId . ', ' . (int) $mundaneId . ', ' . (int) $reasonId . ', ' . $uid . ', NOW())'
+        );
+        if ($ok === false) {
+            return $this->fail('Could not add the granter.');
+        }
+        $this->audit(
+            'addGranter',
+            ['KingdomId' => $kingdomId, 'MundaneId' => $mundaneId, 'ReasonId' => $reasonId, 'by_whom_id' => $uid],
+            'Kingdom',
+            $kingdomId,
+            null,
+            ['MundaneId' => $mundaneId, 'Persona' => $player['persona'], 'ReasonId' => $reasonId, 'ReasonName' => $reason['Name'] ?? '', 'AllCredits' => $reasonId === 0]
+        );
+        return ['Status' => 0, 'Granters' => $this->granters($kingdomId)];
+    }
+
+    /** Remove one granter row by id. Kingdom CREATE on that row's kingdom. Idempotent. */
+    public function removeGranter(int $uid, int $kingdomId, int $granterId): array
+    {
+        if (!valid_id($kingdomId)) {
+            return $this->fail('That kingdom does not exist.');
+        }
+        if ($uid <= 0 || !$this->canAppoint($uid, $kingdomId)) {
+            return $this->denied('Only kingdom officers with CREATE authority can remove granters.');
+        }
+        $row = null;
+        foreach ($this->granters($kingdomId) as $g) {
+            if ($g['GranterId'] === $granterId) {
+                $row = $g;
+            }
+        }
+        if ($row === null) {
+            return ['Status' => 0, 'Granters' => $this->granters($kingdomId)];
+        }
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'DELETE FROM ' . DB_PREFIX . 'bonus_credit_granter WHERE granter_id = ' . (int) $granterId . ' AND kingdom_id = ' . (int) $kingdomId
+        );
+        if ($ok === false) {
+            return $this->fail('Could not remove the granter.');
+        }
+        $this->audit(
+            'removeGranter',
+            ['KingdomId' => $kingdomId, 'GranterId' => $granterId, 'by_whom_id' => $uid],
+            'Kingdom',
+            $kingdomId,
+            ['MundaneId' => $row['MundaneId'], 'Persona' => $row['Persona'], 'ReasonId' => $row['ReasonId'], 'ReasonName' => $row['ReasonName'], 'AllCredits' => $row['AllCredits']],
+            null
+        );
+        return ['Status' => 0, 'Granters' => $this->granters($kingdomId)];
+    }
+
+    private function hasAllCreditsRow(int $mundaneId, int $kingdomId): bool
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT 1 AS ok FROM ' . DB_PREFIX . 'bonus_credit_granter
+             WHERE kingdom_id = ' . (int) $kingdomId . ' AND mundane_id = ' . (int) $mundaneId . ' AND reason_id = 0 LIMIT 1'
+        );
+        return (bool) ($r && $r->Next());
     }
 
     /**
@@ -147,6 +422,9 @@ class BonusCredit
      */
     public function reasons(string $scopeType, int $scopeId, bool $includeArchived = false): array
     {
+        if ($scopeType === 'ork') {
+            return $this->reasonRows('r.scope_type = \'ork\'' . ($includeArchived ? '' : ' AND r.archived_at IS NULL'));
+        }
         if ($scopeType !== 'kingdom' || !valid_id($scopeId)) {
             return [];
         }
@@ -158,19 +436,191 @@ class BonusCredit
     /**
      * The credits a park may hand out: those of its kingdom and of every
      * kingdom above it (a principality's parks get the parent kingdom's too),
-     * plus any Amtgard-wide ones. Live only; this is the park modal's list.
+     * plus the Amtgard-wide ones any of those kingdoms adopted. Live only.
      */
     public function reasonsForPark(int $parkId): array
     {
         $kingdomId = $this->parkKingdom($parkId);
-        if ($kingdomId <= 0) {
+        return $kingdomId > 0 ? $this->reasonsForKingdom($kingdomId, false) : [];
+    }
+
+    /** A kingdom's own credits plus the Amtgard-wide ones adopted by it or a kingdom above it. */
+    public function reasonsForKingdom(int $kingdomId, bool $includeArchived = false): array
+    {
+        if (!valid_id($kingdomId)) {
             return [];
         }
-        $chain = $this->kingdomAncestry($kingdomId);
+        $chain = implode(',', array_map('intval', $this->kingdomAncestry($kingdomId)));
         return $this->reasonRows(
-            '((r.scope_type = \'kingdom\' AND r.scope_id IN (' . implode(',', array_map('intval', $chain)) . ')) OR r.scope_type = \'ork\')
-             AND r.archived_at IS NULL'
+            '((r.scope_type = \'kingdom\' AND r.scope_id IN (' . $chain . '))
+              OR (r.scope_type = \'ork\' AND r.reason_id IN (
+                    SELECT ad.reason_id FROM ' . DB_PREFIX . 'bonus_credit_adoption ad
+                    WHERE ad.kingdom_id IN (' . $chain . ') AND ad.withdrawn_at IS NULL)))'
+            . ($includeArchived ? '' : ' AND r.archived_at IS NULL')
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Adoption: how an Amtgard-wide credit reaches a kingdom
+    // -----------------------------------------------------------------------
+
+    /** Is this Amtgard-wide credit adopted by any of these kingdoms (a player's kingdom and those above it)? */
+    public function isAdoptedIn(int $reasonId, array $kingdomIds): bool
+    {
+        $ids = array_filter(array_map('intval', $kingdomIds));
+        if (!valid_id($reasonId) || !$ids) {
+            return false;
+        }
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT 1 AS ok FROM ' . DB_PREFIX . 'bonus_credit_adoption
+             WHERE reason_id = ' . (int) $reasonId . ' AND kingdom_id IN (' . implode(',', $ids) . ') AND withdrawn_at IS NULL LIMIT 1'
+        );
+        return (bool) ($r && $r->Next());
+    }
+
+    /** Every live Amtgard-wide credit, each marked with whether this kingdom (itself, not a parent) has adopted it. */
+    public function orkCreditsFor(int $kingdomId): array
+    {
+        $out = [];
+        foreach ($this->reasons('ork', 0) as $rs) {
+            $ad = $this->adoptionRow($rs['ReasonId'], $kingdomId);
+            $rs['Adopted']          = $ad !== null && $ad['WithdrawnAt'] === null;
+            $rs['AdoptedByPersona'] = $rs['Adopted'] ? $ad['AdoptedByPersona'] : '';
+            $rs['AdoptedAt']        = $rs['Adopted'] ? $ad['AdoptedAt'] : null;
+            $rs['InheritedFrom']    = '';
+            if (!$rs['Adopted']) {
+                foreach (array_slice($this->kingdomAncestry($kingdomId), 1) as $parent) {
+                    if ($this->isAdoptedIn($rs['ReasonId'], [$parent])) {
+                        $rs['InheritedFrom'] = $this->kingdomName($parent);
+                        break;
+                    }
+                }
+            }
+            $out[] = $rs;
+        }
+        return $out;
+    }
+
+    /** The kingdoms that have adopted an Amtgard-wide credit (live adoptions), by name. */
+    public function adoptions(int $reasonId): array
+    {
+        if (!valid_id($reasonId)) {
+            return [];
+        }
+        $out = [];
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT ad.adoption_id, ad.kingdom_id, ad.adopted_by, ad.adopted_at, k.name AS kingdom_name, a.persona AS adopted_by_persona
+             FROM ' . DB_PREFIX . 'bonus_credit_adoption ad
+             LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = ad.kingdom_id
+             LEFT JOIN ' . DB_PREFIX . 'mundane a ON a.mundane_id = ad.adopted_by
+             WHERE ad.reason_id = ' . (int) $reasonId . ' AND ad.withdrawn_at IS NULL
+             ORDER BY k.name'
+        );
+        while ($r && $r->Next()) {
+            $out[] = [
+                'AdoptionId'       => (int) $r->adoption_id,
+                'KingdomId'        => (int) $r->kingdom_id,
+                'KingdomName'      => (string) ($r->kingdom_name ?? ''),
+                'AdoptedBy'        => (int) $r->adopted_by,
+                'AdoptedByPersona' => (string) ($r->adopted_by_persona ?? ''),
+                'AdoptedAt'        => (string) $r->adopted_at,
+            ];
+        }
+        return $out;
+    }
+
+    /** Adopt an Amtgard-wide credit for a kingdom. Kingdom CREATE, or an ORK admin on its behalf. Idempotent. */
+    public function adopt(int $uid, int $reasonId, int $kingdomId): array
+    {
+        return $this->setAdopted($uid, $reasonId, $kingdomId, true);
+    }
+
+    /** Withdraw a kingdom's adoption. Same authority. Credits already granted stay. Idempotent. */
+    public function withdraw(int $uid, int $reasonId, int $kingdomId): array
+    {
+        return $this->setAdopted($uid, $reasonId, $kingdomId, false);
+    }
+
+    private function setAdopted(int $uid, int $reasonId, int $kingdomId, bool $adopt): array
+    {
+        $reason = $this->reason($reasonId);
+        if ($reason === null || $reason['ScopeType'] !== 'ork') {
+            return $this->fail('That is not an Amtgard-wide credit.');
+        }
+        if (!valid_id($kingdomId) || !$this->orgExists('kingdom', $kingdomId)) {
+            return $this->fail('That kingdom does not exist.');
+        }
+        if ($uid <= 0 || !($this->canAppoint($uid, $kingdomId) || $this->isOrkAdmin($uid))) {
+            return $this->denied('Only kingdom officers with CREATE authority, or an ORK admin, can adopt or withdraw a credit for a kingdom.');
+        }
+        if ($adopt && $reason['ArchivedAt'] !== null) {
+            return $this->fail('That credit is archived and cannot be adopted.');
+        }
+        $row  = $this->adoptionRow($reasonId, $kingdomId);
+        $live = $row !== null && $row['WithdrawnAt'] === null;
+        if ($adopt === $live) {
+            return ['Status' => 0, 'Adopted' => $live];
+        }
+        $this->db->Clear();
+        if ($adopt && $row === null) {
+            $ok = $this->db->ExecuteChecked(
+                'INSERT INTO ' . DB_PREFIX . 'bonus_credit_adoption (reason_id, kingdom_id, adopted_by, adopted_at)
+                 VALUES (' . (int) $reasonId . ', ' . (int) $kingdomId . ', ' . $uid . ', NOW())'
+            );
+        } elseif ($adopt) {
+            $ok = $this->db->ExecuteChecked(
+                'UPDATE ' . DB_PREFIX . 'bonus_credit_adoption
+                 SET adopted_by = ' . $uid . ', adopted_at = NOW(), withdrawn_by = NULL, withdrawn_at = NULL
+                 WHERE reason_id = ' . (int) $reasonId . ' AND kingdom_id = ' . (int) $kingdomId
+            );
+        } else {
+            $ok = $this->db->ExecuteChecked(
+                'UPDATE ' . DB_PREFIX . 'bonus_credit_adoption
+                 SET withdrawn_by = ' . $uid . ', withdrawn_at = NOW()
+                 WHERE reason_id = ' . (int) $reasonId . ' AND kingdom_id = ' . (int) $kingdomId
+            );
+        }
+        if ($ok === false) {
+            return $this->fail('Could not update the adoption.');
+        }
+        $this->audit(
+            $adopt ? 'adopt' : 'withdraw',
+            ['ReasonId' => $reasonId, 'KingdomId' => $kingdomId, 'by_whom_id' => $uid, 'as_ork_admin' => !$this->canAppoint($uid, $kingdomId)],
+            'Kingdom',
+            $kingdomId,
+            ['ReasonName' => $reason['Name'], 'Adopted' => $live],
+            ['ReasonName' => $reason['Name'], 'Adopted' => $adopt]
+        );
+        return ['Status' => 0, 'Adopted' => $adopt];
+    }
+
+    private function adoptionRow(int $reasonId, int $kingdomId): ?array
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT ad.*, a.persona AS adopted_by_persona FROM ' . DB_PREFIX . 'bonus_credit_adoption ad
+             LEFT JOIN ' . DB_PREFIX . 'mundane a ON a.mundane_id = ad.adopted_by
+             WHERE ad.reason_id = ' . (int) $reasonId . ' AND ad.kingdom_id = ' . (int) $kingdomId
+        );
+        if ($r && $r->Next()) {
+            $f = $r->CurrentFieldSet();
+            return [
+                'AdoptedBy'        => (int) $f['adopted_by'],
+                'AdoptedByPersona' => (string) ($f['adopted_by_persona'] ?? ''),
+                'AdoptedAt'        => (string) $f['adopted_at'],
+                'WithdrawnAt'      => ($f['withdrawn_at'] === null || $f['withdrawn_at'] === '') ? null : (string) $f['withdrawn_at'],
+            ];
+        }
+        return null;
+    }
+
+    private function kingdomName(int $kingdomId): string
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet('SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . (int) $kingdomId);
+        return ($r && $r->Next()) ? (string) $r->name : '';
     }
 
     private function reasonRows(string $where): array
@@ -179,7 +629,8 @@ class BonusCredit
         $this->db->Clear();
         $r = $this->db->DataSet(
             'SELECT r.*, k.name AS scope_name,
-                    (SELECT COUNT(*) FROM ' . DB_PREFIX . 'bonus_credit b WHERE b.reason_id = r.reason_id AND b.revoked_at IS NULL) AS granted
+                    (SELECT COUNT(*) FROM ' . DB_PREFIX . 'bonus_credit b WHERE b.reason_id = r.reason_id AND b.revoked_at IS NULL) AS granted,
+                    (SELECT COUNT(*) FROM ' . DB_PREFIX . 'bonus_credit_adoption ad WHERE ad.reason_id = r.reason_id AND ad.withdrawn_at IS NULL) AS adoptions
              FROM ' . DB_PREFIX . 'bonus_credit_reason r
              LEFT JOIN ' . DB_PREFIX . 'kingdom k ON r.scope_type = \'kingdom\' AND k.kingdom_id = r.scope_id
              WHERE ' . $where . '
@@ -205,11 +656,11 @@ class BonusCredit
     /** The reason an automated source owns at this scope, or null. */
     public function reasonForSource(string $scopeType, int $scopeId, string $sourceType, int $sourceId): ?array
     {
-        if ($scopeType !== 'kingdom' || !valid_id($scopeId) || $sourceId <= 0) {
+        if (!in_array($scopeType, ['kingdom', 'ork'], true) || ($scopeType === 'kingdom' && !valid_id($scopeId)) || $sourceId <= 0) {
             return null;
         }
         $rows = $this->reasonRows(
-            'r.scope_type = \'kingdom\' AND r.scope_id = ' . (int) $scopeId . '
+            'r.scope_type = \'' . $scopeType . '\' AND r.scope_id = ' . ($scopeType === 'ork' ? 0 : (int) $scopeId) . '
              AND r.source_type = \'' . $this->esc($sourceType) . '\' AND r.source_id = ' . (int) $sourceId
         );
         return $rows[0] ?? null;
@@ -233,11 +684,13 @@ class BonusCredit
         $sourceType = trim((string) ($r['SourceType'] ?? self::SOURCE_MANUAL));
         $sourceId   = (int) ($r['SourceId'] ?? 0);
 
-        if ($scopeType !== 'kingdom' || !valid_id($scopeId)) {
-            return $this->fail('Credits are defined by a kingdom; choose the kingdom this one belongs to.');
+        if ($scopeType === 'ork') {
+            $scopeId = 0;
+        } elseif ($scopeType !== 'kingdom' || !valid_id($scopeId)) {
+            return $this->fail('Credits are defined by a kingdom or Amtgard-wide; choose which.');
         }
         if ($uid <= 0 || !$this->canDefine($uid, $scopeType, $scopeId)) {
-            return $this->denied('Only kingdom officers can set up credits.');
+            return $this->denied($scopeType === 'ork' ? 'Only ORK admins can set up Amtgard-wide credits.' : 'Only kingdom officers with CREATE authority can set up credits.');
         }
         if (!$this->orgExists($scopeType, $scopeId)) {
             return $this->fail('That kingdom does not exist.');
@@ -319,7 +772,9 @@ class BonusCredit
             return $this->fail('Credit not found.');
         }
         if ($uid <= 0 || !$this->canDefine($uid, $reason['ScopeType'], $reason['ScopeId'])) {
-            return $this->denied('Only officers of the kingdom that defined this credit can change it.');
+            return $this->denied($reason['ScopeType'] === 'ork'
+                ? 'Only ORK admins can change an Amtgard-wide credit.'
+                : 'Only the defining kingdom\'s officers with CREATE authority can change this credit.');
         }
         if ($archived === ($reason['ArchivedAt'] !== null)) {
             return ['Status' => 0, 'ReasonId' => $reasonId, 'Reason' => $reason];
@@ -371,12 +826,15 @@ class BonusCredit
         if ($player === null) {
             return $this->fail('Player not found.');
         }
-        if ($uid <= 0 || !$this->canGrant($uid, $player['park_id'])) {
-            return $this->denied('You do not have authority over this player\'s park.');
+        if ($uid <= 0 || !$this->canGrantReason($uid, $player['park_id'], $reason)) {
+            return $this->denied('You do not have authority to grant this credit to this player.');
         }
         $family = $reason['ScopeType'] === 'kingdom' ? $this->kingdomFamily($reason['ScopeId']) : [];
         if (!self::covers($reason['ScopeType'], $reason['ScopeId'], $player, $family)) {
             return $this->denied('This credit belongs to another kingdom; it can only go to that kingdom\'s own players.');
+        }
+        if ($reason['ScopeType'] === 'ork' && !$this->isAdoptedIn($reason['ReasonId'], $this->kingdomAncestry($player['kingdom_id']))) {
+            return $this->denied('This player\'s kingdom has not adopted this Amtgard-wide credit.');
         }
         if (!$this->classActive($classId)) {
             return $this->fail('Choose an active class for the credit.');
@@ -422,8 +880,9 @@ class BonusCredit
             return $this->fail('Credit not found.');
         }
         $player = $this->playerRow((int) $row['MundaneId']);
-        if ($uid <= 0 || $player === null || !$this->canGrant($uid, $player['park_id'])) {
-            return $this->denied('You do not have authority over this player\'s park.');
+        $reason = $this->reason((int) $row['ReasonId']) ?? ['ScopeType' => $row['ScopeType'], 'ScopeId' => $row['ScopeId'], 'ReasonId' => $row['ReasonId']];
+        if ($uid <= 0 || $player === null || !$this->canGrantReason($uid, $player['park_id'], $reason)) {
+            return $this->denied('You do not have authority to remove this credit.');
         }
         if ($row['RevokedAt'] !== null) {
             return ['Status' => 0, 'BonusCreditId' => $bonusCreditId];
@@ -475,15 +934,18 @@ class BonusCredit
     }
 
     /** Who has a reason's credit, newest first: the modal's "already granted" list. A park host sees its own players only. */
-    public function forReason(int $reasonId, int $parkId = 0, int $limit = 200): array
+    public function forReason(int $reasonId, int $parkId = 0, int $limit = 200, int $kingdomId = 0): array
     {
         if (!valid_id($reasonId)) {
             return [];
         }
-        return $this->credits(
-            'b.reason_id = ' . (int) $reasonId . ' AND b.revoked_at IS NULL' . ($parkId > 0 ? ' AND m.park_id = ' . (int) $parkId : ''),
-            $limit
-        );
+        $where = 'b.reason_id = ' . (int) $reasonId . ' AND b.revoked_at IS NULL';
+        if ($parkId > 0) {
+            $where .= ' AND m.park_id = ' . (int) $parkId;
+        } elseif ($kingdomId > 0) {
+            $where .= ' AND m.kingdom_id IN (' . implode(',', array_map('intval', $this->kingdomFamily($kingdomId))) . ')';
+        }
+        return $this->credits($where, $limit);
     }
 
     /** One credit with its names, or null. */
@@ -560,6 +1022,7 @@ class BonusCredit
             'SourceId'       => (int) $f['source_id'],
             'ScopeName'      => (string) ($f['scope_name'] ?? ($f['scope_type'] === 'ork' ? 'Amtgard' : '')),
             'Granted'        => (int) ($f['granted'] ?? 0),
+            'Adoptions'      => (int) ($f['adoptions'] ?? 0),
             'CreatedBy'      => (int) $f['created_by'],
             'CreatedAt'      => (string) $f['created_at'],
             'ArchivedAt'     => ($f['archived_at'] === null || $f['archived_at'] === '') ? null : (string) $f['archived_at'],
@@ -610,6 +1073,9 @@ class BonusCredit
 
     private function orgExists(string $scopeType, int $scopeId): bool
     {
+        if ($scopeType === 'ork') {
+            return true;
+        }
         if ($scopeType !== 'kingdom') {
             return false;
         }

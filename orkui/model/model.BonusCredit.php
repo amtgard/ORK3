@@ -51,9 +51,39 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->forPlayer($mundaneId, $includeRevoked);
     }
 
-    public function for_reason(int $reasonId, int $parkId = 0, int $limit = 200): array
+    public function for_reason(int $reasonId, int $parkId = 0, int $limit = 200, int $kingdomId = 0): array
     {
-        return $this->_bonus()->forReason($reasonId, $parkId, $limit);
+        return $this->_bonus()->forReason($reasonId, $parkId, $limit, $kingdomId);
+    }
+
+    public function is_ork_admin(int $uid): bool
+    {
+        return $this->_bonus()->isOrkAdmin($uid);
+    }
+
+    public function reasons_for_kingdom(int $kingdomId, bool $includeArchived = false): array
+    {
+        return $this->_bonus()->reasonsForKingdom($kingdomId, $includeArchived);
+    }
+
+    public function ork_credits_for(int $kingdomId): array
+    {
+        return $this->_bonus()->orkCreditsFor($kingdomId);
+    }
+
+    public function adoptions(int $reasonId): array
+    {
+        return $this->_bonus()->adoptions($reasonId);
+    }
+
+    public function adopt(int $uid, int $reasonId, int $kingdomId): array
+    {
+        return $this->_bonus()->adopt($uid, $reasonId, $kingdomId);
+    }
+
+    public function withdraw(int $uid, int $reasonId, int $kingdomId): array
+    {
+        return $this->_bonus()->withdraw($uid, $reasonId, $kingdomId);
     }
 
     public function reasons_for_park(int $parkId): array
@@ -77,10 +107,46 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->canDefine($uid, $scopeType, $scopeId);
     }
 
+    /** May $uid hand out credits anywhere in a kingdom? */
+    public function can_grant_in_kingdom(int $uid, int $kingdomId): bool
+    {
+        return $this->_bonus()->canGrantInKingdom($uid, $kingdomId);
+    }
+
     /** May $uid hand out credits to a park's players? */
     public function can_grant(int $uid, int $parkId): bool
     {
         return $this->_bonus()->canGrant($uid, $parkId);
+    }
+
+    public function can_appoint(int $uid, int $kingdomId): bool
+    {
+        return $this->_bonus()->canAppoint($uid, $kingdomId);
+    }
+
+    public function granters(int $kingdomId): array
+    {
+        return $this->_bonus()->granters($kingdomId);
+    }
+
+    public function add_granter(int $uid, int $kingdomId, int $mundaneId, int $reasonId = 0): array
+    {
+        return $this->_bonus()->addGranter($uid, $kingdomId, $mundaneId, $reasonId);
+    }
+
+    public function remove_granter(int $uid, int $kingdomId, int $granterId): array
+    {
+        return $this->_bonus()->removeGranter($uid, $kingdomId, $granterId);
+    }
+
+    public function grantable_reasons_for_park(int $uid, int $parkId): array
+    {
+        return $this->_bonus()->grantableReasonsForPark($uid, $parkId);
+    }
+
+    public function grantable_reasons_in_kingdom(int $uid, int $kingdomId, bool $includeArchived = false): array
+    {
+        return $this->_bonus()->grantableReasonsInKingdom($uid, $kingdomId, $includeArchived);
     }
 
     private function _bonus(): BonusCredit
