@@ -447,6 +447,18 @@ class Court
         return (bool)($chk && $chk->Next());
     }
 
+    /** True when the recommendation is Monarchy Only (any level). */
+    private function isRecHidden($rec_id)
+    {
+        $rec_id = (int)$rec_id;
+        if ($rec_id <= 0) {
+            return false;
+        }
+        $this->db->Clear();
+        $mo = $this->db->DataSet('SELECT monarchy_only FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . $rec_id . ' LIMIT 1');
+        return (bool)($mo && $mo->Next() && (int)$mo->monarchy_only > 0);
+    }
+
     /**
      * Add an award to a court. Enforces object-level authorization: the
      * kingdomaward must belong to $kingdom_id (the court's own kingdom), else
@@ -501,7 +513,7 @@ class Court
             $this->db->Clear();
             $dup = $this->db->DataSet(
                 'SELECT court_award_id, rank, sort_order, pass_to_local, notes,
-                        public_comment, status, scroll_status, regalia_status
+                        public_comment, recommendations_id, public_comment_cleared, status, scroll_status, regalia_status
                    FROM ' . DB_PREFIX . "court_award
                   WHERE court_id = " . $court_id . '
                     AND (recommendations_id = ' . $rec_id . '
@@ -519,6 +531,8 @@ class Court
                     'pass_to_local'  => (int)$dup->pass_to_local,
                     'notes'          => (string)($dup->notes ?? ''),
                     'public_comment' => (string)($dup->public_comment ?? ''),
+                    'rec_id'         => (int)$dup->recommendations_id,
+                    'cleared'        => (int)$dup->public_comment_cleared,
                     'status'         => (string)$dup->status,
                     'scroll_status'  => (int)$dup->scroll_status,
                     'regalia_status' => (int)$dup->regalia_status,
@@ -546,6 +560,19 @@ class Court
             $status         = $existing['status'];
             $scroll_status  = $existing['scroll_status'];
             $regalia_status = $existing['regalia_status'];
+
+            // The line keeps whatever citation it already has, but if it is tied to a
+            // hidden rec and carries no typed comment, commitStagedAward would publish
+            // that rec's reason. Withhold it. A line tied to a different (public) rec
+            // is left alone: the citation it inherits is that public rec's reason.
+            if ($existing['rec_id'] > 0 && $existing['cleared'] === 0
+                && trim($public_comment) === '' && $this->isRecHidden($existing['rec_id'])) {
+                $this->db->Clear();
+                $this->db->Execute(
+                    'UPDATE ' . DB_PREFIX . 'court_award SET public_comment_cleared = 1
+                      WHERE court_award_id = ' . $court_award_id
+                );
+            }
         } else {
             // Next sort_order — the bottom of the whole running order, notes included,
             // so a new award never lands above a trailing note.
@@ -558,12 +585,7 @@ class Court
             // publishes `public_comment ?: rec.reason` to the permanent, public award
             // note unless the citation was explicitly cleared — so a line drawn from a
             // hidden rec starts cleared, and only what an officer types is published.
-            $cleared = 0;
-            if ($rec_id > 0) {
-                $this->db->Clear();
-                $mo = $this->db->DataSet('SELECT monarchy_only FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . $rec_id . ' LIMIT 1');
-                $cleared = ($mo && $mo->Next() && (int)$mo->monarchy_only > 0 && trim((string)$public_comment) === '') ? 1 : 0;
-            }
+            $cleared = ($rec_id > 0 && trim((string)$public_comment) === '' && $this->isRecHidden($rec_id)) ? 1 : 0;
 
             $this->db->Clear();
             $this->db->Execute(
@@ -623,7 +645,7 @@ class Court
                              pass_to_local = ' . $pass_to_local . ',
                              notes = ' . $notes_val . ',
                              public_comment = \'' . $this->esc($public_comment) . '\',
-                             public_comment_cleared = 0,
+                             public_comment_cleared = ' . $cleared . ',
                              award_id = NULL,
                              given_by_mundane_id = NULL,
                              last_finalize_error = NULL,
