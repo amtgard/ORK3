@@ -738,10 +738,10 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-bonus-badge{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:600;background:#fefcbf;color:#744210;vertical-align:middle;white-space:nowrap}
 .pn-bonus-badge i{font-size:10px;color:#d69e2e}
 .pn-bonus-section{margin-top:22px}
-.pn-bonus-heading{margin:0 0 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+#theme_container .pn-bonus-heading,.pn-bonus-heading{margin:0 0 4px;padding:0;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;background:none;border:0;box-shadow:none;text-shadow:none;color:inherit}
 .pn-bonus-heading i{color:#d69e2e}
 .pn-bonus-hint{margin:0 0 10px;font-size:12px;color:var(--ork-text-muted,#718096)}
-.pn-bonus-scope{margin-left:6px;font-size:11px;color:var(--ork-text-muted,#718096)}
+.pn-bonus-scope{font-size:12px;color:var(--ork-text-muted,#718096)}
 .pn-bonus-note{font-size:12px;color:var(--ork-text-muted,#718096)}
 .pn-bonus-revoke{background:none;border:0;color:#c53030;cursor:pointer;font-size:12px;padding:2px 6px}
 .pn-bonus-revoke:hover{text-decoration:underline}
@@ -2591,32 +2591,35 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<div class="pn-bonus-section" id="pn-bonus-section">
 					<h4 class="pn-bonus-heading"><i class="fas fa-star"></i> Bonus Credits</h4>
 					<p class="pn-bonus-hint">Credits granted for something other than attendance. They count toward class levels only, never as attendance.</p>
-					<table class="pn-table" id="pn-bonus-table">
+					<?php // pn-table display: the shared DataTables setup (pnInitDataTable in revised.js) gives
+					      // it paging, sort, search and CSV export, like the award and attendance tables. ?>
+					<table class="pn-table display" id="pn-bonus-table">
 						<thead>
 							<tr>
-								<th>Category</th>
-								<th>Class</th>
-								<th class="pn-col-numeric">Credits</th>
-								<th>Date</th>
-								<th>Granted by</th>
-								<?php if ($pnCanRevokeBonus): ?><th></th><?php endif; ?>
+								<th data-sorttype="text">Category</th>
+								<th data-sorttype="text">From</th>
+								<th data-sorttype="text">Class</th>
+								<th data-sorttype="numeric" class="pn-col-numeric">Credits</th>
+								<th data-sorttype="date">Date</th>
+								<th data-sorttype="text">Granted by</th>
+								<?php if ($pnCanRevokeBonus): ?><th class="pn-nosort"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
 							<?php foreach ($pnBonus as $bc): ?>
 							<tr data-bonus-id="<?= (int)$bc['BonusCreditId'] ?>">
 								<td>
-									<?= htmlspecialchars($bc['ReasonName']) ?>
-									<span class="pn-bonus-scope"><?= htmlspecialchars($bc['ScopeName']) ?></span>
+									<?= htmlspecialchars($bc['CategoryName']) ?>
 									<?php if (!empty($bc['Note'])): ?><div class="pn-bonus-note"><?= htmlspecialchars($bc['Note']) ?></div><?php endif; ?>
 								</td>
+								<td class="pn-bonus-scope"><?= htmlspecialchars($bc['ScopeName']) ?></td>
 								<td><?= htmlspecialchars($bc['ClassName']) ?></td>
 								<td class="pn-col-numeric"><?= rtrim(rtrim(number_format((float)$bc['Credits'], 2, '.', ''), '0'), '.') ?></td>
 								<td><?= htmlspecialchars($bc['Date']) ?></td>
 								<td><?= htmlspecialchars($bc['GrantedByPersona']) ?></td>
 								<?php if ($pnCanRevokeBonus): ?>
 								<td class="pn-col-numeric">
-									<button type="button" class="pn-bonus-revoke" data-id="<?= (int)$bc['BonusCreditId'] ?>" data-who="<?= htmlspecialchars($bc['ReasonName'], ENT_QUOTES) ?>">Remove</button>
+									<button type="button" class="pn-bonus-revoke" data-id="<?= (int)$bc['BonusCreditId'] ?>" data-who="<?= htmlspecialchars($bc['CategoryName'], ENT_QUOTES) ?>">Remove</button>
 								</td>
 								<?php endif; ?>
 							</tr>
