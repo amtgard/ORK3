@@ -4219,8 +4219,15 @@ $(document).ready(function() {
         });
     }
 
+    // Monarchy Only eligibility follows the PICKED recipient, not the page.
+    function knMoRecheck(recipientId) {
+        if (window.orkMonarchyOnlyRecheck) {
+            window.orkMonarchyOnlyRecheck(gid('kn-rec-monarchy'), UIR_JS + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/monarchyonlyeligible', recipientId);
+        }
+    }
     gid('kn-rec-player-text').addEventListener('input', function() {
         gid('kn-rec-player-id').value = '';
+        knMoRecheck(0);
         checkRequired();
         var term = this.value.trim();
         clearTimeout(playerTimer);
@@ -4246,6 +4253,7 @@ $(document).ready(function() {
         gid('kn-rec-player-text').value = decodeURIComponent(item.dataset.name);
         gid('kn-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
+        knMoRecheck(item.dataset.id);
         knRecRanks = {};
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
@@ -4278,6 +4286,7 @@ $(document).ready(function() {
         gid('kn-rec-char-count').textContent = '400 characters remaining';
         var knAnonEl = gid('kn-rec-anon'); if (knAnonEl) knAnonEl.checked = false;
         var knMoEl = gid('kn-rec-monarchy'); if (knMoEl) knMoEl.checked = false;
+        knMoRecheck(0);
         knRecRanks = {};
         checkRequired();
         gid('kn-rec-overlay').classList.add('kn-open');
@@ -4323,6 +4332,7 @@ $(document).ready(function() {
                     gid('kn-rec-char-count').textContent = '400 characters remaining';
                     var knAnonElS = gid('kn-rec-anon'); if (knAnonElS) knAnonElS.checked = false;
                     var knMoElS = gid('kn-rec-monarchy'); if (knMoElS) knMoElS.checked = false;
+                    knMoRecheck(0);
                     knRecRanks = {};
                     setTimeout(function() { gid('kn-rec-success').style.display = 'none'; }, 3000);
                 } else {
@@ -8030,8 +8040,16 @@ $(document).ready(function() {
     }
 
     // Player search
+    // Monarchy Only eligibility follows the PICKED recipient (this search is
+    // kingdom-wide, so the recipient need not be of this park).
+    function pkMoRecheck(recipientId) {
+        if (window.orkMonarchyOnlyRecheck) {
+            window.orkMonarchyOnlyRecheck(gid('pk-rec-monarchy'), UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/monarchyonlyeligible', recipientId);
+        }
+    }
     gid('pk-rec-player-text').addEventListener('input', function() {
         gid('pk-rec-player-id').value = '';
+        pkMoRecheck(0);
         checkRequired();
         var term = this.value.trim();
         clearTimeout(playerTimer);
@@ -8057,6 +8075,7 @@ $(document).ready(function() {
         gid('pk-rec-player-text').value = decodeURIComponent(item.dataset.name);
         gid('pk-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
+        pkMoRecheck(item.dataset.id);
         pkRecRanks = {};
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
@@ -8089,6 +8108,7 @@ $(document).ready(function() {
         gid('pk-rec-char-count').textContent = '400 characters remaining';
         var pkAnonEl = gid('pk-rec-anon'); if (pkAnonEl) pkAnonEl.checked = false;
         var pkMoEl = gid('pk-rec-monarchy'); if (pkMoEl) pkMoEl.checked = false;
+        pkMoRecheck(0);
         pkRecRanks = {};
         checkRequired();
         gid('pk-rec-overlay').classList.add('pk-open');
@@ -8146,6 +8166,7 @@ $(document).ready(function() {
                         gid('pk-rec-char-count').textContent = '400 characters remaining';
                         var pkAnonElS = gid('pk-rec-anon'); if (pkAnonElS) pkAnonElS.checked = false;
                         var pkMoElS = gid('pk-rec-monarchy'); if (pkMoElS) pkMoElS.checked = false;
+                        pkMoRecheck(0);
                         pkRecRanks = {};
                         setTimeout(function() { gid('pk-rec-success').style.display = 'none'; }, 3000);
                     } else {

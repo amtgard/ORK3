@@ -258,6 +258,20 @@ class Model_Player extends Model
         return (int) Ork3::$Lib->recommendationvisibility->officerLevel((int)$uid, (int)$kingdom_id, (int)$park_id);
     }
 
+    // Kingdom page Add Rec modal: offer the Monarchy Only checkbox to an officer of the
+    // kingdom or of any park in it. The recipient check is monarchy_only_level_for().
+    public function monarchy_only_eligible_in_kingdom($uid, $kingdom_id)
+    {
+        return Ork3::$Lib->recommendationvisibility->isOfficerInKingdom((int)$uid, (int)$kingdom_id);
+    }
+
+    // The level $uid would set marking a rec about $recipient_id Monarchy Only (0 = may
+    // not), measured against the RECIPIENT exactly as the create path measures it.
+    public function monarchy_only_level_for($uid, $recipient_id)
+    {
+        return (int) Ork3::$Lib->recommendationvisibility->creatorLevel((int)$uid, (int)$recipient_id);
+    }
+
     public function delete_player_recommendation($request)
     {
         return $this->Player->DeleteAwardRecommendation($request);

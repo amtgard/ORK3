@@ -9,6 +9,12 @@ html[data-theme="dark"] .mo-check-hint { color:#a0aec0; }
 .mo-note-hint i { margin-right:4px; color:#6b46c1; }
 html[data-theme="dark"] .mo-note-hint { color:#d6bcfa; background:rgba(196,181,253,.10); border-color:rgba(196,181,253,.4); }
 html[data-theme="dark"] .mo-note-hint i { color:#c4b5fd; }
+.mo-check-ineligible { margin-top:4px; padding-left:24px; font-size:11px; line-height:1.4; color:#9c4221; }
+.mo-check-ineligible[hidden] { display:none; }
+.mo-check-ineligible i { margin-right:4px; }
+html[data-theme="dark"] .mo-check-ineligible { color:#fbd38d; }
+label.mo-check-off { cursor:not-allowed !important; opacity:.6; }
+label.mo-check-off input { cursor:not-allowed !important; }
 </style>
 <script>
 window.orkMonarchyOnlyBadge = function (level) {
@@ -32,5 +38,42 @@ window.orkMonarchyOnlyNoteHint = function (noteEl, show) {
         noteEl.parentNode.insertBefore(hint, noteEl.nextSibling);
     }
     hint.hidden = false;
+};
+// Add Rec modals (Kingdom/Park pages): the checkbox is offered page-wide, but whether
+// the PICKED recipient may be marked depends on the caller's authority over that
+// player. Re-check on every pick: not eligible -> unticked, disabled, short note.
+// recipientId 0 resets to the enabled state. The server stays the authority.
+window.orkMonarchyOnlyRecheck = function (cb, url, recipientId) {
+    if (!cb) return;
+    var label = cb.closest('label');
+    var field = (label && label.parentNode) || cb.parentNode;
+    var seq = cb._moSeq = (cb._moSeq || 0) + 1;
+    var tip = "Only officers of this player's park or kingdom can mark a recommendation Monarchy Only.";
+    function apply(eligible) {
+        if (seq !== cb._moSeq) return; // a later pick superseded this answer
+        cb.disabled = !eligible;
+        if (!eligible) cb.checked = false;
+        if (label) {
+            label.classList.toggle('mo-check-off', !eligible);
+            if (eligible) label.removeAttribute('data-tip'); else label.setAttribute('data-tip', tip);
+        }
+        var note = document.getElementById(cb.id + '-ineligible');
+        if (!note && !eligible) {
+            note = document.createElement('div');
+            note.id = cb.id + '-ineligible';
+            note.className = 'mo-check-ineligible';
+            note.setAttribute('role', 'status');
+            note.innerHTML = '<i class="fas fa-circle-info" aria-hidden="true"></i>You are not an officer of this player\u2019s park or kingdom, so this recommendation cannot be Monarchy Only.';
+            field.appendChild(note);
+        }
+        if (note) note.hidden = eligible;
+    }
+    recipientId = parseInt(recipientId, 10) || 0;
+    if (!recipientId || !url) { apply(true); return; }
+    cb.disabled = true; // no tick while the answer is pending
+    fetch(url + '&MundaneId=' + recipientId, { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { apply(!!(d && d.status === 0 && d.eligible)); })
+        .catch(function () { apply(true); }); // unknown: leave it to the server's check
 };
 </script>

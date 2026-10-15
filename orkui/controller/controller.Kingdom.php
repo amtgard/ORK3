@@ -531,7 +531,9 @@ class Controller_Kingdom extends Controller
         $this->data['CallerIsOrkAdmin']    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
         $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$kingdom_id, 0);
         $this->load_model('Player');
-        $this->data['CanMonarchyOnlyRec']  = $uid > 0 && $this->Player->monarchy_only_level($uid, (int)$kingdom_id, 0) > 0;
+        // Offered to any officer in the kingdom (its own or any of its parks'); the modal
+        // re-checks against each picked recipient (KingdomAjax monarchyonlyeligible).
+        $this->data['CanMonarchyOnlyRec']  = $uid > 0 && $this->Player->monarchy_only_eligible_in_kingdom($uid, (int)$kingdom_id);
         $this->data['CourtList']           = [];
         $this->data['CourtUpcomingEvents'] = [];
         if ($this->data['CanManageCourt']) {
