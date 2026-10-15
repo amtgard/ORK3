@@ -534,15 +534,8 @@
 		<!-- Map Widget -->
 		<?php if (!is_null($parkLat)): ?>
 		<div class="pk-card" style="padding:0;overflow:hidden;border-radius:10px;">
-			<iframe
-				src="https://maps.google.com/maps?q=<?= $parkLat ?>,<?= $parkLng ?>&output=embed&z=11"
-				width="100%"
-				height="200"
-				style="border:0;display:block"
-				allowfullscreen=""
-				loading="lazy"
-				referrerpolicy="no-referrer-when-downgrade">
-			</iframe>
+			<?php // JS-API pin map (not an embed iframe) so touch devices pan with one finger — see .ork-pin-map in revised.js ?>
+			<div class="ork-pin-map" role="region" aria-label="Park location map" data-lat="<?= $parkLat ?>" data-lng="<?= $parkLng ?>" data-zoom="11" style="height:200px"></div>
 		</div>
 		<?php endif; ?>
 
