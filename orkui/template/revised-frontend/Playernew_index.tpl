@@ -2594,7 +2594,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<table class="pn-table" id="pn-bonus-table">
 						<thead>
 							<tr>
-								<th>Credit for</th>
+								<th>Category</th>
 								<th>Class</th>
 								<th class="pn-col-numeric">Credits</th>
 								<th>Date</th>

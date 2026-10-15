@@ -2,12 +2,12 @@
 
 /**
  * JSON endpoints for bonus credits (class credits that are not attendance)
- * and the reasons they are granted for. Backs the Add Bonus Credits modal on
+ * and the categories they are granted for. Backs the Add Bonus Credits modal on
  * the park and kingdom pages and the credit list on the player page.
  *
  * Envelope: {status: 0, ...} ok; {status: 1, error} bad request;
  * {status: 3, error} not authorized; {status: 5, error} not logged in.
- * Authority is decided in the domain (BonusCredit::canGrant on the reason's
+ * Authority is decided in the domain (BonusCredit::canGrant on the category's
  * org); this layer only reads the request and the session.
  */
 class Controller_BonusCreditAjax extends Controller
@@ -33,7 +33,7 @@ class Controller_BonusCreditAjax extends Controller
             if (!$this->BonusCredit->is_ork_admin($uid)) {
                 $this->jsonOut(['status' => 3, 'error' => 'Only ORK admins can manage Amtgard-wide credits.']);
             }
-            $reasons    = $this->BonusCredit->reasons('ork', 0, !empty($_GET['archived']));
+            $categories    = $this->BonusCredit->categories('ork', 0, !empty($_GET['archived']));
             $canDefine  = true;
             $canAppoint = false;
             $granters   = [];
@@ -46,7 +46,7 @@ class Controller_BonusCreditAjax extends Controller
             }
             // The kingdom's own credits plus adopted Amtgard-wide ones; a granter-only
             // user sees just the credits their rows cover.
-            $reasons    = $this->BonusCredit->grantable_reasons_in_kingdom($uid, $scopeId, $canDefine && !empty($_GET['archived']));
+            $categories    = $this->BonusCredit->grantable_categories_in_kingdom($uid, $scopeId, $canDefine && !empty($_GET['archived']));
             $canAppoint = $this->BonusCredit->can_appoint($uid, $scopeId);
             $granters   = $canAppoint ? $this->BonusCredit->granters($scopeId) : [];
             // Every live Amtgard-wide credit, flagged with this kingdom's adoption, for the Credits tab.
@@ -55,7 +55,7 @@ class Controller_BonusCreditAjax extends Controller
             if (!$this->BonusCredit->can_grant($uid, $scopeId)) {
                 $this->jsonOut(['status' => 3, 'error' => 'You do not have authority over this park.']);
             }
-            $reasons = $this->BonusCredit->grantable_reasons_for_park($uid, $scopeId);
+            $categories = $this->BonusCredit->grantable_categories_for_park($uid, $scopeId);
             $canDefine = false;
             $canAppoint = false;
             $granters = [];
@@ -64,7 +64,7 @@ class Controller_BonusCreditAjax extends Controller
         $classes = array_map(function ($c) {
             return ['ClassId' => (int) $c['ClassId'], 'ClassName' => (string) $c['Name']];
         }, $this->Attendance->get_classes()['Classes'] ?? []);
-        $this->jsonOut(['status' => 0, 'reasons' => $reasons, 'classes' => $classes, 'canDefine' => $canDefine, 'canAppoint' => $canAppoint,
+        $this->jsonOut(['status' => 0, 'categories' => $categories, 'classes' => $classes, 'canDefine' => $canDefine, 'canAppoint' => $canAppoint,
                         'granters' => $granters, 'orkCredits' => $orkCredits]);
     }
 
@@ -73,9 +73,9 @@ class Controller_BonusCreditAjax extends Controller
     {
         $uid = $this->requireLogin();
         $kingdomId = (int) ($_POST['KingdomId'] ?? 0);
-        $r = $this->BonusCredit->adopt($uid, (int) ($_POST['ReasonId'] ?? 0), $kingdomId);
+        $r = $this->BonusCredit->adopt($uid, (int) ($_POST['CategoryId'] ?? 0), $kingdomId);
         $this->envelope($r, ['adopted' => true, 'orkCredits' => $this->BonusCredit->ork_credits_for($kingdomId),
-                             'reasons' => $this->BonusCredit->grantable_reasons_in_kingdom($uid, $kingdomId, true)]);
+                             'categories' => $this->BonusCredit->grantable_categories_in_kingdom($uid, $kingdomId, true)]);
     }
 
     /** Withdraw a kingdom's adoption of an Amtgard-wide credit. */
@@ -83,9 +83,9 @@ class Controller_BonusCreditAjax extends Controller
     {
         $uid = $this->requireLogin();
         $kingdomId = (int) ($_POST['KingdomId'] ?? 0);
-        $r = $this->BonusCredit->withdraw($uid, (int) ($_POST['ReasonId'] ?? 0), $kingdomId);
+        $r = $this->BonusCredit->withdraw($uid, (int) ($_POST['CategoryId'] ?? 0), $kingdomId);
         $this->envelope($r, ['adopted' => false, 'orkCredits' => $this->BonusCredit->ork_credits_for($kingdomId),
-                             'reasons' => $this->BonusCredit->grantable_reasons_in_kingdom($uid, $kingdomId, true)]);
+                             'categories' => $this->BonusCredit->grantable_categories_in_kingdom($uid, $kingdomId, true)]);
     }
 
     /** The kingdoms that adopted an Amtgard-wide credit (ORK admins). */
@@ -95,14 +95,14 @@ class Controller_BonusCreditAjax extends Controller
         if (!$this->BonusCredit->is_ork_admin($uid)) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
-        $this->jsonOut(['status' => 0, 'adoptions' => $this->BonusCredit->adoptions((int) ($_GET['ReasonId'] ?? $_POST['ReasonId'] ?? 0))]);
+        $this->jsonOut(['status' => 0, 'adoptions' => $this->BonusCredit->adoptions((int) ($_GET['CategoryId'] ?? $_POST['CategoryId'] ?? 0))]);
     }
 
     /** Appoint a bonus credit granter for a kingdom (kingdom CREATE). */
     public function granter_add($p = null)
     {
         $uid = $this->requireLogin();
-        $r = $this->BonusCredit->add_granter($uid, (int) ($_POST['KingdomId'] ?? 0), (int) ($_POST['MundaneId'] ?? 0), (int) ($_POST['ReasonId'] ?? 0));
+        $r = $this->BonusCredit->add_granter($uid, (int) ($_POST['KingdomId'] ?? 0), (int) ($_POST['MundaneId'] ?? 0), (int) ($_POST['CategoryId'] ?? 0));
         $this->envelope($r, ['granters' => $r['Granters'] ?? []]);
     }
 
@@ -114,14 +114,14 @@ class Controller_BonusCreditAjax extends Controller
         $this->envelope($r, ['granters' => $r['Granters'] ?? []]);
     }
 
-    public function reason_create($p = null)
+    public function category_create($p = null)
     {
         $uid = $this->requireLogin();
         [$scopeType, $scopeId] = $this->scope();
         if ($scopeType === 'park') {
             $this->jsonOut(['status' => 1, 'error' => 'Credits are defined by a kingdom, or Amtgard-wide.']);
         }
-        $r = $this->BonusCredit->create_reason($uid, [
+        $r = $this->BonusCredit->create_category($uid, [
             'ScopeType'      => $scopeType,
             'ScopeId'        => $scopeId,
             'Name'           => $_POST['Name'] ?? '',
@@ -129,40 +129,40 @@ class Controller_BonusCreditAjax extends Controller
             'DefaultCredits' => $_POST['DefaultCredits'] ?? 1,
             'Repeatable'     => $_POST['Repeatable'] ?? 0,
         ]);
-        $this->envelope($r, ['reason' => $r['Reason'] ?? null, 'restored' => !empty($r['Restored'])]);
+        $this->envelope($r, ['category' => $r['Category'] ?? null, 'restored' => !empty($r['Restored'])]);
     }
 
-    public function reason_archive($p = null)
+    public function category_archive($p = null)
     {
         $uid = $this->requireLogin();
-        $r = $this->BonusCredit->archive_reason($uid, (int) ($_POST['ReasonId'] ?? 0));
-        $this->envelope($r, ['reason' => $r['Reason'] ?? null]);
+        $r = $this->BonusCredit->archive_category($uid, (int) ($_POST['CategoryId'] ?? 0));
+        $this->envelope($r, ['category' => $r['Category'] ?? null]);
     }
 
-    public function reason_restore($p = null)
+    public function category_restore($p = null)
     {
         $uid = $this->requireLogin();
-        $r = $this->BonusCredit->restore_reason($uid, (int) ($_POST['ReasonId'] ?? 0));
-        $this->envelope($r, ['reason' => $r['Reason'] ?? null]);
+        $r = $this->BonusCredit->restore_category($uid, (int) ($_POST['CategoryId'] ?? 0));
+        $this->envelope($r, ['category' => $r['Category'] ?? null]);
     }
 
     /**
-     * Who already holds a reason's credit (newest first). A kingdom officer
+     * Who already holds a category's credit (newest first). A kingdom officer
      * sees every holder; a park host (ParkId) sees its own players only, and
      * must be allowed to grant there.
      */
-    public function reason_credits($p = null)
+    public function category_credits($p = null)
     {
         $uid = $this->requireLogin();
-        $reason = $this->BonusCredit->reason((int) ($_GET['ReasonId'] ?? $_POST['ReasonId'] ?? 0));
-        if ($reason === null) {
+        $category = $this->BonusCredit->category((int) ($_GET['CategoryId'] ?? $_POST['CategoryId'] ?? 0));
+        if ($category === null) {
             $this->jsonOut(['status' => 1, 'error' => 'Credit not found.']);
         }
         $parkId    = (int) ($_GET['ParkId'] ?? $_POST['ParkId'] ?? 0);
         $kingdomId = (int) ($_GET['KingdomId'] ?? $_POST['KingdomId'] ?? 0);
-        $offered = function (array $list) use ($reason) {
+        $offered = function (array $list) use ($category) {
             foreach ($list as $rs) {
-                if ($rs['ReasonId'] === $reason['ReasonId']) {
+                if ($rs['CategoryId'] === $category['CategoryId']) {
                     return true;
                 }
             }
@@ -170,18 +170,18 @@ class Controller_BonusCreditAjax extends Controller
         };
         if ($parkId > 0) {
             // A park host: the credit must be offered there, and the caller allowed to grant there.
-            if (!$this->BonusCredit->can_grant($uid, $parkId) || !$offered($this->BonusCredit->reasons_for_park($parkId))) {
+            if (!$this->BonusCredit->can_grant($uid, $parkId) || !$offered($this->BonusCredit->categories_for_park($parkId))) {
                 $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
             }
         } elseif ($kingdomId > 0) {
             // A kingdom host: its own credits and adopted Amtgard-wide ones, listed for its own players.
-            if (!$this->BonusCredit->can_grant_in_kingdom($uid, $kingdomId) || !$offered($this->BonusCredit->reasons_for_kingdom($kingdomId, true))) {
+            if (!$this->BonusCredit->can_grant_in_kingdom($uid, $kingdomId) || !$offered($this->BonusCredit->categories_for_kingdom($kingdomId, true))) {
                 $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
             }
-        } elseif (!$this->BonusCredit->can_define($uid, $reason['ScopeType'], $reason['ScopeId'])) {
+        } elseif (!$this->BonusCredit->can_define($uid, $category['ScopeType'], $category['ScopeId'])) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
-        $this->jsonOut(['status' => 0, 'reason' => $reason, 'credits' => $this->BonusCredit->for_reason($reason['ReasonId'], $parkId, 200, $kingdomId)]);
+        $this->jsonOut(['status' => 0, 'category' => $category, 'credits' => $this->BonusCredit->for_category($category['CategoryId'], $parkId, 200, $kingdomId)]);
     }
 
     public function grant($p = null)
@@ -190,7 +190,7 @@ class Controller_BonusCreditAjax extends Controller
         $r = $this->BonusCredit->grant($uid, [
             'MundaneId' => $_POST['MundaneId'] ?? 0,
             'ClassId'   => $_POST['ClassId'] ?? 0,
-            'ReasonId'  => $_POST['ReasonId'] ?? 0,
+            'CategoryId'  => $_POST['CategoryId'] ?? 0,
             'Date'      => $_POST['Date'] ?? date('Y-m-d'),
             'Note'      => $_POST['Note'] ?? '',
         ]);

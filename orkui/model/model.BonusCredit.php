@@ -3,7 +3,7 @@
 /**
  * Thin pass-through to the BonusCredit domain class
  * (system/lib/ork3/class.BonusCredit.php): bonus credits, the class credits
- * that are not attendance, and the reasons they are granted for.
+ * that are not attendance, and the categories they are granted for.
  *
  * No SQL and no business logic here; every method forwards unchanged. The
  * domain takes the acting user's id, which the controller reads from the
@@ -11,29 +11,29 @@
  */
 class Model_BonusCredit extends Model
 {
-    public function reasons(string $scopeType, int $scopeId, bool $includeArchived = false): array
+    public function categories(string $scopeType, int $scopeId, bool $includeArchived = false): array
     {
-        return $this->_bonus()->reasons($scopeType, $scopeId, $includeArchived);
+        return $this->_bonus()->categories($scopeType, $scopeId, $includeArchived);
     }
 
-    public function reason(int $reasonId): ?array
+    public function category(int $categoryId): ?array
     {
-        return $this->_bonus()->reason($reasonId);
+        return $this->_bonus()->category($categoryId);
     }
 
-    public function create_reason(int $uid, array $fields): array
+    public function create_category(int $uid, array $fields): array
     {
-        return $this->_bonus()->createReason($uid, $fields);
+        return $this->_bonus()->createCategory($uid, $fields);
     }
 
-    public function archive_reason(int $uid, int $reasonId): array
+    public function archive_category(int $uid, int $categoryId): array
     {
-        return $this->_bonus()->archiveReason($uid, $reasonId);
+        return $this->_bonus()->archiveCategory($uid, $categoryId);
     }
 
-    public function restore_reason(int $uid, int $reasonId): array
+    public function restore_category(int $uid, int $categoryId): array
     {
-        return $this->_bonus()->restoreReason($uid, $reasonId);
+        return $this->_bonus()->restoreCategory($uid, $categoryId);
     }
 
     public function grant(int $uid, array $fields): array
@@ -51,9 +51,9 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->forPlayer($mundaneId, $includeRevoked);
     }
 
-    public function for_reason(int $reasonId, int $parkId = 0, int $limit = 200, int $kingdomId = 0): array
+    public function for_category(int $categoryId, int $parkId = 0, int $limit = 200, int $kingdomId = 0): array
     {
-        return $this->_bonus()->forReason($reasonId, $parkId, $limit, $kingdomId);
+        return $this->_bonus()->forCategory($categoryId, $parkId, $limit, $kingdomId);
     }
 
     public function is_ork_admin(int $uid): bool
@@ -61,9 +61,9 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->isOrkAdmin($uid);
     }
 
-    public function reasons_for_kingdom(int $kingdomId, bool $includeArchived = false): array
+    public function categories_for_kingdom(int $kingdomId, bool $includeArchived = false): array
     {
-        return $this->_bonus()->reasonsForKingdom($kingdomId, $includeArchived);
+        return $this->_bonus()->categoriesForKingdom($kingdomId, $includeArchived);
     }
 
     public function ork_credits_for(int $kingdomId): array
@@ -71,24 +71,24 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->orkCreditsFor($kingdomId);
     }
 
-    public function adoptions(int $reasonId): array
+    public function adoptions(int $categoryId): array
     {
-        return $this->_bonus()->adoptions($reasonId);
+        return $this->_bonus()->adoptions($categoryId);
     }
 
-    public function adopt(int $uid, int $reasonId, int $kingdomId): array
+    public function adopt(int $uid, int $categoryId, int $kingdomId): array
     {
-        return $this->_bonus()->adopt($uid, $reasonId, $kingdomId);
+        return $this->_bonus()->adopt($uid, $categoryId, $kingdomId);
     }
 
-    public function withdraw(int $uid, int $reasonId, int $kingdomId): array
+    public function withdraw(int $uid, int $categoryId, int $kingdomId): array
     {
-        return $this->_bonus()->withdraw($uid, $reasonId, $kingdomId);
+        return $this->_bonus()->withdraw($uid, $categoryId, $kingdomId);
     }
 
-    public function reasons_for_park(int $parkId): array
+    public function categories_for_park(int $parkId): array
     {
-        return $this->_bonus()->reasonsForPark($parkId);
+        return $this->_bonus()->categoriesForPark($parkId);
     }
 
     public function park_kingdom(int $parkId): int
@@ -129,9 +129,9 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->granters($kingdomId);
     }
 
-    public function add_granter(int $uid, int $kingdomId, int $mundaneId, int $reasonId = 0): array
+    public function add_granter(int $uid, int $kingdomId, int $mundaneId, int $categoryId = 0): array
     {
-        return $this->_bonus()->addGranter($uid, $kingdomId, $mundaneId, $reasonId);
+        return $this->_bonus()->addGranter($uid, $kingdomId, $mundaneId, $categoryId);
     }
 
     public function remove_granter(int $uid, int $kingdomId, int $granterId): array
@@ -139,14 +139,14 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->removeGranter($uid, $kingdomId, $granterId);
     }
 
-    public function grantable_reasons_for_park(int $uid, int $parkId): array
+    public function grantable_categories_for_park(int $uid, int $parkId): array
     {
-        return $this->_bonus()->grantableReasonsForPark($uid, $parkId);
+        return $this->_bonus()->grantableCategoriesForPark($uid, $parkId);
     }
 
-    public function grantable_reasons_in_kingdom(int $uid, int $kingdomId, bool $includeArchived = false): array
+    public function grantable_categories_in_kingdom(int $uid, int $kingdomId, bool $includeArchived = false): array
     {
-        return $this->_bonus()->grantableReasonsInKingdom($uid, $kingdomId, $includeArchived);
+        return $this->_bonus()->grantableCategoriesInKingdom($uid, $kingdomId, $includeArchived);
     }
 
     private function _bonus(): BonusCredit

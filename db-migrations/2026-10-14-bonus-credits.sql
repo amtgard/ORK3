@@ -14,19 +14,19 @@
 -- class-reconciliation offset to attendance credits; the bonus total joins in
 -- the same spot. Nothing that counts attendance ever sees these tables.
 --
--- TWO TABLES. A credit is granted FOR a reason (ork_bonus_credit_reason): the
--- named "thing" an officer picks in the Add Bonus Credits modal. Reasons are
+-- TWO TABLES. A credit is granted FOR a category (ork_bonus_credit_category): the
+-- named "thing" an officer picks in the Add Bonus Credits modal. Categories are
 -- defined at KINGDOM level (a principality counts as a kingdom); parks do not
 -- create them, they hand them out. scope_type leaves room for an Amtgard-wide
 -- level later ('ork', scope_id 0) that nothing creates yet.
 --
--- Authority is kingdom-gated at both ends: creating a reason needs CREATE on
+-- Authority is kingdom-gated at both ends: creating a category needs CREATE on
 -- its kingdom (admin-level); granting one needs EDIT on the player's park (which kingdom
 -- officers hold for every park in their kingdom) AND the player's home must
--- lie inside the reason's kingdom or one of its principalities. So a kingdom
+-- lie inside the category's kingdom or one of its principalities. So a kingdom
 -- can never credit another kingdom's players, and a park can only credit its
--- own. A reason is granted once per player unless marked repeatable. An
--- automated source (a survey) is a reason too, linked by source_type/id, so
+-- own. A category is granted once per player unless marked repeatable. An
+-- automated source (a survey) is a category too, linked by source_type/id, so
 -- "once per survey" is the same rule.
 --
 -- AMTGARD-WIDE credits (scope_type 'ork', scope_id 0) are defined by ORK admins
@@ -39,19 +39,19 @@
 -- and remove credits kingdom-wide WITHOUT holding a kingdom authorization row
 -- -- the person running a survey, say -- the same shape as the qualification
 -- tests' ork_qual_manager. EDIT-level powers only: a granter cannot define,
--- archive or restore a reason. A row names either every credit of the kingdom
--- (reason_id 0, the default) or one specific credit. Only kingdom CREATE
+-- archive or restore a category. A row names either every credit of the kingdom
+-- (category_id 0, the default) or one specific credit. Only kingdom CREATE
 -- appoints or removes them.
 --
 -- Revocation and archiving are stamps, not deletes: a credit's history
--- survives, and an archived reason stops being offered without touching the
+-- survives, and an archived category stops being offered without touching the
 -- credits already granted for it.
 --
 -- Idempotent: CREATE TABLE IF NOT EXISTS; safe to re-run.
 -- After applying: docker restart ork3-php8-app (APCu schema cache).
 
-CREATE TABLE IF NOT EXISTS ork_bonus_credit_reason (
-  reason_id       INT UNSIGNED NOT NULL AUTO_INCREMENT,
+CREATE TABLE IF NOT EXISTS ork_bonus_credit_category (
+  category_id       INT UNSIGNED NOT NULL AUTO_INCREMENT,
   scope_type      ENUM('ork','kingdom') NOT NULL DEFAULT 'kingdom', -- who defines it: a kingdom, or Amtgard (ORK admins)
   scope_id        INT NOT NULL,                        -- kingdom_id, or 0 for 'ork'
   name            VARCHAR(100) NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS ork_bonus_credit_reason (
   created_at      DATETIME NOT NULL,
   archived_by     INT NULL,
   archived_at     DATETIME NULL,
-  PRIMARY KEY (reason_id),
+  PRIMARY KEY (category_id),
   UNIQUE KEY uq_scope_name (scope_type, scope_id, name),
   KEY idx_scope (scope_type, scope_id, archived_at),
   KEY idx_source (source_type, source_id)
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS ork_bonus_credit (
   class_id        INT NOT NULL,
   credits         DECIMAL(4,2) NOT NULL DEFAULT 1.00,
   credit_date     DATE NOT NULL,                       -- the day the credit is for (bookkeeping, not identity)
-  reason_id       INT UNSIGNED NOT NULL,
+  category_id       INT UNSIGNED NOT NULL,
   note            VARCHAR(200) NOT NULL DEFAULT '',
   granted_by      INT NOT NULL,
   granted_at      DATETIME NOT NULL,
@@ -85,30 +85,30 @@ CREATE TABLE IF NOT EXISTS ork_bonus_credit (
   revoke_note     VARCHAR(200) NOT NULL DEFAULT '',
   PRIMARY KEY (bonus_credit_id),
   KEY idx_player (mundane_id, revoked_at, class_id),
-  KEY idx_reason (reason_id, revoked_at, mundane_id)
+  KEY idx_category (category_id, revoked_at, mundane_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS ork_bonus_credit_granter (
   granter_id      INT UNSIGNED NOT NULL AUTO_INCREMENT,
   kingdom_id      INT NOT NULL,
   mundane_id      INT NOT NULL,
-  reason_id       INT UNSIGNED NOT NULL DEFAULT 0,     -- 0 = every credit of this kingdom; else that one credit
+  category_id       INT UNSIGNED NOT NULL DEFAULT 0,     -- 0 = every credit of this kingdom; else that one credit
   added_by        INT NOT NULL,
   added_at        DATETIME NOT NULL,
   PRIMARY KEY (granter_id),
-  UNIQUE KEY uq_kingdom_player_reason (kingdom_id, mundane_id, reason_id),
+  UNIQUE KEY uq_kingdom_player_category (kingdom_id, mundane_id, category_id),
   KEY idx_player (mundane_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS ork_bonus_credit_adoption (
   adoption_id     INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  reason_id       INT UNSIGNED NOT NULL,               -- an Amtgard-wide credit
+  category_id       INT UNSIGNED NOT NULL,               -- an Amtgard-wide credit
   kingdom_id      INT NOT NULL,                        -- the kingdom that adopted it
   adopted_by      INT NOT NULL,
   adopted_at      DATETIME NOT NULL,
   withdrawn_by    INT NULL,
   withdrawn_at    DATETIME NULL,
   PRIMARY KEY (adoption_id),
-  UNIQUE KEY uq_reason_kingdom (reason_id, kingdom_id),
+  UNIQUE KEY uq_category_kingdom (category_id, kingdom_id),
   KEY idx_kingdom (kingdom_id, withdrawn_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
