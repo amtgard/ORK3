@@ -443,6 +443,51 @@ class RecommendationVisibility extends Ork3
         return false;
     }
 
+    /**
+     * THE single gate for publishing text drawn from a recommendation. A Monarchy
+     * Only rec's reason is never published — not as a court citation, not as an
+     * award note — however it got into the text (a form pre-filled while the rec
+     * was still public). Returns '' when the rec is Monarchy Only now and the text
+     * is its reason (trimmed), else the text unchanged; anything the officer
+     * actually wrote passes. Court::publishable_citation delegates here.
+     * Underscored: this class is not JSON-whitelisted, and the name keeps it so.
+     */
+    public static function publishable_citation(string $text, string $recReason, bool $recMonarchyOnly): string
+    {
+        $trimmed = trim($text);
+        if ($recMonarchyOnly && $trimmed !== '' && $trimmed === trim($recReason)) {
+            return '';
+        }
+
+        return $text;
+    }
+
+    /**
+     * publishable_citation() for text tied to rec $recId, reading the rec's CURRENT
+     * reason and state. With $recipientId, a rec that is not about that player is
+     * ignored (text returned unchanged): the id comes from the client and must not
+     * let a caller blank — or probe — an unrelated rec. Missing rec: unchanged.
+     */
+    public function publishable_text_for_rec($text, int $recId, int $recipientId = 0): string
+    {
+        $text = (string) $text;
+        if ($recId <= 0 || trim($text) === '') {
+            return $text;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT mundane_id, reason, monarchy_only FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . $recId . ' LIMIT 1'
+        );
+        if (!$rs || !$rs->Next()) {
+            return $text;
+        }
+        if ($recipientId > 0 && (int) $rs->mundane_id !== $recipientId) {
+            return $text;
+        }
+
+        return self::publishable_citation($text, (string) ($rs->reason ?? ''), (int) $rs->monarchy_only !== 0);
+    }
+
     public function creatorLevel(int $creator, int $recipientId): int
     {
         if ($creator <= 0 || $recipientId <= 0 || $creator === $recipientId) {

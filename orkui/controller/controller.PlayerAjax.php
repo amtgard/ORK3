@@ -207,9 +207,11 @@ class Controller_PlayerAjax extends Controller
             // A Monarchy Only rec's reason is never a public note. A Manager tab opened
             // while the rec was public may still post it (its pre-fill); the one
             // court-citation gate blanks it if the rec is hidden now.
+            $noteWithheld = false;
             if ((int)($_POST['RecommendationsId'] ?? 0) > 0 && $note !== '') {
-                $this->load_model('Court');
-                $note = $this->Court->publishable_citation_for_rec($note, (int)$_POST['RecommendationsId']);
+                $gatedNote    = $this->Player->publishable_award_note($note, (int)$_POST['RecommendationsId'], $player_id);
+                $noteWithheld = $gatedNote !== $note;
+                $note         = $gatedNote;
             }
             $r = $this->Player->add_player_award([
                 'Token'          => $this->session->token,
@@ -270,6 +272,10 @@ class Controller_PlayerAjax extends Controller
             // courtLines lets the client repaint the row's court badges from what the
             // server actually did, instead of issuing its own follow-up court calls.
             $out = ['status' => 0, 'awardId' => $new_award_id, 'courtLines' => $court_lines, 'courtAction' => $court_action];
+            if ($noteWithheld) {
+                $out['noteWithheld'] = true;
+                $out['noteWithheldMessage'] = "The note matched a Monarchy Only recommendation's reason and was not saved.";
+            }
             if ($courtWarning !== '') {
                 $out['courtWarning'] = $courtWarning;
             }

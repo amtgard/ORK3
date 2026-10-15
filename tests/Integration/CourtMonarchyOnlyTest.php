@@ -731,6 +731,65 @@ final class CourtMonarchyOnlyTest extends TestCase
         $this->assertSame('', $this->fx->fetchAward($new)['public_comment']);
     }
 
+    // ---- Re-review 4 (H, I) ---------------------------------------------------
+
+    /** Grant through Player::AddAward (the Admin addaward path) and return the ledger note. */
+    private function ledgerNote(array $off, int $recip, int $kaId, string $note): string
+    {
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = \Ork3::$Lib->player->AddAward([
+            'Token' => $off['token'], 'RecipientId' => $recip, 'KingdomAwardId' => $kaId,
+            'AwardId' => 0, 'Rank' => 1, 'Date' => date('Y-m-d'), 'GivenById' => $off['mundane_id'],
+            'CustomName' => '', 'Note' => $note, 'ParkId' => 0, 'KingdomId' => $this->fx->firstKingdomId(), 'EventId' => 0,
+        ]);
+        $this->assertSame(0, (int)$r['Status'], json_encode($r));
+        $this->ledgerIds[] = (int)$r['AwardId'];
+        return (string)$this->fx->pdo()->query('SELECT note FROM ' . DB_PREFIX . 'awards WHERE awards_id = ' . (int)$r['AwardId'])->fetchColumn();
+    }
+
+    /**
+     * H: profile "Give from rec" in a tab opened while the rec was public pre-fills
+     * its reason; the rec is hidden; the award is saved with that note and the rec id.
+     * The Admin addaward path runs the note through the one gate (via the model).
+     */
+    public function testProfileGiveFromRecStaleTabNoteIsBlanked(): void
+    {
+        [$id, $rec, $off, $c, $court, $recip] = $this->commitableLine();
+        $kaId = (int)$this->fx->fetchAward($id)['kingdomaward_id'];
+        $this->hide($rec);
+        $model = new \Model_Player();
+        $this->assertSame('', $model->publishable_award_note('secret reason', $rec, $recip));
+        $this->assertSame('', $this->ledgerNote($off, $recip, $kaId, $model->publishable_award_note(' secret reason ', $rec, $recip)));
+        // What the officer wrote is kept.
+        $this->assertSame('For service to the realm.', $model->publishable_award_note('For service to the realm.', $rec, $recip));
+        // A rec id that is not about this award's recipient is ignored.
+        $other = $this->fx->createPlayer('mo-h', $this->fx->firstKingdomId(), $this->fx->firstParkId($this->fx->firstKingdomId()))['mundane_id'];
+        $this->assertSame('secret reason', $model->publishable_award_note('secret reason', $rec, $other));
+        // And Court's gate is the same gate.
+        $this->assertSame('', $c->publishableCitationForRec('secret reason', $rec));
+    }
+
+    /** I: the reconcile's cluster match (qualified columns) still reaches a sibling rec's line and a walk-on line. */
+    public function testReconcileClusterMatchReachesSiblingAndWalkOnLines(): void
+    {
+        $k     = $this->fx->firstKingdomId();
+        $p     = $this->fx->firstParkId($k);
+        $ka    = $this->fx->firstKingdomAwardId($k);
+        $recip = $this->fx->createPlayer('mo-i', $k, $p)['mundane_id'];
+        $mine  = $this->fx->createRecommendation($recip, (int)$ka['kingdomaward_id'], (int)$ka['award_id'], ['reason' => 'mine']);
+        $sib   = $this->fx->createRecommendation($recip, (int)$ka['kingdomaward_id'], (int)$ka['award_id'], ['reason' => 'sibling']);
+        $kOff  = $this->kingdomOfficer($k, $p)['mundane_id'];
+        $c     = new \Court();
+        $c1    = $this->fx->createCourt(['kingdom_id' => $k]);
+        $c2    = $this->fx->createCourt(['kingdom_id' => $k]);
+        $sibLine  = (int)$c->addAward($c1, $k, $recip, (int)$ka['kingdomaward_id'], 1, $sib, 0, '', '', true, $kOff)['CourtAwardId'];
+        $walkLine = (int)$c->addAward($c2, $k, $recip, (int)$ka['kingdomaward_id'], 1, 0, 0, '', '', true, $kOff)['CourtAwardId'];
+
+        $this->assertSame(2, $c->reconcileGrantForRecommendation($mine, 0, $kOff, 1, $recip, (int)$ka['kingdomaward_id'], 'leave', $kOff));
+        $this->assertSame('given', $this->fx->fetchAward($sibLine)['status']);
+        $this->assertSame('given', $this->fx->fetchAward($walkLine)['status']);
+    }
+
     public function testPendingRecsHonourToken(): void
     {
         $k     = $this->fx->firstKingdomId();

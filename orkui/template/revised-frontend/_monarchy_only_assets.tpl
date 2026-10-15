@@ -15,6 +15,10 @@ html[data-theme="dark"] .mo-note-hint i { color:#c4b5fd; }
 html[data-theme="dark"] .mo-check-ineligible { color:#fbd38d; }
 label.mo-check-off { cursor:not-allowed !important; opacity:.6; }
 label.mo-check-off input { cursor:not-allowed !important; }
+.mo-toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:100000; max-width:min(92vw,520px); padding:10px 14px; border-radius:6px; font-size:13px; line-height:1.4; color:#553c9a; background:#faf5ff; border:1px solid #d6bcfa; box-shadow:0 4px 14px rgba(0,0,0,.15); cursor:pointer; }
+.mo-toast i { margin-right:6px; color:#6b46c1; }
+html[data-theme="dark"] .mo-toast { color:#e9d8fd; background:#2d2440; border-color:rgba(196,181,253,.45); box-shadow:0 4px 14px rgba(0,0,0,.5); }
+html[data-theme="dark"] .mo-toast i { color:#c4b5fd; }
 </style>
 <script>
 window.orkMonarchyOnlyBadge = function (level) {
@@ -38,6 +42,26 @@ window.orkMonarchyOnlyNoteHint = function (noteEl, show) {
         noteEl.parentNode.insertBefore(hint, noteEl.nextSibling);
     }
     hint.hidden = false;
+};
+// Non-blocking notice: the server's Monarchy Only gate did not save a note because it
+// was a hidden rec's reason (an "Add Award" form opened while the rec was public).
+// Auto-dismisses; click to close. Never a native dialog.
+window.orkMonarchyOnlyWithheldNotice = function (msg) {
+    var t = document.createElement('div');
+    t.className = 'mo-toast';
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
+    t.innerHTML = '<i class="fas fa-eye-slash" aria-hidden="true"></i>';
+    t.appendChild(document.createTextNode(msg || "The note matched a Monarchy Only recommendation\u2019s reason and was not saved."));
+    t.addEventListener('click', function () { t.remove(); });
+    document.body.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, 7000);
+};
+// The Admin addaward response carries X-Ork-Note-Withheld when that gate fired.
+window.orkMonarchyOnlyCheckWithheld = function (resp) {
+    try {
+        if (resp && resp.headers && resp.headers.get('X-Ork-Note-Withheld') === '1') window.orkMonarchyOnlyWithheldNotice();
+    } catch (e) { /* notice only */ }
 };
 // Add Rec modals (Kingdom/Park pages): the checkbox is offered page-wide, but whether
 // the PICKED recipient may be marked depends on the caller's authority over that

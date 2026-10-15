@@ -476,47 +476,26 @@ class Court
     }
 
     /**
-     * THE single gate for a court citation that is published or shown publicly.
-     * A Monarchy Only rec's reason is never a citation, however it got into
-     * public_comment (Grant pre-fill, Record view "Given", "(Start from Rec)" +
-     * Save — all possible while the rec was still public — or a prepopulated
-     * copy). Returns '' when the rec is Monarchy Only now and the citation is its
-     * reason (trimmed), else the citation unchanged; text the officer actually
-     * wrote passes. Used by every publishing writer (commitStagedAward/setAwardId,
-     * reconcileGrantForRecommendation, addAward), every public reader
-     * (getCourtReportDetail) and the officer readers (withholdHiddenRecs,
-     * getUngrantedFromLastCourt). Private static: not reachable from the JSON
-     * service, and Court is not whitelisted there anyway.
+     * The court-side name for THE single publishing gate,
+     * RecommendationVisibility::publishable_citation (one implementation): '' when
+     * the line's rec is Monarchy Only now and the citation is its reason (trimmed),
+     * else the citation unchanged. Used by every publishing writer
+     * (commitStagedAward/setAwardId, reconcileGrantForRecommendation, addAward), the
+     * public reader (getCourtReportDetail) and the officer readers
+     * (withholdHiddenRecs, getUngrantedFromLastCourt).
      */
     private static function publishable_citation(string $publicComment, string $recReason, bool $recMonarchyOnly): string
     {
-        $trimmed = trim($publicComment);
-        if ($recMonarchyOnly && $trimmed !== '' && $trimmed === trim($recReason)) {
-            return '';
-        }
-        return $publicComment;
+        return RecommendationVisibility::publishable_citation($publicComment, $recReason, $recMonarchyOnly);
     }
 
     /**
-     * publishable_citation() for text tied to recommendation $rec_id, reading the
-     * rec's CURRENT reason and state. For callers outside Court that publish a
-     * rec-derived note (the Recs Manager grant). 0 / missing rec: unchanged.
+     * The gate for text tied to recommendation $rec_id (its CURRENT reason and
+     * state), for callers outside Court such as the Recs Manager grant note.
      */
     public function publishableCitationForRec($publicComment, $rec_id)
     {
-        $publicComment = (string)$publicComment;
-        $rec_id        = (int)$rec_id;
-        if ($rec_id <= 0 || trim($publicComment) === '') {
-            return $publicComment;
-        }
-        $this->db->Clear();
-        $rs = $this->db->DataSet(
-            'SELECT reason, monarchy_only FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . $rec_id . ' LIMIT 1'
-        );
-        if (!$rs || !$rs->Next()) {
-            return $publicComment;
-        }
-        return self::publishable_citation($publicComment, (string)($rs->reason ?? ''), (int)$rs->monarchy_only !== 0);
+        return Ork3::$Lib->recommendationvisibility->publishable_text_for_rec((string)$publicComment, (int)$rec_id);
     }
 
     /**

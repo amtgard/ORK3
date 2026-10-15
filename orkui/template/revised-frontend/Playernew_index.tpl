@@ -7874,7 +7874,7 @@ $(function() {
 						actions += '<button class="rs-action-btn" data-rec="' + recId + '" data-award="' + attr(rec.AwardName) + '" data-recipient="' + attr(rec.Persona) + '" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>';
 					}
 					if (PnConfig.canManageAwards && kaid > 0) {
-						var rd = JSON.stringify({KingdomAwardId: kaid, Rank: parseInt(rec.Rank)||0, Reason: rec.Reason||'', AwardName: rec.AwardName||'', MonarchyOnlyLevel: parseInt(rec.MonarchyOnlyLevel, 10)||0});
+						var rd = JSON.stringify({RecommendationsId: parseInt(rec.RecommendationsId, 10)||0, KingdomAwardId: kaid, Rank: parseInt(rec.Rank)||0, Reason: rec.Reason||'', AwardName: rec.AwardName||'', MonarchyOnlyLevel: parseInt(rec.MonarchyOnlyLevel, 10)||0});
 						actions += '<button class="pk-btn pk-btn-primary pn-rec-grant-btn" data-rec="' + rd.replace(/"/g, '&quot;') + '"><i class="fas fa-medal"></i> Grant</button> ';
 					}
 					var canDel = PnConfig.canDeleteRec || rec.RecommendedById == PnConfig.loggedInUserId || mid == PnConfig.loggedInUserId;

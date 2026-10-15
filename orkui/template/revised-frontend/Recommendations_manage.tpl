@@ -1183,6 +1183,8 @@ function rmDoGrant(rec, tr, opts) {
             // Advisory shape: if the server instead lets the grant through and reports
             // the duplicate as a warning, surface it rather than blocking anything.
             if (j.duplicateWarning) { rmToast(j.duplicateWarning, true); }
+            // The server's Monarchy Only gate blanked a note that was a hidden rec's reason.
+            if (j.noteWithheld) { rmToast(j.noteWithheldMessage || "The note matched a Monarchy Only recommendation's reason and was not saved.", true); }
             else if (j.duplicate && j.duplicateDate) { rmToast('Note: this honor was already recorded on ' + rmNiceDateJS(j.duplicateDate) + '.', true); }
             var fd2 = new FormData();
             fd2.append('MundaneId', rec.MundaneId);

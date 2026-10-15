@@ -272,6 +272,14 @@ class Model_Player extends Model
         return (int) Ork3::$Lib->recommendationvisibility->creatorLevel((int)$uid, (int)$recipient_id);
     }
 
+    // Award note from a "Give from rec" form: '' when it is the reason of a rec that
+    // is Monarchy Only now (a tab opened while it was public pre-filled it). A rec id
+    // not about $recipient_id is ignored. The one publishing gate.
+    public function publishable_award_note($note, $rec_id, $recipient_id)
+    {
+        return Ork3::$Lib->recommendationvisibility->publishable_text_for_rec((string)$note, (int)$rec_id, (int)$recipient_id);
+    }
+
     public function delete_player_recommendation($request)
     {
         return $this->Player->DeleteAwardRecommendation($request);

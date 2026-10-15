@@ -2280,6 +2280,7 @@ if (PnConfig.recError) {
 
         // ---- Open / Close ----
         window.pnOpenAwardModal = function(type) {
+            pnActiveRecId = null; // set again by pnGiveFromRec when opened from a rec
             // Reset
             gid('pn-award-error').style.display   = 'none';
             gid('pn-award-error').textContent      = '';
@@ -2317,14 +2318,19 @@ if (PnConfig.recError) {
         };
         var pnAwardsDirty = false;
         window.pnCloseAwardModal = function() {
+            pnActiveRecId = null;
             gid('pn-award-overlay').classList.remove('pn-open');
             document.body.style.overflow = '';
             if (pnAwardsDirty) { pnAwardsDirty = false; window.location.reload(); }
         };
 
+        // The rec a "Give from rec" opened this modal from: sent with the save so the
+        // server's Monarchy Only gate can check the note (cleared on every other open).
+        var pnActiveRecId = null;
         // Pre-populate the award modal from a recommendation row
         window.pnGiveFromRec = function(rec) {
             pnOpenAwardModal('awards');
+            pnActiveRecId = rec.RecommendationsId || null;
             var sel = gid('pn-award-select');
             sel.value = String(rec.KingdomAwardId || '');
             sel.dispatchEvent(new Event('change'));
@@ -2412,6 +2418,7 @@ if (PnConfig.recError) {
             fd.append('KingdomId',      gid('pn-award-kingdom-id').value || '0');
             fd.append('EventId',        gid('pn-award-event-id').value   || '0');
             fd.append('Note',           gid('pn-award-note').value       || '');
+            if (pnActiveRecId) fd.append('RecommendationsId', String(pnActiveRecId));
             var rank = gid('pn-award-rank-val').value;
             if (rank) fd.append('Rank', rank);
             var customName = gid('pn-award-custom-name').value.trim();
@@ -2427,6 +2434,8 @@ if (PnConfig.recError) {
             fetch(AWARD_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                    if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
+                    pnActiveRecId = null;
                     onSuccess();
                 })
                 .catch(function(err) {
@@ -4081,6 +4090,7 @@ $(document).ready(function() {
         fd.append('KingdomId',      gid('kn-award-kingdom-id').value || '0');
         fd.append('EventId',        gid('kn-award-event-id').value   || '0');
         fd.append('Note',           gid('kn-award-note').value       || '');
+        if (knActiveRecId) fd.append('RecommendationsId', String(knActiveRecId));
         var rank = gid('kn-award-rank-val').value;
         if (rank) fd.append('Rank', rank);
         var customName = gid('kn-award-custom-name') ? gid('kn-award-custom-name').value.trim() : '';
@@ -4101,6 +4111,7 @@ $(document).ready(function() {
         fetch(saveUrl, { method: 'POST', body: fd })
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
                 onSuccess();
             })
             .catch(function(err) {
@@ -7897,6 +7908,7 @@ $(document).ready(function() {
         fd.append('KingdomId',      gid('pk-award-kingdom-id').value || '0');
         fd.append('EventId',        gid('pk-award-event-id').value   || '0');
         fd.append('Note',           gid('pk-award-note').value       || '');
+        if (pkActiveRecId) fd.append('RecommendationsId', String(pkActiveRecId));
         var rank = gid('pk-award-rank-val').value;
         if (rank) fd.append('Rank', rank);
         var customName = gid('pk-award-custom-name') ? gid('pk-award-custom-name').value.trim() : '';
@@ -7915,6 +7927,7 @@ $(document).ready(function() {
         fetch(saveUrl, { method: 'POST', body: fd })
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
                 onSuccess();
             })
             .catch(function(err) {
