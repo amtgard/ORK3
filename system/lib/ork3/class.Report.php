@@ -1028,7 +1028,7 @@ class Report extends Ork3
             // Batch-fetch all active seconds (IsMine = false; applyViewerFlags sets it per-viewer).
             // The unfiltered in-process variant: hidden rows are cached here and dropped
             // per request, so their seconds must be cached alongside them.
-            $seconds_by_rec = Ork3::$Lib->player->secondsForRecommendations($rec_ids, 0);
+            $seconds_by_rec = Ork3::$Lib->player->seconds_for_recommendations($rec_ids, 0);
 
             // Attach seconds; viewer flags are left false and filled in by applyViewerFlags.
             foreach ($response['AwardRecommendations'] as &$rec) {
@@ -1486,7 +1486,7 @@ class Report extends Ork3
         if ($viewer <= 0) {
             return 0;
         }
-        $where = "recs.monarchy_only > 0 AND m.kingdom_id IN ($kidList) AND (m.suspended IS NULL OR m.suspended = 0)"
+        $where = "recs.monarchy_only <> 0 AND m.kingdom_id IN ($kidList) AND (m.suspended IS NULL OR m.suspended = 0)"
             . " AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)"
             . ' AND ' . $vis->sqlPredicate($viewer, 'recs', 'm', array_map('intval', explode(',', $kidList)));
         if (!empty($request['RecommendedBy'])) {

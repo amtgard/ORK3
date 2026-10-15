@@ -231,4 +231,25 @@ final class RecommendationMonarchyOnlyReadersTest extends TestCase
         $this->assertArrayNotHasKey($park, $out);
         $this->assertArrayNotHasKey($king, $out);
     }
+
+    /**
+     * The unfiltered seconds reader must not be reachable through orkservice/Json.
+     * PHP method names are case-insensitive, so a lowercase first letter does not
+     * hide a method: `Player/SecondsForRecommendations` passes the validator and
+     * dispatches to it. Only a `_` in the name is refused by every spelling.
+     */
+    public function testUnfilteredSecondsReaderIsNotJsonCallable(): void
+    {
+        $server   = new \JsonServer(['Player']);
+        $validate = new \ReflectionMethod(\JsonServer::class, 'validate_method');
+        $validate->setAccessible(true);
+        foreach (['SecondsForRecommendations', 'SecondsforRecommendations', 'SECONDSFORRECOMMENDATIONS',
+                  'Seconds_for_recommendations', 'Seconds_For_Recommendations'] as $spelling) {
+            $reachable = $validate->invoke($server, 'Player', $spelling) && method_exists(\Player::class, $spelling);
+            $this->assertFalse($reachable, "Player/$spelling reaches an unfiltered reader through the JSON service");
+        }
+        $this->assertTrue(method_exists(\Player::class, 'seconds_for_recommendations'));
+        // The public wrapper stays callable.
+        $this->assertTrue($validate->invoke($server, 'Player', 'GetSecondsForRecommendations'));
+    }
 }

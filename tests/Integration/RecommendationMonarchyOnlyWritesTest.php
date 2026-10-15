@@ -150,11 +150,48 @@ final class RecommendationMonarchyOnlyWritesTest extends TestCase
         $this->fx->setPassedToLocal($id, true);
         $this->assertSame(0, $set($c['parkOfficer']['token'], 1)['Status']);
         $this->assertSame(2, $this->level($id));
+        // Still passed down: the park officer can SEE it (effective park-level) but
+        // the kingdom's hide is not theirs to lift.
+        $this->assertNotSame(0, $set($c['parkOfficer']['token'], 0)['Status']);
+        $this->assertSame(2, $this->level($id));
         $this->fx->setPassedToLocal($id, false);
         // Park officer cannot unhide a kingdom-level hide; kingdom officer can.
         $this->assertNotSame(0, $set($c['parkOfficer']['token'], 0)['Status']);
         $this->assertSame(0, $set($c['kingdomOfficer']['token'], 0)['Status']);
         $this->assertSame(0, $this->level($id));
+    }
+
+    /** Unhiding a PUBLIC rec must not answer differently from a hidden one for a non-officer. */
+    public function testUnhideIsNotAHiddennessOracle(): void
+    {
+        $c   = $this->cast();
+        $pub = $this->publicRec($c);
+        $hid = $this->publicRec($c);
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "recommendations SET monarchy_only = 2 WHERE recommendations_id = $hid");
+        $unhide = function ($tok, $id) {
+            unset($_SESSION['is_authorized_mundane_id']);
+
+            return \Ork3::$Lib->player->SetRecommendationMonarchyOnly(['Token' => $tok, 'RecommendationsId' => $id, 'Hidden' => 0]);
+        };
+        foreach (['plain', 'author'] as $who) {
+            $a = $unhide($c[$who]['token'], $pub);
+            $b = $unhide($c[$who]['token'], $hid);
+            $this->assertNotSame(0, $a['Status'], "$who unhide of a public rec must be refused");
+            $this->assertSame($b, $a, "$who sees different answers for public vs hidden");
+        }
+        $this->assertSame(0, $unhide($c['parkOfficer']['token'], $pub)['Status']);
+        $this->assertSame(0, $this->level($pub));
+        $this->assertSame(2, $this->level($hid));
+    }
+
+    public function testCannotSecondAnOutOfRangeHiddenRec(): void
+    {
+        $c  = $this->cast();
+        $id = $this->publicRec($c);
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "recommendations SET monarchy_only = -1 WHERE recommendations_id = $id");
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = \Ork3::$Lib->player->AddSecondToRecommendation(['Token' => $c['plain']['token'], 'RecommendationsId' => $id, 'Notes' => 'x']);
+        $this->assertNotSame(0, $r['Status']);
     }
 
     public function testCannotSecondAHiddenRecYouCannotSee(): void

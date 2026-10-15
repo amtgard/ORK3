@@ -4488,8 +4488,11 @@ class Player extends Ork3
     // actor's highest authority over the recipient, and never lowers an existing
     // hide (GREATEST) — a park officer re-hiding a passed-down kingdom rec must not
     // turn it into a park-level one that un-passing could no longer restore.
-    // Unhide: only an officer at the rec's effective level (authorship is not
-    // enough to lift an officer's hide).
+    // Unhide: only an officer at the rec's STORED level (authorship is not enough
+    // to lift an officer's hide, and a passed-down kingdom hide stays the kingdom's).
+    // Authority is checked before the rec's current state is consulted, so a
+    // non-officer gets the same refusal for a public rec as for a hidden one — the
+    // answer must never reveal whether a rec is Monarchy Only.
     public function SetRecommendationMonarchyOnly($request)
     {
         if (($mundane_id = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) === 0) {
@@ -4520,16 +4523,21 @@ class Player extends Ork3
         $vis = Ork3::$Lib->recommendationvisibility;
         if (!empty($request['Hidden'])) {
             $level = $vis->creatorLevel($mundane_id, $rec['MundaneId']);
-            if ($level === 0 || ($rec['MonarchyOnly'] > 0 && !$vis->canSee($mundane_id, $rec))) {
+            if ($level === 0 || ($rec['MonarchyOnly'] !== 0 && !$vis->canSee($mundane_id, $rec))) {
                 return NoAuthorization("Only officers of this player's park or kingdom can mark a recommendation Monarchy Only.");
             }
             $set = 'monarchy_only = GREATEST(monarchy_only, ' . $level . ')';
         } else {
+            $refused = 'Only an officer who can see this recommendation at its level can make it visible.';
             if ($rec['MonarchyOnly'] === 0) {
+                // Nothing to lift — but only an officer over the recipient may learn that.
+                if ($vis->creatorLevel($mundane_id, $rec['MundaneId']) === 0) {
+                    return NoAuthorization($refused);
+                }
                 return Success('Recommendation is already visible.');
             }
             if (!$vis->canManageHidden($mundane_id, $rec)) {
-                return NoAuthorization('Only an officer who can see this recommendation at its level can make it visible.');
+                return NoAuthorization($refused);
             }
             $set = 'monarchy_only = 0';
         }
@@ -4758,7 +4766,7 @@ class Player extends Ork3
             return InvalidParameter('Recommendation not found.');
         }
 
-        if ((int)$awardRec->monarchy_only > 0) {
+        if ((int)$awardRec->monarchy_only !== 0) {
             $recip = $this->player_info((int)$awardRec->mundane_id);
             if (!Ork3::$Lib->recommendationvisibility->canSee((int)$mundane_id, [
                 'MundaneId' => (int)$awardRec->mundane_id, 'RecommendedById' => (int)$awardRec->recommended_by_id,
@@ -5041,7 +5049,7 @@ class Player extends Ork3
     /**
      * JSON-exposed. Drops the seconds of Monarchy Only recommendations: the caller
      * here is unauthenticated and chooses the ids. In-process readers that have
-     * already applied RecommendationVisibility call secondsForRecommendations().
+     * already applied RecommendationVisibility call seconds_for_recommendations().
      */
     public function GetSecondsForRecommendations($recommendation_ids, $viewer_id)
     {
@@ -5057,17 +5065,20 @@ class Player extends Ork3
                 $public[] = (int)$rs->recommendations_id;
             }
         }
-        return $public ? $this->secondsForRecommendations($public, $viewer_id) : [];
+        return $public ? $this->seconds_for_recommendations($public, $viewer_id) : [];
     }
 
     /**
      * For a list of recommendation IDs, return active seconds grouped by recommendations_id.
      * Each entry includes the supporter's mundane_id, persona, notes, created_at, and updated_at.
      * The viewer_id is used to compute the IsMine flag and (caller) for masking decisions.
-     * Unfiltered: lowercase on purpose so orkservice/Json refuses it — only in-process
-     * readers that apply RecommendationVisibility themselves may call it.
+     * Unfiltered: only in-process readers that apply RecommendationVisibility
+     * themselves may call it. The underscore is the guard — JsonServer refuses any
+     * method name containing `_`. A lowercase first letter is NOT a guard: PHP method
+     * names are case-insensitive, so `Player/SecondsForRecommendations` would pass
+     * the validator and dispatch here.
      */
-    public function secondsForRecommendations($recommendation_ids, $viewer_id)
+    public function seconds_for_recommendations($recommendation_ids, $viewer_id)
     {
         if (!is_array($recommendation_ids) || count($recommendation_ids) === 0) {
             return array();

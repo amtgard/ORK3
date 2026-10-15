@@ -148,6 +148,53 @@ final class RecommendationVisibilityTest extends TestCase
         $this->assertFalse($this->vis->canManageHidden($c['parkOfficer'], $r));
         $this->assertTrue($this->vis->canManageHidden($c['kingdomOfficer'], $r));
         $this->assertTrue($this->vis->canManageHidden($c['parkOfficer'], $this->rec($c['recipient'], $c['author'], 1)));
+        // Passed down, a kingdom hide READS as park-level, but lifting it stays the
+        // kingdom's call: authority is measured against the STORED level.
+        $passed = $this->rec($c['recipient'], $c['author'], 2, true);
+        $this->assertTrue($this->vis->canSee($c['parkOfficer'], $passed));
+        $this->assertFalse($this->vis->canManageHidden($c['parkOfficer'], $passed));
+        $this->assertTrue($this->vis->canManageHidden($c['kingdomOfficer'], $passed));
+        // Out-of-range stored levels need kingdom authority (fail closed).
+        $this->assertFalse($this->vis->canManageHidden($c['parkOfficer'], $this->rec($c['recipient'], $c['author'], -1)));
+        $this->assertTrue($this->vis->canManageHidden($c['kingdomOfficer'], $this->rec($c['recipient'], $c['author'], 3)));
+    }
+
+    public function testOutOfRangeStoredLevelFailsClosed(): void
+    {
+        foreach ([-1, 3, 99] as $bad) {
+            $this->assertSame(2, RecommendationVisibility::effectiveLevel($bad, false), "stored $bad");
+            $this->assertSame(2, RecommendationVisibility::effectiveLevel($bad, true), "stored $bad passed");
+        }
+        $c = $this->cast();
+        $r = $this->rec($c['recipient'], $c['author'], -1);
+        $this->assertFalse($this->vis->canSee(0, $r));
+        $this->assertFalse($this->vis->canSee($c['plain'], $r));
+        $this->assertFalse($this->vis->canSee($c['parkOfficer'], $r));
+        $this->assertFalse($this->vis->canSee($c['recipient'], $r));
+        $this->assertTrue($this->vis->canSee($c['kingdomOfficer'], $r));
+
+        $ka = $this->fx->firstKingdomAwardId($this->k);
+        $ids = [];
+        foreach ([-1, 3] as $i => $bad) {
+            $ids[] = $this->fx->createRecommendation(
+                $c['recipient'],
+                (int) $ka['kingdomaward_id'],
+                (int) $ka['award_id'],
+                ['monarchy_only' => $bad, 'recommended_by_id' => $c['author'], 'rank' => 1 + $i]
+            );
+        }
+        foreach (['plain' => [], 'parkOfficer' => [], 'kingdomOfficer' => $ids] as $role => $expect) {
+            $pred = $this->vis->sqlPredicate($c[$role], 'r', 'm', [$this->k]);
+            $sees = array_map('intval', $this->fx->pdo()->query(
+                'SELECT r.recommendations_id FROM ' . DB_PREFIX . 'recommendations r JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
+                 WHERE r.recommendations_id IN (' . implode(',', $ids) . ') AND ' . $pred . ' ORDER BY r.recommendations_id'
+            )->fetchAll(\PDO::FETCH_COLUMN));
+            $this->assertSame($expect, $sees, "sqlPredicate for $role");
+        }
+        $this->assertSame([], $this->fx->pdo()->query(
+            'SELECT r.recommendations_id FROM ' . DB_PREFIX . 'recommendations r JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
+             WHERE r.recommendations_id IN (' . implode(',', $ids) . ') AND ' . $this->vis->sqlPredicate(0, 'r', 'm', [$this->k])
+        )->fetchAll(\PDO::FETCH_COLUMN));
     }
 
     public function testSqlPredicateAgreesWithCanSee(): void

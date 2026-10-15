@@ -30,18 +30,31 @@ class RecommendationVisibility extends Ork3
     /** @var array<int,int> */
     private $parentMemo = [];
 
+    /**
+     * The stored level, normalised. Anything that is not 0, 1 or 2 is not a level
+     * this feature ever writes, so it is read as kingdom-level: an unexpected value
+     * must hide a rec from more people, never fewer (fail closed).
+     */
+    public static function storedLevel(int $stored): int
+    {
+        return ($stored >= self::LEVEL_PUBLIC && $stored <= self::LEVEL_KINGDOM) ? $stored : self::LEVEL_KINGDOM;
+    }
+
     public static function effectiveLevel(int $stored, bool $passedToLocal): int
     {
         if ($stored === self::LEVEL_KINGDOM && $passedToLocal) {
             return self::LEVEL_PARK;
         }
 
-        return max(0, min(2, $stored));
+        return self::storedLevel($stored);
     }
 
+    /** SQL twin of effectiveLevel(), including its fail-closed reading of out-of-range values. */
     public static function effectiveLevelSql(string $recAlias): string
     {
-        return "(CASE WHEN $recAlias.monarchy_only = 2 AND $recAlias.passed_to_local = 1 THEN 1 ELSE $recAlias.monarchy_only END)";
+        return "(CASE WHEN $recAlias.monarchy_only = 0 THEN 0"
+            . " WHEN $recAlias.monarchy_only = 2 AND $recAlias.passed_to_local = 1 THEN 1"
+            . " WHEN $recAlias.monarchy_only = 1 THEN 1 ELSE 2 END)";
     }
 
     public function viewerFromToken($token): int
@@ -125,9 +138,15 @@ class RecommendationVisibility extends Ork3
         return $this->officerLevel($viewer, (int) ($rec['KingdomId'] ?? 0), (int) ($rec['ParkId'] ?? 0)) >= $eff;
     }
 
+    /**
+     * May $viewer lift (or otherwise manage) this rec's Monarchy Only flag? Measured
+     * against the STORED level, not the effective one: a kingdom hide that has been
+     * passed down to local reads as park-level, but lifting it stays the kingdom's
+     * call. Authorship alone is never enough.
+     */
     public function canManageHidden(int $viewer, array $rec): bool
     {
-        $eff = self::effectiveLevel((int) ($rec['MonarchyOnly'] ?? 0), !empty($rec['PassedToLocal']));
+        $required = max(self::LEVEL_PARK, self::storedLevel((int) ($rec['MonarchyOnly'] ?? 0)));
         if ($viewer <= 0 || $viewer === (int) ($rec['MundaneId'] ?? 0)) {
             return false;
         }
@@ -135,7 +154,7 @@ class RecommendationVisibility extends Ork3
             return true;
         }
 
-        return $this->officerLevel($viewer, (int) ($rec['KingdomId'] ?? 0), (int) ($rec['ParkId'] ?? 0)) >= max(1, $eff);
+        return $this->officerLevel($viewer, (int) ($rec['KingdomId'] ?? 0), (int) ($rec['ParkId'] ?? 0)) >= $required;
     }
 
     public function filterRecommendations(array $response, int $viewer): array
