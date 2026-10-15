@@ -473,6 +473,56 @@ class Court
     }
 
     /**
+     * Server-side backstop for a stale planner. A planner opened while a rec was
+     * public holds its reason; if the rec is hidden afterwards, that tab could still
+     * post the reason as the line's PublicComment (Grant modal pre-fill, "(Start from
+     * Rec)"), and commitStagedAward publishes a typed comment as-is. So a citation
+     * that IS the line's rec's reason (trimmed) is refused while that rec is Monarchy
+     * Only — callers answer with the reload status. Anything the officer actually
+     * wrote, and a public rec's reason, are unaffected.
+     */
+    private function isHiddenRecCitation(int $court_award_id, string $comment): bool
+    {
+        $comment = trim($comment);
+        if ($court_award_id <= 0 || $comment === '') {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT rec.reason, rec.monarchy_only
+               FROM ' . DB_PREFIX . 'court_award ca
+               JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
+              WHERE ca.court_award_id = ' . $court_award_id . ' LIMIT 1'
+        );
+        return (bool)($rs && $rs->Next()
+            && (int)$rs->monarchy_only !== 0
+            && trim((string)$rs->reason) === $comment);
+    }
+
+    /**
+     * A rec's effective visibility changed (hide, unhide, pass-down): bump
+     * row_version on every still-open court line drawn from it. The heartbeat's
+     * version stamp is built from court_award rows, so this is what makes open
+     * planners re-fetch the line (and its RecMonarchyOnly / RecReason) — and it
+     * makes any stale write still carrying the old RowVersion fail with the
+     * existing "this row changed — reload" answer. Committed and cancelled lines
+     * are history and are left alone.
+     */
+    public function bumpOpenLinesForRec($rec_id)
+    {
+        $rec_id = (int)$rec_id;
+        if ($rec_id <= 0) {
+            return;
+        }
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'court_award SET row_version = row_version + 1
+              WHERE recommendations_id = ' . $rec_id . '
+                AND status NOT IN (\'given\', \'cancelled\')'
+        );
+    }
+
+    /**
      * Add an award to a court. Enforces object-level authorization: the
      * kingdomaward must belong to $kingdom_id (the court's own kingdom), else
      * an officer could attach another kingdom's award id. Returns the assembled
@@ -949,6 +999,9 @@ class Court
             $sets[] = 'notes = \'' . $this->esc((string)$fields['Notes']) . '\'';
         }
         if (array_key_exists('PublicComment', $fields)) {
+            if ($this->isHiddenRecCitation($court_award_id, (string)$fields['PublicComment'])) {
+                return false;
+            }
             $sets[] = 'public_comment = \'' . $this->esc((string)$fields['PublicComment']) . '\'';
         }
         if (array_key_exists('PublicCommentCleared', $fields)) {
@@ -1313,6 +1366,9 @@ class Court
      */
     public function stageAward($court_award_id, $given_by_mundane_id, $public_comment, $rank, $expectedRowVersion = null)
     {
+        if ($this->isHiddenRecCitation((int)$court_award_id, (string)$public_comment)) {
+            return false;
+        }
         $where = 'court_award_id = ' . (int)$court_award_id . '
                 AND status NOT IN (\'given\', \'cancelled\', \'staged\')';
         if ($expectedRowVersion !== null) {
@@ -1421,8 +1477,9 @@ class Court
      * managers may not see: a kingdom officer may put a kingdom-level hide on a PARK
      * court, and a rec can be hidden after its line was staged. Such a caller keeps
      * RecMonarchyOnly (the planner shows the "Monarchy Only" notice) but gets no
-     * RecReason and no RecByPersona. Visibility is RecommendationVisibility's rule,
-     * for the caller (the session user threaded from the controller); 0 sees none.
+     * RecReason and no RecByPersona. A caller who is the line's RECIPIENT gets
+     * RecMonarchyOnly = false as well: they must not learn a hidden rec backs it.
+     * Visibility is RecommendationVisibility's rule, for the caller (the session user threaded from the controller); 0 sees none.
      */
     private function withholdHiddenRecs(array $rows, int $caller_uid): array
     {
@@ -1431,6 +1488,18 @@ class Court
         foreach ($rows as $i => $row) {
             $rid = (int)($row['RecommendationsId'] ?? 0);
             if (empty($row['RecMonarchyOnly']) || $rid <= 0) {
+                continue;
+            }
+            // A court manager who is this line's RECIPIENT must not learn a hidden rec
+            // backs their own line at all: no notice, no reason, no recommender.
+            // (Nothing is left to inherit, so this cannot leak a citation either; the
+            // commit re-reads the rec's real state for itself.)
+            if ($caller_uid > 0 && $caller_uid === (int)($row['MundaneId'] ?? 0)) {
+                $rows[$i]['RecMonarchyOnly'] = false;
+                $rows[$i]['RecReason']       = '';
+                if (array_key_exists('RecByPersona', $row)) {
+                    $rows[$i]['RecByPersona'] = null;
+                }
                 continue;
             }
             if (!isset($seen[$rid])) {
@@ -1783,6 +1852,23 @@ class Court
         // recorded by an earlier attempt at this line, in the same statement.
         $this->setAwardId($court_award_id, $award_id, $note);
         $row['PublicComment'] = $note;
+
+        // Close the line's OWN recommendation now, in the domain. The caller's
+        // token-authorized cluster resolve cannot: it answers "not found" for a
+        // Monarchy Only rec the finalizing officer may not see (a kingdom-level
+        // hide on a park court), which left the granted rec live to be granted
+        // again. The court line authorizes acting on its own rec. Best-effort, like
+        // the cluster resolve: a failure here never undoes the committed grant.
+        if (!empty($row['RecommendationsId'])) {
+            try {
+                Ork3::$Lib->player->resolve_court_line_recommendation(
+                    (int)$row['RecommendationsId'],
+                    (int)$row['MundaneId'],
+                    (int)Ork3::$Lib->authorization->IsAuthorized($ctx['Token'] ?? '')
+                );
+            } catch (\Throwable $e) { /* best-effort */
+            }
+        }
 
         return [
             'status'   => 'ok',

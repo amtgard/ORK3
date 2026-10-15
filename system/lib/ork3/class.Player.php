@@ -4486,6 +4486,11 @@ class Player extends Ork3
 				WHERE recommendations_id = " . $rec_id);
         }
 
+        // Passing a Monarchy Only rec down (or back up) changes its effective level,
+        // i.e. which officers may see it: open Court Planner lines must re-fetch.
+        if ((int)$awardRec->monarchy_only !== 0) {
+            Ork3::$Lib->court->bumpOpenLinesForRec($rec_id);
+        }
         $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
         if (isset(Ork3::$Lib->dangeraudit)) {
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, ['passed_to_local' => $passed]);
@@ -4539,6 +4544,9 @@ class Player extends Ork3
         }
         $this->db->Clear();
         $this->db->Execute('UPDATE ' . DB_PREFIX . 'recommendations SET ' . $set . ' WHERE recommendations_id = ' . $rec_id);
+        // Open Court Planners drawn from this rec must re-fetch it (and refuse stale
+        // writes still carrying the reason they rendered while it was public).
+        Ork3::$Lib->court->bumpOpenLinesForRec($rec_id);
 
         $this->bust_player_award_recs_cache($rec['MundaneId'], $rec['KingdomId'], $rec['ParkId']);
         if (isset(Ork3::$Lib->dangeraudit)) {
@@ -4597,6 +4605,17 @@ class Player extends Ork3
             return InvalidParameter('Only the giver, recipient, or Admin may dismiss a recommendation.');
         }
 
+        $this->soft_dismiss_recommendation($awardRec, $mundane_id, !empty($request['Granted']), $request, __FUNCTION__);
+        return Success('Recommendation Removed!');
+    }
+
+    /**
+     * The dismissal itself, shared by DeleteAwardRecommendation (after its own
+     * authorization) and resolve_court_line_recommendation: Granted notification
+     * first, then the soft delete, audit, seconds cascade and cache bust.
+     */
+    private function soft_dismiss_recommendation($awardRec, int $actor, bool $granted, array $request, string $fn)
+    {
         $prior_rec = [
             'recommendations_id' => (int)$awardRec->recommendations_id,
             'mundane_id'         => (int)$awardRec->mundane_id,
@@ -4608,25 +4627,57 @@ class Player extends Ork3
             'reason'             => $awardRec->reason,
         ];
         $cascade_at = date('Y-m-d H:i:s');
-        // Granted-from-Manager: notify advocates BEFORE the rec/seconds soft-delete.
-        if (!empty($request['Granted'])) {
+        // Granted: notify advocates BEFORE the rec/seconds soft-delete.
+        if ($granted) {
             try {
                 Ork3::$Lib->notification->notifyRecommendationGranted(
                     (int)$awardRec->recommendations_id,
-                    $mundane_id
+                    $actor
                 );
             } catch (\Throwable $e) { /* best-effort */
             }
         }
-        $awardRec->deleted_by = $mundane_id;
+        $awardRec->deleted_by = $actor;
         $awardRec->deleted_at = $cascade_at;
         $awardRec->save();
-        Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
+        Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
         // Cascade soft-delete to any active seconds on this recommendation.
         $this->db->Clear();
-        $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . $mundane_id . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
+        $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . $actor . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
         $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
-        return Success('Recommendation Removed!');
+    }
+
+    /**
+     * Close (dismiss as granted) the recommendation a court line was drawn from, when
+     * that line commits. In-process only — Court::commitStagedAward calls it; the
+     * underscore keeps it off the JSON service (JsonServer refuses any method name
+     * containing "_"). It deliberately skips the Monarchy Only refusal: the court line
+     * itself authorizes acting on ITS OWN rec (a kingdom officer put it there), and
+     * without this a park court that grants a kingdom-level hide left the rec live,
+     * so it could be granted again. Only that one rec id, only while live, and only
+     * when it is about the line's recipient. Siblings still go through the token-
+     * authorized ResolveRecommendationCluster. Returns true when it closed the rec.
+     */
+    public function resolve_court_line_recommendation($rec_id, $line_mundane_id, $actor_uid)
+    {
+        $rec_id          = (int)$rec_id;
+        $line_mundane_id = (int)$line_mundane_id;
+        $actor_uid       = (int)$actor_uid;
+        if ($rec_id <= 0 || $line_mundane_id <= 0 || $actor_uid <= 0) {
+            return false;
+        }
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $rec_id;
+        if (!$awardRec->find()
+            || (int)$awardRec->mundane_id !== $line_mundane_id
+            || (int)$awardRec->deleted_by > 0) {
+            return false;
+        }
+        $this->soft_dismiss_recommendation($awardRec, $actor_uid, true, [
+            'RecommendationsId' => $rec_id, 'Granted' => 1, 'Source' => 'CourtCommit',
+        ], __FUNCTION__);
+        return true;
     }
 
     /**

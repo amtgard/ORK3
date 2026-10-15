@@ -344,6 +344,158 @@ final class CourtMonarchyOnlyTest extends TestCase
         $this->assertIsArray($c->addAward($court, $k, $recip, (int)$ka['kingdomaward_id'], 1, $rec, 0, '', '', true, $kOff));
     }
 
+    // ---- Review 2, re-review follow-ups (A, B, C) ----------------------------
+
+    /** @return array{0:int,1:int,2:int,3:array,4:int,5:array,6:\Court} court, kingdom, recipient, ka, rec, kingdom officer, Court */
+    private function publicLineSetup(): array
+    {
+        $k     = $this->fx->firstKingdomId();
+        $p     = $this->fx->firstParkId($k);
+        $ka    = $this->fx->firstKingdomAwardId($k);
+        $recip = $this->fx->createPlayer('mo-a', $k, $p)['mundane_id'];
+        $rec   = $this->fx->createRecommendation($recip, (int)$ka['kingdomaward_id'], (int)$ka['award_id'], ['reason' => 'secret reason']);
+        $court = $this->fx->createCourt(['kingdom_id' => $k]);
+        $kOff  = $this->kingdomOfficer($k, $p);
+        $c     = new \Court();
+        $id    = (int)$c->addAward($court, $k, $recip, (int)$ka['kingdomaward_id'], 1, $rec, 0, '', '', true, $kOff['mundane_id'])['CourtAwardId'];
+        return [$id, $k, $recip, $ka, $rec, $kOff, $c];
+    }
+
+    private function rowVersion(int $id): int
+    {
+        return (int)$this->fx->fetchAward($id)['row_version'];
+    }
+
+    /** A: hiding (or passing down) a rec bumps its open court lines, so the heartbeat resends them and stale writes are refused. */
+    public function testVisibilityChangeBumpsTheRecsOpenCourtLines(): void
+    {
+        [$id, $k, $recip, $ka, $rec, $kOff] = $this->publicLineSetup();
+        $player = \Ork3::$Lib->player;
+        $v0 = $this->rowVersion($id);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $this->assertSame(0, $player->SetRecommendationMonarchyOnly(['Token' => $kOff['token'], 'RecommendationsId' => $rec, 'Hidden' => 1])['Status']);
+        $v1 = $this->rowVersion($id);
+        $this->assertGreaterThan($v0, $v1, 'hiding the rec must bump its open line');
+
+        // Pass-down needs kingdom CREATE authority.
+        $this->fx->insertScopedAuth($kOff['mundane_id'], 0, $k, 'create');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $this->assertSame(0, $player->SetRecommendationPassedToLocal(['Token' => $kOff['token'], 'RecommendationsId' => $rec, 'Passed' => 1])['Status']);
+        $this->assertGreaterThan($v1, $this->rowVersion($id), 'passing a hidden rec down changes its effective level');
+    }
+
+    /** A: a grant staged by a planner that still holds the pre-hide RowVersion is refused. */
+    public function testStaleStageAfterHideIsRefused(): void
+    {
+        [$id, $k, $recip, $ka, $rec, $kOff, $c] = $this->publicLineSetup();
+        $stale = $this->rowVersion($id);
+        unset($_SESSION['is_authorized_mundane_id']);
+        \Ork3::$Lib->player->SetRecommendationMonarchyOnly(['Token' => $kOff['token'], 'RecommendationsId' => $rec, 'Hidden' => 1]);
+        $this->assertFalse($c->stageAward($id, $kOff['mundane_id'], 'secret reason', 1, $stale));
+        $this->assertSame('planned', $this->fx->fetchAward($id)['status']);
+    }
+
+    /** A: whatever the RowVersion, a citation that IS the hidden rec's reason is refused. */
+    public function testCitationEqualToAHiddenReasonIsRefused(): void
+    {
+        [$id, $k, $recip, $ka, $rec, $kOff, $c] = $this->publicLineSetup();
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . 'recommendations SET monarchy_only = 2 WHERE recommendations_id = ' . $rec);
+
+        $this->assertFalse($c->updateAward($id, ['PublicComment' => 'secret reason']));
+        $this->assertFalse($c->updateAward($id, ['PublicComment' => '  secret reason '], $this->rowVersion($id)));
+        $this->assertFalse($c->stageAward($id, $kOff['mundane_id'], 'secret reason', 1));
+        $this->assertSame('', $this->fx->fetchAward($id)['public_comment']);
+        $this->assertSame('planned', $this->fx->fetchAward($id)['status']);
+
+        // Anything the officer actually wrote is fine.
+        $this->assertTrue($c->updateAward($id, ['PublicComment' => 'For service to the realm.']));
+        $this->assertTrue($c->stageAward($id, $kOff['mundane_id'], 'For service to the realm.', 1));
+    }
+
+    /** A: the guard is about hidden recs only — a public rec's reason may still be the citation. */
+    public function testCitationEqualToAPublicReasonIsAllowed(): void
+    {
+        [$id, $k, $recip, $ka, $rec, $kOff, $c] = $this->publicLineSetup();
+        $this->assertTrue($c->updateAward($id, ['PublicComment' => 'secret reason']));
+    }
+
+    /**
+     * B: a park officer finalizing a park-court line built from a kingdom-level hide
+     * (added by a kingdom officer) closes that rec — it cannot be granted again —
+     * and cascades its seconds, even though the park officer cannot see it.
+     */
+    public function testParkCourtCommitClosesTheLinesOwnHiddenRec(): void
+    {
+        $k      = $this->fx->firstKingdomId();
+        $p      = $this->fx->firstParkId($k);
+        $ka     = $this->fx->firstKingdomAwardId($k);
+        $recip  = $this->fx->createPlayer('mo-b', $k, $p)['mundane_id'];
+        $author = $this->fx->createPlayer('mo-bauthor', $k, $p)['mundane_id'];
+        $rec    = $this->fx->createRecommendation($recip, (int)$ka['kingdomaward_id'], (int)$ka['award_id'], [
+            'monarchy_only' => 2, 'reason' => 'secret reason', 'recommended_by_id' => $author,
+        ]);
+        $supporter = $this->fx->createPlayer('mo-bsec', $k, $p)['mundane_id'];
+        $this->fx->pdo()->exec('INSERT INTO ' . DB_PREFIX . "recommendation_seconds (recommendations_id, supporter_mundane_id, notes) VALUES ($rec, $supporter, 'me too')");
+        $secondId = (int)$this->fx->pdo()->lastInsertId();
+        $court  = $this->fx->createCourt(['kingdom_id' => $k, 'park_id' => $p, 'court_date' => date('Y-m-d')]);
+        $kOff   = $this->kingdomOfficer($k, $p);
+        $parkOff = $this->fx->createPlayerWithToken('mo-bpark', $k, $p);
+        $this->fx->insertScopedAuth($parkOff['mundane_id'], $p, 0, 'create');
+
+        $c  = new \Court();
+        $id = (int)$c->addAward($court, $k, $recip, (int)$ka['kingdomaward_id'], 1, $rec, 0, '', '', true, $kOff['mundane_id'])['CourtAwardId'];
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "court_award SET status = 'staged', given_by_mundane_id = " . (int)$parkOff['mundane_id'] . ' WHERE court_award_id = ' . $id);
+
+        try {
+            unset($_SESSION['is_authorized_mundane_id']);
+            $res = $c->commitStagedAward($id, ['Token' => $parkOff['token']]);
+            $this->assertSame('ok', $res['status'], 'Commit must succeed: ' . json_encode($res));
+            $this->ledgerIds[] = (int)$res['award_id'];
+
+            $row = $this->fx->fetchRecommendation($rec);
+            $this->assertNotNull($row['deleted_at'], 'the granted hidden rec is closed');
+            $this->assertSame((int)$parkOff['mundane_id'], (int)$row['deleted_by']);
+            $sec = $this->fx->pdo()->query('SELECT deleted_at, deleted_by FROM ' . DB_PREFIX . 'recommendation_seconds WHERE recommendation_seconds_id = ' . $secondId)->fetch(\PDO::FETCH_ASSOC);
+            $this->assertNotNull($sec['deleted_at'], 'its seconds cascade');
+            $this->assertSame($row['deleted_at'], $sec['deleted_at']);
+        } finally {
+            $this->fx->pdo()->exec('DELETE FROM ' . DB_PREFIX . 'recommendation_seconds WHERE recommendation_seconds_id = ' . $secondId);
+            $this->fx->pdo()->exec('DELETE FROM ' . DB_PREFIX . 'notification WHERE mundane_id IN (' . (int)$author . ',' . (int)$supporter . ')');
+        }
+    }
+
+    /** C: a court manager who is the line's recipient is not told a hidden rec backs their own line. */
+    public function testRecipientManagerIsNotToldAHiddenRecBacksTheirLine(): void
+    {
+        $k      = $this->fx->firstKingdomId();
+        $p      = $this->fx->firstParkId($k);
+        $ka     = $this->fx->firstKingdomAwardId($k);
+        $recipOff = $this->kingdomOfficer($k, $p)['mundane_id'];
+        $author = $this->fx->createPlayer('mo-cauthor', $k, $p);
+        $rec    = $this->fx->createRecommendation($recipOff, (int)$ka['kingdomaward_id'], (int)$ka['award_id'], [
+            'monarchy_only' => 2, 'reason' => 'secret reason', 'recommended_by_id' => $author['mundane_id'],
+        ]);
+        $court  = $this->fx->createCourt(['kingdom_id' => $k]);
+        $kOff   = $this->kingdomOfficer($k, $p)['mundane_id'];
+        $c  = new \Court();
+        $id = (int)$c->addAward($court, $k, $recipOff, (int)$ka['kingdomaward_id'], 1, $rec, 0, '', '', true, $kOff)['CourtAwardId'];
+        $this->assertTrue($c->canManage($recipOff, $k, 0));
+
+        $mine = array_column($c->getCourtAwards($court, $recipOff), null, 'CourtAwardId')[$id];
+        $this->assertFalse($mine['RecMonarchyOnly'], 'no Monarchy Only notice on your own line');
+        $this->assertSame('', $mine['RecReason']);
+        $this->assertNull($mine['RecByPersona']);
+        $this->fx->pdo()->exec('UPDATE ' . DB_PREFIX . "court_award SET status = 'staged' WHERE court_award_id = " . $id);
+        $staged = array_column($c->getStagedAwards($court, $recipOff), null, 'CourtAwardId')[$id];
+        $this->assertFalse($staged['RecMonarchyOnly']);
+        $this->assertSame('', $staged['RecReason']);
+
+        // Another officer still sees the flag and the reason.
+        $theirs = array_column($c->getCourtAwards($court, $kOff), null, 'CourtAwardId')[$id];
+        $this->assertTrue($theirs['RecMonarchyOnly']);
+        $this->assertSame('secret reason', $theirs['RecReason']);
+    }
+
     public function testPendingRecsHonourToken(): void
     {
         $k     = $this->fx->firstKingdomId();
