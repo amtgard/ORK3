@@ -331,7 +331,7 @@ class Controller_Park extends Controller
 
         $this->load_model('Court');
         $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$this->session->kingdom_id, (int)$park_id);
-        $this->data['CanMonarchyOnlyRec']  = $uid > 0 && $this->Player->monarchy_only_level($uid, (int)$this->session->kingdom_id, (int)$park_id) > 0;
+        $this->data['CanMonarchyOnlyRec']  = $uid > 0 && $this->Player->monarchy_only_level($uid, (int)($this->data['park_info']['ParkInfo']['KingdomId'] ?? 0), (int)$park_id) > 0;
         $this->data['CourtList']           = [];
         $this->data['CourtUpcomingEvents'] = [];
         if ($this->data['CanManageCourt']) {
