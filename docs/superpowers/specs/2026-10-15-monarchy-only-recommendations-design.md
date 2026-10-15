@@ -169,8 +169,13 @@ The cache of `PlayerAwardRecommendations` stays viewer-agnostic: rows carry
   `EditSecondNotes`, `WithdrawSecond` (the last two even for the second's own
   supporter). So the recipient cannot dismiss or probe hidden recs about
   themselves, and a park officer cannot act on a kingdom-level hide.
-  `ResolveRecommendationCluster` skips hidden members the caller cannot see
-  (they stay live; a park court's finalize does not close a kingdom-level hide).
+  `ResolveRecommendationCluster` skips hidden members the caller cannot see.
+  A committed court line's OWN rec is the exception: `Court::commitStagedAward`
+  closes it directly through `Player::resolve_court_line_recommendation`
+  (in-process, underscored so not JSON-callable; that one id, only while live,
+  only when it is about the line's recipient). The line authorizes acting on its
+  own rec, so a park court that grants a kingdom-level hide closes it (Granted
+  notification, seconds cascade) and it cannot be granted again.
 
 ## Read paths to filter
 
@@ -194,7 +199,9 @@ cannot see keeps `RecMonarchyOnly` but comes back with no `RecReason` and no
 `RecByPersona` — a kingdom officer may put a kingdom-level hide on a PARK court
 (their choice), and that court's park officers see only the notice ("Its reason
 is visible only to officers at the recommendation's level."). No caller (0)
-sees none. `Court::addAward` takes the caller's uid (threaded
+sees none. A caller who is the line's RECIPIENT (a court manager on their own
+line) gets `RecMonarchyOnly = false` and no reason or recommender: they are not
+told a hidden rec backs it. `Court::addAward` takes the caller's uid (threaded
 from `CourtAjax::requireCourtAuth` through `model.Court::add_award`) and refuses
 a recommendation-backed line unless `canUseRecForLine` passes: the rec must be
 about that recipient, and a Monarchy Only rec must be visible to the caller
@@ -214,12 +221,23 @@ revive, reuse) and `updateAward` write the flag as the officer set it, and:
   `setAwardId` freezes exactly what was published (nothing, for a hidden rec).
 - Hidden at add and at commit → only what the officer typed is published.
   Unhidden before commit → the reason inherits normally.
+- A hidden rec's reason is never accepted as a TYPED citation either:
+  `stageAward` and `updateAward` refuse a `PublicComment` equal (trimmed) to the
+  line's rec reason while that rec is Monarchy Only, and CourtAjax answers with
+  the reload status. This backstops a planner that rendered the rec while it
+  was public and then posts its reason (Grant modal pre-fill, "(Start from Rec)").
+- `SetRecommendationMonarchyOnly`, and `SetRecommendationPassedToLocal` for a
+  Monarchy Only rec (its effective level changes), bump `row_version` on every
+  still-open court line drawn from the rec (`Court::bumpOpenLinesForRec`).
 
 **Planner client.** `addAward`'s response and `getCourtAwards` rows carry
 `PublicCommentCleared` and `RecMonarchyOnly`. The Monarchy Only field carries
-the line's persisted cleared flag (so a save posts it back unchanged), and the
-heartbeat reconcile rebuilds the field when the rec is hidden or unhidden while
-the page is open. For a `RecMonarchyOnly` line the planner (`Court_detail.tpl`, server- and JS-built rows) shows the reason only as
+the line's persisted cleared flag (so a save posts it back unchanged). The
+heartbeat's version stamp is built from court_award rows only, so a visibility
+change reaches an open planner through that `row_version` bump: the next poll
+re-sends the line and the reconcile rebuilds the field (hidden or unhidden),
+and any stale write still carrying the old `RowVersion` (Save, Grant, Record
+view citation) is refused with "This row changed — reload". For a `RecMonarchyOnly` line the planner (`Court_detail.tpl`, server- and JS-built rows) shows the reason only as
 officer-only reference text: no ghost hint, no (Start from Rec)/(Undo clear),
 the Grant modal's reason is never pre-filled, the herald sheet and Complete-modal
 count never treat it as an inherited citation, and the Record view
