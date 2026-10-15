@@ -189,6 +189,8 @@
 				<button class="kn-btn kn-btn-outline" onclick="knOpenAwardModal()">
 					<i class="fas fa-medal"></i> Enter Awards
 				</button>
+			<?php endif; ?>
+			<?php if (!empty($CanBonusCredits)): ?>
 				<button class="kn-btn kn-btn-outline" onclick="bcOpen()">
 					<i class="fas fa-star"></i> Bonus Credits
 				</button>
@@ -3562,7 +3564,7 @@ window.OrkRsCfg = {
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
 <?php endif; ?>
-<?php if ($CanManageKingdom ?? false): ?>
+<?php if (!empty($CanBonusCredits)): ?>
 <script>
 window.OrkBcCfg = {
 	uir:       '<?= UIR ?>',
