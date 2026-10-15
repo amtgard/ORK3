@@ -24,7 +24,7 @@ lists, counts, duplicate checks, exports, or the JSON service.
 | Pass down to local | A kingdom-level hide that is passed to local is **effectively** park-level. Un-pass restores kingdom-level. |
 | Toggle later | Recs Manager row action + bulk action: Hide / Unhide. |
 | Court finalize | A hidden rec's reason is never auto-published as the public award note; the officer may type one. |
-| ORK global admin | Sees everything (as today). |
+| ORK global admin | Sees everything (as today), except hidden recs about themselves: the recipient exclusion is checked before the admin grant. |
 
 ## Data model
 
@@ -55,20 +55,21 @@ One domain class owns the rule: `system/lib/ork3/class.RecommendationVisibility.
 not whitelisted in `orkservice/Json/index.php`, so not JSON-callable). It is the
 only place the rule is expressed; Report, Player and Court call it. API:
 `viewerFromToken($token): int`, `canSee(int $viewer, array $row): bool`,
-`sqlPredicate(int $viewer, string $recAlias, string $mundaneAlias, array $kingdomIds, array $parkIds): string`,
+`sqlPredicate(int $viewer, string $recAlias, string $mundaneAlias, array $kingdomIds): string`,
 `creatorLevel(int $creator, int $recipientId): int` (0 = not an officer). For a row with recipient `R` (kingdom `K`, park `P`), author
 `A`, effective level `L`, and verified viewer `V`:
 
 ```
 visible =  L == 0
-        || V is ORK global admin
-        || (V != R && V == A)
-        || (V != R && L == 1 && canManage(V, K, P) or canManage(V, parent(K), 0))
-        || (V != R && L == 2 && canManage(V, K, 0) or canManage(V, parent(K), 0))
+        || (V != R && (V is ORK global admin
+                       || V == A
+                       || (L == 1 && canManage(V, K, P) or canManage(V, parent(K), 0))
+                       || (L == 2 && canManage(V, K, 0) or canManage(V, parent(K), 0))))
 ```
 
-Note `V == A` is also guarded by `V != R` (a self-rec can't hide from oneself
-anyway; the guard keeps the rule uniform). `canManage` results are memoized per
+The recipient exclusion (`V != R`) is checked first and gates every grant,
+including the admin grant, so no hidden rec about a player reaches that player.
+`canManage` results are memoized per
 `(V, K, P)` for the request — lists hit a handful of distinct parks, not one
 lookup per row.
 
@@ -83,8 +84,10 @@ into a predicate:
 ```
 
 `officerKingdoms` / `officerParks` are resolved for the context scope (the
-kingdom(s) and parks the list covers), using `canManage`. Admin → predicate
-`1=1`. No viewer → `eff = 0`.
+kingdom(s) and parks the list covers), using `canManage`. The helper takes no
+separate park-list parameter. The recipient exclusion is applied before the
+admin grant, as in the row rule. Admin → predicate
+`1=1` (after the recipient exclusion). No viewer → `eff = 0`.
 
 ## Viewer identity (security)
 
@@ -94,6 +97,9 @@ validated `Token` (`Ork3::$Lib->authorization->IsAuthorized`). `RequestedBy`
 is never trusted for this. No/invalid token → hidden rows dropped (fail
 closed). Every in-app caller passes `$this->session->token` (controllers) or
 the token it already holds (Court).
+
+Controllers pass `$this->session->token` to every reader. The Court Planner
+forwards that same token to Court's readers.
 
 The cache of `PlayerAwardRecommendations` stays viewer-agnostic: rows carry
 `MonarchyOnly` (raw), `PassedToLocal`, recipient park/kingdom, and author;
@@ -111,10 +117,13 @@ The cache of `PlayerAwardRecommendations` stays viewer-agnostic: rows carry
   ParkAjax `addrecommendation` pass the field.
 - **Hide / Unhide** — new `Player::SetRecommendationMonarchyOnly(Token,
   RecommendationsId, Hidden)`. Hide: level = actor's highest authority over the
-  recipient. Unhide: allowed only if the actor can currently see the row at its
-  effective level (author-only visibility is **not** enough to unhide an
-  officer's hide). Bust caches, `dangeraudit`. Wired as a Recs Manager row
-  action and `Recommendations/bulk` actions `monarchyonly` / `unmonarchyonly`.
+  recipient, written with `GREATEST(monarchy_only, :level)` so re-hiding never
+  downgrades an existing level. Unhide: requires officer authority at the
+  **stored** level (`monarchy_only`, not the effective level). A kingdom-level
+  hide therefore stays the kingdom's to lift even while it is passed down to
+  local. Author-only visibility is **not** enough to unhide an officer's hide.
+  Bust caches, `dangeraudit`. Wired as a Recs Manager row action and
+  `Recommendations/bulk` actions `monarchyonly` / `unmonarchyonly`.
 - **Pass down** — unchanged write; effective level does the rest. The park
   pass-down notification text stays generic (it already exposes no detail).
 - **Seconds** — `AddSecondToRecommendation` refuses a rec the token viewer can't see.
@@ -125,9 +134,10 @@ The cache of `PlayerAwardRecommendations` stays viewer-agnostic: rows carry
 |---|---|
 | `Report::PlayerAwardRecommendations` | carry columns; filter in `applyViewerFlags` by token viewer |
 | `Report::PlayerAwardRecommendationsPage` | SQL predicate in `$base` (rows, `Total`) and in the cluster `SupportCount` |
-| `Report::PlayerAwardRecommendationsCount` (tab badge) | SQL predicate; viewer authority sets in the cache key |
-| `Report::DeletedAwardRecommendations` | SQL predicate |
+| `Report::PlayerAwardRecommendationsCount` (tab badge) | Public count cached (viewer-agnostic); hidden portion counted uncached per request via SQL predicate |
+| `Report::DeletedAwardRecommendations` | SQL predicate; no longer cached |
 | `Player::GetPeerAwardRecommendations` (dup pre-check) | SQL predicate |
+| `GetSecondsForRecommendations` | Drops hidden recs; the in-process reader uses `secondsForRecommendations` |
 | `Court::getPendingRecommendations` | inherits via Report (pass token) |
 | Legacy `Controller_Player::index`, `Reports::player_award_recommendations` | pass token → filtered |
 | Recs Manager CSV export | inherits via Page |
@@ -143,6 +153,11 @@ can see. No change beyond the citation rule below.
 line with `public_comment_cleared = 1`. `commitStagedAward` then publishes only
 what the officer typed. The planner still shows officers the reason.
 
+The citation rule applies on every path that creates or reuses a court line:
+insert, revive of a cancelled line, and reuse of an existing line. The commit
+step also re-checks the recommendation's current Monarchy Only state, so a rec
+hidden after its line was staged still does not publish its reason.
+
 ## UI
 
 - **Add Rec modals** (`Playernew_index.tpl` `#pn-rec-*`, `Kingdomnew_index.tpl`
@@ -152,13 +167,15 @@ what the officer typed. The planner still shows officers the reason.
   officer of the page's park/kingdom (Player page: the recipient's park). The
   server remains the authority. Dark mode checked.
 - **Badge** `.rm-badge.rm-badge-monarchy` (+ `html[data-theme="dark"]`
-  variant) in `recs-manager.css`, text `Monarchy Only`, `data-tip`:
-  park → "Visible to park and kingdom officers"; kingdom → "Visible only to
-  kingdom officers". Shown in `_rm_row.tpl`, Park recs tab, Kingdom recs
-  panel, Player profile recs table (JS-built rows — the JSON carries
-  `MonarchyOnlyLevel`).
-- **Recs Manager** Hide/Unhide row action + bulk menu items.
-- **What's New** entry.
+  variant), text `Monarchy Only`, `data-tip`: park → "Visible to park and
+  kingdom officers"; kingdom → "Visible only to kingdom officers". Markup comes
+  from one output-free PHP helper, `_monarchy_only_badge.tpl`. Its CSS and JS
+  twin (for JS-built rows) live in one assets partial, `_monarchy_only_assets.tpl`.
+  Shown in `_rm_row.tpl`, Park recs tab, Kingdom recs panel, and Player profile
+  recs table (JS-built rows — the JSON carries `MonarchyOnlyLevel`).
+- **Recs Manager** Hide/Unhide row action + bulk menu items. The toggle's
+  active style lives in `recs-manager.css`.
+- **What's New** entry: `notes_only`; see Out of scope.
 
 ## Testing
 
@@ -178,3 +195,5 @@ what the officer typed. The planner still shows officers the reason.
   caller can claim an admin id). Noted, not fixed here.
 - Pre-existing: private-mode "own recs" filter matches `RecommendedById`, which
   masking nulls for anonymous recs.
+- The What's New entry is `notes_only`, and `WHATS_NEW_VERSION` was not bumped.
+  Release timing is the maintainer's call.
