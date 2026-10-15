@@ -415,7 +415,7 @@ class Controller_Recommendations extends Controller
         fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM so Excel reads accented personas correctly
         fputcsv($out, [
             'Recipient', 'Park', 'Award', 'Rank', 'Recommended By', 'Date', 'Age (days)',
-            'Support', 'Already Has', 'Retired', 'Snoozed', 'Passed To Local', 'On Court', 'Reason',
+            'Support', 'Already Has', 'Retired', 'Snoozed', 'Passed To Local', 'Monarchy Only', 'On Court', 'Reason',
         ]);
 
         // Headers, BOM and the header row are already on the wire, so a failure
@@ -510,10 +510,23 @@ class Controller_Recommendations extends Controller
                 !empty($g['IsRetired']) ? 'Yes' : 'No',
                 !empty($g['IsSnoozed']) ? 'Yes' : 'No',
                 !empty($g['PassedToLocal']) ? 'Yes' : 'No',
+                // The file leaves the ORK, so mark officer-only clusters plainly: the
+                // effective level of the most restricted member (blank = public).
+                $this->monarchyOnlyLabel((int)($g['MonarchyOnlyLevel'] ?? 0)),
                 $this->csvSafe(implode('; ', array_keys($courtNames))),
                 $this->csvSafe($g['Members'][0]['Reason'] ?? ''),
             ]);
         }
+    }
+
+    // CSV label for a cluster's effective Monarchy Only level. Anything above park
+    // reads as Kingdom (fail closed: never under-state who may see it).
+    private function monarchyOnlyLabel(int $level)
+    {
+        if ($level <= 0) {
+            return '';
+        }
+        return $level === 1 ? 'Park' : 'Kingdom';
     }
 
     // Parse the route (`kingdom/6` joined segment) + resolve the scope ids, then

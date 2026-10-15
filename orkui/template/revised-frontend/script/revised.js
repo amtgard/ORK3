@@ -2285,6 +2285,7 @@ if (PnConfig.recError) {
             gid('pn-award-error').textContent      = '';
             gid('pn-award-success').style.display  = 'none';
             gid('pn-award-note').value            = '';
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), false);
             gid('pn-award-char-count').textContent = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
             gid('pn-award-givenby-text').value    = '';
@@ -2330,7 +2331,10 @@ if (PnConfig.recError) {
             if (rec.Rank) {
                 setTimeout(function() { selectRankPill(parseInt(rec.Rank)); }, 0);
             }
-            if (rec.Reason) {
+            // Monarchy Only: the reason is officer-only and never becomes the public note.
+            var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), recMo);
+            if (rec.Reason && !recMo) {
                 var noteEl = gid('pn-award-note');
                 noteEl.value = rec.Reason;
                 var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -2372,6 +2376,7 @@ if (PnConfig.recError) {
             gid('pn-award-rank-row').style.display   = 'none';
             gid('pn-rank-pills').innerHTML           = '';
             gid('pn-award-note').value               = '';
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), false);
             gid('pn-award-char-count').textContent   = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
             gid('pn-award-info-line').innerHTML      = '';
@@ -3559,6 +3564,7 @@ $(document).ready(function() {
         gid('kn-award-player-id').value          = '';
         gid('kn-award-player-results').classList.remove('kn-ac-open');
         gid('kn-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), false);
         gid('kn-award-char-count').textContent   = '400 characters remaining';
         gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-givenby-text').value       = '';
@@ -3642,7 +3648,10 @@ $(document).ready(function() {
                 if (pill) pill.click();
             }, 0);
         }
-        if (rec.Reason) {
+        // Monarchy Only: the reason is officer-only and never becomes the public note.
+        var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), recMo);
+        if (rec.Reason && !recMo) {
             var noteEl = gid('kn-award-note');
             noteEl.value = rec.Reason;
             var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -4041,6 +4050,7 @@ $(document).ready(function() {
         gid('kn-award-rank-row').style.display   = 'none';
         gid('kn-rank-pills').innerHTML           = '';
         gid('kn-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), false);
         gid('kn-award-char-count').textContent   = '400 characters remaining';
         gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-info-line').innerHTML      = '';
@@ -7657,6 +7667,7 @@ $(document).ready(function() {
         gid('pk-award-player-id').value          = '';
         gid('pk-award-player-results').classList.remove('pk-ac-open');
         gid('pk-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), false);
         gid('pk-award-char-count').textContent   = '400 characters remaining';
         gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-givenby-text').value       = '';
@@ -7719,7 +7730,10 @@ $(document).ready(function() {
                 if (pill) pill.click();
             }, 0);
         }
-        if (rec.Reason) {
+        // Monarchy Only: the reason is officer-only and never becomes the public note.
+        var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), recMo);
+        if (rec.Reason && !recMo) {
             var noteEl = gid('pk-award-note');
             noteEl.value = rec.Reason;
             var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -7842,6 +7856,7 @@ $(document).ready(function() {
         gid('pk-award-rank-row').style.display   = 'none';
         gid('pk-rank-pills').innerHTML           = '';
         gid('pk-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), false);
         gid('pk-award-char-count').textContent   = '400 characters remaining';
         gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-info-line').innerHTML      = '';

@@ -749,10 +749,11 @@ function rmRecLabel(tr) {
 }
 // Both dismiss paths say the same thing about what dismissal is.
 var RM_DISMISS_KEPT = 'Dismissed recommendations are kept, not deleted — turn on “Show dismissed” to see them and restore any retired by mistake.';
-// The first reason in the cluster (the row no longer duplicates it in data-rec).
-function rmFirstReason(tr) {
+// The first member of the cluster — its reason is the one a grant would offer as
+// the public note (the row no longer duplicates it in data-rec).
+function rmFirstMember(tr) {
     var m = []; try { m = JSON.parse(tr.getAttribute('data-membersfull') || '[]'); } catch (x) {}
-    return (m[0] && m[0].Reason) ? m[0].Reason : '';
+    return m[0] || null;
 }
 
 // Repaint a snooze button for its new state. Both the icon AND the rich tooltip
@@ -1139,7 +1140,7 @@ function rmDoGrant(rec, tr, opts) {
         fd.append('ParkId', opts.parkId != null ? opts.parkId : (RmConfig.parkId || '0'));
         fd.append('KingdomId', opts.kingdomId != null ? opts.kingdomId : (RmConfig.kingdomId || '0'));
         fd.append('EventId', opts.eventId != null ? opts.eventId : '0');
-        fd.append('Note', opts.note != null ? opts.note : (rec.Reason || ''));
+        fd.append('Note', opts.note != null ? opts.note : (rec.ReasonMonarchyOnly ? '' : (rec.Reason || '')));
         fd.append('Rank', opts.rank != null ? opts.rank : (rec.Rank || 0));
         // Thread the granted recommendation id so the server can reconcile the matching
         // court line and a later court finalize can't double-grant it.
@@ -1245,7 +1246,8 @@ function rmOpenGrantModal(rec, tr, courts) {
     rmSetGrantDate(rmTodayYMD());
     rmGid('rm-grant-givenby').value = RmConfig.userName || '';
     rmGid('rm-grant-givenby-id').value = RmConfig.userId || '';
-    rmGid('rm-grant-note').value = rec.Reason || '';
+    rmGid('rm-grant-note').value = rec.ReasonMonarchyOnly ? '' : (rec.Reason || '');
+    if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(rmGid('rm-grant-note'), !!rec.ReasonMonarchyOnly);
     rmBuildRankPills(rec);
     var chipsEl = rmGid('rm-grant-officer-chips');
     if (chipsEl) chipsEl.querySelectorAll('.rm-officer-chip').forEach(function (c) { c.classList.remove('rm-selected'); });
@@ -1295,8 +1297,11 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
     var tr = g.closest('tr');
     var rec = rmRecOf(tr);
     // The reason is no longer duplicated into data-rec (it is already in
-    // data-membersfull on every row); read it at click time instead.
-    rec.Reason = rmFirstReason(tr);
+    // data-membersfull on every row); read it at click time instead. A Monarchy Only
+    // member's reason is officer-only and is never offered as the public note.
+    var first = rmFirstMember(tr);
+    rec.ReasonMonarchyOnly = !!(first && (parseInt(first.MonarchyOnlyLevel, 10) || 0) !== 0);
+    rec.Reason = (first && !rec.ReasonMonarchyOnly && first.Reason) ? first.Reason : '';
     var courts = []; try { courts = JSON.parse(tr.getAttribute('data-courts') || '[]'); } catch (x) {}
     rmOpenGrantModal(rec, tr, courts);
 });
