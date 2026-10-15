@@ -6012,6 +6012,71 @@ class Report extends Ork3
             ),
         );
 
+        // --- shared question library opt-in -----------------------------------
+        // Opting in is ork_qual_config.share_questions = 1 on the kingdom's REEVE
+        // row (sharing is Reeve-only). No saved row means NOT opted in — the same
+        // rule QualTest::getConfig() and getLibraryQuestions() apply. One pass
+        // over the active kingdoms feeds the KPIs, the pie and both lists, so the
+        // counts and the lists can never disagree.
+        $shareRows = $this->_rfuQualSharingKingdoms();
+        $shareIn = array();
+        $shareOut = array();
+        $shareContributing = 0;
+        $shareOutNoReeve = 0;
+        foreach ($shareRows as $row) {
+            if ($row['shares']) {
+                if ($row['shared_q'] > 0) {
+                    $shareContributing++;
+                }
+                $shareIn[] = array(
+                    'label' => $row['name'],
+                    'route' => 'Kingdom/index/' . $row['kingdom_id'],
+                    'sub'   => ($row['shared_q'] > 0)
+                        ? number_format($row['shared_q']) . ' question' . ($row['shared_q'] === 1 ? '' : 's') . ' in the library'
+                        : 'No published questions shared yet',
+                );
+            } else {
+                if (!$row['reeve_on']) {
+                    $shareOutNoReeve++;
+                }
+                $shareOut[] = array(
+                    'label' => $row['name'],
+                    'route' => 'Kingdom/index/' . $row['kingdom_id'],
+                    'sub'   => $row['reeve_on'] ? "Reeve's Test enabled" : "Reeve's Test off",
+                );
+            }
+        }
+        $shareInCount  = count($shareIn);
+        $shareOutCount = count($shareOut);
+        // The pie splits opted-out kingdoms by whether they run the Reeve's Test
+        // at all, so "declined to share" reads apart from "nothing to share".
+        // Opting in takes precedence: a kingdom that opted in with its Reeve's
+        // Test switched off still has library access, so it stays "opted in" and
+        // the pie agrees with the KPI.
+        $featQualSharing = array(
+            'key'         => 'qual_sharing',
+            'title'       => 'Question Library Sharing',
+            'description' => "Kingdoms opt in to share their published Reeve's Test questions with other kingdoms, and in return can import from the shared library.",
+            'kpis' => array(
+                $this->_rfuKpi('Kingdoms opted in', $shareInCount, $activeKingdoms, $kPct($shareInCount), "active kingdoms with sharing turned on in their Reeve's Test settings", null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Kingdoms opted out', $shareOutCount, $activeKingdoms, $kPct($shareOutCount), 'active kingdoms that have not opted in — never saving test settings counts as opted out', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Opted in and contributing', $shareContributing, $activeKingdoms, $kPct($shareContributing), 'opted in AND at least one active question in a published version — actually adding to the library', null, null, 'of active kingdoms'),
+            ),
+            'charts' => array(
+                array(
+                    'id'         => 'rfu-qual-sharing',
+                    'type'       => 'pie',
+                    'title'      => 'Active kingdoms: library sharing',
+                    'categories' => array('Kingdoms opted in', 'Kingdoms opted out', "Kingdoms without the Reeve's Test enabled"),
+                    'data'       => array($shareInCount, $shareOutCount - $shareOutNoReeve, $shareOutNoReeve),
+                ),
+            ),
+            'links' => array(
+                $this->_rfuLinkTile('Opted in to sharing', $shareIn),
+                $this->_rfuLinkTile('Opted out of sharing', $shareOut),
+            ),
+        );
+
         // --- taking the test --------------------------------------------------
         // ork_qual_attempt logs EVERY submission, pass or fail, so pass rate is
         // per attempt (SUM(passed)/COUNT(*)). ork_qual_result is pass-only current
@@ -6558,6 +6623,7 @@ class Report extends Ork3
             'features' => array(
                 $featQualAdoption,
                 $featQualBank,
+                $featQualSharing,
                 $featQualTaking,
             ),
         );
@@ -7727,6 +7793,58 @@ class Report extends Ork3
             }
         }
         return $this->_rfuLinkTile($title, $rows);
+    }
+
+    /**
+     * Every active kingdom with its shared-question-library state, by name.
+     * shares   — a saved REEVE qual_config row with share_questions = 1 (no row = out).
+     * reeve_on — the QualTestReeveEnabled switch is on ('"1"', JSON round-tripped).
+     * shared_q — active Reeve questions in a PUBLISHED version, i.e. what the
+     *            kingdom would put in the library; mirrors the join in
+     *            QualTest::getLibraryQuestions() minus the share filter.
+     *
+     * @return array list of ['kingdom_id' => int, 'name' => string, 'shares' => bool, 'reeve_on' => bool, 'shared_q' => int]
+     */
+    private function _rfuQualSharingKingdoms()
+    {
+        $p = DB_PREFIX;
+        $this->db->Clear();
+        $rows = array();
+        $r = $this->db->query(
+            "SELECT k.kingdom_id, k.name,
+					COALESCE(qc.share_questions, 0) AS shares,
+					EXISTS (
+						SELECT 1 FROM `{$p}configuration` cfg
+						 WHERE cfg.type = 'Kingdom' AND cfg.id = k.kingdom_id
+						   AND cfg.`key` = 'QualTestReeveEnabled' AND cfg.value = '\"1\"'
+					) AS reeve_on,
+					(
+						SELECT COUNT(DISTINCT q.qual_question_id)
+						  FROM `{$p}qual_question` q
+						  JOIN `{$p}qual_set_question` sq ON sq.qual_question_id = q.qual_question_id
+						  JOIN `{$p}qual_question_set` s
+						    ON s.qual_question_set_id = sq.qual_question_set_id
+						   AND s.kingdom_id = q.kingdom_id AND s.test_type = 'reeve' AND s.status = 'published'
+						 WHERE q.kingdom_id = k.kingdom_id AND q.test_type = 'reeve' AND q.status = 'active'
+					) AS shared_q
+			   FROM `{$p}kingdom` k
+			   LEFT JOIN `{$p}qual_config` qc
+			     ON qc.kingdom_id = k.kingdom_id AND qc.test_type = 'reeve'
+			  WHERE k.active = 'Active'
+			  ORDER BY k.name ASC"
+        );
+        if ($r !== false) {
+            while ($r->next()) {
+                $rows[] = array(
+                    'kingdom_id' => (int)$r->kingdom_id,
+                    'name'       => $r->name,
+                    'shares'     => ((int)$r->shares === 1),
+                    'reeve_on'   => ((int)$r->reeve_on === 1),
+                    'shared_q'   => (int)$r->shared_q,
+                );
+            }
+        }
+        return $rows;
     }
 
     /**

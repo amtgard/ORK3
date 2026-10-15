@@ -4530,7 +4530,7 @@ class Player extends Ork3
                     $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
                     return Success('Recommendation Removed!');
                 } else {
-                    return InvalidParameter('Only the giver, recipient, or Admin may delete a recommendation.');
+                    return InvalidParameter('Only the giver, recipient, or Admin may dismiss a recommendation.');
                 }
             } else {
                 return InvalidParameter('There was a problem with the request.');
