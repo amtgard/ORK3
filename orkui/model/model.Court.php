@@ -111,9 +111,14 @@ class Model_Court extends Model
         return $this->_court()->getCourtAwards($court_id);
     }
 
-    public function add_award($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich = true)
+    public function add_award($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich = true, $caller_uid = 0)
     {
-        return $this->_court()->addAward($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich);
+        return $this->_court()->addAward($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich, $caller_uid);
+    }
+
+    public function can_use_rec_for_line($rec_id, $mundane_id, $caller_uid)
+    {
+        return $this->_court()->canUseRecForLine($rec_id, $mundane_id, $caller_uid);
     }
 
     public function update_award($court_award_id, array $fields, $expectedRowVersion = null)

@@ -276,7 +276,9 @@ class Controller_CourtAjax extends Controller
         }
 
         // The lib enforces object-level auth: the kingdomaward must belong to this
-        // court's own kingdom (else an officer could attach another kingdom's id).
+        // court's own kingdom (else an officer could attach another kingdom's id),
+        // and a recommendation must be about this recipient and, when Monarchy
+        // Only, visible to this caller.
         $award = $this->Court->add_award(
             $court_id,
             (int)$court['KingdomId'],
@@ -286,8 +288,15 @@ class Controller_CourtAjax extends Controller
             $rec_id,
             $pass_to_local,
             $notes,
-            $public_comment
+            $public_comment,
+            true,
+            $uid
         );
+        if ($award === false && $rec_id > 0 && !$this->Court->can_use_rec_for_line($rec_id, $mundane_id, $uid)) {
+            // One message for "not this player's rec" and "a hidden rec you cannot
+            // see", so the answer never reveals that a hidden rec exists.
+            $this->jsonOut(['status' => 1, 'error' => 'That recommendation cannot be added to this court.']);
+        }
         if ($award === false) {
             // The usual cause is not a mistake by the officer: the pending list is
             // scoped to players in this kingdom, but a player who transferred carries
@@ -1002,7 +1011,8 @@ class Controller_CourtAjax extends Controller
                 $row['PassToLocal'] ? 1 : 0,
                 $row['Notes'],
                 $row['PublicComment'],
-                false
+                false,
+                $uid
             );
             if ($res !== false) {
                 $added++;
