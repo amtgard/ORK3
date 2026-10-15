@@ -208,7 +208,6 @@ count never treat it as an inherited citation, and the Record view
   reads "This recommendation is Monarchy Only — its reason is not copied into
   the public award note." (`orkMonarchyOnlyNoteHint` in
   `_monarchy_only_assets.tpl`, dark mode included).
-- **What's New** entry: `notes_only`; see Out of scope.
 
 ## Testing
 
@@ -228,5 +227,4 @@ count never treat it as an inherited citation, and the Record view
   caller can claim an admin id). Noted, not fixed here.
 - Pre-existing: private-mode "own recs" filter matches `RecommendedById`, which
   masking nulls for anonymous recs.
-- The What's New entry is `notes_only`, and `WHATS_NEW_VERSION` was not bumped.
-  Release timing is the maintainer's call.
+- No What's New entry: this is a general addition, not a release headline.
