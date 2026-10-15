@@ -268,9 +268,9 @@ class Model_Court extends Model
     // Recommendations
     // -----------------------------------------------------------------------
 
-    public function get_pending_recommendations($kingdom_id, $park_id = 0, $caller_uid = 0, $court_id = 0)
+    public function get_pending_recommendations($kingdom_id, $park_id = 0, $caller_uid = 0, $court_id = 0, $caller_token = '')
     {
-        return $this->_court()->getPendingRecommendations($kingdom_id, $park_id, $caller_uid, $court_id);
+        return $this->_court()->getPendingRecommendations($kingdom_id, $park_id, $caller_uid, $court_id, $caller_token);
     }
 
     public function get_recommendation_court_map($kingdom_id, $park_id = 0, $include_park_courts = false)

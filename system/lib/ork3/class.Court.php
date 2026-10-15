@@ -554,14 +554,25 @@ class Court
             $rec_val   = $rec_id > 0 ? $rec_id : 'NULL';
             $notes_val = "'" . $this->esc($notes) . "'";
 
+            // A Monarchy Only recommendation's reason is officer-only. commitStagedAward
+            // publishes `public_comment ?: rec.reason` to the permanent, public award
+            // note unless the citation was explicitly cleared — so a line drawn from a
+            // hidden rec starts cleared, and only what an officer types is published.
+            $cleared = 0;
+            if ($rec_id > 0) {
+                $this->db->Clear();
+                $mo = $this->db->DataSet('SELECT monarchy_only FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . $rec_id . ' LIMIT 1');
+                $cleared = ($mo && $mo->Next() && (int)$mo->monarchy_only > 0 && trim((string)$public_comment) === '') ? 1 : 0;
+            }
+
             $this->db->Clear();
             $this->db->Execute(
                 'INSERT INTO ' . DB_PREFIX . 'court_award
              (court_id, mundane_id, kingdomaward_id, rank, recommendations_id,
-              sort_order, pass_to_local, notes, public_comment)
+              sort_order, pass_to_local, notes, public_comment, public_comment_cleared)
              VALUES (' . $court_id . ', ' . $mundane_id . ', ' . $kingdomaward_id . ', ' . $rank . ',
                      ' . $rec_val . ', ' . $sort . ', ' . $pass_to_local . ', ' . $notes_val . ',
-                     \'' . $this->esc($public_comment) . '\')'
+                     \'' . $this->esc($public_comment) . '\', ' . $cleared . ')'
             );
             if ($rec_id > 0) {
                 // uniq_court_rec (court_id, recommendations_id) makes "one
@@ -2478,7 +2489,7 @@ class Court
     // Pending recommendations (for the add-from-rec modal)
     // -----------------------------------------------------------------------
 
-    public function getPendingRecommendations($kingdom_id, $park_id = 0, $caller_uid = 0, $court_id = 0)
+    public function getPendingRecommendations($kingdom_id, $park_id = 0, $caller_uid = 0, $court_id = 0, $caller_token = '')
     {
         // Delegate the heavy lifting (Master-peerage cascade, custom-award carve-out,
         // award_id cross-check, snooze awareness, age, seconds, anon masking) to
@@ -2487,7 +2498,7 @@ class Court
         //   - look up which recs are on THIS court vs SOME OTHER court
         //   - look up the park abbreviation (recommended_awards doesn't return it)
         //   - map the field names to what the Court Planner template expects
-        $req = ['RequestedBy' => (int)$caller_uid];
+        $req = ['RequestedBy' => (int)$caller_uid, 'Token' => (string)$caller_token];
         if ($park_id > 0) {
             $req['ParkId']    = (int)$park_id;
             $req['KingdomId'] = 0;

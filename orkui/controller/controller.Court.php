@@ -121,7 +121,7 @@ class Controller_Court extends Controller
         $courtAwards  = $this->Court->get_court_awards($court_id);
         // Non-award line items that share the running order with the awards.
         $courtNotes   = $this->Court->get_court_notes($court_id);
-        $pendingRecs  = $this->Court->get_pending_recommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id);
+        $pendingRecs  = $this->Court->get_pending_recommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id, (string)$this->session->token);
         // Event options for the Edit Details modal's re-link select (spec 0.1) — mirrors
         // list()'s identical call; scoped to the COURT's kingdom, not the session's.
         $upcomingEvents = $this->Court->get_upcoming_events($court['KingdomId']);
