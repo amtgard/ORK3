@@ -4267,6 +4267,7 @@ $(document).ready(function() {
         gid('kn-rec-reason').value          = '';
         gid('kn-rec-char-count').textContent = '400 characters remaining';
         var knAnonEl = gid('kn-rec-anon'); if (knAnonEl) knAnonEl.checked = false;
+        var knMoEl = gid('kn-rec-monarchy'); if (knMoEl) knMoEl.checked = false;
         knRecRanks = {};
         checkRequired();
         gid('kn-rec-overlay').classList.add('kn-open');
@@ -4294,6 +4295,7 @@ $(document).ready(function() {
         if (rank) fd.append('Rank', rank);
         var anonEl = gid('kn-rec-anon');
         if (anonEl && anonEl.checked) fd.append('Anonymous', 1);
+        var moEl = gid('kn-rec-monarchy'); if (moEl && moEl.checked) fd.append('MonarchyOnly', '1');
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         fetch(UIR_JS + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/addrecommendation', { method: 'POST', body: fd })
@@ -4310,6 +4312,7 @@ $(document).ready(function() {
                     gid('kn-rec-reason').value = '';
                     gid('kn-rec-char-count').textContent = '400 characters remaining';
                     var knAnonElS = gid('kn-rec-anon'); if (knAnonElS) knAnonElS.checked = false;
+                    var knMoElS = gid('kn-rec-monarchy'); if (knMoElS) knMoElS.checked = false;
                     knRecRanks = {};
                     setTimeout(function() { gid('kn-rec-success').style.display = 'none'; }, 3000);
                 } else {
@@ -8070,6 +8073,7 @@ $(document).ready(function() {
         gid('pk-rec-reason').value          = '';
         gid('pk-rec-char-count').textContent = '400 characters remaining';
         var pkAnonEl = gid('pk-rec-anon'); if (pkAnonEl) pkAnonEl.checked = false;
+        var pkMoEl = gid('pk-rec-monarchy'); if (pkMoEl) pkMoEl.checked = false;
         pkRecRanks = {};
         checkRequired();
         gid('pk-rec-overlay').classList.add('pk-open');
@@ -8107,6 +8111,7 @@ $(document).ready(function() {
             if (rank) fd.append('Rank', rank);
             var anonEl = gid('pk-rec-anon');
             if (anonEl && anonEl.checked) fd.append('Anonymous', 1);
+            var moEl = gid('pk-rec-monarchy'); if (moEl && moEl.checked) fd.append('MonarchyOnly', '1');
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             if (warnEl) warnEl.style.display = 'none';

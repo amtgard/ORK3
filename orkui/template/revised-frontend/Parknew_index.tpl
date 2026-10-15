@@ -1673,6 +1673,7 @@
 
 			<!-- Recommendations Tab -->
 			<?php if (!empty($ShowRecsTab)): ?>
+			<?php include_once __DIR__ . '/_monarchy_only_badge.tpl'; ?>
 			<div class="pk-tab-panel" id="pk-tab-recommendations" style="display:none">
 				<?php if (!empty($CanAdminPark)):
 					$pkDelegated = array_values(array_filter($AwardRecommendations ?? [], function ($r) {
@@ -1695,7 +1696,7 @@
 						<li class="pk-delegated-item">
 							<a href="<?= UIR ?>Player/profile/<?= (int)$dr['MundaneId'] ?>"><?= htmlspecialchars($dr['Persona']) ?></a>
 							<span class="pk-delegated-sep">&middot;</span>
-							<span class="pk-delegated-award"><?= htmlspecialchars(preg_replace('/^Order of(?:\s+the)?\s+/i', '', $dr['AwardName'])) ?></span>
+							<span class="pk-delegated-award"><?= htmlspecialchars(preg_replace('/^Order of(?:\s+the)?\s+/i', '', $dr['AwardName'])) ?></span><?= ork_monarchy_only_badge((int)($dr['MonarchyOnlyLevel'] ?? 0)) ?>
 							<?php if ((int)$dr['Rank'] > 0): ?><span class="pk-delegated-rank">Rank <?= (int)$dr['Rank'] ?></span><?php endif; ?>
 							<?php if (!empty($dr['PassedToLocalAt'])): ?><span class="pk-delegated-approved">Approved on: <?= htmlspecialchars(date('F j, Y', strtotime($dr['PassedToLocalAt']))) ?></span><?php endif; ?>
 						</li>
@@ -1781,7 +1782,7 @@
 							data-passlocal="<?= !empty($rec['PassedToLocal']) ? '1' : '0' ?>"
 							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((array_key_exists('IsLadder', $rec) ? !empty($rec['IsLadder']) : (int)$rec['Rank'] > 0) ? 'below' : 'nonladder') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
-							<td><?= htmlspecialchars(preg_replace('/^Order of(?:\\s+the)?\\s+/i', '', $rec['AwardName'])) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="pk-rec-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?></td>
+							<td><?= htmlspecialchars(preg_replace('/^Order of(?:\\s+the)?\\s+/i', '', $rec['AwardName'])) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="pk-rec-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?><?= ork_monarchy_only_badge((int)($rec['MonarchyOnlyLevel'] ?? 0)) ?></td>
 							<td style="white-space:nowrap" data-order="<?= max(0, (int)$rec['Rank']) ?>">
 								<?php if ((int)$rec['Rank'] > 0): ?><span class="ladder-rank" data-lvl="<?= min((int)$rec['Rank'], 10) ?>"><?= (int)$rec['Rank'] ?></span><?php else: ?>&mdash;<?php endif; ?>
 								<?php if (!empty($rec['AlreadyHas'])): ?>
@@ -2328,6 +2329,15 @@ var PkBannerConfig = {
 				</label>
 				<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
 			</div>
+			<?php if (!empty($CanMonarchyOnlyRec)): ?>
+			<div class="pk-acct-field" style="margin-top:12px">
+				<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+					<input type="checkbox" id="pk-rec-monarchy" value="1" style="width:16px;height:16px;cursor:pointer">
+					<span>Monarchy Only</span>
+				</label>
+				<div class="mo-check-hint">Only officers will see this recommendation; the player will not.</div>
+			</div>
+			<?php endif; ?>
 		</div>
 		<div class="pk-modal-footer">
 			<button class="pk-btn-ghost" id="pk-rec-cancel">Cancel</button>
@@ -3771,4 +3781,5 @@ window.OrkRsCfg = {
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php include __DIR__ . '/_monarchy_only_assets.tpl'; ?>
 <?php endif; ?>

@@ -1,4 +1,5 @@
 <?php
+include_once __DIR__ . '/_monarchy_only_badge.tpl';
         $gMid    = (int)$group['MundaneId'];
         $gKaid   = (int)$group['KingdomAwardId'];
         $gRank   = (int)$group['Rank'];
@@ -31,6 +32,7 @@
                 'By'      => $m['RecommendedByName'] ?? (!empty($m['IsAnonymous']) ? 'Anonymous' : ''),
                 'Date'    => rmNiceDate($m['DateRecommended'] ?? ''),
                 'Reason'  => $m['Reason'] ?? '',
+                'MonarchyOnlyLevel' => (int)($m['MonarchyOnlyLevel'] ?? 0),
                 'Seconds' => array_map(function ($s) {
                     return ['Name' => $s['SupporterName'] ?? '', 'Notes' => $s['Notes'] ?? ''];
                 }, $m['Seconds'] ?? []),
@@ -69,6 +71,7 @@
     ?>
       <tr class="rm-row" data-rec-cluster="<?= (int)$group['MundaneId'] ?>:<?= (int)$group['KingdomAwardId'] ?>:<?= (int)$group['Rank'] ?>" data-snoozed="<?= $snoozed ?>" data-dismissed="<?= $dismissed ?>"
           data-passlocal="<?= !empty($group['PassedToLocal']) ? 1 : 0 ?>"
+          data-monarchy="<?= (int)($group['MonarchyOnlyLevel'] ?? 0) ?>" data-monarchyall="<?= !empty($group['MonarchyOnlyAll']) ? 1 : 0 ?>"
           data-courts='<?= $courtJson ?>'
           data-rec='<?= $gpayload ?>'
           data-members='<?= $membersJson ?>'
@@ -92,6 +95,7 @@
             <span class="rm-badge <?= $rmCovered ? 'rm-badge-master' : 'rm-badge-has' ?>" data-tip="<?= $rmCovered ? 'Covered by a Master peerage &mdash; the recipient was not granted this order.' : 'The recipient already holds this award.' ?>"><?= $rmCovered ? 'covered by master' : 'already has' ?></span>
           <?php } ?>
           <?php if (!empty($group['PassedToLocal'])) { ?><span class="rm-badge rm-badge-passlocal" data-tip="Passed to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php } ?>
+          <?= ork_monarchy_only_badge((int)($group['MonarchyOnlyLevel'] ?? 0)) ?>
           <?php if ($elig === 'below') { ?><span class="rm-badge rm-badge-below">below rec.</span><?php } ?>
           <?php if (!empty($group['IsRetired'])) { ?><span class="rm-badge rm-badge-retired" data-tip="This recipient is retired or deceased in the ORK. Memorial honors are legitimate &mdash; just confirm before granting or staging this on a live court.">retired</span><?php } ?>
           <?php if ($dismissed) {
@@ -138,12 +142,15 @@
           <button type="button" class="rm-act rm-act-court"  data-tip="Add to court" aria-label="Add to a court plan">&#65291;</button>
           <button type="button" class="rm-act rm-act-snooze" aria-label="<?= $snoozed ? 'Unsnooze this recommendation' : 'Snooze until the next monarchy' ?>"><span class="rm-snooze-ico" aria-hidden="true"><?= $snoozed ? '&#128276;' : '&#128164;' ?></span><span class="rm-snooze-tip" aria-hidden="true"><?php if ($snoozed) { ?><strong>Unsnooze</strong>Restore this recommendation to the active list.<?php } else { ?><strong>Snooze to Next Monarchy</strong>Temporarily dismiss this recommendation until either the Monarch or Regent officer at this level changes.<?php } ?></span></button>
           <?php if (($Context ?? '') === 'kingdom') { ?><button type="button" class="rm-act rm-act-passlocal<?= !empty($group['PassedToLocal']) ? ' rm-act-active' : '' ?>" aria-label="<?= !empty($group['PassedToLocal']) ? 'Remove the pass to the local park' : 'Pass to the local park' ?>"><i class="fas fa-arrow-down" aria-hidden="true"></i><span class="rm-passlocal-tip" aria-hidden="true"><strong>Send to Local Park</strong>For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level.</span></button><?php } ?>
+          <?php $moAll = !empty($group['MonarchyOnlyAll']); ?>
+          <button type="button" class="rm-act rm-act-monarchy<?= $moAll ? ' rm-act-active' : '' ?>" data-tip="<?= $moAll ? 'Make visible &mdash; remove Monarchy Only' : 'Monarchy Only &mdash; hide from everyone but officers' ?>" aria-label="<?= $moAll ? 'Remove Monarchy Only' : 'Mark Monarchy Only' ?>"><i class="fas <?= $moAll ? 'fa-eye' : 'fa-eye-slash' ?>" aria-hidden="true"></i></button>
           <button type="button" class="rm-act rm-act-dismiss" aria-label="Dismiss recommendation" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">&#10005;</button>
           <button type="button" class="rm-act rm-act-more" data-tip="More actions" aria-label="More actions" aria-expanded="false">&hellip;</button>
           <?php } ?>
           <div class="rm-act-help" hidden>
             <strong>Snooze</strong> sets this aside until the Monarch or Regent changes.
             <?php if (($Context ?? '') === 'kingdom') { ?><strong>Pass down</strong> grants the local park authority to award at this level. <?php } ?>
+            <strong>Monarchy Only</strong> hides it from everyone but officers.
             <strong>Dismiss</strong> removes it from the pending list.
           </div>
         </td>
