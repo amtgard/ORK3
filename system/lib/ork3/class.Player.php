@@ -4551,72 +4551,72 @@ class Player extends Ork3
         return Success('Recommendation visibility updated.');
     }
 
+    // Authorization and attribution both come from the TOKEN. RequestedBy is
+    // caller-supplied and this method is reachable through the public JSON service,
+    // so it is ignored here: trusting it let any logged-in user dismiss any
+    // recommendation by claiming to be its author or recipient, and forge deleted_by
+    // and the Granted notification's actor.
     public function DeleteAwardRecommendation($request)
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
+        if (($mundane_id = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
             return NoAuthorization();
         }
 
-        if (valid_id($request['RequestedBy'])) {
-            $can_delete_recommendation = false;
-            $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
-            $awardRec->clear();
-            $awardRec->recommendations_id = $request['RecommendationsId'];
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $request['RecommendationsId'] ?? 0;
 
-            if (valid_id($request['RecommendationsId']) && $awardRec->find()) {
-                $recipientInfo = $this->player_info($awardRec->mundane_id);
-                if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
-                    $can_delete_recommendation = true;
-                }
-                if ($can_delete_recommendation || $request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {
-                    $prior_rec = [
-                        'recommendations_id' => (int)$awardRec->recommendations_id,
-                        'mundane_id'         => (int)$awardRec->mundane_id,
-                        'kingdomaward_id'    => (int)$awardRec->kingdomaward_id,
-                        'award_id'           => (int)$awardRec->award_id,
-                        'rank'               => (int)$awardRec->rank,
-                        'recommended_by_id'  => (int)$awardRec->recommended_by_id,
-                        'date_recommended'   => $awardRec->date_recommended,
-                        'reason'             => $awardRec->reason,
-                    ];
-                    $cascade_at = date('Y-m-d H:i:s');
-                    // Granted-from-Manager: notify advocates BEFORE the rec/seconds soft-delete.
-                    if (!empty($request['Granted'])) {
-                        try {
-                            Ork3::$Lib->notification->notifyRecommendationGranted(
-                                (int)$awardRec->recommendations_id,
-                                (int)$request['RequestedBy']
-                            );
-                        } catch (\Throwable $e) { /* best-effort */
-                        }
-                    }
-                    $awardRec->deleted_by = $request['RequestedBy'];
-                    $awardRec->deleted_at = $cascade_at;
-                    $awardRec->save();
-                    Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
-                    // Cascade soft-delete to any active seconds on this recommendation.
-                    $this->db->Clear();
-                    $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . (int)$request['RequestedBy'] . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
-                    $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
-                    return Success('Recommendation Removed!');
-                } else {
-                    return InvalidParameter('Only the giver, recipient, or Admin may dismiss a recommendation.');
-                }
-            } else {
-                return InvalidParameter('There was a problem with the request.');
+        if (!valid_id($request['RecommendationsId'] ?? 0) || !$awardRec->find()) {
+            return InvalidParameter('There was a problem with the request.');
+        }
+
+        $recipientInfo = $this->player_info($awardRec->mundane_id);
+        $can_delete_recommendation = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)
+            || $mundane_id === (int)$awardRec->recommended_by_id
+            || $mundane_id === (int)$awardRec->mundane_id;
+        if (!$can_delete_recommendation) {
+            return InvalidParameter('Only the giver, recipient, or Admin may delete a recommendation.');
+        }
+
+        $prior_rec = [
+            'recommendations_id' => (int)$awardRec->recommendations_id,
+            'mundane_id'         => (int)$awardRec->mundane_id,
+            'kingdomaward_id'    => (int)$awardRec->kingdomaward_id,
+            'award_id'           => (int)$awardRec->award_id,
+            'rank'               => (int)$awardRec->rank,
+            'recommended_by_id'  => (int)$awardRec->recommended_by_id,
+            'date_recommended'   => $awardRec->date_recommended,
+            'reason'             => $awardRec->reason,
+        ];
+        $cascade_at = date('Y-m-d H:i:s');
+        // Granted-from-Manager: notify advocates BEFORE the rec/seconds soft-delete.
+        if (!empty($request['Granted'])) {
+            try {
+                Ork3::$Lib->notification->notifyRecommendationGranted(
+                    (int)$awardRec->recommendations_id,
+                    $mundane_id
+                );
+            } catch (\Throwable $e) { /* best-effort */
             }
-        } else {
-            return NoAuthorization();
         }
+        $awardRec->deleted_by = $mundane_id;
+        $awardRec->deleted_at = $cascade_at;
+        $awardRec->save();
+        Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
+        // Cascade soft-delete to any active seconds on this recommendation.
+        $this->db->Clear();
+        $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . $mundane_id . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
+        $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
+        return Success('Recommendation Removed!');
     }
 
     /**
      * The one definition of "this recommendation is still live", as a SQL fragment.
      *
-     * A soft delete stamps deleted_by; historic rows (and any caller that omitted
-     * RequestedBy before the guard above rejected it) carry deleted_by = 0, which is
-     * NOT a deletion. Reading deleted_at instead — as the cluster resolver used to —
-     * makes those rows invisible to the resolver while the Manager still lists them
+     * A soft delete stamps deleted_by (the dismissing token's user); historic rows
+     * (written back when deleted_by came from a caller-supplied RequestedBy that could
+     * be omitted) carry deleted_by = 0, which is NOT a deletion. Reading deleted_at
+     * instead — as the cluster resolver used to — makes those rows invisible to the resolver while the Manager still lists them
      * as pending, so a granted award can be granted again.
      *
      * NOT yet the single source of truth: class.Report.php (PlayerAwardRecommendations,
@@ -4634,6 +4634,8 @@ class Player extends Ork3
     // as "granted": each member runs through DeleteAwardRecommendation(Granted=1), which
     // notifies that rec's advocates BEFORE soft-deleting it and cascading its seconds.
     // Used by the Manager group-grant and CourtAjax::grant_award. No-ops on an empty cluster.
+    // Authorization is per-rec inside DeleteAwardRecommendation, from the Token alone;
+    // RequestedBy is not forwarded (a caller-chosen id must never authorize or attribute).
     public function ResolveRecommendationCluster($request)
     {
         $mundane_id = (int)($request['MundaneId'] ?? 0);
@@ -4662,7 +4664,6 @@ class Player extends Ork3
             $r = $this->DeleteAwardRecommendation([
                 'Token'             => $request['Token'] ?? '',
                 'RecommendationsId' => $rid,
-                'RequestedBy'       => (int)($request['RequestedBy'] ?? 0),
                 'Granted'           => 1,
             ]);
             if ((int)($r['Status'] ?? 1) === 0) {

@@ -199,6 +199,22 @@ final class CourtFixture
     }
 
     /**
+     * Give a player a live login token: ork_session is the authoritative token
+     * store IsAuthorized() reads, so a row there is all a token needs.
+     */
+    public function issueToken(int $mundaneId): string
+    {
+        $token = md5(self::MARKER . $mundaneId . bin2hex(random_bytes(8)));
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'session (mundane_id, token, created, last_seen, expires)
+             VALUES (?, ?, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 72 HOUR))'
+        )->execute([$mundaneId, $token]);
+        $this->tokens[] = $token;
+
+        return $token;
+    }
+
+    /**
      * First kingdomaward in a kingdom — recommendations need a real one to join to.
      */
     public function firstKingdomAwardId(int $kingdomId): array
@@ -254,14 +270,9 @@ final class CourtFixture
     public function createPlayerWithToken(string $tag, int $kingdomId, int $parkId): array
     {
         $p = $this->createPlayer($tag, $kingdomId, $parkId);
-        $token = md5(self::MARKER . $tag . bin2hex(random_bytes(8)));
+        $token = $this->issueToken((int) $p['mundane_id']);
         $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET token = ?, penalty_box = 0, suspended = 0 WHERE mundane_id = ?')
             ->execute([$token, $p['mundane_id']]);
-        $this->pdo->prepare(
-            'INSERT IGNORE INTO ' . DB_PREFIX . 'session (mundane_id, token, created, last_seen, expires)
-             VALUES (?, ?, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 72 HOUR))'
-        )->execute([$p['mundane_id'], $token]);
-        $this->tokens[] = $token;
 
         return $p + ['token' => $token];
     }
@@ -360,6 +371,7 @@ final class CourtFixture
         $this->deleteIn('court_award', 'court_id', $this->courtIds);
         $this->deleteIn('court_award', 'court_award_id', $this->awardIds);
         $this->deleteIn('court', 'court_id', $this->courtIds);
+        $this->deleteIn('recommendation_seconds', 'recommendations_id', $this->recIds);
         $this->deleteIn('recommendations', 'recommendations_id', $this->recIds);
 
         // Put borrowed officer seats back before the stand-in players go away.
