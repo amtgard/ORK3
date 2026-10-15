@@ -8129,6 +8129,8 @@ $(document).ready(function() {
                         gid('pk-rec-rank-pills').innerHTML = '';
                         gid('pk-rec-reason').value = '';
                         gid('pk-rec-char-count').textContent = '400 characters remaining';
+                        var pkAnonElS = gid('pk-rec-anon'); if (pkAnonElS) pkAnonElS.checked = false;
+                        var pkMoElS = gid('pk-rec-monarchy'); if (pkMoElS) pkMoElS.checked = false;
                         pkRecRanks = {};
                         setTimeout(function() { gid('pk-rec-success').style.display = 'none'; }, 3000);
                     } else {
