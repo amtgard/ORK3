@@ -175,7 +175,9 @@ The cache of `PlayerAwardRecommendations` stays viewer-agnostic: rows carry
   (in-process, underscored so not JSON-callable; that one id, only while live,
   only when it is about the line's recipient). The line authorizes acting on its
   own rec, so a park court that grants a kingdom-level hide closes it (Granted
-  notification, seconds cascade) and it cannot be granted again.
+  notification, seconds cascade) and it cannot be granted again. Committing a
+  court line closes the line's own linked rec even when it was granted at a
+  different rank than recommended: the line fulfills that rec.
 
 ## Read paths to filter
 
@@ -200,8 +202,10 @@ cannot see keeps `RecMonarchyOnly` but comes back with no `RecReason` and no
 (their choice), and that court's park officers see only the notice ("Its reason
 is visible only to officers at the recommendation's level."). No caller (0)
 sees none. A caller who is the line's RECIPIENT (a court manager on their own
-line) gets `RecMonarchyOnly = false` and no reason or recommender: they are not
-told a hidden rec backs it. `Court::addAward` takes the caller's uid (threaded
+line) gets `RecMonarchyOnly = false`, no reason, no recommender and no rec id
+(`RecommendationsId` null / 0, `IsWalkOn` true): they are not told a hidden rec
+backs it. Commit, the own-rec close and pass-to-local read the rec id from the
+database, never from these caller-filtered rows. `Court::addAward` takes the caller's uid (threaded
 from `CourtAjax::requireCourtAuth` through `model.Court::add_award`) and refuses
 a recommendation-backed line unless `canUseRecForLine` passes: the rec must be
 about that recipient, and a Monarchy Only rec must be visible to the caller
@@ -221,11 +225,23 @@ revive, reuse) and `updateAward` write the flag as the officer set it, and:
   `setAwardId` freezes exactly what was published (nothing, for a hidden rec).
 - Hidden at add and at commit → only what the officer typed is published.
   Unhidden before commit → the reason inherits normally.
-- A hidden rec's reason is never accepted as a TYPED citation either:
-  `stageAward` and `updateAward` refuse a `PublicComment` equal (trimmed) to the
-  line's rec reason while that rec is Monarchy Only, and CourtAjax answers with
-  the reload status. This backstops a planner that rendered the rec while it
-  was public and then posts its reason (Grant modal pre-fill, "(Start from Rec)").
+- A hidden rec's reason is never published as a TYPED citation either. A line
+  staged or saved while its rec was public can carry the reason verbatim
+  (Grant modal pre-fill, Record view "Given", "(Start from Rec)" + Save, then
+  Bulk Record Grants). At commit, `getAwardCommitFields` re-reads the rec's
+  reason with its state; if the rec is Monarchy Only now and
+  `trim(PublicComment) === trim(rec.reason)`, nothing is published and
+  `setAwardId` blanks the stored citation so the Court Report agrees. Text the
+  officer actually wrote is published as usual.
+- New writes of that text are refused: `stageAward` and `updateAward` refuse a
+  `PublicComment` equal (trimmed) to the line's rec reason while that rec is
+  Monarchy Only. CourtAjax `grant_award` / `update_award` check first and answer
+  `status 1` with `Court::HIDDEN_CITATION_MESSAGE` ("This citation is the text
+  of a Monarchy Only recommendation, which is never published. Edit or clear it
+  to continue.") — not the reload status, which a reload would never clear.
+  Court reads (`getCourtAwards`, `getStagedAwards`) present such a stored
+  citation as empty, so the Grant modal does not pre-fill it and Save does not
+  re-post it: the next save clears it, and no line is left stuck.
 - `SetRecommendationMonarchyOnly`, and `SetRecommendationPassedToLocal` for a
   Monarchy Only rec (its effective level changes), bump `row_version` on every
   still-open court line drawn from the rec (`Court::bumpOpenLinesForRec`).
