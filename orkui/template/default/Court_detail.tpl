@@ -1714,11 +1714,15 @@ $_total_awards = count($courtAwards ?? []);
                         <div class="cp-pc-label-row" style="margin-top:10px">
                             <span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>
                         </div>
-                        <div class="cp-pubcomment-wrap" id="cp-pcwrap-<?= $pcCaid ?>" data-rec-engaged="1" data-rec-cleared="1" data-rec-monarchy="1">
+                        <?php /* data-rec-cleared carries the line's PERSISTED flag (the officer's
+                                 own "(Clear)"), so a save posts it back unchanged. The hidden rec's
+                                 reason is withheld by RecMonarchyOnly, never by forcing this flag:
+                                 a forced 1 outlived an unhide and stopped the line inheriting. */ ?>
+                        <div class="cp-pubcomment-wrap" id="cp-pcwrap-<?= $pcCaid ?>" data-rec-engaged="1" data-rec-cleared="<?= !empty($aw['PublicCommentCleared']) ? '1' : '0' ?>" data-rec-monarchy="1">
                             <textarea class="cp-notes-area" id="cp-pubcomment-<?= $pcCaid ?>"
                                       aria-label="Public comment (shown on the Court Report)"
                                       placeholder="Shown on the public Court Report…"><?= htmlspecialchars($pcSaved) ?></textarea>
-                            <div class="cp-pc-monarchy" id="cp-pc-monarchy-<?= $pcCaid ?>"><i class="fas fa-eye-slash" aria-hidden="true"></i> Monarchy Only recommendation &mdash; its reason is never published. Type a public comment above if you want one.<?php if ($pcRecReason !== ''): ?><div class="cp-pc-monarchy-reason">Officers only: <?= htmlspecialchars($pcRecReason) ?></div><?php endif; ?></div>
+                            <div class="cp-pc-monarchy" id="cp-pc-monarchy-<?= $pcCaid ?>"><i class="fas fa-eye-slash" aria-hidden="true"></i> Monarchy Only recommendation &mdash; its reason is never published. Type a public comment above if you want one.<?php if ($pcRecReason !== ''): ?><div class="cp-pc-monarchy-reason">Officers only: <?= htmlspecialchars($pcRecReason) ?></div><?php else: ?><div class="cp-pc-monarchy-reason">Its reason is visible only to officers at the recommendation&rsquo;s level.</div><?php endif; ?></div>
                         </div>
                         <?php else: ?>
                         <div class="cp-pc-label-row" style="margin-top:10px">
@@ -3224,16 +3228,25 @@ $_total_awards = count($courtAwards ?? []);
     // Mirrors the server-rendered field, all three states: untouched (rec text as a
     // ghost hint + Start/Clear), cleared (marker + Undo), and Monarchy Only (the rec's
     // reason is officer-only reference text and nothing offers it as the citation).
+    // The officer-only line under a Monarchy Only row's notice. A caller who may not see
+    // the rec (e.g. a park officer on a kingdom-level hide) gets no reason from the server.
+    // Plain text (callers escape it), so the reconcile can compare it to textContent.
+    function cpMonarchyReasonText(recReason) {
+        return recReason ? 'Officers only: ' + recReason : 'Its reason is visible only to officers at the recommendation\u2019s level.';
+    }
+
     function cpPubCommentFieldHtml(caid, recReason, publicComment, cleared, recMonarchyOnly) {
         recReason     = recReason || '';
         publicComment = publicComment || '';
         var label = '<div class="cp-pc-label-row" style="margin-top:10px"><span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>';
         if (recMonarchyOnly) {
+            // data-rec-cleared is the line's persisted flag, posted back unchanged on save;
+            // the hidden reason is withheld by RecMonarchyOnly, not by forcing it to 1.
             return label + '</div>' +
-                '<div class="cp-pubcomment-wrap" id="cp-pcwrap-' + caid + '" data-rec-engaged="1" data-rec-cleared="1" data-rec-monarchy="1">' +
+                '<div class="cp-pubcomment-wrap" id="cp-pcwrap-' + caid + '" data-rec-engaged="1" data-rec-cleared="' + (cleared ? '1' : '0') + '" data-rec-monarchy="1">' +
                 '<textarea class="cp-notes-area" id="cp-pubcomment-' + caid + '" aria-label="Public comment (shown on the Court Report)" placeholder="Shown on the public Court Report…">' + esc(publicComment) + '</textarea>' +
                 '<div class="cp-pc-monarchy" id="cp-pc-monarchy-' + caid + '"><i class="fas fa-eye-slash" aria-hidden="true"></i> Monarchy Only recommendation \u2014 its reason is never published. Type a public comment above if you want one.' +
-                (recReason !== '' ? '<div class="cp-pc-monarchy-reason">Officers only: ' + esc(recReason) + '</div>' : '') +
+                '<div class="cp-pc-monarchy-reason">' + esc(cpMonarchyReasonText(recReason)) + '</div>' +
                 '</div></div>';
         }
         var triggered = recReason !== '' && publicComment === '';
@@ -4952,18 +4965,27 @@ $_total_awards = count($courtAwards ?? []);
         // field posts PublicCommentCleared=0 under a matching RowVersion — wiping their
         // clear and republishing the confidential recommendation reason at Finalize.
         var pcWrapSync = row.querySelector('[data-rec-cleared]');
-        if (pcWrapSync && sa.RecMonarchyOnly && pcWrapSync.dataset.recMonarchy !== '1') {
-            // The rec was hidden after this row rendered: rebuild the field in its
-            // Monarchy Only form so no (Start from Rec)/ghost text is left on screen.
-            var pcLabel = pcWrapSync.previousElementSibling;
-            var holder = document.createElement('div');
-            holder.innerHTML = cpPubCommentFieldHtml(caid, sa.RecReason, pcEl ? pcEl.value : (sa.PublicComment || ''), true, true);
-            while (holder.firstChild) pcWrapSync.parentNode.insertBefore(holder.firstChild, pcWrapSync);
-            if (pcLabel && pcLabel.classList.contains('cp-pc-label-row')) pcLabel.remove();
-            pcWrapSync.remove();
-            pcWrapSync = gid('cp-pcwrap-' + caid);
+        // The rec's Monarchy Only state is read live, so the field follows it both ways:
+        // hidden after this row rendered -> Monarchy Only form (no (Start from Rec) or
+        // ghost text left on screen); unhidden -> the ordinary inherit form again. A
+        // Monarchy Only row also rebuilds when its officer-only reference text changes
+        // (e.g. a pass-down made the reason visible to this officer).
+        if (pcWrapSync) {
+            var wasMonarchy = pcWrapSync.dataset.recMonarchy === '1';
+            var moReasonEl  = wasMonarchy ? pcWrapSync.querySelector('.cp-pc-monarchy-reason') : null;
+            var reasonMoved = wasMonarchy && sa.RecMonarchyOnly && moReasonEl
+                && moReasonEl.textContent !== cpMonarchyReasonText(sa.RecReason || '');
+            if (wasMonarchy !== !!sa.RecMonarchyOnly || reasonMoved) {
+                var pcLabel = pcWrapSync.previousElementSibling;
+                var holder = document.createElement('div');
+                holder.innerHTML = cpPubCommentFieldHtml(caid, sa.RecReason, pcEl ? pcEl.value : (sa.PublicComment || ''), !!sa.PublicCommentCleared, !!sa.RecMonarchyOnly);
+                while (holder.firstChild) pcWrapSync.parentNode.insertBefore(holder.firstChild, pcWrapSync);
+                if (pcLabel && pcLabel.classList.contains('cp-pc-label-row')) pcLabel.remove();
+                pcWrapSync.remove();
+                pcWrapSync = gid('cp-pcwrap-' + caid);
+            }
         }
-        if (pcWrapSync) pcWrapSync.dataset.recCleared = (sa.PublicCommentCleared || pcWrapSync.dataset.recMonarchy === '1') ? '1' : '0';
+        if (pcWrapSync) pcWrapSync.dataset.recCleared = sa.PublicCommentCleared ? '1' : '0';
         var flagsEl = row.querySelector('.cp-award-flags');
         if (flagsEl) {
             var localFlag = flagsEl.querySelector('.cp-flag-local');

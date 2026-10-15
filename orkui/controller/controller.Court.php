@@ -118,7 +118,7 @@ class Controller_Court extends Controller
             return;
         }
 
-        $courtAwards  = $this->Court->get_court_awards($court_id);
+        $courtAwards  = $this->Court->get_court_awards($court_id, $uid);
         // Non-award line items that share the running order with the awards.
         $courtNotes   = $this->Court->get_court_notes($court_id);
         $pendingRecs  = $this->Court->get_pending_recommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id, (string)$this->session->token);
@@ -267,7 +267,7 @@ class Controller_Court extends Controller
         $awardOptions = $this->Award->fetch_award_option_groups($court['KingdomId'], 'Awards');
 
         $this->data['Court']                  = $court;
-        $this->data['CourtAwards']            = $this->Court->get_court_awards($court_id);
+        $this->data['CourtAwards']            = $this->Court->get_court_awards($court_id, $uid);
         $this->data['GiverOptions']           = $this->Court->get_court_giver_options($court_id);
         $this->data['UpcomingEvents']         = $upcomingEvents;
         $this->data['CourtMode']              = $courtState['mode'] ?? 'run';

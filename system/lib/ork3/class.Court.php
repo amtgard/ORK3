@@ -448,21 +448,6 @@ class Court
     }
 
     /**
-     * True when the recommendation is Monarchy Only (any level). Any non-zero stored
-     * value counts — an out-of-range level is read as hidden, never as public.
-     */
-    private function isRecHidden($rec_id)
-    {
-        $rec_id = (int)$rec_id;
-        if ($rec_id <= 0) {
-            return false;
-        }
-        $this->db->Clear();
-        $mo = $this->db->DataSet('SELECT monarchy_only FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . $rec_id . ' LIMIT 1');
-        return (bool)($mo && $mo->Next() && (int)$mo->monarchy_only !== 0);
-    }
-
-    /**
      * May $caller_uid put recommendation $rec_id on a court line for $mundane_id?
      * The rec must exist and be ABOUT that recipient — otherwise any officer could
      * attach another player's rec id and read its reason and recommender back out
@@ -471,32 +456,20 @@ class Court
      */
     public function canUseRecForLine($rec_id, $mundane_id, $caller_uid = 0)
     {
-        $rec_id     = (int)$rec_id;
-        $mundane_id = (int)$mundane_id;
-        if ($rec_id <= 0 || $mundane_id <= 0) {
-            return false;
-        }
-        $this->db->Clear();
-        $rs = $this->db->DataSet(
-            'SELECT r.mundane_id, r.recommended_by_id, r.monarchy_only, r.passed_to_local, m.kingdom_id, m.park_id
-               FROM ' . DB_PREFIX . 'recommendations r
-               JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
-              WHERE r.recommendations_id = ' . $rec_id . ' LIMIT 1'
+        return $this->recUsableForLine(
+            Ork3::$Lib->recommendationvisibility->loadRec((int)$rec_id),
+            (int)$mundane_id,
+            (int)$caller_uid
         );
-        if (!$rs || !$rs->Next() || (int)$rs->mundane_id !== $mundane_id) {
+    }
+
+    /** canUseRecForLine() on a rec already loaded by RecommendationVisibility::loadRec(). */
+    private function recUsableForLine(?array $rec, int $mundane_id, int $caller_uid): bool
+    {
+        if ($rec === null || $mundane_id <= 0 || $rec['MundaneId'] !== $mundane_id) {
             return false;
         }
-        if ((int)$rs->monarchy_only === 0) {
-            return true;
-        }
-        return Ork3::$Lib->recommendationvisibility->canSee((int)$caller_uid, [
-            'MundaneId'       => (int)$rs->mundane_id,
-            'RecommendedById' => (int)$rs->recommended_by_id,
-            'KingdomId'       => (int)$rs->kingdom_id,
-            'ParkId'          => (int)$rs->park_id,
-            'MonarchyOnly'    => (int)$rs->monarchy_only,
-            'PassedToLocal'   => (int)$rs->passed_to_local,
-        ]);
+        return Ork3::$Lib->recommendationvisibility->canSee($caller_uid, $rec);
     }
 
     /**
@@ -537,8 +510,11 @@ class Court
             return false;
         }
 
-        // Object-level authorization for the recommendation itself.
-        if ($rec_id > 0 && !$this->canUseRecForLine($rec_id, $mundane_id, $caller_uid)) {
+        // Object-level authorization for the recommendation itself. Loaded once:
+        // its Monarchy Only state below comes from this same read.
+        $vis = Ork3::$Lib->recommendationvisibility;
+        $rec = $rec_id > 0 ? $vis->loadRec($rec_id) : null;
+        if ($rec_id > 0 && !$this->recUsableForLine($rec, $mundane_id, (int)$caller_uid)) {
             return false;
         }
 
@@ -611,20 +587,6 @@ class Court
             $scroll_status  = $existing['scroll_status'];
             $regalia_status = $existing['regalia_status'];
             $cleared        = $existing['cleared'];
-
-            // The line keeps whatever citation it already has, but if it is tied to a
-            // hidden rec and carries no typed comment, commitStagedAward would publish
-            // that rec's reason. Withhold it. A line tied to a different (public) rec
-            // is left alone: the citation it inherits is that public rec's reason.
-            if ($existing['rec_id'] > 0 && $existing['cleared'] === 0
-                && trim($public_comment) === '' && $this->isRecHidden($existing['rec_id'])) {
-                $this->db->Clear();
-                $this->db->Execute(
-                    'UPDATE ' . DB_PREFIX . 'court_award SET public_comment_cleared = 1
-                      WHERE court_award_id = ' . $court_award_id
-                );
-                $cleared = 1;
-            }
         } else {
             // Next sort_order — the bottom of the whole running order, notes included,
             // so a new award never lands above a trailing note.
@@ -633,11 +595,12 @@ class Court
             $rec_val   = $rec_id > 0 ? $rec_id : 'NULL';
             $notes_val = "'" . $this->esc($notes) . "'";
 
-            // A Monarchy Only recommendation's reason is officer-only. commitStagedAward
-            // publishes `public_comment ?: rec.reason` to the permanent, public award
-            // note unless the citation was explicitly cleared — so a line drawn from a
-            // hidden rec starts cleared, and only what an officer types is published.
-            $cleared = ($rec_id > 0 && trim((string)$public_comment) === '' && $this->isRecHidden($rec_id)) ? 1 : 0;
+            // public_comment_cleared is ONLY the officer's explicit "(Clear)". A Monarchy
+            // Only rec's reason is withheld by reading the rec's CURRENT state wherever
+            // the reason would be used (commitStagedAward, the planner, the Record view),
+            // not by a flag written here: a flag set at add time went stale when the rec
+            // was later unhidden, and the line then never inherited its reason.
+            $cleared = 0;
 
             $this->db->Clear();
             $this->db->Execute(
@@ -762,18 +725,20 @@ class Court
                 $is_title    = (bool)(int)$info->is_title;
             }
 
-            if ($rec_id) {
+            if ($rec !== null) {
+                // The caller passed recUsableForLine(), so it may see this reason.
                 $this->db->Clear();
-                $rr = $this->db->DataSet('SELECT reason, monarchy_only FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . $rec_id . ' LIMIT 1');
+                $rr = $this->db->DataSet('SELECT reason FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . $rec_id . ' LIMIT 1');
                 if ($rr && $rr->Next()) {
                     $rec_reason = $rr->reason ?? '';
-                    $rec_hidden = (int)$rr->monarchy_only !== 0;
                 }
+                $rec_hidden = $rec['MonarchyOnly'] !== 0;
             }
             // A repeat add can return a line tied to a SIBLING rec of the same honor;
             // the flag must describe what that line would publish.
             if (!$rec_hidden && $existing !== null && $existing['rec_id'] > 0 && $existing['rec_id'] !== $rec_id) {
-                $rec_hidden = $this->isRecHidden($existing['rec_id']);
+                $sibling    = $vis->loadRec($existing['rec_id']);
+                $rec_hidden = $sibling !== null && $sibling['MonarchyOnly'] !== 0;
             }
         }
 
@@ -990,14 +955,9 @@ class Court
             // The officer's explicit "publish nothing for this line" flag. Only an
             // explicitly cleared line suppresses the inherited recommendation
             // reason at commit; a line that merely happens to be blank still
-            // inherits, exactly as it always has.
-            // A line drawn from a Monarchy Only rec stays cleared whatever a (stale)
-            // client posts: its reason is never the public citation.
-            $sets[] = (int)$fields['PublicCommentCleared']
-                ? 'public_comment_cleared = 1'
-                : 'public_comment_cleared = IF(EXISTS(SELECT 1 FROM ' . DB_PREFIX . 'recommendations r
-                       WHERE r.recommendations_id = ' . DB_PREFIX . 'court_award.recommendations_id
-                         AND r.monarchy_only <> 0), 1, 0)';
+            // inherits, exactly as it always has. A Monarchy Only rec's reason is
+            // withheld by the commit-time re-read of the rec, not by this flag.
+            $sets[] = 'public_comment_cleared = ' . ((int)$fields['PublicCommentCleared'] ? 1 : 0);
         }
         if (array_key_exists('PassToLocal', $fields)) {
             $sets[] = 'pass_to_local = ' . ((int)$fields['PassToLocal'] ? 1 : 0);
@@ -1410,8 +1370,12 @@ class Court
     /**
      * All staged rows on a court with every field finalize needs to call
      * add_player_award, plus the owning court's context (park/kingdom/date/event).
+     *
+     * $caller_uid: RecReason is blanked on lines whose Monarchy Only rec the caller
+     * may not see (see withholdHiddenRecs). The commit never publishes a hidden rec's
+     * reason anyway; this keeps it out of the caller's hands too.
      */
-    public function getStagedAwards($court_id)
+    public function getStagedAwards($court_id, $caller_uid = 0)
     {
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -1447,6 +1411,36 @@ class Court
                     'CourtDate'             => $rs->court_date,
                     'EventCalendarDetailId' => (int)$rs->event_calendardetail_id,
                 ];
+            }
+        }
+        return $this->withholdHiddenRecs($rows, (int)$caller_uid);
+    }
+
+    /**
+     * Monarchy Only on a court line. A court line can carry a rec its court's
+     * managers may not see: a kingdom officer may put a kingdom-level hide on a PARK
+     * court, and a rec can be hidden after its line was staged. Such a caller keeps
+     * RecMonarchyOnly (the planner shows the "Monarchy Only" notice) but gets no
+     * RecReason and no RecByPersona. Visibility is RecommendationVisibility's rule,
+     * for the caller (the session user threaded from the controller); 0 sees none.
+     */
+    private function withholdHiddenRecs(array $rows, int $caller_uid): array
+    {
+        $vis  = Ork3::$Lib->recommendationvisibility;
+        $seen = [];
+        foreach ($rows as $i => $row) {
+            $rid = (int)($row['RecommendationsId'] ?? 0);
+            if (empty($row['RecMonarchyOnly']) || $rid <= 0) {
+                continue;
+            }
+            if (!isset($seen[$rid])) {
+                $seen[$rid] = $vis->canSeeRecId($caller_uid, $rid);
+            }
+            if (!$seen[$rid]) {
+                $rows[$i]['RecReason'] = '';
+                if (array_key_exists('RecByPersona', $row)) {
+                    $rows[$i]['RecByPersona'] = null;
+                }
             }
         }
         return $rows;
@@ -2486,7 +2480,12 @@ class Court
     // Court awards
     // -----------------------------------------------------------------------
 
-    public function getCourtAwards($court_id)
+    /**
+     * Every line on a court, for the planner and the Record view. $caller_uid is the
+     * officer viewing it: lines whose Monarchy Only rec they may not see come back
+     * without RecReason / RecByPersona (withholdHiddenRecs). 0 = sees none.
+     */
+    public function getCourtAwards($court_id, $caller_uid = 0)
     {
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -2594,7 +2593,7 @@ class Court
             }
         }
 
-        return array_values($awards);
+        return $this->withholdHiddenRecs(array_values($awards), (int)$caller_uid);
     }
 
     // -----------------------------------------------------------------------

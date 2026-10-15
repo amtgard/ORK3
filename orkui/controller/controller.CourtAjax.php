@@ -818,7 +818,7 @@ class Controller_CourtAjax extends Controller
 
         $this->load_model('Player');
 
-        $staged    = $this->Court->get_staged_awards($court_id);
+        $staged    = $this->Court->get_staged_awards($court_id, $uid);
         $committed = 0;
         $failed    = [];
         // Second line of defence against committing one honor twice. addAward now
@@ -1061,7 +1061,7 @@ class Controller_CourtAjax extends Controller
         // client has confirmed it is already holding this exact version; a client
         // that sends no SinceVersion still gets the complete payload every poll.
         if (!$unchanged) {
-            $state['awards_full'] = $this->Court->get_court_awards($court_id);
+            $state['awards_full'] = $this->Court->get_court_awards($court_id, $uid);
             $state['notes_full']  = $this->Court->get_court_notes($court_id);
         }
         $state['unchanged'] = $unchanged;

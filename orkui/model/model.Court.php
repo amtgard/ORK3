@@ -106,9 +106,11 @@ class Model_Court extends Model
     // Court awards
     // -----------------------------------------------------------------------
 
-    public function get_court_awards($court_id)
+    // $caller_uid: the session user. Lines whose Monarchy Only rec they may not see
+    // come back without the rec's reason and recommender.
+    public function get_court_awards($court_id, $caller_uid = 0)
     {
-        return $this->_court()->getCourtAwards($court_id);
+        return $this->_court()->getCourtAwards($court_id, $caller_uid);
     }
 
     public function add_award($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich = true, $caller_uid = 0)
@@ -220,9 +222,9 @@ class Model_Court extends Model
         return $this->_court()->unstageAward($court_award_id, $expectedRowVersion);
     }
 
-    public function get_staged_awards($court_id)
+    public function get_staged_awards($court_id, $caller_uid = 0)
     {
-        return $this->_court()->getStagedAwards($court_id);
+        return $this->_court()->getStagedAwards($court_id, $caller_uid);
     }
 
     public function count_staged_awards($court_id)
