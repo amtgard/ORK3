@@ -909,7 +909,6 @@
 		<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
 		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false)): ?>
 		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
-			<?php if ($CanManageKingdom ?? false): ?>
 			<div class="kn-report-cols">
 				<?php if ($CanManageKingdom ?? false): ?>
 				<div class="kn-report-group">
@@ -958,7 +957,6 @@
 				</div>
 				<?php endif; ?>
 			</div>
-			<?php endif; ?>
 
 			<!-- Court Planner subsection (relocated from former top-level tab) -->
 			<?php if ($CanManageCourt ?? false): ?>
