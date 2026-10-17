@@ -1719,7 +1719,8 @@ class Player extends Ork3
     {
         // Cold-cache the dedupe-by-date subquery costs ~185ms for the busiest player
         // in the DB (1500+ attendance rows). Memcache to convert most loads to ~1ms.
-        // Bust in Attendance::Add/Set/RemoveAttendance and SetPlayerReconciledCredits.
+        // Bust in Attendance::Add/Set/RemoveAttendance, SetPlayerReconciledCredits,
+        // and BonusCredit::grant/revoke.
         $ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)($request['MundaneId'] ?? 0)]);
         if (($cached = Ork3::$Lib->ghettocache->get('Player.GetPlayerClasses', $ck, 300)) !== false) {
             return $cached;
@@ -1751,7 +1752,17 @@ class Player extends Ork3
                     group by c.class_id
                 ";
         */
-        $sql = "select c.class_id, c.active, c.name as class_name, count(a.week) as weeks, sum(a.attendances) as attendances, sum(a.credits) as credits, cr.class_reconciliation_id, cr.reconciled
+        // Bonus credits (ork_bonus_credit, class.BonusCredit.php) are class credits
+        // that are NOT attendance -- "here's a credit for filling in the survey".
+        // They count toward levels and nowhere else, so this is the ONE query that
+        // reads them: folded into `credits` (every level computation and the
+        // player page read that figure) and also returned apart as BonusCredits.
+        // `attendances` and `weeks` stay attendance-only. coalesce() keeps a class
+        // with bonus credits but no sign-ins from summing to NULL.
+        $sql = "select c.class_id, c.active, c.name as class_name, count(a.week) as weeks, sum(a.attendances) as attendances,
+                        coalesce(sum(a.credits), 0) + coalesce(max(bc.bonus_credits), 0) as credits,
+                        coalesce(max(bc.bonus_credits), 0) as bonus_credits,
+                        cr.class_reconciliation_id, cr.reconciled
 					from " . DB_PREFIX . "class c
 						left join
 							(select ssa.class_id, count(ssa.attendance_id) as attendances, sum(ssa.credits) as credits, ssa.date_week6 as week
@@ -1761,6 +1772,11 @@ class Player extends Ork3
 								where
 									ssa.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'
 								group by ssa.class_id, ssa.date) a on a.class_id = c.class_id
+						left join
+							(select class_id, sum(credits) as bonus_credits
+								from " . DB_PREFIX . "bonus_credit
+								where mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "' and revoked_at is null
+								group by class_id) bc on bc.class_id = c.class_id
 						left join " . DB_PREFIX . "class_reconciliation cr on cr.class_id = c.class_id and cr.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'
                     where c.active = 1
 					group by c.class_id
@@ -1780,7 +1796,9 @@ class Player extends Ork3
                         'ClassName' => $r->class_name,
                         'Weeks' => $r->weeks,
                         'Attendances' => $r->attendances,
-                        'Credits' => $r->credits
+                        'Credits' => $r->credits,
+                        // A DECIMAL column comes back as a string; Credits is a double. Keep the pair the same type for API clients.
+                        'BonusCredits' => (float) $r->bonus_credits
                     );
             }
             $response['Status'] = Success();
