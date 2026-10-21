@@ -498,9 +498,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-sub-pronouns{font-style:italic;color:rgba(255,255,255,0.6)}
 .pn-sub-sep{margin:0 6px;color:rgba(255,255,255,0.4);font-size:10px}
 .pn-tooltip-trigger{position:relative;display:inline-flex;align-items:center}
-.pn-tooltip-trigger .pn-tooltip-text{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#2d3748;color:#fff;font-size:12px;font-weight:400;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
-.pn-tooltip-trigger:hover .pn-tooltip-text,.pn-tooltip-trigger:focus-within .pn-tooltip-text{display:block}
-html[data-theme="dark"] .pn-tooltip-trigger .pn-tooltip-text{background:var(--ork-bg-tertiary,#1a202c);border:1px solid var(--ork-border)}
+.pn-tooltip-trigger .pn-tooltip-text{display:none} /* text is shown via the fixed-position .pn-acct-help-bubble (revised.js) so the modal cannot clip it */
 .pn-about-empty{text-align:center;padding:40px 20px;color:#a0aec0;font-size:14px}
 .pn-about-layout{display:flex;gap:24px;align-items:flex-start}
 .pn-about-main{flex:1;min-width:0;position:relative}
@@ -794,7 +792,7 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-dm-hint i{color:#3182ce;margin-top:2px;flex-shrink:0}
 .pn-dm-hint strong{color:#1a365d}
 @media(max-width:600px){
-.pn-design-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pn-design-tabs{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
 .pn-name-part{flex:0 0 100%;min-width:0}
 .pn-name-core{flex:1 1 0;min-width:0}
 .pn-color-row{flex-direction:column;gap:8px}

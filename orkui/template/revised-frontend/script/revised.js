@@ -1726,6 +1726,44 @@ if (PnConfig.recError) {
             el.addEventListener('mouseleave', function() {
                 if (helpBubble) helpBubble.style.display = 'none';
             });
+            // The tip sits inside a <label>; don't let a click toggle the checkbox
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+    })();
+
+    // ---- Persona Display Controls tooltips (fixed-position so the scrolling modal can't clip them) ----
+    (function() {
+        var triggers = document.querySelectorAll('.pn-tooltip-trigger');
+        if (!triggers.length) return;
+        var bubble = null;
+        function show(t) {
+            var txt = t.querySelector('.pn-tooltip-text');
+            if (!txt) return;
+            if (!bubble) {
+                bubble = document.createElement('div');
+                bubble.className = 'pn-acct-help-bubble';
+                bubble.style.display = 'none';
+                document.body.appendChild(bubble);
+            }
+            bubble.textContent = txt.textContent;
+            bubble.style.display = 'block';
+            var r = t.getBoundingClientRect();
+            var w = bubble.offsetWidth, h = bubble.offsetHeight;
+            var left = Math.max(6, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 6));
+            var top = r.bottom + 6;
+            if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 6);
+            bubble.style.left = left + 'px';
+            bubble.style.top = top + 'px';
+        }
+        function hide() { if (bubble) bubble.style.display = 'none'; }
+        triggers.forEach(function(t) {
+            t.addEventListener('mouseenter', function() { show(t); });
+            t.addEventListener('mouseleave', hide);
+            t.addEventListener('focus', function() { show(t); });
+            t.addEventListener('blur', hide);
         });
     })();
 
@@ -9155,9 +9193,7 @@ $(document).ready(function() {
                 if (creditsField) creditsField.value = evGetSavedCredits();
                 $('#ev-PlayerName').val('');
                 $('#ev-MundaneId').val('');
-
-                var tabCount = document.querySelector('[data-tab="ev-tab-attendance"] .ev-tab-count');
-                if (tabCount) { tabCount.textContent = '(' + ((parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0) + 1) + ')'; }
+                // Tab badge is bumped once, inside evAppendAttendanceRow().
             } else {
                 var errorDiv = document.querySelector('.ev-att-form .ev-error') || document.createElement('div');
                 errorDiv.className = 'ev-error';

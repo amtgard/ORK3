@@ -392,6 +392,14 @@ html[data-theme="dark"] .pn-btn[data-tip]:hover::after,
 html[data-theme="dark"] .kn-md-help-btn[data-tip]:hover::after {
 	background: #4a5568; color: #f7fafc;
 }
+/* Actions column is the right-most cell: anchor tips to the button's right edge
+   so they grow leftwards instead of overflowing the page. !important beats the
+   long :not() chain in revised.css's generic [data-tip] rule. */
+.un-action-btns .pn-btn[data-tip]:hover::after {
+	left: auto !important; right: 0 !important; transform: none !important;
+	white-space: normal !important; min-width: 0 !important;
+	width: max-content; max-width: 200px;
+}
 
 /* Destructive-action color preserved across themes. Inline color:#e53e3e on
    buttons gets stomped by a dark-mode rule in revised.css; this class wins. */
