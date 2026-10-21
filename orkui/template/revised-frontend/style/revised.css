@@ -10892,6 +10892,8 @@ html[data-theme="dark"] .tn-ladder-peers { background: #1a202c; border-color: #2
     white-space: normal !important;
     text-align: left;
     font-weight: 400;
+    text-transform: none;   /* stat labels are uppercase; the tip copy is a sentence */
+    letter-spacing: normal;
 }
 .kn-admin-th-tip[data-tip]:hover::after,
 .kn-admin-field label i[data-tip]:hover::after {
@@ -10899,8 +10901,27 @@ html[data-theme="dark"] .tn-ladder-peers { background: #1a202c; border-color: #2
     transform: none !important;
 }
 .pk-stat-tip[data-tip]:hover::after { z-index: 600; }
+/* The hovered card lifts with a transform (own stacking context, z auto) and the hero content sits at z-index 2,
+   so without this the tip paints underneath the hero buttons on phones. */
+.pk-stat-card:hover { z-index: 3; }
 @media (max-width: 600px) {
     .pk-stat-tip[data-tip]:hover::after { width: 200px; max-width: 200px !important; }
+    /* Stat-card tips: anchor to the card (not the small icon) so they can never
+       leave the viewport. Cards sit in a 2-column grid: left-column cards anchor
+       the tip to their left edge, right-column cards (even) to their right edge. */
+    .pk-stat-card { position: relative; }
+    .pk-stat-card .pk-stat-tip { position: static !important; }
+    .pk-stat-card .pk-stat-tip[data-tip]:hover::after,
+    .pk-stat-card .pk-stat-tip-text {
+        left: 0 !important; right: auto !important; transform: none !important;
+        bottom: calc(100% + 6px) !important; top: auto !important;
+        width: min(220px, calc(100vw - 36px)) !important; max-width: calc(100vw - 36px) !important;
+    }
+    .pk-stat-card:nth-child(even) .pk-stat-tip[data-tip]:hover::after,
+    .pk-stat-card:nth-child(even) .pk-stat-tip-text {
+        left: auto !important; right: 0 !important;
+    }
+    .pk-stat-card .pk-stat-tip-text::after { display: none; }
 }
 
 /* Recs filter-help popover: on phones the 300px absolute popover (anchored to

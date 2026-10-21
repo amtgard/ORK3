@@ -1714,24 +1714,39 @@ if (PnConfig.recError) {
             }
             return helpBubble;
         }
+        var helpTipOpenEl = null;
+        function hideHelp() { helpTipOpenEl = null; if (helpBubble) helpBubble.style.display = 'none'; }
+        function showHelp(el) {
+            var b = ensureBubble();
+            b.textContent = el.getAttribute('data-tip');
+            var r = el.getBoundingClientRect();
+            b.style.display = 'block';
+            b.style.top  = (r.bottom + 6) + 'px';
+            b.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 286)) + 'px';
+            helpTipOpenEl = el;
+        }
         gid('pn-acct-overlay').querySelectorAll('.pn-acct-help-tip[data-tip]').forEach(function(el) {
-            el.addEventListener('mouseenter', function() {
-                var b = ensureBubble();
-                b.textContent = el.getAttribute('data-tip');
-                var r = el.getBoundingClientRect();
-                b.style.display = 'block';
-                b.style.top  = (r.bottom + 6) + 'px';
-                b.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 286)) + 'px';
-            });
-            el.addEventListener('mouseleave', function() {
-                if (helpBubble) helpBubble.style.display = 'none';
-            });
-            // The tip sits inside a <label>; don't let a click toggle the checkbox
+            el.addEventListener('mouseenter', function() { showHelp(el); el._tapShown = false; });
+            el.addEventListener('mouseleave', hideHelp);
+            // The tip sits inside a <label>; don't let a click toggle the checkbox. Tap toggles the bubble (touch).
             el.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
+                if (helpTipOpenEl === el && el._tapShown) { hideHelp(); return; }
+                showHelp(el); el._tapShown = true;
             });
         });
+        // Hide on scroll of any ancestor (capture), tap elsewhere, Escape, and modal close
+        window.addEventListener('scroll', hideHelp, true);
+        document.addEventListener('click', function(e) {
+            if (helpTipOpenEl && !(e.target.closest && e.target.closest('.pn-acct-help-tip'))) hideHelp();
+        }, true);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideHelp(); });
+        if (window.MutationObserver) {
+            new MutationObserver(function() {
+                if (!gid('pn-acct-overlay').classList.contains('pn-open')) hideHelp();
+            }).observe(gid('pn-acct-overlay'), { attributes: true, attributeFilter: ['class', 'style'] });
+        }
     })();
 
     // ---- Persona Display Controls tooltips (fixed-position so the scrolling modal can't clip them) ----
@@ -1758,13 +1773,37 @@ if (PnConfig.recError) {
             bubble.style.left = left + 'px';
             bubble.style.top = top + 'px';
         }
-        function hide() { if (bubble) bubble.style.display = 'none'; }
+        var openTrigger = null;
+        function hide() { openTrigger = null; if (bubble) bubble.style.display = 'none'; }
         triggers.forEach(function(t) {
-            t.addEventListener('mouseenter', function() { show(t); });
+            t.addEventListener('mouseenter', function() { show(t); openTrigger = t; t._tapShown = false; });
             t.addEventListener('mouseleave', hide);
-            t.addEventListener('focus', function() { show(t); });
+            t.addEventListener('focus', function() { show(t); openTrigger = t; });
             t.addEventListener('blur', hide);
+            // Tap/click toggles (touch); never let the tap reach an enclosing <label>/checkbox
+            t.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (openTrigger === t && t._tapShown) { hide(); return; }
+                show(t); openTrigger = t; t._tapShown = true;
+            });
         });
+        window.addEventListener('scroll', hide, true);
+        document.addEventListener('click', function(e) {
+            if (openTrigger && !(e.target.closest && e.target.closest('.pn-tooltip-trigger'))) hide();
+        }, true);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hide(); });
+        if (window.MutationObserver) {
+            var seenOv = [];
+            triggers.forEach(function(t) {
+                var ov = t.closest('.pn-overlay, [id$="-overlay"]');
+                if (!ov || seenOv.indexOf(ov) !== -1) return;
+                seenOv.push(ov);
+                new MutationObserver(function() {
+                    if (!ov.classList.contains('pn-open')) hide();
+                }).observe(ov, { attributes: true, attributeFilter: ['class', 'style'] });
+            });
+        }
     })();
 
     // ---- Add Dues Modal ----
