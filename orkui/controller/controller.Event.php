@@ -673,6 +673,10 @@ class Controller_Event extends Controller
             'display' => 'New Occurrence',
         ];
 
+        // BR-054: a park-owned event defaults "Held At" to its own park (user can still change it).
+        if ($at_park_id <= 0 && !empty($info['ParkId'])) {
+            $at_park_id = (int)$info['ParkId'];
+        }
         $this->data['AtParkId']   = $at_park_id;
         $this->data['AtParkName'] = '';
         $rawDate = trim($_GET['date'] ?? '');

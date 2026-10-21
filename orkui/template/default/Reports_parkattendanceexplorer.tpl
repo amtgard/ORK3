@@ -21,6 +21,9 @@ if ($grid_view && ($mode ?? '') === 'all_parks' && !empty($attendance)) {
         $period_totals[$period] = ($period_totals[$period] ?? 0) + $val;
         if (!in_array($period, $grid_periods)) $grid_periods[] = $period;
     }
+    // Merge in the full expected period list (empty periods render as 0), then sort chronologically.
+    foreach ((array)($all_periods ?? []) as $ap) { if (!in_array($ap, $grid_periods)) $grid_periods[] = $ap; }
+    sort($grid_periods, SORT_STRING);
     uasort($grid_parks, function($a, $b) { return strcmp($a['ParkName'], $b['ParkName']); });
     $grid_kingdom_row = ['ParkId' => 0, 'ParkName' => isset($kingdom_name) ? $kingdom_name : 'Kingdom', 'periods' => $period_totals];
 }
