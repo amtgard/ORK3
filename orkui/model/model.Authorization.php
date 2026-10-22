@@ -23,6 +23,16 @@ class Model_Authorization extends Model
         return $this->Authorization->RemoveAuthorization($request);
     }
 
+    public function is_idp_linked($mundane_id): bool
+    {
+        return $this->Authorization->IsIdpLinked($mundane_id);
+    }
+
+    public function ensure_idp_link($idp_user_id, $mundane_id): bool
+    {
+        return $this->Authorization->EnsureIdpLink($idp_user_id, $mundane_id);
+    }
+
     public function has_authority(int $uid, string $type, $id, ?string $role): bool
     {
         return $this->_authorization_gate()->check($uid, $type, $id, $role);
