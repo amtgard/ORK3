@@ -431,6 +431,66 @@ class Authorization extends Ork3
 		return $response;
 	}
 
+	/**
+	 * Read-only token check: who does this token belong to, and is it live?
+	 *
+	 * Authorize() with a Token validates it and then ROTATES it, so the caller's
+	 * old token dies and only the response carries the new one. Right for the
+	 * app that owns the token; fragile for third-party verification, where mORK
+	 * proves its identity to a site (Listmancer) by handing over its token and
+	 * the site would have to relay the rotated one back before anything else or
+	 * the player is silently logged out. This call rotates nothing, creates no
+	 * session, writes no $_SESSION, and returns no token, so a verifying site
+	 * never holds a token it could act with.
+	 *
+	 * Same validity and restriction rules as Authorize_h's token branch, except
+	 * the token is never echoed back in Status.Detail. ValidateSessionByToken's
+	 * throttled last_seen/expires slide still applies, as for any API call.
+	 *
+	 * @param array{Token?: string}|string $request
+	 * @return array{Status: array, UserId?: int, Timeout?: string, Client?: string}
+	 */
+	public function WhoAmI($request)
+	{
+		global $DB;
+		$token = is_array($request) ? (string)($request['Token'] ?? '') : (string)$request;
+		$response = array();
+
+		$mundane_id = $this->ValidateSessionByToken($token);
+		if ($mundane_id === 0) {
+			$response['Status'] = InvalidParameter(null, "Token could not be found or has expired.");
+			return $response;
+		}
+
+		$this->mundane->clear();
+		$this->mundane->mundane_id = $mundane_id;
+		if (!$this->mundane->find()) {
+			$response['Status'] = ProcessingError();
+			return $response;
+		}
+		if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+			$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
+			return $response;
+		}
+
+		$DB->Clear();
+		$DB->token = $token;
+		$rs = $DB->DataSet("SELECT expires, user_agent FROM " . DB_PREFIX . "session WHERE token = :token LIMIT 1");
+		$expires = '';
+		$client  = '';
+		if ($rs && $rs->Next()) {
+			// Same ISO 8601 shape Authorize() uses for Timeout.
+			$expires = date('c', strtotime((string)$rs->expires));
+			$client  = (string)$rs->user_agent;
+		}
+
+		$response['Status']  = Success();
+		$response['UserId']  = $mundane_id;
+		$response['Timeout'] = $expires;
+		$response['Client']  = $client;
+		return $response;
+	}
+
 	public function AuthorizeIdp()
 	{
 		$request = [
