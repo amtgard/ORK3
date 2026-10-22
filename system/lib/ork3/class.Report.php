@@ -431,7 +431,14 @@ class Report extends Ork3
             $masters_clause = "or COALESCE(alias.peerage, a.peerage) = 'Master'";
         }
         if (valid_id($request['IncludeLadder']) && is_numeric($request['LadderMinimum'])) {
-            $ladder_clause = " or (COALESCE(alias.is_ladder, a.is_ladder) = 1 and ma.rank >= $request[LadderMinimum])";
+            // Ladder = the alias says so, else the kingdom row, the catalog row, or
+            // the curated kingdom-original list (Award::sqlEffectiveIsLadder). The
+            // catalog flag alone misses every kingdom-original ladder -- Order of the
+            // Sharpshooter, Hunter, Raider and friends sit on award 94 "Custom Award"
+            // (is_ladder 0) or no catalog row at all -- so their grants never reached
+            // this report while the ladder grid and recommendations already listed
+            // them. Reported 2026-10-22 (Lichwood Grove: two Sharpshooters missing).
+            $ladder_clause = " or (COALESCE(alias.is_ladder, " . Award::sqlEffectiveIsLadder('ka', 'a') . ") = 1 and ma.rank >= $request[LadderMinimum])";
         }
         if (valid_id($request['IncludeTitles'])) {
             $title_clause =  "or COALESCE(alias.is_title, a.is_title) = 1";
