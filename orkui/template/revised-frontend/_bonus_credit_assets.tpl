@@ -495,6 +495,10 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         focus: function (e) { e.preventDefault(); },
         select: function (e, ui) {
             e.preventDefault();
+            // The Enter that picked this name must not also Add (see keydown
+            // below). The flag lives only for the rest of this event dispatch:
+            // a mouse pick sets it too, and it must not swallow a later Enter.
+            pickedByKey = true; setTimeout(function () { pickedByKey = false; }, 0);
             gid('bc-player').value = ui.item.name;
             gid('bc-player-id').value = ui.item.value;
             updateAdd();
@@ -516,7 +520,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         var btn = this, mid = gid('bc-player-id').value, cls = gid('bc-class').value, amt = gid('bc-credits').value;
         if (!current || !mid) return;
         btn.disabled = true;
-        jQuery.post(base + 'grant', { CategoryId: current.CategoryId, MundaneId: mid, ClassId: cls, Credits: amt }, function (r) {
+        jQuery.post(base + 'grant', { CategoryId: current.CategoryId, MundaneId: mid, ClassId: cls, Credits: amt, ScopeType: Cfg.scopeType, ScopeId: Cfg.scopeId }, function (r) {
             if (!r || r.status !== 0) { updateAdd(); feedback((r && r.error) || 'Could not add the credit.', false); return; }
             lastClass = parseInt(cls, 10);
             gid('bc-tbody').insertAdjacentHTML('afterbegin', rowHtml(r.credit, true));
@@ -532,13 +536,21 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
     // Enter adds only when a player is already chosen and the suggestion list is
     // closed. While the list is open, Enter belongs to the autocomplete (it picks
     // the highlighted name); without this check the same keypress also fired Add.
+    // jQuery UI's own keydown handler was bound first, so by the time this ran
+    // it had already picked the highlighted name, closed the list and (via
+    // select -> updateAdd) enabled Add: the "list is open" test passed and the
+    // same Enter granted the credit. Three independent tells, any one of which
+    // stops that: the list is still open (capture phase runs this first in
+    // current browsers), the select handler flagged this keypress, or jQuery UI
+    // already consumed it (it preventDefaults the Enter that picks an item).
+    var pickedByKey = false;
     gid('bc-player').addEventListener('keydown', function (e) {
         if (e.key !== 'Enter') return;
         var menuOpen = false;
         try { menuOpen = jQuery('#bc-player').autocomplete('widget').is(':visible'); } catch (err) {}
-        if (menuOpen) return;
+        if (menuOpen || pickedByKey || e.defaultPrevented) return;
         if (!gid('bc-add').disabled) { e.preventDefault(); gid('bc-add').click(); }
-    });
+    }, true);
 
     // ================= Credits tab (kingdom CREATE) =================
     function renderCategories() {

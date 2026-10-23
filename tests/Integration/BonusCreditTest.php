@@ -285,7 +285,7 @@ final class BonusCreditTest extends TestCase
             $sibling = $this->playerAt($this->siblingPark, 'bc-sibling');
             $r = $this->grant($parkOfficer, $sibling, $purple['CategoryId']);
             $this->assertSame(3, $r['Status']);
-            $this->assertStringContainsString('park', (string) $r['Error']);
+            $this->assertStringContainsString('authority', (string) $r['Error']);
             $this->assertSame([], $this->bonus->totalsByClass($sibling));
         }
         // Another kingdom's player: no authority there either.
@@ -303,7 +303,7 @@ final class BonusCreditTest extends TestCase
         $away        = $this->playerAt($this->otherPark, 'bc-away');
         $r = $this->grant($awayOfficer, $away, $purple['CategoryId']);
         $this->assertSame(3, $r['Status']);
-        $this->assertStringContainsString('another kingdom', (string) $r['Error']);
+        $this->assertStringContainsString('can only go to its own players', (string) $r['Error']);
         $this->assertSame([], $this->bonus->totalsByClass($away));
     }
 
@@ -330,8 +330,8 @@ final class BonusCreditTest extends TestCase
     {
         $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');
         $player   = $this->playerAt($this->park, 'bc-player');
-        $pool     = $this->reason($kOfficer, $this->kingdom, 'Pool', ['DefaultCredits' => 2]);
-        $many     = $this->reason($kOfficer, $this->kingdom, 'Many', ['DefaultCredits' => 1, 'Repeatable' => 1]);
+        $pool     = $this->category($kOfficer, $this->kingdom, 'Pool', ['DefaultCredits' => 2]);
+        $many     = $this->category($kOfficer, $this->kingdom, 'Many', ['DefaultCredits' => 1, 'Repeatable' => 1]);
         $bard     = $this->classId;
         $healer   = $this->fixture->secondClassId($bard);
 

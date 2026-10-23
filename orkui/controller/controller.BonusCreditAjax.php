@@ -194,6 +194,10 @@ class Controller_BonusCreditAjax extends Controller
             'Credits'   => $_POST['Credits'] ?? '',
             'Date'      => $_POST['Date'] ?? date('Y-m-d'),
             'Note'      => $_POST['Note'] ?? '',
+            // The page the grant is made from; the domain keeps the player
+            // inside it (a kingdom's page: its family; a park's page: its members).
+            'HostType'  => $_POST['ScopeType'] ?? '',
+            'HostId'    => $_POST['ScopeId'] ?? 0,
         ]);
         $this->envelope($r, ['credit' => $r['Credit'] ?? null, 'remaining' => $r['Remaining'] ?? null]);
     }

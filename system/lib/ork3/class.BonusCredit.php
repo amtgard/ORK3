@@ -616,6 +616,13 @@ class BonusCredit
         return null;
     }
 
+    private function parkName(int $parkId): string
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet('SELECT name FROM ' . DB_PREFIX . 'park WHERE park_id = ' . (int) $parkId);
+        return ($r && $r->Next()) ? (string) $r->name : '';
+    }
+
     private function kingdomName(int $kingdomId): string
     {
         $this->db->Clear();
@@ -800,7 +807,13 @@ class BonusCredit
     /**
      * Grant a credit for a category. $r keys: MundaneId, ClassId, CategoryId,
      * Credits (default: whatever is left of the allowance), Date (Y-m-d,
-     * default today), Note.
+     * default today), Note, and optionally HostType/HostId: the page the
+     * grant is made from ('kingdom'|'park' + id; 'ork' for the Admin panel).
+     * When given, the player must belong to that host -- a kingdom's page
+     * reaches its own and its principalities' players, a park's page its own
+     * members -- whatever authority the actor holds elsewhere. Without it an
+     * ORK admin on Goldenvale's page could grant to a Nine Blades player by
+     * typing a "NB:" search (Ken, 2026-10-15).
      *
      * The category's amount is an ALLOWANCE per player, not a fixed grant
      * (Ken, 2026-10-15): "worth 2" means a player may receive up to 2 credits
@@ -834,9 +847,36 @@ class BonusCredit
         if ($uid <= 0 || !$this->canGrantCategory($uid, $player['park_id'], $category)) {
             return $this->denied('You do not have authority to grant this credit to this player.');
         }
+        $hostType = (string) ($r['HostType'] ?? '');
+        $hostId   = (int) ($r['HostId'] ?? 0);
+        if ($hostType === 'kingdom' && valid_id($hostId) && !in_array($player['kingdom_id'], $this->kingdomFamily($hostId), true)) {
+            $who  = $player['persona'] !== '' ? $player['persona'] : 'This player';
+            $home = $player['kingdom_id'] > 0 ? $this->kingdomName($player['kingdom_id']) : '';
+            return $this->denied(
+                ($home !== '' ? $who . ' belongs to ' . $home . '. ' : $who . ' has no home kingdom. ')
+                . 'From this page you can only grant to players of ' . $this->kingdomName($hostId) . '; use their own kingdom\'s page.'
+            );
+        }
+        if ($hostType === 'park' && valid_id($hostId) && $player['park_id'] !== $hostId) {
+            $who  = $player['persona'] !== '' ? $player['persona'] : 'This player';
+            $home = $player['park_id'] > 0 ? $this->parkName($player['park_id']) : '';
+            return $this->denied(
+                ($home !== '' ? $who . ' belongs to ' . $home . '. ' : $who . ' has no home park. ')
+                . 'From this page you can only grant to members of ' . $this->parkName($hostId) . '; use their own park\'s page.'
+            );
+        }
         $family = $category['ScopeType'] === 'kingdom' ? $this->kingdomFamily($category['ScopeId']) : [];
         if (!self::covers($category['ScopeType'], $category['ScopeId'], $player, $family)) {
-            return $this->denied('This credit belongs to another kingdom; it can only go to that kingdom\'s own players.');
+            // The player is the odd one out, not the credit: the actor is
+            // looking at their own kingdom's category and typed a name from
+            // somewhere else. Name both sides so the fix is obvious.
+            $who   = $player['persona'] !== '' ? $player['persona'] : 'This player';
+            $owner = $category['ScopeName'] !== '' ? $category['ScopeName'] : $this->kingdomName((int) $category['ScopeId']);
+            $home  = $player['kingdom_id'] > 0 ? $this->kingdomName($player['kingdom_id']) : '';
+            return $this->denied(
+                ($home !== '' ? $who . ' belongs to ' . $home . '. ' : $who . ' has no home kingdom. ')
+                . '“' . $category['Name'] . '” is defined by ' . $owner . ' and can only go to its own players.'
+            );
         }
         if ($category['ScopeType'] === 'ork' && !$this->isAdoptedIn($category['CategoryId'], $this->kingdomAncestry($player['kingdom_id']))) {
             return $this->denied('This player\'s kingdom has not adopted this Amtgard-wide credit.');
