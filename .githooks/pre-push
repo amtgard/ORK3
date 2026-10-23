@@ -1,0 +1,62 @@
+#!/bin/sh
+#
+# ORK3 shared pre-push hook (versioned; activated via core.hooksPath=.githooks).
+#
+# Runs the architectural layering gate over every commit being pushed, so a
+# violation that slipped past pre-commit (`git commit --no-verify`, a rebase, a
+# cherry-pick, or a branch built before the gate existed) cannot reach the fork
+# and turn into a PR.
+#
+# Override a deliberate exception with:
+#     ORK3_ALLOW_LAYER_VIOLATION=1 git push …
+#
+# stdin: <local ref> <local sha> <remote ref> <remote sha>, one line per ref.
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+[ -z "$REPO_ROOT" ] && exit 0
+cd "$REPO_ROOT" || exit 0
+
+[ -x bin/check-layering.sh ] || exit 0
+
+ZERO=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+FAILED=0
+
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+    # Branch deletion — nothing to inspect.
+    [ "$LOCAL_SHA" = "$ZERO" ] && continue
+
+    if [ "$REMOTE_SHA" = "$ZERO" ]; then
+        # New branch on the remote: diff against wherever it forked from master.
+        BASE=$(git merge-base "$LOCAL_SHA" refs/remotes/origin/master 2>/dev/null) \
+            || BASE=$(git merge-base "$LOCAL_SHA" master 2>/dev/null)
+        [ -z "$BASE" ] && continue      # cannot establish a range — do not block
+        RANGE="$BASE..$LOCAL_SHA"
+    else
+        RANGE="$REMOTE_SHA..$LOCAL_SHA"
+    fi
+
+    # Nothing new to push on this ref.
+    [ -z "$(git rev-list -1 "$RANGE" 2>/dev/null)" ] && continue
+
+    echo "🔍 Layering gate: $RANGE"
+    bin/check-layering.sh --range "$RANGE" || FAILED=1
+done
+
+if [ "$FAILED" = 1 ]; then
+    if [ "${ORK3_ALLOW_LAYER_VIOLATION:-}" = "1" ]; then
+        echo ""
+        echo "⚠️  ORK3_ALLOW_LAYER_VIOLATION=1 — pushing despite the layering violations above."
+        exit 0
+    fi
+    echo ""
+    echo "❌ Push blocked: commits on this branch break the ORK3 layer separation."
+    echo "   Domain logic and SQL live in system/lib/ork3/; orkui/ reaches it only"
+    echo "   through orkui/model/ wrappers."
+    echo ""
+    echo "   Audit the whole tree:  bin/check-layering.sh --all"
+    echo "   Deliberate exception:  ORK3_ALLOW_LAYER_VIOLATION=1 git push …"
+    echo ""
+    exit 1
+fi
+
+exit 0
