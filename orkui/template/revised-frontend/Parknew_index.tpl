@@ -430,7 +430,7 @@
 	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('players')">
 		<div class="pk-stat-icon"><i class="fas fa-users"></i></div>
 		<div class="pk-stat-value"><?= $activePlayersYear ?></div>
-		<div class="pk-stat-label">Active Players</div>
+		<div class="pk-stat-label">Players, Last 6 Months <span class="pk-stat-tip" data-tip="Everyone who signed in at this park in the past 6 months. This is not the same as the Active Players report, which only counts players who meet the kingdom's attendance requirements, so that report's total is usually lower."><i class="fas fa-info-circle"></i></span></div>
 	</div>
 	<div class="pk-stat-card">
 		<div class="pk-stat-icon"><i class="fas fa-chart-bar"></i></div>
@@ -987,7 +987,7 @@
 				<?php if (count($allPlayers) > 0): ?>
 					<div class="pk-players-toolbar">
 						<span class="pk-players-toolbar-left">
-							<?= count($playerList) ?> active member<?= count($playerList) != 1 ? 's' : '' ?> (past 6 months)<?php if (count($allPlayers) > count($playerList)): ?> &middot; <?= count($allPlayers) ?> total<?php endif; ?>
+							<?= count($playerList) ?> member<?= count($playerList) != 1 ? 's' : '' ?> with a sign-in in the past 6 months <span class="pk-stat-tip" data-tip="Anyone who signed in in the past 6 months. The Active Players report instead applies the kingdom's attendance requirements, so its total is usually lower."><i class="fas fa-info-circle"></i></span><?php if (count($allPlayers) > count($playerList)): ?> &middot; <?= count($allPlayers) ?> total<?php endif; ?>
 						</span>
 						<div class="pk-players-toolbar-right">
 							<div class="pk-player-search-wrap">
@@ -3721,7 +3721,8 @@ function pkCopyEventLink(el) {
 		setTimeout(function() { el.classList.remove('pk-copied'); }, 1500);
 	});
 }
-window.pkRecActiveFilter = 'open';
+// Only default to 'open' when the viewer can see the pill bar to change it; otherwise show everything.
+window.pkRecActiveFilter = '<?= (!empty($CanAdminPark) || !empty($ViewerHasCircle)) ? 'open' : 'all' ?>';
 window.pkRecCircleAwardIds = <?= json_encode($ViewerCircleAwardIds ?? array()) ?>;
 $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	if (settings.nTable.id !== 'pk-rec-table') return true;

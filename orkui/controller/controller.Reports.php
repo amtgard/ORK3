@@ -1055,6 +1055,8 @@ class Controller_Reports extends Controller
                 'LocalPlayersOnly' => $form['LocalPlayersOnly']
             ));
             $this->data['mode'] = 'all_parks';
+            // Full ordered period list so the grid shows empty periods (as 0) in order.
+            $this->data['all_periods'] = $this->_generatePeriodLabels($rounded_start, $rounded_end, $period);
 
             if (is_array($result)) {
                 $attendance = $result['Attendance'];

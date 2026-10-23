@@ -2034,7 +2034,7 @@ var KnBannerConfig = {
 						<thead>
 							<tr>
 								<th>Title</th>
-								<th><span class="kn-admin-th-tip" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke).">Class <i class="fas fa-question-circle" style="font-size:9px;color:#a0aec0;cursor:help"></i></span></th>
+								<th><span class="kn-admin-th-tip" data-tip="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke).">Class <i class="fas fa-question-circle" style="font-size:9px;color:#a0aec0;cursor:help"></i></span></th>
 								<th>Min Att.</th>
 								<th>Cutoff</th>
 								<th>Period</th>
@@ -2135,7 +2135,7 @@ var KnBannerConfig = {
 								<input type="checkbox" id="kn-admin-new-istitle">
 							</div>
 							<div class="kn-admin-field">
-								<label>Title Class <i class="fas fa-question-circle" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
+								<label>Title Class <i class="fas fa-question-circle" data-tip="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
 								<input type="number" id="kn-admin-new-tclass" min="0" value="0" style="width:64px" disabled>
 							</div>
 						</div>
@@ -2167,7 +2167,7 @@ var KnBannerConfig = {
 								<input type="checkbox" id="kn-admin-custom-istitle">
 							</div>
 							<div class="kn-admin-field">
-								<label>Title Class <i class="fas fa-question-circle" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
+								<label>Title Class <i class="fas fa-question-circle" data-tip="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
 								<input type="number" id="kn-admin-custom-tclass" min="0" value="0" style="width:64px" disabled>
 							</div>
 						</div>
@@ -3502,6 +3502,8 @@ $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 window.knInitRecsTab = function() {
 	var $tbl = $('#kn-rec-table');
 	if (!$tbl.length) return;
+	// No pill bar rendered for this viewer: don't silently hide 'already' recs behind an invisible filter.
+	if (!document.querySelector('#kn-tab-recommendations .kn-rec-filter-bar')) window.knRecActiveFilter = 'all';
 	window.knRecCircleAwardIds = (function() { try { return JSON.parse($tbl.attr('data-circle-ids') || '[]'); } catch (e) { return []; } })();
 	if ($.fn.dataTable.isDataTable('#kn-rec-table')) {
 		$tbl.DataTable().destroy();

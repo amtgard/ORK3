@@ -140,8 +140,23 @@
 	$atParkCity       = trim($AtParkCity       ?? '');
 	$atParkProvince   = trim($AtParkProvince   ?? '');
 	$atParkPostalCode = trim($AtParkPostalCode ?? '');
-	$locationFallback = (!$locationDisplay && ($atParkCity || $atParkProvince))
-		? implode(', ', array_filter([$atParkCity, $atParkProvince])) : '';
+	// Prefer the park's street address ("123 Main St, City, ST") and fall back to "City, Province".
+	// City/province are skipped when the street field already embeds them (same dedupe as above).
+	$locationFallback = '';
+	// The occurrence form defaults Country to "United States", so a country alone is not a real location.
+	$_countryOnly = (trim($address) === '' && trim($city) === '' && trim($province) === '');
+	if ((!$locationDisplay || $_countryOnly) && ($atParkAddress || $atParkCity || $atParkProvince)) {
+		$_fbParts = [];
+		$_fbLower = strtolower($atParkAddress);
+		if ($atParkAddress !== '') $_fbParts[] = $atParkAddress;
+		if ($atParkCity !== '' && ($atParkAddress === '' || stripos($_fbLower, strtolower($atParkCity)) === false)) $_fbParts[] = $atParkCity;
+		// A map-picker address that already names the city also carries the state ("WA 98662, USA"), so
+		// don't append the spelled-out province after it.
+		$_fbHasCity = ($atParkAddress !== '' && $atParkCity !== '' && stripos($_fbLower, strtolower($atParkCity)) !== false);
+		if ($atParkProvince !== '' && ($atParkAddress === '' || (!$_fbHasCity && stripos($_fbLower, strtolower($atParkProvince)) === false))) $_fbParts[] = $atParkProvince;
+		$locationFallback = implode(', ', $_fbParts);
+		if (!$mapQueryAddress || $_countryOnly) $mapQueryAddress = implode(', ', array_filter([$atParkAddress, $atParkCity, $atParkProvince, $atParkPostalCode]));
+	}
 
 	// Park map link fallback: parse park location JSON when event has no map link
 	if (!$mapLink && $locationFallback) {
@@ -958,7 +973,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 		<div class="ev-stat-label">Starts At</div>
 	</div>
 	<?php $hasMapTab = (bool)($locationDisplay ?: $locationFallback); ?>
-	<?php $_dispLoc = $locationDisplay ?: $locationFallback; ?>
+	<?php $_dispLoc = ($_countryOnly && $locationFallback) ? $locationFallback : ($locationDisplay ?: $locationFallback); ?>
 	<div class="ev-stat-card ev-stat-card-location">
 		<div class="ev-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
 		<div class="ev-stat-value" style="font-size:14px;padding-top:3px">

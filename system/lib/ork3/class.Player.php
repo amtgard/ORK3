@@ -2467,17 +2467,31 @@ class Player extends Ork3
             $this->db->query($sql);
             $sql = "UPDATE " . DB_PREFIX . "event_rsvp SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
             $this->db->query($sql);
-            // class_reconciliation: unique key on (class_id, mundane_id) — deduplicate first
-            $sql = "DELETE FROM " . DB_PREFIX . "class_reconciliation
-					WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'
-					AND class_id IN (
-						SELECT class_id FROM (
-							SELECT class_id FROM " . DB_PREFIX . "class_reconciliation
-							WHERE mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "'
-						) AS existing
-					)";
+            // class_reconciliation: unique key on (class_id, mundane_id). Where both players
+            // have a row for a class, SUM the reconciled credits into the destination row
+            // (dropping the source's would lose credits), then move the remaining rows.
+            $_rc_from = (int)$fromMundane['id'];
+            $_rc_to   = (int)$toMundane['id'];
+            $this->db->Clear();
+            $_rc_rs = $this->db->DataSet("SELECT class_id, reconciled FROM " . DB_PREFIX . "class_reconciliation WHERE mundane_id = $_rc_from");
+            $_rc_rows = [];
+            if ($_rc_rs) {
+                while ($_rc_rs->Next()) {
+                    $_rc_rows[] = ['class_id' => (int)$_rc_rs->class_id, 'reconciled' => (int)$_rc_rs->reconciled];
+                }
+            }
+            $_merge_prior['source_class_reconciliation'] = $_rc_rows;
+            $this->db->Clear();
+            $sql = "UPDATE " . DB_PREFIX . "class_reconciliation d
+					JOIN " . DB_PREFIX . "class_reconciliation s ON s.class_id = d.class_id AND s.mundane_id = $_rc_from
+					SET d.reconciled = d.reconciled + s.reconciled
+					WHERE d.mundane_id = $_rc_to";
             $this->db->query($sql);
-            $sql = "UPDATE " . DB_PREFIX . "class_reconciliation SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+            $sql = "DELETE s FROM " . DB_PREFIX . "class_reconciliation s
+					JOIN " . DB_PREFIX . "class_reconciliation d ON d.class_id = s.class_id AND d.mundane_id = $_rc_to
+					WHERE s.mundane_id = $_rc_from";
+            $this->db->query($sql);
+            $sql = "UPDATE " . DB_PREFIX . "class_reconciliation SET mundane_id = $_rc_to WHERE mundane_id = $_rc_from";
             $this->db->query($sql);
             // whats_new_seen: unique key on (mundane_id, version) — deduplicate first
             $sql = "DELETE FROM " . DB_PREFIX . "whats_new_seen

@@ -854,6 +854,19 @@ class Event extends Ork3
                 $this->db->Execute('UPDATE ' . DB_PREFIX . 'event_calendardetail SET current = 0 WHERE event_id = ' . (int)$request['EventId']);
             }
 
+            // BR-054: no "Held At" park and no address/city/province given -> default to
+            // the parent event's own park so the occurrence still shows a location.
+            if (!valid_id($request['AtParkId'] ?? 0)
+                && trim((string)($request['Address'] ?? '')) === ''
+                && trim((string)($request['City'] ?? '')) === ''
+                && trim((string)($request['Province'] ?? '')) === '') {
+                $this->db->Clear();
+                $_evpark = $this->db->DataSet('SELECT park_id FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int)$request['EventId']);
+                if ($_evpark && $_evpark->Next() && valid_id($_evpark->park_id)) {
+                    $request['AtParkId'] = (int)$_evpark->park_id;
+                }
+            }
+
             $details   = $this->_geocodeCached($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);
             $geocode   = ($details && isset($details['Geocode'])) ? json_decode($details['Geocode']) : null;
             $latitude  = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lat : 0.0;

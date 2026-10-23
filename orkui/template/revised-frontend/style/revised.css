@@ -1141,7 +1141,7 @@ html[data-theme="dark"] .pn-form-error.pn-rec-suggest .pn-rec-suggest-link:hover
 }
 .pn-acct-help-bubble {
     position: fixed;
-    max-width: 280px;
+    max-width: min(280px, calc(100vw - 12px));
     background: #2d3748;
     color: #fff;
     font-size: 12px;
@@ -1150,7 +1150,7 @@ html[data-theme="dark"] .pn-form-error.pn-rec-suggest .pn-rec-suggest-link:hover
     padding: 8px 10px;
     border-radius: 6px;
     pointer-events: none;
-    z-index: 9999;
+    z-index: calc(var(--z-modal) + 1); /* above the modal overlay */
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 html[data-theme="dark"] .pn-acct-help-tip { background: var(--ork-border); color: var(--ork-text-muted); }
@@ -10878,3 +10878,66 @@ html[data-theme="dark"] .pk-field-count { color: #48bb78; }
     line-height  : 1.45;
 }
 html[data-theme="dark"] .tn-ladder-peers { background: #1a202c; border-color: #2d3748; color: #a0aec0; }
+
+/* Wrapping data-tip variants (generic tip uses min-width:max-content, which
+   never wraps long copy). Anchored to the trigger's left edge; the stat tip
+   is centered in a narrow card so it wraps to a fixed width. Dark mode colors
+   come from the generic html[data-theme="dark"] [data-tip] rule. */
+.pk-stat-tip[data-tip]:hover::after,
+.kn-admin-th-tip[data-tip]:hover::after,
+.kn-admin-field label i[data-tip]:hover::after {
+    min-width: 0 !important;
+    width: 240px;
+    max-width: 240px !important;
+    white-space: normal !important;
+    text-align: left;
+    font-weight: 400;
+    text-transform: none;   /* stat labels are uppercase; the tip copy is a sentence */
+    letter-spacing: normal;
+}
+.kn-admin-th-tip[data-tip]:hover::after,
+.kn-admin-field label i[data-tip]:hover::after {
+    left: 0 !important;
+    transform: none !important;
+}
+.pk-stat-tip[data-tip]:hover::after { z-index: 600; }
+/* The hovered card lifts with a transform (own stacking context, z auto) and the hero content sits at z-index 2,
+   so without this the tip paints underneath the hero buttons on phones. */
+.pk-stat-card:hover { z-index: 3; }
+@media (max-width: 600px) {
+    .pk-stat-tip[data-tip]:hover::after { width: 200px; max-width: 200px !important; }
+    /* Stat-card tips: anchor to the card (not the small icon) so they can never
+       leave the viewport. Cards sit in a 2-column grid: left-column cards anchor
+       the tip to their left edge, right-column cards (even) to their right edge. */
+    .pk-stat-card { position: relative; }
+    .pk-stat-card .pk-stat-tip { position: static !important; }
+    .pk-stat-card .pk-stat-tip[data-tip]:hover::after,
+    .pk-stat-card .pk-stat-tip-text {
+        left: 0 !important; right: auto !important; transform: none !important;
+        bottom: calc(100% + 6px) !important; top: auto !important;
+        width: min(220px, calc(100vw - 36px)) !important; max-width: calc(100vw - 36px) !important;
+    }
+    .pk-stat-card:nth-child(even) .pk-stat-tip[data-tip]:hover::after,
+    .pk-stat-card:nth-child(even) .pk-stat-tip-text {
+        left: auto !important; right: 0 !important;
+    }
+    .pk-stat-card .pk-stat-tip-text::after { display: none; }
+}
+
+/* Recs filter-help popover: on phones the 300px absolute popover (anchored to
+   the info button) runs off the viewport. Pin it to the viewport with 8px
+   insets and let it scroll. Dark mode colors are inherited from the base rules
+   plus the existing html[data-theme="dark"] .kn-rec-filter-popover block. */
+@media (max-width: 600px) {
+    .kn-rec-filter-popover {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        top: auto;
+        bottom: 8px;
+        width: auto;
+        max-height: 70vh;
+        overflow: auto;
+        z-index: 1000;
+    }
+}
