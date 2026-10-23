@@ -5,7 +5,7 @@ Status: Draft for review
 
 ## 1. Goal
 
-A report, **Population Explorer**, that lets officers pull a list of players and
+A report, **Population Explorer**, that lets any logged-in user (officers included) pull a list of players and
 details using an AND/OR filter builder.
 
 A filter row is `Criteria | Operand | Value`. Rows are grouped with AND/OR, and
@@ -27,15 +27,15 @@ runs it, views the table, exports it, and can share the exact query as a link.
 
 | Topic | Decision |
 |---|---|
-| Who / scope | Officers see players in **their own kingdom or park**. Only global admins may choose another kingdom. Same gate pattern as the other scoped `Reports/*` pages. |
+| Who / scope | **Any logged-in user** may run it for **any kingdom or park** (owner decision 2026-10-01). Anonymous users are sent to Login. The **Suspended** and **Banned** criteria are *restricted*: they need officer authority over the scope being viewed (global admin, kingdom `AUTH_EDIT` for that kingdom, or for a park either park `AUTH_CREATE` for that park or kingdom `AUTH_EDIT` for the park's kingdom; see §3.3). |
 | Personal data | **No real-name or email columns in v1.** `restricted` players show persona only. |
 | v1 extras | **Excel (.xlsx) export** and **shareable URL** (query encoded in the link). No saved queries, no new tables, no migration. |
 | Criteria / columns | The catalog in section 4. |
 | Approach | **A:** compile the validated tree to one SQL query from a registry of whitelisted fragments. |
 
 Non-goals: saved queries, drag-reordering columns, event-attendance and
-officer-role criteria, real-name/email columns, anything cross-kingdom for
-non-admins.
+officer-role criteria, real-name/email columns, ladder ranks as display columns,
+anonymous (logged-out) access.
 
 ## 3. Architecture
 
@@ -79,7 +79,7 @@ Validation (reject with a message naming the offending rule; build no SQL):
 
 - criterion id exists in the registry; operand allowed for that criterion
 - value matches the type: ISO `YYYY-MM-DD` regex, `(int)` casts, `between`
-  needs two ordered values, ids checked against known parks / kingdoms /
+  needs two values (sorted ascending if reversed, see §3.4), ids checked against known parks / kingdoms /
   classes / peerage orders, bool enum
 - tree depth ≤ 6, total leaves ≤ 40, `IN`-list size ≤ 100
 - columns exist in the column registry; Persona is always included
@@ -99,41 +99,110 @@ user tree, so no tree can widen it:
 - Kingdom: `k.kingdom_id IN (stats ids)` via the same
   `Ork3::$Lib->kingdom->GetStatsKingdomIds()` helper `GetPlayerRoster` uses
   (includes principalities per the statistics setting).
-- Park: `m.park_id = ?` plus its kingdom.
-- Global admin may supply a `kingdom_id`; for anyone else a supplied id is
-  checked with the same authority helpers the other report scopes use and
-  otherwise rejected with a `status: 5`-style authorization error (never silently
-  widened or narrowed).
+- Park: `m.park_id = P AND m.kingdom_id = <P's kingdom>` (same as `GetPlayerRoster`'s park scope).
+- **Access:** any valid session token may use any existing kingdom or park as its
+  scope. A missing or non-existent scope id is rejected. The scope comes from the
+  request (`KingdomId`/`ParkId`) or, failing that, from the session's park/kingdom.
+- **Officer authority** over the scope is:
+  - global admin;
+  - kingdom `AUTH_EDIT` for that kingdom (principalities resolve through `HasAuthority`'s
+    parent walk);
+  - for a park: park `AUTH_CREATE` for that park, **or** kingdom `AUTH_EDIT` for the
+    park's kingdom, so kingdom officers are officers for their own parks (owner intent
+    "park or kingdom level officer", ruling A1, 2026-10-01). The old
+    `Report::_authorizeKingdomParkReportScope` rule did not include that last case. It only unlocks **restricted criteria** (`suspended`, `banned`):
+  - for non-officers they are left out of `PublicRegistry` (not in the picker);
+  - `NormalizeTree` rejects them on that rule with "This filter requires officer
+    access for this kingdom or park.", whether they arrive in the JSON body, a
+    share link or an export.
 
 ### 3.4 Execution
 
-One query on `ork_mundane m` joined to `ork_kingdom k` / `ork_park p`, with:
+Two queries on `ork_mundane m` (performance pass, 2026-10-01; results unchanged):
+first the matching ids in report order, capped, with `COUNT(*) OVER ()` as the true
+Total from the same single evaluation of the filter; then the selected columns for
+exactly those ids, joined to `ork_kingdom k` / `ork_park p`. With:
 
-- criteria fragments as correlated subqueries / `EXISTS` (e.g. last sign-in is
-  `(select max(a.date) from ork_attendance a where a.mundane_id = m.mundane_id)`,
-  the existing `idx_sor_mundane_date` pattern)
-- output columns as scalar subqueries, **lazy** (only selected columns cost anything)
-- `GROUP BY m.mundane_id` plus `m.mundane_id` as the final ORDER BY tiebreaker,
-  matching `GetPlayerRoster`
+- criteria fragments as correlated subqueries, written as per-player index probes
+  (e.g. last sign-in is `(select a.date from ork_attendance a where a.mundane_id =
+  m.mundane_id order by a.date desc limit 1)`, the newest `idx_sor_mundane_date`
+  entry; "holds an award" is `(select 1 ... limit 1) is not null` with
+  `w.award_id in (0, ids)` checked on `idx_awards_mundane_award_rank_date`, because
+  MariaDB turns a correlated `EXISTS` into a full scan of `ork_awards`; aliased rows
+  come from one uncorrelated lookup on `idx_alias_award_id`)
+- output columns as scalar subqueries, **lazy** (only selected columns cost anything,
+  and only for the listed rows)
+- no outer `GROUP BY` (every join is 1:1 on a primary key and every fragment is a
+  scalar subquery or a probe, so rows cannot multiply); `m.mundane_id` is the final
+  ORDER BY tiebreaker; the order key is `CONCAT(m.persona)` (the same value and
+  collation as `persona`), so MariaDB sorts the scope instead of walking the whole
+  persona index
+- SQL emission only (the validated tree and every rule path stay as the user built
+  them): identical sibling rules compile once; under OR the "holds one of these
+  awards" rules (has award, peerage has any / yes) merge into one probe over the
+  union of ids, under AND their "holds none" forms do; each group's parts are
+  emitted cheapest first (columns of `m`, then single probes, then aggregates)
+- every statement of a run (the ids, the columns, and the scope count) runs under
+  its own MariaDB statement timeout (10 s each, so up to three per run); a timeout is
+  reported to the user as "query took too long — narrow your filter"
+- the three statements read one snapshot: `START TRANSACTION WITH CONSISTENT
+  SNAPSHOT, READ ONLY` (REPEATABLE READ) on the same connection, committed in a
+  `finally`. The InnoDB tables (players, attendance, awards) therefore describe the
+  same moment for the listed rows, their columns, Total and the scope count. The
+  MyISAM reference tables (`ork_kingdom`, `ork_park`, `ork_dues`, `ork_kingdomaward`,
+  `ork_award`, `ork_class`) are not transactional and are read as of each statement.
+  If a transaction is already open, the run reads without a snapshot.
+- one run at a time per player: `GET_LOCK('pe:<database>:<mundane_id>', 0)` around
+  the run (export included; the database is in the name because named locks are
+  server-wide); a second request while one is going is refused at once with
+  "Another Population Explorer run of yours is still in progress — please wait for
+  it to finish." (JSON `busy: true`, export HTTP 429 with `Retry-After: 5`). The two
+  endpoints release the PHP session (`session_write_close()`) as soon as they have
+  read the token, so a long run does not hold up that browser's other pages, and a
+  second run from another tab, browser or device is refused by this lock rather
+  than queued behind the session lock
 - result cap **5,000 rows**; the response carries `truncated: true` and the true
-  total (`count(*)` of the same predicate) so the UI can say "showing 5,000 of N"
+  total (every match of the same predicate) so the UI can say "showing 5,000 of N"
 
 Semantics fixed here:
 
 - **Last Class** = class on the player's most recent sign-in that has a class.
+- **Last sign-in days ago** = `DATEDIFF(CURDATE(), last sign-in date)`, using the
+  same last-sign-in expression as "Last sign-in date". Players who have never signed in
+  are **not matched** by any operator (owner decision 2026-10-01). Use Total sign-ins = 0
+  to find them.
+- **BETWEEN takes its two values in either order.** For every date and number
+  criterion, the server sorts the pair ascending instead of rejecting it, and the
+  builder swaps the two inputs on blur so the screen matches what runs. Both ends are
+  inclusive.
+- **Player Since** = the player's first sign-in date on or after `1988-01-01`, the same
+  floor `Player::get_earliest_attendance_date` uses for the profile (earlier rows are
+  `0000-00-00` or typo dates). `player_since_override` is not used: that column is not
+  on master.
+- **Last Sign-in Park** = the park of the most recent sign-in, with ties broken by the
+  highest attendance id. An event sign-in with no park (`park_id = 0`) counts as no park,
+  so the column is blank and park filters treat it as NULL (no match for IS NOT / NOT IN).
+- **Award dates** (`award_date_any`) ignore held awards dated before `1980-01-01`
+  (`0000-00-00` or typo years mean "unknown"), per the awards data-mining convention.
+- **Classes played in last N months** with IS NOT / NOT IN means "did not play those
+  classes in the window", so it also matches players with no sign-ins in the window.
+  The operand note says so.
 - **Peerage held** counts non-revoked, non-stripped awards (`revoked = 0` and
   `coalesce(stripped_from,0) = 0`; `stripped_from` is NULL or 0 on normal rows) whose `ork_award.peerage` is Knight / Master / Paragon /
   Squire / Page / Man-At-Arms; the knight "order" is the award itself
   (Flame, Sword, Crown, Serpent…).
-- **Dues Paid** = `ork_split.is_dues = 1` with `dues_through >= curdate()` within
-  scope, as the existing Dues report computes it.
+- **Dues Paid / Dues Through** are computed exactly as the existing Dues report
+  (`Report::GetDuesPaidList`) computes them, from the live `ork_dues` table
+  (including lifetime dues), within scope. (The legacy `ork_split` ledger is not
+  used: it holds only a handful of recent dues rows.)
 - **Active / Waivered / Suspended / Banned** map to `m.active`, `m.waivered`,
   `m.suspended`, `m.penalty_box`.
 
 ### 3.5 Share link and export
 
 - **Share link:** the validated `{tree, columns}` JSON, base64url-encoded into
-  `&q=` on the report URL. On load the server decodes and **re-validates** it
+  `&pe=` on the report URL (not `q`, which Google Analytics logs as a site
+  search). On load the server decodes and **re-validates** it
   like any other request; a hand-edited link is no riskier than typing the same
   thing into the form. Oversized payloads (> 8 KB) are rejected with a message
   rather than truncated. Scope is never taken from the link beyond what the
@@ -141,7 +210,7 @@ Semantics fixed here:
 - **Export:** `Reports/population_explorer_export` re-runs the same compiled
   query server-side (POST, logged-in session required, scope re-derived server-side exactly as for Run) and streams an `.xlsx` (Excel only in v1; CSV is not offered, since Excel opens everywhere and avoids CSV quoting/encoding issues) built with `system/lib/vendor/SimpleXlsx.php`
   (pure-PHP writer; no `ZipArchive`). Same 5,000-row cap, with a note row when
-  truncated. Dates are real date cells.
+  truncated. Dates are written as ISO `YYYY-MM-DD` text (the pure-PHP `SimpleXlsx` writer has no date cell style). `SimpleXlsx.php` is vendored verbatim into `system/lib/vendor/` (it is not yet on master).
 
 ## 4. Catalog (v1)
 
@@ -149,14 +218,28 @@ Semantics fixed here:
 
 | Group | Criteria | Operands |
 |---|---|---|
-| Activity | Last Sign-In Date; Sign-ins in last N months (N per row); Total sign-ins; Player Since (first sign-in) | `=  ≠  >  ≥  <  ≤  between` |
+| Activity | Last sign-in date; Last sign-in days ago (whole days); Sign-ins in last N months (N per row); Total sign-ins; Player Since (first sign-in) | `=  ≠  >  ≥  <  ≤  between` |
 | Activity | Last Class; Classes played in last N months | `IS  IS NOT  IN  NOT IN` |
 | Location | Home Kingdom; Home Park; Last Sign-in Park | `IS  IS NOT  IN  NOT IN` |
 | Status | Dues Paid; Waivered; Active; Suspended; Banned | `IS Yes / No` |
 | Status | Dues Through date | date operands |
-| Peerage | Knighthood held (by order); Masterhood held; Paragon held; Squire / Page / Man-At-Arms held | `HAS ANY / HAS ALL / HAS NONE`, plus `IS Yes/No` for "any" |
-| Awards | Has award X; award count; awarded after / before date | has / has not; number and date operands |
+| Peerage | Knighthood held (by order); Masterhood held; Paragon held; Squire / Page / Man-At-Arms held (exactly those three; Lords-Page and Apprentice are not included) | `HAS ANY / HAS ALL / HAS NONE`, plus `IS Yes/No` for "any" |
+| Awards | Has award X; award count; awarded after / before date | has / has not; number operands; date operands `>  ≥  <  ≤  between` (no `=`/`≠`) |
 | Qualifications | Reeve qualified; Corpora qualified | `IS Yes / No` |
+| Ladder Award Ranks | One criterion per ranked ladder: the 15 global ladders the Ladder Award Grid uses (`ork_award.is_ladder = 1`, excluding Walker in the Middle, id 31), labelled with the kingdom's own name where it renames one, **plus** every kingdom-only ladder of the kingdoms in scope. A kingdom-only ladder is a kingdom award in master's existing list, `Award::pseudoLadderKingdomAwardIds()`; it may sit on a generic award such as Custom Award, id 94. `ork_kingdomaward.is_ladder` is not on master, so swap to that column when the award-management branch merges. | `=  ≠  >  ≥  <  ≤  between` (integer) |
+
+**Ladder rank semantics:**
+- A player's rank in a ladder is `GREATEST(MAX(rank), COUNT(*))` over that player's
+  *held* awards in that ladder (the Ladder Award Grid's rule; many rows have no rank).
+  "Held" is the report's usual rule: `revoked = 0`, not stripped, alias resolved.
+- A player with no award in the ladder has rank **0**, never NULL, so `≠` and `<`
+  include them. The operand note says this.
+- Global ladders match on the resolved award id. Kingdom-only ladders match on
+  `w.kingdomaward_id`.
+- Criterion ids are generated per ladder: `ladder_a<award_id>` for global ladders and
+  `ladder_k<kingdomaward_id>` for kingdom-only ones. They are added to the registry at
+  run time for the current scope. A kingdom-only ladder outside the scope is rejected
+  on that rule.
 
 **Output columns:** Persona (always), Home Park, Home Kingdom, Last Sign-In Date,
 Last Sign-In Park, Last Class, Sign-ins (last 6 months), Total Sign-ins, Player
@@ -183,9 +266,15 @@ header with scope chip, `.rp-context` explainer, `.rp-stats-row` (result count,
   extra `N` input for the "last N months" criteria.
 - Columns card: grouped checkboxes, Persona locked, sensible defaults, Reset.
   Order follows the checkbox order.
-- Run is explicit (button), not on keystroke. Results: DataTables table,
-  **Export** and **Copy link** buttons, `.rp-empty-state`, a loading state, and
-  per-rule inline validation errors.
+- Run is explicit (button), not on keystroke. Run, Copy link and Export sit in one action bar OUTSIDE the collapsible Filters and Columns cards (always visible, between the cards and Results). A successful Run collapses both cards unless the builder was edited while that run was in flight; in that case the cards stay open, the results are marked "Filters changed since last run", and focus is not moved. Results: DataTables table,
+  `.rp-empty-state`, a loading state, and per-rule inline validation errors.
+- Filters and Columns are collapsible cards: the header toggle (`aria-expanded`) shows a
+  one-line summary while folded ("3 rules (AND)", "4 selected", "changed since last run").
+  A rule error re-opens Filters.
+- A **Help** button in the page header opens the guide: a modal dialog (focus trapped,
+  page behind inert, Esc / close button / backdrop close it, focus returns to Help) with
+  static prose plus a criteria reference generated from the same registry as the picker,
+  so restricted criteria appear only for officers.
 - Tooltips use `data-tip`, never `title`. No native `alert/confirm/prompt`.
 - Dark mode via `html[data-theme="dark"]` for the builder's own pieces (groups,
   segmented toggles, chips), verified on computed styles in both themes
@@ -216,8 +305,10 @@ header with scope chip, `.rp-context` explainer, `.rp-stats-row` (result count,
    empty IN, oversized link).
 3. **Injection tests**: hostile strings in every value slot produce a rejection
    or a harmless literal — never changed SQL.
-4. **Authorization**: a park officer cannot read another park/kingdom by
-   altering the request or the share link; admin can.
+4. **Authorization**: any logged-in user can run any scope; anonymous cannot;
+   restricted criteria (suspended, banned) are hidden from and rejected for
+   non-officers of the scope, including an officer of a *different* park/kingdom,
+   via JSON body, share link and export; officers of the scope and admins can use them.
 5. **Performance**: run the slowest criteria (sign-ins in last N months, Last
    Class, award count) on the largest kingdom (~15.8k players); record timings
    in the PR. Target: each single criterion and the example query in
@@ -230,8 +321,8 @@ header with scope chip, `.rp-context` explainer, `.rp-stats-row` (result count,
 ## 8. Rollout
 
 - No migration. No new tables.
-- Add the report link to the Kingdom and Park reports tabs; add a What's New
-  entry per the release-notes convention.
+- Add the report link to the Kingdom and Park reports tabs. No What's New entry and
+  no version bump: it ships under 3.5.5 Hydra (owner decision, 2026-10-01).
 - Verify every claim above (including "no migration") against the branch before
   declaring done.
 

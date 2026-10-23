@@ -190,6 +190,11 @@
 					<i class="fas fa-medal"></i> Enter Awards
 				</button>
 			<?php endif; ?>
+			<?php if (!empty($CanBonusCredits)): ?>
+				<button class="kn-btn kn-btn-outline" onclick="bcOpen()">
+					<i class="fas fa-star"></i> Bonus Credits
+				</button>
+			<?php endif; ?>
 			<a class="kn-btn kn-btn-outline" href="#" onclick="knActivateTab('map');return false;">
 				<i class="fas fa-map"></i> Map
 			</a>
@@ -829,6 +834,7 @@
 							<li><a href="<?= UIR ?>Reports/corpora/Kingdom&id=<?= $kingdom_id ?>">Corpora Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
+							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
 						</ul>
@@ -841,8 +847,8 @@
 							<li><a href="<?= UIR ?>Reports/player_award_recommendations&KingdomId=<?= $kingdom_id ?>">Recommendations</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/knights_and_masters&KingdomId=<?= $kingdom_id ?>">Knights &amp; Masters</a></li>
-							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
 							<?php if ($IsLoggedIn): ?>
+							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
 							<li><a href="<?= UIR ?>Reports/knights_list&KingdomId=<?= $kingdom_id ?>">Knights</a></li>
 							<li><a href="<?= UIR ?>Reports/masters_list&KingdomId=<?= $kingdom_id ?>">Masters</a></li>
 							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?>-level Awards</a></li>
@@ -850,6 +856,7 @@
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>">Ladder Award Grid</a></li>
 											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>">Custom Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/beltline_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-sitemap"></i> Beltline Explorer</a></li>
+							<li><a href="<?= UIR ?>Reports/award_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-award"></i> Award Explorer</a></li>
 							<?php endif; ?>
 						</ul>
 					</div>
@@ -907,7 +914,6 @@
 		<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
 		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false)): ?>
 		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
-			<?php if ($CanManageKingdom ?? false): ?>
 			<div class="kn-report-cols">
 				<?php if ($CanManageKingdom ?? false): ?>
 				<div class="kn-report-group">
@@ -956,7 +962,6 @@
 				</div>
 				<?php endif; ?>
 			</div>
-			<?php endif; ?>
 
 			<!-- Court Planner subsection (relocated from former top-level tab) -->
 			<?php if ($CanManageCourt ?? false): ?>
@@ -3566,4 +3571,16 @@ window.OrkRsCfg = {
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
 <?php include __DIR__ . '/_monarchy_only_assets.tpl'; ?>
+<?php endif; ?>
+<?php if (!empty($CanBonusCredits)): ?>
+<script>
+window.OrkBcCfg = {
+	uir:       '<?= UIR ?>',
+	scopeType: 'kingdom',
+	scopeId:   <?= (int)($kingdom_id ?? 0) ?>,
+	scopeName: <?= json_encode($kingdom_name ?? '') ?>,
+	kingdomId: <?= (int)($kingdom_id ?? 0) ?>
+};
+</script>
+<?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
 <?php endif; ?>

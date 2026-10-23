@@ -371,7 +371,12 @@ var AWARD_DESCRIPTIONS = {
 function orkInitTheme() {
     if (orkInitTheme._done) return;
     orkInitTheme._done = true;
-    var stored = localStorage.getItem('ork_theme');
+    // localStorage can THROW, not merely return null: blocked site data, a
+    // private window, some privacy extensions. Unguarded, the exception escaped
+    // before data-theme was set and the page fell through to the OS preference,
+    // showing dark to someone who had chosen light.
+    var stored = null;
+    try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
     if (stored === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
     } else if (stored === 'light') {
@@ -384,19 +389,20 @@ function orkInitTheme() {
     var btn = document.getElementById('ork-theme-toggle');
     if (btn) {
         btn.addEventListener('click', function() {
-            var stored = localStorage.getItem('ork_theme');
+            var stored = null;
+            try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
             // Cycle: auto → dark → light → auto (keyed off stored pref, not data-theme)
             if (!stored) {
                 // auto → dark
                 document.documentElement.setAttribute('data-theme', 'dark');
-                localStorage.setItem('ork_theme', 'dark');
+                try { localStorage.setItem('ork_theme', 'dark'); } catch (e) { /* preference is not persisted */ }
             } else if (stored === 'dark') {
                 // dark → light
                 document.documentElement.setAttribute('data-theme', 'light');
-                localStorage.setItem('ork_theme', 'light');
+                try { localStorage.setItem('ork_theme', 'light'); } catch (e) { /* preference is not persisted */ }
             } else {
                 // light → auto: remove pref, re-apply OS preference live
-                localStorage.removeItem('ork_theme');
+                try { localStorage.removeItem('ork_theme'); } catch (e) { /* nothing to clear */ }
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     document.documentElement.setAttribute('data-theme', 'dark');
                 } else {
@@ -421,7 +427,10 @@ function orkInitTheme() {
     // Live OS preference listener — only fires when user is in auto mode (no stored pref)
     if (window.matchMedia) {
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
-            if (localStorage.getItem('ork_theme')) return; // user has a manual pref, ignore
+            var manual = null;
+            try { manual = null;
+ try { manual = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ } } catch (e) { /* treat as unset */ }
+            if (manual) return; // user has a manual pref, ignore
             if (e.matches) {
                 document.documentElement.setAttribute('data-theme', 'dark');
             } else {
@@ -442,7 +451,8 @@ function orkInitTheme() {
 function orkUpdateThemeIcon() {
     var btn = document.getElementById('ork-theme-toggle');
     if (!btn) return;
-    var stored = localStorage.getItem('ork_theme');
+    var stored = null;
+    try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
     // Sun icon (light mode)
     var sunSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9A9.01 9.01 0 0 0 12 3zm0 16a7 7 0 1 1 7-7 7.008 7.008 0 0 1-7 7z"/><path d="M12 7a5 5 0 1 0 5 5 5.006 5.006 0 0 0-5-5z"/></svg>';
     // Moon icon (dark mode)
@@ -464,7 +474,8 @@ function orkUpdateThemeIcon() {
 // Run theme init on DOMContentLoaded to ensure button is in DOM
 // Theme attr is applied immediately via stored value in case it was already set server-side
 (function() {
-    var stored = localStorage.getItem('ork_theme');
+    var stored = null;
+    try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
     if (stored === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
     } else if (stored === 'light') {
@@ -586,7 +597,24 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
             var item = e.target.closest('.aw-pick-item');
             if (!item) return;
             if (!activeSelect) return;
-            activeSelect.value = item.getAttribute('data-value');
+            var val = item.getAttribute('data-value');
+
+            // A multiple select toggles and STAYS OPEN: closing after each pick
+            // would make choosing three awards three trips through the list.
+            if (activeSelect.multiple) {
+                var opt = null, i;
+                for (i = 0; i < activeSelect.options.length; i++) {
+                    if (activeSelect.options[i].value === val) { opt = activeSelect.options[i]; break; }
+                }
+                if (!opt) return;
+                opt.selected = !opt.selected;
+                item.classList.toggle('aw-active', opt.selected);
+                activeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                syncTrigger(activeSelect);
+                return;
+            }
+
+            activeSelect.value = val;
             activeSelect.dispatchEvent(new Event('change', { bubbles: true }));
             syncTrigger(activeSelect);
             closeDropdown();
@@ -617,37 +645,44 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
     }
 
     function buildHTML(sel) {
+        var multi = !!sel.multiple;
         var html = '', cur = sel.value, ch = sel.children;
         for (var i = 0; i < ch.length; i++) {
             if (ch[i].tagName === 'OPTGROUP') {
                 html += '<div class="aw-pick-group"><div class="aw-pick-group-label">' + escHtml(ch[i].label) + '</div>';
-                for (var j = 0; j < ch[i].children.length; j++) html += itemHTML(ch[i].children[j], cur);
+                for (var j = 0; j < ch[i].children.length; j++) html += itemHTML(ch[i].children[j], cur, multi);
                 html += '</div>';
             } else if (ch[i].tagName === 'OPTION' && ch[i].value) {
-                html += '<div class="aw-pick-standalone">' + itemHTML(ch[i], cur) + '</div>';
+                html += '<div class="aw-pick-standalone">' + itemHTML(ch[i], cur, multi) + '</div>';
             }
         }
         return html;
     }
 
-    function itemHTML(opt, cur) {
+    function itemHTML(opt, cur, multi) {
         var aid = parseInt(opt.getAttribute('data-award-id')) || 0;
         var isL = opt.getAttribute('data-is-ladder') === '1';
         var desc = isL && typeof AWARD_DESCRIPTIONS !== 'undefined' ? (AWARD_DESCRIPTIONS[aid] || '') : '';
-        var cls = 'aw-pick-item' + (opt.value === cur && cur ? ' aw-active' : '');
+        // A multiple select has many chosen values, so "active" follows the
+        // option's own selected state rather than one current value.
+        var cls = 'aw-pick-item' + ((multi ? opt.selected : (opt.value === cur && cur)) ? ' aw-active' : '');
         var h = '<div class="' + cls + '" data-value="' + opt.value + '" tabindex="0">';
         h += '<span class="aw-pick-name">' + escHtml(opt.textContent) + '</span>';
         if (desc) h += '<span class="aw-pick-desc">' + escHtml(desc) + '</span>';
         return h + '</div>';
     }
 
-    function openDropdown(sel, trigger) {
-        ensureDOM();
-        if (activeSelect === sel && dropdown.classList.contains('aw-open')) { closeDropdown(); return; }
-        activeSelect = sel; activeTrigger = trigger;
-        body.innerHTML = buildHTML(sel);
-        var empty = body.querySelector('.aw-pick-empty'); if (empty) empty.remove();
-        searchInput.value = '';
+    /**
+     * Place the dropdown against its trigger.
+     *
+     * Split out of openDropdown so it can be re-run: the dropdown is
+     * position:fixed and was measured once at open, so any scroll afterwards left
+     * it floating away from the control it belongs to. That never showed on the
+     * modal pages, where there is nothing behind to scroll, but a full-page report
+     * scrolls freely.
+     */
+    function positionDropdown(trigger) {
+        if (!dropdown || !trigger) { return; }
         var rect = trigger.getBoundingClientRect();
         var vw = window.innerWidth, vh = window.innerHeight;
         var mobile = vw <= 600;
@@ -686,11 +721,42 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
             dropdown.style.maxHeight = maxH + 'px';
             dropdown.style.borderRadius = '6px';
         }
+    }
+
+    function openDropdown(sel, trigger) {
+        ensureDOM();
+        if (activeSelect === sel && dropdown.classList.contains('aw-open')) { closeDropdown(); return; }
+        activeSelect = sel; activeTrigger = trigger;
+        body.innerHTML = buildHTML(sel);
+        var empty = body.querySelector('.aw-pick-empty'); if (empty) empty.remove();
+        searchInput.value = '';
+        positionDropdown(trigger);
         dropdown.classList.add('aw-open');
         searchInput.focus();
         var active = body.querySelector('.aw-active');
         if (active) active.scrollIntoView({ block: 'center' });
     }
+
+    /**
+     * Follow the trigger while open. Capture phase, because the page may scroll
+     * inside a container rather than the window, and those events do not bubble.
+     * Scrolling the dropdown's OWN list must not move it, or the list jumps as you
+     * read it. If the trigger has scrolled out of sight entirely the dropdown
+     * closes, rather than clinging to the edge of the viewport.
+     */
+    function trackTrigger(e) {
+        if (!dropdown || !dropdown.classList.contains('aw-open') || !activeTrigger) { return; }
+        if (e && e.target && e.target.nodeType === 1 && dropdown.contains(e.target)) { return; }
+        // On a phone the dropdown is fullscreen and owes nothing to the trigger's
+        // position, so it must not close just because the trigger scrolled away.
+        if (window.innerWidth > 600) {
+            var rect = activeTrigger.getBoundingClientRect();
+            if (rect.bottom < 0 || rect.top > window.innerHeight) { closeDropdown(); return; }
+        }
+        positionDropdown(activeTrigger);
+    }
+    window.addEventListener('scroll', trackTrigger, true);
+    window.addEventListener('resize', trackTrigger);
 
     function closeDropdown() {
         if (!dropdown) return;
@@ -699,11 +765,43 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         activeSelect = null; activeTrigger = null;
     }
 
+    /**
+     * The trigger's empty-state wording. The widget started life as the award
+     * chooser and said so; it works on any select, so the caller can name what
+     * is being chosen with data-aw-placeholder. Defaults to the award wording so
+     * every existing call site reads exactly as before.
+     */
+    function placeholderFor(sel, plural) {
+        var custom = sel.getAttribute('data-aw-placeholder');
+        if (custom) { return custom; }
+        return plural ? 'Select awards\u2026' : 'Select award\u2026';
+    }
+
     function syncTrigger(sel) {
         var btn = sel._awTrigger; if (!btn) return;
+        if (sel.multiple) {
+            var chosen = [], i;
+            for (i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].selected && sel.options[i].value) { chosen.push(sel.options[i].text); }
+            }
+            // Name them while they fit. A bare "2 selected" hides WHAT is selected,
+            // which matters most on a shared link: the person opening it has to be
+            // able to read the filter, not just see that one exists.
+            var label;
+            if (chosen.length === 0) {
+                label = placeholderFor(sel, true);
+            } else {
+                var joined = chosen.join(', ');
+                label = joined.length <= 60 ? joined : chosen.length + ' selected';
+            }
+            btn.querySelector('.aw-trigger-label').textContent = label;
+            btn.classList.toggle('aw-has-value', chosen.length > 0);
+            btn.title = chosen.join(', ');
+            return;
+        }
         var opt = sel.options[sel.selectedIndex];
         var hasVal = opt && opt.value;
-        btn.querySelector('.aw-trigger-label').textContent = hasVal ? opt.text : 'Select award\u2026';
+        btn.querySelector('.aw-trigger-label').textContent = hasVal ? opt.text : placeholderFor(sel, false);
         btn.classList.toggle('aw-has-value', !!hasVal);
     }
 
@@ -711,13 +809,13 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         sel.style.display = 'none';
         var btn = document.createElement('button');
         btn.type = 'button'; btn.className = 'aw-picker-trigger';
-        var opt = sel.options[sel.selectedIndex];
-        var hasVal = opt && opt.value;
-        btn.innerHTML = '<span class="aw-trigger-label">' + (hasVal ? escHtml(opt.text) : 'Select award\u2026') + '</span>' +
+        btn.innerHTML = '<span class="aw-trigger-label"></span>' +
             '<i class="fas fa-chevron-down" style="color:#a0aec0;font-size:11px"></i>';
-        if (hasVal) btn.classList.add('aw-has-value');
         sel.parentNode.insertBefore(btn, sel.nextSibling);
         sel._awTrigger = btn;
+        // One place decides the label, so a multiple select does not start out
+        // saying "Select award..." in the singular.
+        syncTrigger(sel);
         btn.addEventListener('click', function() { openDropdown(sel, btn); });
 
         var desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
@@ -910,6 +1008,9 @@ $(document).ready(function() {
         } else if (badge === 'soon') {
             $nameCell.append('<span class="pn-level-badge pn-level-badge-soon"><i class="fas fa-hourglass-half"></i> Soon to Level!</span>');
         }
+        // The bonus-credit badge is server-rendered, so it would sit ahead of the
+        // level badges just appended; keep it last in the cell.
+        $nameCell.find('.pn-bonus-badge').appendTo($nameCell);
     });
 
     // Profile data tables use DataTables for sorting/paging/search/CSV — see pnInitDataTable().
@@ -2457,6 +2558,7 @@ if (PnConfig.recError) {
     pnInitDataTable('#pn-awards-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Awards' });
     pnInitDataTable('#pn-titles-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Titles' });
     pnInitDataTable('#pn-classes-table',        { order: [[2, 'desc']],              filename: 'Class Levels' });
+    pnInitDataTable('#pn-bonus-table',          { order: [[4, 'desc']],              filename: 'Bonus Credits', pageLength: 10 });
     pnInitDataTable('#pn-revoked-awards-table', { order: [[3, 'desc']],              filename: 'Revoked Awards' });
     pnInitDataTable('#pn-revoked-titles-table', { order: [[3, 'desc']],              filename: 'Revoked Titles' });
 

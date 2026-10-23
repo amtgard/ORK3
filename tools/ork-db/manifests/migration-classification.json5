@@ -109,6 +109,7 @@
     "dev-set-test-logins.php": { "class": "ES", "render": "skip", "notes": "Local-dev credential helper; not a schema migration" },
     "2026-08-22-signin-tally.sql": { "class": "S", "render": "full", "notes": "Anonymous per-day/per-client sign-in counters (no player attribution); CREATE TABLE IF NOT EXISTS, idempotent" },
     "2026-10-04-qual-report-comment.sql": { "class": "S", "render": "full", "notes": "Free-text comment on a qual question report; ADD COLUMN IF NOT EXISTS, idempotent" },
+    "2026-10-14-bonus-credits.sql": { "class": "S", "render": "full", "notes": "Non-attendance class credits (ork_bonus_credit ledger); CREATE TABLE IF NOT EXISTS, idempotent" }
     "2026-10-15-recommendation-monarchy-only.sql": { "class": "S", "render": "full", "notes": "Monarchy Only visibility level on recommendations; ADD COLUMN/INDEX IF NOT EXISTS, idempotent" }
   }
 }

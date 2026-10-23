@@ -352,6 +352,11 @@
 						<i class="fas fa-clipboard-list"></i> Enter Attendance
 					</button>
 				<?php endif; ?>
+				<?php if (!empty($CanBonusCredits)): ?>
+					<button class="pk-btn pk-btn-outline" onclick="bcOpen()">
+						<i class="fas fa-star"></i> Bonus Credits
+					</button>
+				<?php endif; ?>
 				<?php if (!empty($CanAdminPark)): ?>
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAwardModal()">
 						<i class="fas fa-medal"></i> Enter Awards
@@ -1240,6 +1245,7 @@
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Park&id=<?= $park_id ?>">Player Status Reconciliation</a></li>
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
+							<li><a href="<?= UIR ?>Reports/population_explorer&ParkId=<?= $park_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
 							<?php endif; ?>
 						</ul>
 					</div>
@@ -1271,6 +1277,7 @@
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Ladder Award Grid</a></li>
 							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
+							<li><a href="<?= UIR ?>Reports/award_explorer&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>"><i class="fas fa-award"></i> Award Explorer</a></li>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -3782,4 +3789,16 @@ window.OrkRsCfg = {
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
 <?php include __DIR__ . '/_monarchy_only_assets.tpl'; ?>
+<?php endif; ?>
+<?php if (!empty($CanBonusCredits)): ?>
+<script>
+window.OrkBcCfg = {
+	uir:       '<?= UIR ?>',
+	scopeType: 'park',
+	scopeId:   <?= (int)($park_id ?? 0) ?>,
+	scopeName: <?= json_encode($park_name ?? '') ?>,
+	kingdomId: <?= (int)($kingdom_id ?? 0) ?>
+};
+</script>
+<?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
 <?php endif; ?>

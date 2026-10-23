@@ -1604,6 +1604,39 @@ function rmUpdateCourtBadge(tr, courts) {
     td.innerHTML = '<a class="rm-courtbadge" href="' + RmConfig.uir + 'Court/detail/' + courts[0].CourtId + '">' + rmEsc(courts[0].Name) + more + '</a>';
 }
 
+// A court created from this modal joins the page's two court lists at once: the
+// "Existing court" select (and becomes its selection, with the mode switched back
+// to Existing) and the status filter. Without this the new court was not offered
+// for the next add, so the officer had to reload the page to put a second
+// recommendation on the court they had just made.
+function rmRegisterCourt(courtId, name, ymd) {
+    var sel = document.getElementById('rm-court-select');
+    var filt = document.getElementById('rm-filter-court');
+    var o;
+    if (sel && !sel.querySelector('option[value="' + courtId + '"]')) {
+        o = document.createElement('option');
+        o.value = String(courtId);
+        o.dataset.name = name;
+        o.textContent = name + (ymd ? ' \u2014 ' + rmNiceDateJS(ymd) : '') + ' (draft)';
+        sel.insertBefore(o, sel.firstChild);
+        var empty = sel.parentNode.querySelector('.rm-empty');
+        if (empty) empty.remove();
+    }
+    if (sel) sel.value = String(courtId);
+    if (filt && !filt.querySelector('option[value="court:' + courtId + '"]')) {
+        o = document.createElement('option');
+        o.value = 'court:' + courtId;
+        o.textContent = 'On: ' + name;
+        filt.appendChild(o);
+    }
+    var existing = document.querySelector('input[name="rm-court-mode"][value="existing"]');
+    if (existing) { existing.checked = true; existing.dispatchEvent(new Event('change', { bubbles: true })); }
+    var nameEl = document.getElementById('rm-court-name');
+    var dateEl = document.getElementById('rm-court-date');
+    if (nameEl) nameEl.value = '';
+    if (dateEl) { if (dateEl._flatpickr) dateEl._flatpickr.clear(); else dateEl.value = ''; }
+}
+
 // Submit: resolve a court id (create new, or use selected existing), then add_award per target.
 document.getElementById('rm-court-submit').addEventListener('click', function () {
     var mode = document.querySelector('input[name="rm-court-mode"]:checked').value;
@@ -1612,14 +1645,15 @@ document.getElementById('rm-court-submit').addEventListener('click', function ()
         if (mode === 'new') {
             var name = (document.getElementById('rm-court-name').value || '').trim();
             if (!name) { rmToast('Enter a court name.', true); btn.disabled = false; return; }
+            var ymd = (document.getElementById('rm-court-date').value || '').trim();
             var fd = new FormData();
             fd.append('KingdomId', RmConfig.kingdomId);
             fd.append('ParkId', RmConfig.parkId || '0');
             fd.append('Name', name);
-            fd.append('CourtDate', (document.getElementById('rm-court-date').value || '').trim());
+            fd.append('CourtDate', ymd);
             fd.append('EventCalendarDetailId', '0');
             rmPost(RmConfig.uir + 'CourtAjax/create_court', fd).then(function (j) {
-                if (j.status === 0 && j.court_id) cb(j.court_id, j.name);
+                if (j.status === 0 && j.court_id) { rmRegisterCourt(j.court_id, j.name, ymd); cb(j.court_id, j.name); }
                 else { rmToast(j.error || 'Could not create court.', true); btn.disabled = false; }
             }).catch(function () { rmToast('Could not create court.', true); btn.disabled = false; });
         } else {

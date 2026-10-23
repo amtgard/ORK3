@@ -381,6 +381,10 @@ class Controller_Kingdom extends Controller
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+        // Bonus Credits button + modal: kingdom EDIT hands credits out, CREATE
+        // also defines them, and a named manager does both with no kingdom row.
+        $this->load_model('BonusCredit');
+        $this->data['CanBonusCredits'] = $uid > 0 && $this->BonusCredit->can_grant_in_kingdom($uid, (int)$kingdom_id);
         // Park creation is GLOBAL ADMIN ONLY, by design -- see Park::CreatePark,
         // which checks HasAuthority(AUTH_ADMIN, 0, AUTH_CREATE). This affordance
         // must mirror that check exactly; gating it on kingdom authority showed
