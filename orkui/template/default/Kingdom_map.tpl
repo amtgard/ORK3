@@ -19,6 +19,7 @@
 		map = new google.maps.Map(document.getElementById('map'), {
 			center: {lat: 0, lng: 0},
 			zoom: 2,
+			gestureHandling: (window.matchMedia && matchMedia('(pointer: coarse)').matches) ? 'greedy' : 'auto', // one-finger pan on touch
 			mapId: 'ORK3_MAP_ID'
 		});
 		$('.info-container:first-child').height($(window).height() * 0.85);

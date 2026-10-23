@@ -1301,11 +1301,11 @@ if (PnConfig.recError) {
         if (!dimBtn) return;
         if (!dimBtn.dataset.confirm) {
             dimBtn.dataset.confirm = '1';
-            dimBtn.textContent = 'Confirm Delete?';
+            dimBtn.textContent = 'Confirm Dismiss?';
             dimBtn.classList.add('pk-rec-dismiss-confirm');
             dimBtn._confirmTimer = setTimeout(function() {
                 dimBtn.dataset.confirm = '';
-                dimBtn.innerHTML = '<i class="fas fa-times"></i> Delete';
+                dimBtn.innerHTML = '<i class="fas fa-times"></i> Dismiss';
                 dimBtn.classList.remove('pk-rec-dismiss-confirm');
             }, 3000);
             return;
@@ -2774,6 +2774,7 @@ window.knInitMap = async function() {
     var map = new google.maps.Map(document.getElementById('kn-map'), {
         center: {lat: 0, lng: 0},
         zoom: 2,
+        gestureHandling: orkMapGestureHandling(),
         mapId: 'ORK3_MAP_ID'
     });
 
@@ -3780,11 +3781,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#kn-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Delete?';
+                dimBtn.textContent = 'Confirm Dismiss?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Delete';
+                    dimBtn.textContent = 'Dismiss';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -3801,7 +3802,7 @@ $(document).ready(function() {
                     if (d.status === 0) {
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to delete recommendation.');
+                        alert(d.error || 'Failed to dismiss recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -7854,11 +7855,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#pk-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Delete?';
+                dimBtn.textContent = 'Confirm Dismiss?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Delete';
+                    dimBtn.textContent = 'Dismiss';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -7875,7 +7876,7 @@ $(document).ready(function() {
                     if (d.status === 0) {
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to delete recommendation.');
+                        alert(d.error || 'Failed to dismiss recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -16920,7 +16921,7 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 var $delTable = $(panel).find('.pk-deleted-recs-table');
                 panel.__dt = window.orkInitDataTable($delTable, {
                     order: [[6, 'desc']],   // Deleted At, newest first
-                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Deleted Recommendations',
+                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Dismissed Recommendations',
                     columnDefs: [{ targets: 8, orderable: false, searchable: false }]
                 });
                 window.orkAdjustDataTables($(panel));
@@ -16950,7 +16951,7 @@ window.initUsernameAvailabilityCheck = function(opts) {
             var open = panel.classList.toggle('pk-deleted-open');
             toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
             var lbl = toggle.querySelector('.pk-deleted-recs-toggle-label');
-            if (lbl) lbl.textContent = open ? 'Hide Deleted Recommendations' : 'Show Deleted Recommendations';
+            if (lbl) lbl.textContent = open ? 'Hide Dismissed Recommendations' : 'Show Dismissed Recommendations';
             body.style.display = open ? '' : 'none';
             if (open && panel.dataset.loaded !== '1') {
                 loadDeleted(panel, listUrl);
@@ -17986,6 +17987,66 @@ window.evSetEventStatus = function(eventId, status, btn) {
 };
 
 // =============================================================================
+// Google Maps — shared touch gestures, loader, and pin maps
+// =============================================================================
+// Touch devices pan the map with ONE finger ('greedy') instead of Google's
+// default two-finger 'cooperative' mode. Mouse pointers keep 'auto' so the
+// desktop scroll wheel still scrolls the page rather than zooming the map.
+window.orkMapGestureHandling = function() {
+    return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ? 'greedy' : 'auto';
+};
+
+// One Maps JS API load per page, however many maps ask for it.
+window.orkEnsureGoogleMaps = (function() {
+    var loading = false;
+    return function(cb) {
+        if (typeof google !== 'undefined' && google.maps && google.maps.Map) return cb();
+        window.addEventListener('orkGmapsReady', cb, { once: true });
+        if (loading) return;
+        loading = true;
+        window.__orkGmapsCb = function() { window.dispatchEvent(new Event('orkGmapsReady')); };
+        var s = document.createElement('script');
+        // key and region pinned, as in knInitMap's loader.
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=__orkGmapsCb&v=weekly&region=CA';
+        s.async = true; s.defer = true;
+        document.head.appendChild(s);
+    };
+})();
+
+// Single-pin location maps: <div class="ork-pin-map" data-lat data-lng data-zoom>.
+// Built the first time the element is on screen, so a map inside a hidden tab
+// panel waits until the tab opens (Google Maps renders blank at zero size) and
+// pages that never scroll to a map never load the API.
+(function() {
+    function build(el) {
+        var pos = { lat: parseFloat(el.getAttribute('data-lat')), lng: parseFloat(el.getAttribute('data-lng')) };
+        if (isNaN(pos.lat) || isNaN(pos.lng)) return;
+        orkEnsureGoogleMaps(function() {
+            var map = new google.maps.Map(el, {
+                center: pos,
+                zoom: parseInt(el.getAttribute('data-zoom'), 10) || 14,
+                gestureHandling: orkMapGestureHandling(),
+                mapTypeControl: false, streetViewControl: false
+            });
+            new google.maps.Marker({ position: pos, map: map });
+        });
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        var els = document.querySelectorAll('.ork-pin-map');
+        if (!els.length) return;
+        if (!('IntersectionObserver' in window)) { els.forEach(build); return; }
+        var io = new IntersectionObserver(function(entries) {
+            entries.forEach(function(en) {
+                if (!en.isIntersecting) return;
+                io.unobserve(en.target);
+                build(en.target);
+            });
+        });
+        els.forEach(function(el) { io.observe(el); });
+    });
+})();
+
+// =============================================================================
 // Calendar Enhancements R2: RSVP dropdowns, Map view
 // Works on both Kingdomnew (kn-*) and Parknew (pk-*) surfaces.
 // =============================================================================
@@ -18164,28 +18225,9 @@ window.evSetEventStatus = function(eventId, status, btn) {
     });
 
     // ---- Events Map view (lazy Google Maps) ----
-    var GMAPS_API_KEY = 'AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8'; // mirrors knInitMap's key
-    var gmapsLoading  = false;
-    var gmapsReady    = (typeof google !== 'undefined' && google.maps && google.maps.Map);
-
-    function ensureGoogleMaps(cb) {
-        if (gmapsReady) return cb();
-        if (gmapsLoading) {
-            window.addEventListener('orkGmapsReady', cb, { once: true });
-            return;
-        }
-        gmapsLoading = true;
-        window.__orkGmapsCb = function() {
-            gmapsReady = true;
-            window.dispatchEvent(new Event('orkGmapsReady'));
-            cb();
-        };
-        var s = document.createElement('script');
-        // region pinned, as in knInitMap's loader.
-        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_API_KEY + '&callback=__orkGmapsCb&v=weekly&region=CA';
-        s.async = true; s.defer = true;
-        document.head.appendChild(s);
-    }
+    // Shared loader, so a Park page's events map and its sidebar pin map
+    // never pull the API in twice.
+    var ensureGoogleMaps = window.orkEnsureGoogleMaps;
 
     function popoverHtml(loc) {
         // Pre-render the RSVP button's inner HTML rather than leaving the wrap span
@@ -18259,6 +18301,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
         var bounds = new google.maps.LatLngBounds();
         var map = new google.maps.Map(el, {
             zoom: 4, center: { lat: locations[0].lat, lng: locations[0].lng },
+            gestureHandling: orkMapGestureHandling(),
             mapTypeControl: false, streetViewControl: false, fullscreenControl: false
         });
         var infow = new google.maps.InfoWindow();
