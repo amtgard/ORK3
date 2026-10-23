@@ -319,6 +319,29 @@ final class ReportsFixture
         return $id;
     }
 
+    /**
+     * Same as insertKingdomAward() but under a CHOSEN kingdomaward_id. Needed to
+     * stand in for a kingdom-original ladder: Award::pseudoLadderKingdomAwardIds()
+     * recognises those by their production ids, which the sandbox does not carry.
+     * Fails loudly if the id is already taken rather than silently reusing a row.
+     * Cleaned up with the rest.
+     */
+    public function insertKingdomAwardWithId(int $kingdomAwardId, int $kingdomId, int $awardId, string $name): int
+    {
+        $taken = $this->pdo->prepare('SELECT 1 FROM ' . DB_PREFIX . 'kingdomaward WHERE kingdomaward_id = ?');
+        $taken->execute([$kingdomAwardId]);
+        if ($taken->fetchColumn() !== false) {
+            throw new RuntimeException("kingdomaward_id {$kingdomAwardId} already exists in the sandbox; pick another curated id");
+        }
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'kingdomaward (kingdomaward_id, is_title, title_class, kingdom_id, award_id, name, reign_limit, month_limit)
+             VALUES (?, 0, 0, ?, ?, ?, 0, 0)'
+        )->execute([$kingdomAwardId, $kingdomId, $awardId, $name]);
+        $this->kingdomAwardIds[] = $kingdomAwardId;
+
+        return $kingdomAwardId;
+    }
+
     public function insertParkOfficer(int $kingdomId, int $parkId, int $mundaneId, string $role): int
     {
         $stmt = $this->pdo->prepare(
