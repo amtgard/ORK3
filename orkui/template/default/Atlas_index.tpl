@@ -223,6 +223,19 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
 .at-park-profile-btn:hover { background:#2b6cb0; color:#fff; text-decoration:none; }
 .at-park-profile-btn i { margin-right:6px; }
 
+/* ── Heatmap button ── */
+.at-heatmap-btn {
+	display:inline-flex; align-items:center; gap:5px;
+	background:#c53030; color:#fff; font-size:13px; font-weight:600;
+	padding:7px 14px; border-radius:6px; text-decoration:none;
+	transition:background .15s; margin-left:auto;
+}
+.at-heatmap-btn:hover { background:#9b2c2c; color:#fff; text-decoration:none; }
+/* Dark mode: follow the project's danger-button convention (light red fill,
+   dark text) and brighten on hover instead of darkening. */
+html[data-theme="dark"] .at-heatmap-btn { background:#fc8181; color:#1a202c; }
+html[data-theme="dark"] .at-heatmap-btn:hover { background:#feb2b2; color:#1a202c; }
+
 /* ── Empty ── */
 .at-empty {
 	text-align:center; color:var(--ork-text-on-ground); font-style:italic;
@@ -284,6 +297,11 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
 			<span class="at-toggle-track"><span class="at-toggle-thumb"></span></span>
 			<span class="at-toggle-label"><i class="fas fa-circle-notch" style="margin-right:4px;color:#3182ce"></i>Show 25-Mile Park Radius</span>
 		</label>
+		<?php if ($ShowHeatmapBtn ?? false): ?>
+		<a href="?Route=Atlas/heatmap" class="at-heatmap-btn">
+			<i class="fas fa-fire"></i>Population Heatmap
+		</a>
+		<?php endif; ?>
 	</div>
 
 	<!-- Map + Sidebar -->
