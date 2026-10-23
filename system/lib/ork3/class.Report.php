@@ -5223,7 +5223,146 @@ class Report extends Ork3
             'RequestsGlobal'       => $global['requests'] ?? null,
             'BytesGlobal'          => $global['bytes'] ?? null,
             'BlockedGlobal'        => $global !== null ? $this->_cfFirewallTotal($token, $zone, $win, null, null) : null,
+            // v2 (2026-10-19): what actually reached a server we run, and how much
+            // of the edge-stopped traffic is Cloudflare's own challenge/block pages.
+            // See RecapPlatformBreakdown() for how the digest derives its buckets.
+            'OriginRequests'       => $ork['originRequests'],
+            'CfPageRequests'       => $ork['cfPageRequests'],
+            'CacheHitsGlobal'      => $global['cacheHits'] ?? null,
+            'CachedBytesGlobal'    => $global['cachedBytes'] ?? null,
+            'OriginRequestsGlobal' => $global['originRequests'] ?? null,
+            'CfPageRequestsGlobal' => $global['cfPageRequests'] ?? null,
+            'TopOtherHost'         => $global['topOtherHost'] ?? null,
+            'StatsVersion'         => 2,
         );
+    }
+
+    // Cache statuses that mean Cloudflare went to an origin for the response.
+    // "revalidated" is a conditional request the origin answered with 304: cheap,
+    // but it still touched the server, so it counts as handled by us.
+    private const CF_ORIGIN_CACHE_STATUSES = '["dynamic","miss","expired","bypass","revalidated"]';
+
+    /**
+     * Fetch a complete, fresh PlatformStats block for an already-computed week,
+     * for the backfill (bin/backfill-recap-platform-stats.php). Returns null when
+     * Cloudflare cannot answer (no credentials, past retention, error) so the
+     * caller leaves the stored week untouched.
+     *
+     * The WHOLE block is refetched, not just the v2 keys: every bucket in the
+     * digest is a remainder of the others, so the numbers must come from one
+     * query window. Grafting fresh origin counts onto a total stored earlier
+     * (say, by a mid-week manual run) produces percentages over 100.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function RecapPlatformStatsForWeek($week_start)
+    {
+        $win = $this->_WeeklyRecapWindow($week_start);
+        $ps  = $this->_RecapCloudflareStats($win);
+        return is_array($ps) ? $ps : null;
+    }
+
+    /**
+     * Replace ONLY the PlatformStats block of a stored week's payload, with a
+     * single JSON_SET. Every other key (HumanUsers, the peerage and event lists,
+     * the hand-blanked bot-wave weeks) stays byte-for-byte as it was, and
+     * computed_at is left alone so the page footer still says when the recap
+     * itself was built. Returns false if no row exists for the week.
+     *
+     * @param array<string, mixed> $platform_stats a block from _RecapCloudflareStats()
+     */
+    public function ReplaceWeeklyRecapPlatformStats($week_start, array $platform_stats)
+    {
+        $win = $this->_WeeklyRecapWindow($week_start);
+        $r = $this->db->query(
+            "SELECT 1 AS present FROM " . DB_PREFIX . "weekly_recap WHERE week_start = :ws",
+            array(':ws' => $win['WeekStart'])
+        );
+        if (!$r || $r->size() == 0) {
+            return false;
+        }
+        // JSON_EXTRACT of the bound literal makes MariaDB store real JSON, not a
+        // string containing JSON.
+        $sql = "UPDATE " . DB_PREFIX . "weekly_recap
+				   SET payload_json = JSON_SET(payload_json, '$.PlatformStats', JSON_EXTRACT(:ps, '$'))
+				 WHERE week_start = :ws";
+        return $this->db->query($sql, array(':ws' => $win['WeekStart'], ':ps' => json_encode($platform_stats)));
+    }
+
+    /**
+     * PURE. Turn a stored PlatformStats block into the three buckets the recap
+     * digest reports, for one scope ('ork' = ork.amtgard.com US+CA, 'global' =
+     * the whole zone):
+     *
+     *   servers   requests Cloudflare forwarded to an origin we run
+     *   cache     answered from Cloudflare's cache
+     *   stopped   never reached us: malicious (blocked/challenged) + the
+     *             challenge/block pages those clients then fetched + other
+     *             edge responses (redirects, not-found, non-firewall 403s)
+     *
+     * 'other' is a remainder, so the three always sum to the total. Returns
+     * null when the block predates v2 (no OriginRequests) so the template can
+     * fall back to the old sentence for weeks that can no longer be backfilled.
+     *
+     * @param array<string, mixed> $ps
+     * @return array<string, int>|null
+     */
+    public static function RecapPlatformBreakdown(array $ps, $scope = 'ork')
+    {
+        $g = $scope === 'global' ? 'Global' : '';
+        $totalKey = $scope === 'global' ? 'RequestsGlobal' : 'Requests';
+        $cacheKey = $scope === 'global' ? 'CacheHitsGlobal' : 'CacheHits';
+        $malKey   = $scope === 'global' ? 'BlockedGlobal' : 'BlockedOrChallenged';
+        if (!isset($ps['OriginRequests' . $g]) || !isset($ps[$totalKey])) {
+            return null;
+        }
+        $total   = max(0, (int)$ps[$totalKey]);
+        $servers = max(0, (int)$ps['OriginRequests' . $g]);
+        $cache   = max(0, (int)($ps[$cacheKey] ?? 0));
+        $stopped = max(0, $total - $servers - $cache);
+        $mal     = min($stopped, max(0, (int)($ps[$malKey] ?? 0)));
+        $cfPages = min($stopped - $mal, max(0, (int)($ps['CfPageRequests' . $g] ?? 0)));
+        $other   = $stopped - $mal - $cfPages;
+        $pct = function ($n) use ($total) {
+            return $total > 0 ? (int)round(100 * $n / $total) : 0;
+        };
+        return array(
+            'total'       => $total,
+            'servers'     => $servers,
+            'cache'       => $cache,
+            'stopped'     => $stopped,
+            'malicious'   => $mal,
+            'cfPages'     => $cfPages,
+            'other'       => $other,
+            'serversPct'  => $pct($servers),
+            'cachePct'    => $pct($cache),
+            'stoppedPct'  => $pct($stopped),
+        );
+    }
+
+    /**
+     * PURE. Given per-host totals, cache hits and origin counts (host => count),
+     * return the host other than $exclude with the most edge-stopped traffic,
+     * or null when no other host appears. Stopped = total - cache - origin.
+     *
+     * @param array<string, int> $totals
+     * @param array<string, int> $hits
+     * @param array<string, int> $origins
+     * @return array{Host: string, Requests: int, Stopped: int}|null
+     */
+    public static function RecapTopOtherHost(array $totals, array $hits, array $origins, $exclude = 'ork.amtgard.com')
+    {
+        $best = null;
+        foreach ($totals as $host => $count) {
+            if ($host === $exclude || $host === '') {
+                continue;
+            }
+            $stopped = max(0, (int)$count - (int)($hits[$host] ?? 0) - (int)($origins[$host] ?? 0));
+            if ($best === null || $stopped > $best['Stopped']) {
+                $best = array('Host' => (string)$host, 'Requests' => (int)$count, 'Stopped' => $stopped);
+            }
+        }
+        return $best;
     }
 
     // One httpRequestsAdaptiveGroups round trip for a given (optional) host and
@@ -5239,9 +5378,28 @@ class Report extends Ork3
             $filterParts[] = 'clientCountryName_in:["' . implode('","', $countries) . '"]';
         }
         $filter = '{' . implode(', ', $filterParts) . '}';
-        $cacheFilterParts = $filterParts;
-        $cacheFilterParts[] = 'cacheStatus:"hit"';
-        $cacheFilter = '{' . implode(', ', $cacheFilterParts) . '}';
+        $withExtra = function ($extra) use ($filterParts) {
+            return '{' . implode(', ', array_merge($filterParts, array($extra))) . '}';
+        };
+        $cacheFilter  = $withExtra('cacheStatus:"hit"');
+        $originFilter = $withExtra('cacheStatus_in:' . self::CF_ORIGIN_CACHE_STATUSES);
+        $cfPageFilter = $withExtra('clientRequestPath_like:"/cdn-cgi/%"');
+
+        // Per-host breakdown only makes sense zone-wide (no host filter): it is
+        // what names the busiest OTHER host in the worldwide sentence.
+        $byHost = '';
+        if ($host === null) {
+            $byHost = '
+				byHost: httpRequestsAdaptiveGroups(limit:6, filter:' . $filter . ', orderBy:[count_DESC]) {
+					count dimensions { clientRequestHTTPHost }
+				}
+				byHostHit: httpRequestsAdaptiveGroups(limit:6, filter:' . $cacheFilter . ', orderBy:[count_DESC]) {
+					count dimensions { clientRequestHTTPHost }
+				}
+				byHostOrigin: httpRequestsAdaptiveGroups(limit:6, filter:' . $originFilter . ', orderBy:[count_DESC]) {
+					count dimensions { clientRequestHTTPHost }
+				}';
+        }
 
         $gql = 'query($zone:String!,$since:Time!,$until:Time!) {
 			viewer { zones(filter:{zoneTag:$zone}) {
@@ -5254,6 +5412,12 @@ class Report extends Ork3
 				cacheHit: httpRequestsAdaptiveGroups(limit:1, filter:' . $cacheFilter . ') {
 					count sum { edgeResponseBytes }
 				}
+				origin: httpRequestsAdaptiveGroups(limit:1, filter:' . $originFilter . ') {
+					count
+				}
+				cfPages: httpRequestsAdaptiveGroups(limit:1, filter:' . $cfPageFilter . ') {
+					count
+				}' . $byHost . '
 			} }
 		}';
         $json = $this->_cfGraphQL($token, $gql, array('zone' => $zone, 'since' => $since, 'until' => $until));
@@ -5268,15 +5432,27 @@ class Report extends Ork3
         foreach (($zones['byCountry'] ?? array()) as $row) {
             $by_country[$row['dimensions']['clientCountryName']] = (int)$row['count'];
         }
+        $hostCounts = function ($key) use ($zones) {
+            $out = array();
+            foreach (($zones[$key] ?? array()) as $row) {
+                $out[$row['dimensions']['clientRequestHTTPHost']] = (int)$row['count'];
+            }
+            return $out;
+        };
         $total_bytes  = (int)$totals['sum']['edgeResponseBytes'];
         $cached_bytes = (int)($cache['sum']['edgeResponseBytes'] ?? 0);
         return array(
-            'requests'    => (int)$totals['count'],
-            'bytes'       => $total_bytes,
-            'cacheHits'   => (int)$cache['count'],
-            'cachedBytes' => $cached_bytes,
-            'originBytes' => max(0, $total_bytes - $cached_bytes),
-            'byCountry'   => $by_country,
+            'requests'       => (int)$totals['count'],
+            'bytes'          => $total_bytes,
+            'cacheHits'      => (int)$cache['count'],
+            'cachedBytes'    => $cached_bytes,
+            'originBytes'    => max(0, $total_bytes - $cached_bytes),
+            'byCountry'      => $by_country,
+            'originRequests' => (int)($zones['origin'][0]['count'] ?? 0),
+            'cfPageRequests' => (int)($zones['cfPages'][0]['count'] ?? 0),
+            'topOtherHost'   => $host === null
+                ? self::RecapTopOtherHost($hostCounts('byHost'), $hostCounts('byHostHit'), $hostCounts('byHostOrigin'))
+                : null,
         );
     }
 
