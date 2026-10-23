@@ -2214,7 +2214,7 @@ class Player extends Ork3
         $DB->Clear();
         $DB->Execute('COMMIT');
 
-        // Auto-login: create a device session (ork_session; 3-device cap)
+        // Auto-login: create a device session (ork_session; capped at Authorization::MAX_SESSIONS_PER_USER)
         $this->mundane->token = Ork3::$Lib->authorization->CreateSession($new_mundane_id); // vestigial pointer + session row
         $this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
         $this->mundane->save();
