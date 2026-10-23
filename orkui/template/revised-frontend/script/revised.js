@@ -1008,6 +1008,9 @@ $(document).ready(function() {
         } else if (badge === 'soon') {
             $nameCell.append('<span class="pn-level-badge pn-level-badge-soon"><i class="fas fa-hourglass-half"></i> Soon to Level!</span>');
         }
+        // The bonus-credit badge is server-rendered, so it would sit ahead of the
+        // level badges just appended; keep it last in the cell.
+        $nameCell.find('.pn-bonus-badge').appendTo($nameCell);
     });
 
     // Profile data tables use DataTables for sorting/paging/search/CSV — see pnInitDataTable().
@@ -2541,6 +2544,7 @@ if (PnConfig.recError) {
     pnInitDataTable('#pn-awards-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Awards' });
     pnInitDataTable('#pn-titles-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Titles' });
     pnInitDataTable('#pn-classes-table',        { order: [[2, 'desc']],              filename: 'Class Levels' });
+    pnInitDataTable('#pn-bonus-table',          { order: [[4, 'desc']],              filename: 'Bonus Credits', pageLength: 10 });
     pnInitDataTable('#pn-revoked-awards-table', { order: [[3, 'desc']],              filename: 'Revoked Awards' });
     pnInitDataTable('#pn-revoked-titles-table', { order: [[3, 'desc']],              filename: 'Revoked Titles' });
 

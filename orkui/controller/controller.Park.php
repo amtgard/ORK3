@@ -285,6 +285,9 @@ class Controller_Park extends Controller
         $this->data['IsOwnPark']     = $uid > 0 && (int)($this->session->park_id ?? 0) === (int)$park_id;
         $this->data['CanManagePark'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$park_id, AUTH_EDIT);
+        // Bonus Credits button + modal: park EDIT, or a manager of the park's kingdom.
+        $this->load_model('BonusCredit');
+        $this->data['CanBonusCredits'] = $uid > 0 && $this->BonusCredit->can_grant($uid, (int)$park_id);
         $this->data['CanAdminPark']  = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
         // Park admins can merge two players who both belong to THIS park.
