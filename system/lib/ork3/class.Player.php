@@ -2296,9 +2296,6 @@ class Player extends Ork3
     // Bust caches affected by a change to this player's recommendation data:
     //   - Report.PlayerAwardRecommendations under the three scopes (player,
     //     kingdom, park) that could hold this player's row.
-    //   - Report.DeletedAwardRecommendations (the Show Dismissed panel) under the
-    //     same three scopes — a dismiss or undelete changes that list too, and
-    //     nothing was clearing it, so the panel disagreed with the DB for 5 minutes.
     //   - Report.PlayerAwardRecommendationsCount (the profile tab badge), which is
     //     keyed on the ROLLED-UP kingdom id list, so it is busted per kingdom in the
     //     rollup rather than by the recipient's own kingdom id alone.
@@ -2353,12 +2350,6 @@ class Player extends Ork3
                     Ork3::$Lib->ghettocache->key($kd + ['IncludeDismissed' => $incl, 'V' => Report::REC_CACHE_VERSION])
                 );
             }
-            // Show Dismissed panel — same three scope shapes, plus the namespace's
-            // trailing Deleted marker.
-            Ork3::$Lib->ghettocache->bust(
-                'Report.DeletedAwardRecommendations',
-                Ork3::$Lib->ghettocache->key($kd + ['Deleted' => 1, 'V' => Report::REC_CACHE_VERSION])
-            );
         }
         // Profile tab badge. Its key is the ROLLED-UP kingdom id list, so bust it for
         // the player's own kingdom and for a parent kingdom that folds this one into
@@ -4159,6 +4150,17 @@ class Player extends Ork3
         }
         $recipient = array( 'KingdomId' => $this->mundane->kingdom_id, 'ParkId' => $this->mundane->park_id );
 
+        // Monarchy Only: the level comes from the creator's HIGHEST authority over the
+        // recipient (kingdom officer → 2, park officer → 1). A request for it from
+        // anyone else is refused outright rather than silently saved as public.
+        $monarchyOnly = 0;
+        if (!empty($request['MonarchyOnly'])) {
+            $monarchyOnly = Ork3::$Lib->recommendationvisibility->creatorLevel((int)$mundane_id, (int)$request['MundaneId']);
+            if ($monarchyOnly === 0) {
+                return InvalidParameter("Only officers of this player's park or kingdom can mark a recommendation Monarchy Only.");
+            }
+        }
+
         if (valid_id($request['AwardId'])) {
             list($request['KingdomAwardId'], $request['AwardId']) = Ork3::$Lib->award->LookupAward(array('KingdomId' => $recipient['KingdomId'], 'AwardId' => $request['AwardId']));
         } elseif (valid_id($request['KingdomAwardId'])) {
@@ -4285,6 +4287,7 @@ class Player extends Ork3
             $awardRec->recommended_by_id = $mundane_id;
             $awardRec->reason = $request['Reason'];
             $awardRec->mask_giver = !empty($request['Anonymous']) ? 1 : 0;
+            $awardRec->monarchy_only = $monarchyOnly;
             $awardRec->save();
             $this->bust_player_award_recs_cache($request['MundaneId']);
             return Success('Recommendation Added!');
@@ -4302,6 +4305,9 @@ class Player extends Ork3
         $rec_id = (int)($request['RecommendationsId'] ?? 0);
         if (!$rec_id) {
             return InvalidParameter();
+        }
+        if ($this->rec_hidden_from((int)$mundane_id, $rec_id)) {
+            return InvalidParameter('Recommendation not found.');
         }
 
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
@@ -4416,6 +4422,9 @@ class Player extends Ork3
         if (!$rec_id) {
             return InvalidParameter();
         }
+        if ($this->rec_hidden_from((int)$mundane_id, $rec_id)) {
+            return InvalidParameter('Recommendation not found.');
+        }
 
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
         $awardRec->clear();
@@ -4457,6 +4466,9 @@ class Player extends Ork3
             return InvalidParameter();
         }
         $passed = !empty($request['Passed']) ? 1 : 0;
+        if ($this->rec_hidden_from((int)$mundane_id, $rec_id)) {
+            return InvalidParameter('Recommendation not found.');
+        }
 
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
         $awardRec->clear();
@@ -4492,6 +4504,11 @@ class Player extends Ork3
 				WHERE recommendations_id = " . $rec_id);
         }
 
+        // Passing a Monarchy Only rec down (or back up) changes its effective level,
+        // i.e. which officers may see it: open Court Planner lines must re-fetch.
+        if ((int)$awardRec->monarchy_only !== 0) {
+            Ork3::$Lib->court->bumpOpenLinesForRec($rec_id);
+        }
         $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
         if (isset(Ork3::$Lib->dangeraudit)) {
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, ['passed_to_local' => $passed]);
@@ -4499,72 +4516,195 @@ class Player extends Ork3
         return Success('Recommendation pass-to-local updated.');
     }
 
+    // Monarchy Only toggle from the Recommendations Manager. Hide: the level is the
+    // actor's highest authority over the recipient, and never lowers an existing
+    // hide (GREATEST) — a park officer re-hiding a passed-down kingdom rec must not
+    // turn it into a park-level one that un-passing could no longer restore.
+    // Unhide: only an officer at the rec's STORED level (authorship is not enough
+    // to lift an officer's hide, and a passed-down kingdom hide stays the kingdom's).
+    //
+    // What the answer reveals. Only an officer over the recipient (or an ORK admin)
+    // can ever change this flag, and only on a rec they can see. Everyone else — a
+    // non-officer, the recipient, an author who is not an officer, a park officer
+    // facing a kingdom-level hide (not passed down) — gets EXACTLY the response a
+    // nonexistent id gets, before the rec's state is consulted. So the method tells
+    // them nothing: not whether the id exists, not whether it is hidden. An officer
+    // who can see the rec gets real answers (Success, "already visible", or the
+    // stored-level refusal for a passed-down kingdom hide they can see but not lift);
+    // none of those tell them anything their own Recs Manager does not already show.
+    public function SetRecommendationMonarchyOnly($request)
+    {
+        if (($mundane_id = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) === 0) {
+            return NoAuthorization();
+        }
+        $rec_id = (int)($request['RecommendationsId'] ?? 0);
+        if (!$rec_id) {
+            return InvalidParameter();
+        }
+        $vis   = Ork3::$Lib->recommendationvisibility;
+        $rec   = $vis->loadRec($rec_id);
+        $level = ($rec === null || $mundane_id === $rec['MundaneId'])
+            ? 0
+            : $vis->officerLevel($mundane_id, $rec['KingdomId'], $rec['ParkId']);
+        if ($rec === null || $level === 0 || !$vis->canSee($mundane_id, $rec)) {
+            return InvalidParameter('Recommendation not found.');
+        }
+        if (!empty($request['Hidden'])) {
+            $set = 'monarchy_only = GREATEST(monarchy_only, ' . $level . ')';
+        } else {
+            if ($rec['MonarchyOnly'] === 0) {
+                return Success('Recommendation is already visible.');
+            }
+            if (!$vis->canManageHidden($mundane_id, $rec)) {
+                return NoAuthorization('Only an officer who can see this recommendation at its level can make it visible.');
+            }
+            $set = 'monarchy_only = 0';
+        }
+        $this->db->Clear();
+        $this->db->Execute('UPDATE ' . DB_PREFIX . 'recommendations SET ' . $set . ' WHERE recommendations_id = ' . $rec_id);
+        // Open Court Planners drawn from this rec must re-fetch it (and refuse stale
+        // writes still carrying the reason they rendered while it was public).
+        Ork3::$Lib->court->bumpOpenLinesForRec($rec_id);
+
+        $this->bust_player_award_recs_cache($rec['MundaneId'], $rec['KingdomId'], $rec['ParkId']);
+        if (isset(Ork3::$Lib->dangeraudit)) {
+            Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Player', $rec['MundaneId'], ['monarchy_only' => !empty($request['Hidden']) ? 1 : 0]);
+        }
+        return Success('Recommendation visibility updated.');
+    }
+
+    /**
+     * Monarchy Only gate for a write that acts on ONE recommendation by id: true when
+     * the rec exists, is Monarchy Only, and $viewer (the TOKEN's user) may not see it.
+     * Callers check it first and answer with their own "not found" response, so a
+     * hidden rec is indistinguishable from a missing one to anyone outside its
+     * audience — including the recipient. Private, and underscored: never JSON-callable.
+     */
+    private function rec_hidden_from(int $viewer, int $rec_id): bool
+    {
+        $vis = Ork3::$Lib->recommendationvisibility;
+        $rec = $vis->loadRec($rec_id);
+
+        return $rec !== null && !$vis->canSee($viewer, $rec);
+    }
+
+    // Authorization and attribution both come from the TOKEN. RequestedBy is
+    // caller-supplied and this method is reachable through the public JSON service,
+    // so it is ignored here: trusting it let any logged-in user dismiss any
+    // recommendation by claiming to be its author or recipient, and forge deleted_by
+    // and the Granted notification's actor.
     public function DeleteAwardRecommendation($request)
     {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
+        if (($mundane_id = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
             return NoAuthorization();
         }
 
-        if (valid_id($request['RequestedBy'])) {
-            $can_delete_recommendation = false;
-            $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
-            $awardRec->clear();
-            $awardRec->recommendations_id = $request['RecommendationsId'];
+        // A Monarchy Only rec this viewer may not see answers exactly like a missing
+        // one, before any other check: the recipient must not be able to dismiss (or
+        // probe for) a hidden rec about themselves.
+        if (!valid_id($request['RecommendationsId'] ?? 0)
+            || $this->rec_hidden_from($mundane_id, (int)$request['RecommendationsId'])) {
+            return InvalidParameter('There was a problem with the request.');
+        }
 
-            if (valid_id($request['RecommendationsId']) && $awardRec->find()) {
-                $recipientInfo = $this->player_info($awardRec->mundane_id);
-                if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
-                    $can_delete_recommendation = true;
-                }
-                if ($can_delete_recommendation || $request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {
-                    $prior_rec = [
-                        'recommendations_id' => (int)$awardRec->recommendations_id,
-                        'mundane_id'         => (int)$awardRec->mundane_id,
-                        'kingdomaward_id'    => (int)$awardRec->kingdomaward_id,
-                        'award_id'           => (int)$awardRec->award_id,
-                        'rank'               => (int)$awardRec->rank,
-                        'recommended_by_id'  => (int)$awardRec->recommended_by_id,
-                        'date_recommended'   => $awardRec->date_recommended,
-                        'reason'             => $awardRec->reason,
-                    ];
-                    $cascade_at = date('Y-m-d H:i:s');
-                    // Granted-from-Manager: notify advocates BEFORE the rec/seconds soft-delete.
-                    if (!empty($request['Granted'])) {
-                        try {
-                            Ork3::$Lib->notification->notifyRecommendationGranted(
-                                (int)$awardRec->recommendations_id,
-                                (int)$request['RequestedBy']
-                            );
-                        } catch (\Throwable $e) { /* best-effort */
-                        }
-                    }
-                    $awardRec->deleted_by = $request['RequestedBy'];
-                    $awardRec->deleted_at = $cascade_at;
-                    $awardRec->save();
-                    Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
-                    // Cascade soft-delete to any active seconds on this recommendation.
-                    $this->db->Clear();
-                    $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . (int)$request['RequestedBy'] . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
-                    $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
-                    return Success('Recommendation Removed!');
-                } else {
-                    return InvalidParameter('Only the giver, recipient, or Admin may dismiss a recommendation.');
-                }
-            } else {
-                return InvalidParameter('There was a problem with the request.');
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $request['RecommendationsId'] ?? 0;
+
+        if (!$awardRec->find()) {
+            return InvalidParameter('There was a problem with the request.');
+        }
+
+        $recipientInfo = $this->player_info($awardRec->mundane_id);
+        $can_delete_recommendation = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)
+            || $mundane_id === (int)$awardRec->recommended_by_id
+            || $mundane_id === (int)$awardRec->mundane_id;
+        if (!$can_delete_recommendation) {
+            return InvalidParameter('Only the giver, recipient, or Admin may dismiss a recommendation.');
+        }
+
+        $this->soft_dismiss_recommendation($awardRec, $mundane_id, !empty($request['Granted']), $request, __FUNCTION__);
+        return Success('Recommendation Removed!');
+    }
+
+    /**
+     * The dismissal itself, shared by DeleteAwardRecommendation (after its own
+     * authorization) and resolve_court_line_recommendation: Granted notification
+     * first, then the soft delete, audit, seconds cascade and cache bust.
+     */
+    private function soft_dismiss_recommendation($awardRec, int $actor, bool $granted, array $request, string $fn)
+    {
+        $prior_rec = [
+            'recommendations_id' => (int)$awardRec->recommendations_id,
+            'mundane_id'         => (int)$awardRec->mundane_id,
+            'kingdomaward_id'    => (int)$awardRec->kingdomaward_id,
+            'award_id'           => (int)$awardRec->award_id,
+            'rank'               => (int)$awardRec->rank,
+            'recommended_by_id'  => (int)$awardRec->recommended_by_id,
+            'date_recommended'   => $awardRec->date_recommended,
+            'reason'             => $awardRec->reason,
+        ];
+        $cascade_at = date('Y-m-d H:i:s');
+        // Granted: notify advocates BEFORE the rec/seconds soft-delete.
+        if ($granted) {
+            try {
+                Ork3::$Lib->notification->notifyRecommendationGranted(
+                    (int)$awardRec->recommendations_id,
+                    $actor
+                );
+            } catch (\Throwable $e) { /* best-effort */
             }
-        } else {
-            return NoAuthorization();
         }
+        $awardRec->deleted_by = $actor;
+        $awardRec->deleted_at = $cascade_at;
+        $awardRec->save();
+        Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
+        // Cascade soft-delete to any active seconds on this recommendation.
+        $this->db->Clear();
+        $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . $actor . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
+        $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
+    }
+
+    /**
+     * Close (dismiss as granted) the recommendation a court line was drawn from, when
+     * that line commits. In-process only — Court::commitStagedAward calls it; the
+     * underscore keeps it off the JSON service (JsonServer refuses any method name
+     * containing "_"). It deliberately skips the Monarchy Only refusal: the court line
+     * itself authorizes acting on ITS OWN rec (a kingdom officer put it there), and
+     * without this a park court that grants a kingdom-level hide left the rec live,
+     * so it could be granted again. Only that one rec id, only while live, and only
+     * when it is about the line's recipient. Siblings still go through the token-
+     * authorized ResolveRecommendationCluster. Returns true when it closed the rec.
+     */
+    public function resolve_court_line_recommendation($rec_id, $line_mundane_id, $actor_uid)
+    {
+        $rec_id          = (int)$rec_id;
+        $line_mundane_id = (int)$line_mundane_id;
+        $actor_uid       = (int)$actor_uid;
+        if ($rec_id <= 0 || $line_mundane_id <= 0 || $actor_uid <= 0) {
+            return false;
+        }
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $rec_id;
+        if (!$awardRec->find()
+            || (int)$awardRec->mundane_id !== $line_mundane_id
+            || (int)$awardRec->deleted_by > 0) {
+            return false;
+        }
+        $this->soft_dismiss_recommendation($awardRec, $actor_uid, true, [
+            'RecommendationsId' => $rec_id, 'Granted' => 1, 'Source' => 'CourtCommit',
+        ], __FUNCTION__);
+        return true;
     }
 
     /**
      * The one definition of "this recommendation is still live", as a SQL fragment.
      *
-     * A soft delete stamps deleted_by; historic rows (and any caller that omitted
-     * RequestedBy before the guard above rejected it) carry deleted_by = 0, which is
-     * NOT a deletion. Reading deleted_at instead — as the cluster resolver used to —
-     * makes those rows invisible to the resolver while the Manager still lists them
+     * A soft delete stamps deleted_by (the dismissing token's user); historic rows
+     * (written back when deleted_by came from a caller-supplied RequestedBy that could
+     * be omitted) carry deleted_by = 0, which is NOT a deletion. Reading deleted_at
+     * instead — as the cluster resolver used to — makes those rows invisible to the resolver while the Manager still lists them
      * as pending, so a granted award can be granted again.
      *
      * NOT yet the single source of truth: class.Report.php (PlayerAwardRecommendations,
@@ -4582,6 +4722,11 @@ class Player extends Ork3
     // as "granted": each member runs through DeleteAwardRecommendation(Granted=1), which
     // notifies that rec's advocates BEFORE soft-deleting it and cascading its seconds.
     // Used by the Manager group-grant and CourtAjax::grant_award. No-ops on an empty cluster.
+    // Authorization is per-rec inside DeleteAwardRecommendation, from the Token alone;
+    // RequestedBy is not forwarded (a caller-chosen id must never authorize or attribute).
+    // Monarchy Only members the token's viewer may not see are skipped the same way:
+    // DeleteAwardRecommendation answers "not found" for them, so they are neither
+    // resolved nor counted (a park court cannot close a kingdom-level hide).
     public function ResolveRecommendationCluster($request)
     {
         $mundane_id = (int)($request['MundaneId'] ?? 0);
@@ -4610,7 +4755,6 @@ class Player extends Ork3
             $r = $this->DeleteAwardRecommendation([
                 'Token'             => $request['Token'] ?? '',
                 'RecommendationsId' => $rid,
-                'RequestedBy'       => (int)($request['RequestedBy'] ?? 0),
                 'Granted'           => 1,
             ]);
             if ((int)($r['Status'] ?? 1) === 0) {
@@ -4626,7 +4770,8 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
-        if (!valid_id($request['RecommendationsId'])) {
+        if (!valid_id($request['RecommendationsId'] ?? 0)
+            || $this->rec_hidden_from((int)$mundane_id, (int)$request['RecommendationsId'])) {
             return InvalidParameter('There was a problem with the request.');
         }
 
@@ -4705,6 +4850,10 @@ class Player extends Ork3
 
         if (!valid_id($request['RecommendationsId'])) {
             return InvalidParameter('Invalid recommendation.');
+        }
+
+        if ($this->rec_hidden_from((int)$mundane_id, (int)$request['RecommendationsId'])) {
+            return InvalidParameter('Recommendation not found.');
         }
 
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
@@ -4821,7 +4970,10 @@ class Player extends Ork3
         $second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
         $second->clear();
         $second->recommendation_seconds_id = $request['RecommendationSecondsId'];
-        if (!$second->find() || $second->deleted_at) {
+        // A second on a Monarchy Only rec the viewer may not see reads as missing, even
+        // to its own supporter (the rec may have been hidden after they seconded it).
+        if (!$second->find() || $second->deleted_at
+            || $this->rec_hidden_from((int)$mundane_id, (int)$second->recommendations_id)) {
             return InvalidParameter('Second not found.');
         }
         if ((int)$second->supporter_mundane_id !== (int)$mundane_id) {
@@ -4859,7 +5011,8 @@ class Player extends Ork3
         $second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
         $second->clear();
         $second->recommendation_seconds_id = $request['RecommendationSecondsId'];
-        if (!$second->find() || $second->deleted_at) {
+        if (!$second->find() || $second->deleted_at
+            || $this->rec_hidden_from((int)$mundane_id, (int)$second->recommendations_id)) {
             return InvalidParameter('Second not found.');
         }
 
@@ -4915,6 +5068,9 @@ class Player extends Ork3
         if (!valid_id($request['RecommendationsId'])) {
             return InvalidParameter('Invalid recommendation.');
         }
+        if ($this->rec_hidden_from((int)$mundane_id, (int)$request['RecommendationsId'])) {
+            return InvalidParameter('Recommendation not found.');
+        }
 
         $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
         $awardRec->clear();
@@ -4937,7 +5093,7 @@ class Player extends Ork3
      * used to warn a submitter that someone already recommended this. Anonymous ("mask
      * giver") recommendations are reported without the recommender's name. Capped at 5.
      */
-    public function GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id)
+    public function GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id, $token = '')
     {
         $mundane_id         = (int)$mundane_id;
         $kingdomaward_id    = (int)$kingdomaward_id;
@@ -4948,16 +5104,24 @@ class Player extends Ork3
         // and `r.rank = 0` silently drops those rows.
         $rank_clause = ' AND COALESCE(r.rank, 0) = ' . ($rank > 0 ? $rank : 0);
 
+        $vis    = Ork3::$Lib->recommendationvisibility;
+        $viewer = $vis->viewerFromToken($token);
+        $this->db->Clear();
+        $kr = $this->db->DataSet('SELECT kingdom_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id . ' LIMIT 1');
+        $recipKingdom = ($kr && $kr->Next()) ? (int)$kr->kingdom_id : 0;
+
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT r.date_recommended, r.mask_giver, rbi.persona AS recommender_persona
 			 FROM ' . DB_PREFIX . 'recommendations r
 			 LEFT JOIN ' . DB_PREFIX . 'mundane rbi ON rbi.mundane_id = r.recommended_by_id
+			 LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
 			 WHERE r.mundane_id = ' . $mundane_id .
              ' AND r.kingdomaward_id = ' . $kingdomaward_id .
              $rank_clause .
              ' AND ' . self::LiveRecommendationClause('r') . '
 			 AND r.recommended_by_id != ' . $exclude_mundane_id .
+            ' AND ' . $vis->sqlPredicate($viewer, 'r', 'm', [$recipKingdom]) .
             ' LIMIT 5'
         );
 
@@ -4976,11 +5140,38 @@ class Player extends Ork3
     }
 
     /**
+     * JSON-exposed. Drops the seconds of Monarchy Only recommendations: the caller
+     * here is unauthenticated and chooses the ids. In-process readers that have
+     * already applied RecommendationVisibility call seconds_for_recommendations().
+     */
+    public function GetSecondsForRecommendations($recommendation_ids, $viewer_id)
+    {
+        $ids = array_filter(array_map('intval', (array)$recommendation_ids));
+        if (!$ids) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT recommendations_id FROM ' . DB_PREFIX . 'recommendations WHERE monarchy_only = 0 AND recommendations_id IN (' . implode(',', $ids) . ')');
+        $public = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $public[] = (int)$rs->recommendations_id;
+            }
+        }
+        return $public ? $this->seconds_for_recommendations($public, $viewer_id) : [];
+    }
+
+    /**
      * For a list of recommendation IDs, return active seconds grouped by recommendations_id.
      * Each entry includes the supporter's mundane_id, persona, notes, created_at, and updated_at.
      * The viewer_id is used to compute the IsMine flag and (caller) for masking decisions.
+     * Unfiltered: only in-process readers that apply RecommendationVisibility
+     * themselves may call it. The underscore is the guard — JsonServer refuses any
+     * method name containing `_`. A lowercase first letter is NOT a guard: PHP method
+     * names are case-insensitive, so `Player/SecondsForRecommendations` would pass
+     * the validator and dispatch here.
      */
-    public function GetSecondsForRecommendations($recommendation_ids, $viewer_id)
+    public function seconds_for_recommendations($recommendation_ids, $viewer_id)
     {
         if (!is_array($recommendation_ids) || count($recommendation_ids) === 0) {
             return array();

@@ -1108,6 +1108,22 @@ class Controller_Admin extends Controller
                             $this->data['Error'] = 'Who gave this award? Award not added!';
                             break;
                         }
+                        // "Give from rec" forms send the source rec. A Monarchy Only rec's
+                        // reason is never a public award note: a tab opened while the rec
+                        // was public pre-filled it, so the one publishing gate blanks it
+                        // (a rec id that is not about this recipient is ignored). The
+                        // header (sent only once the award is saved) lets the form say so
+                        // without a dialog.
+                        $awardNote    = (string)$this->request->Admin_player->Note;
+                        $sourceRec    = (int)($_POST['RecommendationsId'] ?? 0);
+                        $noteWithheld = false;
+                        if ($sourceRec > 0 && trim($awardNote) !== '') {
+                            $gatedNote = $this->Player->publishable_award_note($awardNote, $sourceRec, (int)$id);
+                            if ($gatedNote !== $awardNote) {
+                                $noteWithheld = true;
+                                $awardNote    = $gatedNote;
+                            }
+                        }
                         $r = $this->Player->add_player_award(array(
                                 'Token' => $this->session->token,
                                 'RecipientId' => $id,
@@ -1117,11 +1133,15 @@ class Controller_Admin extends Controller
                                 'Rank' => $this->request->Admin_player->Rank,
                                 'Date' => $this->request->Admin_player->Date,
                                 'GivenById' => $this->request->Admin_player->GivenById,
-                                'Note' => $this->request->Admin_player->Note,
+                                'Note' => $awardNote,
                                 'ParkId' => valid_id($this->request->Admin_player->ParkId) ? $this->request->Admin_player->ParkId : 0,
                                 'KingdomId' => valid_id($this->request->Admin_player->KingdomId) ? $this->request->Admin_player->KingdomId : 0,
                                 'EventId' => valid_id($this->request->Admin_player->EventId) ? $this->request->Admin_player->EventId : 0
                             ));
+                        // add_player_award returns the FLAT shape: Status 0 = saved.
+                        if ($noteWithheld && (int)($r['Status'] ?? 1) === 0 && !headers_sent()) {
+                            header('X-Ork-Note-Withheld: 1');
+                        }
                         break;
                     case 'deleteaward':
                         $r = $this->Player->delete_player_award(array(

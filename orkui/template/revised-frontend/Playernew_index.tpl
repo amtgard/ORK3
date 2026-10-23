@@ -3917,6 +3917,15 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 					</label>
 					<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
 				</div>
+				<?php if (!empty($CanMonarchyOnlyRec)): ?>
+				<div style="margin-top:12px">
+					<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+						<input type="checkbox" name="MonarchyOnly" id="pn-rec-monarchy" value="1" style="width:16px;height:16px;cursor:pointer">
+						<span>Monarchy Only</span>
+					</label>
+					<div class="mo-check-hint">Only officers will see this recommendation; the player will not.</div>
+				</div>
+				<?php endif; ?>
 			</form>
 		</div>
 		<div class="pn-modal-footer">
@@ -3937,6 +3946,7 @@ window.OrkRsCfg = {
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php include __DIR__ . '/_monarchy_only_assets.tpl'; ?>
 <?php if (!empty($CanRevokeBonus) && !empty($BonusCredits)): ?>
 <script>
 // Remove a bonus credit from the Class Levels tab. The page reloads afterwards so
@@ -7945,7 +7955,7 @@ $(function() {
 				}
 
 				html += '<tr data-rec-id="' + recId + '">'
-					+ '<td>' + esc(rec.AwardName) + '</td>'
+					+ '<td>' + esc(rec.AwardName) + (window.orkMonarchyOnlyBadge ? orkMonarchyOnlyBadge(rec.MonarchyOnlyLevel) : '') + '</td>'
 					+ '<td class="pn-col-numeric">' + rank + '</td>'
 					+ '<td class="pn-col-nowrap">' + esc(rec.DateRecommended) + '</td>'
 					+ '<td><a href="' + PnConfig.uir + 'Player/profile/' + parseInt(rec.RecommendedById) + '">' + esc(rec.RecommendedByName) + '</a></td>'
@@ -7959,7 +7969,7 @@ $(function() {
 						actions += '<button class="rs-action-btn" data-rec="' + recId + '" data-award="' + attr(rec.AwardName) + '" data-recipient="' + attr(rec.Persona) + '" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>';
 					}
 					if (PnConfig.canManageAwards && kaid > 0) {
-						var rd = JSON.stringify({KingdomAwardId: kaid, Rank: parseInt(rec.Rank)||0, Reason: rec.Reason||'', AwardName: rec.AwardName||''});
+						var rd = JSON.stringify({RecommendationsId: parseInt(rec.RecommendationsId, 10)||0, KingdomAwardId: kaid, Rank: parseInt(rec.Rank)||0, Reason: rec.Reason||'', AwardName: rec.AwardName||'', MonarchyOnlyLevel: parseInt(rec.MonarchyOnlyLevel, 10)||0});
 						actions += '<button class="pk-btn pk-btn-primary pn-rec-grant-btn" data-rec="' + rd.replace(/"/g, '&quot;') + '"><i class="fas fa-medal"></i> Grant</button> ';
 					}
 					var canDel = PnConfig.canDeleteRec || rec.RecommendedById == PnConfig.loggedInUserId || mid == PnConfig.loggedInUserId;

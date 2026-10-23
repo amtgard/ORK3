@@ -22,6 +22,10 @@ final class CourtFixture
     private array $officerSeats = [];
     /** @var list<int> */
     private array $recIds = [];
+    /** @var list<int> */
+    private array $authIds = [];
+    /** @var list<string> */
+    private array $tokens = [];
 
     public function __construct(private readonly PDO $pdo)
     {
@@ -195,6 +199,22 @@ final class CourtFixture
     }
 
     /**
+     * Give a player a live login token: ork_session is the authoritative token
+     * store IsAuthorized() reads, so a row there is all a token needs.
+     */
+    public function issueToken(int $mundaneId): string
+    {
+        $token = md5(self::MARKER . $mundaneId . bin2hex(random_bytes(8)));
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'session (mundane_id, token, created, last_seen, expires)
+             VALUES (?, ?, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL 72 HOUR))'
+        )->execute([$mundaneId, $token]);
+        $this->tokens[] = $token;
+
+        return $token;
+    }
+
+    /**
      * First kingdomaward in a kingdom — recommendations need a real one to join to.
      */
     public function firstKingdomAwardId(int $kingdomId): array
@@ -223,24 +243,72 @@ final class CourtFixture
             'mask_giver'        => 0,
             'reason'            => 'Fixture recommendation.',
             'dismissed_by'      => null,
+            'monarchy_only'     => 0,
+            'passed_to_local'   => 0,
         ], $overrides);
 
         $st = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'recommendations
              (mundane_id, kingdomaward_id, award_id, rank, recommended_by_id,
-              date_recommended, mask_giver, reason, deleted_at, deleted_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+              date_recommended, mask_giver, reason, deleted_at, deleted_by, monarchy_only, passed_to_local)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $st->execute([
             $mundaneId, $kaId, $awardId, $row['rank'], $row['recommended_by_id'],
             $row['date_recommended'], $row['mask_giver'], $row['reason'],
             $row['dismissed_by'] ? date('Y-m-d H:i:s') : null,
             $row['dismissed_by'] ?: null,
+            (int) $row['monarchy_only'], (int) $row['passed_to_local'],
         ]);
         $id = (int) $this->pdo->lastInsertId();
         $this->recIds[] = $id;
 
         return $id;
+    }
+
+    /** A player with a live ork_session token, so domain calls can IsAuthorized() them. */
+    public function createPlayerWithToken(string $tag, int $kingdomId, int $parkId): array
+    {
+        $p = $this->createPlayer($tag, $kingdomId, $parkId);
+        $token = $this->issueToken((int) $p['mundane_id']);
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET token = ?, penalty_box = 0, suspended = 0 WHERE mundane_id = ?')
+            ->execute([$token, $p['mundane_id']]);
+
+        return $p + ['token' => $token];
+    }
+
+    public function insertScopedAuth(int $mundaneId, int $parkId, int $kingdomId, string $role = 'create'): int
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'authorization
+             (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
+             VALUES (?, ?, ?, 0, 0, ?, NOW())'
+        )->execute([$mundaneId, $parkId, $kingdomId, $role]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->authIds[] = $id;
+
+        return $id;
+    }
+
+    public function insertGlobalAdmin(int $mundaneId): int
+    {
+        return $this->insertScopedAuth($mundaneId, 0, 0, 'admin');
+    }
+
+    public function setPassedToLocal(int $recId, bool $passed): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'recommendations SET passed_to_local = ? WHERE recommendations_id = ?')
+            ->execute([$passed ? 1 : 0, $recId]);
+    }
+
+    public function secondParkId(int $kingdomId, int $excludeParkId): int
+    {
+        $st = $this->pdo->prepare(
+            'SELECT park_id FROM ' . DB_PREFIX . 'park WHERE kingdom_id = ? AND park_id <> ? ORDER BY park_id ASC LIMIT 1'
+        );
+        $st->execute([$kingdomId, $excludeParkId]);
+
+        return (int) $st->fetchColumn();
     }
 
     public function fetchRecommendation(int $recId): array
@@ -303,6 +371,7 @@ final class CourtFixture
         $this->deleteIn('court_award', 'court_id', $this->courtIds);
         $this->deleteIn('court_award', 'court_award_id', $this->awardIds);
         $this->deleteIn('court', 'court_id', $this->courtIds);
+        $this->deleteIn('recommendation_seconds', 'recommendations_id', $this->recIds);
         $this->deleteIn('recommendations', 'recommendations_id', $this->recIds);
 
         // Put borrowed officer seats back before the stand-in players go away.
@@ -315,8 +384,14 @@ final class CourtFixture
         $this->officerSeats = [];
 
         $this->deleteIn('officer', 'officer_id', $this->officerIds);
+        $this->deleteIn('authorization', 'authorization_id', $this->authIds);
+        if ($this->tokens) {
+            $in = implode(',', array_fill(0, count($this->tokens), '?'));
+            $this->pdo->prepare('DELETE FROM ' . DB_PREFIX . 'session WHERE token IN (' . $in . ')')
+                ->execute($this->tokens);
+        }
         $this->deleteIn('mundane', 'mundane_id', $this->mundaneIds);
-        $this->awardIds = $this->courtIds = $this->officerIds = $this->mundaneIds = $this->recIds = [];
+        $this->awardIds = $this->courtIds = $this->officerIds = $this->mundaneIds = $this->recIds = $this->authIds = $this->tokens = [];
     }
 
     private function deleteIn(string $table, string $pk, array $ids): void

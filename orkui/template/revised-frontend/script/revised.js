@@ -2381,11 +2381,13 @@ if (PnConfig.recError) {
 
         // ---- Open / Close ----
         window.pnOpenAwardModal = function(type) {
+            pnActiveRecId = null; // set again by pnGiveFromRec when opened from a rec
             // Reset
             gid('pn-award-error').style.display   = 'none';
             gid('pn-award-error').textContent      = '';
             gid('pn-award-success').style.display  = 'none';
             gid('pn-award-note').value            = '';
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), false);
             gid('pn-award-char-count').textContent = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
             gid('pn-award-givenby-text').value    = '';
@@ -2417,21 +2419,29 @@ if (PnConfig.recError) {
         };
         var pnAwardsDirty = false;
         window.pnCloseAwardModal = function() {
+            pnActiveRecId = null;
             gid('pn-award-overlay').classList.remove('pn-open');
             document.body.style.overflow = '';
             if (pnAwardsDirty) { pnAwardsDirty = false; window.location.reload(); }
         };
 
+        // The rec a "Give from rec" opened this modal from: sent with the save so the
+        // server's Monarchy Only gate can check the note (cleared on every other open).
+        var pnActiveRecId = null;
         // Pre-populate the award modal from a recommendation row
         window.pnGiveFromRec = function(rec) {
             pnOpenAwardModal('awards');
+            pnActiveRecId = rec.RecommendationsId || null;
             var sel = gid('pn-award-select');
             sel.value = String(rec.KingdomAwardId || '');
             sel.dispatchEvent(new Event('change'));
             if (rec.Rank) {
                 setTimeout(function() { selectRankPill(parseInt(rec.Rank)); }, 0);
             }
-            if (rec.Reason) {
+            // Monarchy Only: the reason is officer-only and never becomes the public note.
+            var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), recMo);
+            if (rec.Reason && !recMo) {
                 var noteEl = gid('pn-award-note');
                 noteEl.value = rec.Reason;
                 var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -2473,6 +2483,7 @@ if (PnConfig.recError) {
             gid('pn-award-rank-row').style.display   = 'none';
             gid('pn-rank-pills').innerHTML           = '';
             gid('pn-award-note').value               = '';
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), false);
             gid('pn-award-char-count').textContent   = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
             gid('pn-award-info-line').innerHTML      = '';
@@ -2508,6 +2519,7 @@ if (PnConfig.recError) {
             fd.append('KingdomId',      gid('pn-award-kingdom-id').value || '0');
             fd.append('EventId',        gid('pn-award-event-id').value   || '0');
             fd.append('Note',           gid('pn-award-note').value       || '');
+            if (pnActiveRecId) fd.append('RecommendationsId', String(pnActiveRecId));
             var rank = gid('pn-award-rank-val').value;
             if (rank) fd.append('Rank', rank);
             var customName = gid('pn-award-custom-name').value.trim();
@@ -2523,6 +2535,8 @@ if (PnConfig.recError) {
             fetch(AWARD_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                    if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
+                    pnActiveRecId = null;
                     onSuccess();
                 })
                 .catch(function(err) {
@@ -3661,6 +3675,7 @@ $(document).ready(function() {
         gid('kn-award-player-id').value          = '';
         gid('kn-award-player-results').classList.remove('kn-ac-open');
         gid('kn-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), false);
         gid('kn-award-char-count').textContent   = '400 characters remaining';
         gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-givenby-text').value       = '';
@@ -3744,7 +3759,10 @@ $(document).ready(function() {
                 if (pill) pill.click();
             }, 0);
         }
-        if (rec.Reason) {
+        // Monarchy Only: the reason is officer-only and never becomes the public note.
+        var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), recMo);
+        if (rec.Reason && !recMo) {
             var noteEl = gid('kn-award-note');
             noteEl.value = rec.Reason;
             var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -4143,6 +4161,7 @@ $(document).ready(function() {
         gid('kn-award-rank-row').style.display   = 'none';
         gid('kn-rank-pills').innerHTML           = '';
         gid('kn-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), false);
         gid('kn-award-char-count').textContent   = '400 characters remaining';
         gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-info-line').innerHTML      = '';
@@ -4173,6 +4192,7 @@ $(document).ready(function() {
         fd.append('KingdomId',      gid('kn-award-kingdom-id').value || '0');
         fd.append('EventId',        gid('kn-award-event-id').value   || '0');
         fd.append('Note',           gid('kn-award-note').value       || '');
+        if (knActiveRecId) fd.append('RecommendationsId', String(knActiveRecId));
         var rank = gid('kn-award-rank-val').value;
         if (rank) fd.append('Rank', rank);
         var customName = gid('kn-award-custom-name') ? gid('kn-award-custom-name').value.trim() : '';
@@ -4193,6 +4213,7 @@ $(document).ready(function() {
         fetch(saveUrl, { method: 'POST', body: fd })
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
                 onSuccess();
             })
             .catch(function(err) {
@@ -4311,8 +4332,15 @@ $(document).ready(function() {
         });
     }
 
+    // Monarchy Only eligibility follows the PICKED recipient, not the page.
+    function knMoRecheck(recipientId) {
+        if (window.orkMonarchyOnlyRecheck) {
+            window.orkMonarchyOnlyRecheck(gid('kn-rec-monarchy'), UIR_JS + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/monarchyonlyeligible', recipientId);
+        }
+    }
     gid('kn-rec-player-text').addEventListener('input', function() {
         gid('kn-rec-player-id').value = '';
+        knMoRecheck(0);
         checkRequired();
         var term = this.value.trim();
         clearTimeout(playerTimer);
@@ -4338,6 +4366,7 @@ $(document).ready(function() {
         gid('kn-rec-player-text').value = decodeURIComponent(item.dataset.name);
         gid('kn-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
+        knMoRecheck(item.dataset.id);
         knRecRanks = {};
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
@@ -4369,6 +4398,8 @@ $(document).ready(function() {
         gid('kn-rec-reason').value          = '';
         gid('kn-rec-char-count').textContent = '400 characters remaining';
         var knAnonEl = gid('kn-rec-anon'); if (knAnonEl) knAnonEl.checked = false;
+        var knMoEl = gid('kn-rec-monarchy'); if (knMoEl) knMoEl.checked = false;
+        knMoRecheck(0);
         knRecRanks = {};
         checkRequired();
         gid('kn-rec-overlay').classList.add('kn-open');
@@ -4396,6 +4427,7 @@ $(document).ready(function() {
         if (rank) fd.append('Rank', rank);
         var anonEl = gid('kn-rec-anon');
         if (anonEl && anonEl.checked) fd.append('Anonymous', 1);
+        var moEl = gid('kn-rec-monarchy'); if (moEl && moEl.checked) fd.append('MonarchyOnly', '1');
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         fetch(UIR_JS + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/addrecommendation', { method: 'POST', body: fd })
@@ -4412,6 +4444,8 @@ $(document).ready(function() {
                     gid('kn-rec-reason').value = '';
                     gid('kn-rec-char-count').textContent = '400 characters remaining';
                     var knAnonElS = gid('kn-rec-anon'); if (knAnonElS) knAnonElS.checked = false;
+                    var knMoElS = gid('kn-rec-monarchy'); if (knMoElS) knMoElS.checked = false;
+                    knMoRecheck(0);
                     knRecRanks = {};
                     setTimeout(function() { gid('kn-rec-success').style.display = 'none'; }, 3000);
                 } else {
@@ -7756,6 +7790,7 @@ $(document).ready(function() {
         gid('pk-award-player-id').value          = '';
         gid('pk-award-player-results').classList.remove('pk-ac-open');
         gid('pk-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), false);
         gid('pk-award-char-count').textContent   = '400 characters remaining';
         gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-givenby-text').value       = '';
@@ -7818,7 +7853,10 @@ $(document).ready(function() {
                 if (pill) pill.click();
             }, 0);
         }
-        if (rec.Reason) {
+        // Monarchy Only: the reason is officer-only and never becomes the public note.
+        var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), recMo);
+        if (rec.Reason && !recMo) {
             var noteEl = gid('pk-award-note');
             noteEl.value = rec.Reason;
             var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -7941,6 +7979,7 @@ $(document).ready(function() {
         gid('pk-award-rank-row').style.display   = 'none';
         gid('pk-rank-pills').innerHTML           = '';
         gid('pk-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), false);
         gid('pk-award-char-count').textContent   = '400 characters remaining';
         gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-info-line').innerHTML      = '';
@@ -7971,6 +8010,7 @@ $(document).ready(function() {
         fd.append('KingdomId',      gid('pk-award-kingdom-id').value || '0');
         fd.append('EventId',        gid('pk-award-event-id').value   || '0');
         fd.append('Note',           gid('pk-award-note').value       || '');
+        if (pkActiveRecId) fd.append('RecommendationsId', String(pkActiveRecId));
         var rank = gid('pk-award-rank-val').value;
         if (rank) fd.append('Rank', rank);
         var customName = gid('pk-award-custom-name') ? gid('pk-award-custom-name').value.trim() : '';
@@ -7989,6 +8029,7 @@ $(document).ready(function() {
         fetch(saveUrl, { method: 'POST', body: fd })
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
                 onSuccess();
             })
             .catch(function(err) {
@@ -8114,8 +8155,16 @@ $(document).ready(function() {
     }
 
     // Player search
+    // Monarchy Only eligibility follows the PICKED recipient (this search is
+    // kingdom-wide, so the recipient need not be of this park).
+    function pkMoRecheck(recipientId) {
+        if (window.orkMonarchyOnlyRecheck) {
+            window.orkMonarchyOnlyRecheck(gid('pk-rec-monarchy'), UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/monarchyonlyeligible', recipientId);
+        }
+    }
     gid('pk-rec-player-text').addEventListener('input', function() {
         gid('pk-rec-player-id').value = '';
+        pkMoRecheck(0);
         checkRequired();
         var term = this.value.trim();
         clearTimeout(playerTimer);
@@ -8141,6 +8190,7 @@ $(document).ready(function() {
         gid('pk-rec-player-text').value = decodeURIComponent(item.dataset.name);
         gid('pk-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
+        pkMoRecheck(item.dataset.id);
         pkRecRanks = {};
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
@@ -8172,6 +8222,8 @@ $(document).ready(function() {
         gid('pk-rec-reason').value          = '';
         gid('pk-rec-char-count').textContent = '400 characters remaining';
         var pkAnonEl = gid('pk-rec-anon'); if (pkAnonEl) pkAnonEl.checked = false;
+        var pkMoEl = gid('pk-rec-monarchy'); if (pkMoEl) pkMoEl.checked = false;
+        pkMoRecheck(0);
         pkRecRanks = {};
         checkRequired();
         gid('pk-rec-overlay').classList.add('pk-open');
@@ -8209,6 +8261,7 @@ $(document).ready(function() {
             if (rank) fd.append('Rank', rank);
             var anonEl = gid('pk-rec-anon');
             if (anonEl && anonEl.checked) fd.append('Anonymous', 1);
+            var moEl = gid('pk-rec-monarchy'); if (moEl && moEl.checked) fd.append('MonarchyOnly', '1');
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             if (warnEl) warnEl.style.display = 'none';
@@ -8226,6 +8279,9 @@ $(document).ready(function() {
                         gid('pk-rec-rank-pills').innerHTML = '';
                         gid('pk-rec-reason').value = '';
                         gid('pk-rec-char-count').textContent = '400 characters remaining';
+                        var pkAnonElS = gid('pk-rec-anon'); if (pkAnonElS) pkAnonElS.checked = false;
+                        var pkMoElS = gid('pk-rec-monarchy'); if (pkMoElS) pkMoElS.checked = false;
+                        pkMoRecheck(0);
                         pkRecRanks = {};
                         setTimeout(function() { gid('pk-rec-success').style.display = 'none'; }, 3000);
                     } else {
