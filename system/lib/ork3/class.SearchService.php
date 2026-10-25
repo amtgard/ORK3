@@ -136,6 +136,7 @@ class SearchService extends Ork3
                     'Country' => $eventdetail->country,
                     'MapUrl' => $eventdetail->map_url,
                     'MapUrlName' => $eventdetail->map_url_name,
+                    'Location' => $eventdetail->location,
                 'EventType'  => $eventdetail->event_type
                 );
             return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $detail);
@@ -458,7 +459,8 @@ class SearchService extends Ork3
         );
         $sql = "select 
 						`mundane_id`, m.`active`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
-						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr
+						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr,
+						(m.email IS NOT NULL AND m.email <> '') as has_email
 					from " . DB_PREFIX . "mundane m
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
 						left join " . DB_PREFIX . "park p on p.park_id = m.park_id
@@ -489,7 +491,13 @@ class SearchService extends Ork3
                         'PAbbr' => $q->p_abbr,
                         'Suspended' => $q->suspended,
                         'SuspendedAt' => $q->suspended_at,
-                        'SuspendedUntil' => $q->suspended_until
+                        'SuspendedUntil' => $q->suspended_until,
+                        // Whether a mailbox exists, never the address itself. The IDP
+                        // needs this to avoid offering "Email Code" for a record that
+                        // can never receive one -- 74% of active players have no email
+                        // on file, and the claim flow returns Success() either way, so
+                        // without this they are told it worked and nothing arrives.
+                        'HasEmail' => (int)$q->has_email
                     );
                 if (is_numeric($limit)) {
                     if ($limit == 0) {

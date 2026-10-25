@@ -21,6 +21,9 @@ if ($grid_view && ($mode ?? '') === 'all_parks' && !empty($attendance)) {
         $period_totals[$period] = ($period_totals[$period] ?? 0) + $val;
         if (!in_array($period, $grid_periods)) $grid_periods[] = $period;
     }
+    // Merge in the full expected period list (empty periods render as 0), then sort chronologically.
+    foreach ((array)($all_periods ?? []) as $ap) { if (!in_array($ap, $grid_periods)) $grid_periods[] = $ap; }
+    sort($grid_periods, SORT_STRING);
     uasort($grid_parks, function($a, $b) { return strcmp($a['ParkName'], $b['ParkName']); });
     $grid_kingdom_row = ['ParkId' => 0, 'ParkName' => isset($kingdom_name) ? $kingdom_name : 'Kingdom', 'periods' => $period_totals];
 }
@@ -215,7 +218,7 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 <?php foreach ($grid_parks as $gpark) : ?>
 				<tr>
 					<td><a href="<?=UIR.'Park/profile/'.$gpark['ParkId']?>"><?=htmlspecialchars($gpark['ParkName'])?></a></td>
-					<?php $_gvals = array_values($gpark['periods']); $_gcnt = count($_gvals); ?>
+					<?php $_gvals = array_values($gpark['periods']); $_gcnt = count($grid_periods); /* every rendered period counts (empty = 0) */ ?>
 					<td><?=$_gcnt > 0 ? number_format(array_sum($_gvals) / $_gcnt, 1) : '0'?></td>
 <?php foreach ($grid_periods as $gp) : ?>
 					<td><?=(int)($gpark['periods'][$gp] ?? 0)?></td>
@@ -225,7 +228,7 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 <?php if (!empty($grid_kingdom_row)) : ?>
 				<tr class="rp-row-summary">
 					<td><strong><?=htmlspecialchars($grid_kingdom_row['ParkName'])?></strong></td>
-					<?php $_gkvals = array_values($grid_kingdom_row['periods']); $_gkcnt = count($_gkvals); ?>
+					<?php $_gkvals = array_values($grid_kingdom_row['periods']); $_gkcnt = count($grid_periods); ?>
 					<td><strong><?=$_gkcnt > 0 ? number_format(array_sum($_gkvals) / $_gkcnt, 1) : '0'?></strong></td>
 <?php foreach ($grid_periods as $gp) : ?>
 					<td><strong><?=(int)($grid_kingdom_row['periods'][$gp] ?? 0)?></strong></td>

@@ -175,7 +175,8 @@ class Controller_Player extends Controller
                                 'KingdomAwardId' => $this->request->Player_index->KingdomAwardId,
                                 'Rank' => $this->request->Player_index->Rank,
                                 'GivenById' => $this->request->Player_index->MundaneId,
-                                'Reason' => $this->request->Player_index->Reason
+                                'Reason' => $this->request->Player_index->Reason,
+                                'MonarchyOnly' => !empty($this->request->Player_index->MonarchyOnly) ? 1 : 0
                             ));
                         break;
                     case 'deleterecommendation':
@@ -245,7 +246,7 @@ class Controller_Player extends Controller
         $this->data['ShowRecsTab']          = $recsPublic || $canEdit;
         $this->data['AwardRecommendations'] = [];
         if ($this->data['ShowRecsTab'] || $uid > 0) {
-            $recs = $this->Reports->recommended_awards(array('PlayerId' => $id, 'KingdomId' => 0, 'ParkId' => 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0));
+            $recs = $this->Reports->recommended_awards(array('PlayerId' => $id, 'KingdomId' => 0, 'ParkId' => 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => 0, 'Token' => $this->session->token));
             $this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
         }
 
@@ -280,6 +281,10 @@ class Controller_Player extends Controller
 
     public function profile($id = null)
     {
+        // Same-slug kingdom-original ladders, so the rank pickers can say when the
+        // recipient already holds the equivalent ladder in another kingdom.
+        // Informational only -- see Award::pseudoLadderSiblings().
+        $this->data['PseudoLadderSiblings'] = (new Award())->pseudoLadderSiblings();
         $this->template = '../revised-frontend/Playernew_index.tpl';
         $this->load_model('QualTest');
 
@@ -374,6 +379,7 @@ class Controller_Player extends Controller
                             'Rank'           => $this->request->Player_profile->Rank,
                             'Reason'         => $this->request->Player_profile->Reason,
                             'Anonymous'      => !empty($this->request->Player_profile->Anonymous) ? 1 : 0,
+                            'MonarchyOnly'   => !empty($this->request->Player_profile->MonarchyOnly) ? 1 : 0,
                         ]);
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 0) {
@@ -458,6 +464,7 @@ class Controller_Player extends Controller
             || ($playerKingdomId > 0 && $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_EDIT))
             || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN));
         $this->data['canManageAwards'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
+        $this->data['CanMonarchyOnlyRec'] = $uid > 0 && $this->Player->monarchy_only_level($uid, $playerKingdomId, $playerParkId) > 0;
         $knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
         $this->data['ShowRecsTab']          = $recsPublic || $canEdit;
@@ -525,6 +532,16 @@ class Controller_Player extends Controller
         $this->data['KingdomEvents']   = ($uid === (int)$id) ? $this->Event->get_kingdom_upcoming_events((int)$this->session->kingdom_id, (int)$id) : [];
         $this->data['IsOwnProfile']    = $uid === (int)$id;
         $this->data['Player']['ParkName'] = $this->session->park_name;
+
+        // Bonus credits (class credits that are not attendance): listed on the
+        // Class Levels tab so a credit never reads as an unexplained number.
+        // Live ones only; revoked history is kept for a management tool, not
+        // shown here. Officers with authority over the player's park may
+        // remove one.
+        $this->load_model('BonusCredit');
+        $__bcPark = (int)($this->data['Details']['ParkId'] ?? $this->data['Player']['ParkId'] ?? 0);
+        $this->data['CanRevokeBonus'] = $uid > 0 && $__bcPark > 0 && $this->BonusCredit->can_grant($uid, $__bcPark);
+        $this->data['BonusCredits']   = $this->BonusCredit->for_player((int)$id);
 
 
         // Beltline peers, associates, and title list (domain aggregate)

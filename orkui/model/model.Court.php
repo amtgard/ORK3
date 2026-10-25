@@ -106,14 +106,21 @@ class Model_Court extends Model
     // Court awards
     // -----------------------------------------------------------------------
 
-    public function get_court_awards($court_id)
+    // $caller_uid: the session user. Lines whose Monarchy Only rec they may not see
+    // come back without the rec's reason and recommender.
+    public function get_court_awards($court_id, $caller_uid = 0)
     {
-        return $this->_court()->getCourtAwards($court_id);
+        return $this->_court()->getCourtAwards($court_id, $caller_uid);
     }
 
-    public function add_award($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich = true)
+    public function add_award($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich = true, $caller_uid = 0)
     {
-        return $this->_court()->addAward($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich);
+        return $this->_court()->addAward($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich, $caller_uid);
+    }
+
+    public function can_use_rec_for_line($rec_id, $mundane_id, $caller_uid)
+    {
+        return $this->_court()->canUseRecForLine($rec_id, $mundane_id, $caller_uid);
     }
 
     public function update_award($court_award_id, array $fields, $expectedRowVersion = null)
@@ -215,9 +222,20 @@ class Model_Court extends Model
         return $this->_court()->unstageAward($court_award_id, $expectedRowVersion);
     }
 
-    public function get_staged_awards($court_id)
+    // True when $comment is the text of the line's rec while that rec is Monarchy Only.
+    public function is_hidden_rec_citation($court_award_id, $comment)
     {
-        return $this->_court()->getStagedAwards($court_id);
+        return $this->_court()->isHiddenRecCitation($court_award_id, $comment);
+    }
+
+    public function hidden_citation_message()
+    {
+        return Court::HIDDEN_CITATION_MESSAGE;
+    }
+
+    public function get_staged_awards($court_id, $caller_uid = 0)
+    {
+        return $this->_court()->getStagedAwards($court_id, $caller_uid);
     }
 
     public function count_staged_awards($court_id)
@@ -268,9 +286,9 @@ class Model_Court extends Model
     // Recommendations
     // -----------------------------------------------------------------------
 
-    public function get_pending_recommendations($kingdom_id, $park_id = 0, $caller_uid = 0, $court_id = 0)
+    public function get_pending_recommendations($kingdom_id, $park_id = 0, $caller_uid = 0, $court_id = 0, $caller_token = '')
     {
-        return $this->_court()->getPendingRecommendations($kingdom_id, $park_id, $caller_uid, $court_id);
+        return $this->_court()->getPendingRecommendations($kingdom_id, $park_id, $caller_uid, $court_id, $caller_token);
     }
 
     public function get_recommendation_court_map($kingdom_id, $park_id = 0, $include_park_courts = false)

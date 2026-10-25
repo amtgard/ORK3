@@ -51,6 +51,20 @@ final class ParkProfileTest extends TestCase
         $this->assertContains($ctx['event_id'], array_column($summary, 'EventId'));
     }
 
+    public function testParkEventSummaryIncludesEventsMoreThanAYearOut(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $ctx = $this->fixture->createPublishedEvent($parkId, 'far-future', 'published', '+18 months');
+
+        $summary = $this->profileDomain->GetParkEventSummary([
+            'ParkId' => $parkId,
+            'KingdomId' => $this->fixture->kingdomIdForPark($parkId),
+            'MundaneId' => 0,
+            'IsAdmin' => false,
+        ]);
+        $this->assertContains($ctx['event_id'], array_column($summary, 'EventId'));
+    }
+
     public function testParkEventSummaryBatchCoords(): void
     {
         $parkId = $this->fixture->firstParkId();

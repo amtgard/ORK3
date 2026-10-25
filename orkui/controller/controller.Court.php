@@ -118,10 +118,10 @@ class Controller_Court extends Controller
             return;
         }
 
-        $courtAwards  = $this->Court->get_court_awards($court_id);
+        $courtAwards  = $this->Court->get_court_awards($court_id, $uid);
         // Non-award line items that share the running order with the awards.
         $courtNotes   = $this->Court->get_court_notes($court_id);
-        $pendingRecs  = $this->Court->get_pending_recommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id);
+        $pendingRecs  = $this->Court->get_pending_recommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id, (string)$this->session->token);
         // Event options for the Edit Details modal's re-link select (spec 0.1) — mirrors
         // list()'s identical call; scoped to the COURT's kingdom, not the session's.
         $upcomingEvents = $this->Court->get_upcoming_events($court['KingdomId']);
@@ -193,6 +193,10 @@ class Controller_Court extends Controller
         // map (see Player::GetAwardMaxRanks). Membership of this list is the only
         // reliable test -- most of them carry AwardId 94 ("Custom Award"), not 0.
         $this->data['PseudoLadderKingdomAwardIds'] = Award::pseudoLadderKingdomAwardIds();
+        // Same awards grouped by slug, so the Grant modal can tell the officer when
+        // the recipient already holds the equivalent ladder in another kingdom --
+        // informational only, it changes no default. See Award::pseudoLadderSiblings.
+        $this->data['PseudoLadderSiblings'] = (new Award())->pseudoLadderSiblings();
         $this->data['StatusFlow']   = $statusFlow;
         $this->data['CanManage']    = $canManage;
         $this->data['Uid']          = $uid;
@@ -263,7 +267,7 @@ class Controller_Court extends Controller
         $awardOptions = $this->Award->fetch_award_option_groups($court['KingdomId'], 'Awards');
 
         $this->data['Court']                  = $court;
-        $this->data['CourtAwards']            = $this->Court->get_court_awards($court_id);
+        $this->data['CourtAwards']            = $this->Court->get_court_awards($court_id, $uid);
         $this->data['GiverOptions']           = $this->Court->get_court_giver_options($court_id);
         $this->data['UpcomingEvents']         = $upcomingEvents;
         $this->data['CourtMode']              = $courtState['mode'] ?? 'run';
