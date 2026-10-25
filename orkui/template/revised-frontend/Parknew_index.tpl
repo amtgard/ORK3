@@ -1809,7 +1809,10 @@
 										<a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a>
 									<?php else: ?>&mdash;<?php endif; ?>
 								</td>
-							<td><?= htmlspecialchars($rec['DateRecommended']) ?>
+							<?php /* data-order: DataTables sorts this column by the attribute, not the cell text.
+							   The cell also holds the age badge, and the built-in 'date' sorter ran Date.parse()
+							   over that markup, got NaN for every row and so never reordered anything. */ ?>
+							<td data-order="<?= (int)strtotime((string)$rec['DateRecommended']) ?>"><?= htmlspecialchars($rec['DateRecommended']) ?>
 <?php
 $_d = (int)($rec['AgeDays'] ?? 0);
 if ($_d < 1)        { $_al = 'today'; $_ac = 'kn-rec-age-green'; }
@@ -3743,7 +3746,8 @@ $(function() {
 		window.pkRecDT = $('#pk-rec-table').DataTable({
 			order: [[4, 'desc']],
 			columnDefs: [
-				{ targets: [4], type: 'date' },
+				// Column 4 (Date) sorts on its numeric data-order attribute; see the <td>.
+				{ targets: [4], type: 'num' },
 				<?php if (!empty($CanAdminPark)): ?>
 				{ targets: [-1], orderable: false, searchable: false },
 				<?php endif; ?>
