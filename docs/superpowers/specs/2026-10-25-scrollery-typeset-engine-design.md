@@ -194,11 +194,12 @@ Both implementations are tested against one shared fixture file, so they cannot 
 
 Input: `issuerTitle` (string, may be empty), `issuerName` (string), `useThe` (bool),
 `useOf` (bool), `scopeType` (`park`|`kingdom`|`''`).
-Output: `{ lead: string, place: string, placeArticle: string }`.
+Output: `{ lead, article, place, title, useThe, useOf, name }` (PHP adds `phrase`, §5.3).
+The last four are the effective (possibly split) form the composer prefills from.
 
 - `lead` is the connective after "Amtgard", e.g. `and the Barony of`, or `and`.
 - `place` is the proper name without a leading article.
-- `placeArticle` is `'the'` or `''`. The engine sets it at connective size.
+- `article` is `'the'` or `''`. The engine sets it at connective size.
 
 Rules, applied in order:
 
@@ -217,7 +218,7 @@ Rules, applied in order:
    stand without a rank word, and today that prints "and the  of". Otherwise
    `lead = 'and'` + (`useThe` ? `' the'` : `''`) + `' ' + title` + (`useOf` ? `' of'` : `''`).
 5. **Article.** If `issuerName` starts with `the ` (any case) and the lead ends with
-   `of`, set `placeArticle = 'the'` and drop it from `issuerName`. If the lead does not
+   `of`, set `article = 'the'` and drop it from `issuerName`. If the lead does not
    end with `of` (an unsplit whole name such as "The Celestial Kingdom"), keep the
    article in `place` exactly as written.
 6. `place = issuerName`.
