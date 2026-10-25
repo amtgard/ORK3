@@ -70,6 +70,21 @@ export default defineConfig({
       },
     },
     {
+      // The frozen review corpus (or any corpus file) rendered through the fixture renderer,
+      // so it needs no login. See corpus.spec.ts. Three times device scale because the
+      // contact sheet is read by eye; line counts and sizes are layout measurements and do
+      // not depend on it. The viewport is tall enough to hold the whole certificate.
+      name: 'scroll-corpus',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'corpus.spec.ts',
+      timeout: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 2600, height: 3500 },
+        deviceScaleFactor: 3,
+      },
+    },
+    {
       // Re-emits the report from an existing results.json. See rescore.spec.ts.
       name: 'scroll-sweep-rescore',
       testDir: './tools/scroll-sweep',
