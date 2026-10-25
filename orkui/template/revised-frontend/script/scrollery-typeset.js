@@ -13,11 +13,11 @@
  *
  * THE PURE CORE
  *
- * Everything in this file so far is arithmetic on strings and numbers: it touches no
- * DOM, no `window` and no `document`, which is what lets a Node test drive it in
- * milliseconds without the app up. (The one rule for anything added later: reach for
- * `window` / `document` only inside a function, never at load, or `require()` under
- * Node dies.) It loads both ways:
+ * Everything in this file is arithmetic on strings and numbers: it touches no DOM, no
+ * `window` and no `document`, which is what lets a Node test drive it in milliseconds
+ * without the app up. (The one rule for anything added later: reach for `window` /
+ * `document` only inside a function, never at load, or `require()` under Node dies.) It
+ * loads both ways:
  *
  *     browser   window.ScrolleryTypeset
  *     Node      require('.../scrollery-typeset.js')
@@ -25,11 +25,22 @@
  * WHAT IS HERE
  *
  *   CONST        the role table and every tunable number, copied from spec §6.4.1 and
- *                §6.3.2. T14 calibrates them against the sweep; they are plain data on
- *                purpose, so a calibration run edits a value and nothing else.
+ *                §6.3.2 and awaiting calibration against the sweep. They are plain data
+ *                on purpose, so a calibration run edits a value and nothing else.
  *   tokenize     text -> words, with protected spans held together and the honorific
  *                and epithet roles marked (§6.3.1).
  *   breakPenalty what it costs to break a line in the gap after a word (§6.3.2).
+ *   utility      what a size is worth: 100 at the role's `sat`, 120 at its `max`
+ *                (§6.3.3).
+ *   solveBlock   one block's breaks and size together. It enumerates every way to cut
+ *                the words into lines, finds the largest size each fits at under the
+ *                artwork's free widths, scores them and returns the best (§6.3.3,
+ *                §6.3.4, §6.4.3). When nothing fits it cuts over-long words and tries
+ *                again, and when that fails it returns the words as written at the
+ *                minimum size, flagged.
+ *
+ * The spec's later pieces (the choice of composition, ornament placement and the DOM
+ * layer that measures and writes, §6.1) build on these and are not in the file yet.
  *
  * CHARACTERS ARE COUNTED WITH Array.from(), NEVER .length. `.length` counts UTF-16 code
  * units, so an astral character (an emoji in a persona is legal) counts twice, and
@@ -127,7 +138,9 @@
 
     var GRAND_RANKS = ['Duke', 'Duchess', 'Marquis', 'Master'];
 
-    var NBSP = ' ';
+    /* The no-break space that holds a protected span together, written as an escape
+       because the literal character is invisible in review. */
+    var NBSP = '\u00a0';
 
     /* A list as a lookup. The word lists are fixed at load; only the numbers above are
        meant to be edited in place. */
@@ -146,9 +159,11 @@
      * The punctuation that dresses a word without being part of it: quotes, brackets,
      * sentence punctuation, dashes and the ellipsis. "&" is deliberately NOT here — it
      * is itself a WEAK_END word and stripping it would leave nothing to match.
-     * Escapes, not literals, so the curly quotes are visible in review.
+     * Escapes, not literals, so a curly quote cannot be mistaken for a straight one in
+     * review: \u201c \u201d \u2018 \u2019 are the curly quotes, \u2026 the ellipsis and
+     * \u2013 \u2014 the en and em dashes.
      */
-    var EDGE_PUNCT = /^[\s"'“”‘’()\[\]{}<>,.;:!?*…–—-]+|[\s"'“”‘’()\[\]{}<>,.;:!?*…–—-]+$/g;
+    var EDGE_PUNCT = /^[\s"'\u201c\u201d\u2018\u2019()\[\]{}<>,.;:!?*\u2026\u2013\u2014-]+|[\s"'\u201c\u201d\u2018\u2019()\[\]{}<>,.;:!?*\u2026\u2013\u2014-]+$/g;
 
     function stripEdges(text) {
         return text.replace(EDGE_PUNCT, '');
@@ -352,9 +367,363 @@
         return p;
     }
 
+    /* ------------------------------------------------------------------ utility */
+
+    /*
+     * utility(s, range) -> number   (§6.3.3)
+     *
+     * What a size is worth: a straight line from 0 to 100 as `s` climbs to `sat`, then a
+     * shallower climb to 120 at `max`. Past `sat` a bigger name still reads as better,
+     * but not enough to be worth a bad break or a third line. `range.max` is the ceiling
+     * the caller computed for this block (the hierarchy of §6.4.2 may have lowered it),
+     * so a block held under its role's own maximum still tops out at 120 at its ceiling.
+     */
+    function utility(s, range) {
+        var sat = range.sat;
+        if (!(sat > 0)) { throw new TypeError('utility: the range has no sat (the lead is sized by hierarchy, not scored)'); }
+        var u = 100 * Math.min(s, sat) / sat;
+        if (s > sat && range.max > sat) { u += 20 * (s - sat) / (range.max - sat); }
+        return u;
+    }
+
+    /* ------------------------------------------------------------------ solveBlock */
+
+    /* Two scores closer than this are a tie. Widths are sums of floats, so symmetrical
+       candidates can differ in the last bits; the tie rules must not hang on that. */
+    var EPS = 1e-9;
+
+    /* The internal token: tokenize()'s marks, plus `joinPrev` for a fragment of a split
+       word, which sits against the fragment before it with no space between. */
+    function lineTokens(tokens) {
+        return tokens.map(function (t) {
+            return { text: t.text, honorific: t.honorific, epithetStart: t.epithetStart, joinPrev: false };
+        });
+    }
+
+    function charCount(text) {
+        return Array.from(text).length;
+    }
+
+    function isLowerChar(c) { return c !== c.toUpperCase(); }
+    function isUpperChar(c) { return c !== c.toLowerCase(); }
+
+    /* Cut `text` after each of the given character indices (a cut after index i leaves
+       text[0..i] on the left). Returns the pieces, in order. */
+    function cutAfter(chars, cuts) {
+        var out = [], from = 0, i;
+        for (i = 0; i < cuts.length; i++) {
+            out.push(chars.slice(from, cuts[i] + 1).join(''));
+            from = cuts[i] + 1;
+        }
+        out.push(chars.slice(from).join(''));
+        return out;
+    }
+
+    /* The words inside a protected span. The no-break spaces that held the span together
+       become ordinary breakable spaces, so a span too wide for any line is cut where a
+       reader would cut it, between its words, before anything cuts inside one. */
+    function nbspPieces(chars) {
+        return chars.join('').split(NBSP).filter(function (word) { return word !== ''; });
+    }
+
+    /* Where a word may be cut at its own separators: after each run of _ - / . that is
+       followed by something. The separator stays with the left piece ("Anthony_",
+       "Anti-"), so the line that breaks there still shows where the word goes on. */
+    function separatorCuts(chars) {
+        var cuts = [], i;
+        for (i = 0; i < chars.length - 1; i++) {
+            if ('_-/.'.indexOf(chars[i]) >= 0 && '_-/.'.indexOf(chars[i + 1]) < 0) { cuts.push(i); }
+        }
+        return cuts;
+    }
+
+    /* Where a word may be cut between a lowercase letter and a capital ("McDonald" ->
+       "Mc|Donald"), and between a run of capitals and the capital that starts the next
+       word ("XMLParser" -> "XML|Parser"). */
+    function camelCuts(chars) {
+        var cuts = [], i;
+        for (i = 0; i < chars.length - 1; i++) {
+            if (isLowerChar(chars[i]) && isUpperChar(chars[i + 1])) { cuts.push(i); }
+            else if (isUpperChar(chars[i]) && isUpperChar(chars[i + 1])
+                && i + 2 < chars.length && isLowerChar(chars[i + 2])) { cuts.push(i); }
+        }
+        return cuts;
+    }
+
+    /* The midpoint of a word, halved again for as long as a piece is still too long, so
+       a 40-character run with no seams ends as pieces that can sit on a line. */
+    function midpointPieces(chars, tooLong) {
+        if (chars.length < 2 || !tooLong(chars.join(''))) { return [chars.join('')]; }
+        var mid = Math.ceil(chars.length / 2);
+        return midpointPieces(chars.slice(0, mid), tooLong).concat(midpointPieces(chars.slice(mid), tooLong));
+    }
+
+    /*
+     * One pass of the fallback (§6.3.3): break every token that cannot sit on any line
+     * even at the smallest size into pieces, with `piecesOf` choosing where. Pieces after
+     * the first carry no honorific or epithet mark (the word has one, and the first piece
+     * keeps it) and, when `joined` is true, sit against the piece before with no space;
+     * pieces of a protected span (`joined` false) are separate words again. Returns the
+     * new token list, or null when no token was cut, so a pass that changes nothing is
+     * not searched again.
+     */
+    function splitPass(tokens, tooLong, piecesOf, joined) {
+        var out = [], changed = false;
+        tokens.forEach(function (t) {
+            var pieces = tooLong(t.text) ? piecesOf(Array.from(t.text)) : [t.text];
+            if (pieces.length < 2) { out.push(t); return; }
+            changed = true;
+            pieces.forEach(function (text, k) {
+                out.push({
+                    text: text,
+                    honorific: k === 0 ? t.honorific : false,
+                    epithetStart: k === 0 ? t.epithetStart : false,
+                    joinPrev: k === 0 ? t.joinPrev : joined
+                });
+            });
+        });
+        return changed ? out : null;
+    }
+
+    /* Every way to start `k` lines among `n` tokens: line 0 starts at token 0 and each
+       later line at a larger index, in ascending order, so ties resolve the same way on
+       every run. `visit` gets the live array of line starts; copy it to keep it. */
+    function eachBreaking(n, k, visit) {
+        var starts = [0];
+        (function pick(next, left) {
+            if (left === 0) { visit(starts); return; }
+            for (var g = next; g <= n - left; g++) {
+                starts.push(g);
+                pick(g + 1, left - 1);
+                starts.pop();
+            }
+        }(1, k - 1));
+    }
+
+    /*
+     * Enumerate every candidate over `tokens` and rate it (§6.3.3, §6.3.4, §6.4.3).
+     *
+     * Returns { best, nearest }: `best` is the highest-scoring candidate whose largest
+     * feasible size reaches the role's minimum (ties to fewer lines), or null; `nearest`
+     * is, among all candidates, the one that comes closest to fitting. The caller falls
+     * back to `nearest` only when nothing fits.
+     *
+     * A candidate is rated up to three ways: plain, and with each line §6.3.4 allows
+     * made minor. Each way is its own entry in the running, since making a line minor
+     * both lifts its size and costs MINOR_PENALTY.
+     */
+    function search(tokens, ctx) {
+        var n = tokens.length, role = ctx.role, range = ctx.range, lo = range.min;
+        var PW = [0], PS = [0], PC = [0], bp = [], i, k;
+
+        for (i = 0; i < n; i++) {
+            var spaced = (i > 0 && !tokens[i].joinPrev) ? 1 : 0;
+            PW[i + 1] = PW[i] + ctx.measure(tokens[i].text);
+            PS[i + 1] = PS[i] + spaced;
+            PC[i + 1] = PC[i] + charCount(tokens[i].text);
+            bp[i] = breakPenalty(tokens, i, role);
+        }
+
+        var run = 0;
+        while (run < n && tokens[run].honorific) { run++; }
+        var epi = -1;
+        for (i = 0; i < n; i++) { if (tokens[i].epithetStart) { epi = i; break; } }
+
+        var best = null, nearest = null;
+
+        /* One way of rating one candidate. `minor` is -1 or the line made minor. */
+        function rate(starts, LW, cnt, chars, bpSum, minor) {
+            var kk = starts.length, j;
+
+            var sStar = range.max;
+            for (j = 0; j < kk; j++) {
+                var w = LW[j] * (j === minor ? CONST.MINOR_SCALE : 1) * ctx.rootPx;
+                if (w > 0) { sStar = Math.min(sStar, ctx.allowed(j, minor === 0) / w); }
+            }
+
+            var maxLW = 0;
+            for (j = 0; j < kk; j++) { if (j !== minor && LW[j] > maxLW) { maxLW = LW[j]; } }
+
+            var score = utility(Math.max(sStar, lo), range) - ctx.linePenalty[Math.min(kk, ctx.linePenalty.length) - 1] - bpSum;
+            if (kk >= 2 && maxLW > 0) {
+                var ragged = 0, widow = false;
+                for (j = 0; j < kk; j++) {
+                    if (j === minor) { continue; }
+                    ragged += Math.pow((maxLW - LW[j]) / maxLW, 2);
+                    if (cnt[j] === 1 && LW[j] < 0.3 * maxLW) { widow = true; }
+                }
+                score -= CONST.RAGGED * ragged + (widow ? CONST.WIDOW : 0);
+            }
+            if (minor >= 0) { score -= CONST.MINOR_PENALTY; }
+
+            return { starts: starts.slice(), k: kk, minor: minor, sStar: sStar, score: score };
+        }
+
+        function beats(a, b) {
+            if (!b) { return true; }
+            if (a.score > b.score + EPS) { return true; }
+            if (a.score < b.score - EPS) { return false; }
+            if (a.k !== b.k) { return a.k < b.k; }
+            return a.minor < 0 && b.minor >= 0;
+        }
+
+        function closer(a, b) {
+            if (!b) { return true; }
+            if (a.sStar > b.sStar + EPS) { return true; }
+            if (a.sStar < b.sStar - EPS) { return false; }
+            return beats(a, b);
+        }
+
+        function consider(c) {
+            if (closer(c, nearest)) { nearest = c; }
+            if (c.sStar >= lo - EPS && beats(c, best)) { best = c; }
+        }
+
+        for (k = 1; k <= Math.min(ctx.maxLines, n); k++) {
+            eachBreaking(n, k, function (starts) {
+                var LW = [], cnt = [], chars = [], bpSum = 0, j, a, b;
+                for (j = 0; j < k; j++) {
+                    a = starts[j];
+                    b = (j + 1 < k ? starts[j + 1] : n) - 1;
+                    LW.push(PW[b + 1] - PW[a] + ctx.spaceW * (PS[b + 1] - PS[a + 1]));
+                    cnt.push(b - a + 1);
+                    chars.push(PC[b + 1] - PC[a] + (PS[b + 1] - PS[a + 1]));
+                    if (j + 1 < k) { bpSum += bp[b]; }
+                }
+
+                consider(rate(starts, LW, cnt, chars, bpSum, -1));
+                if (k < 2 || role !== 'name' || !CONST.MINOR_LINES) { return; }
+
+                /* The line holding the most characters is never the minor one. */
+                var most = Math.max.apply(null, chars);
+                if (run > 0 && starts[1] === run && chars[0] < most) {
+                    consider(rate(starts, LW, cnt, chars, bpSum, 0));
+                }
+                if (epi > 0 && starts[k - 1] === epi && n - epi >= 2 && chars[k - 1] < most) {
+                    consider(rate(starts, LW, cnt, chars, bpSum, k - 1));
+                }
+            });
+        }
+        return { best: best, nearest: nearest };
+    }
+
+    function joinLine(tokens, a, b) {
+        var text = '', i;
+        for (i = a; i <= b; i++) { text += (i > a && !tokens[i].joinPrev ? ' ' : '') + tokens[i].text; }
+        return text;
+    }
+
+    function solutionOf(c, tokens, overflow, lo) {
+        var lines = [], j, b;
+        for (j = 0; j < c.k; j++) {
+            b = (j + 1 < c.k ? c.starts[j + 1] : tokens.length) - 1;
+            lines.push(joinLine(tokens, c.starts[j], b));
+        }
+        return { size: overflow ? lo : c.sStar, lines: lines, minor: c.minor, planned: c.k, score: c.score, overflow: overflow };
+    }
+
+    /*
+     * solveBlock(opts) -> { size, lines, minor, planned, score, overflow }   (§6.3.3)
+     *
+     *   text       the words to set
+     *   role       'name', 'award' or 'place'
+     *   measure    word -> width in em at 1px (a protected span arrives with no-break
+     *              spaces inside it, as tokenize() leaves it)
+     *   spaceW     the width of one space, em at 1px
+     *   range      { min, max, sat } for this block. `max` is the ceiling after the
+     *              hierarchy of §6.4.2; `min` already carries any multi-up FLOOR_SCALE.
+     *              A range from CONST.ROLES also supplies the per-line-count prices.
+     *   maxLines   most lines the block may take (an award over 40 characters is allowed
+     *              three, whatever the caller passes)
+     *   lineHeight line-height factor
+     *   y0         where the block's top sits, frame px
+     *   rootPx     computed font-size of the root, px
+     *   freeWidth  (yTop, yBottom) -> width of the free band, frame px
+     *
+     * `size` is the em size of the block's main lines, `lines` the text of each line,
+     * `minor` the index of the line set smaller (-1 for none), `planned` the number of
+     * lines. `overflow` is true when nothing fits even at `range.min`: the lines then
+     * come back at that minimum, every word present, and the caller flags the block.
+     */
+    function solveBlock(o) {
+        var role = o.role;
+        var tokens = lineTokens(tokenize(o.text, role));
+        var range = { min: o.range.min, max: Math.max(o.range.max, o.range.min), sat: o.range.sat };
+        var lo = range.min;
+        if (tokens.length === 0) {
+            return { size: lo, lines: [], minor: -1, planned: 0, score: 0, overflow: false };
+        }
+
+        var maxLines = Math.max(1, o.maxLines);
+        if (role === 'award' && charCount(tokens.map(function (t) { return t.text; }).join(' ')) > CONST.AWARD_LONG.chars) {
+            maxLines = Math.max(maxLines, CONST.AWARD_LONG.maxLines);
+        }
+
+        /* The price of each line count: the range's own table, else the role's. A place
+           without one is priced like the centred place, whose first entry is the same
+           zero a one-line Classic place pays. */
+        var table = o.range.linePenalty
+            || (CONST.ROLES[role] && CONST.ROLES[role].linePenalty)
+            || CONST.ROLES.placeCentered.linePenalty;
+
+        /* Free width for line j, with the conservative band of §6.4.3: from where the
+           line would start at the smallest size to where it would end at the largest.
+           The band is taller than the line ever is, so the width found is safe at every
+           size in between and no iteration is needed. When line 0 is minor, the lines
+           below it start higher than the uniform spacing assumes, so their band begins
+           higher by the same fraction. Asked for each band once. */
+        var cache = {};
+        function allowed(j, lineZeroMinor) {
+            var up = j - (lineZeroMinor && j > 0 ? 1 - CONST.MINOR_SCALE : 0);
+            var top = o.y0 + up * o.lineHeight * lo * o.rootPx;
+            var bottom = o.y0 + (j + 1) * o.lineHeight * range.max * o.rootPx;
+            var key = top + ':' + bottom;
+            if (!(key in cache)) { cache[key] = o.freeWidth(top, bottom) * (1 - CONST.SLACK); }
+            return cache[key];
+        }
+
+        var ctx = {
+            role: role, range: range, maxLines: maxLines, measure: o.measure, spaceW: o.spaceW,
+            rootPx: o.rootPx, linePenalty: table, allowed: allowed
+        };
+
+        var first = search(tokens, ctx);
+        if (first.best) { return solutionOf(first.best, tokens, false, lo); }
+
+        /* Nothing fits as written. Cut the words that cannot sit on any line, gently
+           first: a protected span between its own words, then a word at its own
+           separators, then at camelCase seams, then wherever it is long enough to need
+           it. */
+        var widest = 0, j;
+        for (j = 0; j < maxLines; j++) { widest = Math.max(widest, allowed(j, false)); }
+        function tooLong(text) { return o.measure(text) * lo * o.rootPx > widest; }
+
+        var passes = [
+            function (t) { return splitPass(t, tooLong, nbspPieces, false); },
+            function (t) { return splitPass(t, tooLong, function (cs) { return cutAfter(cs, separatorCuts(cs)); }, true); },
+            function (t) { return splitPass(t, tooLong, function (cs) { return cutAfter(cs, camelCuts(cs)); }, true); },
+            function (t) { return splitPass(t, tooLong, function (cs) { return midpointPieces(cs, tooLong); }, true); }
+        ];
+        var current = tokens, p, next, found;
+        for (p = 0; p < passes.length; p++) {
+            next = passes[p](current);
+            if (!next) { continue; }
+            current = next;
+            found = search(current, ctx);
+            if (found.best) { return solutionOf(found.best, current, false, lo); }
+        }
+
+        /* Still nothing, even cut up. Cutting that does not make a block fit only
+           mutilates the name, so the flagged answer is the closest-fitting candidate over
+           the words as written, set at the minimum. */
+        return solutionOf(first.nearest, tokens, true, lo);
+    }
+
     return {
         CONST: CONST,
         tokenize: tokenize,
-        breakPenalty: breakPenalty
+        breakPenalty: breakPenalty,
+        utility: utility,
+        solveBlock: solveBlock
     };
 }));
