@@ -31,16 +31,21 @@ class ScrollText
      * "article" is "the" or '' (set at connective size, so it is split from the place
      * rather than left in it), and "place" is the proper name.
      *
-     * The last four keys echo the effective form after any split: the title, flags and
+     * The next four keys echo the effective form after any split: the title, flags and
      * name that, fed back in, print the same lines. The composer prefills its fields
      * from them, so "name" keeps its article ("the Wetlands") — the place alone would
      * lose it on the way back.
      *
-     * $scopeType ('park', 'kingdom' or '') is part of the signature because spec 5.2
-     * lists it, but no rule keys off it today: the unsplit-kingdom test below is
-     * decided by the title and flags, which is also how a stored kingdom looks.
+     * "phrase" is the issuer as a sentence wants it after "of" — the zodiac flavour
+     * text reads "a shining star of <<ISSUER>>". It is PHP-only (the browser never
+     * writes flavour), so it is not in the shared fixture. A kingdom reads as
+     * "the Kingdom of the Wetlands", the same whether it arrived whole or already
+     * split by the composer; with no rank word it is the name as it stands ("The
+     * Celestial Kingdom"). A park, or an issuer of no known scope, is the name exactly
+     * as stored, which is what the flavour always printed for them. $scopeType
+     * ('park', 'kingdom' or '') decides only that; the lines above do not depend on it.
      *
-     * @return array{lead: string, article: string, place: string, title: string, useThe: bool, useOf: bool, name: string}
+     * @return array{lead: string, article: string, place: string, title: string, useThe: bool, useOf: bool, name: string, phrase: string}
      */
     public static function IssuerLines(
         string $title,
@@ -49,8 +54,9 @@ class ScrollText
         bool $useOf,
         string $scopeType = ''
     ): array {
-        $title = self::Tidy($title);
-        $name  = self::Tidy($name);
+        $stored = $name;
+        $title  = self::Tidy($title);
+        $name   = self::Tidy($name);
 
         // "Inactive" is a park status that leaked into ork_parktitle.title on 5 parks.
         // As a rank word it prints "and the Inactive of".
@@ -91,6 +97,16 @@ class ScrollText
             $place   = $m[1];
         }
 
+        // The rank word is always introduced with "the" here, whatever the flags say:
+        // flavour is a sentence ("star of the Kingdom of the Wetlands"), not the
+        // certificate's own line, so there is no "and" for the article to follow.
+        $phrase = $stored;
+        if ($scopeType === 'kingdom') {
+            $phrase = $title !== ''
+                ? 'the ' . $title . ' of ' . ($article !== '' ? 'the ' : '') . $place
+                : $place;
+        }
+
         return [
             'lead'    => $lead,
             'article' => $article,
@@ -99,6 +115,7 @@ class ScrollText
             'useThe'  => $useThe,
             'useOf'   => $useOf,
             'name'    => $name,
+            'phrase'  => $phrase,
         ];
     }
 

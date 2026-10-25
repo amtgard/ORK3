@@ -1370,7 +1370,8 @@ class Scroll extends Ork3
      * would print the raw markup on the certificate. Two forms exist, both only in
      * zodiac:
      *
-     *   <<ISSUER>>                    the issuing park or kingdom's name
+     *   <<ISSUER>>                    the issuer as it reads after "of" — a park's
+     *                                 name, or "the Kingdom of the Wetlands"
      *   <<prefix|MONTH|suffix|else>>  prefix . month . suffix when a month is
      *                                 known, otherwise the else branch verbatim
      *
@@ -1563,15 +1564,19 @@ class Scroll extends Ork3
             'useThe'      => $useThe,
             'useOf'       => $useOf,
             // The display split of the four keys above, which are left as stored. A
-            // template that draws the issuer in parts reads these; ExpandFlavour()
-            // above keeps the whole stored name.
+            // template that draws the issuer in parts reads these. The flavour text
+            // gets ScrollText's "phrase" instead (see below), not these parts.
             'issuerLead'    => $issuerLines['lead'],
             'issuerArticle' => $issuerLines['article'],
             'issuerPlace'   => $issuerLines['place'],
             'heraldry'    => (string) ($context['heraldry'] ?? ''),
             'flavour'     => self::ExpandFlavour(
                 (string) ($order['flavour'][(string) $rank] ?? ''),
-                $issuerName,
+                // "a shining star of <<ISSUER>>" wants the issuer as it reads after "of":
+                // a park's name as stored, a kingdom as "the Kingdom of the Wetlands".
+                // The stored kingdom name alone gave "star of The Kingdom of the Wetlands",
+                // and the composer's split name gave "star of the Wetlands".
+                $issuerLines['phrase'],
                 $context['month'] ?? null
             ),
             'primary'     => $order['primary'],

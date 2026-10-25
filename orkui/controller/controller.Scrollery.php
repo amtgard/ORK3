@@ -339,7 +339,9 @@ class Controller_Scrollery extends Controller
                 'Id'    => $id,
                 'Name'  => (string) ($ctx['Name'] ?? ''),
                 'Title' => (string) ($ctx['Title'] ?? ''),
-                'Label' => trim(((string) ($ctx['Title'] ?? '')) . ' ' . ((string) ($ctx['Name'] ?? ''))),
+                // Display, not Title + Name: for a kingdom those are the composer's split
+                // fields ("Kingdom", "the Wetlands"), which read wrongly as a label.
+                'Label' => (string) ($ctx['Display'] ?? trim(((string) ($ctx['Title'] ?? '')) . ' ' . ((string) ($ctx['Name'] ?? '')))),
             ];
         }
 

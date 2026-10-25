@@ -79,6 +79,44 @@ final class ScrollTextModelTest extends TestCase
         $this->assertSame('The Celestial Kingdom', $got['name']);
     }
 
+    /**
+     * @return iterable<string, array{string, string, bool, bool, string, string}>
+     */
+    public static function phrases(): iterable
+    {
+        // title, name, useThe, useOf, scope, phrase
+        yield 'unsplit kingdom' => ['', 'The Kingdom of the Wetlands', false, false, 'kingdom', 'the Kingdom of the Wetlands'];
+        yield 'composed kingdom, already split' => ['Kingdom', 'the Wetlands', true, true, 'kingdom', 'the Kingdom of the Wetlands'];
+        yield 'kingdom without the leading article' => ['', 'Kingdom of 13 Roads', false, false, 'kingdom', 'the Kingdom of 13 Roads'];
+        yield 'kingdom whose place keeps a capital The' => ['', 'The Principality of The Painted Skies', false, false, 'kingdom', 'the Principality of the Painted Skies'];
+        yield 'kingdom with a bare place' => ['', 'The Empire of Rivermoor', false, false, 'kingdom', 'the Empire of Rivermoor'];
+        yield 'plural rank word' => ['', 'The Freeholds of Amtgard', false, false, 'kingdom', 'the Freeholds of Amtgard'];
+        yield 'whole kingdom name keeps its own article' => ['', 'The Celestial Kingdom', false, false, 'kingdom', 'The Celestial Kingdom'];
+        yield 'whole kingdom name with no rank word' => ['', 'Uncharted Wastelands', false, false, 'kingdom', 'Uncharted Wastelands'];
+        yield 'park is the stored name' => ['Shire', 'The Everglade Sentinels', true, true, 'park', 'The Everglade Sentinels'];
+        yield 'park with no article' => ['Barony', 'Iron Keep', true, true, 'park', 'Iron Keep'];
+        yield 'park whose title is Inactive' => ['Inactive', 'Foo', true, true, 'park', 'Foo'];
+        yield 'park exactly as stored, spacing included' => ['Shire', "  The  River's End ", true, true, 'park', "  The  River's End "];
+        yield 'unknown scope is the stored name' => ['', 'The Kingdom of the Wetlands', false, false, '', 'The Kingdom of the Wetlands'];
+    }
+
+    /**
+     * The zodiac flavour reads "a shining star of <<ISSUER>>", so the issuer has to read
+     * well after "of": "the Kingdom of the Wetlands", not "The Kingdom of the Wetlands"
+     * and not the composer's split "the Wetlands". A park never changed and does not now.
+     */
+    #[DataProvider('phrases')]
+    public function testPhraseIsTheIssuerAsItReadsAfterOf(
+        string $title,
+        string $name,
+        bool $useThe,
+        bool $useOf,
+        string $scope,
+        string $phrase
+    ): void {
+        $this->assertSame($phrase, \ScrollText::IssuerLines($title, $name, $useThe, $useOf, $scope)['phrase']);
+    }
+
     private function row(array $overrides = []): array
     {
         return array_merge([
@@ -171,6 +209,57 @@ final class ScrollTextModelTest extends TestCase
     }
 
     /**
+     * Zodiac ranks 6, 9 and 10 carry <<ISSUER>>. Rank 6 reads "a shining star of
+     * <<ISSUER>>, and an invaluable member of our community", which with the stored
+     * kingdom name printed "star of The Kingdom of the Wetlands" and, after the
+     * composer's split, "star of the Wetlands".
+     */
+    public function testZodiacFlavourNamesAKingdomAfterOf(): void
+    {
+        $stored = Scroll::BuildScroll(
+            $this->row(['AwardId' => 30, 'Rank' => 6, 'ParkName' => '', 'KingdomName' => 'The Kingdom of the Wetlands']),
+            $this->context()
+        );
+        $this->assertStringContainsString('shining star of the Kingdom of the Wetlands,', $stored['flavour']);
+        $this->assertStringNotContainsString('<<', $stored['flavour']);
+        // The stored name is still what the certificate carries elsewhere.
+        $this->assertSame('The Kingdom of the Wetlands', $stored['issuerName']);
+
+        $composed = Scroll::BuildScroll(
+            $this->row(['AwardId' => 30, 'Rank' => 6, 'ParkName' => '', 'KingdomName' => 'the Wetlands']),
+            $this->context(['issuerTitle' => 'Kingdom', 'useThe' => true, 'useOf' => true])
+        );
+        $this->assertSame($stored['flavour'], $composed['flavour']);
+    }
+
+    /** Ranks 9 and 10 put the issuer in other positions; all three use the same phrase. */
+    public function testEveryZodiacRankThatNamesTheIssuerUsesThePhrase(): void
+    {
+        foreach ([6, 9, 10] as $rank) {
+            $s = Scroll::BuildScroll(
+                $this->row(['AwardId' => 30, 'Rank' => $rank, 'ParkName' => '', 'KingdomName' => 'The Empire of the Iron Mountains']),
+                $this->context()
+            );
+            $this->assertStringContainsString('the Empire of the Iron Mountains', $s['flavour'], "rank {$rank}");
+            $this->assertStringNotContainsString('The Empire', $s['flavour'], "rank {$rank}");
+        }
+    }
+
+    /** A park's flavour is unchanged: its stored name, with no rank word added. */
+    public function testZodiacFlavourNamesAParkByItsStoredName(): void
+    {
+        $s = Scroll::BuildScroll($this->row(['AwardId' => 30, 'Rank' => 6]), $this->context());
+
+        $this->assertStringContainsString('shining star of Rising Sun Station,', $s['flavour']);
+
+        $titled = Scroll::BuildScroll(
+            $this->row(['AwardId' => 30, 'Rank' => 6]),
+            $this->context(['issuerTitle' => 'Shire'])
+        );
+        $this->assertSame($s['flavour'], $titled['flavour']);
+    }
+
+    /**
      * Run scope_context() with the kingdom and park lookups stubbed, so it can be
      * exercised without a database. Its static caches are keyed by id, hence the
      * ids no real row has.
@@ -233,6 +322,8 @@ final class ScrollTextModelTest extends TestCase
         $this->assertTrue($scope['UseThe']);
         $this->assertTrue($scope['UseOf']);
         $this->assertSame('the Wetlands', $scope['Name']);
+        // Title and Name are the composer's fields; a label must read as the stored name.
+        $this->assertSame('The Kingdom of the Wetlands', $scope['Display']);
 
         $lines = \ScrollText::IssuerLines($scope['Title'], $scope['Name'], $scope['UseThe'], $scope['UseOf'], 'kingdom');
         $this->assertSame('and the Kingdom of', $lines['lead']);
@@ -254,6 +345,7 @@ final class ScrollTextModelTest extends TestCase
         $this->assertFalse($scope['UseThe']);
         $this->assertFalse($scope['UseOf']);
         $this->assertSame('The Celestial Kingdom', $scope['Name']);
+        $this->assertSame('The Celestial Kingdom', $scope['Display']);
     }
 
     /** A park keeps its own rank word, and an "Inactive" one takes the Barony floor. */
@@ -267,6 +359,7 @@ final class ScrollTextModelTest extends TestCase
         );
         $this->assertSame('Barony', $inactive['Title']);
         $this->assertSame('Foo', $inactive['Name']);
+        $this->assertSame('Barony Foo', $inactive['Display']);
 
         $shire = $this->scopeContext(
             'park',
@@ -275,6 +368,7 @@ final class ScrollTextModelTest extends TestCase
             ['ParkName' => 'Everglade Sentinels', 'ParkTitle' => 'Shire', 'KingdomId' => 4, 'HasHeraldry' => 0]
         );
         $this->assertSame('Shire', $shire['Title']);
+        $this->assertSame('Shire Everglade Sentinels', $shire['Display']);
 
         $untitled = $this->scopeContext(
             'park',
@@ -283,5 +377,30 @@ final class ScrollTextModelTest extends TestCase
             ['ParkName' => 'Bar', 'ParkTitle' => '', 'KingdomId' => 4, 'HasHeraldry' => 0]
         );
         $this->assertSame('Barony', $untitled['Title']);
+        $this->assertSame('Barony Bar', $untitled['Display']);
+    }
+
+    /**
+     * The chip and door labels used to be trim(Title . ' ' . Name) of the UNSPLIT values.
+     * Display must stay exactly that, so a kingdom whose stored name has stray
+     * whitespace still prints it trimmed, as before.
+     */
+    public function testDisplayIsExactlyWhatTheOldTitlePlusNameLabelWas(): void
+    {
+        $kingdom = $this->scopeContext(
+            'kingdom',
+            987650006,
+            ['KingdomName' => '  The Kingdom of the Wetlands ', 'HasHeraldry' => 0],
+            []
+        );
+        $this->assertSame(trim('' . ' ' . '  The Kingdom of the Wetlands '), $kingdom['Display']);
+
+        $park = $this->scopeContext(
+            'park',
+            987650007,
+            [],
+            ['ParkName' => 'Mordengaard', 'ParkTitle' => 'Barony', 'KingdomId' => 4, 'HasHeraldry' => 0]
+        );
+        $this->assertSame('Barony Mordengaard', $park['Display']);
     }
 }

@@ -362,7 +362,12 @@ class Model_Scrollery extends Model
     /**
      * Name, kingdom and heraldry for the park or kingdom a scroll is being issued by.
      *
-     * @return array{Type:string,Id:int,Name:string,Title:string,KingdomId:int,Heraldry:string,UseThe:bool,UseOf:bool}
+     * Display is the issuer's whole name as a person reads it — "The Kingdom of the
+     * Wetlands", "Barony Mordengaard" — for chips and door labels. Title and Name are
+     * the composer's fields and, for a kingdom, are the split form ("Kingdom" and "the
+     * Wetlands"), which reads wrongly as a label.
+     *
+     * @return array{Type:string,Id:int,Name:string,Title:string,Display:string,KingdomId:int,Heraldry:string,UseThe:bool,UseOf:bool}
      */
     public function scope_context(string $scopeType, int $scopeId): array
     {
@@ -383,6 +388,7 @@ class Model_Scrollery extends Model
                 'Id'        => $scopeId,
                 'Name'      => $issuer['name'],
                 'Title'     => $issuer['title'],
+                'Display'   => trim((string) ($info['KingdomName'] ?? '')),
                 'UseThe'    => $issuer['useThe'],
                 'UseOf'     => $issuer['useOf'],
                 'KingdomId' => $scopeId,
@@ -403,12 +409,15 @@ class Model_Scrollery extends Model
         // text model reads it as no title, which then takes the same Barony floor an
         // untitled park always did.
         $parkTitle = ScrollText::IssuerLines((string) ($park['ParkTitle'] ?? ''), '', true, true, 'park')['title'];
+        $parkTitle = $parkTitle !== '' ? $parkTitle : 'Barony';
+        $parkName  = (string) ($park['ParkName'] ?? '');
 
         return [
             'Type'      => 'park',
             'Id'        => $scopeId,
-            'Name'      => (string) ($park['ParkName'] ?? ''),
-            'Title'     => $parkTitle !== '' ? $parkTitle : 'Barony',
+            'Name'      => $parkName,
+            'Title'     => $parkTitle,
+            'Display'   => trim($parkTitle . ' ' . $parkName),
             'UseThe'    => true,
             'UseOf'     => true,
             'KingdomId' => (int) ($park['KingdomId'] ?? 0),

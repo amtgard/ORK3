@@ -139,7 +139,7 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
             <div class="rp-header-scope">
                 <span class="rp-scope-chip">
                     <i class="fa-solid <?= ($ScopeType ?? 'park') === 'kingdom' ? 'fa-crown' : 'fa-shield-halved' ?>"></i>
-                    <?= htmlspecialchars(trim(($scope['Title'] ?? '') . ' ' . ($scope['Name'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+                    <?= htmlspecialchars((string) ($scope['Display'] ?? trim(($scope['Title'] ?? '') . ' ' . ($scope['Name'] ?? ''))), ENT_QUOTES, 'UTF-8') ?>
                 </span>
                 <?php foreach (is_array($OtherScopes ?? null) ? $OtherScopes : [] as $s): ?>
                     <a class="rp-scope-chip" href="<?= UIR ?>Scrollery/bulk/<?= $s['Type'] ?>/<?= (int) $s['Id'] ?>">

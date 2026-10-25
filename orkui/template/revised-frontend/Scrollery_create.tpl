@@ -277,7 +277,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
             <div class="rp-header-scope">
                 <span class="rp-scope-chip">
                     <i class="fa-solid <?= ($ScopeType ?? 'park') === 'kingdom' ? 'fa-crown' : 'fa-shield-halved' ?>"></i>
-                    <?= scroll_e(trim(($scope['Title'] ?? '') . ' ' . ($scope['Name'] ?? ''))) ?>
+                    <?= scroll_e((string) ($scope['Display'] ?? trim(($scope['Title'] ?? '') . ' ' . ($scope['Name'] ?? '')))) ?>
                 </span>
                 <?php foreach (is_array($OtherScopes ?? null) ? $OtherScopes : [] as $s): ?>
                     <a class="rp-scope-chip" href="<?= UIR ?>Scrollery/create/<?= $s['Type'] ?>/<?= (int) $s['Id'] ?>">
