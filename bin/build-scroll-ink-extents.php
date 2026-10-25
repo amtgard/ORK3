@@ -146,6 +146,40 @@ declare(strict_types=1);
  * own, and the fallback is at least visible in the manifest.
  *
  * ---------------------------------------------------------------------------------
+ * FLOURISH GRIDS: THE INK BOX IS STILL A BOX
+ *
+ * The ink box fixes the swash-is-not-its-viewBox error and keeps a smaller one. The
+ * ink box of squiggly-bottom is a rectangle, and the swash inside it is a curve that
+ * rises and falls: a line of type can sit in the dip of that curve and be nowhere near
+ * any ink, while the box says it is inside. The typeset engine places a flourish so its
+ * INK clears the text, and for that it needs the ink as a MASK.
+ *
+ * Each flourish therefore gets a `grid`: 32x32 cells laid over the master's own box
+ * (a cell is 1/32 of its width by 1/32 of its height, so the grid scales with the
+ * element exactly as the fractions above do). A cell is inked if ANY pixel in it is an
+ * ink pixel under the formula above — the same predicate the ink box uses, which is what
+ * keeps the grid and the box from disagreeing about where the art ends — and the mask is
+ * then dilated by one cell in all eight directions. The dilation is the safety margin: a
+ * placement tested against this grid stays about a cell (3% of the element) off the
+ * swash without the engine having to remember to add one.
+ *
+ * Each row is one 32-bit integer written as 8 hex characters, bit 31 the left-most cell.
+ * 32 rows of 8 characters is 256 characters a flourish, small enough to live on one line
+ * of this manifest and to travel as a `data-sc-ink` attribute on the `<img>` itself.
+ *
+ * WHICH FILES. Only the flourishes, not all 253: the grid is a placement aid, and masks
+ * for art nothing places would be unread data, the trap the per-row extents already fell
+ * into. The set is read from the two places the layout reads it — Scroll::DEFAULT_RESOURCES
+ * and the `flourish_*` resources in system/lib/ork3/data/scroll-orders.php — rather than
+ * listed here, so a new themed flourish gets a grid the next time this runs and not
+ * never. That includes `writing_line`: it is one of the defaults and it is cheap, though
+ * nothing places it.
+ *
+ * A flourish with NO ink above the floor does not go in `blank` below: it fails the run.
+ * `blank` is for art that is allowed to paint nothing; a flourish that does is a broken
+ * asset, and a grid-less entry would send the engine back to the box.
+ *
+ * ---------------------------------------------------------------------------------
  * MTIME IS LOAD-BEARING
  *
  * The file is `touch`ed last. `Scroll::artGeneration()` already treats
@@ -174,6 +208,13 @@ const INK_FLOOR = 0.06;
 
 /** Decimal places kept in the emitted fractions. 1/512 is 0.00195, so 4 is exact. */
 const PRECISION = 4;
+
+/**
+ * Cells per side of a flourish's ink grid. 32 bits is one PHP int and one hex word per
+ * row, and 1/32 of a swash is finer than the clearance a line of type needs from it.
+ * The consumer reads `w` and `h` out of the manifest, so it does not hard-code this.
+ */
+const GRID = 32;
 
 /** @var list<string> Master extensions. `.webp` is deliberately absent — renditions. */
 const MASTER_EXTENSIONS = ['svg', 'png', 'jpg', 'jpeg'];
@@ -229,6 +270,12 @@ if (!is_dir($artDir)) {
     exit(1);
 }
 
+$flourishes = flourishFiles($root);
+if ($flourishes === []) {
+    fwrite(STDERR, "Could not read the flourish set from Scroll::DEFAULT_RESOURCES / scroll-orders.php.\n");
+    exit(1);
+}
+
 $masters = collectMasters($artDir, $only);
 if ($masters === []) {
     fwrite(STDERR, "No master art found under assets/scrolls/ (filter: '" . ($only ?: 'none') . "').\n");
@@ -250,6 +297,7 @@ $files = [];
 $blank = [];
 $failed = [];
 $scanned = 0;
+$gridded = 0;
 
 foreach ($masters as $relative) {
     $source = $artDir . '/' . $relative;
@@ -276,7 +324,8 @@ foreach ($masters as $relative) {
     }
     $output = [];
 
-    $extent = scanInk($tmpPng);
+    $wantsGrid = isset($flourishes[$relative]);
+    $extent = scanInk($tmpPng, $wantsGrid);
     if ($extent === null) {
         $failed[] = $relative . ' (raster unreadable by GD)';
         continue;
@@ -285,6 +334,14 @@ foreach ($masters as $relative) {
     $scanned++;
 
     if ($extent['ink'] === null) {
+        if ($wantsGrid) {
+            // A flourish the layout places that paints nothing is a broken asset, not a
+            // measurement. Recording it as blank would leave the engine to fall back to
+            // the box — the error this manifest exists to retire — so refuse instead.
+            $failed[] = $relative . ' (a flourish with no ink above the floor has no grid)';
+            continue;
+        }
+
         // No pixel cleared INK_FLOOR. Recorded, not invented — see the header.
         $blank[] = $relative;
         if ($verbose) {
@@ -294,7 +351,8 @@ foreach ($masters as $relative) {
     }
 
     /*
-     * The bounding box only — NOT the per-row extents the scan also computes.
+     * The bounding box — plus the grid, for flourishes only — and NOT the per-row
+     * extents the scan also computes.
      *
      * Emitting `rows` made this manifest 1.57 MB against renditions.json's 62 KB, and
      * nothing reads it: the keep-out pass in scrollery-autofit.js insets a text block
@@ -310,6 +368,10 @@ foreach ($masters as $relative) {
         'box' => $box,
         'ink' => $extent['ink'],
     ];
+    if ($extent['grid'] !== null) {
+        $files[$relative]['grid'] = $extent['grid'];
+        $gridded++;
+    }
 
     if ($verbose) {
         printf(
@@ -326,6 +388,16 @@ foreach ($masters as $relative) {
 }
 
 $elapsed = microtime(true) - $started;
+
+// A flourish the layout names but this run never saw would simply end up with no grid,
+// and the manifest would look complete. Only a full run can say so: --only scans a subset.
+if ($only === '') {
+    foreach (array_keys($flourishes) as $relative) {
+        if (!in_array($relative, $masters, true)) {
+            $failed[] = $relative . ' (named as a flourish, but there is no such master under assets/scrolls/)';
+        }
+    }
+}
 
 if ($failed !== []) {
     fwrite(STDERR, "\nFAILED on " . count($failed) . " file(s):\n");
@@ -370,12 +442,14 @@ printf(
     "\nScroll ink extents built.\n\n"
     . "  scanned                 %d files   in %.1fs\n"
     . "  with ink                %d\n"
+    . "  with ink grid           %d\n"
     . "  blank (no ink >%.2f)    %d%s\n"
     . "  raster                  x%d\n"
     . "  manifest                %s   %s bytes\n",
     $scanned,
     $elapsed,
     count($files),
+    $gridded,
     INK_FLOOR,
     count($blank),
     $blank === [] ? '' : '   (' . implode(', ', $blank) . ')',
@@ -415,6 +489,50 @@ function locateMagick(): ?string
     }
 
     return null;
+}
+
+/**
+ * The files that get an ink grid: the defaults every order inherits plus every
+ * `flourish_*` an order overrides them with, as paths relative to assets/scrolls/ (the
+ * manifest's own keys) — so `scrolls/rose/squiggly-top-rose.svg` is
+ * `rose/squiggly-top-rose.svg`.
+ *
+ * scroll-orders.php is a plain data file that returns an array, so it is simply
+ * required. DEFAULT_RESOURCES is a constant of Scroll, which extends Ork3 and cannot be
+ * loaded without the application's bootstrap and a database; its literal is read out of
+ * the source instead. If that read finds nothing the layout and this script would
+ * silently disagree about what a flourish is, so it returns [] and the caller stops.
+ *
+ * @return array<string, true> keyed by relative path
+ */
+function flourishFiles(string $root): array
+{
+    $source = (string) @file_get_contents($root . '/system/lib/ork3/class.Scroll.php');
+    if (!preg_match('/const\s+DEFAULT_RESOURCES\s*=\s*\[(.*?)\]\s*;/s', $source, $block)) {
+        return [];
+    }
+    preg_match_all("/'[a-z_]+'\s*=>\s*'(scrolls\/[^']+)'/", $block[1], $defaults);
+    $paths = $defaults[1];
+    if ($paths === []) {
+        return [];
+    }
+
+    $ordersFile = $root . '/system/lib/ork3/data/scroll-orders.php';
+    $orders = is_file($ordersFile) ? require $ordersFile : [];
+    foreach ((array) $orders as $order) {
+        foreach ((array) ($order['resources'] ?? []) as $key => $path) {
+            if (str_starts_with((string) $key, 'flourish_')) {
+                $paths[] = (string) $path;
+            }
+        }
+    }
+
+    $out = [];
+    foreach ($paths as $path) {
+        $out[(string) preg_replace('#^scrolls/#', '', $path)] = true;
+    }
+
+    return $out;
 }
 
 /**
@@ -543,7 +661,8 @@ function svgLength(string $tag, string $attribute): ?int
 }
 
 /**
- * Scan a rasterised PNG for ink, returning the fractional bbox and the per-row extents.
+ * Scan a rasterised PNG for ink, returning the fractional bbox, the per-row extents and,
+ * when asked, the dilated ink grid.
  *
  * INK_FLOOR is shared with tools/scroll-sweep/lib/mask.ts; the formula is not. See the
  * file header before touching either.
@@ -553,9 +672,14 @@ function svgLength(string $tag, string $attribute): ?int
  * 0.2% difference, which matters only in that it keeps `x1 = 1.0` meaning "the ink
  * genuinely reaches the right edge" rather than "it reaches the last column's left side".
  *
- * @return array{ink: array{x0:float,y0:float,x1:float,y1:float}|null, rows: list<array{0:float,1:float}|null>}|null
+ * The grid is built in the same pass, from the same ink-pixel predicate, so it cannot
+ * disagree with the box about what counts as ink. Cell (cx, cy) covers pixel columns
+ * [cx*w/32, (cx+1)*w/32) — integer division, so a raster width that is not a multiple of
+ * 32 gives slightly uneven cells and never an unmapped pixel.
+ *
+ * @return array{ink: array{x0:float,y0:float,x1:float,y1:float}|null, rows: list<array{0:float,1:float}|null>, grid: array{w:int,h:int,rows:list<string>}|null}|null
  */
-function scanInk(string $png): ?array
+function scanInk(string $png, bool $withGrid = false): ?array
 {
     $image = @imagecreatefrompng($png);
     if ($image === false) {
@@ -577,10 +701,13 @@ function scanInk(string $png): ?array
     $minY = PHP_INT_MAX;
     $maxY = -1;
     $rows = [];
+    // One int per grid row; bit (GRID - 1) is the left-most cell. Undilated until the end.
+    $cells = array_fill(0, GRID, 0);
 
     for ($y = 0; $y < $h; $y++) {
         $rowLeft = -1;
         $rowRight = -1;
+        $cellRow = intdiv($y * GRID, $h);
 
         for ($x = 0; $x < $w; $x++) {
             $rgb = imagecolorat($image, $x, $y);
@@ -599,6 +726,10 @@ function scanInk(string $png): ?array
             // COVERAGE, not darkness. See the note on INK_FLOOR.
             if (($a * max($luma, 1.0 - $luma)) <= INK_FLOOR) {
                 continue;
+            }
+
+            if ($withGrid) {
+                $cells[$cellRow] |= 1 << (GRID - 1 - intdiv($x * GRID, $w));
             }
 
             if ($rowLeft < 0) {
@@ -635,7 +766,7 @@ function scanInk(string $png): ?array
     unset($image);
 
     if ($maxX < 0) {
-        return ['ink' => null, 'rows' => $rows];
+        return ['ink' => null, 'rows' => $rows, 'grid' => null];
     }
 
     return [
@@ -646,19 +777,50 @@ function scanInk(string $png): ?array
             'y1' => round(($maxY + 1) / $h, PRECISION),
         ],
         'rows' => $rows,
+        'grid' => $withGrid ? ['w' => GRID, 'h' => GRID, 'rows' => dilatedGridRows($cells)] : null,
     ];
 }
 
 /**
- * Write the manifest, pretty-printed everywhere except the row arrays.
+ * Dilate the cell mask by one cell in all eight directions and encode it, one 8-hex-char
+ * string per row.
  *
- * JSON_PRETTY_PRINT puts every scalar of a nested array on its own line, so 253 files x
- * 512 rows x [left, right] would be a half-million-line, ~15 MB file that no diff and no
- * reader can use. Each `rows` value is therefore encoded compactly and spliced in through
- * a placeholder, which leaves the manifest readable at the level a human reads it — one
- * entry, its box, its ink box — with the row detail on a single machine-readable line.
+ * Widening each row by a cell either side (the shifts) and then OR-ing each row with the
+ * rows above and below it is the 3x3 neighbourhood. The & keeps a left shift out of bit
+ * 32, which would otherwise print as a ninth hex digit.
  *
- * @param array<string, array{box: array{0:int,1:int}, ink: array<string,float>, rows: list<array{0:float,1:float}|null>}> $files
+ * @param list<int> $cells one bit-packed int per grid row, bit 31 = left-most cell
+ * @return list<string>
+ */
+function dilatedGridRows(array $cells): array
+{
+    $full = (1 << GRID) - 1;
+
+    $wide = [];
+    foreach ($cells as $r => $bits) {
+        $wide[$r] = ($bits | ($bits << 1) | ($bits >> 1)) & $full;
+    }
+
+    $rows = [];
+    foreach ($wide as $r => $bits) {
+        $rows[] = sprintf('%08x', $bits | ($wide[$r - 1] ?? 0) | ($wide[$r + 1] ?? 0));
+    }
+
+    return $rows;
+}
+
+/**
+ * Write the manifest, pretty-printed everywhere except a grid's row array.
+ *
+ * JSON_PRETTY_PRINT puts every scalar of a nested array on its own line. For the per-row
+ * extents that would have been a half-million-line, ~15 MB file that no diff and no
+ * reader can use, which is part of why they are not emitted. The grid's 32 row strings
+ * are small but would still turn each flourish into a 40-line entry. Each grid's `rows`
+ * is therefore encoded compactly and spliced in through a placeholder, which leaves the
+ * manifest readable at the level a human reads it — one entry, its box, its ink box, its
+ * grid — with the mask itself on a single machine-readable line.
+ *
+ * @param array<string, array{box: array{0:int,1:int}, ink: array<string,float>, grid?: array{w:int,h:int,rows:list<string>}}> $files
  * @param list<string> $blank
  */
 function writeManifest(string $path, array $files, array $blank): void
@@ -677,6 +839,16 @@ function writeManifest(string $path, array $files, array $blank): void
             'box' => $entry['box'],
             'ink' => $entry['ink'],
         ];
+
+        if (isset($entry['grid'])) {
+            $token = '@grid-rows-' . count($rowsByToken) . '@';
+            $rowsByToken[$token] = json_encode($entry['grid']['rows']);
+            $doc['files'][$relative]['grid'] = [
+                'w' => $entry['grid']['w'],
+                'h' => $entry['grid']['h'],
+                'rows' => $token,
+            ];
+        }
     }
 
     $json = (string) json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
