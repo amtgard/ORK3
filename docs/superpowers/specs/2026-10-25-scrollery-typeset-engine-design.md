@@ -348,7 +348,10 @@ score     = U(s*) − LINE_PENALTY[role][k] − Σ breakPenalty
 ```
 
 The highest score wins; ties go to fewer lines. A candidate with `s* < min` is
-infeasible.
+infeasible. In `U(s)`, `max` and `sat` are the role's own table values, not the hierarchy
+cap. `max_eff` (§6.4.2) only caps `s*` and sets the band extent. Scoring against the cap
+would squeeze the above-`sat` bonus into a sliver and buy line breaks for trivial size
+gains (ruling made during T5).
 
 **Fallback when nothing is feasible.** Split over-long tokens at `_`, `-`, `/`, `.`,
 then at camelCase boundaries, then hard-split at the midpoint. Re-run. If still
