@@ -1,11 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PNG } from 'pngjs';
 import { loadCorpus, renderFixtures, serveFixtures, openFixture } from '../lib/fixture';
-import { openPrint, prepareFixtures, fixtureSpecFor, fixtureCatalogue, fixtureCovers, FIXTURE_ORDERS } from '../lib/drive';
-import { applyLayer } from '../lib/isolate';
+import {
+  openPrint, prepareFixtures, fixtureSpecFor, fixtureFileId, fixtureCatalogue, fixtureCovers,
+  FIXTURE_ORDERS, FIXTURE_HERALDRY,
+} from '../lib/drive';
+import { applyLayer, markGround } from '../lib/isolate';
 import { captureLayers, typeBand, scoreInk } from '../lib/raster';
 import { diffMask, count } from '../lib/mask';
 import { writeReport, isDirtyTop, ink, ZERO, type Result } from '../lib/report';
@@ -139,9 +143,109 @@ test('every case the baseline stages enumerate renders in one batch', () => {
   expect(cases.length).toBeGreaterThan(2000);
   const specs = new Map(cases.map(c => { const s = fixtureSpecFor(c); return [s.id, s] as const; }));
   expect(specs.size, 'two cases share a fixture file').toBe(cases.length);
+  expect(FIXTURE_HERALDRY).toBeTruthy();                     // else the next line passes on undefined === undefined
+  expect([...specs.values()].filter(f => f.heraldry !== FIXTURE_HERALDRY), 'cases drawn without the heraldry').toEqual([]);
   const dir = renderFixtures([...specs.values()], 'topscore-baseline');
   const missing = [...specs.keys()].filter(id => !existsSync(join(dir, `${id}.html`)));
   expect(missing, 'specs the renderer refused').toEqual([]);
+});
+
+test('the heraldry stand-in is a 420x420 opaque #333333 square, at the URL serveFixtures answers', () => {
+  expect(FIXTURE_HERALDRY).toBe('/orkui/__fixture/heraldry-standin.png');
+  const png = PNG.sync.read(readFileSync(join(__dirname, '..', 'fixtures', 'heraldry-standin.png')));
+  expect([png.width, png.height]).toEqual([420, 420]);
+  /* Every pixel, not a sample: a stand-in with a hole in it measures a different ornament. */
+  let off = 0;
+  for (let i = 0; i < png.data.length; i += 4) {
+    if (png.data[i] !== 0x33 || png.data[i + 1] !== 0x33 || png.data[i + 2] !== 0x33 || png.data[i + 3] !== 255) off++;
+  }
+  expect(off, 'pixels that are not opaque #333333').toBe(0);
+});
+
+test('a case with heraldry and the same case without it never share a fixture file', () => {
+  const c = namedCases().find(x => x.id === 'N_case-zero')!;
+  const { id, ...body } = fixtureSpecFor(c);
+  expect(body.heraldry).toBe(FIXTURE_HERALDRY);
+  const { heraldry, ...bare } = body;
+  expect(fixtureFileId(c.id, body)).toBe(id);
+  expect(fixtureFileId(c.id, bare as typeof body)).not.toBe(id);
+});
+
+/* crown draws the square as it is. owl does not: every pass of its heraldry goes through
+   `filter: blur(1px) url(#OWL_edge-detect)` (owl.tpl), so any device becomes a line drawing
+   of its own edges, and a solid square becomes the outline of a square. That is the owl
+   certificate working as designed, and it means the stand-in under-represents owl: the
+   frame is there for the type to strike, the fill is not. */
+for (const [order, solid] of [['owl', false], ['crown', true]] as const) {
+  test(`the stand-in is drawn in the ${order} certificate's heraldry slot, and layer A carries it as a plate`, async ({ page }) => {
+    const c = enumerate(loadAxes(), 'A').find(x => x.order === order && x.rank === 5 && x.text === 'real')!;
+    await openPrint(page, c, undefined as never, 1);
+    await typeBand(page);                                    // forces the 1:1 scale the rasters are taken at
+    const img = page.locator('img[src$="heraldry-standin.png"]').first();
+    expect(await img.count(), 'no heraldry image in the certificate').toBeGreaterThan(0);
+    expect(await img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth), 'the stand-in did not load').toBe(420);
+    const box = await img.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+    });
+    expect(box.width).toBeGreaterThan(300);
+
+    const shot = async (layer: 'A' | 'G' | 'C', withHeraldry: boolean) => {
+      await markGround(page);
+      await applyLayer(page, layer);
+      await page.evaluate((hide) => {
+        let st = document.getElementById('zz-hide-heraldry') as HTMLStyleElement | null;
+        if (!st) { st = document.createElement('style'); st.id = 'zz-hide-heraldry'; document.head.appendChild(st); }
+        st.textContent = hide ? 'img[src$="heraldry-standin.png"] { visibility: hidden !important; }' : '';
+      }, !withHeraldry);
+      return page.screenshot({ clip: box, type: 'png', animations: 'disabled' });
+    };
+
+    const aWith = await shot('A', true);
+    const aWithout = await shot('A', false);
+    const area = box.width * box.height;
+    /* The same layer with and without the one image: the difference is the heraldry and
+       nothing else, whatever other plates and blends sit in the slot. */
+    const carried = count(diffMask(aWith, aWithout));
+    if (solid) {
+      expect(carried / area, 'layer A does not carry the heraldry').toBeGreaterThan(0.9);
+
+      /* It is dark: multiplied onto the ground, the middle of the square is well below mid-grey. */
+      const png = PNG.sync.read(aWith);
+      let sum = 0, n = 0;
+      for (let y = png.height / 2 - 50; y < png.height / 2 + 50; y++) {
+        for (let x = png.width / 2 - 50; x < png.width / 2 + 50; x++) {
+          const i = (Math.floor(y) * png.width + Math.floor(x)) * 4;
+          sum += (0.2126 * png.data[i] + 0.7152 * png.data[i + 1] + 0.0722 * png.data[i + 2]) / 255; n++;
+        }
+      }
+      expect(sum / n, 'the heraldry slot is not dark').toBeLessThan(0.4);
+    } else {
+      /* An outline: a few thousand pixels, nowhere near the 90% of a fill. */
+      expect(carried, 'layer A does not carry the heraldry outline').toBeGreaterThan(1500);
+    }
+
+    /* A plate, not ink: layers G and C both hide overlays, so neither shows it. */
+    expect((await shot('G', true)).equals(await shot('G', false)), 'ground layer shows the heraldry').toBe(true);
+    expect((await shot('C', true)).equals(await shot('C', false)), 'glyph layer shows the heraldry').toBe(true);
+  });
+}
+
+test('the fixture driver refuses what it cannot render, instead of drawing the plain twin', async ({ page }) => {
+  const base = namedCases().find(x => x.id === 'N_case-zero')!;
+  const refused: [string, SweepCase, RegExp][] = [
+    ['trim', { ...base, trim: true }, /trim/],
+    ['no lines', { ...base, lines: false }, /lines/],
+    ['preview', { ...base, surface: 'preview' }, /preview/],
+  ];
+  for (const [what, c, reason] of refused) {
+    expect(fixtureCovers(c), what).toBe(false);
+    expect(() => fixtureSpecFor(c), what).toThrow(reason);
+    await expect(openPrint(page, c, undefined as never, 1), what).rejects.toThrow(reason);
+  }
+  /* The same case, unmodified, still renders. */
+  await openPrint(page, base, undefined as never, 1);
+  await expect(page.locator('.award-template')).toHaveAttribute('data-order', 'battle');
 });
 
 test('the conversion follows the brief: award id, title, scope', () => {
@@ -198,10 +302,41 @@ test('the report prints the top-half columns, and an old results.json still repo
   writeReport([
     result({ id: 'new', CA: sc(400), CAtop: sc(350), CBtop: sc(10) }),
     result({ id: 'old', CA: sc(400), CAtop: undefined, CBtop: undefined }),
-  ], dir, 0);
+  ], dir, 0, 'fixture');
   const md = readFileSync(join(dir, 'report.md'), 'utf8');
   expect(md).toContain('C∩A top');
   expect(md).toContain('C∩B top');
   const json = JSON.parse(readFileSync(join(dir, 'results.json'), 'utf8')) as { results: Result[] };
   expect(json.results.find(r => r.id === 'new')!.CAtop!.score).toBe(350);
+});
+
+test('results.json and report.md say which driver measured them', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sweep-driver-'));
+  for (const driver of ['fixture', 'compose'] as const) {
+    writeReport([result({ id: 'x' })], dir, 0, driver);
+    const json = JSON.parse(readFileSync(join(dir, 'results.json'), 'utf8')) as { driver: string };
+    expect(json.driver).toBe(driver);
+    expect(readFileSync(join(dir, 'report.md'), 'utf8')).toContain(`Driver **${driver}**`);
+  }
+});
+
+test('regression.mjs refuses to compare a compose run with a fixture baseline', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sweep-regress-'));
+  const row = (id: string) => ({ ...result({ id }), CA: sc(10), CB: sc(10), CC: sc(0) });
+  const file = (name: string, driver?: string) => {
+    const p = join(dir, name);
+    writeFileSync(p, JSON.stringify({ ...(driver ? { driver } : {}), results: [row('a')] }));
+    return p;
+  };
+  const run = (b: string, c: string) => spawnSync('node',
+    [join(__dirname, '..', 'bin', 'regression.mjs'), b, c], { encoding: 'utf8' });
+
+  const mismatch = run(file('base-fixture.json', 'fixture'), file('cur-compose.json', 'compose'));
+  expect(mismatch.status, mismatch.stdout + mismatch.stderr).toBe(2);
+  expect(mismatch.stderr).toMatch(/driver/i);
+  /* A file from before the stamp existed was a compose run, the only driver there was. */
+  const legacy = run(file('base-fixture2.json', 'fixture'), file('cur-legacy.json'));
+  expect(legacy.status).toBe(2);
+  expect(run(file('base-legacy.json'), file('cur-compose2.json', 'compose')).status).toBe(0);
+  expect(run(file('base-fixture3.json', 'fixture'), file('cur-fixture.json', 'fixture')).status).toBe(0);
 });

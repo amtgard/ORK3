@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeReport, isDirty, type Result } from './lib/report';
+import { writeReport, isDirty, type Driver, type Result } from './lib/report';
 
 const OUT = process.env.ORK3_SWEEP_OUT ?? join(__dirname, 'out');
 
@@ -16,7 +16,9 @@ const OUT = process.env.ORK3_SWEEP_OUT ?? join(__dirname, 'out');
  * Run: npx playwright test --project=scroll-sweep-rescore
  */
 test('rescore', () => {
-  const { results } = JSON.parse(readFileSync(join(OUT, 'results.json'), 'utf8')) as { results: Result[] };
-  writeReport(results, OUT, 0);
+  const { results, driver } = JSON.parse(readFileSync(join(OUT, 'results.json'), 'utf8')) as
+    { results: Result[]; driver?: Driver };
+  /* Re-scoring does not change who measured it. A file from before the stamp was compose. */
+  writeReport(results, OUT, 0, driver ?? 'compose');
   console.log(`rescored ${results.length} cases, ${results.filter(isDirty).length} over threshold`);
 });

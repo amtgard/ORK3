@@ -8,7 +8,7 @@ import { enumerate, enumerateExhaustiveC, namedCases, caseId, type SweepCase } f
 import { captureLayers, typeBand, scoreInk } from './lib/raster';
 import { blockBoxes, showOnlyBlock, applyLayer } from './lib/isolate';
 import { diffMask, severity } from './lib/mask';
-import { writeReport, isDirty, worst, ZERO, type Result } from './lib/report';
+import { writeReport, isDirty, worst, ZERO, type Driver, type Result } from './lib/report';
 
 const KINGDOM = Number(process.env.ORK3_SWEEP_KINGDOM ?? 1);
 const OUT = process.env.ORK3_SWEEP_OUT ?? join(__dirname, 'out');
@@ -135,6 +135,7 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
      storageState. See auth.setup.ts. Under ORK3_SWEEP_DRIVER=fixture there is neither: the
      "catalogue" is the fixture table and every order, hunter included, is reachable. */
   const FIXTURE = fixtureDriver();
+  const DRIVER: Driver = FIXTURE ? 'fixture' : 'compose';
   const { byOrder, unreachable } = await loadCatalogue(page, KINGDOM);
 
   mkdirSync(OUT, { recursive: true });
@@ -302,9 +303,11 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
   }
 
   if (SHARDS > 1) {
-    writeFileSync(join(OUT, `shard-${shard}.json`), JSON.stringify(results));
+    /* The driver travels with the shard, so merge.spec stamps what actually ran and not
+       whatever its own environment says. */
+    writeFileSync(join(OUT, `shard-${shard}.json`), JSON.stringify({ driver: DRIVER, results }));
   } else {
-    writeReport(results, OUT, THRESHOLD);
+    writeReport(results, OUT, THRESHOLD, DRIVER);
   }
   process.stdout.write(`\nsweep ${shard + 1}/${SHARDS}: ${results.length} cases, `
     + `${results.filter(isDirty).length} over threshold`

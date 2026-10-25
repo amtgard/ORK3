@@ -17,6 +17,19 @@ const worst = r => Math.max(r.ca / T.ca, r.cb / T.cb, r.cc / T.cc);
 const base = JSON.parse(readFileSync(process.argv[2] ?? 'tools/scroll-sweep/baseline/results-1to1-NA.json', 'utf8'));
 const cur = JSON.parse(readFileSync(process.argv[3] ?? 'tools/scroll-sweep/out/results.json', 'utf8'));
 
+/* THE TWO RUNS MUST HAVE BEEN DRAWN BY THE SAME DRIVER. The fixture driver has no composer
+   preview, no trim or no-lines sheets and a stand-in for the kingdom's arms, so a figure
+   from one is not evidence about the other, and "nothing got worse" across them would be a
+   comparison of drivers. A file with no stamp predates it and was a compose run, the only
+   driver there was. */
+const driverOf = f => f.driver ?? 'compose';
+if (driverOf(base) !== driverOf(cur)) {
+  console.error(`refusing to compare: the baseline was measured by the ${driverOf(base)} driver `
+    + `and the current run by the ${driverOf(cur)} driver. Re-run with ORK3_SWEEP_DRIVER=${driverOf(base)}, `
+    + `or capture a new baseline with the driver you mean to compare.`);
+  process.exit(2);
+}
+
 const norm = rs => Object.fromEntries(rs.map(r => [r.id, r.ca !== undefined ? r : {
   id: r.id, ca: r.CA.score * r.glyphPx / 1000, cb: r.CB.score * r.glyphPx / 1000,
   cc: r.CC.score * r.glyphPx / 1000,

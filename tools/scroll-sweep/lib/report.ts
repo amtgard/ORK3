@@ -2,6 +2,15 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export type Score = { score: number; overlapPx: number; worstRun: number };
+
+/**
+ * Which driver put the certificates on the page (lib/drive.ts). A required argument to
+ * writeReport and stamped into results.json: the two drivers do not draw the same
+ * certificate (the fixture driver has no preview surface, no trim or no-lines sheets, and a
+ * stand-in for the kingdom's arms), so a figure from one is not evidence about the other.
+ * A results.json from before the stamp existed was a compose run; it was the only driver.
+ */
+export type Driver = 'fixture' | 'compose';
 export type Result = {
   id: string; stage: string; surface: string;
   order: string; variant: string; rank: number; hand: string; text: string;
@@ -89,11 +98,11 @@ export const worstRun = (r: Result) => Math.max(r.CA.worstRun, r.CB.worstRun, r.
 /** The buckets the distribution is reported in, in ppt of glyph area. */
 const BUCKETS = [0, 0.1, 0.25, 0.5, 0.9, 1, 2, 5, 10, Infinity];
 
-export function writeReport(results: Result[], outDir: string, threshold: number): void {
+export function writeReport(results: Result[], outDir: string, threshold: number, driver: Driver): void {
   mkdirSync(outDir, { recursive: true });
   writeFileSync(
     join(outDir, 'results.json'),
-    JSON.stringify({ threshold, generated: new Date().toISOString(), results }, null, 2),
+    JSON.stringify({ threshold, driver, generated: new Date().toISOString(), results }, null, 2),
   );
 
   const dirty = results.filter(isDirty).sort((a, b) => worst(b) - worst(a));
@@ -136,7 +145,7 @@ export function writeReport(results: Result[], outDir: string, threshold: number
 
   writeFileSync(join(outDir, 'report.md'), `# Scrollery ink-collision sweep
 
-Cases **${results.length}** · over threshold **${dirty.length}** · over threshold in the top half **${dirtyTop}**${scoredTop === results.length ? '' : ` (scored on ${scoredTop} of ${results.length})`}
+Driver **${driver}** · cases **${results.length}** · over threshold **${dirty.length}** · over threshold in the top half **${dirtyTop}**${scoredTop === results.length ? '' : ` (scored on ${scoredTop} of ${results.length})`}
 
 Thresholds are per layer pair and each is calibrated against a measured population —
 see \`THRESHOLDS\` in lib/report.ts for the numbers and what was looked at:

@@ -1,5 +1,5 @@
 /**
- * The three text profiles.
+ * The five text profiles: `max`, `real`, `kingdomReal`, `empty` and `caseZero`.
  *
  * Every length here is DERIVED from the ORK's own data (see the plan's Global
  * Constraints table), not invented. Inventing them is how the crown collision hid on
@@ -37,9 +37,12 @@ export type TextFields = {
  * space-free persona as a signature. Derived rather than invented, which is what the
  * brief for this work asks for.
  *
- * Both are swept. `max` is also what the frozen baseline was measured against, so it
- * is the profile the regression diff can speak about; `real` is newer coverage and has
- * no "before".
+ * `kingdomReal` is `real` issued by a kingdom instead of a park; `empty` and `caseZero`
+ * are described where they are defined. All five are swept. `max` is also what the
+ * original frozen baseline (baseline/results-1to1-NA.json) was measured against, so it is
+ * the profile a regression diff against that file can speak about; `real` and
+ * `kingdomReal` are newer coverage, and the baseline captured through the fixture driver
+ * for the typeset-engine work is their first "before".
  */
 const rep = (n: number) => 'Wilhelmina Featherstonehaugh de la Mancha'.repeat(10).slice(0, n);
 

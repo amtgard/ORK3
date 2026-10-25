@@ -140,16 +140,21 @@ export async function settle(page: Page): Promise<void> {
  * Read when openPrint is CALLED rather than once at import, so a test can switch modes
  * and a shell value left over from another run cannot reach one that did not ask for it.
  *
- * WHAT THIS DRIVER CANNOT RENDER, said here so that nobody reads a clean run as covering it:
+ * WHAT THIS DRIVER CANNOT RENDER, or renders differently, said here so that nobody reads a
+ * clean run as covering it. The first two are REFUSED, by fixtureSpecFor(): a case the
+ * driver cannot draw is an error, never a quiet render of its plain twin.
  *
  *   preview surface   it is ScrolleryAjax/preview inside the composer page, which is login-gated
  *   trim, no-lines    scroll-render-fixtures.php sets `face`, `heading` and `up` and no other
  *                     query parameter, so the page would render as if they were absent
- *   heraldry          compose draws the kingdom's own device (kingdom 1 has one); a fixture
- *                     draws none unless a spec carries one, and these do not. The heraldry is
- *                     a plate under the type, so layer A here lacks it. Before and after are
- *                     both measured this way, which is what makes the pair comparable; a
- *                     fixture figure is not comparable to a compose figure.
+ *   heraldry          compose draws the kingdom's own device (kingdom 1 has one) and a fixture
+ *                     draws none unless a spec carries one, so every case here carries
+ *                     FIXTURE_HERALDRY, a flat dark square in the slot, and layer A has a
+ *                     plate there for the type to strike. It is a stand-in, not the device:
+ *                     a solid box is the worst case for type over it, which is the
+ *                     conservative side to be wrong on, but a fixture figure is still not a
+ *                     compose figure. Before and after are both measured this way, which is
+ *                     what makes the pair comparable.
  *   custom, no name   the composer falls back to the kingdom's own award-94 row name when
  *                     the officer types none; a fixture has no row, so the `empty` and
  *                     `caseZero` profiles print a custom certificate with a blank award line
@@ -207,9 +212,25 @@ export function fixtureCatalogue(): { byOrder: Record<string, Choice>; unreachab
   return { byOrder, unreachable: [] };
 }
 
+/**
+ * The heraldry every fixture carries: tools/scroll-sweep/fixtures/heraldry-standin.png, a
+ * 420x420 opaque #333333 square, which serveFixtures() answers on the app's own origin.
+ * The path is absolute from the origin so the partial's `<img src>` resolves from wherever
+ * the page sits. 420 is _heraldry.tpl's default box, so the square fills the slot it fills
+ * for the kingdom's real arms.
+ */
+export const FIXTURE_HERALDRY = '/orkui/__fixture/heraldry-standin.png';
+
+/** Why the fixture driver cannot render this case, or null when it can. */
+export function fixtureRefusal(c: SweepCase): string | null {
+  if (c.surface !== 'print') return `the ${c.surface} surface is the composer page, which needs a login`;
+  if (c.trim) return 'trim is a query parameter the fixture renderer does not set';
+  if (c.lines === false) return 'lines=0 is a query parameter the fixture renderer does not set';
+  return null;
+}
+
 /** Whether the fixture driver can render this case; see the list above for what it cannot. */
-export const fixtureCovers = (c: SweepCase): boolean =>
-  c.surface === 'print' && !c.trim && c.lines !== false;
+export const fixtureCovers = (c: SweepCase): boolean => fixtureRefusal(c) === null;
 
 /** FNV-1a, 32 bit. Any stable string hash will do; it only has to agree between calls. */
 function fnv(text: string): string {
@@ -232,9 +253,17 @@ function fnv(text: string): string {
  * id carries `+`), and makes two cases that are the same certificate share one file.
  *
  * `scope` is always kingdom, as the compose driver's is, so the issuer line is the
- * profile's `issuerName` as a kingdom name. No `isLadder`: compose sends none.
+ * profile's `issuerName` as a kingdom name. No `isLadder`: compose sends none. `heraldry`
+ * is FIXTURE_HERALDRY on every case, and it is part of what is hashed, so a certificate with
+ * the square and the same one without never share a file.
+ *
+ * Throws for a case the driver cannot render. This is the one place every path passes
+ * through (prepareFixtures and openPrint both), so neither can be handed a trim or a
+ * preview case and quietly draw the plain twin.
  */
 export function fixtureSpecFor(c: SweepCase): FixtureSpec {
+  const why = fixtureRefusal(c);
+  if (why) throw new Error(`the fixture driver cannot render ${c.id}: ${why}`);
   const f = FIXTURE_ORDERS[c.order];
   if (!f) throw new Error(`no fixture identity for order "${c.order}": add it to FIXTURE_ORDERS`);
   const t = PROFILES[c.text];
@@ -255,11 +284,17 @@ export function fixtureSpecFor(c: SweepCase): FixtureSpec {
     reason: t.reason,
     givenBy: t.givenBy,
     date: t.date,
+    heraldry: FIXTURE_HERALDRY,
     ...(c.recipe ? { recipe: c.recipe } : {}),
     ...(c.up ? { up: c.up } : {}),
   };
-  const slug = c.id.replace(/[^A-Za-z0-9_-]/g, '-');
-  return { id: `${slug}-${fnv(JSON.stringify(body))}`, ...body };
+  return { id: fixtureFileId(c.id, body), ...body };
+}
+
+/** The file name for a case: its id as a slug, then a hash of everything it asks to have drawn. */
+export function fixtureFileId(caseId: string, body: Omit<FixtureSpec, 'id'>): string {
+  const slug = caseId.replace(/[^A-Za-z0-9_-]/g, '-');
+  return `${slug}-${fnv(JSON.stringify(body))}`;
 }
 
 /* Where each rendered fixture lives, and which directory each page's route is serving. */
