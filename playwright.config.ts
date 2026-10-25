@@ -85,6 +85,21 @@ export default defineConfig({
       },
     },
     {
+      // The underlay review sheet: every plate of every order, one at a time, labelled with
+      // the policy's verdict. Fixture-rendered, so it needs no login. See underlays.spec.ts.
+      // The viewport holds the whole certificate; scale 1 because the thumbnails are
+      // sized by the spec and the sheet is read by eye.
+      name: 'scroll-underlays',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'underlays.spec.ts',
+      timeout: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 2600, height: 3500 },
+        deviceScaleFactor: 1,
+      },
+    },
+    {
       // Re-emits the report from an existing results.json. See rescore.spec.ts.
       name: 'scroll-sweep-rescore',
       testDir: './tools/scroll-sweep',
