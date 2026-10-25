@@ -508,6 +508,42 @@ class Scroll extends Ork3
         return self::Hands()[self::NormaliseHand($face)]['fonts'] ?? [];
     }
 
+    /** What every surface falls back to: let the engine choose. */
+    public const DEFAULT_HEADING = 'auto';
+
+    /**
+     * How the certificate's top block is composed when the page is asked, per print,
+     * to override the engine's own choice.
+     *
+     * `auto` lets the typeset engine choose (Classic when the text fits it, Centered
+     * when it does not); `classic` and `centered` force one. Like the hand it is a
+     * per-PRINT choice that travels in the URL (&heading=) and is never stored on the
+     * award, so a reprint chooses again. Keys are the values that go in &heading= and
+     * on <body data-sc-heading>.
+     *
+     * @return array<string, string> key => label
+     */
+    public static function Headings(): array
+    {
+        return ['auto' => 'Automatic', 'classic' => 'Classic', 'centered' => 'Centered'];
+    }
+
+    /**
+     * A requested heading reduced to one Headings() lists.
+     *
+     * An ALLOWLIST, as NormaliseHand() is, because the value lands in an HTML
+     * attribute and selects a layout. Only case and surrounding whitespace are
+     * forgiven, so a hand-typed `&heading=Classic ` still resolves; anything else,
+     * including a value with junk after a valid word, is not a heading and gets the
+     * default rather than a guess at what was meant.
+     */
+    public static function NormaliseHeading(?string $v): string
+    {
+        $key = strtolower(trim((string) $v));
+
+        return isset(self::Headings()[$key]) ? $key : self::DEFAULT_HEADING;
+    }
+
     /**
      * Whether the citation's ruled writing lines are drawn.
      *
@@ -1342,6 +1378,240 @@ class Scroll extends Ork3
         return DIR_TEMPLATE . 'revised-frontend/scroll/' . $orderId . '.tpl';
     }
 
+    /*
+     * ------------------------------------------------------------------------------
+     * Layout data for the typeset engine.
+     *
+     * The engine runs in the browser and cannot see the plate it is typing on, so the
+     * template hands it two things measured offline: where the type may run on this
+     * exact certificate (free-space.json, as `data-sc-free` on .Award) and which cells
+     * of each flourish are inked (ink-extents.json, as `data-sc-ink` on each flourish
+     * <img>). Both are optional: an installation that has not run the builders gets
+     * null and '' here, and the engine treats that as unconstrained.
+     * ------------------------------------------------------------------------------
+     */
+
+    /**
+     * Where free-space.json is read from when it is not the shipped file. Null means
+     * assets/scrolls/free-space.json. Tests point it at a fixture, because the shipped
+     * manifest is a generated artefact and a unit test must not depend on its numbers.
+     */
+    public static ?string $freeSpacePathOverride = null;
+
+    private static function freeSpacePath(): string
+    {
+        return self::$freeSpacePathOverride
+            ?: ((defined('DIR_ASSETS') ? DIR_ASSETS : '') . 'scrolls/free-space.json');
+    }
+
+    private static function inkExtentsPath(): string
+    {
+        return (defined('DIR_ASSETS') ? DIR_ASSETS : '') . 'scrolls/ink-extents.json';
+    }
+
+    /** @var array<string, array<string, mixed>|null> parsed free-space manifests, by path */
+    private static array $freeSpaceManifests = [];
+
+    /**
+     * free-space.json, parsed once per process. Absent, unreadable or not JSON is
+     * null, not an error: the file is generated, and a certificate with no profile is
+     * still a certificate. Keyed by path so a test that swaps the override reads the
+     * file it named.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function freeSpaceManifest(): ?array
+    {
+        $path = self::freeSpacePath();
+        if (array_key_exists($path, self::$freeSpaceManifests)) {
+            return self::$freeSpaceManifests[$path];
+        }
+
+        $manifest = null;
+        if (is_file($path)) {
+            $decoded = json_decode((string) @file_get_contents($path), true);
+            if (is_array($decoded)) {
+                $manifest = $decoded;
+            }
+        }
+
+        return self::$freeSpaceManifests[$path] = $manifest;
+    }
+
+    /**
+     * One manifest entry as two int lists of the same length, or null if it is not
+     * that. A half-formed entry is treated as absent rather than trusted: a profile
+     * whose L and R disagree about how many bands there are has no meaning band by
+     * band, and the engine would be handed edges that belong to different rows.
+     *
+     * @return array{L: list<int>, R: list<int>}|null
+     */
+    private static function freeSpaceEntry(mixed $entry): ?array
+    {
+        if (!is_array($entry) || !is_array($entry['L'] ?? null) || !is_array($entry['R'] ?? null)) {
+            return null;
+        }
+
+        $left  = array_map('intval', array_values($entry['L']));
+        $right = array_map('intval', array_values($entry['R']));
+
+        return $left !== [] && count($left) === count($right) ? ['L' => $left, 'R' => $right] : null;
+    }
+
+    /**
+     * The free interval the type may run in, per 25px band, for one certificate.
+     * See spec section 7.1 for the format and how the manifest is built.
+     *
+     * A fixed order has one measured profile per order/variant/rank, keyed
+     * "smith//5" or "owl/parchment/0". A custom scroll has no profile of its own: it
+     * is a ground, a border and a numeral set composed, and the ink of each was
+     * measured alone, so the free space is where all of them are clear — the
+     * rightmost left edge and the leftmost right edge, band by band. A component with
+     * no entry is skipped rather than counted as blocked: the manifest only lists
+     * what it measured, and "none" is not a border to measure. If nothing at all is
+     * known the answer is null, which the engine reads as unconstrained.
+     *
+     * A band a component does not cover is unconstrained BY THAT COMPONENT, so a
+     * shorter profile never truncates a longer one.
+     *
+     * `$manifest` is for tests; production passes nothing and gets the shipped file.
+     *
+     * @param  array<string, mixed>      $s         a BuildScroll() array
+     * @param  array<string, mixed>|null $manifest
+     * @return array{y0: int, step: int, L: list<int>, R: list<int>}|null
+     */
+    public static function FreeSpace(array $s, ?array $manifest = null): ?array
+    {
+        $manifest ??= self::freeSpaceManifest();
+        if ($manifest === null) {
+            return null;
+        }
+
+        $y0   = $manifest['y0'] ?? null;
+        $step = $manifest['step'] ?? null;
+        if (!is_numeric($y0) || !is_numeric($step) || (int) $step < 1) {
+            return null;
+        }
+
+        $order = (string) ($s['order'] ?? '');
+        $rank  = (int) ($s['rank'] ?? 0);
+        if ($order === 'custom') {
+            $recipe = is_array($s['recipe'] ?? null) ? $s['recipe'] : [];
+            $ground = (string) ($recipe['ground'] ?? '');
+            $border = (string) ($recipe['border'] ?? '');
+            $set    = (string) ($recipe['rankSet'] ?? '');
+            $keys   = array_values(array_filter([
+                $ground === '' ? '' : 'ground/' . $ground,
+                $border === '' ? '' : 'border/' . $border,
+                $set === '' ? '' : 'rankset/' . $set . '/' . $rank,
+            ], static fn (string $k): bool => $k !== ''));
+            $source = $manifest['components'] ?? null;
+        } else {
+            $keys   = [$order . '/' . (string) ($s['variant'] ?? '') . '/' . $rank];
+            $source = $manifest['configs'] ?? null;
+        }
+
+        if (!is_array($source)) {
+            return null;
+        }
+
+        $left  = [];
+        $right = [];
+        $found = false;
+        foreach ($keys as $key) {
+            $entry = self::freeSpaceEntry($source[$key] ?? null);
+            if ($entry === null) {
+                continue;
+            }
+            $found = true;
+            foreach ($entry['L'] as $band => $edge) {
+                $left[$band] = isset($left[$band]) ? max($left[$band], $edge) : $edge;
+            }
+            foreach ($entry['R'] as $band => $edge) {
+                $right[$band] = isset($right[$band]) ? min($right[$band], $edge) : $edge;
+            }
+        }
+
+        return $found ? ['y0' => (int) $y0, 'step' => (int) $step, 'L' => $left, 'R' => $right] : null;
+    }
+
+    /**
+     * FreeSpace() as the compact string `_text.tpl` puts in `data-sc-free`:
+     * "<y0>,<step>|<L,L,…>|<R,R,…>". Empty when there is no profile, so the template
+     * can omit the attribute with one test. All digits and separators, so it needs no
+     * escaping.
+     *
+     * @param array<string, mixed>      $s
+     * @param array<string, mixed>|null $manifest
+     */
+    public static function FreeSpaceAttr(array $s, ?array $manifest = null): string
+    {
+        $free = self::FreeSpace($s, $manifest);
+        if ($free === null) {
+            return '';
+        }
+
+        return $free['y0'] . ',' . $free['step'] . '|' . implode(',', $free['L']) . '|' . implode(',', $free['R']);
+    }
+
+    /** @var array<string, mixed>|null the `files` map of ink-extents.json */
+    private static ?array $inkFiles = null;
+
+    /**
+     * ink-extents.json's per-file entries, read once per process. Missing or broken
+     * is an empty map: no grids, which is the behaviour before the grids existed.
+     *
+     * @return array<string, mixed>
+     */
+    private static function inkFiles(): array
+    {
+        if (self::$inkFiles !== null) {
+            return self::$inkFiles;
+        }
+
+        self::$inkFiles = [];
+        $path           = self::inkExtentsPath();
+        if (is_file($path)) {
+            $decoded = json_decode((string) @file_get_contents($path), true);
+            if (is_array($decoded) && is_array($decoded['files'] ?? null)) {
+                self::$inkFiles = $decoded['files'];
+            }
+        }
+
+        return self::$inkFiles;
+    }
+
+    /**
+     * A flourish's ink grid as "32x32:" plus its 32 rows of 8 hex digits, which is
+     * what `data-sc-ink` carries (spec section 7.2). '' when the file has no grid.
+     *
+     * The shape is checked rather than trusted: this lands in an attribute the engine
+     * indexes by cell, and a short row would shift every cell after it.
+     *
+     * Takes a path with or without the `scrolls/` prefix — order `resources` carry
+     * it, the manifest keys do not — and strips it exactly as scroll_resource() does.
+     */
+    public static function InkGrid(string $relative): string
+    {
+        $key  = preg_replace('#^scrolls/#', '', ltrim(trim($relative), '/')) ?? '';
+        $grid = self::inkFiles()[$key]['grid'] ?? null;
+        if (!is_array($grid) || ($grid['w'] ?? null) !== 32 || ($grid['h'] ?? null) !== 32) {
+            return '';
+        }
+
+        $rows = is_array($grid['rows'] ?? null) ? array_values($grid['rows']) : [];
+        if (count($rows) !== 32) {
+            return '';
+        }
+        foreach ($rows as $row) {
+            if (!is_string($row) || preg_match('/^[0-9a-f]{8}$/', $row) !== 1) {
+                return '';
+            }
+        }
+
+        return '32x32:' . implode('', $rows);
+    }
+
     /**
      * Certificate date, e.g. "13th May 2024". Empty for a missing/zero date so the
      * text layer draws its writing-line blank instead of "30th Nov -0001".
@@ -1698,6 +1968,14 @@ class Scroll extends Ork3
              * so its own mtime is the right stamp for "the art moved".
              */
             'gen'  => self::artGeneration(),
+            /*
+             * The LAYOUT data's generation. `data-sc-free` and `data-sc-ink` are baked
+             * into the cached markup from free-space.json and ink-extents.json, and
+             * regenerating either changes no template, no art and no input, so neither
+             * stamp above moves. Without this a recalibrated profile would reach the
+             * browser only as each certificate's cache entry expired.
+             */
+            'layout' => self::layoutGeneration(),
             'data' => $s,
         ]));
     }
@@ -1712,6 +1990,37 @@ class Scroll extends Ork3
 
         $mtime = @filemtime((defined('DIR_ASSETS') ? DIR_ASSETS : '') . 'scrolls/renditions.json');
         $stamp = $mtime === false ? 0 : $mtime;
+
+        return $stamp;
+    }
+
+    /** @var array{0: string, 1: string}|null [free-space path, stamp] */
+    private static ?array $layoutStamp = null;
+
+    /**
+     * The mtimes of free-space.json and ink-extents.json, as "free|ink": the stamp
+     * that moves when the layout data does. 0 stands for a file that is not there,
+     * so a missing manifest is a stable key rather than an error.
+     *
+     * Taken once per process, like artGeneration(), and remembered with the path it
+     * was taken for so that pointing $freeSpacePathOverride at another file cannot be
+     * answered from the old one.
+     */
+    private static function layoutGeneration(): string
+    {
+        $free = self::freeSpacePath();
+        if (self::$layoutStamp !== null && self::$layoutStamp[0] === $free) {
+            return self::$layoutStamp[1];
+        }
+
+        $mtime = static function (string $path): int {
+            $t = @filemtime($path);
+
+            return $t === false ? 0 : $t;
+        };
+        $stamp = $mtime($free) . '|' . $mtime(self::inkExtentsPath());
+
+        self::$layoutStamp = [$free, $stamp];
 
         return $stamp;
     }
@@ -2249,4 +2558,13 @@ function scroll_art_attrs(string $relative): string
 function scroll_resource(string $relative): string
 {
     return scroll_art(preg_replace('#^scrolls/#', '', ltrim(trim($relative), '/')) ?? '');
+}
+
+/**
+ * A flourish's ink grid, for `data-sc-ink`: "32x32:" and the 32 rows, or '' when the
+ * file has none. Takes the same `scrolls/`-prefixed path scroll_resource() does.
+ */
+function scroll_ink_grid(string $relative): string
+{
+    return Scroll::InkGrid($relative);
 }
