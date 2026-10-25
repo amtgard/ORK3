@@ -1454,10 +1454,23 @@ class Scroll extends Ork3
         // Arcanyst carried UseThe/UseOf for exactly this, toggled by hand per scroll.
         // Here the shape is known from the data, so they are derived instead — and an
         // explicit context value still overrides, which is what the create flow uses.
+        //
+        // issuerName, issuerTitle, useThe and useOf stay the stored form. What the
+        // certificate sets in separate sizes — "and the Kingdom of" / "the" / "Wetlands"
+        // — is split out of them by ScrollText::IssuerLines() into issuerLead,
+        // issuerArticle and issuerPlace, below.
         $isPark     = $parkName !== '';
         $issuerName = $isPark ? $parkName : (string) ($awardRow['KingdomName'] ?? '');
 
+        // "Inactive" is a park status that leaked into ork_parktitle.title on 5 parks,
+        // not a rank word. Read as empty it takes the Barony floor below, rather than
+        // printing "and the Inactive of". The model applies the same rule to a title an
+        // officer types into the composer, but the floor is ours, so it has to be
+        // decided before it.
         $issuerTitle = trim((string) ($context['issuerTitle'] ?? ''));
+        if (strtolower($issuerTitle) === 'inactive') {
+            $issuerTitle = '';
+        }
         if ($issuerTitle === '') {
             $issuerTitle = $isPark ? 'Barony' : '';
         }
@@ -1499,6 +1512,10 @@ class Scroll extends Ork3
         if ($mundaneId <= 0) {
             $mundaneId = (int) ($context['mundaneId'] ?? 0);
         }
+
+        $useThe      = (bool) ($context['useThe'] ?? $isPark);
+        $useOf       = (bool) ($context['useOf'] ?? $isPark);
+        $issuerLines = ScrollText::IssuerLines($issuerTitle, $issuerName, $useThe, $useOf, $isPark ? 'park' : 'kingdom');
 
         return [
             'mundaneId'   => max(0, $mundaneId),
@@ -1543,8 +1560,14 @@ class Scroll extends Ork3
             'givenBy'     => (string) ($awardRow['GivenBy'] ?? ''),
             'issuerTitle' => $issuerTitle,
             'issuerName'  => $issuerName,
-            'useThe'      => (bool) ($context['useThe'] ?? $isPark),
-            'useOf'       => (bool) ($context['useOf'] ?? $isPark),
+            'useThe'      => $useThe,
+            'useOf'       => $useOf,
+            // The display split of the four keys above, which are left as stored. A
+            // template that draws the issuer in parts reads these; ExpandFlavour()
+            // above keeps the whole stored name.
+            'issuerLead'    => $issuerLines['lead'],
+            'issuerArticle' => $issuerLines['article'],
+            'issuerPlace'   => $issuerLines['place'],
             'heraldry'    => (string) ($context['heraldry'] ?? ''),
             'flavour'     => self::ExpandFlavour(
                 (string) ($order['flavour'][(string) $rank] ?? ''),

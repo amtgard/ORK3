@@ -369,15 +369,22 @@ class Model_Scrollery extends Model
         if ($scopeType === 'kingdom') {
             $info = $this->kingdom_short_info($scopeId);
 
+            // Kingdom names already carry their own article and rank word —
+            // "The Kingdom of the Wetlands" — so the stored form prints neither
+            // separately. The composer's fields should show what WILL print, so hand
+            // it the split form: Title "Kingdom", both boxes ticked, Name "the
+            // Wetlands" (the article stays on the name; the text model lifts it out
+            // again at print). A name that does not read "<rank> of <place>" comes
+            // back whole with the boxes clear, exactly as stored.
+            $issuer = ScrollText::IssuerLines('', (string) ($info['KingdomName'] ?? ''), false, false, 'kingdom');
+
             return [
                 'Type'      => 'kingdom',
                 'Id'        => $scopeId,
-                // Kingdom names already carry their own article and rank word —
-                // "The Kingdom of the Wetlands" — so the certificate adds neither.
-                'Name'      => (string) ($info['KingdomName'] ?? ''),
-                'Title'     => '',
-                'UseThe'    => false,
-                'UseOf'     => false,
+                'Name'      => $issuer['name'],
+                'Title'     => $issuer['title'],
+                'UseThe'    => $issuer['useThe'],
+                'UseOf'     => $issuer['useOf'],
                 'KingdomId' => $scopeId,
                 'Heraldry'  => (int) ($info['HasHeraldry'] ?? 0) === 1
                     ? (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
@@ -392,11 +399,16 @@ class Model_Scrollery extends Model
 
         $park = $this->park_details($scopeId);
 
+        // ork_parktitle.title is "Inactive" on 5 parks — a status, not a rank word. The
+        // text model reads it as no title, which then takes the same Barony floor an
+        // untitled park always did.
+        $parkTitle = ScrollText::IssuerLines((string) ($park['ParkTitle'] ?? ''), '', true, true, 'park')['title'];
+
         return [
             'Type'      => 'park',
             'Id'        => $scopeId,
             'Name'      => (string) ($park['ParkName'] ?? ''),
-            'Title'     => trim((string) ($park['ParkTitle'] ?? '')) ?: 'Barony',
+            'Title'     => $parkTitle !== '' ? $parkTitle : 'Barony',
             'UseThe'    => true,
             'UseOf'     => true,
             'KingdomId' => (int) ($park['KingdomId'] ?? 0),
