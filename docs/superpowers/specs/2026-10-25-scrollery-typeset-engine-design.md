@@ -625,8 +625,9 @@ return [
   // order => list of fnmatch() patterns, relative to assets/scrolls/, for plates that
   // type is DESIGNED to sit on (washes, scenes, textures). Everything else in layer A
   // is an obstacle.
-  'smith'  => ['smith/bg.*'],
-  'battle' => ['battle/arcane/wash.*', 'battle/arcane/glow.*'],
+  'smith'  => ['smith/burn.*'],
+  'battle' => ['battle/arcane/wash.*'],
+  'owl'    => ['owl/border.*'],      // the page-wide blueprint grid sits under type by design
   // …
   'custom' => [ /* ground-level washes by ground key */ ],
 ];
