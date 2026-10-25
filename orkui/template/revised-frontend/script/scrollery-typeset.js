@@ -373,16 +373,22 @@
      * utility(s, range) -> number   (§6.3.3)
      *
      * What a size is worth: a straight line from 0 to 100 as `s` climbs to `sat`, then a
-     * shallower climb to 120 at `max`. Past `sat` a bigger name still reads as better,
-     * but not enough to be worth a bad break or a third line. `range.max` is the ceiling
-     * the caller computed for this block (the hierarchy of §6.4.2 may have lowered it),
-     * so a block held under its role's own maximum still tops out at 120 at its ceiling.
+     * shallower climb to 120 at the role's own maximum. Past `sat` a bigger name still
+     * reads as better, but not enough to be worth a bad break or a third line.
+     *
+     * The maximum is `range.uMax` when the range has one, else `range.max`. They differ
+     * when the hierarchy of §6.4.2 has lowered a block's ceiling: that ceiling limits how
+     * large the block may be set (`max`, the cap on s*), but it does not change what a
+     * size is worth, so the worth is measured against the role's table value (`uMax`).
+     * Measured against the lowered ceiling instead, the whole bonus past `sat` would be
+     * squeezed into a sliver and a block would be pushed up to its cap by a second line.
      */
     function utility(s, range) {
         var sat = range.sat;
         if (!(sat > 0)) { throw new TypeError('utility: the range has no sat (the lead is sized by hierarchy, not scored)'); }
+        var top = range.uMax != null ? range.uMax : range.max;
         var u = 100 * Math.min(s, sat) / sat;
-        if (s > sat && range.max > sat) { u += 20 * (s - sat) / (range.max - sat); }
+        if (s > sat && top > sat) { u += 20 * (s - sat) / (top - sat); }
         return u;
     }
 
@@ -532,7 +538,7 @@
         var best = null, nearest = null;
 
         /* One way of rating one candidate. `minor` is -1 or the line made minor. */
-        function rate(starts, LW, cnt, chars, bpSum, minor) {
+        function rate(starts, LW, cnt, bpSum, minor) {
             var kk = starts.length, j;
 
             var sStar = range.max;
@@ -591,16 +597,16 @@
                     if (j + 1 < k) { bpSum += bp[b]; }
                 }
 
-                consider(rate(starts, LW, cnt, chars, bpSum, -1));
+                consider(rate(starts, LW, cnt, bpSum, -1));
                 if (k < 2 || role !== 'name' || !CONST.MINOR_LINES) { return; }
 
                 /* The line holding the most characters is never the minor one. */
                 var most = Math.max.apply(null, chars);
                 if (run > 0 && starts[1] === run && chars[0] < most) {
-                    consider(rate(starts, LW, cnt, chars, bpSum, 0));
+                    consider(rate(starts, LW, cnt, bpSum, 0));
                 }
                 if (epi > 0 && starts[k - 1] === epi && n - epi >= 2 && chars[k - 1] < most) {
-                    consider(rate(starts, LW, cnt, chars, bpSum, k - 1));
+                    consider(rate(starts, LW, cnt, bpSum, k - 1));
                 }
             });
         }
@@ -630,11 +636,21 @@
      *   measure    word -> width in em at 1px (a protected span arrives with no-break
      *              spaces inside it, as tokenize() leaves it)
      *   spaceW     the width of one space, em at 1px
-     *   range      { min, max, sat } for this block. `max` is the ceiling after the
-     *              hierarchy of §6.4.2; `min` already carries any multi-up FLOOR_SCALE.
-     *              A range from CONST.ROLES also supplies the per-line-count prices.
+     *   range      { min, max, sat, uMax? } for this block.
+     *                min   already carries any multi-up FLOOR_SCALE.
+     *                max   the size ceiling after the hierarchy of §6.4.2 (max_eff). It
+     *                      caps s* and sets how far down the page each line's band
+     *                      reaches, and nothing else.
+     *                sat   the role's own saturation size.
+     *                uMax  the role's own maximum, which utility() measures worth
+     *                      against: a lowered ceiling does not make a size worth more.
+     *                      It defaults to CONST.ROLES[role].max for 'name' and 'award'.
+     *                      A place has two table rows (Classic, Centered), so for
+     *                      'place' the caller passes it, and solveBlock throws without.
+     *              A range taken from CONST.ROLES also supplies the per-line-count prices.
      *   maxLines   most lines the block may take (an award over 40 characters is allowed
-     *              three, whatever the caller passes)
+     *              three, whatever the caller passes). Defaults to the role's table row
+     *              for 'name' and 'award'; a place must pass it.
      *   lineHeight line-height factor
      *   y0         where the block's top sits, frame px
      *   rootPx     computed font-size of the root, px
@@ -647,14 +663,27 @@
      */
     function solveBlock(o) {
         var role = o.role;
+        var row = CONST.ROLES[role];      // none for 'place': it has a Classic and a Centered row
+
+        /* What a caller must say and the role table cannot say for it. Refused up front,
+           so a missing value fails with its name rather than as a crash deep inside. */
+        var uMax = o.range.uMax != null ? o.range.uMax : (row ? row.max : null);
+        if (uMax == null) { throw new TypeError("solveBlock: role '" + role + "' has no single role-table row, so range.uMax (the role's own maximum) must be passed"); }
+        var maxLines = o.maxLines != null ? o.maxLines : (row ? row.maxLines : null);
+        if (!(maxLines >= 1)) { throw new TypeError("solveBlock: role '" + role + "' has no single role-table row, so maxLines must be passed"); }
+
         var tokens = lineTokens(tokenize(o.text, role));
-        var range = { min: o.range.min, max: Math.max(o.range.max, o.range.min), sat: o.range.sat };
+        var range = {
+            min: o.range.min,
+            max: Math.max(o.range.max, o.range.min),
+            sat: o.range.sat != null ? o.range.sat : (row ? row.sat : null),
+            uMax: uMax
+        };
         var lo = range.min;
         if (tokens.length === 0) {
             return { size: lo, lines: [], minor: -1, planned: 0, score: 0, overflow: false };
         }
 
-        var maxLines = Math.max(1, o.maxLines);
         if (role === 'award' && charCount(tokens.map(function (t) { return t.text; }).join(' ')) > CONST.AWARD_LONG.chars) {
             maxLines = Math.max(maxLines, CONST.AWARD_LONG.maxLines);
         }

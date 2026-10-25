@@ -171,7 +171,7 @@ test('a short name stays on one line at its maximum', () => {
   const s = solve('Sir Hillary', 'name', 1683);
   expect(s.planned).toBe(1); expect(s.size).toBeCloseTo(2.3);
 });
-// PROPOSED FIXTURE (W 1683). The brief's W is 1000, where the 3-line candidate wins under spec 6.3.3:
+// W 1683, by controller ruling. The brief's W was 1000, where the 3-line candidate wins under spec 6.3.3:
 // ["Nicodemus", "the Rat", "Landcrest"] sets at 2.167 (U 116.2) and scores 61.9, against 48.4 for the best
 // two-line cut. At 1683 the two-line cut already sets at 2.05 (score 85.1) and a third line buys nothing.
 test('a long name takes two lines rather than one small one, never ending on "the"', () => {
@@ -186,7 +186,7 @@ test('a quoted nickname is never split', () => {
   const s = solve('William "Billy Bob" FitzRobert', 'name', 700);
   expect(s.lines.some(l => l.includes('"Billy') && !l.includes('Bob"'))).toBe(false);
 });
-// PROPOSED FIXTURE (W 1683). The brief's W is 1100, where a plain 3-line cut wins under spec 6.3.3:
+// W 1683, by controller ruling. The brief's W was 1100, where a plain 3-line cut wins under spec 6.3.3:
 // ["Sir Lord", "Kato Darkhaven", "Grimwulff"] scores 55.05 (minor-0 variant 54.97), against 47.29 for the
 // two-line cut with a minor "Sir Lord". At 1683 the three-line cut is capped at 2.3 and the two-line minor
 // cut scores 78.2 against 75.7.
@@ -198,6 +198,9 @@ test('the line holding most of the characters is never minor', () => {
   const s = solve('Captain Sir Lord Kato Grimwulff', 'name', 1100);   // "Captain Sir Lord" outweighs "Kato Grimwulff"
   expect(s.minor).not.toBe(0);
 });
+// W 1683, by controller ruling. The brief's W was 1100, where this test was vacuous: the result is already
+// minor -1 with minor lines on (the plain 3-line cut wins), so switching them off proved nothing. At 1683 the
+// same text is minor 0 with them on (see 'an honorific may become a minor line'), so -1 here is a real effect.
 test('minor lines can be switched off', () => {
   const saved = TS.CONST.MINOR_LINES; TS.CONST.MINOR_LINES = false;
   try { expect(solve('Sir Lord Kato Darkhaven Grimwulff', 'name', 1683).minor).toBe(-1); } finally { TS.CONST.MINOR_LINES = saved; }
@@ -214,14 +217,11 @@ test('fallback splits an unbreakable token', () => {
 test('an impossible block still returns every word, flagged', () => {
   const s = solve('Wilhelmina Featherstonehaugh de la Mancha Wilhelmina Featherstonehaugh', 'name', 120);
   expect(s.overflow).toBe(true); expect(s.size).toBeCloseTo(TS.CONST.ROLES.name.min);
-  expect(s.lines.join(' ').replace(/ /g, ' ')).toContain('Featherstonehaugh');
+  expect(s.lines.join(' ').replace(/\u00a0/g, ' ')).toContain('Featherstonehaugh');
 });
 test('ties go to fewer lines', () => expect(solve('Halo', 'name', 1683).planned).toBe(1));
 
 // Beyond the brief: the edges that decide whether the solver is right, not just plausible.
-
-const fixture = (over: any = {}) => ({
-  measure: (w: string) => Array.from(w).length * 0.5, spaceW: 0.25, y0: 900, rootPx: 100, ...over });
 
 test('utility is a 100-point ramp to sat, then 20 more to max, and refuses a range with no sat', () => {
   const r = { min: 0.8, max: 2.3, sat: 1.6 };
@@ -358,10 +358,42 @@ test('an overflowing block is flagged with the narrowest cut, not the cheapest',
 });
 test('a protected span survives as one token through the solver', () => {
   const s = solve('Sir "Billy Bob" Fitzgerald-Montgomery', 'name', 900);
-  expect(s.lines.some(l => l.includes('"Billy Bob"'))).toBe(true);
+  expect(s.lines.some(l => l.includes('"Billy\u00a0Bob"'))).toBe(true);
 });
-test('fifty tokens solve well inside a millisecond budget', () => {
+test('fifty tokens come back in order, in well under a quarter of a second', () => {
   const words = Array.from({ length: 50 }, (_, i) => 'w' + 'x'.repeat(i % 4)).join(' ');
   const t0 = Date.now(); const s = solve(words, 'name', 1683); const ms = Date.now() - t0;
   expect(s.lines.join(' ')).toBe(words); expect(ms).toBeLessThan(250);
+});
+
+// ----------------------------------------------------- utility is measured against the role
+
+test('utility reads the role maximum from uMax when the range has one, else from max', () => {
+  const lowered = { min: 0.7, max: 1.275, sat: 1.2, uMax: 1.5 };
+  expect(TS.utility(1.275, lowered)).toBeCloseTo(105);                              // 100 + 20 * 0.075 / 0.3
+  expect(TS.utility(1.275, { min: 0.7, max: 1.275, sat: 1.2 })).toBeCloseTo(120);   // no uMax: max stands in
+});
+// Reproduced in review: with the hierarchy ceiling (1.275) standing in for the role maximum, the
+// bonus past sat shrank to a sliver and a second line won on the strength of its cap.
+//   one line  "Knight of the Flame" sets at 1.203: U = 100 + 20 * 0.003 / 0.3 = 100.2
+//   two lines "Knight" / "of the Flame" sets at the 1.275 cap: U = 105, less 22 for the line, plus 10 for the
+//   break before "of", less 6.2 for raggedness = 86.8
+//   (measured against 1.275 instead, the one line scored 100.8 and the two lines 101.8.)
+test('a hierarchy ceiling does not squeeze the utility past sat: one line still beats two', () => {
+  const s = solve('Knight of the Flame', 'award', 1080, { range: { min: 0.70, max: 1.275, sat: 1.20 } });
+  expect(s.planned).toBe(1); expect(s.size).toBeCloseTo(1.203, 3);
+});
+test('a place has no single role-table row, so it must say its own maximum and line count', () => {
+  const placeRange = { min: 0.62, max: 1.0, sat: 1.0 };
+  const place = (over: any) => solve('Barony of the Iron Wastes', 'name', 1683, { role: 'place', range: placeRange, ...over });
+  expect(() => place({ maxLines: 2 })).toThrow(/uMax/);
+  expect(() => place({ range: { ...placeRange, uMax: 1.3 }, maxLines: undefined })).toThrow(/maxLines/);
+  const s = place({ range: { ...placeRange, uMax: 1.3 }, maxLines: 2 });
+  expect(s.lines.join(' ')).toBe('Barony of the Iron Wastes');
+});
+test('maxLines defaults from the role table when the caller leaves it out', () => {
+  const text = 'Nicodemus the Rat Landcrest';
+  const given = solve(text, 'name', 1000), omitted = solve(text, 'name', 1000, { maxLines: undefined });
+  expect(omitted).toEqual(given);
+  expect(solve(text, 'name', 1000, { maxLines: 1 }).planned).toBe(1);   // a caller's own cap still wins
 });
