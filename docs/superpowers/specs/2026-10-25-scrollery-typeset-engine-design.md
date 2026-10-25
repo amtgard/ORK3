@@ -248,7 +248,10 @@ An empty `place` renders the writing-line blank, as an empty recipient already d
   `ScrollText::IssuerLines(string $title, string $name, bool $useThe, bool $useOf, string $scopeType): array`.
 - **BuildScroll** adds three keys: `issuerLead`, `issuerArticle`, `issuerPlace`. The
   existing `issuerTitle`, `issuerName`, `useThe` and `useOf` keys stay exactly as
-  they are. `ExpandFlavour(<<ISSUER>>)` keeps the full stored name.
+  they are. `ExpandFlavour(<<ISSUER>>)` receives `IssuerLines()['phrase']` (PHP only).
+  For a kingdom that is `the {title} of {the }place` ("shining star of the Kingdom of the
+  Wetlands"), so award-backed and composed prints agree. For a park it is the stored
+  name, unchanged. (Ruling made during T2.)
 - **Composer prefill:** `Model_Scrollery::scope_context()` for a kingdom returns the
   split form (Title = rank word, UseThe/UseOf = true, Name = rest). The composer
   fields then show what will print.
