@@ -39,6 +39,8 @@ export type FixtureSpec = {
   heading?: 'auto' | 'classic' | 'centered';
   heraldry?: string;
   up?: 0 | 2 | 4;
+  /** Left unset to match compose, which sends no IsLadder; see bin/scroll-render-fixtures.php. */
+  isLadder?: boolean;
 };
 
 const SWEEP_DIR = join(__dirname, '..');
@@ -46,7 +48,8 @@ const REPO_ROOT = join(SWEEP_DIR, '..', '..');
 const FIXTURE_OUT = join(SWEEP_DIR, 'out', 'fixtures');
 const FIXTURE_ASSETS = join(SWEEP_DIR, 'fixtures');
 
-const SAFE_NAME = /^[A-Za-z0-9._-]+$/;
+/* A name that becomes one path segment. No leading dot, so `.` and `..` never pass. */
+const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /** Read `tools/scroll-sweep/corpus/<name>.json` and return its `cases`. */
 export function loadCorpus(name: string): FixtureSpec[] {

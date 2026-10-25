@@ -10,12 +10,12 @@
  * `<id> ok (<order>)` or `<id> ERROR <message>` on stderr, and one bad spec never stops
  * the rest. Exit status: 0 all rendered, 2 some specs failed, 1 the run could not start.
  *
- * WHY THIS EXISTS: every certificate the sweep and the corpus measure used to be fetched
- * from Scrollery/compose, which wants a login, an award that really exists and a
- * browser session per worker. The page is nothing but BuildScroll() + Scrollery_render.tpl,
- * so this runs those two directly, exactly as controller.Scrollery.php's render_bare()
- * does, and a Playwright route (tools/scroll-sweep/lib/fixture.ts) serves the files
- * same-origin so the page's own scripts and fonts load as they do in production.
+ * WHY THIS EXISTS: a certificate fetched from Scrollery/compose needs a login, an award
+ * that really exists and a browser session per worker. The page is nothing but
+ * BuildScroll() + Scrollery_render.tpl, so this runs those two directly, exactly as
+ * controller.Scrollery.php's render_bare() does, and a Playwright route
+ * (tools/scroll-sweep/lib/fixture.ts) serves the files same-origin so the page's own
+ * scripts and fonts load as they do in production.
  *
  * Run it inside the app container, which carries PHP and the repo mount:
  *
@@ -99,8 +99,13 @@ foreach ($specs as $c) {
             'KingdomAwardName' => $c['title'],
             'ParkName' => $isPark ? $c['issuerName'] : '',
             'KingdomName' => $isPark ? '' : $c['issuerName'],
-            'IsLadder' => 1,
         ];
+        // Scrollery/compose builds its award row with no IsLadder key, and BuildScroll()'s `ranked`
+        // reads it for a custom award at rank 0. Forcing 1 here printed a blank ordinal where
+        // production prints the title phrase, so it is set only when a spec asks for it.
+        if (array_key_exists('isLadder', $c)) {
+            $row['IsLadder'] = (int) $c['isLadder'];
+        }
         $ctx = [
             'player' => $c['player'],
             'pronoun' => $c['pronoun'],

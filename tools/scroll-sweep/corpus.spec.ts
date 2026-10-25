@@ -28,8 +28,17 @@ import { loadCorpus, renderFixtures, serveFixtures, openFixture, type FixtureSpe
  * the page has them, so the two can be compared.
  */
 
-const CORPUS = process.env.ORK3_CORPUS ?? 'review-2026-10-25';
-const TAG = process.env.ORK3_CORPUS_TAG ?? 'corpus';
+/* Both become path segments (a file under corpus/, a directory under out/) and the run
+   deletes PNGs in the second, so they are checked here, before anything touches the disk.
+   No leading dot: `..` would otherwise name the directory above. */
+const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const safe = (name: string, value: string): string => {
+  if (!SAFE_SEGMENT.test(value)) throw new Error(`${name} must match ${SAFE_SEGMENT}: ${JSON.stringify(value)}`);
+  return value;
+};
+
+const CORPUS = safe('ORK3_CORPUS', process.env.ORK3_CORPUS ?? 'review-2026-10-25');
+const TAG = safe('ORK3_CORPUS_TAG', process.env.ORK3_CORPUS_TAG ?? 'corpus');
 const PAGES = Math.max(1, Number(process.env.ORK3_CORPUS_PAGES ?? 3));
 const OUT = join(__dirname, 'out', TAG);
 
