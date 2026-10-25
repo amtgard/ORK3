@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../lib/auth';
 import { loadCatalogue } from '../lib/catalogue';
-import { openPrint, openPreview, printUrl } from '../lib/drive';
+import { openPrint, openPreview, printUrl, fixtureDriver } from '../lib/drive';
 import { loadAxes } from '../lib/axes';
 import { enumerate } from '../lib/cases';
 
@@ -17,6 +17,9 @@ const caseZero = () => {
 test.beforeEach(async ({ page }) => { await login(page); });
 
 test('every order partial is either reachable or declared unreachable', async ({ page }) => {
+  /* There is no composer catalogue to find hunter missing from: the fixture driver reaches
+     it by name and declares nothing unreachable (see FIXTURE_ORDERS in lib/drive.ts). */
+  test.skip(fixtureDriver(), 'compose driver only');
   const { byOrder, unreachable } = await loadCatalogue(page, KINGDOM);
   const orders = new Set(loadAxes().orderVariants.map(o => o.order));
   for (const order of orders) {
@@ -54,6 +57,7 @@ test('the print URL carries the hand, and the page honours it', async ({ page })
 });
 
 test('the composer preview renders the same award on the other surface', async ({ page }) => {
+  test.skip(fixtureDriver(), 'the preview is the composer page, which needs a login');
   const { byOrder } = await loadCatalogue(page, KINGDOM);
   await openPreview(page, caseZero(), byOrder['battle'], KINGDOM);
   await expect(page.locator('#sc-mount .Award').first()).toBeVisible();

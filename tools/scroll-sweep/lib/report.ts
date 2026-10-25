@@ -7,6 +7,11 @@ export type Result = {
   order: string; variant: string; rank: number; hand: string; text: string;
   glyphPx: number;
   CA: Score; CB: Score; CC: Score;
+  /* The same two scores with only the top half's glyphs (layer Ctop) as the type. Like CC
+     they are per-thousand of the WHOLE certificate's glyph area (`glyphPx`), so ink()
+     reads all five alike. Absent from a results.json written before they existed, which
+     the rescore seam still has to be able to read. */
+  CAtop?: Score; CBtop?: Score;
   /* Which two text blocks produced the C n C score, as their indices in BLOCK_SEL.
      Empty when nothing collided. */
   ccPair: string;
@@ -62,6 +67,16 @@ export const isDirty = (r: Result) =>
   || ink(r.CB, r.glyphPx) > THRESHOLDS.CB
   || ink(r.CC, r.glyphPx) > THRESHOLDS.CC;
 
+/**
+ * Over threshold in the TOP HALF alone, on either pair. The same two thresholds as isDirty
+ * and for the same reason: a stroke through a letter is a stroke through a letter wherever
+ * on the page the letter is. There is no C∩C twin; text-on-text is a whole-page question
+ * and the top half has no designed contact to separate from it.
+ */
+export const isDirtyTop = (r: Result) =>
+  (r.CAtop ? ink(r.CAtop, r.glyphPx) > THRESHOLDS.CA : false)
+  || (r.CBtop ? ink(r.CBtop, r.glyphPx) > THRESHOLDS.CB : false);
+
 /** For ranking and bucketing only: each pair scaled by its own threshold, so 1.0 is
     "exactly at the line" on whichever pair is worst. */
 export const worst = (r: Result) => Math.max(
@@ -97,9 +112,13 @@ export function writeReport(results: Result[], outDir: string, threshold: number
     return `| ${lo} – ${hi === Infinity ? '∞' : hi} | ${n} | ${bar} |`;
   }).join('\n');
 
+  /* A dash, not a zero, where the case predates the top-half scores: zero would read as
+     "measured and clean". */
+  const top = (s: Score | undefined, r: Result) => (s ? ink(s, r.glyphPx).toFixed(0) : '–');
   const rows = dirty.slice(0, 200).map(r =>
     `| \`${r.id}\` | ${ink(r.CA, r.glyphPx).toFixed(0)} | ${ink(r.CB, r.glyphPx).toFixed(0)} `
-    + `| ${ink(r.CC, r.glyphPx).toFixed(0)} | ${worstRun(r)} |`).join('\n');
+    + `| ${ink(r.CC, r.glyphPx).toFixed(0)} | ${top(r.CAtop, r)} | ${top(r.CBtop, r)} `
+    + `| ${worstRun(r)} |`).join('\n');
 
   const bySurface = ['print', 'preview'].map(s => {
     const rs = results.filter(r => r.surface === s);
@@ -107,12 +126,17 @@ export function writeReport(results: Result[], outDir: string, threshold: number
     return `| ${s} | ${rs.length} | ${rs.filter(isDirty).length} |`;
   }).join('\n');
 
+  /* How many of those are over the line in the top half alone, and how many cases have the
+     top-half scores at all. The second matters when reading a merged or re-scored file. */
+  const scoredTop = results.filter(r => r.CAtop && r.CBtop).length;
+  const dirtyTop = results.filter(isDirtyTop).length;
+
   const pairs = results.filter(r => r.ccPair && ink(r.CC, r.glyphPx) > THRESHOLDS.CC);
   const blank = results.filter(r => r.glyphPx === 0);
 
   writeFileSync(join(outDir, 'report.md'), `# Scrollery ink-collision sweep
 
-Cases **${results.length}** · over threshold **${dirty.length}**
+Cases **${results.length}** · over threshold **${dirty.length}** · over threshold in the top half **${dirtyTop}**${scoredTop === results.length ? '' : ` (scored on ${scoredTop} of ${results.length})`}
 
 Thresholds are per layer pair and each is calibrated against a measured population —
 see \`THRESHOLDS\` in lib/report.ts for the numbers and what was looked at:
@@ -123,6 +147,11 @@ striking ink is. Both masks are eroded one pixel first, so two antialiasing frin
 touching is not a finding. \`worst run\` is the largest connected component — a swash
 drawn through a line and the same area of scattered pepper come out alike on area alone
 and do not look alike.
+
+The **top** columns are the same two scores with only the type above and including the
+order line left in, which is the half the typeset engine places. They use the same
+thresholds, so \`C∩A top\` over ${THRESHOLDS.CA} or \`C∩B top\` over ${THRESHOLDS.CB} is a
+defect the engine's own half owns.
 
 ## By surface
 
@@ -140,9 +169,9 @@ ${hist}
 
 ## Over threshold${dirty.length > 200 ? ' (first 200)' : ''}
 
-| case | C∩A | C∩B | C∩C | worst run (px) |
-| --- | --- | --- | --- | --- |
-${rows || '| _none_ | | | | |'}
+| case | C∩A | C∩B | C∩C | C∩A top | C∩B top | worst run (px) |
+| --- | --- | --- | --- | --- | --- | --- |
+${rows || '| _none_ | | | | | | |'}
 
 ## Text on text
 

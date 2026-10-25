@@ -2,12 +2,12 @@ import { test, expect } from '@playwright/test';
 import { join } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { loadCatalogue, type Choice } from './lib/catalogue';
-import { openPrint, openPreview } from './lib/drive';
+import { openPrint, openPreview, fixtureDriver, fixtureCovers, prepareFixtures } from './lib/drive';
 import { loadAxes } from './lib/axes';
 import { enumerate, enumerateExhaustiveC, namedCases, caseId, type SweepCase } from './lib/cases';
-import { captureLayers, typeBand } from './lib/raster';
+import { captureLayers, typeBand, scoreInk } from './lib/raster';
 import { blockBoxes, showOnlyBlock, applyLayer } from './lib/isolate';
-import { diffMask, severity, count, erode1 } from './lib/mask';
+import { diffMask, severity } from './lib/mask';
 import { writeReport, isDirty, worst, ZERO, type Result } from './lib/report';
 
 const KINGDOM = Number(process.env.ORK3_SWEEP_KINGDOM ?? 1);
@@ -132,7 +132,9 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
   test.setTimeout(0);
   const axes = loadAxes();
   /* No login here: the shared session comes from the scroll-sweep-setup project's
-     storageState. See auth.setup.ts. */
+     storageState. See auth.setup.ts. Under ORK3_SWEEP_DRIVER=fixture there is neither: the
+     "catalogue" is the fixture table and every order, hunter included, is reachable. */
+  const FIXTURE = fixtureDriver();
   const { byOrder, unreachable } = await loadCatalogue(page, KINGDOM);
 
   mkdirSync(OUT, { recursive: true });
@@ -154,9 +156,24 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
   if (STAGES.includes('B')) cases.push(...enumerate(axes, 'B'));
   if (STAGES.includes('C')) cases.push(...(EXHAUSTIVE ? enumerateExhaustiveC(axes) : enumerate(axes, 'C')));
   cases = cases.filter(reachable);
+  /* What the fixture driver cannot render is dropped, loudly, rather than rendered as
+     something else: a preview case drawn as print would be scored under the wrong name. */
+  const unrenderable = (list: SweepCase[]) => {
+    if (!FIXTURE) return list;
+    const keep = list.filter(fixtureCovers);
+    if (keep.length < list.length) {
+      process.stdout.write(`  fixture driver: ${list.length - keep.length} case(s) skipped `
+        + `(composer preview, trim and no-lines need compose)\n`);
+    }
+    return keep;
+  };
+  cases = unrenderable(cases);
   if (ONLY) cases = cases.filter(c => c.id.includes(ONLY));
   if (LIMIT) cases = cases.slice(0, LIMIT);
   if (SHARDS > 1) cases = cases.filter((_, i) => i % SHARDS === shard);
+
+  /* One render for this shard's whole list, not one per case. */
+  if (FIXTURE) await prepareFixtures(page, cases, `sweep-${shard}`);
 
   const results: Result[] = [];
   const failures: string[] = [];
@@ -170,10 +187,7 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
     const band = await typeBand(page);
     const shots = await captureLayers(page, band);
     const G = shots.G;
-    const C = diffMask(shots.C, G);
-    const A = diffMask(shots.A, G);
-    const B = diffMask(shots.B, G);
-    const glyphPx = count(erode1(C));
+    const { glyphPx, CA, CB, CAtop, CBtop } = scoreInk(shots);
 
     /*
      * TEXT ON TEXT — screen on boxes, settle on pixels.
@@ -219,9 +233,7 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
     return {
       id: c.id, stage: c.stage, surface: c.surface, order: c.order, variant: c.variant,
       rank: c.rank, hand: c.hand, text: c.text, glyphPx,
-      CA: glyphPx ? severity(C, A) : ZERO,
-      CB: glyphPx ? severity(C, B) : ZERO,
-      CC,
+      CA, CB, CC, CAtop, CBtop,
       ccPair,
     };
   };
@@ -282,9 +294,10 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
      * Hashing the id makes every shard reach the same verdict about a given case, so
      * the union is exactly the set, once each, however the lists differ.
      */
-    const d = stageD(near, axes)
+    const d = unrenderable(stageD(near, axes)
       .filter(reachable)
-      .filter(c => SHARDS <= 1 || idHash(c.id) % SHARDS === shard);
+      .filter(c => SHARDS <= 1 || idHash(c.id) % SHARDS === shard));
+    if (FIXTURE) await prepareFixtures(page, d, `sweep-${shard}-d`);
     await run(d, 'D');
   }
 

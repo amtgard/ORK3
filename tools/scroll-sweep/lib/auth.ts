@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { fixtureDriver } from './drive';
 
 /**
  * Mirrors tools/fuzzy-validator/playwright/lib/auth.ts — one login flow for the repo.
@@ -12,6 +13,10 @@ export function hasAuthCredentials(): boolean {
 }
 
 export async function login(page: Page): Promise<void> {
+  /* The fixture driver never reaches a gated route, so there is nothing to log in to. This
+     also lets auth.setup.ts run (it saves whatever session exists, here an empty one), so
+     the sweep's setup project does not stop a credential-free run before it starts. */
+  if (fixtureDriver()) return;
   const user = process.env.ORK3_E2E_USERNAME;
   const pass = process.env.ORK3_E2E_PASSWORD;
   if (!user || !pass) {

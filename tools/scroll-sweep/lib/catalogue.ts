@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { loadAxes } from './axes';
+import { fixtureDriver, fixtureCatalogue } from './drive';
 
 export type Choice = { awardId: number; title: string; minRank: number; maxRank: number };
 
@@ -26,6 +27,9 @@ export async function loadCatalogue(
   page: Page,
   kingdomId: number,
 ): Promise<{ byOrder: Record<string, Choice>; unreachable: string[] }> {
+  /* The fixture driver has no composer to read. Its answer is the same table with every
+     order in it, hunter included, because a fixture reaches hunter by name. */
+  if (fixtureDriver()) return fixtureCatalogue();
   await page.goto(`./index.php?Route=Scrollery/create/kingdom/${kingdomId}`);
   await page.waitForSelector('#sc-award option', { state: 'attached' });
 

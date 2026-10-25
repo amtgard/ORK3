@@ -29,19 +29,22 @@ test('isolating a layer does not move the type', async ({ page }) => {
   });
 
   const before = await boxOf();
-  for (const layer of ['G', 'A', 'B', 'C', 'full'] as const) {
+  for (const layer of ['G', 'A', 'B', 'C', 'Ctop', 'full'] as const) {
     await applyLayer(page, layer);
     expect(await boxOf(), `layer ${layer} reflowed the page`).toEqual(before);
   }
 });
 
-test('the five rasters are produced, share a clip, and differ', async ({ page }) => {
+test('the six rasters are produced, share a clip, and differ', async ({ page }) => {
   const { byOrder } = await loadCatalogue(page, KINGDOM);
   await openPrint(page, pick('crown', 'max'), byOrder['crown'], KINGDOM);
   const shots = await captureLayers(page);
-  expect(Object.keys(shots).sort()).toEqual(['A', 'B', 'C', 'G', 'full']);
+  expect(Object.keys(shots).sort()).toEqual(['A', 'B', 'C', 'Ctop', 'G', 'full']);
   expect(shots.C.equals(shots.A), 'glyph layer is identical to the plate layer').toBe(false);
   expect(shots.C.equals(shots.full)).toBe(false);
+  /* Ctop is C with the bottom half's type taken out, so on a certificate that has any it
+     must differ from C. Identical means the layer hid nothing. */
+  expect(shots.Ctop.equals(shots.C), 'Ctop is identical to C, so it hid nothing').toBe(false);
 });
 
 test('the ground is identified, and it is not the border or the wash', async ({ page }) => {

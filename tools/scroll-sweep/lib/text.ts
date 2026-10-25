@@ -8,7 +8,7 @@
  * `empty` is an extreme in its own right and not merely the absence of one: the
  * garber collision was invisible with a blank signer and visible with a real name.
  */
-export type TextProfile = 'max' | 'real' | 'empty' | 'caseZero';
+export type TextProfile = 'max' | 'real' | 'kingdomReal' | 'empty' | 'caseZero';
 
 export type TextFields = {
   player: string;
@@ -43,6 +43,26 @@ export type TextFields = {
  */
 const rep = (n: number) => 'Wilhelmina Featherstonehaugh de la Mancha'.repeat(10).slice(0, n);
 
+const REAL: TextFields = {
+  /* The longest persona in the ORK, 100 characters. */
+  player: 'Darth P-Nut,  Kenjitsu Master of the Lost Art of Peepee Bashing,  Lord UltraSluff of the Nuckleduste',
+  /* The longest ork_awards.note, truncated to the 400-character maximum. */
+  reason: 'Brill was essential for the successful organization and completion of Night Quest this year at Keep, cap stoning a tradition of becoming heavily involved in the successful organization and completion of quests at BFP and Midgard for half a decade, Kingdom for a few years now, and Keep twice. While Lando`s own brilliant performance has been recommended already, he was able to rely on a strong team',
+  /* The longest persona containing NO space — the unbreakable case, which is what
+     overflows a fixed-width box instead of wrapping in it. */
+  givenBy: "Smiles/Hobi/Can'tCallHimSmileyCanWe?",
+  /* The longest date this app can print. The crown collision was invisible on
+     "9th August 2019" and obvious on this. */
+  date: '27th September 2026',
+  /* ork_kingdom.name max, 37 characters. */
+  issuerName: 'The Principality of the Crimson Sands',
+  issuerTitle: 'Principality',
+  useThe: true,
+  useOf: true,
+  /* Scroll::CUSTOM_NAME_MAX_LENGTH is 64; the longest real catalogue name is 35. */
+  customName: 'Guildmaster of Reeves, Principality of the Crimson Sands Order',
+};
+
 export const PROFILES: Record<TextProfile, TextFields> = {
   max: {
     player: rep(100),
@@ -55,24 +75,20 @@ export const PROFILES: Record<TextProfile, TextFields> = {
     useOf: true,
     customName: rep(64),
   },
-  real: {
-    /* The longest persona in the ORK, 100 characters. */
-    player: 'Darth P-Nut,  Kenjitsu Master of the Lost Art of Peepee Bashing,  Lord UltraSluff of the Nuckleduste',
-    /* The longest ork_awards.note, truncated to the 400-character maximum. */
-    reason: 'Brill was essential for the successful organization and completion of Night Quest this year at Keep, cap stoning a tradition of becoming heavily involved in the successful organization and completion of quests at BFP and Midgard for half a decade, Kingdom for a few years now, and Keep twice. While Lando`s own brilliant performance has been recommended already, he was able to rely on a strong team',
-    /* The longest persona containing NO space — the unbreakable case, which is what
-       overflows a fixed-width box instead of wrapping in it. */
-    givenBy: "Smiles/Hobi/Can'tCallHimSmileyCanWe?",
-    /* The longest date this app can print. The crown collision was invisible on
-       "9th August 2019" and obvious on this. */
-    date: '27th September 2026',
-    /* ork_kingdom.name max, 37 characters. */
+  real: REAL,
+  /*
+   * `real`, issued by a KINGDOM the way the app prints one. A kingdom's name is already a
+   * whole phrase, so it takes no rank word, no article and no "of" (see the issuer-line
+   * comment in Scroll::BuildScroll). `real` sets all three, which is how a park is issued;
+   * 47% of ladder awards are kingdom-issued and set none. The 37-character principality
+   * name is the longest real kingdom name, so this is the kingdom-issued worst case.
+   */
+  kingdomReal: {
+    ...REAL,
     issuerName: 'The Principality of the Crimson Sands',
-    issuerTitle: 'Principality',
-    useThe: true,
-    useOf: true,
-    /* Scroll::CUSTOM_NAME_MAX_LENGTH is 64; the longest real catalogue name is 35. */
-    customName: 'Guildmaster of Reeves, Principality of the Crimson Sands Order',
+    issuerTitle: '',
+    useThe: false,
+    useOf: false,
   },
   /* Nothing optional filled in. Exercises the writing-line blanks, the min-height
      reservations, and the branch where an empty reason computes its size from 200. */
@@ -101,4 +117,4 @@ export const PROFILES: Record<TextProfile, TextFields> = {
   },
 };
 
-export const PROFILE_NAMES: TextProfile[] = ['max', 'real', 'empty', 'caseZero'];
+export const PROFILE_NAMES: TextProfile[] = ['max', 'real', 'kingdomReal', 'empty', 'caseZero'];

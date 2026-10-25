@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-export type Layer = 'full' | 'G' | 'A' | 'B' | 'C';
+export type Layer = 'full' | 'G' | 'A' | 'B' | 'C' | 'Ctop';
 
 const STYLE_ID = 'sweep-isolate';
 const SCALE_ID = 'sweep-scale';
@@ -71,6 +71,59 @@ const HIDE_GLYPHS = `.Award, .Award * {
   -webkit-text-fill-color: transparent !important;
   text-shadow: none !important; }`;
 
+/**
+ * The certificate's text blocks, in document order — the parity partition's domain.
+ *
+ * `:first-of-type` / `:nth-of-type`, not `:first-child` / `:nth-child`: the ornament
+ * images are siblings of these paragraphs inside .IssuingTextSection, so a child index
+ * counts them and a type index does not. That also keeps the harness correct across a
+ * fix that moves an ornament into or out of that section.
+ *
+ * Selected on the certificate's own structure rather than on a marker attribute,
+ * because the harness must not need a production change in order to measure. A block
+ * added to _text.tpl and not listed here is simply never partitioned, and the
+ * Codd u Ceven reconstruction check is what makes that visible rather than silent.
+ */
+const BLOCKS = [
+  '.IssuingTextSection > p:first-of-type',
+  '.IssuingTextSection > p:nth-of-type(2)',
+  '.IssuingVerb',
+  '.AwardeeName',
+  '.AwardDetails',
+  '.Order',
+  /* The bare "for" between the order line and the citation. It has no hook of its own
+     — it is `section.Body` with inline styles — and leaving it out of the partition is
+     what made every case report a phantom 2.3 ppt of text-on-text: unpartitioned text
+     is hidden by NEITHER parity rule, so it appears in both rasters and intersects
+     itself. */
+  '.Award > section.Body:not(.Award_Reason):not(.Flavour)',
+  '.Award_Reason',
+  '.Flavour',
+  '.AwardDate',
+  '.AwardSignatory',
+];
+export const BLOCK_SEL = BLOCKS.join(',');
+
+/*
+ * THE TOP HALF OF THE CERTIFICATE ENDS AT `.Order`.
+ *
+ * The top half is what the typeset engine composes: the issuing line, the verb, the
+ * recipient, the award details and the order line, which are the blocks up to and
+ * including `.Order`. The citation, flavour, date and signer below it are not the
+ * engine's to place, so a collision there says nothing about it. Found by position in
+ * the list rather than from a second list, so a block added before `.Order` cannot
+ * leave this one stale.
+ */
+const BOTTOM_BLOCKS = BLOCKS.slice(BLOCKS.indexOf('.Order') + 1);
+
+/* HIDE_GLYPHS, but only for the blocks after `.Order`. The blocks themselves and everything
+   inside them: `color` is inherited, yet several descendants set a fill or a colour of
+   their own. */
+const HIDE_BOTTOM_GLYPHS = `${BOTTOM_BLOCKS.map(sel => `${sel}, ${sel} *`).join(',\n')} {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important; }`;
+
 /*
  * ONE BLOCK ONLY — how text-on-text is measured.
  *
@@ -100,39 +153,11 @@ export const LAYER_CSS: Record<Layer, string> = {
   B: `${HIDE_OVERLAYS} ${HIDE_GLYPHS}`,
   /* C — ground + glyph ink. */
   C: `${HIDE_OVERLAYS} ${HIDE_ORNAMENT}`,
+  /* Ctop — C with the glyphs of every block after `.Order` made transparent, so only the
+     top half's ink is left. `color: transparent`, never `display: none`: the type does not
+     move and Ctop can be intersected with A and B exactly as C is. */
+  Ctop: `${HIDE_OVERLAYS} ${HIDE_ORNAMENT} ${HIDE_BOTTOM_GLYPHS}`,
 };
-
-/**
- * The certificate's text blocks, in document order — the parity partition's domain.
- *
- * `:first-of-type` / `:nth-of-type`, not `:first-child` / `:nth-child`: the ornament
- * images are siblings of these paragraphs inside .IssuingTextSection, so a child index
- * counts them and a type index does not. That also keeps the harness correct across a
- * fix that moves an ornament into or out of that section.
- *
- * Selected on the certificate's own structure rather than on a marker attribute,
- * because the harness must not need a production change in order to measure. A block
- * added to _text.tpl and not listed here is simply never partitioned, and the
- * Codd u Ceven reconstruction check is what makes that visible rather than silent.
- */
-export const BLOCK_SEL = [
-  '.IssuingTextSection > p:first-of-type',
-  '.IssuingTextSection > p:nth-of-type(2)',
-  '.IssuingVerb',
-  '.AwardeeName',
-  '.AwardDetails',
-  '.Order',
-  /* The bare "for" between the order line and the citation. It has no hook of its own
-     — it is `section.Body` with inline styles — and leaving it out of the partition is
-     what made every case report a phantom 2.3 ppt of text-on-text: unpartitioned text
-     is hidden by NEITHER parity rule, so it appears in both rasters and intersects
-     itself. */
-  '.Award > section.Body:not(.Award_Reason):not(.Flavour)',
-  '.Award_Reason',
-  '.Flavour',
-  '.AwardDate',
-  '.AwardSignatory',
-].join(',');
 
 /**
  * Mark the ground plates, once per page.

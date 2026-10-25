@@ -16,7 +16,7 @@ test('axes carry the whole published vocabulary', () => {
 
 test('stage A is order-variant x rank x text', () => {
   const cases = enumerate(loadAxes(), 'A');
-  expect(cases).toHaveLength(20 * 11 * 4);          // 880
+  expect(cases).toHaveLength(20 * 11 * 5);          // 1100: five text profiles since kingdomReal
   expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);
   expect(cases.every(c => c.hand === 'chancery')).toBe(true);
 });
@@ -26,7 +26,7 @@ test('stage B is order-variant x hand x text at one rank each', () => {
     loadAxes().orderVariants.map(o => [o.order + '/' + o.variant, 7])
   );
   const cases = enumerate(loadAxes(), 'B', tightest);
-  expect(cases).toHaveLength(20 * 10 * 4);          // 800
+  expect(cases).toHaveLength(20 * 10 * 5);          // 1000
   expect(cases.every(c => c.rank === 7)).toBe(true);
 });
 

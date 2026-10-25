@@ -1,8 +1,9 @@
 import type { Page } from '@playwright/test';
 import { applyLayer, markGround, washCandidates, showOnlyPlate, markAsGround, forceFullScale, type Layer } from './isolate';
-import { diffMask, count } from './mask';
+import { diffMask, count, erode1, severity } from './mask';
+import { ZERO } from './report';
 
-export const LAYERS: Layer[] = ['full', 'G', 'A', 'B', 'C'];
+export const LAYERS: Layer[] = ['full', 'G', 'A', 'B', 'C', 'Ctop'];
 
 export type Clip = { x: number; y: number; width: number; height: number };
 
@@ -102,6 +103,33 @@ export async function captureLayers(page: Page, clip?: Clip): Promise<Record<Lay
   }
   await applyLayer(page, 'full');
   return out;
+}
+
+/**
+ * The text-on-artwork and text-on-ornament scores, whole certificate and top half.
+ *
+ * `CA`/`CB` are layer C against layers A and B; `CAtop`/`CBtop` are the same with Ctop as
+ * the glyph mask (see LAYER_CSS). All four are given the WHOLE certificate's glyph area as
+ * their divisor, not Ctop's own: `ink()` in report.ts turns a score back into pixels by
+ * multiplying by `Result.glyphPx`, so a score over any other area would be converted with
+ * the wrong factor and the top-half figures would not be in the same units as the others.
+ * Divided that way, `ink(CAtop)` is exactly the weighted ink pixels the top half's type
+ * strikes on the artwork, which is also why it can never exceed `ink(CA)`.
+ */
+export function scoreInk(shots: Record<Layer, Buffer>) {
+  const G = shots.G;
+  const C = diffMask(shots.C, G);
+  const Ctop = diffMask(shots.Ctop, G);
+  const A = diffMask(shots.A, G);
+  const B = diffMask(shots.B, G);
+  const glyphPx = count(erode1(C));
+  return {
+    glyphPx,
+    CA: glyphPx ? severity(C, A) : ZERO,
+    CB: glyphPx ? severity(C, B) : ZERO,
+    CAtop: glyphPx ? severity(Ctop, A, glyphPx) : ZERO,
+    CBtop: glyphPx ? severity(Ctop, B, glyphPx) : ZERO,
+  };
 }
 
 /**

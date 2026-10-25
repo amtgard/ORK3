@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { SweepCase } from './cases';
 import type { Choice } from './catalogue';
+import type { FixtureSpec } from './fixture';
 import { PROFILES } from './text';
 
 /* Scroll::DEFAULT_RECIPE's own pair. Stage C varies ground/border/rankSet, not the
@@ -124,7 +127,210 @@ export async function settle(page: Page): Promise<void> {
   await page.waitForTimeout(120);
 }
 
+/*
+ * THE FIXTURE DRIVER — `ORK3_SWEEP_DRIVER=fixture`.
+ *
+ * The compose driver needs a login, a kingdom whose catalogue carries the award, and a
+ * browser session per worker. The fixture driver needs none of them: a certificate is
+ * Scroll::BuildScroll() plus Scrollery_render.tpl, so a SweepCase and its text profile are
+ * turned into a FixtureSpec, the specs for a whole shard are rendered in ONE docker exec
+ * (lib/fixture.ts), and each case is then served to the page from disk. Compose stays the
+ * default; nothing here changes what it does.
+ *
+ * Read when openPrint is CALLED rather than once at import, so a test can switch modes
+ * and a shell value left over from another run cannot reach one that did not ask for it.
+ *
+ * WHAT THIS DRIVER CANNOT RENDER, said here so that nobody reads a clean run as covering it:
+ *
+ *   preview surface   it is ScrolleryAjax/preview inside the composer page, which is login-gated
+ *   trim, no-lines    scroll-render-fixtures.php sets `face`, `heading` and `up` and no other
+ *                     query parameter, so the page would render as if they were absent
+ *   heraldry          compose draws the kingdom's own device (kingdom 1 has one); a fixture
+ *                     draws none unless a spec carries one, and these do not. The heraldry is
+ *                     a plate under the type, so layer A here lacks it. Before and after are
+ *                     both measured this way, which is what makes the pair comparable; a
+ *                     fixture figure is not comparable to a compose figure.
+ *   custom, no name   the composer falls back to the kingdom's own award-94 row name when
+ *                     the officer types none; a fixture has no row, so the `empty` and
+ *                     `caseZero` profiles print a custom certificate with a blank award line
+ *                     — what a reprint of a nameless historical grant prints.
+ */
+export const fixtureDriver = (): boolean => process.env.ORK3_SWEEP_DRIVER === 'fixture';
+
+/**
+ * What the composer's catalogue would have told the sweep, for every order, so the
+ * catalogue lookup (and the login it needs) can be skipped.
+ *
+ *   awardId   the order's award_id in system/lib/ork3/data/scroll-orders.php, except:
+ *               hunter  0  — that file's 6969 is Arcanyst's invention and matches nothing;
+ *                          real archery grants carry no base award and Scroll::
+ *                          OrderForAwardRow() recognises them by NAME, so this is also
+ *                          what makes hunter reachable here and not under compose
+ *               custom  94 — the file's 0 is a sentinel that never wins an id lookup;
+ *                          Custom Award is how the composer reaches the custom scroll
+ *   title     kingdom 1's own kingdomaward.name for it, which is what the composer sends
+ *             and what the order line prints: mostly "Order of the <Order>", with the
+ *             spellings the data really has ("Order of Battle", "Jovius", "Griffin").
+ *             Custom has none: its title is the profile's customName.
+ *   min/max   the order's `ranks`, null meaning 0-10. warrior starts at 1, and sweeping
+ *             rank 0 on it would measure a state the app cannot produce.
+ *
+ * Checked against scroll-sweep-unit's topscore.spec.ts, which reads the data file itself,
+ * so a changed award id or rank range fails a test rather than rendering another order.
+ */
+export const FIXTURE_ORDERS: Record<string, { awardId: number; title: string; minRank: number; maxRank: number }> = {
+  battle:  { awardId: 243, title: 'Order of Battle',      minRank: 0, maxRank: 10 },
+  crown:   { awardId: 239, title: 'Order of the Crown',   minRank: 0, maxRank: 10 },
+  dragon:  { awardId: 25,  title: 'Order of the Dragon',  minRank: 0, maxRank: 10 },
+  flame:   { awardId: 34,  title: 'Order of the Flame',   minRank: 0, maxRank: 10 },
+  garber:  { awardId: 26,  title: 'Order of the Garber',  minRank: 0, maxRank: 10 },
+  griffon: { awardId: 33,  title: 'Order of the Griffin', minRank: 0, maxRank: 10 },
+  jovious: { awardId: 28,  title: 'Order of the Jovius',  minRank: 0, maxRank: 10 },
+  lion:    { awardId: 23,  title: 'Order of the Lion',    minRank: 0, maxRank: 10 },
+  hunter:  { awardId: 0,   title: 'Order of the Hunter',  minRank: 0, maxRank: 10 },
+  hydra:   { awardId: 32,  title: 'Order of the Hydra',   minRank: 0, maxRank: 10 },
+  mask:    { awardId: 29,  title: 'Order of the Mask',    minRank: 0, maxRank: 10 },
+  owl:     { awardId: 24,  title: 'Order of the Owl',     minRank: 0, maxRank: 10 },
+  rose:    { awardId: 21,  title: 'Order of the Rose',    minRank: 0, maxRank: 10 },
+  smith:   { awardId: 22,  title: 'Order of the Smith',   minRank: 0, maxRank: 10 },
+  warrior: { awardId: 27,  title: 'Order of the Warrior', minRank: 1, maxRank: 10 },
+  zodiac:  { awardId: 30,  title: 'Order of the Zodiac',  minRank: 0, maxRank: 10 },
+  custom:  { awardId: 94,  title: '',                     minRank: 0, maxRank: 10 },
+};
+
+/** loadCatalogue()'s answer without the composer: every order reachable, none declared unreachable. */
+export function fixtureCatalogue(): { byOrder: Record<string, Choice>; unreachable: string[] } {
+  const byOrder: Record<string, Choice> = {};
+  for (const [order, f] of Object.entries(FIXTURE_ORDERS)) {
+    byOrder[order] = { awardId: f.awardId, title: f.title, minRank: f.minRank, maxRank: f.maxRank };
+  }
+  return { byOrder, unreachable: [] };
+}
+
+/** Whether the fixture driver can render this case; see the list above for what it cannot. */
+export const fixtureCovers = (c: SweepCase): boolean =>
+  c.surface === 'print' && !c.trim && c.lines !== false;
+
+/** FNV-1a, 32 bit. Any stable string hash will do; it only has to agree between calls. */
+function fnv(text: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * A SweepCase and its TextProfile as the certificate spec the fixture renderer reads.
+ *
+ * The file is named for the case AND a hash of what was asked for. A case id is not enough
+ * on its own: the harness's own tests build cases by spreading one and overriding a hand or
+ * a variant, which leaves the id of the case they started from, and two different
+ * certificates must never share a file. The hash is what keeps the second from silently
+ * measuring the first. It also keeps the id inside the renderer's [A-Za-z0-9_-] (a recipe
+ * id carries `+`), and makes two cases that are the same certificate share one file.
+ *
+ * `scope` is always kingdom, as the compose driver's is, so the issuer line is the
+ * profile's `issuerName` as a kingdom name. No `isLadder`: compose sends none.
+ */
+export function fixtureSpecFor(c: SweepCase): FixtureSpec {
+  const f = FIXTURE_ORDERS[c.order];
+  if (!f) throw new Error(`no fixture identity for order "${c.order}": add it to FIXTURE_ORDERS`);
+  const t = PROFILES[c.text];
+  const body: Omit<FixtureSpec, 'id'> = {
+    hand: c.hand,
+    order: c.order,
+    awardId: f.awardId,
+    title: c.order === 'custom' ? t.customName : f.title,
+    variant: c.variant,
+    rank: c.rank,
+    scope: 'kingdom',
+    issuerName: t.issuerName,
+    issuerTitle: t.issuerTitle,
+    useThe: t.useThe,
+    useOf: t.useOf,
+    player: t.player,
+    pronoun: 'their',          // what compose sends when no player is looked up
+    reason: t.reason,
+    givenBy: t.givenBy,
+    date: t.date,
+    ...(c.recipe ? { recipe: c.recipe } : {}),
+    ...(c.up ? { up: c.up } : {}),
+  };
+  const slug = c.id.replace(/[^A-Za-z0-9_-]/g, '-');
+  return { id: `${slug}-${fnv(JSON.stringify(body))}`, ...body };
+}
+
+/* Where each rendered fixture lives, and which directory each page's route is serving. */
+const renderedIn = new Map<string, string>();
+const servedDir = new WeakMap<Page, string>();
+
+/*
+ * lib/fixture.ts imports settle() from this file, so this file may not import it back at
+ * the top: whichever loaded first would see the other half-built. Loaded on use instead.
+ */
+const fixtureLib = () => import('./fixture');
+
+/**
+ * Render a whole list of cases in ONE docker exec.
+ *
+ * A render is a process start plus a bootstrap of the app, and a sweep is thousands of
+ * cases, so the cost is paid per shard and not per case. Cases that are the same
+ * certificate are rendered once. openPrint() renders on demand for a case that was not
+ * prepared, which is what a unit test wants and a sweep does not.
+ */
+export async function prepareFixtures(page: Page, cases: SweepCase[], tag: string): Promise<void> {
+  const fx = await fixtureLib();
+  const specs = new Map<string, FixtureSpec>();
+  for (const c of cases) {
+    const s = fixtureSpecFor(c);
+    specs.set(s.id, s);
+  }
+  const dir = fx.renderFixtures([...specs.values()], tag);
+  for (const id of specs.keys()) renderedIn.set(id, dir);
+  await fx.serveFixtures(page, dir);
+  servedDir.set(page, dir);
+}
+
+async function openFixtureCase(page: Page, c: SweepCase): Promise<void> {
+  const fx = await fixtureLib();
+  const spec = fixtureSpecFor(c);
+  let dir = renderedIn.get(spec.id);
+  if (!dir || !existsSync(join(dir, `${spec.id}.html`))) {
+    dir = fx.renderFixtures([spec], `adhoc-${spec.id}`);
+    renderedIn.set(spec.id, dir);
+  }
+  /* renderFixtures() reports a spec that failed to render on stderr and leaves no file. Say
+     which case it was here, so the sweep records a failure under its name instead of
+     measuring the 404 page. */
+  if (!existsSync(join(dir, `${spec.id}.html`))) {
+    throw new Error(`the fixture for ${c.id} did not render (see scroll-render-fixtures above)`);
+  }
+  if (servedDir.get(page) !== dir) {
+    await fx.serveFixtures(page, dir);
+    servedDir.set(page, dir);
+  }
+  await fx.openFixture(page, spec);
+
+  /* A wrong award id would render a different, perfectly good certificate and the sweep
+     would score it under this case's name. */
+  const got = await page.evaluate(() => {
+    const t = document.querySelector('.award-template') as HTMLElement | null;
+    return t ? { order: t.dataset.order ?? '', variant: t.dataset.variant ?? '' } : null;
+  });
+  if (!got) throw new Error(`no certificate on the page for ${c.id}`);
+  if (got.order !== c.order || (c.variant && got.variant !== c.variant)) {
+    throw new Error(`${c.id} rendered as ${got.order}/${got.variant}, not ${c.order}/${c.variant}`);
+  }
+}
+
+/**
+ * The print surface. Under `ORK3_SWEEP_DRIVER=fixture` the catalogue choice and the kingdom
+ * are not consulted: the case alone says what to render.
+ */
 export async function openPrint(page: Page, c: SweepCase, ch: Choice, kingdomId: number) {
+  if (fixtureDriver()) return openFixtureCase(page, c);
   await page.goto(printUrl(c, ch, kingdomId), { waitUntil: 'load' });
   await settle(page);
 }
@@ -144,6 +350,9 @@ export async function openPrint(page: Page, c: SweepCase, ch: Choice, kingdomId:
  * lands in the composer's real DOM with the composer's real stylesheet over it.
  */
 export async function openPreview(page: Page, c: SweepCase, ch: Choice, kingdomId: number) {
+  if (fixtureDriver()) {
+    throw new Error(`the fixture driver cannot render the composer preview (${c.id}); filter with fixtureCovers()`);
+  }
   await page.goto(`./index.php?Route=Scrollery/create/kingdom/${kingdomId}`, { waitUntil: 'load' });
   await page.waitForSelector('#sc-mount', { state: 'attached' });
   const ok = await page.evaluate(async (args) => {
