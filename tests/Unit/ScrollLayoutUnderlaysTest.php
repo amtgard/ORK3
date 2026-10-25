@@ -86,4 +86,98 @@ final class ScrollLayoutUnderlaysTest extends TestCase
             }
         }
     }
+
+    /**
+     * The policy is written by hand against a vocabulary that is also data. These three tests
+     * hold the two together, so a rename or a new ground in scroll-recipes.php cannot leave an
+     * entry here quietly wrong.
+     *
+     * custom lays three of its grounds over the parchment as washes (forge, rosewash, arcane),
+     * and those are underlays. If one stopped being listed, the profile builder would count the
+     * whole wash as artwork on every custom certificate that used it.
+     */
+    public function testEveryWashGroundIsAnUnderlayInCustom(): void
+    {
+        $grounds = Scroll::Recipes()['grounds'];
+        $custom = $this->policy()['custom'] ?? [];
+        $this->assertNotSame([], Scroll::GROUND_WASHES, 'Scroll::GROUND_WASHES is empty; this test would pass vacuously');
+
+        foreach (array_keys(Scroll::GROUND_WASHES) as $key) {
+            $this->assertArrayHasKey($key, $grounds, "GROUND_WASHES names '{$key}', which is not a ground in scroll-recipes.php");
+            $file = $grounds[$key];
+            $hit = array_filter($custom, static fn (string $pattern): bool => fnmatch($pattern, $file));
+            $this->assertNotEmpty($hit, "custom lists no pattern for the '{$key}' wash ({$file}); it would be counted as artwork");
+        }
+    }
+
+    /**
+     * The other nine grounds are opaque and normally blended, which makes each of them the
+     * ground, and a pattern that names the ground hides it from layer A while G keeps it: the
+     * difference is the entire ground, reported as artwork. This is the test that would have
+     * rejected the brief's own example, `smith/bg.*`, which is the `map` ground.
+     *
+     * One exemption, and it is about the ORDER, not the file: warrior rank 10 draws bg_10.jpg at
+     * soft-light, so markGround() does not take it for the ground there, and it is the rank's
+     * own page ground. Custom's `sunburst` draws the same file normally, so custom must never
+     * list it, and the exemption is warrior's alone.
+     */
+    public function testNoPatternHidesAGround(): void
+    {
+        $exempt = [
+            'warrior' => [
+                'warrior/bg_10.*' => 'rank 10 draws it soft-light, so it is not the ground there (custom draws it normally, as sunburst)',
+            ],
+        ];
+
+        $washes = array_keys(Scroll::GROUND_WASHES);
+        $grounds = array_filter(
+            Scroll::Recipes()['grounds'],
+            static fn (string $key): bool => !in_array($key, $washes, true),
+            ARRAY_FILTER_USE_KEY
+        );
+        $policy = $this->policy();
+
+        foreach ($policy as $order => $patterns) {
+            foreach ($patterns as $pattern) {
+                foreach ($grounds as $key => $file) {
+                    if (!fnmatch($pattern, $file)) {
+                        continue;
+                    }
+                    $this->assertArrayHasKey(
+                        $pattern,
+                        $exempt[$order] ?? [],
+                        "{$order}: '{$pattern}' matches {$file}, the '{$key}' ground, which markGround() takes for the ground; listing it hides the whole ground from layer A"
+                    );
+                }
+            }
+        }
+
+        // An exemption that no longer matches anything is a stale excuse, not a rule.
+        foreach ($exempt as $order => $byPattern) {
+            foreach (array_keys($byPattern) as $pattern) {
+                $this->assertContains($pattern, $policy[$order] ?? [], "the exemption for {$order} '{$pattern}' is stale: the policy no longer lists it");
+                $named = array_filter($grounds, static fn (string $file): bool => fnmatch($pattern, $file));
+                $this->assertNotEmpty($named, "the exemption for {$order} '{$pattern}' is stale: it matches no ground");
+            }
+        }
+    }
+
+    /**
+     * Patterns name the print route's plate, `stem.*`. A pattern that also reached `stem_display.webp`
+     * would be matching the composer's preview rendition, which the profile is never built from, and
+     * would mean the pattern is wider than the file it was written for.
+     */
+    public function testNoPatternMatchesADisplayRendition(): void
+    {
+        $displays = array_values(array_filter($this->plates(), static fn (string $p): bool => fnmatch('*_display.webp', $p)));
+        $this->assertNotSame([], $displays, 'no display renditions found under assets/scrolls/; this test would pass vacuously');
+
+        foreach ($this->policy() as $order => $patterns) {
+            foreach ($patterns as $pattern) {
+                foreach ($displays as $file) {
+                    $this->assertFalse(fnmatch($pattern, $file), "{$order}: '{$pattern}' matches the display rendition {$file}");
+                }
+            }
+        }
+    }
 }

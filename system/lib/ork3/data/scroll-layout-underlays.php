@@ -31,19 +31,29 @@ declare(strict_types=1);
  *
  * THE GRAIN IS THE FILE, NOT THE LAYER. A plate is hidden by its src, so a file drawn as
  * both an underlay and an obstacle cannot be split (see `mask`). That is a limit of the
- * data, not a judgement about the art, and it always resolves to obstacle.
+ * data, not a judgement about the art, and it always resolves to obstacle. For the same
+ * reason one file gets one answer everywhere: it is never an underlay in one order and an
+ * obstacle in another (`owl/border.*` is listed under both owl and custom).
  *
- * GROUNDS ARE NEVER LISTED. An opaque, full-frame, normally blended plate is the ground
- * (markGround() in tools/scroll-sweep/lib/isolate.ts) and is measured against separately.
- * Listing one here would hide it from layer A while it stays in G, and the difference of
- * the two would be the whole ground reported as artwork. This is why `custom` lists the
- * three grounds that are washes laid over the parchment and none of the nine that are
- * ground (Scroll::GROUND_WASHES is the authority on which is which).
+ * NEVER LIST A PLATE THAT markGround() ALREADY TAKES FOR THE GROUND IN THAT ORDER.
+ * markGround() (tools/scroll-sweep/lib/isolate.ts) takes an opaque, full-frame, normally
+ * blended <img> for the ground, and the ground stays visible in layer G. A pattern naming
+ * it would hide it from layer A only, and the difference of the two would be the whole
+ * ground reported as artwork. The rule is about the plate in that order, not about the
+ * file: `warrior/bg_10.*` is listed under warrior, where rank 10 draws it soft-light and
+ * so it is not the ground, and is NOT listed under custom, where the `sunburst` ground
+ * draws the same file normally and so it is. `custom` lists the washes laid over the
+ * parchment and none of the grounds (Scroll::GROUND_WASHES says which grounds are which).
+ * ScrollLayoutUnderlaysTest holds all of this to the vocabulary in scroll-recipes.php.
  *
- * WHEN UNSURE, OBSTACLE, with a `REVIEW` note beside the entry. The sheet prints every
- * REVIEW note at its head so the owner sees the calls that are actually open. A note
- * begins at a comment line reading ` * REVIEW <order>: ...` and continues over the
- * following comment lines indented three spaces past the asterisk.
+ * THE KNOTWORK BORDER IS NOT A FILE. _border.tpl (drawn by battle, dragon, griffon and
+ * custom) is inline SVG with no src, so no pattern can name it and the builder treats it
+ * as an obstacle. The sheet notes it in words and shows no thumbnail.
+ *
+ * WHEN UNSURE, OBSTACLE, and say why in a CALL note beside the entry. The sheet prints
+ * every CALL note at its head so the owner sees the judgement calls behind the draft. A
+ * note begins at a comment line reading ` * CALL <order> (<where it landed>): ...` and
+ * continues over the following comment lines indented three spaces past the asterisk.
  */
 
 return [
@@ -52,10 +62,10 @@ return [
      *   UNDERLAY  arcane/wash.jpg      full page, soft-light at 0.8: a ring of runes
      *                                  across the left and middle that the text crosses.
      *   obstacle  border_symbols       a sword and an arrow in the side margins, multiply.
-     *   obstacle  arcane/glow          NOT a glow: see REVIEW.
+     *   obstacle  arcane/glow          NOT a glow: see CALL.
      *   obstacle  symbol_N and martial/over_N (both variants), common/rank_N: emblems, numerals.
      *
-     * REVIEW battle: arcane/glow.* is an obstacle although spec 7.3's example lists it.
+     * CALL battle (obstacle): arcane/glow.* is an obstacle although spec 7.3's example lists it.
      *   The file is the brown hand-and-knot emblem (it is byte-identical to arcane/hand.png),
      *   a hard-edged figure at bottom centre, not a soft glow.
      */
@@ -122,9 +132,9 @@ return [
      * mask: border twice, and mask/symbol.png THREE times: two blurred screen passes (the
      * glow) and the plain emblem between them.
      *
-     * REVIEW mask: the glow is a faint diffuse bloom around the emblem that the type could
-     *   plausibly sit on, but it is drawn from the SAME FILE as the emblem (the blur is a
-     *   filter on the wrapper). A pattern for mask/symbol.* would hide the emblem too, so
+     * CALL mask (obstacle): the glow is a faint diffuse bloom around the emblem that the type
+     *   could plausibly sit on, but it is drawn from the SAME FILE as the emblem (the blur is
+     *   a filter on the wrapper). A pattern for mask/symbol.* would hide the emblem too, so
      *   the whole file is an obstacle. Cost: the soft halo around the emblem at the foot of
      *   the page narrows the room the profile reports there.
      */
@@ -134,15 +144,19 @@ return [
      * owl (parchment, cyanotype and transparency alike): the ground is parchment.jpg,
      * cyanotype.jpg or, for transparency, the page itself. owl/border.jpg is drawn two,
      * one or three times and rank_N once or twice, all with the invert/screen blends.
+     *   UNDERLAY  owl/border.*   the blueprint grid across the whole page (and, in the same
+     *                            file, the frame and the corner owls: see CALL).
+     *   obstacle  rank_N         the numeral.
      *
-     * REVIEW owl: owl/border.jpg is the frame and the corner owls AND a faint graph-paper
-     *   grid across the whole page, one file. The grid is exactly the sort of texture the
-     *   type is designed to sit on and the frame and owls are exactly what it is not, and a
-     *   file-level pattern cannot split them, so it is an obstacle. Cost: if the builder's
-     *   ink threshold counts the grid lines, owl reports almost no clear width anywhere. It
-     *   needs a ruling from the owner, and probably a builder rule for this one file.
+     * CALL owl (underlay, as ruled): owl/border.jpg is one file holding the page-wide
+     *   graph-paper grid, the frame and the corner owls. The grid is the texture the type is
+     *   designed to sit on. The frame and the owls are what it is not, but they sit outside
+     *   the .Award column: the owl border's art stops at 433px a side (Scroll::BORDER_INSETS)
+     *   and .Award's padding is never less than that, so type does not reach them and listing
+     *   the file costs nothing there. Custom draws the same file through its owl border, so
+     *   custom lists it too.
      */
-    'owl' => [],
+    'owl' => ['owl/border.*'],
 
     /*
      * rose: burn.svg is drawn under the heraldry at multiply, opacity 0.2, hue-rotated
@@ -159,31 +173,31 @@ return [
      *   UNDERLAY  smith/burn.*
      *   obstacle  border (twice), symbol (twice: the anvil).
      *
-     * REVIEW smith: the brief and spec 7.3's example name `smith/bg.*`. smith never draws
-     *   it. bg.jpg is the opaque `map` ground used only by custom, and it carries its own
-     *   frame, tools and anvil, so it is a ground (never listed) and not an underlay.
-     *   The townscape smith draws is burn.jpg, which is what is listed.
+     * CALL smith (burn.*, not the brief's bg.*): the brief and spec 7.3's example name
+     *   `smith/bg.*`. smith never draws it. bg.jpg is the opaque `map` ground used only by
+     *   custom, and it carries its own frame, tools and anvil, so it is a ground and not an
+     *   underlay. The townscape smith draws is burn.jpg, which is what is listed.
+     *   ScrollLayoutUnderlaysTest::testNoPatternHidesAGround fails if bg.* is listed.
      */
     'smith' => ['smith/burn.*'],
 
     /*
      * warrior: ranks 1-9 draw the parchment ground and border_N.jpg (the frame and that
      * rank's figure, a hawk on a post at rank 5; multiply) and, at rank 9, also symbol_9
-     * (the purple dragon). Rank 10 draws bg_10.jpg
-     * at soft-light and nothing else.
+     * (the purple dragon). Rank 10 draws bg_10.jpg at soft-light and nothing else.
+     *   UNDERLAY  warrior/bg_10.*   rank 10 only.
+     *   obstacle  border_N (ranks 1-9), symbol_9.
      *
-     * REVIEW warrior: rank 10's warrior/bg_10.jpg is the whole certificate in one plate: the
-     *   frame, a flame wash across the lower third, a phoenix and a black ash line. It is
-     *   the page's ground in every way except that soft-light is not `normal`, so
-     *   markGround() does not take it for one. Because it is partly an underlay (the flame
-     *   wash) and partly obstacles (frame, phoenix, ash) in one file, it is an obstacle.
-     *   Cost: at rank 10 the profile sees the entire page as artwork unless the builder
-     *   treats this plate as it treats the `sunburst` ground (groundsWithOwnBorder, which
-     *   is this same file drawn normally by custom): measure it against its own median
-     *   colour. That is the better rule and is the builder's to apply; this file cannot
-     *   express it.
+     * CALL warrior (underlay, as ruled): rank 10's warrior/bg_10.jpg is that rank's own page
+     *   ground, with the frame, a flame wash, a phoenix and an ash band painted into it. It is
+     *   drawn soft-light, so markGround() does not take it for the ground, and it is listed
+     *   here instead. It is NOT listed under custom, where the `sunburst` ground draws the
+     *   same file normally and so it is the ground there.
+     *   For the builder: at warrior rank 10 the frame and the ash band live inside this
+     *   underlay, so the builder will see no obstacle ink there. The .Award padding
+     *   (17% of 2550, 433px a side; scrollery.css) is what keeps type off that frame.
      */
-    'warrior' => [],
+    'warrior' => ['warrior/bg_10.*'],
 
     /*
      * zodiac: bg_generic.jpg and bg_rank.jpg are opaque grounds with their own frame and
@@ -194,14 +208,16 @@ return [
     /*
      * custom: composed from parts, so the entry is per PLATE, not per recipe. Of the twelve
      * grounds, nine are opaque and normally blended (parchment, linen, jovious, flame,
-     * starfield, starfield2, cyanotype, sunburst, map) and are the ground. Three are washes
-     * that custom.tpl lays over the parchment, with the blend each one's own order uses
-     * (Scroll::GROUND_WASHES): forge (smith/burn), rosewash (rose/burn) and arcane
-     * (battle/arcane/wash). Those are the underlays, and they are the same three files
-     * as above, so the two entries cannot drift apart.
+     * starfield, starfield2, cyanotype, sunburst, map) and are the ground, so none of them
+     * is listed. Three are washes that custom.tpl lays over the parchment, with the blend
+     * each one's own order uses (Scroll::GROUND_WASHES): forge (smith/burn), rosewash
+     * (rose/burn) and arcane (battle/arcane/wash). Those are underlays, and they are the
+     * same three files as above, so the two entries cannot drift apart.
      *
-     * Borders (eight rasters and the knotwork) and rank sets are obstacles: the numerals
-     * and the zodiac, garber and flame whole-page numeral plates are hard-edged figures.
+     * The fourth entry is the owl border, which custom draws through its border slot: the
+     * same file as owl, so the same answer (see owl). The other borders (eight rasters
+     * and the knotwork) and the rank sets are obstacles: numerals and the zodiac, garber and
+     * flame whole-page numeral plates are hard-edged figures.
      */
-    'custom' => ['smith/burn.*', 'rose/burn.*', 'battle/arcane/wash.*'],
+    'custom' => ['smith/burn.*', 'rose/burn.*', 'battle/arcane/wash.*', 'owl/border.*'],
 ];

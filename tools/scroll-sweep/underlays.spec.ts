@@ -46,7 +46,10 @@ const POLICY_FILE = join(__dirname, '..', '..', 'system', 'lib', 'ork3', 'data',
 
 /* Thumbnails are 900 frame-px wide: enough to judge a plate, small enough that the whole
    sheet is tens of megabytes and not gigabytes. Layout inside the foreignObject is in the
-   2550x3300 frame whatever the SVG is displayed at, so shrinking the SVG moves nothing. */
+   2550x3300 frame whatever the SVG is displayed at, so shrinking the SVG moves nothing.
+   The `display: none` on the last line hides page chrome (toolbar and notices) before
+   anything is measured or photographed. It is not layer isolation, which is `visibility`
+   only, below. */
 const THUMB_W = 900;
 const THUMB_CSS = `svg[data-scroll-frame] { width: ${THUMB_W}px !important; height: auto !important;
     max-width: none !important; max-height: none !important; }
@@ -108,21 +111,23 @@ echo json_encode(['policy' => $policy, 'matched' => $out]);`;
 }
 
 /**
- * The open calls the policy file records as `REVIEW <order>: ...` comment notes, each
- * continuing over following comment lines indented three spaces past the asterisk. Read
- * from the file rather than restated here, so the sheet and the policy cannot disagree.
+ * The judgement calls the policy file records as ` * CALL <order> (<where it landed>): ...`
+ * comment notes, each continuing over following comment lines indented three spaces past
+ * the asterisk. Read from the file rather than restated here, so the sheet and the policy
+ * cannot disagree.
  */
-function reviewNotes(): { order: string; text: string }[] {
-  const notes: { order: string; text: string }[] = [];
-  let cur: { order: string; text: string } | null = null;
+type Call = { order: string; status: string; text: string };
+function policyCalls(): Call[] {
+  const calls: Call[] = [];
+  let cur: Call | null = null;
   for (const line of readFileSync(POLICY_FILE, 'utf8').split('\n')) {
-    const head = line.match(/^\s*\* REVIEW ([a-z]+): (.*)$/);
+    const head = line.match(/^\s*\* CALL ([a-z]+)(?: \(([^)]*)\))?: (.*)$/);
     const more = line.match(/^\s*\*   (\S.*)$/);
-    if (head) { cur = { order: head[1], text: head[2] }; notes.push(cur); }
+    if (head) { cur = { order: head[1], status: head[2] ?? '', text: head[3] }; calls.push(cur); }
     else if (cur && more) cur.text += ' ' + more[1];
     else cur = null;
   }
-  return notes;
+  return calls;
 }
 
 /** A file's identity apart from its rank: `over_10.webp` and `over_6.webp` are the same plate design. */
@@ -270,9 +275,9 @@ function writeSheet(blocks: Block[], policy: Policy, dead: Record<string, string
     const tail = same.length ? `<p class="meta">Draws no plate that the renders above do not already show: ${esc(same.join(', '))}.</p>` : '';
     return `<section id="${esc(group.replace('/', '-'))}"><h2>${esc(group)}</h2>${body}${tail}</section>`;
   }).join('\n');
-  const notes = reviewNotes();
-  const noteBox = notes.length
-    ? `<div class="calls"><strong>Open calls, where a plate is an obstacle because it was not clear-cut (from the policy file):</strong><ul>${notes.map(n => `<li><strong>${esc(n.order)}</strong>: ${esc(n.text)}</li>`).join('')}</ul></div>`
+  const calls = policyCalls();
+  const noteBox = calls.length
+    ? `<div class="calls"><strong>Judgement calls behind this policy, with where each one landed (from the policy file):</strong><ul>${calls.map(c => `<li><strong>${esc(c.order)}</strong>${c.status ? ` (${esc(c.status)})` : ''}: ${esc(c.text)}</li>`).join('')}</ul></div>`
     : '';
 
   writeFileSync(join(OUT, 'index.html'), `<!doctype html>

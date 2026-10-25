@@ -87,8 +87,9 @@ export default defineConfig({
     {
       // The underlay review sheet: every plate of every order, one at a time, labelled with
       // the policy's verdict. Fixture-rendered, so it needs no login. See underlays.spec.ts.
-      // The viewport holds the whole certificate; scale 1 because the thumbnails are
-      // sized by the spec and the sheet is read by eye.
+      // The viewport matches scroll-corpus, so the page lays out at the width it does there.
+      // It does not size the output: the spec shrinks the certificate to a 900px thumbnail and
+      // photographs that element. Scale 1 so one thumbnail pixel is one screenshot pixel.
       name: 'scroll-underlays',
       testDir: './tools/scroll-sweep',
       testMatch: 'underlays.spec.ts',
