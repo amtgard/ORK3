@@ -209,6 +209,8 @@ class Controller_Court extends Controller
         $this->data['GiverOptions'] = $giverOptions;
         $this->data['CourtMode']    = $courtState['mode'] ?? 'run';
         $this->data['StateVersion'] = $courtState['version'] ?? '';
+        // The planner's view tab (?view=resources). Anything else means Order of Court.
+        $this->data['CpView']       = (($_GET['view'] ?? '') === 'resources') ? 'resources' : 'order';
         $this->data['StagedCount']  = $stagedCount;
         $this->data['PrevSkipped']  = $prevSkipped;
         $this->data['UpcomingEvents'] = $upcomingEvents;

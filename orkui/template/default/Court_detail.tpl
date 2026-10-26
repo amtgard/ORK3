@@ -116,7 +116,6 @@ if (!function_exists('cp_track_chip')) {
 
 /* Section */
 .cp-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.cp-section-header h2 { font-size: 16px; font-weight: 700; color: #2d3748; margin: 0; background: none; border: none; padding: 0; text-shadow: none; border-radius: 0; }
 
 /* Award rows */
 /* QW#1a / S3: horizontal scroll so the Grant/Skip columns are reachable on narrow
@@ -992,8 +991,6 @@ html[data-theme="dark"] .cp-stat-print  { color: #90cdf4; }
 html[data-theme="dark"] .cp-stat-custom { color: #d6bcfa; }
 html[data-theme="dark"] .cp-stat-need   { color: #feb2b2; }
 html[data-theme="dark"] .cp-stat-ready  { color: #9ae6b4; }
-html[data-theme="dark"] .cp-section-header h2 { color: #e2e8f0; }
-html[data-theme="dark"] .cp-section-header h2 i { color: #a0aec0 !important; }
 html[data-theme="dark"] #cp-award-count { color: #718096 !important; }
 
 /* Sidebar cards */
@@ -1863,9 +1860,9 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
     <?php
     // Two views of the same lines: the Order of Court list and the Resource Planning
     // grid (JS-rendered from window.courtAwards). The view is in the URL (?view=) so a
-    // reload or a shared link returns to it; anything but "resources" means Order.
-    // Rendered server-side as well so the page never flashes the wrong panel.
-    $cpView = (($_GET['view'] ?? '') === 'resources') ? 'resources' : 'order';
+    // reload or a shared link returns to it; the controller resolves it (CpView), and
+    // it is rendered server-side so the page never flashes the wrong panel.
+    $cpView = ($CpView ?? 'order') === 'resources' ? 'resources' : 'order';
     ?>
     <!-- Main content -->
     <div class="cp-main-content" id="cp-main-content" data-cp-view="<?= $cpView ?>">
@@ -3717,8 +3714,9 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         chip.setAttribute('aria-expanded', 'false');
         if (cpTrackMenu) { cpTrackMenu.hidden = true; cpTrackMenu.innerHTML = ''; }
         if (returnFocus) {
-            // A Resource Planning re-render replaces its chips; hand focus to the twin.
-            var target = document.body.contains(chip) ? chip : cpRpTwin(chip);
+            // A Resource Planning re-render replaces its chips; hand focus to the twin, or,
+            // when the line has left the active filter, to that filter (else the grid root).
+            var target = document.body.contains(chip) ? chip : (cpRpTwin(chip) || cpRpFocusFallback(chip));
             if (target) target.focus({ preventScroll: true });
         }
         // A Resource Planning render held back while its chip's picker was open.
@@ -3961,16 +3959,20 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
                 cpPendingRunAdvance(caid, sentRv, sentRv + 1);
                 // The makers this save posted are now the line's makers: write them to
                 // the model so Resource Planning (which reads only the model) shows them.
+                // A persona is read from the text box only when the id changed (a pick):
+                // with the same id, typed-but-unpicked text must not rename the maker.
                 var sa = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
                 if (sa) {
                     var smId = scrollMakerEl  ? (parseInt(scrollMakerEl.value,  10) || 0) : 0;
                     var rmId = regaliaMakerEl ? (parseInt(regaliaMakerEl.value, 10) || 0) : 0;
                     var smTx = gid('cp-scroll-maker-text-'  + caid);
                     var rmTx = gid('cp-regalia-maker-text-' + caid);
+                    var smWas = parseInt(sa.ScrollMakerId, 10)  || 0;
+                    var rmWas = parseInt(sa.RegaliaMakerId, 10) || 0;
+                    sa.ScrollMakerPersona  = !smId ? '' : (smId !== smWas && smTx ? smTx.value : (sa.ScrollMakerPersona || ''));
+                    sa.RegaliaMakerPersona = !rmId ? '' : (rmId !== rmWas && rmTx ? rmTx.value : (sa.RegaliaMakerPersona || ''));
                     sa.ScrollMakerId       = smId || null;
-                    sa.ScrollMakerPersona  = smId && smTx ? smTx.value : '';
                     sa.RegaliaMakerId      = rmId || null;
-                    sa.RegaliaMakerPersona = rmId && rmTx ? rmTx.value : '';
                 }
                 cpRpInvalidate();
                 // Update Pass-to-Local badge in row header — but ONLY when this
@@ -5886,22 +5888,22 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
     function cpRpMakerHtml(kind, a) {
         var caid = cpRpInt(a.CourtAwardId);
         var noun = kind === 'scroll' ? 'Scroll maker' : 'Regalia maker';
-        var base = 'type="button" class="cp-rp-maker" data-kind="' + kind + '" data-caid="' + caid + '"';
+        var id   = cpRpInt(kind === 'scroll' ? a.ScrollMakerId : a.RegaliaMakerId);
+        // An item that is needed (Custom Design / Needed) with no maker yet stands out.
+        var need = a.Status !== 'cancelled' && (kind === 'scroll' ? cpRpNeedsScrollArtisan(a) : cpRpNeedsRegaliaArtisan(a));
+        var cls  = 'cp-rp-maker' + (need ? ' cp-rp-maker-need' : '');
+        var base = 'type="button" class="' + cls + '" data-kind="' + kind + '" data-caid="' + caid + '"';
         if (kind === 'scroll' && cpRpScroll(a) === 3) {
             // The Scrollery prints it, so there is no maker (the Order hides the field).
             return '<button ' + base + ' data-state="auto" disabled aria-label="' + noun + ': printed by Scrollery">' +
                 '<span class="cp-rp-maker-text">Printed by Scrollery</span></button>';
         }
-        var id      = cpRpInt(kind === 'scroll' ? a.ScrollMakerId : a.RegaliaMakerId);
         var persona = (kind === 'scroll' ? a.ScrollMakerPersona : a.RegaliaMakerPersona) || '';
         if (id > 0) {
             persona = persona || 'Player #' + id;
             return '<button ' + base + ' data-state="set" data-maker-id="' + id + '" aria-label="' + esc(noun + ': ' + persona) + '">' +
                 '<i class="fas fa-user-edit cp-rp-maker-icon" aria-hidden="true"></i><span class="cp-rp-maker-text">' + esc(persona) + '</span></button>';
         }
-        // An item that is needed (Custom Design / Needed) and has no maker yet stands out.
-        var need = a.Status !== 'cancelled' && (kind === 'scroll' ? cpRpNeedsScrollArtisan(a) : cpRpNeedsRegaliaArtisan(a));
-        if (need) base = base.replace('class="cp-rp-maker"', 'class="cp-rp-maker cp-rp-maker-need"');
         return '<button ' + base + ' data-state="empty" aria-label="' + noun + ': unassigned">' +
             '<span class="cp-rp-maker-text">Assign…</span></button>';
     }
@@ -5969,6 +5971,17 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         var sel  = cpRpFocusSel(el);
         return (root && sel) ? root.querySelector(sel) : null;
     }
+    // Where focus goes when an RP element has no twin (its line left the active filter):
+    // the active filter button, else the grid root. Only for an element of RP's own
+    // (closest() still works inside a detached row); an Order element is not ours.
+    function cpRpFocusFallback(el) {
+        var root = gid('cp-rp-root');
+        if (!root || !el || !el.closest || !el.closest('#cp-rp-root, .cp-rp-row') || cpRpView !== 'resources') return null;
+        var f = root.querySelector('.cp-rp-filter.active');
+        if (f) return f;
+        root.tabIndex = -1;
+        return root;
+    }
 
     function cpRpRender() {
         var root = gid('cp-rp-root');
@@ -5980,7 +5993,8 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         cpRpDirty = false;
 
         var act = document.activeElement;
-        var focusSel = (act && root.contains(act)) ? cpRpFocusSel(act) : null;
+        var focusEl  = (act && act !== root && root.contains(act)) ? act : null;
+        var focusSel = focusEl ? cpRpFocusSel(focusEl) : null;
 
         var html;
         if (!courtAwards.length) {
@@ -6010,8 +6024,10 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
                 '</div>';
         }
         root.innerHTML = html;
-        if (focusSel) {
-            var again = root.querySelector(focusSel);
+        if (focusEl) {
+            // The same control again, or — when its line just left the active filter
+            // (e.g. a Custom scroll set to Complete under "Custom scrolls") — the filter.
+            var again = (focusSel && root.querySelector(focusSel)) || cpRpFocusFallback(focusEl);
             if (again) again.focus({ preventScroll: true });
         }
     }
@@ -6421,8 +6437,8 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
 
     // ---- Init: drag, heartbeat, prev-banner session-dismiss ----
     cpInitDrag();
-    // The server rendered the panel ?view= asked for; the URL stays the authority.
-    if (/[?&]view=resources(?:&|$)/.test(location.search) || cpRpView === 'resources') window.cpSetView('resources');
+    // The controller resolved ?view= and the server rendered that panel (data-cp-view).
+    if (cpRpView === 'resources') window.cpSetView('resources');
     // S2: normalize the staged-safeguard banner to the current mode's wording on load
     // (the server render defaults to plan phrasing).
     cpUpdateStagedIndicator(cpStagedCount);

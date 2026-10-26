@@ -2530,7 +2530,8 @@ class Court
      * Cheap heartbeat state for the live multi-manager poll (spec 6.4).
      * court_award has no updated_at column, so `version` is an md5 of the row set
      * (court_award_id:status:sort_order:given_by:modified) plus court mode/status,
-     * which changes on any edit, reorder, giver change, add, or remove.
+     * which changes on any edit, reorder, giver change, add, or remove. Notes and the
+     * court's artisan rows are folded in too, so their adds and removes flip it as well.
      */
     public function getCourtState($court_id)
     {
@@ -2589,6 +2590,21 @@ class Court
             while ($ns->Next()) {
                 $stampParts[] = 'n' . (int)$ns->court_note_id . ':' . (int)$ns->sort_order . ':' . (int)$ns->row_version;
             }
+        }
+        // Artisans: addArtisan/removeArtisan touch only court_award_artisan (they must
+        // not bump the line's row_version, or the officer's own next guarded write would
+        // read as stale), so fold that table in as one aggregate. Ids only ever grow, so
+        // COUNT + SUM + MAX moves on an add, a remove, and a remove-then-add.
+        $this->db->Clear();
+        $as = $this->db->DataSet(
+            'SELECT COUNT(*) AS n, COALESCE(SUM(caa.court_award_artisan_id), 0) AS s,
+                    COALESCE(MAX(caa.court_award_artisan_id), 0) AS m
+             FROM ' . DB_PREFIX . 'court_award_artisan caa
+             JOIN ' . DB_PREFIX . 'court_award ca ON ca.court_award_id = caa.court_award_id
+             WHERE ca.court_id = ' . $court_id
+        );
+        if ($as && $as->Next()) {
+            $stampParts[] = 'a' . (int)$as->n . ':' . (int)$as->s . ':' . (int)$as->m;
         }
         $version = md5($court_status . '|' . $mode . '|' . implode(',', $stampParts));
 
