@@ -406,9 +406,11 @@ test('the Heading and Hand fields each have usable width in the composer', async
     await page.setViewportSize({ width, height: 900 });
     await openComposer(page, 'kingdom');
     const heading = await page.locator('#sc-heading').boundingBox();
-    const hand = await page.locator('.sc-hand-trigger').boundingBox();
+    const hand = await page.locator('.sc-hand:has(#sc-face) .sc-hand-trigger').boundingBox();
     expect(heading!.width, `heading select at ${width}px`).toBeGreaterThan(200);
     expect(hand!.width, `hand control at ${width}px`).toBeGreaterThan(200);
+    const sig = await page.locator('.sc-hand:has(#sc-sig) .sc-hand-trigger').boundingBox();
+    expect(sig!.width, `signature control at ${width}px`).toBeGreaterThan(200);
     // "Automatic (Classic)" is not truncated by the control.
     expect(await page.locator('#sc-heading').evaluate((el: HTMLSelectElement) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   }
