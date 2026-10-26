@@ -559,6 +559,41 @@ test('the composer: the Signature Hand listbox is operable with the pointer, and
   await expect(page.locator('#sc-stage')).toHaveAttribute('data-scroll-sig', 'allura');
 });
 
+/* The Wording card clips its overflow. With a tall window the space below the Signature Hand
+   trigger is ample, so a menu that only asked the viewport dropped down and the card cut it off
+   after its first option. Both pickers, in windows that put each near the bottom and the top. */
+for (const height of [900, 1900]) {
+  test(`the composer: every hand menu opens wholly inside its card (window ${height}px tall)`, async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height });
+    await openComposer(page, 'kingdom');
+    for (const id of ['sc-face', 'sc-sig']) {
+      const wrap = page.locator(`.sc-hand:has(#${id})`);
+      await wrap.locator('.sc-hand-trigger').click();
+      const menu = wrap.locator('.sc-hand-menu');
+      await expect(menu).toBeVisible();
+      const fit = await menu.evaluate((m) => {
+        const r = m.getBoundingClientRect();
+        let clip: Element | null = m.parentElement;
+        while (clip && getComputedStyle(clip).overflowY === 'visible') { clip = clip.parentElement; }
+        const c = clip && clip !== document.documentElement ? clip.getBoundingClientRect()
+          : { top: 0, bottom: window.innerHeight } as DOMRect;
+        const last = m.querySelector('.sc-hand-opt:last-child') as HTMLElement;
+        last.scrollIntoView({ block: 'nearest' });
+        const lr = last.getBoundingClientRect();
+        const hit = document.elementFromPoint(lr.left + lr.width / 2, lr.top + lr.height / 2);
+        return {
+          inside: r.top >= Math.max(0, c.top) - 1 && r.bottom <= Math.min(window.innerHeight, c.bottom) + 1,
+          lastReachable: !!hit && last.contains(hit),
+        };
+      });
+      expect(fit.inside, `#${id} menu inside its card and the window`).toBe(true);
+      expect(fit.lastReachable, `#${id} last option can be clicked`).toBe(true);
+      await page.keyboard.press('Escape');
+      await expect(menu).toBeHidden();
+    }
+  });
+}
+
 test('the composer fits a long signature in a script face, onto no more than two lines', async ({ page }) => {
   await openComposer(page, 'kingdom');
   await page.fill('#sc-givenby', 'Sir Reginald Fitzwilliam-Ashworth the Third, Warden of the Marches');

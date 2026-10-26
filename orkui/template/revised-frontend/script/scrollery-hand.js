@@ -218,6 +218,21 @@
         if (openMenu && !e.target.closest('.sc-hand')) { closeOpen(); }
     });
 
+    /* The band of the window, in viewport px, that an absolutely placed child of `el`
+       can be seen in: the window itself, narrowed by every ancestor whose overflow
+       clips. */
+    function visibleRoom(el) {
+        var top = 0;
+        var bottom = global.innerHeight;
+        for (var n = el.parentElement; n && n !== doc.documentElement; n = n.parentElement) {
+            if (global.getComputedStyle(n).overflowY === 'visible') { continue; }
+            var r = n.getBoundingClientRect();
+            top = Math.max(top, r.top);
+            bottom = Math.min(bottom, r.bottom);
+        }
+        return { top: top, bottom: bottom };
+    }
+
     function enhance(select) {
         if (!select || select.hasAttribute('data-sc-enhanced')) { return; }
         if (!doc.createElement('div').closest) { return; }   /* very old browser: keep the <select> */
@@ -296,9 +311,20 @@
             loadSpecimens(select, items);
             menu.hidden = false;
             trigger.setAttribute('aria-expanded', 'true');
-            /* Drop upward when the space below cannot hold the list. */
-            var below = global.innerHeight - trigger.getBoundingClientRect().bottom;
-            menu.setAttribute('data-drop', below < Math.min(menu.scrollHeight + 16, 340) ? 'up' : 'down');
+            /* Drop upward when the space below cannot hold the list. "Space" is the room
+               the menu can actually be seen in: the window, cut down by any ancestor that
+               clips its overflow. The composer's Wording card does, so a picker at the foot
+               of the card with a tall window below it must still open upward. */
+            var room = visibleRoom(wrap);
+            var t = trigger.getBoundingClientRect();
+            var below = room.bottom - t.bottom;
+            var above = t.top - room.top;
+            var need = Math.min(menu.scrollHeight + 16, 340);
+            var up = below < need && above > below;
+            menu.setAttribute('data-drop', up ? 'up' : 'down');
+            /* Neither side holds it all: cap the list to its side, and it scrolls. */
+            var side = (up ? above : below) - 12;
+            menu.style.maxHeight = side < menu.scrollHeight ? Math.max(120, side) + 'px' : '';
             setActive(select.selectedIndex);
             openMenu = close;
         }
