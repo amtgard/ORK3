@@ -49,6 +49,8 @@ export type CaseMeasure = {
   scLineCount?: number;
   /** The rendered issuer text: the lead, the place, and the two joined by a space. */
   issuerText?: string[];
+  /** False for a certificate with no issuer, which may lack a place and a lead. Absent means it has one. */
+  hasIssuer?: boolean;
   /** Multi-up factor the case was captured at (spec 6.4.1 FLOOR_SCALE applies from 2). */
   up?: number;
   error?: string;
@@ -92,6 +94,9 @@ function result(gate: string, title: string, offenders: string[], okSummary: str
   };
 }
 
+/** Name and award always; place and lead when the certificate has an issuer (the default). */
+const requiredRoles = (c: CaseMeasure): RoleName[] => (c.hasIssuer === false ? ['name', 'award'] : ['name', 'award', 'place', 'lead']);
+
 /* Q1 -------------------------------------------------------------------------------- */
 export function q1Hierarchy(cases: CaseMeasure[]): GateResult {
   const bad: string[] = [];
@@ -101,6 +106,9 @@ export function q1Hierarchy(cases: CaseMeasure[]): GateResult {
     const place = c.roles.place?.sizeEm;
     const lead = c.roles.lead?.sizeEm;
     const why: string[] = [];
+    // A missing role or versal is a failure, not a rule with nothing to check.
+    for (const role of requiredRoles(c)) if (!c.roles[role]) why.push(`no ${role} element measured`);
+    if (c.versalEm === undefined) why.push('no versal element found');
 
     if (name !== undefined && award !== undefined) {
       const lim = 0.85 * name;
@@ -134,7 +142,10 @@ export function q2PlannedIsPrinted(cases: CaseMeasure[]): GateResult {
     const why: string[] = [];
     for (const role of ['name', 'award', 'place', 'lead'] as RoleName[]) {
       const r = c.roles[role];
-      if (!r) continue;
+      if (!r) {
+        if (requiredRoles(c).includes(role)) why.push(`${role}: no element measured`);
+        continue;
+      }
       if (r.planned === undefined) {
         why.push(`${role}: no data-sc-planned`);
       } else if (r.engineLines === undefined) {

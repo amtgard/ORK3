@@ -329,7 +329,9 @@ function buildRun(): { run: Run; sample?: FixtureSpec[] } {
   let before: string[] | null = null;
   if (!(SAMPLE_ONLY && SEED !== undefined)) {
     for (const c of loadCorpus(CORPUS)) cases.push({ ...c, group: CORPUS });
-    if (CORPUS === FROZEN && existsSync(BEFORE_FILE)) {
+    if (CORPUS === FROZEN) {
+      // Q9's pass-3 comparison is against this file; without it the check would quietly not run.
+      if (!existsSync(BEFORE_FILE)) throw new Error(`the frozen corpus needs its before-report for Q9, and ${BEFORE_FILE} is missing`);
       const was = JSON.parse(readFileSync(BEFORE_FILE, 'utf8')) as Array<{ id: string; rootEm?: number }>;
       before = was.filter(r => r.rootEm !== undefined && r.rootEm < 0.999).map(r => r.id);
     }
@@ -367,7 +369,7 @@ type GateName = 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'Q7' | 'Q8' | 'Q9' | 'Q11';
 
 function grade(run: Run, reports: CaseReport[], forced: Forced): Record<GateName, GateResult> {
   const info = new Map(run.cases.map(c => [c.id, c]));
-  const cases: CaseMeasure[] = reports.map(r => ({ ...r, up: info.get(r.id)?.up }));
+  const cases: CaseMeasure[] = reports.map(r => ({ ...r, up: info.get(r.id)?.up, hasIssuer: (info.get(r.id)?.issuerName ?? '').trim() !== '' }));
   const infos: CaseInfo[] = run.cases.map(c => ({ id: c.id, scope: c.scope, up: c.up, group: c.group }));
   const before = run.before ? { ids: run.before, scope: run.cases.filter(c => c.group === run.corpus).map(c => c.id) } : undefined;
   return {
@@ -411,6 +413,8 @@ test('capture and report the corpus', async ({ context }) => {
     if (/\.png$/.test(f)) rmSync(join(OUT, f), { force: true });
   }
   rmSync(join(OUT, 'forced.json'), { force: true });
+  // An unseeded run must not leave a sample's specs beside its own report.
+  if (!sample) rmSync(join(OUT, 'specs.json'), { force: true });
   // Written before anything renders, so a seed that finds a failure can be replayed from this file.
   if (sample) {
     writeFileSync(

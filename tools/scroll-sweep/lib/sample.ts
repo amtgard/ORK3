@@ -148,6 +148,10 @@ export function drawSample(seed: number, count: number): SampleSpec[] {
   const customLong = col(`select distinct custom_name from ork_awards where award_id in (94,246) and char_length(custom_name)>28 order by rand(${rand()}) limit 30`);
   const notes = col(`select note from ork_awards where note<>'' and char_length(note) between 10 and 400 order by rand(${rand()}) limit ${count + 10}`);
 
+  for (const [name, pool] of [['signer', signers], ['custom name', customAll], ['note', notes]] as const) {
+    if (!pool.length) throw new Error(`sampling pool is empty: ${name}`);
+  }
+
   // Kingdom cases: the split ones come from kingdoms the split rule actually matches.
   const splittable = kingdoms.filter(k => splitKingdom(k));
   const kingdomPool = [...take(splittable.length ? splittable : kingdoms, nSplit).map(k => ({ k, split: true })), ...take(kingdoms, nKingdom - nSplit).map(k => ({ k, split: false }))];
@@ -158,6 +162,9 @@ export function drawSample(seed: number, count: number): SampleSpec[] {
   shuffle(rng, issuers);
 
   // Persona strata, shuffled across the cases.
+  for (const [name, got, want] of [['uniform', uniform.length, nUniform], ['24-40 character', mid.length, nMid], ['over-40 character', long.length, nLong]] as const) {
+    if (got < want) throw new Error(`only ${got} ${name} personas for ${want} cases`);
+  }
   const personaOrder = shuffle(rng, [...uniform, ...mid, ...long]);
 
   // Each hand the same number of times (exactly, when count is a multiple of ten).

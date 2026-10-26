@@ -141,3 +141,19 @@ test('Q11 reads the p95 of the reported times and fails when there are none', ()
   expect(q11Performance(slow).offenders[0]).toMatch(/p95 40ms > 20ms/);
   expect(q11Performance([good('x', { ms: undefined })]).offenders[0]).toMatch(/no data-sc-ms on any case/);
 });
+
+test('no gate passes on a missing element', () => {
+  // Q1: a certificate with no versal, and one with no award.
+  const noVersal = good('v', { versalEm: undefined });
+  expect(q1Hierarchy([noVersal]).offenders).toEqual(['v: no versal element found']);
+  const noAward = { ...good('a'), roles: { ...good().roles, award: undefined } };
+  expect(q1Hierarchy([noAward]).offenders[0]).toMatch(/^a: no award element measured/);
+  // Q2: no roles at all, and a missing place or lead on a certificate with an issuer.
+  expect(q2PlannedIsPrinted([{ id: 'e', roles: {} }]).offenders[0]).toBe('e: name: no element measured; award: no element measured; place: no element measured; lead: no element measured');
+  const noPlace = { ...good('p'), roles: { ...good().roles, place: undefined } };
+  expect(q2PlannedIsPrinted([noPlace]).offenders).toEqual(['p: place: no element measured']);
+  // ... and may lack them when the certificate has no issuer, but never the name or the award.
+  expect(q2PlannedIsPrinted([{ ...noPlace, hasIssuer: false }]).ok).toBe(true);
+  expect(q2PlannedIsPrinted([{ id: 'e', roles: {}, hasIssuer: false }]).offenders[0]).toBe('e: name: no element measured; award: no element measured');
+  expect(q1Hierarchy([{ ...noPlace, hasIssuer: false }]).ok).toBe(true);
+});
