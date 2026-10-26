@@ -169,10 +169,10 @@ column end-to-end:
   linkage.
 - `setAwardTrackingStatus($courtAwardId, $type, $status, $rowVersion)` —
   sets scroll/regalia tracking on the planning row to an explicit value,
-  guarded by the row's `row_version`. Scroll has four states: `0` Not
-  Tracked, `1` Custom Design, `2` Complete, `3` Scrollery Print (setting
-  Scrollery Print clears the scroll maker). Regalia has `0` Not Tracked,
-  `1` Needed, `2` Complete.
+  guarded by the row's `row_version`. Scroll has six states: `0` Pending,
+  `1` Assigned, `4` In Progress, `3` Scrollery Print (setting it clears the
+  scroll maker), `2` Complete, `5` Not Needed. Regalia has five (no
+  Scrollery Print). The definitions live in `Court::trackingStatusDefinitions()`.
 
 `class.Player.php` is extended with:
 - Snooze set/clear methods writing the 3 columns.

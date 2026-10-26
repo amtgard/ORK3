@@ -628,6 +628,9 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
 .cp-status-sep { color:#cbd5e0; }
 /* Status-bar tracking counts: coloured by the definition's group, like the chips. */
 .cp-stat                           { font-weight: 600; }
+.cp-stat[hidden], .cp-stat-none[hidden] { display: none; }
+.cp-stat-sep::before               { content: ", "; font-weight: 400; color: #4a5568; white-space: pre; }
+.cp-stat-none                      { color: #718096; }
 .cp-stat[data-group="pending"]     { color: var(--cp-trk-pending-fg); }
 .cp-stat[data-group="print"]       { color: var(--cp-trk-print-fg); }
 .cp-stat[data-group="assigned"]    { color: var(--cp-trk-assigned-fg); }
@@ -1076,6 +1079,8 @@ html[data-theme="dark"] .cp-body.cp-sidebar-collapsed .cp-sidebar-collapse-btn {
 /* Status bar + section heading */
 html[data-theme="dark"] .cp-status-bar { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
 html[data-theme="dark"] .cp-status-sep { color: #4a5568; }
+html[data-theme="dark"] .cp-stat-sep::before { color: #cbd5e0; }
+html[data-theme="dark"] .cp-stat-none { color: #a0aec0; }
 html[data-theme="dark"] #cp-award-count { color: #718096 !important; }
 
 /* Sidebar cards */
@@ -1974,12 +1979,18 @@ foreach ($courtAwards ?? [] as $_ca) {
 $_total_awards = count($courtAwards ?? []);
 $_stat_html = function ($type) use ($_track_counts) {
     $parts = [];
+    $first = true;
     foreach (cp_track_def()[$type] as $_e) {
         $st = (int)$_e['value'];
-        $parts[] = '<span class="cp-stat" data-group="' . htmlspecialchars((string)$_e['group']) . '"><span data-sb="' . $type . '-' . $st . '">'
-            . (int)($_track_counts[$type][$st] ?? 0) . '</span> ' . htmlspecialchars((string)$_e['label']) . '</span>';
+        $n = (int)($_track_counts[$type][$st] ?? 0);
+        $shown = $n > 0;
+        $parts[] = '<span class="cp-stat' . ($shown && !$first ? ' cp-stat-sep' : '') . '"' . ($shown ? '' : ' hidden') . ' data-group="' . htmlspecialchars((string)$_e['group']) . '"><span data-sb="' . $type . '-' . $st . '">'
+            . $n . '</span> ' . htmlspecialchars((string)$_e['label']) . '</span>';
+        if ($shown) $first = false;
     }
-    return implode(', ', $parts);
+    // Zero-count statuses are hidden (cpRefreshStatusBar toggles them); "none" shows when all are.
+    $parts[] = '<span class="cp-stat-none"' . ($first ? '' : ' hidden') . '>none</span>';
+    return implode('', $parts);
 };
 ?>
 
@@ -4133,6 +4144,9 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                 cpSetLineTracking(caid, type, d.newStatus, d.RowVersion);
                 return;
             }
+            // A stale answer drops this rule write: the reload refreshes the model, and the rule
+            // is deliberately not re-judged (the heartbeat reload is async, and looping here
+            // could fight a peer's change). The maker is saved; the officer can set the status.
             if (d && d.status === 9) { cpStale(caid); return; }
             if (!d || !d._postFailed) cpAlert((d && d.error) || 'The maker was saved, but the ' + (type === 'scroll' ? 'scroll' : 'regalia') + ' status could not be updated.');
         });
@@ -4166,7 +4180,23 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         });
         document.querySelectorAll('.cp-status-bar [data-sb]').forEach(function(el) {
             var k = String(el.dataset.sb).split('-');
-            el.textContent = (counts[k[0]] && counts[k[0]][k[1]]) || 0;
+            var n = (counts[k[0]] && counts[k[0]][k[1]]) || 0;
+            el.textContent = n;
+            if (el.parentNode) el.parentNode.hidden = !n;   // zero counts stay out of the bar
+        });
+        // Separators: every shown status but the first in its group gets the leading comma;
+        // "none" stands in when the whole group is zero.
+        ['scroll', 'regalia'].forEach(function(t) {
+            var wrap = document.querySelector('.cp-status-bar .cp-sb-' + t);
+            if (!wrap) return;
+            var first = true;
+            wrap.querySelectorAll('.cp-stat').forEach(function(sp) {
+                var show = !sp.hidden;
+                sp.classList.toggle('cp-stat-sep', show && !first);
+                if (show) first = false;
+            });
+            var none = wrap.querySelector('.cp-stat-none');
+            if (none) none.hidden = !first;
         });
         cpRefreshScrolleryButton();
     }
@@ -4308,6 +4338,15 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         // lands: a heartbeat arriving between the commit and the response would already
         // carry the new makers, and the maker rule would see no change and not fire.
         var smBefore = 0, rmBefore = 0;
+        // The makers and persona text this save posts, captured at the same moment: the
+        // .then below uses these, not a re-read of the hidden inputs, which a later pick
+        // may have changed by the time the answer lands.
+        var smId = scrollMakerEl  ? (parseInt(scrollMakerEl.value,  10) || 0) : 0;
+        var rmId = regaliaMakerEl ? (parseInt(regaliaMakerEl.value, 10) || 0) : 0;
+        var smTxEl = gid('cp-scroll-maker-text-'  + caid);
+        var rmTxEl = gid('cp-regalia-maker-text-' + caid);
+        var smTxVal = smTxEl ? smTxEl.value : '';
+        var rmTxVal = rmTxEl ? rmTxEl.value : '';
         var sb = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
         if (sb) { smBefore = parseInt(sb.ScrollMakerId, 10) || 0; rmBefore = parseInt(sb.RegaliaMakerId, 10) || 0; }
         post('CourtAjax/update_award', fd).then(function(d) {
@@ -4323,14 +4362,10 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                 // with the same id, typed-but-unpicked text must not rename the maker.
                 var sa = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
                 if (sa) {
-                    var smId = scrollMakerEl  ? (parseInt(scrollMakerEl.value,  10) || 0) : 0;
-                    var rmId = regaliaMakerEl ? (parseInt(regaliaMakerEl.value, 10) || 0) : 0;
-                    var smTx = gid('cp-scroll-maker-text-'  + caid);
-                    var rmTx = gid('cp-regalia-maker-text-' + caid);
                     var smWas = parseInt(sa.ScrollMakerId, 10)  || 0;
                     var rmWas = parseInt(sa.RegaliaMakerId, 10) || 0;
-                    sa.ScrollMakerPersona  = !smId ? '' : (smId !== smWas && smTx ? smTx.value : (sa.ScrollMakerPersona || ''));
-                    sa.RegaliaMakerPersona = !rmId ? '' : (rmId !== rmWas && rmTx ? rmTx.value : (sa.RegaliaMakerPersona || ''));
+                    sa.ScrollMakerPersona  = !smId ? '' : (smId !== smWas && smTxEl ? smTxVal : (sa.ScrollMakerPersona || ''));
+                    sa.RegaliaMakerPersona = !rmId ? '' : (rmId !== rmWas && rmTxEl ? rmTxVal : (sa.RegaliaMakerPersona || ''));
                     sa.ScrollMakerId       = smId || null;
                     sa.RegaliaMakerId      = rmId || null;
                     // Maker rules: a maker set on a Pending item makes it Assigned, a maker

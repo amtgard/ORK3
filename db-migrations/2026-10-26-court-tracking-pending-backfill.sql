@@ -1,3 +1,5 @@
+-- Deploy order: run immediately before, or in the same step as, the code deploy
+-- (migration first is the safer order).
 -- Court Planner deeper tracking statuses: value 1 is now "Assigned" (an artisan
 -- agreed to make it) and the new 0 is "Pending" (needed, nobody has it). Lines
 -- that were 1 ("Custom Design" / "Needed") with no maker move to Pending; lines
