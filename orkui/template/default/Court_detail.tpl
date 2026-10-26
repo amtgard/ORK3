@@ -360,7 +360,7 @@ html[data-theme="dark"] .cp-send-local-btn[data-tip]:hover::after { background: 
     /* --- Section header: the nowrap button row keeps a ~707px min-content floor, so the
        four action buttons run off the right edge across the whole stacked range. Wrap. --- */
     .cp-section-header { flex-wrap: wrap; row-gap: 8px; }
-    .cp-section-header h2 { flex: 1 1 100%; }
+    .cp-section-header .cp-view-tabs { flex: 1 1 100%; }
     .cp-section-header .cp-header-actions { flex: 1 1 100%; flex-wrap: wrap; }
     .cp-section-header #cp-script-btn { flex: 0 0 auto; }
 }
@@ -1390,6 +1390,230 @@ html[data-theme="dark"] .cp-script-note-title { color: #e2e8f0; }
 html[data-theme="dark"] #cp-mobile-runbar { background: #11182a; color: #cbd5e0; box-shadow: 0 -2px 8px rgba(0,0,0,.5); }
 html[data-theme="dark"] #cp-mobile-runbar .cp-mrb-name { color: #e2e8f0; }
 
+/* ============================================================
+   VIEW TABS — Order of Court | Resource Planning
+   ============================================================ */
+.cp-view-tabs { display: flex; align-items: flex-end; gap: 2px; min-width: 0; }
+/* A real <button>: restate the box so orkui's element-level button rules can't reshape it. */
+button.cp-view-tab {
+    -webkit-appearance: none; appearance: none;
+    display: inline-flex; align-items: center; margin: 0; min-height: 0;
+    padding: 6px 12px 7px; border: none; border-radius: 6px 6px 0 0;
+    background: none; box-shadow: inset 0 -2px 0 transparent;
+    color: #718096; font-family: inherit; font-size: 15px; font-weight: 700;
+    line-height: 1.3; letter-spacing: 0; text-transform: none; white-space: nowrap; cursor: pointer;
+    transition: color .12s, background .12s, box-shadow .12s;
+}
+button.cp-view-tab:hover { color: #2d3748; background: #f7fafc; }
+button.cp-view-tab[aria-selected="true"] { color: #2d3748; box-shadow: inset 0 -2px 0 #2c5282; }
+button.cp-view-tab .cp-count { margin-left: 5px; }
+button.cp-view-tab[aria-selected="false"] .cp-h2-icon { color: #a0aec0; }
+/* The Order's header actions (adds, Court Script) belong to the Order tab only. They
+   carry an inline display:flex, so the hide needs !important to win. */
+.cp-main-content[data-cp-view="resources"] .cp-section-header .cp-header-actions,
+.cp-main-content[data-cp-view="resources"] .cp-section-header #cp-script-btn { display: none !important; }
+.cp-view-panel[hidden] { display: none !important; }
+html[data-theme="dark"] button.cp-view-tab { color: #a0aec0; }
+html[data-theme="dark"] button.cp-view-tab:hover { color: #e2e8f0; background: #1f2733; }
+html[data-theme="dark"] button.cp-view-tab[aria-selected="true"] { color: #e2e8f0; box-shadow: inset 0 -2px 0 #63b3ed; }
+html[data-theme="dark"] button.cp-view-tab[aria-selected="false"] .cp-h2-icon { color: #718096; }
+
+/* ============================================================
+   RESOURCE PLANNING — summary strip, filters and the grid
+   One row per award line, in running order. A CSS grid in the list's own language
+   (not DataTables: it is a form-control grid). Each row is its own grid on one
+   shared column template, so the columns line up; the template narrows in two
+   steps (two-line rows below 1280px, cards at phone width).
+   ============================================================ */
+.cp-rp { margin-bottom: 20px; }
+.cp-rp-summary {
+    display: flex; flex-direction: column; gap: 4px;
+    background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 9px 14px; margin-bottom: 10px; font-size: 13px; color: #4a5568;
+}
+.cp-rp-sum-group { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; }
+.cp-rp-sum-label { font-size: 10px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: .08em; min-width: 72px; }
+.cp-rp-sum-label i { margin-right: 3px; }
+.cp-rp-sum-item b { font-variant-numeric: tabular-nums; }
+.cp-rp-sum-sep { color: #cbd5e0; }
+.cp-rp-sum-need { color: #c05621; font-weight: 700; }
+.cp-rp-sum-ok   { color: #718096; font-weight: 400; }
+.cp-rp-sum-note { font-size: 11px; color: #718096; }
+
+.cp-rp-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+button.cp-rp-filter {
+    -webkit-appearance: none; appearance: none;
+    display: inline-flex; align-items: center; gap: 6px; margin: 0; min-height: 0;
+    padding: 4px 6px 4px 11px; border: 1px solid #e2e8f0; border-radius: 14px;
+    background: #fff; box-shadow: none; color: #4a5568;
+    font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1.3;
+    letter-spacing: 0; text-transform: none; white-space: nowrap; cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+}
+button.cp-rp-filter:hover { background: #f7fafc; border-color: #cbd5e0; }
+button.cp-rp-filter.active,
+button.cp-rp-filter.active:hover { background: #2c5282; border-color: #2c5282; color: #fff; }
+.cp-rp-filter-n { min-width: 18px; padding: 0 6px; border-radius: 9px; background: #edf2f7; color: #4a5568; font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; }
+button.cp-rp-filter.active .cp-rp-filter-n { background: rgba(255,255,255,.22); color: #fff; }
+
+.cp-rp-grid {
+    --cp-rp-cols: 30px minmax(0, 1.3fr) minmax(0, 1.4fr) 122px minmax(0, 1fr) 114px minmax(0, 1fr) minmax(0, 1.1fr) 66px;
+    --cp-rp-areas: "num who award scroll smaker regalia rmaker arts line";
+    border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
+}
+.cp-rp-head, .cp-rp-row {
+    display: grid; grid-template-columns: var(--cp-rp-cols); grid-template-areas: var(--cp-rp-areas);
+    align-items: center; column-gap: 8px;
+}
+.cp-rp-num    { grid-area: num; }
+.cp-rp-who    { grid-area: who; }
+.cp-rp-award  { grid-area: award; }
+.cp-rp-scroll { grid-area: scroll; }
+.cp-rp-smaker { grid-area: smaker; }
+.cp-rp-regalia { grid-area: regalia; }
+.cp-rp-rmaker { grid-area: rmaker; }
+.cp-rp-arts   { grid-area: arts; }
+.cp-rp-line   { grid-area: line; }
+.cp-rp-c { min-width: 0; }
+/* Sticky under the fixed 48px top nav (#newmenu). No ancestor scrolls, so it pins to
+   the viewport for the length of the grid. */
+.cp-rp-head {
+    position: sticky; top: 48px; z-index: 4;
+    background: #f7fafc; border-bottom: 1px solid #e2e8f0; border-radius: 8px 8px 0 0;
+    padding: 7px var(--cp-row-px, 12px);
+    font-size: 10px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: .07em;
+}
+.cp-rp-head > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-rp-head .cp-rp-num { text-align: right; padding-right: 2px; }
+.cp-rp-row {
+    padding: var(--cp-row-py, 6px) var(--cp-row-px, 12px);
+    font-size: var(--cp-row-font, 13px);
+    background: #fff; border-bottom: 1px solid #edf2f7;
+}
+.cp-rp-row:nth-child(even) { background: #fafbfc; }
+.cp-rp-row:last-child { border-bottom: none; border-radius: 0 0 8px 8px; }
+/* Gaps first: a line still waiting on an artisan carries a left-edge accent. */
+.cp-rp-row.cp-rp-needs { box-shadow: inset 3px 0 0 #dd6b20; }
+/* Skipped lines stay in place, dimmed — as on the Order. */
+.cp-rp-row.cp-rp-skipped { opacity: .5; }
+.cp-rp-row .cp-rp-num { color: #6b7280; font-variant-numeric: tabular-nums; font-size: var(--cp-row-num, 12px); text-align: right; padding-right: 2px; font-weight: 600; }
+.cp-rp-who { display: flex; align-items: baseline; gap: 6px; overflow: hidden; }
+.cp-rp-persona { font-weight: 700; color: #2d3748; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cp-rp-park { font-size: 11px; color: #5a6472; flex-shrink: 0; }
+.cp-rp-award { display: flex; align-items: baseline; gap: 4px; overflow: hidden; color: #4a5568; }
+.cp-rp-award-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cp-rp-award .cp-award-rank.ladder-rank { font-size: 11px; flex-shrink: 0; font-weight: 600; }
+.cp-rp-scroll, .cp-rp-regalia { display: flex; }
+.cp-rp-grid button.cp-chip[data-status]:hover { border-color: currentColor; }
+html[data-theme="dark"] .cp-rp-grid button.cp-chip[data-status]:hover { border-color: currentColor; }
+.cp-rp-line { font-size: 11px; color: #718096; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Maker cell: a persona, a muted "Assign…", or the Scrollery's own line. */
+button.cp-rp-maker {
+    -webkit-appearance: none; appearance: none;
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; min-height: 0;
+    margin: 0; padding: 2px 7px; border: 1px solid transparent; border-radius: 5px;
+    background: none; box-shadow: none; color: #2d3748;
+    font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1.35;
+    letter-spacing: 0; text-transform: none; text-align: left; cursor: pointer;
+}
+button.cp-rp-maker:not(:disabled):hover { background: #edf2f7; border-color: #cbd5e0; }
+.cp-rp-maker-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cp-rp-maker-icon { font-size: 10px; color: #9f7aea; flex-shrink: 0; }
+/* Unassigned is quiet on an untracked item; on a needed one it is the gap to fill. */
+button.cp-rp-maker[data-state="empty"] { color: #a0aec0; font-weight: 500; border-style: dashed; }
+button.cp-rp-maker.cp-rp-maker-need { color: #c05621; border-color: #f6ad55; }
+button.cp-rp-maker[data-state="auto"] { color: #a0aec0; font-weight: 400; font-style: italic; padding-left: 0; cursor: default; }
+
+.cp-rp-arts { display: flex; align-items: center; gap: 6px; }
+.cp-rp-art-list { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #4a5568; }
+.cp-rp-muted { color: #a0aec0; }
+button.cp-rp-art-add {
+    -webkit-appearance: none; appearance: none;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 22px; height: 22px; min-height: 0; margin: 0; padding: 0;
+    border: 1px solid #cbd5e0; border-radius: 50%; background: #fff; box-shadow: none;
+    color: #4a5568; font-size: 10px; line-height: 1; cursor: pointer;
+}
+button.cp-rp-art-add:hover { background: #edf2f7; color: #2d3748; }
+
+.cp-rp-empty, .cp-rp-nomatch { text-align: center; padding: 36px 24px; color: #a0aec0; font-size: 14px; }
+.cp-rp-empty { border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+.cp-rp-empty i { display: block; font-size: 28px; opacity: .3; margin-bottom: 10px; }
+
+html[data-theme="dark"] .cp-rp-summary { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-rp-sum-label,
+html[data-theme="dark"] .cp-rp-sum-note { color: #a0aec0; }
+html[data-theme="dark"] .cp-rp-sum-sep { color: #4a5568; }
+html[data-theme="dark"] .cp-rp-sum-need { color: #fbd38d; }
+html[data-theme="dark"] .cp-rp-sum-ok { color: #97a3b4; }
+html[data-theme="dark"] button.cp-rp-filter { background: #161b22; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] button.cp-rp-filter:hover { background: #1f2733; border-color: #4a5568; }
+html[data-theme="dark"] button.cp-rp-filter.active,
+html[data-theme="dark"] button.cp-rp-filter.active:hover { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .cp-rp-filter-n { background: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] button.cp-rp-filter.active .cp-rp-filter-n { background: rgba(255,255,255,.2); color: #fff; }
+html[data-theme="dark"] .cp-rp-grid,
+html[data-theme="dark"] .cp-rp-empty { background: #161b22; border-color: #2d3748; }
+html[data-theme="dark"] .cp-rp-head { background: #1f2733; border-color: #2d3748; color: #a0aec0; }
+html[data-theme="dark"] .cp-rp-row { background: #161b22; border-color: #1f2733; }
+html[data-theme="dark"] .cp-rp-row:nth-child(even) { background: #1a2030; }
+html[data-theme="dark"] .cp-rp-row.cp-rp-needs { box-shadow: inset 3px 0 0 #f6ad55; }
+html[data-theme="dark"] .cp-rp-row .cp-rp-num,
+html[data-theme="dark"] .cp-rp-park { color: #97a3b4; }
+html[data-theme="dark"] .cp-rp-persona { color: #e2e8f0; }
+html[data-theme="dark"] .cp-rp-award,
+html[data-theme="dark"] .cp-rp-line,
+html[data-theme="dark"] .cp-rp-art-list { color: #a0aec0; }
+html[data-theme="dark"] button.cp-rp-maker { color: #e2e8f0; }
+html[data-theme="dark"] button.cp-rp-maker:not(:disabled):hover { background: #2d3748; border-color: #4a5568; }
+html[data-theme="dark"] .cp-rp-maker-icon { color: #b794f4; }
+html[data-theme="dark"] button.cp-rp-maker[data-state="empty"] { color: #718096; }
+html[data-theme="dark"] button.cp-rp-maker.cp-rp-maker-need { color: #fbd38d; border-color: rgba(246,173,85,.55); }
+html[data-theme="dark"] button.cp-rp-maker[data-state="auto"] { color: #718096; }
+html[data-theme="dark"] .cp-rp-muted { color: #718096; }
+html[data-theme="dark"] button.cp-rp-art-add { background: #1f2733; border-color: #4a5568; color: #cbd5e0; }
+html[data-theme="dark"] button.cp-rp-art-add:hover { background: #2d3748; color: #fff; }
+html[data-theme="dark"] .cp-rp-empty,
+html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
+
+/* Below 1280px the nine columns no longer fit beside the sidebar: each line takes two
+   rows — recipient over award, each chip over its maker. */
+@media (max-width: 1279px) {
+    .cp-rp-grid {
+        --cp-rp-cols: 30px minmax(0, 1.9fr) minmax(122px, 1fr) minmax(114px, 1fr) minmax(0, .9fr) 66px;
+        --cp-rp-areas: "num who scroll regalia arts line" "num award smaker rmaker arts line";
+    }
+    .cp-rp-head, .cp-rp-row { row-gap: 3px; }
+    .cp-rp-row .cp-rp-num { align-self: start; padding-top: 3px; }
+}
+
+/* Phone: each line is a card — recipient and award on top, then Scroll (chip + maker),
+   Regalia (chip + maker) and the artisans. The filters scroll sideways; the page never does. */
+@media (max-width: 640px) {
+    .cp-view-tabs { gap: 0; }
+    button.cp-view-tab { flex: 1 1 auto; justify-content: center; min-height: 44px; padding: 6px 8px; font-size: 14px; }
+    button.cp-view-tab .cp-h2-icon { display: none; }
+    .cp-rp-sum-label { flex: 1 1 100%; }
+    .cp-rp-filters { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+    button.cp-rp-filter { flex: 0 0 auto; min-height: 40px; }
+    .cp-rp-grid {
+        --cp-rp-cols: 22px auto minmax(0, 1fr) auto;
+        --cp-rp-areas: "num who who line" "num award award award" ". scroll smaker smaker" ". regalia rmaker rmaker" ". arts arts arts";
+    }
+    .cp-rp-head { display: none; }
+    .cp-rp-row { row-gap: 6px; padding: 12px 14px; }
+    .cp-rp-head + .cp-rp-row { border-radius: 8px 8px 0 0; }
+    .cp-rp-persona { font-size: 15px; }
+    .cp-rp-award { font-size: 14px; }
+    .cp-rp-line { align-self: start; }
+    .cp-rp-grid button.cp-chip { flex: 1 1 auto; justify-content: center; min-height: 44px; padding: 0 12px; border-radius: 22px; font-size: 12px; gap: 6px; }
+    button.cp-rp-maker { min-height: 44px; width: 100%; font-size: 13px; padding: 0 10px; }
+    button.cp-rp-maker[data-state="auto"] { padding-left: 4px; }
+    .cp-rp-art-list { white-space: normal; font-size: 13px; }
+    button.cp-rp-art-add { width: 44px; height: 44px; font-size: 13px; }
+}
+
 </style>
 
 <?php if ($error): ?>
@@ -1636,14 +1860,30 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         </div>
     </div>
 
+    <?php
+    // Two views of the same lines: the Order of Court list and the Resource Planning
+    // grid (JS-rendered from window.courtAwards). The view is in the URL (?view=) so a
+    // reload or a shared link returns to it; anything but "resources" means Order.
+    // Rendered server-side as well so the page never flashes the wrong panel.
+    $cpView = (($_GET['view'] ?? '') === 'resources') ? 'resources' : 'order';
+    ?>
     <!-- Main content -->
-    <div class="cp-main-content">
+    <div class="cp-main-content" id="cp-main-content" data-cp-view="<?= $cpView ?>">
 
-    <!-- Award list -->
+    <!-- View tabs + the Order's header actions (shown on the Order tab only) -->
     <div class="cp-section-header">
-        <h2><i class="fas fa-award cp-h2-icon"></i>
-            Order of Court <span id="cp-award-count" class="cp-count">(<?= count($courtAwards) ?>)</span>
-        </h2>
+        <div class="cp-view-tabs" role="tablist" aria-label="Court Planner views" id="cp-view-tabs">
+            <button type="button" class="cp-view-tab" role="tab" id="cp-tab-order" data-view="order"
+                    aria-controls="cp-panel-order" aria-selected="<?= $cpView === 'order' ? 'true' : 'false' ?>"
+                    tabindex="<?= $cpView === 'order' ? '0' : '-1' ?>">
+                <i class="fas fa-award cp-h2-icon" aria-hidden="true"></i>Order of Court <span id="cp-award-count" class="cp-count">(<?= count($courtAwards) ?>)</span>
+            </button>
+            <button type="button" class="cp-view-tab" role="tab" id="cp-tab-resources" data-view="resources"
+                    aria-controls="cp-panel-resources" aria-selected="<?= $cpView === 'resources' ? 'true' : 'false' ?>"
+                    tabindex="<?= $cpView === 'resources' ? '0' : '-1' ?>">
+                <i class="fas fa-paint-brush cp-h2-icon" aria-hidden="true"></i>Resource Planning
+            </button>
+        </div>
         <?php if ($courtSt === 'draft'): ?>
         <div class="cp-header-actions" style="display:flex;gap:8px">
             <?php if (!empty($pendingRecs)): ?>
@@ -1684,6 +1924,9 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
             <i class="fas fa-scroll"></i> Court Script
         </button>
     </div>
+
+    <!-- Order of Court panel: the print bar, toolbar and award list -->
+    <div class="cp-view-panel" id="cp-panel-order" role="tabpanel" aria-labelledby="cp-tab-order"<?= $cpView === 'order' ? '' : ' hidden' ?>>
 
     <?php if ($courtSt !== 'complete'): ?>
     <!-- After a Scrollery print run: "Set these scrolls to complete?" (cpShowPrintBar).
@@ -2037,6 +2280,14 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         </div>
         <?php endforeach; ?>
         <?php endif; ?>
+    </div>
+
+    </div><!-- /cp-panel-order -->
+
+    <!-- Resource Planning panel: scrolls, regalia and artisans per line. Rendered by
+         cpRpRender() from window.courtAwards only, so there is no PHP twin to drift. -->
+    <div class="cp-view-panel" id="cp-panel-resources" role="tabpanel" aria-labelledby="cp-tab-resources"<?= $cpView === 'resources' ? '' : ' hidden' ?>>
+        <div class="cp-rp" id="cp-rp-root"></div>
     </div>
 
     </div><!-- /cp-main-content -->
@@ -2878,8 +3129,12 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         if (CP_VALID_DENSITIES.indexOf(d) < 0) d = 'comfortable';
         var list = gid('cp-award-list');
         if (!list) return;
-        CP_VALID_DENSITIES.forEach(function(name) { list.classList.remove('cp-density-' + name); });
-        list.classList.add('cp-density-' + d);
+        // The Resource Planning grid reads the same density tokens as the list.
+        [list, gid('cp-rp-root')].forEach(function(el) {
+            if (!el) return;
+            CP_VALID_DENSITIES.forEach(function(name) { el.classList.remove('cp-density-' + name); });
+            el.classList.add('cp-density-' + d);
+        });
         // Toolbar segmented control state
         var seg = gid('cp-density-seg');
         if (seg) {
@@ -3153,6 +3408,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         var h = gid('cp-scroll-maker-id-' + caid);   if (h) h.value = '0';
         var a = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
         if (a) { a.ScrollMakerId = null; a.ScrollMakerPersona = ''; }
+        cpRpInvalidate();
     }
 
     // Line-level writer for a saved scroll/regalia status: chip, client model, RowVersion
@@ -3167,6 +3423,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         if (rowVersion != null) cpSetRowVersion(caid, rowVersion);
         if (type === 'scroll') cpSyncScrollMakerField(caid, s);
         cpRefreshStatusBar();
+        cpRpInvalidate();   // the Resource Planning chip and counts follow the model
     }
     window.cpSetLineTracking = cpSetLineTracking;
 
@@ -3459,7 +3716,13 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         document.removeEventListener('pointerdown', cpTrackMenuOutside, true);
         chip.setAttribute('aria-expanded', 'false');
         if (cpTrackMenu) { cpTrackMenu.hidden = true; cpTrackMenu.innerHTML = ''; }
-        if (returnFocus && document.body.contains(chip)) chip.focus({ preventScroll: true });
+        if (returnFocus) {
+            // A Resource Planning re-render replaces its chips; hand focus to the twin.
+            var target = document.body.contains(chip) ? chip : cpRpTwin(chip);
+            if (target) target.focus({ preventScroll: true });
+        }
+        // A Resource Planning render held back while its chip's picker was open.
+        if (cpRpDirty) cpRpInvalidate();
     }
     function cpTrackMenuDismiss() { cpCloseTrackMenu(true); }
     function cpTrackMenuOutside(e) {
@@ -3589,6 +3852,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
             if (String(awards[i].CourtAwardId) === String(caid)) awards.splice(i, 1);
         }
         cpRefreshStatusBar();   // the row is gone: recount the bar and the print button
+        cpRpInvalidate();
     }
 
     // Re-sort the client model (window.courtAwards) into the given DOM id order and
@@ -3632,6 +3896,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         awards.forEach(function(a) { if (ordered.indexOf(a) === -1) { a.SortOrder = ++pos; ordered.push(a); } });
         awards.length = 0;
         Array.prototype.push.apply(awards, ordered);
+        cpRpInvalidate();   // every reorder path lands here: Resource Planning follows
     }
 
     function cpSaveOrder() {
@@ -3694,6 +3959,20 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
                 // return the new token, so bump locally (the heartbeat also reconciles it).
                 cpBumpRowVersion(caid);
                 cpPendingRunAdvance(caid, sentRv, sentRv + 1);
+                // The makers this save posted are now the line's makers: write them to
+                // the model so Resource Planning (which reads only the model) shows them.
+                var sa = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
+                if (sa) {
+                    var smId = scrollMakerEl  ? (parseInt(scrollMakerEl.value,  10) || 0) : 0;
+                    var rmId = regaliaMakerEl ? (parseInt(regaliaMakerEl.value, 10) || 0) : 0;
+                    var smTx = gid('cp-scroll-maker-text-'  + caid);
+                    var rmTx = gid('cp-regalia-maker-text-' + caid);
+                    sa.ScrollMakerId       = smId || null;
+                    sa.ScrollMakerPersona  = smId && smTx ? smTx.value : '';
+                    sa.RegaliaMakerId      = rmId || null;
+                    sa.RegaliaMakerPersona = rmId && rmTx ? rmTx.value : '';
+                }
+                cpRpInvalidate();
                 // Update Pass-to-Local badge in row header — but ONLY when this
                 // save actually carried the flag. On a kingdom court the checkbox
                 // does not render, so ptl is a meaningless 0; syncing on it would
@@ -3996,6 +4275,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         cpSyncRowGuards(caid, status);
         cpRefreshProgress();
         cpRefreshScrolleryButton();   // a skipped line leaves the print count
+        cpRpInvalidate();             // grant/skip/unskip/stage/unstage all land here
     };
 
     // ---- Staged-not-finalized safeguard indicator (spec §5.3) ----
@@ -4972,6 +5252,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         var cnt = gid('cp-award-count');
         if (cnt) cnt.textContent = '(' + document.querySelectorAll('#cp-award-list .cp-award-row').length + ')';
         cpRenumberRows();
+        cpRpInvalidate();
     }
 
     // ---- Court notes: non-award line items on the running order ----
@@ -5170,6 +5451,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
     };
 
     window.cpSubmitArtisan = function() {
+        var artCaid      = currentArtisanCourtAwardId;
         var mundaneId    = gid('cp-art-mundane-id').value;
         var contribution = gid('cp-art-contribution').value.trim();
         var errEl        = gid('cp-art-error');
@@ -5192,7 +5474,15 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
                     '<button class="cp-btn-danger-sm" onclick="cpRemoveArtisan(' + a.CourtAwardArtisanId + ')"><i class="fas fa-times"></i></button>' +
                     '</div>';
                 gid('cp-artisans-' + currentArtisanCourtAwardId).insertAdjacentHTML('beforeend', row);
+                var am = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(artCaid); });
+                if (am) {
+                    if (!Array.isArray(am.Artisans)) am.Artisans = [];
+                    am.Artisans.push({ CourtAwardArtisanId: a.CourtAwardArtisanId, MundaneId: a.MundaneId, Persona: a.Persona, Contribution: a.Contribution });
+                }
                 cpCloseArtisanModal();
+                // After the close, so the focus it hands back to the Resource Planning
+                // "+" is the one the re-render then carries over to the new "+".
+                cpRpInvalidate();
             } else {
                 errEl.textContent = d.error || 'Could not add artisan.';
                 errEl.style.display = 'block';
@@ -5231,7 +5521,14 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         var fd = new FormData();
         fd.append('CourtAwardArtisanId', artId);
         post('CourtAjax/remove_artisan', fd).then(function(d) {
-            if (d.status === 0) { var el = gid('cp-art-' + artId); if (el) el.remove(); }
+            if (d.status === 0) {
+                var el = gid('cp-art-' + artId); if (el) el.remove();
+                courtAwards.forEach(function(x) {
+                    if (!Array.isArray(x.Artisans)) return;
+                    x.Artisans = x.Artisans.filter(function(r) { return String(r.CourtAwardArtisanId) !== String(artId); });
+                });
+                cpRpInvalidate();
+            }
             else if (!d._postFailed) cpAlert(d.error || 'Could not remove.');
         });
     };
@@ -5476,6 +5773,322 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         });
     };
 
+    // ---- Resource Planning tab ----
+    // A second view of the same award lines, for whoever runs the court's logistics:
+    // which scrolls and regalia are needed, and who is making them. It reads ONLY the
+    // client model (window.courtAwards) and writes through the Order's own line-level
+    // writers (the shared chip picker ends in cpSetLineTracking), so there is one source
+    // of truth. Every model writer calls cpRpInvalidate(); the grid re-renders from the
+    // model once per frame while its tab is visible, and on show otherwise.
+    var cpRpView   = gid('cp-main-content') && gid('cp-main-content').dataset.cpView === 'resources' ? 'resources' : 'order';
+    var cpRpDirty  = true;    // the model moved since the last render
+    var cpRpFrame  = 0;       // pending requestAnimationFrame id
+    var cpRpFilter = 'all';   // survives re-renders
+    // Set by the maker search (Task 2) while an inline search is open; the render waits
+    // while it is true, and the search calls cpRpInvalidate() once it clears it.
+    window.cpRpEditing = false;
+
+    var CP_RP_FILTERS = [
+        { key: 'all',       label: 'All' },
+        { key: 'needs',     label: 'Needs an artisan' },
+        { key: 'custom',    label: 'Custom scrolls' },
+        { key: 'print',     label: 'Scrollery Print' },
+        { key: 'regalia',   label: 'Regalia needed' },
+        { key: 'untracked', label: 'Not tracked' },
+        { key: 'complete',  label: 'Complete' }
+    ];
+
+    function cpRpInt(v) { return parseInt(v, 10) || 0; }
+    function cpRpScroll(a)  { var s = cpRpInt(a.ScrollStatus);  return (s >= 0 && s <= 3) ? s : 0; }
+    function cpRpRegalia(a) { var s = cpRpInt(a.RegaliaStatus); return (s >= 0 && s <= 2) ? s : 0; }
+    // A Custom Design scroll with no scroll maker, or Needed regalia with no regalia maker.
+    function cpRpNeedsScrollArtisan(a)  { return cpRpScroll(a) === 1 && cpRpInt(a.ScrollMakerId) <= 0; }
+    function cpRpNeedsRegaliaArtisan(a) { return cpRpRegalia(a) === 1 && cpRpInt(a.RegaliaMakerId) <= 0; }
+    function cpRpNeedsArtisan(a) { return cpRpNeedsScrollArtisan(a) || cpRpNeedsRegaliaArtisan(a); }
+
+    // Filter membership. Skipped lines appear only under All, the same way the summary
+    // leaves them out, so every filter's count agrees with the strip above it.
+    function cpRpMatches(a, key) {
+        if (key === 'all') return true;
+        if (a.Status === 'cancelled') return false;
+        var ss = cpRpScroll(a), rs = cpRpRegalia(a);
+        switch (key) {
+            case 'needs':     return cpRpNeedsArtisan(a);
+            case 'custom':    return ss === 1;
+            case 'print':     return ss === 3;
+            case 'regalia':   return rs === 1;
+            // Nothing tracked on the line at all: still waiting on a decision.
+            case 'untracked': return ss === 0 && rs === 0;
+            // Every tracked item is Complete (and at least one is tracked).
+            case 'complete':  return (ss !== 0 || rs !== 0) && (ss === 0 || ss === 2) && (rs === 0 || rs === 2);
+        }
+        return false;
+    }
+
+    function cpRpCounts() {
+        var c = { scroll: { 0: 0, 1: 0, 2: 0, 3: 0 }, regalia: { 0: 0, 1: 0, 2: 0 },
+                  scrollNeed: 0, regaliaNeed: 0, skipped: 0, filters: {} };
+        CP_RP_FILTERS.forEach(function(f) { c.filters[f.key] = 0; });
+        courtAwards.forEach(function(a) {
+            CP_RP_FILTERS.forEach(function(f) { if (cpRpMatches(a, f.key)) c.filters[f.key]++; });
+            if (a.Status === 'cancelled') { c.skipped++; return; }
+            c.scroll[cpRpScroll(a)]++;
+            c.regalia[cpRpRegalia(a)]++;
+            if (cpRpNeedsScrollArtisan(a))  c.scrollNeed++;
+            if (cpRpNeedsRegaliaArtisan(a)) c.regaliaNeed++;
+        });
+        return c;
+    }
+
+    // One summary item: "<n> <label>", coloured like the Order's status bar.
+    function cpRpSumItem(cls, n, label, extra) {
+        return '<span class="cp-rp-sum-item ' + cls + '"><b>' + n + '</b> ' + esc(label) + (extra || '') + '</span>';
+    }
+    // "(M need an artisan)" after a Custom Design or Needed count, or "(all assigned)".
+    function cpRpNeedNote(total, need) {
+        if (!total) return '';
+        return need
+            ? ' <span class="cp-rp-sum-need">(' + need + ' need' + (need === 1 ? 's' : '') + ' an artisan)</span>'
+            : ' <span class="cp-rp-sum-ok">(all assigned)</span>';
+    }
+
+    function cpRpSummaryHtml(c) {
+        var sep = '<span class="cp-rp-sum-sep" aria-hidden="true">&middot;</span>';
+        return '<div class="cp-rp-summary">' +
+            '<div class="cp-rp-sum-group"><span class="cp-rp-sum-label"><i class="fas fa-scroll" aria-hidden="true"></i> Scrolls</span>' +
+                cpRpSumItem('cp-stat-print', c.scroll[3], 'Scrollery Print') + sep +
+                cpRpSumItem('cp-stat-custom', c.scroll[1], 'Custom Design', cpRpNeedNote(c.scroll[1], c.scrollNeed)) + sep +
+                cpRpSumItem('cp-stat-ready', c.scroll[2], 'Complete') + sep +
+                cpRpSumItem('cp-stat-none', c.scroll[0], 'Not Tracked') +
+            '</div>' +
+            '<div class="cp-rp-sum-group"><span class="cp-rp-sum-label"><i class="fas fa-medal" aria-hidden="true"></i> Regalia</span>' +
+                cpRpSumItem('cp-stat-need', c.regalia[1], 'Needed', cpRpNeedNote(c.regalia[1], c.regaliaNeed)) + sep +
+                cpRpSumItem('cp-stat-ready', c.regalia[2], 'Complete') + sep +
+                cpRpSumItem('cp-stat-none', c.regalia[0], 'Not Tracked') +
+            '</div>' +
+            (c.skipped ? '<div class="cp-rp-sum-note">' + c.skipped + ' skipped line' + (c.skipped === 1 ? ' is' : 's are') + ' not counted.</div>' : '') +
+            '</div>';
+    }
+
+    function cpRpFiltersHtml(c) {
+        return '<div class="cp-rp-filters" role="group" aria-label="Filter lines">' +
+            CP_RP_FILTERS.map(function(f) {
+                var on = f.key === cpRpFilter;
+                return '<button type="button" class="cp-rp-filter' + (on ? ' active' : '') + '" data-rp-filter="' + f.key + '"' +
+                    ' aria-pressed="' + (on ? 'true' : 'false') + '" onclick="cpRpSetFilter(\'' + f.key + '\')">' +
+                    esc(f.label) + ' <span class="cp-rp-filter-n">' + c.filters[f.key] + '</span></button>';
+            }).join('') +
+            '</div>';
+    }
+
+    // A maker cell. Read-only here; Task 2 makes button.cp-rp-maker interactive.
+    // data-state: "set" (a persona), "empty" (Assign…), "auto" (Printed by Scrollery).
+    function cpRpMakerHtml(kind, a) {
+        var caid = cpRpInt(a.CourtAwardId);
+        var noun = kind === 'scroll' ? 'Scroll maker' : 'Regalia maker';
+        var base = 'type="button" class="cp-rp-maker" data-kind="' + kind + '" data-caid="' + caid + '"';
+        if (kind === 'scroll' && cpRpScroll(a) === 3) {
+            // The Scrollery prints it, so there is no maker (the Order hides the field).
+            return '<button ' + base + ' data-state="auto" disabled aria-label="' + noun + ': printed by Scrollery">' +
+                '<span class="cp-rp-maker-text">Printed by Scrollery</span></button>';
+        }
+        var id      = cpRpInt(kind === 'scroll' ? a.ScrollMakerId : a.RegaliaMakerId);
+        var persona = (kind === 'scroll' ? a.ScrollMakerPersona : a.RegaliaMakerPersona) || '';
+        if (id > 0) {
+            persona = persona || 'Player #' + id;
+            return '<button ' + base + ' data-state="set" data-maker-id="' + id + '" aria-label="' + esc(noun + ': ' + persona) + '">' +
+                '<i class="fas fa-user-edit cp-rp-maker-icon" aria-hidden="true"></i><span class="cp-rp-maker-text">' + esc(persona) + '</span></button>';
+        }
+        // An item that is needed (Custom Design / Needed) and has no maker yet stands out.
+        var need = a.Status !== 'cancelled' && (kind === 'scroll' ? cpRpNeedsScrollArtisan(a) : cpRpNeedsRegaliaArtisan(a));
+        if (need) base = base.replace('class="cp-rp-maker"', 'class="cp-rp-maker cp-rp-maker-need"');
+        return '<button ' + base + ' data-state="empty" aria-label="' + noun + ': unassigned">' +
+            '<span class="cp-rp-maker-text">Assign…</span></button>';
+    }
+
+    function cpRpArtisansHtml(a) {
+        var caid = cpRpInt(a.CourtAwardId);
+        var list = Array.isArray(a.Artisans) ? a.Artisans : [];
+        var names = list.map(function(r) {
+            var who = r.Persona || 'Unknown player';
+            return r.Contribution
+                ? '<span class="cp-rp-art-name" data-tip="' + esc(who + ' — ' + r.Contribution) + '">' + esc(who) + '</span>'
+                : '<span class="cp-rp-art-name">' + esc(who) + '</span>';
+        }).join(', ');
+        return '<span class="cp-rp-art-list">' + (names || '<span class="cp-rp-muted">None</span>') + '</span>' +
+            '<button type="button" class="cp-rp-art-add" data-caid="' + caid + '" onclick="cpOpenArtisanModal(' + caid + ')"' +
+            ' data-tip="Add artisan" aria-label="' + esc('Add artisan for ' + (a.Persona || '') + ' — ' + (a.AwardName || '')) + '">' +
+            '<i class="fas fa-plus" aria-hidden="true"></i></button>';
+    }
+
+    // Award name + rank, as the Order row shows it.
+    function cpRpAwardHtml(a) {
+        var rank = cpRpInt(a.Rank);
+        var pill = '';
+        if (a.IsLadder) {
+            pill = rank > 0
+                ? '<span class="ladder-rank cp-award-rank" data-lvl="' + Math.min(rank, 10) + '">Rank ' + rank + '</span>'
+                : '<span class="ladder-rank ladder-rank-unset cp-award-rank" data-tip="Ladder award — the rank is chosen when this line is granted.">Rank at grant</span>';
+        }
+        return '<span class="cp-rp-award-name">' + esc(a.AwardName || '') + '</span>' + pill;
+    }
+
+    function cpRpRowHtml(a, num) {
+        var caid = cpRpInt(a.CourtAwardId);
+        var disp = cpDisplayStatus(a.Status);
+        var line = (CP_AW_BADGE[disp] || CP_AW_BADGE.planned).label;
+        var needs = a.Status !== 'cancelled' && cpRpNeedsArtisan(a);
+        return '<div class="cp-rp-row' + (a.Status === 'cancelled' ? ' cp-rp-skipped' : '') + (needs ? ' cp-rp-needs' : '') + '"' +
+                ' role="row" data-caid="' + caid + '">' +
+            '<div class="cp-rp-c cp-rp-num" role="cell">' + num + '</div>' +
+            '<div class="cp-rp-c cp-rp-who" role="cell"><span class="cp-rp-persona">' + esc(a.Persona || '') + '</span>' +
+                (a.ParkAbbrev ? '<span class="cp-rp-park">' + esc(a.ParkAbbrev) + '</span>' : '') + '</div>' +
+            '<div class="cp-rp-c cp-rp-award" role="cell">' + cpRpAwardHtml(a) + '</div>' +
+            '<div class="cp-rp-c cp-rp-scroll" role="cell">' + cpTrackChipHtml('scroll', a.ScrollStatus, caid) + '</div>' +
+            '<div class="cp-rp-c cp-rp-smaker" role="cell">' + cpRpMakerHtml('scroll', a) + '</div>' +
+            '<div class="cp-rp-c cp-rp-regalia" role="cell">' + cpTrackChipHtml('regalia', a.RegaliaStatus, caid) + '</div>' +
+            '<div class="cp-rp-c cp-rp-rmaker" role="cell">' + cpRpMakerHtml('regalia', a) + '</div>' +
+            '<div class="cp-rp-c cp-rp-arts" role="cell">' + cpRpArtisansHtml(a) + '</div>' +
+            '<div class="cp-rp-c cp-rp-line" role="cell" data-line="' + esc(disp) + '">' + esc(line) + '</div>' +
+            '</div>';
+    }
+
+    // The selector that finds an element's counterpart after a re-render, so focus
+    // survives it (a chip the officer just used, a filter, a "+" or a maker cell).
+    function cpRpFocusSel(el) {
+        if (!el || !el.classList) return null;
+        if (el.classList.contains('cp-chip')) return '.cp-chip[data-type="' + el.dataset.type + '"][data-caid="' + cpRpInt(el.dataset.caid) + '"]';
+        if (el.classList.contains('cp-rp-maker')) return '.cp-rp-maker[data-kind="' + el.dataset.kind + '"][data-caid="' + cpRpInt(el.dataset.caid) + '"]';
+        if (el.classList.contains('cp-rp-art-add')) return '.cp-rp-art-add[data-caid="' + cpRpInt(el.dataset.caid) + '"]';
+        if (el.dataset && el.dataset.rpFilter) return '[data-rp-filter="' + el.dataset.rpFilter + '"]';
+        return null;
+    }
+    // The live Resource Planning counterpart of a (possibly detached) element.
+    function cpRpTwin(el) {
+        var root = gid('cp-rp-root');
+        var sel  = cpRpFocusSel(el);
+        return (root && sel) ? root.querySelector(sel) : null;
+    }
+
+    function cpRpRender() {
+        var root = gid('cp-rp-root');
+        if (!root) return;
+        // Never re-render under an open edit: the maker search (Task 2) or the shared
+        // picker anchored to one of this grid's chips. Each calls cpRpInvalidate() when
+        // it ends, and the render runs then.
+        if (window.cpRpEditing || (cpTrackMenuChip && root.contains(cpTrackMenuChip))) { cpRpDirty = true; return; }
+        cpRpDirty = false;
+
+        var act = document.activeElement;
+        var focusSel = (act && root.contains(act)) ? cpRpFocusSel(act) : null;
+
+        var html;
+        if (!courtAwards.length) {
+            html = '<div class="cp-rp-empty"><i class="fas fa-paint-brush" aria-hidden="true"></i>No awards on this court yet.</div>';
+        } else {
+            var c = cpRpCounts();
+            var rows = '';
+            courtAwards.forEach(function(a, i) {
+                // i + 1 is the Order's "#": the model is kept in running order (notes
+                // are a separate list) and cpRenumberRows counts award rows the same way.
+                if (cpRpMatches(a, cpRpFilter)) rows += cpRpRowHtml(a, i + 1);
+            });
+            if (!rows) rows = '<div class="cp-rp-nomatch">No lines match this filter.</div>';
+            html = cpRpSummaryHtml(c) + cpRpFiltersHtml(c) +
+                '<div class="cp-rp-grid" role="table" aria-label="Resource planning">' +
+                    '<div class="cp-rp-head" role="row">' +
+                        '<div class="cp-rp-c cp-rp-num" role="columnheader">#</div>' +
+                        '<div class="cp-rp-c cp-rp-who" role="columnheader">Recipient</div>' +
+                        '<div class="cp-rp-c cp-rp-award" role="columnheader">Award</div>' +
+                        '<div class="cp-rp-c cp-rp-scroll" role="columnheader">Scroll</div>' +
+                        '<div class="cp-rp-c cp-rp-smaker" role="columnheader">Scroll Maker</div>' +
+                        '<div class="cp-rp-c cp-rp-regalia" role="columnheader">Regalia</div>' +
+                        '<div class="cp-rp-c cp-rp-rmaker" role="columnheader">Regalia Maker</div>' +
+                        '<div class="cp-rp-c cp-rp-arts" role="columnheader">Artisans</div>' +
+                        '<div class="cp-rp-c cp-rp-line" role="columnheader">Line</div>' +
+                    '</div>' + rows +
+                '</div>';
+        }
+        root.innerHTML = html;
+        if (focusSel) {
+            var again = root.querySelector(focusSel);
+            if (again) again.focus({ preventScroll: true });
+        }
+    }
+    window.cpRpRender = cpRpRender;
+
+    // The one hook every model writer calls. Coalesces to one render per frame while
+    // the tab is visible; while hidden it only marks the grid dirty for the next show.
+    function cpRpInvalidate() {
+        cpRpDirty = true;
+        if (cpRpView !== 'resources' || cpRpFrame) return;
+        var raf = window.requestAnimationFrame || function(fn) { return setTimeout(fn, 16); };
+        cpRpFrame = raf(function() {
+            cpRpFrame = 0;
+            if (cpRpView === 'resources' && cpRpDirty) cpRpRender();
+        });
+    }
+    window.cpRpInvalidate = cpRpInvalidate;
+
+    window.cpRpSetFilter = function(key) {
+        var ok = CP_RP_FILTERS.some(function(f) { return f.key === key; });
+        cpRpFilter = ok ? key : 'all';
+        cpRpRender();
+    };
+
+    // ---- View tabs: Order of Court | Resource Planning ----
+    // The URL keeps the view (?view=resources) so a reload or shared link returns to it.
+    // Built by hand rather than with URLSearchParams, which would re-encode the Route
+    // value (Court/detail/21 -> Court%2Fdetail%2F21).
+    function cpViewUrl(view) {
+        var q = location.search.replace(/^\?/, '').split('&').filter(function(p) {
+            return p !== '' && p.split('=')[0] !== 'view';
+        });
+        if (view === 'resources') q.push('view=resources');
+        return location.pathname + (q.length ? '?' + q.join('&') : '') + location.hash;
+    }
+
+    window.cpSetView = function(view, focusTab) {
+        view = view === 'resources' ? 'resources' : 'order';
+        cpRpView = view;
+        var main = gid('cp-main-content');
+        if (main) main.dataset.cpView = view;   // CSS hides the Order's header actions on RP
+        document.querySelectorAll('#cp-view-tabs .cp-view-tab').forEach(function(t) {
+            var on = t.dataset.view === view;
+            t.setAttribute('aria-selected', on ? 'true' : 'false');
+            t.tabIndex = on ? 0 : -1;
+            if (on && focusTab) t.focus();
+        });
+        var po = gid('cp-panel-order'), pr = gid('cp-panel-resources');
+        if (po) po.hidden = view !== 'order';
+        if (pr) pr.hidden = view !== 'resources';
+        try { history.replaceState(history.state, '', cpViewUrl(view)); } catch (e) {}
+        if (view === 'resources' && cpRpDirty) cpRpRender();
+    };
+
+    (function cpInitViewTabs() {
+        var tabs = gid('cp-view-tabs');
+        if (!tabs) return;
+        tabs.addEventListener('click', function(e) {
+            var t = e.target.closest('.cp-view-tab');
+            if (t) window.cpSetView(t.dataset.view);
+        });
+        // Arrow keys move between the tabs (and select, since a panel switch is instant).
+        tabs.addEventListener('keydown', function(e) {
+            var all = Array.prototype.slice.call(tabs.querySelectorAll('.cp-view-tab'));
+            var i = all.indexOf(document.activeElement);
+            if (i < 0) return;
+            var n = -1;
+            if (e.key === 'ArrowRight') n = (i + 1) % all.length;
+            else if (e.key === 'ArrowLeft') n = (i - 1 + all.length) % all.length;
+            else if (e.key === 'Home') n = 0;
+            else if (e.key === 'End') n = all.length - 1;
+            if (n < 0) return;
+            e.preventDefault();
+            window.cpSetView(all[n].dataset.view, true);
+        });
+    })();
+
     // ---- Live heartbeat (spec §6.4) ----
     function cpAnyModalOpen() {
         var ids = ['cp-rec-modal', 'cp-adhoc-modal', 'cp-artisan-modal', 'cp-cn-modal', 'cp-grant-modal', 'cp-publish-modal', 'cp-complete-modal'];
@@ -5601,6 +6214,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         var rc = row.querySelector('.cp-chip[data-type="regalia"]');
         if (rc && String(rc.dataset.status) !== String(sa.RegaliaStatus)) cpApplyTrackState(rc, 'regalia', sa.RegaliaStatus);
         cpSyncScrollMakerField(caid, sa.ScrollStatus);
+        cpRpInvalidate();
     }
 
     // Full-field reconcile (S5): drive the row set from awards_full — status, giver,
@@ -5644,6 +6258,9 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
                 a.ScrollStatus = sa.ScrollStatus;
                 a.RegaliaStatus = sa.RegaliaStatus;
                 a.ScrolleryPrintable = !!sa.ScrolleryPrintable;
+                // awards_full carries each line's artisans; Resource Planning reads them
+                // from the model, so a peer's add or remove shows up on the next poll.
+                if (Array.isArray(sa.Artisans)) a.Artisans = sa.Artisans;
                 if (givenByMap[String(caid)] !== undefined) a.GivenByMundaneId = givenByMap[String(caid)];
             }
         });
@@ -5671,6 +6288,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         var sbt = gid('cp-sb-total');               if (sbt) sbt.textContent = n + ' award' + (n !== 1 ? 's' : '');
         cpRefreshStatusBar();
         cpRefreshProgress();
+        cpRpInvalidate();
     }
 
     // Fallback for an older server that only sends the light `awards` array.
@@ -5698,6 +6316,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         cpUpdateStagedIndicator(staged);
         if (d.mode && d.mode !== cpMode) { cpMode = window.cpMode = d.mode; cpUpdateModeBadge(d.mode); }
         cpRefreshProgress();
+        cpRpInvalidate();
     }
 
     // ---- Presence + honest sync state (S5) ----
@@ -5802,6 +6421,8 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
 
     // ---- Init: drag, heartbeat, prev-banner session-dismiss ----
     cpInitDrag();
+    // The server rendered the panel ?view= asked for; the URL stays the authority.
+    if (/[?&]view=resources(?:&|$)/.test(location.search) || cpRpView === 'resources') window.cpSetView('resources');
     // S2: normalize the staged-safeguard banner to the current mode's wording on load
     // (the server render defaults to plan phrasing).
     cpUpdateStagedIndicator(cpStagedCount);
