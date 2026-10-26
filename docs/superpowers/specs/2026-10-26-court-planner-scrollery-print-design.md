@@ -169,11 +169,13 @@ unchanged.
   | Issuer | The court's park or kingdom, with heraldry from `scope_context` |
   | Provenance | `mundaneId`, `scopeType`, `scopeId` |
 
-- Lines that cannot print are listed on a notice page at the front of the
-  document, each with its reason. Reasons include an award Scrollery can't
-  print, a title that resolves blank (an unnamed Custom Award or Custom
-  Title), and a player who no longer resolves. Every other line still prints.
-  If nothing prints, the module's existing `deny()` page explains why.
+- Lines that cannot print are named, each with its reason. Reasons include an
+  award Scrollery can't print, a title that resolves blank (an unnamed Custom
+  Award or Custom Title), and a player who no longer resolves. Every other line
+  still prints. The planner shows them in its post-print bar, from the
+  preflight. The print page shows a screen-only notice for any line that
+  became unprintable between the preflight and the print, so no paper is spent
+  on it. If nothing prints, the module's existing `deny()` page explains why.
 - Every printed scroll is logged through the existing `record_print()` with
   `awards_id` NULL, as composed scrolls are.
 - The run is capped at `Scroll::MAX_PRINT_RUN`. The overflow is reported the
@@ -195,7 +197,7 @@ unchanged.
   The preflight uses the same `Model_Scrollery::scrolls_for_court_awards`
   resolution as the print route, so the two cannot disagree. The tab then
   opens with the `Printable` ids only. The bar and "complete" act on that list
-  and nothing else. Lines that only appear on the notice page, or were cut by
+  and nothing else. Lines that were skipped, or were cut by
   the cap, are never completed.
 - The planner records the `Printable` list, with each line's `row_version`.
   It then shows a bar
