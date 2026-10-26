@@ -120,6 +120,31 @@ class ScrollText
     }
 
     /**
+     * The rank word BuildScroll hands to IssuerLines(): the title as given, with the two
+     * corrections the PRINT applies before the model runs.
+     *
+     * "Inactive" is a park status that leaked into ork_parktitle.title on 5 parks, not a
+     * rank word, so it reads as empty. And an empty title on a PARK takes the Barony
+     * floor ("and the Barony of / Wetlands"), because park names are bare and need a rank
+     * word to read at all; a kingdom supplies its own whole phrase and has no floor.
+     * ScrolleryText.issuerLines() applies the same two rules for scope 'park', so the
+     * composer's preview says what the print says; tests/fixtures/scroll-text-model.json
+     * pins both.
+     */
+    public static function IssuerTitle(string $title, string $scopeType): string
+    {
+        $title = trim($title);
+        if (strtolower($title) === 'inactive') {
+            $title = '';
+        }
+        if ($title === '' && $scopeType === 'park') {
+            $title = 'Barony';
+        }
+
+        return $title;
+    }
+
+    /**
      * The characters Windows-1252 puts in the 0x80-0x9F byte range, by Unicode code
      * point, mapped back to that byte. The five bytes it leaves undefined (0x81, 0x8D,
      * 0x8F, 0x90, 0x9D) are absent: a decoder that kept them arrives as the C1 control

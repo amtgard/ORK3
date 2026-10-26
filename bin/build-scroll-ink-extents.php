@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit(1);
+}
+
 /**
  * Build assets/scrolls/ink-extents.json — what the Scrollery artwork actually PAINTS.
  *

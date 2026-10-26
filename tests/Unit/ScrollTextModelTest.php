@@ -34,8 +34,23 @@ final class ScrollTextModelTest extends TestCase
     #[DataProvider('cases')]
     public function testIssuerLinesMatchTheSharedFixture(array $in, array $want): void
     {
-        $got = \ScrollText::IssuerLines($in['title'], $in['name'], $in['useThe'], $in['useOf'], $in['scope']);
+        // The title goes through IssuerTitle() first, as BuildScroll does: the Barony floor and the
+        // Inactive rule live there, and the browser's issuerLines() applies them itself.
+        $title = \ScrollText::IssuerTitle($in['title'], $in['scope']);
+        $got   = \ScrollText::IssuerLines($title, $in['name'], $in['useThe'], $in['useOf'], $in['scope']);
         $this->assertSame($want, array_intersect_key($got, $want));
+    }
+
+    public function testIssuerTitleFloorsOnlyAParkAndNeverKeepsInactive(): void
+    {
+        $this->assertSame('Barony', \ScrollText::IssuerTitle('', 'park'));
+        $this->assertSame('Barony', \ScrollText::IssuerTitle('  ', 'park'));
+        $this->assertSame('Barony', \ScrollText::IssuerTitle('Inactive', 'park'));
+        $this->assertSame('Barony', \ScrollText::IssuerTitle(' iNaCtIvE ', 'park'));
+        $this->assertSame('Shire', \ScrollText::IssuerTitle(' Shire ', 'park'));
+        $this->assertSame('', \ScrollText::IssuerTitle('', 'kingdom'));
+        $this->assertSame('', \ScrollText::IssuerTitle('Inactive', 'kingdom'));
+        $this->assertSame('', \ScrollText::IssuerTitle('', ''));
     }
 
     /** @return iterable<string, array{string, string}> */

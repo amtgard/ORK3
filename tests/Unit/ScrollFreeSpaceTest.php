@@ -191,6 +191,67 @@ final class ScrollFreeSpaceTest extends TestCase
         $this->assertNull(\Scroll::FreeSpace($this->scroll(), $m), 'L and R of unequal length is a broken entry');
     }
 
+    /** @return array<string, mixed>|null */
+    private function swapInkFiles(?array $files): ?array
+    {
+        $p = new ReflectionProperty(\Scroll::class, 'inkFiles');
+        $p->setAccessible(true);
+        $was = $p->getValue(null);
+        $p->setValue(null, $files);
+
+        return $was;
+    }
+
+    public function testANonNumericEdgeMakesTheEntryAbsentRatherThanZero(): void
+    {
+        // intval('abc') is 0, a perfectly plausible edge: the entry has to read as absent instead.
+        foreach (
+            [
+                'a word'        => ['L' => [450, 'abc'], 'R' => [2100, 2090]],
+                'null'          => ['L' => [450, null], 'R' => [2100, 2090]],
+                'an array'      => ['L' => [450, [460]], 'R' => [2100, 2090]],
+                'a bool'        => ['L' => [450, true], 'R' => [2100, 2090]],
+                'empty string'  => ['L' => [450, 460], 'R' => [2100, '']],
+                'trailing junk' => ['L' => [450, 460], 'R' => [2100, '2090px']],
+            ] as $why => $entry
+        ) {
+            $m = self::M;
+            $m['configs']['smith//5'] = $entry;
+            $this->assertNull(\Scroll::FreeSpace($this->scroll(), $m), $why);
+        }
+
+        // ...and a component with such an entry is skipped, not counted as an edge at 0.
+        $m = self::M;
+        $m['components']['border/knot'] = ['L' => ['x', 'y'], 'R' => ['z', 'w']];
+        $f = \Scroll::FreeSpace($this->custom(['ground' => 'linen', 'border' => 'knot', 'rankSet' => 'common']), $m);
+        $this->assertSame([500, 433], $f['L']);
+        $this->assertSame([2116, 2050], $f['R']);
+
+        // Numeric strings and floats from a hand-edited file are still numbers.
+        $m = self::M;
+        $m['configs']['smith//5'] = ['L' => ['450', 460.0], 'R' => [2100, '2090']];
+        $this->assertSame(['L' => [450, 460], 'R' => [2100, 2090]], array_intersect_key(\Scroll::FreeSpace($this->scroll(), $m), ['L' => 1, 'R' => 1]));
+    }
+
+    public function testTheInkGridRefusesARowWithATrailingNewlineOrAnyOtherJunk(): void
+    {
+        $good = array_fill(0, 32, 'deadbeef');
+        $was  = $this->swapInkFiles(null);
+        try {
+            $this->swapInkFiles(['t/x.svg' => ['grid' => ['w' => 32, 'h' => 32, 'rows' => $good]]]);
+            $this->assertSame('32x32:' . str_repeat('deadbeef', 32), \Scroll::InkGrid('t/x.svg'));
+
+            foreach (["deadbeef\n", "deadbeef\r\n", "deadbeef ", "DEADBEEF", "deadbee", "deadbeef0", "\ndeadbeef", "deadbeeg", ''] as $bad) {
+                $rows    = $good;
+                $rows[7] = $bad;
+                $this->swapInkFiles(['t/x.svg' => ['grid' => ['w' => 32, 'h' => 32, 'rows' => $rows]]]);
+                $this->assertSame('', \Scroll::InkGrid('t/x.svg'), 'row ' . json_encode($bad));
+            }
+        } finally {
+            $this->swapInkFiles($was);
+        }
+    }
+
     public function testTheAttributeFormat(): void
     {
         $this->assertSame('400,25|450,460|2100,2090', \Scroll::FreeSpaceAttr($this->scroll(), self::M));

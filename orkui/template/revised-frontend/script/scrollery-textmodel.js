@@ -37,7 +37,9 @@
      * Same inputs and outputs as the PHP. The last four keys echo the effective form
      * after any split — the title, flags and name that, fed back in, print the same
      * lines — and are what the composer prefills from, so `name` keeps its article
-     * ("the Wetlands"). scopeType is accepted for signature parity; no rule uses it.
+     * ("the Wetlands"). scopeType decides one thing: on a 'park' an empty title takes the
+     * Barony floor, as Scroll::BuildScroll does through ScrollText::IssuerTitle(), so a
+     * cleared title box previews what it prints.
      */
     function issuerLines(title, name, useThe, useOf, scopeType) {
         title = tidy(title);
@@ -47,6 +49,7 @@
 
         // "Inactive" is a park status that leaked into ork_parktitle.title on 5 parks.
         if (title.toLowerCase() === 'inactive') { title = ''; }
+        if (title === '' && scopeType === 'park') { title = 'Barony'; }
 
         // The stored kingdom shape: one whole phrase, no separate title or flags.
         // "and the" + title + "of" would print the rank word twice, so take it apart.

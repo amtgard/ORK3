@@ -198,6 +198,7 @@ final class ScrollLayoutUnderlaysTest extends TestCase
         $alphaMax = 120;   // GD alpha runs 0 (opaque) to 127 (transparent); below this is visible
         $clearTo  = 2400;  // the foot cluster's first pixel is at 2546 on every rank
         $seen     = 0;
+        $byPattern = [];
         foreach ($this->policy() as $order => $entries) {
             foreach ($entries as $entry) {
                 if (!is_array($entry)) {
@@ -211,6 +212,9 @@ final class ScrollLayoutUnderlaysTest extends TestCase
                 foreach ($masters as $file) {
                     $im = imagecreatefrompng(self::ART . '/' . $file);
                     $this->assertNotFalse($im, "{$order}: cannot read {$file}");
+                    // A palette PNG has no alpha channel in the pixel value: read it as truecolour so the
+                    // check below sees the transparency rather than a palette index.
+                    imagepalettetotruecolor($im);
                     $w = imagesx($im);
                     $h = min(imagesy($im), $clearTo);
                     $stray = [];
@@ -234,10 +238,19 @@ final class ScrollLayoutUnderlaysTest extends TestCase
                         . 'the art moved, so the window or the art needs revisiting'
                     );
                     $seen++;
+                    $byPattern[$entry['pattern']] = ($byPattern[$entry['pattern']] ?? 0) + 1;
                 }
             }
         }
         $this->assertGreaterThan(0, $seen, 'no windowed entry matched any PNG master; this test would pass vacuously');
+
+        // Count per pattern, so a renamed rank file cannot quietly drop out of the check: Garber's
+        // eleven rank plates are rank_0 to rank_9 (one pattern) and rank_10 (the other).
+        $this->assertSame(10, $byPattern['garber/rank_?.*'] ?? 0, 'garber rank_0 to rank_9 masters checked');
+        $this->assertSame(1, $byPattern['garber/rank_10.*'] ?? 0, 'garber rank_10 master checked');
+        $onDisk = array_values(array_filter($this->plates(), static fn (string $p): bool => preg_match('#^garber/rank_\d+\.png$#', $p) === 1));
+        $this->assertCount(11, $onDisk, 'the Garber set is eleven rank plates');
+        $this->assertSame(11, ($byPattern['garber/rank_?.*'] ?? 0) + ($byPattern['garber/rank_10.*'] ?? 0), 'every Garber rank master was checked');
     }
 
     public function testPatternsAreRelativeToTheScrollsDirectory(): void

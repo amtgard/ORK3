@@ -1500,6 +1500,16 @@ class Scroll extends Ork3
             return null;
         }
 
+        // intval() would turn a non-numeric value into 0 — a plausible edge — so one is
+        // treated as the entry being absent instead.
+        foreach ([$entry['L'], $entry['R']] as $edges) {
+            foreach ($edges as $edge) {
+                if (!is_int($edge) && !is_float($edge) && !(is_string($edge) && is_numeric($edge))) {
+                    return null;
+                }
+            }
+        }
+
         $left  = array_map('intval', array_values($entry['L']));
         $right = array_map('intval', array_values($entry['R']));
 
@@ -1652,7 +1662,7 @@ class Scroll extends Ork3
             return '';
         }
         foreach ($rows as $row) {
-            if (!is_string($row) || preg_match('/^[0-9a-f]{8}$/', $row) !== 1) {
+            if (!is_string($row) || preg_match('/^[0-9a-f]{8}\z/', $row) !== 1) {
                 return '';
             }
         }
@@ -1786,18 +1796,15 @@ class Scroll extends Ork3
         $isPark     = $parkName !== '';
         $issuerName = $isPark ? $parkName : ScrollText::RepairMojibake((string) ($awardRow['KingdomName'] ?? ''));
 
-        // "Inactive" is a park status that leaked into ork_parktitle.title on 5 parks,
-        // not a rank word. Read as empty it takes the Barony floor below, rather than
-        // printing "and the Inactive of". The model applies the same rule to a title an
-        // officer types into the composer, but the floor is ours, so it has to be
-        // decided before it.
-        $issuerTitle = ScrollText::RepairMojibake(trim((string) ($context['issuerTitle'] ?? '')));
-        if (strtolower($issuerTitle) === 'inactive') {
-            $issuerTitle = '';
-        }
-        if ($issuerTitle === '') {
-            $issuerTitle = $isPark ? 'Barony' : '';
-        }
+        // The title is the officer's or the park's own, corrected before the model runs:
+        // "Inactive" (a park status that leaked into ork_parktitle.title on 5 parks) reads
+        // as empty, and an empty park title takes the Barony floor rather than printing
+        // "and the Inactive of". ScrollText::IssuerTitle() holds both rules and the
+        // browser's issuerLines() applies the same two, so the preview agrees.
+        $issuerTitle = ScrollText::IssuerTitle(
+            ScrollText::RepairMojibake(trim((string) ($context['issuerTitle'] ?? ''))),
+            $isPark ? 'park' : 'kingdom'
+        );
 
         // PROVENANCE — who this certificate is for and which body issued it.
         //

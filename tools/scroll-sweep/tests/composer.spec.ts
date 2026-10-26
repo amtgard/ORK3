@@ -741,3 +741,29 @@ test('the print page: the Reason lines checkbox works when the URL carries face=
   expect(await page.evaluate(() => window.location.search)).not.toContain('lines=');
   await page.evaluate(() => localStorage.removeItem('sc-lines'));
 });
+
+/* ----------------------------------------------------------------------------------------------
+ * A park whose title box is cleared (or reads "Inactive") takes the Barony floor in the PREVIEW, as it does in print.
+ * ---------------------------------------------------------------------------------------------- */
+for (const title of ['', 'Inactive']) {
+  test(`preview matches print: a park with the issuer title ${JSON.stringify(title)} reads "the Barony of"`, async ({ page }) => {
+    await openComposer(page, 'park');
+    await page.fill('#sc-issuer-name', 'Wetlands');
+    await page.fill('#sc-issuer-title', title);
+    await page.setChecked('#sc-use-the', true);
+    await page.setChecked('#sc-use-of', true);
+    await previewIdle(page);
+    await composerSettled(page);
+    const preview = await readTop(page, '#sc-mount');
+    const url = await printUrlOf(page);
+
+    await page.goto(url, { waitUntil: 'load' });
+    await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+    await settle(page);
+    const print = await readTop(page, '.scroll-flow');
+
+    expect(print.roles.lead!.lines.join(' '), 'print').toContain('Barony');
+    expect(preview.roles.lead!.lines, 'the lead lines').toEqual(print.roles.lead!.lines);
+    expect(preview.roles.place!.lines, 'the place lines').toEqual(print.roles.place!.lines);
+  });
+}
