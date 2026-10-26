@@ -66,7 +66,8 @@ The table is in display order; the values are not.
 - `allowedTrackingStatuses('scroll')` is {0,1,2,3,4,5}. `allowedTrackingStatuses('regalia')` is {0,1,2,4,5}.
 - **One data backfill migration** (classified `PB`/`skip` in `tools/ork-db/manifests/migration-classification.json5`):
   - Regalia currently at 1 ("Needed") **with no regalia maker** becomes 0 (Pending): "Needed" with no artisan was always "nobody has it yet". Regalia at 1 with a maker stays 1, now Assigned.
-  - Scroll at 1 ("Custom Design") stays 1 (Assigned) whether or not a maker is recorded, because that label already meant "an artisan is making it". A scroll at Assigned with no maker recorded is flagged in the grid (below).
+  - A scroll at 1 ("Custom Design") **with no scroll maker** also becomes 0 (Pending). This is the user's decision. A scroll at 1 with a maker stays 1, which is now Assigned.
+  - In short, the backfill moves every `status = 1 AND maker IS NULL` row, for either type, to 0.
 - **Starting state (the user's decision):** every existing 0 stays 0 and reads as Pending, and new lines keep starting at 0 (Pending). On an open court, every untouched item therefore counts as needing an artisan until someone marks it Not Needed or assigns it. That is intended, and completed courts get no backfill.
 - **Release Feature Utilization report** (`class.Report.php` ~6690): its "tracked" counts are `status > 0` and its "done" counts are `= 2`. Both still mean what they meant ("moved off the default" / "complete"), so leave them alone.
 
@@ -123,7 +124,7 @@ Scrollery Print stays disabled where the award can't be printed, exactly as now.
 **"Needs an artisan"** means the item is Pending, Assigned or In Progress **and has no maker recorded**, on a line that isn't skipped. (My call, settled from the builder check.)
 
 - A Pending item that already has a maker isn't flagged. Picking Pending in the picker never clears a maker.
-- An Assigned or In Progress item with no maker *is* flagged. This covers the legacy Custom Design scroll with no maker, and a maker cleared while the item is In Progress.
+- An Assigned or In Progress item with no maker *is* flagged. This covers a maker cleared while the item is In Progress, and Assigned picked directly in the picker with no maker.
 - Scrollery Print, Complete and Not Needed are never flagged.
 - No status choice is blocked for lack of a maker. The grid flags it, and the server does not validate it.
 - A flagged item shows the existing left-edge accent, and its maker cell reads "Assign…" in the needs state.
@@ -169,7 +170,7 @@ Scrollery Print stays disabled where the award can't be printed, exactly as now.
 ## My calls (the user can override)
 
 - Number values: Pending 0, Assigned 1, Complete 2, Scrollery Print 3, In Progress 4, Not Needed 5. Keeping the old numbers avoids rewriting existing data.
-- Regalia "Needed" with a maker becomes Assigned; legacy Custom Design scrolls with no maker stay Assigned and are flagged.
+- Regalia "Needed" and scroll "Custom Design" lines that have a maker become Assigned. The user decided that both become Pending when they have no maker.
 - One colour per status shared by both types; regalia loses its red "Needed".
 - Not Needed is shown hatched and is last in the bar.
 - The bars replace the RP summary strip; the per-status filter chips give way to bar clicks.
