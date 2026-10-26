@@ -119,6 +119,10 @@ class Controller_Court extends Controller
         }
 
         $courtAwards  = $this->Court->get_court_awards($court_id, $uid);
+        // Per-line ScrolleryPrintable: the scroll dropdown disables Scrollery Print
+        // for an award Scrollery cannot print.
+        $this->load_model('Scrollery');
+        $courtAwards  = $this->Scrollery->flag_printable_court_lines($courtAwards, (int)$court['KingdomId']);
         // Non-award line items that share the running order with the awards.
         $courtNotes   = $this->Court->get_court_notes($court_id);
         $pendingRecs  = $this->Court->get_pending_recommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id, (string)$this->session->token);

@@ -55,20 +55,40 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
     ? ($court['ParkName'] ?? 'Park') . ' Courts'
     : ($court['KingdomName'] ?? 'Kingdom') . ' Courts';
 
-// QW#8: state-aware label for the scroll/regalia tracking glyphs (mirrors the JS
-// cpTrackLabel). Keeps data-tip + aria-label describing the CURRENT state, not color-alone.
+// The scroll/regalia status label (mirrors the JS cpTrackLabel — keep the two in step).
+// Scroll: 0 Not Tracked, 1 Custom Design, 2 Complete, 3 Scrollery Print (Court::SCROLL_*).
+// Regalia: 0 Not Tracked, 1 Needed, 2 Complete. The chip shows it as text, so state is
+// never carried by colour alone.
 if (!function_exists('cp_track_label')) {
     function cp_track_label($type, $status)
     {
-        $noun = $type === 'scroll' ? 'Scroll' : 'Regalia';
-        $s    = (int)$status;
+        $s = (int)$status;
         if ($s === 2) {
-            return $noun . ': done';
+            return 'Complete';
         }
         if ($s === 1) {
-            return $noun . ($type === 'scroll' ? ': in progress (needs printing)' : ': in progress (needs token)');
+            return $type === 'scroll' ? 'Custom Design' : 'Needed';
         }
-        return $noun . ': not tracked';
+        if ($s === 3 && $type === 'scroll') {
+            return 'Scrollery Print';
+        }
+        return 'Not Tracked';
+    }
+}
+// One scroll/regalia status chip (mirrors the JS cpTrackChipHtml). A real <button>, so
+// it is keyboard operable; the click opens the shared status picker (cpOpenTrackMenu).
+if (!function_exists('cp_track_chip')) {
+    function cp_track_chip($type, $status, $courtAwardId)
+    {
+        $lbl  = cp_track_label($type, $status);
+        $noun = $type === 'scroll' ? 'Scroll' : 'Regalia';
+        $icon = $type === 'scroll' ? 'fa-scroll' : 'fa-medal';
+        return '<button type="button" class="cp-chip" data-type="' . $type . '" data-status="' . (int)$status . '"'
+            . ' data-caid="' . (int)$courtAwardId . '" aria-haspopup="listbox" aria-expanded="false"'
+            . ' aria-label="' . htmlspecialchars($noun . ': ' . $lbl) . '" onclick="cpOpenTrackMenu(event, this)">'
+            . '<i class="fas ' . $icon . ' cp-chip-icon" aria-hidden="true"></i>'
+            . '<span class="cp-chip-label">' . htmlspecialchars($lbl) . '</span>'
+            . '<i class="fas fa-caret-down cp-chip-caret" aria-hidden="true"></i></button>';
     }
 }
 ?>
@@ -553,9 +573,12 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
 
 .cp-status-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13px; color:#4a5568; background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 14px; margin-bottom:14px; }
 .cp-status-sep { color:#cbd5e0; }
-.cp-stat-ready { color:#276749; font-weight:600; }
-.cp-stat-wip   { color:#c05621; font-weight:600; }
-.cp-stat-none  { color:#718096; }
+/* Status-bar tracking counts, one class per state — the chip colours. */
+.cp-stat-print  { color:#2b6cb0; font-weight:600; }
+.cp-stat-custom { color:#6b46c1; font-weight:600; }
+.cp-stat-need   { color:#c53030; font-weight:600; }
+.cp-stat-ready  { color:#276749; font-weight:600; }
+.cp-stat-none   { color:#718096; }
 /* Run-mode sticky progress/sync bar — phone only; shown in the ≤600px block. */
 .cp-mobile-runbar { display: none; }
 
@@ -572,9 +595,9 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
    ============================================================ */
 
 /* Density tokens — applied at .cp-award-list level */
-.cp-density-cozy        { --cp-row-py: 11px; --cp-row-px: 14px; --cp-row-font: 14px; --cp-row-num: 13px; --cp-track-size: 24px; --cp-track-font: 13px; }
-.cp-density-comfortable { --cp-row-py: 6px;  --cp-row-px: 12px; --cp-row-font: 13px; --cp-row-num: 12px; --cp-track-size: 22px; --cp-track-font: 12px; }
-.cp-density-compact     { --cp-row-py: 2px;  --cp-row-px: 10px; --cp-row-font: 12px; --cp-row-num: 11px; --cp-track-size: 18px; --cp-track-font: 10px; }
+.cp-density-cozy        { --cp-row-py: 11px; --cp-row-px: 14px; --cp-row-font: 14px; --cp-row-num: 13px; --cp-chip-font: 11px;   --cp-chip-py: 3px; --cp-chip-gap: 4px; }
+.cp-density-comfortable { --cp-row-py: 6px;  --cp-row-px: 12px; --cp-row-font: 13px; --cp-row-num: 12px; --cp-chip-font: 10.5px; --cp-chip-py: 2px; --cp-chip-gap: 3px; }
+.cp-density-compact     { --cp-row-py: 2px;  --cp-row-px: 10px; --cp-row-font: 12px; --cp-row-num: 11px; --cp-chip-font: 10px;   --cp-chip-py: 1px; --cp-chip-gap: 2px; }
 
 /* Toolbar above the spreadsheet */
 .cp-list-toolbar {
@@ -620,17 +643,17 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
 .cp-list-toolbar + .cp-award-list { border-radius: 0 0 8px 8px; border-top: none; }
 
 /* ----- Grid template for header + rows (spreadsheet alignment) -----
-   Columns: drag/order | num | recipient | award | type | flags | scroll | regalia | status | chevron
+   Columns: drag/order | num | recipient | award | type | flags | scroll/regalia chips | status | chevron
 */
 .cp-row-grid {
     display: grid;
-    grid-template-columns: 28px 32px minmax(110px, 1.3fr) minmax(160px, 1.6fr) 78px 50px 30px 30px 96px 22px;
+    grid-template-columns: 28px 32px minmax(110px, 1.3fr) minmax(160px, 1.6fr) 78px 50px 118px 96px 22px;
     align-items: center;
     column-gap: 8px;
 }
 .cp-list-published .cp-row-grid {
     /* Wider status column to fit Grant / Skip buttons */
-    grid-template-columns: 28px 32px minmax(110px, 1.3fr) minmax(160px, 1.6fr) 78px 50px 30px 30px 178px 22px;
+    grid-template-columns: 28px 32px minmax(110px, 1.3fr) minmax(160px, 1.6fr) 78px 50px 118px 178px 22px;
 }
 
 /* Header row — sticky, label-style */
@@ -648,8 +671,6 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
     text-overflow: ellipsis;
 }
 .cp-list-header .cp-hdr-num     { text-align: right; padding-right: 2px; }
-.cp-list-header .cp-hdr-scroll,
-.cp-list-header .cp-hdr-regalia { text-align: center; }
 .cp-list-header .cp-hdr-status  { text-align: left; }
 
 /* The list itself becomes the spreadsheet container */
@@ -689,19 +710,86 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
 .cp-cell-type    { display: flex; align-items: center; }
 .cp-cell-type > * { width: 100%; text-align: center; }
 .cp-cell-flags   { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; overflow: hidden; }
-.cp-cell-scroll, .cp-cell-regalia { display: flex; align-items: center; justify-content: center; }
+.cp-cell-tracking { display: flex; flex-direction: column; align-items: flex-start; gap: var(--cp-chip-gap, 3px); }
 .cp-cell-status  { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 .cp-cell-chevron { color: #cbd5e0; font-size: 11px; text-align: center; display: flex; align-items: center; justify-content: center; }
 
-/* Tracking icons — scale by density */
-.cp-density-cozy        .cp-tracking-icon,
-.cp-density-comfortable .cp-tracking-icon,
-.cp-density-compact     .cp-tracking-icon {
-    width: var(--cp-track-size, 22px); height: var(--cp-track-size, 22px);
-    line-height: var(--cp-track-size, 22px);
-    font-size: var(--cp-track-font, 12px);
-    margin-left: 0;
+/* ----- Scroll / regalia status chips -----
+   A chip is a <button>: button.cp-chip (0,1,1) restates every box property so the UA
+   and any element-level button rule cannot reshape it. Sized by the density tokens.
+   Status colours: Not Tracked grey, Scrollery Print blue, Custom Design purple,
+   Needed red, Complete green. The label carries the state; colour only echoes it. */
+button.cp-chip, .cp-chip {
+    -webkit-appearance: none; appearance: none;
+    display: inline-flex; align-items: center; gap: 4px;
+    box-sizing: border-box; max-width: 100%; min-width: 0; min-height: 0;
+    margin: 0; padding: var(--cp-chip-py, 2px) 7px var(--cp-chip-py, 2px) 6px;
+    border: 1px solid #e2e8f0; border-radius: 10px;
+    background: #edf2f7; color: #4a5568; box-shadow: none;
+    font-family: inherit; font-size: var(--cp-chip-font, 10.5px); font-weight: 600;
+    line-height: 1.25; letter-spacing: 0; text-transform: none; text-align: left;
+    white-space: nowrap; cursor: pointer;
+    transition: border-color .12s, box-shadow .12s;
 }
+.cp-chip .cp-chip-icon  { font-size: .95em; opacity: .85; flex-shrink: 0; }
+.cp-chip .cp-chip-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cp-chip .cp-chip-caret { font-size: .85em; opacity: .55; flex-shrink: 0; }
+button.cp-chip:hover { border-color: currentColor; }
+button.cp-chip:focus-visible, button.cp-chip[aria-expanded="true"] { outline: none; box-shadow: 0 0 0 2px #90cdf4; }
+button.cp-chip[aria-busy="true"] { opacity: .6; cursor: progress; }
+.cp-chip[data-status="3"]                       { background: #ebf4ff; color: #2b6cb0; border-color: #bee3f8; }
+.cp-chip[data-type="scroll"][data-status="1"]   { background: #faf5ff; color: #6b46c1; border-color: #e9d8fd; }
+.cp-chip[data-type="regalia"][data-status="1"]  { background: #fff5f5; color: #c53030; border-color: #fed7d7; }
+.cp-chip[data-status="2"]                       { background: #f0fff4; color: #276749; border-color: #c6f6d5; }
+html[data-theme="dark"] button.cp-chip, html[data-theme="dark"] .cp-chip { background: #2d3748; color: #cbd5e0; border-color: #4a5568; }
+html[data-theme="dark"] button.cp-chip:focus-visible,
+html[data-theme="dark"] button.cp-chip[aria-expanded="true"] { box-shadow: 0 0 0 2px #4299e1; }
+html[data-theme="dark"] .cp-chip[data-status="3"]                      { background: rgba(66,153,225,.16);  color: #90cdf4; border-color: rgba(144,205,244,.35); }
+html[data-theme="dark"] .cp-chip[data-type="scroll"][data-status="1"]  { background: rgba(159,122,234,.18); color: #d6bcfa; border-color: rgba(214,188,250,.35); }
+html[data-theme="dark"] .cp-chip[data-type="regalia"][data-status="1"] { background: rgba(245,101,101,.16); color: #feb2b2; border-color: rgba(254,178,178,.35); }
+html[data-theme="dark"] .cp-chip[data-status="2"]                      { background: rgba(72,187,120,.16);  color: #9ae6b4; border-color: rgba(154,230,180,.35); }
+/* A Scrollery Print line has no scroll maker; its expand panel hides the field. */
+.cp-scroll-maker-field[hidden] { display: none; }
+/* About-panel legend swatches: the same chip, inert. */
+.cp-chip.cp-chip-demo { cursor: default; pointer-events: none; }
+
+/* The one shared status picker. position:fixed and measured from the chip
+   (cpOpenTrackMenu), like .cp-ac-dropdown, so the overflow-x:auto award list
+   cannot clip it. */
+.cp-track-menu {
+    position: fixed; z-index: 1100; width: 214px; box-sizing: border-box;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.14); padding: 4px;
+    font-size: 12px; color: #2d3748; text-align: left;
+}
+.cp-track-menu[hidden] { display: none; }
+.cp-track-menu-head { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #a0aec0; padding: 4px 8px 2px; }
+.cp-track-opt { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 4px; cursor: pointer; outline: none; }
+.cp-track-opt:hover, .cp-track-opt:focus { background: #edf2f7; }
+.cp-track-opt:focus-visible { box-shadow: inset 0 0 0 2px #90cdf4; }
+.cp-track-opt-text { flex: 1 1 auto; min-width: 0; }
+.cp-track-opt-text small { display: block; color: #718096; font-size: 10.5px; margin-top: 1px; }
+.cp-track-opt-current .cp-track-opt-text { font-weight: 700; }
+.cp-track-opt-check { color: #2b6cb0; font-size: 11px; margin-top: 2px; visibility: hidden; }
+.cp-track-opt-current .cp-track-opt-check { visibility: visible; }
+.cp-track-opt[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.cp-track-opt[aria-disabled="true"]:hover { background: none; }
+.cp-track-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; background: #a0aec0; }
+.cp-track-dot[data-status="3"]                      { background: #3182ce; }
+.cp-track-dot[data-type="scroll"][data-status="1"]  { background: #805ad5; }
+.cp-track-dot[data-type="regalia"][data-status="1"] { background: #e53e3e; }
+.cp-track-dot[data-status="2"]                      { background: #38a169; }
+html[data-theme="dark"] .cp-track-menu { background: #1f2733; border-color: #2d3748; color: #e2e8f0; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+html[data-theme="dark"] .cp-track-menu-head { color: #718096; }
+html[data-theme="dark"] .cp-track-opt:hover, html[data-theme="dark"] .cp-track-opt:focus { background: #2d3748; }
+html[data-theme="dark"] .cp-track-opt[aria-disabled="true"]:hover { background: none; }
+html[data-theme="dark"] .cp-track-opt-text small { color: #a0aec0; }
+html[data-theme="dark"] .cp-track-opt-check { color: #90cdf4; }
+html[data-theme="dark"] .cp-track-dot { background: #718096; }
+html[data-theme="dark"] .cp-track-dot[data-status="3"]                      { background: #63b3ed; }
+html[data-theme="dark"] .cp-track-dot[data-type="scroll"][data-status="1"]  { background: #b794f4; }
+html[data-theme="dark"] .cp-track-dot[data-type="regalia"][data-status="1"] { background: #fc8181; }
+html[data-theme="dark"] .cp-track-dot[data-status="2"]                      { background: #68d391; }
 
 /* Reorder arrows compact in spreadsheet */
 .cp-row-grid .cp-reorder-btns { gap: 0; }
@@ -824,11 +912,9 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
 .cp-about-list li { margin-bottom: 4px; }
 .cp-about-p { margin: 0 0 12px; }
 .cp-about-track-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
-.cp-about-track-row .cp-tracking-demo { flex-shrink: 0; pointer-events: none; margin-top: 1px; }
+.cp-about-track-type { flex-shrink: 0; min-width: 52px; }
+.cp-about-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .cp-about-legend { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; font-size: 11px; color: #718096; margin-top: 4px; }
-.cp-legend-gray   { font-weight: 700; color: #a0aec0; }
-.cp-legend-red    { font-weight: 700; color: #e53e3e; }
-.cp-legend-green  { font-weight: 700; color: #38a169; }
 
 /* Status pills used in About section (workflow chain + grant/skip examples) */
 .cp-pill { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; }
@@ -866,6 +952,10 @@ html[data-theme="dark"] .cp-body.cp-sidebar-collapsed .cp-sidebar-collapse-btn {
 html[data-theme="dark"] .cp-status-bar { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
 html[data-theme="dark"] .cp-status-sep { color: #4a5568; }
 html[data-theme="dark"] .cp-stat-none  { color: #718096; }
+html[data-theme="dark"] .cp-stat-print  { color: #90cdf4; }
+html[data-theme="dark"] .cp-stat-custom { color: #d6bcfa; }
+html[data-theme="dark"] .cp-stat-need   { color: #feb2b2; }
+html[data-theme="dark"] .cp-stat-ready  { color: #9ae6b4; }
 html[data-theme="dark"] .cp-section-header h2 { color: #e2e8f0; }
 html[data-theme="dark"] .cp-section-header h2 i { color: #a0aec0 !important; }
 html[data-theme="dark"] #cp-award-count { color: #718096 !important; }
@@ -1180,39 +1270,25 @@ html[data-theme="dark"] .cp-script-note-title { color: #e2e8f0; }
     .cp-cell-type      { order: 6; flex: 0 0 auto; }
     .cp-cell-type > *  { width: auto; }
     .cp-cell-flags     { order: 7; flex: 0 0 auto; }
-    /* Scroll/regalia readiness gets its own full-width row so the glyph can carry a
-       visible caption — hover is not available to state it here. */
-    .cp-cell-scroll    { order: 8; flex: 1 1 100%; justify-content: flex-start; margin-left: 0; }
-    .cp-cell-regalia   { order: 9; flex: 1 1 100%; justify-content: flex-start; }
+    /* Scroll/regalia chips get their own full-width row, side by side, each a roomy
+       tap target. */
+    .cp-cell-tracking  { order: 8; flex: 1 1 100%; flex-direction: row; align-items: stretch; gap: 8px; }
     /* Status + actions span the full card width, stacked */
     .cp-cell-status    { order: 10; flex: 1 1 100%; flex-direction: column; align-items: stretch; gap: 8px; }
     .cp-cell-status .cp-aw-badge   { align-self: flex-start; }
     .cp-cell-status .cp-grant-static { align-self: flex-start; }
     .cp-cell-status .cp-grant-actions { display: flex; width: 100%; gap: 8px; justify-content: stretch; }
     .cp-cell-status .cp-grant-actions > button { flex: 1 1 auto; justify-content: center; min-height: 44px; font-size: 14px; padding: 10px 12px; }
-    /* Reachable, roomy tracking + reorder on the phone. Both were losing to the
+    /* Reachable, roomy chips + reorder on the phone. Both were losing to the
        .cp-density-* rules, which are more specific — so drive the density TOKENS, and
        match .cp-density-cozy .cp-row-grid .cp-reorder-btn (0,3,0) for the arrows. */
-    .cp-page .cp-award-list { --cp-track-size: 44px; --cp-track-font: 18px; }
+    .cp-page .cp-award-list { --cp-chip-font: 13px; --cp-chip-py: 0px; }
     .cp-page .cp-row-grid .cp-reorder-btns { gap: 8px; }
     .cp-page .cp-row-grid .cp-reorder-btn { width: 44px; height: 36px; font-size: 13px; min-height: 36px; }
-    /* Glyph + caption are ONE ≥44px tap target: the icon becomes a labelled pill. */
-    .cp-page .cp-cell-scroll .cp-tracking-icon,
-    .cp-page .cp-cell-regalia .cp-tracking-icon {
-        display: inline-flex; align-items: center; gap: 8px;
-        width: auto; min-height: 44px; padding: 0 14px;
-        border-radius: 22px; line-height: 1; margin-left: 0;
+    .cp-page .cp-cell-tracking button.cp-chip {
+        flex: 1 1 0; justify-content: center; gap: 8px;
+        min-height: 44px; padding: 0 12px; border-radius: 22px;
     }
-    .cp-cell-scroll .cp-track-label,
-    .cp-cell-regalia .cp-track-label { display: inline; font-size: 13px; font-weight: 600; }
-    /* #ccc under white text is unreadable once it carries words. */
-    .cp-page .cp-cell-scroll .cp-tracking-icon[data-status="0"],
-    .cp-page .cp-cell-regalia .cp-tracking-icon[data-status="0"] { background-color: #718096; }
-    html[data-theme="dark"] .cp-page .cp-cell-scroll .cp-tracking-icon[data-status="0"],
-    html[data-theme="dark"] .cp-page .cp-cell-regalia .cp-tracking-icon[data-status="0"] { background-color: #2d3748; color: #cbd5e0; }
-    /* The corner state chip is redundant once the state is spelled out. */
-    .cp-cell-scroll .cp-tracking-icon::after,
-    .cp-cell-regalia .cp-tracking-icon::after { display: none; }
     /* Compact the toolbar so it doesn't wrap awkwardly */
     .cp-list-toolbar { gap: 6px; }
 
@@ -1387,13 +1463,29 @@ html[data-theme="dark"] #cp-mobile-runbar .cp-mrb-name { color: #e2e8f0; }
 <?php endif; ?>
 
 <?php
-$_scroll_counts  = [0=>0, 1=>0, 2=>0];
-$_regalia_counts = [0=>0, 1=>0, 2=>0];
+// Tracking counts for the status bar, in display order (work outstanding first).
+// cpRefreshStatusBar() recounts from the chips and rewrites only the [data-sb] numbers.
+$_scroll_counts  = [3=>0, 1=>0, 2=>0, 0=>0];
+$_regalia_counts = [1=>0, 2=>0, 0=>0];
 foreach ($courtAwards ?? [] as $_ca) {
-    $_scroll_counts[min(2, max(0, (int)($_ca['ScrollStatus'] ?? 0)))]++;
-    $_regalia_counts[min(2, max(0, (int)($_ca['RegaliaStatus'] ?? 0)))]++;
+    $_ss = (int)($_ca['ScrollStatus'] ?? 0);
+    $_rs = (int)($_ca['RegaliaStatus'] ?? 0);
+    $_scroll_counts[isset($_scroll_counts[$_ss]) ? $_ss : 0]++;
+    $_regalia_counts[isset($_regalia_counts[$_rs]) ? $_rs : 0]++;
 }
 $_total_awards = count($courtAwards ?? []);
+$_stat_class = [
+    'scroll'  => [3 => 'cp-stat-print', 1 => 'cp-stat-custom', 2 => 'cp-stat-ready', 0 => 'cp-stat-none'],
+    'regalia' => [1 => 'cp-stat-need', 2 => 'cp-stat-ready', 0 => 'cp-stat-none'],
+];
+$_stat_html = function ($type, array $counts) use ($_stat_class) {
+    $parts = [];
+    foreach ($counts as $st => $n) {
+        $parts[] = '<span class="' . $_stat_class[$type][$st] . '"><span data-sb="' . $type . '-' . $st . '">' . (int)$n . '</span> '
+            . htmlspecialchars(cp_track_label($type, $st)) . '</span>';
+    }
+    return implode(', ', $parts);
+};
 ?>
 
 <?php if (!$error): ?>
@@ -1401,9 +1493,9 @@ $_total_awards = count($courtAwards ?? []);
 <div class="cp-status-bar">
     <span id="cp-sb-total"><?= $_total_awards ?> award<?= $_total_awards !== 1 ? 's' : '' ?></span>
     <span class="cp-status-sep"> &middot; </span>
-    <span class="cp-sb-scroll">Scrolls: <span class="cp-stat-ready"><?= $_scroll_counts[2] ?> ready</span>, <span class="cp-stat-wip"><?= $_scroll_counts[1] ?> in progress</span>, <span class="cp-stat-none"><?= $_scroll_counts[0] ?> not started</span></span>
+    <span class="cp-sb-scroll">Scrolls: <?= $_stat_html('scroll', $_scroll_counts) ?></span>
     <span class="cp-status-sep"> &middot; </span>
-    <span class="cp-sb-regalia">Regalia: <span class="cp-stat-ready"><?= $_regalia_counts[2] ?> ready</span>, <span class="cp-stat-wip"><?= $_regalia_counts[1] ?> in progress</span>, <span class="cp-stat-none"><?= $_regalia_counts[0] ?> not started</span></span>
+    <span class="cp-sb-regalia">Regalia: <?= $_stat_html('regalia', $_regalia_counts) ?></span>
     <?php if (in_array($courtSt, ['published','complete'])): ?>
     <span class="cp-status-sep"> &middot; </span>
     <span class="cp-sb-progress" id="cp-sb-progress"></span>
@@ -1482,19 +1574,19 @@ $_total_awards = count($courtAwards ?? []);
                     <p class="cp-about-p">Click <strong>Publish</strong> when the list is final. During court, use the <span class="cp-pill cp-pill-grant"><i class="fas fa-check"></i> Grant</span> and <span class="cp-pill cp-pill-skip"><i class="fas fa-forward"></i> Skip</span> buttons on each award to track progress in real time.</p>
 
                     <div class="cp-about-section">Scroll &amp; Regalia Tracking</div>
-                    <p class="cp-about-p" style="margin-bottom:8px">Each row has two icons you can click to cycle status:</p>
+                    <p class="cp-about-p" style="margin-bottom:8px">Each row has two status chips. Click one to choose its state:</p>
+                    <?php foreach (['scroll' => [0, 3, 1, 2], 'regalia' => [0, 1, 2]] as $_lgType => $_lgStates): ?>
                     <div class="cp-about-track-row">
-                        <span class="cp-tracking-icon cp-tracking-demo" data-status="1"><i class="fas fa-print"></i></span>
-                        <span><strong>Scroll</strong> &mdash; needs to be printed.</span>
+                        <span class="cp-about-track-type"><strong><?= $_lgType === 'scroll' ? 'Scroll' : 'Regalia' ?></strong></span>
+                        <span class="cp-about-chips">
+                            <?php foreach ($_lgStates as $_lgSt): ?>
+                            <span class="cp-chip cp-chip-demo" data-type="<?= $_lgType ?>" data-status="<?= $_lgSt ?>"><i class="fas <?= $_lgType === 'scroll' ? 'fa-scroll' : 'fa-medal' ?> cp-chip-icon" aria-hidden="true"></i><span class="cp-chip-label"><?= htmlspecialchars(cp_track_label($_lgType, $_lgSt)) ?></span></span>
+                            <?php endforeach; ?>
+                        </span>
                     </div>
-                    <div class="cp-about-track-row">
-                        <span class="cp-tracking-icon cp-tracking-demo" data-status="1"><i class="fas fa-medal"></i></span>
-                        <span><strong>Regalia</strong> &mdash; needs a physical token.</span>
-                    </div>
+                    <?php endforeach; ?>
                     <div class="cp-about-legend">
-                        <span class="cp-legend-gray">● gray</span> not tracked &nbsp;&rarr;&nbsp;
-                        <span class="cp-legend-red">● red</span> needs doing &nbsp;&rarr;&nbsp;
-                        <span class="cp-legend-green">● green</span> done
+                        <strong>Scrollery Print</strong> goes in the bulk print. <strong>Custom Design</strong> means an artisan is making it.
                     </div>
 
                 </div>
@@ -1572,8 +1664,7 @@ $_total_awards = count($courtAwards ?? []);
             <div class="cp-hdr-award">Award</div>
             <div class="cp-hdr-type">Type</div>
             <div class="cp-hdr-flags">Flags</div>
-            <div class="cp-hdr-scroll" data-tip="Scroll"><i class="fas fa-print"></i></div>
-            <div class="cp-hdr-regalia" data-tip="Regalia"><i class="fas fa-medal"></i></div>
+            <div class="cp-hdr-tracking">Scroll / Regalia</div>
             <div class="cp-hdr-status">Status</div>
             <div class="cp-hdr-chev"></div>
         </div>
@@ -1674,11 +1765,9 @@ $_total_awards = count($courtAwards ?? []);
                     <?php if ($aw['PassToLocal']): ?><span class="cp-flag-local" data-tip="Pass to Local — this award will be handed down to the recipient's home park to grant at their court."><i class="fas fa-arrow-down"></i></span><?php endif; ?>
                     <?php if ($aw['RecommendationsId']): ?><span class="cp-flag-rec" data-tip="This award came from a submitted recommendation."><i class="fas fa-star"></i></span><?php endif; ?>
                 </div>
-                <div class="cp-cell cp-cell-scroll">
-                    <span class="cp-tracking-icon" role="button" tabindex="0" data-tip="<?= htmlspecialchars(cp_track_label('scroll', $aw['ScrollStatus'])) ?>" aria-label="<?= htmlspecialchars(cp_track_label('scroll', $aw['ScrollStatus'])) ?>" data-type="scroll" data-status="<?= (int)$aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)"><i class="fas fa-print"></i><span class="cp-track-label"><?= htmlspecialchars(cp_track_label('scroll', $aw['ScrollStatus'])) ?></span></span>
-                </div>
-                <div class="cp-cell cp-cell-regalia">
-                    <span class="cp-tracking-icon" role="button" tabindex="0" data-tip="<?= htmlspecialchars(cp_track_label('regalia', $aw['RegaliaStatus'])) ?>" aria-label="<?= htmlspecialchars(cp_track_label('regalia', $aw['RegaliaStatus'])) ?>" data-type="regalia" data-status="<?= (int)$aw['RegaliaStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'regalia', this)"><i class="fas fa-medal"></i><span class="cp-track-label"><?= htmlspecialchars(cp_track_label('regalia', $aw['RegaliaStatus'])) ?></span></span>
+                <div class="cp-cell cp-cell-tracking">
+                    <?= cp_track_chip('scroll', $aw['ScrollStatus'], $aw['CourtAwardId']) ?>
+                    <?= cp_track_chip('regalia', $aw['RegaliaStatus'], $aw['CourtAwardId']) ?>
                 </div>
                 <div class="cp-cell cp-cell-status">
                     <span class="cp-aw-badge" style="background:<?= $abg ?>;color:<?= $aclr ?>"><?= $albl ?></span>
@@ -1805,7 +1894,9 @@ $_total_awards = count($courtAwards ?? []);
 
                 <!-- Scroll / Regalia Makers -->
                 <div class="cp-expand-grid" style="margin-top:8px">
-                    <div>
+                    <?php /* Hidden while the line is Scrollery Print: the system prints it, so
+                             there is no maker (the server clears scroll_maker_id). */ ?>
+                    <div class="cp-scroll-maker-field" id="cp-scroll-maker-field-<?= (int)$aw['CourtAwardId'] ?>"<?= (int)$aw['ScrollStatus'] === 3 ? ' hidden' : '' ?>>
                         <div class="cp-expand-label">Scroll Maker</div>
                         <div style="position:relative">
                             <input type="text" id="cp-scroll-maker-text-<?= (int)$aw['CourtAwardId'] ?>"
@@ -2874,7 +2965,8 @@ $_total_awards = count($courtAwards ?? []);
     var cpPrintingListActive = false;
 
     // The Printing List is a temporary VIEW: it physically reorders the DOM (scroll-
-    // tracked rows moved to the end, red before green) and display:none's the rest.
+    // tracked rows moved to the end, work outstanding before Complete) and
+    // display:none's the rest.
     // cpSaveOrder() serialises every .cp-award-row including the hidden ones, so a
     // reorder saved while this view is active would overwrite the court's real
     // running order with the filtered arrangement — rows the officer never saw,
@@ -2896,18 +2988,19 @@ $_total_awards = count($courtAwards ?? []);
             // Snapshot current DOM order so we can restore it
             cpPrintingListSavedOrder = cpLineRows().map(cpLineKey);
 
-            // Get all rows with their scroll status
+            // Bucket rows by scroll status, keeping running order within each bucket:
+            // Scrollery Print, then Custom Design (work outstanding), then Complete.
+            // Not Tracked rows are hidden.
             var rows = Array.from(list.querySelectorAll('.cp-award-row'));
-            var withScroll = [], noScroll = [];
+            var buckets = {3: [], 1: [], 2: []};
             rows.forEach(function(row) {
-                var icon = row.querySelector('.cp-tracking-icon[data-type="scroll"]');
-                var st = icon ? parseInt(icon.dataset.status, 10) : 0;
-                if (st === 1) withScroll.unshift(row);       // red — needs printing → top
-                else if (st === 2) withScroll.push(row);     // green — done → after red
-                else noScroll.push(row);                     // gray — not tracked
+                var chip = row.querySelector('.cp-chip[data-type="scroll"]');
+                var st = chip ? parseInt(chip.dataset.status, 10) : 0;
+                if (buckets[st]) buckets[st].push(row);
             });
+            var withScroll = buckets[3].concat(buckets[1], buckets[2]);
 
-            // Show only scroll-tracked rows, sorted red then green. A note has no scroll.
+            // Show only scroll-tracked rows, outstanding first. A note has no scroll.
             cpLineRows().forEach(function(r) { r.style.display = 'none'; });
             withScroll.forEach(function(r) { r.style.display = ''; list.appendChild(r); });
 
@@ -2916,7 +3009,7 @@ $_total_awards = count($courtAwards ?? []);
                 var hint = document.createElement('div');
                 hint.className = 'cp-award-empty';
                 hint.id = 'cp-print-empty';
-                hint.innerHTML = '<i class="fas fa-print" style="font-size:24px;opacity:.3;margin-bottom:8px;display:block"></i>No awards have scroll tracking set. Click the <i class="fas fa-print"></i> icon on any row to mark it.';
+                hint.innerHTML = '<i class="fas fa-scroll" style="font-size:24px;opacity:.3;margin-bottom:8px;display:block"></i>No awards have scroll tracking set. Click the <strong>Scroll</strong> chip on any row to choose a status.';
                 list.appendChild(hint);
             }
         } else {
@@ -2936,71 +3029,241 @@ $_total_awards = count($courtAwards ?? []);
         }
     };
 
-    // QW#8: state-aware label for the tracking glyphs (mirrors PHP cp_track_label) so the
-    // scroll/regalia state is conveyed by text/aria too, not color alone.
+    // The scroll/regalia status label (mirrors PHP cp_track_label — keep the two in step).
+    // Scroll: 0 Not Tracked, 1 Custom Design, 2 Complete, 3 Scrollery Print.
+    // Regalia: 0 Not Tracked, 1 Needed, 2 Complete.
     function cpTrackLabel(type, status) {
-        var noun = type === 'scroll' ? 'Scroll' : 'Regalia';
         var s = parseInt(status, 10) || 0;
-        if (s === 2) return noun + ': done';
-        if (s === 1) return noun + (type === 'scroll' ? ': in progress (needs printing)' : ': in progress (needs token)');
-        return noun + ': not tracked';
+        if (s === 2) return 'Complete';
+        if (s === 1) return type === 'scroll' ? 'Custom Design' : 'Needed';
+        if (s === 3 && type === 'scroll') return 'Scrollery Print';
+        return 'Not Tracked';
+    }
+    // The picker's states per type, in menu order, and the one-line hints under two.
+    var CP_TRACK_STATES = { scroll: [0, 3, 1, 2], regalia: [0, 1, 2] };
+    var CP_TRACK_HINTS  = { 'scroll-3': 'Goes in the bulk print', 'scroll-1': 'An artisan is making it' };
+    var CP_SCROLLERY_NO_PRINT = "Scrollery can't print this award";
+
+    function cpTrackNoun(type) { return type === 'scroll' ? 'Scroll' : 'Regalia'; }
+
+    // One status chip (mirrors PHP cp_track_chip).
+    function cpTrackChipHtml(type, status, caid) {
+        var s   = parseInt(status, 10) || 0;
+        var lbl = cpTrackLabel(type, s);
+        return '<button type="button" class="cp-chip" data-type="' + type + '" data-status="' + s + '" data-caid="' + (parseInt(caid, 10) || 0) + '"' +
+            ' aria-haspopup="listbox" aria-expanded="false" aria-label="' + esc(cpTrackNoun(type) + ': ' + lbl) + '" onclick="cpOpenTrackMenu(event, this)">' +
+            '<i class="fas ' + (type === 'scroll' ? 'fa-scroll' : 'fa-medal') + ' cp-chip-icon" aria-hidden="true"></i>' +
+            '<span class="cp-chip-label">' + esc(lbl) + '</span>' +
+            '<i class="fas fa-caret-down cp-chip-caret" aria-hidden="true"></i></button>';
     }
 
-    // Single writer for a tracking glyph: status + tooltip + aria-label + the visible
-    // stacked-card caption, so the touch label can never drift from the state.
+    // Single writer for a chip element: status + visible label + aria-label, so the text
+    // can never drift from the state. cpSetLineTracking() is the line-level writer.
     function cpApplyTrackState(el, type, status) {
         if (!el) return;
-        el.dataset.status = status;
-        var lbl = cpTrackLabel(type, status);
-        el.dataset.tip = lbl;
-        el.setAttribute('aria-label', lbl);
-        var lblEl = el.querySelector('.cp-track-label');
+        var s   = parseInt(status, 10) || 0;
+        var lbl = cpTrackLabel(type, s);
+        el.dataset.status = s;
+        el.setAttribute('aria-label', cpTrackNoun(type) + ': ' + lbl);
+        var lblEl = el.querySelector('.cp-chip-label');
         if (lblEl) lblEl.textContent = lbl;
     }
+    window.cpApplyTrackState = cpApplyTrackState;
 
-    window.cpUpdateTracking = function(event, caid, type, element) {
-        event.stopPropagation();
+    // A Scrollery Print line has no scroll maker (the server clears scroll_maker_id), so
+    // the expand panel hides the field and clears it locally — a later Save cannot post
+    // the old maker back. Any other state shows it again.
+    function cpSyncScrollMakerField(caid, status) {
+        var isScrollery = (parseInt(status, 10) || 0) === 3;
+        var field = gid('cp-scroll-maker-field-' + caid);
+        if (field) field.hidden = isScrollery;
+        if (!isScrollery) return;
+        var t = gid('cp-scroll-maker-text-' + caid); if (t) t.value = '';
+        var h = gid('cp-scroll-maker-id-' + caid);   if (h) h.value = '0';
+        var a = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
+        if (a) { a.ScrollMakerId = null; a.ScrollMakerPersona = ''; }
+    }
+
+    // Line-level writer for a saved scroll/regalia status: chip, client model, RowVersion
+    // (when given), Scroll Maker field and status bar. The picker uses it on success; any
+    // other write that moves a line's status should go through it too.
+    function cpSetLineTracking(caid, type, status, rowVersion) {
+        var s   = parseInt(status, 10) || 0;
+        var row = gid('cp-aw-' + caid);
+        if (row) cpApplyTrackState(row.querySelector('.cp-chip[data-type="' + type + '"]'), type, s);
+        var a = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
+        if (a) { if (type === 'scroll') a.ScrollStatus = s; else a.RegaliaStatus = s; }
+        if (rowVersion != null) cpSetRowVersion(caid, rowVersion);
+        if (type === 'scroll') cpSyncScrollMakerField(caid, s);
+        cpRefreshStatusBar();
+    }
+    window.cpSetLineTracking = cpSetLineTracking;
+
+    // Lines (not skipped) set to Scrollery Print — what the bulk print would take.
+    window.cpScrolleryCount = function() {
+        return courtAwards.filter(function(a) {
+            return a.Status !== 'cancelled' && (parseInt(a.ScrollStatus, 10) || 0) === 3;
+        }).length;
+    };
+
+    // ---- Scroll / regalia status picker ----
+    // One shared popover for every chip. position:fixed and measured from the chip, so
+    // the overflow-x:auto award list cannot clip it; a scroll or resize closes it rather
+    // than leaving it stranded. It lives inside .cp-page so the disabled option's
+    // data-tip renders (court-planner.js only tips inside .cp-page).
+    var cpTrackMenu = null;
+    var cpTrackMenuChip = null;
+
+    function cpTrackMenuEl() {
+        if (cpTrackMenu) return cpTrackMenu;
+        cpTrackMenu = document.createElement('div');
+        cpTrackMenu.className = 'cp-track-menu';
+        cpTrackMenu.id = 'cp-track-menu';
+        cpTrackMenu.setAttribute('role', 'listbox');
+        cpTrackMenu.hidden = true;
+        var list = gid('cp-award-list');
+        ((list && list.closest('.cp-page')) || document.body).appendChild(cpTrackMenu);
+        cpTrackMenu.addEventListener('click', function(e) {
+            var opt = e.target.closest('.cp-track-opt');
+            if (opt) cpPickTrackOpt(opt);
+        });
+        cpTrackMenu.addEventListener('keydown', cpTrackMenuKey);
+        return cpTrackMenu;
+    }
+
+    function cpPositionTrackMenu(chip, menu) {
+        var vv = window.visualViewport;
+        var vh = vv ? vv.height : window.innerHeight;
+        var vw = vv ? vv.width  : window.innerWidth;
+        var r  = chip.getBoundingClientRect();
+        var mh = menu.offsetHeight, mw = menu.offsetWidth;
+        var top = r.bottom + 4;
+        if (top + mh > vh - 8) top = r.top - mh - 4;   // no room below: open upward
+        var left = r.left;
+        if (left + mw > vw - 8) left = vw - mw - 8;
+        menu.style.top  = Math.max(8, top)  + 'px';
+        menu.style.left = Math.max(8, left) + 'px';
+    }
+
+    window.cpOpenTrackMenu = function(event, chip) {
+        if (event) event.stopPropagation();   // a chip click never toggles the row's expand
+        if (!chip || chip.getAttribute('aria-busy') === 'true') return;
+        if (cpTrackMenuChip === chip) { cpCloseTrackMenu(true); return; }
+        cpCloseTrackMenu(false);
+
+        var type = chip.dataset.type === 'regalia' ? 'regalia' : 'scroll';
+        var cur  = parseInt(chip.dataset.status, 10) || 0;
+        var caid = chip.dataset.caid;
+        var a    = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
+        var printable = !!(a && a.ScrolleryPrintable);
+
+        var menu = cpTrackMenuEl();
+        menu.setAttribute('aria-label', cpTrackNoun(type) + ' status');
+        var html = '<div class="cp-track-menu-head" aria-hidden="true">' + cpTrackNoun(type) + '</div>';
+        CP_TRACK_STATES[type].forEach(function(st) {
+            // Scrollery Print is offered only where Scrollery can print the award — but
+            // stays enabled on a line already at it, so the officer can move it off.
+            var disabled = type === 'scroll' && st === 3 && !printable && cur !== 3;
+            var hint = disabled ? CP_SCROLLERY_NO_PRINT : CP_TRACK_HINTS[type + '-' + st];
+            html += '<div class="cp-track-opt' + (st === cur ? ' cp-track-opt-current' : '') + '" role="option" tabindex="-1"' +
+                ' data-status="' + st + '" aria-selected="' + (st === cur ? 'true' : 'false') + '"' +
+                (disabled ? ' aria-disabled="true" data-tip="' + esc(CP_SCROLLERY_NO_PRINT) + '"' : '') + '>' +
+                '<span class="cp-track-dot" data-type="' + type + '" data-status="' + st + '" aria-hidden="true"></span>' +
+                '<span class="cp-track-opt-text">' + esc(cpTrackLabel(type, st)) + (hint ? '<small>' + esc(hint) + '</small>' : '') + '</span>' +
+                '<i class="fas fa-check cp-track-opt-check" aria-hidden="true"></i></div>';
+        });
+        menu.innerHTML = html;
+        menu.hidden = false;
+        cpTrackMenuChip = chip;
+        chip.setAttribute('aria-expanded', 'true');
+        cpPositionTrackMenu(chip, menu);
+        var first = menu.querySelector('.cp-track-opt-current') || menu.querySelector('.cp-track-opt:not([aria-disabled="true"])');
+        if (first) first.focus({ preventScroll: true });   // a focus scroll would close it
+
+        window.addEventListener('scroll', cpTrackMenuDismiss, true);
+        window.addEventListener('resize', cpTrackMenuDismiss);
+        document.addEventListener('pointerdown', cpTrackMenuOutside, true);
+    };
+
+    function cpCloseTrackMenu(returnFocus) {
+        if (!cpTrackMenuChip) return;
+        var chip = cpTrackMenuChip;
+        cpTrackMenuChip = null;
+        window.removeEventListener('scroll', cpTrackMenuDismiss, true);
+        window.removeEventListener('resize', cpTrackMenuDismiss);
+        document.removeEventListener('pointerdown', cpTrackMenuOutside, true);
+        chip.setAttribute('aria-expanded', 'false');
+        if (cpTrackMenu) { cpTrackMenu.hidden = true; cpTrackMenu.innerHTML = ''; }
+        if (returnFocus && document.body.contains(chip)) chip.focus({ preventScroll: true });
+    }
+    function cpTrackMenuDismiss() { cpCloseTrackMenu(true); }
+    function cpTrackMenuOutside(e) {
+        if (!cpTrackMenuChip) return;
+        if (cpTrackMenu && cpTrackMenu.contains(e.target)) return;
+        if (cpTrackMenuChip.contains(e.target)) return;   // the chip's own click closes it
+        cpCloseTrackMenu(false);
+    }
+
+    function cpTrackMenuKey(e) {
+        var opts = Array.prototype.slice.call(cpTrackMenu.querySelectorAll('.cp-track-opt:not([aria-disabled="true"])'));
+        var i = opts.indexOf(document.activeElement);
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!opts.length) return;
+            var n = e.key === 'ArrowDown' ? (i + 1) % opts.length : (i <= 0 ? opts.length - 1 : i - 1);
+            opts[n].focus({ preventScroll: true });
+        } else if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+            e.preventDefault();
+            if (i >= 0) cpPickTrackOpt(opts[i]);
+        } else if (e.key === 'Escape' || e.key === 'Esc') {
+            e.preventDefault();
+            e.stopPropagation();
+            cpCloseTrackMenu(true);
+        } else if (e.key === 'Tab') {
+            e.preventDefault();
+            cpCloseTrackMenu(true);
+        }
+    }
+
+    // Save the picked state through the explicit-value endpoint, guarded by the line's
+    // RowVersion. The chip changes only on success; a stale line reloads (cpStale).
+    function cpPickTrackOpt(opt) {
+        var chip = cpTrackMenuChip;
+        if (!chip || !opt || opt.getAttribute('aria-disabled') === 'true') return;
+        var type = chip.dataset.type === 'regalia' ? 'regalia' : 'scroll';
+        var st   = parseInt(opt.dataset.status, 10) || 0;
+        var caid = parseInt(chip.dataset.caid, 10) || 0;
+        cpCloseTrackMenu(true);
+        if (st === (parseInt(chip.dataset.status, 10) || 0)) return;
+
         var fd = new FormData();
         fd.append('CourtAwardId', caid);
         fd.append('Type', type);
-
-        post('CourtAjax/update_award_tracking_status', fd).then(function(d) {
-            if (d.status === 0) {
-                // Keep the tooltip + screen-reader label + visible caption on the CURRENT state.
-                cpApplyTrackState(element, type, d.newStatus);
-                const award = courtAwards.find(a => a.CourtAwardId === caid);
-                if (award) {
-                    if (type === 'scroll') award.ScrollStatus = d.newStatus;
-                    else award.RegaliaStatus = d.newStatus;
-                }
-                cpRefreshStatusBar();
-            } else if (!d._postFailed) {
-                cpAlert(d.error || 'Could not update tracking status.');
-            }
+        fd.append('Status', st);
+        fd.append('RowVersion', cpGetRowVersion(caid));
+        chip.setAttribute('aria-busy', 'true');
+        post('CourtAjax/set_award_tracking_status', fd).then(function(d) {
+            chip.removeAttribute('aria-busy');
+            if (d && d.status === 0) { cpSetLineTracking(caid, type, d.newStatus, d.RowVersion); return; }
+            if (d && d.status === 9) { cpStale(caid); return; }
+            if (!d || !d._postFailed) cpAlert((d && d.error) || 'Could not update tracking status.');
         });
-    };
+    }
 
-    // Recompute and update the status bar counts from current DOM state
+    // Recompute the status bar's tracking counts from the row chips. The PHP render
+    // owns the bar's wording; this rewrites only the [data-sb="type-status"] numbers.
     function cpRefreshStatusBar() {
-        var scroll  = {0:0, 1:0, 2:0};
-        var regalia = {0:0, 1:0, 2:0};
-        document.querySelectorAll('#cp-award-list .cp-award-row').forEach(function(row) {
-            var si = row.querySelector('.cp-tracking-icon[data-type="scroll"]');
-            var ri = row.querySelector('.cp-tracking-icon[data-type="regalia"]');
-            if (si) { var s = parseInt(si.dataset.status,10)||0; scroll[Math.min(2,Math.max(0,s))]++; }
-            if (ri) { var r = parseInt(ri.dataset.status,10)||0; regalia[Math.min(2,Math.max(0,r))]++; }
+        var counts = { scroll: { 0: 0, 1: 0, 2: 0, 3: 0 }, regalia: { 0: 0, 1: 0, 2: 0 } };
+        document.querySelectorAll('#cp-award-list .cp-award-row .cp-chip').forEach(function(chip) {
+            var t  = chip.dataset.type === 'regalia' ? 'regalia' : 'scroll';
+            var st = parseInt(chip.dataset.status, 10) || 0;
+            if (counts[t][st] === undefined) st = 0;
+            counts[t][st]++;
         });
-        var bar = document.querySelector('.cp-status-bar');
-        if (!bar) return;
-        // Update scroll text (second span[class] child)
-        var scrollSpan = bar.querySelector('.cp-sb-scroll');
-        if (scrollSpan) {
-            scrollSpan.innerHTML = 'Scrolls: <span class="cp-stat-ready">'+scroll[2]+' ready</span>, <span class="cp-stat-wip">'+scroll[1]+' in progress</span>, <span class="cp-stat-none">'+scroll[0]+' not started</span>';
-        }
-        var regaliaSpan = bar.querySelector('.cp-sb-regalia');
-        if (regaliaSpan) {
-            regaliaSpan.innerHTML = 'Regalia: <span class="cp-stat-ready">'+regalia[2]+' ready</span>, <span class="cp-stat-wip">'+regalia[1]+' in progress</span>, <span class="cp-stat-none">'+regalia[0]+' not started</span>';
-        }
+        document.querySelectorAll('.cp-status-bar [data-sb]').forEach(function(el) {
+            var k = String(el.dataset.sb).split('-');
+            el.textContent = (counts[k[0]] && counts[k[0]][k[1]]) || 0;
+        });
     }
 
     function cpRefreshProgress() {
@@ -4382,8 +4645,7 @@ $_total_awards = count($courtAwards ?? []);
             '</div>' +
             '<div class="cp-cell cp-cell-type"><span class="' + typeClass + '" data-tip="' + esc(typeTip) + '">' + typeLabel + '</span></div>' +
             '<div class="cp-cell cp-cell-flags cp-award-flags">' + ptlBadge + recBadge + '</div>' +
-            '<div class="cp-cell cp-cell-scroll"><span class="cp-tracking-icon" role="button" tabindex="0" data-tip="' + esc(cpTrackLabel('scroll', aw.ScrollStatus)) + '" aria-label="' + esc(cpTrackLabel('scroll', aw.ScrollStatus)) + '" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i><span class="cp-track-label">' + esc(cpTrackLabel('scroll', aw.ScrollStatus)) + '</span></span></div>' +
-            '<div class="cp-cell cp-cell-regalia"><span class="cp-tracking-icon" role="button" tabindex="0" data-tip="' + esc(cpTrackLabel('regalia', aw.RegaliaStatus)) + '" aria-label="' + esc(cpTrackLabel('regalia', aw.RegaliaStatus)) + '" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i><span class="cp-track-label">' + esc(cpTrackLabel('regalia', aw.RegaliaStatus)) + '</span></span></div>' +
+            '<div class="cp-cell cp-cell-tracking">' + cpTrackChipHtml('scroll', aw.ScrollStatus, aw.CourtAwardId) + cpTrackChipHtml('regalia', aw.RegaliaStatus, aw.CourtAwardId) + '</div>' +
             '<div class="cp-cell cp-cell-status"><span class="cp-aw-badge" style="background:#edf2f7;color:#4a5568">Planned</span></div>' +
             '<div class="cp-cell cp-cell-chevron"><i class="fas fa-chevron-down"></i></div>' +
             '</div>' +
@@ -4394,7 +4656,7 @@ $_total_awards = count($courtAwards ?? []);
             '</div>' +
             '</div>' +
             '<div class="cp-expand-grid" style="margin-top:8px">' +
-            '<div><div class="cp-expand-label">Scroll Maker</div><div style="position:relative"><input type="text" id="cp-scroll-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-scroll-drop-' + aw.CourtAwardId + '" data-hidden="cp-scroll-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-scroll-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-scroll-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
+            '<div class="cp-scroll-maker-field" id="cp-scroll-maker-field-' + aw.CourtAwardId + '"' + ((parseInt(aw.ScrollStatus, 10) || 0) === 3 ? ' hidden' : '') + '><div class="cp-expand-label">Scroll Maker</div><div style="position:relative"><input type="text" id="cp-scroll-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-scroll-drop-' + aw.CourtAwardId + '" data-hidden="cp-scroll-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-scroll-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-scroll-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
             '<div><div class="cp-expand-label">Regalia Maker</div><div style="position:relative"><input type="text" id="cp-regalia-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-regalia-drop-' + aw.CourtAwardId + '" data-hidden="cp-regalia-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-regalia-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-regalia-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
             '</div>' +
             '<div style="margin-bottom:10px"><div class="cp-expand-label" style="margin-bottom:6px">Contributing Artisans</div><div id="cp-artisans-' + aw.CourtAwardId + '"></div>' +
@@ -4924,6 +5186,7 @@ $_total_awards = count($courtAwards ?? []);
         var so = gid('cp-script-overlay');
         if (so && !so.hidden) return true;
         if (document.querySelector('.cp-award-row-expand.open')) return true;
+        if (cpTrackMenuChip) return true;   // the scroll/regalia picker is open
         return false;
     }
     function cpUpdateModeBadge(mode) {
@@ -5031,11 +5294,13 @@ $_total_awards = count($courtAwards ?? []);
         var rmId   = gid('cp-regalia-maker-id-' + caid);
         if (rmText) rmText.value = sa.RegaliaMakerPersona || '';
         if (rmId)   rmId.value   = sa.RegaliaMakerId || 0;
-        // Scroll / regalia tracking status icons.
-        var si = row.querySelector('.cp-tracking-icon[data-type="scroll"]');
-        if (si && String(si.dataset.status) !== String(sa.ScrollStatus)) cpApplyTrackState(si, 'scroll', sa.ScrollStatus);
-        var ri = row.querySelector('.cp-tracking-icon[data-type="regalia"]');
-        if (ri && String(ri.dataset.status) !== String(sa.RegaliaStatus)) cpApplyTrackState(ri, 'regalia', sa.RegaliaStatus);
+        // Scroll / regalia status chips, and the Scroll Maker field that follows the
+        // scroll state (hidden at Scrollery Print).
+        var sc = row.querySelector('.cp-chip[data-type="scroll"]');
+        if (sc && String(sc.dataset.status) !== String(sa.ScrollStatus)) cpApplyTrackState(sc, 'scroll', sa.ScrollStatus);
+        var rc = row.querySelector('.cp-chip[data-type="regalia"]');
+        if (rc && String(rc.dataset.status) !== String(sa.RegaliaStatus)) cpApplyTrackState(rc, 'regalia', sa.RegaliaStatus);
+        cpSyncScrollMakerField(caid, sa.ScrollStatus);
     }
 
     // Full-field reconcile (S5): drive the row set from awards_full — status, giver,
@@ -5078,6 +5343,7 @@ $_total_awards = count($courtAwards ?? []);
                 a.RegaliaMakerPersona = sa.RegaliaMakerPersona || '';
                 a.ScrollStatus = sa.ScrollStatus;
                 a.RegaliaStatus = sa.RegaliaStatus;
+                a.ScrolleryPrintable = !!sa.ScrolleryPrintable;
                 if (givenByMap[String(caid)] !== undefined) a.GivenByMundaneId = givenByMap[String(caid)];
             }
         });
@@ -5260,24 +5526,6 @@ $_total_awards = count($courtAwards ?? []);
         }
     });
 
-    // ---- Keyboard operation of the custom span controls (QW a11y) ----
-    // The scroll/regalia tracking toggles are <span onclick> — 46 of them on a busy
-    // court, and until now not one was reachable by keyboard or assistive tech, with no
-    // other control anywhere that records whether a scroll or medallion physically
-    // exists. role="button" + tabindex="0" are on the span in both the PHP render and
-    // the JS row builder; this is the other half, firing the same handler the mouse
-    // does on Enter/Space. (The focus ring already exists in court-planner.css.)
-    document.addEventListener('keydown', function(e) {
-        if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
-        var el = e.target;
-        if (!el || !el.classList || !el.classList.contains('cp-tracking-icon')) return;
-        if (el.classList.contains('cp-tracking-demo')) return;   // legend swatch, not a control
-        var row = el.closest('.cp-award-row');
-        if (!row) return;
-        e.preventDefault();      // Space must toggle the state, not scroll the award list
-        cpUpdateTracking(e, parseInt(row.dataset.courtAwardId, 10) || 0, el.dataset.type || 'scroll', el);
-    });
-
     // ---- Focus return for the overlays (QW a11y) ----
     // None of the cp-*-modal overlays or the script overlay remembered the control that
     // opened them, so every close dropped focus on <body> — back at the top of the page,
@@ -5287,7 +5535,7 @@ $_total_awards = count($courtAwards ?? []);
     document.addEventListener('focusin', function(e) {
         var t = e.target;
         if (!t || !t.closest) return;
-        if (t.closest('.cp-overlay, #cp-script-overlay, .ork-dialog-overlay')) return;
+        if (t.closest('.cp-overlay, #cp-script-overlay, .ork-dialog-overlay, #cp-track-menu')) return;
         cpFocusReturn = t;
     });
     function cpRestoreFocus() {
@@ -5310,6 +5558,7 @@ $_total_awards = count($courtAwards ?? []);
     });
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
+            cpCloseTrackMenu(true);
             cpDismissNote();
             ['cp-rec-modal','cp-adhoc-modal','cp-artisan-modal','cp-cn-modal','cp-grant-modal','cp-publish-modal','cp-complete-modal'].forEach(function(id) {
                 var el = gid(id); if (el) el.style.display = 'none';
@@ -5557,7 +5806,10 @@ window.cpApplyHeroColor = function(img) {
             var by = {};
             awards.forEach(function (a) {
                 if (a.Status === 'cancelled') return;
-                var who = (kind === 'scroll' ? a.ScrollMakerPersona : a.RegaliaMakerPersona) || '(unassigned)';
+                // A Scrollery Print scroll is made by the bulk print, not a maker.
+                var who = (kind === 'scroll' && (parseInt(a.ScrollStatus, 10) || 0) === 3)
+                    ? 'Scrollery'
+                    : ((kind === 'scroll' ? a.ScrollMakerPersona : a.RegaliaMakerPersona) || '(unassigned)');
                 (by[who] = by[who] || []).push(a);
             });
             var names = Object.keys(by).sort(function (x, y) {
@@ -5568,7 +5820,7 @@ window.cpApplyHeroColor = function(img) {
             if (!names.length) return '';
             return names.map(function (who) {
                 var items = by[who].map(function (a) {
-                    var st = kind === 'scroll' ? a.ScrollStatus : a.RegaliaStatus;
+                    var st = parseInt(kind === 'scroll' ? a.ScrollStatus : a.RegaliaStatus, 10) || 0;
                     return '<tr>' +
                         '<td class="cp-rec-box">' + (st === 2 ? '&#9745;' : '&#9744;') + '</td>' +
                         '<td>' + cpScriptRecipient(a) + '</td>' +

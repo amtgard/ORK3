@@ -240,6 +240,26 @@ class Model_Scrollery extends Model
     }
 
     /**
+     * Stamps each Court Planner line with ScrolleryPrintable (bool), read from
+     * printable_kingdomaward_ids() for the court's kingdom. The planner's scroll
+     * dropdown disables Scrollery Print on a line where it is false. Every surface
+     * that hands lines to the planner (page render, heartbeat, add) goes through
+     * here, so they all carry the same flag.
+     *
+     * @param array<int|string, array<string, mixed>> $lines
+     * @return array<int|string, array<string, mixed>>
+     */
+    public function flag_printable_court_lines(array $lines, int $kingdomId): array
+    {
+        $printable = $this->printable_kingdomaward_ids($kingdomId);
+        foreach ($lines as $i => $line) {
+            $lines[$i]['ScrolleryPrintable'] = isset($printable[(int) ($line['KingdomAwardId'] ?? 0)]);
+        }
+
+        return $lines;
+    }
+
+    /**
      * A COURT'S Scrollery Print lines as one print run.
      *
      * A court line is not an award row: until the court is finalized nothing has

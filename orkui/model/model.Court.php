@@ -188,11 +188,6 @@ class Model_Court extends Model
         return $this->_court()->skipAward($court_award_id, $expectedRowVersion);
     }
 
-    public function update_award_tracking_status($courtAwardId, $type)
-    {
-        return $this->_court()->updateAwardTrackingStatus($courtAwardId, $type);
-    }
-
     public function set_award_tracking_status($courtAwardId, $type, $status, $rowVersion)
     {
         return $this->_court()->setAwardTrackingStatus($courtAwardId, $type, $status, $rowVersion);

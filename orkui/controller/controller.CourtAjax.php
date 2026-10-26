@@ -310,6 +310,11 @@ class Controller_CourtAjax extends Controller
             ]);
         }
 
+        // The planner builds the new row from this payload, so it carries the same
+        // ScrolleryPrintable flag as the page render and the heartbeat.
+        $this->load_model('Scrollery');
+        $award = $this->Scrollery->flag_printable_court_lines([$award], (int)$court['KingdomId'])[0];
+
         $this->jsonOut(['status' => 0, 'award' => $award]);
     }
 
@@ -1073,7 +1078,11 @@ class Controller_CourtAjax extends Controller
         // client has confirmed it is already holding this exact version; a client
         // that sends no SinceVersion still gets the complete payload every poll.
         if (!$unchanged) {
-            $state['awards_full'] = $this->Court->get_court_awards($court_id, $uid);
+            $this->load_model('Scrollery');
+            $state['awards_full'] = $this->Scrollery->flag_printable_court_lines(
+                $this->Court->get_court_awards($court_id, $uid),
+                (int)$court['KingdomId']
+            );
             $state['notes_full']  = $this->Court->get_court_notes($court_id);
         }
         $state['unchanged'] = $unchanged;
@@ -1177,30 +1186,6 @@ class Controller_CourtAjax extends Controller
             'status'       => 0,
             'staged_count' => $this->Court->count_staged_awards($court_id),
         ]);
-    }
-
-    // -----------------------------------------------------------------------
-    // update_award_tracking_status
-    // POST: CourtAwardId, Type
-    // -----------------------------------------------------------------------
-    public function update_award_tracking_status($p = null)
-    {
-        $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
-        if (!valid_id($court_award_id)) {
-            $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
-        }
-
-        $court_id = $this->Court->get_court_award_court_id($court_award_id);
-        if (!$court_id) {
-            $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
-        }
-
-        $this->requireCourtAuth($court_id);
-
-        $type = $_POST['Type'] ?? '';
-
-        $result = $this->Court->update_award_tracking_status($court_award_id, $type);
-        $this->jsonOut($result);
     }
 
     // -----------------------------------------------------------------------

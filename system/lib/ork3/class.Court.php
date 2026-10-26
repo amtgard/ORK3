@@ -3061,33 +3061,6 @@ class Court
         return $events;
     }
 
-    public function updateAwardTrackingStatus($courtAwardId, $type)
-    {
-        if (!in_array($type, ['scroll', 'regalia'])) {
-            return ['status' => 1, 'error' => 'Invalid type'];
-        }
-
-        $field = $type . '_status';
-
-        $this->db->Clear();
-        $rs = $this->db->DataSet(
-            'SELECT ' . $field . ' FROM ' . DB_PREFIX . 'court_award WHERE court_award_id = ' . (int)$courtAwardId
-        );
-        if (!$rs || !$rs->Next()) {
-            return ['status' => 1, 'error' => 'Award not found'];
-        }
-
-        $currentStatus = (int)$rs->{$field};
-        $nextStatus = ($currentStatus + 1) % 3;
-
-        $this->db->Clear();
-        $this->db->Execute(
-            'UPDATE ' . DB_PREFIX . 'court_award SET ' . $field . ' = ' . $nextStatus . ' WHERE court_award_id = ' . (int)$courtAwardId
-        );
-
-        return ['status' => 0, 'newStatus' => $nextStatus];
-    }
-
     /** Status values a tracking type accepts; [] for an unknown type. */
     public function allowedTrackingStatuses($type)
     {
