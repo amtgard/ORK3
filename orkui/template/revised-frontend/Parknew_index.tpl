@@ -1331,15 +1331,7 @@
 			.pk-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
 			.pk-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
 			.pk-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
-			.kn-rec-age-badge { font-size:11px; padding:1px 6px; border-radius:10px; font-weight:600; margin-left:4px; }
-			.kn-rec-age-green  { background:#c6f6d5; color:#22543d; }
-			.kn-rec-age-yellow { background:#fefcbf; color:#744210; }
-			.kn-rec-age-orange { background:#fed7aa; color:#7b341e; }
-			.kn-rec-age-red    { background:#fed7d7; color:#742a2a; }
-			.pk-rec-passlocal { display:inline-block; margin-left:6px; font-size:11px; color:#2c5f8b; border:1px solid rgba(44,95,139,.4); border-radius:3px; padding:0 5px; white-space:nowrap; }
-			html[data-theme="dark"] .pk-rec-passlocal { color:#6fb0e6; border-color:rgba(111,176,230,.4); }
-			.pk-rec-passlocal[data-tip] { position:relative; }
-			.pk-rec-passlocal[data-tip]:hover::after { content:attr(data-tip); position:absolute; left:0; top:calc(100% + 4px); white-space:normal; width:220px; background:#1a202c; color:#fff; font-size:11px; padding:6px 8px; border-radius:4px; z-index:50; }
+			/* .kn-rec-age-* and .pk-rec-passlocal live in revised.css: this block only renders for court managers. */
 			/* Delegated-by-the-Kingdom pinned section (officer-only, to-schedule list) */
 			.pk-delegated { border:1px solid rgba(44,95,139,.4); background:rgba(44,95,139,.07); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
 			.pk-delegated-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
