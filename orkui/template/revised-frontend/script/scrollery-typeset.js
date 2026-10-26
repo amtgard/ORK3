@@ -812,6 +812,7 @@
     var VERIFY_TOL = 0.5;
     var VERIFY_ROUNDS = 6;
     var VERIFY_MARGIN = 0.995;
+    var SIZE_EPS = 1e-3;
 
     function computed(el) {
         return window.getComputedStyle(el);
@@ -999,10 +1000,14 @@
     /* ------------------------------------------------------------------ geometry */
 
     /* A box's top in layout px from the top of the document, summed up the offsetParent
-       chain. Differences of two of these cancel whatever the chain ends at. */
+       chain. Differences of two of these cancel whatever the chain ends at. On a rendered
+       certificate the chain ends at the SVG's <foreignObject>, which is not an HTMLElement
+       and has no offsetTop (undefined), so a missing offset counts as 0: summed raw it
+       made every box NaN, and NaN compares false with everything (the budget read floor
+       and the profile read as ignored on every certificate). */
     function absTop(el) {
         var y = 0;
-        while (el) { y += el.offsetTop; el = el.offsetParent; }
+        while (el) { y += el.offsetTop || 0; el = el.offsetParent; }
         return y;
     }
 
@@ -1213,7 +1218,7 @@
                     if (w > allowed[j] + VERIFY_TOL) { worst = Math.min(worst, allowed[j] / w); }
                 });
                 if (worst === 1) { break; }
-                if (round === VERIFY_ROUNDS || size <= range.min + 1e-9) { overflow = true; break; }
+                if (round === VERIFY_ROUNDS || size <= range.min + SIZE_EPS) { overflow = true; break; }
                 size = setSize(el, Math.max(size * worst * VERIFY_MARGIN, range.min), ctx.rootPx, parentPx);
                 if (x.onSize) { x.onSize(size); }
             }
@@ -1258,7 +1263,7 @@
 
     function absLeft(el) {
         var x = 0;
-        while (el) { x += el.offsetLeft; el = el.offsetParent; }
+        while (el) { x += el.offsetLeft || 0; el = el.offsetParent; }
         return x;
     }
 
@@ -1400,19 +1405,19 @@
 
     /*
      * Try each scale in turn (apply(s) puts the image(s) there) and keep the first that
-     * is clear of every text box and of the artwork; hide the image(s) when none is.
-     * Returns 'placed' (first candidate), 'scaled' or 'hidden'. An image with nothing to
+     * is clear of every text box and, unless `skipArt`, of the artwork; hide the image(s)
+     * when none is. Returns 'placed' (first candidate), 'scaled' or 'hidden'. An image with nothing to
      * judge it by (no grid, or no box yet) is left at its first candidate and reported
      * placed: the engine does not move what it cannot measure.
      */
-    function chooseScale(ctx, imgs, scales, apply, boxes, gap) {
+    function chooseScale(ctx, imgs, scales, apply, boxes, gap, skipArt) {
         for (var i = 0; i < scales.length; i++) {
             apply(scales[i]);
             var clear = true, judged = true;
             for (var j = 0; j < imgs.length && clear; j++) {
                 var ink = inkOf(ctx.award, imgs[j]);
                 if (!ink) { judged = false; continue; }
-                if (hitsText(ink.rects, boxes, gap) || hitsArtwork(ctx, ink.rects)) { clear = false; }
+                if (hitsText(ink.rects, boxes, gap) || (!skipArt && hitsArtwork(ctx, ink.rects))) { clear = false; }
             }
             if (!judged && i === 0) { return 'placed'; }
             if (clear) { return i === 0 ? 'placed' : 'scaled'; }
@@ -1457,6 +1462,8 @@
     /* Put the issuer back to what the stylesheet draws, so each composition starts from
        the same page and a second run starts where the first did. */
     function resetIssuer(A) {
+        A.p1.style.removeProperty('white-space');
+        if (!A.p1.getAttribute('style')) { A.p1.removeAttribute('style'); }
         A.section.style.removeProperty('--sc-place-gutter');
         A.section.style.removeProperty('--sc-place-reserve');
         if (!A.section.getAttribute('style')) { A.section.removeAttribute('style'); }
@@ -1543,12 +1550,21 @@
         var fits = size >= min - 1e-9;
         if (!fits) { size = min; }
         size = setLeadSize(ctx, A, size);
+        /* Checked against the very width stamped in data-sc-w (avail less SLACK), so a line
+           that passes here is a line the stamp does not contradict. A size is "at the
+           floor" within a thousandth: setSize reads back a size rounded through four
+           decimals of em, which never equals the request exactly. */
+        var allowed = avail * (1 - CONST.SLACK);
         for (var round = 0; round < 4 && fits; round++) {
             var r = nodeRect(ctx.award, k, A.lead);
             var w = r ? r.x1 - r.x0 : 0;
-            if (w <= avail + VERIFY_TOL) { break; }
-            if (size <= min + 1e-9) { fits = false; break; }
-            size = setLeadSize(ctx, A, Math.max(size * (avail / w) * VERIFY_MARGIN, min));
+            if (w <= allowed + VERIFY_TOL) { break; }
+            if (size <= min + SIZE_EPS) { fits = false; break; }
+            size = setLeadSize(ctx, A, Math.max(size * (allowed / w) * VERIFY_MARGIN, min));
+        }
+        if (fits && round === 4) {
+            var last = nodeRect(ctx.award, k, A.lead);
+            fits = !last || last.x1 - last.x0 <= allowed + VERIFY_TOL;
         }
         return { size: size, fits: fits };
     }
@@ -1614,6 +1630,12 @@
         var P = CONST.ROLES.placeClassic, lh = P.lineHeight;
 
         resetIssuer(A);
+        /* The versal and the lead share one row in Classic and the lead never wraps. Left
+           to wrap, a lead too wide for what the versal leaves goes under it, its left edge
+           becomes the column's and the whole column reads as available. Held on the row
+           it overflows to the right instead, its left edge stays true, and it is shrunk
+           to the room there is. */
+        A.p1.style.whiteSpace = 'nowrap';
         A.section.setAttribute('data-sc-comp', 'classic');
         var k = frameScale(award);
         var leadM = prepareLead(A);
@@ -1896,20 +1918,24 @@
         var boxes = textBoxes(award, k), out = { top: 'hidden', right: 'hidden', bottom: 'hidden', rule: 'hidden' };
 
         /* A flourish the stylesheet draws at some width: scaled in place. */
-        function inPlace(img) {
+        function inPlace(img, skipArt) {
             if (!img) { return 'hidden'; }
             img.style.removeProperty('width');
             if (!(img.offsetWidth > 0)) { return computed(img).display === 'none' ? 'hidden' : 'placed'; }
             var base = img.offsetWidth;
             return chooseScale(ctx, [img], CONST.ORN_SCALES, function (s) {
                 if (s === 1) { resetFlourish(img, ['width']); } else { setWidth(img, base * s); }
-            }, boxes, gap);
+            }, boxes, gap, skipArt);
         }
 
-        out.top = inPlace(A.top);
+        /* #TopTextFlourish and #BottomTextFlourish are one piece with the versal: where
+           they sit is where the artwork was designed to leave room for "Amtgard", so they
+           are not judged against the artwork, only against the text. Only the right
+           flourish and the rule pair give way to the artwork. */
+        out.top = inPlace(A.top, true);
 
         if (comp === 'classic') {
-            out.bottom = inPlace(A.bottom);
+            out.bottom = inPlace(A.bottom, true);
             if (A.right && !st.rightOff && A.rightBase > 0) {
                 out.right = chooseScale(ctx, [A.right], CONST.ORN_SCALES, function (s) { applyRight(ctx, A, k, s); }, boxes, gap);
             } else if (A.right) {

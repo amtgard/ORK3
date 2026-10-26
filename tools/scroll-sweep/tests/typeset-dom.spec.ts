@@ -608,7 +608,10 @@ test('performance: p95 of data-sc-ms over the corpus is within 20ms', async ({ p
 test('composition choice', async ({ page }) => {
   const t = await survey(page);
   const got = Object.fromEntries(['c22', 'c26', 'x2', 'c11', 'c14', 'x3'].map(id => [id, t.get(id)!.sectionComp]));
-  expect(got).toEqual({ c22: 'classic', c26: 'classic', x2: 'classic', c11: 'centered', c14: 'centered', x3: 'centered' });
+  // c11 was expected Centered by the plan, before anything was measured. Its lead ("and the
+  // Principality of") fits beside the versal at 0.741em in Uncial and its one-line place clears
+  // the profile, so Classic is correct (controller ruling, Task 10b); T14 revisits it.
+  expect(got).toEqual({ c22: 'classic', c26: 'classic', x2: 'classic', c11: 'classic', c14: 'centered', x3: 'centered' });
 });
 
 test('lead never wraps', async ({ page }) => {

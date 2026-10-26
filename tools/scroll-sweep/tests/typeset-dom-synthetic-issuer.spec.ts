@@ -25,7 +25,7 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 interface Opts {
   name?: string; award?: string; lead?: string; place?: string; art?: boolean;
   free?: string; up?: number; face?: string; heading?: string; height?: number; scale?: number;
-  spacing?: string; signMin?: number;
+  spacing?: string; signMin?: number; leadSpacing?: string;
 }
 
 function pageHtml(o: Opts = {}): string {
@@ -34,11 +34,11 @@ function pageHtml(o: Opts = {}): string {
   const free = o.free ? ` data-sc-free="${o.free}"` : '';
   const up = o.up ? ` data-scroll-up="${o.up}"` : '';
   const heading = o.heading ? ` data-sc-heading="${o.heading}"` : '';
-  const wrap = o.scale ? `transform: scale(${o.scale}); transform-origin: 0 0;` : '';
+  const wide = Math.round(2550 * (o.scale ?? 1));
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     html, body { margin: 0; }
     .Award { position: relative; box-sizing: border-box; width: 2550px; height: ${o.height ?? 3300}px; padding: 200px 475px 150px;
-      font: 100px/1.2 ${face}; text-align: center; display: flex; flex-direction: column; ${wrap} }
+      font: 100px/1.2 ${face}; text-align: center; display: flex; flex-direction: column; }
     .Award p, .Award section, .Award div, .Award span { margin: 0; text-align: center; }
     /* Mirrors scrollery.css as landed in Task 8: the selectors and values of the typeset contract. */
     .Award [data-sc-role="name"], .Award [data-sc-role="award"], .Award [data-sc-role="name"] .sc-line--minor { letter-spacing: -0.01em; }
@@ -53,6 +53,7 @@ function pageHtml(o: Opts = {}): string {
     .Award .ScPlace > [data-sc-role="place"]:has(> .sc-line) { display: inline-block; }
     .Award .ScPlace .sc-line { margin-left: auto; margin-right: 0; }
     section.IssuingTextSection:not([data-sc-comp="centered"]) #IssuerTitle > .sc-line { display: inline-block; width: auto; margin: 0; }
+    ${o.leadSpacing ? `.Award [data-sc-role="lead"] .sc-line { word-spacing: ${o.leadSpacing}; }` : ''}
     .Award .sc-art { font-size: var(--sc-art-size, 0.8em); }
     .Award .Flourish { position: absolute; pointer-events: none; height: auto; }
     #TopTextFlourish { width: 3.8em; left: -0.4em; bottom: 0.9em; }
@@ -76,6 +77,9 @@ function pageHtml(o: Opts = {}): string {
     .Award_Reason p { display: inline-block; }
     .SignAndDate { flex: 0 0 auto; min-height: ${o.signMin ?? 300}px; }
   </style></head><body${up}${heading}>
+  <svg viewBox="0 0 2550 3300" style="aspect-ratio:8.5/11;width:${wide}px;display:block;position:relative;overflow:hidden" data-scroll-frame>
+  <foreignObject x="0" y="0" width="2550" height="3300" style="overflow:visible;">
+  <div class="award-template">
   <div class="Award"${free}>
     <section class="IssuingTextSection" data-sc-comp="classic">
       <p class="ScLead"><span class="ScVersal">Amtgard
@@ -94,7 +98,7 @@ function pageHtml(o: Opts = {}): string {
     <section class="For">for</section>
     <section class="Award_Reason"><p data-scroll-text="reason">Valour in the lists and kindness in the tents.</p></section>
     <section class="SignAndDate"></section>
-  </div></body></html>`;
+  </div></div></foreignObject></svg></body></html>`;
 }
 
 // A profile that leaves [lo, hi] free at every height.
@@ -552,4 +556,100 @@ test('the lead is written as one line in its role, and the article size goes on 
   await page.evaluate(() => { document.querySelector('#IssuerTitle')!.textContent = 'and'; });
   await lay(page);
   expect(await page.evaluate(() => document.querySelector('#IssuerTitle')!.textContent)).toBe('and');
+});
+// The four defects Task 10b found on real certificates. The synthetic page is wrapped in the real
+// <svg viewBox><foreignObject> frame (above), which is what defect 1 needed to show at all.
+
+const leadState = (page: Page) => page.evaluate(() => {
+  const lead = document.querySelector<HTMLElement>('#IssuerTitle')!, line = lead.querySelector<HTMLElement>('.sc-line')!;
+  const rg = document.createRange(); rg.selectNodeContents(line);
+  const t = rg.getBoundingClientRect(), v = document.querySelector('.ScVersal')!.getBoundingClientRect();
+  return {
+    stamped: Number(line.dataset.scW), printed: t.width, onVersalRow: t.top < v.bottom - 20,
+    size: Number(lead.dataset.scSize), overflow: lead.hasAttribute('data-sc-overflow'),
+  };
+});
+
+test('defect 1: inside the svg frame no box is NaN, so the profile is read and the budget is not floor', async ({ page }) => {
+  await load(page, { place: 'Wetlands', free: band(300, 2210) });
+  const report = await lay(page);
+  expect(report.budget).toBe('ok');
+  expect(report.comp).toBe('classic');
+  const nan = await page.evaluate(() => {
+    const bad: string[] = [];
+    document.querySelectorAll('.Award [data-sc-role]').forEach((el) => {
+      for (const a of ['data-sc-size', 'data-sc-w']) { const v = el.getAttribute(a) ?? el.querySelector('.sc-line')?.getAttribute(a); if (v !== null && v !== undefined && !isFinite(Number(v))) bad.push(`${el.getAttribute('data-sc-role')} ${a}=${v}`); }
+    });
+    const sec = document.querySelector<HTMLElement>('.IssuingTextSection')!;
+    for (const v of ['--sc-place-gutter', '--sc-place-reserve']) if (/NaN/.test(sec.style.getPropertyValue(v))) bad.push(v);
+    document.querySelectorAll<HTMLElement>('.Flourish').forEach((f) => { if (/NaN/.test(f.getAttribute('style') ?? '')) bad.push('flourish ' + f.id); });
+    return bad;
+  });
+  expect(nan).toEqual([]);
+  // The profile is honoured: a band that narrows the column beside the lead and the place is what
+  // moves the type, which a NaN band lookup could not do.
+  await load(page, { place: 'Wetlands', free: band(900, 1650) });
+  await lay(page);
+  const w = await page.evaluate(() => Number(document.querySelector<HTMLElement>('[data-sc-role="name"] .sc-line')!.dataset.scW));
+  expect(w).toBeLessThanOrEqual(750);
+});
+
+test('defect 2: a Classic lead too wide for the versal row is shrunk onto the row, not wrapped under it', async ({ page }) => {
+  await load(page, { lead: 'and the Principality of i i i', place: 'Wetlands' });
+  const report = await lay(page);
+  const s = await leadState(page);
+  expect(report.comp).toBe('classic');
+  expect(s.onVersalRow).toBe(true);
+  expect(s.size).toBeLessThan(1.04 - 0.05);
+  expect(s.size).toBeGreaterThanOrEqual(0.7 - 0.001);
+  // The width it was held to is the room beside the versal, not the whole column.
+  expect(s.stamped).toBeLessThan(1000);
+  expect(s.printed).toBeLessThanOrEqual(s.stamped + 0.5);
+  expect(await page.evaluate(() => document.querySelector('#IssuerTitle')!.getAttribute('data-sc-lines'))).toBe('1');
+});
+
+// word-spacing stands in for what the measurer cannot see on real faces (kerning across a space):
+// the printed lead comes out a few px wider than the sum of its measured words.
+const WIDE_LEAD = 'and the Principality of i i i i i i';
+
+test('defect 4: the lead is checked against the width it is stamped with', async ({ page }) => {
+  await load(page, { lead: WIDE_LEAD, place: 'Wetlands', leadSpacing: '4px' });
+  const report = await lay(page);
+  const s = await leadState(page);
+  expect(report.comp).toBe('classic');
+  expect(s.onVersalRow).toBe(true);
+  expect(s.printed).toBeLessThanOrEqual(s.stamped + 0.5);
+  expect(s.overflow).toBe(false);
+});
+
+test('defect 3: a lead that cannot fit at its floor makes Classic infeasible, and a forced Classic flags it', async ({ page }) => {
+  const lead = WIDE_LEAD + ' l';
+  await load(page, { lead, place: 'Wetlands', leadSpacing: '4px' });
+  expect((await lay(page)).comp).toBe('centered');
+
+  await load(page, { lead, place: 'Wetlands', leadSpacing: '4px', heading: 'classic' });
+  const forced = await lay(page);
+  const s = await leadState(page);
+  expect(forced.comp).toBe('classic');
+  expect(s.overflow).toBe(true);
+  expect(s.size).toBeCloseTo(0.7, 2);
+});
+
+test('the top and bottom flourishes are not judged against the artwork; the right one still is', async ({ page }) => {
+  // Artwork ink across the top swash's rows only (bands 0 and 1, y < 200): the lead and place
+  // bands are clear, so Classic stays and the swash alone is on the wrong side of the artwork.
+  const free = '0,100|' + [560, 560, ...Array(38).fill(300)].join(',') + '|' + Array(40).fill(2210).join(',');
+  await load(page, { place: 'Wetlands', free });
+  const report = await lay(page);
+  expect(report.comp).toBe('classic');
+  expect(report.ornaments.top).toBe('placed');
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('#TopTextFlourish')!).display)).not.toBe('none');
+
+  // The same in Centered, with the artwork across the bottom swash's rows as well.
+  await load(page, { place: 'Wetlands', heading: 'centered', free: band(560, 2210) });
+  const c = await lay(page);
+  expect(c.ornaments.top).toBe('placed');
+  // ...while the right flourish gives way to artwork (the last test above and the edge test).
+  await load(page, { place: 'Wetlands', free: band(300, 2090) });
+  expect((await lay(page)).ornaments.right).toBe('hidden');
 });
