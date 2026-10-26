@@ -218,6 +218,12 @@ class Model_Scrollery extends Model
      * from printable_award_choices(), so it carries that list's officer-position,
      * dangling-row and allowlist rules rather than a second opinion about them.
      *
+     * Narrower than that list by exactly one rule: a choice whose certificate would
+     * carry no award name (a Custom Award the kingdom never named) is left out,
+     * because scrolls_for_court_awards() always skips such a line as
+     * COURT_SKIP_NO_NAME. Both decide it through courtChoicePrintsANameForTest(),
+     * so the dropdown can never offer Scrollery Print for a line that cannot print.
+     *
      * @return array<int, true>
      */
     public function printable_kingdomaward_ids(int $kingdomId): array
@@ -225,7 +231,7 @@ class Model_Scrollery extends Model
         $ids = [];
         foreach ($this->printable_award_choices($kingdomId) as $choice) {
             $kaId = (int) ($choice['KingdomAwardId'] ?? 0);
-            if ($kaId > 0) {
+            if ($kaId > 0 && self::courtChoicePrintsANameForTest($choice)) {
                 $ids[$kaId] = true;
             }
         }
@@ -256,19 +262,24 @@ class Model_Scrollery extends Model
      *   - cancelled lines.
      * $courtAwardIds === [] means every line of the court.
      *
-     * Which lines are reported in Skipped, with an officer-facing reason:
+     * Which lines are reported in Skipped, with an officer-facing reason, checked
+     * in this order:
      *   - the line's kingdomaward is not in the kingdom's printable catalog (an
      *     officer position, a title, a masterhood) — COURT_SKIP_UNPRINTABLE;
-     *   - its recipient's player record is gone — COURT_SKIP_NO_PLAYER;
      *   - it resolves to a blank title (a Custom Award the kingdom never named):
      *     the reprint surface prints that blank on purpose, but a court run is an
      *     officer printing a new certificate, and compose() refuses the same case
-     *     for the same reason — COURT_SKIP_NO_NAME.
+     *     for the same reason — COURT_SKIP_NO_NAME, decided by
+     *     courtChoicePrintsANameForTest(), the predicate printable_kingdomaward_ids()
+     *     also applies;
+     *   - its recipient's player record is gone — COURT_SKIP_NO_PLAYER.
      *
-     * The citation always passes RecommendationVisibility::publishable_citation()
-     * (see courtLineScrollRowForTest()). The giver is the line's own when one is
-     * set, else the court's default giver — getCourtGiverOptions() is read once
-     * per run, and only if some line needs it.
+     * The citation is the one the court will publish at commit:
+     * Court::effectiveCitation(), shared with the commit path, so the typed comment
+     * wins, an uncleared public rec reason is inherited, and a Monarchy Only reason
+     * never prints (see courtLineScrollRowForTest()). The giver is the line's own
+     * when one is set, else the court's default giver — getCourtGiverOptions() is
+     * read once per run, and only if some line needs it.
      *
      * Scrolls keeps the court's running order and is capped at
      * Scroll::MAX_PRINT_RUN; printable lines past the cap are counted in Dropped.
@@ -371,6 +382,8 @@ class Model_Scrollery extends Model
 
             if ($choice === null) {
                 $reason = self::COURT_SKIP_UNPRINTABLE;
+            } elseif (!self::courtChoicePrintsANameForTest($choice)) {
+                $reason = self::COURT_SKIP_NO_NAME;
             } elseif ($recipient === null) {
                 $reason = self::COURT_SKIP_NO_PLAYER;
             } else {
@@ -403,11 +416,6 @@ class Model_Scrollery extends Model
                     $scroll = null;
                     $reason = self::COURT_SKIP_UNPRINTABLE;
                 }
-
-                if ($scroll !== null && trim((string) $scroll['title']) === '') {
-                    $scroll = null;
-                    $reason = self::COURT_SKIP_NO_NAME;
-                }
             }
 
             $meta[$caId] = [
@@ -437,9 +445,12 @@ class Model_Scrollery extends Model
      * text: AwardId and Name are the allowlist's, and OfficerRole is 'none' because
      * printable_award_choices() only ever returns non-officer rows — the same
      * construction compose() uses. The date is the court's (a line has none of its
-     * own). The citation passes RecommendationVisibility::publishable_citation(),
-     * so a Monarchy Only rec's reason that was saved as the line's public comment
-     * never prints.
+     * own). The citation is Court::effectiveCitation() — the exact rule the commit
+     * path publishes by: the typed public comment; else the rec's reason unless the
+     * officer cleared the citation or the rec is Monarchy Only; then the publishing
+     * gate, so a Monarchy Only reason saved as the typed comment never prints
+     * either. Scrolls print BEFORE court, so without the inheritance most of them
+     * would carry no citation at all.
      *
      * The issuer follows compose(): a park court names the park, a kingdom court
      * names the kingdom, and only that one name is set. MundaneId and IsLadder ride
@@ -463,8 +474,9 @@ class Model_Scrollery extends Model
             'Rank'             => (int) ($line['Rank'] ?? 0),
             'IsLadder'         => !empty($line['IsLadder']) ? 1 : 0,
             'Date'             => (string) ($court['Date'] ?? ''),
-            'Note'             => RecommendationVisibility::publishable_citation(
+            'Note'             => Court::effectiveCitation(
                 (string) ($line['PublicComment'] ?? ''),
+                (bool) ($line['PublicCommentCleared'] ?? false),
                 (string) ($line['RecReason'] ?? ''),
                 (bool) ($line['RecMonarchyOnly'] ?? false)
             ),
@@ -474,6 +486,28 @@ class Model_Scrollery extends Model
             'ParkName'         => $parkId > 0 ? (string) ($court['ParkName'] ?? '') : '',
             'KingdomName'      => $parkId > 0 ? '' : (string) ($court['KingdomName'] ?? ''),
         ];
+    }
+
+    /**
+     * Whether a catalog choice, printed from a court line, would carry an award
+     * name. THE one predicate behind both printable_kingdomaward_ids() (what the
+     * planner offers) and scrolls_for_court_awards()'s COURT_SKIP_NO_NAME (what
+     * the run refuses), so the two cannot drift.
+     *
+     * Resolved the way BuildScroll() resolves the title it draws — the same row
+     * courtLineScrollRowForTest() builds, through Scroll::ResolveTitle() and the
+     * mojibake repair — and nothing on a court line changes that answer: the title
+     * depends only on the choice's AwardId and Name. A Custom Award whose
+     * kingdomaward is blank or still the ORK's "Custom Award" placeholder resolves
+     * to '' and so prints no name.
+     *
+     * @param array<string, mixed> $choice a printable_award_choices() entry
+     */
+    public static function courtChoicePrintsANameForTest(array $choice): bool
+    {
+        $title = Scroll::ResolveTitle(self::courtLineScrollRowForTest([], $choice, [], ''));
+
+        return trim(ScrollText::RepairMojibake($title)) !== '';
     }
 
     /**

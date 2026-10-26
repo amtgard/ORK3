@@ -498,6 +498,33 @@ class Court
     }
 
     /**
+     * The citation a court line PUBLISHES, the one rule shared by the commit path
+     * (commitStagedAward) and anything that has to show that citation ahead of
+     * commit — Scrollery's court print run, whose scrolls are printed before court.
+     *
+     * Precedence (spec 6.1): the officer's public comment; else the originating
+     * rec's reason, but only when the officer did not explicitly clear the
+     * citation and the rec is not Monarchy Only; else nothing. The result then
+     * passes the publishing gate (publishable_citation()), so a Monarchy Only
+     * reason saved verbatim as the typed comment is withheld too.
+     *
+     * Public static and DB-free on purpose: it is a pure decision over four facts
+     * the caller has already read. Not JSON-reachable — Court is not whitelisted.
+     */
+    public static function effectiveCitation(
+        string $publicComment,
+        bool $publicCommentCleared,
+        string $recReason,
+        bool $recMonarchyOnly
+    ): string {
+        $note = $publicComment !== ''
+            ? $publicComment
+            : ((!$publicCommentCleared && !$recMonarchyOnly) ? $recReason : '');
+
+        return self::publishable_citation($note, $recReason, $recMonarchyOnly);
+    }
+
+    /**
      * The gate for text tied to recommendation $rec_id (its CURRENT reason and
      * state), for callers outside Court such as the Recs Manager grant note.
      */
@@ -1871,18 +1898,27 @@ class Court
         // A Monarchy Only rec's reason is never inherited, whatever the line's flag
         // says: the rec may have been hidden after its line was staged (the flag was
         // set only at add time), and RecMonarchyOnly is re-read at commit.
-        $note     = $row['PublicComment'] !== ''
-            ? $row['PublicComment']
-            : ((empty($row['PublicCommentCleared']) && empty($row['RecMonarchyOnly'])) ? $row['RecReason'] : '');
+        //
         // ...and never as a TYPED citation either. A line staged (or saved) while
         // its rec was public can carry the reason verbatim in public_comment — Grant
         // modal pre-fill, Record view "Given", "(Start from Rec)" + Save, then Bulk
         // Record Grants — and the rec can be hidden before finalize. The commit
         // re-reads both, publishes nothing in that case, and setAwardId blanks the
         // stored citation so the public Court Report agrees.
-        $published = self::publishable_citation($note, (string)($row['RecReason'] ?? ''), !empty($row['RecMonarchyOnly']));
-        $withheld  = $published !== $note;
-        $note      = $published;
+        //
+        // Both rules live in effectiveCitation(), which Scrollery's court print run
+        // also uses, so a scroll printed before court carries the citation this
+        // commit will publish.
+        $note = self::effectiveCitation(
+            (string)$row['PublicComment'],
+            !empty($row['PublicCommentCleared']),
+            (string)($row['RecReason'] ?? ''),
+            !empty($row['RecMonarchyOnly'])
+        );
+        // Withheld = the gate blanked a typed citation. Only a non-empty typed
+        // comment can be gated: an inherited reason is inherited only when the rec
+        // is NOT Monarchy Only, and the gate fires only when it is.
+        $withheld = (string)$row['PublicComment'] !== '' && $note !== (string)$row['PublicComment'];
 
         // (3) Throw-safe player-record write. add_player_award returns the FLAT
         // shape: Status (int, 0=success), Error, Detail (+ our new AwardId).

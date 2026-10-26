@@ -32,6 +32,7 @@ final class ScrolleryCourtLineTest extends TestCase
             'PublicComment'   => '',
             'RecReason'       => '',
             'RecMonarchyOnly' => false,
+            'PublicCommentCleared' => false,
             'IsLadder'        => true,
         ], $o);
     }
@@ -92,6 +93,82 @@ final class ScrolleryCourtLineTest extends TestCase
         );
 
         $this->assertSame('For valor', $row['Note']);
+    }
+
+    /**
+     * Scrolls print BEFORE court, when most lines still have no typed citation:
+     * the scroll carries the rec reason the commit will inherit and publish.
+     */
+    public function testEmptyCitationInheritsAPublicRecReason(): void
+    {
+        $row = Model_Scrollery::courtLineScrollRowForTest(
+            $this->line(['PublicComment' => '', 'RecReason' => 'For holding the bridge', 'RecMonarchyOnly' => false]),
+            $this->choice(),
+            $this->court(),
+            ''
+        );
+
+        $this->assertSame('For holding the bridge', $row['Note']);
+    }
+
+    /** The officer's explicit "(Clear)" promises nothing of the rec is published. */
+    public function testClearedCitationDoesNotInheritTheRecReason(): void
+    {
+        $row = Model_Scrollery::courtLineScrollRowForTest(
+            $this->line([
+                'PublicComment'        => '',
+                'PublicCommentCleared' => true,
+                'RecReason'            => 'For holding the bridge',
+                'RecMonarchyOnly'      => false,
+            ]),
+            $this->choice(),
+            $this->court(),
+            ''
+        );
+
+        $this->assertSame('', $row['Note']);
+    }
+
+    /** An empty citation never inherits a Monarchy Only rec's reason. */
+    public function testEmptyCitationDoesNotInheritAHiddenRecReason(): void
+    {
+        $row = Model_Scrollery::courtLineScrollRowForTest(
+            $this->line(['PublicComment' => '', 'RecReason' => 'secret', 'RecMonarchyOnly' => true]),
+            $this->choice(),
+            $this->court(),
+            ''
+        );
+
+        $this->assertSame('', $row['Note']);
+    }
+
+    /** The shared rule, against the commit path's own precedence table. */
+    public function testEffectiveCitationPrecedence(): void
+    {
+        // [publicComment, cleared, recReason, monarchyOnly] => expected
+        $cases = [
+            [['Typed', false, 'Rec', false], 'Typed'],
+            [['Typed', true, 'Rec', false], 'Typed'],
+            [['', false, 'Rec', false], 'Rec'],
+            [['', true, 'Rec', false], ''],
+            [['', false, 'Rec', true], ''],
+            [['Rec', false, 'Rec', true], ''],
+            [[' Rec ', false, 'Rec', true], ''],
+            [['Officer wrote this', false, 'Rec', true], 'Officer wrote this'],
+            [['', false, '', false], ''],
+        ];
+        foreach ($cases as [$args, $expected]) {
+            $this->assertSame($expected, Court::effectiveCitation(...$args), json_encode($args));
+        }
+    }
+
+    public function testUnnamedCustomChoicePrintsNoName(): void
+    {
+        $this->assertFalse(Model_Scrollery::courtChoicePrintsANameForTest(['AwardId' => 94, 'Name' => 'Custom Award']));
+        $this->assertFalse(Model_Scrollery::courtChoicePrintsANameForTest(['AwardId' => 94, 'Name' => '']));
+        $this->assertFalse(Model_Scrollery::courtChoicePrintsANameForTest(['AwardId' => 246, 'Name' => 'Custom Title']));
+        $this->assertTrue(Model_Scrollery::courtChoicePrintsANameForTest(['AwardId' => 94, 'Name' => 'Order of the Hellrider']));
+        $this->assertTrue(Model_Scrollery::courtChoicePrintsANameForTest(['AwardId' => 21, 'Name' => 'Order of the Rose']));
     }
 
     public function testGiverPassesThrough(): void

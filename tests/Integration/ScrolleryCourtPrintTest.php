@@ -68,7 +68,13 @@ final class ScrolleryCourtPrintTest extends TestCase
 
         $this->assertNotSame([], $map);
         foreach ($this->model->printable_award_choices($this->kid) as $choice) {
-            $this->assertTrue($map[$choice['KingdomAwardId']] ?? false);
+            // Every catalog choice that prints a name is in the map; one that would
+            // print a blank title is not (it could only ever be skipped).
+            $this->assertSame(
+                Model_Scrollery::courtChoicePrintsANameForTest($choice),
+                $map[$choice['KingdomAwardId']] ?? false,
+                $choice['Name']
+            );
         }
         $this->assertSame([], $this->model->printable_kingdomaward_ids(0));
     }
@@ -174,10 +180,15 @@ final class ScrolleryCourtPrintTest extends TestCase
         );
         $st->execute([$this->kid]);
         $kaId = (int) $st->fetchColumn();
-        if ($kaId <= 0 || !isset($this->model->printable_kingdomaward_ids($this->kid)[$kaId])) {
-            $this->markTestSkipped('No unnamed, Scrollery-printable Custom Award in kingdom ' . $this->kid . '.');
+        $inCatalog = in_array($kaId, array_column($this->model->printable_award_choices($this->kid), 'KingdomAwardId'), true);
+        if ($kaId <= 0 || !$inCatalog) {
+            $this->markTestSkipped('No unnamed Custom Award in kingdom ' . $this->kid . "'s Scrollery catalog.");
         }
 
+        // The planner's dropdown never offers Scrollery Print for it...
+        $this->assertArrayNotHasKey($kaId, $this->model->printable_kingdomaward_ids($this->kid));
+
+        // ...and a line that reached Scrollery Print anyway is skipped, not printed blank.
         $line = $this->scrolleryLine($kaId, ['rank' => 0]);
         $run  = $this->model->scrolls_for_court_awards($this->courtId, [], $this->playerId);
 
