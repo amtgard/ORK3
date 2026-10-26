@@ -1536,8 +1536,10 @@ button.cp-rp-blk {
     -webkit-appearance: none; appearance: none;
     position: relative; display: flex; gap: 1px; flex: 1 1 0; min-width: 4px; height: 100%; min-height: 0;
     margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
-    cursor: pointer;
+    overflow: hidden; cursor: pointer;
 }
+/* Dense bars (many lines): slices touch inside a block; the 2px block gaps stay. */
+.cp-rp-bar-dense button.cp-rp-blk { gap: 0; }
 .cp-rp-slice { flex: 1 1 0; min-width: 0; height: 100%; background: var(--cp-trk-pending-mark); }
 .cp-rp-bar .cp-rp-blk:first-child .cp-rp-slice:first-child { border-radius: 3px 0 0 3px; }
 .cp-rp-bar .cp-rp-blk:last-child .cp-rp-slice:last-child   { border-radius: 0 3px 3px 0; }
@@ -1571,6 +1573,11 @@ button.cp-rp-need-btn:focus-visible, button.cp-rp-fchip:focus-visible { outline:
 .cp-rp-need-ok { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: #4a5568; }
 .cp-rp-need-ok i { color: #2f855a; }
 .cp-rp-sum-note { font-size: 11px; color: #718096; }
+/* Windows High Contrast would flatten every fill to the system background: keep the
+   bars' and swatches' own colours (the labels, legend and aria carry them too). */
+@media (forced-colors: active) {
+    .cp-rp-slice, button.cp-rp-blk, .cp-rp-swatch, .cp-rp-bar-empty { forced-color-adjust: none; }
+}
 /* Visually hidden, still read aloud (the legend's spoken counts). */
 .cp-rp-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* Shown while the heartbeat waits on an Order line's open expand panel. */
@@ -1581,7 +1588,10 @@ button.cp-rp-need-btn:focus-visible, button.cp-rp-fchip:focus-visible { outline:
    filter; it should not draw a ring for a mouse user. */
 #cp-rp-root:focus:not(:focus-visible) { outline: none; }
 
-.cp-rp-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+/* The filter buttons, then the active bar filter's chip (beside them; on a phone,
+   above them — see the 640px block). */
+.cp-rp-filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.cp-rp-filters { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 button.cp-rp-filter {
     -webkit-appearance: none; appearance: none;
     display: inline-flex; align-items: center; gap: 6px; margin: 0; min-height: 0;
@@ -1719,9 +1729,7 @@ button.cp-rp-art-add {
 }
 button.cp-rp-art-add:hover { background: #edf2f7; color: #2d3748; }
 
-.cp-rp-empty, .cp-rp-nomatch { text-align: center; padding: 36px 24px; color: #a0aec0; font-size: 14px; }
-.cp-rp-empty { border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
-.cp-rp-empty i { display: block; font-size: 28px; opacity: .3; margin-bottom: 10px; }
+.cp-rp-nomatch { text-align: center; padding: 36px 24px; color: #a0aec0; font-size: 14px; }
 
 html[data-theme="dark"] .cp-rp-bars { --cp-rp-sel: #edf2f7; background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
 html[data-theme="dark"] .cp-rp-bar-label,
@@ -1752,8 +1760,7 @@ html[data-theme="dark"] button.cp-rp-filter.active,
 html[data-theme="dark"] button.cp-rp-filter.active:hover { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
 html[data-theme="dark"] .cp-rp-filter-n { background: #2d3748; color: #cbd5e0; }
 html[data-theme="dark"] button.cp-rp-filter.active .cp-rp-filter-n { background: rgba(255,255,255,.2); color: #fff; }
-html[data-theme="dark"] .cp-rp-grid,
-html[data-theme="dark"] .cp-rp-empty { background: #161b22; border-color: #2d3748; }
+html[data-theme="dark"] .cp-rp-grid { background: #161b22; border-color: #2d3748; }
 html[data-theme="dark"] .cp-rp-head { background: #1f2733; border-color: #2d3748; color: #a0aec0; }
 html[data-theme="dark"] .cp-rp-row { background: #161b22; border-color: #1f2733; }
 html[data-theme="dark"] .cp-rp-row:nth-child(even) { background: #1a2030; }
@@ -1778,7 +1785,6 @@ html[data-theme="dark"] .cp-rp-grid input.cp-rp-maker-input::placeholder { color
 html[data-theme="dark"] .cp-rp-muted { color: #718096; }
 html[data-theme="dark"] button.cp-rp-art-add { background: #1f2733; border-color: #4a5568; color: #cbd5e0; }
 html[data-theme="dark"] button.cp-rp-art-add:hover { background: #2d3748; color: #fff; }
-html[data-theme="dark"] .cp-rp-empty,
 html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
 
 /* Below 1280px the nine columns no longer fit beside the sidebar: each line takes two
@@ -1807,8 +1813,11 @@ html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
     .cp-rp-leg-key { flex: 1 1 100%; }
     button.cp-rp-need-btn, .cp-rp-need-ok { margin-left: 0; }
     button.cp-rp-need-btn, button.cp-rp-fchip { min-height: 36px; }
-    button.cp-rp-fchip { flex: 0 0 auto; }
-    .cp-rp-filters { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+    .cp-rp-bar-dense-sm button.cp-rp-blk { gap: 0; }
+    /* The chip takes its own row above the sideways-scrolling buttons. */
+    .cp-rp-filterbar { flex-direction: column; align-items: flex-start; }
+    button.cp-rp-fchip { order: -1; margin: 0; max-width: 100%; white-space: normal; text-align: left; }
+    .cp-rp-filters { align-self: stretch; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
     button.cp-rp-filter { flex: 0 0 auto; min-height: 40px; }
     .cp-rp-grid {
         --cp-rp-cols: 22px auto minmax(0, 1fr) auto;
@@ -6233,8 +6242,11 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         courtAwards.forEach(function(a) {
             if (a.Status === 'cancelled') { c.skipped++; return; }
             c.lines++;
-            c.scroll[cpRpScroll(a)].push(a);
-            c.regalia[cpRpRegalia(a)].push(a);
+            // A bucket is made on first use too, so a value outside CP_TRACK_STATES (an
+            // empty definition, say) cannot throw.
+            var sv = cpRpScroll(a), rv = cpRpRegalia(a);
+            (c.scroll[sv]  || (c.scroll[sv]  = [])).push(a);
+            (c.regalia[rv] || (c.regalia[rv] = [])).push(a);
             if (cpRpNeedsArtisan(a)) c.need++;
             if (cpLineComplete(a))   c.complete++;
         });
@@ -6279,8 +6291,11 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                 ' aria-label="' + esc(t.title + ': ' + e.label + ', ' + items.length + ' of ' + c.lines) + '"' +
                 ' onclick="cpRpToggleFilter(\'' + key + '\')">' + slices + '</button>';
         }).join('');
+        // Past ~90 lines a phone-width slice is thinner than its gap, past ~300 a desktop
+        // one is: dense bars drop the gaps between slices (blocks keep theirs).
+        var dense = c.lines > 300 ? ' cp-rp-bar-dense' : c.lines > 90 ? ' cp-rp-bar-dense-sm' : '';
         return '<div class="cp-rp-bar-row">' + label +
-            '<div class="cp-rp-bar" role="group" aria-label="' + t.title + ' by status">' + blocks + '</div></div>';
+            '<div class="cp-rp-bar' + dense + '" role="group" aria-label="' + t.title + ' by status">' + blocks + '</div></div>';
     }
     // The legend: every status present in either bar, with its swatch and its counts as
     // "scrolls · regalia" (– where the type has no such status), then the artisan callout.
@@ -6294,8 +6309,9 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         });
         var items = entries.map(function(e) {
             var v = cpRpInt(e.value);
-            var s = c.scroll[v], r = c.regalia[v];
-            var sn = s ? s.length : 0, rn = r ? r.length : 0;
+            // A type without this status shows "–" (Scrollery Print on regalia).
+            var s = CP_TRACK_STATES.scroll.indexOf(v) >= 0, r = CP_TRACK_STATES.regalia.indexOf(v) >= 0;
+            var sn = (c.scroll[v] || []).length, rn = (c.regalia[v] || []).length;
             if (!sn && !rn) return '';
             var spoken = e.label + ': ' + (s ? sn + ' scroll' + (sn === 1 ? '' : 's') : 'no scrolls') + ', ' + (r ? rn + ' regalia' : 'no regalia');
             return '<span class="cp-rp-leg-item" data-group="' + esc(e.group) + '">' +
@@ -6322,7 +6338,9 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     }
 
     // The three filter buttons, then — while a bar block filters the grid — its
-    // removable chip ("Regalia · In Progress ×").
+    // removable chip ("Regalia · In Progress ×"). The chip sits outside the buttons'
+    // group: on a phone that group scrolls sideways, and the chip takes its own row
+    // above it so it is never off-screen.
     function cpRpFiltersHtml(c) {
         var sf = cpRpStatusFilter(cpRpFilter), chip = '';
         if (sf) {
@@ -6333,14 +6351,15 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                 '<span class="cp-rp-swatch" aria-hidden="true"></span>' + esc(name) +
                 ' <i class="fas fa-times" aria-hidden="true"></i></button>';
         }
-        return '<div class="cp-rp-filters" role="group" aria-label="Filter lines">' +
+        return '<div class="cp-rp-filterbar">' +
+            '<div class="cp-rp-filters" role="group" aria-label="Filter lines">' +
             CP_RP_FILTERS.map(function(f) {
                 var on = f.key === cpRpFilter;
                 return '<button type="button" class="cp-rp-filter' + (on ? ' active' : '') + '" data-rp-filter="' + f.key + '"' +
                     ' aria-pressed="' + (on ? 'true' : 'false') + '" onclick="cpRpSetFilter(\'' + f.key + '\')">' +
                     esc(f.label) + ' <span class="cp-rp-filter-n">' + cpRpFilterCount(c, f.key) + '</span></button>';
-            }).join('') + chip +
-            '</div>';
+            }).join('') +
+            '</div>' + chip + '</div>';
     }
 
     // A maker cell: the maker button (click, Enter or Space opens the inline search) and,
@@ -6445,7 +6464,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     // inside a detached row or bar); an Order element is not ours.
     function cpRpFocusFallback(el) {
         var root = gid('cp-rp-root');
-        if (!root || !el || !el.closest || !el.closest('#cp-rp-root, .cp-rp-row, .cp-rp-bars, .cp-rp-filters') || cpRpView !== 'resources') return null;
+        if (!root || !el || !el.closest || !el.closest('#cp-rp-root, .cp-rp-row, .cp-rp-bars, .cp-rp-filterbar') || cpRpView !== 'resources') return null;
         var f = root.querySelector('.cp-rp-filter.active, .cp-rp-fchip');
         if (f) return f;
         root.tabIndex = -1;
@@ -6473,8 +6492,8 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         var html;
         var c = cpRpCounts();
         if (!courtAwards.length) {
-            // The bars still show, as empty "No awards yet" tracks.
-            html = cpRpBarsHtml(c) + '<div class="cp-rp-empty"><i class="fas fa-paint-brush" aria-hidden="true"></i>No awards on this court yet.</div>';
+            // The bars' "No awards yet" tracks are the whole empty state.
+            html = cpRpBarsHtml(c);
         } else {
             var rows = '';
             courtAwards.forEach(function(a, i) {
