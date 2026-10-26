@@ -603,6 +603,10 @@
     var SKEY = 'sc-sig';
     var sigKeys = [];
     var sigFallback = 'hand';
+    /* The refit the last apply queued, settled. The print page's auto-print gate waits on
+       it: a remembered face applied in place was never preloaded, and printing before it
+       arrives prints the fallback. */
+    var sigLast = Promise.resolve();
 
     function sigKnown(key) { return !!key && sigKeys.indexOf(key) !== -1; }
 
@@ -649,7 +653,7 @@
         var loading = (fam && doc.fonts && doc.fonts.load)
             ? doc.fonts.load('16px "' + fam + '"')
             : Promise.resolve();
-        loading.then(function () {}, function () {}).then(function () {
+        sigLast = loading.then(function () {}, function () {}).then(function () {
             af.fit(root || doc);
             if (af.reportClipping) { af.reportClipping(root || doc); }
         });
@@ -705,6 +709,9 @@
             set: sigSet,
             bind: sigBind,
             apply: sigApply,
+            /* ready() -> Promise. Settles once the last apply's face has loaded and the
+               page has been fitted in it. Never rejects. */
+            ready: function () { return sigLast; },
             /* Always names the key, as face does, so a URL says what the preview showed. */
             decorate: function (url, key) { return sigKnown(key) ? setParam(url, 'sig', key) : url; }
         }

@@ -524,7 +524,9 @@ foreach ($Scrolls as $scrollery_scan) {
     var Sig = Hand.sig;
     Sig.init(<?= json_encode(array_keys($scrollery_sigs)) ?>, <?= json_encode(Scroll::DEFAULT_SIGNATURE_HAND) ?>);
 
-    var urlSig = (window.location.search.match(/[?&]sig=([a-z]+)/i) || [])[1];
+    /* Lowercased as the server's NormaliseSignatureHand does, so &sig=GreatVibes counts
+       as explicit rather than falling through to the remembered value. */
+    var urlSig = ((window.location.search.match(/[?&]sig=([a-z]+)/i) || [])[1] || '').toLowerCase();
 
     function repaint(key) {
         Sig.apply(document.body, key, document, sel);
@@ -645,7 +647,12 @@ foreach ($Scrolls as $scrollery_scan) {
         ? settled(window.ScrolleryAutofit.ready)
         : settled(document.fonts && document.fonts.ready);
 
-    Promise.all([loaded, fitted]).then(go, go);
+    /* A remembered signature face is applied in place and was not preloaded; its refit
+       is the last thing that has to finish. */
+    var Sig = window.ScrolleryHand && window.ScrolleryHand.sig;
+    var signed = settled(Sig && Sig.ready ? Sig.ready() : null);
+
+    Promise.all([loaded, fitted, signed]).then(go, go);
     window.setTimeout(go, FAILSAFE_MS);
 }());
 </script>

@@ -643,9 +643,20 @@ test('the print page: the default sig leaves the given-by font unchanged, and a 
   await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
   await settle(page);
   await expect.poll(async () => (await givenByFont(page, '.scroll-flow')).family).toContain('Allura');
+  // The auto-print gate waits on sig.ready(): it settles only once the remembered face, which
+  // was never preloaded, has loaded.
+  expect(await page.evaluate(() => (window as any).ScrolleryHand.sig.ready()
+    .then(() => document.fonts.check('16px "Allura"')))).toBe(true);
   await page.goto(url + '&sig=hand', { waitUntil: 'load' });
   await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
   await settle(page);
   expect((await givenByFont(page, '.scroll-flow')).family).toContain('Averia Serif Libre');
+  // The key is matched case-blind, as the server matches it: an explicit mixed-case sig= still
+  // beats the remembered face.
+  await page.goto(url + '&sig=GreatVibes', { waitUntil: 'load' });
+  await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+  await settle(page);
+  expect((await givenByFont(page, '.scroll-flow')).family).toContain('Great Vibes');
+  expect(await page.locator('#sc-sig').inputValue()).toBe('greatvibes');
   await page.evaluate(() => localStorage.removeItem('sc-sig'));
 });
