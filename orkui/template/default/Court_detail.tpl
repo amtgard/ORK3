@@ -1885,7 +1885,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         <div class="cp-header-actions" style="display:flex;gap:8px">
             <?php if (!empty($pendingRecs)): ?>
             <button class="cp-btn-outline cp-btn-sm" onclick="cpOpenRecModal()">
-                <i class="fas fa-star"></i> Add from Recommendations
+                <i class="fas fa-star"></i> Add from Recs
             </button>
             <?php endif; ?>
             <button class="cp-btn-primary cp-btn-sm" onclick="cpOpenAdhocModal('award')">
