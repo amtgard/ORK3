@@ -1545,6 +1545,12 @@ button.cp-rp-maker-clear:hover, button.cp-rp-maker-clear:focus-visible { backgro
 /* The results list is sized to its input; a narrow maker column needs more room for
    a persona and its kingdom:park. cpPositionAc clamps it to the viewport. */
 #cp-rp-root .cp-ac-dropdown { min-width: 240px; }
+.cp-rp-row.cp-rp-skipped.cp-rp-editing { opacity: 1; }
+/* Touch tablets keep the desktop grid; the clear needs a real target there too. The
+   phone card layout below raises it to 44px. */
+@media (pointer: coarse) {
+    button.cp-rp-maker-clear { width: 28px; height: 28px; font-size: 12px; }
+}
 
 .cp-rp-arts { display: flex; align-items: center; gap: 6px; }
 .cp-rp-art-list { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #4a5568; }
@@ -5825,6 +5831,9 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
     // 'scroll:<caid>' / 'regalia:<caid>' -> {id, persona} while that maker's write is
     // queued or in flight; the cell shows it (aria-busy) until the write settles.
     var cpRpMakerPending = {};
+    // True when a render was skipped because the maker search was open: only then does
+    // closing the search need a render (it already restored its own cell from the model).
+    var cpRpEditDeferred = false;
 
     var CP_RP_FILTERS = [
         { key: 'all',       label: 'All' },
@@ -6032,8 +6041,13 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         // Never re-render under an open edit: the inline maker search or the shared
         // picker anchored to one of this grid's chips. Each calls cpRpInvalidate() when
         // it ends, and the render runs then.
-        if (window.cpRpEditing || (cpTrackMenuChip && root.contains(cpTrackMenuChip))) { cpRpDirty = true; return; }
+        if (window.cpRpEditing || (cpTrackMenuChip && root.contains(cpTrackMenuChip))) {
+            cpRpDirty = true;
+            if (window.cpRpEditing) cpRpEditDeferred = true;   // the editor's close renders it
+            return;
+        }
         cpRpDirty = false;
+        cpRpEditDeferred = false;
 
         var act = document.activeElement;
         var focusEl  = (act && act !== root && root.contains(act)) ? act : null;
@@ -6135,8 +6149,9 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
             if (!a) return;   // the line left the court while this waited its turn
             // A peer (or this officer's queued chip write) may have moved the scroll to
             // Scrollery Print meanwhile: it has no maker, so nothing is posted.
+            // A clear needs nothing more: the line already has no maker.
             if (kind === 'scroll' && cpRpScroll(a) === 3) {
-                cpAlert('This scroll is now set to Scrollery Print, so it has no scroll maker.');
+                if (id > 0) cpAlert('This scroll is now set to Scrollery Print, so it has no scroll maker.');
                 return;
             }
             var fd = new FormData();
@@ -6218,6 +6233,9 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
             '</span>';
         var input = cell.querySelector('.cp-rp-maker-input');
         var drop  = gid(dropId);
+        // A skipped row is dimmed; the open search (and its results list) is not.
+        var rowEl = cell.closest('.cp-rp-row');
+        if (rowEl) rowEl.classList.add('cp-rp-editing');
         window.cpRpEditing = true;
 
         var ed = { caid: caid, kind: kind };
@@ -6225,6 +6243,10 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
             if (cpRpEditor !== ed) return;
             cpRpEditor = null;
             if (window.cpAcOpenDrop === drop && typeof window.cpAcUnbind === 'function') window.cpAcUnbind();
+            // A search still debouncing or in flight resolves against this detached list;
+            // the shared module skips a list that has left the document.
+            drop.removeAttribute('id');
+            if (rowEl) rowEl.classList.remove('cp-rp-editing');
             if (cell.isConnected) {
                 var row = cpRpFind(caid);
                 if (row) cell.innerHTML = cpRpMakerHtml(kind, row);
@@ -6232,7 +6254,15 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
                 if (refocus && again) again.focus({ preventScroll: true });
             }
             window.cpRpEditing = false;
-            cpRpInvalidate();
+            // Render only what the open search held back. A blur from a click elsewhere
+            // closes this while the button is still down: a render now would replace the
+            // node under the pointer and the click would never land, so it waits for the
+            // pointer to come up (cpRpAfterPointer), after the click is dispatched.
+            if (cpRpEditDeferred) {
+                cpRpEditDeferred = false;
+                if (cpRpPointerHeld) cpRpRenderAfterPointer = true;
+                else cpRpInvalidate();
+            }
         };
         cpRpEditor = ed;
 
@@ -6262,6 +6292,18 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         input.focus({ preventScroll: true });
         if (cur) input.select();
     }
+
+    // Is a pointer button down right now? (see ed.close)
+    var cpRpPointerHeld = false, cpRpRenderAfterPointer = false;
+    document.addEventListener('pointerdown', function() { cpRpPointerHeld = true; }, true);
+    function cpRpPointerUp() {
+        cpRpPointerHeld = false;
+        if (!cpRpRenderAfterPointer) return;
+        cpRpRenderAfterPointer = false;
+        setTimeout(cpRpInvalidate, 0);   // after the click this pointerup produces
+    }
+    document.addEventListener('pointerup', cpRpPointerUp, true);
+    document.addEventListener('pointercancel', cpRpPointerUp, true);
 
     var cpRpRootEl = gid('cp-rp-root');
     if (cpRpRootEl) cpRpRootEl.addEventListener('click', function(e) {
