@@ -3,12 +3,16 @@
 declare(strict_types=1);
 
 /*
- * DRAFT, PENDING OWNER SIGN-OFF. This is the one judgement the artwork requires (spec 7.3,
- * docs/scrollery-ink-collision-results.md section 4): which plates each design means the
- * type to sit ON. The owner signs the contact sheet before any free-space profile built
- * from this file is committed. Regenerate the sheet with
+ * ADOPTED BY CONTROLLER RULING ON 2026-10-25; the owner may revise it. This is the one
+ * judgement the artwork requires (spec 7.3, docs/scrollery-ink-collision-results.md
+ * section 4): which plates each design means the type to sit ON. The owner had not yet
+ * reviewed the contact sheet when the typeset engine was calibrated, so the draft policy
+ * below was adopted as final and every free-space profile was built from it. To revise a
+ * pattern, edit it here, look at the sheet, then rebuild the profiles (the coverage test
+ * fails on a stale policy-sha until you do):
  *
  *     npx playwright test --project=scroll-underlays      # writes tools/scroll-sweep/out/underlays/index.html
+ *     npm run profile:scrolls                             # rebuilds assets/scrolls/free-space.json
  *
  * WHAT THE FILE IS. order id => list of fnmatch() patterns, relative to assets/scrolls/,
  * naming the plates that design is DESIGNED to have type printed over: full-page washes,
