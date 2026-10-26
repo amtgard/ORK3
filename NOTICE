@@ -16,7 +16,14 @@ assets/scrolls/**
 orkui/template/revised-frontend/scroll/**
   Award certificate artwork, layer designs and flavour text originate in Arcanyst
   (https://github.com/ValoryFox/Arcanyst), by Valory Fox, used with the author's
-  permission to continue the work. Flavour text credited in Arcanyst to Kisa
+  permission to continue the work.
+  LICENSE: NOT covered by this repository's Apache-2.0 LICENSE. Licensed to Amtgard
+  International (and its authorized chapters, affiliates and successors) under the
+  Software and Artwork License Grant dated 2026-09-03, a non-exclusive grant with no
+  right to sublicense; see docs/licenses/arcanyst-software-and-artwork-license-grant-2026-09-03.md
+  (a plaintext transcription; the signed original is on file with Amtgard International).
+  Section 3 of that grant requires visible attribution to Valory Fox. Anyone else
+  who copies or forks this material needs their own permission from the author. Flavour text credited in Arcanyst to Kisa
   (Shelly Alexandra).
   Modifications: art re-pathed under assets/scrolls/; three webpack
   content-hashed files renamed (parchment.jpg, battle/arcane/wash.jpg,
