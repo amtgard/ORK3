@@ -45,11 +45,17 @@
  *                profile and the forced heading, read once per certificate.
  *   measureWords the width of each word in em at 1px, from a hidden span, cached per page.
  *   freeWidth    the free width of a band of the page, from the profile (§7.1).
- *   layoutTop    the entry point: sets the name, then the award under the hierarchy of
- *                §6.4.2, writes explicit lines, verifies them against the browser and
- *                writes the report (§6.8). The issuing place is not here yet; the
- *                spec's other pieces (composition, ornament placement, the budget) build
- *                on this and are not in the file yet.
+ *   setRole      one role: solve, write explicit lines, verify against the browser,
+ *                report (§6.8). The name, the award and the place all go through it.
+ *   the issuer   the versal, the lead and the place solved together: Classic with its
+ *                geometry taken from the flourishes' ink grids (§6.5.1), Centered
+ *                (§6.5.2), and the choice between them (§6.5.3).
+ *   ornaments    each flourish tried placed, then scaled, then hidden, against the ink
+ *                boxes of the text and the artwork's free interval (§6.6).
+ *   the budget   the top stack held to its share of the page, the name's ceiling coming
+ *                down until it fits or every role is at its floor (§6.7).
+ *   layoutTop    the entry point: runs the pipeline of §4 over one certificate and
+ *                writes the report (§6.8).
  *
  * CHARACTERS ARE COUNTED WITH Array.from(), NEVER .length. `.length` counts UTF-16 code
  * units, so an astral character (an emoji in a persona is legal) counts twice, and
@@ -100,6 +106,25 @@
         CLASSIC_PLACE_MIN: 0.85,  /* floor for the place in the Classic composition */
         ORN_GAP: 0.12,            /* em of clearance kept between text ink and an ornament */
         H_TOP_MIN: 0.40,          /* share of the content height the top block must keep */
+
+        /* The Centered lead is held lower than the table's maximum: spec §6.5.2 gives
+           "0.70-0.90em" for the connective on its own line. */
+        LEAD_CENTERED_MAX: 0.90,
+
+        /* Ornament candidates, tried in order before the flourish is hidden (§6.5.1,
+           §6.6), and the line-two rule's own two (§6.5.2: scale 0.8, then hidden). */
+        ORN_SCALES: [1, 0.85, 0.70],
+        RULE_SCALES: [1, 0.8],
+
+        /* The Centered rule pair (§6.5.2): each half is min(RULE.share of the place's
+           widest line, RULE.maxEm of its own em) wide; the halves meet with RULE.gapEm
+           between them. */
+        RULE: { share: 0.32, maxEm: 3.3, gapEm: 0.2 },
+
+        /* Budget (§6.7): the name's ceiling drops by this factor, at most BUDGET_ROUNDS
+           times, while the top stack is taller than its share of the page. */
+        NAME_SHRINK: 0.92,
+        BUDGET_ROUNDS: 3,
 
         /* Hierarchy (§6.4.2): each block's ceiling, as a fraction of the one above. */
         RATIOS: { awardToName: 0.85, placeToName: 0.75, placeToAward: 0.90 },
@@ -500,6 +525,22 @@
         return changed ? out : null;
     }
 
+    /*
+     * The band of the page line `j` can occupy: from where it would start at the smallest
+     * size to where it would end at the largest, so the width found for it is safe at
+     * every size in between and no iteration is needed (§6.4.3). When line 0 is minor the
+     * lines below it start higher than uniform spacing says, so their band begins higher
+     * by the same fraction. The solver and the DOM layer's verify read the same band
+     * through this one function: a band computed twice is a band that drifts.
+     */
+    function bandFor(y0, lineHeight, lo, hi, rootPx, j, lineZeroMinor) {
+        var up = j - (lineZeroMinor && j > 0 ? 1 - CONST.MINOR_SCALE : 0);
+        return {
+            top: y0 + up * lineHeight * lo * rootPx,
+            bottom: y0 + (j + 1) * lineHeight * hi * rootPx
+        };
+    }
+
     /* Every way to start `k` lines among `n` tokens: line 0 starts at token 0 and each
        later line at a larger index, in ascending order, so ties resolve the same way on
        every run. `visit` gets the live array of line starts; copy it to keep it. */
@@ -704,19 +745,13 @@
             || (CONST.ROLES[role] && CONST.ROLES[role].linePenalty)
             || CONST.ROLES.placeCentered.linePenalty;
 
-        /* Free width for line j, with the conservative band of §6.4.3: from where the
-           line would start at the smallest size to where it would end at the largest.
-           The band is taller than the line ever is, so the width found is safe at every
-           size in between and no iteration is needed. When line 0 is minor, the lines
-           below it start higher than the uniform spacing assumes, so their band begins
-           higher by the same fraction. Asked for each band once. */
+        /* Free width for line j over its conservative band (bandFor, §6.4.3). Asked for
+           each band once. */
         var cache = {};
         function allowed(j, lineZeroMinor) {
-            var up = j - (lineZeroMinor && j > 0 ? 1 - CONST.MINOR_SCALE : 0);
-            var top = o.y0 + up * o.lineHeight * lo * o.rootPx;
-            var bottom = o.y0 + (j + 1) * o.lineHeight * range.max * o.rootPx;
-            var key = top + ':' + bottom;
-            if (!(key in cache)) { cache[key] = o.freeWidth(top, bottom) * (1 - CONST.SLACK); }
+            var band = bandFor(o.y0, o.lineHeight, lo, range.max, o.rootPx, j, lineZeroMinor);
+            var key = band.top + ':' + band.bottom;
+            if (!(key in cache)) { cache[key] = o.freeWidth(band.top, band.bottom) * (1 - CONST.SLACK); }
             return cache[key];
         }
 
@@ -1034,6 +1069,10 @@
 
     /* ------------------------------------------------------------------ one role */
 
+    function collapse(text) {
+        return (text || '').replace(/\s+/g, ' ').trim();
+    }
+
     /* The words to set. A role already holding lines gives its source back from
        data-sc-text; otherwise its text is read and stored there. A composer's
        `textContent = ...` removes the lines, so the next run reads the new text. */
@@ -1043,74 +1082,121 @@
             if (stored !== null) { return stored; }
             return lineEls(role).map(function (l) { return l.textContent; }).join(' ');
         }
-        var text = (role.textContent || '').replace(/\s+/g, ' ').trim();
+        var text = collapse(role.textContent);
         if (text) { role.setAttribute('data-sc-text', text); } else { role.removeAttribute('data-sc-text'); }
         return text;
     }
 
+    /*
+     * The place's source: its words and its article. The server writes the article as a
+     * `<span class="sc-art">the</span>` inside the place span (spec §8.1), and it is set
+     * at the lead's size, so it is not one of the words the solver breaks. It is kept in
+     * data-sc-art while the lines are up, and written back onto the first line.
+     */
+    function placeSource(role) {
+        if (lineEls(role).length) {
+            var stored = role.getAttribute('data-sc-text');
+            if (stored !== null) { return { text: stored, art: role.getAttribute('data-sc-art') || '' }; }
+            return { text: lineEls(role).map(function (l) { return l.textContent; }).join(' '), art: '' };
+        }
+        var art = '', text = '';
+        Array.prototype.forEach.call(role.childNodes, function (n) {
+            if (n.nodeType === 1 && n.classList.contains('sc-art')) { art = collapse(n.textContent); } else { text += n.textContent; }
+        });
+        text = collapse(text);
+        if (text) { role.setAttribute('data-sc-text', text); } else { role.removeAttribute('data-sc-text'); }
+        if (text && art) { role.setAttribute('data-sc-art', art); } else { role.removeAttribute('data-sc-art'); }
+        return { text: text, art: text ? art : '' };
+    }
+
     function clearReport(role) {
-        ['data-sc-size', 'data-sc-lines', 'data-sc-planned', 'data-sc-overflow', 'data-sc-text']
+        ['data-sc-size', 'data-sc-lines', 'data-sc-planned', 'data-sc-overflow', 'data-sc-text', 'data-sc-art']
             .forEach(function (a) { role.removeAttribute(a); });
     }
 
     /* The lines as explicit block spans. The text goes in as a text node, so nothing in a
        persona can become markup. A minor line carries its own em size, relative to the
-       role's. */
-    function writeLines(role, lines, minor, allowed) {
+       role's. The article, when there is one, is re-created on the first line. */
+    function writeLines(role, lines, minor, allowed, art) {
         role.textContent = '';
         lines.forEach(function (text, j) {
             var span = document.createElement('span');
             span.className = j === minor ? 'sc-line sc-line--minor' : 'sc-line';
             if (j === minor) { span.style.fontSize = CONST.MINOR_SCALE + 'em'; }
             span.setAttribute('data-sc-w', allowed[j].toFixed(2));
-            span.appendChild(document.createTextNode(text));
+            if (j === 0 && art) {
+                var a = document.createElement('span');
+                a.className = 'sc-art';
+                a.appendChild(document.createTextNode(art));
+                span.appendChild(a);
+                span.appendChild(document.createTextNode(' ' + text));
+            } else {
+                span.appendChild(document.createTextNode(text));
+            }
             role.appendChild(span);
         });
     }
 
     /*
-     * The width line `j` was allowed, as solveBlock worked it out and with the same
-     * conservative band: from where the line would start at the smallest size to where it
-     * would end at the largest, so the width is safe at every size in between. When line 0
-     * is minor the lines below start higher than uniform spacing says.
-     */
-    function lineAllowed(ctx, lh, y0, j, minorIdx, range) {
-        var up = j - (minorIdx === 0 && j > 0 ? 1 - CONST.MINOR_SCALE : 0);
-        var top = y0 + up * lh * range.min * ctx.rootPx;
-        var bottom = y0 + (j + 1) * lh * range.max * ctx.rootPx;
-        return freeWidth(ctx, top, bottom, true) * (1 - CONST.SLACK);
-    }
-
-    /*
      * Set one role: solve, write, verify, report. Returns the report entry, or null when
-     * the role is absent or empty. An empty role is left alone, down to the blank writing
-     * line a composer leaves inside it, and any report it carried from a fuller text is
-     * taken off so that it does not describe words that are gone.
+     * the role is absent, empty, or has no size to write against. An empty role is left
+     * alone, down to the blank writing line a composer leaves inside it, and any report it
+     * carried from a fuller text is taken off so that it does not describe words that are
+     * gone. A role whose parent or root has no font size (a hidden subtree) is left alone
+     * too: the em to write would divide by zero.
+     *
+     * `x` carries what a role needs beyond the name's and the award's defaults:
+     *   row         the role-table row for line height (default CONST.ROLES[roleName])
+     *   source      el -> { text, art } (default: sourceText, no article)
+     *   solverRole  the role solveBlock is told (the place's two rows share 'place')
+     *   range       { sat, uMax, linePenalty } passed through for a place
+     *   maxLines    the place's line count
+     *   y0          the block's top, frame px (default: roleTop)
+     *   width       (top, bottom) -> width of the band, frame px (default: the centred
+     *               free width over the column)
+     *   artPx       width the article takes on the first line, held back from line 0
+     *   onSize      called with the size after every write, so the article follows
      */
-    function setRole(ctx, el, roleName, maxEm, minEm) {
+    function setRole(ctx, el, roleName, maxEm, minEm, x) {
+        x = x || {};
         if (!el) { return null; }
-        var row = CONST.ROLES[roleName];
-        var text = sourceText(el);
-        if (!text) { clearReport(el); return null; }
+        var row = x.row || CONST.ROLES[roleName];
+        var src = x.source ? x.source(el) : { text: sourceText(el), art: '' };
+        if (!src.text) { clearReport(el); return null; }
 
         var parentPx = pxOf(computed(el.parentElement).fontSize);
+        if (!(parentPx > 0) || !(ctx.rootPx > 0)) { return null; }
+
         var range = { min: minEm, max: Math.max(maxEm, minEm) };
-        var tokens = tokenize(text, roleName).map(function (t) { return t.text; });
+        var tokens = tokenize(src.text, roleName).map(function (t) { return t.text; });
         var m = measureWords(el, tokens);
-        var y0 = roleTop(ctx.award, el);
+        var y0 = x.y0 != null ? x.y0 : roleTop(ctx.award, el);
+        var widthOf = x.width || function (top, bottom) { return freeWidth(ctx, top, bottom, true); };
+        var artPx = x.artPx || 0;
 
         var sol = solveBlock({
-            text: text, role: roleName, measure: m.measure, spaceW: m.space,
-            range: { min: range.min, max: range.max },
+            text: src.text, role: x.solverRole || roleName, measure: m.measure, spaceW: m.space,
+            range: x.range
+                ? { min: range.min, max: range.max, sat: x.range.sat, uMax: x.range.uMax, linePenalty: x.range.linePenalty }
+                : { min: range.min, max: range.max },
+            maxLines: x.maxLines,
             lineHeight: row.lineHeight, y0: y0, rootPx: ctx.rootPx,
-            freeWidth: function (top, bottom) { return freeWidth(ctx, top, bottom, true); }
+            /* The article sits on line 0, which is the band that starts at y0 exactly. */
+            freeWidth: function (top, bottom) {
+                var w = widthOf(top, bottom);
+                return artPx && top === y0 ? Math.max(0, w - artPx) : w;
+            }
         });
 
+        /* data-sc-w is the whole line's width, article included: it is what verify and the
+           tests hold the printed line to. */
         var allowed = sol.lines.map(function (_, j) {
-            return lineAllowed(ctx, row.lineHeight, y0, j, sol.minor, range);
+            var b = bandFor(y0, row.lineHeight, range.min, range.max, ctx.rootPx, j, sol.minor === 0);
+            return widthOf(b.top, b.bottom) * (1 - CONST.SLACK);
         });
-        writeLines(el, sol.lines, sol.minor, allowed);
+        writeLines(el, sol.lines, sol.minor, allowed, src.art);
         var size = setSize(el, sol.size, ctx.rootPx, parentPx);
+        if (x.onSize) { x.onSize(size); }
 
         /* Verify against the browser. The solver measured each word alone, so kerning
            across a space, or a face that is not the one measured, can leave a line a few
@@ -1129,6 +1215,7 @@
                 if (worst === 1) { break; }
                 if (round === VERIFY_ROUNDS || size <= range.min + 1e-9) { overflow = true; break; }
                 size = setSize(el, Math.max(size * worst * VERIFY_MARGIN, range.min), ctx.rootPx, parentPx);
+                if (x.onSize) { x.onSize(size); }
             }
         }
 
@@ -1141,49 +1228,907 @@
             size: size,
             lines: Number(el.getAttribute('data-sc-lines')),
             planned: sol.planned,
-            overflow: overflow
+            overflow: overflow,
+            y0: y0
         };
+    }
+
+    /* ------------------------------------------------------------------ ink and ornaments */
+
+    /* Half a pixel is the smallest overlap that is real: layout rounds to whole pixels,
+       and a curl placed exactly ORN_GAP below a line must read as clear. */
+    var INK_EPS = 0.5;
+
+    var inkCache = Object.create(null);
+
+    /* "32x32:" + 256 hex -> 32 row masks (bit 31 is the leftmost cell), or null. Spec
+       §7.2. */
+    function decodeInk(text) {
+        if (!text) { return null; }
+        if (!(text in inkCache)) {
+            var m = /^32x32:([0-9a-fA-F]{256})$/.exec(text), rows = null;
+            if (m) {
+                rows = [];
+                for (var i = 0; i < 32; i++) { rows.push(parseInt(m[1].substr(i * 8, 8), 16)); }
+            }
+            inkCache[text] = rows;
+        }
+        return inkCache[text];
+    }
+
+    function absLeft(el) {
+        var x = 0;
+        while (el) { x += el.offsetLeft; el = el.offsetParent; }
+        return x;
+    }
+
+    /* An element's laid-out box in frame px from the top-left of the .Award, as a
+       difference of offsetParent-chain sums so that whatever the chain ends at cancels. */
+    function relBox(award, el) {
+        return { x: absLeft(el) - absLeft(award), y: absTop(el) - absTop(award), w: el.offsetWidth, h: el.offsetHeight };
+    }
+
+    /* Is the image drawn mirrored (the right ScRule copy)? Its grid is then read from the
+       other side. */
+    function isFlipped(el) {
+        var m = /^matrix\(([^)]+)\)$/.exec(computed(el).transform);
+        return !!m && parseFloat(m[1].split(',')[0]) < 0;
+    }
+
+    /* Screen px per frame px: the SVG that holds the certificate scales it, and every
+       ink box here comes from getBoundingClientRect and its relatives (spec §6.2). */
+    function frameScale(award) {
+        var w = award.offsetWidth;
+        return w > 0 ? award.getBoundingClientRect().width / w : 1;
+    }
+
+    function resetFlourish(img, props) {
+        (props || ['top', 'right', 'bottom', 'left', 'width', 'display']).forEach(function (p) { img.style.removeProperty(p); });
+        if (!img.getAttribute('style')) { img.removeAttribute('style'); }
+    }
+
+    function setWidth(img, px) {
+        var fontPx = pxOf(computed(img).fontSize) || 100;
+        img.style.width = (px / fontPx).toFixed(4) + 'em';
+    }
+
+    /* The inked cells of a flourish as frame-px rectangles [x0, y0, x1, y1], with the
+       box and grid they came from. Null when the image has no grid or no laid-out box
+       (a hidden image, or one not decoded yet): there is nothing to judge then. */
+    function inkOf(award, img) {
+        var rows = decodeInk(img.getAttribute('data-sc-ink'));
+        if (!rows) { return null; }
+        var box = relBox(award, img);
+        if (!(box.w > 0 && box.h > 0)) { return null; }
+        var flip = isFlipped(img), cw = box.w / 32, ch = box.h / 32, rects = [];
+        for (var r = 0; r < 32; r++) {
+            if (!rows[r]) { continue; }
+            for (var c = 0; c < 32; c++) {
+                if ((rows[r] >>> (31 - c)) & 1) {
+                    var cc = flip ? 31 - c : c;
+                    rects.push([box.x + cc * cw, box.y + r * ch, box.x + (cc + 1) * cw, box.y + (r + 1) * ch]);
+                }
+            }
+        }
+        return { box: box, rows: rows, rects: rects };
+    }
+
+    /* The ink boxes of a node's text, frame px: Range.getClientRects() undone by the
+       frame's scale. */
+    function nodeRects(award, k, node) {
+        var a = award.getBoundingClientRect(), range = document.createRange(), out = [];
+        range.selectNodeContents(node);
+        Array.prototype.forEach.call(range.getClientRects(), function (r) {
+            if (r.width > 0 && r.height > 0) {
+                out.push({ x0: (r.left - a.left) / k, y0: (r.top - a.top) / k, x1: (r.right - a.left) / k, y1: (r.bottom - a.top) / k });
+            }
+        });
+        return out;
+    }
+
+    function unionOf(rects) {
+        if (!rects.length) { return null; }
+        return rects.reduce(function (u, r) {
+            return { x0: Math.min(u.x0, r.x0), y0: Math.min(u.y0, r.y0), x1: Math.max(u.x1, r.x1), y1: Math.max(u.y1, r.y1) };
+        });
+    }
+
+    function nodeRect(award, k, node) {
+        return unionOf(nodeRects(award, k, node));
+    }
+
+    /*
+     * Every text line an ornament must keep clear of (spec §6.6): the lines of each
+     * engine role, the lead (one run of text, no lines) and the two quiet lines under
+     * the issuer. NOT the versal: the top and bottom flourishes are drawn around
+     * "Amtgard" by design, and the versal is not a role, so it is simply not listed.
+     */
+    function textBoxes(award, k) {
+        var out = [];
+        function add(node) { nodeRects(award, k, node).forEach(function (r) { out.push(r); }); }
+        Array.prototype.forEach.call(award.querySelectorAll('[data-sc-role]'), function (role) {
+            var lines = lineEls(role);
+            if (lines.length) { lines.forEach(add); } else if (collapse(role.textContent)) { add(role); }
+        });
+        Array.prototype.forEach.call(award.querySelectorAll('.IssuingVerb, .AwardDetails'), function (el) {
+            if (collapse(el.textContent)) { add(el); }
+        });
+        return out;
+    }
+
+    /* Does any inked cell meet a text box grown by `gap` on every side? */
+    function hitsText(rects, boxes, gap) {
+        for (var i = 0; i < rects.length; i++) {
+            var c = rects[i];
+            for (var j = 0; j < boxes.length; j++) {
+                var b = boxes[j];
+                if (c[0] < b.x1 + gap - INK_EPS && c[2] > b.x0 - gap + INK_EPS
+                    && c[1] < b.y1 + gap - INK_EPS && c[3] > b.y0 - gap + INK_EPS) { return true; }
+            }
+        }
+        return false;
+    }
+
+    /*
+     * The free interval at a span of y, as raw edges: unlike freeWidth() it is NOT held
+     * inside the column, because a flourish is allowed to hang past the column and what
+     * matters to it is the artwork. A band with no data is unbounded.
+     */
+    function profileEdges(ctx, yTop, yBottom) {
+        var l = -Infinity, r = Infinity, free = ctx.free;
+        if (free) {
+            var b0 = Math.floor((yTop - free.y0) / free.step);
+            var b1 = Math.ceil((yBottom - free.y0) / free.step) - 1;
+            if (b1 < b0) { b1 = b0; }
+            for (var b = Math.max(b0, 0); b <= b1; b++) {
+                if (free.L[b] != null && free.L[b] > l) { l = free.L[b]; }
+                if (free.R[b] != null && free.R[b] < r) { r = free.R[b]; }
+            }
+        }
+        return { l: l, r: r };
+    }
+
+    /* Does any inked cell fall outside the free interval of its band? */
+    function hitsArtwork(ctx, rects) {
+        if (!ctx.free) { return false; }
+        for (var i = 0; i < rects.length; i++) {
+            var e = profileEdges(ctx, rects[i][1], rects[i][3]);
+            if (rects[i][0] < e.l - INK_EPS || rects[i][2] > e.r + INK_EPS) { return true; }
+        }
+        return false;
+    }
+
+    /*
+     * Try each scale in turn (apply(s) puts the image(s) there) and keep the first that
+     * is clear of every text box and of the artwork; hide the image(s) when none is.
+     * Returns 'placed' (first candidate), 'scaled' or 'hidden'. An image with nothing to
+     * judge it by (no grid, or no box yet) is left at its first candidate and reported
+     * placed: the engine does not move what it cannot measure.
+     */
+    function chooseScale(ctx, imgs, scales, apply, boxes, gap) {
+        for (var i = 0; i < scales.length; i++) {
+            apply(scales[i]);
+            var clear = true, judged = true;
+            for (var j = 0; j < imgs.length && clear; j++) {
+                var ink = inkOf(ctx.award, imgs[j]);
+                if (!ink) { judged = false; continue; }
+                if (hitsText(ink.rects, boxes, gap) || hitsArtwork(ctx, ink.rects)) { clear = false; }
+            }
+            if (!judged && i === 0) { return 'placed'; }
+            if (clear) { return i === 0 ? 'placed' : 'scaled'; }
+        }
+        imgs.forEach(function (img) { img.style.display = 'none'; });
+        return 'hidden';
+    }
+
+    /* The row, in frame px from the image's top, where its curl starts: the topmost
+       inked row in the left 65% of the box (spec §6.5.1). Columns 0..20 are bits 31..11. */
+    function curlOffset(rows, h) {
+        for (var r = 0; r < 32; r++) { if ((rows[r] >>> 11) !== 0) { return r * h / 32; } }
+        return 0;
+    }
+
+    function firstInkRow(rows, h) {
+        for (var r = 0; r < 32; r++) { if (rows[r]) { return r * h / 32; } }
+        return 0;
+    }
+
+    /* ------------------------------------------------------------------ the issuer */
+
+    function issuerEls(award) {
+        var lead = award.querySelector('[data-sc-role="lead"]');
+        var place = award.querySelector('[data-sc-role="place"]');
+        if (!lead || !place) { return null; }
+        var p1 = lead.closest('p') || lead.parentElement;
+        var p2 = place.closest('p') || place.parentElement;
+        return {
+            section: award.querySelector('.IssuingTextSection') || p1.parentElement,
+            p1: p1, p2: p2, lead: lead, place: place,
+            versal: award.querySelector('.ScVersal'),
+            top: award.querySelector('#TopTextFlourish'),
+            bottom: award.querySelector('#BottomTextFlourish'),
+            right: award.querySelector('#RightTextFlourish'),
+            verb: award.querySelector('.IssuingVerb'),
+            rules: Array.prototype.slice.call(award.querySelectorAll('.ScRule')),
+            rightBase: 0
+        };
+    }
+
+    /* Put the issuer back to what the stylesheet draws, so each composition starts from
+       the same page and a second run starts where the first did. */
+    function resetIssuer(A) {
+        A.section.style.removeProperty('--sc-place-gutter');
+        A.section.style.removeProperty('--sc-place-reserve');
+        if (!A.section.getAttribute('style')) { A.section.removeAttribute('style'); }
+        if (A.top) { resetFlourish(A.top, ['width', 'display']); }
+        if (A.bottom) { resetFlourish(A.bottom, ['width', 'display']); }
+        if (A.right) { resetFlourish(A.right); }
+        A.rules.forEach(function (r) { resetFlourish(r); });
+        if (A.verb) {
+            A.verb.style.removeProperty('margin-top');
+            if (!A.verb.getAttribute('style')) { A.verb.removeAttribute('style'); }
+        }
+    }
+
+    function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+
+    function setVersal(ctx, A, nameSize) {
+        if (!A.versal) { return; }
+        var parentPx = pxOf(computed(A.versal.parentElement).fontSize);
+        if (!(parentPx > 0) || !(ctx.rootPx > 0)) { return; }
+        var size = setSize(A.versal, clamp(nameSize, CONST.VERSAL.min, CONST.VERSAL.max), ctx.rootPx, parentPx);
+        A.versal.setAttribute('data-sc-size', size.toFixed(3));
+    }
+
+    function setLeadSize(ctx, A, size) {
+        var parentPx = pxOf(computed(A.lead.parentElement).fontSize);
+        if (!(parentPx > 0) || !(ctx.rootPx > 0)) { return size; }
+        return setSize(A.lead, size, ctx.rootPx, parentPx);
+    }
+
+    /* The article rides at the lead's size (§6.4.1). The stylesheet sizes `.sc-art` from
+       --sc-art-size, in em of the line it sits on, which is the place's own size, so the
+       variable is written on the place and rewritten whenever the place's size moves. */
+    function setArticle(ctx, A, size) {
+        if (!A.place.querySelector('.sc-art')) { return; }
+        var px = pxOf(computed(A.place).fontSize);
+        if (px > 0 && ctx.rootPx > 0) { A.place.style.setProperty('--sc-art-size', (size * ctx.rootPx / px).toFixed(4) + 'em'); }
+    }
+
+    /* How wide the article makes line 0 at lead size `size`, with its space measured at
+       the place's largest size (an upper bound: the real space is no wider). */
+    function articleWidth(ctx, A, src, size, placeMax) {
+        if (!src.art) { return 0; }
+        var m = measureWords(A.place, [src.art]);
+        return (m.measure(src.art) * size + m.space * placeMax) * ctx.rootPx;
+    }
+
+    /* The connective as one line, like every other role (spec §6.8): its text goes in an
+       `.sc-line`, which the stylesheet makes an inline-block in Classic so it stays on the
+       versal's row and a centred block in Centered. Returns its width in em at 1px, or
+       null when it has no text. */
+    function prepareLead(A) {
+        var text = sourceText(A.lead);
+        if (!text) { clearReport(A.lead); return null; }
+        if (!lineEls(A.lead).length) { writeLines(A.lead, [text], -1, [0]); }
+        var words = text.split(' ').filter(Boolean);
+        var m = measureWords(A.lead, words), em = 0;
+        words.forEach(function (w) { em += m.measure(w); });
+        return { em: em + m.space * (words.length - 1) };
+    }
+
+    /* The lead's report: the size and the printed row count, and the width its line was
+       held to. */
+    function reportLead(A, size, overflow) {
+        var lines = lineEls(A.lead);
+        if (!lines.length) { return; }
+        A.lead.setAttribute('data-sc-size', size.toFixed(3));
+        A.lead.setAttribute('data-sc-planned', '1');
+        A.lead.setAttribute('data-sc-lines', String(printedRows(lines)));
+        if (overflow) { A.lead.setAttribute('data-sc-overflow', '1'); } else { A.lead.removeAttribute('data-sc-overflow'); }
+    }
+
+    /*
+     * Size the lead to `avail` px: the largest size up to `cap` that fits, never below
+     * `min`. Checked against the browser's own width afterwards, like every role.
+     * Returns { size, fits }; a lead that cannot fit at `min` is set at `min` and does
+     * not fit.
+     */
+    function sizeLead(ctx, A, k, m, avail, cap, min) {
+        if (!m) { return { size: cap, fits: true }; }
+        var line = lineEls(A.lead)[0];
+        if (line) { line.setAttribute('data-sc-w', (avail * (1 - CONST.SLACK)).toFixed(2)); }
+        var s = avail * (1 - CONST.SLACK) / (m.em * ctx.rootPx);
+        var size = Math.min(cap, s);
+        var fits = size >= min - 1e-9;
+        if (!fits) { size = min; }
+        size = setLeadSize(ctx, A, size);
+        for (var round = 0; round < 4 && fits; round++) {
+            var r = nodeRect(ctx.award, k, A.lead);
+            var w = r ? r.x1 - r.x0 : 0;
+            if (w <= avail + VERIFY_TOL) { break; }
+            if (size <= min + 1e-9) { fits = false; break; }
+            size = setLeadSize(ctx, A, Math.max(size * (avail / w) * VERIFY_MARGIN, min));
+        }
+        return { size: size, fits: fits };
+    }
+
+    /*
+     * Solve the place and the lead together. The lead is capped by the place's size, and
+     * the article that sits in the place is set at the lead's, so each waits on the other.
+     * The first pass budgets the article at the lead's ceiling, which only over-reserves;
+     * the second tries the lead's real size and is kept only if the lead did not grow
+     * (a bigger article than the one planned for would overflow line 0). A composition
+     * whose place sits under a lead that changes height (Centered) solves once more when
+     * the place's top moved.
+     */
+    function converge(ctx, A, caps, placeFor, leadFor) {
+        var place = placeFor(caps.leadMax);
+        var lead = leadFor(place ? place.size : caps.placeMax);
+        if (place && lead.size < caps.leadMax - 0.01) {
+            var budget = lead.size;
+            var place2 = placeFor(budget);
+            var lead2 = leadFor(place2 ? place2.size : caps.placeMax);
+            if (lead2.size <= budget + 0.002) {
+                place = place2; lead = lead2;
+            } else {
+                place = placeFor(caps.leadMax);
+                lead = leadFor(place ? place.size : caps.placeMax);
+            }
+        }
+        if (place && Math.abs(roleTop(ctx.award, A.p2) - place.y0) > VERIFY_TOL) {
+            place = placeFor(Math.max(lead.size, caps.leadMin));
+            lead = leadFor(place ? place.size : caps.placeMax);
+        }
+        setArticle(ctx, A, lead.size);
+        return { place: place, lead: lead };
+    }
+
+    /* Where the right flourish goes, vertically: its curl hangs ORN_GAP below the place's
+       last line (§6.5.1). The text ink box's bottom is the descender line and then some;
+       it is measured, as the spec asks, after the place is written. */
+    function applyRight(ctx, A, k, scale) {
+        var img = A.right;
+        setWidth(img, A.rightBase * scale);
+        var box = relBox(ctx.award, img), rows = decodeInk(img.getAttribute('data-sc-ink'));
+        var lines = lineEls(A.place), last = lines.length ? nodeRect(ctx.award, k, lines[lines.length - 1]) : null;
+        if (!rows || !last || !(box.h > 0)) { return; }
+        var host = img.offsetParent, hostY = host ? relBox(ctx.award, host).y + host.clientTop : 0;
+        var fontPx = pxOf(computed(img).fontSize) || ctx.rootPx;
+        var topFrame = last.y1 + CONST.ORN_GAP * ctx.rootPx + INK_EPS - curlOffset(rows, box.h);
+        img.style.top = ((topFrame - hostY) / fontPx).toFixed(4) + 'em';
+        img.style.bottom = 'auto';
+    }
+
+    /* How tall the place's text box is, per em of its size: the font's content area, a
+       little over 1. Measured from whatever the place holds now; 1.25 when nothing
+       can be measured. */
+    function contentRatio(ctx, k, el) {
+        var r = nodeRect(ctx.award, k, el), px = pxOf(computed(el).fontSize);
+        return r && px > 0 ? clamp((r.y1 - r.y0) / px, 1, 1.6) : 1.25;
+    }
+
+    /* Classic (§6.5.1). */
+    function issuerClassic(ctx, A, caps, st, relaxed) {
+        var award = ctx.award, root = ctx.rootPx, col = ctx.column, gap = CONST.ORN_GAP * root;
+        var P = CONST.ROLES.placeClassic, lh = P.lineHeight;
+
+        resetIssuer(A);
+        A.section.setAttribute('data-sc-comp', 'classic');
+        var k = frameScale(award);
+        var leadM = prepareLead(A);
+
+        /* The place's smallest size for Classic to count as feasible. A forced Classic
+           that cannot meet it is solved again at the table's own floor. */
+        var pmin = relaxed ? caps.placeMin
+            : Math.max(caps.placeMin, Math.min(CONST.CLASSIC_PLACE_MIN * ctx.floorScale, caps.placeMax));
+
+        /* The geometry that does not depend on the place's text: the place's box
+           [xL, xR] and the bands the lead and the place occupy. The lead is held at its
+           ceiling while the versal line is measured, because its line is the tallest the
+           lead can make. */
+        setLeadSize(ctx, A, caps.leadMax);
+        var y0 = roleTop(award, A.p2);
+        var placeBand = { top: y0, bottom: y0 + lh * caps.placeMax * root };
+        var xL = col.left, xR = col.right;
+
+        /* gutter: the bottom flourish's rightmost ink in the place's rows, plus ORN_GAP. */
+        var bot = A.bottom ? inkOf(award, A.bottom) : null;
+        if (bot) {
+            bot.rects.forEach(function (r) {
+                if (r[3] > placeBand.top - gap && r[1] < placeBand.bottom + gap) { xL = Math.max(xL, r[2] + gap); }
+            });
+        }
+
+        /* reserve: where the right flourish's stem ink starts, in the rows the place's
+           text box can reach. With the curl placed ORN_GAP below the text, those rows lie
+           above the curl row, so only the stem is in them. The box is the one at the
+           natural scale: a smaller flourish hangs further right, so this is the larger
+           reserve and holds for every scale the ornament pass may pick. */
+        var rightOn = A.right && !st.rightOff;
+        if (rightOn) {
+            A.rightBase = A.right.offsetWidth;
+            var rink = inkOf(award, A.right);
+            if (rink) {
+                var tMax = contentRatio(ctx, k, A.place) * caps.placeMax * root;
+                var off = curlOffset(rink.rows, rink.box.h), ch = rink.box.h / 32, cw = rink.box.w / 32;
+                var lo = off - 2 * gap - tMax - INK_EPS, hi = off - INK_EPS, stem = Infinity;
+                for (var r = 0; r < 32; r++) {
+                    if (!rink.rows[r] || (r + 1) * ch <= lo || r * ch >= hi) { continue; }
+                    for (var c = 0; c < 32; c++) {
+                        if ((rink.rows[r] >>> (31 - c)) & 1) { stem = Math.min(stem, rink.box.x + c * cw); break; }
+                    }
+                }
+                xR = Math.min(xR, stem - gap);
+            }
+        }
+        var edges = profileEdges(ctx, placeBand.top, placeBand.bottom);
+        xL = Math.max(xL, edges.l);
+        xR = Math.min(xR, edges.r);
+        A.section.style.setProperty('--sc-place-gutter', Math.max(0, xL - col.left).toFixed(2) + 'px');
+        A.section.style.setProperty('--sc-place-reserve', Math.max(0, col.right - xR).toFixed(2) + 'px');
+
+        var src = placeSource(A.place), artSize = caps.leadMax;
+        function placeFor(budget) {
+            artSize = budget;
+            return setRole(ctx, A.place, 'place', caps.placeMax, pmin, {
+                row: P, solverRole: 'place', range: { sat: P.sat, uMax: P.max, linePenalty: P.linePenalty },
+                maxLines: 1, source: placeSource, y0: y0,
+                width: function () { return Math.max(0, xR - xL); },
+                artPx: articleWidth(ctx, A, src, budget, caps.placeMax),
+                onSize: function () { setArticle(ctx, A, artSize); }
+            });
+        }
+
+        var leadBand = null;
+        function leadFor(placeSize) {
+            var cap = Math.min(caps.leadMax, Math.max(caps.leadMin, placeSize));
+            setLeadSize(ctx, A, cap);
+            if (rightOn) { applyRight(ctx, A, k, 1); }
+
+            /* The lead runs from its left edge to the column's, or to where the right
+               flourish's ink begins in the lead's rows, less ORN_GAP, if that is sooner. */
+            var rect = nodeRect(award, k, A.lead), avail = col.width, right = col.right;
+            if (rect) {
+                leadBand = { top: rect.y0 - gap, bottom: rect.y1 + gap };
+                var ink = rightOn ? inkOf(award, A.right) : null;
+                if (ink) {
+                    ink.rects.forEach(function (c2) {
+                        if (c2[3] > leadBand.top && c2[1] < leadBand.bottom) { right = Math.min(right, c2[0] - gap); }
+                    });
+                }
+                right = Math.min(right, profileEdges(ctx, leadBand.top, leadBand.bottom).r);
+                avail = right - rect.x0;
+            }
+            return sizeLead(ctx, A, k, leadM, avail, cap, caps.leadMin);
+        }
+
+        var res = converge(ctx, A, caps, placeFor, leadFor);
+
+        /* Feasibility (§6.5.1): the lead fits at its floor, the place fits one line at
+           pmin, and the profile is clear across the column for both bands. */
+        var clear = true;
+        if (ctx.free) {
+            [placeBand, leadBand].forEach(function (b) {
+                if (!b) { return; }
+                var e = profileEdges(ctx, b.top, b.bottom);
+                if (e.l > col.left + INK_EPS || e.r < col.right - INK_EPS) { clear = false; }
+            });
+        }
+        var placeOk = !res.place || !res.place.overflow;
+        var feasible = res.lead.fits && placeOk && clear;
+        return { comp: 'classic', feasible: feasible, place: res.place, lead: res.lead };
+    }
+
+    /*
+     * Where one half of the Centered rule goes at scale `s`: `widest` is the place's widest
+     * line, `last` its last line's ink box. The halves meet at the column centre with
+     * RULE.gapEm between them, and the topmost inked row sits ORN_GAP under the line.
+     * Writes the image's inline geometry and returns the frame-px y of its lowest inked
+     * row, or null when it has no grid or box to go by.
+     */
+    function applyRule(ctx, A, img, i, s, widest, last) {
+        var award = ctx.award, gap = CONST.ORN_GAP * ctx.rootPx;
+        img.style.display = 'block';
+        var fontPx = pxOf(computed(img).fontSize) || ctx.rootPx;
+        var w = Math.min(CONST.RULE.share * widest, CONST.RULE.maxEm * fontPx) * s;
+        setWidth(img, w);
+        var rows = decodeInk(img.getAttribute('data-sc-ink')), box = relBox(award, img);
+        if (!rows || !(box.h > 0)) { return null; }
+        var host = img.offsetParent, hostBox = host ? relBox(award, host) : { x: 0, y: 0 };
+        var hostX = hostBox.x + (host ? host.clientLeft : 0), hostY = hostBox.y + (host ? host.clientTop : 0);
+        var half = CONST.RULE.gapEm * fontPx / 2;
+        var x = i === 0 ? ctx.column.cx - half - w : ctx.column.cx + half;
+        var top = last.y1 + gap + INK_EPS - firstInkRow(rows, box.h);
+        img.style.left = ((x - hostX) / fontPx).toFixed(4) + 'em';
+        img.style.top = ((top - hostY) / fontPx).toFixed(4) + 'em';
+        img.style.right = 'auto';
+        img.style.bottom = 'auto';
+        var lastRow = 31;
+        while (lastRow > 0 && !rows[lastRow]) { lastRow--; }
+        return top + (lastRow + 1) * box.h / 32;
+    }
+
+    /* The widest of the place's lines and the box of its last, frame px; null with no
+       lines. */
+    function placeExtent(award, k, A) {
+        var lines = lineEls(A.place), widest = 0, last = null;
+        lines.forEach(function (l, j) {
+            var r = nodeRect(award, k, l);
+            if (!r) { return; }
+            widest = Math.max(widest, r.x1 - r.x0);
+            if (j === lines.length - 1) { last = r; }
+        });
+        return last ? { widest: widest, last: last } : null;
+    }
+
+    /*
+     * The rule pair hangs under the last place line and needs a rule's height of clear
+     * paper there, which the gap above "presents" does not have. The room is made before
+     * the budget is judged, by raising the verb's top margin by what is missing, so the
+     * stack the budget sees is the stack that prints. A stylesheet that already leaves the
+     * room adds nothing here.
+     */
+    function reserveRuleRoom(ctx, A, k) {
+        var ext = placeExtent(ctx.award, k, A);
+        if (!ext || A.rules.length !== 2 || !A.verb || !collapse(A.verb.textContent)) { return; }
+        var bottom = applyRule(ctx, A, A.rules[0], 0, 1, ext.widest, ext.last);
+        if (bottom === null) { return; }
+        var gap = CONST.ORN_GAP * ctx.rootPx;
+        var deficit = bottom + gap - relBox(ctx.award, A.verb).y;
+        if (deficit > INK_EPS) {
+            A.verb.style.marginTop = (num(computed(A.verb).marginTop) + deficit).toFixed(2) + 'px';
+        }
+        A.rules[0].style.display = '';
+    }
+
+    /* Centered (§6.5.2): the versal, the lead and the place each on lines of their own,
+       centred. Nothing here can be infeasible; what does not fit is set at its floor
+       and flagged. */
+    function issuerCentered(ctx, A, caps) {
+        var award = ctx.award;
+        var PC = CONST.ROLES.placeCentered;
+
+        resetIssuer(A);
+        A.section.setAttribute('data-sc-comp', 'centered');
+        var k = frameScale(award);
+        var leadM = prepareLead(A);
+        var leadMax = Math.min(caps.leadMax, CONST.LEAD_CENTERED_MAX);
+        var ccaps = { leadMax: leadMax, leadMin: Math.min(caps.leadMin, leadMax), placeMax: caps.placeMax, placeMin: caps.placeMin };
+
+        setLeadSize(ctx, A, leadMax);
+        var src = placeSource(A.place), artSize = leadMax;
+        function placeFor(budget) {
+            artSize = budget;
+            return setRole(ctx, A.place, 'place', ccaps.placeMax, ccaps.placeMin, {
+                row: PC, solverRole: 'place', range: { sat: PC.sat, uMax: PC.max, linePenalty: PC.linePenalty },
+                maxLines: 2, source: placeSource, y0: roleTop(award, A.p2),
+                artPx: articleWidth(ctx, A, src, budget, ccaps.placeMax),
+                onSize: function () { setArticle(ctx, A, artSize); }
+            });
+        }
+        function leadFor(placeSize) {
+            var cap = Math.min(ccaps.leadMax, Math.max(ccaps.leadMin, placeSize));
+            setLeadSize(ctx, A, cap);
+            var rect = nodeRect(award, k, A.lead);
+            var avail = rect ? freeWidth(ctx, rect.y0, rect.y1, true) : ctx.column.width;
+            return sizeLead(ctx, A, k, leadM, avail, cap, ccaps.leadMin);
+        }
+
+        var res = converge(ctx, A, ccaps, placeFor, leadFor);
+        reserveRuleRoom(ctx, A, k);
+        return { comp: 'centered', feasible: true, place: res.place, lead: res.lead };
+    }
+
+    /*
+     * The issuer solve for a given hierarchy: the versal, then the composition by the
+     * choice of §6.5.3. `st` carries the name's and the award's sizes (null before they
+     * are known, which is the provisional solve with no hierarchy cap), and `rightOff`
+     * when the right flourish is known to be hidden and so constrains nothing.
+     */
+    function layoutIssuer(ctx, A, st) {
+        var L = CONST.ROLES.lead, P = CONST.ROLES.placeClassic, fs = ctx.floorScale, R = CONST.RATIOS;
+        var placeMin = Math.min(P.min * fs, P.max);
+        var placeMax = P.max;
+        if (st.nameSize != null) { placeMax = Math.min(placeMax, R.placeToName * st.nameSize); }
+        if (st.awardSize != null) { placeMax = Math.min(placeMax, R.placeToAward * st.awardSize); }
+        placeMax = Math.max(placeMax, placeMin);
+        var caps = { placeMin: placeMin, placeMax: placeMax, leadMin: Math.min(L.min * fs, L.max), leadMax: L.max };
+
+        setVersal(ctx, A, st.nameSize != null ? st.nameSize : CONST.ROLES.name.max);
+
+        var forced = st.comp || ctx.heading;
+        var res;
+        if (forced === 'centered') {
+            res = issuerCentered(ctx, A, caps);
+        } else {
+            res = issuerClassic(ctx, A, caps, st, false);
+            if (!res.feasible) {
+                if (forced === 'classic') {
+                    /* A forced Classic renders anyway, at the floors, and says so. */
+                    res = issuerClassic(ctx, A, caps, st, true);
+                    res.feasible = false;
+                    if (res.place) { A.place.setAttribute('data-sc-overflow', '1'); res.place.overflow = true; }
+                    if (!res.lead.fits) { reportLead(A, res.lead.size, true); }
+                } else {
+                    res = issuerCentered(ctx, A, caps);
+                }
+            }
+        }
+        if (res.lead) { reportLead(A, res.lead.size, !res.lead.fits); }
+        res.caps = caps;
+        return res;
+    }
+
+    /*
+     * The hierarchy of §6.4.2, held against the FINAL name and award. The issuer is
+     * solved before the name settles (the name's top moves with the issuer's height), so
+     * a name that shrinks afterwards can leave the place above 0.75 of it. Sizes only
+     * come down here, which can never overflow a line, and the lead and article follow.
+     */
+    function enforceHierarchy(ctx, A, res, nameSize, awardSize) {
+        setVersal(ctx, A, nameSize);
+        var caps = res.caps, P = CONST.ROLES.placeClassic, R = CONST.RATIOS;
+        var cap = Math.max(Math.min(P.max, R.placeToName * nameSize, R.placeToAward * awardSize), caps.placeMin);
+        if (res.place && res.place.size > cap + 0.0005) {
+            var parentPx = pxOf(computed(A.place.parentElement).fontSize);
+            if (parentPx > 0) {
+                res.place.size = setSize(A.place, cap, ctx.rootPx, parentPx);
+                A.place.setAttribute('data-sc-size', res.place.size.toFixed(3));
+            }
+        }
+        var leadCap = Math.min(res.comp === 'centered' ? Math.min(caps.leadMax, CONST.LEAD_CENTERED_MAX) : caps.leadMax,
+            Math.max(caps.leadMin, res.place ? res.place.size : caps.placeMax));
+        if (res.lead && res.lead.size > leadCap + 0.0005) {
+            res.lead.size = setLeadSize(ctx, A, leadCap);
+            reportLead(A, res.lead.size, !res.lead.fits);
+        }
+        if (res.lead) { setArticle(ctx, A, res.lead.size); }
+    }
+
+    /*
+     * Ornament placement (§6.6), after the text is final. Each flourish is tried placed,
+     * then at 0.85 and 0.70, then hidden; the Centered rule pair at 1 and 0.8. Returns
+     * { top, right, bottom, rule } as 'placed' | 'scaled' | 'hidden'.
+     */
+    function placeOrnaments(ctx, A, comp, st) {
+        var award = ctx.award, k = frameScale(award), gap = CONST.ORN_GAP * ctx.rootPx;
+        var boxes = textBoxes(award, k), out = { top: 'hidden', right: 'hidden', bottom: 'hidden', rule: 'hidden' };
+
+        /* A flourish the stylesheet draws at some width: scaled in place. */
+        function inPlace(img) {
+            if (!img) { return 'hidden'; }
+            img.style.removeProperty('width');
+            if (!(img.offsetWidth > 0)) { return computed(img).display === 'none' ? 'hidden' : 'placed'; }
+            var base = img.offsetWidth;
+            return chooseScale(ctx, [img], CONST.ORN_SCALES, function (s) {
+                if (s === 1) { resetFlourish(img, ['width']); } else { setWidth(img, base * s); }
+            }, boxes, gap);
+        }
+
+        out.top = inPlace(A.top);
+
+        if (comp === 'classic') {
+            out.bottom = inPlace(A.bottom);
+            if (A.right && !st.rightOff && A.rightBase > 0) {
+                out.right = chooseScale(ctx, [A.right], CONST.ORN_SCALES, function (s) { applyRight(ctx, A, k, s); }, boxes, gap);
+            } else if (A.right) {
+                A.right.style.display = 'none';
+            }
+            A.rules.forEach(function (r) { r.style.display = 'none'; });
+            return out;
+        }
+
+        /* Centered: the line-two flourishes go, the rule pair takes their place. */
+        [A.bottom, A.right].forEach(function (img) { if (img) { img.style.display = 'none'; } });
+        var ext = placeExtent(award, k, A);
+        if (A.rules.length === 2 && ext) {
+            out.rule = chooseScale(ctx, A.rules, CONST.RULE_SCALES, function (s) {
+                A.rules.forEach(function (img, i) { applyRule(ctx, A, img, i, s, ext.widest, ext.last); });
+            }, boxes, gap);
+        } else {
+            A.rules.forEach(function (r) { r.style.display = 'none'; });
+        }
+        return out;
+    }
+
+    /* -------------------------------------------------------------------- the budget */
+
+    function num(v) {
+        var n = parseFloat(v);
+        return isNaN(n) ? 0 : n;
+    }
+
+    function outerHeight(el) {
+        var cs = computed(el);
+        return el.offsetHeight + num(cs.marginTop) + num(cs.marginBottom);
+    }
+
+    /* An element's height with nothing growing it: flex-grow off for the read, put back
+       after. With nothing growing it and nothing shrinking it, a flex item is the larger
+       of its min-height, its flex-basis and its content, which is what the budget wants. */
+    function naturalOuter(el) {
+        var g = el.style.flexGrow, s = el.style.flexShrink;
+        el.style.flexGrow = '0';
+        el.style.flexShrink = '0';
+        var h = outerHeight(el);
+        el.style.flexGrow = g;
+        el.style.flexShrink = s;
+        if (!el.getAttribute('style')) { el.removeAttribute('style'); }
+        return h;
+    }
+
+    /* The child of the .Award that holds `el`. */
+    function topChildOf(award, el) {
+        while (el && el.parentElement !== award) { el = el.parentElement; }
+        return el;
+    }
+
+    /*
+     * What the page needs below the award line (§6.7): everything after it, at the
+     * smallest it can be. The elastic spacer at its min-height, the citation at its
+     * natural text height capped at six of its lines, the signature block and the rest
+     * at their natural heights, and the bare spacer divs at nothing.
+     */
+    function bottomNeed(award, awardEl) {
+        var need = 0, el = awardEl ? topChildOf(award, awardEl) : null;
+        el = el ? el.nextElementSibling : null;
+        while (el) {
+            var cs = computed(el);
+            if (el.classList.contains('ScSpacer')) {
+                var min = num(cs.minHeight) || 0.3 * (num(cs.fontSize) || 0);
+                need += min + num(cs.marginTop) + num(cs.marginBottom);
+            } else if (el.classList.contains('Award_Reason')) {
+                var p = el.querySelector('p');
+                var lh = cs.lineHeight === 'normal' ? 1.2 * num(cs.fontSize) : num(cs.lineHeight);
+                need += (p ? Math.min(p.offsetHeight, 6 * lh) : el.offsetHeight) + num(cs.marginTop) + num(cs.marginBottom);
+            } else if (el.tagName === 'DIV' && !el.className && !collapse(el.textContent) && !el.children.length) {
+                /* a bottom spacer: elastic, and nothing at its smallest */
+            } else {
+                need += naturalOuter(el);
+            }
+            el = el.nextElementSibling;
+        }
+        return need;
+    }
+
+    function stackHeight(award, firstEl, awardEl) {
+        var a = firstEl ? topChildOf(award, firstEl) : null, b = awardEl ? topChildOf(award, awardEl) : null;
+        if (!a || !b) { return null; }
+        return absTop(b) + b.offsetHeight - absTop(a);
+    }
+
+    /* ------------------------------------------------------------------ layoutTop */
+
+    function now() {
+        return (window.performance && window.performance.now) ? window.performance.now() : Date.now();
     }
 
     /*
      * layoutTop(award, opts) -> Report
      *
-     *   Report = { comp, ms, budget, roles: { name?, award? }, ornaments: {} }
+     *   Report = { comp, ms, budget, roles: { name?, award?, lead?, place? },
+     *              ornaments: { top?, right?, bottom?, rule? } }
      *
-     * Sets the name at its measured top, then the award under the hierarchy of §6.4.2:
-     * its ceiling is the smaller of its own maximum and 0.85 of the name's FINAL size
-     * (after verify, so a name that had to shrink pulls the award down with it), and
-     * never below its own minimum. The award's top is measured after the name's lines
-     * are written, because they are what moves it. Multi-up lifts both minimums (§6.4.1).
-     * The issuer roles are not touched yet; `comp`, `budget` and `ornaments` are
-     * placeholders until they are.
+     * The pipeline of spec §4, in this order:
+     *   1. read the context;
+     *   2. a provisional issuer solve with no hierarchy cap, so the name is measured at
+     *      the top the issuer will roughly leave it;
+     *   3. the name, at its measured top;
+     *   4. the award, under 0.85 of the name's FINAL size;
+     *   5. the final issuer solve under the hierarchy of §6.4.2, and one re-solve of the
+     *      name and award if that changed the issuer's height;
+     *   6. the budget (§6.7): while the top stack is taller than its share of the page,
+     *      the name's ceiling comes down 8% and steps 3-5 run again, three times at most;
+     *   7. the ornaments, from the text as it finally stands.
+     * Multi-up lifts every minimum (§6.4.1). A page with no issuer roles (the lead and
+     * the place) skips steps 2 and 5, and a page with no name or award skips theirs.
      *
-     * `opts.nameMax` lowers the name's ceiling, which is the budget loop's lever (§6.7).
+     * `opts.nameMax` lowers the name's ceiling before the budget loop starts.
      */
     function layoutTop(award, opts) {
-        var t0 = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
+        var t0 = now();
         var o = opts || {};
         var ctx = readContext(award);
-        var N = CONST.ROLES.name, A = CONST.ROLES.award;
+        var N = CONST.ROLES.name, A = CONST.ROLES.award, fs = ctx.floorScale;
         var report = { comp: ctx.heading, ms: 0, budget: 'ok', roles: {}, ornaments: {} };
 
         var nameEl = award.querySelector('[data-sc-role="name"]');
         var awardEl = award.querySelector('[data-sc-role="award"]');
+        var I = issuerEls(award);
 
-        var nameMax = o.nameMax > 0 ? Math.min(o.nameMax, N.max) : N.max;
-        var nameMin = Math.min(N.min * ctx.floorScale, nameMax);
-        var name = setRole(ctx, nameEl, 'name', nameMax, nameMin);
-        if (name) { report.roles.name = name; }
+        /* What the page below the award line needs does not depend on the top, so it is
+           read once, before the top is touched. The room the top may take is read each
+           time it is judged: on a page whose height follows its content that makes the
+           budget vacuous, which is right, and on a frame of fixed height it is the same
+           number every time. */
+        var below = bottomNeed(award, awardEl);
+        function topRoom() {
+            var cs = computed(award);
+            var content = award.clientHeight - pxOf(cs.paddingTop) - pxOf(cs.paddingBottom);
+            return content > 0 ? Math.max(CONST.H_TOP_MIN * content, content - below) : null;
+        }
 
-        /* With no name on the page there is nothing for the award to rank under. */
-        var nameSize = name ? name.size : N.max;
-        var awardMin = Math.min(A.min * ctx.floorScale, A.max);
-        var awardMax = Math.max(Math.min(A.max, CONST.RATIOS.awardToName * nameSize), awardMin);
-        var aw = setRole(ctx, awardEl, 'award', awardMax, awardMin);
-        if (aw) { report.roles.award = aw; }
+        var nameMaxCap = o.nameMax > 0 ? Math.min(o.nameMax, N.max) : N.max;
+        var nameFloor = Math.min(N.min * fs, nameMaxCap);
+        var awardMin = Math.min(A.min * fs, A.max);
 
-        var t1 = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
-        report.ms = t1 - t0;
+        if (I) { layoutIssuer(ctx, I, { nameSize: null, awardSize: null }); }
+
+        /* Steps 3-5. */
+        function fitNameAndAward(cap) {
+            var name = setRole(ctx, nameEl, 'name', cap, nameFloor);
+            var nameSize = name ? name.size : N.max;
+            var awardMax = Math.max(Math.min(A.max, CONST.RATIOS.awardToName * nameSize), awardMin);
+            var aw = setRole(ctx, awardEl, 'award', awardMax, awardMin);
+            return { name: name, award: aw };
+        }
+        function fitStack(cap) {
+            var fit = fitNameAndAward(cap);
+            if (I) {
+                var h0 = I.section.offsetHeight;
+                fit.issuer = layoutIssuer(ctx, I, {
+                    nameSize: fit.name ? fit.name.size : null,
+                    awardSize: fit.award ? fit.award.size : null
+                });
+                if (Math.abs(I.section.offsetHeight - h0) > VERIFY_TOL) {
+                    var again = fitNameAndAward(cap);
+                    fit.name = again.name;
+                    fit.award = again.award;
+                }
+            }
+            return fit;
+        }
+
+        var fit = fitStack(nameMaxCap);
+        var firstEl = I ? I.lead : (nameEl || awardEl);
+        var stack = stackHeight(award, firstEl, awardEl);
+
+        var room = topRoom();
+        if (room !== null && stack !== null) {
+            for (var round = 0; round < CONST.BUDGET_ROUNDS && stack > room + VERIFY_TOL && fit.name; round++) {
+                var cur = Math.min(nameMaxCap, fit.name.size);
+                var next = Math.max(CONST.NAME_SHRINK * cur, nameFloor);
+                if (next >= cur - 1e-6) { break; }
+                nameMaxCap = next;
+                fit = fitStack(nameMaxCap);
+                stack = stackHeight(award, firstEl, awardEl);
+                room = topRoom();
+            }
+            report.budget = stack <= room + VERIFY_TOL ? 'ok' : 'floor';
+        }
+
+        if (fit.name) { report.roles.name = fit.name; }
+        if (fit.award) { report.roles.award = fit.award; }
+
+        if (I) {
+            var nameSize = fit.name ? fit.name.size : N.max;
+            var awardSize = fit.award ? fit.award.size : A.max;
+            var res = fit.issuer;
+            enforceHierarchy(ctx, I, res, nameSize, awardSize);
+
+            var orn = placeOrnaments(ctx, I, res.comp, {});
+            if (res.comp === 'classic' && orn.right === 'hidden' && I.right && I.rightBase > 0) {
+                /* The right flourish did not fit anywhere, so what it reserved is room
+                   the type could have had: solve the issuer again without it. */
+                res = layoutIssuer(ctx, I, { nameSize: nameSize, awardSize: awardSize, rightOff: true, comp: 'classic' });
+                enforceHierarchy(ctx, I, res, nameSize, awardSize);
+                orn = placeOrnaments(ctx, I, 'classic', { rightOff: true });
+            }
+
+            report.comp = res.comp;
+            report.ornaments = orn;
+            if (res.lead) { report.roles.lead = { size: res.lead.size, lines: Number(I.lead.getAttribute('data-sc-lines')), planned: 1, overflow: !res.lead.fits }; }
+            if (res.place) { report.roles.place = res.place; }
+            award.setAttribute('data-sc-comp', res.comp);
+        } else if (report.comp) {
+            award.setAttribute('data-sc-comp', report.comp);
+        } else {
+            award.removeAttribute('data-sc-comp');
+        }
+        award.setAttribute('data-sc-budget', report.budget);
+
+        report.ms = now() - t0;
         award.setAttribute('data-sc-ms', report.ms.toFixed(1));
         return report;
     }
