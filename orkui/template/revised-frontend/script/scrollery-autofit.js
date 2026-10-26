@@ -27,8 +27,11 @@
  *
  * WHAT IT DOES, per certificate (.Award):
  *
- *   pass 1  recipient and order line — solve for the largest size that puts the text
- *           on as few lines as the design can carry.
+ *   pass 1  the top of the certificate — recipient, order line, issuing body and the
+ *           flourishes hung on them. When scrollery-typeset.js is on the page, it
+ *           solves all of them together (ScrolleryTypeset.layoutTop). Without it the
+ *           older per-block passes run: the largest size that puts each block on as
+ *           few lines as the design can carry.
  *   pass 2  the reason block — binary-search down until its own overflow:hidden box
  *           stops clipping it.
  *   pass 3  if the whole column still overflows the page, scale the certificate's
@@ -871,7 +874,43 @@
         return true;
     }
 
-    /* One certificate. Safe to call as often as you like. */
+    /*
+     * The typeset engine, or null when this page does not have one that can run.
+     * Looked up on every call rather than once at load, so an engine that arrives
+     * after this file (or is removed by a test) is honoured on the next fit.
+     */
+    function typesetEngine() {
+        var t = global.ScrolleryTypeset;
+        return t && typeof t.layoutTop === 'function' ? t : null;
+    }
+
+    /*
+     * Run it, and never let it take the rest of the certificate down with it. The
+     * reason, the date and the signer below are still ours to fit, and fit() would
+     * otherwise abandon the whole certificate on the engine's first exception. The
+     * failure is left on the element, where a test or a person with devtools can see
+     * which certificate it was and what it said.
+     */
+    function runEngine(award, engine) {
+        try {
+            engine.layoutTop(award);
+            award.removeAttribute('data-sc-error');
+        } catch (e) {
+            award.setAttribute('data-sc-error', String(e && e.message ? e.message : e));
+        }
+    }
+
+    /*
+     * One certificate. Safe to call as often as you like.
+     *
+     * In order: restore the root; the engine sets the top (name, award line, issuing
+     * body, ornaments); the citation is sized into the room that leaves; pass 3 scales
+     * the root if the column still overflows, and if it did the engine and the citation
+     * run once more against the new root; then the date and signer, and the signature
+     * lift last, because it measures the gap the citation left. With no engine on the
+     * page the first step is the old passes instead (name, award line, title, issuer)
+     * and the swash anchor runs after the text passes.
+     */
     function fitAward(award) {
         if (!award || !award.clientWidth) { return; }
 
@@ -882,36 +921,58 @@
         var avail = columnWidth(award);
         if (!(avail > 0)) { return; }
 
-        var name = award.querySelector(POLICY.name.sel);
-        if (name) { fitLines(name, POLICY.name, avail); }
+        /*
+         * The top of the certificate — issuing body, name, award line, and the
+         * ornaments hung on them — is the typeset engine's. It solves the five blocks
+         * together, because they depend on each other (the award may not outrank the
+         * name, the place may not outrank either, the flourishes are placed against the
+         * type the others chose) and the old passes below each solved their own block
+         * with no knowledge of the rest.
+         *
+         * The old passes stay, behind this test, for the one case the engine can be
+         * missing: a stale cached copy of this file paired with a page that never
+         * loaded the engine. They run unchanged there. A later task deletes them.
+         */
+        var engine = typesetEngine();
+        if (engine) {
+            runEngine(award, engine);
+        } else {
+            var name = award.querySelector(POLICY.name.sel);
+            if (name) { fitLines(name, POLICY.name, avail); }
 
-        var order = award.querySelector(POLICY.order.sel);
-        if (order) { fitLines(order, POLICY.order, avail); }
+            var order = award.querySelector(POLICY.order.sel);
+            if (order) { fitLines(order, POLICY.order, avail); }
 
-        /* Before the reason, and measured rather than solved — see fitInline(). It
-           takes no `avail`: the width it has to fit into is its own <p>'s content box,
-           which is not the .Award column (the issuing section overhangs it), and the
-           line-box count already accounts for that without anyone computing it. */
-        /* Before the issuer NAME: the name's paragraph sits directly under this line,
-           so its position — and the ornament anchored to it — depends on how many
-           lines this one ends up taking. */
-        fitTitle(award, POLICY.title);
+            /* Before the reason, and measured rather than solved — see fitInline(). It
+               takes no `avail`: the width it has to fit into is its own <p>'s content box,
+               which is not the .Award column (the issuing section overhangs it), and the
+               line-box count already accounts for that without anyone computing it. */
+            /* Before the issuer NAME: the name's paragraph sits directly under this line,
+               so its position — and the ornament anchored to it — depends on how many
+               lines this one ends up taking. */
+            fitTitle(award, POLICY.title);
 
-        var issuer = award.querySelector(POLICY.issuer.sel);
-        if (issuer) { fitInline(issuer, POLICY.issuer); }
+            var issuer = award.querySelector(POLICY.issuer.sel);
+            if (issuer) { fitInline(issuer, POLICY.issuer); }
+        }
 
         var reason = award.querySelector(POLICY.reason.sel);
         if (reason) { fitReason(reason); }
 
         /*
-         * Pass 3 last, and then pass 2 once more if it fired. Shrinking the root
-         * scale is the one thing that hands the column real room back, and a citation
-         * that had no fitting size a moment ago very often has one now. Passes 1 and
-         * 2 do not need repeating for width: every size they chose is in em, so the
-         * root scale carries them down with it and text that fitted still fits.
+         * Pass 3 last, and then the passes it invalidates if it fired. Shrinking the
+         * root scale is the one thing that hands the column real room back, and a
+         * citation that had no fitting size a moment ago very often has one now. Every
+         * size the earlier passes chose is in em, so the root scale carries them down
+         * with it and text that fitted still fits — in WIDTH. The engine is the
+         * exception to "nothing else needs repeating": it also wrote pixel distances
+         * (the place's gutter and reserve, the rules' offsets) and it judged the
+         * vertical budget against the root size of that moment, so after a root scale
+         * it runs again, before the reason is sized into whatever room that leaves.
          */
-        if (fitColumn(award) && reason) {
-            fitReason(reason);
+        if (fitColumn(award)) {
+            if (engine) { runEngine(award, engine); }
+            if (reason) { fitReason(reason); }
         }
 
         /* Before the lift, which measures the gap above a block whose height these
@@ -923,8 +984,10 @@
         var signer = award.querySelector(POLICY.signer.sel);
         if (signer) { fitInline(signer, POLICY.signer); }
 
-        /* After every text pass: the block it follows has finished moving only now. */
-        anchorOrnaments(award);
+        /* After every text pass: the block it follows has finished moving only now. The
+           engine places every flourish itself, against the type it just set, so this
+           only runs when there is no engine. */
+        if (!engine) { anchorOrnaments(award); }
 
         /* Last: it measures the gap the citation left, which is only final now. */
         liftSignature(award);
@@ -1213,7 +1276,7 @@
     }
 
     /*
-     * The first pass, gated on the webfonts.
+     * The first pass, gated on the webfonts (and, below, on the images).
      *
      * Measuring before the faces land measures the fallback serif, and BlackChancery
      * is nothing like a fallback serif — every size chosen would be wrong. All five
@@ -1271,10 +1334,46 @@
         el.hidden = false;
     }
 
+    /*
+     * The images, as well as the fonts.
+     *
+     * The typeset engine places the flourishes by reading their ink grids against the
+     * box each image is laid out in, and an image that has not loaded has no box (or
+     * the wrong one: height 0 until it decodes). It would be left where the stylesheet
+     * put it and reported as placed without having been checked. So the first pass
+     * waits for every <img> on the page to decode.
+     *
+     * A broken image rejects decode() and must not hold the page up, and an image the
+     * browser is deferring (loading="lazy", offscreen in a long bulk document) never
+     * settles at all, so the wait is capped: past IMAGE_WAIT_MS the pass runs with
+     * what has arrived, which is what the page did before this gate existed.
+     */
+    var IMAGE_WAIT_MS = 4000;
+
+    function whenImages() {
+        var imgs = Array.prototype.slice.call(doc.images || []).filter(function (img) {
+            return !(img.complete && img.naturalWidth > 0);
+        });
+        if (!imgs.length) { return Promise.resolve(); }
+
+        var all = Promise.all(imgs.map(function (img) {
+            if (typeof img.decode === 'function') {
+                return img.decode().catch(function () { /* broken: nothing to wait for */ });
+            }
+            return new Promise(function (resolve) {
+                img.addEventListener('load', resolve, { once: true });
+                img.addEventListener('error', resolve, { once: true });
+            });
+        }));
+        var cap = new Promise(function (resolve) { global.setTimeout(resolve, IMAGE_WAIT_MS); });
+        return Promise.race([all, cap]);
+    }
+
     var ready = Promise.all([
         whenParsed(),
         (doc.fonts && doc.fonts.ready ? doc.fonts.ready : Promise.resolve())
     ])
+        .then(whenImages)
         .catch(function () { /* a font that failed to load still gets a fitted page */ })
         .then(function () {
             fit(doc);
@@ -1296,8 +1395,8 @@
         /* reportClipping(root?) -> void. Refresh #sc-clip-notice from that list.
            Call after re-fitting a preview. */
         reportClipping: reportClipping,
-        /* ready: Promise, resolved after the initial fonts-gated pass. Anything that
-           prints should await this. It never rejects. */
+        /* ready: Promise, resolved after the initial pass, which waits for fonts and
+           images. Anything that prints should await this. It never rejects. */
         ready: ready
     };
 }(window, document));
