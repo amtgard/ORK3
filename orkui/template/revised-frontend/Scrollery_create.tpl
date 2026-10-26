@@ -180,10 +180,17 @@ $awardOption = static function (array $c) use ($customKind): string {
 .sc-field > label,
 .sc-field > .sc-field-label { display: block; font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
                   color: var(--rp-text-muted); font-weight: 700; margin-bottom: 4px; }
-.sc-row         { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sc-row         { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 /* The toggles are a sentence about the issuer line, so they sit with it. */
 .sc-toggles     { display: flex; gap: 14px; align-items: center; font-size: 12px; margin: -2px 0 11px; }
 .sc-toggles label { display: flex; gap: 5px; align-items: center; color: var(--rp-text-body); cursor: pointer; }
+/* A grid track defaults to min-width:auto, so a control with a wide intrinsic width (a
+   select showing a long option, the hand listbox's 12rem trigger) props its column open
+   and squeezes its neighbour. minmax(0,1fr) lets both tracks shrink to the panel, and
+   the controls fill the track they are given. */
+.sc-field .adm-select { width: 100%; min-width: 0; box-sizing: border-box; }
+.sc-field .sc-hand { display: block; }
+.sc-field .sc-hand-trigger { min-width: 0; }
 .sc-hint        { font-size: 11px; line-height: 1.45; color: var(--rp-text-muted); margin: 4px 0 0; text-align: left; }
 
 /* Preview — the sticky stage in the main column. */
@@ -382,7 +389,12 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                              what the award is, and is remembered per browser. Same control,
                              same list and same store as the one on the print page — see
                              script/scrollery-hand.js. */ ?>
-                    <div class="sc-row">
+                    <?php /* Hand and Heading each have a row of their own. They used to share
+                             one, and the hand's listbox trigger (min-width 12rem, its label
+                             a display face) took most of the 330px panel, leaving Heading
+                             about 100px: the select showed "Au" and its hint broke one word
+                             per line. Heading now also carries a longer label, "Automatic
+                             (Classic)", so it could not have lived there anyway. */ ?>
                     <div class="sc-field">
                         <label for="sc-face">Hand (lettering)</label>
                         <select id="sc-face" class="adm-select">
@@ -411,8 +423,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                             <option value="<?= scroll_e($headingKey) ?>"<?= $headingKey === Scroll::DEFAULT_HEADING ? ' selected' : '' ?>><?= scroll_e($headingLabel) ?></option>
                             <?php endforeach; ?>
                         </select>
-                        <p class="sc-hint">How the issuing line is set. Applies to this print only.</p>
-                    </div>
+                        <p class="sc-hint">Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. Applies to this print only.</p>
                     </div>
 
                     <div class="sc-row">

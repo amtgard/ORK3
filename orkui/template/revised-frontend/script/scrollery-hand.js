@@ -523,6 +523,66 @@
         }
     };
 
+    /* ----------------------------------------------------------------------
+     * ScrolleryHeading — make "Automatic" say what it chose.
+     *
+     * Automatic lets the typeset engine pick the issuing block's composition: Classic
+     * whenever Classic fits, Centered only when a name or place will not. So on most
+     * certificates Automatic IS Classic and the control looks like it does nothing.
+     * The select therefore carries the answer in its Automatic option —
+     * "Automatic (Classic)", "Automatic (Centered)", or "Automatic (mixed)" on a page
+     * holding several certificates that disagree.
+     *
+     * The engine's report is the data-sc-comp attribute it writes on every .Award at
+     * the end of every fit. A MutationObserver on that attribute rather than a hook in
+     * the fit: the attribute is rewritten on EVERY fit (an identical value is still a
+     * mutation record), so editing a name that flips the choice, a hand swap and a
+     * bulk page's first pass all land here with no cooperation from the engine, and
+     * this file does not have to know which call site ran the fit.
+     *
+     * While a forced composition is in effect the engine reports the FORCED one, which
+     * says nothing about what Automatic would have done, so the label is left on its
+     * last resolved text until the select goes back to Automatic.
+     * -------------------------------------------------------------------- */
+    var COMP_WORD = { classic: 'Classic', centered: 'Centered' };
+
+    /* The label for a set of composition values: one word if they agree, "mixed" if
+       not, null when there is nothing to say yet. Pure, so it is unit-tested. */
+    function headingLabel(comps) {
+        var seen = [];
+        for (var i = 0; i < comps.length; i++) {
+            if (COMP_WORD[comps[i]] && seen.indexOf(comps[i]) === -1) { seen.push(comps[i]); }
+        }
+        if (seen.length === 0) { return null; }
+        return 'Automatic (' + (seen.length === 1 ? COMP_WORD[seen[0]] : 'mixed') + ')';
+    }
+
+    function bindHeading(select, root) {
+        if (!select || !root || typeof global.MutationObserver !== 'function') { return; }
+
+        function sync() {
+            if (select.value !== 'auto') { return; }
+            var comps = [];
+            var els = root.querySelectorAll('.Award[data-sc-comp]');
+            for (var i = 0; i < els.length; i++) { comps.push(els[i].getAttribute('data-sc-comp')); }
+            var text = headingLabel(comps);
+            if (text === null) { return; }
+            for (var n = 0; n < select.options.length; n++) {
+                if (select.options[n].value === 'auto' && select.options[n].textContent !== text) {
+                    select.options[n].textContent = text;
+                }
+            }
+        }
+
+        new global.MutationObserver(sync).observe(root, {
+            subtree: true, childList: true, attributes: true, attributeFilter: ['data-sc-comp']
+        });
+        select.addEventListener('change', sync);
+        sync();
+    }
+
+    global.ScrolleryHeading = { label: headingLabel, bind: bindHeading };
+
     global.ScrolleryHand = {
         /* init(keys, defaultFace) — called by each page from Scroll::Hands(). */
         init: function (list, def) {

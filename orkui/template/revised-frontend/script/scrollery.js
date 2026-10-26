@@ -794,6 +794,13 @@
             stage.setAttribute('data-sc-heading', headingEl.value);
             fitPreview();
         });
+
+        /* Automatic says what it chose, after EVERY fit and not only after a heading
+           change: editing the name can flip the engine's choice. The helper watches the
+           engine's own data-sc-comp report on the mounted certificate, so it covers the
+           fit that follows a keystroke, an award change and a hand swap alike. Guarded:
+           a cached older scrollery-hand.js has no helper and the label just stays plain. */
+        if (window.ScrolleryHeading) { window.ScrolleryHeading.bind(headingEl, mount); }
     }
 
     function applyText() {

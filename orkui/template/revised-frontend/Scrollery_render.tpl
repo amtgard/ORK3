@@ -121,6 +121,38 @@ if ($scrollery_ref !== ''
 <?php endforeach; ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery.css?v=<?= filemtime($scrollery_css) ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
+<style>
+/* An instant data-tip tooltip for the toolbar (project convention: never title=). The
+   bare print page loads none of the CRM's stylesheets, so the rule lives here. It drops
+   BELOW the label because the toolbar is stuck to the top edge, wraps, and is
+   right-anchored so a control near the right of a narrow window cannot push it off
+   screen. Chrome only: the toolbar is display:none under @media print. */
+.sc-tip { position: relative; }
+.sc-tip[data-tip]:hover::after,
+.sc-tip[data-tip]:focus-within::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 70;
+    width: max-content;
+    max-width: 240px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: #2d3748;
+    color: #fff;
+    font-size: 12px;
+    line-height: 1.35;
+    text-align: left;
+    white-space: normal;
+    pointer-events: none;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .3);
+}
+@media (prefers-color-scheme: dark) {
+    .sc-tip[data-tip]:hover::after,
+    .sc-tip[data-tip]:focus-within::after { background: #e2e8f0; color: #1a202c; }
+}
+</style>
 </head>
 <body class="scroll-surface"
       data-scroll-face="<?= scroll_e($scrollery_face) ?>"
@@ -214,8 +246,13 @@ foreach ($Scrolls as $scrollery_scan) {
 
         Unlike the hand it is not remembered: a forced heading is a rescue for a name that
         sets badly, and would force a name that sets fine on the next certificate.
+
+        The Automatic option names what Automatic chose — "Automatic (Classic)", or
+        "(mixed)" on a bulk page whose certificates disagree — because on most
+        certificates Automatic and Classic look identical. See ScrolleryHeading in
+        script/scrollery-hand.js.
     */ ?>
-    <label class="sc-toolbar-field" for="sc-heading">
+    <label class="sc-toolbar-field sc-tip" for="sc-heading" data-tip="Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. Applies to this print only.">
         <span>Heading</span>
         <select id="sc-heading" class="sc-select">
             <?php foreach (Scroll::Headings() as $scrollery_hkey => $scrollery_hlabel): ?>
@@ -460,6 +497,13 @@ foreach ($Scrolls as $scrollery_scan) {
     function refit() {
         var A = window.ScrolleryAutofit;
         if (A && typeof A.fit === 'function') { A.fit(document); }
+    }
+
+    /* Say what Automatic chose, off the engine's own data-sc-comp report on every
+       certificate on the page (a bulk print holds many, hence "mixed"). Watched, so the
+       first fit after fonts.ready and every re-fit below update it. */
+    if (window.ScrolleryHeading) {
+        window.ScrolleryHeading.bind(sel, document.querySelector('.scroll-flow'));
     }
 
     sel.addEventListener('change', function () {

@@ -334,10 +334,139 @@ test('the print page heading picker is chrome, and is not on the paper', async (
   await expect(label).toBeVisible();
   expect(await page.locator('#sc-heading').getAttribute('title'), 'tooltips are data-tip, never title').toBeNull();
   // The same control as the hand's: the same label and select classes.
-  expect(await label.getAttribute('class')).toBe(await page.locator('.sc-toolbar label[for="sc-face"]').getAttribute('class'));
+  // Plus sc-tip, which carries the heading's data-tip tooltip.
+  expect(await label.getAttribute('class')).toBe((await page.locator('.sc-toolbar label[for="sc-face"]').getAttribute('class')) + ' sc-tip');
   expect(await page.locator('#sc-heading').getAttribute('class')).toBe(await page.locator('#sc-face').getAttribute('class'));
 
   await page.emulateMedia({ media: 'print' });
   await expect(page.locator('#sc-heading')).toBeHidden();
   await expect(page.locator('.sc-toolbar')).toBeHidden();
+});
+
+/* ----------------------------------------------------------------------------------------------
+ * The Heading control says what Automatic chose.
+ *
+ * Automatic is Classic whenever Classic fits and Centered only when it does not, so on most
+ * certificates it looked identical to Classic. The Automatic option now carries the engine's own
+ * answer: "Automatic (Classic)", "Automatic (Centered)", or "Automatic (mixed)" on a page of
+ * certificates that disagree.
+ * ---------------------------------------------------------------------------------------------- */
+
+const autoText = (page: Page) => page.locator('#sc-heading option[value="auto"]').textContent();
+const compOf = (page: Page, root: string) =>
+  page.evaluate((r) => document.querySelector(`${r} .Award`)!.getAttribute('data-sc-comp'), root);
+
+test('the composer says what Automatic resolved to, after every fit', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  await page.fill('#sc-issuer-title', 'Kingdom');
+  await page.fill('#sc-issuer-name', 'Wetlands');
+  await composerSettled(page);
+  expect(await compOf(page, '#sc-mount')).toBe('classic');
+  expect(await autoText(page)).toBe('Automatic (Classic)');
+
+  // A place that cannot sit on the Classic line flips the engine's own choice, with no change to
+  // the Heading control: editing the name is enough, so the label must follow every fit.
+  await page.fill('#sc-issuer-name', 'the Very Long and Winding Marches of the Seven Uncharted Windswept Highlands and Isles');
+  await composerSettled(page);
+  expect(await compOf(page, '#sc-mount')).toBe('centered');
+  expect(await autoText(page)).toBe('Automatic (Centered)');
+
+  await page.fill('#sc-issuer-name', 'Wetlands');
+  await composerSettled(page);
+  expect(await autoText(page)).toBe('Automatic (Classic)');
+});
+
+test('forcing Centered or Classic re-sets the certificate, and the labels beside Automatic stay plain', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  await page.fill('#sc-issuer-title', 'Kingdom');
+  await page.fill('#sc-issuer-name', 'Wetlands');
+  await composerSettled(page);
+  expect(await compOf(page, '#sc-mount')).toBe('classic');
+
+  await page.selectOption('#sc-heading', 'centered');
+  await composerSettled(page);
+  expect(await compOf(page, '#sc-mount')).toBe('centered');
+  // A forced choice says nothing about what Automatic would have done: the label keeps its last answer.
+  expect(await autoText(page)).toBe('Automatic (Classic)');
+  expect(await page.locator('#sc-heading option[value="centered"]').textContent()).toBe('Centered');
+  expect(await page.locator('#sc-heading option[value="classic"]').textContent()).toBe('Classic');
+
+  // And the other way: a certificate that Automatic sets Centered can be forced Classic.
+  await page.selectOption('#sc-heading', 'auto');
+  await page.fill('#sc-issuer-name', 'the Very Long and Winding Marches of the Seven Uncharted Windswept Highlands and Isles');
+  await composerSettled(page);
+  expect(await compOf(page, '#sc-mount')).toBe('centered');
+  await page.selectOption('#sc-heading', 'classic');
+  await composerSettled(page);
+  expect(await compOf(page, '#sc-mount')).toBe('classic');
+});
+
+test('the Heading and Hand fields each have usable width in the composer', async ({ page }) => {
+  for (const width of [1400, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await openComposer(page, 'kingdom');
+    const heading = await page.locator('#sc-heading').boundingBox();
+    const hand = await page.locator('.sc-hand-trigger').boundingBox();
+    expect(heading!.width, `heading select at ${width}px`).toBeGreaterThan(200);
+    expect(hand!.width, `hand control at ${width}px`).toBeGreaterThan(200);
+    // "Automatic (Classic)" is not truncated by the control.
+    expect(await page.locator('#sc-heading').evaluate((el: HTMLSelectElement) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  }
+});
+
+test('the print page says what Automatic chose, with a data-tip and no title', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  await page.fill('#sc-issuer-title', 'Kingdom');
+  await page.fill('#sc-issuer-name', 'Wetlands');
+  await composerSettled(page);
+  const url = await printUrlOf(page);
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+  await settle(page);
+
+  const award = page.locator('.scroll-flow .Award').first();
+  await expect(award).toHaveAttribute('data-sc-comp', 'classic');
+  await expect(page.locator('#sc-heading option[value="auto"]')).toHaveText('Automatic (Classic)');
+
+  const label = page.locator('.sc-toolbar label[for="sc-heading"]');
+  expect(await label.getAttribute('data-tip')).toContain('Automatic sets the classic heading');
+  expect(await label.getAttribute('title')).toBeNull();
+
+  // Forcing each composition re-sets the page, and the Automatic label keeps its last answer.
+  await page.selectOption('#sc-heading', 'centered');
+  await expect(award).toHaveAttribute('data-sc-comp', 'centered');
+  await expect(page.locator('#sc-heading option[value="auto"]')).toHaveText('Automatic (Classic)');
+  await page.selectOption('#sc-heading', 'classic');
+  await expect(award).toHaveAttribute('data-sc-comp', 'classic');
+});
+
+test('a bulk page whose certificates disagree reads "Automatic (mixed)"', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  const url = await printUrlOf(page);
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+  await settle(page);
+  const auto = page.locator('#sc-heading option[value="auto"]');
+  await expect(auto).toHaveText(/^Automatic \((Classic|Centered)\)$/);
+
+  // A second certificate, as a bulk run would hold, composed the other way. The label follows the
+  // engine's own report on the page, so it is driven here by that report.
+  await page.evaluate(() => {
+    const first = document.querySelector('.scroll-flow .scroll-page')!;
+    const copy = first.cloneNode(true) as HTMLElement;
+    const a = copy.querySelector('.Award')!;
+    const was = document.querySelector('.scroll-flow .Award')!.getAttribute('data-sc-comp');
+    a.setAttribute('data-sc-comp', was === 'classic' ? 'centered' : 'classic');
+    document.querySelector('.scroll-flow')!.appendChild(copy);
+  });
+  await expect(auto).toHaveText('Automatic (mixed)');
+});
+
+test('ScrolleryHeading.label: one word when the certificates agree, mixed when not, nothing without a report', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  const got = await page.evaluate(() => {
+    const L = (window as any).ScrolleryHeading.label;
+    return [L(['classic']), L(['classic', 'classic']), L(['centered']), L(['classic', 'centered']), L([]), L([null, 'bogus'])];
+  });
+  expect(got).toEqual(['Automatic (Classic)', 'Automatic (Classic)', 'Automatic (Centered)', 'Automatic (mixed)', null, null]);
 });
