@@ -70,5 +70,5 @@ htmlcov/
 test-results/
 ga-service-account.json
 
-# Signed legal originals stay off the repository; docs/licenses/ carries plaintext transcriptions.
+# Signed legal originals stay off the repository.
 docs/licenses/*.pdf

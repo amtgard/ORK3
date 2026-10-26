@@ -20,7 +20,7 @@ if (PHP_SAPI !== 'cli') {
  * machine running it — the same "build machine, not the runtime image" split that
  * bin/build-scroll-renditions.sh documents: ork3-php8-app carries no ImageMagick, and
  * this output is committed rather than generated at deploy because the art is frozen
- * (it is Valory Fox's, licensed — see NOTICE).
+ * (it is the Arcanyst artwork, by Valory Fox — see NOTICE).
  *
  * ---------------------------------------------------------------------------------
  * WHY THIS EXISTS: A LAYOUT BOX IS NOT INK
