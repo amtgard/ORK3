@@ -341,6 +341,23 @@ foreach ($Scrolls as $scrollery_scan) {
 </p>
 <?php endif; ?>
 <?php /*
+    Court lines that could not be printed (Scrollery/court only): "Persona — Award"
+    => reason. The planner's preflight already removed unprintable lines before
+    this tab opened, so these became unprintable in between. Same class as the
+    overflow notice, so scrollery.css hides it at print time with the rest of the
+    chrome — it never costs a sheet of paper.
+*/ ?>
+<?php if (!empty($Skipped) && is_array($Skipped)): ?>
+<div class="sc-overflow-notice sc-skipped-notice" role="status">
+    <?= count($Skipped) === 1 ? 'One scroll was' : (int) count($Skipped) . ' scrolls were' ?> left out of this run:
+    <ul>
+        <?php foreach ($Skipped as $label => $reason): ?>
+        <li><?= htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') ?>: <?= htmlspecialchars((string) $reason, ENT_QUOTES, 'UTF-8') ?></li>
+        <?php endforeach; ?>
+    </ul>
+</div>
+<?php endif; ?>
+<?php /*
     Citations that still do not fit.
 
     Emitted empty and hidden; scrollery-autofit.js fills it in after its measured

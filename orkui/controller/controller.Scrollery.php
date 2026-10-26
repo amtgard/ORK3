@@ -448,6 +448,96 @@ class Controller_Scrollery extends Controller
     }
 
     /**
+     * A court's Scrollery Print lines, as one bare print run — the Court Planner's
+     * "Print Scrollery scrolls" button opens this in a new tab.
+     *
+     * Route is Scrollery/court/{courtId}, with &lines=1,2,3 naming the court lines
+     * the planner meant to print (absent or empty: every Scrollery Print line).
+     * The list is a request, never a grant: Model_Scrollery::scrolls_for_court_awards()
+     * re-reads the court, drops ids that are not this court's, and drops lines a peer
+     * has since moved off Scrollery Print or cancelled.
+     *
+     * AUTHORITY IS Model_Court::can_manage() ALONE — whoever may run the court may
+     * print its scrolls. That is a deliberate decision, not an omission: Scrollery's
+     * own may_issue_for() is not layered on top. Session only, no print token: the
+     * planner is a signed-in surface, and a court line has no awards_id for a token
+     * to sign.
+     *
+     * The planner's preflight (CourtAjax/scrollery_print_plan) already removed
+     * unprintable lines before this tab opened, so a Skipped line here is one that
+     * became unprintable in between. It is reported in a screen-only notice rather
+     * than a page of its own, so it never costs a sheet of paper.
+     */
+    public function court($action = null)
+    {
+        $courtId  = (int) (explode('/', trim((string) $action, '/'))[0] ?? 0);
+        $viewerId = isset($this->session->user_id) ? (int) $this->session->user_id : 0;
+        if ($viewerId <= 0) {
+            header('Location: ' . UIR . 'Login/login/Scrollery/court/' . $courtId);
+            exit;
+        }
+
+        $this->load_model('Court');
+        $court = $courtId > 0 ? $this->Court->get_court_detail($courtId) : null;
+        if (!is_array($court) || !$this->Court->can_manage($viewerId, $court['KingdomId'], $court['ParkId'])) {
+            // One sentence for "no such court" and "not yours": telling the two apart
+            // would confirm which court ids exist to someone who cannot run them.
+            $this->deny(
+                'You do not have permission to print scrolls for that court. Printing a court\'s '
+                . 'scrolls is open to the officers who can manage the court.',
+                'Scrollery/court/' . $courtId
+            );
+            return;
+        }
+
+        $lineIds = array_values(array_unique(array_filter(
+            array_map('intval', explode(',', (string) ($_GET['lines'] ?? '')))
+        )));
+
+        $run     = $this->Scrollery->scrolls_for_court_awards($courtId, $lineIds, $viewerId);
+        $planner = 'Court/detail/' . $courtId;
+
+        if ($run['Scrolls'] === []) {
+            $first = reset($run['Skipped']);
+            $this->deny(
+                $first !== false
+                    ? 'None of these scrolls can be printed. ' . $first
+                    : 'None of these court lines is set to Scrollery Print any more, so there is nothing to print.',
+                'Scrollery/court/' . $courtId,
+                $planner,
+                'Back to the court'
+            );
+            return;
+        }
+
+        $scrolls = [];
+        foreach ($run['Scrolls'] as $scroll) {
+            $scrolls[] = $scroll;
+            // AwardsId null: like a composed scroll, a court line has no award row yet.
+            $this->record_print(null, $scroll, $viewerId);
+        }
+
+        $skipped = [];
+        foreach ($run['Skipped'] as $caId => $reason) {
+            $line  = $run['Lines'][$caId] ?? [];
+            $label = implode(' — ', array_filter([
+                trim((string) ($line['Persona'] ?? '')),
+                trim((string) ($line['AwardName'] ?? '')),
+            ], 'strlen'));
+            $skipped[$label !== '' ? $label : 'Court line ' . (int) $caId] = $reason;
+        }
+
+        $this->render_bare('Scrollery_render.tpl', [
+            'Scrolls'   => $scrolls,
+            'Skipped'   => $skipped,
+            'Dropped'   => (int) $run['Dropped'],
+            'MaxRun'    => Scroll::MAX_PRINT_RUN,
+            'AutoPrint' => isset($_GET['print']),
+            'PageTitle' => count($scrolls) . (count($scrolls) === 1 ? ' scroll' : ' scrolls'),
+        ]);
+    }
+
+    /**
      * The same print run as DATA — item 41's other half.
      *
      * `render` is a page, so anything that wants the FACTS about a run — a PDF

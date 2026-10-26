@@ -201,6 +201,282 @@ class Model_Scrollery extends Model
     }
 
     /**
+     * Why a Court Planner line did not make it into a Scrollery print run. The
+     * planner shows these verbatim, so they are written for the officer.
+     */
+    public const COURT_SKIP_UNPRINTABLE = "Scrollery can't print this award.";
+    public const COURT_SKIP_NO_NAME     = 'This award has no name to print.';
+    public const COURT_SKIP_NO_PLAYER   = 'The recipient could not be found.';
+
+    /**
+     * Which of a kingdom's kingdomawards Scrollery can print, as a set:
+     * KingdomAwardId => true.
+     *
+     * The ONE definition of "printable" the Court Planner uses — the scroll-status
+     * dropdown disables Scrollery Print for anything outside it, and
+     * scrolls_for_court_awards() resolves every line against the same list. Built
+     * from printable_award_choices(), so it carries that list's officer-position,
+     * dangling-row and allowlist rules rather than a second opinion about them.
+     *
+     * @return array<int, true>
+     */
+    public function printable_kingdomaward_ids(int $kingdomId): array
+    {
+        $ids = [];
+        foreach ($this->printable_award_choices($kingdomId) as $choice) {
+            $kaId = (int) ($choice['KingdomAwardId'] ?? 0);
+            if ($kaId > 0) {
+                $ids[$kaId] = true;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * A COURT'S Scrollery Print lines as one print run.
+     *
+     * A court line is not an award row: until the court is finalized nothing has
+     * been written to ork_awards, so there is no awards_id to print from and
+     * scrolls_for_awards_ids() cannot serve it. The certificate is built from the
+     * line itself — its recipient, kingdomaward and rank — with the COURT
+     * supplying the date and the issuing body, exactly as the court will when it
+     * commits the grant.
+     *
+     * NOT AN AUTHORITY CHECK. The caller has already decided the viewer may manage
+     * this court (Model_Court::can_manage(), the print route's whole gate by
+     * decision); $viewerId is passed to getCourtAwards() only so a Monarchy Only
+     * rec's reason is withheld from a viewer who may not see it.
+     *
+     * Which lines take part, silently — these are not errors, they are simply not
+     * this run:
+     *   - lines on another court (an id the URL carries that this court lacks);
+     *   - lines whose ScrollStatus is no longer Court::SCROLL_SCROLLERY, because a
+     *     peer moved the chip after the planner opened the print tab;
+     *   - cancelled lines.
+     * $courtAwardIds === [] means every line of the court.
+     *
+     * Which lines are reported in Skipped, with an officer-facing reason:
+     *   - the line's kingdomaward is not in the kingdom's printable catalog (an
+     *     officer position, a title, a masterhood) — COURT_SKIP_UNPRINTABLE;
+     *   - its recipient's player record is gone — COURT_SKIP_NO_PLAYER;
+     *   - it resolves to a blank title (a Custom Award the kingdom never named):
+     *     the reprint surface prints that blank on purpose, but a court run is an
+     *     officer printing a new certificate, and compose() refuses the same case
+     *     for the same reason — COURT_SKIP_NO_NAME.
+     *
+     * The citation always passes RecommendationVisibility::publishable_citation()
+     * (see courtLineScrollRowForTest()). The giver is the line's own when one is
+     * set, else the court's default giver — getCourtGiverOptions() is read once
+     * per run, and only if some line needs it.
+     *
+     * Scrolls keeps the court's running order and is capped at
+     * Scroll::MAX_PRINT_RUN; printable lines past the cap are counted in Dropped.
+     *
+     * Lines (an addition to the three keys the planner contract names) carries
+     * Persona / AwardName / RowVersion for every line in Scrolls or Skipped, so the
+     * print route can name a skipped line and the planner's preflight can hand back
+     * each printable line's row version without reading the court a second time.
+     *
+     * @param array<int, mixed> $courtAwardIds
+     * @return array{Scrolls: array<int, array>, Skipped: array<int, string>, Dropped: int,
+     *               Lines: array<int, array{Persona: string, AwardName: string, RowVersion: int}>}
+     */
+    public function scrolls_for_court_awards(int $courtId, array $courtAwardIds, int $viewerId): array
+    {
+        $empty = ['Scrolls' => [], 'Skipped' => [], 'Dropped' => 0, 'Lines' => []];
+        if ($courtId <= 0) {
+            return $empty;
+        }
+
+        $court = Ork3::$Lib->court->getCourtDetail($courtId);
+        if (!is_array($court)) {
+            return $empty;
+        }
+
+        $wanted = [];
+        foreach ($courtAwardIds as $id) {
+            $id = (int) $id;
+            if ($id > 0) {
+                $wanted[$id] = true;
+            }
+        }
+
+        // getCourtAwards() reads WHERE court_id = this court, so an id from another
+        // court can never be in this list — the foreign-id rule is the query itself.
+        // It is already in running order (sort_order, court_award_id).
+        $lines = [];
+        foreach (Ork3::$Lib->court->getCourtAwards($courtId, $viewerId) as $line) {
+            $caId = (int) ($line['CourtAwardId'] ?? 0);
+            if ($caId <= 0 || ($wanted !== [] && !isset($wanted[$caId]))) {
+                continue;
+            }
+            if ((int) ($line['ScrollStatus'] ?? 0) !== Court::SCROLL_SCROLLERY
+                || (string) ($line['Status'] ?? '') === 'cancelled'
+            ) {
+                continue;
+            }
+            $lines[$caId] = $line;
+        }
+        if ($lines === []) {
+            return $empty;
+        }
+
+        $kingdomId = (int) ($court['KingdomId'] ?? 0);
+        $parkId    = (int) ($court['ParkId'] ?? 0);
+        $scopeType = $parkId > 0 ? 'park' : 'kingdom';
+        $scopeId   = $parkId > 0 ? $parkId : $kingdomId;
+
+        // The issuing body, named the way the composer names it: scope_context()'s
+        // split Title/Name plus its article and "of" flags, and its master-size
+        // heraldry. One call for the whole run — every line shares the court's body.
+        $scope    = $this->scope_context($scopeType, $scopeId);
+        $courtRow = [
+            'Date'        => $court['CourtDate'] ?? null,
+            'ParkId'      => $parkId,
+            'KingdomId'   => $kingdomId,
+            'ParkName'    => $scopeType === 'park' ? (string) $scope['Name'] : '',
+            'KingdomName' => $scopeType === 'kingdom' ? (string) $scope['Name'] : '',
+        ];
+
+        $choices = [];
+        foreach ($this->printable_award_choices($kingdomId) as $choice) {
+            $choices[(int) $choice['KingdomAwardId']] = $choice;
+        }
+
+        // Pronouns in one read, as scrolls_for_awards_ids() does, rather than one
+        // possessive_pronoun_for_player() round trip per certificate.
+        $mundaneIds = [];
+        foreach ($lines as $line) {
+            $mundaneId = (int) ($line['MundaneId'] ?? 0);
+            if ($mundaneId > 0) {
+                $mundaneIds[$mundaneId] = true;
+            }
+        }
+        $recipients = $mundaneIds === []
+            ? []
+            : Ork3::$Lib->player->GetScrollRecipients(array_keys($mundaneIds));
+
+        $defaultGiver = null;
+        $scrolls      = [];
+        $skipped      = [];
+        $meta         = [];
+        $dropped      = 0;
+
+        foreach ($lines as $caId => $line) {
+            $choice    = $choices[(int) ($line['KingdomAwardId'] ?? 0)] ?? null;
+            $recipient = $recipients[(int) ($line['MundaneId'] ?? 0)] ?? null;
+            $scroll    = null;
+            $reason    = '';
+
+            if ($choice === null) {
+                $reason = self::COURT_SKIP_UNPRINTABLE;
+            } elseif ($recipient === null) {
+                $reason = self::COURT_SKIP_NO_PLAYER;
+            } else {
+                if ((int) ($line['GivenByMundaneId'] ?? 0) > 0) {
+                    $givenBy = (string) ($line['GivenByPersona'] ?? '');
+                } else {
+                    $defaultGiver ??= Ork3::$Lib->court->getCourtGiverOptions($courtId)['default'] ?? [];
+                    $givenBy = (string) (is_array($defaultGiver) ? ($defaultGiver['persona'] ?? '') : '');
+                }
+
+                try {
+                    $scroll = Scroll::BuildScroll(
+                        self::courtLineScrollRowForTest($line, $choice, $courtRow, $givenBy),
+                        [
+                            'player'      => (string) ($recipient['Persona'] ?? ''),
+                            'pronoun'     => $this->possessive_pronoun($recipient),
+                            'heraldry'    => (string) $scope['Heraldry'],
+                            'issuerTitle' => (string) $scope['Title'],
+                            'useThe'      => (bool) $scope['UseThe'],
+                            'useOf'       => (bool) $scope['UseOf'],
+                            'mundaneId'   => (int) $line['MundaneId'],
+                            'scopeType'   => $scopeType,
+                            'scopeId'     => $scopeId,
+                        ]
+                    );
+                } catch (InvalidArgumentException $e) {
+                    // The choice came from the same allowlist BuildScroll() resolves
+                    // through, so this is not expected — but a refusal there is still
+                    // "can't print", never a fatal on the officer's print tab.
+                    $scroll = null;
+                    $reason = self::COURT_SKIP_UNPRINTABLE;
+                }
+
+                if ($scroll !== null && trim((string) $scroll['title']) === '') {
+                    $scroll = null;
+                    $reason = self::COURT_SKIP_NO_NAME;
+                }
+            }
+
+            $meta[$caId] = [
+                'Persona'    => (string) ($line['Persona'] ?? ''),
+                'AwardName'  => (string) ($line['AwardName'] ?? ''),
+                'RowVersion' => (int) ($line['RowVersion'] ?? 0),
+            ];
+
+            if ($scroll === null) {
+                $skipped[$caId] = $reason;
+            } elseif (count($scrolls) < Scroll::MAX_PRINT_RUN) {
+                $scrolls[$caId] = $scroll;
+            } else {
+                $dropped++;
+                unset($meta[$caId]);
+            }
+        }
+
+        return ['Scrolls' => $scrolls, 'Skipped' => $skipped, 'Dropped' => $dropped, 'Lines' => $meta];
+    }
+
+    /**
+     * One court line -> the row Scroll::BuildScroll() draws from. Pure, so the
+     * mapping is pinned without a database (ScrolleryCourtLineTest).
+     *
+     * The award comes from the kingdom's catalog CHOICE, never from the line's own
+     * text: AwardId and Name are the allowlist's, and OfficerRole is 'none' because
+     * printable_award_choices() only ever returns non-officer rows — the same
+     * construction compose() uses. The date is the court's (a line has none of its
+     * own). The citation passes RecommendationVisibility::publishable_citation(),
+     * so a Monarchy Only rec's reason that was saved as the line's public comment
+     * never prints.
+     *
+     * The issuer follows compose(): a park court names the park, a kingdom court
+     * names the kingdom, and only that one name is set. MundaneId and IsLadder ride
+     * along because BuildScroll() reads them for provenance and for whether a
+     * Custom Award at rank 0 still draws a blank to write its level into.
+     *
+     * @param array<string, mixed> $line    a getCourtAwards() line
+     * @param array<string, mixed> $choice  a printable_award_choices() entry
+     * @param array<string, mixed> $court   Date, ParkId, KingdomId, ParkName, KingdomName
+     * @return array<string, mixed>
+     */
+    public static function courtLineScrollRowForTest(array $line, array $choice, array $court, string $givenBy): array
+    {
+        $parkId = (int) ($court['ParkId'] ?? 0);
+
+        return [
+            'AwardId'          => (int) ($choice['AwardId'] ?? 0),
+            'OfficerRole'      => 'none',
+            'KingdomAwardName' => (string) ($choice['Name'] ?? ''),
+            'MundaneId'        => (int) ($line['MundaneId'] ?? 0),
+            'Rank'             => (int) ($line['Rank'] ?? 0),
+            'IsLadder'         => !empty($line['IsLadder']) ? 1 : 0,
+            'Date'             => (string) ($court['Date'] ?? ''),
+            'Note'             => RecommendationVisibility::publishable_citation(
+                (string) ($line['PublicComment'] ?? ''),
+                (string) ($line['RecReason'] ?? ''),
+                (bool) ($line['RecMonarchyOnly'] ?? false)
+            ),
+            'GivenBy'          => $givenBy,
+            'ParkId'           => $parkId,
+            'KingdomId'        => (int) ($court['KingdomId'] ?? 0),
+            'ParkName'         => $parkId > 0 ? (string) ($court['ParkName'] ?? '') : '',
+            'KingdomName'      => $parkId > 0 ? '' : (string) ($court['KingdomName'] ?? ''),
+        ];
+    }
+
+    /**
      * A print run as DATA — everything Scrollery knows about a set of certificates,
      * with no markup anywhere in it.
      *

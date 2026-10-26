@@ -1251,4 +1251,56 @@ class Controller_CourtAjax extends Controller
         $this->jsonOut($this->Court->complete_printed_scrolls($court_id, $lines));
     }
 
+    // -----------------------------------------------------------------------
+    // scrollery_print_plan
+    // POST: CourtId
+    //
+    // The planner's preflight for "Print Scrollery scrolls": which Scrollery Print
+    // lines will print, which will not and why, and how many fall past the run
+    // cap. Resolved by the SAME call the print route makes
+    // (Model_Scrollery::scrolls_for_court_awards), so the two can never disagree
+    // about what is printable. Read-only: nothing is written, and no print is
+    // logged — the route logs when it actually renders.
+    //
+    // RowVersion travels with each printable line so complete_printed_scrolls can
+    // refuse a line a peer changed while the print tab was open.
+    // -----------------------------------------------------------------------
+    public function scrollery_print_plan($p = null)
+    {
+        $court_id = (int)($_POST['CourtId'] ?? 0);
+        if (!valid_id($court_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid court.']);
+        }
+
+        [$uid] = $this->requireCourtAuth($court_id);
+
+        $this->load_model('Scrollery');
+        $run = $this->Scrollery->scrolls_for_court_awards($court_id, [], $uid);
+
+        $printable = [];
+        foreach (array_keys($run['Scrolls']) as $caId) {
+            $printable[] = [
+                'CourtAwardId' => (int)$caId,
+                'RowVersion'   => (int)($run['Lines'][$caId]['RowVersion'] ?? 0),
+            ];
+        }
+
+        $skipped = [];
+        foreach ($run['Skipped'] as $caId => $reason) {
+            $skipped[] = [
+                'CourtAwardId' => (int)$caId,
+                'Persona'      => (string)($run['Lines'][$caId]['Persona'] ?? ''),
+                'AwardName'    => (string)($run['Lines'][$caId]['AwardName'] ?? ''),
+                'Reason'       => $reason,
+            ];
+        }
+
+        $this->jsonOut([
+            'status'    => 0,
+            'Printable' => $printable,
+            'Skipped'   => $skipped,
+            'Dropped'   => (int)$run['Dropped'],
+        ]);
+    }
+
 }
