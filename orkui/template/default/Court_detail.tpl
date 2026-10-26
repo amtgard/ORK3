@@ -808,8 +808,12 @@ button.cp-chip[aria-busy="true"] { opacity: .6; cursor: progress; }
     --cp-trk-inprogress-bg: #fffaf0;  --cp-trk-inprogress-fg: #975a16;  --cp-trk-inprogress-bd: #fbd38d;  --cp-trk-inprogress-mark: #c08419;
     --cp-trk-done-bg: #f0fff4;        --cp-trk-done-fg: #276749;        --cp-trk-done-bd: #c6f6d5;        --cp-trk-done-mark: #2f855a;
     --cp-trk-notneeded-bg: #f8fafc;   --cp-trk-notneeded-fg: #5a6578;   --cp-trk-notneeded-bd: #cbd5e0;   --cp-trk-notneeded-mark: #e2e8f0;
-    --cp-trk-notneeded-stripe: #eef2f6;
+    --cp-trk-notneeded-stripe: #dfe5ec;
     --cp-trk-notneeded-hatch: repeating-linear-gradient(135deg, var(--cp-trk-notneeded-bg) 0 3px, var(--cp-trk-notneeded-stripe) 3px 6px);
+    /* The bar block's fill: the -mark grey hatched with a darker stripe, no border, so it
+       reads as hatched (never as a flat Pending grey) and stays the palest block. */
+    --cp-trk-notneeded-bar-stripe: #b8c2d0;
+    --cp-trk-notneeded-bar: repeating-linear-gradient(135deg, var(--cp-trk-notneeded-mark) 0 3px, var(--cp-trk-notneeded-bar-stripe) 3px 5px);
 }
 html[data-theme="dark"] {
     --cp-trk-pending-bg: #2d3748;     --cp-trk-pending-fg: #cbd5e0;     --cp-trk-pending-bd: #4a5568;     --cp-trk-pending-mark: #a0aec0;
@@ -818,7 +822,8 @@ html[data-theme="dark"] {
     --cp-trk-inprogress-bg: rgba(237,137,54,.16); --cp-trk-inprogress-fg: #fbd38d; --cp-trk-inprogress-bd: rgba(251,211,141,.35); --cp-trk-inprogress-mark: #c08419;
     --cp-trk-done-bg: rgba(72,187,120,.16);    --cp-trk-done-fg: #9ae6b4;    --cp-trk-done-bd: rgba(154,230,180,.35);    --cp-trk-done-mark: #38a169;
     --cp-trk-notneeded-bg: #1a2030;   --cp-trk-notneeded-fg: #9aa5b5;   --cp-trk-notneeded-bd: #3a4558;   --cp-trk-notneeded-mark: #2d3748;
-    --cp-trk-notneeded-stripe: #222a38;
+    --cp-trk-notneeded-stripe: #2a3344;
+    --cp-trk-notneeded-bar-stripe: #46536a;
 }
 .cp-chip[data-group="pending"]    { background: var(--cp-trk-pending-bg);    color: var(--cp-trk-pending-fg);    border-color: var(--cp-trk-pending-bd); }
 .cp-chip[data-group="print"]      { background: var(--cp-trk-print-bg);      color: var(--cp-trk-print-fg);      border-color: var(--cp-trk-print-bd); }
@@ -1496,26 +1501,78 @@ html[data-theme="dark"] button.cp-view-tab[aria-selected="true"] { color: #e2e8f
 html[data-theme="dark"] button.cp-view-tab[aria-selected="false"] .cp-h2-icon { color: #718096; }
 
 /* ============================================================
-   RESOURCE PLANNING — summary strip, filters and the grid
+   RESOURCE PLANNING — status bars, filters and the grid
    One row per award line, in running order. A CSS grid in the list's own language
    (not DataTables: it is a form-control grid). Each row is its own grid on one
    shared column template, so the columns line up; the template narrows in two
    steps (two-line rows below 1280px, cards at phone width).
    ============================================================ */
 .cp-rp { margin-bottom: 20px; }
-.cp-rp-summary {
-    display: flex; flex-direction: column; gap: 4px;
+/* The status bars: one row per type, a label and a full-width bar. Each block is one
+   status (a button that filters the grid); each slice inside it is one line. The gaps
+   between slices (1px) and blocks (2px) are transparent, so they are the card's own
+   surface, never a stroke. Block colour is the group's -mark token; Not Needed is a
+   paler hatch, last. The active block gets a dark outline. */
+.cp-rp-bars {
+    --cp-rp-bar-h: 18px;
+    --cp-rp-sel: #1a202c;
+    display: flex; flex-direction: column; gap: 7px;
     background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px;
-    padding: 9px 14px; margin-bottom: 10px; font-size: 13px; color: #4a5568;
+    padding: 11px 14px 10px; margin-bottom: 10px; font-size: 13px; color: #4a5568;
 }
-.cp-rp-sum-group { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; }
-.cp-rp-sum-label { font-size: 10px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: .08em; min-width: 72px; }
-.cp-rp-sum-label i { margin-right: 3px; }
-.cp-rp-sum-item b { font-variant-numeric: tabular-nums; }
-.cp-rp-sum-sep { color: #cbd5e0; }
-.cp-rp-sum-need { color: #c05621; font-weight: 700; }
-.cp-rp-sum-ok   { color: #718096; font-weight: 400; }
+.cp-rp-bar-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cp-rp-bar-label {
+    flex: 0 0 auto; min-width: 96px; display: flex; align-items: baseline; gap: 5px; white-space: nowrap;
+    font-size: 11px; font-weight: 700; color: #4a5568; text-transform: uppercase; letter-spacing: .06em;
+}
+.cp-rp-bar-label i { color: #718096; width: 13px; text-align: center; }
+.cp-rp-bar-label b { font-size: 12px; color: #2d3748; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.cp-rp-bar { flex: 1 1 auto; min-width: 0; display: flex; gap: 2px; height: var(--cp-rp-bar-h); }
+.cp-rp-bar-empty {
+    align-items: center; justify-content: center; border-radius: 3px;
+    background: #edf2f7; color: #718096; font-size: 11px; font-weight: 600;
+}
+button.cp-rp-blk {
+    -webkit-appearance: none; appearance: none;
+    position: relative; display: flex; gap: 1px; flex: 1 1 0; min-width: 4px; height: 100%; min-height: 0;
+    margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+    cursor: pointer;
+}
+.cp-rp-slice { flex: 1 1 0; min-width: 0; height: 100%; background: var(--cp-trk-pending-mark); }
+.cp-rp-bar .cp-rp-blk:first-child .cp-rp-slice:first-child { border-radius: 3px 0 0 3px; }
+.cp-rp-bar .cp-rp-blk:last-child .cp-rp-slice:last-child   { border-radius: 0 3px 3px 0; }
+.cp-rp-bar .cp-rp-blk:only-child .cp-rp-slice:only-child   { border-radius: 3px; }
+.cp-rp-blk[data-group="print"] .cp-rp-slice,      [data-group="print"] > .cp-rp-swatch      { background: var(--cp-trk-print-mark); }
+.cp-rp-blk[data-group="assigned"] .cp-rp-slice,   [data-group="assigned"] > .cp-rp-swatch   { background: var(--cp-trk-assigned-mark); }
+.cp-rp-blk[data-group="inprogress"] .cp-rp-slice, [data-group="inprogress"] > .cp-rp-swatch { background: var(--cp-trk-inprogress-mark); }
+.cp-rp-blk[data-group="done"] .cp-rp-slice,       [data-group="done"] > .cp-rp-swatch       { background: var(--cp-trk-done-mark); }
+.cp-rp-blk[data-group="notneeded"] .cp-rp-slice,  [data-group="notneeded"] > .cp-rp-swatch  { background: var(--cp-trk-notneeded-bar); }
+.cp-rp-blk:hover .cp-rp-slice { filter: brightness(1.08) saturate(1.05); }
+button.cp-rp-blk.active { z-index: 1; box-shadow: 0 0 0 2px var(--cp-rp-sel); }
+button.cp-rp-blk:focus-visible { z-index: 2; outline: 2px solid #3182ce; outline-offset: 3px; }
+
+/* Legend: swatch + label + "scrolls · regalia" counts in text ink (identity is the
+   swatch beside it), then the artisan callout, which is a filter. */
+.cp-rp-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding-top: 2px; font-size: 12px; }
+.cp-rp-leg-key { font-size: 10px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: .06em; }
+.cp-rp-leg-item { display: inline-flex; align-items: center; gap: 5px; color: #4a5568; white-space: nowrap; }
+.cp-rp-leg-item b { color: #2d3748; font-variant-numeric: tabular-nums; }
+.cp-rp-swatch { flex-shrink: 0; width: 10px; height: 10px; border-radius: 2px; background: var(--cp-trk-pending-mark); }
+button.cp-rp-need-btn {
+    -webkit-appearance: none; appearance: none;
+    display: inline-flex; align-items: center; gap: 5px; margin: 0 0 0 auto; min-height: 0;
+    padding: 3px 10px; border: 1px solid #fbd38d; border-radius: 14px;
+    background: #fffaf0; color: #9c4221; box-shadow: none;
+    font: inherit; font-size: 12px; font-weight: 600; line-height: 1.3; cursor: pointer; white-space: nowrap;
+}
+button.cp-rp-need-btn:hover { border-color: #c05621; }
+button.cp-rp-need-btn.active { background: #c05621; border-color: #c05621; color: #fff; }
+button.cp-rp-need-btn:focus-visible, button.cp-rp-fchip:focus-visible { outline: 2px solid #3182ce; outline-offset: 2px; }
+.cp-rp-need-ok { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: #4a5568; }
+.cp-rp-need-ok i { color: #2f855a; }
 .cp-rp-sum-note { font-size: 11px; color: #718096; }
+/* Visually hidden, still read aloud (the legend's spoken counts). */
+.cp-rp-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* Shown while the heartbeat waits on an Order line's open expand panel. */
 .cp-rp-paused { margin: 0 0 8px; font-size: 12px; color: #718096; }
 .cp-rp-paused[hidden] { display: none; }
@@ -1539,6 +1596,17 @@ button.cp-rp-filter.active,
 button.cp-rp-filter.active:hover { background: #2c5282; border-color: #2c5282; color: #fff; }
 .cp-rp-filter-n { min-width: 18px; padding: 0 6px; border-radius: 9px; background: #edf2f7; color: #4a5568; font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; }
 button.cp-rp-filter.active .cp-rp-filter-n { background: rgba(255,255,255,.22); color: #fff; }
+/* The active bar filter, as a removable chip: "Regalia · In Progress ×". */
+button.cp-rp-fchip {
+    -webkit-appearance: none; appearance: none;
+    display: inline-flex; align-items: center; gap: 6px; margin: 0 0 0 4px; min-height: 0;
+    padding: 4px 10px 4px 9px; border: 1px solid #2d3748; border-radius: 16px;
+    background: #fff; color: #1a202c; box-shadow: none;
+    font: inherit; font-size: 12px; font-weight: 600; line-height: 1.3; cursor: pointer; white-space: nowrap;
+}
+button.cp-rp-fchip i { font-size: 11px; color: #718096; }
+button.cp-rp-fchip:hover { background: #edf2f7; }
+button.cp-rp-fchip:hover i { color: #c53030; }
 
 .cp-rp-grid {
     --cp-rp-cols: 30px minmax(0, 1.3fr) minmax(0, 1.4fr) 122px minmax(0, 1fr) 114px minmax(0, 1fr) minmax(0, 1.1fr) 66px;
@@ -1655,14 +1723,29 @@ button.cp-rp-art-add:hover { background: #edf2f7; color: #2d3748; }
 .cp-rp-empty { border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
 .cp-rp-empty i { display: block; font-size: 28px; opacity: .3; margin-bottom: 10px; }
 
-html[data-theme="dark"] .cp-rp-summary { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
-html[data-theme="dark"] .cp-rp-sum-label,
+html[data-theme="dark"] .cp-rp-bars { --cp-rp-sel: #edf2f7; background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
+html[data-theme="dark"] .cp-rp-bar-label,
+html[data-theme="dark"] .cp-rp-leg-item { color: #cbd5e0; }
+html[data-theme="dark"] .cp-rp-bar-label i,
+html[data-theme="dark"] .cp-rp-leg-key,
 html[data-theme="dark"] .cp-rp-sum-note { color: #a0aec0; }
-html[data-theme="dark"] .cp-rp-sum-sep { color: #4a5568; }
+html[data-theme="dark"] .cp-rp-bar-label b,
+html[data-theme="dark"] .cp-rp-leg-item b { color: #edf2f7; }
+html[data-theme="dark"] .cp-rp-bar-empty { background: #2d3748; color: #a0aec0; }
+html[data-theme="dark"] button.cp-rp-blk:focus-visible,
+html[data-theme="dark"] button.cp-rp-need-btn:focus-visible,
+html[data-theme="dark"] button.cp-rp-fchip:focus-visible { outline-color: #63b3ed; }
+html[data-theme="dark"] button.cp-rp-need-btn { background: rgba(246,173,85,.12); border-color: rgba(246,173,85,.45); color: #fbd38d; }
+html[data-theme="dark"] button.cp-rp-need-btn:hover { border-color: #f6ad55; }
+html[data-theme="dark"] button.cp-rp-need-btn.active { background: #c05621; border-color: #c05621; color: #fff; }
+html[data-theme="dark"] .cp-rp-need-ok { color: #cbd5e0; }
+html[data-theme="dark"] .cp-rp-need-ok i { color: #68d391; }
+html[data-theme="dark"] button.cp-rp-fchip { background: #161b22; border-color: #a0aec0; color: #edf2f7; }
+html[data-theme="dark"] button.cp-rp-fchip:hover { background: #2d3748; }
+html[data-theme="dark"] button.cp-rp-fchip i { color: #a0aec0; }
+html[data-theme="dark"] button.cp-rp-fchip:hover i { color: #feb2b2; }
 html[data-theme="dark"] .cp-rp-paused { color: #a0aec0; }
 html[data-theme="dark"] .cp-rp-paused i { color: #718096; }
-html[data-theme="dark"] .cp-rp-sum-need { color: #fbd38d; }
-html[data-theme="dark"] .cp-rp-sum-ok { color: #97a3b4; }
 html[data-theme="dark"] button.cp-rp-filter { background: #161b22; border-color: #2d3748; color: #cbd5e0; }
 html[data-theme="dark"] button.cp-rp-filter:hover { background: #1f2733; border-color: #4a5568; }
 html[data-theme="dark"] button.cp-rp-filter.active,
@@ -1715,7 +1798,16 @@ html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
     .cp-view-tabs { gap: 0; }
     button.cp-view-tab { flex: 1 1 auto; justify-content: center; min-height: 44px; padding: 6px 8px; font-size: 14px; }
     button.cp-view-tab .cp-h2-icon { display: none; }
-    .cp-rp-sum-label { flex: 1 1 100%; }
+    /* Taller bars to tap; the label sits above its bar, and the legend wraps. */
+    .cp-rp-bars { --cp-rp-bar-h: 30px; padding: 10px 12px; }
+    .cp-rp-bar-row { flex-wrap: wrap; gap: 4px; }
+    .cp-rp-bar-label { flex: 1 1 100%; }
+    .cp-rp-bar { flex-basis: 100%; }
+    .cp-rp-legend { gap: 6px 12px; }
+    .cp-rp-leg-key { flex: 1 1 100%; }
+    button.cp-rp-need-btn, .cp-rp-need-ok { margin-left: 0; }
+    button.cp-rp-need-btn, button.cp-rp-fchip { min-height: 36px; }
+    button.cp-rp-fchip { flex: 0 0 auto; }
     .cp-rp-filters { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
     button.cp-rp-filter { flex: 0 0 auto; min-height: 40px; }
     .cp-rp-grid {
@@ -2855,8 +2947,9 @@ $_stat_html = function ($type) use ($_track_counts) {
 <script>
 // The one tracking-status definition (Court::trackingStatusDefinitions, display order),
 // the same data the PHP cp_track_* helpers read. cpTrackDef/cpTrackLabel/CP_TRACK_STATES
-// and every count, sheet and picker below derive from it.
-window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+// and every count, sheet and picker below derive from it. A failed encode emits an empty
+// definition rather than "= ;", so the script still parses.
+window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{"scroll":[],"regalia":[]}' ?>;
 </script>
 <script>
 (function() {
@@ -4202,6 +4295,12 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         // S5 optimistic lock: thread our last-known row_version so a stale save is rejected.
         var sentRv = cpGetRowVersion(caid);
         fd.append('RowVersion',    sentRv);
+        // The makers the line had when this save was sent. Read now, not when the answer
+        // lands: a heartbeat arriving between the commit and the response would already
+        // carry the new makers, and the maker rule would see no change and not fire.
+        var smBefore = 0, rmBefore = 0;
+        var sb = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
+        if (sb) { smBefore = parseInt(sb.ScrollMakerId, 10) || 0; rmBefore = parseInt(sb.RegaliaMakerId, 10) || 0; }
         post('CourtAjax/update_award', fd).then(function(d) {
             if (d && d.status === 9) { cpStale(caid); return; }
             if (d.status === 0) {
@@ -4227,8 +4326,9 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                     sa.RegaliaMakerId      = rmId || null;
                     // Maker rules: a maker set on a Pending item makes it Assigned, a maker
                     // cleared from an Assigned item makes it Pending (queued after the save).
-                    if ((smId > 0) !== (smWas > 0)) cpApplyMakerRule(caid, 'scroll',  smWas > 0, smId > 0);
-                    if ((rmId > 0) !== (rmWas > 0)) cpApplyMakerRule(caid, 'regalia', rmWas > 0, rmId > 0);
+                    // Judged against the makers captured before the post (see smBefore).
+                    if ((smId > 0) !== (smBefore > 0)) cpApplyMakerRule(caid, 'scroll',  smBefore > 0, smId > 0);
+                    if ((rmId > 0) !== (rmBefore > 0)) cpApplyMakerRule(caid, 'regalia', rmBefore > 0, rmId > 0);
                 }
                 cpRpInvalidate();
                 // Update Pass-to-Local badge in row header — but ONLY when this
@@ -6079,100 +6179,167 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     // closing the search need a render (it already restored its own cell from the model).
     var cpRpEditDeferred = false;
 
+    // The standing filters. A status filter comes from a bar block instead, keyed
+    // '<type>:<value>' ('regalia:4'), so no status has a button of its own.
     var CP_RP_FILTERS = [
-        { key: 'all',       label: 'All' },
-        { key: 'needs',     label: 'Needs an artisan' },
-        { key: 'custom',    label: 'Assigned scrolls' },
-        { key: 'print',     label: 'Scrollery Print' },
-        { key: 'regalia',   label: 'Assigned regalia' },
-        { key: 'untracked', label: 'All pending' },
-        { key: 'complete',  label: 'Complete' }
+        { key: 'all',      label: 'All' },
+        { key: 'needs',    label: 'Needs an artisan' },
+        { key: 'complete', label: 'Complete lines' }
+    ];
+    // The two bars, top to bottom.
+    var CP_RP_TYPES = [
+        { type: 'scroll',  title: 'Scrolls', icon: 'fa-scroll' },
+        { type: 'regalia', title: 'Regalia', icon: 'fa-medal' }
     ];
 
     function cpRpInt(v) { return parseInt(v, 10) || 0; }
-    // The valid statuses are CP_TRACK_STATES' (the picker's own list), so a status added
-    // there is counted as itself, never folded into Pending.
-    function cpRpTrackVal(type, v) { var s = cpRpInt(v); return CP_TRACK_STATES[type].indexOf(s) >= 0 ? s : 0; }
+    // The stored value as the definition reads it: a value it does not hold is Pending
+    // (cpTrackDef), so a status added to the definition is counted as itself.
+    function cpRpTrackVal(type, v) { return cpRpInt(cpTrackDef(type, v).value); }
     function cpRpScroll(a)  { return cpRpTrackVal('scroll', a.ScrollStatus); }
     function cpRpRegalia(a) { return cpRpTrackVal('regalia', a.RegaliaStatus); }
-    // Pending, Assigned or In Progress with no maker, on a line that isn't skipped.
-    function cpRpNeedsScrollArtisan(a)  { return cpNeedsArtisan(a, 'scroll'); }
-    function cpRpNeedsRegaliaArtisan(a) { return cpNeedsArtisan(a, 'regalia'); }
-    function cpRpNeedsArtisan(a) { return cpRpNeedsScrollArtisan(a) || cpRpNeedsRegaliaArtisan(a); }
+    // Either item needs an artisan (cpNeedsArtisan: Pending, Assigned or In Progress with
+    // no maker, on a line that isn't skipped).
+    function cpRpNeedsArtisan(a) { return cpNeedsArtisan(a, 'scroll') || cpNeedsArtisan(a, 'regalia'); }
 
-    // Filter membership. Skipped lines appear only under All, the same way the summary
-    // leaves them out, so every filter's count agrees with the strip above it.
+    // A bar block's filter key -> {type, value}, or null. Only a value the type's own
+    // definition holds is a status filter, so 'regalia:3' (no Scrollery Print) is not one.
+    function cpRpStatusFilter(key) {
+        var m = /^(scroll|regalia):(\d+)$/.exec(String(key || ''));
+        if (!m) return null;
+        var v = parseInt(m[2], 10);
+        return CP_TRACK_STATES[m[1]].indexOf(v) >= 0 ? { type: m[1], value: v } : null;
+    }
+    function cpRpValidFilter(key) {
+        return CP_RP_FILTERS.some(function(f) { return f.key === key; }) || !!cpRpStatusFilter(key);
+    }
+
+    // Filter membership. Skipped lines appear only under All, the same way the bars
+    // leave them out, so every count agrees with the bars above it.
     function cpRpMatches(a, key) {
         if (key === 'all') return true;
         if (a.Status === 'cancelled') return false;
-        var ss = cpRpScroll(a), rs = cpRpRegalia(a);
-        switch (key) {
-            case 'needs':     return cpRpNeedsArtisan(a);
-            case 'custom':    return ss === 1;
-            case 'print':     return ss === 3;
-            case 'regalia':   return rs === 1;
-            // Both items still Pending: still waiting on a decision.
-            case 'untracked': return ss === 0 && rs === 0;
-            // Each item is Complete or Not Needed.
-            case 'complete':  return cpLineComplete(a);
-        }
-        return false;
+        if (key === 'needs')    return cpRpNeedsArtisan(a);
+        if (key === 'complete') return cpLineComplete(a);   // each item Complete or Not Needed
+        var sf = cpRpStatusFilter(key);
+        return !!sf && (sf.type === 'regalia' ? cpRpRegalia(a) : cpRpScroll(a)) === sf.value;
     }
 
+    // One pass over the model for the bars, the legend and the filter counts. Each
+    // status holds its lines (running order), which become that block's slices.
     function cpRpCounts() {
-        var c = { scroll: {}, regalia: {}, scrollNeed: 0, regaliaNeed: 0, skipped: 0, filters: {} };
-        ['scroll', 'regalia'].forEach(function(t) { CP_TRACK_STATES[t].forEach(function(st) { c[t][st] = 0; }); });
-        CP_RP_FILTERS.forEach(function(f) { c.filters[f.key] = 0; });
+        var c = { scroll: {}, regalia: {}, lines: 0, need: 0, complete: 0, skipped: 0, all: courtAwards.length };
+        ['scroll', 'regalia'].forEach(function(t) { CP_TRACK_STATES[t].forEach(function(st) { c[t][st] = []; }); });
         courtAwards.forEach(function(a) {
-            CP_RP_FILTERS.forEach(function(f) { if (cpRpMatches(a, f.key)) c.filters[f.key]++; });
             if (a.Status === 'cancelled') { c.skipped++; return; }
-            c.scroll[cpRpScroll(a)]++;
-            c.regalia[cpRpRegalia(a)]++;
-            if (cpRpNeedsScrollArtisan(a))  c.scrollNeed++;
-            if (cpRpNeedsRegaliaArtisan(a)) c.regaliaNeed++;
+            c.lines++;
+            c.scroll[cpRpScroll(a)].push(a);
+            c.regalia[cpRpRegalia(a)].push(a);
+            if (cpRpNeedsArtisan(a)) c.need++;
+            if (cpLineComplete(a))   c.complete++;
         });
         return c;
     }
-
-    // One summary item: "<n> <label>", coloured like the Order's status bar (data-group).
-    function cpRpSumItem(group, n, label, extra) {
-        return '<span class="cp-rp-sum-item cp-stat" data-group="' + esc(group) + '"><b>' + n + '</b> ' + esc(label) + (extra || '') + '</span>';
-    }
-    // "(M need an artisan)" after a type's counts, or "(all assigned)".
-    function cpRpNeedNote(total, need) {
-        if (!total) return '';
-        return need
-            ? ' <span class="cp-rp-sum-need">(' + need + ' need' + (need === 1 ? 's' : '') + ' an artisan)</span>'
-            : ' <span class="cp-rp-sum-ok">(all assigned)</span>';
+    function cpRpFilterCount(c, key) {
+        return key === 'needs' ? c.need : key === 'complete' ? c.complete : c.all;
     }
 
-    // Interim strip: one count per status from the definition. (The status bars replace it.)
-    function cpRpSummaryHtml(c) {
-        var sep = '<span class="cp-rp-sum-sep" aria-hidden="true">&middot;</span>';
-        function row(type, icon, title, need) {
-            var lines = 0;
-            var items = CP_TRACK_STATES[type].map(function(st) {
-                lines += c[type][st] || 0;
-                return cpRpSumItem(cpTrackGroup(type, st), c[type][st] || 0, cpTrackLabel(type, st));
-            });
-            return '<div class="cp-rp-sum-group"><span class="cp-rp-sum-label"><i class="fas ' + icon + '" aria-hidden="true"></i> ' + title + '</span>' +
-                items.join(sep) + cpRpNeedNote(lines, need) + '</div>';
+    // A type's statuses in bar order: the definition's display order, Not Needed last.
+    function cpRpBarOrder(type) {
+        var list = cpTrackList(type);
+        return list.filter(function(e) { return e.group !== 'notneeded'; })
+            .concat(list.filter(function(e) { return e.group === 'notneeded'; }));
+    }
+    // "Recipient — Award (Rank n) · Maker": a slice's tooltip.
+    function cpRpSliceTip(a, type) {
+        var rank  = cpIsLadder(a) ? cpRpInt(a.Rank) : 0;
+        var mid   = cpTrackMakerId(a, type);
+        var maker = mid > 0 ? ((type === 'regalia' ? a.RegaliaMakerPersona : a.ScrollMakerPersona) || 'Player #' + mid) : '';
+        return (a.Persona || 'Unknown player') + ' — ' + (a.AwardName || 'Award') +
+            (rank > 0 ? ' (Rank ' + rank + ')' : '') + (maker ? ' · ' + maker : '');
+    }
+    // One bar: a block per status present, each a focusable button that filters the grid
+    // to its lines; inside it, one slice per line. Widths are the counts (flex-grow).
+    function cpRpBarHtml(t, c) {
+        var label = '<div class="cp-rp-bar-label"><i class="fas ' + t.icon + '" aria-hidden="true"></i>' +
+            '<span>' + t.title + '</span> <b>' + c.lines + '</b></div>';
+        if (!c.lines) {
+            return '<div class="cp-rp-bar-row">' + label +
+                '<div class="cp-rp-bar cp-rp-bar-empty">' + (c.all ? 'Every line is skipped' : 'No awards yet') + '</div></div>';
         }
-        return '<div class="cp-rp-summary">' +
-            row('scroll', 'fa-scroll', 'Scrolls', c.scrollNeed) +
-            row('regalia', 'fa-medal', 'Regalia', c.regaliaNeed) +
+        var blocks = cpRpBarOrder(t.type).map(function(e) {
+            var v = cpRpInt(e.value), items = c[t.type][v] || [];
+            if (!items.length) return '';
+            var key = t.type + ':' + v, on = cpRpFilter === key;
+            var slices = items.map(function(a) {
+                return '<span class="cp-rp-slice" data-tip="' + esc(cpRpSliceTip(a, t.type)) + '"></span>';
+            }).join('');
+            return '<button type="button" class="cp-rp-blk' + (on ? ' active' : '') + '" data-group="' + esc(e.group) + '"' +
+                ' data-rp-filter="' + key + '" style="flex-grow:' + items.length + '" aria-pressed="' + (on ? 'true' : 'false') + '"' +
+                ' aria-label="' + esc(t.title + ': ' + e.label + ', ' + items.length + ' of ' + c.lines) + '"' +
+                ' onclick="cpRpToggleFilter(\'' + key + '\')">' + slices + '</button>';
+        }).join('');
+        return '<div class="cp-rp-bar-row">' + label +
+            '<div class="cp-rp-bar" role="group" aria-label="' + t.title + ' by status">' + blocks + '</div></div>';
+    }
+    // The legend: every status present in either bar, with its swatch and its counts as
+    // "scrolls · regalia" (– where the type has no such status), then the artisan callout.
+    function cpRpLegendHtml(c) {
+        var seen = {}, entries = [];
+        ['scroll', 'regalia'].forEach(function(t) {
+            cpRpBarOrder(t).forEach(function(e) {
+                var v = cpRpInt(e.value);
+                if (!seen[v]) { seen[v] = 1; entries.push(e); }
+            });
+        });
+        var items = entries.map(function(e) {
+            var v = cpRpInt(e.value);
+            var s = c.scroll[v], r = c.regalia[v];
+            var sn = s ? s.length : 0, rn = r ? r.length : 0;
+            if (!sn && !rn) return '';
+            var spoken = e.label + ': ' + (s ? sn + ' scroll' + (sn === 1 ? '' : 's') : 'no scrolls') + ', ' + (r ? rn + ' regalia' : 'no regalia');
+            return '<span class="cp-rp-leg-item" data-group="' + esc(e.group) + '">' +
+                '<span class="cp-rp-swatch" aria-hidden="true"></span>' +
+                '<span aria-hidden="true">' + esc(e.label) + ' <b>' + (s ? sn : '–') + ' · ' + (r ? rn : '–') + '</b></span>' +
+                '<span class="cp-rp-sr">' + esc(spoken) + '</span></span>';
+        }).join('');
+        var need = c.need
+            ? '<button type="button" class="cp-rp-need-btn' + (cpRpFilter === 'needs' ? ' active' : '') + '" data-rp-filter="needs"' +
+                ' aria-pressed="' + (cpRpFilter === 'needs' ? 'true' : 'false') + '" onclick="cpRpToggleFilter(\'needs\')">' +
+                '<i class="fas fa-user-plus" aria-hidden="true"></i><b>' + c.need + '</b> need' + (c.need === 1 ? 's' : '') + ' an artisan</button>'
+            : (c.lines ? '<span class="cp-rp-need-ok"><i class="fas fa-check" aria-hidden="true"></i>Every item has an artisan or needs none</span>' : '');
+        if (!items && !need) return '';
+        return '<div class="cp-rp-legend">' +
+            (items ? '<span class="cp-rp-leg-key" aria-hidden="true">Scrolls · Regalia</span>' + items : '') + need + '</div>';
+    }
+    // The bars, replacing the old summary strip.
+    function cpRpBarsHtml(c) {
+        return '<div class="cp-rp-bars">' +
+            CP_RP_TYPES.map(function(t) { return cpRpBarHtml(t, c); }).join('') +
+            cpRpLegendHtml(c) +
             (c.skipped ? '<div class="cp-rp-sum-note">' + c.skipped + ' skipped line' + (c.skipped === 1 ? ' is' : 's are') + ' not counted.</div>' : '') +
             '</div>';
     }
 
+    // The three filter buttons, then — while a bar block filters the grid — its
+    // removable chip ("Regalia · In Progress ×").
     function cpRpFiltersHtml(c) {
+        var sf = cpRpStatusFilter(cpRpFilter), chip = '';
+        if (sf) {
+            var e = cpTrackDef(sf.type, sf.value);
+            var name = (sf.type === 'regalia' ? 'Regalia' : 'Scroll') + ' · ' + e.label;
+            chip = '<button type="button" class="cp-rp-fchip" data-group="' + esc(e.group) + '" onclick="cpRpSetFilter(\'all\')"' +
+                ' aria-label="' + esc('Clear the filter ' + name) + '">' +
+                '<span class="cp-rp-swatch" aria-hidden="true"></span>' + esc(name) +
+                ' <i class="fas fa-times" aria-hidden="true"></i></button>';
+        }
         return '<div class="cp-rp-filters" role="group" aria-label="Filter lines">' +
             CP_RP_FILTERS.map(function(f) {
                 var on = f.key === cpRpFilter;
                 return '<button type="button" class="cp-rp-filter' + (on ? ' active' : '') + '" data-rp-filter="' + f.key + '"' +
                     ' aria-pressed="' + (on ? 'true' : 'false') + '" onclick="cpRpSetFilter(\'' + f.key + '\')">' +
-                    esc(f.label) + ' <span class="cp-rp-filter-n">' + c.filters[f.key] + '</span></button>';
-            }).join('') +
+                    esc(f.label) + ' <span class="cp-rp-filter-n">' + cpRpFilterCount(c, f.key) + '</span></button>';
+            }).join('') + chip +
             '</div>';
     }
 
@@ -6186,10 +6353,10 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         var pend = cpRpMakerPending[kind + ':' + caid];
         var id   = pend ? pend.id : cpRpInt(kind === 'scroll' ? a.ScrollMakerId : a.RegaliaMakerId);
         // An item that needs an artisan (cpNeedsArtisan) stands out.
-        var need = !pend && a.Status !== 'cancelled' && (kind === 'scroll' ? cpRpNeedsScrollArtisan(a) : cpRpNeedsRegaliaArtisan(a));
+        var need = !pend && cpNeedsArtisan(a, kind);
         var cls  = 'cp-rp-maker' + (need ? ' cp-rp-maker-need' : '') + (pend ? ' cp-rp-maker-busy' : '');
         var base = 'type="button" class="' + cls + '" data-kind="' + kind + '" data-caid="' + caid + '"' + (pend ? ' aria-busy="true"' : '');
-        if (kind === 'scroll' && cpRpScroll(a) === 3) {
+        if (kind === 'scroll' && cpTrackGroup('scroll', a.ScrollStatus) === 'print') {
             // The Scrollery prints it, so there is no maker (the Order hides the field).
             return '<button ' + base + ' data-state="auto" disabled aria-label="' + noun + ': printed by Scrollery">' +
                 '<span class="cp-rp-maker-text">Printed by Scrollery</span></button>';
@@ -6257,7 +6424,13 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         if (el.classList.contains('cp-rp-maker')) return '.cp-rp-maker[data-kind="' + el.dataset.kind + '"][data-caid="' + cpRpInt(el.dataset.caid) + '"]';
         if (el.classList.contains('cp-rp-maker-clear')) return '.cp-rp-maker-clear[data-kind="' + el.dataset.kind + '"][data-caid="' + cpRpInt(el.dataset.caid) + '"]';
         if (el.classList.contains('cp-rp-art-add')) return '.cp-rp-art-add[data-caid="' + cpRpInt(el.dataset.caid) + '"]';
-        if (el.dataset && el.dataset.rpFilter) return '[data-rp-filter="' + el.dataset.rpFilter + '"]';
+        // A filter button, a bar block or the artisan callout: the class too, since the
+        // callout and the "Needs an artisan" button share a key.
+        if (el.dataset && el.dataset.rpFilter) {
+            var kind = el.classList.contains('cp-rp-blk') ? '.cp-rp-blk' : el.classList.contains('cp-rp-need-btn') ? '.cp-rp-need-btn' : '.cp-rp-filter';
+            return kind + '[data-rp-filter="' + el.dataset.rpFilter + '"]';
+        }
+        if (el.classList.contains('cp-rp-fchip')) return '.cp-rp-fchip';
         return null;
     }
     // The live Resource Planning counterpart of a (possibly detached) element.
@@ -6266,13 +6439,14 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         var sel  = cpRpFocusSel(el);
         return (root && sel) ? root.querySelector(sel) : null;
     }
-    // Where focus goes when an RP element has no twin (its line left the active filter):
-    // the active filter button, else the grid root. Only for an element of RP's own
-    // (closest() still works inside a detached row); an Order element is not ours.
+    // Where focus goes when an RP element has no twin (its line left the active filter,
+    // its bar block emptied, its chip was cleared): the active filter button or status
+    // chip, else the grid root. Only for an element of RP's own (closest() still works
+    // inside a detached row or bar); an Order element is not ours.
     function cpRpFocusFallback(el) {
         var root = gid('cp-rp-root');
-        if (!root || !el || !el.closest || !el.closest('#cp-rp-root, .cp-rp-row') || cpRpView !== 'resources') return null;
-        var f = root.querySelector('.cp-rp-filter.active');
+        if (!root || !el || !el.closest || !el.closest('#cp-rp-root, .cp-rp-row, .cp-rp-bars, .cp-rp-filters') || cpRpView !== 'resources') return null;
+        var f = root.querySelector('.cp-rp-filter.active, .cp-rp-fchip');
         if (f) return f;
         root.tabIndex = -1;
         return root;
@@ -6297,10 +6471,11 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         var focusSel = focusEl ? cpRpFocusSel(focusEl) : null;
 
         var html;
+        var c = cpRpCounts();
         if (!courtAwards.length) {
-            html = '<div class="cp-rp-empty"><i class="fas fa-paint-brush" aria-hidden="true"></i>No awards on this court yet.</div>';
+            // The bars still show, as empty "No awards yet" tracks.
+            html = cpRpBarsHtml(c) + '<div class="cp-rp-empty"><i class="fas fa-paint-brush" aria-hidden="true"></i>No awards on this court yet.</div>';
         } else {
-            var c = cpRpCounts();
             var rows = '';
             courtAwards.forEach(function(a, i) {
                 // i + 1 is the Order's "#": the model is kept in running order (notes
@@ -6308,7 +6483,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                 if (cpRpMatches(a, cpRpFilter)) rows += cpRpRowHtml(a, i + 1);
             });
             if (!rows) rows = '<div class="cp-rp-nomatch" role="row"><div role="cell">No lines match this filter.</div></div>';
-            html = cpRpSummaryHtml(c) + cpRpFiltersHtml(c) +
+            html = cpRpBarsHtml(c) + cpRpFiltersHtml(c) +
                 '<div class="cp-rp-grid" role="table" aria-label="Resource planning">' +
                     '<div class="cp-rp-head" role="row">' +
                         '<div class="cp-rp-c cp-rp-num" role="columnheader">#</div>' +
@@ -6326,7 +6501,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         root.innerHTML = html;
         if (focusEl) {
             // The same control again, or — when its line just left the active filter
-            // (e.g. a Custom scroll set to Complete under "Custom scrolls") — the filter.
+            // (e.g. an In Progress scroll set to Complete under "Scroll · In Progress") — the filter.
             var again = (focusSel && root.querySelector(focusSel)) || cpRpFocusFallback(focusEl);
             if (again) again.focus({ preventScroll: true });
         }
@@ -6363,9 +6538,13 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     }
 
     window.cpRpSetFilter = function(key) {
-        var ok = CP_RP_FILTERS.some(function(f) { return f.key === key; });
-        cpRpFilter = ok ? key : 'all';
+        cpRpFilter = cpRpValidFilter(key) ? key : 'all';
         cpRpRender();
+    };
+    // A bar block or the artisan callout: applies its filter, or clears it when it is
+    // already the active one.
+    window.cpRpToggleFilter = function(key) {
+        window.cpRpSetFilter(cpRpFilter === key ? 'all' : key);
     };
 
     // ---- Resource Planning: inline maker assignment ----
@@ -6410,7 +6589,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             // A peer (or this officer's queued chip write) may have moved the scroll to
             // Scrollery Print meanwhile: it has no maker, so nothing is posted.
             // A clear needs nothing more: the line already has no maker.
-            if (kind === 'scroll' && cpRpScroll(a) === 3) {
+            if (kind === 'scroll' && cpTrackGroup('scroll', a.ScrollStatus) === 'print') {
                 if (id > 0) cpAlert('This scroll is now set to Scrollery Print, so it has no scroll maker.');
                 return;
             }
