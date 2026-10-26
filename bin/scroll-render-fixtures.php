@@ -126,6 +126,13 @@ foreach ($specs as $c) {
             $_GET['up'] = (string) (int) $c['up'];
         }
 
+        // Each file is a standalone page, so each one needs the page-level shared defs. The knotwork
+        // library is emitted once per PROCESS (_border_defs.tpl sets this flag so a page that calls
+        // it twice pays once), and this loop is many pages in one process: without the reset only the
+        // first file carried the library and every later <use href="#Border-..."> drew nothing. The
+        // griffon plate is decided by the first call too, so it is also per page now.
+        unset($GLOBALS['scroll_border_defs']);
+
         ob_start();
         try {
             (static function (string $__path, array $__data): void {
