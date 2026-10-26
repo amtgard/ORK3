@@ -483,7 +483,12 @@ final class SurveyPureTest extends TestCase
     {
         require_once DIR_UI . 'controller/controller.SurveyAjax.php';
         $domain = array_keys((new ReflectionClass(Survey::class))->getConstant('UPDATE_FIELDS'));
+        // AudienceKingdomIds is a JSON list the controller decodes separately.
+        // ScopeType/ScopeId are accepted by Survey::update() ahead of its column
+        // loop (routed to scopeChange()), so they are not in UPDATE_FIELDS but
+        // the controller must still forward them.
         $domain = array_values(array_diff($domain, ['AudienceKingdomIds']));
+        $domain = array_merge($domain, ['ScopeType', 'ScopeId']);
         $forwarded = (new ReflectionClass(Controller_SurveyAjax::class))->getConstant('UPDATE_SCALAR_FIELDS');
         $this->assertIsArray($forwarded, 'the controller allowlist is a class constant');
         sort($domain);
