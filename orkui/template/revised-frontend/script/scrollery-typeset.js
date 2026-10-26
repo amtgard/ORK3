@@ -366,10 +366,16 @@
      * both, the earlier one starts the epithet — "Ravenge the Renegade, Slayer" is one
      * epithet, not a name followed by a one-word epithet — and exactly one word is
      * marked.
+     *
+     * `run` is the length of the leading honorific run. A comma inside it belongs to the
+     * title ("Sir, Kato"), so the search for the epithet's comma starts after it:
+     * otherwise "Kato" was marked an epithet and the gap after "Sir," scored -53 (a
+     * comma, the end of the honorifics and an epithet start all at once) for what is a
+     * plain title and name.
      */
-    function epithetStart(words) {
+    function epithetStart(words, run) {
         var at = -1, i;
-        for (i = 0; i < words.length - 1; i++) {
+        for (i = run || 0; i < words.length - 1; i++) {
             if (/,$/.test(words[i])) { at = i + 1; break; }
         }
         for (i = 1; i < words.length; i++) {
@@ -392,7 +398,7 @@
     function tokenize(text, role) {
         var words = splitWords(text);
         var run = role === 'name' ? honorificRun(words) : 0;
-        var epi = role === 'name' ? epithetStart(words) : -1;
+        var epi = role === 'name' ? epithetStart(words, run) : -1;
         var out = [];
 
         for (var i = 0; i < words.length; i++) {

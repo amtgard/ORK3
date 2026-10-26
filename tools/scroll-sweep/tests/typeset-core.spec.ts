@@ -18,6 +18,13 @@ test('Grand counts only before a rank', () => {
   expect(flags('Grand Hall', 'honorific')).toEqual([false, false]);
 });
 test('epithet after a comma', () => expect(flags('Stormcrow Giggleshadows, the Relentless', 'epithetStart')).toEqual([false, false, true, false]));
+// T14, the T4 minor: a comma inside the honorific run is the title's, not the start of an epithet.
+test('a comma after an honorific does not start an epithet', () => {
+  expect(flags('sir, Kato', 'epithetStart')).toEqual([false, false]);
+  expect(TS.breakPenalty(TS.tokenize('sir, Kato', 'name'), 0, 'name')).toBe(-45);   // end of the honorifics -25, comma -20, no epithet -8
+  expect(flags('Lord Kato, the Bold', 'epithetStart')).toEqual([false, false, true, false]);
+  expect(flags('Sir Lord, Kato Darkhaven, Slayer', 'epithetStart')).toEqual([false, false, false, false, true]);
+});
 test('epithet at a lowercase the', () => expect(flags('Ravenge the Renegade', 'epithetStart')).toEqual([false, true, false]));
 test('penalties', () => {
   const award = TS.tokenize('Twilight Peak Guildmaster of Anti-Paladins', 'award');
