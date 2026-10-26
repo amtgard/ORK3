@@ -1624,8 +1624,8 @@ button.cp-rp-fchip:hover { background: #edf2f7; }
 button.cp-rp-fchip:hover i { color: #c53030; }
 
 .cp-rp-grid {
-    --cp-rp-cols: 30px minmax(0, 1.3fr) minmax(0, 1.4fr) 122px minmax(0, 1fr) 114px minmax(0, 1fr) minmax(0, 1.1fr) 66px;
-    --cp-rp-areas: "num who award scroll smaker regalia rmaker arts line";
+    --cp-rp-cols: 30px minmax(0, 1.3fr) minmax(0, 1.4fr) 122px minmax(0, 1.1fr) 114px minmax(0, 1.1fr);
+    --cp-rp-areas: "num who award scroll smaker regalia rmaker";
     border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
 }
 .cp-rp-head, .cp-rp-row {
@@ -1639,8 +1639,6 @@ button.cp-rp-fchip:hover i { color: #c53030; }
 .cp-rp-smaker { grid-area: smaker; }
 .cp-rp-regalia { grid-area: regalia; }
 .cp-rp-rmaker { grid-area: rmaker; }
-.cp-rp-arts   { grid-area: arts; }
-.cp-rp-line   { grid-area: line; }
 .cp-rp-c { min-width: 0; }
 /* Sticky under the fixed 48px top nav (#newmenu). No ancestor scrolls, so it pins to
    the viewport for the length of the grid. */
@@ -1673,7 +1671,6 @@ button.cp-rp-fchip:hover i { color: #c53030; }
 .cp-rp-scroll, .cp-rp-regalia { display: flex; }
 .cp-rp-grid button.cp-chip[data-status]:hover { border-color: currentColor; }
 html[data-theme="dark"] .cp-rp-grid button.cp-chip[data-status]:hover { border-color: currentColor; }
-.cp-rp-line { font-size: 11px; color: #718096; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Maker cell: a persona, a muted "Assign…", or the Scrollery's own line. */
 button.cp-rp-maker {
@@ -1722,18 +1719,6 @@ button.cp-rp-maker-clear:hover, button.cp-rp-maker-clear:focus-visible { backgro
     button.cp-rp-maker-clear { width: 28px; height: 28px; font-size: 12px; }
 }
 
-.cp-rp-arts { display: flex; align-items: center; gap: 6px; }
-.cp-rp-art-list { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #4a5568; }
-.cp-rp-muted { color: #a0aec0; }
-button.cp-rp-art-add {
-    -webkit-appearance: none; appearance: none;
-    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-    width: 22px; height: 22px; min-height: 0; margin: 0; padding: 0;
-    border: 1px solid #cbd5e0; border-radius: 50%; background: #fff; box-shadow: none;
-    color: #4a5568; font-size: 10px; line-height: 1; cursor: pointer;
-}
-button.cp-rp-art-add:hover { background: #edf2f7; color: #2d3748; }
-
 .cp-rp-nomatch { text-align: center; padding: 36px 24px; color: #a0aec0; font-size: 14px; }
 
 html[data-theme="dark"] .cp-rp-bars { --cp-rp-sel: #edf2f7; background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
@@ -1773,9 +1758,7 @@ html[data-theme="dark"] .cp-rp-row.cp-rp-needs { box-shadow: inset 3px 0 0 #f6ad
 html[data-theme="dark"] .cp-rp-row .cp-rp-num,
 html[data-theme="dark"] .cp-rp-park { color: #97a3b4; }
 html[data-theme="dark"] .cp-rp-persona { color: #e2e8f0; }
-html[data-theme="dark"] .cp-rp-award,
-html[data-theme="dark"] .cp-rp-line,
-html[data-theme="dark"] .cp-rp-art-list { color: #a0aec0; }
+html[data-theme="dark"] .cp-rp-award { color: #a0aec0; }
 html[data-theme="dark"] button.cp-rp-maker { color: #e2e8f0; }
 html[data-theme="dark"] button.cp-rp-maker:not(:disabled):hover { background: #2d3748; border-color: #4a5568; }
 html[data-theme="dark"] .cp-rp-maker-icon { color: #b794f4; }
@@ -1787,17 +1770,14 @@ html[data-theme="dark"] button.cp-rp-maker-clear:hover,
 html[data-theme="dark"] button.cp-rp-maker-clear:focus-visible { background: rgba(197,48,48,.25); border-color: rgba(252,129,129,.5); color: #feb2b2; }
 html[data-theme="dark"] .cp-rp-grid input.cp-rp-maker-input { background: #1f2733; border-color: #4299e1; box-shadow: 0 0 0 2px rgba(66,153,225,.25); color: #e2e8f0; }
 html[data-theme="dark"] .cp-rp-grid input.cp-rp-maker-input::placeholder { color: #718096; }
-html[data-theme="dark"] .cp-rp-muted { color: #718096; }
-html[data-theme="dark"] button.cp-rp-art-add { background: #1f2733; border-color: #4a5568; color: #cbd5e0; }
-html[data-theme="dark"] button.cp-rp-art-add:hover { background: #2d3748; color: #fff; }
 html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
 
-/* Below 1280px the nine columns no longer fit beside the sidebar: each line takes two
+/* Below 1280px the seven columns no longer fit beside the sidebar: each line takes two
    rows — recipient over award, each chip over its maker. */
 @media (max-width: 1279px) {
     .cp-rp-grid {
-        --cp-rp-cols: 30px minmax(0, 1.9fr) minmax(122px, 1fr) minmax(114px, 1fr) minmax(0, .9fr) 66px;
-        --cp-rp-areas: "num who scroll regalia arts line" "num award smaker rmaker arts line";
+        --cp-rp-cols: 30px minmax(0, 1.9fr) minmax(122px, 1fr) minmax(114px, 1fr);
+        --cp-rp-areas: "num who scroll regalia" "num award smaker rmaker";
     }
     .cp-rp-head, .cp-rp-row { row-gap: 3px; }
     .cp-rp-row .cp-rp-num { align-self: start; padding-top: 3px; }
@@ -1825,15 +1805,14 @@ html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
     .cp-rp-filters { align-self: stretch; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
     button.cp-rp-filter { flex: 0 0 auto; min-height: 40px; }
     .cp-rp-grid {
-        --cp-rp-cols: 22px auto minmax(0, 1fr) auto;
-        --cp-rp-areas: "num who who line" "num award award award" ". scroll smaker smaker" ". regalia rmaker rmaker" ". arts arts arts";
+        --cp-rp-cols: 22px auto minmax(0, 1fr);
+        --cp-rp-areas: "num who who" "num award award" ". scroll smaker" ". regalia rmaker";
     }
     .cp-rp-head { display: none; }
     .cp-rp-row { row-gap: 6px; padding: 12px 14px; }
     .cp-rp-head + .cp-rp-row { border-radius: 8px 8px 0 0; }
     .cp-rp-persona { font-size: 15px; }
     .cp-rp-award { font-size: 14px; }
-    .cp-rp-line { align-self: start; }
     .cp-rp-grid button.cp-chip { flex: 1 1 auto; justify-content: center; min-height: 44px; padding: 0 12px; border-radius: 22px; font-size: 12px; gap: 6px; }
     button.cp-rp-maker { min-height: 44px; width: 100%; font-size: 13px; padding: 0 10px; }
     button.cp-rp-maker[data-state="auto"] { padding-left: 4px; }
@@ -1841,8 +1820,6 @@ html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
     button.cp-rp-maker-clear { width: 44px; height: 44px; font-size: 13px; }
     /* 16px keeps iOS from zooming the viewport on focus. */
     .cp-rp-grid input.cp-rp-maker-input { min-height: 44px; font-size: 16px; padding: 0 10px; }
-    .cp-rp-art-list { white-space: normal; font-size: 13px; }
-    button.cp-rp-art-add { width: 44px; height: 44px; font-size: 13px; }
 }
 
 </style>
@@ -6430,21 +6407,6 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             '<span class="cp-rp-maker-text">' + shown + '</span></button>';
     }
 
-    function cpRpArtisansHtml(a) {
-        var caid = cpRpInt(a.CourtAwardId);
-        var list = Array.isArray(a.Artisans) ? a.Artisans : [];
-        var names = list.map(function(r) {
-            var who = r.Persona || 'Unknown player';
-            return r.Contribution
-                ? '<span class="cp-rp-art-name" data-tip="' + esc(who + ' — ' + r.Contribution) + '">' + esc(who) + '</span>'
-                : '<span class="cp-rp-art-name">' + esc(who) + '</span>';
-        }).join(', ');
-        return '<span class="cp-rp-art-list">' + (names || '<span class="cp-rp-muted">None</span>') + '</span>' +
-            '<button type="button" class="cp-rp-art-add" data-caid="' + caid + '" onclick="cpOpenArtisanModal(' + caid + ')"' +
-            ' data-tip="Add artisan" aria-label="' + esc('Add artisan for ' + (a.Persona || '') + ' — ' + (a.AwardName || '')) + '">' +
-            '<i class="fas fa-plus" aria-hidden="true"></i></button>';
-    }
-
     // Award name + rank, as the Order row shows it.
     function cpRpAwardHtml(a) {
         return '<span class="cp-rp-award-name">' + esc(a.AwardName || '') + '</span>' + cpRankPillHtml(a);
@@ -6452,8 +6414,6 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
 
     function cpRpRowHtml(a, num) {
         var caid = cpRpInt(a.CourtAwardId);
-        var disp = cpDisplayStatus(a.Status);
-        var line = (CP_AW_BADGE[disp] || CP_AW_BADGE.planned).label;
         var needs = a.Status !== 'cancelled' && cpRpNeedsArtisan(a);
         return '<div class="cp-rp-row' + (a.Status === 'cancelled' ? ' cp-rp-skipped' : '') + (needs ? ' cp-rp-needs' : '') + '"' +
                 ' role="row" data-caid="' + caid + '">' +
@@ -6465,19 +6425,16 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             '<div class="cp-rp-c cp-rp-smaker" role="cell">' + cpRpMakerHtml('scroll', a) + '</div>' +
             '<div class="cp-rp-c cp-rp-regalia" role="cell">' + cpTrackChipHtml('regalia', a.RegaliaStatus, caid) + '</div>' +
             '<div class="cp-rp-c cp-rp-rmaker" role="cell">' + cpRpMakerHtml('regalia', a) + '</div>' +
-            '<div class="cp-rp-c cp-rp-arts" role="cell">' + cpRpArtisansHtml(a) + '</div>' +
-            '<div class="cp-rp-c cp-rp-line" role="cell" data-line="' + esc(disp) + '">' + esc(line) + '</div>' +
             '</div>';
     }
 
     // The selector that finds an element's counterpart after a re-render, so focus
-    // survives it (a chip the officer just used, a filter, a "+" or a maker cell).
+    // survives it (a chip the officer just used, a filter or a maker cell).
     function cpRpFocusSel(el) {
         if (!el || !el.classList) return null;
         if (el.classList.contains('cp-chip')) return '.cp-chip[data-type="' + el.dataset.type + '"][data-caid="' + cpRpInt(el.dataset.caid) + '"]';
         if (el.classList.contains('cp-rp-maker')) return '.cp-rp-maker[data-kind="' + el.dataset.kind + '"][data-caid="' + cpRpInt(el.dataset.caid) + '"]';
         if (el.classList.contains('cp-rp-maker-clear')) return '.cp-rp-maker-clear[data-kind="' + el.dataset.kind + '"][data-caid="' + cpRpInt(el.dataset.caid) + '"]';
-        if (el.classList.contains('cp-rp-art-add')) return '.cp-rp-art-add[data-caid="' + cpRpInt(el.dataset.caid) + '"]';
         // A filter button, a bar block or the artisan callout: the class too, since the
         // callout and the "Needs an artisan" button share a key.
         if (el.dataset && el.dataset.rpFilter) {
@@ -6547,8 +6504,6 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                         '<div class="cp-rp-c cp-rp-smaker" role="columnheader">Scroll Maker</div>' +
                         '<div class="cp-rp-c cp-rp-regalia" role="columnheader">Regalia</div>' +
                         '<div class="cp-rp-c cp-rp-rmaker" role="columnheader">Regalia Maker</div>' +
-                        '<div class="cp-rp-c cp-rp-arts" role="columnheader">Artisans</div>' +
-                        '<div class="cp-rp-c cp-rp-line" role="columnheader">Line</div>' +
                     '</div>' + rows +
                 '</div>';
         }
