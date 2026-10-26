@@ -77,7 +77,11 @@
      *
      * Two cells of the spec table have no plain number:
      *   - award `maxLines` is 2, rising to 3 for an award name over 40 characters;
-     *     AWARD_LONG carries that rule beside the table.
+     *     AWARD_LONG carries that rule beside the table. The name's `maxLines` is 3,
+     *     rising to 4 for a persona over 70 characters, which NAME_LONG carries. The
+     *     name's fourth line costs 90, a step of 30 like each before it, so a long
+     *     persona takes the fourth line only when three cannot hold it at a size worth
+     *     printing.
      *   - the lead (the connective, "and the Barony of") is sized by hierarchy, not
      *     scored, so it has no `sat` and no line price. `sat` is null so a caller that
      *     feeds it to the utility function fails loudly instead of quietly producing
@@ -85,13 +89,39 @@
      */
     var CONST = {
         ROLES: {
-            name:          { min: 0.80, max: 2.30, sat: 1.60, maxLines: 3, lineHeight: 1.12, linePenalty: [0, 30, 60] },
+            name:          { min: 0.80, max: 2.30, sat: 1.60, maxLines: 3, lineHeight: 1.12, linePenalty: [0, 30, 60, 90] },
             award:         { min: 0.70, max: 1.50, sat: 1.20, maxLines: 2, lineHeight: 1.10, linePenalty: [0, 22, 50] },
             placeClassic:  { min: 0.62, max: 1.30, sat: 1.00, maxLines: 1, lineHeight: 1.10, linePenalty: [0] },
             placeCentered: { min: 0.62, max: 1.30, sat: 1.00, maxLines: 2, lineHeight: 1.10, linePenalty: [0, 25] },
             lead:          { min: 0.70, max: 1.04, sat: null, maxLines: 1, lineHeight: 1.10, linePenalty: [0] }
         },
         AWARD_LONG: { chars: 40, maxLines: 3 },
+
+        /* Calibration (T14). A persona over 70 characters may take a fourth line. The
+           frozen corpus's c16 (100 characters of Cormorant Unicase) cannot be broken into
+           three lines inside the column even at name.min: it printed 1,169px lines in a
+           1,121px column and was flagged overflow. Lowering name.min would shrink every
+           long persona to buy one case. A fourth line is the typographer's answer and the
+           role already has a price for it. Measured: c16 sets four lines at 0.957em with no
+           overflow, and c31 four lines at 1.051em where three had held it at 0.838em. */
+        NAME_LONG: { chars: 70, maxLines: 4 },
+
+        /* Calibration (T14). The most a candidate may be paid back, in total, for the
+           good places it breaks (the comma, the end of the honorific run, the epithet:
+           the negative penalties of §6.3.2). Uncapped, every extra line that lands on a
+           second good gap is paid again, which is how c46 ("Syr Grand Marquis Noodles,
+           The Symbol of Peace") scored a three-line 1.846em over its two-line 1.284em:
+           the third line was worth 45 points of break credit against 28 for the second,
+           and the size it bought is mostly past `sat`. The cap is one honorific-run gap:
+           an extra line has to earn its place on size, not on collecting credit. Measured
+           over the frozen corpus (docs/scrollery-typeset-results.md): c46 two lines at
+           1.284em, c12 and c32 rise from 1.158 and 1.229em to 1.350 and 1.441em, c49
+           from 1.187 to 1.520em, and nothing else moves. A lower utility bonus (20 to 10)
+           and a dearer third line ([0, 30, 80]) were measured first and rejected: the
+           bonus left c46 on three lines and turned the two-line c28, c38 and c48 into
+           small one-liners, and the dearer line fixed c46 by shrinking c12, c15 and c32
+           to 0.82, 1.02 and 0.87em two-liners. */
+        BREAK_CREDIT_CAP: 25,
 
         /* The "Amtgard" versal: clamp(nameSize, min, max), the one display element
            allowed to out-size the name, and only down to this floor (§6.4.2). */
@@ -600,7 +630,8 @@
             var maxLW = 0;
             for (j = 0; j < kk; j++) { if (j !== minor && LW[j] > maxLW) { maxLW = LW[j]; } }
 
-            var score = utility(Math.max(sStar, lo), range) - ctx.linePenalty[Math.min(kk, ctx.linePenalty.length) - 1] - bpSum;
+            var score = utility(Math.max(sStar, lo), range) - ctx.linePenalty[Math.min(kk, ctx.linePenalty.length) - 1]
+                - Math.max(bpSum, -CONST.BREAK_CREDIT_CAP);
             if (kk >= 2 && maxLW > 0) {
                 var ragged = 0, widow = false;
                 for (j = 0; j < kk; j++) {
@@ -698,7 +729,7 @@
      *                      A place has two table rows (Classic, Centered), so for
      *                      'place' the caller passes it, and solveBlock throws without.
      *              A range taken from CONST.ROLES also supplies the per-line-count prices.
-     *   maxLines   most lines the block may take (an award over 40 characters is allowed
+     *   maxLines   most lines the block may take (a name over 70 characters is allowed four, an award over 40 characters is allowed
      *              three, whatever the caller passes). Defaults to the role's table row
      *              for 'name' and 'award'; a place must pass it.
      *   lineHeight line-height factor
@@ -734,8 +765,12 @@
             return { size: lo, lines: [], minor: -1, planned: 0, score: 0, overflow: false };
         }
 
-        if (role === 'award' && charCount(tokens.map(function (t) { return t.text; }).join(' ')) > CONST.AWARD_LONG.chars) {
+        var chars = charCount(tokens.map(function (t) { return t.text; }).join(' '));
+        if (role === 'award' && chars > CONST.AWARD_LONG.chars) {
             maxLines = Math.max(maxLines, CONST.AWARD_LONG.maxLines);
+        }
+        if (role === 'name' && chars > CONST.NAME_LONG.chars) {
+            maxLines = Math.max(maxLines, CONST.NAME_LONG.maxLines);
         }
 
         /* The price of each line count: the range's own table, else the role's. A place

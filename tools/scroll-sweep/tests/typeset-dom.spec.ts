@@ -447,6 +447,25 @@ test('c46 name takes at most two lines', async ({ page }) => {
   expect(r.roles.name!.painted).toBeLessThanOrEqual(2);
 });
 
+// T14. c46 printed three lines at 1.846em where two sit at 1.284em; the check above is the guard, and this
+// one says the two lines are not a small compromise.
+test('c46 sets its two lines at a size worth printing', async ({ page }) => {
+  const r = await get(page, 'c46');
+  expect(r.roles.name!.em).toBeGreaterThanOrEqual(1.2);
+});
+
+// T14. c16 (100 characters of Cormorant Unicase) overflowed at name.min on three lines; NAME_LONG lets a
+// persona over 70 characters take a fourth. c31 is the other persona of that length.
+test('c16 and c31, the 70-character-plus personas, take four lines and none overflows', async ({ page }) => {
+  for (const id of ['c16', 'c31']) {
+    const r = await get(page, id);
+    expect(r.roles.name!.painted, id).toBe(4);
+    expect(r.roles.name!.overflow, id).toBe(false);
+    expect(r.roles.name!.em, id).toBeGreaterThanOrEqual(0.8);
+    expect(r.wide.filter(w => w.role === 'name'), id).toEqual([]);
+  }
+});
+
 test('hierarchy: the award never outranks the name', async ({ page }) => {
   const bad: string[] = [];
   for (const r of (await rows(page)).filter(x => !x.error)) {

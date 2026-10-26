@@ -115,15 +115,19 @@ test('award before-of bonus is for the award role only', () => {
   expect(TS.breakPenalty(TS.tokenize('Lady of Arms', 'name'), 0, 'name')).toBe(-25);
 });
 
-test('CONST carries the spec 6.4.1 table and constants verbatim', () => {
+test('CONST carries the spec 6.4.1 table and constants, with the T14 calibrations noted', () => {
   const C = TS.CONST;
-  expect(C.ROLES.name).toEqual({ min: 0.80, max: 2.30, sat: 1.60, maxLines: 3, lineHeight: 1.12, linePenalty: [0, 30, 60] });
+  // T14 added the name's fourth line (NAME_LONG, below), so the price list grew by one entry: 90, a step
+  // of 30 like each before it. The three entries of the spec's table are unchanged.
+  expect(C.ROLES.name).toEqual({ min: 0.80, max: 2.30, sat: 1.60, maxLines: 3, lineHeight: 1.12, linePenalty: [0, 30, 60, 90] });
   expect(C.ROLES.award).toEqual({ min: 0.70, max: 1.50, sat: 1.20, maxLines: 2, lineHeight: 1.10, linePenalty: [0, 22, 50] });
   expect(C.ROLES.placeClassic).toEqual({ min: 0.62, max: 1.30, sat: 1.00, maxLines: 1, lineHeight: 1.10, linePenalty: [0] });
   expect(C.ROLES.placeCentered).toEqual({ min: 0.62, max: 1.30, sat: 1.00, maxLines: 2, lineHeight: 1.10, linePenalty: [0, 25] });
   expect(C.ROLES.lead).toMatchObject({ min: 0.70, max: 1.04, maxLines: 1, lineHeight: 1.10 });
   expect(Object.keys(C.ROLES).sort()).toEqual(['award', 'lead', 'name', 'placeCentered', 'placeClassic']);
   expect(C.AWARD_LONG).toEqual({ chars: 40, maxLines: 3 });
+  expect(C.NAME_LONG).toEqual({ chars: 70, maxLines: 4 });   // T14, from c16
+  expect(C.BREAK_CREDIT_CAP).toBe(25);                       // T14, from c46
   expect(C.VERSAL).toEqual({ min: 1.20, max: 1.495 });
   expect(C.SLACK).toBe(0.025);
   expect(C.RAGGED).toBe(30);
@@ -269,6 +273,30 @@ test('an award of 40 characters keeps its two-line cap, one of 41 may take three
   const a = solve(forty, 'award', 500), b = solve(forty1, 'award', 500);
   expect(a.planned).toBe(2); expect(a.overflow).toBe(true);   // three lines would fit, but the cap says two
   expect(b.planned).toBe(3); expect(b.overflow).toBe(false);
+});
+// T14, from c16 (a 100-character Cormorant Unicase persona that overflowed at name.min on three lines).
+// Seven nine-letter words, 0.5em a letter, in a 850px band: three lines need about 933px each at name.min.
+const longPersona = (extra: string) => Array.from({ length: 7 }, (_, i) => String.fromCharCode(65 + i).repeat(9)).join(' ') + extra;
+test('a persona of 70 characters keeps its three-line cap, one of 71 may take four', () => {
+  const seventy = longPersona('x'), seventyOne = longPersona('xx');
+  expect(Array.from(seventy).length).toBe(70); expect(Array.from(seventyOne).length).toBe(71);
+  const a = solve(seventy, 'name', 850), b = solve(seventyOne, 'name', 850);
+  expect(a.planned).toBe(3); expect(a.overflow).toBe(true);   // four lines would fit, but the cap says three
+  expect(b.planned).toBe(4); expect(b.overflow).toBe(false); expect(b.size).toBeGreaterThanOrEqual(TS.CONST.ROLES.name.min);
+});
+test('the fourth line is for a persona that needs it: one that fits on three keeps three', () => {
+  // The same 71 characters in a band wide enough for three lines at a good size.
+  const s = solve(longPersona('xx'), 'name', 1683);
+  expect(s.planned).toBeLessThanOrEqual(3);
+});
+// T14, from c46. Without the cap the third line collects a second good break (the end of the honorific run)
+// on top of the comma's, and is chosen at 1.88em over a two-line 1.34em.
+test('break credit is capped, so an extra line earns its place on size and not on a second good gap', () => {
+  const text = 'Syr Grand Marquis Noodles, The Symbol of Peace';
+  const capped = solve(text, 'name', 1400);
+  expect(capped.planned).toBe(2); expect(capped.lines).toEqual(['Syr Grand Marquis Noodles,', 'The Symbol of Peace']);
+  const saved = TS.CONST.BREAK_CREDIT_CAP; TS.CONST.BREAK_CREDIT_CAP = 1000;
+  try { expect(solve(text, 'name', 1400).planned).toBe(3); } finally { TS.CONST.BREAK_CREDIT_CAP = saved; }
 });
 test('a ceiling below the role maximum holds the size under it', () => {
   const s = solve('Halo', 'award', 1683, { range: { ...TS.CONST.ROLES.award, max: 0.9 } });
