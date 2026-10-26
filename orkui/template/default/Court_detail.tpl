@@ -166,6 +166,11 @@ html[data-theme="dark"] .cp-award-row-main:has(+ .cp-award-row-expand.open) { ba
 .cp-pc-cleared { margin-top: 6px; font-size: 11px; line-height: 1.4; color: #744210; background: #fffbeb; border: 1px solid #f6e05e; border-radius: 5px; padding: 6px 8px; }
 .cp-pc-cleared i { margin-right: 4px; color: #b7791f; }
 .cp-pc-cleared .cp-rec-hint-btn { margin-left: 4px; font-size: 11px; }
+/* Monarchy Only rec: its reason is shown to officers for reference but is never a
+   citation — no ghost text, no (Start from Rec), nothing that copies it. */
+.cp-pc-monarchy { margin-top: 6px; font-size: 11px; line-height: 1.4; color: #553c9a; background: #faf5ff; border: 1px solid #d6bcfa; border-radius: 5px; padding: 6px 8px; }
+.cp-pc-monarchy i { margin-right: 4px; color: #6b46c1; }
+.cp-pc-monarchy-reason { margin-top: 4px; color: #4a5568; font-style: italic; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cp-artisan-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
 /* Right-aligned: Save and Remove act on the whole award row, but sitting
    left-aligned directly beneath "Add Artisan" they read as part of the
@@ -340,11 +345,26 @@ html[data-theme="dark"] .cp-send-local-btn[data-tip]:hover::after { background: 
     .cp-section-header #cp-script-btn { flex: 0 0 auto; }
 }
 /* ---- Court Script preview modal ---- */
-.cp-script-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.5); display: flex; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow: auto; }
+/* --z-modal sits above the fixed top nav (--ork-z-nav: 9999); at 1000 the nav painted
+   over the top of the sheet and the backdrop stopped at the nav's bottom edge. */
+.cp-script-overlay { position: fixed; inset: 0; z-index: var(--z-modal, 10100); background: rgba(0,0,0,.5); display: flex; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow: auto; }
 .cp-script-overlay[hidden] { display: none; }
 .cp-script-modal { background: #fff; color: #1a202c; width: 100%; max-width: 760px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.3); overflow: hidden; }
-.cp-script-chrome { padding: 18px 22px; border-bottom: 1px solid #e2e8f0; }
-.cp-script-titlebar { text-align: center; margin-bottom: 12px; }
+.cp-script-chrome { position: relative; padding: 18px 22px; border-bottom: 1px solid #e2e8f0; }
+/* Symmetric gutters: the title is centred, so padding only on the right would
+   shift it off centre, and none at all lets a long court name run under the X. */
+.cp-script-titlebar { text-align: center; margin-bottom: 12px; padding: 0 40px; }
+/* Same size, shape and icon as the report guides' close button (.pe-help-close). */
+.cp-script-x {
+    position: absolute; top: 10px; right: 12px;
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; padding: 0;
+    border: none; border-radius: 50%; background: none;
+    color: #718096; font-size: 20px; line-height: 1; cursor: pointer;
+    transition: background .15s, color .15s;
+}
+.cp-script-x:hover { background: #edf2f7; color: #1a202c; }
+.cp-script-x:focus-visible { outline: 2px solid #2c5282; outline-offset: 2px; }
 .cp-script-h1 { font-size: 22px; font-weight: 700; margin: 0; background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; color: #1a202c; }
 .cp-script-date { color: #718096; margin: 4px 0 0; font-size: 13px; }
 .cp-script-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -392,6 +412,8 @@ html[data-theme="dark"] .cp-send-local-btn[data-tip]:hover::after { background: 
 html[data-theme="dark"] .cp-script-modal { background: #161b22; color: #e2e8f0; }
 html[data-theme="dark"] .cp-script-chrome { border-color: #2d3748; }
 html[data-theme="dark"] .cp-script-h1 { color: #e2e8f0; }
+html[data-theme="dark"] .cp-script-x { color: #a0aec0; }
+html[data-theme="dark"] .cp-script-x:hover { background: #2d3748; color: #e2e8f0; }
 html[data-theme="dark"] .cp-script-density { border-color: #2d3748; }
 html[data-theme="dark"] .cp-script-density button { background: #1f2733; color: #cbd5e0; }
 html[data-theme="dark"] .cp-script-density button + button { border-color: #2d3748; }
@@ -478,6 +500,7 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
     body.cp-script-open #cp-script-overlay { position: static; display: block !important; background: #fff; padding: 0; overflow: visible; }
     body.cp-script-open #cp-script-overlay .cp-script-modal { max-width: none; width: auto; margin: 0; box-shadow: none; border-radius: 0; background: #fff; color: #000; }
     body.cp-script-open .cp-script-controls { display: none !important; }
+    body.cp-script-open .cp-script-x { display: none !important; }
     /* Print scope. Default (Print this sheet) prints exactly the previewed sheet — the
        .cp-sheet-active rule above already does that. body.cp-print-all reveals all three
        and forces a page break between them, so the packet comes off the printer as three
@@ -953,6 +976,9 @@ html[data-theme="dark"] .cp-notes-area::placeholder { color: #4a5568; }
 html[data-theme="dark"] .cp-rec-hint { color: #a0aec0; }
 html[data-theme="dark"] .cp-rec-hint-btn { color: #63b3ed; }
 html[data-theme="dark"] .cp-pc-cleared { background: rgba(214,158,46,.12); border-color: rgba(214,158,46,.4); color: #f6e05e; }
+html[data-theme="dark"] .cp-pc-monarchy { background: rgba(196,181,253,.10); border-color: rgba(196,181,253,.4); color: #d6bcfa; }
+html[data-theme="dark"] .cp-pc-monarchy i { color: #c4b5fd; }
+html[data-theme="dark"] .cp-pc-monarchy-reason { color: #cbd5e0; }
 html[data-theme="dark"] .cp-pc-cleared i { color: #f6e05e; }
 html[data-theme="dark"] .cp-artisan-row { color: #cbd5e0; }
 html[data-theme="dark"] .cp-maker-ac    { background: #1f2733 !important; border-color: #2d3748 !important; color: #e2e8f0 !important; }
@@ -1639,7 +1665,7 @@ $_total_awards = count($courtAwards ?? []);
                 </div>
                 <div class="cp-cell cp-cell-award">
                     <span class="cp-award-name-text"><?= htmlspecialchars($aw['AwardName']) ?></span>
-                    <?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span class="ladder-rank cp-award-rank" data-lvl="<?= min((int)$aw['Rank'], 10) ?>">Rank <?= (int)$aw['Rank'] ?></span><?php endif; ?>
+                    <?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span class="ladder-rank cp-award-rank" data-lvl="<?= min((int)$aw['Rank'], 10) ?>">Rank <?= (int)$aw['Rank'] ?></span><?php elseif ($aw['IsLadder']): ?><span class="ladder-rank ladder-rank-unset cp-award-rank" title="Ladder award — the rank is chosen when this line is granted.">Rank at grant</span><?php endif; ?>
                 </div>
                 <div class="cp-cell cp-cell-type">
                     <span class="<?= $typeClass ?>" data-tip="<?= htmlspecialchars($typeTip) ?>"><?= $typeLabel ?></span>
@@ -1698,7 +1724,25 @@ $_total_awards = count($courtAwards ?? []);
                         // cleared end-state the JS clear path produces — marker shown, rec
                         // hint hidden, hint buttons withdrawn, no rehydrating onfocus.
                         $pcCleared   = $pcTriggered && !empty($aw['PublicCommentCleared']);
+                        // Monarchy Only rec: the reason is officer-only and is never the
+                        // public citation, so none of the inherit/restore affordances exist.
+                        $pcMonarchy  = !empty($aw['RecMonarchyOnly']);
                         ?>
+                        <?php if ($pcMonarchy): ?>
+                        <div class="cp-pc-label-row" style="margin-top:10px">
+                            <span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>
+                        </div>
+                        <?php /* data-rec-cleared carries the line's PERSISTED flag (the officer's
+                                 own "(Clear)"), so a save posts it back unchanged. The hidden rec's
+                                 reason is withheld by RecMonarchyOnly, never by forcing this flag:
+                                 a forced 1 outlived an unhide and stopped the line inheriting. */ ?>
+                        <div class="cp-pubcomment-wrap" id="cp-pcwrap-<?= $pcCaid ?>" data-rec-engaged="1" data-rec-cleared="<?= !empty($aw['PublicCommentCleared']) ? '1' : '0' ?>" data-rec-monarchy="1">
+                            <textarea class="cp-notes-area" id="cp-pubcomment-<?= $pcCaid ?>"
+                                      aria-label="Public comment (shown on the Court Report)"
+                                      placeholder="Shown on the public Court Report…"><?= htmlspecialchars($pcSaved) ?></textarea>
+                            <div class="cp-pc-monarchy" id="cp-pc-monarchy-<?= $pcCaid ?>"><i class="fas fa-eye-slash" aria-hidden="true"></i> Monarchy Only recommendation &mdash; its reason is never published. Type a public comment above if you want one.<?php if ($pcRecReason !== ''): ?><div class="cp-pc-monarchy-reason">Officers only: <?= htmlspecialchars($pcRecReason) ?></div><?php else: ?><div class="cp-pc-monarchy-reason">Its reason is visible only to officers at the recommendation&rsquo;s level.</div><?php endif; ?></div>
+                        </div>
+                        <?php else: ?>
                         <div class="cp-pc-label-row" style="margin-top:10px">
                             <span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>
                             <?php if ($pcTriggered && !$pcCleared): ?>
@@ -1722,6 +1766,7 @@ $_total_awards = count($courtAwards ?? []);
                             <div class="cp-pc-cleared" id="cp-pc-cleared-<?= $pcCaid ?>"><i class="fas fa-eye-slash"></i> Marked as cleared &mdash; this row is flagged not to inherit the recommendation&rsquo;s wording. <button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(<?= $pcCaid ?>,'restore')">(Undo clear)</button></div>
                             <?php endif; ?>
                         </div>
+                        <?php endif; ?>
                     </div>
                     <div>
                         <?php if (($court['ParkId'] ?? 0) == 0): ?>
@@ -2173,15 +2218,22 @@ $_total_awards = count($courtAwards ?? []);
                     <div class="cp-grant-ro-award" id="cp-grant-award"></div>
                 </div>
             </div>
-            <div class="cp-row-2">
-                <div class="cp-field" id="cp-grant-rank-wrap">
-                    <label for="cp-grant-rank">Rank</label>
-                    <input type="number" id="cp-grant-rank" min="1" max="99" value="1">
-                </div>
-                <div class="cp-field">
-                    <label for="cp-grant-date">Date</label>
-                    <input type="text" id="cp-grant-date" readonly>
-                </div>
+            <!-- Rank gets its own full-width row: ten pills do not fit in half the
+                 modal, and the ad-hoc Add Award modal already lays it out this way. -->
+            <div class="cp-field" id="cp-grant-rank-wrap">
+                <label>Rank <span id="cp-grant-rank-hint" style="color:#a0aec0;font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">&mdash; select the rank being awarded</span></label>
+                <div class="cp-rank-pills" id="cp-grant-rank-pills"></div>
+                <!-- Informational only. Fires when the recipient holds the same ladder
+                     in another kingdom (e.g. a principality's own row vs its parent's).
+                     It suggests nothing and changes no default -- the officer decides. -->
+                <div class="cp-grant-related" id="cp-grant-rank-related" style="display:none"></div>
+                <!-- Kept as #cp-grant-rank so cpSubmitGrant reads the value exactly as
+                     it did when this was a number input. -->
+                <input type="hidden" id="cp-grant-rank" value="1">
+            </div>
+            <div class="cp-field">
+                <label for="cp-grant-date">Date</label>
+                <input type="text" id="cp-grant-date" readonly>
             </div>
             <div class="cp-field">
                 <label for="cp-grant-giver-text">Given By <span style="color:#e53e3e">*</span></label>
@@ -2320,6 +2372,14 @@ $_total_awards = count($courtAwards ?? []);
         }
         return $flat;
     })($awardOpts, is_array($PseudoLadderKingdomAwardIds ?? null) ? $PseudoLadderKingdomAwardIds : [])) ?>;
+    // Kingdom-original ladder ids. The Grant modal needs these to pick the right
+    // key into the held-ranks map: those awards are keyed "k<KingdomAwardId>", and
+    // membership of this list is the only reliable test -- most of them carry
+    // AwardId 94 ("Custom Award"), so "has no catalog row" does not identify them.
+    var cpPseudoLadderIds = <?= json_encode(array_map('intval', is_array($PseudoLadderKingdomAwardIds ?? null) ? $PseudoLadderKingdomAwardIds : [])) ?>;
+    // kaid -> {Slug, Name, Kingdom} for the same awards, so the Grant modal can say
+    // what the recipient holds on the equivalent ladder elsewhere.
+    var cpPseudoLadderInfo = <?= json_encode(is_array($PseudoLadderSiblings ?? null) ? $PseudoLadderSiblings : (object)[]) ?>;
     // Group sets per modal mode, in canonical display order (skip-empty at render).
     var CP_AWARD_GROUPS = ['Ladder Awards', 'Other', 'Custom Award'];
     var CP_TITLE_GROUPS = ['Knighthoods', 'Masterhoods', 'Paragons', 'Noble Titles', 'Associate Titles', 'Custom Title'];
@@ -2328,7 +2388,8 @@ $_total_awards = count($courtAwards ?? []);
     var cpGiverOptions = window.cpGiverOptions = <?= json_encode($giverOptions) ?>;
     var cpMode         = window.cpMode         = <?= json_encode($courtMode) ?>;
     var cpStagedCount  = window.cpStagedCount  = <?= (int)$stagedCount ?>;
-    var cpPrevSkipped  = window.cpPrevSkipped  = <?= json_encode($prevSkipped) ?>;
+    <?php /* No cpPrevSkipped dump: nothing in the client read it, and it carried the
+             previous court's raw rows. The banner above uses count($prevSkipped). */ ?>
     var cpStateVersion = <?= json_encode($stateVersion) ?>;
     // Human-readable court date for the grant modal (F j, Y).
     var cpCourtDateHuman = <?= json_encode($court['CourtDate'] ? date('F j, Y', strtotime($court['CourtDate'])) : '') ?>;
@@ -3183,10 +3244,41 @@ $_total_awards = count($courtAwards ?? []);
     };
 
     // ---- Public Comment: rec-reason helper text ----
-    function cpPubCommentFieldHtml(caid, recReason, publicComment) {
+    // Mirrors the server-rendered field, all three states: untouched (rec text as a
+    // ghost hint + Start/Clear), cleared (marker + Undo), and Monarchy Only (the rec's
+    // reason is officer-only reference text and nothing offers it as the citation).
+    // The officer-only line under a Monarchy Only row's notice. A caller who may not see
+    // the rec (e.g. a park officer on a kingdom-level hide) gets no reason from the server.
+    // Plain text (callers escape it), so the reconcile can compare it to textContent.
+    function cpMonarchyReasonText(recReason) {
+        return recReason ? 'Officers only: ' + recReason : 'Its reason is visible only to officers at the recommendation\u2019s level.';
+    }
+
+    function cpPubCommentFieldHtml(caid, recReason, publicComment, cleared, recMonarchyOnly) {
         recReason     = recReason || '';
         publicComment = publicComment || '';
+        var label = '<div class="cp-pc-label-row" style="margin-top:10px"><span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>';
+        if (recMonarchyOnly) {
+            // data-rec-cleared is the line's persisted flag, posted back unchanged on save;
+            // the hidden reason is withheld by RecMonarchyOnly, not by forcing it to 1.
+            return label + '</div>' +
+                '<div class="cp-pubcomment-wrap" id="cp-pcwrap-' + caid + '" data-rec-engaged="1" data-rec-cleared="' + (cleared ? '1' : '0') + '" data-rec-monarchy="1">' +
+                '<textarea class="cp-notes-area" id="cp-pubcomment-' + caid + '" aria-label="Public comment (shown on the Court Report)" placeholder="Shown on the public Court Report…">' + esc(publicComment) + '</textarea>' +
+                '<div class="cp-pc-monarchy" id="cp-pc-monarchy-' + caid + '"><i class="fas fa-eye-slash" aria-hidden="true"></i> Monarchy Only recommendation \u2014 its reason is never published. Type a public comment above if you want one.' +
+                '<div class="cp-pc-monarchy-reason">' + esc(cpMonarchyReasonText(recReason)) + '</div>' +
+                '</div></div>';
+        }
         var triggered = recReason !== '' && publicComment === '';
+        var isCleared = triggered && !!cleared;
+        if (isCleared) {
+            return label + '</div>' +
+                '<div class="cp-pubcomment-wrap" id="cp-pcwrap-' + caid + '" data-rec-engaged="1" data-rec-cleared="1" data-rec-text="' + esc(recReason) + '">' +
+                '<textarea class="cp-notes-area" id="cp-pubcomment-' + caid + '" placeholder="Shown on the public Court Report…"></textarea>' +
+                '<div class="cp-rec-hint" id="cp-rec-hint-' + caid + '" style="display:none">' + esc(recReason) + '</div>' +
+                '<div class="cp-pc-cleared" id="cp-pc-cleared-' + caid + '"><i class="fas fa-eye-slash"></i> Marked as cleared \u2014 this row is ' +
+                'flagged not to inherit the recommendation\u2019s wording. ' +
+                '<button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(' + caid + ',\'restore\')">(Undo clear)</button></div></div>';
+        }
         var buttons = triggered
             ? '<button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(' + caid + ',\'start\')">(Start from Rec)</button>' +
               '<button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(' + caid + ',\'clear\')">(Clear)</button>'
@@ -3195,7 +3287,7 @@ $_total_awards = count($courtAwards ?? []);
         var hint = triggered
             ? '<div class="cp-rec-hint" id="cp-rec-hint-' + caid + '">' + esc(recReason) + '</div>'
             : '';
-        return '<div class="cp-pc-label-row" style="margin-top:10px"><span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>' + buttons + '</div>' +
+        return label + buttons + '</div>' +
             // data-rec-cleared must be present (not undefined) on every row: the save
             // predicate and the reconcile sync both read dataset.recCleared, and an
             // absent attribute reads as undefined rather than '0'.
@@ -3219,7 +3311,7 @@ $_total_awards = count($courtAwards ?? []);
 
     window.cpRecHintFocus = function(caid) {
         var wrap = gid('cp-pcwrap-' + caid);
-        if (!wrap || wrap.dataset.recEngaged === '1') return;
+        if (!wrap || wrap.dataset.recEngaged === '1' || wrap.dataset.recMonarchy === '1') return;
         var ta   = gid('cp-pubcomment-' + caid);
         var hint = gid('cp-rec-hint-' + caid);
         if (ta && hint && !ta.value) ta.value = hint.textContent;
@@ -3230,6 +3322,8 @@ $_total_awards = count($courtAwards ?? []);
         var ta   = gid('cp-pubcomment-' + caid);
         var hint = gid('cp-rec-hint-' + caid);
         if (!ta) return;
+        var mw = gid('cp-pcwrap-' + caid);
+        if (mw && mw.dataset.recMonarchy === '1') return; // a hidden rec's reason is never offered
         if (action === 'start') {
             if (hint) ta.value = hint.textContent;
             cpRecHintEngage(caid);
@@ -3444,8 +3538,14 @@ $_total_awards = count($courtAwards ?? []);
         gid('cp-grant-recipient').textContent = aw.Persona + (aw.ParkAbbrev ? ' (' + aw.ParkAbbrev + ')' : '');
         gid('cp-grant-award').textContent = aw.AwardName + (isLadder && aw.Rank ? ' — Rank ' + aw.Rank : '');
         var rankWrap = gid('cp-grant-rank-wrap');
-        if (isLadder) { rankWrap.style.display = ''; gid('cp-grant-rank').value = aw.Rank || 1; }
-        else          { rankWrap.style.display = 'none'; gid('cp-grant-rank').value = aw.Rank || 0; }
+        if (isLadder) {
+            rankWrap.style.display = '';
+            cpBuildGrantRankPills(aw);
+        } else {
+            rankWrap.style.display = 'none';
+            gid('cp-grant-rank').value = aw.Rank || 0;
+            gid('cp-grant-rank-pills').innerHTML = '';
+        }
         gid('cp-grant-date').value = cpCourtDateHuman || 'Today';
         // Reason precedence: saved public comment → originating rec reason → blank.
         // Precedence must mirror commitStagedAward: an explicitly CLEARED line inherits
@@ -3453,7 +3553,9 @@ $_total_awards = count($courtAwards ?? []);
         // public_comment via stageAward, and commit then takes the PublicComment!==''
         // branch and never re-reads the flag — publishing permanently, on the primary
         // Run-mode path, exactly the text the officer suppressed.
-        gid('cp-grant-reason').value = aw.PublicComment || (aw.PublicCommentCleared ? '' : (aw.RecReason || ''));
+        // A Monarchy Only rec's reason is officer-only: never pre-fill it, whatever the
+        // line's cleared flag says (the rec may have been hidden after it was added).
+        gid('cp-grant-reason').value = aw.PublicComment || ((aw.PublicCommentCleared || aw.RecMonarchyOnly) ? '' : (aw.RecReason || ''));
         cpBuildGiverPills();
         var def = cpGiverOptions && cpGiverOptions.default;
         if (def) {
@@ -3759,7 +3861,7 @@ $_total_awards = count($courtAwards ?? []);
             title: 'Dismiss this recommendation?',
             body: 'It will be removed from the kingdom\'s recommendation list for everyone, not just from this court. '
                 + 'Nothing is deleted permanently \u2014 to bring it back later, open the Kingdom page, go to the '
-                + 'Recommendations tab and expand "Show Deleted Recommendations", then choose Restore.',
+                + 'Recommendations tab and expand "Show Dismissed Recommendations", then choose Restore.',
             confirmLabel: 'Dismiss',
             danger: true,
             onConfirm: doDismiss
@@ -3773,6 +3875,16 @@ $_total_awards = count($courtAwards ?? []);
         else { selectedRecs.splice(idx, 1); el.classList.remove('selected'); }
         cpRmUpdateCount();
     };
+
+    // Show a recommendation-modal error so it cannot be missed: the box sits below
+    // a height-capped scroll list, so it is scrolled into view rather than just shown.
+    function cpRmShowError(msg) {
+        var box = gid('cp-rec-error');
+        if (!box) return;
+        box.textContent = msg;
+        box.style.display = 'block';
+        if (box.scrollIntoView) { box.scrollIntoView({ block: 'nearest' }); }
+    }
 
     window.cpSubmitRecs = function() {
         if (selectedRecs.length === 0) {
@@ -3826,12 +3938,24 @@ $_total_awards = count($courtAwards ?? []);
             selectedRecs = failed.map(function(x) { return x.rid; });
             cpRmUpdateCount();
             if (failed.length) {
-                gid('cp-rec-error').textContent = failed[0].d.error || 'Some awards could not be added.';
-                gid('cp-rec-error').style.display = 'block';
+                // Say how many, not just the first reason: adding five and having two
+                // refused used to render one line of 13px red text under a 460px
+                // scroll list, which reads as "the button did nothing".
+                var msg = failed[0].d.error || 'Some awards could not be added.';
+                if (failed.length !== results.length) {
+                    msg = failed.length + ' of ' + results.length + ' could not be added. ' + msg;
+                }
+                cpRmShowError(msg);
             } else {
                 cpCloseRecModal();
             }
-        }).catch(function() { cpRecsDone(); });
+        }).catch(function(err) {
+            // Never swallow: a throw in here (a render failure on an appended row,
+            // say) left the modal untouched and silent while the adds had already
+            // been written server-side.
+            cpRecsDone();
+            cpRmShowError('Something went wrong while adding. Some lines may have been added — close this and check the Order of Court before retrying.');
+        });
     };
 
     // ---- Ad-hoc award modal ----
@@ -4055,6 +4179,112 @@ $_total_awards = count($courtAwards ?? []);
         cpSelectAdhocRank(Math.min(Math.max(held, planned) + 1, maxRank));
     };
 
+    // ---- Grant modal rank pills -------------------------------------------
+    // Same control as the ad-hoc Add Award modal, for the same reason: a bare
+    // number input asks the officer to remember what the recipient already holds.
+    // It was also the only ladder control in the Court Planner that did not show
+    // it, which is how a rank-less ladder line defaulted silently to Rank 1.
+    //
+    // Held ranks come from the same PlayerAjax/player/{id}/awardranks map the
+    // ad-hoc modal uses, via the shared cpAdhocHeldRanks cache. "Planned" has no
+    // meaning here -- this line is already on the court, it is the thing being
+    // granted -- so only the held shading applies.
+    window.cpBuildGrantRankPills = function(aw) {
+        var maxRank = /zodiac/i.test(aw.AwardName || '') ? 12 : 10;
+        var mid     = String(aw.MundaneId || '');
+        var held    = cpGrantHeldRank(aw);
+        var current = parseInt(aw.Rank, 10) || 0;
+        var html = '';
+        for (var i = 1; i <= maxRank; i++) {
+            var cls = 'ladder-rank cp-rank-pill';
+            var tip = '';
+            if (i <= held) { cls += ' cp-rank-pill-held'; tip = ' data-tip="Already awarded"'; }
+            html += '<button type="button" class="' + cls + '" data-lvl="' + Math.min(i, 10) + '" data-rank="' + i + '"' + tip + ' onclick="cpSelectGrantRank(' + i + ')">' + i + '</button>';
+        }
+        gid('cp-grant-rank-pills').innerHTML = html;
+        var hint = gid('cp-grant-rank-hint');
+        if (hint) {
+            hint.innerHTML = held
+                ? '\u2014 green ranks have already been awarded (to ' + held + ').'
+                : '\u2014 select the rank being awarded';
+        }
+        cpShowRelatedLadders(aw);
+        // An existing rank on the line is the officer's own earlier choice, so keep
+        // it. Otherwise land on the first rank not already held.
+        cpSelectGrantRank(current > 0 ? Math.min(current, maxRank) : Math.min(held + 1, maxRank));
+        // Held ranks are fetched once per recipient; repaint when they land.
+        if (mid && !cpAdhocHeldRanks[mid]) {
+            fetch(uir + 'PlayerAjax/player/' + mid + '/awardranks')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    cpAdhocHeldRanks[mid] = d || {};
+                    // Only repaint if this is still the award on screen.
+                    if (String(gid('cp-grant-caid').value) === String(aw.CourtAwardId)) { cpBuildGrantRankPills(aw); }
+                })
+                .catch(function() { cpAdhocHeldRanks[mid] = {}; });
+        }
+    };
+
+    // Mirrors cpAdhocLedgerRank's key rules: kingdom-original ladders have no
+    // catalog row, so they are keyed "k<KingdomAwardId>"; everything else by base
+    // award_id. No falling back between the two -- most kingdom-original ladders
+    // carry AwardId 94 ("Custom Award"), so a miss would read the player's
+    // Custom Award rank and shade ranks they never earned.
+    function cpGrantHeldRank(aw) {
+        var mid = String(aw.MundaneId || '');
+        var map = cpAdhocHeldRanks[mid];
+        if (!map) { return 0; }
+        var key = (!aw.AwardId || cpPseudoLadderIds.indexOf(Number(aw.KingdomAwardId)) !== -1)
+            ? 'k' + (aw.KingdomAwardId || 0)
+            : String(aw.AwardId);
+        return parseInt(map[key], 10) || 0;
+    }
+
+    // What the recipient holds on the SAME ladder in another kingdom.
+    //
+    // Held ranks are keyed "k<kingdomaward_id>", so a principality's row of a ladder
+    // and its parent kingdom's row are separate buckets, while the State of Amtgard
+    // grid merges them by slug. Rather than merge the buckets -- which would change
+    // suggested ranks for every split-off principality to fix a handful of cases --
+    // this just states the fact and leaves the decision alone. Deliberately NOT
+    // limited to the parent chain: a player who transferred between unrelated
+    // kingdoms is worth mentioning too, and mentioning is all this does.
+    function cpShowRelatedLadders(aw) {
+        var box = gid('cp-grant-rank-related');
+        if (!box) { return; }
+        box.style.display = 'none';
+        box.textContent = '';
+        var meta = cpPseudoLadderInfo && cpPseudoLadderInfo[String(aw.KingdomAwardId)];
+        if (!meta || !meta.Slug) { return; }          // not a kingdom-original ladder
+        var map = cpAdhocHeldRanks[String(aw.MundaneId || '')];
+        if (!map) { return; }                          // held ranks not fetched yet
+        var found = [];
+        for (var kaid in cpPseudoLadderInfo) {
+            if (!Object.prototype.hasOwnProperty.call(cpPseudoLadderInfo, kaid)) { continue; }
+            if (String(kaid) === String(aw.KingdomAwardId)) { continue; }
+            var sib = cpPseudoLadderInfo[kaid];
+            if (!sib || sib.Slug !== meta.Slug) { continue; }
+            var r = parseInt(map['k' + kaid], 10) || 0;
+            if (r > 0) { found.push({ name: sib.Name, kingdom: sib.Kingdom, rank: r }); }
+        }
+        if (!found.length) { return; }
+        found.sort(function(a, b) { return b.rank - a.rank; });
+        var parts = found.map(function(f) {
+            return esc(f.name) + (f.kingdom ? ' (' + esc(f.kingdom) + ')' : '') + ' at rank ' + f.rank;
+        });
+        box.innerHTML = '<i class="fas fa-circle-info" style="margin-right:6px"></i>Also holds ' + parts.join('; ')
+            + '. This is a separate ladder in the ORK &mdash; shown in case the ranks should continue.';
+        box.style.display = '';
+    }
+
+    window.cpSelectGrantRank = function(rank) {
+        gid('cp-grant-rank').value = rank;
+        var pills = gid('cp-grant-rank-pills').querySelectorAll('.cp-rank-pill');
+        for (var i = 0; i < pills.length; i++) {
+            pills[i].classList.toggle('cp-rank-pill-selected', String(pills[i].dataset.rank) === String(rank));
+        }
+    };
+
     window.cpSelectAdhocRank = function(rank) {
         gid('cp-adhoc-rank-val').value = rank;
         var pills = gid('cp-adhoc-rank-pills').querySelectorAll('.cp-rank-pill');
@@ -4117,7 +4347,13 @@ $_total_awards = count($courtAwards ?? []);
         }
         var ptlBadge = aw.PassToLocal ? '<span class="cp-flag-local" data-tip="Pass to Local — this award will be handed down to the recipient\'s home park to grant at their court."><i class="fas fa-arrow-down"></i></span>' : '';
         var recBadge = aw.RecommendationsId ? '<span class="cp-flag-rec" data-tip="This award came from a submitted recommendation."><i class="fas fa-star"></i></span>' : '';
-        var rankStr  = (aw.IsLadder && aw.Rank > 0) ? '<span class="ladder-rank cp-award-rank" data-lvl="' + Math.min(aw.Rank, 10) + '">Rank ' + aw.Rank + '</span>' : '';
+        // Mirror of the server-rendered row above: a ladder line with no rank yet
+        // gets a placeholder chip, not blank -- blank made it read as a one-off award.
+        var rankStr  = aw.IsLadder
+            ? (aw.Rank > 0
+                ? '<span class="ladder-rank cp-award-rank" data-lvl="' + Math.min(aw.Rank, 10) + '">Rank ' + aw.Rank + '</span>'
+                : '<span class="ladder-rank ladder-rank-unset cp-award-rank" title="Ladder award — the rank is chosen when this line is granted.">Rank at grant</span>')
+            : '';
         var noteBtn  = aw.Notes ? '<button class="cp-note-btn" data-note="' + esc(aw.Notes) + '" onclick="event.stopPropagation();cpShowNote(this)" data-tip="View note" aria-label="View internal note"><i class="fas fa-comment-alt"></i></button>' : '';
         var typeClass = aw.IsTitle ? 'cp-type-title' : (aw.IsLadder ? 'cp-type-ladder' : 'cp-type-award');
         var typeLabel = aw.IsTitle ? 'Title' : (aw.IsLadder ? 'Ladder' : 'Award');
@@ -4125,7 +4361,13 @@ $_total_awards = count($courtAwards ?? []);
         var typeRow   = aw.IsTitle ? 'title'  : (aw.IsLadder ? 'ladder' : 'award');
         var html = '<div class="cp-award-row cp-aw-type-' + typeRow + '" id="cp-aw-' + aw.CourtAwardId + '" data-court-award-id="' + aw.CourtAwardId + '" data-rowversion="' + (aw.RowVersion || 0) + '" data-sort="' + aw.SortOrder + '">' +
             '<div class="cp-award-row-main cp-row-grid" onclick="cpToggleAward(' + aw.CourtAwardId + ')">' +
-            '<div class="cp-cell cp-cell-order"><div class="cp-reorder-btns">' +
+            '<div class="cp-cell cp-cell-order">' +
+            // The drag handle the server row has (draft only). It was missing here, so
+            // every award added without a reload -- ad-hoc, artisan, walk-on, or one
+            // another officer added that arrived through the poll -- could only be
+            // moved with the arrows until the page was reloaded.
+            (courtStatus === 'draft' ? '<span class="cp-award-drag" data-tip="Drag to reorder" aria-label="Drag to reorder" onclick="event.stopPropagation()"><i class="fas fa-grip-vertical"></i></span>' : '') +
+            '<div class="cp-reorder-btns">' +
             '<button class="cp-reorder-btn" data-tip="Move up" aria-label="Move award up" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',-1)">&#9650;</button>' +
             '<button class="cp-reorder-btn" data-tip="Move down" aria-label="Move award down" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',1)">&#9660;</button>' +
             '</div></div>' +
@@ -4147,7 +4389,7 @@ $_total_awards = count($courtAwards ?? []);
             '</div>' +
             '<div class="cp-award-row-expand" id="cp-aw-expand-' + aw.CourtAwardId + '">' +
             '<div class="cp-expand-grid">' +
-            '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea>' + cpPubCommentFieldHtml(aw.CourtAwardId, aw.RecReason, aw.PublicComment) + '</div>' +
+            '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea>' + cpPubCommentFieldHtml(aw.CourtAwardId, aw.RecReason, aw.PublicComment, aw.PublicCommentCleared, aw.RecMonarchyOnly) + '</div>' +
             '<div>' + cpPtlControlHtml(aw.CourtAwardId, aw.RecommendationsId, aw.PassToLocal) +
             '</div>' +
             '</div>' +
@@ -4555,7 +4797,7 @@ $_total_awards = count($courtAwards ?? []);
         var inherited = 0, none = 0;
         rows.forEach(function(a) {
             if ((a.PublicComment || '') !== '') return;
-            if ((a.RecReason || '') !== '' && !a.PublicCommentCleared) inherited++;
+            if ((a.RecReason || '') !== '' && !a.PublicCommentCleared && !a.RecMonarchyOnly) inherited++;
             else none++;
         });
         if (!inherited && !none) return '';
@@ -4748,6 +4990,26 @@ $_total_awards = count($courtAwards ?? []);
         // field posts PublicCommentCleared=0 under a matching RowVersion — wiping their
         // clear and republishing the confidential recommendation reason at Finalize.
         var pcWrapSync = row.querySelector('[data-rec-cleared]');
+        // The rec's Monarchy Only state is read live, so the field follows it both ways:
+        // hidden after this row rendered -> Monarchy Only form (no (Start from Rec) or
+        // ghost text left on screen); unhidden -> the ordinary inherit form again. A
+        // Monarchy Only row also rebuilds when its officer-only reference text changes
+        // (e.g. a pass-down made the reason visible to this officer).
+        if (pcWrapSync) {
+            var wasMonarchy = pcWrapSync.dataset.recMonarchy === '1';
+            var moReasonEl  = wasMonarchy ? pcWrapSync.querySelector('.cp-pc-monarchy-reason') : null;
+            var reasonMoved = wasMonarchy && sa.RecMonarchyOnly && moReasonEl
+                && moReasonEl.textContent !== cpMonarchyReasonText(sa.RecReason || '');
+            if (wasMonarchy !== !!sa.RecMonarchyOnly || reasonMoved) {
+                var pcLabel = pcWrapSync.previousElementSibling;
+                var holder = document.createElement('div');
+                holder.innerHTML = cpPubCommentFieldHtml(caid, sa.RecReason, pcEl ? pcEl.value : (sa.PublicComment || ''), !!sa.PublicCommentCleared, !!sa.RecMonarchyOnly);
+                while (holder.firstChild) pcWrapSync.parentNode.insertBefore(holder.firstChild, pcWrapSync);
+                if (pcLabel && pcLabel.classList.contains('cp-pc-label-row')) pcLabel.remove();
+                pcWrapSync.remove();
+                pcWrapSync = gid('cp-pcwrap-' + caid);
+            }
+        }
         if (pcWrapSync) pcWrapSync.dataset.recCleared = sa.PublicCommentCleared ? '1' : '0';
         var flagsEl = row.querySelector('.cp-award-flags');
         if (flagsEl) {
@@ -4807,6 +5069,8 @@ $_total_awards = count($courtAwards ?? []);
                 a.Notes = sa.Notes || '';
                 a.PublicComment = sa.PublicComment || '';
                 a.PublicCommentCleared = !!sa.PublicCommentCleared;
+                a.RecMonarchyOnly = !!sa.RecMonarchyOnly;
+                a.RecReason = sa.RecReason || '';
                 a.PassToLocal = sa.PassToLocal;
                 a.ScrollMakerId = sa.ScrollMakerId || null;
                 a.ScrollMakerPersona = sa.ScrollMakerPersona || '';
@@ -5211,7 +5475,7 @@ window.cpApplyHeroColor = function(img) {
             // Crown's.
             if (a.PublicComment) {
                 html += '<div class="cp-script-cite-text">' + esc(a.PublicComment) + '</div>';
-            } else if (a.RecReason && !a.PublicCommentCleared) {
+            } else if (a.RecReason && !a.PublicCommentCleared && !a.RecMonarchyOnly) {
                 html += '<div class="cp-script-cite-text cp-script-cite-inherited">' +
                         '<span class="cp-script-cite-src">from recommendation \u2014 unvetted</span> ' +
                         esc(a.RecReason) + '</div>';
@@ -5417,6 +5681,12 @@ window.cpApplyHeroColor = function(img) {
      aria-labelledby="cp-script-title" onclick="if(event.target===this)cpCloseScript()">
     <div class="cp-script-modal">
         <div class="cp-script-chrome">
+            <!-- There is a Close button among the actions below, but it sits in a row of
+                 print buttons and reads as one of them; people look for the corner X and,
+                 not finding one, clicked the backdrop. Esc closes it too, which the title
+                 makes discoverable. -->
+            <button type="button" class="cp-script-x" aria-label="Close" title="Close (Esc)"
+                    onclick="cpCloseScript()"><i class="fas fa-xmark" aria-hidden="true"></i></button>
             <div class="cp-script-titlebar">
                 <h1 id="cp-script-title" class="cp-script-h1"></h1>
                 <p id="cp-script-date" class="cp-script-date"></p>

@@ -4,8 +4,10 @@
  * tab activation — kept out of the initial profile() page load because rendering
  * thousands of <tr> rows inline blew up the browser's DOMContentLoaded handler.
  * Expects $AwardRecommendations, $IsLoggedIn, $CanManageKingdom, $kingdom_name,
- * $kingdom_id to be in scope.
- */ ?>
+ * $kingdom_id, $RecsHiddenBySetting to be in scope.
+ */
+include __DIR__ . '/_recs_hidden_notice.tpl';
+include_once __DIR__ . '/_monarchy_only_badge.tpl'; ?>
 			<style>
 			.rm-inline-passlocal { display:inline-block; margin-left:6px; font-size:11px; color:#2c5f8b; border:1px solid rgba(44,95,139,.4); border-radius:3px; padding:0 5px; }
 			html[data-theme="dark"] .rm-inline-passlocal { color:#6fb0e6; }
@@ -25,7 +27,9 @@
 				<?php endif; ?>
 			</div>
 			<?php endif; ?>
-			<?php if (empty($AwardRecommendations)): ?>
+			<?php if (empty($AwardRecommendations) && !empty($RecsHiddenBySetting)): ?>
+			<div class="pk-recs-empty"><?= htmlspecialchars(ork_recs_hidden_notice(!empty($IsLoggedIn))) ?></div>
+			<?php elseif (empty($AwardRecommendations)): ?>
 			<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($kingdom_name) ?>.</div>
 			<?php else: ?>
 			<?php if (($CanManageKingdom ?? false) || !empty($ViewerHasCircle)): ?>
@@ -48,9 +52,9 @@
 							<dt>Below Rec'd</dt>
 							<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
 							<dt>Non-Ladder</dt>
-							<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Delete as appropriate.</dd>
+							<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Dismiss as appropriate.</dd>
 							<dt>At or Above Rec'd</dt>
-							<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
+							<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Dismiss these to keep the list tidy.</dd>
 							<dt>All</dt>
 							<dd>Every recommendation regardless of status. Use for a full audit.</dd>
 							<?php if (!empty($ViewerHasCircle)): ?>
@@ -84,11 +88,11 @@
 					<?php foreach ($AwardRecommendations as $rec): ?>
 					<tr class="pk-rec-row"
 						data-rec-id="<?= (int)$rec['RecommendationsId'] ?>" data-award-id="<?= (int)$rec['AwardId'] ?>"
-						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
+						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((array_key_exists('IsLadder', $rec) ? !empty($rec['IsLadder']) : (int)$rec['Rank'] > 0) ? 'below' : 'nonladder') ?>">
 						<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 						<td><?php if (!empty($rec['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$rec['ParkId'] ?>"><?= htmlspecialchars($rec['ParkName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
-						<td><?= htmlspecialchars($rec['AwardName']) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="rm-inline-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?></td>
-						<td style="white-space:nowrap">
+						<td><?= htmlspecialchars($rec['AwardName']) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="rm-inline-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?><?= ork_monarchy_only_badge((int)($rec['MonarchyOnlyLevel'] ?? 0)) ?></td>
+						<td style="white-space:nowrap" data-order="<?= max(0, (int)$rec['Rank']) ?>">
 							<?php if ((int)$rec['Rank'] > 0): ?><span class="ladder-rank" data-lvl="<?= min((int)$rec['Rank'], 10) ?>"><?= (int)$rec['Rank'] ?></span><?php else: ?>&mdash;<?php endif; ?>
 							<?php if (!empty($rec['AlreadyHas'])): ?>
 							<span class="pk-rec-has-tip"
@@ -131,12 +135,12 @@
 			<div class="pk-deleted-recs" id="kn-deleted-recs" data-loaded="0">
 				<button type="button" class="pk-deleted-recs-toggle" id="kn-deleted-recs-toggle" aria-expanded="false">
 					<span class="pk-deleted-recs-caret">&#9654;</span>
-					<span class="pk-deleted-recs-toggle-label">Show Deleted Recommendations</span>
+					<span class="pk-deleted-recs-toggle-label">Show Dismissed Recommendations</span>
 					<span class="pk-deleted-recs-count" id="kn-deleted-recs-count" style="display:none">0</span>
 				</button>
 				<div class="pk-deleted-recs-body" id="kn-deleted-recs-body" style="display:none">
 					<div class="pk-deleted-recs-loading" id="kn-deleted-recs-loading">Loading&hellip;</div>
-					<div class="pk-deleted-recs-empty" id="kn-deleted-recs-empty" style="display:none">No deleted recommendations.</div>
+					<div class="pk-deleted-recs-empty" id="kn-deleted-recs-empty" style="display:none">No dismissed recommendations.</div>
 					<div class="pk-deleted-recs-table-wrap" id="kn-deleted-recs-table-wrap" style="display:none">
 						<table class="pk-deleted-recs-table">
 							<thead>
@@ -147,8 +151,8 @@
 									<th>Notes</th>
 									<th>Date Rec.</th>
 									<th>Recommended By</th>
-									<th>Deleted At</th>
-									<th>Deleted By</th>
+									<th>Dismissed At</th>
+									<th>Dismissed By</th>
 									<th class="no-export"></th>
 								</tr>
 							</thead>

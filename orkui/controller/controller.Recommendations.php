@@ -70,6 +70,7 @@ class Controller_Recommendations extends Controller
         $this->load_model('Reports');
         $page = $this->Reports->recommended_awards_page([
             'RequestedBy' => $uid,
+            'Token'       => $this->session->token,
             'KingdomId'   => $park_id > 0 ? 0 : $kingdom_id,
             'ParkId'      => $park_id,
             'Eligibility' => 'open',
@@ -151,6 +152,7 @@ class Controller_Recommendations extends Controller
 
         $req = [
             'RequestedBy' => $uid,
+            'Token'       => $this->session->token,
             'KingdomId'   => $park_id > 0 ? 0 : $kingdom_id,
             'ParkId'      => $park_id,
             'Search'      => (string)($_GET['search'] ?? ''),
@@ -207,7 +209,7 @@ class Controller_Recommendations extends Controller
     }
 
     // Route: POST ?Route=Recommendations/bulk/kingdom/{id} or /bulk/park/{id}
-    // POST: Action=dismiss|snooze|unsnooze|passlocal, Ids=comma-separated rec ids,
+    // POST: Action=dismiss|snooze|unsnooze|passlocal|undelete|monarchyonly|unmonarchyonly, Ids=comma-separated rec ids,
     // Passed=0|1 (passlocal only).
     //
     // One round trip for a whole bulk selection instead of one POST per rec. Each id
@@ -230,7 +232,7 @@ class Controller_Recommendations extends Controller
         // Ids/Action must be scalar: a stray Ids[]=/Action[]= would make PHP emit an
         // "Array to string conversion" warning INTO the already-started JSON body.
         $action = is_array($_POST['Action'] ?? null) ? '' : (string)($_POST['Action'] ?? '');
-        if (!in_array($action, ['dismiss', 'snooze', 'unsnooze', 'passlocal', 'undelete'], true)) {
+        if (!in_array($action, ['dismiss', 'snooze', 'unsnooze', 'passlocal', 'undelete', 'monarchyonly', 'unmonarchyonly'], true)) {
             echo json_encode(['status' => 1, 'ok' => 0, 'failed' => 0, 'results' => [], 'error' => 'Invalid action.']);
             exit;
         }
@@ -290,6 +292,12 @@ class Controller_Recommendations extends Controller
                     'Token'             => $token,
                     'RecommendationsId' => $rec_id,
                     'RequestedBy'       => $uid,
+                ]);
+            } elseif ($action === 'monarchyonly' || $action === 'unmonarchyonly') {
+                $r = $this->Player->set_recommendation_monarchy_only([
+                    'Token'             => $token,
+                    'RecommendationsId' => $rec_id,
+                    'Hidden'            => $action === 'monarchyonly' ? 1 : 0,
                 ]);
             } else {
                 $r = $this->Player->set_recommendation_passed_to_local([
@@ -363,6 +371,7 @@ class Controller_Recommendations extends Controller
         // can no longer produce a silently truncated (or zero-byte) CSV.
         $req = [
             'RequestedBy' => $uid,
+            'Token'       => $this->session->token,
             'KingdomId'   => $park_id > 0 ? 0 : $kingdom_id,
             'ParkId'      => $park_id,
             'Search'      => (string)($_GET['search'] ?? ''),
@@ -406,7 +415,7 @@ class Controller_Recommendations extends Controller
         fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM so Excel reads accented personas correctly
         fputcsv($out, [
             'Recipient', 'Park', 'Award', 'Rank', 'Recommended By', 'Date', 'Age (days)',
-            'Support', 'Already Has', 'Retired', 'Snoozed', 'Passed To Local', 'On Court', 'Reason',
+            'Support', 'Already Has', 'Retired', 'Snoozed', 'Passed To Local', 'Monarchy Only', 'On Court', 'Reason',
         ]);
 
         // Headers, BOM and the header row are already on the wire, so a failure
@@ -451,7 +460,11 @@ class Controller_Recommendations extends Controller
     {
         foreach ($groups as $g) {
             $rank      = (int)($g['Rank'] ?? 0);
-            $rankLabel = $rank > 0 ? (string)$rank : 'non-ladder';
+            // "non-ladder" is a statement about the AWARD, so it must come from the
+            // ladder flag. Keyed off the rank it used to label a rank-less ladder
+            // recommendation non-ladder, which is the thing the officer needs to fix.
+            $isLadder  = array_key_exists('IsLadder', $g) ? !empty($g['IsLadder']) : ($rank > 0);
+            $rankLabel = $isLadder ? ($rank > 0 ? (string)$rank : 'no rank set') : 'non-ladder';
             $parkName  = $parks[(int)($g['ParkId'] ?? 0)]['Name'] ?? '';
 
             // Recommenders across the cluster (unique, anonymous shown as "Anonymous").
@@ -497,10 +510,23 @@ class Controller_Recommendations extends Controller
                 !empty($g['IsRetired']) ? 'Yes' : 'No',
                 !empty($g['IsSnoozed']) ? 'Yes' : 'No',
                 !empty($g['PassedToLocal']) ? 'Yes' : 'No',
+                // The file leaves the ORK, so mark officer-only clusters plainly: the
+                // effective level of the most restricted member (blank = public).
+                $this->monarchyOnlyLabel((int)($g['MonarchyOnlyLevel'] ?? 0)),
                 $this->csvSafe(implode('; ', array_keys($courtNames))),
                 $this->csvSafe($g['Members'][0]['Reason'] ?? ''),
             ]);
         }
+    }
+
+    // CSV label for a cluster's effective Monarchy Only level. Anything above park
+    // reads as Kingdom (fail closed: never under-state who may see it).
+    private function monarchyOnlyLabel(int $level)
+    {
+        if ($level <= 0) {
+            return '';
+        }
+        return $level === 1 ? 'Park' : 'Kingdom';
     }
 
     // Parse the route (`kingdom/6` joined segment) + resolve the scope ids, then

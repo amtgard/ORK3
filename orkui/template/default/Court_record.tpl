@@ -721,7 +721,10 @@ html[data-theme="dark"] .cp-rec-cite-status.cp-rec-cite-status-error { color: #f
                 // unedited textarea as nothing-to-save, so an officer's silence is never
                 // recorded as authorship — see the JS comments below.
                 $citation = (string)($aw['PublicComment'] ?? '');
-                $recReason = (string)($aw['RecReason'] ?? '');
+                // A Monarchy Only rec's reason is never a citation: it is neither shown
+                // as "inherited" nor pre-filled into the box (commitStagedAward will not
+                // publish it either).
+                $recReason = !empty($aw['RecMonarchyOnly']) ? '' : (string)($aw['RecReason'] ?? '');
                 $citationOwn = $citation !== '';
                 $citationInherited = !$citationOwn && $recReason !== '';
                 $citationEmpty = !$citationOwn && !$citationInherited;
@@ -1308,7 +1311,8 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
     // determine/redisplay the inherited (state 2) citation state after an edit.
     function cpRecCiteRecReason(caid) {
         var a = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
-        return a ? (a.RecReason || '') : '';
+        // Monarchy Only: the reason is officer-only and never inherited as a citation.
+        return (a && !a.RecMonarchyOnly) ? (a.RecReason || '') : '';
     }
 
     // caid -> in-flight Promise for a citation save. Exists so cpRecMark (below) can

@@ -46,7 +46,6 @@ class ParkProfile extends Ork3
             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = e.park_id
             JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_id = e.event_id
                 AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-                AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
             LEFT JOIN (
                 SELECT event_calendardetail_id,
                     SUM(status = \'going\') AS rsvp_going,
@@ -360,7 +359,6 @@ class ParkProfile extends Ork3
             LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = ci.kingdom_id
             WHERE (ci.park_id = ' . $pid . ' OR (ci.park_id = 0 AND ci.kingdom_id = ' . $kid . '))
               AND ci.event_end >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-              AND ci.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
             ORDER BY ci.event_start';
         $this->db->Clear();
         $ciResult = $this->db->DataSet($ciSql);

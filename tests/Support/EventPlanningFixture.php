@@ -385,6 +385,13 @@ final class EventPlanningFixture
         }
     }
 
+    public function fetchDetailAtParkId(int $detailId): int
+    {
+        return (int) $this->pdo->query(
+            'SELECT at_park_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int) $detailId
+        )->fetchColumn();
+    }
+
     public function createDetailOnEvent(int $eventId, string $start, string $end): int
     {
         return $this->insertDetail($eventId, $start, $end);

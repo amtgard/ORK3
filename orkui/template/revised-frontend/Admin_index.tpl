@@ -175,6 +175,11 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-action-label">Merge Players</div>
 					<div class="cp-action-desc">Combine two duplicate player records</div>
 				</button>
+				<button class="cp-action-card" onclick="bcOpen()">
+					<div class="cp-action-icon cp-action-icon-green"><i class="fas fa-star"></i></div>
+					<div class="cp-action-label">Bonus Credits</div>
+					<div class="cp-action-desc">Amtgard-wide credits for kingdoms to adopt</div>
+				</button>
 				</div>
 		</div>
 
@@ -1528,3 +1533,14 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 	cpSort(0); // apply prefix-stripped alphabetical sort on load
 })();
 </script>
+<?php /* Bonus Credits modal, Amtgard-wide host: ORK admins define credits that kingdoms adopt. */ ?>
+<script>
+window.OrkBcCfg = {
+	uir:       '<?= UIR ?>',
+	scopeType: 'ork',
+	scopeId:   0,
+	scopeName: 'Amtgard',
+	kingdomId: 0
+};
+</script>
+<?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>

@@ -117,8 +117,9 @@ class Controller
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
             $_uid_check = (int)$this->session->user_id;
             $_tok_check = $this->session->token;
-            // Multi-device: per-request validation runs against ork_session (up to 3
-            // concurrent device sessions), not the single vestigial ork_mundane.token
+            // Multi-device: per-request validation runs against ork_session (up to
+            // Authorization::MAX_SESSIONS_PER_USER concurrent device sessions), not
+            // the single vestigial ork_mundane.token
             // slot. ValidateSessionByToken also enforces expiry and slides last_seen.
             $_owner = Ork3::$Lib->authorization->ValidateSessionByToken($_tok_check);
             if ($_owner === 0 || $_owner !== $_uid_check) {

@@ -234,7 +234,9 @@ html[data-theme="dark"] .qt-confirm-title {
 .qt-report-reason-row:last-of-type { border-bottom:none; }
 .qt-report-count { font-weight:700; color:#e53e3e; min-width:24px; text-align:right; }
 .qt-report-reporters-hdr { margin:14px 0 6px; font-size:0.74rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#a0aec0; }
-.qt-report-reporter-row { display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:5px 0; border-bottom:1px solid #f0f4f8; font-size:0.86rem; }
+.qt-report-reporter-row { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:2px 12px; padding:5px 0; border-bottom:1px solid #f0f4f8; font-size:0.86rem; }
+/* What the reporter typed, on its own line under their name. */
+.qt-report-reporter-comment { flex:0 0 100%; color:#4a5568; white-space:pre-wrap; overflow-wrap:anywhere; }
 .qt-report-reporter-row:last-child { border-bottom:none; }
 .qt-report-reporter-name a { color:#2b6cb0; text-decoration:none; font-weight:600; }
 .qt-report-reporter-name a:hover { text-decoration:underline; }
@@ -376,6 +378,7 @@ html[data-theme="dark"] .qt-report-count { color: #fc8181; }
 html[data-theme="dark"] .qt-report-reporter-row { border-bottom-color: var(--ork-border, #4a5568); }
 html[data-theme="dark"] .qt-report-reporter-name a { color: #63b3ed; }
 html[data-theme="dark"] .qt-report-reporter-meta { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-report-reporter-comment { color: var(--ork-text-secondary, #cbd5e0); }
 /* Bulk bar (already dark-friendly bg) — preserve high-contrast inner buttons */
 html[data-theme="dark"] .qt-bulk-bar-archive { background: #742a2a; color: #feb2b2; }
 html[data-theme="dark"] .qt-bulk-bar-archive:hover { background: #9b2c2c; }
@@ -1973,7 +1976,7 @@ $(function() {
 	function repEsc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 	// Show WHO reported (persona linked to their profile so the writer can reach
-	// out), with each report's reason and date. Reporter identity is only exposed
+	// out), with each report's reason, date and comment. Reporter identity is only exposed
 	// here in the admin-only reports modal.
 	function renderReporters(reporters) {
 		var el = document.getElementById('qt-report-reporters');
@@ -1992,8 +1995,9 @@ $(function() {
 					: d.toLocaleDateString([], { year:'numeric', month:'short', day:'numeric' });
 			}
 			var meta = repEsc(reasonLabels[rp.Reason] || rp.Reason) + (when ? ' · ' + when : '');
+			var comment = rp.Comment ? '<div class="qt-report-reporter-comment">' + repEsc(rp.Comment) + '</div>' : '';
 			return '<div class="qt-report-reporter-row"><span class="qt-report-reporter-name">' + nameHtml
-				+ '</span><span class="qt-report-reporter-meta">' + meta + '</span></div>';
+				+ '</span><span class="qt-report-reporter-meta">' + meta + '</span>' + comment + '</div>';
 		}).join('');
 		el.innerHTML = '<div class="qt-report-reporters-hdr">Who reported (' + reporters.length + ')</div>' + rows;
 	}

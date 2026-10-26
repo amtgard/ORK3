@@ -247,14 +247,47 @@ class Model_Player extends Model
         return $this->Player->SetRecommendationPassedToLocal($request);
     }
 
+    public function set_recommendation_monarchy_only($request)
+    {
+        return $this->Player->SetRecommendationMonarchyOnly($request);
+    }
+
+    // Officer level for the Add Rec modal's Monarchy Only checkbox: 2 kingdom, 1 park, 0 none.
+    public function monarchy_only_level($uid, $kingdom_id, $park_id)
+    {
+        return (int) Ork3::$Lib->recommendationvisibility->officerLevel((int)$uid, (int)$kingdom_id, (int)$park_id);
+    }
+
+    // Kingdom page Add Rec modal: offer the Monarchy Only checkbox to an officer of the
+    // kingdom or of any park in it. The recipient check is monarchy_only_level_for().
+    public function monarchy_only_eligible_in_kingdom($uid, $kingdom_id)
+    {
+        return Ork3::$Lib->recommendationvisibility->isOfficerInKingdom((int)$uid, (int)$kingdom_id);
+    }
+
+    // The level $uid would set marking a rec about $recipient_id Monarchy Only (0 = may
+    // not), measured against the RECIPIENT exactly as the create path measures it.
+    public function monarchy_only_level_for($uid, $recipient_id)
+    {
+        return (int) Ork3::$Lib->recommendationvisibility->creatorLevel((int)$uid, (int)$recipient_id);
+    }
+
+    // Award note from a "Give from rec" form: '' when it is the reason of a rec that
+    // is Monarchy Only now (a tab opened while it was public pre-filled it). A rec id
+    // not about $recipient_id is ignored. The one publishing gate.
+    public function publishable_award_note($note, $rec_id, $recipient_id)
+    {
+        return Ork3::$Lib->recommendationvisibility->publishable_text_for_rec((string)$note, (int)$rec_id, (int)$recipient_id);
+    }
+
     public function delete_player_recommendation($request)
     {
         return $this->Player->DeleteAwardRecommendation($request);
     }
 
-    public function get_peer_award_recommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id)
+    public function get_peer_award_recommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id, $token = '')
     {
-        return $this->_player()->GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id);
+        return $this->_player()->GetPeerAwardRecommendations($mundane_id, $kingdomaward_id, $rank, $exclude_mundane_id, $token);
     }
 
     public function restore_player_recommendation($request)

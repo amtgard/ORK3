@@ -132,19 +132,31 @@ define('DUMPTRACE', false);
 define('GOOGLE_MAPS_API_KEY', '');
 define('GOOGLE_MAPS_ACCESS_API_KEY', '');
 define('SENDGRID_API_KEY', '');
-// Amazon SES SMTP credentials -- the outbound mail path for password reset
-// (Authorization::ResetPassword). Leave empty here; the real values live in
-// prod config.php. With these empty, a reset request fails cleanly and is
-// logged instead of sending mail.
-define('AMAZON_SES_HOST', '');
-define('AMAZON_SES_USERNAME', '');
-define('AMAZON_SES_PASSWORD', '');
 define('BEHOLD_KEY', '');
 // Cloudflare analytics — keep empty in committed config.dev.php. For local
 // testing pass via docker (-e CF_API_TOKEN=… -e CF_ZONE_ID=…) — the recap
 // code falls back to getenv() when the constants are empty.
 define('CF_API_TOKEN', '');
 define('CF_ZONE_ID', '');
+
+// Amazon SES SMTP — same env var names as Amtgard IDP (.env / ORK .dev.env).
+// heartbeat.sh passes these into php-fpm when set on the container.
+//
+// This is the outbound mail path for password reset (Authorization::ResetPassword).
+// Leave empty here; the real values live in prod config.php. With these empty a
+// reset request fails cleanly and is logged instead of sending mail.
+//
+// Defined ONCE, here. A second plain-empty block added above these on 2026-10-09
+// re-declared HOST/USERNAME/PASSWORD; PHP keeps the FIRST define() and warns, so
+// the earlier block won and these getenv() reads were dead for those three.
+define('AMAZON_SES_HOST', getenv('AMAZON_SES_HOST') ?: '');
+define('AMAZON_SES_USERNAME', getenv('AMAZON_SES_USERNAME') ?: '');
+define('AMAZON_SES_PASSWORD', getenv('AMAZON_SES_PASSWORD') ?: '');
+define('AMAZON_SES_FROM_EMAIL', getenv('AMAZON_SES_FROM_EMAIL') ?: '');
+$amazonSesPort = getenv('AMAZON_SES_PORT');
+define('AMAZON_SES_PORT', ($amazonSesPort !== false && trim((string) $amazonSesPort) !== '')
+    ? (int) $amazonSesPort
+    : 587);
 
 // CARTO basemap tile key (Live Attendance + Weather maps) — keep empty in
 // committed config.dev.php; set the real value in an untracked local
@@ -161,6 +173,15 @@ define('CACHE_ENABLED', true);
 
 // For development purposes due to containerization, the frontend (browser) and backend need different endpoints
 // In production, the same endpoint will suffice (https://idp.amtgard.com)
+// Who the ORK is when it calls another service. Not destination-specific --
+// reuse this for any future outbound integration.
+define('ORK_CLIENT_NAME', 'AmtgardORK');
+
+// Key the IDP accepts from the ORK. Per-relationship, so it lives with the
+// other IDP_* settings. idp.amtgard.com is behind the same Cloudflare zone as
+// the ORK, and a server-side POST is challenged without a skip rule matching
+// this key. Empty locally (no Cloudflare in front of a local IDP).
+define('IDP_API_KEY', getenv('IDP_API_KEY') ?: '');
 define('IDP_BASE_URL', 'http://localhost:37080');
 define('IDP_API_URL', 'http://host.docker.internal:37080');
 define('IDP_CLIENT_ID', 'ork3_dev');
