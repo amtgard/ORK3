@@ -32,6 +32,9 @@ Three changes to `scrollery-typeset.js`, all measured on the frozen corpus (size
 | `NAME_LONG` | none | `{chars: 70, maxLines: 4}` | c16 |
 | name `linePenalty` | `[0, 30, 60]` | `[0, 30, 60, 90]` | the fourth line needs a price |
 | epithet start | first comma-word | first comma-word after the honorific run | the T4 minor ("sir, Kato") |
+| `HIER_LINE_BONUS` | none | 0.15 | Task 16, section 10.2 (award and place held under the name's effective size) |
+| `ART_GAP` | none | 0.25em | Task 16, section 10.3 (type keeps a gap from hard artwork) |
+| `#BottomTextFlourish` `top` | 0.95em | 1.20em | Task 16, section 10.1 (the swash clears "Amtgard") |
 
 Everything else is as the spec gives it: role table min/max/sat, award `linePenalty [0, 22, 50]`,
 `AWARD_LONG`, `SLACK 0.025`, `RAGGED 30`, `WIDOW 40`, `MINOR_SCALE 0.72`, `MINOR_PENALTY 6`,
@@ -301,3 +304,106 @@ c14, c16, c46, c12, c15, x3), for the sign-off of section 10.3.
    here is `CBtop` and the budget, not a count.
 6. **Q6 and Q12 are compared against a policy-blind baseline.** The 144 to 0 and the 140 fixed include the
    effect of scoring layer A with the policy; the baseline was not re-captured.
+
+## 10. Task 16: the owner's three sign-off fixes
+
+Measured 2026-10-26 on the fresh seeded corpus (replay of `corpus-20261026`, 104 cases) against
+`out/signoff-20261026`, the run the owner reviewed. Gates Q1 to Q4, Q7 to Q9 and Q11 pass after each
+of the three parts. Crops are in `.superpowers/sdd/2026-10-25-scrollery-typeset-engine/task-16-visual/`.
+
+### 10.1 The versal's lower swash clears "Amtgard" (`scrollery.css`)
+
+`#BottomTextFlourish` was at `top: 0.95em` of the versal span; it is now `1.20em`, one static offset for
+every hand (the owner accepted uneven space under the m). Measured on real pixels at 1:1: for each of the
+ten hands and each of the three swash drawings (common, rose, jovious), a screenshot of the lettering alone
+and of the swash alone, taking for every text column the gap from its lowest ink to the swash's top ink in
+that column (a window of +-0.05em across columns, for the swash's slope). Em are of the span's font size.
+
+| hand | lowest ink of "Amtgard" | clearance before | clearance after |
+|---|---|---|---|
+| chancery | 1.171 | 0.127 | 0.375 |
+| sharp | 1.043 | 0.127 | 0.375 |
+| pirata | 1.177 | -0.033 | 0.214 |
+| cinzel | 0.983 | -0.007 | 0.241 |
+| gotisch | 1.271 | -0.140 | **0.107 (worst)** |
+| uncial | 1.177 | -0.013 | 0.234 |
+| fondamento | 1.298 | -0.047 | 0.201 |
+| garamond | 1.298 | -0.047 | 0.201 |
+| unicase | 0.930 | 0.047 | 0.294 |
+| metamorphous | 1.244 | 0.007 | 0.254 |
+
+(worst of the three swash drawings per hand). The swash's top ink, measured on the stem, moves from 0.963em
+(common), 0.997em (rose) and 1.084em (jovious) to 1.213, 1.247 and 1.334em: the offset is +0.25em in all three.
+The owner's c25 (gotisch) was 0.14em inside the lettering, c26 (garamond) 0.05em.
+
+**A reading of the brief's criterion.** "The swash's topmost ink is >= 0.08em below the text's lowest ink"
+read literally (the stem's tip against the deepest descender anywhere in the word) needs `top` = 1.365em,
+which the brief's own 1.35em limit rules out. It was read column by column: the swash only meets the
+lettering in the columns it passes under, and the g's descender is not over the stem. 1.20em clears every
+hand by at least 0.107em in that sense (the stem's tip then sits below the baseline of the m, as the crops
+show) and 1.17em was the least that passed 0.08em exactly.
+
+**The engine adapts, as the spec says it does.** `--sc-place-gutter` is measured from the swash's rightmost
+ink in the place's rows; on all 104 corpus cases it, the composition, the swash's scale and every size are
+identical with the swash at 0.95em and at 1.20em (checked by toggling the offset on the same build), so the
+curl still lies in the place's rows and the gutter did not move. `topscore.spec.ts` expected the swash's
+designed contact (the 238 to 262px of section 5); that contact is gone, so it now asserts a low CBtop and
+puts the old offset back for a second capture to prove the mask still reads ink.
+
+### 10.2 A long name no longer drags the issuer and the award down (`HIER_LINE_BONUS`)
+
+The hierarchy compares the award (0.85x) and the place (0.75x) with
+`nameEff = min(name.max, nameSize * (1 + HIER_LINE_BONUS * (lines - 1)))`. The engine
+(`nameEffective`: the award solve, `layoutIssuer`, `enforceHierarchy`), the gate Q1 and spec 6.4.2 / 10.2
+carry the same formula. The versal clamps the real `nameSize`.
+
+**Calibration.** 0.25 (the brief's start) let the award reach 1.42em under a two-line name of 1.34em (c50) and
+1.5em under two-line names of 1.46em: fifteen two-line cases had an award larger than the name's own em
+size. `award <= 0.85 * (1 + b) * name` stays at or under the name for two lines exactly when `b <= 0.176`,
+so the bottom of the allowed range, **0.15**, was taken: no one- or two-line name is out-sized by its award or place, and
+every three- and four-line name is, by design. Four-line c16: award 0.813 -> 1.180em, place 0.718 -> 1.041em;
+c05 (three lines at 0.834em): award 0.709 -> 0.922, place 0.626 -> 0.813; the James x5 hunter case (c31, four lines
+at 1.051): award 0.893 -> 1.295, place 0.788 -> 1.143. All 54 one-line cases are identical in size
+(name, award, place) apart from s20, whose award title text another task repaired. 34 multi-line cases
+change, in the direction expected; one composition flips: **c02 Classic -> Centered** (two lines at 1.225em; the
+place, now 1.057em instead of 0.919, no longer fits Classic's room beside the swash, and Centered fits it).
+c17's name goes 1.487 -> 1.368em because the larger award makes the stack taller and the budget takes a round.
+
+### 10.3 Type keeps a gap from hard-edged artwork (`ART_GAP`)
+
+The profile already held back 30 frame px of clearance from the ink it found, and the solver keeps `SLACK`
+of every width; on s17 (custom r5, zodiac plate, cinzel) the name's first line was 48px from the Pisces
+glyph and 84px from Aries (ink against the plate's ink, measured on screenshots at 1:1: line ink
+519..2022, plate ink at 471 and 2106). `ART_GAP = 0.25` em of the role, kept from a profile edge that is
+narrower than the column, now makes it **90px and 126px** (+42px each side; 0.53em of the name's 1.69em).
+Measured at the other values: 0.10 -> 66/101px, 0.15 -> 74/110, 0.20 -> 82/118.
+
+**How it is applied, and why.** The gap grows with the size, so a line must satisfy
+`s * (w + units * ART_GAP * rootPx) <= allowed`, which is solved in closed form. It is applied *after* the
+candidate is chosen: the first implementation priced it into the choice, and it tipped three cases that sit
+on a line-count tie (c28 two lines at 1.82em became one at 1.17em, s36 two lines at 2.3em one at 1.39em, c12 three lines at
+1.35em two at 0.80em through the budget loop). Chosen on gap-free widths and then sized for the gap, no break and
+no line count changes. The size never goes below the role's minimum (the gap is given up before the text
+overflows) and the budget loop walks the name's ceiling down from the size without the gap
+(`bare`). Classic's lead and place take no gap: Classic is feasible only where the profile is clear across the
+column, so they have no art edge, and **no Classic certificate became Centered because of it**. One flipped
+the other way: **c23 Centered -> Classic** (its name shrinks 3%, and with it the place's ceiling).
+
+Over the 104 cases 36 change by this part alone, almost all by 2 to 7% in the name, the award or the place; the
+largest are c28's name (1.824 -> 1.714em) and c14's (1.595 -> 1.489em). No name changes lines.
+
+### 10.4 Every case whose place size, place lines or composition changed (A + B + C against the sign-off run)
+
+Place size before -> after (all one line, before and after); composition shown only where it flipped.
+Part A alone changes none of them. Most of the list is Part B; the small drops (c01, c07, c19, c36, c37, s05,
+s09, s32, s39) are Part C on a role next to artwork.
+
+c01 1.142->1.099 · c02 0.919->1.057 (Classic->Centered) · c04 1.263->1.3 · c05 0.626->0.813 · c07 1.103->1.052 ·
+c12 1.013->1.291 · c14 1.131->1.132 · c15 1.144->1.3 · c16 0.718->1.004 · c17 1.115->1.291 · c18 1.199->1.3 ·
+c19 1.254->1.2 · c21 1.201->1.3 · c23 1.034->1.006 (Centered->Classic) · c31 0.788->1.095 · c32 1.081->1.3 ·
+c33 0.681->0.783 · c35 1.147->1.3 · c36 0.869->0.833 · c37 1.3->1.288 · c41 0.896->1.024 · c42 0.937->1.011 ·
+c45 1.091->1.255 · c46 0.963->1.107 · c49 1.14->1.3 · c50 1.002->1.152 · x3 1.032->1.101 · s03 1.177->1.3 ·
+s05 1.246->1.176 · s09 0.732->0.709 · s10 1.091->1.255 · s12 0.804->0.925 · s14 1.101->1.266 · s20 1.198->1.3
+(award text repaired by another task) · s23 0.762->0.84 · s26 0.79->0.874 · s30 1.216->1.3 · s31 0.823->0.946 ·
+s32 1.158->1.095 · s35 1.114->1.208 · s39 1.051->1.001 · s40 0.656->0.728 · s42 0.75->0.863 · s50 1.263->1.3.
+

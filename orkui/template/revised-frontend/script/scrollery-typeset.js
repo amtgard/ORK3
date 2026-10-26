@@ -172,6 +172,16 @@
            the real nameSize: it is a size, not a weight. */
         HIER_LINE_BONUS: 0.15,
 
+        /* Clearance kept between type and hard-edged ARTWORK (Task 16), in em of the role
+           being set. The free-space profile already holds 30 frame px back from the ink it
+           found (profile.ts `clearance`), and the solver keeps SLACK of every width, which
+           left the first line of s17 (custom r5, the zodiac rank plate, cinzel,
+           "ALA ATTENDANT EIGHTYFIVE") 48px from the Pisces glyph on one side: clear, and
+           crowded. Applied only where a profile edge is narrower than the column; the
+           column's own edge is a margin, not artwork, and takes none. It is an em amount
+           because the eye reads a gap against the size of the letters beside it. */
+        ART_GAP: 0.25,
+
         /* Break penalties (§6.3.2). Positive discourages a break in the gap, negative
            invites one. They are additive. */
         P_WEAK_END: 60,           /* the word before the gap is a connective: "of |" */
@@ -640,10 +650,16 @@
         function rate(starts, LW, cnt, bpSum, minor) {
             var kk = starts.length, j;
 
-            var sStar = range.max;
+            var sStar = range.max, sGap = range.max;
             for (j = 0; j < kk; j++) {
-                var w = LW[j] * (j === minor ? CONST.MINOR_SCALE : 1) * ctx.rootPx;
-                if (w > 0) { sStar = Math.min(sStar, ctx.allowed(j, minor === 0) / w); }
+                var scale = j === minor ? CONST.MINOR_SCALE : 1;
+                var w = LW[j] * scale * ctx.rootPx;
+                if (w > 0) {
+                    sStar = Math.min(sStar, ctx.allowed(j, minor === 0) / w);
+                    /* Artwork clearance grows with the size, so it is priced as extra
+                       width: s * (w + units * ART_GAP * scale * rootPx) <= allowed. */
+                    sGap = Math.min(sGap, ctx.allowed(j, minor === 0) / (w + ctx.units(j, minor === 0) * CONST.ART_GAP * scale * ctx.rootPx));
+                }
             }
 
             var maxLW = 0;
@@ -662,7 +678,7 @@
             }
             if (minor >= 0) { score -= CONST.MINOR_PENALTY; }
 
-            return { starts: starts.slice(), k: kk, minor: minor, sStar: sStar, score: score };
+            return { starts: starts.slice(), k: kk, minor: minor, sStar: sStar, sGap: sGap, score: score };
         }
 
         function beats(a, b) {
@@ -725,7 +741,12 @@
             b = (j + 1 < c.k ? c.starts[j + 1] : tokens.length) - 1;
             lines.push(joinLine(tokens, c.starts[j], b));
         }
-        return { size: overflow ? lo : c.sStar, lines: lines, minor: c.minor, planned: c.k, score: c.score, overflow: overflow };
+        /* The candidate was CHOSEN on widths without the artwork clearance (sStar), so the
+           gap never changes how a name breaks or how many lines it takes: a tie between a
+           one-line and a two-line setting (c28) would otherwise flip on a few percent of
+           width and halve the name. It then costs size, to sGap, and never past the role's
+           minimum: a gap that does not fit there is given up before the text overflows. */
+        return { size: overflow ? lo : Math.max(c.sGap, Math.min(lo, c.sStar)), bare: overflow ? lo : c.sStar, lines: lines, minor: c.minor, planned: c.k, score: c.score, overflow: overflow };
     }
 
     /*
@@ -755,6 +776,11 @@
      *   y0         where the block's top sits, frame px
      *   rootPx     computed font-size of the root, px
      *   freeWidth  (yTop, yBottom) -> width of the free band, frame px
+     *   gapUnits   optional (yTop, yBottom) -> how many ART_GAPs that width gives up (0 when
+     *              omitted): a line at size s may be no wider than freeWidth - units *
+     *              ART_GAP * s * rootPx, so the size that keeps the gap solves in closed
+     *              form. It lowers the size of the candidate chosen without it; it does
+     *              not take part in the choice (see solutionOf).
      *
      * `size` is the em size of the block's main lines, `lines` the text of each line,
      * `minor` the index of the line set smaller (-1 for none), `planned` the number of
@@ -808,10 +834,18 @@
             if (!(key in cache)) { cache[key] = o.freeWidth(band.top, band.bottom) * (1 - CONST.SLACK); }
             return cache[key];
         }
+        var unitCache = {};
+        function units(j, lineZeroMinor) {
+            if (!o.gapUnits) { return 0; }
+            var band = bandFor(o.y0, o.lineHeight, lo, range.max, o.rootPx, j, lineZeroMinor);
+            var key = band.top + ':' + band.bottom;
+            if (!(key in unitCache)) { unitCache[key] = o.gapUnits(band.top, band.bottom); }
+            return unitCache[key];
+        }
 
         var ctx = {
             role: role, range: range, maxLines: maxLines, measure: o.measure, spaceW: o.spaceW,
-            rootPx: o.rootPx, linePenalty: table, allowed: allowed
+            rootPx: o.rootPx, linePenalty: table, allowed: allowed, units: units
         };
 
         var first = search(tokens, ctx);
@@ -947,18 +981,15 @@
     }
 
     /*
-     * freeWidth(ctx, yTop, yBottom, centred) -> px
+     * freeSpan(ctx, yTop, yBottom) -> { l, r, lArt, rArt }
      *
-     * The width of the page that is clear of the artwork from `yTop` to `yBottom` (frame
-     * px). The profile's bands that the span touches are intersected, then the result is
-     * held inside the column. A centred role can only use what is clear on BOTH sides of
-     * the column centre, so its width is twice the nearer edge's distance from it; any
-     * other role gets the whole free interval. With no profile, or no data in those
-     * bands, the column itself is the free space.
+     * The free interval of the bands the span touches, held inside the column, and whether
+     * each end of it is ARTWORK (a profile edge that is narrower than the column) or the
+     * column's own edge. Only an artwork end takes ART_GAP.
      */
-    function freeWidth(ctx, yTop, yBottom, centred) {
+    function freeSpan(ctx, yTop, yBottom) {
         var col = ctx.column, free = ctx.free;
-        var l = col.left, r = col.right;
+        var l = col.left, r = col.right, lArt = false, rArt = false;
         if (free) {
             var b0 = Math.floor((yTop - free.y0) / free.step);
             var b1 = Math.ceil((yBottom - free.y0) / free.step) - 1;
@@ -967,7 +998,45 @@
                 if (free.L[b] != null && free.L[b] > l) { l = free.L[b]; }
                 if (free.R[b] != null && free.R[b] < r) { r = free.R[b]; }
             }
+            lArt = l > col.left + INK_EPS;
+            rArt = r < col.right - INK_EPS;
         }
+        return { l: l, r: r, lArt: lArt, rArt: rArt };
+    }
+
+    /*
+     * artGapUnits(ctx, yTop, yBottom, centred) -> 0, 1 or 2
+     *
+     * How many ART_GAPs the width of a span loses: a centred role is held by the nearer
+     * edge and loses its gap on both sides of the centre (2), if that edge is artwork; any
+     * other role loses one for each artwork end. Multiply by ART_GAP and the role's size in
+     * px for the amount.
+     */
+    function artGapUnits(ctx, yTop, yBottom, centred) {
+        var sp = freeSpan(ctx, yTop, yBottom), cx = ctx.column.cx;
+        if (!centred) { return (sp.lArt ? 1 : 0) + (sp.rArt ? 1 : 0); }
+        var dl = cx - sp.l, dr = sp.r - cx;
+        if (dl < dr) { return sp.lArt ? 2 : 0; }
+        if (dr < dl) { return sp.rArt ? 2 : 0; }
+        return (sp.lArt || sp.rArt) ? 2 : 0;
+    }
+
+    /*
+     * freeWidth(ctx, yTop, yBottom, centred, gapPx) -> px
+     *
+     * The width of the page that is clear of the artwork from `yTop` to `yBottom` (frame
+     * px). The profile's bands that the span touches are intersected, then the result is
+     * held inside the column. A centred role can only use what is clear on BOTH sides of
+     * the column centre, so its width is twice the nearer edge's distance from it; any
+     * other role gets the whole free interval. With no profile, or no data in those
+     * bands, the column itself is the free space.
+     *
+     * `gapPx` (default 0) is the clearance to keep from artwork, ART_GAP at the role's
+     * size: each artwork edge that bounds the width gives up that much (artGapUnits).
+     */
+    function freeWidth(ctx, yTop, yBottom, centred, gapPx) {
+        var sp = freeSpan(ctx, yTop, yBottom), col = ctx.column, g = gapPx > 0 ? gapPx : 0;
+        var l = sp.l + (sp.lArt ? g : 0), r = sp.r - (sp.rArt ? g : 0);
         if (centred) { return Math.max(0, 2 * Math.min(col.cx - l, r - col.cx)); }
         return Math.max(0, r - l);
     }
@@ -1226,6 +1295,8 @@
      *   y0          the block's top, frame px (default: roleTop)
      *   width       (top, bottom) -> width of the band, frame px (default: the centred
      *               free width over the column)
+     *   gapUnits    (top, bottom) -> ART_GAPs `width` gives up (default: those of the
+     *               default width; none when `width` is supplied)
      *   artPx       width the article takes on the first line, held back from line 0
      *   onSize      called with the size after every write, so the article follows
      */
@@ -1244,6 +1315,9 @@
         var m = measureWords(el, tokens);
         var y0 = x.y0 != null ? x.y0 : roleTop(ctx.award, el);
         var widthOf = x.width || function (top, bottom) { return freeWidth(ctx, top, bottom, true); };
+        /* ART_GAP applies to the default centred width only; a caller that supplies its own
+           `width` (the Classic place's box) says how many gaps it gives up, or none. */
+        var unitsOf = x.gapUnits || (x.width ? null : function (top, bottom) { return artGapUnits(ctx, top, bottom, true); });
         var artPx = x.artPx || 0;
 
         var sol = solveBlock({
@@ -1257,14 +1331,19 @@
             freeWidth: function (top, bottom) {
                 var w = widthOf(top, bottom);
                 return artPx && top === y0 ? Math.max(0, w - artPx) : w;
-            }
+            },
+            gapUnits: unitsOf
         });
 
         /* data-sc-w is the whole line's width, article included: it is what verify and the
            tests hold the printed line to. */
         var allowed = sol.lines.map(function (_, j) {
             var b = bandFor(y0, row.lineHeight, range.min, range.max, ctx.rootPx, j, sol.minor === 0);
-            return widthOf(b.top, b.bottom) * (1 - CONST.SLACK);
+            var u = unitsOf ? unitsOf(b.top, b.bottom) : 0;
+            var scale = (j === sol.minor ? CONST.MINOR_SCALE : 1);
+            /* A gap that could not be kept at the role's minimum is not held against the line. */
+            var held = sol.size > range.min + SIZE_EPS ? 1 : 0;
+            return Math.max(0, widthOf(b.top, b.bottom) * (1 - CONST.SLACK) - held * u * CONST.ART_GAP * sol.size * scale * ctx.rootPx);
         });
         writeLines(el, sol.lines, sol.minor, allowed, src.art);
         var size = setSize(el, sol.size, ctx.rootPx, parentPx);
@@ -1298,6 +1377,11 @@
 
         return {
             size: size,
+            /* The size the block would have without the artwork clearance (shrunk by the same
+               verify ratio). The budget walks the name's ceiling down from this, so that the
+               clearance costs size and nothing else: with it the rounds would start lower, end
+               at a smaller ceiling and tip a name that sits on a line-count tie (c12) over. */
+            bare: sol.size > 0 ? size * (Math.max(sol.bare, sol.size) / sol.size) : size,
             lines: Number(el.getAttribute('data-sc-lines')),
             planned: sol.planned,
             overflow: overflow,
@@ -1938,7 +2022,7 @@
             var cap = Math.min(ccaps.leadMax, Math.max(ccaps.leadMin, placeSize));
             setLeadSize(ctx, A, cap);
             var rect = nodeRect(award, k, A.lead);
-            var avail = rect ? freeWidth(ctx, rect.y0, rect.y1, true) : ctx.column.width;
+            var avail = rect ? freeWidth(ctx, rect.y0, rect.y1, true, CONST.ART_GAP * cap * ctx.rootPx) : ctx.column.width;
             return sizeLead(ctx, A, k, leadM, avail, cap, ccaps.leadMin);
         }
 
@@ -2219,7 +2303,7 @@
         var room = topRoom();
         if (room !== null && stack !== null) {
             for (var round = 0; round < CONST.BUDGET_ROUNDS && stack > room + VERIFY_TOL && fit.name; round++) {
-                var cur = Math.min(nameMaxCap, fit.name.size);
+                var cur = Math.min(nameMaxCap, fit.name.bare);
                 var next = Math.max(CONST.NAME_SHRINK * cur, nameFloor);
                 if (next >= cur - 1e-6) { break; }
                 nameMaxCap = next;
@@ -2276,6 +2360,7 @@
         readContext: readContext,
         measureWords: measureWords,
         freeWidth: freeWidth,
+        artGapUnits: artGapUnits,
         nameEffective: nameEffective,
         layoutTop: layoutTop
     };

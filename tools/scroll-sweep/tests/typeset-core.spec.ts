@@ -182,6 +182,79 @@ test('nameEffective never exceeds name.max', () => {
   }
 });
 
+// Task 16. Type keeps ART_GAP (em of the role) from hard-edged artwork, and only from artwork.
+test('freeWidth: an art edge narrows the width by the gap, a column edge does not', () => {
+  const column = { left: 400, right: 2150, width: 1750, cx: 1275 };
+  // Band 0 (y 400-425): free from 700 to 2150, so the LEFT end is artwork (700 > 400) and the right is the column's.
+  // Band 1: nothing in the way. Band 2: artwork on both sides, 600 and 1950.
+  const free = TS.parseFree('400,25|700,,600|,,1950');
+  const ctx = { column, free };
+  const GAP = TS.CONST.ART_GAP * 100;                      // ART_GAP at a 100px role
+  expect(TS.CONST.ART_GAP).toBe(0.25);
+
+  // Not centred: one gap off the artwork end, none off the column end.
+  expect(TS.freeWidth(ctx, 400, 425, false)).toBe(2150 - 700);
+  expect(TS.freeWidth(ctx, 400, 425, false, GAP)).toBe(2150 - 700 - GAP);
+  expect(TS.artGapUnits(ctx, 400, 425, false)).toBe(1);
+  // Centred: held by the nearer edge, which here is the art edge (575 from the centre against 875).
+  expect(TS.freeWidth(ctx, 400, 425, true)).toBe(2 * (1275 - 700));
+  expect(TS.freeWidth(ctx, 400, 425, true, GAP)).toBe(2 * (1275 - 700 - GAP));
+  expect(TS.artGapUnits(ctx, 400, 425, true)).toBe(2);
+
+  // A band with nothing in it is the column: no art edge, no gap, whatever the gap asked for.
+  expect(TS.freeWidth(ctx, 425, 450, false, GAP)).toBe(1750);
+  expect(TS.freeWidth(ctx, 425, 450, true, GAP)).toBe(1750);
+  expect(TS.artGapUnits(ctx, 425, 450, true)).toBe(0);
+  // No profile at all: the column, untouched.
+  expect(TS.freeWidth({ column, free: null }, 400, 425, true, GAP)).toBe(1750);
+
+  // A centred role held by the COLUMN edge although the far end is artwork takes no gap: the
+  // right edge 2150 is the nearer to the centre of a column shifted right of its art.
+  const skew = { column: { left: 400, right: 2150, width: 1750, cx: 1500 }, free: TS.parseFree('400,25|500|') };
+  expect(TS.freeWidth(skew, 400, 425, true, GAP)).toBe(2 * (2150 - 1500));
+  expect(TS.artGapUnits(skew, 400, 425, true)).toBe(0);
+
+  // Both ends artwork: each gives up a gap, and the centred width loses two.
+  expect(TS.freeWidth(ctx, 450, 475, false, GAP)).toBe(1950 - 600 - 2 * GAP);
+  expect(TS.freeWidth(ctx, 450, 475, true, GAP)).toBe(2 * (1275 - 600 - GAP));
+  // An edge a hair inside the column is the column's (layout rounds to the pixel).
+  const hair = { column, free: TS.parseFree('400,25|400.2|') };
+  expect(TS.artGapUnits(hair, 400, 425, true)).toBe(0);
+});
+
+test('solveBlock: the size that fits gives up ART_GAP per art edge, and a role with none is unchanged', () => {
+  const W = 3000;                                          // one line "AAAA" is 2 em wide, 200px at 1em and 100px root
+  const one = solve('AAAAAAAAAAAA', 'name', W);            // 12 chars: 6em wide
+  const clear = solve('AAAAAAAAAAAA', 'name', W, { gapUnits: () => 0 });
+  expect(clear.size).toBe(one.size);
+  // width 6em * s * 100 + 2 * 0.25 * s * 100 = A  =>  s = A / (600 + 50)
+  const gapped = solve('AAAAAAAAAAAA', 'name', 1000, { gapUnits: () => 2 });
+  const A = 1000 * (1 - TS.CONST.SLACK);
+  expect(gapped.size).toBeCloseTo(A / (600 + 2 * TS.CONST.ART_GAP * 100), 3);
+  const bare = solve('AAAAAAAAAAAA', 'name', 1000);
+  expect(bare.size).toBeCloseTo(A / 600, 3);
+  expect(gapped.size).toBeLessThan(bare.size);
+});
+
+test('solveBlock: the gap costs size, never the break, and never goes below the role minimum', () => {
+  const text = 'Alpha Bravo Charlie Delta Echo Foxtrot Golf Hotel';
+  for (const W of [1000, 1400, 2200, 6000]) {
+    const bare = solve(text, 'name', W);
+    const gapped = solve(text, 'name', W, { gapUnits: () => 2 });
+    expect(gapped.lines, `W=${W}`).toEqual(bare.lines);          // the same candidate wins
+    expect(gapped.planned).toBe(bare.planned);
+    expect(gapped.size).toBeLessThanOrEqual(bare.size + 1e-9);
+    expect(gapped.bare, 'bare is the size without the gap').toBeCloseTo(bare.size, 9);
+  }
+  // A width that fits the text only at the minimum: the gap is given up before the text overflows.
+  const lo = TS.CONST.ROLES.name.min;
+  const tight = solve('AAAAAAAAAAAA', 'name', 6 * lo * 100 / 0.975 + 1);   // 12 chars = 6em, room for lo and a hair
+  const tightGap = solve('AAAAAAAAAAAA', 'name', 6 * lo * 100 / 0.975 + 1, { gapUnits: () => 2 });
+  expect(tight.overflow).toBe(false);
+  expect(tightGap.overflow).toBe(false);
+  expect(tightGap.size).toBeCloseTo(lo, 6);
+});
+
 test('CONST word lists carry the spec 6.3 lists', () => {
   const C = TS.CONST;
   expect(C.HONORIFICS).toHaveLength(35);

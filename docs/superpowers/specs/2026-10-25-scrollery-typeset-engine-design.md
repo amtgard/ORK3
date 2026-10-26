@@ -385,7 +385,7 @@ Each candidate is scored both with and without the minor treatment.
 
 Other constants: `SLACK = 0.025`, `RAGGED = 30`, `WIDOW = 40`, `MINOR_SCALE = 0.72`,
 `MINOR_PENALTY = 6`, `CLASSIC_PLACE_MIN = 0.85`, `ORN_GAP = 0.12em`, `H_TOP_MIN = 0.40`
-of content height (see §6.7), `HIER_LINE_BONUS = 0.15` (§6.4.2).
+of content height (see §6.7), `HIER_LINE_BONUS = 0.15` (§6.4.2), `ART_GAP = 0.25`em (§6.4.3).
 
 Enumeration is exhaustive. Inputs are bounded: a persona is at most 100 characters (≤ 50
 tokens, ≤ 1,225 three-line candidates), and a custom award name at most 64. There is no
@@ -440,6 +440,22 @@ Given the block's top `y0`, line-height factor `lh` and role range:
 - `s* = min(max_eff, min_j A_j / (LW_j · rootPx))` (minor lines use `LW_j · MINOR_SCALE`).
 
 Because the bands are conservative, no iteration is needed.
+
+**Artwork clearance (`ART_GAP = 0.25`, Task 16).** Type keeps `ART_GAP` em of the role being
+set from hard-edged artwork, on top of the profile's own 30px (§7.1) and `SLACK`. It applies
+to a profile edge that is narrower than the column (an *art* edge) and never to the column's
+own edge. A centred role is held by its nearer edge, so if that edge is art it gives the gap
+up on both sides (two units); any other role gives one unit per art end. A line of size `s`
+may be no wider than `A_j − units_j · ART_GAP · s · rootPx`, which gives the size that keeps
+the gap in closed form, `s_gap = min_j A_j / (LW_j · rootPx + units_j · ART_GAP · rootPx)`.
+It is applied **after** the choice: candidates are rated on `s*` without the gap, so the gap
+never changes how a name breaks or how many lines it takes (a tie between one line and two,
+or two and three, would otherwise flip on a few percent of width and halve the name); the
+chosen candidate is then set at `max(s_gap, min(role.min, s*))`, i.e. a gap that does not fit
+at the role's minimum is given up before the text overflows. The budget loop (§6.7) walks the
+name's ceiling down from the size the name would have without the gap. The Classic lead and
+place are untouched: Classic is feasible only where the profile is clear across the column,
+so they have no art edge, and the Centered lead takes the gap at its ceiling size.
 
 ### 6.5 Issuer compositions
 

@@ -114,6 +114,37 @@ test('a short persona takes one line at name.max; a long one takes at least two'
   expect(long.lines.length).toBeGreaterThanOrEqual(2);
 });
 
+// Task 16: type keeps ART_GAP (0.25em of the role) from hard-edged artwork, and from nothing else.
+test('type keeps a gap from artwork edges, and none from the column edge', async ({ page }) => {
+  const name = 'Stormcrow Giggleshadows, the Relentless';
+  const band = (l: number, r: number) => '0,100|' + Array(40).fill(l).join(',') + '|' + Array(40).fill(r).join(',');
+  const lineBox = () => page.evaluate(() => {
+    const lines = [...document.querySelectorAll<HTMLElement>('[data-sc-role="name"] .sc-line')];
+    return lines.map((l) => ({ w: l.scrollWidth, px: parseFloat(getComputedStyle(l).fontSize), allowed: Number(l.dataset.scW) }));
+  });
+
+  // The synthetic column is 475..2075 (1600px). A profile that IS the column is no artwork: the
+  // name is set exactly as it is with no profile at all.
+  await load(page, { name });
+  await lay(page);
+  const none = { size: (await role(page, 'name')).size, lines: (await role(page, 'name')).lines };
+  await load(page, { name, free: band(475, 2075) });
+  await lay(page);
+  expect((await role(page, 'name')).size).toBe(none.size);
+  expect((await role(page, 'name')).lines).toEqual(none.lines);
+
+  // Artwork at 900 and 1650 leaves 750px, and every printed line is at least ART_GAP em narrower
+  // on each side: width <= 750 - 2 * 0.25 * its own size, within a pixel of rounding.
+  await load(page, { name, free: NARROW });
+  await lay(page);
+  const boxes = await lineBox();
+  expect(boxes.length).toBeGreaterThanOrEqual(2);
+  for (const b of boxes) {
+    expect(b.w).toBeLessThanOrEqual(750 - 2 * 0.25 * b.px + 1);
+    expect(b.allowed).toBeLessThanOrEqual(750 - 2 * 0.25 * b.px + 1);
+  }
+});
+
 test('a quoted nickname is never split', async ({ page }) => {
   // The narrow band forces several lines, so a break inside the quotes is on offer.
   await load(page, { name: 'William "Billy Bob" FitzRobert the Younger of Nowhere', free: NARROW });
