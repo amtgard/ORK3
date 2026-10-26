@@ -29,13 +29,23 @@ class Court
     /** The refusal CourtAjax returns when a posted citation is a hidden rec's reason. */
     public const HIDDEN_CITATION_MESSAGE = 'This citation is the text of a Monarchy Only recommendation, which is never published. Edit or clear it to continue.';
 
-    /** Scroll tracking values. 3 = Scrollery Print (goes in the bulk print). */
-    public const SCROLL_NOT_TRACKED = 0;
-    public const SCROLL_CUSTOM      = 1;
+    /**
+     * Scroll/regalia tracking values (never renumbered). 3 = Scrollery Print
+     * (scroll only: goes in the bulk print). Display order is set by
+     * trackingStatusDefinitions(), not by value.
+     */
+    public const SCROLL_PENDING     = 0;
+    public const SCROLL_ASSIGNED    = 1;
     public const SCROLL_COMPLETE    = 2;
     public const SCROLL_SCROLLERY   = 3;
-    /** Regalia tracking: 0 Not Tracked, 1 Needed, 2 Complete (never 3). */
-    public const REGALIA_NEEDED     = 1;
+    public const SCROLL_IN_PROGRESS = 4;
+    public const SCROLL_NOT_NEEDED  = 5;
+    /** Regalia tracking: the same values, minus Scrollery Print (never 3). */
+    public const REGALIA_PENDING     = 0;
+    public const REGALIA_ASSIGNED    = 1;
+    public const REGALIA_COMPLETE    = 2;
+    public const REGALIA_IN_PROGRESS = 4;
+    public const REGALIA_NOT_NEEDED  = 5;
 
     /**
      * Effective is_ladder, including kingdom-original ladders.
@@ -3077,16 +3087,33 @@ class Court
         return $events;
     }
 
+    /**
+     * The single definition of the tracking statuses, in display order:
+     * ['scroll' => [['value','label','hint','group'], ...], 'regalia' => [...]].
+     * Everything that lists, validates or groups a status derives from this.
+     */
+    public static function trackingStatusDefinitions(): array
+    {
+        $pending    = ['value' => self::SCROLL_PENDING, 'label' => 'Pending', 'hint' => 'Needed — nobody has it yet', 'group' => 'pending'];
+        $print      = ['value' => self::SCROLL_SCROLLERY, 'label' => 'Scrollery Print', 'hint' => 'Goes in the bulk print', 'group' => 'print'];
+        $assigned   = ['value' => self::SCROLL_ASSIGNED, 'label' => 'Assigned', 'hint' => 'An artisan has agreed to make it', 'group' => 'assigned'];
+        $inProgress = ['value' => self::SCROLL_IN_PROGRESS, 'label' => 'In Progress', 'hint' => 'Being made', 'group' => 'inprogress'];
+        $complete   = ['value' => self::SCROLL_COMPLETE, 'label' => 'Complete', 'hint' => '', 'group' => 'done'];
+        $notNeeded  = ['value' => self::SCROLL_NOT_NEEDED, 'label' => 'Not Needed', 'hint' => "This line doesn't get one", 'group' => 'notneeded'];
+        return [
+            'scroll'  => [$pending, $print, $assigned, $inProgress, $complete, $notNeeded],
+            'regalia' => [$pending, $assigned, $inProgress, $complete, $notNeeded],
+        ];
+    }
+
     /** Status values a tracking type accepts; [] for an unknown type. */
     public function allowedTrackingStatuses($type)
     {
-        if ($type === 'scroll') {
-            return [self::SCROLL_NOT_TRACKED, self::SCROLL_CUSTOM, self::SCROLL_COMPLETE, self::SCROLL_SCROLLERY];
+        $defs = self::trackingStatusDefinitions();
+        if (!is_string($type) || !isset($defs[$type])) {
+            return [];
         }
-        if ($type === 'regalia') {
-            return [0, self::REGALIA_NEEDED, 2];
-        }
-        return [];
+        return array_column($defs[$type], 'value');
     }
 
     /**

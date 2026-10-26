@@ -54,12 +54,88 @@ final class CourtTrackingStatusTest extends TestCase
     {
         $id = $this->award();
         $rv = (int)$this->row($id)['row_version'];
-        foreach ([0, 1, 2, 3] as $status) {
+        foreach ([0, 1, 2, 3, 4, 5] as $status) {
             $r = $this->court->setAwardTrackingStatus($id, 'scroll', $status, $rv);
             $this->assertSame(0, $r['status']);
             $this->assertSame($status, $r['newStatus']);
             $rv = $r['RowVersion'];
             $this->assertSame($status, (int)$this->row($id)['scroll_status']);
+        }
+    }
+
+    public function testDefinitionsListStatusesInDisplayOrder(): void
+    {
+        $d = Court::trackingStatusDefinitions();
+        $this->assertSame([0, 3, 1, 4, 2, 5], array_column($d['scroll'], 'value'));
+        $this->assertSame([0, 1, 4, 2, 5], array_column($d['regalia'], 'value'));
+        $this->assertSame(
+            ['Pending', 'Scrollery Print', 'Assigned', 'In Progress', 'Complete', 'Not Needed'],
+            array_column($d['scroll'], 'label')
+        );
+        $this->assertSame(
+            ['pending', 'print', 'assigned', 'inprogress', 'done', 'notneeded'],
+            array_column($d['scroll'], 'group')
+        );
+        $this->assertSame(['Pending', 'Assigned', 'In Progress', 'Complete', 'Not Needed'], array_column($d['regalia'], 'label'));
+        $this->assertSame(['pending', 'assigned', 'inprogress', 'done', 'notneeded'], array_column($d['regalia'], 'group'));
+        $this->assertSame(
+            ['Needed — nobody has it yet', 'Goes in the bulk print', 'An artisan has agreed to make it', 'Being made', '', "This line doesn't get one"],
+            array_map(fn ($r) => (string)($r['hint'] ?? ''), $d['scroll'])
+        );
+        $this->assertSame([0, 3, 1, 4, 2, 5], $this->court->allowedTrackingStatuses('scroll'));
+        $this->assertSame([0, 1, 4, 2, 5], $this->court->allowedTrackingStatuses('regalia'));
+        $this->assertSame([], $this->court->allowedTrackingStatuses('bogus'));
+    }
+
+    public function testSetsEachAllowedRegaliaStatus(): void
+    {
+        $id = $this->award();
+        $rv = (int)$this->row($id)['row_version'];
+        foreach ([0, 1, 2, 4, 5] as $status) {
+            $r = $this->court->setAwardTrackingStatus($id, 'regalia', $status, $rv);
+            $this->assertSame(0, $r['status']);
+            $rv = $r['RowVersion'];
+            $this->assertSame($status, (int)$this->row($id)['regalia_status']);
+        }
+    }
+
+    public function testRejectsUnknownStatus(): void
+    {
+        $id = $this->award();
+        $before = $this->row($id);
+        foreach (['scroll', 'regalia'] as $type) {
+            $r = $this->court->setAwardTrackingStatus($id, $type, 6, (int)$before['row_version']);
+            $this->assertSame(1, $r['status']);
+        }
+        $this->assertSame($before, $this->row($id));
+    }
+
+    public function testBackfillMovesUnmakeredAssignedToPending(): void
+    {
+        $a = $this->award(['scroll_status' => 1]);
+        $b = $this->award(['scroll_status' => 1, 'scroll_maker_id' => $this->playerId]);
+        $c = $this->award();
+        $d = $this->award(['regalia_maker_id' => $this->playerId]);
+        // The fixture has no regalia_status override.
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'court_award SET regalia_status = 1 WHERE court_award_id IN (' . $c . ',' . $d . ')');
+        $e = $this->award(['scroll_status' => 2]);
+        $before = [];
+        foreach ([$b, $d, $e] as $i) {
+            $before[$i] = $this->row($i);
+        }
+        $rvA = (int)$this->row($a)['row_version'];
+
+        $sql = file_get_contents(__DIR__ . '/../../db-migrations/2026-10-26-court-tracking-pending-backfill.sql');
+        $sql = preg_replace('/^\s*--.*$/m', '', $sql);
+        foreach (array_filter(array_map('trim', explode(';', $sql))) as $stmt) {
+            $this->fixture->pdo()->exec($stmt);
+        }
+
+        $this->assertSame(0, (int)$this->row($a)['scroll_status']);
+        $this->assertSame($rvA + 1, (int)$this->row($a)['row_version']);
+        $this->assertSame(0, (int)$this->row($c)['regalia_status']);
+        foreach ([$b, $d, $e] as $i) {
+            $this->assertSame($before[$i], $this->row($i));
         }
     }
 

@@ -115,7 +115,7 @@ final class ScrolleryCourtPrintTest extends TestCase
     {
         $ka        = $this->printableKa();
         $printed   = $this->scrolleryLine($ka, ['sort_order' => 10]);
-        $custom    = $this->scrolleryLine($ka, ['sort_order' => 20, 'scroll_status' => Court::SCROLL_CUSTOM]);
+        $custom    = $this->scrolleryLine($ka, ['sort_order' => 20, 'scroll_status' => Court::SCROLL_ASSIGNED]);
         $cancelled = $this->scrolleryLine($ka, ['sort_order' => 30, 'status' => 'cancelled']);
 
         $otherCourt = $this->fixture->createCourt(['kingdom_id' => $this->kid]);

@@ -238,6 +238,12 @@ class Model_Court extends Model
         return Court::HIDDEN_CITATION_MESSAGE;
     }
 
+    // The scroll/regalia tracking status definitions (display order, labels, hints, groups).
+    public function tracking_status_definitions()
+    {
+        return Court::trackingStatusDefinitions();
+    }
+
     public function get_staged_awards($court_id, $caller_uid = 0)
     {
         return $this->_court()->getStagedAwards($court_id, $caller_uid);

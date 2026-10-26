@@ -202,6 +202,7 @@ class Controller_Court extends Controller
         // informational only, it changes no default. See Award::pseudoLadderSiblings.
         $this->data['PseudoLadderSiblings'] = (new Award())->pseudoLadderSiblings();
         $this->data['StatusFlow']   = $statusFlow;
+        $this->data['TrackingStatuses'] = $this->Court->tracking_status_definitions();
         $this->data['CanManage']    = $canManage;
         $this->data['Uid']          = $uid;
         $this->data['HeraldryUrl']  = $heraldryUrl;
