@@ -167,7 +167,7 @@
 
                nameEff = min(name.max, nameSize * (1 + HIER_LINE_BONUS * (lines - 1)))
 
-           so each extra line adds a quarter of the size to what the award and place are
+           so each extra line adds 15% of the size to what the award and place are
            held under. A one-line name is unchanged by construction. The versal stays on
            the real nameSize: it is a size, not a weight. */
         HIER_LINE_BONUS: 0.15,
