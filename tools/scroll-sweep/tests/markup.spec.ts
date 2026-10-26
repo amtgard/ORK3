@@ -13,6 +13,11 @@ const spec = (id: string): FixtureSpec => loadCorpus(CORPUS).find(c => c.id === 
 test('centered rules apply when forced: the swashes go, the rule pair shows', async ({ page }) => {
   const c22 = spec('c22');
   await serveFixtures(page, renderFixtures([c22], 'markup-centered'));
+  // The stylesheet's half of the contract is tested with no script on the page. With the
+  // engine running, data-sc-comp is the engine's output and this test would be forcing an
+  // attribute it owns (the engine may rewrite it at any fit); with no script, the attribute
+  // is the one the server printed and the only thing that changes it is this test.
+  await page.route(/\.js(\?|$)/, route => route.abort());
   await openFixture(page, c22);
 
   const section = page.locator('section.IssuingTextSection');
@@ -44,7 +49,7 @@ test('centered rules apply when forced: the swashes go, the rule pair shows', as
 test('with no script at all the certificate still renders and every sweep block still matches', async ({ page }) => {
   const c22 = spec('c22');
   await serveFixtures(page, renderFixtures([c22], 'markup-nojs'));
-  // Aborts every script, the engine and the old autofit alike: what a blocked-script
+  // Aborts every script, the engine and the autofit alike: what a blocked-script
   // print gets. The fixture documents are .html, so they are unaffected.
   await page.route(/\.js(\?|$)/, route => route.abort());
   await openFixture(page, c22);
@@ -65,26 +70,48 @@ test('with no script at all the certificate still renders and every sweep block 
   expect(await px('.Order')).toBeLessThanOrEqual(0.85 * (await px('.AwardeeName')) + 0.5);
 });
 
-test('the rhythm: "presents" sits close above the name', async ({ page }) => {
-  const c10 = spec('c10');
-  await serveFixtures(page, renderFixtures([c10], 'markup-rhythm'));
-  await openFixture(page, c10);
-
-  const m = await page.evaluate(() => {
+test('the rhythm: the top stack is spaced 0.25 / 0.45 / 0.20 / 0.20 root em (spec 6.7)', async ({ page }) => {
+  // issuer -> "presents", "presents" -> name, name -> details, details -> award line. Read as
+  // painted gaps between boxes, in frame px.
+  const gaps = (p: typeof page) => p.evaluate(() => {
     const award = document.querySelector('.Award') as HTMLElement;
-    const verb = document.querySelector('.IssuingVerb') as HTMLElement;
-    const name = document.querySelector('.AwardeeName') as HTMLElement;
+    const k = award.getBoundingClientRect().width / award.offsetWidth;
+    const box = (sel: string) => {
+      const r = (document.querySelector(sel) as HTMLElement).getBoundingClientRect();
+      return { top: r.top / k, bottom: r.bottom / k };
+    };
+    const place = box('.ScPlace');
+    const verb = box('.IssuingVerb');
+    const name = box('.AwardeeName');
+    const details = box('.AwardDetails');
+    const order = box('section.Order');
     return {
       root: parseFloat(getComputedStyle(award).fontSize),
-      verbBottom: verb.offsetTop + verb.offsetHeight,
-      nameTop: name.offsetTop,
-      sameParent: verb.offsetParent === name.offsetParent,
+      gaps: [verb.top - place.bottom, name.top - verb.bottom, details.top - name.bottom, order.top - details.bottom],
     };
   });
-  expect(m.sameParent).toBe(true);
-  const gap = m.nameTop - m.verbBottom;
-  expect(gap).toBeGreaterThanOrEqual(0);
-  expect(gap).toBeLessThanOrEqual(0.6 * m.root);
+  const want = [0.25, 0.45, 0.20, 0.20];
+  const TOL = 0.02;   // root em: two frame px at the 100px root
+
+  // With no script the gaps are the stylesheet's alone, so all four are the spec's.
+  const c10 = spec('c10');
+  await serveFixtures(page, renderFixtures([c10], 'markup-rhythm'));
+  await page.route(/\.js(\?|$)/, route => route.abort());
+  await openFixture(page, c10);
+  const bare = await gaps(page);
+  bare.gaps.forEach((g, i) => {
+    expect(Math.abs(g / bare.root - want[i]), `no script, gap ${i}: ${(g / bare.root).toFixed(3)} root em, wanted ${want[i]}`).toBeLessThanOrEqual(TOL);
+  });
+
+  // With the engine in charge the type inside the boxes changes size but the gaps between the
+  // boxes must not move. The first gap is left out: in Centered the engine adds room above
+  // "presents" for the rule pair, on purpose.
+  await page.unroute(/\.js(\?|$)/);
+  await openFixture(page, c10);
+  const fitted = await gaps(page);
+  fitted.gaps.slice(1).forEach((g, i) => {
+    expect(Math.abs(g / fitted.root - want[i + 1]), `engine, gap ${i + 1}: ${(g / fitted.root).toFixed(3)} root em, wanted ${want[i + 1]}`).toBeLessThanOrEqual(TOL);
+  });
 });
 
 test('the elastic spacer sits between the award and "for", within its caps', async ({ page }) => {
@@ -227,7 +254,7 @@ test('the render page stamps the heading on <body>, normalised', async ({ page }
   expect(await body()).toBe('auto');
 });
 
-test('the five flourishes carry their ink grids and the old autofit inputs are still there', async ({ page }) => {
+test('the five flourishes carry their ink grids, and only the citation still carries a size formula', async ({ page }) => {
   const c22 = spec('c22');
   await serveFixtures(page, renderFixtures([c22], 'markup-ink'));
   await openFixture(page, c22);
@@ -241,8 +268,10 @@ test('the five flourishes carry their ink grids and the old autofit inputs are s
   const src = (sel: string) => page.locator(sel).getAttribute('src');
   expect(await src('.ScRule--l')).toBe(await src('#BottomTextFlourish'));
   expect(await src('.ScRule--r')).toBe(await src('#BottomTextFlourish'));
-  // The stale-script fallback still reads these until the old passes are deleted.
-  expect(await page.locator('.AwardeeName').getAttribute('data-af-len')).not.toBeNull();
-  expect(await page.locator('[data-scroll-text="issuerName"]').getAttribute('data-af-inv')).not.toBeNull();
+  // The name's and the place's sizes are the engine's, so the old length formulas are no
+  // longer emitted as data; the citation's is, because scrollery-autofit.js still fits it.
+  expect(await page.locator('.AwardeeName').getAttribute('data-af-len')).toBeNull();
+  expect(await page.locator('[data-scroll-text="issuerName"]').getAttribute('data-af-inv')).toBeNull();
+  expect(await page.locator('.Award_Reason').getAttribute('data-af-len')).not.toBeNull();
   expect(await page.locator('.Award').getAttribute('data-sc-free')).toMatch(/^\d+,\d+\|/);
 });

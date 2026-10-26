@@ -180,48 +180,6 @@ const pinFrame = (page: Page) =>
     st.textContent = 'svg[data-scroll-frame] { position: absolute !important; left: 0 !important; top: 0 !important; margin: 0 !important; }';
   });
 
-/* ---- the knotwork library -------------------------------------------------------------- */
-
-/*
- * THE KNOTWORK BORDER'S SYMBOL LIBRARY IS MISSING FROM EVERY FIXTURE BUT THE FIRST.
- *
- * _border.tpl draws the knotwork as eight <use href="#Border-..."> references. The symbols they
- * point at are emitted ONCE PER PAGE by _border_defs.tpl, behind `$GLOBALS['scroll_border_defs']`.
- * That is right for a page, and wrong for bin/scroll-render-fixtures.php, which renders every spec
- * in ONE php process: the first file it writes carries the library and the flag then stays set, so
- * every later file is a standalone page whose <use> points at nothing and draws no border at all.
- * (Checked: of 22 files in a run, one has `id="Border-TopCorner"`; the same is true of every
- * sweep-N shard and of the corpus.) For these profiles that would silently drop the knotwork from
- * battle, dragon, griffon and custom's `knot` border, the one obstacle that is inline SVG.
- *
- * The renderer is not this file's to change, so the library is taken from the one file that has it
- * and put on any page that references it and lacks it. A renderer that emits the library per file
- * makes this a no-op. It must come from a GRIFFON render: the ~47KB griffon plate is only in the
- * page's library when the run holds a griffon (Scrollery_render.tpl decides), so the donor is
- * rendered first, and checked for the plate.
- */
-const DEFS_MARKERS = ['Border-TopCorner', 'Border-BottomCorner', 'Border-Deco-1', 'Border-Griffons'];
-
-/** The library's <svg> out of a rendered fixture, or throws if the file does not carry all of it. */
-function borderDefsFrom(html: string): string {
-  const blocks = html.match(/<svg\b[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/svg>/g) ?? [];
-  const block = blocks.find(b => b.includes('id="Border-TopCorner"'));
-  if (!block) throw new Error('the donor fixture carries no knotwork library (id="Border-TopCorner")');
-  for (const id of DEFS_MARKERS) {
-    if (!block.includes(`id="${id}"`)) throw new Error(`the donor fixture's knotwork library has no ${id}`);
-  }
-  return block;
-}
-
-/** Put the library on a page that draws the knotwork without carrying it. Reports whether it did. */
-const ensureBorderDefs = (page: Page, defs: string): Promise<boolean> =>
-  page.evaluate((html) => {
-    const uses = document.querySelector('use[href^="#Border-"]');
-    if (!uses || document.getElementById('Border-TopCorner')) return false;
-    document.body.insertAdjacentHTML('afterbegin', html);
-    return true;
-  }, defs);
-
 /* ---- one configuration --------------------------------------------------------------- */
 
 type Measured = {
@@ -249,9 +207,8 @@ function ownBorderFiles(r: Recipes): Set<string> {
   return new Set(r.groundsWithOwnBorder.map(g => stem(r.grounds[g])));
 }
 
-async function measure(page: Page, spec: FixtureSpec, own: Set<string>, defs: string, debugName: string): Promise<Measured> {
+async function measure(page: Page, spec: FixtureSpec, own: Set<string>, debugName: string): Promise<Measured> {
   await openFixture(page, spec);
-  await ensureBorderDefs(page, defs);
   await page.evaluate(() => window.scrollTo(0, 0));
   await forceFullScale(page);
   await pinFrame(page);
@@ -479,12 +436,7 @@ test('measure the free space of every certificate design', async ({ context }) =
   const own = ownBorderFiles(readRecipes());
   const specs = new Map<string, FixtureSpec>();
   for (const c of cfgs) specs.set(c.key, fixtureSpecFor(c.kase));
-  // The donor is rendered FIRST: the renderer puts the shared knotwork library in the first file only.
-  const donor = fixtureSpecFor(caseFor('griffon', '', 0));
-  const toRender = new Map<string, FixtureSpec>([[donor.id, donor]]);
-  for (const s of specs.values()) toRender.set(s.id, s);
-  const dir = renderFixtures([...toRender.values()], FIXTURE_TAG);
-  const defs = borderDefsFrom(readFileSync(join(dir, `${donor.id}.html`), 'utf8'));
+  const dir = renderFixtures([...specs.values()], FIXTURE_TAG);
 
   const results = new Map<string, Measured>();
   const errors: string[] = [];
@@ -498,7 +450,7 @@ test('measure the free space of every certificate design', async ({ context }) =
       try {
         let m = byFixture.get(spec.id);
         if (!m) {
-          m = await measure(page, spec, own, defs, `${cfg.key.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')}.png`);
+          m = await measure(page, spec, own, `${cfg.key.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')}.png`);
           byFixture.set(spec.id, m);
         }
         results.set(cfg.key, m);

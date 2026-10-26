@@ -38,14 +38,19 @@ test('the catalogue carries the rank floor, so impossible states are not swept',
   expect(byOrder['crown'].minRank).toBe(0);
 });
 
-test('a certificate renders and the autofit pass has run', async ({ page }) => {
+test('a certificate renders and the typeset engine has run', async ({ page }) => {
   const { byOrder } = await loadCatalogue(page, KINGDOM);
   await openPrint(page, caseZero(), byOrder['battle'], KINGDOM);
-  await expect(page.locator('.Award').first()).toBeVisible();
-  /* data-af-base is written by scrollery-autofit.js the first time it sizes an
-     element. Its presence is the proof the measured pass ran rather than the page
-     having stopped at the server's length-formula guess. */
-  await expect(page.locator('.AwardeeName').first()).toHaveAttribute('data-af-base', /./);
+  const award = page.locator('.Award').first();
+  await expect(award).toBeVisible();
+  /* data-sc-ms and data-sc-budget are written by ScrolleryTypeset.layoutTop() at the end
+     of every top-half solve (the milliseconds it took, and whether the stack fit the
+     vertical budget). Their presence is the proof the engine ran rather than the page
+     having stopped at the server's first guess; and no error attribute means it ran to
+     the end. */
+  await expect(award).toHaveAttribute('data-sc-ms', /^\d/);
+  await expect(award).toHaveAttribute('data-sc-budget', /^(ok|floor)$/);
+  await expect(award).not.toHaveAttribute('data-sc-error', /./);
 });
 
 test('the print URL carries the hand, and the page honours it', async ({ page }) => {

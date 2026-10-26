@@ -572,32 +572,56 @@ test('fallback glyphs are measured, not assumed', async ({ page }) => {
   expect(r.roles.name!.planned).toBe(r.roles.name!.painted);
 });
 
-test('without the engine the old passes still run', async ({ page }) => {
-  // The engine's script never arrives: what a page with a stale cache and no engine would do.
+/* The one console error scrollery-autofit.js prints when the engine is missing. The aborted
+   script also makes the browser log its own failed-request error, which is not this test's. */
+const engineErrors = (page: Page): string[] => {
+  const seen: string[] = [];
+  page.on('console', m => { if (m.type() === 'error' && m.text().startsWith('scrollery-autofit:')) seen.push(m.text()); });
+  return seen;
+};
+
+test('without the engine the top keeps the server first guess, one console error says so, the bottom still fits', async ({ page }) => {
+  // The engine's script never arrives: what a page with a stale cache and no engine would get.
   await serve(page);
   await page.route(/scrollery-typeset\.js(\?|$)/, route => route.abort());
+  const errors = engineErrors(page);
   await openFixture(page, base('c22'));
   const m = await page.evaluate(() => ({
     engine: typeof (window as any).ScrolleryTypeset,
-    base: document.querySelector('.AwardeeName')!.hasAttribute('data-af-base'),
     ms: document.querySelector('.Award')!.hasAttribute('data-sc-ms'),
     lines: document.querySelectorAll('.sc-line').length,
+    nameBase: document.querySelector('.AwardeeName')!.hasAttribute('data-af-base'),
+    nameStyle: document.querySelector('.AwardeeName')!.getAttribute('style'),
+    orderStyle: document.querySelector('section.Order')!.getAttribute('style'),
+    reasonBase: document.querySelector('.Award_Reason')!.hasAttribute('data-af-base'),
   }));
   expect(m.engine).toBe('undefined');
-  expect(m.base).toBe(true);
   expect(m.ms).toBe(false);
   expect(m.lines).toBe(0);
+  // No fallback: nothing wrote a size on the name or the order line, so each is still exactly
+  // the inline size the server printed, and the old per-block baseline is never recorded.
+  expect(m.nameBase).toBe(false);
+  expect(m.nameStyle).toMatch(/^font-size:max\(1\.36em, calc\(2\.55em/);
+  expect(m.orderStyle).toMatch(/^font-size:\d+\.\d{4}em$/);
+  // The bottom half is not the engine's, so it still runs.
+  expect(m.reasonBase).toBe(true);
+  // Reported once for the whole page load, however many fits ran (the page's own, and settle's).
+  expect(errors).toHaveLength(1);
+  expect(errors[0]).toContain('ScrolleryTypeset.layoutTop is missing');
 });
 
-test('deleting ScrolleryTypeset after load falls back to the old passes', async ({ page }) => {
+test('deleting ScrolleryTypeset after load reports once and does not fall back', async ({ page }) => {
+  const errors = engineErrors(page);
   await open(page, base('c22'));
   const m = await page.evaluate(() => {
     delete (window as any).ScrolleryTypeset;
-    const n = (window as any).ScrolleryAutofit.fit(document);
-    return { n, base: document.querySelector('.AwardeeName')!.hasAttribute('data-af-base') };
+    const A = (window as any).ScrolleryAutofit;
+    const n = A.fit(document) + A.fit(document);
+    return { n, nameBase: document.querySelector('.AwardeeName')!.hasAttribute('data-af-base') };
   });
-  expect(m.n).toBe(1);
-  expect(m.base).toBe(true);
+  expect(m.n).toBe(2);
+  expect(m.nameBase).toBe(false);
+  expect(errors).toHaveLength(1);
 });
 
 test('multi-up lifts the floors', async ({ page }) => {

@@ -43,12 +43,49 @@ export type Verdict =
 /** A plate's painted box in frame px, relative to the frame's own corner. */
 export type Box = { x: number; y: number; w: number; h: number };
 
+/**
+ * What is wrong with one policy entry, or null. The same rules as ScrollLayoutUnderlaysTest's
+ * entryProblem(), which is the author-time check; this one is on the sweep's own path, because a
+ * malformed window would not fail anything there, it would quietly clip the wrong rows (a string
+ * `'500'` compares as a number, a y1 past the frame clips nothing, y0 >= y1 hides nothing) and
+ * every Q6 and profile number after it would be about a different layout than the one printed.
+ * A window is a non-empty pattern and two integers with 0 <= y0 < y1 <= 3300. Pure.
+ */
+export function entryProblem(entry: unknown): string | null {
+  if (typeof entry === 'string') return entry === '' ? 'an empty pattern' : null;
+  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return 'neither a string nor a window object';
+  const e = entry as Record<string, unknown>;
+  const extra = Object.keys(e).filter(k => k !== 'pattern' && k !== 'y');
+  if (extra.length) return `a window with keys other than pattern and y (${extra.join(', ')})`;
+  if (typeof e.pattern !== 'string' || e.pattern === '') return 'a window with no pattern';
+  const y = e.y;
+  if (!Array.isArray(y) || y.length !== 2) return 'a window whose y is not [y0, y1]';
+  const [y0, y1] = y;
+  if (!Number.isInteger(y0) || !Number.isInteger(y1)) return `a window whose y0 and y1 are not integers (${JSON.stringify(y)})`;
+  if (y0 < 0 || y1 > FRAME_H) return `a window outside the frame rows 0..${FRAME_H} (${y0}, ${y1})`;
+  if (y0 >= y1) return `a window with y0 >= y1 (${y0}, ${y1})`;
+  return null;
+}
+
+/** Throw a clear error naming the order and the entry when one is malformed. */
+export function assertEntry(order: string, entry: unknown): void {
+  const why = entryProblem(entry);
+  if (why !== null) {
+    throw new Error(`${POLICY_FILE}: order '${order}' has a malformed underlay entry ${JSON.stringify(entry)}: ${why}`);
+  }
+}
+
 /** The policy file as data, read by PHP so a window's array shape arrives as written. */
 export function readPolicy(): Policy {
   const r = spawnSync('php', ['-r', 'echo json_encode(require $argv[1]);', POLICY_FILE], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
   if (r.error) throw new Error(`could not run php: ${r.error.message}`);
   if (r.status !== 0) throw new Error(`reading the underlay policy failed\n${r.stderr}${r.stdout}`);
-  return JSON.parse(r.stdout);
+  const policy = JSON.parse(r.stdout) as Policy;
+  for (const [order, entries] of Object.entries(policy)) {
+    if (!Array.isArray(entries)) throw new Error(`${POLICY_FILE}: order '${order}' is not a list of entries`);
+    entries.forEach(e => assertEntry(order, e));
+  }
+  return policy;
 }
 
 /** Combine the entries that matched one plate: a plain pattern (whole) beats a window. Pure. */
@@ -80,7 +117,10 @@ echo json_encode(array_map(function ($q) use ($policy) {
     });
     if (r.error) throw new Error(`could not run php: ${r.error.message}`);
     if (r.status !== 0) throw new Error(`asking the underlay policy failed\n${r.stderr}${r.stdout}`);
-    (JSON.parse(r.stdout) as Entry[][]).forEach((m, i) => cache.set(`${order}|${ask[i]}`, combine(m)));
+    (JSON.parse(r.stdout) as Entry[][]).forEach((m, i) => {
+      m.forEach(e => assertEntry(order, e));
+      cache.set(`${order}|${ask[i]}`, combine(m));
+    });
   }
   return new Map(files.map(f => [f, cache.get(`${order}|${f}`)!]));
 }

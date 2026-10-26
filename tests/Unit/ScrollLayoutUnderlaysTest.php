@@ -172,6 +172,74 @@ final class ScrollLayoutUnderlaysTest extends TestCase
         $this->assertGreaterThan(0, $seen, 'no windowed entry matched any plate; this test would pass vacuously');
     }
 
+    /**
+     * A window is a claim about the ART: the rows inside it hold the thread that is meant to run
+     * behind the type, and the rows outside it, down to where the foot cluster begins, are empty.
+     * The policy validators above check the shape of the claim and that the file is the frame; only
+     * the pixels can say the claim is still true. If the threads are redrawn above or below the
+     * window, those rows become obstacles the layout cannot see (the profile hides only the window)
+     * or underlays it should have avoided, and nothing else fails.
+     *
+     * "Visible" is GD alpha below 120 (GD runs 0 opaque to 127 transparent), which is a PNG
+     * opacity above about 6%. The threads are at most 186 of 255 opaque (GD alpha about 34), so
+     * they clear the bar easily; anything fainter than the bar is below what prints. A stray
+     * stroke of even a few percent fails this test rather than being waved through.
+     * The checked span ends at row 2400, not at the foot of the frame: the scissors, tape and
+     * numeral cluster is a real obstacle that starts at 2546 and is meant to be there.
+     *
+     * Only the PNG masters are read; the WebP print renditions are derived from them.
+     */
+    public function testAWindowHoldsTheThreadsAndNothingBelowItUntilTheFootCluster(): void
+    {
+        if (!extension_loaded('gd') || !function_exists('imagecreatefrompng')) {
+            $this->markTestSkipped('GD with PNG support is not available, so the window cannot be checked against the art.');
+        }
+
+        $alphaMax = 120;   // GD alpha runs 0 (opaque) to 127 (transparent); below this is visible
+        $clearTo  = 2400;  // the foot cluster's first pixel is at 2546 on every rank
+        $seen     = 0;
+        foreach ($this->policy() as $order => $entries) {
+            foreach ($entries as $entry) {
+                if (!is_array($entry)) {
+                    continue;
+                }
+                [$y0, $y1] = $entry['y'];
+                $masters = array_filter(
+                    $this->plates(),
+                    static fn (string $p): bool => fnmatch($entry['pattern'], $p) && str_ends_with($p, '.png')
+                );
+                foreach ($masters as $file) {
+                    $im = imagecreatefrompng(self::ART . '/' . $file);
+                    $this->assertNotFalse($im, "{$order}: cannot read {$file}");
+                    $w = imagesx($im);
+                    $h = min(imagesy($im), $clearTo);
+                    $stray = [];
+                    for ($y = 0; $y < $h; $y++) {
+                        if ($y >= $y0 && $y < $y1) {
+                            $y = $y1 - 1;   // the window itself may hold anything
+                            continue;
+                        }
+                        for ($x = 0; $x < $w; $x++) {
+                            if (((imagecolorat($im, $x, $y) >> 24) & 0x7F) < $alphaMax) {
+                                $stray[] = "({$x},{$y})";
+                                break 2;
+                            }
+                        }
+                    }
+                    imagedestroy($im);
+                    $this->assertSame(
+                        [],
+                        $stray,
+                        "{$order}: {$file} has a visible pixel at {$stray[0]} outside its window rows {$y0} to {$y1} (checked down to row {$clearTo}); "
+                        . 'the art moved, so the window or the art needs revisiting'
+                    );
+                    $seen++;
+                }
+            }
+        }
+        $this->assertGreaterThan(0, $seen, 'no windowed entry matched any PNG master; this test would pass vacuously');
+    }
+
     public function testPatternsAreRelativeToTheScrollsDirectory(): void
     {
         foreach ($this->policy() as $order => $entries) {

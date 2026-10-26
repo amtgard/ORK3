@@ -6,7 +6,7 @@ import { applyLayer, forceFullScale, markGround } from '../lib/isolate';
 import { count, diffMask, type Mask } from '../lib/mask';
 import { captureLayers } from '../lib/raster';
 import {
-  combine, decide, hidingCss, isFullFrame, plan, readPolicy, resolveUnderlays, setUnderlayCss, tagPlates, underlayCssFor, windowClip,
+  assertEntry, combine, decide, entryProblem, hidingCss, isFullFrame, plan, readPolicy, resolveUnderlays, setUnderlayCss, tagPlates, underlayCssFor, windowClip,
   type Box,
 } from '../lib/underlays';
 
@@ -30,6 +30,21 @@ test('a plain pattern is the whole plate, and it beats a window', () => {
   expect(combine(['a/b.*'])).toEqual({ kind: 'whole', pattern: 'a/b.*' });
   expect(combine([{ pattern: 'a/*', y: [10, 20] }])).toEqual({ kind: 'window', y0: 10, y1: 20, pattern: 'a/*' });
   expect(combine([{ pattern: 'a/*', y: [10, 20] }, 'a/b.*']).kind).toBe('whole');
+});
+
+test('a malformed window is rejected at run time, naming the order and the entry', () => {
+  const win = (y: unknown, extra: object = {}) => ({ pattern: 'garber/rank_?.*', y, ...extra });
+  for (const bad of [
+    '', { pattern: '', y: [1, 2] }, { y: [1, 2] }, win([500, 500]), win([900, 500]), win([-1, 500]), win([500, 3301]),
+    win([500]), win([500, 900, 1200]), win(['500', '900']), win([500.5, 900]), win(undefined), win([500, 900], { x: [0, 1] }), 7, null, ['a'],
+  ]) {
+    expect(entryProblem(bad), JSON.stringify(bad)).not.toBeNull();
+  }
+  for (const good of ['garber/rank_?.*', win([420, 1220]), win([0, 3300])]) {
+    expect(entryProblem(good), JSON.stringify(good)).toBeNull();
+  }
+  expect(() => assertEntry('garber', win([900, 500]))).toThrow(/order 'garber'.*"y":\[900,500\].*y0 >= y1/s);
+  expect(() => assertEntry('garber', win([420, 1220]))).not.toThrow();
 });
 
 test('the policy resolves garber rank plates to the window and nothing else of garber', () => {

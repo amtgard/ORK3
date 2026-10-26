@@ -12,7 +12,10 @@ ORK3_SWEEP_REVERT=1 ORK3_SWEEP_STAGES=NA npm run sweep:scrolls
 `ORK3_SWEEP_REVERT` undoes this branch's four layout changes from outside the page,
 after autofit has run — see the long note on `revertToBefore()` in `lib/drive.ts`. It
 exists because the "before" is not recoverable from git: these files carry unrelated
-in-flight work that the before has to keep.
+in-flight work that the before has to keep. (Since the typeset engine replaced the
+title and ornament passes, `ORK3_SWEEP_REVERT` undoes only the date/signer and
+overflow-wrap changes; this baseline was captured earlier and is frozen, so it is not
+re-captured.)
 
 Verified by reproducing every named defect through it, which is the only thing that
 makes a reconstruction trustworthy: case zero back to 975 ink px of ornament over type,

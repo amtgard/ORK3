@@ -291,11 +291,12 @@ c14, c16, c46, c12, c15, x3), for the sign-off of section 10.3.
    does not see art, so the citation can be pushed onto the foot cluster.
 3. **The underlay policy is a ruling, not the owner's judgement.** Garber's window and every plain pattern
    were adopted by the controller; the owner may revise them (regeneration commands are in the policy's header).
-4. **Two stale tests in `scroll-sweep-unit`:** `markup.spec.ts` "centered rules apply when forced" (it
-   forces `data-sc-comp` by hand under a running engine, which hides the rule pair) and `drive.spec.ts`
-   "a certificate renders and the autofit pass has run" (it looks for `data-af-base`, a marker of the old
-   name pass the engine replaced in T11; `data-sc-ms` is the marker now). Both fail identically before and
-   after this work.
+4. **The two stale tests in `scroll-sweep-unit` were fixed in Task 15b.** `markup.spec.ts` "centered rules apply
+   when forced" now runs with no script on the page (it used to force `data-sc-comp` by hand under a running
+   engine), and `drive.spec.ts` "a certificate renders and the typeset engine has run" asserts the engine's own
+   `data-sc-ms` and `data-sc-budget` instead of `data-af-base`, a marker of the old name pass. The old passes,
+   their CSS and the `data-af-len` / `data-af-inv` inputs for the name and the place are gone; the corpus
+   report and every top-half crop were identical before and after (only per-case milliseconds differ).
 5. **D3's swash-through-name count and D7's gap sizes** were not re-measured per case; their evidence
    here is `CBtop` and the budget, not a count.
 6. **Q6 and Q12 are compared against a policy-blind baseline.** The 144 to 0 and the 140 fixed include the

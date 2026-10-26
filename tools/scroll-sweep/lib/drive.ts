@@ -61,11 +61,12 @@ export function printUrl(c: SweepCase, ch: Choice, kingdomId: number): string {
  *             every certificate clean.
  *   images  — the plates ARE layer A. decode(), not merely `complete`: a decoded
  *             image is one the compositor can paint.
- *   autofit — scrollery-autofit.js sizes the type on document.fonts.ready. A raster
- *             taken before it finishes measures the server's first-guess sizes, which
- *             are not what prints. It is idempotent by construction (every element's
- *             baseline is recorded in data-af-base and restored before each run), so
- *             calling it again here cannot compound.
+ *   autofit — scrollery-autofit.js runs the typeset engine and fits the bottom half on
+ *             document.fonts.ready. A raster taken before it finishes measures the
+ *             server's first-guess sizes, which are not what prints. It is idempotent by
+ *             construction (every element it sizes has its baseline recorded in
+ *             data-af-base and restored before each run, and the engine re-composes from
+ *             the words), so calling it again here cannot compound.
  */
 /*
  * MEASURE THE STATE BEFORE THIS WORK, AT THE SAME RESOLUTION.
@@ -77,14 +78,17 @@ export function printUrl(c: SweepCase, ch: Choice, kingdomId: number): string {
  *
  * Re-capturing the baseline means running the OLD layout behaviour, and the old
  * behaviour is not recoverable from git: these files carry unrelated in-flight work
- * that the "before" must keep. So the four changes are undone from OUTSIDE instead,
- * after the autofit pass has run — which needs no hook in production code and leaves
- * the working tree untouched:
+ * that the "before" must keep. So the changes are undone from OUTSIDE instead, after
+ * the autofit pass has run — which needs no hook in production code and leaves the
+ * working tree untouched:
  *
- *   1. fitTitle()          -> restore #IssuerTitle to the size the server wrote
- *   2. anchorOrnaments()   -> drop the measured `top` back to the CSS default
- *   3. date/signer fits    -> restore both to the size the server wrote
- *   4. overflow-wrap       -> back to `normal` on the signature block
+ *   1. date/signer fits    -> restore both to the size the server wrote
+ *   2. overflow-wrap       -> back to `normal` on the signature block
+ *
+ * Two more were undone here until the typeset engine replaced the passes they undid
+ * (fitTitle() and anchorOrnaments()). Those blocks are the engine's now, and putting
+ * them back to "the size the server wrote" from outside would corrupt its output, so
+ * they are gone. The top-half "before" is the frozen baseline/corpus-before-2026-10-25.json.
  *
  * Set ORK3_SWEEP_REVERT=1 to capture a baseline. It is not a supported way to render a
  * certificate; it exists so that "no case that was clean became dirty" is a measured
@@ -99,11 +103,8 @@ async function revertToBefore(page: Page): Promise<void> {
         el.style.fontSize = el.getAttribute('data-af-inline') || '';
       });
     };
-    restore('#IssuerTitle');
     restore('[data-scroll-text="date"]');
     restore('[data-scroll-text="givenBy"]');
-    document.querySelectorAll<HTMLElement>('#BottomTextFlourish')
-      .forEach(el => el.style.removeProperty('top'));
 
     const id = 'sweep-revert';
     let st = document.getElementById(id) as HTMLStyleElement | null;
