@@ -157,4 +157,37 @@ final class CourtTrackingStatusTest extends TestCase
         $this->assertSame([$id], $r['Stale']);
         $this->assertSame(1, (int)$this->row($id)['scroll_status']);
     }
+
+    public function testCompleteDeduplicatesIds(): void
+    {
+        $id = $this->award();
+        $this->setScroll($id, 3);
+        $rv    = (int)$this->row($id)['row_version'];
+        $lines = $this->lines([$id, $id]);
+        $r = $this->court->completePrintedScrolls($this->courtId, $lines);
+        $this->assertSame([$id], $r['Completed']);
+        $this->assertSame([], $r['Stale']);
+        $this->assertSame(2, (int)$this->row($id)['scroll_status']);
+        $this->assertSame($rv + 1, (int)$this->row($id)['row_version']);
+    }
+
+    public function testCompleteIgnoresNonArrayElements(): void
+    {
+        $id = $this->award();
+        $this->setScroll($id, 3);
+        $lines = array_merge(['junk', 7, null], $this->lines([$id]), [false]);
+        // phpunit.xml sets failOnWarning="false", so trap any warning ourselves. Before
+        // the fix each junk element was read as line 0 and reported in Stale.
+        set_error_handler(static function (int $no, string $msg): bool {
+            throw new ErrorException($msg, 0, $no);
+        });
+        try {
+            $r = $this->court->completePrintedScrolls($this->courtId, $lines);
+        } finally {
+            restore_error_handler();
+        }
+        $this->assertSame([$id], $r['Completed']);
+        $this->assertSame([], $r['Stale']);
+        $this->assertSame(2, (int)$this->row($id)['scroll_status']);
+    }
 }

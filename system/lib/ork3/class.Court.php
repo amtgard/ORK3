@@ -3114,14 +3114,34 @@ class Court
      * saw it), so a chip a peer changed mid-print is left alone and reported
      * in Stale.
      *
+     * The posted list is a request: elements that are not arrays are ignored, a
+     * repeated id keeps its first entry (so a line is completed, and its
+     * row_version bumped, at most once), and the list is capped at
+     * Scroll::MAX_PRINT_RUN, the most one print run can hold. Ids past the cap
+     * are neither completed nor reported as stale.
+     *
      * @param array $lines [['CourtAwardId' => int, 'RowVersion' => int], ...]
      */
     public function completePrintedScrolls($courtId, array $lines)
     {
+        $run = [];
+        foreach ($lines as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+            $id = (int)($line['CourtAwardId'] ?? 0);
+            if (isset($run[$id])) {
+                continue;
+            }
+            if (count($run) >= Scroll::MAX_PRINT_RUN) {
+                break;
+            }
+            $run[$id] = (int)($line['RowVersion'] ?? 0);
+        }
+
         $completed = [];
         $stale     = [];
-        foreach ($lines as $line) {
-            $id = (int)($line['CourtAwardId'] ?? 0);
+        foreach ($run as $id => $rowVersion) {
             $this->db->Clear();
             $rs = $this->db->DataSet(
                 'UPDATE ' . DB_PREFIX . 'court_award
@@ -3129,7 +3149,7 @@ class Court
                   WHERE court_award_id = ' . $id . '
                     AND court_id = ' . (int)$courtId . '
                     AND scroll_status = ' . self::SCROLL_SCROLLERY . '
-                    AND row_version = ' . (int)($line['RowVersion'] ?? 0)
+                    AND row_version = ' . $rowVersion
             );
             if ($rs && $rs->Size() == 1) {
                 $completed[] = $id;

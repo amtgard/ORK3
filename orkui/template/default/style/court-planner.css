@@ -300,7 +300,7 @@ html[data-theme="dark"] .cp-toast-info { background: #2b6cb0; }
    so splitting the block would only add risk for no behavior change. */
 @media (pointer: coarse) {
     /* NOTE: the status-chip and reorder-arrow touch sizes are deliberately NOT here.
-       Above 600px .cp-row-grid is still the fixed spreadsheet grid (…118px 96px 22px
+       Above 600px .cp-row-grid is still the fixed spreadsheet grid (…132px 96px 22px
        with an 8px column-gap), so 44px controls overflow their tracks and the scroll and
        regalia pills overlap — on any touch device at tablet width. Those rules live in the
        @media (max-width: 600px) block instead, where the grid has already collapsed to

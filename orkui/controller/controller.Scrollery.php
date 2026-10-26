@@ -517,6 +517,8 @@ class Controller_Scrollery extends Controller
             $this->record_print(null, $scroll, $viewerId);
         }
 
+        // Keyed by court-award id, not by the label: two lines for the same person and
+        // the same award share a label, and keying by it merged them into one entry.
         $skipped = [];
         foreach ($run['Skipped'] as $caId => $reason) {
             $line  = $run['Lines'][$caId] ?? [];
@@ -524,7 +526,10 @@ class Controller_Scrollery extends Controller
                 trim((string) ($line['Persona'] ?? '')),
                 trim((string) ($line['AwardName'] ?? '')),
             ], 'strlen'));
-            $skipped[$label !== '' ? $label : 'Court line ' . (int) $caId] = $reason;
+            $skipped[(int) $caId] = [
+                'Label'  => $label !== '' ? $label : 'Court line ' . (int) $caId,
+                'Reason' => (string) $reason,
+            ];
         }
 
         $this->render_bare('Scrollery_render.tpl', [

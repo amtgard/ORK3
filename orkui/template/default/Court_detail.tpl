@@ -1050,8 +1050,6 @@ html[data-theme="dark"] .cp-btn-skip:hover { background: #2d3748; color: #e2e8f0
 html[data-theme="dark"] .cp-btn-grant  { background: #276749; color: #fff; }
 html[data-theme="dark"] .cp-btn-grant:hover { background: #22543d; }
 
-/* Tracking icons — status 0 (gray) needs to recede on dark bg */
-
 /* Empty state */
 html[data-theme="dark"] .cp-award-empty { color: #4a5568; }
 
@@ -3200,6 +3198,23 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
     var cpPendingRun = null;
     var cpPrintBusy  = false;
 
+    // The officer's own guarded write to a printed line moves its row_version, and
+    // Yes would then read the line as "changed since printing". Every guarded writer
+    // calls this on success: the run follows the line only when the write was sent
+    // with the run's own token, so a peer's change in between still reads as stale.
+    // A line this officer moved off Scrollery Print is still refused by the server.
+    function cpPendingRunAdvance(caid, sentRv, newRv) {
+        if (!cpPendingRun) return;
+        var id = parseInt(caid, 10) || 0;
+        for (var i = 0; i < cpPendingRun.length; i++) {
+            var l = cpPendingRun[i];
+            if (l.CourtAwardId === id) {
+                if (l.RowVersion === (parseInt(sentRv, 10) || 0)) l.RowVersion = parseInt(newRv, 10) || 0;
+                return;
+            }
+        }
+    }
+
     function cpPlural(n, one, many) { return n === 1 ? one : many; }
     function cpSkippedItem(s) {
         return (s.Persona || 'Unknown player') + ' — ' + (s.AwardName || 'Unknown award') + ': ' + (s.Reason || '');
@@ -3243,7 +3258,8 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
                 return;
             }
             var ids = printable.map(function(p) { return parseInt(p.CourtAwardId, 10) || 0; });
-            var url = uir + 'Scrollery/court/' + courtId + '&lines=' + ids.join(',');
+            // &print=1: the render page opens the print dialog itself once its fonts load.
+            var url = uir + 'Scrollery/court/' + courtId + '&lines=' + ids.join(',') + '&print=1';
             var opened = false;
             if (tab && !tab.closed) {
                 try { tab.location.href = url; opened = true; } catch (e) {}
@@ -3504,10 +3520,15 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
             fd.append('CourtAwardId', caid);
             fd.append('Type', type);
             fd.append('Status', st);
-            fd.append('RowVersion', cpGetRowVersion(caid));
+            var sentRv = cpGetRowVersion(caid);
+            fd.append('RowVersion', sentRv);
             return post('CourtAjax/set_award_tracking_status', fd).then(function(d) {
                 chip.removeAttribute('aria-busy');
-                if (d && d.status === 0) { cpSetLineTracking(caid, type, d.newStatus, d.RowVersion); return; }
+                if (d && d.status === 0) {
+                    cpPendingRunAdvance(caid, sentRv, d.RowVersion);
+                    cpSetLineTracking(caid, type, d.newStatus, d.RowVersion);
+                    return;
+                }
                 if (d && d.status === 9) { cpStale(caid); return; }
                 if (!d || !d._postFailed) cpAlert((d && d.error) || 'Could not update tracking status.');
             });
@@ -3664,13 +3685,15 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         fd.append('ScrollMakerId',  scrollMakerEl  ? (parseInt(scrollMakerEl.value,  10) || 0) : 0);
         fd.append('RegaliaMakerId', regaliaMakerEl ? (parseInt(regaliaMakerEl.value, 10) || 0) : 0);
         // S5 optimistic lock: thread our last-known row_version so a stale save is rejected.
-        fd.append('RowVersion',    cpGetRowVersion(caid));
+        var sentRv = cpGetRowVersion(caid);
+        fd.append('RowVersion',    sentRv);
         post('CourtAjax/update_award', fd).then(function(d) {
             if (d && d.status === 9) { cpStale(caid); return; }
             if (d.status === 0) {
                 // Guarded write won: the server row is now old+1. update_award does not
                 // return the new token, so bump locally (the heartbeat also reconciles it).
                 cpBumpRowVersion(caid);
+                cpPendingRunAdvance(caid, sentRv, sentRv + 1);
                 // Update Pass-to-Local badge in row header — but ONLY when this
                 // save actually carried the flag. On a kingdom court the checkbox
                 // does not render, so ptl is a meaningless 0; syncing on it would
@@ -4143,7 +4166,8 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         fd.append('PublicComment', reason);
         fd.append('Rank',          rank);
         // S5 optimistic lock: thread our last-known row_version.
-        fd.append('RowVersion', cpGetRowVersion(caid));
+        var sentRv = cpGetRowVersion(caid);
+        fd.append('RowVersion', sentRv);
         post('CourtAjax/grant_award', fd).then(function(d) {
             btn.disabled = false;
             if (d && d.status === 9) { cpStale(caid); cpCloseGrantModal(); return; }
@@ -4151,6 +4175,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
                 var a = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
                 if (a) { a.PublicComment = reason; a.Rank = rank; a.GivenByMundaneId = giverId; }
                 cpBumpRowVersion(caid);
+                cpPendingRunAdvance(caid, sentRv, sentRv + 1);
                 cpSetRowStatus(caid, 'staged');
                 if (typeof d.staged_count !== 'undefined') cpUpdateStagedIndicator(d.staged_count);
                 cpCloseGrantModal();
@@ -4181,11 +4206,13 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         var fd = new FormData();
         fd.append('CourtAwardId', caid);
         // S5 optimistic lock: thread our last-known row_version.
-        fd.append('RowVersion', cpGetRowVersion(caid));
+        var sentRv = cpGetRowVersion(caid);
+        fd.append('RowVersion', sentRv);
         post('CourtAjax/skip_award', fd).then(function(d) {
             if (d && d.status === 9) { cpStale(caid); return; }
             if (d.status === 0) {
                 cpBumpRowVersion(caid);
+                cpPendingRunAdvance(caid, sentRv, sentRv + 1);
                 cpSetRowStatus(caid, 'cancelled');
             } else if (!d._postFailed) {
                 cpAlert(d.error || 'Could not skip award.');
@@ -4200,11 +4227,13 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         var fd = new FormData();
         fd.append('CourtAwardId', caid);
         fd.append('Status', 'planned');
-        fd.append('RowVersion', cpGetRowVersion(caid));
+        var sentRv = cpGetRowVersion(caid);
+        fd.append('RowVersion', sentRv);
         post('CourtAjax/set_award_status', fd).then(function(d) {
             if (d && d.status === 9) { cpStale(caid); return; }
             if (d.status === 0) {
                 cpBumpRowVersion(caid);
+                cpPendingRunAdvance(caid, sentRv, sentRv + 1);
                 cpSetRowStatus(caid, 'planned');
             } else if (!d._postFailed) {
                 cpAlert(d.error || 'Could not un-skip the award.');
