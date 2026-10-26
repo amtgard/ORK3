@@ -6441,6 +6441,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         if (document.querySelector('.cp-award-row-expand.open')) return true;
         if (cpTrackMenuChip) return true;   // the scroll/regalia picker is open
         if (cpDrag) return true;            // a drag-reorder is moving a row
+        if (cpPrintingListActive) return true;   // its exit restores a pre-toggle row snapshot
         if (document.querySelector('.ork-dialog-overlay')) return true;   // a confirm (remove note/award/artisan)
         return false;
     }
