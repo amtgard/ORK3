@@ -29,6 +29,14 @@ class Court
     /** The refusal CourtAjax returns when a posted citation is a hidden rec's reason. */
     public const HIDDEN_CITATION_MESSAGE = 'This citation is the text of a Monarchy Only recommendation, which is never published. Edit or clear it to continue.';
 
+    /** Scroll tracking values. 3 = Scrollery Print (goes in the bulk print). */
+    public const SCROLL_NOT_TRACKED = 0;
+    public const SCROLL_CUSTOM      = 1;
+    public const SCROLL_COMPLETE    = 2;
+    public const SCROLL_SCROLLERY   = 3;
+    /** Regalia tracking: 0 Not Tracked, 1 Needed, 2 Complete (never 3). */
+    public const REGALIA_NEEDED     = 1;
+
     /**
      * Effective is_ladder, including kingdom-original ladders.
      *
@@ -3042,6 +3050,85 @@ class Court
         );
 
         return ['status' => 0, 'newStatus' => $nextStatus];
+    }
+
+    /** Status values a tracking type accepts; [] for an unknown type. */
+    public function allowedTrackingStatuses($type)
+    {
+        if ($type === 'scroll') {
+            return [self::SCROLL_NOT_TRACKED, self::SCROLL_CUSTOM, self::SCROLL_COMPLETE, self::SCROLL_SCROLLERY];
+        }
+        if ($type === 'regalia') {
+            return [0, self::REGALIA_NEEDED, 2];
+        }
+        return [];
+    }
+
+    /**
+     * Explicit, optimistic-locked write of a line's scroll_status/regalia_status.
+     * Scrollery Print (scroll 3) is printed by the system, so any assigned
+     * scroll maker is cleared with it.
+     */
+    public function setAwardTrackingStatus($courtAwardId, $type, $status, $rowVersion)
+    {
+        $status = (int)$status;
+        if (!in_array($status, $this->allowedTrackingStatuses($type), true)) {
+            return ['status' => 1, 'error' => 'Invalid type or status'];
+        }
+        $id = (int)$courtAwardId;
+
+        $sets = $type . '_status = ' . $status . ', row_version = row_version + 1';
+        if ($type === 'scroll' && $status === self::SCROLL_SCROLLERY) {
+            $sets .= ', scroll_maker_id = NULL';
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_award SET ' . $sets
+            . ' WHERE court_award_id = ' . $id . ' AND row_version = ' . (int)$rowVersion
+        );
+        if ($rs && $rs->Size() == 1) {
+            return ['status' => 0, 'newStatus' => $status, 'RowVersion' => (int)$rowVersion + 1];
+        }
+
+        // 0 rows: either the line is gone or someone else moved its row_version.
+        $this->db->Clear();
+        $chk = $this->db->DataSet('SELECT court_award_id FROM ' . DB_PREFIX . 'court_award WHERE court_award_id = ' . $id);
+        if (!$chk || !$chk->Next()) {
+            return ['status' => 1, 'error' => 'Award not found'];
+        }
+        return ['status' => 9, 'stale' => true];
+    }
+
+    /**
+     * Flip printed Scrollery lines (scroll_status 3) to Complete. Each line is
+     * its own guarded UPDATE (this court, still 3, row_version as the client
+     * saw it), so a chip a peer changed mid-print is left alone and reported
+     * in Stale.
+     *
+     * @param array $lines [['CourtAwardId' => int, 'RowVersion' => int], ...]
+     */
+    public function completePrintedScrolls($courtId, array $lines)
+    {
+        $completed = [];
+        $stale     = [];
+        foreach ($lines as $line) {
+            $id = (int)($line['CourtAwardId'] ?? 0);
+            $this->db->Clear();
+            $rs = $this->db->DataSet(
+                'UPDATE ' . DB_PREFIX . 'court_award
+                    SET scroll_status = ' . self::SCROLL_COMPLETE . ', row_version = row_version + 1
+                  WHERE court_award_id = ' . $id . '
+                    AND court_id = ' . (int)$courtId . '
+                    AND scroll_status = ' . self::SCROLL_SCROLLERY . '
+                    AND row_version = ' . (int)($line['RowVersion'] ?? 0)
+            );
+            if ($rs && $rs->Size() == 1) {
+                $completed[] = $id;
+            } else {
+                $stale[] = $id;
+            }
+        }
+        return ['status' => 0, 'Completed' => $completed, 'Stale' => $stale];
     }
     // -----------------------------------------------------------------------
     // Court Report (public, read-only) — see docs/superpowers/specs/2026-05-28-court-report-design.md

@@ -193,6 +193,16 @@ class Model_Court extends Model
         return $this->_court()->updateAwardTrackingStatus($courtAwardId, $type);
     }
 
+    public function set_award_tracking_status($courtAwardId, $type, $status, $rowVersion)
+    {
+        return $this->_court()->setAwardTrackingStatus($courtAwardId, $type, $status, $rowVersion);
+    }
+
+    public function complete_printed_scrolls($courtId, array $lines)
+    {
+        return $this->_court()->completePrintedScrolls($courtId, $lines);
+    }
+
     public function court_has_award($court_id, $mundane_id, $kingdomaward_id, $rank)
     {
         return $this->_court()->courtHasAward($court_id, $mundane_id, $kingdomaward_id, $rank);

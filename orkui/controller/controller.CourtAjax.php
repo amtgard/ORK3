@@ -1203,4 +1203,52 @@ class Controller_CourtAjax extends Controller
         $this->jsonOut($result);
     }
 
+    // -----------------------------------------------------------------------
+    // set_award_tracking_status
+    // POST: CourtAwardId, Type, Status, RowVersion
+    // -----------------------------------------------------------------------
+    public function set_award_tracking_status($p = null)
+    {
+        $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
+        if (!valid_id($court_award_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        }
+
+        $court_id = $this->Court->get_court_award_court_id($court_award_id);
+        if (!$court_id) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        }
+
+        $this->requireCourtAuth($court_id);
+
+        $result = $this->Court->set_award_tracking_status(
+            $court_award_id,
+            (string)($_POST['Type'] ?? ''),
+            (int)($_POST['Status'] ?? -1),
+            (int)($_POST['RowVersion'] ?? 0)
+        );
+        $this->jsonOut($result);
+    }
+
+    // -----------------------------------------------------------------------
+    // complete_printed_scrolls
+    // POST: CourtId, Lines (JSON: [{CourtAwardId, RowVersion}, ...])
+    // -----------------------------------------------------------------------
+    public function complete_printed_scrolls($p = null)
+    {
+        $court_id = (int)($_POST['CourtId'] ?? 0);
+        if (!valid_id($court_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid court.']);
+        }
+
+        $this->requireCourtAuth($court_id);
+
+        $lines = json_decode((string)($_POST['Lines'] ?? ''), true);
+        if (!is_array($lines)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid lines.']);
+        }
+
+        $this->jsonOut($this->Court->complete_printed_scrolls($court_id, $lines));
+    }
+
 }
