@@ -105,8 +105,10 @@
     function paint(select) {
         var opt = select && select.selectedOptions && select.selectedOptions[0];
         var fam = familyOf(opt);
-        /* One face, the chosen one. The other nine wait for loadSpecimens(). */
-        if (fam) { select.style.fontFamily = fam; }
+        /* One face, the chosen one. The other nine wait for loadSpecimens(). An option
+           with NO family (the signature picker's "Match the lettering") clears it, so
+           moving back to it does not leave the previous face on the closed control. */
+        select.style.fontFamily = fam;
     }
 
     /*
@@ -271,7 +273,7 @@
             var opt = select.options[select.selectedIndex];
             trigger.querySelector('.sc-hand-label').textContent = opt ? opt.textContent : '';
             var fam = familyOf(opt);
-            if (fam) { trigger.querySelector('.sc-hand-label').style.fontFamily = fam; }
+            trigger.querySelector('.sc-hand-label').style.fontFamily = fam;
             for (var i = 0; i < items.length; i++) {
                 var on = i === select.selectedIndex;
                 items[i].setAttribute('aria-selected', on ? 'true' : 'false');
@@ -583,6 +585,94 @@
 
     global.ScrolleryHeading = { label: headingLabel, bind: bindHeading };
 
+    /* ----------------------------------------------------------------------
+     * The signature hand — the typeface of the given-by line.
+     *
+     * The same kind of choice as the hand above and kept beside it for that reason: a
+     * per-PRINT presentation preference, remembered per BROWSER ('sc-sig'), carried to
+     * the print page as &sig=, and never stored on the award. The vocabulary is
+     * scroll-recipes.php ('signatureHands'), the faces and the [data-scroll-sig] rules
+     * are style/scrollery-signature.css, and it reuses the hand's listbox
+     * (enhance/paint/armSpecimens above) because "each option drawn in its own face" is
+     * the whole point of this picker too.
+     *
+     * Kept as its own small store rather than parameterising the hand's: the hand's
+     * get/set/bind are tangled up with the page-level default and the &face= rule that
+     * four surfaces depend on, and a signature picker is not worth a regression there.
+     * -------------------------------------------------------------------- */
+    var SKEY = 'sc-sig';
+    var sigKeys = [];
+    var sigFallback = 'hand';
+
+    function sigKnown(key) { return !!key && sigKeys.indexOf(key) !== -1; }
+
+    function sigGet() {
+        try {
+            var v = global.localStorage.getItem(SKEY);
+            return sigKnown(v) ? v : sigFallback;
+        } catch (e) {
+            return sigFallback;       /* blocked storage: see get() */
+        }
+    }
+
+    function sigSet(key) {
+        if (!sigKnown(key)) { return sigFallback; }
+        try { global.localStorage.setItem(SKEY, key); } catch (e) { /* see get() */ }
+        return key;
+    }
+
+    /* The CSS family behind a key, read off the <select>'s own option so this file
+       never restates the vocabulary. '' for the default. */
+    function sigFamily(select, key) {
+        var o = select && select.querySelector('option[value="' + key + '"]');
+        return (o && o.getAttribute('data-face-family')) || '';
+    }
+
+    /*
+     * Re-letter the signature on `el` (the stage or <body>) and re-measure it.
+     *
+     * The face is requested explicitly BEFORE the fit. document.fonts.ready is not
+     * enough on its own: it is already resolved at the moment of the attribute swap
+     * (nothing has started loading — a face only loads once style recalc finds text
+     * that uses it), so a fit queued behind it would measure the fallback face. The fit
+     * has to wait on the one load that this swap is about to cause. Failures are
+     * swallowed: a face that cannot load falls back, and the fit still runs.
+     */
+    function sigApply(el, key, root, select) {
+        if (!el || !sigKnown(key)) { return; }
+        el.setAttribute('data-scroll-sig', key);
+
+        var af = global.ScrolleryAutofit;
+        if (!af) { return; }
+
+        var fam = sigFamily(select, key);
+        var loading = (fam && doc.fonts && doc.fonts.load)
+            ? doc.fonts.load('16px "' + fam + '"')
+            : Promise.resolve();
+        loading.then(function () {}, function () {}).then(function () {
+            af.fit(root || doc);
+            if (af.reportClipping) { af.reportClipping(root || doc); }
+        });
+    }
+
+    function sigBind(select, onChange) {
+        if (!select) { return; }
+
+        var initial = sigGet();
+        if (sigKnown(initial)) { select.value = initial; }
+
+        armSpecimens(select);
+        enhance(select);
+        paint(select);
+
+        select.addEventListener('change', function () {
+            var key = sigSet(select.value);
+            select.value = key;
+            paint(select);
+            if (typeof onChange === 'function') { onChange(key); }
+        });
+    }
+
     global.ScrolleryHand = {
         /* init(keys, defaultFace) — called by each page from Scroll::Hands(). */
         init: function (list, def) {
@@ -601,6 +691,22 @@
         /* paint(select) -> void. Draw the closed control in the face it is showing. */
         paint: paint,
         apply: apply,
-        decorate: decorate
+        decorate: decorate,
+        /* The signature hand: sig.init(keys, default), get/set/known, bind(select,
+           onChange), apply(el, key, root, select), decorate(url, key). */
+        sig: {
+            KEY: SKEY,
+            init: function (list, def) {
+                sigKeys = Array.isArray(list) ? list.slice() : [];
+                if (sigKnown(def)) { sigFallback = def; }
+            },
+            known: sigKnown,
+            get: sigGet,
+            set: sigSet,
+            bind: sigBind,
+            apply: sigApply,
+            /* Always names the key, as face does, so a URL says what the preview showed. */
+            decorate: function (url, key) { return sigKnown(key) ? setParam(url, 'sig', key) : url; }
+        }
     };
 }(window, document));

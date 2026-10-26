@@ -508,6 +508,49 @@ class Scroll extends Ork3
         return self::Hands()[self::NormaliseHand($face)]['fonts'] ?? [];
     }
 
+    /**
+     * The signature hand every surface falls back to: none. The given-by line stays in
+     * the certificate's own text face, which is what every certificate printed before
+     * the picker existed did.
+     */
+    public const DEFAULT_SIGNATURE_HAND = 'hand';
+
+    /**
+     * The signature hands, keyed by the value that goes in &sig= and
+     * [data-scroll-sig]. See the long note on 'signatureHands' in scroll-recipes.php.
+     *
+     * @return array<string, array{label:string, family:string, file:string, scale:float, fonts:list<string>}>
+     */
+    public static function SignatureHands(): array
+    {
+        return self::Recipes()['signatureHands'];
+    }
+
+    /**
+     * A requested signature hand reduced to one this installation ships — an ALLOWLIST,
+     * as NormaliseHand() is, because the value lands in an HTML attribute and selects a
+     * font. Case and surrounding whitespace are forgiven; anything else, including a
+     * value with junk after a valid word, is the default rather than a guess.
+     */
+    public static function NormaliseSignatureHand(?string $v): string
+    {
+        $key = strtolower(trim((string) $v));
+
+        return isset(self::SignatureHands()[$key]) ? $key : self::DEFAULT_SIGNATURE_HAND;
+    }
+
+    /**
+     * The woff2 filenames one signature hand needs preloaded: its own face, and nothing
+     * for the default. Answers through NormaliseSignatureHand(), so it cannot name a
+     * file the installation does not ship.
+     *
+     * @return list<string>
+     */
+    public static function SignatureHandFonts(?string $v): array
+    {
+        return self::SignatureHands()[self::NormaliseSignatureHand($v)]['fonts'] ?? [];
+    }
+
     /** What every surface falls back to: let the engine choose. */
     public const DEFAULT_HEADING = 'auto';
 

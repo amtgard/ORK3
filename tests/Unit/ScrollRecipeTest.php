@@ -337,6 +337,124 @@ final class ScrollRecipeTest extends TestCase
         $this->assertSame(Scroll::Hands()['sharp']['fonts'], Scroll::HandFonts('sharp'));
     }
 
+    /* ------------------------------------------------------------------
+     * The signature hands: the given-by line's typeface, built like the hands.
+     * ------------------------------------------------------------------ */
+
+    public function testTheDefaultSignatureHandIsTodaysBehaviour(): void
+    {
+        $this->assertSame('hand', Scroll::DEFAULT_SIGNATURE_HAND);
+        $this->assertSame(
+            Scroll::DEFAULT_SIGNATURE_HAND,
+            array_key_first(Scroll::SignatureHands()),
+            'the default leads the picker'
+        );
+
+        $def = Scroll::SignatureHands()[Scroll::DEFAULT_SIGNATURE_HAND];
+        $this->assertSame('Match the lettering', $def['label']);
+        // No family, no file, no preload: the line stays in the certificate's own face.
+        $this->assertSame('', $def['family']);
+        $this->assertSame([], $def['fonts']);
+        $this->assertSame([], Scroll::SignatureHandFonts(Scroll::DEFAULT_SIGNATURE_HAND));
+    }
+
+    public function testThereAreSixToTenSignatureFacesAndEachShipsItsFont(): void
+    {
+        $faces = array_filter(Scroll::SignatureHands(), static fn (array $h): bool => $h['file'] !== '');
+        $this->assertGreaterThanOrEqual(6, count($faces));
+        $this->assertLessThanOrEqual(10, count($faces));
+
+        foreach (Scroll::SignatureHands() as $key => $hand) {
+            $this->assertMatchesRegularExpression('/^[a-z]+$/', $key, 'a key reaches an HTML attribute and &sig=');
+            $this->assertNotSame('', trim($hand['label']), $key . ' would render an empty option');
+            $this->assertIsFloat($hand['scale'], $key);
+            $this->assertGreaterThan(0.5, $hand['scale'], $key);
+            $this->assertLessThan(2.5, $hand['scale'], $key);
+            if ($key === Scroll::DEFAULT_SIGNATURE_HAND) {
+                continue;
+            }
+            $this->assertNotSame('', $hand['family'], $key);
+            $this->assertSame([$hand['file']], $hand['fonts'], $key . ': one face, preloaded');
+            $this->assertStringEndsWith('.woff2', $hand['file'], $key);
+            $this->assertFileExists(DIR_TEMPLATE . 'revised-frontend/style/fonts/' . $hand['file'], $key);
+        }
+    }
+
+    /**
+     * Data, @font-face and selector agree, in the same way the hands' three do: a face in
+     * the data with no rule prints in the body face while the picker shows script, and a
+     * rule whose scale differs from the data's prints at a size the list never offered.
+     */
+    public function testEverySignatureHandHasAFontFaceAndARuleThatMatchesItsData(): void
+    {
+        $css = file_get_contents(DIR_TEMPLATE . 'revised-frontend/style/scrollery-signature.css');
+        $this->assertNotFalse($css);
+
+        foreach (Scroll::SignatureHands() as $key => $hand) {
+            if ($key === Scroll::DEFAULT_SIGNATURE_HAND) {
+                $this->assertStringNotContainsString('data-scroll-sig="' . $key . '"', $css, 'the default has no rule');
+                continue;
+            }
+
+            $this->assertStringContainsString(
+                "font-family: '" . $hand['family'] . "';\n    src: url('fonts/" . $hand['file'] . "') format('woff2');",
+                $css,
+                $key . ' has no @font-face'
+            );
+            $this->assertStringContainsString('font-display: block;', $css);
+
+            $needle = '[data-scroll-sig="' . $key . '"] [data-scroll-text="givenBy"] {';
+            $pos = strpos($css, $needle);
+            $this->assertNotFalse($pos, $key . ' would silently print in the body face');
+            $block = substr($css, $pos, strpos($css, '}', $pos) - $pos);
+
+            $this->assertStringContainsString("font-family: '" . $hand['family'] . "'", $block, $key);
+            $this->assertMatchesRegularExpression('/zoom:\s*([0-9.]+);/', $block, $key);
+            preg_match('/zoom:\s*([0-9.]+);/', $block, $m);
+            $this->assertEqualsWithDelta($hand['scale'], (float) $m[1], 0.001, $key . ': the stylesheet and the data disagree about size');
+        }
+    }
+
+    public function testASignatureHandIsAnAllowlistNotASanitiser(): void
+    {
+        foreach (array_keys(Scroll::SignatureHands()) as $key) {
+            $this->assertSame($key, Scroll::NormaliseSignatureHand($key));
+        }
+
+        $this->assertSame('greatvibes', Scroll::NormaliseSignatureHand('GreatVibes'));
+        $this->assertSame('greatvibes', Scroll::NormaliseSignatureHand('  greatvibes  '));
+
+        foreach ([null, '', 'comic', 'greatvibes"onload=x', 'great vibes', '../../etc/passwd', '<script>', 'greatvibesx'] as $bad) {
+            $this->assertSame(Scroll::DEFAULT_SIGNATURE_HAND, Scroll::NormaliseSignatureHand($bad), var_export($bad, true));
+        }
+    }
+
+    /** The preload list answers through the allowlist, so it can never 404. */
+    public function testSignatureHandFontsAlwaysAnswerARealHand(): void
+    {
+        $this->assertSame([], Scroll::SignatureHandFonts('no-such-hand'));
+        $this->assertSame(
+            [Scroll::SignatureHands()['allura']['file']],
+            Scroll::SignatureHandFonts('Allura')
+        );
+    }
+
+    /** Every face the picker offers is attributed, with its licence. */
+    public function testEverySignatureFontIsAttributedInTheFontsNote(): void
+    {
+        $note = file_get_contents(DIR_TEMPLATE . 'revised-frontend/style/fonts/SIGNATURE-FONTS.md');
+        $this->assertNotFalse($note);
+
+        foreach (Scroll::SignatureHands() as $key => $hand) {
+            if ($hand['file'] === '') {
+                continue;
+            }
+            $this->assertStringContainsString('`' . $hand['file'] . '`', $note, $key);
+            $this->assertStringContainsString($hand['family'], $note, $key);
+        }
+        $this->assertStringContainsString('SIL OFL 1.1', $note);
+    }
+
     /** A colour outside the curated palette is refused — free entry was rejected. */
     public function testColoursMustComeFromTheCuratedPalette(): void
     {

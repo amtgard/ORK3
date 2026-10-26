@@ -167,6 +167,7 @@ $awardOption = static function (array $c) use ($customKind): string {
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime($reports) ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery.css?v=<?= filemtime($css) ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-signature.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-signature.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
 <style>
 /* Page layout only. Every control is .adm-input / .adm-select / .adm-textarea and
@@ -530,6 +531,23 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                         </div>
                     </div>
 
+                    <?php /* The signature hand, directly under the Given by box it letters. Same
+                             control, list and store pattern as the Hand above (script/
+                             scrollery-hand.js): each option is drawn in its own face, the choice
+                             is remembered per browser and goes on the print URL as sig=, and it
+                             is NOT stored on the award. "Match the lettering" is the default and
+                             changes nothing. It applies even when Given by is empty — the
+                             certificate has the line either way, and it costs nothing. */ ?>
+                    <div class="sc-field">
+                        <label for="sc-sig">Signature Hand</label>
+                        <select id="sc-sig" class="adm-select">
+                            <?php foreach (Scroll::SignatureHands() as $sigKey => $sigDef): ?>
+                            <option value="<?= scroll_e($sigKey) ?>"<?= $sigDef['family'] !== '' ? ' data-face-family="' . scroll_e($sigDef['family']) . '"' : '' ?><?= $sigKey === Scroll::DEFAULT_SIGNATURE_HAND ? ' selected' : '' ?>><?= scroll_e($sigDef['label']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="sc-hint">How the signed name is lettered. Remembered for your next print.</p>
+                    </div>
+
                 </div>
             </div>
 
@@ -755,6 +773,18 @@ window.ScConfig = {
     Hand.bind(sel, function (face) {
         Hand.apply(stage, face, stage);
     });
+
+    /* The signature hand, on the same stage and for the same reason as the hand: the
+       attribute is set directly for the opening render (nothing is mounted yet to
+       measure), then swapped in place and re-fitted on a change. */
+    var sigSel = document.getElementById('sc-sig');
+    if (sigSel && Hand.sig) {
+        Hand.sig.init(<?= json_encode(array_keys(Scroll::SignatureHands())) ?>, <?= json_encode(Scroll::DEFAULT_SIGNATURE_HAND) ?>);
+        stage.setAttribute('data-scroll-sig', Hand.sig.get());
+        Hand.sig.bind(sigSel, function (key) {
+            Hand.sig.apply(stage, key, stage, sigSel);
+        });
+    }
 
     /* The reason lines, on the preview stage. No re-fit: the rules are out of flow, so
        hiding them changes nothing the autofit measures. */

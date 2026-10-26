@@ -260,4 +260,95 @@ return [
             ],
         ],
     ],
+
+    /*
+     * The signature hands — a per-PRINT choice of typeface for the given-by line.
+     *
+     * Same idea as 'hands' above, and built the same way so it behaves the same on every
+     * surface: a key that travels in &sig= and [data-scroll-sig], a `label` the officer
+     * reads (here the face's own name, drawn in that face by the picker), the `family`
+     * the picker draws it in, the woff2 `file`, and the `fonts` preload manifest. It is
+     * not stored on the award; each officer's choice is remembered per browser ('sc-sig').
+     *
+     * `hand` is the default and is TODAY'S BEHAVIOUR: the given-by line stays in the
+     * certificate's own text face, with no rule applied. It has no family and no file,
+     * and is the only entry that may lack them, so a certificate nobody has chosen a
+     * signature for prints exactly as it always did.
+     *
+     * `scale` is how large the face is set against the lettering it replaces, as a
+     * multiple of the shared x-height target in scrollery-signature.css. Script faces
+     * have small x-heights and enormous swashes, so one font-size would print some of
+     * them as a whisper and others as a shout; the scale was set by eye on a rendered
+     * certificate, against the 0.7em given-by line, until a short and a long name read
+     * as comparably sized in every face.
+     *
+     * The faces are declared in style/scrollery-signature.css and selected by
+     * [data-scroll-sig="<key>"] there; ScrollRecipeTest keeps the three in agreement.
+     * All eight are SIL OFL 1.1 from Google Fonts — see style/fonts/SIGNATURE-FONTS.md.
+     */
+    'signatureHands' => [
+        'hand' => [
+            'label'  => 'Match the lettering',
+            'family' => '',
+            'file'   => '',
+            'scale'  => 1.0,
+            'fonts'  => [],
+        ],
+        'greatvibes' => [
+            'label'  => 'Great Vibes',
+            'family' => 'Great Vibes',
+            'file'   => 'GreatVibes-Regular.woff2',
+            'scale'  => 1.10,
+            'fonts'  => ['GreatVibes-Regular.woff2'],
+        ],
+        'pinyon' => [
+            'label'  => 'Pinyon Script',
+            'family' => 'Pinyon Script',
+            'file'   => 'PinyonScript-Regular.woff2',
+            'scale'  => 1.10,
+            'fonts'  => ['PinyonScript-Regular.woff2'],
+        ],
+        'alexbrush' => [
+            'label'  => 'Alex Brush',
+            'family' => 'Alex Brush',
+            'file'   => 'AlexBrush-Regular.woff2',
+            'scale'  => 1.10,
+            'fonts'  => ['AlexBrush-Regular.woff2'],
+        ],
+        'allura' => [
+            'label'  => 'Allura',
+            'family' => 'Allura',
+            'file'   => 'Allura-Regular.woff2',
+            'scale'  => 1.15,
+            'fonts'  => ['Allura-Regular.woff2'],
+        ],
+        'saintdelafield' => [
+            'label'  => 'Mrs Saint Delafield',
+            'family' => 'Mrs Saint Delafield',
+            'file'   => 'MrsSaintDelafield-Regular.woff2',
+            'scale'  => 1.35,
+            'fonts'  => ['MrsSaintDelafield-Regular.woff2'],
+        ],
+        'muellerhoff' => [
+            'label'  => 'Herr Von Muellerhoff',
+            'family' => 'Herr Von Muellerhoff',
+            'file'   => 'HerrVonMuellerhoff-Regular.woff2',
+            'scale'  => 1.30,
+            'fonts'  => ['HerrVonMuellerhoff-Regular.woff2'],
+        ],
+        'doulaise' => [
+            'label'  => 'Monsieur La Doulaise',
+            'family' => 'Monsieur La Doulaise',
+            'file'   => 'MonsieurLaDoulaise-Regular.woff2',
+            'scale'  => 1.20,
+            'fonts'  => ['MonsieurLaDoulaise-Regular.woff2'],
+        ],
+        'cedarville' => [
+            'label'  => 'Cedarville Cursive',
+            'family' => 'Cedarville Cursive',
+            'file'   => 'CedarvilleCursive-Regular.woff2',
+            'scale'  => 1.0,
+            'fonts'  => ['CedarvilleCursive-Regular.woff2'],
+        ],
+    ],
 ];

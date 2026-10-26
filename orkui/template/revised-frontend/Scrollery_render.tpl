@@ -47,7 +47,19 @@ $fontBase      = HTTP_TEMPLATE . 'revised-frontend/style/fonts/';
 $scrollery_hands = Scroll::Hands();
 $scrollery_face  = Scroll::NormaliseHand((string) ($_GET['face'] ?? ''));
 
-$scrollery_preload_fonts = Scroll::HandFonts($scrollery_face);
+/*
+ * The signature hand — &sig=.
+ *
+ * How the given-by line is lettered: the same kind of per-print choice as the hand, so
+ * it travels the same way (a page parameter, stamped on <body>, never stored on the
+ * award). NormaliseSignatureHand() is its allowlist. Its face is preloaded alongside
+ * the hand's so the print gate, which waits on document.fonts.ready, has it in hand
+ * before the first fit measures the signature.
+ */
+$scrollery_sigs = Scroll::SignatureHands();
+$scrollery_sig  = Scroll::NormaliseSignatureHand(isset($_GET['sig']) ? (string) $_GET['sig'] : null);
+
+$scrollery_preload_fonts = array_merge(Scroll::HandFonts($scrollery_face), Scroll::SignatureHandFonts($scrollery_sig));
 
 /*
  * The citation's ruled lines — &lines=0.
@@ -120,6 +132,7 @@ if ($scrollery_ref !== ''
 <link rel="preload" as="font" type="font/woff2" crossorigin href="<?= $fontBase . $f ?>">
 <?php endforeach; ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery.css?v=<?= filemtime($scrollery_css) ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-signature.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-signature.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
 <style>
 /* An instant data-tip tooltip for the toolbar (project convention: never title=). The
@@ -127,6 +140,9 @@ if ($scrollery_ref !== ''
    BELOW the label because the toolbar is stuck to the top edge, wraps, and is
    right-anchored so a control near the right of a narrow window cannot push it off
    screen. Chrome only: the toolbar is display:none under @media print. */
+/* The toolbar gained a third picker. It is a single nowrap flex row in scrollery.css, so
+   on a narrow window it would push Print off the edge; let it wrap instead. */
+.sc-toolbar { flex-wrap: wrap; }
 .sc-tip { position: relative; }
 .sc-tip[data-tip]:hover::after,
 .sc-tip[data-tip]:focus-within::after {
@@ -157,6 +173,7 @@ if ($scrollery_ref !== ''
 <body class="scroll-surface"
       data-scroll-face="<?= scroll_e($scrollery_face) ?>"
       data-sc-heading="<?= scroll_e($scrollery_heading) ?>"
+      data-scroll-sig="<?= scroll_e($scrollery_sig) ?>"
       <?php if (!$scrollery_lines): ?>data-scroll-lines="0"<?php endif; ?>
       <?php if ($scrollery_trim): ?>data-scroll-trim="1"<?php endif; ?>
       <?php if ($scrollery_up): ?>data-scroll-up="<?= $scrollery_up ?>"<?php endif; ?>>
@@ -252,6 +269,18 @@ foreach ($Scrolls as $scrollery_scan) {
         certificates Automatic and Classic look identical. See ScrolleryHeading in
         script/scrollery-hand.js.
     */ ?>
+    <?php /* The signature hand, beside the hand it is a sibling of: how the given-by line is
+             lettered, for a REPRINT where the signer would rather sign in script. Same
+             listbox as the hand (each option drawn in its own face), re-lettered in place
+             like it; "Match the lettering" is the default. */ ?>
+    <label class="sc-toolbar-field" for="sc-sig">
+        <span>Signature</span>
+        <select id="sc-sig" class="sc-select">
+            <?php foreach ($scrollery_sigs as $scrollery_skey => $scrollery_sdef): ?>
+            <option value="<?= scroll_e($scrollery_skey) ?>"<?= $scrollery_sdef['family'] !== '' ? ' data-face-family="' . scroll_e($scrollery_sdef['family']) . '"' : '' ?><?= $scrollery_skey === $scrollery_sig ? ' selected' : '' ?>><?= scroll_e($scrollery_sdef['label']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </label>
     <label class="sc-toolbar-field sc-tip" for="sc-heading" data-tip="Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. Applies to this print only.">
         <span>Heading</span>
         <select id="sc-heading" class="sc-select">
@@ -474,6 +503,55 @@ foreach ($Scrolls as $scrollery_scan) {
     var stored = Hand.get();
     if (stored !== document.body.getAttribute('data-scroll-face')) {
         Hand.apply(document.body, stored, document);
+    }
+}());
+</script>
+<script>
+/*
+ * The signature hand's behaviour. Its own block for the reason the heading's is: the hand's
+ * block above returns early on an explicit &face=.
+ *
+ * An explicit &sig= in the URL is this print's stated intent and beats the remembered
+ * default, and is not written back to the store (following somebody else's link must not
+ * change your own preference), exactly as &face= is treated. Without one, the remembered
+ * choice is applied in place. Either way the URL is kept honest on a change.
+ */
+(function () {
+    var sel = document.getElementById('sc-sig');
+    var Hand = window.ScrolleryHand;
+    if (!sel || !Hand || !Hand.sig) { return; }
+
+    var Sig = Hand.sig;
+    Sig.init(<?= json_encode(array_keys($scrollery_sigs)) ?>, <?= json_encode(Scroll::DEFAULT_SIGNATURE_HAND) ?>);
+
+    var urlSig = (window.location.search.match(/[?&]sig=([a-z]+)/i) || [])[1];
+
+    function repaint(key) {
+        Sig.apply(document.body, key, document, sel);
+        try {
+            var next = Sig.decorate(window.location.search || '?', key);
+            window.history.replaceState(null, '', window.location.pathname + next + window.location.hash);
+        } catch (e) { /* older browser: the attribute swap still worked */ }
+    }
+
+    if (urlSig && Sig.known(urlSig)) {
+        sel.value = urlSig;
+        Hand.paint(sel);
+        Hand.armSpecimens(sel);
+        Hand.enhance(sel);
+        sel.addEventListener('change', function () {
+            Hand.paint(sel);
+            repaint(Sig.set(sel.value));
+        });
+        return;
+    }
+
+    Sig.bind(sel, repaint);
+
+    /* Applied in place rather than by redirecting, as the hand's remembered face is. */
+    var stored = Sig.get();
+    if (stored !== document.body.getAttribute('data-scroll-sig')) {
+        Sig.apply(document.body, stored, document, sel);
     }
 }());
 </script>

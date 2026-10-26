@@ -1170,6 +1170,9 @@
          * the render page's own fallback is the one that should decide.
          */
         if (window.ScrolleryHand) { qs.set('face', window.ScrolleryHand.get()); }
+        /* The signature hand, the same way: a page parameter the print window's own page
+           allowlists (Scroll::NormaliseSignatureHand) and stamps on <body>. */
+        if (window.ScrolleryHand && window.ScrolleryHand.sig) { qs.set('sig', window.ScrolleryHand.sig.get()); }
         /* The heading, the same way: a page parameter, not a composed value. Always
            sent, as face is, so the URL says what the preview showed. The server
            normalises it against Scroll::Headings() and defaults a stranger. */

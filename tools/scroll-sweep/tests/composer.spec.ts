@@ -470,3 +470,180 @@ test('ScrolleryHeading.label: one word when the certificates agree, mixed when n
   });
   expect(got).toEqual(['Automatic (Classic)', 'Automatic (Classic)', 'Automatic (Centered)', 'Automatic (mixed)', null, null]);
 });
+
+/* ----------------------------------------------------------------------------------------------
+ * Signature Hand: the typeface of the given-by line.
+ *
+ * A per-print choice built like the hand: an attribute on a certificate ancestor selects the face,
+ * the choice is remembered per browser ('sc-sig'), it rides the print URL as sig=, and the default
+ * ("Match the lettering") leaves the line exactly as it was.
+ * ---------------------------------------------------------------------------------------------- */
+
+const givenByFont = (page: Page, root: string) =>
+  page.evaluate((r) => {
+    const el = document.querySelector(`${r} [data-scroll-text="givenBy"]`)!;
+    const cs = getComputedStyle(el);
+    return { family: cs.fontFamily, style: cs.fontStyle, size: cs.fontSize, zoom: cs.zoom };
+  }, root);
+
+async function chooseSig(page: Page, key: string): Promise<void> {
+  await page.evaluate((k) => {
+    const sel = document.getElementById('sc-sig') as HTMLSelectElement;
+    sel.value = k;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }, key);
+}
+
+test('the composer: Signature Hand lists its faces, defaults to no change, and lettering follows the choice', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  await page.fill('#sc-givenby', 'Lady Isolde of Dunmere');
+  await composerSettled(page);
+
+  const opts = await page.locator('#sc-sig option').evaluateAll((os: HTMLOptionElement[]) =>
+    os.map(o => ({ value: o.value, label: o.textContent, fam: o.getAttribute('data-face-family') })));
+  expect(opts[0]).toEqual({ value: 'hand', label: 'Match the lettering', fam: null });
+  expect(opts.length - 1).toBeGreaterThanOrEqual(6);
+  expect(opts.length - 1).toBeLessThanOrEqual(10);
+  for (const o of opts.slice(1)) expect(o.fam, `${o.value} carries its own family for the specimen`).toBeTruthy();
+
+  // It sits in a row directly below Date / Given by, with the spec's hint.
+  const below = await page.evaluate(() => {
+    const given = document.getElementById('sc-givenby')!.getBoundingClientRect();
+    const sig = document.getElementById('sc-sig')!.closest('.sc-field')!.getBoundingClientRect();
+    return { givenBottom: given.bottom, sigTop: sig.top };
+  });
+  expect(below.sigTop).toBeGreaterThan(below.givenBottom);
+  await expect(page.locator('.sc-field:has(#sc-sig) .sc-hint')).toHaveText('How the signed name is lettered. Remembered for your next print.');
+  await expect(page.locator('label[for="sc-sig"]')).toHaveText('Signature Hand');
+
+  const before = await givenByFont(page, '#sc-mount');
+  expect(before.family).toContain('Averia Serif Libre');
+  expect(await page.locator('#sc-stage').getAttribute('data-scroll-sig')).toBe('hand');
+
+  await chooseSig(page, 'greatvibes');
+  await composerSettled(page);
+  const after = await givenByFont(page, '#sc-mount');
+  expect(after.family).toContain('Great Vibes');
+  expect(after.style).toBe('normal');
+  expect(Number(after.zoom)).toBeGreaterThan(1);
+  await expect(page.locator('#sc-stage')).toHaveAttribute('data-scroll-sig', 'greatvibes');
+  expect(await page.evaluate(() => document.fonts.check('16px "Great Vibes"'))).toBe(true);
+  expect(await page.evaluate(() => localStorage.getItem('sc-sig'))).toBe('greatvibes');
+  // The closed control is drawn in the chosen face.
+  expect(await page.locator('.sc-hand:has(#sc-sig) .sc-hand-label').evaluate(el => (el as HTMLElement).style.fontFamily)).toContain('Great Vibes');
+
+  // Back to the default: the line is exactly what it was, and the closed control is not left in script.
+  await chooseSig(page, 'hand');
+  await composerSettled(page);
+  const again = await givenByFont(page, '#sc-mount');
+  expect(again).toEqual(before);
+  expect(await page.locator('.sc-hand:has(#sc-sig) .sc-hand-label').evaluate(el => (el as HTMLElement).style.fontFamily)).toBe('');
+});
+
+test('the composer: the Signature Hand listbox is operable with the pointer, and it survives a reload', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  const wrap = page.locator('.sc-hand:has(#sc-sig)');
+  await wrap.locator('.sc-hand-trigger').click();
+  await expect(wrap.locator('.sc-hand-menu')).toBeVisible();
+  await wrap.locator('.sc-hand-opt[data-value="allura"]').click();
+  await expect(page.locator('#sc-sig')).toHaveValue('allura');
+  await expect(page.locator('#sc-stage')).toHaveAttribute('data-scroll-sig', 'allura');
+
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForSelector('#sc-mount .Award', { state: 'attached' });
+  await expect(page.locator('#sc-sig')).toHaveValue('allura');
+  await expect(page.locator('#sc-stage')).toHaveAttribute('data-scroll-sig', 'allura');
+});
+
+test('the composer fits a long signature in a script face, onto no more than two lines', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  await page.fill('#sc-givenby', 'Sir Reginald Fitzwilliam-Ashworth the Third, Warden of the Marches');
+  for (const key of ['greatvibes', 'saintdelafield', 'doulaise']) {
+    await chooseSig(page, key);
+    await composerSettled(page);
+    const lines = await page.evaluate(() => {
+      const el = document.querySelector('#sc-mount [data-scroll-text="givenBy"]')!;
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      return new Set(Array.from(r.getClientRects()).filter(x => x.width > 0.5).map(x => Math.round(x.top))).size;
+    });
+    expect(lines, `${key}: the fit still holds the signer to two lines`).toBeLessThanOrEqual(2);
+  }
+});
+
+test('the print page: sig= round-trips, is allowlisted, and re-letters in place', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  await page.fill('#sc-givenby', 'Lady Isolde of Dunmere');
+  await chooseSig(page, 'pinyon');
+  await composerSettled(page);
+  const url = await printUrlOf(page);
+  expect(new URL(url, page.url()).searchParams.get('sig')).toBe('pinyon');
+
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+  await settle(page);
+  await expect(page.locator('body')).toHaveAttribute('data-scroll-sig', 'pinyon');
+  await expect(page.locator('#sc-sig')).toHaveValue('pinyon');
+  // The face is in the page's font gate: loaded by the time the fit has settled, not swapped in later.
+  expect(await page.evaluate(() => document.fonts.check('16px "Pinyon Script"'))).toBe(true);
+  expect(await page.evaluate(() => Array.from(document.querySelectorAll('link[rel=preload]')).map(l => l.getAttribute('href')))).toEqual(
+    expect.arrayContaining([expect.stringContaining('PinyonScript-Regular.woff2')]));
+  expect((await givenByFont(page, '.scroll-flow')).family).toContain('Pinyon Script');
+
+  // Re-letter in place: the URL is kept honest and the attribute swaps with no reload.
+  await page.evaluate(() => { (window as any).__same_document = true; });
+  await chooseSig(page, 'alexbrush');
+  await expect(page.locator('body')).toHaveAttribute('data-scroll-sig', 'alexbrush');
+  await expect.poll(async () => (await givenByFont(page, '.scroll-flow')).family).toContain('Alex Brush');
+  expect(await page.evaluate(() => (window as any).__same_document)).toBe(true);
+  const search = await page.evaluate(() => window.location.search);
+  expect(search.match(/[?&]sig=/g)).toHaveLength(1);
+  expect(new URLSearchParams(search).get('sig')).toBe('alexbrush');
+  expect(new URLSearchParams(search).get('Route')).toBe('Scrollery/compose');
+
+  // The toolbar control is chrome: not on the paper.
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('#sc-sig')).toBeHidden();
+});
+
+test('the print page: the default sig leaves the given-by font unchanged, and a hostile sig= is the default', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  await page.fill('#sc-givenby', 'Lady Isolde of Dunmere');
+  await composerSettled(page);
+  const url = (await printUrlOf(page)).replace(/&sig=[^&]*/, '');
+
+  const plain = async (u: string) => {
+    await page.goto(u, { waitUntil: 'load' });
+    await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+    await settle(page);
+    return givenByFont(page, '.scroll-flow');
+  };
+
+  // No sig and nothing remembered: the body face, today's behaviour.
+  await page.evaluate(() => localStorage.removeItem('sc-sig'));
+  const none = await plain(url);
+  expect(none.family).toContain('Averia Serif Libre');
+  await expect(page.locator('body')).toHaveAttribute('data-scroll-sig', 'hand');
+  expect(await page.locator('#sc-sig').inputValue()).toBe('hand');
+
+  const explicitDefault = await plain(url + '&sig=hand');
+  expect(explicitDefault).toEqual(none);
+
+  for (const bad of ['comic', 'greatvibes%22onload%3Dx', '..%2F..%2Fetc%2Fpasswd', '%3Cscript%3E']) {
+    const got = await plain(`${url}&sig=${bad}`);
+    expect(got, `sig=${bad}`).toEqual(none);
+    await expect(page.locator('body')).toHaveAttribute('data-scroll-sig', 'hand');
+  }
+
+  // A remembered choice applies in place when the URL says nothing, and an explicit sig= beats it.
+  await page.evaluate(() => localStorage.setItem('sc-sig', 'allura'));
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+  await settle(page);
+  await expect.poll(async () => (await givenByFont(page, '.scroll-flow')).family).toContain('Allura');
+  await page.goto(url + '&sig=hand', { waitUntil: 'load' });
+  await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+  await settle(page);
+  expect((await givenByFont(page, '.scroll-flow')).family).toContain('Averia Serif Libre');
+  await page.evaluate(() => localStorage.removeItem('sc-sig'));
+});
