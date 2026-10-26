@@ -79,31 +79,19 @@ already `tinyint`.
 | value | scroll | regalia |
 |---|---|---|
 | 0 | Not Tracked | Not Tracked |
-| 1 | Scrollery Print | Needed |
+| 1 | Custom Design | Needed |
 | 2 | Complete | Complete |
-| 3 | Custom Design | (not used; rejected) |
+| 3 | Scrollery Print | (not used; rejected) |
 
-Keeping 1 and 2 where they are means existing rows need no rewrite. Every
-current "needs printing" line becomes Scrollery Print, and every done line
-stays Complete. *My call:* this mapping is deliberate. It also keeps the
-Release Feature Utilization report (`class.Report.php` ~6690: `> 0` tracked,
-`= 2` done) correct without edits.
-
-**One-time data fix (my call).** The old status 1 never said how a scroll was
-being made, so two kinds of existing row don't fit "Scrollery Print". A data
-migration (`db-migrations/2026-10-26-court-scroll-status-modes.sql`,
-classified in `migration-classification.json5`) rewrites them:
-
-- status 1 **with a `scroll_maker_id`** becomes 3 (Custom Design), because an
-  artisan is already on it;
-- status 1 on a line whose award **Scrollery can't print** also becomes 3
-  (Custom Design), because someone has to make it by hand.
-
-The second rule needs the printable test, which is PHP, not SQL. So that part
-runs as an idempotent PHP backfill under `system/scripts/` that uses the same
-printable definition as the planner, not a SQL approximation of it. The maker
-rule can stay plain SQL. It only touches courts that aren't complete. Locally,
-all 10 status-1 rows have no maker; production may differ.
+**User's decision:** Custom Design is 1, because that is what today's "in
+progress (needs printing)" state represents. Every existing tracked line keeps
+its meaning as Custom Design, and every done line stays Complete. So there is
+**no migration and no backfill**. Scrollery Print is the only new value. A
+line enters the bulk print only when an officer explicitly picks Scrollery
+Print. This also keeps the Release Feature Utilization report
+(`class.Report.php` ~6690: `> 0` tracked, `= 2` done) correct without edits.
+Its integration test (`ReleaseUtilizationCrownTest`) should still pass
+unchanged.
 
 ## Behaviour
 
@@ -238,7 +226,7 @@ all 10 status-1 rows have no maker; production may differ.
   `{CourtAwardId, RowVersion}`, all-or-report as described above.
 - The old cycling `update_award_tracking_status` and its lib
   `updateAwardTrackingStatus` (`% 3`) are removed once nothing calls them. A
-  `% 3` cycle would wrap value 3 back to 0.
+  `% 3` cycle would never reach value 3 (Scrollery Print).
 
 ## Constraints and conventions
 
