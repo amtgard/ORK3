@@ -464,37 +464,6 @@ foreach ($Scrolls as $scrollery_scan) {
 
     Hand.bind(sel, repaint);
 
-    /* The reason lines. Re-letters nothing and re-fits nothing — the rules are out of
-       flow, so this is a pure repaint — but the URL is kept honest for the same reason
-       the hand's is: this page's link gets copied. */
-    var Lines = window.ScrolleryLines;
-    if (Lines) {
-        var box = document.getElementById('sc-lines');
-        var urlLines = /[?&]lines=/.test(window.location.search);
-
-        Lines.bind(box, function (on) {
-            Lines.apply(document.body, on);
-            try {
-                var next = Lines.decorate(window.location.search || '?', on);
-                /* decorate() only ever ADDS lines=0, so turning them back on has to
-                   clear the parameter rather than set it to 1 — otherwise the URL
-                   accumulates a value that means "the default" and reads as a choice. */
-                if (on) { next = next.replace(/([?&])lines=[^&]*&?/, '$1').replace(/[?&]$/, ''); }
-                window.history.replaceState(null, '', window.location.pathname + next + window.location.hash);
-            } catch (e) { /* older browser: the attribute swap still worked */ }
-        });
-
-        /* An explicit &lines= in the URL is this print's stated intent and beats the
-           remembered default, exactly as &face= does. */
-        if (urlLines) {
-            if (box) { box.checked = !document.body.hasAttribute('data-scroll-lines'); }
-        } else {
-            var remembered = Lines.get();
-            if (box) { box.checked = remembered; }
-            Lines.apply(document.body, remembered);
-        }
-    }
-
     /* The remembered hand is applied in place rather than by redirecting on load: a
        page that bounces itself to a different URL before the officer has done
        anything is worse than one that re-letters. It costs the <link rel=preload>,
@@ -503,6 +472,45 @@ foreach ($Scrolls as $scrollery_scan) {
     var stored = Hand.get();
     if (stored !== document.body.getAttribute('data-scroll-face')) {
         Hand.apply(document.body, stored, document);
+    }
+}());
+</script>
+<script>
+/*
+ * The reason-lines switch. Its own block for the reason the signature's and heading's
+ * are: the hand's block above returns early on an explicit &face=, and the composer
+ * always sends one, so a binding inside it never ran on a print opened from there.
+ */
+(function () {
+    var Lines = window.ScrolleryLines;
+    if (!Lines) { return; }
+
+    /* The reason lines. Re-letters nothing and re-fits nothing — the rules are out of
+       flow, so this is a pure repaint — but the URL is kept honest for the same reason
+       the hand's is: this page's link gets copied. */
+    var box = document.getElementById('sc-lines');
+    var urlLines = /[?&]lines=/.test(window.location.search);
+
+    Lines.bind(box, function (on) {
+        Lines.apply(document.body, on);
+        try {
+            var next = Lines.decorate(window.location.search || '?', on);
+            /* decorate() only ever ADDS lines=0, so turning them back on has to
+               clear the parameter rather than set it to 1 — otherwise the URL
+               accumulates a value that means "the default" and reads as a choice. */
+            if (on) { next = next.replace(/([?&])lines=[^&]*&?/, '$1').replace(/[?&]$/, ''); }
+            window.history.replaceState(null, '', window.location.pathname + next + window.location.hash);
+        } catch (e) { /* older browser: the attribute swap still worked */ }
+    });
+
+    /* An explicit &lines= in the URL is this print's stated intent and beats the
+       remembered default, exactly as &face= does. */
+    if (urlLines) {
+        if (box) { box.checked = !document.body.hasAttribute('data-scroll-lines'); }
+    } else {
+        var remembered = Lines.get();
+        if (box) { box.checked = remembered; }
+        Lines.apply(document.body, remembered);
     }
 }());
 </script>
@@ -577,6 +585,9 @@ foreach ($Scrolls as $scrollery_scan) {
     function refit() {
         var A = window.ScrolleryAutofit;
         if (A && typeof A.fit === 'function') { A.fit(document); }
+        /* Composition changes which lines clip; the notice has to follow, as it does on
+           the hand and signature paths. */
+        if (A && typeof A.reportClipping === 'function') { A.reportClipping(document); }
     }
 
     /* Say what Automatic chose, off the engine's own data-sc-comp report on every

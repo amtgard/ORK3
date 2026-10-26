@@ -248,7 +248,6 @@ for (const pc of PARITY) {
         const r = top.roles[role];
         expect(r, `${surface}: has a ${role} role`).not.toBeNull();
         expect(Number.isFinite(r!.size), `${surface}: ${role} has a finite data-sc-size (${r!.size})`).toBe(true);
-        expect(r!.lines.length, `${surface}: ${role} was broken into lines`).toBeGreaterThan(0);
       }
     }
     if (pc.heading !== 'auto') expect(print.comp, 'a forced heading is the composition that prints').toBe(pc.heading);
@@ -256,6 +255,9 @@ for (const pc of PARITY) {
     expect(preview.comp, 'composition').toBe(print.comp);
     expect(preview.sectionComp, 'issuing section composition').toBe(print.sectionComp);
     for (const role of ['lead', 'place', 'name', 'award']) {
+      // Counts first, so a legitimately empty role (0 == 0) passes while a role that is lettered on one
+      // surface and empty on the other does not; the line texts then have to agree too.
+      expect(preview.roles[role]!.lines.length, `${role} line count`).toBe(print.roles[role]!.lines.length);
       expect(preview.roles[role]!.lines, `${role} lines`).toEqual(print.roles[role]!.lines);
       const a = preview.roles[role]!.size!;
       const b = print.roles[role]!.size!;
@@ -712,4 +714,30 @@ test('the print page: a remembered hand with no face= settles ready() only once 
   });
   expect(spill, 'every line fits its role box').toEqual([]);
   await page.evaluate(() => localStorage.removeItem('sc-face'));
+});
+
+/* ----------------------------------------------------------------------------------------------
+ * The Reason-lines switch works on a print opened from the composer (which always sends face=).
+ * ---------------------------------------------------------------------------------------------- */
+test('the print page: the Reason lines checkbox works when the URL carries face=', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  await composerSettled(page);
+  const url = (await printUrlOf(page)).replace(/[?&]lines=[^&]*/, '');
+  expect(url).toMatch(/[?&]face=/);
+
+  await page.evaluate(() => localStorage.removeItem('sc-lines'));
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+  await expect(page.locator('#sc-lines')).toBeChecked();
+  await expect(page.locator('body')).not.toHaveAttribute('data-scroll-lines', '0');
+
+  await page.locator('#sc-lines').uncheck();
+  await expect(page.locator('body')).toHaveAttribute('data-scroll-lines', '0');
+  expect(await page.evaluate(() => window.location.search)).toContain('lines=0');
+  expect(await page.evaluate(() => localStorage.getItem('sc-lines'))).toBe('0');
+
+  await page.locator('#sc-lines').check();
+  await expect(page.locator('body')).not.toHaveAttribute('data-scroll-lines', '0');
+  expect(await page.evaluate(() => window.location.search)).not.toContain('lines=');
+  await page.evaluate(() => localStorage.removeItem('sc-lines'));
 });
