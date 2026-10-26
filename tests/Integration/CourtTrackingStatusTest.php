@@ -119,6 +119,9 @@ final class CourtTrackingStatusTest extends TestCase
         // The fixture has no regalia_status override.
         $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'court_award SET regalia_status = 1 WHERE court_award_id IN (' . $c . ',' . $d . ')');
         $e = $this->award(['scroll_status' => 2]);
+        // Legacy rows store "no maker" as 0 as well as NULL.
+        $f = $this->award(['scroll_status' => 1]);
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'court_award SET scroll_maker_id = 0 WHERE court_award_id = ' . $f);
         $before = [];
         foreach ([$b, $d, $e] as $i) {
             $before[$i] = $this->row($i);
@@ -134,6 +137,7 @@ final class CourtTrackingStatusTest extends TestCase
         $this->assertSame(0, (int)$this->row($a)['scroll_status']);
         $this->assertSame($rvA + 1, (int)$this->row($a)['row_version']);
         $this->assertSame(0, (int)$this->row($c)['regalia_status']);
+        $this->assertSame(0, (int)$this->row($f)['scroll_status']);
         foreach ([$b, $d, $e] as $i) {
             $this->assertSame($before[$i], $this->row($i));
         }
