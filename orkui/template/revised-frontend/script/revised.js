@@ -3401,8 +3401,12 @@ $(document).ready(function() {
                 $(this).toggle(persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1);
             });
             $root.find('.kn-year-section').each(function() {
-                var hasVisible =
-                    $(this).find('.kn-player-card:visible, .kn-year-table tbody tr:visible').length > 0;
+                // Own display state, not :visible, for the same reason as the park
+                // filter (pkApplyPlayerFilters): a section hidden by a no-match query
+                // would otherwise never come back until the box was emptied.
+                var hasVisible = $(this).find('.kn-player-card, .kn-year-table tbody tr').filter(function() {
+                    return this.style.display !== 'none';
+                }).length > 0;
                 $(this).toggle(hasVisible);
                 if (hasVisible) this.open = true;
             });
@@ -7507,8 +7511,17 @@ $(document).ready(function() {
             });
             $root.find('.pk-year-section').each(function() {
                 if (!filtering) { $(this).show(); return; }
-                var hasVisible =
-                    $(this).find('.pk-player-card:visible, .pk-year-table tbody tr:visible').length > 0;
+                // Count matches by each card's/row's OWN display state, not jQuery's
+                // :visible. :visible is false for anything inside a hidden ancestor,
+                // so once this section had been hidden for a query with no matches
+                // ("Macrus"), the cards un-hidden by the next keystroke still read as
+                // invisible, the section stayed hidden, and no later query could bring
+                // it back until the box was emptied. (Reported 2026-10-26, park 277.)
+                // Same reason not to rely on :visible with content-visibility:auto,
+                // which gives off-screen children no boxes either.
+                var hasVisible = $(this).find('.pk-player-card, .pk-year-table tbody tr').filter(function() {
+                    return this.style.display !== 'none';
+                }).length > 0;
                 $(this).toggle(hasVisible);
                 if (hasVisible) this.open = true;
             });
