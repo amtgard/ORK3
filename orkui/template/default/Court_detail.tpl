@@ -647,13 +647,13 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
 */
 .cp-row-grid {
     display: grid;
-    grid-template-columns: 28px 32px minmax(110px, 1.3fr) minmax(160px, 1.6fr) 78px 50px 118px 96px 22px;
+    grid-template-columns: 28px 32px minmax(110px, 1.3fr) minmax(160px, 1.6fr) 78px 50px 132px 96px 22px;
     align-items: center;
     column-gap: 8px;
 }
 .cp-list-published .cp-row-grid {
     /* Wider status column to fit Grant / Skip buttons */
-    grid-template-columns: 28px 32px minmax(110px, 1.3fr) minmax(160px, 1.6fr) 78px 50px 118px 178px 22px;
+    grid-template-columns: 28px 32px minmax(110px, 1.3fr) minmax(160px, 1.6fr) 78px 50px 132px 178px 22px;
 }
 
 /* Header row — sticky, label-style */
@@ -734,7 +734,10 @@ button.cp-chip, .cp-chip {
 .cp-chip .cp-chip-icon  { font-size: .95em; opacity: .85; flex-shrink: 0; }
 .cp-chip .cp-chip-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .cp-chip .cp-chip-caret { font-size: .85em; opacity: .55; flex-shrink: 0; }
-button.cp-chip:hover { border-color: currentColor; }
+/* Hover outranks every per-status colour rule: (0,4,1) over the light (0,3,0) ones,
+   and the dark twin (0,5,2) over html[data-theme="dark"] .cp-chip[..][..] (0,4,1). */
+.cp-cell-tracking button.cp-chip[data-status]:hover { border-color: currentColor; }
+html[data-theme="dark"] .cp-cell-tracking button.cp-chip[data-status]:hover { border-color: currentColor; }
 button.cp-chip:focus-visible, button.cp-chip[aria-expanded="true"] { outline: none; box-shadow: 0 0 0 2px #90cdf4; }
 button.cp-chip[aria-busy="true"] { opacity: .6; cursor: progress; }
 .cp-chip[data-status="3"]                       { background: #ebf4ff; color: #2b6cb0; border-color: #bee3f8; }
@@ -790,6 +793,39 @@ html[data-theme="dark"] .cp-track-dot[data-status="3"]                      { ba
 html[data-theme="dark"] .cp-track-dot[data-type="scroll"][data-status="1"]  { background: #b794f4; }
 html[data-theme="dark"] .cp-track-dot[data-type="regalia"][data-status="1"] { background: #fc8181; }
 html[data-theme="dark"] .cp-track-dot[data-status="2"]                      { background: #68d391; }
+
+/* Print Scrollery scrolls (N): sized to sit in the toolbar beside the density control. */
+.cp-list-toolbar .cp-scrollery-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; font-size: 11px; font-weight: 600; line-height: 1.2;
+}
+.cp-list-toolbar .cp-scrollery-btn:disabled { opacity: .5; cursor: not-allowed; }
+.cp-list-toolbar .cp-scrollery-btn:disabled:hover { background: #fff; }
+html[data-theme="dark"] .cp-list-toolbar .cp-scrollery-btn:disabled:hover { background: #1f2733; }
+
+/* The post-print bar: "Printed N Scrollery scrolls." · Set these scrolls to complete? · Not yet */
+.cp-print-bar { background: #ebf8ff; border: 1px solid #90cdf4; color: #2c5282; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; font-size: 13px; }
+.cp-print-bar[hidden] { display: none; }
+.cp-print-bar-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cp-print-bar-icon { font-size: 16px; color: #2b6cb0; flex-shrink: 0; }
+.cp-print-bar-text { flex: 1 1 200px; min-width: 0; font-weight: 600; line-height: 1.4; }
+.cp-print-bar-text a { color: inherit; text-decoration: underline; font-weight: 700; margin-left: 4px; }
+.cp-print-bar-actions { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.cp-print-bar-actions[hidden], .cp-print-bar-close[hidden] { display: none; }
+.cp-print-bar-close { background: none; border: none; color: #4a5568; cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 6px; flex-shrink: 0; }
+.cp-print-bar-close:hover { color: #2b6cb0; }
+.cp-print-bar-skipped, .cp-print-bar-note { margin-top: 8px; padding-top: 8px; border-top: 1px solid #bee3f8; color: #2d3748; font-size: 12px; line-height: 1.45; }
+.cp-print-bar-skipped[hidden], .cp-print-bar-note[hidden] { display: none; }
+.cp-print-bar-skipped ul { margin: 4px 0 0; padding-left: 18px; }
+.cp-print-bar-skipped li { margin: 1px 0; }
+.cp-print-bar-note p { margin: 0; }
+.cp-print-bar-note p + p { margin-top: 3px; }
+html[data-theme="dark"] .cp-print-bar { background: rgba(99,179,237,.12); border-color: rgba(99,179,237,.4); color: #90cdf4; }
+html[data-theme="dark"] .cp-print-bar-icon { color: #90cdf4; }
+html[data-theme="dark"] .cp-print-bar-close { color: #a0aec0; }
+html[data-theme="dark"] .cp-print-bar-close:hover { color: #90cdf4; }
+html[data-theme="dark"] .cp-print-bar-skipped,
+html[data-theme="dark"] .cp-print-bar-note { color: #e2e8f0; border-top-color: rgba(99,179,237,.3); }
 
 /* Reorder arrows compact in spreadsheet */
 .cp-row-grid .cp-reorder-btns { gap: 0; }
@@ -1272,7 +1308,7 @@ html[data-theme="dark"] .cp-script-note-title { color: #e2e8f0; }
     .cp-cell-flags     { order: 7; flex: 0 0 auto; }
     /* Scroll/regalia chips get their own full-width row, side by side, each a roomy
        tap target. */
-    .cp-cell-tracking  { order: 8; flex: 1 1 100%; flex-direction: row; align-items: stretch; gap: 8px; }
+    .cp-cell-tracking  { order: 8; flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; align-items: stretch; gap: 8px; }
     /* Status + actions span the full card width, stacked */
     .cp-cell-status    { order: 10; flex: 1 1 100%; flex-direction: column; align-items: stretch; gap: 8px; }
     .cp-cell-status .cp-aw-badge   { align-self: flex-start; }
@@ -1282,15 +1318,23 @@ html[data-theme="dark"] .cp-script-note-title { color: #e2e8f0; }
     /* Reachable, roomy chips + reorder on the phone. Both were losing to the
        .cp-density-* rules, which are more specific — so drive the density TOKENS, and
        match .cp-density-cozy .cp-row-grid .cp-reorder-btn (0,3,0) for the arrows. */
-    .cp-page .cp-award-list { --cp-chip-font: 13px; --cp-chip-py: 0px; }
+    .cp-page .cp-award-list { --cp-chip-font: 12px; --cp-chip-py: 0px; }
     .cp-page .cp-row-grid .cp-reorder-btns { gap: 8px; }
     .cp-page .cp-row-grid .cp-reorder-btn { width: 44px; height: 36px; font-size: 13px; min-height: 36px; }
+    /* Side by side when both labels fit whole (max-content); on a narrower phone
+       they wrap to one full-width chip per line rather than ellipsising. */
     .cp-page .cp-cell-tracking button.cp-chip {
-        flex: 1 1 0; justify-content: center; gap: 8px;
-        min-height: 44px; padding: 0 12px; border-radius: 22px;
+        flex: 1 1 0; min-width: max-content; justify-content: center; gap: 6px;
+        min-height: 44px; padding: 0 10px; border-radius: 22px;
     }
     /* Compact the toolbar so it doesn't wrap awkwardly */
     .cp-list-toolbar { gap: 6px; }
+    /* The print button takes its own full-width row, a real tap target. */
+    .cp-list-toolbar .cp-scrollery-btn { order: 10; flex: 1 1 100%; justify-content: center; min-height: 44px; font-size: 13px; }
+    /* Post-print bar: the two answers stack full width under the sentence. */
+    .cp-print-bar-actions { flex: 1 1 100%; flex-direction: column; }
+    .cp-print-bar-actions > button { justify-content: center; min-height: 44px; font-size: 14px; }
+    .cp-print-bar-close { min-width: 44px; min-height: 44px; }
 
 
     /* --- Expanded award row: the fixed 2-column grid put Pass to Local and
@@ -1643,6 +1687,24 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         </button>
     </div>
 
+    <?php if ($courtSt !== 'complete'): ?>
+    <!-- After a Scrollery print run: "Set these scrolls to complete?" (cpShowPrintBar).
+         The bar acts only on the lines the preflight said would print. -->
+    <div class="cp-print-bar" id="cp-print-bar" role="region" aria-label="Scrollery print" hidden>
+        <div class="cp-print-bar-main">
+            <i class="fas fa-print cp-print-bar-icon" aria-hidden="true"></i>
+            <span class="cp-print-bar-text" id="cp-print-bar-text" role="status" aria-live="polite"></span>
+            <span class="cp-print-bar-actions" id="cp-print-bar-actions">
+                <button type="button" class="cp-btn-primary cp-btn-sm" id="cp-print-bar-yes" onclick="cpCompletePrinted()"><i class="fas fa-check" aria-hidden="true"></i> Set these scrolls to complete?</button>
+                <button type="button" class="cp-btn-outline cp-btn-sm" id="cp-print-bar-no" onclick="cpDismissPrintBar()">Not yet</button>
+            </span>
+            <button type="button" class="cp-print-bar-close" id="cp-print-bar-close" onclick="cpDismissPrintBar()" aria-label="Dismiss" data-tip="Dismiss" hidden>&times;</button>
+        </div>
+        <div class="cp-print-bar-skipped" id="cp-print-bar-skipped" hidden></div>
+        <div class="cp-print-bar-note" id="cp-print-bar-note" hidden></div>
+    </div>
+    <?php endif; ?>
+
     <!-- Spreadsheet toolbar -->
     <div class="cp-list-toolbar">
         <span class="cp-list-toolbar-label"><i class="fas fa-th-large" style="margin-right:5px"></i>View</span>
@@ -1652,6 +1714,17 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
             <button type="button" data-density="compact"     onclick="cpSetDensity('compact')"     data-tip="Compact — dense rows"><i class="fas fa-minus"></i> Compact</button>
         </div>
         <span class="cp-list-toolbar-spacer"></span>
+        <?php if ($courtSt !== 'complete'):
+            // Mirrors window.cpScrolleryCount(): Scrollery Print lines that aren't skipped.
+            $_scrolleryN = 0;
+            foreach ($courtAwards ?? [] as $_ca) {
+                if (($_ca['Status'] ?? '') !== 'cancelled' && (int)($_ca['ScrollStatus'] ?? 0) === 3) $_scrolleryN++;
+            }
+        ?>
+        <button type="button" class="cp-btn-outline cp-btn-sm cp-scrollery-btn" id="cp-scrollery-print-btn" onclick="cpPrintScrollery()"<?= $_scrolleryN ? '' : ' disabled data-tip="Set a scroll chip to Scrollery Print to add it here."' ?>>
+            <i class="fas fa-print" aria-hidden="true"></i><span>Print Scrollery scrolls (<span id="cp-scrollery-print-n"><?= $_scrolleryN ?></span>)</span>
+        </button>
+        <?php endif; ?>
         <span class="cp-list-toolbar-label" id="cp-list-toolbar-count"><?= count($courtAwards) ?> award<?= count($courtAwards) !== 1 ? 's' : '' ?></span>
     </div>
 
@@ -3106,6 +3179,180 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         }).length;
     };
 
+    // ---- Print Scrollery scrolls (N) and "Set these scrolls to complete?" ----
+    // The toolbar count follows the model: cpRefreshStatusBar (every chip write and
+    // every heartbeat reconcile), a skip/unskip and a removal all call this.
+    var CP_SCROLLERY_EMPTY_TIP = 'Set a scroll chip to Scrollery Print to add it here.';
+    function cpRefreshScrolleryButton() {
+        var btn = gid('cp-scrollery-print-btn');
+        if (!btn) return;
+        var n = window.cpScrolleryCount();
+        var nEl = gid('cp-scrollery-print-n');
+        if (nEl) nEl.textContent = n;
+        if (cpPrintBusy) return;   // the preflight owns the disabled state until it answers
+        btn.disabled = n === 0;
+        if (n === 0) btn.setAttribute('data-tip', CP_SCROLLERY_EMPTY_TIP);
+        else btn.removeAttribute('data-tip');
+    }
+
+    // The run the officer just printed: [{CourtAwardId, RowVersion}] from the
+    // preflight, exactly as printed. Yes completes these lines and no others.
+    var cpPendingRun = null;
+    var cpPrintBusy  = false;
+
+    function cpPlural(n, one, many) { return n === 1 ? one : many; }
+    function cpSkippedItem(s) {
+        return (s.Persona || 'Unknown player') + ' — ' + (s.AwardName || 'Unknown award') + ': ' + (s.Reason || '');
+    }
+
+    window.cpPrintScrollery = function() {
+        var btn = gid('cp-scrollery-print-btn');
+        if (!btn || btn.disabled || cpPrintBusy) return;
+        // Open the tab now, inside the click, so a popup blocker lets it through; it is
+        // pointed at the print once the preflight says which lines will print.
+        var tab = null;
+        try { tab = window.open('', '_blank'); } catch (e) { tab = null; }
+        if (tab) {
+            try {
+                tab.document.title = 'Preparing scrolls…';
+                tab.document.body.innerHTML = '<p style="font:15px system-ui,sans-serif;padding:32px;color:#4a5568">Preparing the Scrollery scrolls…</p>';
+            } catch (e) {}
+        }
+        cpPrintBusy = true;
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        var fd = new FormData();
+        fd.append('CourtId', courtId);
+        post('CourtAjax/scrollery_print_plan', fd).then(function(d) {
+            cpPrintBusy = false;
+            btn.removeAttribute('aria-busy');
+            cpRefreshScrolleryButton();
+            if (!d || d.status !== 0) {
+                if (tab) try { tab.close(); } catch (e) {}
+                if (!d || !d._postFailed) cpAlert((d && d.error) || 'Could not prepare the Scrollery print.');
+                return;
+            }
+            var printable = Array.isArray(d.Printable) ? d.Printable : [];
+            var skipped   = Array.isArray(d.Skipped) ? d.Skipped : [];
+            if (!printable.length) {
+                if (tab) try { tab.close(); } catch (e) {}
+                var msg = skipped.length
+                    ? 'None of the Scrollery Print lines can print:\n\n' + skipped.map(function(s) { return '• ' + cpSkippedItem(s); }).join('\n')
+                    : 'No lines are set to Scrollery Print.';
+                cpAlert(msg, 'Print Scrollery scrolls');
+                return;
+            }
+            var ids = printable.map(function(p) { return parseInt(p.CourtAwardId, 10) || 0; });
+            var url = uir + 'Scrollery/court/' + courtId + '&lines=' + ids.join(',');
+            var opened = false;
+            if (tab && !tab.closed) {
+                try { tab.location.href = url; opened = true; } catch (e) {}
+            }
+            cpPendingRun = printable.map(function(p) {
+                return { CourtAwardId: parseInt(p.CourtAwardId, 10) || 0, RowVersion: parseInt(p.RowVersion, 10) || 0 };
+            });
+            cpShowPrintBar(printable.length, skipped, parseInt(d.Dropped, 10) || 0, opened ? '' : url);
+        });
+    };
+
+    // printUrl is set only when the tab could not be opened (a blocked popup): the bar
+    // then carries a link, and following a link is never blocked.
+    function cpShowPrintBar(n, skipped, dropped, printUrl) {
+        var bar = gid('cp-print-bar');
+        if (!bar) return;
+        var text = gid('cp-print-bar-text');
+        text.textContent = 'Printed ' + n + ' Scrollery ' + cpPlural(n, 'scroll', 'scrolls') + '.';
+        if (printUrl) {
+            var a = document.createElement('a');
+            a.href = printUrl; a.target = '_blank'; a.rel = 'noopener';
+            a.textContent = 'Open the print';
+            text.appendChild(document.createTextNode(' '));
+            text.appendChild(a);
+        }
+        gid('cp-print-bar-actions').hidden = false;
+        gid('cp-print-bar-yes').disabled = false;
+        gid('cp-print-bar-close').hidden = true;
+
+        var sk = gid('cp-print-bar-skipped');
+        sk.innerHTML = '';
+        if (skipped.length) {
+            var head = document.createElement('div');
+            head.textContent = skipped.length + ' ' + cpPlural(skipped.length, "line wasn't printed:", "lines weren't printed:");
+            var ul = document.createElement('ul');
+            skipped.forEach(function(s) {
+                var li = document.createElement('li');
+                li.textContent = cpSkippedItem(s);
+                ul.appendChild(li);
+            });
+            sk.appendChild(head);
+            sk.appendChild(ul);
+        }
+        sk.hidden = !skipped.length;
+
+        var note = gid('cp-print-bar-note');
+        note.innerHTML = '';
+        if (dropped > 0) {
+            var p = document.createElement('p');
+            p.textContent = dropped + ' more ' + cpPlural(dropped, "wasn't", "weren't") + ' included — print again after completing these.';
+            note.appendChild(p);
+        }
+        note.hidden = !note.childNodes.length;
+        bar.hidden = false;
+    }
+
+    window.cpDismissPrintBar = function() {
+        cpPendingRun = null;
+        var bar = gid('cp-print-bar');
+        if (bar) bar.hidden = true;
+    };
+
+    window.cpCompletePrinted = function() {
+        var run = cpPendingRun;
+        var yes = gid('cp-print-bar-yes');
+        if (!run || !run.length || (yes && yes.disabled)) return;
+        if (yes) yes.disabled = true;
+        var fd = new FormData();
+        fd.append('CourtId', courtId);
+        fd.append('Lines', JSON.stringify(run));
+        post('CourtAjax/complete_printed_scrolls', fd).then(function(d) {
+            if (!d || d.status !== 0) {
+                if (yes) yes.disabled = false;
+                if (!d || !d._postFailed) cpAlert((d && d.error) || 'Could not set the scrolls to complete.');
+                return;
+            }
+            cpPendingRun = null;
+            var done  = Array.isArray(d.Completed) ? d.Completed : [];
+            var stale = Array.isArray(d.Stale) ? d.Stale : [];
+            // A line completes only when its row_version still matched the printed one,
+            // and the write bumps it by exactly one, so the new token is printed + 1.
+            var printedRv = {};
+            run.forEach(function(l) { printedRv[String(l.CourtAwardId)] = l.RowVersion; });
+            done.forEach(function(caid) {
+                var rv = printedRv[String(caid)];
+                cpSetLineTracking(caid, 'scroll', 2, rv != null ? rv + 1 : cpGetRowVersion(caid) + 1);
+            });
+            if (!stale.length) {
+                cpDismissPrintBar();
+                cpNotice(done.length + ' ' + cpPlural(done.length, 'scroll', 'scrolls') + ' set to Complete.');
+                return;
+            }
+            // Report what was left alone; the heartbeat brings those lines up to date.
+            gid('cp-print-bar-text').textContent = done.length + ' ' + cpPlural(done.length, 'scroll', 'scrolls') + ' set to Complete.';
+            gid('cp-print-bar-actions').hidden = true;
+            gid('cp-print-bar-close').hidden = false;
+            gid('cp-print-bar-skipped').hidden = true;
+            var note = gid('cp-print-bar-note');
+            note.innerHTML = '';
+            var p = document.createElement('p');
+            p.textContent = stale.length + ' ' + cpPlural(stale.length,
+                'line changed since printing and was left as it was.',
+                'lines changed since printing and were left as they were.');
+            note.appendChild(p);
+            note.hidden = false;
+            cpHeartbeatPoll(true);
+        });
+    };
+
     // ---- Scroll / regalia status picker ----
     // One shared popover for every chip. position:fixed and measured from the chip, so
     // the overflow-x:auto award list cannot clip it; a scroll or resize closes it rather
@@ -3113,6 +3360,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
     // data-tip renders (court-planner.js only tips inside .cp-page).
     var cpTrackMenu = null;
     var cpTrackMenuChip = null;
+    var cpTrackSpaceHold = null;   // chip whose picking Space key is still down
 
     function cpTrackMenuEl() {
         if (cpTrackMenu) return cpTrackMenu;
@@ -3148,6 +3396,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
     window.cpOpenTrackMenu = function(event, chip) {
         if (event) event.stopPropagation();   // a chip click never toggles the row's expand
         if (!chip || chip.getAttribute('aria-busy') === 'true') return;
+        if (cpTrackSpaceHold === chip) return;   // the Space that just picked, released
         if (cpTrackMenuChip === chip) { cpCloseTrackMenu(true); return; }
         cpCloseTrackMenu(false);
 
@@ -3214,6 +3463,16 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
             opts[n].focus({ preventScroll: true });
         } else if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
             e.preventDefault();
+            // Picking returns focus to the chip on keydown; a browser that activates a
+            // button on Space keyup would then re-open the picker. Ignore the chip until
+            // that key is released.
+            if (e.key !== 'Enter' && cpTrackMenuChip) {
+                cpTrackSpaceHold = cpTrackMenuChip;
+                document.addEventListener('keyup', function release() {
+                    document.removeEventListener('keyup', release, true);
+                    setTimeout(function() { cpTrackSpaceHold = null; }, 0);
+                }, true);
+            }
             if (i >= 0) cpPickTrackOpt(opts[i]);
         } else if (e.key === 'Escape' || e.key === 'Esc') {
             e.preventDefault();
@@ -3236,19 +3495,28 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         cpCloseTrackMenu(true);
         if (st === (parseInt(chip.dataset.status, 10) || 0)) return;
 
-        var fd = new FormData();
-        fd.append('CourtAwardId', caid);
-        fd.append('Type', type);
-        fd.append('Status', st);
-        fd.append('RowVersion', cpGetRowVersion(caid));
+        // A line's two chips share one RowVersion, so their writes run one after the
+        // other: the second reads the token the first one returned instead of racing it.
         chip.setAttribute('aria-busy', 'true');
-        post('CourtAjax/set_award_tracking_status', fd).then(function(d) {
-            chip.removeAttribute('aria-busy');
-            if (d && d.status === 0) { cpSetLineTracking(caid, type, d.newStatus, d.RowVersion); return; }
-            if (d && d.status === 9) { cpStale(caid); return; }
-            if (!d || !d._postFailed) cpAlert((d && d.error) || 'Could not update tracking status.');
+        var prev = cpLineWrites[caid] || Promise.resolve();
+        var run = prev.catch(function() {}).then(function() {
+            var fd = new FormData();
+            fd.append('CourtAwardId', caid);
+            fd.append('Type', type);
+            fd.append('Status', st);
+            fd.append('RowVersion', cpGetRowVersion(caid));
+            return post('CourtAjax/set_award_tracking_status', fd).then(function(d) {
+                chip.removeAttribute('aria-busy');
+                if (d && d.status === 0) { cpSetLineTracking(caid, type, d.newStatus, d.RowVersion); return; }
+                if (d && d.status === 9) { cpStale(caid); return; }
+                if (!d || !d._postFailed) cpAlert((d && d.error) || 'Could not update tracking status.');
+            });
         });
+        cpLineWrites[caid] = run;
+        var settle = function() { if (cpLineWrites[caid] === run) delete cpLineWrites[caid]; };
+        run.then(settle, settle);
     }
+    var cpLineWrites = {};   // caid -> the line's last queued tracking write
 
     // Recompute the status bar's tracking counts from the row chips. The PHP render
     // owns the bar's wording; this rewrites only the [data-sb="type-status"] numbers.
@@ -3264,6 +3532,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
             var k = String(el.dataset.sb).split('-');
             el.textContent = (counts[k[0]] && counts[k[0]][k[1]]) || 0;
         });
+        cpRefreshScrolleryButton();
     }
 
     function cpRefreshProgress() {
@@ -3298,6 +3567,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         for (var i = awards.length - 1; i >= 0; i--) {
             if (String(awards[i].CourtAwardId) === String(caid)) awards.splice(i, 1);
         }
+        cpRefreshStatusBar();   // the row is gone: recount the bar and the print button
     }
 
     // Re-sort the client model (window.courtAwards) into the given DOM id order and
@@ -3702,6 +3972,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         if (a) a.Status = status;
         cpSyncRowGuards(caid, status);
         cpRefreshProgress();
+        cpRefreshScrolleryButton();   // a skipped line leaves the print count
     };
 
     // ---- Staged-not-finalized safeguard indicator (spec §5.3) ----
