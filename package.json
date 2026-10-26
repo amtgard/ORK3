@@ -28,6 +28,7 @@
     "sweep:scrolls": "php tools/scroll-sweep/bin/dump-axes.php > tools/scroll-sweep/axes.json && ORK3_SWEEP_WORKERS=${ORK3_SWEEP_WORKERS:-4} playwright test --project=scroll-sweep-merge",
     "sweep:scrolls:exhaustive": "ORK3_SWEEP_EXHAUSTIVE=1 npm run sweep:scrolls",
     "sweep:scrolls:unit": "playwright test --project=scroll-sweep-unit",
-    "sweep:scrolls:corpus": "playwright test --project=scroll-corpus"
+    "sweep:scrolls:corpus": "playwright test --project=scroll-corpus",
+    "profile:scrolls": "php tools/scroll-sweep/bin/dump-axes.php > tools/scroll-sweep/axes.json && playwright test --project=scroll-profile"
   }
 }

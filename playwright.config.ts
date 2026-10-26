@@ -101,6 +101,22 @@ export default defineConfig({
       },
     },
     {
+      // The free-space profiles: how much width is clear of the artwork at each height of the
+      // text band, written to assets/scrolls/free-space.json. Fixture-rendered, so it needs no
+      // login. See profile.spec.ts. The use block is scroll-underlays' own. One CSS pixel is
+      // one frame pixel (the spec forces the SVG to 2550px wide and rasterises at scale 1), and
+      // the viewport holds the whole certificate.
+      name: 'scroll-profile',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'profile.spec.ts',
+      timeout: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 2600, height: 3500 },
+        deviceScaleFactor: 1,
+      },
+    },
+    {
       // Re-emits the report from an existing results.json. See rescore.spec.ts.
       name: 'scroll-sweep-rescore',
       testDir: './tools/scroll-sweep',
