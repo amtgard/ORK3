@@ -1521,6 +1521,30 @@ button.cp-rp-maker:not(:disabled):hover { background: #edf2f7; border-color: #cb
 button.cp-rp-maker[data-state="empty"] { color: #a0aec0; font-weight: 500; border-style: dashed; }
 button.cp-rp-maker.cp-rp-maker-need { color: #c05621; border-color: #f6ad55; }
 button.cp-rp-maker[data-state="auto"] { color: #a0aec0; font-weight: 400; font-style: italic; padding-left: 0; cursor: default; }
+/* A pick or clear on its way to the server. */
+button.cp-rp-maker.cp-rp-maker-busy { opacity: .6; cursor: progress; }
+.cp-rp-row .cp-rp-smaker, .cp-rp-row .cp-rp-rmaker { display: flex; align-items: center; gap: 2px; }
+button.cp-rp-maker-clear {
+    -webkit-appearance: none; appearance: none;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 20px; height: 20px; min-height: 0; margin: 0; padding: 0;
+    border: 1px solid transparent; border-radius: 50%; background: none; box-shadow: none;
+    color: #a0aec0; font-size: 10px; line-height: 1; cursor: pointer;
+}
+button.cp-rp-maker-clear:hover, button.cp-rp-maker-clear:focus-visible { background: #fed7d7; border-color: #feb2b2; color: #c53030; }
+/* The inline search that replaces the maker button while it is open. */
+.cp-rp-maker-edit { display: block; flex: 1 1 auto; width: 100%; min-width: 0; }
+.cp-rp-grid input.cp-rp-maker-input {
+    display: block; box-sizing: border-box; width: 100%; height: auto; min-height: 0; margin: 0;
+    padding: 3px 7px; border: 1px solid #63b3ed; border-radius: 5px;
+    background: #fff; box-shadow: 0 0 0 2px rgba(66,153,225,.2); color: #2d3748;
+    font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1.35;
+}
+.cp-rp-grid input.cp-rp-maker-input:focus { outline: none; border-color: #3182ce; }
+.cp-rp-grid input.cp-rp-maker-input::placeholder { color: #a0aec0; }
+/* The results list is sized to its input; a narrow maker column needs more room for
+   a persona and its kingdom:park. cpPositionAc clamps it to the viewport. */
+#cp-rp-root .cp-ac-dropdown { min-width: 240px; }
 
 .cp-rp-arts { display: flex; align-items: center; gap: 6px; }
 .cp-rp-art-list { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #4a5568; }
@@ -1568,6 +1592,11 @@ html[data-theme="dark"] .cp-rp-maker-icon { color: #b794f4; }
 html[data-theme="dark"] button.cp-rp-maker[data-state="empty"] { color: #718096; }
 html[data-theme="dark"] button.cp-rp-maker.cp-rp-maker-need { color: #fbd38d; border-color: rgba(246,173,85,.55); }
 html[data-theme="dark"] button.cp-rp-maker[data-state="auto"] { color: #718096; }
+html[data-theme="dark"] button.cp-rp-maker-clear { color: #718096; }
+html[data-theme="dark"] button.cp-rp-maker-clear:hover,
+html[data-theme="dark"] button.cp-rp-maker-clear:focus-visible { background: rgba(197,48,48,.25); border-color: rgba(252,129,129,.5); color: #feb2b2; }
+html[data-theme="dark"] .cp-rp-grid input.cp-rp-maker-input { background: #1f2733; border-color: #4299e1; box-shadow: 0 0 0 2px rgba(66,153,225,.25); color: #e2e8f0; }
+html[data-theme="dark"] .cp-rp-grid input.cp-rp-maker-input::placeholder { color: #718096; }
 html[data-theme="dark"] .cp-rp-muted { color: #718096; }
 html[data-theme="dark"] button.cp-rp-art-add { background: #1f2733; border-color: #4a5568; color: #cbd5e0; }
 html[data-theme="dark"] button.cp-rp-art-add:hover { background: #2d3748; color: #fff; }
@@ -1607,6 +1636,10 @@ html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
     .cp-rp-grid button.cp-chip { flex: 1 1 auto; justify-content: center; min-height: 44px; padding: 0 12px; border-radius: 22px; font-size: 12px; gap: 6px; }
     button.cp-rp-maker { min-height: 44px; width: 100%; font-size: 13px; padding: 0 10px; }
     button.cp-rp-maker[data-state="auto"] { padding-left: 4px; }
+    .cp-rp-row .cp-rp-smaker, .cp-rp-row .cp-rp-rmaker { gap: 4px; }
+    button.cp-rp-maker-clear { width: 44px; height: 44px; font-size: 13px; }
+    /* 16px keeps iOS from zooming the viewport on focus. */
+    .cp-rp-grid input.cp-rp-maker-input { min-height: 44px; font-size: 16px; padding: 0 10px; }
     .cp-rp-art-list { white-space: normal; font-size: 13px; }
     button.cp-rp-art-add { width: 44px; height: 44px; font-size: 13px; }
 }
@@ -5786,9 +5819,12 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
     var cpRpDirty  = true;    // the model moved since the last render
     var cpRpFrame  = 0;       // pending requestAnimationFrame id
     var cpRpFilter = 'all';   // survives re-renders
-    // Set by the maker search (Task 2) while an inline search is open; the render waits
+    // Set by the inline maker search while it is open; the render waits
     // while it is true, and the search calls cpRpInvalidate() once it clears it.
     window.cpRpEditing = false;
+    // 'scroll:<caid>' / 'regalia:<caid>' -> {id, persona} while that maker's write is
+    // queued or in flight; the cell shows it (aria-busy) until the write settles.
+    var cpRpMakerPending = {};
 
     var CP_RP_FILTERS = [
         { key: 'all',       label: 'All' },
@@ -5883,29 +5919,35 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
             '</div>';
     }
 
-    // A maker cell. Read-only here; Task 2 makes button.cp-rp-maker interactive.
-    // data-state: "set" (a persona), "empty" (Assign…), "auto" (Printed by Scrollery).
+    // A maker cell: the maker button (click, Enter or Space opens the inline search) and,
+    // when a maker is set, a small × that clears it. data-state: "set" (a persona),
+    // "empty" (Assign…), "auto" (Printed by Scrollery — never editable). While a pick or
+    // clear is still being saved the cell shows the value on its way, marked aria-busy.
     function cpRpMakerHtml(kind, a) {
         var caid = cpRpInt(a.CourtAwardId);
         var noun = kind === 'scroll' ? 'Scroll maker' : 'Regalia maker';
-        var id   = cpRpInt(kind === 'scroll' ? a.ScrollMakerId : a.RegaliaMakerId);
+        var pend = cpRpMakerPending[kind + ':' + caid];
+        var id   = pend ? pend.id : cpRpInt(kind === 'scroll' ? a.ScrollMakerId : a.RegaliaMakerId);
         // An item that is needed (Custom Design / Needed) with no maker yet stands out.
-        var need = a.Status !== 'cancelled' && (kind === 'scroll' ? cpRpNeedsScrollArtisan(a) : cpRpNeedsRegaliaArtisan(a));
-        var cls  = 'cp-rp-maker' + (need ? ' cp-rp-maker-need' : '');
-        var base = 'type="button" class="' + cls + '" data-kind="' + kind + '" data-caid="' + caid + '"';
+        var need = !pend && a.Status !== 'cancelled' && (kind === 'scroll' ? cpRpNeedsScrollArtisan(a) : cpRpNeedsRegaliaArtisan(a));
+        var cls  = 'cp-rp-maker' + (need ? ' cp-rp-maker-need' : '') + (pend ? ' cp-rp-maker-busy' : '');
+        var base = 'type="button" class="' + cls + '" data-kind="' + kind + '" data-caid="' + caid + '"' + (pend ? ' aria-busy="true"' : '');
         if (kind === 'scroll' && cpRpScroll(a) === 3) {
             // The Scrollery prints it, so there is no maker (the Order hides the field).
             return '<button ' + base + ' data-state="auto" disabled aria-label="' + noun + ': printed by Scrollery">' +
                 '<span class="cp-rp-maker-text">Printed by Scrollery</span></button>';
         }
-        var persona = (kind === 'scroll' ? a.ScrollMakerPersona : a.RegaliaMakerPersona) || '';
+        var persona = pend ? pend.persona : ((kind === 'scroll' ? a.ScrollMakerPersona : a.RegaliaMakerPersona) || '');
         if (id > 0) {
             persona = persona || 'Player #' + id;
             return '<button ' + base + ' data-state="set" data-maker-id="' + id + '" aria-label="' + esc(noun + ': ' + persona) + '">' +
-                '<i class="fas fa-user-edit cp-rp-maker-icon" aria-hidden="true"></i><span class="cp-rp-maker-text">' + esc(persona) + '</span></button>';
+                '<i class="fas fa-user-edit cp-rp-maker-icon" aria-hidden="true"></i><span class="cp-rp-maker-text">' + esc(persona) + '</span></button>' +
+                (pend ? '' : '<button type="button" class="cp-rp-maker-clear" data-kind="' + kind + '" data-caid="' + caid + '"' +
+                    ' data-tip="Clear ' + noun.toLowerCase() + '" aria-label="' + esc('Clear ' + noun.toLowerCase() + ' ' + persona) + '">' +
+                    '<i class="fas fa-times" aria-hidden="true"></i></button>');
         }
         return '<button ' + base + ' data-state="empty" aria-label="' + noun + ': unassigned">' +
-            '<span class="cp-rp-maker-text">Assign…</span></button>';
+            '<span class="cp-rp-maker-text">' + (pend ? 'Clearing…' : 'Assign…') + '</span></button>';
     }
 
     function cpRpArtisansHtml(a) {
@@ -5961,6 +6003,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         if (!el || !el.classList) return null;
         if (el.classList.contains('cp-chip')) return '.cp-chip[data-type="' + el.dataset.type + '"][data-caid="' + cpRpInt(el.dataset.caid) + '"]';
         if (el.classList.contains('cp-rp-maker')) return '.cp-rp-maker[data-kind="' + el.dataset.kind + '"][data-caid="' + cpRpInt(el.dataset.caid) + '"]';
+        if (el.classList.contains('cp-rp-maker-clear')) return '.cp-rp-maker-clear[data-kind="' + el.dataset.kind + '"][data-caid="' + cpRpInt(el.dataset.caid) + '"]';
         if (el.classList.contains('cp-rp-art-add')) return '.cp-rp-art-add[data-caid="' + cpRpInt(el.dataset.caid) + '"]';
         if (el.dataset && el.dataset.rpFilter) return '[data-rp-filter="' + el.dataset.rpFilter + '"]';
         return null;
@@ -5986,7 +6029,7 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
     function cpRpRender() {
         var root = gid('cp-rp-root');
         if (!root) return;
-        // Never re-render under an open edit: the maker search (Task 2) or the shared
+        // Never re-render under an open edit: the inline maker search or the shared
         // picker anchored to one of this grid's chips. Each calls cpRpInvalidate() when
         // it ends, and the render runs then.
         if (window.cpRpEditing || (cpTrackMenuChip && root.contains(cpTrackMenuChip))) { cpRpDirty = true; return; }
@@ -6051,6 +6094,188 @@ $_stat_html = function ($type, array $counts) use ($_stat_class) {
         cpRpFilter = ok ? key : 'all';
         cpRpRender();
     };
+
+    // ---- Resource Planning: inline maker assignment ----
+    function cpRpFind(caid) {
+        return courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); }) || null;
+    }
+
+    // A saved maker reaches the model AND the Order's expand inputs, so a later Order
+    // Save posts this maker rather than the one its hidden input still held.
+    function cpRpApplyMaker(caid, kind, id, persona) {
+        var a = cpRpFind(caid);
+        if (a) {
+            if (kind === 'scroll') { a.ScrollMakerId  = id || null; a.ScrollMakerPersona  = id ? persona : ''; }
+            else                   { a.RegaliaMakerId = id || null; a.RegaliaMakerPersona = id ? persona : ''; }
+        }
+        var t = gid('cp-' + kind + '-maker-text-' + caid); if (t) t.value = id ? persona : '';
+        var h = gid('cp-' + kind + '-maker-id-' + caid);   if (h) h.value = id || 0;
+    }
+
+    // The one writer for a maker from Resource Planning. Queued on the line's write
+    // chain (cpLineWrites, as cpPickTrackOpt), so it serializes with chip writes and
+    // each write reads the RowVersion the one before it returned. update_award is
+    // partial: only this maker's column and the RowVersion are posted. Assigning a maker
+    // to a Not Tracked item also moves it to Custom Design / Needed, as the next link
+    // of the same chain; clearing a maker never changes the status.
+    window.cpRpSetMaker = function(caid, kind, mundaneId, persona) {
+        caid = cpRpInt(caid);
+        kind = kind === 'regalia' ? 'regalia' : 'scroll';
+        var id = cpRpInt(mundaneId);
+        persona = id > 0 ? String(persona || '') : '';
+        if (!caid || !cpRpFind(caid)) return Promise.resolve();
+        var key  = kind + ':' + caid;
+        var mine = { id: id, persona: persona };
+        cpRpMakerPending[key] = mine;
+        cpRpInvalidate();
+
+        var prev = cpLineWrites[caid] || Promise.resolve();
+        var run = prev.catch(function() {}).then(function() {
+            var a = cpRpFind(caid);
+            if (!a) return;   // the line left the court while this waited its turn
+            // A peer (or this officer's queued chip write) may have moved the scroll to
+            // Scrollery Print meanwhile: it has no maker, so nothing is posted.
+            if (kind === 'scroll' && cpRpScroll(a) === 3) {
+                cpAlert('This scroll is now set to Scrollery Print, so it has no scroll maker.');
+                return;
+            }
+            var fd = new FormData();
+            fd.append('CourtAwardId', caid);
+            fd.append(kind === 'scroll' ? 'ScrollMakerId' : 'RegaliaMakerId', id);
+            var sentRv = cpGetRowVersion(caid);
+            fd.append('RowVersion', sentRv);
+            return post('CourtAjax/update_award', fd).then(function(d) {
+                if (d && d.status === 0) {
+                    // update_award returns no token; the guarded write won, so the server
+                    // row is sent+1 (cpSaveAward's convention). A heartbeat that already
+                    // brought a newer token in the meantime is kept, never wound back.
+                    var newRv = sentRv + 1;
+                    cpSetRowVersion(caid, Math.max(cpGetRowVersion(caid), newRv));
+                    cpPendingRunAdvance(caid, sentRv, newRv);
+                    cpRpApplyMaker(caid, kind, id, persona);
+                    if (id > 0) return cpRpTrackAssigned(caid, kind);
+                    return;
+                }
+                if (d && d.status === 9) { cpStale(caid); return; }
+                if (!d || !d._postFailed) cpAlert((d && d.error) || 'Could not save the ' + (kind === 'scroll' ? 'scroll' : 'regalia') + ' maker.');
+            });
+        });
+        cpLineWrites[caid] = run;
+        var settle = function() {
+            if (cpLineWrites[caid] === run) delete cpLineWrites[caid];
+            if (cpRpMakerPending[key] === mine) delete cpRpMakerPending[key];
+            cpRpInvalidate();
+        };
+        run.then(settle, settle);
+        return run;
+    };
+
+    // The second link of an assignment: a Not Tracked item becomes tracked (scroll ->
+    // Custom Design, regalia -> Needed). Read at its turn in the chain, from the model.
+    function cpRpTrackAssigned(caid, kind) {
+        var a = cpRpFind(caid);
+        if (!a || (kind === 'scroll' ? cpRpScroll(a) : cpRpRegalia(a)) !== 0) return;
+        var fd = new FormData();
+        fd.append('CourtAwardId', caid);
+        fd.append('Type', kind);
+        fd.append('Status', 1);
+        var sentRv = cpGetRowVersion(caid);
+        fd.append('RowVersion', sentRv);
+        return post('CourtAjax/set_award_tracking_status', fd).then(function(d) {
+            if (d && d.status === 0) {
+                cpPendingRunAdvance(caid, sentRv, d.RowVersion);
+                cpSetLineTracking(caid, kind, d.newStatus, d.RowVersion);
+                return;
+            }
+            if (d && d.status === 9) { cpStale(caid); return; }
+            if (!d || !d._postFailed) cpAlert((d && d.error) || 'The maker was saved, but the ' + (kind === 'scroll' ? 'scroll' : 'regalia') + ' status could not be updated.');
+        });
+    }
+
+    // Swap a maker button for a search input. One editor at a time; while it is open
+    // the grid does not re-render (cpRpEditing), so a heartbeat cannot destroy it.
+    var cpRpEditor = null;
+    function cpRpOpenMakerEdit(btn) {
+        if (!btn || btn.disabled || btn.getAttribute('aria-busy') === 'true') return;
+        if (cpRpEditor) cpRpEditor.close(false);
+        var caid = cpRpInt(btn.dataset.caid);
+        var kind = btn.dataset.kind === 'regalia' ? 'regalia' : 'scroll';
+        var a    = cpRpFind(caid);
+        var cell = btn.parentNode;
+        if (!a || !cell) return;
+        var noun   = kind === 'scroll' ? 'Scroll maker' : 'Regalia maker';
+        var sfx    = kind + '-' + caid;
+        var dropId = 'cp-rp-mk-drop-' + sfx, hidId = 'cp-rp-mk-id-' + sfx;
+        var cur    = btn.dataset.state === 'set' ? (kind === 'scroll' ? a.ScrollMakerPersona : a.RegaliaMakerPersona) || '' : '';
+
+        cell.innerHTML =
+            '<span class="cp-rp-maker-edit">' +
+                '<input type="text" class="cp-rp-maker-input" id="cp-rp-mk-text-' + sfx + '" value="' + esc(cur) + '"' +
+                    ' placeholder="Search by persona…" autocomplete="off" aria-autocomplete="list" aria-controls="' + dropId + '"' +
+                    ' aria-label="' + esc(noun + ' — search by persona. Escape cancels.') + '">' +
+                '<input type="hidden" id="' + hidId + '" value="">' +
+                '<div class="cp-ac-dropdown" id="' + dropId + '" role="listbox"></div>' +
+            '</span>';
+        var input = cell.querySelector('.cp-rp-maker-input');
+        var drop  = gid(dropId);
+        window.cpRpEditing = true;
+
+        var ed = { caid: caid, kind: kind };
+        ed.close = function(refocus) {
+            if (cpRpEditor !== ed) return;
+            cpRpEditor = null;
+            if (window.cpAcOpenDrop === drop && typeof window.cpAcUnbind === 'function') window.cpAcUnbind();
+            if (cell.isConnected) {
+                var row = cpRpFind(caid);
+                if (row) cell.innerHTML = cpRpMakerHtml(kind, row);
+                var again = cell.querySelector('.cp-rp-maker');
+                if (refocus && again) again.focus({ preventScroll: true });
+            }
+            window.cpRpEditing = false;
+            cpRpInvalidate();
+        };
+        cpRpEditor = ed;
+
+        // Picking from the list must not blur the input first (that would cancel).
+        drop.addEventListener('mousedown', function(e) { e.preventDefault(); });
+        input.addEventListener('input', function() {
+            cpAcSearch(input, dropId, hidId, function(p) {
+                var pid = cpRpInt(p && p.MundaneId);
+                if (cpRpEditor !== ed || !pid) return;
+                var a2 = cpRpFind(caid);
+                var was = a2 ? cpRpInt(kind === 'scroll' ? a2.ScrollMakerId : a2.RegaliaMakerId) : 0;
+                if (pid !== was) window.cpRpSetMaker(caid, kind, pid, p.Persona || '');
+                ed.close(true);
+            });
+        });
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' || e.key === 'Esc') { e.preventDefault(); ed.close(true); }
+        });
+        input.addEventListener('blur', function() {
+            // Deferred a tick: focus may be moving into the results list.
+            setTimeout(function() {
+                if (cpRpEditor !== ed) return;
+                if (document.activeElement === input || (drop && drop.contains(document.activeElement))) return;
+                ed.close(false);
+            }, 0);
+        });
+        input.focus({ preventScroll: true });
+        if (cur) input.select();
+    }
+
+    var cpRpRootEl = gid('cp-rp-root');
+    if (cpRpRootEl) cpRpRootEl.addEventListener('click', function(e) {
+        var clr = e.target.closest('button.cp-rp-maker-clear');
+        if (clr && cpRpRootEl.contains(clr)) {
+            // Focus the maker button first: the × is gone once the clear renders.
+            var mk = clr.parentNode && clr.parentNode.querySelector('.cp-rp-maker');
+            if (mk) mk.focus({ preventScroll: true });
+            window.cpRpSetMaker(clr.dataset.caid, clr.dataset.kind, 0, '');
+            return;
+        }
+        var btn = e.target.closest('button.cp-rp-maker');
+        if (btn && cpRpRootEl.contains(btn)) cpRpOpenMakerEdit(btn);
+    });
 
     // ---- View tabs: Order of Court | Resource Planning ----
     // The URL keeps the view (?view=resources) so a reload or shared link returns to it.
