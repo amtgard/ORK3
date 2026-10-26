@@ -619,16 +619,32 @@ symbol {
 
 /* The swash beside the issuing body's NAME.
 
-   `top: 0.95em` is measured against the "Amtgard" span — the FIRST line — and that is
-   where it stays: it is one piece with the versal, drawn with the fixed orders, and
+   `top` is measured against the "Amtgard" span, the FIRST line, and that is where it
+   stays: the swash is one piece with the versal, drawn with the fixed orders, and
    scrollery-typeset.js does not move it. What yields is the type. The engine measures
    this swash's ink against the place line it set and writes --sc-place-gutter (the
    rule for line 2, below), so the place clears the swash however many lines the lead
-   above it took. */
+   above it took.
+
+   1.20em is ONE static offset for every hand, chosen on measured pixels, not font
+   metrics. The swash's stem used to start at 0.95em, which is inside "mtgard" in
+   most hands: the lettering's lowest ink ends between 0.93em (unicase) and 1.30em
+   (fondamento, garamond) below the span's top, and the stem and the curl pass
+   directly under it. Measured column by column over all ten hands and the three
+   swash drawings (common, rose, jovious) at 1:1, the swash's top ink sat 0.14em INSIDE the lettering at worst (gotisch) and 0.05em inside in garamond, the
+   two the owner saw. At 1.20em the swash clears the lettering in every hand by at
+   least 0.107em (gotisch, the worst) and by 0.2 to 0.4em in most.
+
+   The offset is deliberately not per hand and not computed: the owner asked for "an
+   extra tiny bit of space there, even if that results in some renderings having more
+   space than others below the m". Hands whose g barely dips (unicase, chancery, sharp)
+   simply get more air than gotisch does. Any higher and the curl, about 1.2em tall,
+   starts to reach the place line's rows, and the engine's gutter takes more of that
+   line for it. */
 #BottomTextFlourish {
     width: 3.3em;
     left: -0.6em;
-    top: 0.95em;
+    top: 1.20em;
 }
 
 /* How far the right swash may hang past the type column.

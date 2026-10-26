@@ -57,7 +57,7 @@ function pageHtml(o: Opts = {}): string {
     .Award .sc-art { font-size: var(--sc-art-size, 0.8em); }
     .Award .Flourish { position: absolute; pointer-events: none; height: auto; }
     #TopTextFlourish { width: 3.8em; left: -0.4em; bottom: 0.9em; }
-    #BottomTextFlourish { width: 3.3em; left: -0.6em; top: 0.95em; }
+    #BottomTextFlourish { width: 3.3em; left: -0.6em; top: 1.20em; /* Task 16: the production rule (scrollery.css) */ }
     #RightTextFlourish { width: 4.5em; right: -0.9em; top: 0; }
     section.IssuingTextSection[data-sc-comp="centered"] > p.ScLead, section.IssuingTextSection[data-sc-comp="centered"] > p.ScPlace { text-align: center; }
     section.IssuingTextSection[data-sc-comp="centered"] > p.ScPlace { margin-left: 0; padding-right: 0; }
