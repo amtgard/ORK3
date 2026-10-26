@@ -49,3 +49,45 @@ ORK3_SWEEP_REVERT=1 ORK3_SWEEP_STAGES=NA ORK3_SWEEP_OUT=/tmp/before npm run swee
 
 then re-shape it the way this file is shaped (id, the three damage figures, glyphPx) and
 commit it. Keep the raster scale the same on both sides or the comparison means nothing.
+
+# The typeset-engine baseline (2026-10-25)
+
+Two files, captured at HEAD `20b4b539d` before any rendering change of the typeset engine
+(`git diff --stat 9a2658622 HEAD` over `orkui/template/revised-frontend/scroll`,
+`style/scrollery.css`, `script/scrollery-autofit.js` and `Scrollery_render.tpl` was empty):
+
+- `results-1to1-head-2026-10-25.json` — the ink-collision sweep, **fixture driver, SAMPLED
+  matrix**, 1:1 with the frame. Top level `driver: "fixture"`, `sample: true`. 481 cases:
+  N 8, A 180, B 200, C 93. Every case carries `CAtop`/`CBtop` beside `CA`/`CB`/`CC`.
+- `corpus-before-2026-10-25.json` — `out/corpus/report.json` for the 54 frozen review cases
+  (sizes, line counts and pass-3 root scale per case).
+
+## How it was captured
+
+```sh
+ORK3_SWEEP_DRIVER=fixture ORK3_SWEEP_SAMPLE=1 ORK3_SWEEP_STAGES=NAB npm run sweep:scrolls
+# copy out/results.json here, then:
+ORK3_SWEEP_DRIVER=fixture ORK3_SWEEP_SAMPLE=1 ORK3_SWEEP_STAGES=C npm run sweep:scrolls
+# merge its `results` in, keeping threshold, driver, sample and generated
+npm run sweep:scrolls:corpus
+```
+
+## What "sampled" means (`ORK3_SWEEP_SAMPLE=1`, `lib/cases.ts`)
+
+- **A** every order-variant x ranks {0, 5, 10} (warrior at its floor, 1, instead of 0) x
+  profiles {max, empty, kingdomReal}
+- **B** every order-variant x every hand x {max}, at rank 10 (stage A's tightest rank cannot be
+  known when B is enumerated, so the largest sampled rank stands in)
+- **C** every legal ground/border pair, plus rankSet x ranks {0, 5, 10}
+- **N** the named cases, unchanged; `case-zero-preview` is not rendered by the fixture driver
+- stage D is not in this baseline
+
+Every sampled case is a case of the full matrix with the same id.
+`bin/regression.mjs` compares the ids both files hold and says how many; it refuses to compare
+files from different drivers, because the fixture driver draws a stand-in for the kingdom's
+arms and has no preview, trim or no-lines sheets, so its figures are not compose figures.
+Compare a later run against this file with the same driver:
+
+```sh
+node tools/scroll-sweep/bin/regression.mjs tools/scroll-sweep/baseline/results-1to1-head-2026-10-25.json
+```
