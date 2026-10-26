@@ -67,7 +67,8 @@ export const ZERO: Score = { score: 0, overlapPx: 0, worstRun: 0 };
  *   C∩A  clean 0 (griffon), 34 (dragon), 172 (issuer-on-knotwork)
  *        defects 508 (cyanotype), 927 (garber), 1368 (crown across the laurel)
  *        -> 300, which is 1.7x above the highest clean and 1.7x below the lowest defect
- *   C∩B  designed 238-262 — the versal swash, on every certificate in the module
+ *   C∩B  designed 238-262 — the versal swash, on every certificate in the module (until Task 16
+ *        lowered it to clear the lettering; a certificate now scores near 0 and 500 is conservative)
  *        defects 974 (case zero), 975, 1877 (uncial), 3121 (issuer on the knotwork)
  *        -> 500, 1.9x above the designed contact and 1.9x below the smallest defect
  *   C∩C  no designed text-on-text exists at all, so the floor is a true zero

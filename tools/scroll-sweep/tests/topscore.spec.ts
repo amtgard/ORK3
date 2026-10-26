@@ -85,10 +85,15 @@ test('CAtop and CBtop are scored in the same units as CA and CB, and never excee
      is a subset too. Compared in absolute weighted ink pixels, which is what both are. */
   expect(ink(s.CAtop, s.glyphPx)).toBeLessThanOrEqual(ink(s.CA, s.glyphPx) + 1e-6);
   expect(ink(s.CBtop, s.glyphPx)).toBeLessThanOrEqual(ink(s.CB, s.glyphPx) + 1e-6);
-  /* Every certificate carries the designed swash contact (238-262 weighted px per
-     lib/report.ts), and it is in the top half. A CBtop of zero means the score is not
-     reading the mask. */
-  expect(ink(s.CBtop, s.glyphPx), 'CBtop missed the versal swash').toBeGreaterThan(100);
+  /* Task 16 moved the versal's lower swash to 1.20em so that it clears "Amtgard" in every hand
+     (scrollery.css), so the 238-262 weighted px of designed contact lib/report.ts calibrated
+     CBtop against is gone: this certificate now scores below it. A CBtop of zero must still
+     mean "nothing struck" and not "the mask reads nothing", so the old offset is put back for
+     one more capture and has to score. */
+  expect(ink(s.CBtop, s.glyphPx), 'the lowered swash still strikes the lettering').toBeLessThan(100);
+  await page.addStyleTag({ content: '#BottomTextFlourish { top: 0.95em !important; }' });
+  const old = scoreInk(await captureLayers(page, await typeBand(page)));
+  expect(ink(old.CBtop, old.glyphPx), 'CBtop missed the versal swash at its old offset').toBeGreaterThan(100);
 });
 
 test('the fixture driver reaches hunter', async ({ page }) => {

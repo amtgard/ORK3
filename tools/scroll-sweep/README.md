@@ -87,7 +87,7 @@ evidence; the short version:
 | pair | threshold | why |
 | --- | --- | --- |
 | C∩A text over artwork | 300 | clean cases measure 0 to 172; confirmed defects 508 to 1368. 300 is 1.7x above the highest clean and 1.7x below the lowest defect. |
-| C∩B text over ornament | 500 | **every** certificate scores 238 to 262 here, the versal swash that is drawn that way, so the threshold has to clear it. Defects measure 974 to 3121. |
+| C∩B text over ornament | 500 | **every** certificate scores 238 to 262 here, the versal swash that is drawn that way, so the threshold has to clear it (Task 16 moved that swash clear of the lettering, so a certificate now scores near 0 here and the threshold is merely conservative; the 238 to 262 stays the calibration evidence). Defects measure 974 to 3121. |
 | C∩C text over text | 95 | no designed text-on-text exists, so the floor is a true zero. 95 is the earlier 8-pixel figure carried across by the measured 11.9x change of scale. |
 
 The report leads with the **distribution**, not the pass list, and buckets it by multiples
