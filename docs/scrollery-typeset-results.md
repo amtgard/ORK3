@@ -18,12 +18,14 @@ below refer to it. "Before" is the state captured at HEAD `20b4b539d` before any
   over 300 on top-half artwork contact (Q6), against 144 in the baseline. Q6 is now scored with the
   underlay policy applied in layer A, the way the layout treats it (section 5). One case that was clean
   is over a threshold now, a synthetic `max` persona on Garber (section 5.3, reporting only).
-- The owner's visual sign-off (plan Step 6, a human gate) is **pending**; nothing here replaces it.
+- The owner's round-one visual sign-off (plan Step 6) was given 2026-10-26 with three layout complaints,
+  fixed in section 10 (swash, long-name hierarchy, artwork gap); the round-two review of those fixes is
+  pending. Nothing here replaces it.
 - What is still open is listed in section 9.
 
 ## 2. Calibration
 
-Three changes to `scrollery-typeset.js`, all measured on the frozen corpus (sizes in em of the
+Seven changes to `scrollery-typeset.js` and `scrollery.css`, all measured on the frozen corpus (sizes in em of the
 `.Award` root). Nothing else in the role table moved.
 
 | constant | spec | calibrated | why |
@@ -285,7 +287,9 @@ c14, c16, c46, c12, c15, x3), for the sign-off of section 10.3.
 
 ## 9. Still open
 
-1. **The owner's visual sign-off (plan Step 6) is pending.** It is a human gate. The contact sheets are
+1. **The owner's round-two visual review is pending.** Round one was signed off 2026-10-26 with three
+   layout complaints, fixed in section 10 (swash, long-name hierarchy, artwork gap); those fixes still need
+   the owner's eye. It is a human gate. The contact sheets are
    `tools/scroll-sweep/out/corpus/index.html`, `out/corpus-20261026/index.html` and the underlay review
    sheet `out/underlays/index.html`, which now shows Garber's rank plates as WINDOW and the obstacles-only
    thumbnail with the window cut out.

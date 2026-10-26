@@ -125,10 +125,10 @@ class Scroll extends Ork3
      * ork_kingdomaward.name in the ORK is 35 characters ("Guildmaster of Reeves,
      * Principality"), so 64 is roughly double the real-world worst case.
      *
-     * It matters because `.Order` in scrollery.css is a FLAT 1.5em with no
-     * length-scaling in _text.tpl at all — only scrollery-autofit.js shrinks it, in
-     * the browser, after layout — so an unbounded value is a layout break, not a
-     * small font.
+     * It matters because `.Order` in scrollery.css starts from a size _text.tpl only
+     * guesses (min(1.5em, 0.85 x the name's guess)) and the typeset engine sizes and
+     * breaks it in the browser, after layout — so an unbounded value is a layout
+     * break, not a small font.
      */
     public const CUSTOM_NAME_MAX_LENGTH = 64;
 

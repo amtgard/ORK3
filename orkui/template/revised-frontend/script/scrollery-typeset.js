@@ -25,8 +25,9 @@
  * WHAT IS IN THE CORE
  *
  *   CONST        the role table and every tunable number, copied from spec §6.4.1 and
- *                §6.3.2 and awaiting calibration against the sweep. They are plain data
- *                on purpose, so a calibration run edits a value and nothing else.
+ *                §6.3.2, as calibrated against the sweep (the changed values and why are in
+ *                docs/scrollery-typeset-results.md §2 and §10). They are plain data on
+ *                purpose, so a calibration run edits a value and nothing else.
  *   tokenize     text -> words, with protected spans held together and the honorific
  *                and epithet roles marked (§6.3.1).
  *   breakPenalty what it costs to break a line in the gap after a word (§6.3.2).

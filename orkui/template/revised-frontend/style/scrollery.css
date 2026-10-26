@@ -894,8 +894,9 @@ section.IssuingTextSection > p:nth-child(2) {
     /* Tracking comes from the `[data-sc-role]` rule below; the order line is the "award"
        role. Its gap above is the name section's margin-bottom, in root em. */
 
-    /* The order line has no length scaling in _text.tpl at all — it is a flat 1.5em
-       whatever the catalogue name is. 195 of 4,870 ork_kingdomaward.name rows are
+    /* The order line's size is a guess from _text.tpl — min(1.5em, 0.85 x the name's
+       guess) — that the typeset engine then replaces with a measured one (the `award`
+       role), whatever the catalogue name is. 195 of 4,870 ork_kingdomaward.name rows are
        over 24 characters and 71 over 28 ("Guildmaster of Reeves, Principality" is
        35), so a second line is normal, not exceptional; balance it. No
        `overflow-wrap: anywhere` here: every one of those names contains spaces, so

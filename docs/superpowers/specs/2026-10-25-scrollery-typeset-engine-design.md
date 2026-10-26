@@ -284,9 +284,11 @@ engine (§6.3). It is not duplicated in PHP.
 
 `scrollery-autofit.js` `fitAward()` MUST call `ScrolleryTypeset.layoutTop(award)` in
 place of `fitLines(name)`, `fitLines(order)`, `fitTitle`, `fitInline(issuer)` and
-`anchorOrnaments`. If `ScrolleryTypeset` is absent (a stale cached script), it falls
-back to the old passes. The old code stays behind that guard only until the plan's
-verification task passes, and is deleted in T15. When pass 3 (`fitColumn`) fires,
+`anchorOrnaments`. The old passes were deleted in T15b and there is no fallback to
+them: if `ScrolleryTypeset` is absent (a deployment fault, such as a stale cached
+script), autofit logs one `console.error` per page load, leaves the top of every
+certificate on the server's first guess, and still fits the bottom half (reason, date
+and signer). When pass 3 (`fitColumn`) fires,
 `fitAward` re-runs `layoutTop` afterwards, as it already re-runs `fitReason`.
 
 ### 6.2 Units and measurement rules (unchanged house rules)
@@ -342,10 +344,14 @@ solve its largest feasible size `s*` (§6.4) and score it:
 
 ```
 U(s)      = 100 · min(s, sat)/sat + 20 · max(0, s − sat)/(max − sat)
-score     = U(s*) − LINE_PENALTY[role][k] − Σ breakPenalty
+score     = U(s*) − LINE_PENALTY[role][k] − max(Σ breakPenalty, −BREAK_CREDIT_CAP)
             − RAGGED · Σ_j ((maxLW − LW_j)/maxLW)²        (over non-minor lines, k ≥ 2)
             − WIDOW   if some line is one token with LW < 0.3 · maxLW   (k ≥ 2)
 ```
+
+`BREAK_CREDIT_CAP = 25` bounds the credit the negative break penalties of §6.3.2 can
+earn (it applies to every role): an extra line has to earn its place on size, not on
+collecting credit. Calibrated against c46; see `docs/scrollery-typeset-results.md` §2.
 
 The highest score wins; ties go to fewer lines. A candidate with `s* < min` is
 infeasible. In `U(s)`, `max` and `sat` are the role's own table values, not the hierarchy
@@ -373,9 +379,9 @@ Each candidate is scored both with and without the minor treatment.
 
 #### 6.4.1 Role table (root em; starting constants, calibrated in T14)
 
-| role | min | max | sat | maxLines | line-height | LINE_PENALTY[k=1,2,3] |
+| role | min | max | sat | maxLines | line-height | LINE_PENALTY[k=1,2,3,4] |
 |---|---|---|---|---|---|---|
-| name | 0.80 | 2.30 | 1.60 | 3 | 1.12 | 0, 30, 60 |
+| name | 0.80 | 2.30 | 1.60 | 3 (4 if > 70 chars, `NAME_LONG`) | 1.12 | 0, 30, 60, 90 |
 | award | 0.70 | 1.50 | 1.20 | 2 (3 if > 40 chars) | 1.10 | 0, 22, 50 |
 | place (Classic) | 0.62 | 1.30 | 1.00 | 1 | 1.10 | 0 |
 | place (Centered) | 0.62 | 1.30 | 1.00 | 2 | 1.10 | 0, 25 |
@@ -715,9 +721,8 @@ relies on `p:first-of-type` / `p:nth-of-type(2)`).
   no JS, CSS sizes it at the connective size.
 - Server first-guess sizes: keep the name formula. The award becomes
   `min(1.5em, 0.85 × nameGuess)`; the place, `min(1.3em, formula)`. `data-af-len` /
-  `data-af-inv` on the name and issuer stay until T15: the engine ignores them, but the
-  stale-script fallback (§6.1) still reads them. T15 removes them with the old passes.
-  The reason's stay permanently.
+  `data-af-inv` on the name and issuer were removed with the old passes in T15b (the
+  engine never read them). The reason's `data-af-len` stays permanently.
 - **Role element vs text element.** `data-sc-role` marks the element whose size the
   engine sets and whose `.sc-line` children it writes. For the name that is the span
   inside `.AwardeeName` (the composer's `field('player')`). For the award it is
@@ -740,7 +745,7 @@ relies on `p:first-of-type` / `p:nth-of-type(2)`).
 - Vertical rhythm per §6.7. `.Award` keeps `justify-content: center`.
 - In T15, once the old passes are deleted, delete the CSS that only served them, with
   its comments: the `--sc-orn-travel-max` travel clamp and the `#BottomTextFlourish`
-  `top` note. Until then the stale-script fallback still reads them. In T8, rewrite,
+  `top` note (done in T15b; no fallback reads them). In T8, rewrite,
   rather than append to, the long comments whose claims are no longer true.
 - Dark mode does not apply (the certificate is not themed). Cyanotype and other light
   ink keep working through the existing `color: inherit` rules; `.sc-art` and minor
@@ -801,8 +806,6 @@ relies on `p:first-of-type` / `p:nth-of-type(2)`).
 
 ### 10.2 Automated gates (all MUST hold on the frozen corpus, a fresh seeded corpus, and the sweep matrix)
 
-| Gate | Rule |
-|---|---|
 | Gate | Rule |
 |---|---|
 | Q1 hierarchy | award ≤ 0.85·nameEff unless award = award.min; place ≤ min(0.75·nameEff, 0.90·award) unless place = place.min (nameEff of §6.4.2, from the name's `data-sc-lines`); lead ≤ max(lead.min, place); versal = clamp(name, 1.20, 1.495). 0 violations. |
