@@ -106,6 +106,100 @@ typeset engine places. The thresholds are the same two (300 and 500), and there 
 twin. The report counts the cases over threshold in the top half alone. A results file from
 before the layer existed has no top scores; the report says how many cases it scored.
 
+## The corpus and its gates
+
+The sweep above looks for ink on ink. The **corpus** asks a different question of the typeset
+engine: does the top half of a certificate (issuer line, name, award, place) come out the way
+spec section 10.2 says it must, on real data? It renders a set of certificates through the
+fixture driver, measures what the layout did, and grades it.
+
+```sh
+npm run sweep:scrolls:corpus                                   # the frozen review corpus (54 cases)
+ORK3_CORPUS_SEED=20261026 ORK3_CORPUS_TAG=corpus-20261026 \
+  npm run sweep:scrolls:corpus                                 # the frozen corpus and 50 random cases
+```
+
+Needs the app on `:19080` and the database container for the sample. No login. Everything is
+written to `out/<tag>/`: `report.md` (sizes, line counts, and the gate results at the bottom),
+`report.json`, `gates.json`, `index.html` (a contact sheet of the top halves, filterable;
+type `fail` to see the cases that failed a gate) and, with a seed, `specs.json`.
+
+| variable | default | what it does |
+| --- | --- | --- |
+| `ORK3_CORPUS` | `review-2026-10-25` | corpus file under `corpus/` |
+| `ORK3_CORPUS_TAG` | `corpus` | directory under `out/` |
+| `ORK3_CORPUS_SEED` | – | also draw a random sample (below) and grade it with the corpus |
+| `ORK3_CORPUS_COUNT` | 50 | how many cases to draw |
+| `ORK3_CORPUS_SAMPLE_ONLY` | – | `1` grades the drawn sample alone |
+| `ORK3_CORPUS_REPLAY` | – | a tag whose `specs.json` to use instead of drawing |
+| `ORK3_CORPUS_FORCED` | on | `0` skips the forced-composition renders Q4 reads |
+| `ORK3_CORPUS_FULL` | – | `all` keeps the full-page PNG of every case |
+| `ORK3_CORPUS_FULL_LIMIT` | 20 | the most full pages kept for failing cases |
+| `ORK3_CORPUS_PAGES` | 3 | pages captured at once |
+
+**Disk.** Captures are at 3x, so a full certificate is about 15MB. The run keeps the top-half
+crop of every case (that is the contact sheet) and the full page only of cases that fail a
+gate, the first twenty in corpus order. A build with no engine fails every case, so do not
+read "failing cases only" as small until the gates are green. `out/` is not committed.
+
+### The gates
+
+One `test()` each, in `corpus.spec.ts`; the rules are pure functions in `lib/gates.ts`, and
+`tests/gates.spec.ts` (part of `npm run sweep:scrolls:unit`) tries each on a hand-built
+certificate that must pass and on that certificate with one thing wrong. A gate fails with
+the list of offending case ids and the reason for each.
+
+Sizes are root em (the text element's size over `.Award`'s own), line counts are measured
+from where the text is painted, never read back from the engine, and the engine's `data-sc-*`
+attributes are recorded beside them.
+
+| gate | what it asks |
+| --- | --- |
+| **Q1 hierarchy** | award ≤ 0.85 × name (unless it is at the award minimum); place ≤ min(0.75 × name, 0.90 × award) (unless at the place minimum); lead ≤ max(lead minimum, place); versal = clamp(name, 1.20, 1.495). Tolerance 0.003 em, the rounding of three decimal places. |
+| **Q2 planned = printed** | for name, award, place and lead: `data-sc-planned`, `data-sc-lines` and the painted line count are equal. |
+| **Q3 width** | every `.sc-line` (`scrollWidth`, frame px) is within its `data-sc-w` + 0.5px, on every case not flagged `data-sc-overflow`. |
+| **Q4 lead never wraps** | the lead is one line, in the rendered case and in a second and third render with the heading forced to `classic` and to `centered`. |
+| **Q7 parity** | the median kingdom place size is within ±20% of the median park place size, per corpus (the frozen corpus and a sample are graded separately). Scope is the spec's `scope`. |
+| **Q8 text model** | no rendered issuer text (lead, place, or both read together) matches `/\bof The\b/`. The PHP and JS fixture tests are the other half. |
+| **Q9 budget** | no `data-sc-budget="floor"`, no `data-sc-overflow`, and, for the frozen corpus only, no more cases with a pass-3 root scale below 1 than `baseline/corpus-before-2026-10-25.json` records (3: c11, c32, c50). |
+| **Q11 performance** | p95 of `data-sc-ms` ≤ 20. The 200-certificate bulk page's 6s budget is not measured here. |
+
+Q5 and Q6 (ink on ornament and on artwork) and Q12 (regression) are the sweep's: run it with
+`ORK3_SWEEP_DRIVER=fixture`. Q10 (composer against print) is not in this file.
+
+**A gate over an attribute the engine writes fails when the attribute is missing.** Q2, Q3, Q9
+and Q11 read `data-sc-planned`, `.sc-line`, `data-sc-budget` and `data-sc-ms`, and "no overflow
+flags" read off a page with no engine would pass for the wrong reason. A build without the
+engine is therefore red on those four with "no data-sc-…", which is the expected state until
+the engine is wired. Q1, Q4, Q7 and Q8 read what is painted and grade any build.
+
+### The random sample
+
+`lib/sample.ts` draws specs from the real data with read-only queries
+(`docker exec ork3-php8-db mariadb … -N -B -e`), the way the review drew c01 to c50:
+
+- personas: half uniform, a quarter 24 to 40 characters, a quarter over 40 (none over 100);
+- issuers: half kingdoms (`ork_kingdom.active = 'Active'`), half parks joined to
+  `ork_parktitle`; a quarter of the kingdom cases in the composer's split form;
+- custom names from `ork_awards.custom_name` on award ids 94 and 246 (40% over 28 characters);
+- notes of 10 to 400 characters from `ork_awards.note`;
+- each of the ten hands the same number of times.
+
+Every `ORDER BY RAND(n)` takes its n from the seed (`seed + 1`, `seed + 2`, …) and every
+choice the script makes itself comes from a PRNG started at the seed, so the same seed over the
+same data draws the same specs. Sample ids are `s01`, `s02`, …
+
+**Replaying a seed.** The drawn specs are written to `out/<tag>/specs.json` before anything
+renders. Re-run the same seed to redraw (`ORK3_CORPUS_SEED=20261026`), or, since a database
+reload moves what `RAND()` lands on, replay the file itself:
+
+```sh
+ORK3_CORPUS_REPLAY=corpus-20261026 ORK3_CORPUS_TAG=corpus-replay npm run sweep:scrolls:corpus
+```
+
+A failing case is then reproducible by id. To keep one as a regression, copy its spec into a
+file under `corpus/`.
+
 ## The matrix
 
 | stage | what | why crossed that way |
