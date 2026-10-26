@@ -382,6 +382,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                              what the award is, and is remembered per browser. Same control,
                              same list and same store as the one on the print page — see
                              script/scrollery-hand.js. */ ?>
+                    <div class="sc-row">
                     <div class="sc-field">
                         <label for="sc-face">Hand (lettering)</label>
                         <select id="sc-face" class="adm-select">
@@ -390,6 +391,28 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                             <?php endforeach; ?>
                         </select>
                         <p class="sc-hint">Applies to this print and is remembered for the next one. It is not stored on the award.</p>
+                    </div>
+
+                    <?php /* The heading, beside the hand for the same reason: it is how this
+                             one print is set, not part of what the award is. It picks the
+                             composition of the issuing block (Automatic lets the typeset
+                             engine choose; Classic and Centered force one). The same markup
+                             and classes as the hand, so it takes the same light and dark
+                             styling.
+
+                             Deliberately NOT remembered: a forced heading is a rescue for a
+                             name that sets badly, and carrying it to the next certificate
+                             would force it on a name that sets fine. It goes on #sc-stage as
+                             data-sc-heading (scrollery.js) and on the print URL as heading=. */ ?>
+                    <div class="sc-field">
+                        <label for="sc-heading">Heading</label>
+                        <select id="sc-heading" class="adm-select">
+                            <?php foreach (Scroll::Headings() as $headingKey => $headingLabel): ?>
+                            <option value="<?= scroll_e($headingKey) ?>"<?= $headingKey === Scroll::DEFAULT_HEADING ? ' selected' : '' ?>><?= scroll_e($headingLabel) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="sc-hint">How the issuing line is set. Applies to this print only.</p>
+                    </div>
                     </div>
 
                     <div class="sc-row">
@@ -636,7 +659,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
             <div class="sc-preview">
                 <p class="rp-sr-only" id="sc-summary" aria-live="polite"></p>
                 <div class="sc-stage" id="sc-stage" role="img" aria-busy="false"
-                     data-scroll-face="chancery"
+                     data-scroll-face="chancery" data-sc-heading="<?= scroll_e(Scroll::DEFAULT_HEADING) ?>"
                      aria-label="Certificate preview">
                     <svg viewBox="0 0 2550 3300" id="sc-frame" data-scroll-frame
                          style="image-resolution:300dpi;aspect-ratio:8.5/11;width:100%;height:100%;position:relative;overflow:hidden;--heraldry-filter:brightness(1) contrast(1);--heraldry-transform:translateX(0%) translateY(0%) scale(1);">
@@ -659,6 +682,10 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
          work at parse time (its own first pass is inside a promise on
          document.fonts.ready), and it has to have defined the global by the time
          scrollery.js runs. */ ?>
+<?php /* The issuer text model, before everything that reads it: scrollery.js calls
+         ScrolleryText.issuerLines() out of applyText(), and it must split a typed
+         "The Kingdom of the Wetlands" the way print does. */ ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-textmodel.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-textmodel.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-autofit.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-autofit.js') ?>"></script>
 <script>
 window.ScConfig = {

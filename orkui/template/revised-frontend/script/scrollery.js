@@ -34,6 +34,7 @@
         nameEl    = $('sc-issuer-name'),
         useTheEl  = $('sc-use-the'),
         useOfEl   = $('sc-use-of'),
+        headingEl = $('sc-heading'),
         recipeEl  = $('sc-recipe'),
         groundEl  = $('sc-ground'),
         borderEl  = $('sc-border'),
@@ -752,6 +753,48 @@
         }
     }
 
+    /*
+     * The two strings the issuing block shows, from the four boxes.
+     *
+     * lead is plain text; placeHtml is HTML because the article is a span, so the
+     * place goes through esc() — it is the one value here an officer types straight
+     * into markup. Guarded on the global, not assumed: a cached older page that
+     * lacks scrollery-textmodel.js must keep today's behaviour (the unsplit name,
+     * the lead built from the boxes) rather than throw out of every keystroke.
+     */
+    function issuerParts() {
+        var T = window.ScrolleryText;
+        if (T && typeof T.issuerLines === 'function') {
+            var r = T.issuerLines(titleEl.value, nameEl.value,
+                                  useTheEl.checked, useOfEl.checked, cfg.scopeType);
+            return {
+                lead:      r.lead,
+                placeHtml: (r.article ? '<span class="sc-art">the</span> ' : '') + esc(r.place)
+            };
+        }
+        return {
+            lead: 'and'
+                + (useTheEl.checked ? ' the' : '')
+                + ' ' + titleEl.value.trim()
+                + (useOfEl.checked ? ' of' : ''),
+            placeHtml: esc(nameEl.value.trim())
+        };
+    }
+
+    /*
+     * The heading choice. Stamped on the stage, which is what the typeset engine reads
+     * off an ancestor, and the fit is re-run because Classic and Centered are
+     * different compositions of the same words. Per print: not remembered and not
+     * stored on the award (see Scrollery_create.tpl). The attribute is on the stage
+     * rather than inside #sc-mount because reload() replaces the mount's contents.
+     */
+    if (headingEl && stage) {
+        headingEl.addEventListener('change', function () {
+            stage.setAttribute('data-sc-heading', headingEl.value);
+            fitPreview();
+        });
+    }
+
     function applyText() {
         var name = field('player');
         if (name) {
@@ -784,16 +827,21 @@
             phrase.textContent = withEl.value.trim();
         }
 
+        /*
+         * The issuing line, split the way print splits it. A stored kingdom name is one
+         * whole phrase ("The Kingdom of the Wetlands"), and the certificate sets it in
+         * three sizes: the connective, the article, the place. issuerLines() is the
+         * browser twin of the PHP rule the print path runs, so what is typed here
+         * previews as it prints. The article is the small "the" span _text.tpl draws
+         * and is never inside the place, so the place stays a single measurable run.
+         */
         var issuer = field('issuerTitle');
-        if (issuer) {
-            issuer.textContent = 'and'
-                + (useTheEl.checked ? ' the' : '')
-                + ' ' + titleEl.value.trim()
-                + (useOfEl.checked ? ' of' : '');
-        }
-
         var issuerName = field('issuerName');
-        if (issuerName) { issuerName.textContent = nameEl.value.trim(); }
+        if (issuer || issuerName) {
+            var parts = issuerParts();
+            if (issuer) { issuer.textContent = parts.lead; }
+            if (issuerName) { issuerName.innerHTML = parts.placeHtml; }
+        }
 
         /*
          * The order line, for a custom entry only.
@@ -1100,6 +1148,10 @@
          * the render page's own fallback is the one that should decide.
          */
         if (window.ScrolleryHand) { qs.set('face', window.ScrolleryHand.get()); }
+        /* The heading, the same way: a page parameter, not a composed value. Always
+           sent, as face is, so the URL says what the preview showed. The server
+           normalises it against Scroll::Headings() and defaults a stranger. */
+        if (headingEl) { qs.set('heading', headingEl.value); }
         /* Only when OFF — an absent parameter already means on, so the common case
            keeps a clean URL. Same rule the server applies reading it back. */
         if (window.ScrolleryLines && !window.ScrolleryLines.get()) { qs.set('lines', '0'); }
