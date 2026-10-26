@@ -198,6 +198,31 @@ foreach ($Scrolls as $scrollery_scan) {
             <?php endforeach; ?>
         </select>
     </label>
+    <?php /*
+        The heading picker, beside the hand because it is the same kind of choice: how
+        this one print is set, not what the award is. The same label and select classes
+        as the hand, so it takes the same light and dark styling. The options are
+        Scroll::Headings() and the selection is the page's own normalised heading, so a
+        stranger in &heading= shows as Automatic, which is what the page rendered.
+
+        Like the hand it re-sets the page in place. The engine reads data-sc-heading off
+        any ancestor of a certificate, so changing it on <body> and calling the fit again
+        re-composes the top (Classic and Centered are different arrangements of the same
+        words) with no round trip. Chrome, so it is inside .sc-toolbar, which
+        scrollery.css hides whole under @media print; the choice reaches the paper
+        through the attribute it leaves on <body>, not through this control.
+
+        Unlike the hand it is not remembered: a forced heading is a rescue for a name that
+        sets badly, and would force a name that sets fine on the next certificate.
+    */ ?>
+    <label class="sc-toolbar-field" for="sc-heading">
+        <span>Heading</span>
+        <select id="sc-heading" class="sc-select">
+            <?php foreach (Scroll::Headings() as $scrollery_hkey => $scrollery_hlabel): ?>
+            <option value="<?= scroll_e($scrollery_hkey) ?>"<?= $scrollery_hkey === $scrollery_heading ? ' selected' : '' ?>><?= scroll_e($scrollery_hlabel) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </label>
     <?php /* The reason-lines switch. Beside the hand because it is the same kind of
              thing — a per-print presentation choice that changes nothing about the
              award — and on this page rather than only in the composer because a
@@ -413,6 +438,46 @@ foreach ($Scrolls as $scrollery_scan) {
     if (stored !== document.body.getAttribute('data-scroll-face')) {
         Hand.apply(document.body, stored, document);
     }
+}());
+</script>
+<script>
+/*
+ * The heading picker's behaviour. A separate block from the hand's because that one
+ * returns early on an explicit &face=, and the heading has no such branch to skip.
+ *
+ * It owns the choice outright: the server already selected the page's normalised value,
+ * so there is nothing to reconcile on load and nothing remembered. Changing it rewrites
+ * data-sc-heading on <body> and fits again, in place.
+ */
+(function () {
+    var sel = document.getElementById('sc-heading');
+    if (!sel) { return; }
+
+    /* The fit is idempotent (spec 6.2), so calling it on a page that has already been
+       fitted re-composes from the words rather than compounding. It resolves
+       ScrolleryAutofit at call time: this block runs before fonts.ready, and a change
+       before the first pass has finished is simply covered by that pass. */
+    function refit() {
+        var A = window.ScrolleryAutofit;
+        if (A && typeof A.fit === 'function') { A.fit(document); }
+    }
+
+    sel.addEventListener('change', function () {
+        document.body.setAttribute('data-sc-heading', sel.value);
+        refit();
+
+        /* Keep the URL honest, so a link copied off this page prints the heading the
+           officer is looking at. Edited as text, as the hand's is: URLSearchParams
+           would re-encode every other parameter. replaceState, not a navigation. */
+        try {
+            var search = window.location.search || '?';
+            var re = /([?&]heading=)[^&]*/;
+            var next = re.test(search)
+                ? search.replace(re, '$1' + encodeURIComponent(sel.value))
+                : search + (search === '?' ? '' : '&') + 'heading=' + encodeURIComponent(sel.value);
+            window.history.replaceState(null, '', window.location.pathname + next + window.location.hash);
+        } catch (e) { /* older browser: the attribute swap and the fit still worked */ }
+    });
 }());
 </script>
 <?php if (!empty($AutoPrint)): ?>
