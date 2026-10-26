@@ -397,9 +397,9 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
     </div>
 
     <p class="sc-credit">
-        Certificate artwork, layer designs and flavour text by Valory Fox, from Arcanyst,
-        used with the author's permission. Flavour text credited in Arcanyst to Kisa
-        (Shelly Alexandra).
+        Certificates derive from the Arcanyst Scroll Generator, originally created, along
+        with its initial artwork, by Valory Fox (aka Ash). Flavour text credited in
+        Arcanyst to Kisa (Shelly Alexandra).
     </p>
 </div>
 

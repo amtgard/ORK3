@@ -141,9 +141,9 @@ html[data-theme="dark"] .sc-door h2 { color: var(--ork-text); background: none;
     </div>
 
     <p class="sc-credit">
-        Certificate artwork, layer designs and flavour text by Valory Fox, from
-        <a href="https://github.com/ValoryFox/Arcanyst" target="_blank" rel="noopener">Arcanyst</a>,
-        used with the author's permission to continue the work. Flavour text credited in
-        Arcanyst to Kisa (Shelly Alexandra).
+        Certificates derive from the
+        <a href="https://github.com/ValoryFox/Arcanyst" target="_blank" rel="noopener">Arcanyst Scroll Generator</a>,
+        originally created, along with its initial artwork, by Valory Fox (aka Ash).
+        Flavour text credited in Arcanyst to Kisa (Shelly Alexandra).
     </p>
 </div>

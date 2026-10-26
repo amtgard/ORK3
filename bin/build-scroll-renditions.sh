@@ -2,7 +2,7 @@
 #
 # Build WebP renditions of the Scrollery artwork.
 #
-# Scrollery ships 253 files of Valory Fox's certificate art under assets/scrolls/,
+# Scrollery ships 253 files of the Arcanyst certificate art under assets/scrolls/,
 # 244 of them raw PNG/JPG and 50 of those exactly 2550x3300 (a 300 dpi US Letter
 # page). A single certificate pulls 3.8-4.6 MB of plates, and the composer's live
 # preview renders that into a ~600px stage. This script emits, beside each master:
@@ -49,8 +49,8 @@
 # ---------------------------------------------------------------------------------
 #
 # Renditions are COMMITTED, not generated at deploy. Reasons, in order:
-#   1. The art is frozen. It is Valory Fox's, licensed and unchanging (see NOTICE);
-#      regenerating identical bytes on every deploy buys nothing.
+#   1. The art is frozen. It is the Arcanyst artwork, by Valory Fox, and unchanging
+#      (see NOTICE); regenerating identical bytes on every deploy buys nothing.
 #   2. The runtime image has no encoder that can do the job. ork3-php8-app carries no
 #      ImageMagick and no cwebp, and its GD is 2.3.0 - which has WebP support but no
 #      IMG_WEBP_LOSSLESS constant, so it cannot produce the lossless border layer the
