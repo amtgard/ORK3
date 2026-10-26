@@ -479,6 +479,9 @@ test('the capture reads the engine attributes it will be graded on', async ({ pa
   const spec = loadCorpus(FROZEN).find(c => c.id === 'c22')!;
   await serveFixtures(page, renderFixtures([spec], `${TAG}-selftest`));
   await openFixture(page, spec);
+  // Once the engine is wired the page has `.sc-line` elements of its own; count them so the
+  // test adds to them rather than assuming there are none.
+  const own = await page.locator('.sc-line').count();
   await page.evaluate(() => {
     const award = document.querySelector('.Award') as HTMLElement;
     award.setAttribute('data-sc-budget', 'floor');
@@ -502,8 +505,8 @@ test('the capture reads the engine attributes it will be graded on', async ({ pa
   expect(m.ms).toBe(12.5);
   expect(m.roles.name).toMatchObject({ planned: 7, engineLines: 7 });
   expect(m.roles.award?.overflow).toBe(true);
-  expect(m.scLineCount).toBe(2);
-  expect(m.wideLines?.map(l => l.allowed)).toEqual([10, null]);
+  expect(m.scLineCount).toBe(own + 2);
+  expect(m.wideLines?.map(l => l.allowed)).toEqual(expect.arrayContaining([10, null]));
   expect(m.versalEm).toBeGreaterThan(1);
   expect(m.issuerText?.[2]).toMatch(/^and /);
 
@@ -511,8 +514,8 @@ test('the capture reads the engine attributes it will be graded on', async ({ pa
   expect(q2PlannedIsPrinted(c).offenders[0]).toMatch(/name: planned 7, engine says 7, painted \d/);
   expect(q3Width(c).ok).toBe(true); // award is flagged overflow, so Q3 stands down for the case
   const unflagged = { ...c[0], roles: { ...c[0].roles, award: { ...c[0].roles.award!, overflow: false } } };
-  expect(q3Width([unflagged]).offenders[0]).toMatch(/^c22: name line [\d.]+px > 10px; name line [\d.]+px has no data-sc-w$/);
-  expect(q9Budget(c).offenders[0]).toBe('c22: budget at the floor; data-sc-overflow on award');
+  expect(q3Width([unflagged]).offenders[0]).toMatch(/^c22: .*name line [\d.]+px > 10px; name line [\d.]+px has no data-sc-w/);
+  expect(q9Budget(c).offenders[0]).toMatch(/^c22: budget at the floor; data-sc-overflow on .*award/);
   expect(q11Performance(c).ok).toBe(true);
 });
 
