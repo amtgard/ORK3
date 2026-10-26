@@ -54,6 +54,9 @@ const VARIANTS: FixtureSpec[] = [
 const ROLES = ['name', 'award', 'place', 'lead'] as const;
 type RoleName = (typeof ROLES)[number];
 
+/* Task 16: the hierarchy reads the name's effective size (spec 6.4.2). Restated here, not imported, so the test is an independent check. */
+const nameEff = (size: number, lines: number): number => Math.min(2.3, size * (1 + 0.15 * (Math.max(1, lines) - 1)));
+
 type RoleRead = {
   /** Computed font size of the role element, in em of `.Award`'s own. */
   em: number;
@@ -471,8 +474,8 @@ test('hierarchy: the award never outranks the name', async ({ page }) => {
   for (const r of (await rows(page)).filter(x => !x.error)) {
     const n = r.roles.name?.em, a = r.roles.award?.em;
     if (n === undefined || a === undefined) { bad.push(`${r.id}: missing name or award`); continue; }
-    const lim = 0.85 * n;
-    if (a > lim + EPS && a > minOf('award', upOf(r.id)) + EPS) bad.push(`${r.id}: award ${a} > 0.85 x name ${n}`);
+    const lim = 0.85 * nameEff(n, r.roles.name!.lines ?? r.roles.name!.painted);
+    if (a > lim + EPS && a > minOf('award', upOf(r.id)) + EPS) bad.push(`${r.id}: award ${a} > 0.85 x nameEff ${lim / 0.85} (name ${n})`);
   }
   expect(bad).toEqual([]);
 });
@@ -711,8 +714,8 @@ test('place obeys the hierarchy', async ({ page }) => {
   const bad: string[] = [];
   for (const r of issuerCases(await rows(page))) {
     const p = r.roles.place!.em, n = r.roles.name!.em, a = r.roles.award!.em;
-    const lim = Math.min(0.75 * n, 0.9 * a);
-    if (p > lim + EPS && p > minOf('place', upOf(r.id)) + EPS) bad.push(`${r.id}: place ${p} > min(0.75 x name ${n}, 0.90 x award ${a}) = ${lim.toFixed(3)}`);
+    const lim = Math.min(0.75 * nameEff(n, r.roles.name!.lines ?? r.roles.name!.painted), 0.9 * a);
+    if (p > lim + EPS && p > minOf('place', upOf(r.id)) + EPS) bad.push(`${r.id}: place ${p} > min(0.75 x nameEff (name ${n}), 0.90 x award ${a}) = ${lim.toFixed(3)}`);
   }
   expect(bad).toEqual([]);
 });

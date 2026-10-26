@@ -47,8 +47,8 @@ test('the good certificate passes every gate', () => {
 });
 
 test('Q1 names the role that breaks the hierarchy', () => {
-  expect(q1Hierarchy([withRole(good(), 'award', { sizeEm: 1.9 })]).offenders[0]).toMatch(/^g1: award 1.9 > 0.85\*name 1.7/);
-  expect(q1Hierarchy([withRole(good(), 'place', { sizeEm: 1.6 })]).offenders[0]).toMatch(/place 1.6 > 0.75\*name/);
+  expect(q1Hierarchy([withRole(good(), 'award', { sizeEm: 1.9 })]).offenders[0]).toMatch(/^g1: award 1.9 > 0.85\*nameEff 1.7 \(name 2, 1 line/);
+  expect(q1Hierarchy([withRole(good(), 'place', { sizeEm: 1.6 })]).offenders[0]).toMatch(/place 1.6 > 0.75\*nameEff/);
   // Below 0.75*name but above 0.90*award.
   expect(q1Hierarchy([withRole(good(), 'place', { sizeEm: 1.1 })]).offenders[0]).toMatch(/place 1.1 > 0.90\*award 1.08/);
   expect(q1Hierarchy([withRole(good(), 'lead', { sizeEm: 1.0 })]).offenders[0]).toMatch(/lead 1 > max\(lead.min, place\)/);
@@ -73,8 +73,33 @@ test('Q1 lets a role sit at its own minimum, and clamps the versal both ways', (
   tight.roles.award!.sizeEm = 0.9;
   tight.roles.place!.sizeEm = 0.6;
   tight.roles.lead!.sizeEm = 0.6;
-  expect(q1Hierarchy([tight]).offenders[0]).toMatch(/award 0.9 > 0.85\*name 0.85/);
+  expect(q1Hierarchy([tight]).offenders[0]).toMatch(/award 0.9 > 0.85\*nameEff 0.85/);
   expect(q1Hierarchy([{ ...tight, up: 2 }]).offenders).toEqual([]);
+});
+
+test('Q1 holds the award and the place under the name\'s EFFECTIVE size (Task 16)', () => {
+  // A four-line name at 0.957em: nameEff = 0.957 * (1 + 0.15 * 3) = 1.388, so the award may be 1.18 and the place 1.041.
+  const long = good('long', { versalEm: 1.2 });
+  long.roles.name = { sizeEm: 0.957, lines: 4, planned: 4, engineLines: 4 };
+  long.roles.award!.sizeEm = 1.17;
+  long.roles.place!.sizeEm = 1.04;
+  expect(q1Hierarchy([long]).offenders).toEqual([]);
+  // Past either cap it says which, and with the line count the effective size came from.
+  const over = withRole(withRole(long, 'award', { sizeEm: 1.5 }), 'place', { sizeEm: 1.3 });
+  const why = q1Hierarchy([over]).offenders[0];
+  expect(why).toMatch(/award 1.5 > 0.85\*nameEff 1.18 \(name 0.957, 4 line\(s\)\)/);
+  expect(why).toMatch(/place 1.3 > 0.75\*nameEff 1.041/);
+  // The same sizes under a ONE-line name of 0.957em are the old violation: 0.85 * 0.957 = 0.813.
+  const one = withRole(long, 'name', { lines: 1, planned: 1, engineLines: 1 });
+  expect(q1Hierarchy([one]).offenders[0]).toMatch(/award 1.17 > 0.85\*nameEff 0.813/);
+  // The engine's own count (data-sc-lines) is the one used, not the painted count.
+  const painted = withRole(long, 'name', { lines: 1 });
+  expect(q1Hierarchy([painted]).offenders).toEqual([]);
+  // nameEff never passes name.max: a 3-line name at 2.0em is capped at 2.3, so the award may reach its own 1.5 maximum.
+  const cap = good('cap', { versalEm: 1.495 });
+  cap.roles.name = { sizeEm: 2.0, lines: 3, planned: 3, engineLines: 3 };
+  cap.roles.award!.sizeEm = 1.5;
+  expect(q1Hierarchy([cap]).offenders).toEqual([]);
 });
 
 test('Q2 needs the engine to have planned, and the three counts to agree', () => {

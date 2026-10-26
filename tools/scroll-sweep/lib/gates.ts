@@ -69,6 +69,9 @@ export const ROLE_RANGE: Record<RoleName, { min: number; max: number }> = {
 };
 /** Every min is multiplied by this at up=2|4, capped at max (spec 6.4.1). */
 export const FLOOR_SCALE = 1.5;
+/** Spec 6.4.2: the award and the place are held under the name's EFFECTIVE size, which a name set
+ *  on several lines earns extra for. Must equal CONST.HIER_LINE_BONUS in scrollery-typeset.js. */
+export const HIER_LINE_BONUS = 0.15;
 export const EPS_EM = 0.003;
 export const P95_MS_LIMIT = 20;
 export const PLACE_PARITY = 0.2;
@@ -78,6 +81,9 @@ const minOf = (role: RoleName, up?: number): number => {
   const r = ROLE_RANGE[role];
   return up && up >= 2 ? Math.min(r.max, r.min * FLOOR_SCALE) : r.min;
 };
+/** nameEff = min(name.max, size * (1 + HIER_LINE_BONUS * (lines - 1))): the engine's nameEffective(). */
+export const nameEffective = (size: number, lines: number): number =>
+  Math.min(ROLE_RANGE.name.max, size * (1 + HIER_LINE_BONUS * (Math.max(1, lines) - 1)));
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const f3 = (n: number) => (Math.round(n * 1000) / 1000).toString();
 
@@ -106,17 +112,21 @@ export function q1Hierarchy(cases: CaseMeasure[]): GateResult {
     const place = c.roles.place?.sizeEm;
     const lead = c.roles.lead?.sizeEm;
     const why: string[] = [];
+    /* The line count the engine says it printed (data-sc-lines), the one nameEff is computed from;
+       the painted count stands in for a page without the engine's attributes. */
+    const nameLines = c.roles.name?.engineLines ?? c.roles.name?.lines ?? 1;
+    const nameEff = name !== undefined ? nameEffective(name, nameLines) : undefined;
     // A missing role or versal is a failure, not a rule with nothing to check.
     for (const role of requiredRoles(c)) if (!c.roles[role]) why.push(`no ${role} element measured`);
     if (c.versalEm === undefined) why.push('no versal element found');
 
-    if (name !== undefined && award !== undefined) {
-      const lim = 0.85 * name;
-      if (award > lim + EPS_EM && award > minOf('award', c.up) + EPS_EM) why.push(`award ${f3(award)} > 0.85*name ${f3(lim)}`);
+    if (nameEff !== undefined && award !== undefined) {
+      const lim = 0.85 * nameEff;
+      if (award > lim + EPS_EM && award > minOf('award', c.up) + EPS_EM) why.push(`award ${f3(award)} > 0.85*nameEff ${f3(lim)} (name ${f3(name!)}, ${nameLines} line(s))`);
     }
-    if (place !== undefined && name !== undefined) {
-      const lim = 0.75 * name;
-      if (place > lim + EPS_EM && place > minOf('place', c.up) + EPS_EM) why.push(`place ${f3(place)} > 0.75*name ${f3(lim)}`);
+    if (nameEff !== undefined && place !== undefined) {
+      const lim = 0.75 * nameEff;
+      if (place > lim + EPS_EM && place > minOf('place', c.up) + EPS_EM) why.push(`place ${f3(place)} > 0.75*nameEff ${f3(lim)} (name ${f3(name!)}, ${nameLines} line(s))`);
     }
     if (place !== undefined && award !== undefined) {
       const lim = 0.9 * award;

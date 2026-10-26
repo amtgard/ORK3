@@ -159,6 +159,19 @@
         /* Hierarchy (§6.4.2): each block's ceiling, as a fraction of the one above. */
         RATIOS: { awardToName: 0.85, placeToName: 0.75, placeToAward: 0.90 },
 
+        /* Hierarchy against the name's EFFECTIVE size (Task 16). A long name sets on three
+           or four lines at a small size (c16: four lines at 0.957em), and held to its em
+           size alone it pulled the award and the place down to their floors, although a
+           four-line name carries far more weight on the page than its em size says. The
+           ratios of RATIOS are therefore read against
+
+               nameEff = min(name.max, nameSize * (1 + HIER_LINE_BONUS * (lines - 1)))
+
+           so each extra line adds a quarter of the size to what the award and place are
+           held under. A one-line name is unchanged by construction. The versal stays on
+           the real nameSize: it is a size, not a weight. */
+        HIER_LINE_BONUS: 0.15,
+
         /* Break penalties (§6.3.2). Positive discourages a break in the gap, negative
            invites one. They are additive. */
         P_WEAK_END: 60,           /* the word before the gap is a connective: "of |" */
@@ -847,6 +860,19 @@
      * sub-pixel width, where an integer offsetWidth would round a 100px word to a whole
      * percent of its size.
      */
+
+    /*
+     * nameEffective(size, lines) -> em
+     *
+     * The size the hierarchy holds the award and the place under (see
+     * CONST.HIER_LINE_BONUS): the name's size, raised for every line past the first, and
+     * never past the role's own maximum. Pure; the gate Q1 (tools/scroll-sweep/lib/gates.ts)
+     * and spec 6.4.2 carry the same formula and must change with it.
+     */
+    function nameEffective(size, lines) {
+        var n = lines >= 1 ? lines : 1;
+        return Math.min(CONST.ROLES.name.max, size * (1 + CONST.HIER_LINE_BONUS * (n - 1)));
+    }
 
     /* A line wider than its allowed width by more than this is overflowing. Layout
        rounds to whole pixels, so half a pixel is the smallest difference that is real. */
@@ -1931,7 +1957,7 @@
         var L = CONST.ROLES.lead, P = CONST.ROLES.placeClassic, fs = ctx.floorScale, R = CONST.RATIOS;
         var placeMin = Math.min(P.min * fs, P.max);
         var placeMax = P.max;
-        if (st.nameSize != null) { placeMax = Math.min(placeMax, R.placeToName * st.nameSize); }
+        if (st.nameSize != null) { placeMax = Math.min(placeMax, R.placeToName * (st.nameEff != null ? st.nameEff : st.nameSize)); }
         if (st.awardSize != null) { placeMax = Math.min(placeMax, R.placeToAward * st.awardSize); }
         placeMax = Math.max(placeMax, placeMin);
         var caps = { placeMin: placeMin, placeMax: placeMax, leadMin: Math.min(L.min * fs, L.max), leadMax: L.max };
@@ -1964,13 +1990,13 @@
     /*
      * The hierarchy of §6.4.2, held against the FINAL name and award. The issuer is
      * solved before the name settles (the name's top moves with the issuer's height), so
-     * a name that shrinks afterwards can leave the place above 0.75 of it. Sizes only
+     * a name that shrinks afterwards can leave the place above 0.75 of its effective size. Sizes only
      * come down here, which can never overflow a line, and the lead and article follow.
      */
-    function enforceHierarchy(ctx, A, res, nameSize, awardSize) {
+    function enforceHierarchy(ctx, A, res, nameSize, awardSize, nameEff) {
         setVersal(ctx, A, nameSize);
         var caps = res.caps, P = CONST.ROLES.placeClassic, R = CONST.RATIOS;
-        var cap = Math.max(Math.min(P.max, R.placeToName * nameSize, R.placeToAward * awardSize), caps.placeMin);
+        var cap = Math.max(Math.min(P.max, R.placeToName * (nameEff != null ? nameEff : nameSize), R.placeToAward * awardSize), caps.placeMin);
         if (res.place && res.place.size > cap + 0.0005) {
             var parentPx = pxOf(computed(A.place.parentElement).fontSize);
             if (parentPx > 0) {
@@ -2120,7 +2146,7 @@
      *   2. a provisional issuer solve with no hierarchy cap, so the name is measured at
      *      the top the issuer will roughly leave it;
      *   3. the name, at its measured top;
-     *   4. the award, under 0.85 of the name's FINAL size;
+     *   4. the award, under 0.85 of the name's FINAL effective size (nameEffective);
      *   5. the final issuer solve under the hierarchy of §6.4.2, and one re-solve of the
      *      name and award if that changed the issuer's height;
      *   6. the budget (§6.7): while the top stack is taller than its share of the page,
@@ -2164,7 +2190,7 @@
         function fitNameAndAward(cap) {
             var name = setRole(ctx, nameEl, 'name', cap, nameFloor);
             var nameSize = name ? name.size : N.max;
-            var awardMax = Math.max(Math.min(A.max, CONST.RATIOS.awardToName * nameSize), awardMin);
+            var awardMax = Math.max(Math.min(A.max, CONST.RATIOS.awardToName * (name ? nameEffective(nameSize, name.lines) : nameSize)), awardMin);
             var aw = setRole(ctx, awardEl, 'award', awardMax, awardMin);
             return { name: name, award: aw };
         }
@@ -2174,6 +2200,7 @@
                 var h0 = I.section.offsetHeight;
                 fit.issuer = layoutIssuer(ctx, I, {
                     nameSize: fit.name ? fit.name.size : null,
+                    nameEff: fit.name ? nameEffective(fit.name.size, fit.name.lines) : null,
                     awardSize: fit.award ? fit.award.size : null
                 });
                 if (Math.abs(I.section.offsetHeight - h0) > VERIFY_TOL) {
@@ -2209,15 +2236,16 @@
         if (I) {
             var nameSize = fit.name ? fit.name.size : N.max;
             var awardSize = fit.award ? fit.award.size : A.max;
+            var nameEff = fit.name ? nameEffective(nameSize, fit.name.lines) : nameSize;
             var res = fit.issuer;
-            enforceHierarchy(ctx, I, res, nameSize, awardSize);
+            enforceHierarchy(ctx, I, res, nameSize, awardSize, nameEff);
 
             var orn = placeOrnaments(ctx, I, res.comp, {});
             if (res.comp === 'classic' && orn.right === 'hidden' && I.right && I.rightBase > 0) {
                 /* The right flourish did not fit anywhere, so what it reserved is room
                    the type could have had: solve the issuer again without it. */
-                res = layoutIssuer(ctx, I, { nameSize: nameSize, awardSize: awardSize, rightOff: true, comp: 'classic' });
-                enforceHierarchy(ctx, I, res, nameSize, awardSize);
+                res = layoutIssuer(ctx, I, { nameSize: nameSize, nameEff: nameEff, awardSize: awardSize, rightOff: true, comp: 'classic' });
+                enforceHierarchy(ctx, I, res, nameSize, awardSize, nameEff);
                 orn = placeOrnaments(ctx, I, 'classic', { rightOff: true });
             }
 
@@ -2248,6 +2276,7 @@
         readContext: readContext,
         measureWords: measureWords,
         freeWidth: freeWidth,
+        nameEffective: nameEffective,
         layoutTop: layoutTop
     };
 }));

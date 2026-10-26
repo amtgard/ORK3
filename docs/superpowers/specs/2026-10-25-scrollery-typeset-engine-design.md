@@ -385,7 +385,7 @@ Each candidate is scored both with and without the minor treatment.
 
 Other constants: `SLACK = 0.025`, `RAGGED = 30`, `WIDOW = 40`, `MINOR_SCALE = 0.72`,
 `MINOR_PENALTY = 6`, `CLASSIC_PLACE_MIN = 0.85`, `ORN_GAP = 0.12em`, `H_TOP_MIN = 0.40`
-of content height (see §6.7).
+of content height (see §6.7), `HIER_LINE_BONUS = 0.15` (§6.4.2).
 
 Enumeration is exhaustive. Inputs are bounded: a persona is at most 100 characters (≤ 50
 tokens, ≤ 1,225 three-line candidates), and a custom award name at most 64. There is no
@@ -397,9 +397,28 @@ same way autofit reads it), capped at `max`.
 #### 6.4.2 Hierarchy constraints (G1)
 
 ```
-award.max_eff = min(award.max, 0.85 · nameSize)         (never below award.min)
-place.max_eff = min(place.max, 0.75 · nameSize, 0.90 · awardSize)   (never below place.min)
+nameEff       = min(name.max, nameSize · (1 + HIER_LINE_BONUS · (nameLines − 1)))
+award.max_eff = min(award.max, 0.85 · nameEff)          (never below award.min)
+place.max_eff = min(place.max, 0.75 · nameEff, 0.90 · awardSize)    (never below place.min)
 ```
+
+`nameEff` is the name's *effective* size, the size it carries on the page: a name set on
+three or four lines at a small size (T14's c16: four lines at 0.957em) has far more visual
+weight than its em size says, and held to that size alone it dragged the award and the place
+down to their floors. `HIER_LINE_BONUS = 0.15` (Task 16, calibrated, see below) raises the
+size the award and place are held under by 15% for every line past the first. A one-line name
+has `nameEff = nameSize`, so the caps for it are exactly the old ones. `nameLines` is the
+count the engine printed (`data-sc-lines`); `nameEff` never exceeds `name.max`. The versal
+keeps the real `nameSize` (below): it is a size, not a weight.
+
+Calibration: 0.25 was the starting value. Over the 104-case corpus it let the award reach
+1.42em under a two-line name of 1.34em (c50) and 1.5em under two-line names of 1.46em, so
+the award read heavier than the person's name. `award ≤ 0.85 · (1 + b) · name` stays at or
+below the name's own em size for two lines exactly when `b ≤ 0.176`, so the bottom of the
+allowed range, 0.15, was taken: no one- or two-line name is out-sized by its award or place
+in the corpus, and every three- and four-line name is (by design). The two caps that follow
+from it for a four-line 0.957em name are award 1.18em and place 1.04em (they were 0.81 and
+0.72).
 
 ```
 lead.max_eff   = min(lead.max, max(lead.min, placeSize))
@@ -770,7 +789,7 @@ relies on `p:first-of-type` / `p:nth-of-type(2)`).
 |---|---|
 | Gate | Rule |
 |---|---|
-| Q1 hierarchy | award ≤ 0.85·name unless award = award.min; place ≤ min(0.75·name, 0.90·award) unless place = place.min; lead ≤ max(lead.min, place); versal = clamp(name, 1.20, 1.495). 0 violations. |
+| Q1 hierarchy | award ≤ 0.85·nameEff unless award = award.min; place ≤ min(0.75·nameEff, 0.90·award) unless place = place.min (nameEff of §6.4.2, from the name's `data-sc-lines`); lead ≤ max(lead.min, place); versal = clamp(name, 1.20, 1.495). 0 violations. |
 | Q2 planned = printed | `data-sc-lines === data-sc-planned` for name, award, place and lead, and independently measured line counts agree. 0 mismatches, on every case including flagged ones. |
 | Q3 width | every `.sc-line` `scrollWidth` ≤ its `data-sc-w` + 0.5px. 0 on every case not flagged `data-sc-overflow`. |
 | Q4 lead never wraps | lead line count = 1 in both compositions. |

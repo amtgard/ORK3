@@ -126,6 +126,9 @@ test('a quoted nickname is never split', async ({ page }) => {
   expect(r.lines.join(' ').replace(/ /g, ' ')).toBe('William "Billy Bob" FitzRobert the Younger of Nowhere');
 });
 
+/* Task 16: the hierarchy reads the name's effective size (spec 6.4.2). Restated here, not imported, so the test is an independent check. */
+const nameEff = (size: number, lines: number): number => Math.min(2.3, size * (1 + 0.15 * (Math.max(1, lines) - 1)));
+
 test('the award never outranks the name unless it is at its floor', async ({ page }) => {
   const awards = ['Order of the Rose', 'Guildmaster of the Twilight Peak Anti-Paladins', 'Dragon'];
   for (const up of [0, 2]) {
@@ -136,7 +139,7 @@ test('the award never outranks the name unless it is at its floor', async ({ pag
         const n = await role(page, 'name');
         const a = await role(page, 'award');
         const floor = 0.7 * (up ? 1.5 : 1);
-        expect(a.size <= 0.85 * n.size + 0.001 || Math.abs(a.size - floor) < 0.001, `${name} / ${award} up=${up}: ${a.size} vs ${n.size}`).toBe(true);
+        expect(a.size <= 0.85 * nameEff(n.size, n.printed) + 0.001 || Math.abs(a.size - floor) < 0.001, `${name} / ${award} up=${up}: ${a.size} vs ${n.size}`).toBe(true);
       }
     }
   }

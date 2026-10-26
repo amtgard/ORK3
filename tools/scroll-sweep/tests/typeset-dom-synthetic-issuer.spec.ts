@@ -114,7 +114,7 @@ const lay = (page: Page, opts?: object) =>
 
 interface State {
   comp: string | null; sectionComp: string | null; budget: string | null;
-  name: number; award: number; place: number; lead: number; versal: number; art: number | null; leadPx: number; artPx: number | null;
+  name: number; nameLines: number; award: number; place: number; lead: number; versal: number; art: number | null; leadPx: number; artPx: number | null;
   leadLines: string | null; placeLines: string[]; placeText: string; placeOverflow: boolean; leadOverflow: boolean;
   placeMinFloor: number;
 }
@@ -130,7 +130,7 @@ const state = (page: Page): Promise<State> =>
     return {
       comp: award.getAttribute('data-sc-comp'), sectionComp: q('.IssuingTextSection').getAttribute('data-sc-comp'),
       budget: award.getAttribute('data-sc-budget'),
-      name: em(q('[data-sc-role="name"] .sc-line')), award: em(q('[data-sc-role="award"] .sc-line')),
+      name: em(q('[data-sc-role="name"] .sc-line')), nameLines: Number(q('[data-sc-role="name"]').getAttribute('data-sc-lines')), award: em(q('[data-sc-role="award"] .sc-line')),
       place: em(q('[data-sc-role="place"]')), lead: em(q('#IssuerTitle')), versal: em(q('.ScVersal')),
       art: art ? em(art) : null, leadPx: parseFloat(getComputedStyle(q('#IssuerTitle')).fontSize),
       artPx: art ? parseFloat(getComputedStyle(art).fontSize) : null,
@@ -270,6 +270,9 @@ test('the right flourish sits ORN_GAP under the place, and the place stays insid
   expect(g.textRight).toBeLessThanOrEqual(g.colR - g.reserve + 1);
 });
 
+/* Task 16: the hierarchy reads the name's effective size (spec 6.4.2). Restated here, not imported, so the test is an independent check. */
+const nameEff = (size: number, lines: number): number => Math.min(2.3, size * (1 + 0.15 * (Math.max(1, lines) - 1)));
+
 test('the place obeys the hierarchy unless it is at its floor, and the lead is bounded by the place', async ({ page }) => {
   for (const up of [0, 2]) {
     for (const name of NAMES) {
@@ -280,7 +283,7 @@ test('the place obeys the hierarchy unless it is at its floor, and the lead is b
           const s = await state(page);
           const pmin = 0.62 * (up ? 1.5 : 1);
           const tag = `${name} / ${award} / ${place} up=${up}`;
-          expect(s.place <= Math.min(0.75 * s.name, 0.9 * s.award) + 0.001 || Math.abs(s.place - pmin) < 0.002, `place ${s.place} (${tag}) name ${s.name} award ${s.award}`).toBe(true);
+          expect(s.place <= Math.min(0.75 * nameEff(s.name, s.nameLines), 0.9 * s.award) + 0.001 || Math.abs(s.place - pmin) < 0.002, `place ${s.place} (${tag}) name ${s.name} award ${s.award}`).toBe(true);
           expect(s.lead, `lead (${tag})`).toBeLessThanOrEqual(Math.max(0.7 * (up ? 1.5 : 1), s.place) + 0.001);
           expect(s.lead, `lead max (${tag})`).toBeLessThanOrEqual(1.04 + 0.001);
         }
@@ -382,7 +385,7 @@ test('the budget loop lowers the name, by 8% a round and three rounds at most', 
   expect(report.budget).toBe('ok');
   // The hierarchy and the versal follow the name down.
   expect(tight.versal).toBeCloseTo(Math.min(Math.max(tight.name, 1.2), 1.495), 2);
-  expect(tight.award).toBeLessThanOrEqual(0.85 * tight.name + 0.001);
+  expect(tight.award).toBeLessThanOrEqual(0.85 * nameEff(tight.name, tight.nameLines) + 0.001);
   // The loop is bounded: a page that cannot be satisfied stops after three rounds, at floor.
   await load(page, { name: 'Halo', height: 1300 });
   const stuck = await lay(page);

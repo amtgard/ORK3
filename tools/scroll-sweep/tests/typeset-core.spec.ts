@@ -146,9 +146,42 @@ test('CONST carries the spec 6.4.1 table and constants, with the T14 calibration
   expect(C.ORN_GAP).toBe(0.12);
   expect(C.H_TOP_MIN).toBe(0.40);
   expect(C.RATIOS).toEqual({ awardToName: 0.85, placeToName: 0.75, placeToAward: 0.90 });
+  expect(C.HIER_LINE_BONUS).toBe(0.15);                      // Task 16: the hierarchy reads the name's effective size
   expect([C.P_WEAK_END, C.P_PUNCT, C.P_HON_END, C.P_HON_SPLIT, C.P_EPITHET, C.P_SUFFIX, C.P_INITIAL, C.P_AWARD_BEFORE_OF])
     .toEqual([60, -20, -25, 30, -8, 50, 40, -10]);
 });
+// Task 16. The hierarchy ratios are read against the name's EFFECTIVE size, which grows with its line count.
+test('nameEffective: a one-line name keeps the old caps exactly', () => {
+  for (const size of [0.8, 0.957, 1.3, 2.0, 2.3]) {
+    expect(TS.nameEffective(size, 1)).toBe(size);
+    expect(TS.CONST.RATIOS.awardToName * TS.nameEffective(size, 1)).toBe(0.85 * size);
+    expect(TS.CONST.RATIOS.placeToName * TS.nameEffective(size, 1)).toBe(0.75 * size);
+  }
+  expect(TS.nameEffective(1.1, 0)).toBe(1.1);   // no lines reported counts as one
+});
+
+test('nameEffective: a four-line name at 0.957em gives caps from nameEff', () => {
+  const eff = TS.nameEffective(0.957, 4);
+  expect(eff).toBeCloseTo(0.957 * 1.45, 10);              // 1 + 0.15 * 3
+  expect(0.85 * eff).toBeCloseTo(1.1795, 3);              // was 0.813
+  expect(0.75 * eff).toBeCloseTo(1.0407, 3);              // was 0.718
+  expect(TS.nameEffective(1.2, 2)).toBeCloseTo(1.38, 10);
+  expect(TS.nameEffective(1.0, 3)).toBeCloseTo(1.3, 10);
+});
+
+test('nameEffective never exceeds name.max', () => {
+  const max = TS.CONST.ROLES.name.max;
+  expect(TS.nameEffective(2.0, 3)).toBe(max);             // 2.0 * 1.3 = 2.6, held at 2.3
+  expect(TS.nameEffective(max, 4)).toBe(max);
+  expect(TS.nameEffective(2.1, 2)).toBe(max);             // 2.1 * 1.15 = 2.415
+  for (let size = 0.8; size <= 2.3; size += 0.1) {
+    for (let lines = 1; lines <= 4; lines++) {
+      expect(TS.nameEffective(size, lines)).toBeLessThanOrEqual(max);
+      expect(TS.nameEffective(size, lines)).toBeGreaterThanOrEqual(Math.min(size, max));
+    }
+  }
+});
+
 test('CONST word lists carry the spec 6.3 lists', () => {
   const C = TS.CONST;
   expect(C.HONORIFICS).toHaveLength(35);
