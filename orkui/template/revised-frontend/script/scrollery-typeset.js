@@ -11,18 +11,18 @@
  * of those blocks together, from measured word widths and the artwork's free space,
  * and writes the answer once.
  *
- * THE PURE CORE
+ * TWO LAYERS
  *
- * Everything in this file is arithmetic on strings and numbers: it touches no DOM, no
- * `window` and no `document`, which is what lets a Node test drive it in milliseconds
- * without the app up. (The one rule for anything added later: reach for `window` /
- * `document` only inside a function, never at load, or `require()` under Node dies.) It
- * loads both ways:
+ * The pure core is arithmetic on strings and numbers: it touches no DOM, no `window` and
+ * no `document`, which is what lets a Node test drive it in milliseconds without the app
+ * up. The DOM layer, at the bottom of the file, measures and writes. The one rule for
+ * both: reach for `window` / `document` only inside a function, never at load, or
+ * `require()` under Node dies. The file loads both ways:
  *
  *     browser   window.ScrolleryTypeset
  *     Node      require('.../scrollery-typeset.js')
  *
- * WHAT IS HERE
+ * WHAT IS IN THE CORE
  *
  *   CONST        the role table and every tunable number, copied from spec §6.4.1 and
  *                §6.3.2 and awaiting calibration against the sweep. They are plain data
@@ -39,8 +39,17 @@
  *                again, and when that fails it returns the words as written at the
  *                minimum size, flagged.
  *
- * The spec's later pieces (the choice of composition, ornament placement and the DOM
- * layer that measures and writes, §6.1) build on these and are not in the file yet.
+ * WHAT IS IN THE DOM LAYER
+ *
+ *   readContext  the column, the root size, the multi-up floor scale, the free-space
+ *                profile and the forced heading, read once per certificate.
+ *   measureWords the width of each word in em at 1px, from a hidden span, cached per page.
+ *   freeWidth    the free width of a band of the page, from the profile (§7.1).
+ *   layoutTop    the entry point: sets the name, then the award under the hierarchy of
+ *                §6.4.2, writes explicit lines, verifies them against the browser and
+ *                writes the report (§6.8). The issuing place is not here yet; the
+ *                spec's other pieces (composition, ornament placement, the budget) build
+ *                on this and are not in the file yet.
  *
  * CHARACTERS ARE COUNTED WITH Array.from(), NEVER .length. `.length` counts UTF-16 code
  * units, so an astral character (an emoji in a persona is legal) counts twice, and
@@ -748,11 +757,447 @@
         return solutionOf(first.nearest, tokens, true, lo);
     }
 
+
+    /* ================================================================ DOM layer */
+
+    /*
+     * Everything below reads or writes the page. Each function touches `document` and
+     * `window` only when called (the module-level rule at the top of the file).
+     *
+     * GEOMETRY IS LAYOUT PIXELS. Widths and tops come from offsetWidth, scrollWidth and
+     * offsetTop, which are the unscaled px inside the 2550x3300 frame whatever scale the
+     * SVG is drawn at. The one exception is the width of a word at 100px in the measuring
+     * span: it lives outside the frame (so no scale applies to it) and wants the
+     * sub-pixel width, where an integer offsetWidth would round a 100px word to a whole
+     * percent of its size.
+     */
+
+    /* A line wider than its allowed width by more than this is overflowing. Layout
+       rounds to whole pixels, so half a pixel is the smallest difference that is real. */
+    var VERIFY_TOL = 0.5;
+    var VERIFY_ROUNDS = 6;
+    var VERIFY_MARGIN = 0.995;
+
+    function computed(el) {
+        return window.getComputedStyle(el);
+    }
+
+    function pxOf(value) {
+        var n = parseFloat(value);
+        return n > 0 ? n : 0;
+    }
+
+    /* Multi-up floor, read the way scrollery-autofit.js reads it: any element carrying
+       data-scroll-up, which Scrollery_render.tpl stamps on <body>. 2-up and 4-up print at
+       half scale, so every minimum size rises by half to stay legible. */
+    function floorScale() {
+        var el = document.querySelector('[data-scroll-up]');
+        var up = el ? parseInt(el.getAttribute('data-scroll-up'), 10) : 0;
+        return (up === 2 || up === 4) ? 1.5 : 1;
+    }
+
+    /*
+     * data-sc-free is "y0,step|L,L,...|R,R,..." (spec §7.1): band b spans
+     * [y0 + b*step, y0 + (b+1)*step) in frame px, and L[b] / R[b] are the free interval's
+     * edges there. An empty or unreadable entry is an unconstrained band, as is a band
+     * past the end of the list. Returns null when there is no profile at all.
+     */
+    function parseFree(text) {
+        if (!text) { return null; }
+        var parts = String(text).split('|');
+        if (parts.length < 3) { return null; }
+        var head = parts[0].split(',');
+        var y0 = parseFloat(head[0]), step = parseFloat(head[1]);
+        if (!(step > 0) || isNaN(y0)) { return null; }
+        function list(raw) {
+            return raw.split(',').map(function (v) {
+                var n = v === '' ? NaN : parseFloat(v);
+                return isNaN(n) ? null : n;
+            });
+        }
+        return { y0: y0, step: step, L: list(parts[1]), R: list(parts[2]) };
+    }
+
+    /*
+     * readContext(award) -> { award, rootPx, floorScale, column, free, heading }
+     *
+     * `column` is the .Award content box in frame px, with `cx` its centre. It is the
+     * container's box and not any child's, for the reason scrollery-autofit.js gives at
+     * columnWidth(): a flex child grows past the column when its text is too long, so a
+     * child's own width says nothing about the column. `heading` is the forced issuer
+     * composition from the closest [data-sc-heading] (spec §6.5), or null for auto.
+     */
+    function readContext(award) {
+        var cs = computed(award);
+        var left = pxOf(cs.paddingLeft);
+        var right = award.clientWidth - pxOf(cs.paddingRight);
+        var forced = award.closest('[data-sc-heading]');
+        var heading = forced ? forced.getAttribute('data-sc-heading') : null;
+        return {
+            award: award,
+            rootPx: pxOf(cs.fontSize),
+            floorScale: floorScale(),
+            column: { left: left, right: right, width: right - left, cx: (left + right) / 2 },
+            free: parseFree(award.getAttribute('data-sc-free')),
+            heading: (heading === 'classic' || heading === 'centered') ? heading : null
+        };
+    }
+
+    /*
+     * freeWidth(ctx, yTop, yBottom, centred) -> px
+     *
+     * The width of the page that is clear of the artwork from `yTop` to `yBottom` (frame
+     * px). The profile's bands that the span touches are intersected, then the result is
+     * held inside the column. A centred role can only use what is clear on BOTH sides of
+     * the column centre, so its width is twice the nearer edge's distance from it; any
+     * other role gets the whole free interval. With no profile, or no data in those
+     * bands, the column itself is the free space.
+     */
+    function freeWidth(ctx, yTop, yBottom, centred) {
+        var col = ctx.column, free = ctx.free;
+        var l = col.left, r = col.right;
+        if (free) {
+            var b0 = Math.floor((yTop - free.y0) / free.step);
+            var b1 = Math.ceil((yBottom - free.y0) / free.step) - 1;
+            if (b1 < b0) { b1 = b0; }
+            for (var b = Math.max(b0, 0); b <= b1; b++) {
+                if (free.L[b] != null && free.L[b] > l) { l = free.L[b]; }
+                if (free.R[b] != null && free.R[b] < r) { r = free.R[b]; }
+            }
+        }
+        if (centred) { return Math.max(0, 2 * Math.min(col.cx - l, r - col.cx)); }
+        return Math.max(0, r - l);
+    }
+
+    /* ----------------------------------------------------------------- measuring */
+
+    /*
+     * One hidden span for the page, kept in <body> and reused. Words are measured in
+     * child spans of it at 100px, so a width in px at 100px is the width in em at 1px
+     * times 100. The cache is keyed by every property that changes a glyph's width,
+     * then by the word. A page whose fonts are still loading would cache the fallback
+     * face's widths against the web font's name, so nothing is stored while
+     * document.fonts says it is loading.
+     */
+    var measureHost = null;
+    var measureCache = Object.create(null);
+
+    function measureHostEl() {
+        if (measureHost && measureHost.isConnected) { return measureHost; }
+        measureHost = document.createElement('span');
+        measureHost.className = 'sc-measure';
+        measureHost.setAttribute('aria-hidden', 'true');
+        measureHost.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden;'
+            + 'pointer-events:none;white-space:pre;font-size:100px;line-height:1;'
+            + 'margin:0;padding:0;border:0;text-indent:0;word-spacing:normal';
+        document.body.appendChild(measureHost);
+        return measureHost;
+    }
+
+    /* The role element's own face, as the properties that move a glyph's width. Letter
+       spacing is stored as a fraction of the font size: computed, it is a px length for
+       the role's current size, and at 100px it would be a different amount of space. */
+    function faceOf(roleEl) {
+        var cs = computed(roleEl);
+        var size = pxOf(cs.fontSize) || 1;
+        var ls = cs.letterSpacing === 'normal' ? 0 : parseFloat(cs.letterSpacing) || 0;
+        return {
+            fontFamily: cs.fontFamily,
+            fontStyle: cs.fontStyle,
+            fontWeight: cs.fontWeight,
+            fontStretch: cs.fontStretch,
+            fontVariant: cs.fontVariant,
+            fontKerning: cs.fontKerning,
+            fontFeatureSettings: cs.fontFeatureSettings,
+            textTransform: cs.textTransform,
+            letterSpacing: (ls / size * 100).toFixed(3) + 'px'
+        };
+    }
+
+    function faceKey(face) {
+        return Object.keys(face).map(function (k) { return face[k]; }).join('|');
+    }
+
+    /*
+     * measureWords(roleEl, words) -> { widths, space, measure }
+     *
+     * `widths` maps each word to its width in em at 1px and `space` is the width of one
+     * space. `measure(word)` answers for any string, measuring on demand: the solver
+     * cuts over-long words into pieces nobody could list in advance. Asking for the
+     * words up front costs one layout for the whole set.
+     */
+    function measureWords(roleEl, words) {
+        var face = faceOf(roleEl);
+        var key = faceKey(face);
+        var cache = measureCache[key] || (measureCache[key] = Object.create(null));
+        var live = !(document.fonts && document.fonts.status === 'loading');
+        var scratch = live ? cache : Object.create(null);
+
+        function fill(list) {
+            var need = list.filter(function (w, i) { return !(w in scratch) && list.indexOf(w) === i; });
+            if (!need.length) { return; }
+            var host = measureHostEl();
+            Object.keys(face).forEach(function (k) { host.style[k] = face[k]; });
+            var spans = need.map(function (w) {
+                var span = document.createElement('span');
+                span.textContent = w;
+                host.appendChild(span);
+                return span;
+            });
+            spans.forEach(function (span, i) {
+                scratch[need[i]] = span.getBoundingClientRect().width / 100;
+            });
+            host.textContent = '';
+        }
+
+        fill([' '].concat(words || []));
+
+        function measure(word) {
+            if (!(word in scratch)) { fill([word]); }
+            return scratch[word];
+        }
+        var widths = Object.create(null);
+        (words || []).forEach(function (w) { widths[w] = measure(w); });
+        return { widths: widths, space: measure(' '), measure: measure };
+    }
+
+    /* ------------------------------------------------------------------ geometry */
+
+    /* A box's top in layout px from the top of the document, summed up the offsetParent
+       chain. Differences of two of these cancel whatever the chain ends at. */
+    function absTop(el) {
+        var y = 0;
+        while (el) { y += el.offsetTop; el = el.offsetParent; }
+        return y;
+    }
+
+    /* The block that holds a role: the role itself, or the nearest ancestor that is not
+       inline. The name is an inline span, and an inline box's offsetTop moves with its own
+       font size, which would make the first fit and the second disagree about where the
+       name starts. */
+    function blockOf(el) {
+        while (el.parentElement && computed(el).display === 'inline') { el = el.parentElement; }
+        return el;
+    }
+
+    /* The top of a role's text, in frame px from the top of the .Award. */
+    function roleTop(award, role) {
+        var block = blockOf(role), cs = computed(block);
+        return absTop(block) - absTop(award) + block.clientTop + pxOf(cs.paddingTop);
+    }
+
+    function setSize(role, rootEm, rootPx, parentPx) {
+        var em = rootEm * rootPx / parentPx;
+        role.style.fontSize = em.toFixed(4) + 'em';
+        /* What was written, read back as root em, so a size that went through four
+           decimals is reported as the size the browser will draw. */
+        return Number(em.toFixed(4)) * parentPx / rootPx;
+    }
+
+    function lineEls(role) {
+        return Array.prototype.filter.call(role.children, function (c) { return c.classList.contains('sc-line'); });
+    }
+
+    /* The widths each line would have on one row, whatever its box does. A block line is
+       as wide as its container unless its CSS shrinks it, and a line's scrollWidth would
+       then say "the container" for every line. Shrinking them for the read, and letting
+       go afterwards, makes the check the same on any stylesheet. */
+    function naturalWidths(lines) {
+        lines.forEach(function (l) { l.style.width = 'max-content'; });
+        var out = lines.map(function (l) { return Math.max(l.scrollWidth, l.offsetWidth); });
+        lines.forEach(function (l) {
+            l.style.width = '';
+            if (!l.getAttribute('style')) { l.removeAttribute('style'); }
+        });
+        return out;
+    }
+
+    /* How many rows the lines really occupy: a line the browser wrapped counts for each
+       row it took, and a line that is not a block (so shares a row) counts once for all
+       of them. This is the printed count of the report, as opposed to the planned one. */
+    function printedRows(lines) {
+        var tops = [];
+        lines.forEach(function (l) {
+            var range = document.createRange();
+            range.selectNodeContents(l);
+            Array.prototype.forEach.call(range.getClientRects(), function (r) {
+                if (r.width > 0) { tops.push({ top: r.top, height: r.height }); }
+            });
+        });
+        tops.sort(function (a, b) { return a.top - b.top; });
+        var rows = 0, last = null;
+        tops.forEach(function (t) {
+            if (last === null || t.top - last.top > last.height * 0.5) { rows++; last = t; }
+        });
+        return rows;
+    }
+
+    /* ------------------------------------------------------------------ one role */
+
+    /* The words to set. A role already holding lines gives its source back from
+       data-sc-text; otherwise its text is read and stored there. A composer's
+       `textContent = ...` removes the lines, so the next run reads the new text. */
+    function sourceText(role) {
+        if (lineEls(role).length) {
+            var stored = role.getAttribute('data-sc-text');
+            if (stored !== null) { return stored; }
+            return lineEls(role).map(function (l) { return l.textContent; }).join(' ');
+        }
+        var text = (role.textContent || '').replace(/\s+/g, ' ').trim();
+        if (text) { role.setAttribute('data-sc-text', text); } else { role.removeAttribute('data-sc-text'); }
+        return text;
+    }
+
+    function clearReport(role) {
+        ['data-sc-size', 'data-sc-lines', 'data-sc-planned', 'data-sc-overflow', 'data-sc-text']
+            .forEach(function (a) { role.removeAttribute(a); });
+    }
+
+    /* The lines as explicit block spans. The text goes in as a text node, so nothing in a
+       persona can become markup. A minor line carries its own em size, relative to the
+       role's. */
+    function writeLines(role, lines, minor, allowed) {
+        role.textContent = '';
+        lines.forEach(function (text, j) {
+            var span = document.createElement('span');
+            span.className = j === minor ? 'sc-line sc-line--minor' : 'sc-line';
+            if (j === minor) { span.style.fontSize = CONST.MINOR_SCALE + 'em'; }
+            span.setAttribute('data-sc-w', allowed[j].toFixed(2));
+            span.appendChild(document.createTextNode(text));
+            role.appendChild(span);
+        });
+    }
+
+    /*
+     * The width line `j` was allowed, as solveBlock worked it out and with the same
+     * conservative band: from where the line would start at the smallest size to where it
+     * would end at the largest, so the width is safe at every size in between. When line 0
+     * is minor the lines below start higher than uniform spacing says.
+     */
+    function lineAllowed(ctx, lh, y0, j, minorIdx, range) {
+        var up = j - (minorIdx === 0 && j > 0 ? 1 - CONST.MINOR_SCALE : 0);
+        var top = y0 + up * lh * range.min * ctx.rootPx;
+        var bottom = y0 + (j + 1) * lh * range.max * ctx.rootPx;
+        return freeWidth(ctx, top, bottom, true) * (1 - CONST.SLACK);
+    }
+
+    /*
+     * Set one role: solve, write, verify, report. Returns the report entry, or null when
+     * the role is absent or empty. An empty role is left alone, down to the blank writing
+     * line a composer leaves inside it, and any report it carried from a fuller text is
+     * taken off so that it does not describe words that are gone.
+     */
+    function setRole(ctx, el, roleName, maxEm, minEm) {
+        if (!el) { return null; }
+        var row = CONST.ROLES[roleName];
+        var text = sourceText(el);
+        if (!text) { clearReport(el); return null; }
+
+        var parentPx = pxOf(computed(el.parentElement).fontSize);
+        var range = { min: minEm, max: Math.max(maxEm, minEm) };
+        var tokens = tokenize(text, roleName).map(function (t) { return t.text; });
+        var m = measureWords(el, tokens);
+        var y0 = roleTop(ctx.award, el);
+
+        var sol = solveBlock({
+            text: text, role: roleName, measure: m.measure, spaceW: m.space,
+            range: { min: range.min, max: range.max },
+            lineHeight: row.lineHeight, y0: y0, rootPx: ctx.rootPx,
+            freeWidth: function (top, bottom) { return freeWidth(ctx, top, bottom, true); }
+        });
+
+        var allowed = sol.lines.map(function (_, j) {
+            return lineAllowed(ctx, row.lineHeight, y0, j, sol.minor, range);
+        });
+        writeLines(el, sol.lines, sol.minor, allowed);
+        var size = setSize(el, sol.size, ctx.rootPx, parentPx);
+
+        /* Verify against the browser. The solver measured each word alone, so kerning
+           across a space, or a face that is not the one measured, can leave a line a few
+           pixels wide. A solver overflow is already at the minimum with nothing left to
+           give, so it is not shrunk further: the words stay legible and the block is
+           flagged. */
+        var overflow = sol.overflow;
+        var lines = lineEls(el);
+        if (!overflow) {
+            for (var round = 0; round <= VERIFY_ROUNDS; round++) {
+                var widths = naturalWidths(lines);
+                var worst = 1;
+                widths.forEach(function (w, j) {
+                    if (w > allowed[j] + VERIFY_TOL) { worst = Math.min(worst, allowed[j] / w); }
+                });
+                if (worst === 1) { break; }
+                if (round === VERIFY_ROUNDS || size <= range.min + 1e-9) { overflow = true; break; }
+                size = setSize(el, Math.max(size * worst * VERIFY_MARGIN, range.min), ctx.rootPx, parentPx);
+            }
+        }
+
+        el.setAttribute('data-sc-size', size.toFixed(3));
+        el.setAttribute('data-sc-planned', String(sol.planned));
+        el.setAttribute('data-sc-lines', String(printedRows(lines)));
+        if (overflow) { el.setAttribute('data-sc-overflow', '1'); } else { el.removeAttribute('data-sc-overflow'); }
+
+        return {
+            size: size,
+            lines: Number(el.getAttribute('data-sc-lines')),
+            planned: sol.planned,
+            overflow: overflow
+        };
+    }
+
+    /*
+     * layoutTop(award, opts) -> Report
+     *
+     *   Report = { comp, ms, budget, roles: { name?, award? }, ornaments: {} }
+     *
+     * Sets the name at its measured top, then the award under the hierarchy of §6.4.2:
+     * its ceiling is the smaller of its own maximum and 0.85 of the name's FINAL size
+     * (after verify, so a name that had to shrink pulls the award down with it), and
+     * never below its own minimum. The award's top is measured after the name's lines
+     * are written, because they are what moves it. Multi-up lifts both minimums (§6.4.1).
+     * The issuer roles are not touched yet; `comp`, `budget` and `ornaments` are
+     * placeholders until they are.
+     *
+     * `opts.nameMax` lowers the name's ceiling, which is the budget loop's lever (§6.7).
+     */
+    function layoutTop(award, opts) {
+        var t0 = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
+        var o = opts || {};
+        var ctx = readContext(award);
+        var N = CONST.ROLES.name, A = CONST.ROLES.award;
+        var report = { comp: ctx.heading, ms: 0, budget: 'ok', roles: {}, ornaments: {} };
+
+        var nameEl = award.querySelector('[data-sc-role="name"]');
+        var awardEl = award.querySelector('[data-sc-role="award"]');
+
+        var nameMax = o.nameMax > 0 ? Math.min(o.nameMax, N.max) : N.max;
+        var nameMin = Math.min(N.min * ctx.floorScale, nameMax);
+        var name = setRole(ctx, nameEl, 'name', nameMax, nameMin);
+        if (name) { report.roles.name = name; }
+
+        /* With no name on the page there is nothing for the award to rank under. */
+        var nameSize = name ? name.size : N.max;
+        var awardMin = Math.min(A.min * ctx.floorScale, A.max);
+        var awardMax = Math.max(Math.min(A.max, CONST.RATIOS.awardToName * nameSize), awardMin);
+        var aw = setRole(ctx, awardEl, 'award', awardMax, awardMin);
+        if (aw) { report.roles.award = aw; }
+
+        var t1 = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
+        report.ms = t1 - t0;
+        award.setAttribute('data-sc-ms', report.ms.toFixed(1));
+        return report;
+    }
+
     return {
         CONST: CONST,
         tokenize: tokenize,
         breakPenalty: breakPenalty,
         utility: utility,
-        solveBlock: solveBlock
+        solveBlock: solveBlock,
+        parseFree: parseFree,
+        readContext: readContext,
+        measureWords: measureWords,
+        freeWidth: freeWidth,
+        layoutTop: layoutTop
     };
 }));
