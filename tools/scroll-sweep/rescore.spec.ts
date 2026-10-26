@@ -16,9 +16,10 @@ const OUT = process.env.ORK3_SWEEP_OUT ?? join(__dirname, 'out');
  * Run: npx playwright test --project=scroll-sweep-rescore
  */
 test('rescore', () => {
-  const { results, driver } = JSON.parse(readFileSync(join(OUT, 'results.json'), 'utf8')) as
-    { results: Result[]; driver?: Driver };
-  /* Re-scoring does not change who measured it. A file from before the stamp was compose. */
-  writeReport(results, OUT, 0, driver ?? 'compose');
+  const { results, driver, sample } = JSON.parse(readFileSync(join(OUT, 'results.json'), 'utf8')) as
+    { results: Result[]; driver?: Driver; sample?: boolean };
+  /* Re-scoring does not change who measured it or over what. A file from before the stamp was
+     compose, full matrix. */
+  writeReport(results, OUT, 0, { driver: driver ?? 'compose', sample: sample ?? false });
   console.log(`rescored ${results.length} cases, ${results.filter(isDirty).length} over threshold`);
 });

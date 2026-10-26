@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeReport, isDirty, type Driver, type Result } from './lib/report';
+import { writeReport, isDirty, type Driver, type Result, type Run } from './lib/report';
 
 const OUT = process.env.ORK3_SWEEP_OUT ?? join(__dirname, 'out');
 
@@ -22,21 +22,24 @@ test('merge shards', () => {
     console.log('no shard files — nothing to merge');
     return;
   }
-  /* A shard is `{ driver, results }`. A bare array is a shard from before the stamp, and was
-     written by the compose driver, which was the only one. */
+  /* A shard is `{ driver, sample, results }`. A bare array is a shard from before the stamp:
+     compose, full matrix, the only way there was. */
+  type Shard = Run & { results: Result[] };
   const parsed = shards.map(f => {
-    const j = JSON.parse(readFileSync(join(OUT, f), 'utf8')) as Result[] | { driver: Driver; results: Result[] };
-    return Array.isArray(j) ? { driver: 'compose' as Driver, results: j } : j;
+    const j = JSON.parse(readFileSync(join(OUT, f), 'utf8')) as Result[] | (Partial<Run> & { results: Result[] });
+    return Array.isArray(j)
+      ? { driver: 'compose' as Driver, sample: false, results: j }
+      : { driver: j.driver ?? 'compose', sample: j.sample ?? false, results: j.results } as Shard;
   });
-  const drivers = new Set(parsed.map(p => p.driver));
-  /* Shards of one run share one environment, so two drivers here means stale files from an
+  /* Shards of one run share one environment, so two stamps here means stale files from an
      earlier run are mixed in. A report that blends them describes neither. */
-  if (drivers.size !== 1) {
-    throw new Error(`shards were written by different drivers (${[...drivers].join(', ')}); `
+  const stamps = new Set(parsed.map(p => `${p.driver}/sample=${p.sample}`));
+  if (stamps.size !== 1) {
+    throw new Error(`shards were written by different runs (${[...stamps].join(', ')}); `
       + `delete ${OUT}/shard-*.json and re-run`);
   }
   const results = parsed.flatMap(p => p.results);
-  writeReport(results, OUT, 0, [...drivers][0]);
+  writeReport(results, OUT, 0, { driver: parsed[0].driver, sample: parsed[0].sample });
   for (const f of shards) rmSync(join(OUT, f));
   console.log(`merged ${shards.length} shards, ${results.length} cases, `
     + `${results.filter(isDirty).length} over threshold -> ${join(OUT, 'report.md')}`);

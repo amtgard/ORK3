@@ -302,7 +302,7 @@ test('the report prints the top-half columns, and an old results.json still repo
   writeReport([
     result({ id: 'new', CA: sc(400), CAtop: sc(350), CBtop: sc(10) }),
     result({ id: 'old', CA: sc(400), CAtop: undefined, CBtop: undefined }),
-  ], dir, 0, 'fixture');
+  ], dir, 0, { driver: 'fixture', sample: false });
   const md = readFileSync(join(dir, 'report.md'), 'utf8');
   expect(md).toContain('C∩A top');
   expect(md).toContain('C∩B top');
@@ -310,33 +310,71 @@ test('the report prints the top-half columns, and an old results.json still repo
   expect(json.results.find(r => r.id === 'new')!.CAtop!.score).toBe(350);
 });
 
-test('results.json and report.md say which driver measured them', () => {
+test('results.json and report.md say which driver measured them, and whether the matrix was sampled', () => {
   const dir = mkdtempSync(join(tmpdir(), 'sweep-driver-'));
   for (const driver of ['fixture', 'compose'] as const) {
-    writeReport([result({ id: 'x' })], dir, 0, driver);
-    const json = JSON.parse(readFileSync(join(dir, 'results.json'), 'utf8')) as { driver: string };
-    expect(json.driver).toBe(driver);
-    expect(readFileSync(join(dir, 'report.md'), 'utf8')).toContain(`Driver **${driver}**`);
+    for (const sample of [true, false]) {
+      writeReport([result({ id: 'x' })], dir, 0, { driver, sample });
+      const json = JSON.parse(readFileSync(join(dir, 'results.json'), 'utf8')) as { driver: string; sample: boolean };
+      expect(json.driver).toBe(driver);
+      expect(json.sample).toBe(sample);
+      const md = readFileSync(join(dir, 'report.md'), 'utf8');
+      expect(md).toContain(`Driver **${driver}**`);
+      expect(md).toContain(`sample **${sample}**`);
+    }
   }
 });
 
-test('regression.mjs refuses to compare a compose run with a fixture baseline', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'sweep-regress-'));
-  const row = (id: string) => ({ ...result({ id }), CA: sc(10), CB: sc(10), CC: sc(0) });
-  const file = (name: string, driver?: string) => {
-    const p = join(dir, name);
-    writeFileSync(p, JSON.stringify({ ...(driver ? { driver } : {}), results: [row('a')] }));
+const regress = (dir: string) => {
+  const row = (id: string, ca = 10) => ({ ...result({ id }), CA: sc(ca), CB: sc(10), CC: sc(0) });
+  let n = 0;
+  const file = (stamp: { driver?: string; sample?: boolean }, rows: ReturnType<typeof row>[]) => {
+    const p = join(dir, `f${n++}.json`);
+    writeFileSync(p, JSON.stringify({ ...stamp, results: rows }));
     return p;
   };
   const run = (b: string, c: string) => spawnSync('node',
     [join(__dirname, '..', 'bin', 'regression.mjs'), b, c], { encoding: 'utf8' });
+  return { row, file, run };
+};
 
-  const mismatch = run(file('base-fixture.json', 'fixture'), file('cur-compose.json', 'compose'));
+test('regression.mjs refuses to compare a compose run with a fixture baseline', () => {
+  const { row, file, run } = regress(mkdtempSync(join(tmpdir(), 'sweep-regress-')));
+  const fixture = { driver: 'fixture', sample: true };
+  const mismatch = run(file(fixture, [row('a')]), file({ driver: 'compose', sample: true }, [row('a')]));
   expect(mismatch.status, mismatch.stdout + mismatch.stderr).toBe(2);
   expect(mismatch.stderr).toMatch(/driver/i);
   /* A file from before the stamp existed was a compose run, the only driver there was. */
-  const legacy = run(file('base-fixture2.json', 'fixture'), file('cur-legacy.json'));
-  expect(legacy.status).toBe(2);
-  expect(run(file('base-legacy.json'), file('cur-compose2.json', 'compose')).status).toBe(0);
-  expect(run(file('base-fixture3.json', 'fixture'), file('cur-fixture.json', 'fixture')).status).toBe(0);
+  expect(run(file(fixture, [row('a')]), file({}, [row('a')])).status).toBe(2);
+  expect(run(file({}, [row('a')]), file({ driver: 'compose' }, [row('a')])).status).toBe(0);
+  expect(run(file(fixture, [row('a')]), file(fixture, [row('a')])).status).toBe(0);
+});
+
+test('regression.mjs compares only the cases common to both files, and says so', () => {
+  const { row, file, run } = regress(mkdtempSync(join(tmpdir(), 'sweep-regress-')));
+  const sampled = { driver: 'fixture', sample: true };
+  const full = { driver: 'fixture', sample: false };
+
+  /* A sampled baseline against a full run: the run holds everything the baseline does. */
+  const up = run(file(sampled, [row('a'), row('b')]), file(full, [row('a'), row('b'), row('c'), row('d')]));
+  expect(up.status, up.stdout + up.stderr).toBe(0);
+  expect(up.stdout).toContain('compared 2 cases common to both');
+
+  /* A full baseline against a sampled run: the baseline cases outside the sample were not
+     re-run on purpose, so they are reported and do not fail the comparison. */
+  const down = run(file(full, [row('a'), row('b', 999)]), file(sampled, [row('a')]));
+  expect(down.status, down.stdout + down.stderr).toBe(0);
+  expect(down.stdout).toContain('compared 1 cases common to both');
+  expect(down.stdout).toMatch(/1 baseline case\(s\) not in this run/);
+
+  /* A regression among the common cases still fails it. */
+  const bad = run(file(sampled, [row('a', 10)]), file(sampled, [row('a', 900)]));
+  expect(bad.status).toBe(1);
+  expect(bad.stdout).toContain('REGRESSED     1');
+
+  /* Two sampled runs hold the same population, so a dirty baseline case that did not come
+     back is an unverified hole and still fails it. */
+  const hole = run(file(sampled, [row('a'), row('b', 900)]), file(sampled, [row('a')]));
+  expect(hole.status, hole.stdout + hole.stderr).toBe(1);
+  expect(hole.stdout).toMatch(/UNVERIFIED/);
 });

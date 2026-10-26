@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loadAxes } from '../lib/axes';
-import { enumerate, enumerateExhaustiveC } from '../lib/cases';
+import { enumerate, enumerateExhaustiveC, namedCases, sampleMode } from '../lib/cases';
 
 test('axes carry the whole published vocabulary', () => {
   const a = loadAxes();
@@ -15,7 +15,7 @@ test('axes carry the whole published vocabulary', () => {
 });
 
 test('stage A is order-variant x rank x text', () => {
-  const cases = enumerate(loadAxes(), 'A');
+  const cases = enumerate(loadAxes(), 'A', undefined, false);
   expect(cases).toHaveLength(20 * 11 * 5);          // 1100: five text profiles since kingdomReal
   expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);
   expect(cases.every(c => c.hand === 'chancery')).toBe(true);
@@ -61,4 +61,73 @@ test('the exhaustive tier is a superset of stage C', () => {
   // cannot tell us whether the factorisation held.
   for (const id of routine) expect(all.has(id), `${id} is not in the exhaustive tier`).toBe(true);
   expect(all.size).toBe(82 * 4 * 11);
+});
+
+/* ORK3_SWEEP_SAMPLE=1: the sampled matrix the baseline is captured over. These pin its size
+   per stage, because a baseline taken over a population nobody can state is not evidence. */
+const axes = loadAxes();
+const key = (c: { order: string; variant: string }) => c.order + '/' + c.variant;
+
+test('sampled stage A is every order-variant x ranks {0,5,10} x profiles {max,empty,kingdomReal}', () => {
+  const cases = enumerate(axes, 'A', undefined, true);
+  expect(cases).toHaveLength(20 * 3 * 3);                                   // 180
+  expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);
+  expect([...new Set(cases.map(c => c.text))].sort()).toEqual(['empty', 'kingdomReal', 'max']);
+  expect(cases.every(c => c.hand === 'chancery' && c.surface === 'print')).toBe(true);
+  for (const o of axes.orderVariants) {
+    const ranks = [...new Set(cases.filter(c => key(c) === key(o)).map(c => c.rank))].sort((a, b) => a - b);
+    /* warrior starts at rank 1 (data-min="1"), so its floor sample is 1, not an unreachable 0. */
+    expect(ranks, key(o)).toEqual(o.order === 'warrior' ? [1, 5, 10] : [0, 5, 10]);
+  }
+});
+
+test('sampled stage B is every order-variant x every hand x {max}, at rank 10', () => {
+  const cases = enumerate(axes, 'B', undefined, true);
+  expect(cases).toHaveLength(20 * 10 * 1);                                  // 200
+  expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);
+  expect(cases.every(c => c.text === 'max' && c.rank === 10)).toBe(true);
+  expect(new Set(cases.map(c => c.hand))).toEqual(new Set(axes.hands));
+  /* A caller that knows each order's tightest rank can still say so. */
+  const at7 = enumerate(axes, 'B', Object.fromEntries(axes.orderVariants.map(o => [key(o), 7])), true);
+  expect(at7.every(c => c.rank === 7)).toBe(true);
+});
+
+test('sampled stage C keeps every legal pair and samples rankSet x ranks {0,5,10}', () => {
+  const cases = enumerate(axes, 'C', undefined, true);
+  /* 82 legal ground/border pairs + 4 rankSets x 3 ranks, less the one point they share
+     (parchment+knot+common at rank 10), the same overlap the full matrix has. */
+  expect(cases).toHaveLength(82 + 4 * 3 - 1);                               // 93
+  expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);
+  const pairs = cases.filter(c => c.recipe!.rankSet === 'common' && c.rank === 10 && c.recipe!.ground !== undefined);
+  expect(pairs.length).toBeGreaterThanOrEqual(82);
+  const ranked = cases.filter(c => c.recipe!.ground === 'parchment' && c.recipe!.border === 'knot');
+  expect([...new Set(ranked.map(c => c.rank))].sort((a, b) => a - b)).toEqual([0, 5, 10]);
+  expect([...new Set(ranked.map(c => c.recipe!.rankSet))].sort()).toEqual([...axes.rankSets].sort());
+});
+
+test('every sampled case is also a case of the full matrix, so a sampled baseline and a full run share ids', () => {
+  for (const stage of ['A', 'B', 'C'] as const) {
+    const full = new Set(enumerate(axes, stage, undefined, false).map(c => c.id));
+    const missing = enumerate(axes, stage, undefined, true).filter(c => !full.has(c.id)).map(c => c.id);
+    expect(missing, `stage ${stage} sampled ids absent from the full matrix`).toEqual([]);
+  }
+});
+
+test('stage N and the full matrix are untouched by sampling', () => {
+  expect(namedCases()).toHaveLength(9);
+  expect(enumerate(axes, 'A', undefined, false)).toHaveLength(1100);
+  expect(enumerate(axes, 'B', undefined, false)).toHaveLength(1000);
+  expect(enumerate(axes, 'C', undefined, false)).toHaveLength(125);
+});
+
+test('ORK3_SWEEP_SAMPLE=1 turns sampling on and nothing else does', () => {
+  const prior = process.env.ORK3_SWEEP_SAMPLE;
+  try {
+    for (const [v, want] of [['1', true], ['0', false], ['', false], ['true', false], [undefined, false]] as const) {
+      if (v === undefined) delete process.env.ORK3_SWEEP_SAMPLE; else process.env.ORK3_SWEEP_SAMPLE = v;
+      expect(sampleMode(), String(v)).toBe(want);
+    }
+  } finally {
+    if (prior === undefined) delete process.env.ORK3_SWEEP_SAMPLE; else process.env.ORK3_SWEEP_SAMPLE = prior;
+  }
 });

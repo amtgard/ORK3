@@ -30,6 +30,15 @@ if (driverOf(base) !== driverOf(cur)) {
   process.exit(2);
 }
 
+/* A SAMPLED run holds about a fifth of the full matrix (ORK3_SWEEP_SAMPLE, lib/cases.ts), and
+   every sampled case is a case of the full one with the same id. So two files are compared on
+   the case ids they BOTH hold and the output says how many that is. A baseline case the run
+   does not hold is expected when the two disagree about sampling, and is reported; when they
+   agree it was meant to be re-run, and a dirty one that was not is still an unverified hole.
+   A file with no stamp was a full matrix. */
+const sampleOf = f => f.sample ?? false;
+const sameSample = sampleOf(base) === sampleOf(cur);
+
 const norm = rs => Object.fromEntries(rs.map(r => [r.id, r.ca !== undefined ? r : {
   id: r.id, ca: r.CA.score * r.glyphPx / 1000, cb: r.CB.score * r.glyphPx / 1000,
   cc: r.CC.score * r.glyphPx / 1000,
@@ -44,15 +53,17 @@ const fixed = shared.filter(id => !dirty(C[id]) && dirty(B[id]));
 const stillDirty = shared.filter(id => dirty(C[id]) && dirty(B[id]));
 const missing = Object.keys(B).filter(id => !(id in C));
 
-console.log(`compared      ${shared.length} cases`);
+console.log(`compared ${shared.length} cases common to both`
+  + (sameSample ? '' : ` (baseline sample=${sampleOf(base)}, this run sample=${sampleOf(cur)})`));
 console.log(`fixed         ${fixed.length}`);
 console.log(`still dirty   ${stillDirty.length}`);
 console.log(`REGRESSED     ${regressed.length}`);
 /* A baseline case that was DIRTY and was not re-run is an unverified claim, not a
    pass. Reported separately and loudly: the first comparison after the ornament fix
    silently skipped 448 of them because stage D expands from a moving target. */
-const missingDirty = missing.filter(id => dirty(B[id]));
-if (missing.length) console.log(`not re-run    ${missing.length} (${missingDirty.length} were dirty)`);
+const missingDirty = sameSample ? missing.filter(id => dirty(B[id])) : [];
+if (missing.length && sameSample) console.log(`not re-run    ${missing.length} (${missingDirty.length} were dirty)`);
+else if (missing.length) console.log(`${missing.length} baseline case(s) not in this run, which samples differently; not compared`);
 for (const id of regressed.sort((a, b) => worst(C[b]) - worst(C[a])).slice(0, 25)) {
   const b = B[id], c = C[id];
   console.log(`  ! ${id}`);

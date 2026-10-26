@@ -11,6 +11,14 @@ export type Score = { score: number; overlapPx: number; worstRun: number };
  * A results.json from before the stamp existed was a compose run; it was the only driver.
  */
 export type Driver = 'fixture' | 'compose';
+
+/**
+ * How a run was made, stamped into results.json and report.md. `sample` is ORK3_SWEEP_SAMPLE
+ * (lib/cases.ts): a sampled run holds about a fifth of the full matrix, so two files are only
+ * the same population when they agree on it. A results.json from before the stamp was a full
+ * matrix.
+ */
+export type Run = { driver: Driver; sample: boolean };
 export type Result = {
   id: string; stage: string; surface: string;
   order: string; variant: string; rank: number; hand: string; text: string;
@@ -98,11 +106,11 @@ export const worstRun = (r: Result) => Math.max(r.CA.worstRun, r.CB.worstRun, r.
 /** The buckets the distribution is reported in, in ppt of glyph area. */
 const BUCKETS = [0, 0.1, 0.25, 0.5, 0.9, 1, 2, 5, 10, Infinity];
 
-export function writeReport(results: Result[], outDir: string, threshold: number, driver: Driver): void {
+export function writeReport(results: Result[], outDir: string, threshold: number, run: Run): void {
   mkdirSync(outDir, { recursive: true });
   writeFileSync(
     join(outDir, 'results.json'),
-    JSON.stringify({ threshold, driver, generated: new Date().toISOString(), results }, null, 2),
+    JSON.stringify({ threshold, driver: run.driver, sample: run.sample, generated: new Date().toISOString(), results }, null, 2),
   );
 
   const dirty = results.filter(isDirty).sort((a, b) => worst(b) - worst(a));
@@ -145,7 +153,7 @@ export function writeReport(results: Result[], outDir: string, threshold: number
 
   writeFileSync(join(outDir, 'report.md'), `# Scrollery ink-collision sweep
 
-Driver **${driver}** · cases **${results.length}** · over threshold **${dirty.length}** · over threshold in the top half **${dirtyTop}**${scoredTop === results.length ? '' : ` (scored on ${scoredTop} of ${results.length})`}
+Driver **${run.driver}** · sample **${run.sample}** · cases **${results.length}** · over threshold **${dirty.length}** · over threshold in the top half **${dirtyTop}**${scoredTop === results.length ? '' : ` (scored on ${scoredTop} of ${results.length})`}
 
 Thresholds are per layer pair and each is calibrated against a measured population —
 see \`THRESHOLDS\` in lib/report.ts for the numbers and what was looked at:

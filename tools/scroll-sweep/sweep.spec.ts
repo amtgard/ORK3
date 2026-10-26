@@ -4,16 +4,18 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { loadCatalogue, type Choice } from './lib/catalogue';
 import { openPrint, openPreview, fixtureDriver, fixtureCovers, prepareFixtures } from './lib/drive';
 import { loadAxes } from './lib/axes';
-import { enumerate, enumerateExhaustiveC, namedCases, caseId, type SweepCase } from './lib/cases';
+import { enumerate, enumerateExhaustiveC, namedCases, caseId, sampleMode, type SweepCase } from './lib/cases';
 import { captureLayers, typeBand, scoreInk } from './lib/raster';
 import { blockBoxes, showOnlyBlock, applyLayer } from './lib/isolate';
 import { diffMask, severity } from './lib/mask';
-import { writeReport, isDirty, worst, ZERO, type Driver, type Result } from './lib/report';
+import { writeReport, isDirty, worst, ZERO, type Driver, type Result, type Run } from './lib/report';
 
 const KINGDOM = Number(process.env.ORK3_SWEEP_KINGDOM ?? 1);
 const OUT = process.env.ORK3_SWEEP_OUT ?? join(__dirname, 'out');
 const THRESHOLD = Number(process.env.ORK3_SWEEP_THRESHOLD ?? 0.5);
 const EXHAUSTIVE = process.env.ORK3_SWEEP_EXHAUSTIVE === '1';
+/* ORK3_SWEEP_SAMPLE=1: the sampled matrix, defined in lib/cases.ts. Stamped into the results. */
+const SAMPLE = sampleMode();
 const ONLY = process.env.ORK3_SWEEP_ONLY;      // substring filter on case id, for iteration
 const LIMIT = Number(process.env.ORK3_SWEEP_LIMIT ?? 0);
 /*
@@ -99,7 +101,7 @@ function baselineDParents(): Set<string> {
 
 function stageD(near: Result[], axes: ReturnType<typeof loadAxes>): SweepCase[] {
   const out: SweepCase[] = [];
-  const seed = enumerate(axes, 'A').filter(c => c.text !== 'empty');
+  const seed = enumerate(axes, 'A', undefined, SAMPLE).filter(c => c.text !== 'empty');
   const fixed = axes.orderVariants.map(o =>
     seed.find(c => c.order === o.order && c.variant === o.variant && c.rank === 10)!).filter(Boolean);
 
@@ -136,6 +138,7 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
      "catalogue" is the fixture table and every order, hunter included, is reachable. */
   const FIXTURE = fixtureDriver();
   const DRIVER: Driver = FIXTURE ? 'fixture' : 'compose';
+  const RUN: Run = { driver: DRIVER, sample: SAMPLE };
   const { byOrder, unreachable } = await loadCatalogue(page, KINGDOM);
 
   mkdirSync(OUT, { recursive: true });
@@ -153,9 +156,10 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
   /* Always, whatever stages are selected: the acceptance criteria name these
      individually and a cross product need not contain any given point of itself. */
   if (STAGES.includes('N')) cases.push(...namedCases());
-  if (STAGES.includes('A')) cases.push(...enumerate(axes, 'A'));
-  if (STAGES.includes('B')) cases.push(...enumerate(axes, 'B'));
-  if (STAGES.includes('C')) cases.push(...(EXHAUSTIVE ? enumerateExhaustiveC(axes) : enumerate(axes, 'C')));
+  if (STAGES.includes('A')) cases.push(...enumerate(axes, 'A', undefined, SAMPLE));
+  if (STAGES.includes('B')) cases.push(...enumerate(axes, 'B', undefined, SAMPLE));
+  /* The exhaustive tier validates the factorisation and is never sampled. */
+  if (STAGES.includes('C')) cases.push(...(EXHAUSTIVE ? enumerateExhaustiveC(axes) : enumerate(axes, 'C', undefined, SAMPLE)));
   cases = cases.filter(reachable);
   /* What the fixture driver cannot render is dropped, loudly, rather than rendered as
      something else: a preview case drawn as print would be scored under the wrong name. */
@@ -303,11 +307,11 @@ test(`sweep ${shard + 1}/${SHARDS}`, async ({ page }) => {
   }
 
   if (SHARDS > 1) {
-    /* The driver travels with the shard, so merge.spec stamps what actually ran and not
-       whatever its own environment says. */
-    writeFileSync(join(OUT, `shard-${shard}.json`), JSON.stringify({ driver: DRIVER, results }));
+    /* The driver and the sample mode travel with the shard, so merge.spec stamps what
+       actually ran and not whatever its own environment says. */
+    writeFileSync(join(OUT, `shard-${shard}.json`), JSON.stringify({ ...RUN, results }));
   } else {
-    writeReport(results, OUT, THRESHOLD, DRIVER);
+    writeReport(results, OUT, THRESHOLD, RUN);
   }
   process.stdout.write(`\nsweep ${shard + 1}/${SHARDS}: ${results.length} cases, `
     + `${results.filter(isDirty).length} over threshold`

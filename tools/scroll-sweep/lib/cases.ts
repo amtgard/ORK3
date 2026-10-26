@@ -1,4 +1,5 @@
 import type { Axes } from './axes';
+import { FIXTURE_ORDERS } from './drive';
 import { PROFILE_NAMES, type TextProfile } from './text';
 
 export type Surface = 'print' | 'preview';
@@ -73,7 +74,52 @@ function dedupe(cases: SweepCase[]): SweepCase[] {
   return cases.filter(c => (seen.has(c.id) ? false : (seen.add(c.id), true)));
 }
 
-export function enumerate(a: Axes, stage: Stage, tightest?: Record<string, number>): SweepCase[] {
+/**
+ * ORK3_SWEEP_SAMPLE=1 — the SAMPLED matrix.
+ *
+ * The full matrix is about 2,100 cases for stages N, A and B and an hour and a half of wall
+ * clock at 1:1, which is too much to spend on every run. The sample keeps the shape of each
+ * stage and thins the axes that moved least, so a run takes about a fifth as long:
+ *
+ *   A  every order-variant x ranks {0, 5, 10} x profiles {max, empty, kingdomReal}
+ *        rank moves the PLATE, so the two ends and the middle are sampled; an order whose
+ *        minimum rank is above 0 (warrior starts at 1) is sampled at its minimum instead of
+ *        at a rank the app cannot produce
+ *        `max` is the synthetic worst case, `empty` the blank one, `kingdomReal` the real
+ *        kingdom-issued one; `real` and `caseZero` are dropped
+ *   B  every order-variant x every hand x {max}, at rank 10
+ *   C  every legal ground/border pair, as now; rankSet x ranks {0, 5, 10}
+ *   N  unchanged
+ *
+ * Stage B is meant to run at the rank stage A found tightest for each order, and that is
+ * not knowable here: B is enumerated before any of A has been measured, and the shards
+ * enumerate in parallel. So `tightest` defaults to rank 10, the largest sampled rank and the
+ * one the full matrix has always used. It is where the art that grows with rank is widest
+ * (dragon's knotwork widens, garber's tape measure grows; see stage A below). A caller that
+ * has measured the ranks passes them in.
+ *
+ * Every sampled case is also a case of the full matrix, with the same id, so a sampled
+ * baseline and a later full run compare on the cases they share.
+ */
+export const SAMPLE_RANKS = [0, 5, 10];
+export const SAMPLE_PROFILES_A: TextProfile[] = ['max', 'empty', 'kingdomReal'];
+export const SAMPLE_PROFILES_B: TextProfile[] = ['max'];
+
+/** Whether this run is sampled. Opt-in, and read here only: everything else asks enumerate(). */
+export const sampleMode = (): boolean => process.env.ORK3_SWEEP_SAMPLE === '1';
+
+/** The sampled ranks for an order: {0, 5, 10}, with anything below its floor lifted to the floor. */
+function sampledRanks(order: string): number[] {
+  const floor = FIXTURE_ORDERS[order]?.minRank ?? 0;
+  return [...new Set(SAMPLE_RANKS.map(r => Math.max(r, floor)))];
+}
+
+/**
+ * The case matrix for one stage. `sample` is explicit and defaults to OFF, so a unit test or a
+ * helper that enumerates the full matrix cannot be changed by a variable left in the shell;
+ * the sweep passes sampleMode().
+ */
+export function enumerate(a: Axes, stage: Stage, tightest?: Record<string, number>, sample = false): SweepCase[] {
   const cases: SweepCase[] = [];
 
   if (stage === 'A') {
@@ -81,8 +127,8 @@ export function enumerate(a: Axes, stage: Stage, tightest?: Record<string, numbe
        griffon draws symbol_N twice. That is a proven interaction with the order, so
        the two are crossed rather than swept separately. Hand is held at the default. */
     for (const o of a.orderVariants) {
-      for (const rank of a.ranks) {
-        for (const text of PROFILE_NAMES) cases.push(base(o, rank, 'chancery', text, 'A'));
+      for (const rank of sample ? sampledRanks(o.order) : a.ranks) {
+        for (const text of sample ? SAMPLE_PROFILES_A : PROFILE_NAMES) cases.push(base(o, rank, 'chancery', text, 'A'));
       }
     }
     return dedupe(cases);
@@ -97,7 +143,7 @@ export function enumerate(a: Axes, stage: Stage, tightest?: Record<string, numbe
       const key = o.order + '/' + o.variant;
       const rank = tightest?.[key] ?? 10;
       for (const hand of a.hands) {
-        for (const text of PROFILE_NAMES) cases.push(base(o, rank, hand, text, 'B'));
+        for (const text of sample ? SAMPLE_PROFILES_B : PROFILE_NAMES) cases.push(base(o, rank, hand, text, 'B'));
       }
     }
     return dedupe(cases);
@@ -115,7 +161,7 @@ export function enumerate(a: Axes, stage: Stage, tightest?: Record<string, numbe
       cases.push(c);
     }
     for (const rankSet of a.rankSets) {
-      for (const rank of a.ranks) {
+      for (const rank of sample ? sampledRanks('custom') : a.ranks) {
         const c = base(custom, rank, 'chancery', 'max', 'C');
         c.recipe = { ground: 'parchment', border: 'knot', rankSet };
         c.id = caseId(c);
