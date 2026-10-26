@@ -660,3 +660,56 @@ test('the print page: the default sig leaves the given-by font unchanged, and a 
   expect(await page.locator('#sc-sig').inputValue()).toBe('greatvibes');
   await page.evaluate(() => localStorage.removeItem('sc-sig'));
 });
+
+/* ----------------------------------------------------------------------------------------------
+ * A remembered hand is applied in place, and was never preloaded: the page is fitted in it.
+ * ---------------------------------------------------------------------------------------------- */
+test('the print page: a remembered hand with no face= settles ready() only once its faces have loaded, and fits in them', async ({ page }) => {
+  const c = byId('c05');   // a 100-character name at rank 10: the case with the most to lose if measured in the wrong face
+  await openComposer(page, c.scope);
+  await fillCase(page, c, 'auto');
+  await composerSettled(page);
+  const url = (await printUrlOf(page)).replace(/&face=[^&]*/, '').replace(/&sig=[^&]*/, '');
+  expect(url).not.toMatch(/[?&]face=/);
+
+  await page.evaluate(() => { localStorage.setItem('sc-face', 'cinzel'); localStorage.removeItem('sc-sig'); });
+  // The remembered face is not preloaded, so its files are fetched only when the page asks for them.
+  // Slow them down so that "ready() waited for the load" is distinguishable from "it was already there".
+  await page.route(/(Cinzel|Grenze)[^/]*\.woff2/i, async (route) => {
+    await new Promise(r => setTimeout(r, 700));
+    await route.continue();
+  });
+  await page.goto(url, { waitUntil: 'commit' });
+  await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+  await expect(page.locator('body')).toHaveAttribute('data-scroll-face', 'cinzel');
+
+  // The auto-print gate waits on this: it must not settle until the remembered face is in.
+  const loaded = await page.evaluate(() => (window as any).ScrolleryHand.ready().then(() => ({
+    cinzel: document.fonts.check('16px "Cinzel"'),
+    grenze: document.fonts.check('16px "Grenze"'),
+  })));
+  expect(loaded).toEqual({ cinzel: true, grenze: true });
+  await settle(page);
+
+  // Measured in the real face: fitting again changes nothing, and no line spills out of its role box.
+  const before = await readTop(page, '.scroll-flow');
+  await page.evaluate(() => (window as any).ScrolleryAutofit.fit(document));
+  const after = await readTop(page, '.scroll-flow');
+  for (const role of ['lead', 'place', 'name', 'award']) {
+    expect(after.roles[role]!.lines, `${role} lines`).toEqual(before.roles[role]!.lines);
+    expect(Math.abs(after.roles[role]!.size! - before.roles[role]!.size!) / before.roles[role]!.size!, `${role} size`).toBeLessThanOrEqual(0.005);
+  }
+  const spill = await page.evaluate(() => {
+    const out: string[] = [];
+    for (const role of document.querySelectorAll<HTMLElement>('.scroll-flow .Award [data-sc-role]')) {
+      const box = role.getBoundingClientRect();
+      for (const line of role.querySelectorAll<HTMLElement>('.sc-line')) {
+        const r = line.getBoundingClientRect();
+        if (r.width > box.width + 1) out.push(`${role.getAttribute('data-sc-role')}: ${Math.round(r.width)} > ${Math.round(box.width)}`);
+      }
+    }
+    return out;
+  });
+  expect(spill, 'every line fits its role box').toEqual([]);
+  await page.evaluate(() => localStorage.removeItem('sc-face'));
+});

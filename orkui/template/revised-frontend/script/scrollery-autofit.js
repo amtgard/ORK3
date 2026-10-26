@@ -1000,6 +1000,22 @@
             reportClipping(doc);
         });
 
+    /*
+     * A backstop for a face that arrives late: once the first pass is done, the next
+     * time the browser finishes loading any font, fit once more. The callers that swap
+     * a hand or signature in place wait on their own explicit load, so this is for the
+     * ones that cannot — a face whose request began after the pass, from anywhere — and
+     * costs one idempotent refit. One-shot, so it cannot become a refit-per-specimen
+     * loop in the composer's picker.
+     */
+    ready.then(function () {
+        if (!(doc.fonts && typeof doc.fonts.addEventListener === 'function')) { return; }
+        doc.fonts.addEventListener('loadingdone', function () {
+            fit(doc);
+            reportClipping(doc);
+        }, { once: true });
+    });
+
     global.ScrolleryAutofit = {
         /* fit(root?) -> number. Synchronous, idempotent, safe to re-run. */
         fit: fit,

@@ -647,12 +647,14 @@ foreach ($Scrolls as $scrollery_scan) {
         ? settled(window.ScrolleryAutofit.ready)
         : settled(document.fonts && document.fonts.ready);
 
-    /* A remembered signature face is applied in place and was not preloaded; its refit
-       is the last thing that has to finish. */
-    var Sig = window.ScrolleryHand && window.ScrolleryHand.sig;
+    /* A remembered hand or signature face is applied in place and was not preloaded;
+       their refits are the last things that have to finish. */
+    var Hand = window.ScrolleryHand;
+    var Sig = Hand && Hand.sig;
+    var handed = settled(Hand && Hand.ready ? Hand.ready() : null);
     var signed = settled(Sig && Sig.ready ? Sig.ready() : null);
 
-    Promise.all([loaded, fitted, signed]).then(go, go);
+    Promise.all([loaded, fitted, handed, signed]).then(go, go);
     window.setTimeout(go, FAILSAFE_MS);
 }());
 </script>

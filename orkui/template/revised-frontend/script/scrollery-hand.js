@@ -452,11 +452,50 @@
         var af = global.ScrolleryAutofit;
         if (!af) { return; }
 
-        var fonts = (doc.fonts && doc.fonts.ready) ? doc.fonts.ready : Promise.resolve();
-        fonts.then(function () {}, function () {}).then(function () {
+        /* document.fonts.ready is not enough on its own: it can already be settled at
+           the moment of the attribute swap (a face only starts loading once style
+           recalc finds text that uses it), so a fit queued behind it would measure the
+           fallback face — and the engine's nowrap lines clip when the real one lands.
+           Request every family the chosen hand letters with, then fit. sigApply() below
+           is the same fix for the signature. */
+        handLast = Promise.all(handFamilies(el, root).map(function (fam) {
+            return loadFamily(fam);
+        })).then(function () {}, function () {}).then(function () {
             af.fit(root || doc);
             if (af.reportClipping) { af.reportClipping(root || doc); }
         });
+    }
+
+    /* The refit the last apply queued, settled. The print page's auto-print gate waits
+       on it: a remembered hand is applied in place and was never preloaded. */
+    var handLast = Promise.resolve();
+
+    /* The CSS families the hand now in effect letters with: the display face and the
+       text companion, read off the custom properties scrollery.css sets per hand. Read
+       from the computed style (which forces the recalc the swap needs anyway) rather
+       than a second copy of the vocabulary here, so a hand with a third face is picked
+       up by adding it to the CSS. */
+    function handFamilies(el, root) {
+        var out = [];
+        var scope = root || doc;
+        var t = (scope.querySelector && scope.querySelector('.award-template')) ||
+            (el && el.querySelector && el.querySelector('.award-template'));
+        if (!t || !global.getComputedStyle) { return out; }
+        var cs = global.getComputedStyle(t);
+        ['--sc-display-face', '--sc-text-face'].forEach(function (name) {
+            var v = (cs.getPropertyValue(name) || '').trim();
+            if (v && out.indexOf(v) === -1) { out.push(v); }
+        });
+        return out;
+    }
+
+    /* One family, in the three styles a certificate uses. Failures are swallowed: a face
+       that cannot load falls back, and the fit still runs. */
+    function loadFamily(fam) {
+        if (!(doc.fonts && doc.fonts.load)) { return Promise.resolve(); }
+        return Promise.all(['16px ', 'bold 16px ', 'italic 16px '].map(function (spec) {
+            return doc.fonts.load(spec + fam).then(function () {}, function () {});
+        }));
     }
 
     /* ----------------------------------------------------------------------
@@ -695,6 +734,9 @@
         /* paint(select) -> void. Draw the closed control in the face it is showing. */
         paint: paint,
         apply: apply,
+        /* ready() -> Promise. Settles once the last apply's faces have loaded and the
+           page has been fitted in them. Never rejects. */
+        ready: function () { return handLast; },
         decorate: decorate,
         /* The signature hand: sig.init(keys, default), get/set/known, bind(select,
            onChange), apply(el, key, root, select), decorate(url, key). */
