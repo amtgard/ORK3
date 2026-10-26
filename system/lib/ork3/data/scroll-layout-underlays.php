@@ -54,6 +54,18 @@ declare(strict_types=1);
  * custom) is inline SVG with no src, so no pattern can name it and the builder treats it
  * as an obstacle. The sheet notes it in words and shows no thumbnail.
  *
+ * AN ENTRY MAY BE A WINDOW. Where one file is a wash or thread in some rows and an obstacle in
+ * the rest (a plate the grain of the file would otherwise force to one answer), the entry is
+ * `['pattern' => '<fnmatch>', 'y' => [y0, y1]]` instead of a plain string. The plate is an
+ * underlay ONLY inside frame rows y0 <= y < y1 (frame px, 0..3300; half-open: y1 is the first
+ * row outside) and an obstacle everywhere else. The window is in the frame's own 2550x3300
+ * coordinates and is only honoured for a plate that is the full frame (its box within 1px of
+ * 2550x3300); on any other plate the readers fail closed and keep the whole plate an
+ * obstacle. If a plain pattern and a window both match one plate the plain pattern wins (it
+ * says the whole plate is an underlay). Add a window only after measuring the plate's alpha
+ * by row: the window must hold the art meant to sit under the type and none of the rest, with
+ * a margin (ScrollLayoutUnderlaysTest holds the shape; the CALL note records the rows).
+ *
  * WHEN UNSURE, OBSTACLE, and say why in a CALL note beside the entry. The sheet prints
  * every CALL note at its head so the owner sees the judgement calls behind the draft. A
  * note begins at a comment line reading ` * CALL <order> (<where it landed>): ...` and
@@ -98,9 +110,28 @@ return [
     /*
      * garber: linen.jpg is the ground. overlay.png (the frame's corner furniture, nails,
      * bobbin) and rank_N.png (scissors, thread, numeral) are whole-page transparent plates
-     * of figures. Obstacles.
+     * of figures. overlay.png is an obstacle. rank_N.png is two things in one file:
+     *   UNDERLAY  rows 420-1219   two faint yellow horizontal threads (alpha at most 186) that
+     *                             run behind the type on purpose: ranks 0-8 at frame y 467-512
+     *                             and 800-845, ranks 9-10 at y 528-575 and 1123-1170.
+     *   obstacle  the rest of the file: the scissors, tape measure, numeral and pins at the
+     *                             foot, hard-edged, alpha 255, first pixel at y 2546 (ranks 6, 7).
+     *
+     * CALL garber (underlay window, as ruled): rank_N.png is windowed to frame rows 420 to 1220
+     *   (half-open), measured on the alpha of garber/rank_0..10.png. Every thread pixel on every
+     *   rank lies in 467-1170, so the window holds all of it with a 47px margin above and 50px
+     *   below. The foot cluster's first pixel on any rank is y 2546, so the window ends 1326px
+     *   clear of it. Nothing between 1171 and 2545 is drawn on any rank, so the window's lower
+     *   edge is not touching art. The plate's grain was the file, which
+     *   made the whole of it an obstacle and pinned the place line and the Centered lead to a
+     *   465px band wherever a thread runs. Two patterns, same window, because `rank_*` would also
+     *   match the composer's rank_N_display.webp rendition (see testNoPatternMatchesADisplayRendition):
+     *   `rank_?.*` is ranks 0-9 and `rank_10.*` is rank 10.
      */
-    'garber' => [],
+    'garber' => [
+        ['pattern' => 'garber/rank_?.*', 'y' => [420, 1220]],
+        ['pattern' => 'garber/rank_10.*', 'y' => [420, 1220]],
+    ],
 
     /*
      * griffon: symbol_N twice at soft-light (sepia figures at the foot of the page), and

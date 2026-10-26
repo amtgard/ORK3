@@ -4,6 +4,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import { loadCorpus, renderFixtures, serveFixtures, openFixture, type FixtureSpec } from './lib/fixture';
 import { markGround } from './lib/isolate';
+import { combine, FRAME_H, FRAME_W, windowClip, type Entry, type Policy } from './lib/underlays';
 
 /*
  * The underlay review sheet: every plate each certificate design draws, one at a time,
@@ -66,7 +67,7 @@ type Axes = {
   rankSets: string[];
   groundsWithOwnBorder: string[];
 };
-type Policy = Record<string, string[]>;
+const patternOf = (e: Entry) => (typeof e === 'string' ? e : e.pattern);
 
 type Layer = {
   index: number;
@@ -77,6 +78,8 @@ type Layer = {
   paint: string;
   /** Painted box of the first plate, in frame px. */
   box: string;
+  /** Whether that box is the whole 2550x3300 frame (within 1px): a policy window only means something on one. */
+  fullFrame: boolean;
 };
 
 const BASE: Omit<FixtureSpec, 'id' | 'order' | 'awardId' | 'title' | 'variant' | 'rank'> = {
@@ -95,13 +98,13 @@ const BASE: Omit<FixtureSpec, 'id' | 'order' | 'awardId' | 'title' | 'variant' |
 
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 
-/** The policy file, plus which of `patterns` it says match `queries`. One php call; fnmatch is PHP's own. */
-function askPolicy(queries: { order: string; file: string }[]): { policy: Policy; matched: string[][] } {
+/** The policy file, plus which of its entries match each query. One php call; fnmatch is PHP's own. */
+function askPolicy(queries: { order: string; file: string }[]): { policy: Policy; matched: Entry[][] } {
   const code = `$policy = require $argv[1];
 $in = json_decode(stream_get_contents(STDIN), true);
 $out = [];
 foreach ($in as $q) {
-  $out[] = array_values(array_filter($policy[$q['order']] ?? [], fn ($p) => fnmatch($p, $q['file'])));
+  $out[] = array_values(array_filter($policy[$q['order']] ?? [], fn ($e) => fnmatch(is_array($e) ? $e['pattern'] : $e, $q['file'])));
 }
 echo json_encode(['policy' => $policy, 'matched' => $out]);`;
   const r = spawnSync('php', ['-r', code, POLICY_FILE], { input: JSON.stringify(queries), encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
@@ -227,6 +230,8 @@ function enumerate(): { layers: Layer[]; ground: string[] } {
       kind: isPlate ? 'plate' : 'svg',
       paint: describe(imgs[0] ?? child.querySelector('svg')!, child),
       box: `${Math.round(r.width / k)}x${Math.round(r.height / k)}`,
+      fullFrame: Math.abs((r.left - frame.getBoundingClientRect().left) / k) <= 1 && Math.abs((r.top - frame.getBoundingClientRect().top) / k) <= 1
+        && Math.abs(r.width / k - 2550) <= 1 && Math.abs(r.height / k - 3300) <= 1,
     });
     n++;
   });
@@ -244,12 +249,15 @@ async function css(page: Page, rules: string): Promise<void> {
 const ONLY_GROUND = `.award-template > *:not([data-sweep-ground]) { visibility: hidden !important; }`;
 const ALL_PLATES = `.Award { visibility: hidden !important; }`;
 const ONLY_OBSTACLES = `.Award, [data-sweep-underlay] { visibility: hidden !important; }`;
+/* A windowed plate keeps its rows outside the window: the same clip the profile builder and layer A use. */
+const windowRules = (windows: { index: number; y0: number; y1: number }[]) =>
+  windows.map(w => `[data-sweep-layer="${w.index}"] { clip-path: ${windowClip(w.y0, w.y1)} !important; }`).join('\n');
 const only = (i: number) =>
   `.award-template > *:not([data-sweep-layer="${i}"]):not([data-sweep-ground]) { visibility: hidden !important; }`;
 
 /* ---- the sheet --------------------------------------------------------------------- */
 
-type Shot = { file: string; caption: string; verdict?: 'UNDERLAY' | 'OBSTACLE'; note?: string; matched?: string[] };
+type Shot = { file: string; caption: string; verdict?: 'UNDERLAY' | 'WINDOW' | 'OBSTACLE'; note?: string; matched?: string[] };
 type Block = { fixture: Fixture; ground: string[]; summary: Shot[]; layers: Shot[]; fixed: string[]; skipped: string };
 
 function writeSheet(blocks: Block[], policy: Policy, dead: Record<string, string[]>): void {
@@ -262,7 +270,7 @@ function writeSheet(blocks: Block[], policy: Policy, dead: Record<string, string
 </figure>`;
 
   const policyRows = Object.entries(policy).map(([order, pats]) =>
-    `<tr><th scope="row">${esc(order)}</th><td>${pats.length ? pats.map(p => `<code>${esc(p)}</code>`).join(' ') : '<em>none: every plate is an obstacle</em>'}</td></tr>`).join('\n');
+    `<tr><th scope="row">${esc(order)}</th><td>${pats.length ? pats.map(p => `<code>${esc(typeof p === 'string' ? p : `${p.pattern} (rows ${p.y[0]} to ${p.y[1]} only)`)}</code>`).join(' ') : '<em>none: every plate is an obstacle</em>'}</td></tr>`).join('\n');
   const deadRows = Object.entries(dead).filter(([, p]) => p.length)
     .map(([o, p]) => `<li><strong>${esc(o)}</strong>: ${p.map(x => `<code>${esc(x)}</code>`).join(', ')}</li>`).join('');
 
@@ -295,14 +303,15 @@ figure { margin: 0; } figure img { width: 100%; height: auto; display: block; bo
 figure.underlay img { border-color: var(--under); } figure.obstacle img { border-color: var(--obst); }
 figcaption { font-size: 12px; padding-top: 4px; overflow-wrap: anywhere; }
 .badge { font-weight: 700; font-size: 11px; padding: 1px 6px; border-radius: 3px; color: #fff; }
-.badge.underlay { background: var(--under); } .badge.obstacle { background: var(--obst); }
+.badge.underlay { background: var(--under); } .badge.obstacle { background: var(--obst); } .badge.window { background: #b54708; }
+figure.window img { border-color: #b54708; }
 table { border-collapse: collapse; } th, td { text-align: left; padding: 2px 10px 2px 0; vertical-align: top; }
 code { font-size: 12px; } .warn { border: 2px solid var(--obst); padding: 6px 12px; }
 .calls { border: 2px solid #b54708; padding: 6px 12px; margin: 12px 0; } .calls li { margin: 4px 0; }
 </style></head><body>
 <header><h1>Scroll underlays: review sheet</h1><span>UNDERLAY = the type is designed to sit on this plate. OBSTACLE = the type keeps clear of it.</span>
 <input id="find" type="search" placeholder="Filter by file, verdict or blend" aria-label="Filter plates"></header>
-<p>Each thumbnail is the certificate's own ground plus <strong>one</strong> plate, no text. Green border and badge: UNDERLAY. Red: OBSTACLE.
+<p>Each thumbnail is the certificate's own ground plus <strong>one</strong> plate, no text. Green border and badge: UNDERLAY. Amber: WINDOW (an underlay only inside the rows named, an obstacle elsewhere). Red: OBSTACLE.
 Where unsure, a plate is an obstacle and says why in the policy file. Heraldry is left out of every render (it is always an obstacle).</p>
 ${noteBox}
 <h2>The policy as written</h2>
@@ -347,17 +356,32 @@ test('render every plate of every order and write the review sheet', async ({ pa
       const answer = askPolicy(asked);
       policy = answer.policy;
       let q = 0;
-      const verdict = new Map<number, { under: boolean; matched: string[] }>();
+      type LayerVerdict = { kind: 'underlay' | 'window' | 'obstacle'; matched: string[]; y?: [number, number]; note?: string };
+      const verdict = new Map<number, LayerVerdict>();
       for (const l of layers) {
         const m = l.files.map(() => answer.matched[q++]);
-        for (const pats of m) for (const p of pats) matchedEver.set(order, (matchedEver.get(order) ?? new Set()).add(p));
+        for (const entries of m) for (const e of entries) matchedEver.set(order, (matchedEver.get(order) ?? new Set()).add(patternOf(e)));
+        const matched = Array.from(new Set(m.flat().map(patternOf)));
+        const vs = m.map(combine);
         // A layer is an underlay only if every plate in it is. A mixed layer stays an obstacle.
-        verdict.set(l.index, { under: l.files.length > 0 && m.every(x => x.length > 0), matched: Array.from(new Set(m.flat())) });
+        if (l.files.length > 0 && vs.every(v => v.kind === 'whole')) {
+          verdict.set(l.index, { kind: 'underlay', matched });
+        } else if (l.files.length > 0 && vs.every(v => v.kind === 'window')) {
+          const w = vs as { kind: 'window'; y0: number; y1: number }[];
+          const same = w.every(x => x.y0 === w[0].y0 && x.y1 === w[0].y1);
+          if (!same) verdict.set(l.index, { kind: 'obstacle', matched, note: 'windows of different rows in one layer: obstacle' });
+          else if (!l.fullFrame) verdict.set(l.index, { kind: 'obstacle', matched, note: `window ignored: this plate's box ${l.box} is not the ${FRAME_W}x${FRAME_H} frame, so it fails closed` });
+          else verdict.set(l.index, { kind: 'window', matched, y: [w[0].y0, w[0].y1] });
+        } else {
+          verdict.set(l.index, { kind: 'obstacle', matched });
+        }
       }
       await page.evaluate((under) => {
         document.querySelectorAll('[data-sweep-underlay]').forEach(e => e.removeAttribute('data-sweep-underlay'));
         under.forEach(i => document.querySelector(`[data-sweep-layer="${i}"]`)?.setAttribute('data-sweep-underlay', '1'));
-      }, layers.filter(l => verdict.get(l.index)!.under).map(l => l.index));
+      }, layers.filter(l => verdict.get(l.index)!.kind === 'underlay').map(l => l.index));
+      const windows = layers.filter(l => verdict.get(l.index)!.kind === 'window')
+        .map(l => ({ index: l.index, y0: verdict.get(l.index)!.y![0], y1: verdict.get(l.index)!.y![1] }));
 
       const svg = page.locator('svg[data-scroll-frame]').first();
       const shoot = async (name: string, rules: string): Promise<string> => {
@@ -384,7 +408,7 @@ test('render every plate of every order and write the review sheet', async ({ pa
       const summary: Shot[] = [
         { file: await shoot('ground', ONLY_GROUND), caption: 'ground alone' },
         { file: await shoot('plates', ALL_PLATES), caption: 'ground and every plate, no text' },
-        { file: await shoot('obstacles', ONLY_OBSTACLES), caption: 'obstacles only (underlays removed)' },
+        { file: await shoot('obstacles', `${ONLY_OBSTACLES}\n${windowRules(windows)}`), caption: windows.length ? 'obstacles only (underlays removed, windows cut out)' : 'obstacles only (underlays removed)' },
       ];
       const shots: Shot[] = [];
       const fixed: string[] = [];
@@ -395,8 +419,8 @@ test('render every plate of every order and write the review sheet', async ({ pa
         shots.push({
           file: await shoot(`layer${l.index}`, only(l.index)),
           caption: l.files.join(' + '),
-          verdict: v.under ? 'UNDERLAY' : 'OBSTACLE',
-          note: `layer ${l.index + 1} of ${layers.length} · ${l.box}${l.paint ? ' · ' + l.paint : ' · normal blend'}`,
+          verdict: v.kind === 'underlay' ? 'UNDERLAY' : v.kind === 'window' ? 'WINDOW' : 'OBSTACLE',
+          note: `layer ${l.index + 1} of ${layers.length} · ${l.box}${l.paint ? ' · ' + l.paint : ' · normal blend'}${v.y ? ` · underlay in frame rows ${v.y[0]} to ${v.y[1]} only` : ''}${v.note ? ' · ' + v.note : ''}`,
           matched: v.matched,
         });
       }
@@ -410,7 +434,7 @@ test('render every plate of every order and write the review sheet', async ({ pa
   const dead: Record<string, string[]> = {};
   for (const [order, pats] of Object.entries(policy)) {
     const hit = matchedEver.get(order) ?? new Set<string>();
-    dead[order] = pats.filter(p => !hit.has(p));
+    dead[order] = pats.map(patternOf).filter(p => !hit.has(p));
   }
   writeSheet(blocks, policy, dead);
   console.log(`underlay sheet: ${join(OUT, 'index.html')}`);

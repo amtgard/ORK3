@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { applyLayer, markGround, washCandidates, showOnlyPlate, markAsGround, forceFullScale, type Layer } from './isolate';
 import { diffMask, count, erode1, severity } from './mask';
 import { ZERO } from './report';
+import { setUnderlayCss, underlayCssFor } from './underlays';
 
 export const LAYERS: Layer[] = ['full', 'G', 'A', 'B', 'C', 'Ctop'];
 
@@ -88,6 +89,16 @@ export async function typeBand(page: Page): Promise<Clip> {
  * The clip is computed once from the unmodified page and reused — recomputing it per
  * layer would give layer A a different band from layer C and every intersection would
  * be off by the difference.
+ *
+ * LAYER A APPLIES THE UNDERLAY POLICY, the way the layout does. The free-space profile
+ * (profile.spec.ts) treats the plates system/lib/ork3/data/scroll-layout-underlays.php lists
+ * as washes the type is DESIGNED to sit on, and keeps the type off the rest. Scoring the same
+ * type against ALL the plates counted every glyph over a designed underlay as a collision
+ * (96 of the 481 sampled cases, none of them real). So the underlay plates are hidden from A
+ * here through the shared resolver (lib/underlays.ts): a `whole` plate entirely, a `window`
+ * plate only inside its window's rows. G, B, C and Ctop are untouched, and so is `full`.
+ * markGround()'s ground (and a wash classifyWashes() promoted to ground) is never hidden:
+ * G keeps it, so hiding it from A alone would report the whole ground as artwork.
  */
 export async function captureLayers(page: Page, clip?: Clip): Promise<Record<Layer, Buffer>> {
   await forceFullScale(page);
@@ -96,11 +107,14 @@ export async function captureLayers(page: Page, clip?: Clip): Promise<Record<Lay
      an already-hidden image whether it is opaque. */
   await markGround(page);
   await classifyWashes(page, band);
+  const policy = await underlayCssFor(page);
   const out = {} as Record<Layer, Buffer>;
   for (const layer of LAYERS) {
     await applyLayer(page, layer);
+    await setUnderlayCss(page, layer === 'A' ? policy.css : '');
     out[layer] = await page.screenshot({ clip: band, type: 'png', animations: 'disabled' });
   }
+  await setUnderlayCss(page, '');
   await applyLayer(page, 'full');
   return out;
 }

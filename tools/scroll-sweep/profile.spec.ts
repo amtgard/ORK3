@@ -9,6 +9,7 @@ import { caseId, type SweepCase } from './lib/cases';
 import { FIXTURE_ORDERS, fixtureSpecFor } from './lib/drive';
 import { openFixture, renderFixtures, serveFixtures, type FixtureSpec } from './lib/fixture';
 import { applyLayer, forceFullScale, markGround } from './lib/isolate';
+import { plan, setUnderlayCss, tagPlates, POLICY_FILE } from './lib/underlays';
 import { GRID, THRESHOLDS, bandEdges, obstacleMask, type Edges, type ObstacleMask, type Thresholds } from './lib/profile';
 
 /*
@@ -31,11 +32,13 @@ import { GRID, THRESHOLDS, bandEdges, obstacleMask, type Edges, type ObstacleMas
  *       found by markGround() exactly as the sweep finds it.
  *   A   the ground plus every plate, EXCEPT the plates the underlay policy says the type is
  *       designed to sit on (system/lib/ork3/data/scroll-layout-underlays.php), which are hidden.
+ *       A plate the policy gives a WINDOW is hidden only inside the window's rows.
  *
  * The obstacles are what A adds to G, plus what G itself makes unreadable. Isolation never
  * reflows: every rule is `visibility: hidden`, never `display: none` (lib/isolate.ts says why).
- * The policy is matched by PHP's own fnmatch(), as the review sheet does, so this cannot disagree
- * with what the policy file means. It is a DRAFT pending the owner's sign-off, so the manifest
+ * The policy is resolved by lib/underlays.ts (PHP's own fnmatch(), as the review sheet does), the
+ * same module the sweep's layer A uses, so the two cannot disagree with each other or with what the
+ * policy file means. It is a DRAFT pending the owner's sign-off, so the manifest
  * records its hash and a test fails when the two part: regeneration is this one command.
  *
  * CUSTOM scrolls are composed from parts, so each part is measured alone and Scroll::FreeSpace()
@@ -65,7 +68,6 @@ import { GRID, THRESHOLDS, bandEdges, obstacleMask, type Edges, type ObstacleMas
 const OUT = join(__dirname, 'out', 'profiles');
 const FIXTURE_TAG = 'profiles';
 const MANIFEST = join(__dirname, '..', '..', 'assets', 'scrolls', 'free-space.json');
-const POLICY_FILE = join(__dirname, '..', '..', 'system', 'lib', 'ork3', 'data', 'scroll-layout-underlays.php');
 const RECIPES_FILE = join(__dirname, '..', '..', 'system', 'lib', 'ork3', 'data', 'scroll-recipes.php');
 const PAGES = Math.max(1, Number(process.env.ORK3_PROFILE_PAGES ?? 2));
 const ONLY = (process.env.ORK3_PROFILE_ONLY ?? '').split(',').map(s => s.trim()).filter(Boolean);
@@ -134,33 +136,9 @@ echo json_encode(['grounds' => $r['grounds'], 'groundsWithOwnBorder' => $r['grou
   return JSON.parse(r.stdout);
 }
 
-/** Verdicts from PHP's own fnmatch(), cached: a plate has one answer per order, wherever it is drawn. */
-const verdicts = new Map<string, boolean>();
-function underlays(order: string, files: string[]): Set<string> {
-  const ask = files.filter(f => !verdicts.has(`${order}|${f}`));
-  if (ask.length) {
-    const code = `$policy = require $argv[1];
-$in = json_decode(stream_get_contents(STDIN), true);
-echo json_encode(array_map(fn ($q) => count(array_filter($policy[$q['order']] ?? [], fn ($p) => fnmatch($p, $q['file']))) > 0, $in));`;
-    const r = spawnSync('php', ['-r', code, POLICY_FILE], {
-      input: JSON.stringify(ask.map(file => ({ order, file }))),
-      encoding: 'utf8',
-      maxBuffer: 16 * 1024 * 1024,
-    });
-    if (r.error) throw new Error(`could not run php: ${r.error.message}`);
-    if (r.status !== 0) throw new Error(`asking the underlay policy failed\n${r.stderr}${r.stdout}`);
-    (JSON.parse(r.stdout) as boolean[]).forEach((v, i) => verdicts.set(`${order}|${ask[i]}`, v));
-  }
-  return new Set(files.filter(f => verdicts.get(`${order}|${f}`)));
-}
-
 /* ---- in the page --------------------------------------------------------------------- */
 
 type PageFacts = {
-  /** The plates this certificate draws (paths below assets/scrolls/), the ground excluded, with their tag. */
-  plates: { tag: string; file: string }[];
-  /** The ground plates markGround() found. */
-  ground: string[];
   /** Whether the type is light on this certificate (cyanotype). Read from the type's own computed colour. */
   lightInk: boolean;
   frame: { x: number; y: number };
@@ -168,7 +146,7 @@ type PageFacts = {
   heraldry: { x: number; y: number; w: number; h: number } | null;
 };
 
-/** Runs in the page. Tags every plate `data-sweep-plate-img` so the hide rule can name it. */
+/** Runs in the page: the facts that are not about plates (those are lib/underlays.ts tagPlates). */
 function inspect(): PageFacts {
   const frame = document.querySelector('svg[data-scroll-frame]') as SVGElement | null;
   const tpl = document.querySelector('.award-template') as HTMLElement | null;
@@ -176,24 +154,6 @@ function inspect(): PageFacts {
   if (!frame || !tpl || !award) throw new Error('no certificate on the page');
   const fr = frame.getBoundingClientRect();
   const k = fr.width / 2550;
-  const rel = (src: string): string | null => {
-    const m = new URL(src, location.href).pathname.match(/\/scrolls\/(.+)$/);
-    return m ? decodeURIComponent(m[1]) : null;
-  };
-
-  const plates: { tag: string; file: string }[] = [];
-  const ground: string[] = [];
-  let n = 0;
-  tpl.querySelectorAll('img').forEach(img => {
-    img.removeAttribute('data-sweep-plate-img');
-    if (award.contains(img)) return;
-    const file = rel(img.currentSrc || img.src);
-    if (file === null) return;                               // the heraldry, which is not a plate
-    if (img.parentElement === tpl && img.hasAttribute('data-sweep-ground')) { ground.push(file); return; }
-    const tag = String(n++);
-    img.setAttribute('data-sweep-plate-img', tag);
-    plates.push({ tag, file });
-  });
 
   const rgb = getComputedStyle(award).color.match(/[\d.]+/g)!.map(Number);
   const luma = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
@@ -204,7 +164,7 @@ function inspect(): PageFacts {
     const r = hi.getBoundingClientRect();
     heraldry = { x: (r.left - fr.left) / k, y: (r.top - fr.top) / k, w: r.width / k, h: r.height / k };
   }
-  return { plates, ground, lightInk: luma > 0.5, frame: { x: fr.left, y: fr.top }, heraldry };
+  return { lightInk: luma > 0.5, frame: { x: fr.left, y: fr.top }, heraldry };
 }
 
 /**
@@ -219,14 +179,6 @@ const pinFrame = (page: Page) =>
     if (!st) { st = document.createElement('style'); st.id = 'profile-origin'; document.head.appendChild(st); }
     st.textContent = 'svg[data-scroll-frame] { position: absolute !important; left: 0 !important; top: 0 !important; margin: 0 !important; }';
   });
-
-const UNDERLAY_STYLE_ID = 'profile-underlay';
-const hideUnderlays = (page: Page, tags: string[]) =>
-  page.evaluate(({ id, tags }) => {
-    let st = document.getElementById(id) as HTMLStyleElement | null;
-    if (!st) { st = document.createElement('style'); st.id = id; document.head.appendChild(st); }
-    st.textContent = tags.map(t => `img[data-sweep-plate-img="${t}"]`).join(',\n') + (tags.length ? ' { visibility: hidden !important; }' : '');
-  }, { id: UNDERLAY_STYLE_ID, tags });
 
 /* ---- the knotwork library -------------------------------------------------------------- */
 
@@ -305,10 +257,8 @@ async function measure(page: Page, spec: FixtureSpec, own: Set<string>, defs: st
   await pinFrame(page);
   await markGround(page);
   const facts = await page.evaluate(inspect);
-
-  const order = spec.order;
-  const hidden = underlays(order, facts.plates.map(p => p.file));
-  const hideTags = facts.plates.filter(p => hidden.has(p.file)).map(p => p.tag);
+  const plates = await tagPlates(page);
+  const applied = plan(plates, spec.order);
 
   // The same clip for every raster, taken from the unmodified page: pixel-comparable by construction.
   const clip = { x: Math.round(facts.frame.x), y: Math.round(facts.frame.y) + GRID.y0, width: GRID.frameW, height: GRID.bands * GRID.step };
@@ -317,14 +267,14 @@ async function measure(page: Page, spec: FixtureSpec, own: Set<string>, defs: st
   }
   const shoot = () => page.screenshot({ clip, type: 'png', animations: 'disabled' });
 
-  await hideUnderlays(page, []);
+  await setUnderlayCss(page, '');
   await applyLayer(page, 'G');
   const G = await shoot();
   await applyLayer(page, 'A');
   const composite = await shoot();             // ground + every plate: what the debug image is drawn over
-  await hideUnderlays(page, hideTags);
+  await setUnderlayCss(page, applied.css);
   const A = await shoot();                     // ground + the plates that are obstacles
-  await hideUnderlays(page, []);
+  await setUnderlayCss(page, '');
   await applyLayer(page, 'full');
 
   if (process.env.ORK3_PROFILE_DUMP) {
@@ -334,7 +284,7 @@ async function measure(page: Page, spec: FixtureSpec, own: Set<string>, defs: st
     writeFileSync(join(OUT, 'raw', `${base}-A.png`), A);
   }
 
-  const ownBorder = facts.ground.some(f => own.has(stem(f)));
+  const ownBorder = plates.ground.some(f => own.has(stem(f)));
   const obs = obstacleMask(A, G, { lightInk: facts.lightInk, ownBorder, t: T });
   const edges = bandEdges(obs.mask, obs.w, obs.h, T);
 
@@ -364,9 +314,9 @@ async function measure(page: Page, spec: FixtureSpec, own: Set<string>, defs: st
     by: obs.by,
     lightInk: facts.lightInk,
     ownBorder,
-    ground: facts.ground,
-    underlays: Array.from(new Set(facts.plates.filter(p => hidden.has(p.file)).map(p => p.file))),
-    obstacles: Array.from(new Set(facts.plates.filter(p => !hidden.has(p.file)).map(p => p.file))),
+    ground: plates.ground,
+    underlays: Array.from(new Set([...applied.whole, ...applied.window.map(f => `${f} (window)`)])),
+    obstacles: Array.from(new Set([...applied.obstacles, ...applied.window.map(f => `${f} (outside its window)`)])),
     heraldry: hb,
     centreOther,
     debugFile: debugName,

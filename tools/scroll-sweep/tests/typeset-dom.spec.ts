@@ -46,7 +46,7 @@ const VARIANTS: FixtureSpec[] = [
   { ...base('c02'), id: 'v-nokren', player: NOKREN, hand: 'uncial' },
   { ...base('c05'), id: 'v-up2', up: 2 },
   { ...base('c22'), id: 'v-centered', heading: 'centered' },
-  { ...base('c14'), id: 'v-classic', heading: 'classic' },
+  { ...base('x3'), id: 'v-classic', heading: 'classic' },
   { ...base('c22'), ...realFields(), id: 'v-w8real', rank: 8, scope: 'park' },
   { ...base('c22'), id: 'v-halo', player: 'Halo' },
 ];
@@ -630,7 +630,10 @@ test('composition choice', async ({ page }) => {
   // c11 was expected Centered by the plan, before anything was measured. Its lead ("and the
   // Principality of") fits beside the versal at 0.741em in Uncial and its one-line place clears
   // the profile, so Classic is correct (controller ruling, Task 10b); T14 revisits it.
-  expect(got).toEqual({ c22: 'classic', c26: 'classic', x2: 'classic', c11: 'classic', c14: 'centered', x3: 'centered' });
+  // c14 (Garber, rank 2) was Centered only because the whole of garber/rank_N.png was an obstacle and
+  // pinned the place to a 465px band across the thread; the policy window (T14b) frees the thread, the
+  // place fits beside the versal, and Classic is correct. x3 (a long principality line) is the Centered case.
+  expect(got).toEqual({ c22: 'classic', c26: 'classic', x2: 'classic', c11: 'classic', c14: 'classic', x3: 'centered' });
 });
 
 test('lead never wraps', async ({ page }) => {
@@ -738,10 +741,10 @@ test('kingdoms and parks read alike', async ({ page }) => {
 });
 
 test('a forced heading wins', async ({ page }) => {
-  // c22 chooses Classic on its own and c14 Centered; each is forced the other way and must obey.
+  // c22 chooses Classic on its own and x3 Centered; each is forced the other way and must obey.
   expect((await get(page, 'c22')).sectionComp).toBe('classic');
   expect((await get(page, 'v-centered')).sectionComp).toBe('centered');
-  expect((await get(page, 'c14')).sectionComp).toBe('centered');
+  expect((await get(page, 'x3')).sectionComp).toBe('centered');
   const forced = await get(page, 'v-classic');
   expect(forced.sectionComp).toBe('classic');
   expect(forced.comp).toBe('classic');

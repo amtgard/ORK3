@@ -44,6 +44,54 @@ final class ScrollLayoutUnderlaysTest extends TestCase
         return $out;
     }
 
+    /** The fnmatch pattern of an entry, which is either the string itself or a window's 'pattern'. */
+    private static function patternOf(mixed $entry): string
+    {
+        return is_array($entry) ? (string) ($entry['pattern'] ?? '') : (string) $entry;
+    }
+
+    /** @return list<string> every pattern an order lists, windowed or not */
+    private function patternsOf(mixed $entries): array
+    {
+        return array_map(static fn (mixed $e): string => self::patternOf($e), $entries);
+    }
+
+    /**
+     * Why an entry is not a valid policy entry, or null when it is. An entry is a non-empty
+     * fnmatch string, or ['pattern' => non-empty string, 'y' => [y0, y1]] with integers, both
+     * within the frame (0..3300) and y0 < y1 (half-open: y1 is the first row outside).
+     */
+    private static function entryProblem(mixed $entry): ?string
+    {
+        if (is_string($entry)) {
+            return $entry === '' ? 'an empty pattern' : null;
+        }
+        if (!is_array($entry)) {
+            return 'neither a string nor a window array';
+        }
+        if (array_diff(array_keys($entry), ['pattern', 'y']) !== []) {
+            return 'a window with keys other than pattern and y';
+        }
+        if (!isset($entry['pattern']) || !is_string($entry['pattern']) || $entry['pattern'] === '') {
+            return 'a window with no pattern';
+        }
+        if (!isset($entry['y']) || !is_array($entry['y']) || !array_is_list($entry['y']) || count($entry['y']) !== 2) {
+            return 'a window with no [y0, y1]';
+        }
+        [$y0, $y1] = $entry['y'];
+        if (!is_int($y0) || !is_int($y1)) {
+            return 'a window whose y0 and y1 are not integers';
+        }
+        if ($y0 < 0 || $y1 > 3300) {
+            return "a window outside the frame rows 0..3300 ({$y0}, {$y1})";
+        }
+        if ($y0 >= $y1) {
+            return "a window with y0 >= y1 ({$y0}, {$y1})";
+        }
+
+        return null;
+    }
+
     public function testEveryOrderHasAnEntry(): void
     {
         $missing = array_diff(array_keys(Scroll::Orders()), array_keys($this->policy()));
@@ -52,23 +100,82 @@ final class ScrollLayoutUnderlaysTest extends TestCase
         $this->assertArrayHasKey('custom', $this->policy());
     }
 
-    public function testValuesAreListsOfStrings(): void
+    public function testValuesAreListsOfPatternsOrWindows(): void
     {
-        foreach ($this->policy() as $order => $patterns) {
+        foreach ($this->policy() as $order => $entries) {
             $this->assertIsString($order);
-            $this->assertIsArray($patterns, "{$order} is not a list");
-            $this->assertTrue(array_is_list($patterns), "{$order} is not a list");
-            foreach ($patterns as $pattern) {
-                $this->assertIsString($pattern, "{$order} holds a non-string pattern");
-                $this->assertNotSame('', $pattern, "{$order} holds an empty pattern");
+            $this->assertIsArray($entries, "{$order} is not a list");
+            $this->assertTrue(array_is_list($entries), "{$order} is not a list");
+            foreach ($entries as $entry) {
+                $this->assertNull(self::entryProblem($entry), "{$order} holds an invalid entry: " . (self::entryProblem($entry) ?? ''));
             }
         }
     }
 
+    /** @return array<string, array{mixed}> */
+    public static function malformedEntries(): array
+    {
+        return [
+            'y0 equals y1' => [['pattern' => 'garber/rank_?.*', 'y' => [500, 500]]],
+            'y0 above y1' => [['pattern' => 'garber/rank_?.*', 'y' => [900, 500]]],
+            'y0 negative' => [['pattern' => 'garber/rank_?.*', 'y' => [-1, 500]]],
+            'y1 past the frame' => [['pattern' => 'garber/rank_?.*', 'y' => [500, 3301]]],
+            'pattern missing' => [['y' => [500, 900]]],
+            'pattern empty' => [['pattern' => '', 'y' => [500, 900]]],
+            'pattern not a string' => [['pattern' => 7, 'y' => [500, 900]]],
+            'y missing' => [['pattern' => 'garber/rank_?.*']],
+            'y has one number' => [['pattern' => 'garber/rank_?.*', 'y' => [500]]],
+            'y has three numbers' => [['pattern' => 'garber/rank_?.*', 'y' => [500, 900, 1200]]],
+            'y not integers' => [['pattern' => 'garber/rank_?.*', 'y' => ['500', '900']]],
+            'unknown key' => [['pattern' => 'garber/rank_?.*', 'y' => [500, 900], 'x' => [0, 10]]],
+            'empty string' => [''],
+            'a number' => [42],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('malformedEntries')]
+    public function testAMalformedEntryIsRejected(mixed $entry): void
+    {
+        $this->assertNotNull(self::entryProblem($entry), 'the validator accepted a malformed entry');
+    }
+
+    public function testAWellFormedWindowIsAccepted(): void
+    {
+        $this->assertNull(self::entryProblem(['pattern' => 'garber/rank_?.*', 'y' => [420, 1220]]));
+        $this->assertNull(self::entryProblem(['pattern' => 'garber/rank_?.*', 'y' => [0, 3300]]));
+        $this->assertNull(self::entryProblem('garber/rank_?.*'));
+    }
+
+    /**
+     * A window is in frame rows, so it means nothing on a plate that is not the whole frame:
+     * the readers fail closed on one (the plate stays an obstacle). That is the right fallback
+     * and the wrong thing to meet by accident, so every file a window pattern matches must be
+     * the 2550x3300 frame.
+     */
+    public function testAWindowedPatternOnlyMatchesFullFramePlates(): void
+    {
+        $seen = 0;
+        foreach ($this->policy() as $order => $entries) {
+            foreach ($entries as $entry) {
+                if (!is_array($entry)) {
+                    continue;
+                }
+                $hits = array_filter($this->plates(), static fn (string $p): bool => fnmatch($entry['pattern'], $p));
+                foreach ($hits as $file) {
+                    $size = getimagesize(self::ART . '/' . $file);
+                    $this->assertNotFalse($size, "{$order}: cannot read {$file}");
+                    $this->assertSame([2550, 3300], [$size[0], $size[1]], "{$order}: window pattern '{$entry['pattern']}' matches {$file}, which is not the 2550x3300 frame");
+                    $seen++;
+                }
+            }
+        }
+        $this->assertGreaterThan(0, $seen, 'no windowed entry matched any plate; this test would pass vacuously');
+    }
+
     public function testPatternsAreRelativeToTheScrollsDirectory(): void
     {
-        foreach ($this->policy() as $order => $patterns) {
-            foreach ($patterns as $pattern) {
+        foreach ($this->policy() as $order => $entries) {
+            foreach ($this->patternsOf($entries) as $pattern) {
                 $this->assertStringStartsNotWith('/', $pattern, "{$order}: '{$pattern}' must be relative to assets/scrolls/");
                 $this->assertStringNotContainsString('..', $pattern, "{$order}: '{$pattern}' must stay inside assets/scrolls/");
                 $this->assertStringNotContainsString('scrolls/', $pattern, "{$order}: '{$pattern}' carries a scrolls/ prefix; the root is already assets/scrolls/");
@@ -79,8 +186,8 @@ final class ScrollLayoutUnderlaysTest extends TestCase
     public function testEveryPatternMatchesARealPlate(): void
     {
         $plates = $this->plates();
-        foreach ($this->policy() as $order => $patterns) {
-            foreach ($patterns as $pattern) {
+        foreach ($this->policy() as $order => $entries) {
+            foreach ($this->patternsOf($entries) as $pattern) {
                 $hits = array_filter($plates, static fn (string $p): bool => fnmatch($pattern, $p));
                 $this->assertNotEmpty($hits, "{$order}: '{$pattern}' matches no file under assets/scrolls/");
             }
@@ -99,7 +206,7 @@ final class ScrollLayoutUnderlaysTest extends TestCase
     public function testEveryWashGroundIsAnUnderlayInCustom(): void
     {
         $grounds = Scroll::Recipes()['grounds'];
-        $custom = $this->policy()['custom'] ?? [];
+        $custom = $this->patternsOf($this->policy()['custom'] ?? []);
         $this->assertNotSame([], Scroll::GROUND_WASHES, 'Scroll::GROUND_WASHES is empty; this test would pass vacuously');
 
         foreach (array_keys(Scroll::GROUND_WASHES) as $key) {
@@ -135,7 +242,7 @@ final class ScrollLayoutUnderlaysTest extends TestCase
             static fn (string $key): bool => !in_array($key, $washes, true),
             ARRAY_FILTER_USE_KEY
         );
-        $policy = $this->policy();
+        $policy = array_map(fn (array $entries): array => $this->patternsOf($entries), $this->policy());
 
         foreach ($policy as $order => $patterns) {
             foreach ($patterns as $pattern) {
@@ -172,8 +279,8 @@ final class ScrollLayoutUnderlaysTest extends TestCase
         $displays = array_values(array_filter($this->plates(), static fn (string $p): bool => fnmatch('*_display.webp', $p)));
         $this->assertNotSame([], $displays, 'no display renditions found under assets/scrolls/; this test would pass vacuously');
 
-        foreach ($this->policy() as $order => $patterns) {
-            foreach ($patterns as $pattern) {
+        foreach ($this->policy() as $order => $entries) {
+            foreach ($this->patternsOf($entries) as $pattern) {
                 foreach ($displays as $file) {
                     $this->assertFalse(fnmatch($pattern, $file), "{$order}: '{$pattern}' matches the display rendition {$file}");
                 }

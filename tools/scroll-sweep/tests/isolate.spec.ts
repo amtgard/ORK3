@@ -6,6 +6,7 @@ import { loadAxes } from '../lib/axes';
 import { enumerate } from '../lib/cases';
 import { applyLayer, markGround } from '../lib/isolate';
 import { captureLayers, typeBand } from '../lib/raster';
+import { setUnderlayCss } from '../lib/underlays';
 import { diffMask, count } from '../lib/mask';
 
 /* Same geometry as the sweep itself: 2550 wide puts one CSS pixel on one frame
@@ -131,8 +132,22 @@ test('a full-page wash is excluded, and a screen-blended border is not', async (
   const owl = { ...pick('owl', 'max'), variant: 'cyanotype' };
   await openPrint(page, owl, byOrder['owl'], KINGDOM);
   const owlShots = await captureLayers(page);
-  const owlA = diffMask(owlShots.A, owlShots.G);
+  /* captureLayers() now applies the underlay policy to layer A, and owl/border.* is listed there
+     (the blueprint grid is what owl's type is designed to sit on). So the policed A no longer holds
+     the border by design, and the question this test asks, whether the WASH test took the border
+     for a ground, is put to the page: it must not carry the ground mark, and the same layer drawn
+     with the policy switched off must still hold the border as localised knotwork. */
+  const groundSrcs = await page.$$eval('[data-sweep-ground]', els =>
+    els.map(e => (e as HTMLImageElement).src.split('/').slice(-1)[0].split('?')[0]));
+  expect(groundSrcs.some(m => m.startsWith('border')), 'the wash test took owl/border for a ground').toBe(false);
+
+  await applyLayer(page, 'A');
+  await setUnderlayCss(page, '');
+  const rawA = await page.screenshot({ clip: await typeBand(page), type: 'png', animations: 'disabled' });
+  await applyLayer(page, 'full');
+  const owlA = diffMask(rawA, owlShots.G);
   expect(count(owlA), 'owl lost its border to the wash test').toBeGreaterThan(5000);
   expect(count(owlA) / (owlA.w * owlA.h),
     'owl/border should be localised knotwork, not a full-band tint').toBeLessThan(0.9);
+  expect(count(diffMask(owlShots.A, owlShots.G)), 'the policed layer A still holds the owl border').toBeLessThan(count(owlA));
 });
