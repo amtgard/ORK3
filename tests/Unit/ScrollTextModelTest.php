@@ -38,6 +38,88 @@ final class ScrollTextModelTest extends TestCase
         $this->assertSame($want, array_intersect_key($got, $want));
     }
 
+    /** @return iterable<string, array{string, string}> */
+    public static function repairCases(): iterable
+    {
+        $fixture = json_decode(
+            (string) file_get_contents(__DIR__ . '/../fixtures/scroll-text-model.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+
+        foreach ($fixture['repair'] as $case) {
+            yield $case['name'] => [$case['in'], $case['want']];
+        }
+    }
+
+    /** Double-encoded text prints as written; clean text is never touched. */
+    #[DataProvider('repairCases')]
+    public function testRepairMojibakeMatchesTheSharedFixture(string $in, string $want): void
+    {
+        $this->assertSame($want, \ScrollText::RepairMojibake($in));
+    }
+
+    /** Case s20's award title, spelled out by byte so the test does not depend on its own encoding. */
+    public function testRepairMojibakeFixesTheCorpusCaseS20Title(): void
+    {
+        $stored = "The true \xC3\xA2\xE2\x82\xAC\xC5\x93Head\xC3\xA2\xE2\x82\xAC\xC2\x9D man of the East";
+        $this->assertSame("The true \u{201C}Head\u{201D} man of the East", \ScrollText::RepairMojibake($stored));
+    }
+
+    /** Repairing twice changes nothing more: the output is not itself mojibake. */
+    public function testRepairMojibakeIsIdempotent(): void
+    {
+        $once = \ScrollText::RepairMojibake("Caf\u{C3}\u{A9} \u{E2}\u{20AC}\u{153}x\u{E2}\u{20AC}\u{9D}");
+        $this->assertSame($once, \ScrollText::RepairMojibake($once));
+    }
+
+    /** Text that is not valid UTF-8 at all is not ours to guess at. */
+    public function testRepairMojibakeLeavesInvalidUtf8Alone(): void
+    {
+        $this->assertSame("caf\xE9", \ScrollText::RepairMojibake("caf\xE9"));
+    }
+
+    /**
+     * The closing quote's last byte is U+009D, a control character, and a typed custom
+     * name is stripped of those. Repairing after the strip left "â€" and a gap (corpus s20).
+     */
+    public function testACustomNameIsRepairedBeforeItsControlCharactersAreStripped(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row(['AwardId' => Scroll::CUSTOM_TITLE_AWARD_ID, 'Name' => 'Custom Title', 'KingdomAwardName' => 'Custom Title']),
+            $this->context(['customName' => "The true \u{E2}\u{20AC}\u{153}Head\u{E2}\u{20AC}\u{9D} man of the East"])
+        );
+
+        $this->assertSame("The true \u{201C}Head\u{201D} man of the East", $s['title']);
+    }
+
+    public function testBuildScrollRepairsEveryStringTheCertificatePrints(): void
+    {
+        $bad = static fn (string $good): string => strtr($good, [
+            "\u{201C}" => "\u{E2}\u{20AC}\u{153}",
+            "\u{201D}" => "\u{E2}\u{20AC}\u{9D}",
+            "\u{E9}"   => "\u{C3}\u{A9}",
+        ]);
+
+        $s = Scroll::BuildScroll(
+            $this->row([
+                'Note'      => $bad("a \u{201C}fine\u{201D} caf\u{E9}"),
+                'GivenBy'   => $bad("Ren\u{E9}"),
+                'ParkName'  => $bad("Caf\u{E9} Keep"),
+                'Name'      => $bad("The true \u{201C}Head\u{201D} man"),
+                'KingdomAwardName' => $bad("The true \u{201C}Head\u{201D} man"),
+            ]),
+            $this->context(['player' => $bad("Ren\u{E9}e")])
+        );
+
+        $this->assertSame('a “fine” café', $s['reason']);
+        $this->assertSame('René', $s['givenBy']);
+        $this->assertSame('Café Keep', $s['issuerName']);
+        $this->assertSame('Renée', $s['player']);
+        $this->assertStringContainsString('“Head”', $s['title']);
+    }
+
     /**
      * startup.php runs `new ClassName()` over every file in system/lib/ork3/, and
      * Ork3's own bootstrap is not something a pure text model should drag in.

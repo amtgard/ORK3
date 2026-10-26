@@ -1,5 +1,5 @@
 {
-    "_comment": "Shared by tests/Unit/ScrollTextModelTest.php (ScrollText::IssuerLines) and tools/scroll-sweep/tests/textmodel.spec.ts (ScrolleryText.issuerLines), so the PHP and JS text models cannot drift. Each case gives the four inputs a certificate holds (title, name, useThe, useOf) plus the scope, and the three display parts that must come out. The kingdom rows are the real ork_kingdom names (active and retired); the rest pin the park and composer-edited forms and the edges of spec 5.2.",
+    "_comment": "Shared by tests/Unit/ScrollTextModelTest.php (ScrollText::IssuerLines, and ScrollText::RepairMojibake through the \"repair\" list at the end) and tools/scroll-sweep/tests/textmodel.spec.ts (ScrolleryText.issuerLines), so the PHP and JS text models cannot drift. Each case gives the four inputs a certificate holds (title, name, useThe, useOf) plus the scope, and the three display parts that must come out. The kingdom rows are the real ork_kingdom names (active and retired); the rest pin the park and composer-edited forms and the edges of spec 5.2.",
     "cases": [
         {"name":"kingdom: The Kingdom of the Wetlands","in":{"title":"","name":"The Kingdom of the Wetlands","useThe":false,"useOf":false,"scope":"kingdom"},"want":{"lead":"and the Kingdom of","article":"the","place":"Wetlands"}},
         {"name":"kingdom: The Principality of The Painted Skies","in":{"title":"","name":"The Principality of The Painted Skies","useThe":false,"useOf":false,"scope":"kingdom"},"want":{"lead":"and the Principality of","article":"the","place":"Painted Skies"}},
@@ -62,5 +62,29 @@
         {"name":"article: no title, the and of ignored: stays in the place","in":{"title":"","name":"The Iron Keep","useThe":true,"useOf":true,"scope":""},"want":{"lead":"and","article":"","place":"The Iron Keep"}},
         {"name":"article: a lone \"the\" is not an article","in":{"title":"Shire","name":"the","useThe":true,"useOf":true,"scope":""},"want":{"lead":"and the Shire of","article":"","place":"the"}},
         {"name":"article: any case","in":{"title":"Shire","name":"THE Everglade Sentinels","useThe":true,"useOf":true,"scope":""},"want":{"lead":"and the Shire of","article":"the","place":"Everglade Sentinels"}}
+    ],
+    "repair": [
+        {"name":"s20: the award title as stored \u2014 curly quotes double-encoded","in":"The true \u00e2\u20ac\u0153Head\u00e2\u20ac\u009d man of the East","want":"The true \u201cHead\u201d man of the East"},
+        {"name":"accented letters: \u00c3\u00a9 is \u00e9","in":"Caf\u00c3\u00a9","want":"Caf\u00e9"},
+        {"name":"two repaired letters in a row","in":"\u00c3\u00a9\u00c3\u00a8","want":"\u00e9\u00e8"},
+        {"name":"an apostrophe: \u00e2\u20ac\u2122","in":"Soul\u00e2\u20ac\u2122s Crossing","want":"Soul\u2019s Crossing"},
+        {"name":"an em dash and an ellipsis","in":"Wait\u00e2\u20ac\u201dwhat\u00e2\u20ac\u00a6","want":"Wait\u2014what\u2026"},
+        {"name":"a no-break space: \u00c2 then NBSP","in":"a\u00c2\u00a0b","want":"a\u00a0b"},
+        {"name":"an emoji through four bytes","in":"\u00f0\u0178\u02dc\u20ac","want":"\ud83d\ude00"},
+        {"name":"a mixed string: clean text beside a double-encoded run","in":"Fr\u00e4mling \u00e2\u20ac\u0153x\u00e2\u20ac\u009d","want":"Fr\u00e4mling \u201cx\u201d"},
+        {"name":"the Turkish S-cedilla through two bytes","in":"\u00c5\u017eadhibek","want":"\u015eadhibek"},
+        {"name":"clean: Swedish","in":"Fr\u00e4mling i Landet V\u00e5rdare","want":"Fr\u00e4mling i Landet V\u00e5rdare"},
+        {"name":"clean: Turkish S-cedilla","in":"\u015eadhibek","want":"\u015eadhibek"},
+        {"name":"clean: Caf\u00e9","in":"Caf\u00e9","want":"Caf\u00e9"},
+        {"name":"clean: na\u00efve","in":"na\u00efve","want":"na\u00efve"},
+        {"name":"clean: emoji","in":"Hail \ud83d\ude00 and farewell","want":"Hail \ud83d\ude00 and farewell"},
+        {"name":"clean: real curly quotes","in":"The true \u201cHead\u201d man","want":"The true \u201cHead\u201d man"},
+        {"name":"clean: a lone capital A-tilde that is only a letter","in":"\u00c3ngel","want":"\u00c3ngel"},
+        {"name":"clean: ASCII","in":"Order of the Griffin","want":"Order of the Griffin"},
+        {"name":"clean: empty","in":"","want":""},
+        {"name":"not UTF-8 once mapped back: an overlong sequence is left as written","in":"\u00e0\u20ac\u20ac","want":"\u00e0\u20ac\u20ac"},
+        {"name":"not UTF-8 once mapped back: a surrogate is left as written","in":"\u00ed\u00a0\u0080","want":"\u00ed\u00a0\u0080"},
+        {"name":"a lead with too few continuation characters is left as written","in":"\u00e2\u20acx","want":"\u00e2\u20acx"},
+        {"name":"a character that is not a continuation byte ends the run, nothing to repair","in":"\u00c3\u0100","want":"\u00c3\u0100"}
     ]
 }

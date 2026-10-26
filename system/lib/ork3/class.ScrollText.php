@@ -120,6 +120,79 @@ class ScrollText
     }
 
     /**
+     * The characters Windows-1252 puts in the 0x80-0x9F byte range, by Unicode code
+     * point, mapped back to that byte. The five bytes it leaves undefined (0x81, 0x8D,
+     * 0x8F, 0x90, 0x9D) are absent: a decoder that kept them arrives as the C1 control
+     * U+0081 etc., which is already inside the U+0080-U+00BF range and maps to itself.
+     */
+    private const WIN1252 = [
+        0x20AC => 0x80, 0x201A => 0x82, 0x0192 => 0x83, 0x201E => 0x84, 0x2026 => 0x85,
+        0x2020 => 0x86, 0x2021 => 0x87, 0x02C6 => 0x88, 0x2030 => 0x89, 0x0160 => 0x8A,
+        0x2039 => 0x8B, 0x0152 => 0x8C, 0x017D => 0x8E, 0x2018 => 0x91, 0x2019 => 0x92,
+        0x201C => 0x93, 0x201D => 0x94, 0x2022 => 0x95, 0x2013 => 0x96, 0x2014 => 0x97,
+        0x02DC => 0x98, 0x2122 => 0x99, 0x0161 => 0x9A, 0x203A => 0x9B, 0x0153 => 0x9C,
+        0x017E => 0x9E, 0x0178 => 0x9F,
+    ];
+
+    /**
+     * One mojibake run: a UTF-8 lead byte as Windows-1252 shows it (U+00C2-U+00F4),
+     * followed by as many continuation bytes as that lead takes (the ~ below stands for
+     * one), each shown as a U+0080-U+00BF character or one of the Windows-1252 glyphs
+     * in WIN1252. "Ã©" is
+     * the two bytes of "é"; "â€œ" is the three bytes of the left double quote.
+     *
+     * The same pattern is in the browser twin (ScrolleryText.repairMojibake); keep
+     * them in step.
+     */
+    private const MOJIBAKE_RUN = '/[\x{C2}-\x{DF}]~|[\x{E0}-\x{EF}]~{2}|[\x{F0}-\x{F4}]~{3}/u';
+    private const MOJIBAKE_CONT = '[\x{80}-\x{BF}\x{20AC}\x{201A}\x{0192}\x{201E}\x{2026}\x{2020}\x{2021}'
+        . '\x{02C6}\x{2030}\x{0160}\x{2039}\x{0152}\x{017D}\x{2018}\x{2019}\x{201C}\x{201D}\x{2022}'
+        . '\x{2013}\x{2014}\x{02DC}\x{2122}\x{0161}\x{203A}\x{0153}\x{017E}\x{0178}]';
+
+    /**
+     * Repair text that was UTF-8, was decoded as Windows-1252 somewhere upstream and
+     * was encoded to UTF-8 again, so a left quote reads "â€œ" and "é" reads "Ã©".
+     * The stored data is left alone; this runs where text becomes a certificate.
+     *
+     * Each run of the shape MOJIBAKE_RUN is mapped back to its Windows-1252 bytes and
+     * kept only if those bytes are valid UTF-8 and the result is not itself a mojibake
+     * run. Anything else, and every character outside a run, is returned exactly as it
+     * came in, so clean text ("Främling i Landet Vårdare", "Şadhibek", "Café", "naïve",
+     * emoji) passes through untouched, as does a lone "Ã" that is only a letter
+     * ("Ãngel"). Twin of ScrolleryText.repairMojibake().
+     */
+    public static function RepairMojibake(string $s): string
+    {
+        // Nothing to do for ASCII, and invalid UTF-8 is not ours to guess at.
+        if ($s === '' || !preg_match('/[^\x00-\x7F]/', $s) || preg_match('//u', $s) !== 1) {
+            return $s;
+        }
+
+        $run = str_replace('~', self::MOJIBAKE_CONT, self::MOJIBAKE_RUN);
+
+        $out = preg_replace_callback($run, static function (array $m) use ($run): string {
+            $bytes = '';
+            foreach (preg_split('//u', $m[0], -1, PREG_SPLIT_NO_EMPTY) ?: [] as $ch) {
+                $cp = mb_ord($ch, 'UTF-8');
+                if (isset(self::WIN1252[$cp])) {
+                    $bytes .= chr(self::WIN1252[$cp]);
+                } elseif ($cp <= 0xFF) {
+                    $bytes .= chr($cp);
+                } else {
+                    return $m[0];
+                }
+            }
+            if (preg_match('//u', $bytes) !== 1 || preg_match($run, $bytes) === 1) {
+                return $m[0];
+            }
+
+            return $bytes;
+        }, $s);
+
+        return $out ?? $s;
+    }
+
+    /**
      * Trim and collapse whitespace. The unicode flag makes \s cover the no-break space
      * the way the browser's \s already does; a string that is not valid UTF-8 falls
      * back to ASCII whitespace rather than being blanked.

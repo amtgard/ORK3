@@ -822,6 +822,11 @@ class Scroll extends Ork3
      */
     public static function SanitiseCustomName(string $raw): string
     {
+        // Repair double-encoded text FIRST. Its closing quote ends in U+009D, a control
+        // character, which the line below turns into a space: sanitising before repairing
+        // left "â€" and a gap where the quote belonged (corpus case s20).
+        $raw = ScrollText::RepairMojibake($raw);
+
         $clean = preg_replace('/\p{C}+/u', ' ', $raw);
         if ($clean === null) {
             return '';
@@ -1705,7 +1710,12 @@ class Scroll extends Ork3
                 : $order['variants'][0];
         }
 
-        $parkName = trim((string) ($awardRow['ParkName'] ?? ''));
+        // Display text that arrives double-encoded (UTF-8 read as Windows-1252 and encoded
+        // again: "â€œHeadâ€" for “Head”) is repaired as it becomes a certificate, never in
+        // the database. Every user-supplied string below goes through it — see
+        // ScrollText::RepairMojibake(), whose browser twin the composer applies to the
+        // boxes an officer types in, so the preview and the print agree.
+        $parkName = ScrollText::RepairMojibake(trim((string) ($awardRow['ParkName'] ?? '')));
 
         // The issuer line reads: "and" [the] [title] [of] / NAME.
         //
@@ -1731,14 +1741,14 @@ class Scroll extends Ork3
         // — is split out of them by ScrollText::IssuerLines() into issuerLead,
         // issuerArticle and issuerPlace, below.
         $isPark     = $parkName !== '';
-        $issuerName = $isPark ? $parkName : (string) ($awardRow['KingdomName'] ?? '');
+        $issuerName = $isPark ? $parkName : ScrollText::RepairMojibake((string) ($awardRow['KingdomName'] ?? ''));
 
         // "Inactive" is a park status that leaked into ork_parktitle.title on 5 parks,
         // not a rank word. Read as empty it takes the Barony floor below, rather than
         // printing "and the Inactive of". The model applies the same rule to a title an
         // officer types into the composer, but the floor is ours, so it has to be
         // decided before it.
-        $issuerTitle = trim((string) ($context['issuerTitle'] ?? ''));
+        $issuerTitle = ScrollText::RepairMojibake(trim((string) ($context['issuerTitle'] ?? '')));
         if (strtolower($issuerTitle) === 'inactive') {
             $issuerTitle = '';
         }
@@ -1812,23 +1822,23 @@ class Scroll extends Ork3
                 || $rank > 0
                 || (int) ($awardRow['IsLadder'] ?? 0) === 1,
             'variant'     => $variant,
-            'title'       => self::ResolveTitle($awardRow, (string) ($context['customName'] ?? '')),
+            'title'       => ScrollText::RepairMojibake(self::ResolveTitle($awardRow, (string) ($context['customName'] ?? ''))),
             // Introduces the title on the two custom entries, where 'ranked' is false and
             // the ordinal phrase above renders nothing. '' everywhere else, so the two can
             // never both appear. array_key_exists, not ??, because '' is a legitimate
             // override meaning "print no phrase" and must not fall back to the default.
             // See TitlePhrase().
-            'titlePhrase' => self::TitlePhrase(
+            'titlePhrase' => ScrollText::RepairMojibake(self::TitlePhrase(
                 $awardRow,
                 array_key_exists('titlePhrase', $context)
                     ? (string) $context['titlePhrase']
                     : self::PHRASE_UNSET
-            ),
-            'player'      => (string) ($context['player'] ?? ''),
-            'pronoun'     => (string) ($context['pronoun'] ?? 'their'),
-            'reason'      => (string) ($awardRow['Note'] ?? ''),
+            )),
+            'player'      => ScrollText::RepairMojibake((string) ($context['player'] ?? '')),
+            'pronoun'     => ScrollText::RepairMojibake((string) ($context['pronoun'] ?? 'their')),
+            'reason'      => ScrollText::RepairMojibake((string) ($awardRow['Note'] ?? '')),
             'date'        => self::FormatDate((string) ($awardRow['Date'] ?? '')),
-            'givenBy'     => (string) ($awardRow['GivenBy'] ?? ''),
+            'givenBy'     => ScrollText::RepairMojibake((string) ($awardRow['GivenBy'] ?? '')),
             'issuerTitle' => $issuerTitle,
             'issuerName'  => $issuerName,
             'useThe'      => $useThe,

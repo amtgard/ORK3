@@ -381,14 +381,18 @@ class Model_Scrollery extends Model
             // Wetlands" (the article stays on the name; the text model lifts it out
             // again at print). A name that does not read "<rank> of <place>" comes
             // back whole with the boxes clear, exactly as stored.
-            $issuer = ScrollText::IssuerLines('', (string) ($info['KingdomName'] ?? ''), false, false, 'kingdom');
+            // Double-encoded names are repaired here, as BuildScroll() repairs them, so
+            // the composer's boxes open on the text that will print. The database is
+            // never touched: see ScrollText::RepairMojibake().
+            $kingdomName = ScrollText::RepairMojibake((string) ($info['KingdomName'] ?? ''));
+            $issuer = ScrollText::IssuerLines('', $kingdomName, false, false, 'kingdom');
 
             return [
                 'Type'      => 'kingdom',
                 'Id'        => $scopeId,
                 'Name'      => $issuer['name'],
                 'Title'     => $issuer['title'],
-                'Display'   => trim((string) ($info['KingdomName'] ?? '')),
+                'Display'   => trim($kingdomName),
                 'UseThe'    => $issuer['useThe'],
                 'UseOf'     => $issuer['useOf'],
                 'KingdomId' => $scopeId,
@@ -408,9 +412,9 @@ class Model_Scrollery extends Model
         // ork_parktitle.title is "Inactive" on 5 parks — a status, not a rank word. The
         // text model reads it as no title, which then takes the same Barony floor an
         // untitled park always did.
-        $parkTitle = ScrollText::IssuerLines((string) ($park['ParkTitle'] ?? ''), '', true, true, 'park')['title'];
+        $parkTitle = ScrollText::IssuerLines(ScrollText::RepairMojibake((string) ($park['ParkTitle'] ?? '')), '', true, true, 'park')['title'];
         $parkTitle = $parkTitle !== '' ? $parkTitle : 'Barony';
-        $parkName  = (string) ($park['ParkName'] ?? '');
+        $parkName  = ScrollText::RepairMojibake((string) ($park['ParkName'] ?? ''));
 
         return [
             'Type'      => 'park',

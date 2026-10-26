@@ -65,6 +65,20 @@
 
     /* ---- helpers ------------------------------------------------------- */
 
+    /*
+     * Repair double-encoded text the way the print does (ScrollText::RepairMojibake,
+     * twinned in scrollery-textmodel.js), so a title stored as "â€œHeadâ€" previews as
+     * “Head” and not as the garble. Applied only where text is DRAWN on the preview; the
+     * boxes themselves and the values posted to the server stay as typed, because the
+     * server repairs the same strings when it builds the certificate (spec Q10: the
+     * composer equals the print). Guarded on the global: a cached older page without the
+     * twin shows the text as given rather than throwing out of every keystroke.
+     */
+    function fix(v) {
+        var T = window.ScrolleryText;
+        return (T && typeof T.repairMojibake === 'function') ? T.repairMojibake(v) : v;
+    }
+
     function esc(s) {
         return String(s == null ? '' : s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -766,7 +780,7 @@
     function issuerParts() {
         var T = window.ScrolleryText;
         if (T && typeof T.issuerLines === 'function') {
-            var r = T.issuerLines(titleEl.value, nameEl.value,
+            var r = T.issuerLines(fix(titleEl.value), fix(nameEl.value),
                                   useTheEl.checked, useOfEl.checked, cfg.scopeType);
             return {
                 lead:      r.lead,
@@ -806,7 +820,7 @@
     function applyText() {
         var name = field('player');
         if (name) {
-            var typed = playerEl.value.trim();
+            var typed = fix(playerEl.value.trim());
             // The blank writing-line is drawn only when there is no name, exactly as
             // the text layer does server-side. data-blank carries its URL.
             name.innerHTML = typed
@@ -815,13 +829,13 @@
         }
 
         var reason = field('reason');
-        if (reason) { reason.innerHTML = esc(reasonEl.value.trim()) || '<br><br>'; }
+        if (reason) { reason.innerHTML = esc(fix(reasonEl.value.trim())) || '<br><br>'; }
 
         var date = field('date');
         if (date) { date.textContent = prettyDate(dateEl.value); }
 
         var sig = field('givenBy');
-        if (sig) { sig.textContent = givenEl.value.trim(); }
+        if (sig) { sig.textContent = fix(givenEl.value.trim()); }
 
         /*
          * The interstitial phrase. Only present in the DOM for the two custom entries —
@@ -832,7 +846,7 @@
          */
         var phrase = field('titlePhrase');
         if (phrase && withEl && withEl.value.trim() !== '') {
-            phrase.textContent = withEl.value.trim();
+            phrase.textContent = fix(withEl.value.trim());
         }
 
         /*
@@ -864,7 +878,7 @@
          */
         if (customKind()) {
             var order = mount.querySelector('.Order');
-            if (order) { order.textContent = printedTitle(); }
+            if (order) { order.textContent = fix(printedTitle()); }
         }
 
         // The name, the reason and the order line are the three blocks autofit

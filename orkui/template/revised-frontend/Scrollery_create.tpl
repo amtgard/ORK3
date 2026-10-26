@@ -161,7 +161,7 @@ $awardOption = static function (array $c) use ($customKind): string {
         . ' data-variants="' . scroll_e(implode(',', $c['Variants'])) . '"'
         . ($kind !== '' ? ' data-custom-name="' . $kind . '"' : '')
         . ' data-name="' . scroll_e($c['Name']) . '">'
-        . scroll_e($c['Name']) . '</option>';
+        . scroll_e(ScrollText::RepairMojibake((string) $c['Name'])) . '</option>';
 };
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">

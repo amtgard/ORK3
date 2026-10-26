@@ -29,3 +29,16 @@ test('issuerLines: an unsplit name keeps its effective form unchanged', () => {
     title: '', useThe: false, useOf: false, name: 'The Celestial Kingdom',
   });
 });
+
+/* repairMojibake: the same fixture's "repair" list drives ScrollText::RepairMojibake() in PHP. */
+for (const c of fx.repair) {
+  test(`repairMojibake: ${c.name}`, () => {
+    expect(T.repairMojibake(c.in)).toBe(c.want);
+  });
+}
+
+test('repairMojibake: idempotent, and tolerates null', () => {
+  const once = T.repairMojibake('Caf\u00c3\u00a9 \u00e2\u20ac\u0153x\u00e2\u20ac\u009d');
+  expect(T.repairMojibake(once)).toBe(once);
+  expect(T.repairMojibake(null)).toBe('');
+});
