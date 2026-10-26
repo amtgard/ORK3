@@ -352,6 +352,25 @@ What it needs:
   which already computes park/kingdom admin entries against AUTH_EDIT), so the officer
   gating is a check that already exists rather than a new one.
 
+### 3.14 `bin/*.php` is web-executable
+
+> **FOUND 2026-10-25 — pre-existing, not fixed here.**
+
+`nginx.ork3.config` routes `location ~ \.php$` to PHP-FPM with the root set to the repo,
+so nginx executes any `.php` under the repo root, and every script in `bin/` can be
+requested over HTTP. Nothing about Scrollery introduced this.
+
+The new CLI scripts refuse non-CLI use as their first statement:
+`if (PHP_SAPI !== 'cli') { http_response_code(404); exit(1); }`
+(`bin/scroll-render-fixtures.php` does). The older `bin/` scripts do not, for example
+`bin/build-scroll-ink-extents.php`.
+
+Either fix is small. Guard the older scripts the same way, or add
+`location ^~ /bin/ { deny all; }` to nginx, which covers every present and future script
+at once. The nginx rule is the better one, since it does not depend on each author
+remembering the guard. Not done here: it touches scripts and a server config outside the
+Scrollery work.
+
 ---
 
 ## 4. Fixed along the way — recorded so they are not "rediscovered"

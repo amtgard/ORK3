@@ -28,6 +28,8 @@ fix; look at the images.**
 | `ORK3_SWEEP_KINGDOM` | 1 | which kingdom's catalogue to compose against |
 | `ORK3_SWEEP_OUT` | `out/` | where to write |
 | `ORK3_SWEEP_D_CAP` | 150 | how many near-threshold cases stage D expands |
+| `ORK3_SWEEP_DRIVER` | compose | `fixture` renders without a login; see below |
+| `ORK3_SWEEP_SAMPLE` | – | `1` runs the sampled matrix; see below |
 
 `npm run sweep:scrolls:exhaustive` additionally runs every custom recipe rather than the
 factorised subset — that is the run that *validates the factorisation*, and it should be
@@ -36,28 +38,73 @@ done at least once per change to the composed scroll.
 `npm run sweep:scrolls:unit` runs the harness's own tests. Run these first if the sweep
 is behaving oddly; they are fast and they check the things everything else rests on.
 
+### The fixture driver
+
+`ORK3_SWEEP_DRIVER=fixture` renders each case through `bin/scroll-render-fixtures.php`
+(`Scroll::BuildScroll()` plus the render template, one `docker exec` per shard) instead of
+fetching `Scrollery/compose`. It needs no login and writes no print-log rows, and it reaches
+`hunter`, which no composer route can. It draws a flat dark square in the heraldry slot as a
+stand-in for the kingdom's device, so a fixture figure is not a compose figure; compare
+fixture runs with fixture runs. It cannot render the composer preview, `trim` or `lines=0`,
+and refuses those cases rather than rendering their plain twins; the sweep drops them and
+prints how many. See the long comment on `fixtureDriver` in `lib/drive.ts`.
+
+### The sampled matrix
+
+`ORK3_SWEEP_SAMPLE=1` thins the matrix to about a fifth of its size. It is what the baseline
+and the after-runs use.
+
+- **A**: every order-variant × ranks {0, 5, 10} × profiles {max, empty, kingdomReal}
+- **B**: every order-variant × every hand × {max}
+- **C**: the legal ground and border pairs as before, plus rankSet × ranks {0, 5, 10}
+- **N**: unchanged
+
+Every sampled case has the same id as in the full matrix, so a sampled file and a full one
+compare on the cases they share. The exhaustive tier is never sampled.
+
+### Stamps and the regression check
+
+`results.json` carries a `driver` (`compose` or `fixture`) and a `sample` flag, and
+`report.md` repeats them in its first line. A file without a `driver` predates the stamp and
+was a compose run. `bin/regression.mjs` refuses to compare two files from different drivers,
+because they do not draw the same certificate. A sampled file against a full one is
+compared on the shared cases only, and the output says so.
+
 ## How to read `report.md`
 
-**score** is the interfering layer's ink strength summed over its intersection with the
-glyph mask, divided by the glyph area, in parts per thousand. **worst run** is the
-largest connected component of that intersection — a swash drawn through a line and the
-same area of scattered pepper score alike on area alone and do not look alike, so both
-are reported.
+**score** is an absolute weighted ink pixel count: the glyph pixels struck through by the
+interfering layer, each weighted by how dark the striking ink is. (`lib/report.ts` stores the
+ratio of that weight to glyph area and `ink()` scales it back up, so the figures in the
+report are pixels.) Both masks are eroded one pixel first, so two antialiasing fringes
+touching is not a finding. **worst run** is the largest connected component of that
+intersection. A swash drawn through a line and the same area of scattered pepper score alike
+on area alone and do not look alike, so both are reported.
 
-Thresholds are **per layer pair** and each is calibrated against a measured population.
-They are in `lib/report.ts` with the evidence; the short version:
+Thresholds are **per layer pair**, in weighted ink pixels, and each is calibrated against a
+measured population at 1:1. They are `THRESHOLDS` in `lib/report.ts`, which carries the
+evidence; the short version:
 
 | pair | threshold | why |
 | --- | --- | --- |
-| C∩A text over artwork | 1.0 | clean cases measure 0.00–0.77; confirmed defects 1.66–6.33 |
-| C∩B text over ornament | 2.0 | **every** certificate scores 0.86–0.91 here — the same 26 px of `#BottomTextFlourish` sweeping around the "Amtgard" versal. That is drawn that way, so the threshold has to clear it. Real defects measure 6.83–9.05. |
-| C∩C text over text | 0.3 | no designed text-on-text exists, so the floor is a true zero. Real ones measure 0.42 and 1.32 — low because a collision between two small blocks is a small fraction of the whole certificate's type. |
+| C∩A text over artwork | 300 | clean cases measure 0 to 172; confirmed defects 508 to 1368. 300 is 1.7x above the highest clean and 1.7x below the lowest defect. |
+| C∩B text over ornament | 500 | **every** certificate scores 238 to 262 here, the versal swash that is drawn that way, so the threshold has to clear it. Defects measure 974 to 3121. |
+| C∩C text over text | 95 | no designed text-on-text exists, so the floor is a true zero. 95 is the earlier 8-pixel figure carried across by the measured 11.9x change of scale. |
 
 The report leads with the **distribution**, not the pass list, and buckets it by multiples
 of each pair's own threshold so `1.0` is exactly at the line. Some C∩A overlap is by
 design — type sits on owl's blueprint plate on purpose — so what is near the line matters
 as much as what crossed it. A report that published a boolean would invite exactly the
 "it passed" reading this tool exists to prevent.
+
+### Top-half scores
+
+Each result also carries **CAtop** and **CBtop**: the same two scores with only the type
+above and including the `.Order` line left in. They come from a sixth layer, `Ctop`, which
+is C with the glyphs of every block after `.Order` made transparent (`lib/isolate.ts`), so
+nothing moves and it intersects with A and B exactly as C does. The top half is the part the
+typeset engine places. The thresholds are the same two (300 and 500), and there is no C∩C
+twin. The report counts the cases over threshold in the top half alone. A results file from
+before the layer existed has no top scores; the report says how many cases it scored.
 
 ## The matrix
 
@@ -97,6 +144,16 @@ more expensive kind of wrong than measuring nothing. Everything is `visibility` 
 the type to `#ffffff`. Against a white base a darkness metric does not merely miss that
 type — it inverts, scoring the dark ground as ink and the white glyphs as blank paper.
 There is a test for that too.
+
+## Baselines
+
+`baseline/` holds the frozen runs; `baseline/README.md` says how each was captured.
+
+- `results-1to1-NA.json` is a compose-driver run of stages N and A, from before the layout
+  changes. It is **superseded** for comparisons through the fixture driver.
+- `results-1to1-head-2026-10-25.json` is the fixture-driver, sampled baseline. Compare
+  fixture runs against it, passing it to `bin/regression.mjs` explicitly, since the script's
+  default is still the NA file and would be refused on a driver mismatch.
 
 ## Adding an axis
 
