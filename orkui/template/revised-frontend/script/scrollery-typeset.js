@@ -1588,7 +1588,7 @@
         if (line) { line.setAttribute('data-sc-w', (avail * (1 - CONST.SLACK)).toFixed(2)); }
         var s = avail * (1 - CONST.SLACK) / (m.em * ctx.rootPx);
         var size = Math.min(cap, s);
-        var fits = size >= min - 1e-9;
+        var fits = size >= min - SIZE_EPS;
         if (!fits) { size = min; }
         size = setLeadSize(ctx, A, size);
         /* Checked against the very width stamped in data-sc-w (avail less SLACK), so a line

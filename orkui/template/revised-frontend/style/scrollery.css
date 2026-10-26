@@ -619,17 +619,12 @@ symbol {
 
 /* The swash beside the issuing body's NAME.
 
-   `top: 0.95em` is measured against the "Amtgard" span — the FIRST line — and this
-   ornament decorates the SECOND. Those are the same place only while the title line
-   takes one line, which in a wide hand it does not: measured on "Kingdom" with both
-   connectives, that line is 163px in Chancery and 318px in Cinzel, and its second line
-   drops straight into this swash's band.
-
-   The value stays because it is right for the one-line case and is what a render with
-   no JavaScript gets. scrollery-autofit.js's anchorOrnaments() measures where the name
-   paragraph actually ended up and overwrites `top` from it, clamped to
-   --sc-orn-travel-max. Same contract --sc-sign-lift-want has with --sc-sign-lift: the
-   declaration is the fallback and the ceiling, the measurement is the truth. */
+   `top: 0.95em` is measured against the "Amtgard" span — the FIRST line — and that is
+   where it stays: it is one piece with the versal, drawn with the fixed orders, and
+   scrollery-typeset.js does not move it. What yields is the type. The engine measures
+   this swash's ink against the place line it set and writes --sc-place-gutter (the
+   rule for line 2, below), so the place clears the swash however many lines the lead
+   above it took. */
 #BottomTextFlourish {
     width: 3.3em;
     left: -0.6em;
@@ -654,14 +649,6 @@ symbol {
    first. */
 .award-template {
     --sc-swash-hang: 0.9em;
-
-    /* How far anchorOrnaments() may move an ornament from where it was drawn, in the
-       ornament's own em. A measured offset without a ceiling is how a pathological
-       block flings a flourish across the certificate; past this the composition is
-       asking for more than the ornament can give and the answer has to come from the
-       type instead, which is what the title ladder is for. 2.2em is a little over one
-       wrapped line of the issuing block, which is the case this exists to absorb. */
-    --sc-orn-travel-max: 2.2em;
 }
 
 #RightTextFlourish {
@@ -780,15 +767,16 @@ section.IssuingTextSection > p:nth-child(2) {
        is 100 characters and no font size that stays legible puts that on one line.
        `balance` makes the two lines even rather than leaving one word stranded.
 
-       `overflow-wrap: anywhere` is the safety net under scrollery-autofit.js, for
+       `overflow-wrap: anywhere` is the safety net under scrollery-typeset.js, for
        the 71 personas longer than 24 characters that contain NO space at all
        ("*Michael_Anthony_Wilder_III"). Nothing can wrap those, so without it the
        word simply runs past the content column and the certificate's own
        <svg style="overflow:hidden"> trims it off the printed page. `anywhere` (not
        `break-word`) is deliberate: it is the one value that also shrinks the
        element's min-content width, so the flex item stops growing past its column.
-       The autofit pass runs first and prefers a smaller size on one line, so this
-       only fires where no size in range would have fitted. */
+       The engine's lines are `white-space: nowrap` and it prefers a smaller size on
+       one line, so this only matters on the first-guess render, before the engine
+       has run. */
     text-wrap: balance;
     overflow-wrap: anywhere;
 
@@ -896,8 +884,8 @@ section.IssuingTextSection > p:nth-child(2) {
        35), so a second line is normal, not exceptional; balance it. No
        `overflow-wrap: anywhere` here: every one of those names contains spaces, so
        there is always a legal break, and allowing a mid-word one would only make an
-       already-breakable name uglier. scrollery-typeset.js sizes and breaks this line (it is the
-       `award` role); the old autofit pass still shrinks it until that pass is retired. */
+       already-breakable name uglier. scrollery-typeset.js sizes and breaks this line
+       (it is the `award` role). */
     text-wrap: balance;
 }
 

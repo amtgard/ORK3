@@ -85,19 +85,19 @@ $playerLen   = mb_strlen((string) $s['player'], 'UTF-8');
 $reasonLen   = mb_strlen((string) $s['reason'], 'UTF-8') ?: 200;
 
 /*
- * The same two formulas, as data for scrollery-autofit.js: floor, intercept, slope,
+ * The citation's formula, as data for scrollery-autofit.js: floor, intercept, slope,
  * divisor, and the length to substitute when the text is empty (0 = use the real
  * length). Emitted rather than restated in the JS so there is ONE place these
  * numbers live — change the calc() below and the client's ceiling changes with it.
  *
- * The client needs them because it fits text the server never saw. The composer's
- * live preview renders once with an empty recipient and then types into the DOM, so
- * the server's guess there was computed for a zero-length name: without recomputing,
- * the same persona would preview at 2.55em and print at 1.36em. Re-deriving the
- * ceiling from the text actually in the box is what makes the two surfaces agree,
- * which is the whole point of fitting the preview at all.
+ * The client needs it because it fits text the server never saw. The composer's live
+ * preview renders once with an empty reason and then types into the DOM, so the
+ * server's guess there was computed for the 200-character stand-in: without
+ * recomputing, the same note would preview at one size and print at another.
+ * Re-deriving the ceiling from the text actually in the box is what makes the two
+ * surfaces agree, which is the whole point of fitting the preview at all. The name's
+ * and the place's sizes are the typeset engine's, which ignores any such data.
  */
-$nameFormula   = '1.36,2.55,-0.374,8,0';
 $reasonFormula = '0.55,0.8,-0.15,150,200';
 
 /*
@@ -160,20 +160,11 @@ $inkAttr   = static function (string $resource): string {
             <span id="IssuerTitle" data-scroll-text="issuerTitle" data-sc-role="lead"><?= scroll_e($issuerLead) ?></span>
         </p>
         <p class="ScPlace">
-            <?php /* data-af-inv is the place's length formula as data, for scrollery-autofit.js's
-                     old issuer pass: the reciprocal counterpart of data-af-len on the name
-                     below, emitted for the same reason. The composer types a new issuer
-                     name into a preview the server sized for the old one, so a script that
-                     still reads it must be able to re-derive the ceiling rather than read
-                     a stale computed style. The five numbers are floor, intercept,
-                     coefficient, numerator and the max(10, ...) clamp $placeLen applies.
-                     scrollery-typeset.js ignores it; it goes with the old pass.
-
-                     The inline size is that formula under a 1.3em ceiling, the place's
+            <?php /* The inline size is that formula under a 1.3em ceiling, the place's
                      maximum (spec 6.4.1). It is the size a render with no script prints.
                      --sc-art-size is the article's size relative to this span, so "the"
                      comes out at the lead's 1.04em whatever the place was guessed at. */ ?>
-            <span data-scroll-text="issuerName" data-sc-role="place" data-af-inv="1,1,0.5,14,10" style="font-size:min(1.3em, max(1em, calc(1em + 0.5em * (14 / <?= $placeLen ?>))));--sc-art-size:calc(1.04em / <?= $fmtEm($placeGuess) ?>)"><?php if ($issuerArticle !== ''): ?><span class="sc-art"><?= scroll_e($issuerArticle) ?></span> <?php endif; ?><?= scroll_e($issuerPlace) ?></span>
+            <span data-scroll-text="issuerName" data-sc-role="place" style="font-size:min(1.3em, max(1em, calc(1em + 0.5em * (14 / <?= $placeLen ?>))));--sc-art-size:calc(1.04em / <?= $fmtEm($placeGuess) ?>)"><?php if ($issuerArticle !== ''): ?><span class="sc-art"><?= scroll_e($issuerArticle) ?></span> <?php endif; ?><?= scroll_e($issuerPlace) ?></span>
             <img id="RightTextFlourish" src="<?= scroll_resource($res['flourish_right']) ?>" class="Flourish"<?= $inkAttr($res['flourish_right']) ?> alt="">
         </p>
         <?php /* Centered's rule pair: two copies of the order's bottom swash, mirrored,
@@ -188,7 +179,7 @@ $inkAttr   = static function (string $resource): string {
     </section>
 
     <section class="ScName">
-        <p class="AwardeeName" data-af-len="<?= $nameFormula ?>" style="font-size:max(1.36em, calc(2.55em + -0.374em * ((<?= $playerLen ?> / 8))));">
+        <p class="AwardeeName" style="font-size:max(1.36em, calc(2.55em + -0.374em * ((<?= $playerLen ?> / 8))));">
             <span data-scroll-text="player" data-sc-role="name" data-blank="<?= scroll_resource($res['writing_line']) ?>" style="margin-top:0.3em;bottom:0;position:relative;">
                 <?php if ((string) $s['player'] === ''): ?><img class="Underline" src="<?= scroll_resource($res['writing_line']) ?>" alt=""><?php endif; ?><?= scroll_e($s['player']) ?>
             </span>

@@ -738,10 +738,11 @@
      * 103 px and printed at 69 px, because the composer's guess and the print
      * surface's guess were computed from different strings.
      *
-     * scrollery-autofit.js re-derives the identical ceiling from the text actually in
-     * the box, using the coefficients _text.tpl stamps as data-af-len. fitSoon is
-     * coalesced to one animation frame and costs ~1 ms for a single certificate, so
-     * this is safe on every keystroke.
+     * scrollery-autofit.js re-fits from the text actually in the box: the typeset
+     * engine sets the name, the award line and the issuing body, and the citation's
+     * ceiling is re-derived from the coefficients _text.tpl stamps as data-af-len.
+     * fitSoon is coalesced to one animation frame and costs ~1 ms for a single
+     * certificate, so this is safe on every keystroke.
      *
      * Guarded on the global rather than the element: the file is loaded by the page
      * above this one, but a cached older copy without the export must degrade to the
@@ -848,10 +849,10 @@
          *
          * Selected as .Order rather than through field(): scroll/_text.tpl carries no
          * data-scroll-text on it (it is the one text block that has never been live),
-         * and .Order is the same selector scrollery-autofit.js's own POLICY uses, so
-         * the two cannot pick different elements. It is written ONLY when the chosen
-         * award is a custom entry — every other award's title is the catalogue's, the
-         * server already rendered it, and overwriting it here would be this page
+         * and section.Order is the element scrollery-typeset.js sizes as its `award`
+         * role, so the two cannot pick different elements. It is written ONLY when the
+         * chosen award is a custom entry — every other award's title is the catalogue's,
+         * the server already rendered it, and overwriting it here would be this page
          * holding a second opinion about a string it did not resolve.
          */
         if (customKind()) {

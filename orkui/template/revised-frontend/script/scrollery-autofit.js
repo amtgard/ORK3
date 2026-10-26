@@ -1,63 +1,68 @@
 /*
- * Scrollery — measured text autofit for the certificate.
+ * Scrollery — measured autofit for the certificate: everything below the top half, plus
+ * the gates that decide when fitting may start.
  *
- * WHY THIS FILE EXISTS
+ * WHAT THIS FILE IS FOR
  *
- * _text.tpl sizes three of the certificate's text blocks from a formula keyed on
- * string length, transliterated from Arcanyst:
+ * The certificate's text is sized by the server from formulas keyed on string length,
+ * transliterated from Arcanyst. That is a guess, it is never checked, and the server has
+ * no font metrics to do better. It is kept as the FIRST GUESS — a render with no
+ * JavaScript still looks broadly right — and this file measures what the browser
+ * actually laid out and shrinks until it fits. The failure it exists to catch is
+ * invisible on screen and only exists on paper: Scrollery_render.tpl wraps each
+ * certificate in `<svg style="overflow:hidden">`, so text that runs past its box is not
+ * spilled where somebody would notice it, it is trimmed off.
  *
- *     recipient  font-size: max(1.36em, calc(2.55em + -0.374em * (L / 8)))
+ * The citation's guess is the one worth stating, because this file re-derives it:
+ *
  *     reason     font-size: max(0.55em, calc(0.8em - 0.15em * (L / 150)))
- *     order      (no scaling at all — a flat 1.5em)
  *
- * That is a guess, and it is never checked. With .Award { font-size: 75pt } (= 100px
- * inside the 2550x3300 frame) the recipient floors at 136px for any name of about 32
- * characters or more — and the ORK holds 689 personas over 32 characters, 291 over
- * 40, and a 100-character maximum, against a content column of 1683px. The order
- * line has no scaling whatever, and 195 of 4,870 catalogue names are over 24
- * characters.
+ * _text.tpl stamps those numbers as data-af-len, so the formula lives in one place.
  *
- * The failure is invisible on screen and only exists on paper: Scrollery_render.tpl
- * wraps each certificate in `<svg style="overflow:hidden">`, so text that runs past
- * the column is not spilled where somebody would notice it — it is trimmed off.
+ * WHAT IT DOES, per certificate (.Award)
  *
- * So: keep the formula as the FIRST GUESS (a render with no JavaScript still looks
- * broadly right, and the server has no font metrics to do better), then measure what
- * the browser actually laid out and shrink until it fits.
- *
- * WHAT IT DOES, per certificate (.Award):
- *
- *   pass 1  the top of the certificate — recipient, order line, issuing body and the
- *           flourishes hung on them. When scrollery-typeset.js is on the page, it
- *           solves all of them together (ScrolleryTypeset.layoutTop). Without it the
- *           older per-block passes run: the largest size that puts each block on as
- *           few lines as the design can carry.
+ *   top     the recipient, the order line, the issuing body and the flourishes hung on
+ *           them belong to scrollery-typeset.js, which solves them together
+ *           (ScrolleryTypeset.layoutTop). This file calls it and does nothing else to
+ *           those blocks. The engine is required: with no engine on the page the top
+ *           keeps the server's first guess and one console error says so.
  *   pass 2  the reason block — binary-search down until its own overflow:hidden box
- *           stops clipping it.
+ *           stops clipping it. A citation that still loses text is marked
+ *           data-scroll-clipped, and #sc-clip-notice tells the officer.
  *   pass 3  if the whole column still overflows the page, scale the certificate's
- *           root font-size down, which takes every em on it along.
+ *           root font-size down, which takes every em on it along. The engine and the
+ *           citation run once more against the new root.
+ *   foot    the date and the signature, each on as few lines as the design can carry,
+ *           and then the signature block's lift clear of the artwork, which measures
+ *           the gap the citation left and so goes last.
  *
- * IT IS IDEMPOTENT. Every element's first-seen size is recorded once, as a ratio to
- * its parent's font-size, in data-af-base. Every run restores that baseline before it
- * fits, so running the pass twice on a 200-certificate bulk document produces exactly
- * what running it once produced — the sizes never compound. That also makes it safe
- * to call on every keystroke from the composer's live preview.
+ * It also decides WHEN. The first pass waits for the document to be parsed, the
+ * webfonts to settle and the images to decode (all five faces are font-display:block,
+ * so before they land the type is not painted at all, and the engine reads the flourish
+ * images' boxes). Two failsafes keep that from stalling a page: the image wait is capped,
+ * and a 200-certificate bulk document stops fitting past a time budget and leaves the
+ * remaining certificates on the server's guess. One certificate throwing never stops the
+ * others. `ready` resolves after the first pass and never rejects; anything that prints
+ * awaits it.
+ *
+ * IT IS IDEMPOTENT. Every element this file sizes has its first-seen size recorded once,
+ * as a ratio to its parent's font-size, in data-af-base. Every run restores that baseline
+ * before it fits, so running the pass twice on a 200-certificate bulk document produces
+ * exactly what running it once produced — the sizes never compound. That also makes it
+ * safe to call on every keystroke from the composer's live preview.
  *
  * EVERY SIZE IS WRITTEN IN `em`, NOT px. That is what lets pass 3 work at all: the
- * root scale multiplies through to the sizes passes 1 and 2 chose, instead of leaving
+ * root scale multiplies through to the sizes the other passes chose, instead of leaving
  * them pinned at a pixel value while the page around them shrinks.
  *
  * MEASUREMENT IS IN LAYOUT PIXELS ONLY — scrollWidth / clientWidth / offsetWidth /
  * scrollHeight / clientHeight. Never getBoundingClientRect(): the certificate lives
  * inside an <svg viewBox="0 0 2550 3300" width="100%">, so a client rect comes back
  * multiplied by whatever the SVG is scaled to on screen, and mixing the two families
- * of numbers gives silent nonsense that changes with the window width.
- *
- * ONE sanctioned exception: lineBoxes(). The issuing line is an inline <span>, which
- * has no useful offsetWidth — it reports 0 — so there is nothing in the layout-pixel
- * family to measure it with. It uses a Range's client rects to COUNT line boxes and
- * never reads their geometry, and a count is scale-free. If you find yourself wanting
- * a width out of that function, you want a different function.
+ * of numbers gives silent nonsense that changes with the window width. The two
+ * sanctioned exceptions say what they do about it where they are: lineBoxes() reads
+ * only a COUNT of rects, and the signature lift reads screen rects and converts them through
+ * frameScale().
  *
  * PUBLIC API — see the bottom of the file. window.ScrolleryAutofit.
  */
@@ -65,114 +70,26 @@
     'use strict';
 
     /*
-     * Per-target policy.
+     * Per-target policy for the blocks this file fits itself.
      *
-     * `lines` is the ladder of line counts the design will accept, best first, each
-     * with the smallest size it is willing to pay for that many lines. Read the
-     * recipient's row as: "one line if that can be had at 1.15em or better; failing
-     * that two lines at 0.85em or better; failing that three lines at 0.6em; failing
-     * that, the floor."
+     * `lines` is the ladder of line counts the design will accept, best first, each with
+     * the smallest size it is willing to pay for that many lines. Read the signer's row
+     * as: "one line if that can be had at 0.55em or better; failing that two lines at
+     * 0.40em or better; failing that three lines at 0.34em; failing that, the floor."
      *
      * The floors are ABSOLUTE em against the certificate root, not a fraction of the
      * server's guess, and that is deliberate. Fractions of the guess make the answer
-     * depend on the guess: the composer previews a certificate the server rendered
-     * with an empty recipient (guess 2.55em) and then types the name into the DOM,
-     * while the print surface renders the same name server-side (guess 1.36em) — so
-     * the same 100-character persona resolved to 103px in one and 69px in the other.
-     * Measured. With absolute floors the same string in the same box gets the same
-     * size on both surfaces, which is the point of fitting the preview at all.
-     *
-     * 0.6em is 60px inside a 2550px-wide frame that prints at 8.5in — about 14pt on
-     * paper. Below that a certificate is not worth printing and something upstream is
-     * wrong.
+     * depend on the guess: the composer previews a certificate the server rendered with
+     * an empty string and then types into the DOM, while the print surface renders the
+     * same string server-side, so the same text resolved to different sizes on the two
+     * surfaces. With absolute floors the same string in the same box gets the same size
+     * on both, which is the point of fitting the preview at all.
      */
     var POLICY = {
-        name: {
-            sel: '.AwardeeName',
-            lines: [
-                { n: 1, floor: 1.15 },
-                { n: 2, floor: 0.85 },
-                { n: 3, floor: 0.60 }
-            ],
-            minEm: 0.60
-        },
-        order: {
-            sel: '.Order',
-            lines: [
-                { n: 1, floor: 1.05 },
-                { n: 2, floor: 0.75 },
-                { n: 3, floor: 0.55 }
-            ],
-            minEm: 0.55
-        },
-        /*
-         * The issuing line — "Amtgard and The Kingdom of Crystal Groves".
-         *
-         * It had no fitting pass at all until now, only the server's own length
-         * formula, and that formula is FACE-BLIND: it sizes from the character count
-         * and knows nothing about how wide those characters are in the hand actually
-         * being printed. "The Kingdom of Crystal Groves" is one line in BlackChancery
-         * and needs 2160px of a 1670px column in Uncial Antiqua — 1.29x over — so it
-         * wrapped, and a wrapped right-aligned line lands on the border. Same in
-         * Cormorant Unicase and Fondamento. Adding six wider display faces is what
-         * made a latent problem an obvious one.
-         *
-         * Two lines is a legitimate answer for a genuinely long name, which is why
-         * there is a second tier rather than a hard one-line rule. The floors are
-         * lower than the recipient's: this is the issuing body, set above and smaller
-         * than the name of the person the certificate is actually about.
-         */
-        issuer: {
-            sel: '[data-scroll-text="issuerName"]',
-            /* One line at 0.62em or better, because the longest issuer name in the
-               ORK is 37 characters ("The Principality of the Crimson Sands") and in
-               the widest hand that is what it takes: a 29-character name resolves to
-               0.80em in Uncial Antiqua, measured, and this scales from it. 0.62em is
-               62px of a 2550px frame printed at 8.5in — about 15pt, above the floor
-               the recipient's own name is allowed to reach. */
-            lines: [
-                { n: 1, floor: 0.62 },
-                { n: 2, floor: 0.50 }
-            ],
-            minEm: 0.50
-        },
-        /*
-         * The issuing TITLE line — "Amtgard and the Kingdom of".
-         *
-         * It had no fitting pass of any kind, and it is what case zero actually turns
-         * on. The issuer NAME below it has had a ladder since the hands landed; this
-         * line never did, so in a wide hand it simply wraps. Measured on
-         * "Kingdom" + both connectives, same content throughout:
-         *
-         *     chancery 163px   gotisch 174px   unicase 170px      one line
-         *     cinzel   318px   uncial  320px                      TWO lines
-         *
-         * and the second line lands in the band #BottomTextFlourish occupies. The
-         * ornament fix below keeps the swash off it either way; this stops the wrap
-         * happening at all, which is the cause rather than the symptom.
-         *
-         * Only #IssuerTitle is shrunk, never the versal: "Amtgard" is the word the
-         * composition is built around and taking it down to fit a long principality
-         * name would be fixing the wrong half of the line. So this is measured on the
-         * PARAGRAPH's line count and applied to the TITLE's size — see fitTitle().
-         *
-         * 0.55em floor: #IssuerTitle sits at 0.8em of a 1.3em line on a 312.5px root,
-         * so 0.55em is about 223px in the frame — roughly 16pt on paper, still larger
-         * than the citation ever prints.
-         */
-        title: {
-            sel: '#IssuerTitle',
-            block: '.IssuingTextSection > p:first-of-type',
-            lines: [
-                { n: 1, floor: 0.62 },
-                { n: 2, floor: 0.55 }
-            ],
-            minEm: 0.55
-        },
         /*
          * The date and the signature.
          *
-         * Both are a flat 0.7em with no scaling of any kind and no fitting pass, in a
+         * Both come from the server at a flat 0.7em with no scaling of any kind, in a
          * box `section.SignAndDate > div { width: 7em }` wide. The longest date this
          * app can print — "27th September 2026" — takes THREE lines in that box, and a
          * 60-character signer takes four.
@@ -226,36 +143,32 @@
     };
 
     /*
-     * Multi-up raises the LADDER floors — the recipient and the order line. Not the
-     * citation's; see the note at the end of this comment.
+     * Multi-up raises the LADDER floors — the date's and the signer's. Not the citation's;
+     * see the note at the end of this comment.
      *
      * Every measurement in this file happens inside a 2550x3300 viewBox, which is
      * scale-free by construction — the whole point of the frame. That is normally a
-     * feature and here it is the bug: at &up=2 or &up=4 the same certificate prints
-     * at half its linear size, so 0.6em, which the policy comments justify as "about
-     * 14pt on paper", is 7pt on paper and nothing in the measurement can see the
-     * difference.
+     * feature and here it is the bug: at &up=2 or &up=4 the same certificate prints at
+     * half its linear size, so a floor the policy comments justify as legible on paper
+     * is half that on paper and nothing in the measurement can see the difference.
      *
-     * The floors are therefore lifted when the page says it is a multi-up sheet.
-     * NOT by the full 2x that would restore the physical size: the recipient's
-     * one-line tier is 1.15em, so a 2x floor of 1.20em is above it, and the effect
-     * would be that no name ever shrinks and every long one is clipped instead.
-     * 1.5x lands the name floor at 0.90em (about 10.5pt at half scale), which is
-     * small but legible, and leaves the ladder intact.
+     * The floors are therefore lifted by 1.5x when the page says it is a multi-up sheet.
+     * NOT by the full 2x that would restore the physical size, which would put a floor
+     * above the first rung of a ladder and make a block refuse every size it has.
      *
-     * Raising a floor can only ever REFUSE a size, never choose a bigger one than
-     * the server's guess: every use is guarded by Math.min against the base.
+     * Raising a floor can only ever REFUSE a size, never choose a bigger one than the
+     * server's guess: every use is guarded by Math.min against the base.
      *
-     * Read from the document, so a surface opts in by saying what it is printing
-     * rather than by calling into this file. Scrollery_render.tpl stamps
-     * data-scroll-up on <body> from &up=.
+     * Read from the document, so a surface opts in by saying what it is printing rather
+     * than by calling into this file. Scrollery_render.tpl stamps data-scroll-up on
+     * <body> from &up=. The engine reads the same attribute for the top half.
      *
      * WHY THE CITATION IS EXEMPT.
      *
-     * A raised floor is a refusal to shrink. For the recipient and the order line
-     * that refusal is harmless — they have a line ladder to fall down instead, and
-     * both wrap. The citation has neither: its box is `overflow: hidden`, so the
-     * only thing a refusal to shrink can produce is DELETED TEXT.
+     * A raised floor is a refusal to shrink. For the date and the signer that refusal is
+     * harmless — they have a line ladder to fall down instead, and both wrap. The
+     * citation has neither: its box is `overflow: hidden`, so the only thing a refusal
+     * to shrink can produce is DELETED TEXT.
      *
      * Measured, before this exemption: of the 60 longest citations in the ORK, 0
      * were clipped at 1-up and 25 were clipped at &up=2 — 80 to 499 px each, up to
@@ -281,11 +194,6 @@
     function floorOf(em) {
         return em * FLOOR_SCALE;
     }
-
-    /* Two lines of prose rarely break at exactly half. Assume a line packs to about
-       92% before the ragged edge, so "fits in n lines" is not solved as if the text
-       could be poured perfectly. */
-    var LINE_FILL = 0.92;
 
     /* Sub-pixel slack. Layout rounds; 1px of tolerance stops a shrink that buys
        nothing anyone could see. */
@@ -343,37 +251,16 @@
      */
     function formulaEm(el) {
         var spec = el.getAttribute('data-af-len');
-        if (spec) {
-            var n = spec.split(',').map(Number);
-            if (n.length < 5 || n.some(isNaN)) { return 0; }
-
-            var text = (el.textContent || '').trim();
-            var len = Array.from(text).length;
-            if (len === 0 && n[4] > 0) { len = n[4]; }
-
-            return Math.max(n[0], n[1] + n[2] * (len / n[3]));
-        }
-
-        /*
-         * The issuing line's formula is the other shape: `1em + 0.5em * (14 / len)`
-         * shrinks as a RECIPROCAL of the length, not linearly in it, so it cannot be
-         * expressed in the four numbers above. It gets its own attribute rather than
-         * a fudged fit, for the same reason data-af-len exists at all — so the
-         * template stays the one place these numbers live.
-         *
-         * `data-af-inv="floor,intercept,coeff,numerator,minLength"`, evaluated as
-         * max(floor, intercept + coeff * (numerator / max(minLength, len))). The
-         * minLength clamp is the server's own max(10, ...) and is load-bearing: without
-         * it a two-character issuer name computes a size far above the ceiling.
-         */
-        spec = el.getAttribute('data-af-inv');
         if (!spec) { return 0; }
 
-        var m = spec.split(',').map(Number);
-        if (m.length < 5 || m.some(isNaN)) { return 0; }
+        var n = spec.split(',').map(Number);
+        if (n.length < 5 || n.some(isNaN)) { return 0; }
 
-        var chars = Array.from((el.textContent || '').trim()).length;
-        return Math.max(m[0], m[1] + m[2] * (m[3] / Math.max(m[4], chars)));
+        var text = (el.textContent || '').trim();
+        var len = Array.from(text).length;
+        if (len === 0 && n[4] > 0) { len = n[4]; }
+
+        return Math.max(n[0], n[1] + n[2] * (len / n[3]));
     }
 
     /*
@@ -415,100 +302,11 @@
     }
 
     /*
-     * The column the text has to fit into: the .Award content box.
-     *
-     * Not the element's own clientWidth. .Award is `display:flex; flex-direction:
-     * column; align-items:center`, so every child is sized to its own content on the
-     * cross axis and simply GROWS past the column when the text is too long — an
-     * unbreakable 27-character persona makes the <p> itself 2000px wide, and
-     * `scrollWidth <= clientWidth` on that <p> is perfectly true while the name hangs
-     * off both sides of the page. The stable number is the container's.
-     */
-    function columnWidth(award) {
-        return award.clientWidth - px(award, 'paddingLeft') - px(award, 'paddingRight');
-    }
-
-    /*
-     * The single-line width of an element's text at its current size.
-     *
-     * white-space:nowrap collapses the text to one line so the measurement is the
-     * max-content width, which scales linearly with font-size — so one measurement
-     * answers "what size puts this on one line", and on n lines, without a search.
-     *
-     * It has to be measured with nowrap rather than inferred from the wrapped box,
-     * because .AwardeeName carries overflow-wrap:anywhere: with that on, a name that
-     * cannot fit never overflows, it silently becomes more lines, and every
-     * width-overflow test comes back clean.
-     */
-    function maxContentWidth(el) {
-        var prevWhiteSpace = el.style.whiteSpace;
-        var prevWrap = el.style.overflowWrap;
-        el.style.whiteSpace = 'nowrap';
-        el.style.overflowWrap = 'normal';
-        var w = Math.max(el.scrollWidth, el.clientWidth, el.offsetWidth);
-        el.style.whiteSpace = prevWhiteSpace;
-        el.style.overflowWrap = prevWrap;
-        return w;
-    }
-
-    /*
-     * Recipient and order line. Closed-form rather than a search, because the
-     * relationship is linear: text n times narrower fits on n times fewer lines.
-     */
-    function fitLines(el, policy, avail) {
-        var base = baseEm(el);
-        if (!(base > 0) || !(avail > 0)) { return; }
-
-        setEm(el, base);
-
-        if (!(el.textContent || '').trim()) { return; }
-
-        var w = maxContentWidth(el);
-        if (!(w > 0)) { return; }
-
-        for (var i = 0; i < policy.lines.length; i++) {
-            var tier = policy.lines[i];
-            var fill = tier.n === 1 ? 1 : LINE_FILL;
-            var want = base * (tier.n * avail * fill) / w;
-
-            if (want >= base) {
-                /* The server's guess already fits in this many lines. Nothing to do —
-                   and never grow past the guess: the formula is also what governs how
-                   this block sits against the ones above and below it. */
-                return;
-            }
-            if (want >= floorOf(tier.floor) && want >= floorOf(policy.minEm)) {
-                setEm(el, want);
-                return;
-            }
-        }
-
-        setEm(el, Math.min(base, floorOf(policy.minEm)));
-    }
-
-    /*
-     * Is the citation being cut off by its own box?
-     *
-     * NOT `el.scrollHeight > el.clientHeight`. That was the obvious test and it is
-     * wrong, measurably: the reason section also contains the absolutely-positioned
-     * holder for its six ruled underline images, and that holder's own content
-     * overflows it, so the section's scrollHeight is a flat ~994px on EVERY
-     * certificate — a 103-character note measures the same as a 400-character one.
-     * Written that way the search shrank every reason on every certificate straight
-     * to the floor and still reported it clipped. Measured on live pages before and
-     * after.
-     *
-     * The thing that can actually be clipped is the text paragraph, so measure that,
-     * against the box's content height.
-     */
-    /*
      * How many lines an INLINE element occupies.
      *
-     * The recipient and the order line are block <p>s, so maxContentWidth() can
-     * measure them and fitLines() can solve for the size in closed form. The issuer
-     * name is a <span> inside a right-aligned <p>, and an inline box has no useful
-     * offsetWidth — it reported 0 — so there is nothing to solve from.
-     *
+     * The date and the signature are the blocks this is for, and they are not always
+     * block boxes with an offsetWidth worth solving from: an inline box reports 0, and
+     * a box the column clips reports a width that has nothing to do with its text.
      * Counting the line boxes a Range covers answers the question directly instead.
      * The COUNT is used and never the geometry: a Range's rects are in screen pixels
      * while everything else here is in the 2550-wide layout space, and mixing those
@@ -533,68 +331,9 @@
     }
 
     /*
-     * How many LINES a block takes, when the block mixes font sizes.
-     *
-     * lineBoxes() above counts distinct rect tops, which is exactly right for the
-     * issuer name — one span, one size. It is wrong for the issuing TITLE line, and
-     * wrong in the direction that does damage: that paragraph is the versal span at
-     * 1.15em beside #IssuerTitle at 0.8em, and two inline boxes of different sizes
-     * sitting on the SAME baseline have different tops. So a perfectly good one-line
-     * title counted as two, and the first version of fitTitle() dutifully shrank
-     * Chancery's title to its 0.55em floor — 71.5px where the design says 104px — on
-     * every certificate that never had a problem.
-     *
-     * Clustering by half a line-height is what separates "a smaller word on this line"
-     * from "the next line". The rows are far enough apart for the distinction to be
-     * unambiguous: line-height here is 143px and the largest within-line top
-     * difference is the versal's, about 20px.
-     */
-    function lineRows(el) {
-        var range = doc.createRange();
-        range.selectNodeContents(el);
-
-        var lh = px(el, 'lineHeight');
-        if (!(lh > 0)) { lh = px(el, 'fontSize') * 1.2; }
-
-        /*
-         * THE TOLERANCE HAS TO BE IN THE SAME UNITS AS THE RECTS.
-         *
-         * getComputedStyle gives layout px; getClientRects gives those multiplied by
-         * whatever the <svg viewBox="0 0 2550 3300"> is scaled to on screen. This
-         * file's header says never to mix the two families, and mixing them here was
-         * silent rather than obviously broken: at a third scale the real gap between
-         * two lines is about 46px against an unscaled tolerance of 71.5, so every
-         * wrapped title clustered into one row and fitTitle() stopped firing on
-         * exactly the hands it exists for.
-         *
-         * Derived from this element rather than passed in, so the function cannot be
-         * called from somewhere that forgets to supply it.
-         */
-        var box = el.getBoundingClientRect();
-        var k = el.offsetHeight > 0 ? (box.height / el.offsetHeight) : 1;
-        var tol = lh * 0.5 * (k > 0 ? k : 1);
-
-        var rects = range.getClientRects();
-        var rows = [];
-        for (var i = 0; i < rects.length; i++) {
-            if (rects[i].width < 0.5 || rects[i].height < 0.5) { continue; }
-            /* The BOTTOM, not the top: inline boxes of different sizes on one line
-               share a baseline, so their bottoms agree far more closely than their
-               tops do. */
-            var b = rects[i].bottom;
-            var seen = false;
-            for (var j = 0; j < rows.length; j++) {
-                if (Math.abs(rows[j] - b) < tol) { seen = true; break; }
-            }
-            if (!seen) { rows.push(b); }
-        }
-        return Math.max(1, rows.length);
-    }
-
-    /*
      * Fit an inline element by MEASURING the line count at a size rather than solving
-     * for it. Same ladder semantics as fitLines(): the best tier that can be had at or
-     * above its floor wins, and the floor is absolute em so both surfaces agree.
+     * for it. The ladder is the policy's: the best tier that can be had at or above its
+     * floor wins, and the floor is absolute em so both surfaces agree.
      *
      * A descending binary search rather than a scan, for the same reason fitReason()
      * uses one — eight halvings resolve to well under a percent.
@@ -627,64 +366,7 @@
         }
 
         /* Nothing fitted in any tier. The floor is the smallest size the design will
-           pay for; below it the issuing line stops being readable. */
-        setEm(el, Math.min(base, floorOf(policy.minEm)));
-    }
-
-    /*
-     * Fit the issuing title by measuring the LINE it is part of.
-     *
-     * fitInline() measures the element it shrinks, which is right for the issuer name
-     * — that span is the whole line. It is wrong here: the line is the versal plus the
-     * title, the versal is not allowed to move, and a title that is one line box on
-     * its own can still be the reason the paragraph is two.
-     *
-     * So the measurement and the adjustment are on different elements. Everything else
-     * — absolute em floors, restore-then-fit, the descending binary search — is the
-     * same discipline as fitInline(), for the same reasons.
-     */
-    function fitTitle(award, policy) {
-        var el = award.querySelector(policy.sel);
-        var block = award.querySelector(policy.block);
-        if (!el || !block) { return; }
-
-        var base = baseEm(el);
-        if (!(base > 0)) { return; }
-
-        setEm(el, base);
-        if (lineRows(block) <= policy.lines[0].n) {
-            /* Nothing to fit. Put back exactly what the server wrote rather than an
-               equivalent-looking inline value: leaving `0.8000em` behind is harmless
-               here but it is the kind of residue that makes a later diff of the
-               rendered DOM impossible to read. */
-            el.style.fontSize = el.getAttribute('data-af-inline') || '';
-            return;
-        }
-
-        for (var t = 0; t < policy.lines.length; t++) {
-            var tier = policy.lines[t];
-            var lo = Math.min(floorOf(tier.floor), base);
-            var hi = base;
-            var best = null;
-
-            for (var i = 0; i < STEPS; i++) {
-                var mid = (lo + hi) / 2;
-                setEm(el, mid);
-                if (lineRows(block) <= tier.n) {
-                    best = mid;
-                    lo = mid;
-                } else {
-                    hi = mid;
-                }
-            }
-
-            if (best !== null) { setEm(el, best); return; }
-        }
-
-        /* Two lines is a legitimate answer for a genuinely long issuing body, and the
-           ornament anchor below is what keeps the swash off the second one. Going
-           below the floor to avoid it would trade a solved problem for an unreadable
-           line. */
+           pay for; below it the date or the signature stops being readable. */
         setEm(el, Math.min(base, floorOf(policy.minEm)));
     }
 
@@ -692,6 +374,21 @@
         return el.querySelector('[data-scroll-text="reason"]') || el;
     }
 
+    /*
+     * Is the citation being cut off by its own box?
+     *
+     * NOT `el.scrollHeight > el.clientHeight`. That was the obvious test and it is
+     * wrong, measurably: the reason section also contains the absolutely-positioned
+     * holder for its six ruled underline images, and that holder's own content
+     * overflows it, so the section's scrollHeight is a flat ~994px on EVERY
+     * certificate — a 103-character note measures the same as a 400-character one.
+     * Written that way the search shrank every reason on every certificate straight
+     * to the floor and still reported it clipped. Measured on live pages before and
+     * after.
+     *
+     * The thing that can actually be clipped is the text paragraph, so measure that,
+     * against the box's content height.
+     */
     function reasonClipped(el, p) {
         return reasonOverflow(el, p) > TOL;
     }
@@ -885,6 +582,24 @@
     }
 
     /*
+     * A page without the engine is a deployment fault (a stale cached copy of this file
+     * paired with a page that never loaded the engine, or the engine's script failing to
+     * arrive), and there is no second implementation to fall back to. Say so once per
+     * page load — a bulk document would otherwise print it 200 times — and leave the
+     * top of every certificate on the server's first guess.
+     */
+    var engineMissingReported = false;
+    function reportMissingEngine() {
+        if (engineMissingReported) { return; }
+        engineMissingReported = true;
+        if (global.console && typeof global.console.error === 'function') {
+            global.console.error('scrollery-autofit: ScrolleryTypeset.layoutTop is missing, so '
+                + 'the top of the certificate keeps the server\'s first-guess sizes. '
+                + 'scrollery-typeset.js must be loaded before scrollery-autofit.js.');
+        }
+    }
+
+    /*
      * Run it, and never let it take the rest of the certificate down with it. The
      * reason, the date and the signer below are still ours to fit, and fit() would
      * otherwise abandon the whole certificate on the engine's first exception. The
@@ -907,9 +622,7 @@
      * body, ornaments); the citation is sized into the room that leaves; pass 3 scales
      * the root if the column still overflows, and if it did the engine and the citation
      * run once more against the new root; then the date and signer, and the signature
-     * lift last, because it measures the gap the citation left. With no engine on the
-     * page the first step is the old passes instead (name, award line, title, issuer)
-     * and the swash anchor runs after the text passes.
+     * lift last, because it measures the gap the citation left.
      */
     function fitAward(award) {
         if (!award || !award.clientWidth) { return; }
@@ -918,42 +631,23 @@
         var rootBase = baseEm(award);
         if (rootBase > 0) { setEm(award, rootBase); }
 
-        var avail = columnWidth(award);
-        if (!(avail > 0)) { return; }
-
         /*
          * The top of the certificate — issuing body, name, award line, and the
-         * ornaments hung on them — is the typeset engine's. It solves the five blocks
-         * together, because they depend on each other (the award may not outrank the
-         * name, the place may not outrank either, the flourishes are placed against the
-         * type the others chose) and the old passes below each solved their own block
-         * with no knowledge of the rest.
+         * ornaments hung on them — is the typeset engine's alone. It solves the five
+         * blocks together, because they depend on each other (the award may not
+         * outrank the name, the place may not outrank either, the flourishes are placed
+         * against the type the others chose).
          *
-         * The old passes stay, behind this test, for the one case the engine can be
-         * missing: a stale cached copy of this file paired with a page that never
-         * loaded the engine. They run unchanged there. A later task deletes them.
+         * There is no second implementation behind it. A page that never loaded the
+         * engine says so once, on the console, and keeps the server's first guess for
+         * the top; the bottom half below still fits, because it does not need the
+         * engine.
          */
         var engine = typesetEngine();
         if (engine) {
             runEngine(award, engine);
         } else {
-            var name = award.querySelector(POLICY.name.sel);
-            if (name) { fitLines(name, POLICY.name, avail); }
-
-            var order = award.querySelector(POLICY.order.sel);
-            if (order) { fitLines(order, POLICY.order, avail); }
-
-            /* Before the reason, and measured rather than solved — see fitInline(). It
-               takes no `avail`: the width it has to fit into is its own <p>'s content box,
-               which is not the .Award column (the issuing section overhangs it), and the
-               line-box count already accounts for that without anyone computing it. */
-            /* Before the issuer NAME: the name's paragraph sits directly under this line,
-               so its position — and the ornament anchored to it — depends on how many
-               lines this one ends up taking. */
-            fitTitle(award, POLICY.title);
-
-            var issuer = award.querySelector(POLICY.issuer.sel);
-            if (issuer) { fitInline(issuer, POLICY.issuer); }
+            reportMissingEngine();
         }
 
         var reason = award.querySelector(POLICY.reason.sel);
@@ -984,11 +678,6 @@
         var signer = award.querySelector(POLICY.signer.sel);
         if (signer) { fitInline(signer, POLICY.signer); }
 
-        /* After every text pass: the block it follows has finished moving only now. The
-           engine places every flourish itself, against the type it just set, so this
-           only runs when there is no engine. */
-        if (!engine) { anchorOrnaments(award); }
-
         /* Last: it measures the gap the citation left, which is only final now. */
         liftSignature(award);
     }
@@ -1016,75 +705,6 @@
     /* Frame px of clear paper to keep between the citation and the block. 40px is
        1/7.5 inch at 300 dpi — enough that the two read as separate blocks. */
     var SIGN_MIN_GAP = 40;
-
-    /* ----------------------------------------------------------------------
-     * The ornament anchor.
-     *
-     * #BottomTextFlourish is the swash beside the issuing body's NAME — that is what
-     * it decorates, and it is why `section.IssuingTextSection > p:nth-of-type(2)`
-     * carries a 4.4em left gutter while the line above it carries none.
-     *
-     * But it is POSITIONED against the "Amtgard" span, which is the FIRST line. Those
-     * are the same place only while the title line takes exactly one line, and that is
-     * the whole defect: measured on "Kingdom" + both connectives, the title line is
-     * 163px in Chancery and 318px in Cinzel, so in a wide hand its second line drops
-     * into the swash's band — a band with no gutter, because the gutter was put on the
-     * element the swash was never anchored to.
-     *
-     * An ornament anchored to the block it decorates cannot be crossed by that block.
-     * So this measures where the name paragraph actually ended up and re-offsets the
-     * swash from it, preserving the gap the design has in the one-line case.
-     *
-     * WITH THE SCRIPT OFF the CSS default applies unchanged, which is exactly what
-     * ships today — correct for the common case and wrong only where it was already
-     * wrong. Same contract --sc-sign-lift-want has with --sc-sign-lift.
-     *
-     * CLAMPED, like the signature lift: --sc-orn-travel-max is how far an ornament may
-     * be moved from where it was drawn. Past that the composition is asking for more
-     * than the ornament can give and the answer has to come from the type instead,
-     * which is what fitTitle() above is for.
-     * ---------------------------------------------------------------------- */
-
-    /* The gap between the name paragraph's top and the swash's top, in the swash's own
-       em. Measured off the shipping one-line layout, which is the design: the swash box
-       starts 20 frame px above the name paragraph at an em basis of 149.4 frame px. */
-    var ORN_BOTTOM_GAP_EM = -0.134;
-
-    function anchorOrnaments(award) {
-        var img = award.querySelector('#BottomTextFlourish');
-        var name = award.querySelector('.IssuingTextSection > p:nth-of-type(2)');
-        if (!img || !name) { return; }
-
-        var host = img.offsetParent;
-        if (!host) { return; }
-
-        /* Restore the declared value before measuring: the offset is relative to where
-           the ornament currently IS, so a previous run's answer has to come off first
-           or this compounds. Same discipline as liftSignature(). */
-        img.style.removeProperty('top');
-
-        var em = px(img, 'fontSize');
-        if (!(em > 0)) { return; }
-
-        var k = frameScale(award) || 1;
-        var declaredTop = parseFloat(global.getComputedStyle(img).top) || 0;
-
-        /* getBoundingClientRect is scaled by the SVG; the offsets written back are not.
-           Divide by k to get back into the frame's own pixels. */
-        var gap = (name.getBoundingClientRect().top - host.getBoundingClientRect().top) / k;
-        var want = gap + (ORN_BOTTOM_GAP_EM * em);
-
-        var maxTravel = (parseFloat(
-            global.getComputedStyle(templateOf(award) || award)
-                .getPropertyValue('--sc-orn-travel-max')
-        ) || 2.2) * em;
-
-        var travel = want - declaredTop;
-        if (travel > maxTravel) { want = declaredTop + maxTravel; }
-        if (travel < -maxTravel) { want = declaredTop - maxTravel; }
-
-        img.style.top = (want / em).toFixed(4) + 'em';
-    }
 
     function signBlock(award) {
         return award.querySelector('section.SignAndDate');

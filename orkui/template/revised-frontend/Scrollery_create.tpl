@@ -674,6 +674,13 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
 </div>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/revised.js') ?>"></script>
+<?php /* The issuer text model, before everything that reads it: scrollery.js calls
+         ScrolleryText.issuerLines() out of applyText(), and it must split a typed
+         "The Kingdom of the Wetlands" the way print does. */ ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-textmodel.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-textmodel.js') ?>"></script>
+<?php /* The typeset engine, which sets the top of the certificate. The autofit below
+         calls it and has no fallback, so it comes first. */ ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-typeset.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-typeset.js') ?>"></script>
 <?php /* The measured autofit, the same one Scrollery_render.tpl loads. It must be
          parsed BEFORE scrollery.js, which calls ScrolleryAutofit.fitSoon() out of
          applyText() and reload() — without it the preview keeps the server's first
@@ -682,11 +689,6 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
          work at parse time (its own first pass is inside a promise on
          document.fonts.ready), and it has to have defined the global by the time
          scrollery.js runs. */ ?>
-<?php /* The issuer text model, before everything that reads it: scrollery.js calls
-         ScrolleryText.issuerLines() out of applyText(), and it must split a typed
-         "The Kingdom of the Wetlands" the way print does. */ ?>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-textmodel.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-textmodel.js') ?>"></script>
-<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-typeset.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-typeset.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-autofit.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-autofit.js') ?>"></script>
 <script>
 window.ScConfig = {
