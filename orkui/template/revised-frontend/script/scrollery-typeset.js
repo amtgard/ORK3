@@ -1619,7 +1619,7 @@
      * whose place sits under a lead that changes height (Centered) solves once more when
      * the place's top moved.
      */
-    function converge(ctx, A, caps, placeFor, leadFor) {
+    function converge(ctx, A, caps, placeFor, leadFor, placeMin) {
         var place = placeFor(caps.leadMax);
         var lead = leadFor(place ? place.size : caps.placeMax);
         if (place && lead.size < caps.leadMax - 0.01) {
@@ -1638,7 +1638,45 @@
             lead = leadFor(place ? place.size : caps.placeMax);
         }
         setArticle(ctx, A, lead.size);
+        reverifyPlace(ctx, A, place, lead.size, placeMin);
         return { place: place, lead: lead };
+    }
+
+    /*
+     * The place's lines checked again after the article has been resized.
+     *
+     * setRole verified the place's line against its width with the article at the size that
+     * was budgeted for it; the article's FINAL size is the lead's, written after the last
+     * solve, and the two differ by whatever the lead moved between the budget and the answer.
+     * A larger article than the one verified widens line 0, and nothing looked at it again
+     * (the fresh-corpus case s02 printed a place line 444px wide in a 440.7px band). So the
+     * lines are measured here against the width they carry in data-sc-w, which is the whole
+     * line, article included, and the place is shrunk the way setRole shrinks it until they
+     * fit, never below `placeMin`; a line that still does not fit there is flagged, as
+     * setRole flags one. `place` is the report entry and is updated in place.
+     */
+    function reverifyPlace(ctx, A, place, leadSize, placeMin) {
+        if (!place || place.overflow) { return; }
+        var parentPx = pxOf(computed(A.place.parentElement).fontSize);
+        if (!(parentPx > 0) || !(ctx.rootPx > 0)) { return; }
+        var lines = lineEls(A.place);
+        if (!lines.length) { return; }
+        for (var round = 0; round <= VERIFY_ROUNDS; round++) {
+            var widths = naturalWidths(lines), worst = 1;
+            widths.forEach(function (w, j) {
+                var allowed = parseFloat(lines[j].getAttribute('data-sc-w'));
+                if (allowed > 0 && w > allowed + VERIFY_TOL) { worst = Math.min(worst, allowed / w); }
+            });
+            if (worst === 1) { return; }
+            if (round === VERIFY_ROUNDS || place.size <= placeMin + SIZE_EPS) {
+                place.overflow = true;
+                A.place.setAttribute('data-sc-overflow', '1');
+                return;
+            }
+            place.size = setSize(A.place, Math.max(place.size * worst * VERIFY_MARGIN, placeMin), ctx.rootPx, parentPx);
+            A.place.setAttribute('data-sc-size', place.size.toFixed(3));
+            setArticle(ctx, A, leadSize);
+        }
     }
 
     /* Where the right flourish goes, vertically: its curl hangs ORN_GAP below the place's
@@ -1766,7 +1804,7 @@
             return sizeLead(ctx, A, k, leadM, avail, cap, caps.leadMin);
         }
 
-        var res = converge(ctx, A, caps, placeFor, leadFor);
+        var res = converge(ctx, A, caps, placeFor, leadFor, pmin);
 
         /* Feasibility (§6.5.1): the lead fits at its floor, the place fits one line at
            pmin, and the profile is clear across the column for both bands. */
@@ -1878,7 +1916,7 @@
             return sizeLead(ctx, A, k, leadM, avail, cap, ccaps.leadMin);
         }
 
-        var res = converge(ctx, A, ccaps, placeFor, leadFor);
+        var res = converge(ctx, A, ccaps, placeFor, leadFor, ccaps.placeMin);
         reserveRuleRoom(ctx, A, k);
         return { comp: 'centered', feasible: true, place: res.place, lead: res.lead };
     }

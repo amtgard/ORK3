@@ -653,3 +653,34 @@ test('the top and bottom flourishes are not judged against the artwork; the righ
   await load(page, { place: 'Wetlands', free: band(300, 2090) });
   expect((await lay(page)).ornaments.right).toBe('hidden');
 });
+
+// T14b: the article is resized to the lead's size after the place was verified, so a larger article
+// than the one verified could leave line 0 over its band (the fresh-corpus case s02 printed 444px in
+// 440.7px). converge() now measures the place again after that resize. Both cases below were found
+// by sweeping places, leads, faces and band widths against the engine without the re-check: each
+// printed a place line one pixel over its data-sc-w (586 in 585), past the half-pixel tolerance.
+test('the place line still fits its band after the article is resized to the lead\'s size', async ({ page }) => {
+  const cases: Array<{ face: string; place: string; w: number }> = [
+    { face: 'Arial, Helvetica, sans-serif', place: 'Emerald Hills', w: 600 },
+    { face: 'Georgia, serif', place: 'Barony of the Iron Mountains', w: 600 },
+  ];
+  for (const c of cases) {
+    await load(page, { place: c.place, lead: 'of the Shire of', heading: 'centered', face: c.face, art: true, free: band(1275 - c.w / 2, 1275 + c.w / 2) });
+    await lay(page);
+    const r = await page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>('[data-sc-role="place"]')!;
+      const lines = [...el.querySelectorAll<HTMLElement>('.sc-line')];
+      lines.forEach((l) => { l.style.width = 'max-content'; });
+      return {
+        overflow: el.hasAttribute('data-sc-overflow'),
+        lines: lines.map((l) => ({ w: Math.max(l.scrollWidth, l.offsetWidth), allowed: Number(l.dataset.scW) })),
+        art: !!el.querySelector('.sc-art'),
+      };
+    });
+    expect(r.art, `${c.place}: the case must carry an article`).toBe(true);
+    expect(r.lines.length).toBeGreaterThan(0);
+    for (const l of r.lines) {
+      expect(r.overflow || l.w <= l.allowed + 0.5, `${c.face} / ${c.place} / ${c.w}: place line ${l.w}px in ${l.allowed}px`).toBe(true);
+    }
+  }
+});
