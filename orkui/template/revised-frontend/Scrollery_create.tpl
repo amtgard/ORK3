@@ -686,6 +686,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
          ScrolleryText.issuerLines() out of applyText(), and it must split a typed
          "The Kingdom of the Wetlands" the way print does. */ ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-textmodel.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-textmodel.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-typeset.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-typeset.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-autofit.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-autofit.js') ?>"></script>
 <script>
 window.ScConfig = {

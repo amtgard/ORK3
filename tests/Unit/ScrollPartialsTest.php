@@ -355,4 +355,120 @@ final class ScrollPartialsTest extends TestCase
         $html = $this->render('text', ['s' => $this->scroll(['reason' => ''])]);
         $this->assertStringContainsString('(200 / 150)', $html);
     }
+
+    /** The inline style of section.Order, which carries the award's first-guess size. */
+    private function awardStyle(string $html): string
+    {
+        $this->assertSame(1, preg_match('#<section class="Order"[^>]*style="([^"]*)"#', $html, $m), 'section.Order has no style');
+
+        return $m[1];
+    }
+
+    /**
+     * The typeset engine's contract with the markup (spec 8.1): the role elements it
+     * sets, the attribute it reads each flourish's ink from, the composition marker, the
+     * elastic spacer, and the mirrored rule pair Centered draws. All of it is inert
+     * without the engine, so a render with no script is still the certificate it was.
+     */
+    public function testTheTypesetHooksArePresent(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll()]);
+
+        foreach (['data-sc-role="lead"', 'data-sc-role="place"', 'data-sc-role="name"', 'data-sc-role="award"',
+                  'data-sc-comp="classic"', 'class="ScSpacer"', 'ScRule--l', 'ScRule--r'] as $needle) {
+            $this->assertStringContainsString($needle, $html, $needle);
+        }
+        // Top, Bottom, Right and the two rules: five images, five grids.
+        $this->assertSame(5, substr_count($html, 'data-sc-ink="32x32:'));
+    }
+
+    /**
+     * The sweep's BLOCK_SEL selects the issuing lines by type, not by position, so the
+     * two paragraphs must stay the first and second p of the section whatever else is
+     * put between or beside them.
+     */
+    public function testTheIssuingLinesAreStillTheFirstTwoParagraphs(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll()]);
+
+        $this->assertSame(1, preg_match('#<section class="IssuingTextSection".*?</section>#s', $html, $m));
+        preg_match_all('#<p\b[^>]*>#', $m[0], $ps);
+        $this->assertCount(3, $ps[0]);
+        $this->assertStringContainsString('ScLead', $ps[0][0]);
+        $this->assertStringContainsString('ScPlace', $ps[0][1]);
+        $this->assertStringContainsString('IssuingVerb', $ps[0][2]);
+    }
+
+    /** A kingdom is set like a park: "and the Kingdom of" small, "the" smaller, then the place. */
+    public function testAKingdomReadsLikeAPark(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll([
+            'issuerTitle' => '', 'issuerName' => 'The Kingdom of the Wetlands', 'useThe' => false, 'useOf' => false,
+            'issuerLead' => 'and the Kingdom of', 'issuerArticle' => 'the', 'issuerPlace' => 'Wetlands',
+        ])]);
+
+        $this->assertMatchesRegularExpression('#id="IssuerTitle"[^>]*>and the Kingdom of</span>#', $html);
+        $this->assertStringContainsString('<span class="sc-art">the</span> Wetlands', $html);
+    }
+
+    /** No article, no article span and no stray space in front of the place. */
+    public function testAPlaceWithoutAnArticleHasNoArticleSpan(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll([
+            'issuerLead' => 'and the Barony of', 'issuerArticle' => '', 'issuerPlace' => 'Rising Sun Station',
+        ])]);
+
+        $this->assertStringNotContainsString('class="sc-art"', $html);
+        $this->assertMatchesRegularExpression('#data-sc-role="place"[^>]*>Rising Sun Station</span>#', $html);
+    }
+
+    /** A scroll array built before the split keys existed prints what it always printed. */
+    public function testAnOldScrollArrayIsSplitOnTheFly(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll([
+            'issuerTitle' => 'Kingdom', 'issuerName' => 'the Wetlands', 'useThe' => true, 'useOf' => true,
+        ])]);
+
+        $this->assertMatchesRegularExpression('#id="IssuerTitle"[^>]*>and the Kingdom of</span>#', $html);
+        $this->assertStringContainsString('<span class="sc-art">the</span> Wetlands', $html);
+    }
+
+    /** The lead is data, so it is escaped like the rest of the text. */
+    public function testTheLeadIsEscaped(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll([
+            'issuerLead' => 'and <b>the</b> Barony of', 'issuerArticle' => '', 'issuerPlace' => 'X',
+        ])]);
+
+        $this->assertStringNotContainsString('<b>the</b>', $html);
+        $this->assertStringContainsString('and &lt;b&gt;the&lt;/b&gt; Barony of', $html);
+    }
+
+    /**
+     * The award is guessed at 0.85 of the name's guess and never above 1.5em, so a
+     * script-less render cannot print an order line that outweighs the recipient. A
+     * 100-character persona guesses the name at 1.36em, and 0.85 x 1.36 is 1.156.
+     */
+    public function testTheAwardFirstGuessNeverExceedsTheNamesShare(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll(['player' => str_repeat('n', 100)])]);
+
+        $this->assertStringContainsString('font-size:1.1560em', $this->awardStyle($html));
+    }
+
+    /** A short name guesses large, and the award stops at its own maximum. */
+    public function testTheAwardFirstGuessStopsAtItsMaximum(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll(['player' => 'Ru'])]);
+
+        $this->assertStringContainsString('font-size:1.5000em', $this->awardStyle($html));
+    }
+
+    /** The place keeps its formula under a 1.3em ceiling, and the article rides on it. */
+    public function testThePlaceFirstGuessIsCappedAndTheArticleFollowsIt(): void
+    {
+        $html = $this->render('text', ['s' => $this->scroll(['issuerPlace' => 'Rising Sun Station'])]);
+
+        $this->assertMatchesRegularExpression('#data-sc-role="place"[^>]*style="font-size:min\(1\.3em, max\(1em, calc\(1em \+ 0\.5em \* \(14 / 18\)\)\)\)#', $html);
+    }
 }

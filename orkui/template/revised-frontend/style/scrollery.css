@@ -695,7 +695,12 @@ section.IssuingTextSection > p:first-child {
      squiggly-bottom  ink stops at 0.890 of its box   (box 424x161)
      squiggly-right   ink runs the full width through this line's own y band
 
-   which is the whole reason a bounding-box test kept reporting these as clear. */
+   which is the whole reason a bounding-box test kept reporting these as clear.
+
+   They are DEFAULTS now. scrollery-typeset.js measures the same two ornaments' ink grids
+   against the place line it actually set and writes --sc-place-gutter and
+   --sc-place-reserve (frame px) on the section, so the gutter follows the type. A render
+   with no script gets the constants below, which are what this rule has always printed. */
 section.IssuingTextSection > p:nth-child(2) {
     text-align: right;
     position: relative;
@@ -705,11 +710,22 @@ section.IssuingTextSection > p:nth-child(2) {
        box offset -0.6em, in the span's own 1.495em type). `3.5em` was therefore the ink
        edge with a ZERO gutter — it only ever looked right because line 1's -0.3em nudge
        happened to add 40px, and that nudge is now gone. 4.4em leaves real air. */
-    margin-left: 4.4em;
+    margin-left: var(--sc-place-gutter, 4.4em);
 
-    /* RIGHT gutter, paired with --sc-swash-hang below so that the distance from the
+    /* RIGHT gutter, paired with --sc-swash-hang above so that the distance from the
        type to the swash's ink is a constant rather than a function of the order. */
-    padding-right: max(0px, calc(1.9em - var(--sc-swash-hang, 1em)));
+    padding-right: var(--sc-place-reserve, max(0px, calc(1.9em - var(--sc-swash-hang, 1em))));
+}
+
+/* "Amtgard", the one word of the issuing block that is never resized. It is the span the
+   top and bottom swashes are drawn around, so it is the positioning context for both, and
+   its size is fixed at 1.15em of the line (1.495em of the certificate) so the swashes'
+   offsets mean the same thing on every order. The -10px pulls the connective in against
+   its last letter. This was an inline style; it is a class so the engine can name it. */
+.ScVersal {
+    font-size: 1.15em;
+    margin-right: -10px;
+    position: relative;
 }
 
 #IssuerTitle {
@@ -718,7 +734,6 @@ section.IssuingTextSection > p:nth-child(2) {
 
 .IssuingVerb {
     text-align: center;
-    margin-block-start: 0.25em;
 }
 
 /* --------------------------------------------------------------------------
@@ -758,7 +773,7 @@ section.IssuingTextSection > p:nth-child(2) {
     /* Em Size Changes */
     min-width: 6em;
     min-height: 0.8em;
-    margin-bottom: 0.1em;
+    margin-bottom: 0;
     padding: 0em 0.05em 0em 0.05em;
 
     /* A forced second line is a real outcome here — the longest persona in the ORK
@@ -777,16 +792,19 @@ section.IssuingTextSection > p:nth-child(2) {
     text-wrap: balance;
     overflow-wrap: anywhere;
 
-    /* Display-size calligraphic caps want the tracking pulled in — at 1.7em of
-       75pt the default spacing was set for text sizes and reads loose. Negative,
-       so it can only ever make the line NARROWER, which is the safe direction
-       next to scrollery-autofit.js: it can free a line, never force one. The
-       value is per-face; see --sc-display-track in section 1a-ii. */
-    letter-spacing: var(--sc-display-track, -0.01em);
+    /* No letter-spacing here. Display-size caps want the tracking pulled in, but it is
+       declared on the role element inside this paragraph (see the `[data-sc-role]` rule
+       below), not on the paragraph: a computed letter-spacing inherits as a PX length,
+       so an em written here would be frozen at this paragraph's size and the span the
+       engine sizes would keep that amount whatever size it was given. */
 }
 
 .Award .Body.AwardDetails {
-    margin-block-start: 0.2em;
+    /* 0.2 root em below the name, and none under it: .Body's own bottom margin would
+       otherwise stack on the 0.2 the name section keeps above the order line. The
+       section is 0.8em, so a root-em gap is written as calc(<gap> / 0.8). */
+    margin-block-start: calc(0.2em / 0.8);
+    margin-block-end: 0;
     font-weight: 700;
 }
 
@@ -868,9 +886,9 @@ section.IssuingTextSection > p:nth-child(2) {
 
 .Award .Order {
     font-size: 1.5em;
-    margin-block-start: 0.2em;
     color: var(--sc-rubric, hsl(0, 65%, 35%));
-    letter-spacing: var(--sc-display-track, -0.01em);
+    /* Tracking comes from the `[data-sc-role]` rule below; the order line is the "award"
+       role. Its gap above is the name section's margin-bottom, in root em. */
 
     /* The order line has no length scaling in _text.tpl at all — it is a flat 1.5em
        whatever the catalogue name is. 195 of 4,870 ork_kingdomaward.name rows are
@@ -878,8 +896,197 @@ section.IssuingTextSection > p:nth-child(2) {
        35), so a second line is normal, not exceptional; balance it. No
        `overflow-wrap: anywhere` here: every one of those names contains spaces, so
        there is always a legal break, and allowing a mid-word one would only make an
-       already-breakable name uglier. scrollery-autofit.js shrinks this line too. */
+       already-breakable name uglier. scrollery-typeset.js sizes and breaks this line (it is the
+       `award` role); the old autofit pass still shrinks it until that pass is retired. */
     text-wrap: balance;
+}
+
+/* --------------------------------------------------------------------------
+   The typeset engine's contract with the stylesheet (spec sections 6.7, 8.1, 8.2).
+
+   scrollery-typeset.js composes the top half of the certificate: the issuing lines, the
+   name and the order line. It sets the SIZE of each role element (`data-sc-role`) and
+   writes that element's lines as `.sc-line` blocks. Everything below is what has to be
+   true of the page for those writes to mean what the engine measured. None of it changes
+   a render that has no script: a role element with no `.sc-line` in it is still an
+   ordinary span, and the first-guess sizes in _text.tpl are what prints.
+   -------------------------------------------------------------------------- */
+
+/* TRACKING lives on the role element, in em, and nowhere above it.
+
+   A computed letter-spacing inherits as a PX length. Declared on `.AwardeeName` or
+   `.Order`'s parent it would be frozen at that element's own size, so the span the engine
+   resizes would keep the same pixel amount at every size it was given and the words it
+   measured (at 100px, tracking as a fraction of the size) would not be the words that
+   drew. Declared on the role, an em is the role's own size.
+
+   Only the name and the award carry display tracking, because those are the only two that
+   did before. The lead and the place were never tracked and are not now, so their no-JS
+   render is unchanged. A minor line is a smaller size of the same text, and gets the
+   tracking again at its own size for the same reason. */
+.Award [data-sc-role="name"],
+.Award [data-sc-role="award"],
+.Award [data-sc-role="name"] .sc-line--minor {
+    letter-spacing: var(--sc-display-track, -0.01em);
+}
+
+/* ONE LINE, AS WIDE AS ITS TEXT.
+
+   The engine decides where a role breaks, so every line is a block that cannot wrap, and
+   it checks the result by comparing each line's scrollWidth with the width it planned
+   for (data-sc-w). That check only means something if the line box IS its text:
+   `max-content` makes it so, where a plain block would be as wide as its container and
+   never overflow. Centred by auto margins for the same reason, so a line wider than the
+   column hangs out of it evenly instead of being clipped on one side only.
+
+   Unitless line-heights, the role table's (spec 6.4.1): they scale with whatever size the
+   engine writes, which a fixed length inherited from a parent would not. */
+.Award .sc-line {
+    display: block;
+    white-space: nowrap;
+    width: max-content;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.1;
+}
+
+.Award [data-sc-role="name"] .sc-line {
+    line-height: 1.12;
+}
+
+/* The line of a role that is set smaller than its neighbours (a title before a name). Its
+   size is written inline by the engine, in em of the role; the rule is here so it has a
+   name to hang from and inherits its colour with everything else. */
+.Award .sc-line--minor {
+    color: inherit;
+}
+
+/* The place keeps its alignment inside the block the engine makes of it. In Classic the
+   paragraph is right-aligned, so each line is pushed to the right edge by its left margin
+   (auto left, none right). The span becomes an inline-block once it holds lines, because
+   an inline span cannot hold block lines that align to the paragraph: the browser would
+   break the paragraph around them. It shrink-wraps to its widest line, and the
+   paragraph's own text-align then places it. */
+.Award .ScPlace > [data-sc-role="place"]:has(> .sc-line) {
+    display: inline-block;
+}
+
+.Award .ScPlace .sc-line {
+    margin-left: auto;
+    margin-right: 0;
+}
+
+/* The lead is one line that shares its row with the versal, so in Classic its line must
+   not be a block (a block would break the row after "Amtgard"). An inline-block is the
+   closest thing that still has a box exactly its text's width. */
+section.IssuingTextSection:not([data-sc-comp="centered"]) #IssuerTitle > .sc-line {
+    display: inline-block;
+    width: auto;
+    margin: 0;
+}
+
+/* The article, "the", set at the connective's size rather than the place's. It is smaller
+   than the words beside it by design, so the proper name carries the line. The size is a
+   variable because it is relative to whatever the place is set at: _text.tpl prints
+   --sc-art-size on the place span as calc(1.04em / <place guess>), which is 1.04 root em
+   (the lead's ceiling) at the guessed size. Colour and tracking are inherited. */
+.Award .sc-art {
+    font-size: var(--sc-art-size, 0.8em);
+}
+
+/* CENTERED: the composition the engine chooses when Classic's room is not there.
+
+   Classic is the lead on the left and the place on the right, with a swash hanging off
+   each end. Centered puts "Amtgard" on a line of its own, the connective under it, the
+   place under that, all on the centre line, and closes the block with a mirrored rule
+   instead of the two swashes. The versal's own swash (#TopTextFlourish) stays. The
+   selectors are anchored on the section's [data-sc-comp] so a certificate the engine has
+   not touched, or has chosen Classic for, is exactly the stylesheet above. */
+section.IssuingTextSection[data-sc-comp="centered"] > p.ScLead,
+section.IssuingTextSection[data-sc-comp="centered"] > p.ScPlace {
+    text-align: center;
+}
+
+section.IssuingTextSection[data-sc-comp="centered"] > p.ScPlace {
+    margin-left: 0;
+    padding-right: 0;
+}
+
+section.IssuingTextSection[data-sc-comp="centered"] #IssuerTitle {
+    display: block;
+    text-align: center;
+}
+
+section.IssuingTextSection[data-sc-comp="centered"] .ScPlace .sc-line {
+    margin-right: auto;
+}
+
+section.IssuingTextSection[data-sc-comp="centered"] #BottomTextFlourish,
+section.IssuingTextSection[data-sc-comp="centered"] #RightTextFlourish {
+    display: none;
+}
+
+/* The rule pair. Two copies of the order's bottom swash, the right one mirrored, that
+   meet at the centre under the last place line. Absent until Centered is chosen. The
+   engine sizes and positions them from the place's measured width; 3.3em is the size of
+   the bottom swash they copy. The mirror is a transform, which the engine accounts for
+   when it maps the ink grid onto the page. */
+.Award .ScRule {
+    display: none;
+    width: 3.3em;
+}
+
+.Award .ScRule--r {
+    transform: scaleX(-1);
+}
+
+section.IssuingTextSection[data-sc-comp="centered"] .ScRule {
+    display: block;
+}
+
+/* VERTICAL RHYTHM (spec 6.7). The top half is a rigid stack from the content top; the
+   one place the certificate gives is the spacer under the order line.
+
+   .Award > * grows every child by 1, which used to stretch the issuing block, the name
+   block and the order line apart from each other: a certificate with a short name and a
+   short citation had its heading drift down the page. The three stop growing, and the
+   gaps between them are fixed, in ROOT em (the .Award's own 75pt) so they do not move
+   when the engine changes a role's size:
+
+       issuer -> "presents"   0.25      "presents" -> name   0.45
+       name   -> details      0.20      details    -> order  0.20
+
+   Each gap is one margin on one side, and .Body's own bottom margin (0.5em of a 0.8em
+   element) is cleared where it would have stacked on top. */
+.Award > section.IssuingTextSection,
+.Award > section.ScName,
+.Award > section.Order {
+    flex-grow: 0;
+}
+
+.Award .Body.IssuingVerb {
+    /* The section's last child, and a 0.8em element: calc(<gap> / 0.8) is the root-em gap. */
+    margin-block-start: calc(0.25em / 0.8);
+    margin-block-end: 0;
+}
+
+.Award > section.ScName {
+    margin-top: 0.45em;
+    margin-bottom: 0.2em;
+}
+
+.Award .Order {
+    margin-block-start: 0;
+}
+
+/* The elastic gap: whatever the stack leaves, between 0.3em and 1.2em. Beyond the cap the
+   rest goes to the spacers further down, which is where it went before the top stopped
+   growing. */
+.Award > .ScSpacer {
+    flex-grow: 1;
+    flex-shrink: 0;
+    min-height: 0.3em;
+    max-height: 1.2em;
 }
 
 /* --------------------------------------------------------------------------

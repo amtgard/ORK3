@@ -21,6 +21,8 @@
  */
 $scrollery_css = DIR_TEMPLATE . 'revised-frontend/style/scrollery.css';
 $scrollery_fit  = DIR_TEMPLATE . 'revised-frontend/script/scrollery-autofit.js';
+$scrollery_tm   = DIR_TEMPLATE . 'revised-frontend/script/scrollery-textmodel.js';
+$scrollery_ts   = DIR_TEMPLATE . 'revised-frontend/script/scrollery-typeset.js';
 $scrollery_hand = DIR_TEMPLATE . 'revised-frontend/script/scrollery-hand.js';
 $fontBase      = HTTP_TEMPLATE . 'revised-frontend/style/fonts/';
 
@@ -56,6 +58,17 @@ $scrollery_preload_fonts = Scroll::HandFonts($scrollery_face);
  * works on any award and not only on a composed one.
  */
 $scrollery_lines = Scroll::NormaliseShowLines($_GET['lines'] ?? null);
+
+/*
+ * How the top of the certificate is composed — &heading=.
+ *
+ * Another per-print choice that is not part of the award: `auto` lets the typeset
+ * engine pick Classic or Centered for each certificate, and `classic` or `centered`
+ * force one. It is stamped on <body> as data-sc-heading, where the engine reads it
+ * from any ancestor of a certificate. NormaliseHeading() is the allowlist, so a value
+ * that is not one of the three prints `auto` rather than reaching the attribute.
+ */
+$scrollery_heading = Scroll::NormaliseHeading(isset($_GET['heading']) ? (string) $_GET['heading'] : null);
 
 /*
  * Sheet geometry — &trim=1 and &up=2|4.
@@ -111,6 +124,7 @@ if ($scrollery_ref !== ''
 </head>
 <body class="scroll-surface"
       data-scroll-face="<?= scroll_e($scrollery_face) ?>"
+      data-sc-heading="<?= scroll_e($scrollery_heading) ?>"
       <?php if (!$scrollery_lines): ?>data-scroll-lines="0"<?php endif; ?>
       <?php if ($scrollery_trim): ?>data-scroll-trim="1"<?php endif; ?>
       <?php if ($scrollery_up): ?>data-scroll-up="<?= $scrollery_up ?>"<?php endif; ?>>
@@ -291,6 +305,16 @@ foreach ($Scrolls as $scrollery_scan) {
 </div>
 <?php endforeach; ?>
 </div>
+<?php /*
+    The scripts that set the type, in the order they depend on each other.
+
+    The text model first: the typeset engine tokenises and breaks lines with the same
+    rules the server split the issuer with. The typeset engine second: it composes the
+    top half (the issuing lines, the name, the order line) and writes the sizes the
+    autofit below then takes as given. Neither does any DOM work at parse time.
+*/ ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-textmodel.js?v=<?= filemtime($scrollery_tm) ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-typeset.js?v=<?= filemtime($scrollery_ts) ?>"></script>
 <?php /*
     The measured autofit. It self-runs once on document.fonts.ready and exposes
     window.ScrolleryAutofit for anything that needs to re-fit after the DOM changes
