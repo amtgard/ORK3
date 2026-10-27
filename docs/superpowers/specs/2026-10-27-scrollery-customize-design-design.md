@@ -280,3 +280,14 @@ today decides what "replace" means:
 - Whether heraldry source switching re-fetches or swaps the image in place.
 - The Flame/Garber/Zodiac verdicts, after investigating the sources.
 - The park option on a kingdom-scoped builder.
+
+## Follow-ups
+
+- Reprint from the log: `Scrollery/render` (the reprint path) does not read `recipe_json`, so a
+  reprint does not reproduce design choices.
+- Trim `knot_defs` on bulk, court and reprint pages when no scroll in the run has `customBorder`
+  (~357 KB raw per page today).
+- A JS/PHP compatibility parity fixture test (the hide-the-checkbox rule vs
+  `Scroll::CustomBorderRule()`).
+- A committed golden-hash byte-identity test for design-less scrolls.
+- Disabled-reason tooltips reachable by keyboard and screen readers (`aria-describedby`).
