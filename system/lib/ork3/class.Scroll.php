@@ -750,6 +750,23 @@ class Scroll extends Ork3
         return $d;
     }
 
+    /**
+     * Which heraldry source actually draws: the requested one when it has arms,
+     * otherwise the scope's own (kingdom for a kingdom scope, park for a park scope).
+     * Unknown or unavailable never reaches a URL lookup; a missing default simply
+     * draws no arms, as it always has.
+     *
+     * @param array{kingdom?:bool,park?:bool,persona?:bool} $available
+     */
+    public static function ResolveHeraldrySource(string $requested, string $scopeType, array $available): string
+    {
+        if (in_array($requested, self::HERALDRY_SOURCES, true) && !empty($available[$requested])) {
+            return $requested;
+        }
+
+        return $scopeType === 'park' ? 'park' : 'kingdom';
+    }
+
     /** @var array<string, array>|null */
     private static ?array $customBorderRules = null;
 

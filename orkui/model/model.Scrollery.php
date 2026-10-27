@@ -1353,6 +1353,45 @@ class Model_Scrollery extends Model
     }
 
     /**
+     * Master heraldry URLs for each source the Customize Design card can pick, '' where
+     * there are none. Kingdom follows the park's own kingdom; park is '' on a kingdom
+     * scope; persona is the recipient's own arms and needs a real player.
+     *
+     * @return array{kingdom:string,park:string,persona:string}
+     */
+    public function heraldry_sources(string $scopeType, int $scopeId, int $playerId): array
+    {
+        $out = ['kingdom' => '', 'park' => '', 'persona' => ''];
+
+        $kingdomId = $scopeId;
+        if ($scopeType === 'park') {
+            $park      = $this->park_details($scopeId);
+            $kingdomId = (int) ($park['KingdomId'] ?? 0);
+            if ((int) ($park['HasHeraldry'] ?? 0) === 1) {
+                $out['park'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                    ['Type' => 'Park', 'Id' => $scopeId, 'Size' => 'master']
+                )['Url'];
+            }
+        }
+        if ($kingdomId > 0 && (int) ($this->kingdom_short_info($kingdomId)['HasHeraldry'] ?? 0) === 1) {
+            $out['kingdom'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                ['Type' => 'Kingdom', 'Id' => $kingdomId, 'Size' => 'master']
+            )['Url'];
+        }
+        if ($playerId > 0) {
+            $player = Ork3::$Lib->player->GetPlayer(['MundaneId' => $playerId, 'Token' => '']);
+            // GetPlayer() nests its fields under 'Player'.
+            if ((int) ($player['Player']['HasHeraldry'] ?? 0) === 1) {
+                $out['persona'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                    ['Type' => 'Player', 'Id' => $playerId, 'Size' => 'master']
+                )['Url'];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * The issuing body's rank word — "and the Freehold of ...".
      *
      * ORK stores this per park (ork_park.parktitle_id -> ork_parktitle.title,

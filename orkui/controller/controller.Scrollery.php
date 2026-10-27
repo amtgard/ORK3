@@ -725,6 +725,13 @@ class Controller_Scrollery extends Controller
         $pronoun  = $override !== '' ? $this->Scrollery->resolve_pronoun_override($override)
             : ($playerId > 0 ? $this->Scrollery->possessive_pronoun_for_player($playerId) : '');
 
+        $sources        = $this->Scrollery->heraldry_sources($scopeType, $scopeId, $playerId);
+        $heraldrySource = Scroll::ResolveHeraldrySource(
+            (string) ($_GET['heraldrySource'] ?? ''),
+            $scopeType,
+            array_map(static fn (string $u): bool => $u !== '', $sources)
+        );
+
         $scroll = Scroll::BuildScroll(
             [
                 'AwardId'          => $choice['AwardId'],
@@ -740,7 +747,7 @@ class Controller_Scrollery extends Controller
             [
                 'player'      => (string) ($_GET['player'] ?? ''),
                 'pronoun'     => $pronoun !== '' ? $pronoun : 'their',
-                'heraldry'    => (string) ($scope['Heraldry'] ?? ''),
+                'heraldry'    => $sources[$heraldrySource],
                 // Provenance for the print log. A composed scroll has no award row, so
                 // these three can only come from context — and a composed row carries no
                 // awards_id either, which makes mundaneId its ONLY link to a person.
@@ -768,6 +775,18 @@ class Controller_Scrollery extends Controller
                 'useThe'      => ($_GET['useThe'] ?? '') === '1',
                 'useOf'       => ($_GET['useOf'] ?? '') === '1',
                 'variant'     => preg_replace('/[^a-z]/', '', strtolower((string) ($_GET['variant'] ?? ''))),
+                // Passed raw like the recipe: Scroll::NormaliseDesign() inside BuildScroll()
+                // is the one allowlist. Only the heraldry source is resolved here, because
+                // it needs the arms lookup that BuildScroll() must stay free of.
+                'design'      => [
+                    'heraldrySource' => $heraldrySource,
+                    'customBorder'   => (string) ($_GET['customBorder'] ?? ''),
+                    'color1'         => (string) ($_GET['color1'] ?? ''),
+                    'color2'         => (string) ($_GET['color2'] ?? ''),
+                    'matchStyle'     => (string) ($_GET['matchStyle'] ?? ''),
+                    'customRibbon'   => (string) ($_GET['customRibbon'] ?? ''),
+                    'ribbonColor'    => (string) ($_GET['ribbonColor'] ?? ''),
+                ],
                 // Passed through raw on purpose: Scroll::NormaliseRecipe() is the one
                 // allowlist for these, and it runs inside BuildScroll(). Sanitising
                 // here as well would be a second, weaker opinion about a closed
@@ -885,7 +904,9 @@ class Controller_Scrollery extends Controller
             'OrderId'     => (string) ($scroll['order'] ?? ''),
             'Rank'        => (int) ($scroll['rank'] ?? 0),
             'Variant'     => (string) ($scroll['variant'] ?? ''),
-            'Recipe'      => $scroll['recipe'] ?? null,
+            // The design rides in the same JSON, beside the custom recipe keys (which stay
+            // as they were), so a reprint can tell what the certificate looked like.
+            'Recipe'      => array_merge($scroll['recipe'] ?? [], ['design' => $scroll['design'] ?? null]),
         ]);
     }
 
