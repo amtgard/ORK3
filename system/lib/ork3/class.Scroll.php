@@ -161,6 +161,30 @@ class Scroll extends Ork3
         'rankSet'   => 'common',
     ];
 
+    /** The Jovious ribbon tint when none (or a malformed one) is requested. */
+    public const RIBBON_DEFAULT = '#4473CF';
+
+    /**
+     * The "Customize Design" card's choices. A design is per print and travels with the
+     * request like a recipe, so nothing persists it; a caller that passes none gets
+     * exactly this, which renders as the certificate always did.
+     *
+     * heraldrySource '' means the scope's own default. color1/color2 are the Jovious
+     * "Primary" and "Secondary" bands.
+     */
+    public const DEFAULT_DESIGN = [
+        'heraldrySource' => '',
+        'customBorder'   => false,
+        'color1'         => '#6AC1FF',
+        'color2'         => '#E84C92',
+        'matchStyle'     => false,
+        'customRibbon'   => false,
+        'ribbonColor'    => self::RIBBON_DEFAULT,
+    ];
+
+    /** @var string[] */
+    public const HERALDRY_SOURCES = ['kingdom', 'park', 'persona'];
+
     /*
      * ------------------------------------------------------------------------------
      * Recipe exceptions.
@@ -652,6 +676,115 @@ class Scroll extends Ork3
         }
 
         return self::$recipes = require DIR_ORK3 . 'data/scroll-recipes.php';
+    }
+
+    /**
+     * A hex colour as uppercase #RRGGBB, or $fallback. Strict six-digit only: the value
+     * reaches a style attribute, so shorthand, names and anything trailing are refused
+     * rather than repaired.
+     */
+    public static function NormaliseHexColour(string $raw, string $fallback): string
+    {
+        $raw = trim($raw);
+        if (preg_match('/^#?([0-9A-Fa-f]{6})$/', $raw, $m) !== 1) {
+            return $fallback;
+        }
+
+        return '#' . strtoupper($m[1]);
+    }
+
+    /**
+     * Validate a requested design against DEFAULT_DESIGN's keys. Allowlist, same as
+     * NormaliseRecipe(): the heraldry source is a closed set, colours are strict hex,
+     * and booleans accept only the spellings a checkbox or a query string produces.
+     */
+    public static function NormaliseDesign(array $requested): array
+    {
+        $d    = self::DEFAULT_DESIGN;
+        $bool = static fn ($v): bool => in_array($v, ['1', 1, true, 'true', 'on'], true);
+
+        $source = (string) ($requested['heraldrySource'] ?? '');
+        if (in_array($source, self::HERALDRY_SOURCES, true)) {
+            $d['heraldrySource'] = $source;
+        }
+
+        $d['customBorder'] = $bool($requested['customBorder'] ?? false);
+        $d['matchStyle']   = $bool($requested['matchStyle'] ?? false);
+        $d['customRibbon'] = $bool($requested['customRibbon'] ?? false);
+        $d['color1']       = self::NormaliseHexColour((string) ($requested['color1'] ?? ''), $d['color1']);
+        $d['color2']       = self::NormaliseHexColour((string) ($requested['color2'] ?? ''), $d['color2']);
+        $d['ribbonColor']  = self::NormaliseHexColour((string) ($requested['ribbonColor'] ?? ''), $d['ribbonColor']);
+
+        return $d;
+    }
+
+    /** @var array<string, array>|null */
+    private static ?array $customBorderRules = null;
+
+    /**
+     * The raw compatibility data (data/scroll-custom-border.php): per order, `passes`
+     * (style strings, or keyed by variant), optional `ground`, `ranks`, `recipeGrounds`.
+     * An absent order is incompatible.
+     *
+     * @return array<string, array>
+     */
+    public static function CustomBorderRules(): array
+    {
+        if (self::$customBorderRules !== null) {
+            return self::$customBorderRules;
+        }
+
+        return self::$customBorderRules = require DIR_ORK3 . 'data/scroll-custom-border.php';
+    }
+
+    /**
+     * Can this order, at this rank/variant/recipe, take a Custom Border?
+     *
+     * null = no. Otherwise `passes` are the style attributes of the border layers the
+     * knot replaces (match-style mode re-uses them) and `ground` is the frameless ground
+     * to draw instead, relative to assets/scrolls/, or null when the order's border is
+     * a separate layer that is simply not drawn.
+     *
+     * @return array{passes: string[], ground: ?string}|null
+     */
+    public static function CustomBorderRule(string $orderId, int $rank, string $variant, array $recipe): ?array
+    {
+        $rule = self::CustomBorderRules()[$orderId] ?? null;
+        if ($rule === null) {
+            return null;
+        }
+
+        $passes = $rule['passes'] ?? [];
+        if ($passes !== [] && !array_is_list($passes)) {
+            $passes = $passes[$variant] ?? null;
+            if ($passes === null) {
+                return null;
+            }
+        }
+        $ground = $rule['ground'] ?? null;
+
+        if (isset($rule['ranks']) && array_key_exists($rank, $rule['ranks'])) {
+            // false = this rank is incompatible; a string swaps the ground, and the
+            // rank draws no border layer of its own to restyle.
+            if ($rule['ranks'][$rank] === false) {
+                return null;
+            }
+            $ground = $rule['ranks'][$rank];
+            $passes = [];
+        }
+
+        if (isset($rule['recipeGrounds'])) {
+            $rg = (string) ($recipe['ground'] ?? '');
+            if (self::GroundDrawsOwnBorder($rg)) {
+                $mapped = $rule['recipeGrounds'][$rg] ?? false;
+                if (!is_string($mapped)) {
+                    return null;
+                }
+                $ground = $mapped;
+            }
+        }
+
+        return ['passes' => array_values($passes), 'ground' => $ground];
     }
 
     /**
@@ -1848,6 +1981,30 @@ class Scroll extends Ork3
         $useOf       = (bool) ($context['useOf'] ?? $isPark);
         $issuerLines = ScrollText::IssuerLines($issuerTitle, $issuerName, $useThe, $useOf, $isPark ? 'park' : 'kingdom');
 
+        // Only the custom scroll composes its own art; every other order's layers
+        // are fixed by its partial.
+        $recipe = $order['id'] === 'custom'
+            ? self::NormaliseRecipe(is_array($context['recipe'] ?? null) ? $context['recipe'] : [])
+            : [];
+
+        $design = self::NormaliseDesign(is_array($context['design'] ?? null) ? $context['design'] : []);
+
+        // A requested Custom Border is honoured only where the order's art can lose its
+        // frame; elsewhere it is silently ignored, so a hand-edited URL cannot ask for it.
+        $customBorder = null;
+        if ($design['customBorder']) {
+            $rule = self::CustomBorderRule((string) $order['id'], $rank, $variant, $recipe);
+            if ($rule !== null) {
+                $customBorder = [
+                    'color1'     => $design['color1'],
+                    'color2'     => $design['color2'],
+                    'matchStyle' => $design['matchStyle'],
+                    'passes'     => $rule['passes'],
+                    'ground'     => $rule['ground'],
+                ];
+            }
+        }
+
         return [
             'mundaneId'   => max(0, $mundaneId),
             'scopeType'   => $scopeType,
@@ -1912,11 +2069,11 @@ class Scroll extends Ork3
             'primary'     => $order['primary'],
             'secondary'   => $order['secondary'],
             'resources'   => $order['resources'],
-            // Only the custom scroll composes its own art; every other order's layers
-            // are fixed by its partial.
-            'recipe'      => $order['id'] === 'custom'
-                ? self::NormaliseRecipe(is_array($context['recipe'] ?? null) ? $context['recipe'] : [])
-                : [],
+            'recipe'       => $recipe,
+            'design'       => $design,
+            // Every order takes the ribbon; only a ticked design asks for it.
+            'customRibbon' => $design['customRibbon'] ? $design['ribbonColor'] : null,
+            'customBorder' => $customBorder,
         ];
     }
 
