@@ -395,12 +395,40 @@ test('forcing Centered or Classic re-sets the certificate, and the labels beside
 
   // And the other way: a certificate that Automatic sets Centered can be forced Classic.
   await page.selectOption('#sc-heading', 'auto');
-  await page.fill('#sc-issuer-name', 'the Very Long and Winding Marches of the Seven Uncharted Windswept Highlands and Isles');
+  await page.fill('#sc-issuer-name', MEDIUM_PLACE);
   await composerSettled(page);
   expect(await compOf(page, '#sc-mount')).toBe('centered');
   await page.selectOption('#sc-heading', 'classic');
   await composerSettled(page);
   expect(await compOf(page, '#sc-mount')).toBe('classic');
+  expect(await fallbackOf(page, '#sc-mount')).toBeNull();
+  expect(await page.locator('#sc-heading option[value="classic"]').textContent()).toBe('Classic');
+});
+
+// B1 (combo150 c064, c104, c106, c132): a place too long for Classic's one line even at the forced
+// floor is not printed off the edge of the page any more. The engine sets it Centered, stamps
+// data-sc-fallback="classic", and the Classic option says so while it is selected.
+const MEDIUM_PLACE = 'the Seven Silver Rivers of the Hollow Marches';
+const LONG_PLACE = 'the Very Long and Winding Marches of the Seven Uncharted Windswept Highlands and Isles';
+const fallbackOf = (page: Page, root: string) =>
+  page.evaluate((r) => document.querySelector(`${r} .Award`)!.getAttribute('data-sc-fallback'), root);
+
+test('a forced Classic that cannot fit is set Centered, and the Classic option says so', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  await page.fill('#sc-issuer-title', 'Kingdom');
+  await page.fill('#sc-issuer-name', LONG_PLACE);
+  await page.selectOption('#sc-heading', 'classic');
+  await composerSettled(page);
+  expect(await compOf(page, '#sc-mount')).toBe('centered');
+  expect(await fallbackOf(page, '#sc-mount')).toBe('classic');
+  await expect(page.locator('#sc-heading option[value="classic"]')).toHaveText('Classic (didn\'t fit — used Centered)');
+
+  // A place that fits takes the stamp and the note away again.
+  await page.fill('#sc-issuer-name', 'Wetlands');
+  await composerSettled(page);
+  expect(await compOf(page, '#sc-mount')).toBe('classic');
+  expect(await fallbackOf(page, '#sc-mount')).toBeNull();
+  await expect(page.locator('#sc-heading option[value="classic"]')).toHaveText('Classic');
 });
 
 test('the Heading and Hand fields each have usable width in the composer', async ({ page }) => {

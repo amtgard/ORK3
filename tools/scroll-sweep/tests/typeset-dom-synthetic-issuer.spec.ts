@@ -355,6 +355,144 @@ test('a forced heading wins, in both directions', async ({ page }) => {
   expect((await lay(page)).comp).toBe('centered');
 });
 
+// B1 (combo150 c064, c104, c106, c132): a forced Classic whose place cannot be set on Classic's one
+// line, even at the forced floor, ran off the right edge of the page at 0.62em, flagged only by an
+// attribute nothing reads. It now tries a 0.5em floor and, failing that, sets Centered (which wraps
+// the place onto two lines) and stamps data-sc-fallback="classic" so the heading control can say so.
+const FENS = 'Freehold of the Ever-Wandering Mountains and the Windswept Eastern Fens';  // 71 characters
+const HOLLOWS = 'Shire of the Seven Silver Rivers of Hollow';  // 1262px at 0.62em in a 1185px box: sets at about 0.53em
+
+// Every text line in the frame: inside the certificate, and inside the width it was stamped with.
+const textBoxes = (page: Page) =>
+  page.evaluate(() => {
+    const award = document.querySelector<HTMLElement>('.Award')!;
+    const a = award.getBoundingClientRect(), k = a.width / award.offsetWidth;
+    return [...award.querySelectorAll<HTMLElement>('.sc-line')].map((l) => {
+      const r = l.getBoundingClientRect();
+      l.style.width = 'max-content';
+      const w = Math.max(l.scrollWidth, l.offsetWidth);
+      l.style.removeProperty('width');
+      return { text: l.textContent || '', x0: (r.left - a.left) / k, x1: (r.right - a.left) / k, w, allowed: Number(l.dataset.scW) };
+    });
+  });
+const fallbackOf = (page: Page) =>
+  page.evaluate(() => [document.querySelector('.Award')!.getAttribute('data-sc-fallback'),
+    document.querySelector('.IssuingTextSection')!.getAttribute('data-sc-fallback')]);
+
+test('B1: a forced Classic whose place cannot fit even at 0.5em is set Centered, stamped, and stays on the page', async ({ page }) => {
+  expect(FENS.length).toBeGreaterThanOrEqual(70);
+  await load(page, { heading: 'classic', place: FENS });
+  const report = await lay(page);
+  const s = await state(page);
+  expect(report.comp).toBe('centered');
+  expect(s.comp).toBe('centered');
+  expect(s.sectionComp).toBe('centered');
+  expect(await fallbackOf(page)).toEqual(['classic', 'classic']);
+  expect(s.placeOverflow).toBe(false);
+  expect(s.placeLines.length).toBe(2);
+  for (const b of await textBoxes(page)) {
+    expect(b.x0, `${b.text} starts on the page`).toBeGreaterThanOrEqual(0);
+    expect(b.x1, `${b.text} ends on the page`).toBeLessThanOrEqual(2550);
+    expect(b.w, `${b.text}: ${b.w}px in ${b.allowed}px`).toBeLessThanOrEqual(b.allowed + 0.5);
+  }
+  // A second run lands in the same place, stamp and all.
+  await lay(page);
+  expect((await state(page)).comp).toBe('centered');
+  expect(await fallbackOf(page)).toEqual(['classic', 'classic']);
+});
+
+test('B1: Automatic is not stamped: the same place unforced goes Centered with no fallback', async ({ page }) => {
+  await load(page, { place: FENS });
+  expect((await lay(page)).comp).toBe('centered');
+  expect(await fallbackOf(page)).toEqual([null, null]);
+});
+
+test('B1: a forced Classic with a typical place stays Classic, unstamped and unflagged', async ({ page }) => {
+  await load(page, { heading: 'classic', place: 'Wetlands' });
+  expect((await lay(page)).comp).toBe('classic');
+  const s = await state(page);
+  expect(s.sectionComp).toBe('classic');
+  expect(s.placeOverflow).toBe(false);
+  expect(await fallbackOf(page)).toEqual([null, null]);
+});
+
+test('B1: a near miss stays Classic at the 0.5em forced floor, on one line, inside its box', async ({ page }) => {
+  await load(page, { heading: 'classic', place: HOLLOWS });
+  expect((await lay(page)).comp).toBe('classic');
+  const s = await state(page);
+  expect(s.placeLines.length).toBe(1);
+  expect(s.place).toBeLessThan(0.62);
+  expect(s.place).toBeGreaterThanOrEqual(0.5 - 0.001);
+  expect(s.placeOverflow).toBe(false);
+  expect(await fallbackOf(page)).toEqual([null, null]);
+  for (const b of await textBoxes(page)) expect(b.w, `${b.text}: ${b.w}px in ${b.allowed}px`).toBeLessThanOrEqual(b.allowed + 0.5);
+});
+
+test('B1: a forced Classic made infeasible only by the artwork profile keeps Classic and does not flag the place', async ({ page }) => {
+  // c050 / c098: the profile is not clear across the column, so Automatic goes Centered...
+  await load(page, { place: 'Wetlands', free: band(600, 2075) });
+  expect((await lay(page)).comp).toBe('centered');
+  // ...and forced Classic renders Classic, with a place that fits and is not called overflowing.
+  await load(page, { heading: 'classic', place: 'Wetlands', free: band(600, 2075) });
+  expect((await lay(page)).comp).toBe('classic');
+  const s = await state(page);
+  expect(s.placeOverflow).toBe(false);
+  expect(await fallbackOf(page)).toEqual([null, null]);
+});
+
+test('B1: a forced Classic whose place fits below the feasibility floor is not flagged', async ({ page }) => {
+  // 'Shire of the Seven Silver Rivers' sets at about 0.7em: under CLASSIC_PLACE_MIN (0.85), so the
+  // feasibility pass fails, but over the table's floor, so the forced pass fits it.
+  await load(page, { heading: 'classic', place: 'Shire of the Seven Silver Rivers' });
+  expect((await lay(page)).comp).toBe('classic');
+  const s = await state(page);
+  expect(s.place).toBeLessThan(0.85);
+  expect(s.placeOverflow).toBe(false);
+});
+
+// The heading control (scrollery-hand.js, ScrolleryHeading) on a synthetic toolbar: no app needed.
+const HAND = path.resolve(__dirname, '../../../orkui/template/revised-frontend/script/scrollery-hand.js');
+
+test('B1: ScrolleryHeading.classicLabel names a fallback, all or some', async ({ page }) => {
+  await page.setContent('<!doctype html><html><body></body></html>');
+  await page.addScriptTag({ path: HAND });
+  const got = await page.evaluate(() => {
+    const L = (window as any).ScrolleryHeading.classicLabel;
+    return [L(0, 1), L(1, 1), L(3, 3), L(1, 4), L(0, 0), L(0, 5)];
+  });
+  expect(got).toEqual([
+    'Classic', 'Classic (didn\'t fit — used Centered)', 'Classic (didn\'t fit — used Centered)',
+    'Classic (some used Centered)', 'Classic', 'Classic',
+  ]);
+});
+
+test('B1: the heading control reads the stamp while Classic is forced, and lets go of it after', async ({ page }) => {
+  await page.setContent(`<!doctype html><html><body>
+    <select id="sc-heading"><option value="auto">Automatic</option><option value="classic" selected>Classic</option><option value="centered">Centered</option></select>
+    <div class="scroll-flow"><div class="Award" data-sc-comp="classic"></div><div class="Award" data-sc-comp="classic"></div></div>
+  </body></html>`);
+  await page.addScriptTag({ path: HAND });
+  await page.evaluate(() => (window as any).ScrolleryHeading.bind(document.getElementById('sc-heading'), document.querySelector('.scroll-flow')));
+  const classic = page.locator('#sc-heading option[value="classic"]');
+  await expect(classic).toHaveText('Classic');
+
+  // One of two certificates fell back: a bulk page that mixes results.
+  await page.evaluate(() => { const a = document.querySelectorAll('.Award')[0]; a.setAttribute('data-sc-comp', 'centered'); a.setAttribute('data-sc-fallback', 'classic'); });
+  await expect(classic).toHaveText('Classic (some used Centered)');
+  // Both did.
+  await page.evaluate(() => { const a = document.querySelectorAll('.Award')[1]; a.setAttribute('data-sc-comp', 'centered'); a.setAttribute('data-sc-fallback', 'classic'); });
+  await expect(classic).toHaveText('Classic (didn\'t fit — used Centered)');
+  // Back to Automatic: the engine re-fits with no stamps and the Classic option reads plain again.
+  await page.evaluate(() => {
+    const sel = document.getElementById('sc-heading') as HTMLSelectElement;
+    sel.value = 'auto';
+    document.querySelectorAll('.Award').forEach((a) => a.removeAttribute('data-sc-fallback'));
+    sel.dispatchEvent(new Event('change'));
+  });
+  await expect(classic).toHaveText('Classic');
+  await expect(page.locator('#sc-heading option[value="auto"]')).toHaveText('Automatic (Centered)');
+});
+
 test('the budget is ok on a roomy page and floor on an over-tall stack', async ({ page }) => {
   await load(page, { name: 'Stormcrow Giggleshadows, the Relentless' });
   let report = await lay(page);

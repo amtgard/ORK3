@@ -135,6 +135,19 @@
         MINOR_PENALTY: 6,
         MINOR_LINES: true,
         CLASSIC_PLACE_MIN: 0.85,  /* floor for the place in the Classic composition */
+
+        /* B1 (combo150 sweep). The last floor a FORCED Classic tries before it gives the
+           place up to Centered. Classic holds the place to one line, so a place too long
+           for that line at the table's floor (0.62em) used to print at 0.62em anyway and
+           run off the right edge of the page: c064, c104 and c106 needed about 0.34em,
+           c132 0.43em. 0.5em is 12pt on the letter sheet, still legible, and it rescues
+           a near miss (c091, a 3% overshoot at 0.62em, sets Classic at 0.60em). c131
+           needs 0.497em, just under it, and goes Centered with the rest. Below it the
+           place is unreadable and far under 0.75 of the name, so Centered, which wraps
+           the place onto two lines and set the same words at 104px in c022, is the honest
+           answer; the issuer section and the .Award say so in data-sc-fallback. Scaled by
+           floorScale like every floor, and never above the table's own. */
+        FORCED_CLASSIC_PLACE_MIN: 0.50,
         ORN_GAP: 0.12,            /* em of clearance kept between text ink and an ornament */
         H_TOP_MIN: 0.40,          /* share of the content height the top block must keep */
 
@@ -1815,7 +1828,7 @@
     }
 
     /* Classic (§6.5.1). */
-    function issuerClassic(ctx, A, caps, st, relaxed) {
+    function issuerClassic(ctx, A, caps, st, floor) {
         var award = ctx.award, root = ctx.rootPx, col = ctx.column, gap = CONST.ORN_GAP * root;
         var P = CONST.ROLES.placeClassic, lh = P.lineHeight;
 
@@ -1831,8 +1844,9 @@
         var leadM = prepareLead(A);
 
         /* The place's smallest size for Classic to count as feasible. A forced Classic
-           that cannot meet it is solved again at the table's own floor. */
-        var pmin = relaxed ? caps.placeMin
+           that cannot meet it is solved again at a `floor` of its own: the table's, then
+           FORCED_CLASSIC_PLACE_MIN (layoutIssuer). */
+        var pmin = floor != null ? floor
             : Math.max(caps.placeMin, Math.min(CONST.CLASSIC_PLACE_MIN * ctx.floorScale, caps.placeMax));
 
         /* The geometry that does not depend on the place's text: the place's box
@@ -2054,19 +2068,38 @@
         if (forced === 'centered') {
             res = issuerCentered(ctx, A, caps);
         } else {
-            res = issuerClassic(ctx, A, caps, st, false);
+            res = issuerClassic(ctx, A, caps, st, null);
             if (!res.feasible) {
                 if (forced === 'classic') {
-                    /* A forced Classic renders anyway, at the floors, and says so. */
-                    res = issuerClassic(ctx, A, caps, st, true);
-                    res.feasible = false;
-                    if (res.place) { A.place.setAttribute('data-sc-overflow', '1'); res.place.overflow = true; }
-                    if (!res.lead.fits) { reportLead(A, res.lead.size, true); }
+                    /* A forced Classic renders anyway, at the floors. Infeasible says only
+                       that one of three things failed (the place at CLASSIC_PLACE_MIN, the
+                       lead at its floor, the profile across the column), so the place is
+                       judged on its OWN measured overflow from here on, which setRole and
+                       reverifyPlace write truthfully. It used to be stamped overflowing
+                       whenever the composition was infeasible, and c050, c098, c049 and c052
+                       reported a place overflow over a place that fitted, the lead or the
+                       artwork being what failed. A lead or a profile that fails keeps Classic
+                       at the floors, as before. */
+                    res = issuerClassic(ctx, A, caps, st, caps.placeMin);
+                    /* B1: the place still overflows its one line. Only for the reader's own
+                       choice (ctx.heading): the right-flourish re-solve of an AUTOMATIC
+                       Classic arrives here forced by st.comp, and Automatic must not change. */
+                    if (ctx.heading === 'classic' && res.place && res.place.overflow) {
+                        res = issuerClassic(ctx, A, caps, st, Math.min(CONST.FORCED_CLASSIC_PLACE_MIN * fs, caps.placeMin));
+                        if (res.place && res.place.overflow) {
+                            res = issuerCentered(ctx, A, caps);
+                            res.fellBack = 'classic';
+                        }
+                    }
+                    if (!res.fellBack) { res.feasible = false; }
                 } else {
                     res = issuerCentered(ctx, A, caps);
                 }
             }
         }
+        /* Every solve says whether it fell back, so a re-solve that no longer needs to
+           (the name shrank, the right flourish went) takes the stamp off. */
+        if (res.fellBack) { A.section.setAttribute('data-sc-fallback', res.fellBack); } else { A.section.removeAttribute('data-sc-fallback'); }
         if (res.lead) { reportLead(A, res.lead.size, !res.lead.fits); }
         res.caps = caps;
         return res;
@@ -2331,7 +2364,7 @@
                    the type could have had: solve the issuer again without it. */
                 res = layoutIssuer(ctx, I, { nameSize: nameSize, nameEff: nameEff, awardSize: awardSize, rightOff: true, comp: 'classic' });
                 enforceHierarchy(ctx, I, res, nameSize, awardSize, nameEff);
-                orn = placeOrnaments(ctx, I, 'classic', { rightOff: true });
+                orn = placeOrnaments(ctx, I, res.comp, { rightOff: true });
             }
 
             report.comp = res.comp;
@@ -2339,10 +2372,21 @@
             if (res.lead) { report.roles.lead = { size: res.lead.size, lines: Number(I.lead.getAttribute('data-sc-lines')), planned: 1, overflow: !res.lead.fits }; }
             if (res.place) { report.roles.place = res.place; }
             award.setAttribute('data-sc-comp', res.comp);
+            /* A forced Classic that could not fit and was set Centered (B1). data-sc-comp
+               stays truthful ('centered'); this says why, for the heading control
+               (ScrolleryHeading in scrollery-hand.js) and the sweep. */
+            if (res.fellBack) {
+                report.fallback = res.fellBack;
+                award.setAttribute('data-sc-fallback', res.fellBack);
+            } else {
+                award.removeAttribute('data-sc-fallback');
+            }
         } else if (report.comp) {
             award.setAttribute('data-sc-comp', report.comp);
+            award.removeAttribute('data-sc-fallback');
         } else {
             award.removeAttribute('data-sc-comp');
+            award.removeAttribute('data-sc-fallback');
         }
         award.setAttribute('data-sc-budget', report.budget);
 

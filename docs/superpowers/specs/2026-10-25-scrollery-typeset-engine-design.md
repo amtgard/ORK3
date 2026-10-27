@@ -514,9 +514,16 @@ render without JS.
 
 Use Classic if feasible; otherwise Centered. A forced value from
 `[data-sc-heading]` (`classic`|`centered`) on any ancestor overrides `auto`. A forced
-Classic that is infeasible still renders Classic at the floors, with
-`data-sc-overflow`. The chosen composition is written to
-`section.IssuingTextSection[data-sc-comp]`.
+Classic that is infeasible still renders Classic at the floors: the place at the
+table's floor, then at `FORCED_CLASSIC_PLACE_MIN` (0.5em × floorScale). If the place
+still overflows its one line there, the issuer is set Centered instead, and
+`data-sc-fallback="classic"` is written on the issuing section and the `.Award`; the
+heading control then reads "Classic (didn't fit — used Centered)", or "Classic (some
+used Centered)" on a page where only some certificates fell back. An infeasibility
+caused only by the lead or the artwork profile keeps Classic at the floors and does
+not flag the place: `data-sc-overflow` marks a place that really overflows. The
+chosen composition is written to `section.IssuingTextSection[data-sc-comp]`. (B1 of
+the 2026-10-27 combo150 sweep.)
 
 ### 6.6 Ornament placement (shared rule)
 
