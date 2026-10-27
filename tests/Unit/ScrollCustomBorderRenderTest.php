@@ -103,6 +103,24 @@ final class ScrollCustomBorderRenderTest extends TestCase
         $this->assertStringContainsString($this->artPath('jovious/bg.jpg'), $this->render('jovious', null));
     }
 
+    /**
+     * Mask's glow (a 200px screen bloom of the symbol, drawn before the plain symbol and
+     * again after the numeral) lightened the exact knot's bottom ends. The exact knot
+     * now comes after the LAST glow pass; the match knot keeps the border's own place,
+     * before the first.
+     */
+    public function testMaskExactKnotIsDrawnOverBothGlowPasses(): void
+    {
+        foreach ([0, 3] as $rank) {
+            $exact = $this->render('mask', $this->border(false), ['rank' => $rank]);
+            $this->assertSame(2, substr_count($exact, 'blur(200px)'), "rank {$rank}");
+            $this->assertGreaterThan(strrpos($exact, 'blur(200px)'), strpos($exact, 'class="sc-knot"'), "rank {$rank}");
+
+            $match = $this->render('mask', $this->border(true), ['rank' => $rank]);
+            $this->assertLessThan(strpos($match, 'blur(200px)'), strrpos($match, 'class="sc-knot"'), "rank {$rank}");
+        }
+    }
+
     public function testCrownExactModeReplacesBothPasses(): void
     {
         $html = $this->render('crown', $this->border(false));
