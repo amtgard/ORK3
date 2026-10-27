@@ -1232,6 +1232,14 @@ section.IssuingTextSection {
     width: 100%;
 }
 
+/* starfield2 is zodiac's ranked ground, with the dark notch baked into its foot (x ~984-1576)
+   where zodiac's own numeral sits. Zodiac spreads its date and signer round it; the 7em boxes
+   of a custom scroll would span x433-1000 and 1550-2117 and run into it, so narrow them to
+   6.2em (x433-935 and 1617-2117) for this ground only. */
+.award-template[data-order="custom"][data-ground="starfield2"] section.SignAndDate > div {
+    width: 6.2em;
+}
+
 section.SignAndDate {
     display: flex;
     justify-content: space-between;
@@ -1441,6 +1449,13 @@ section.SignAndDate {
     min-height: 250px !important;
 }
 
+/* battle: the motto rides above the rank plate. The glow ring (arcane, every rank) and the
+   martial spear tips are fixed frame art that reach up to y ~2370-2500; the reserve under the
+   motto is what lifts it clear. */
+.award-template[data-order="battle"] section.SignAndDate {
+    min-height: 625px !important;
+}
+
 /* griffon swaps the border's standard deco for the griffon-specific one. The
    `use[href*="Deco-Special"]` rule in section 2b hides every Deco-Special by
    default; this is the one order that draws one. Both selectors key on the <use>
@@ -1465,6 +1480,17 @@ section.SignAndDate {
 .award-template[data-order="crown"] section.SignAndDate > div {
     width: auto !important;
     margin: 0em 1em;
+}
+
+/* The box is as wide as the signature, and a caption centred in a wide box lands on the
+   laurel (a long printed title, or an unbreakable script signer). Narrowing the box cannot
+   fix it: the signer then wraps a line taller and climbs into the motto. So the caption
+   keeps to the right end of the box, on the flank; in a box only as wide as the caption
+   (a short or empty signer) it moves a few px at most. */
+.award-template[data-order="crown"] section.SignAndDate > .AwardSignatory > p:last-child {
+    display: block !important; /* beats the inline-block the markup sets inline */
+    width: fit-content;
+    margin-left: auto;
 }
 
 /* --------------------------------------------------------------------------
