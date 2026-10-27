@@ -1013,7 +1013,7 @@ class Player extends Ork3
      * unconditionally to every viewer, so it can skip the gate rather than restate
      * it — persona is public on every profile in the ORK.
      *
-     * @return array{MundaneId:int, Persona:string, PronounId:int, PronounCustom:string, PronounFreetext:string}
+     * @return array{MundaneId:int, Persona:string, PronounId:int, PronounCustom:string, PronounFreetext:string, HasHeraldry:int}
      */
     public function GetScrollRecipient(int $mundaneId): array
     {
@@ -1023,6 +1023,8 @@ class Player extends Ork3
             'PronounId' => 0,
             'PronounCustom' => '',
             'PronounFreetext' => '',
+            'HasHeraldry' => 0,
+            'ParkId' => 0,
         ];
         if (!valid_id($mundaneId)) {
             return $empty;
@@ -1050,6 +1052,11 @@ class Player extends Ork3
             'PronounId' => (int) $this->mundane->pronoun_id,
             'PronounCustom' => (string) $this->mundane->pronoun_custom,
             'PronounFreetext' => $freetext,
+            // Public on every profile (the arms image is); lets the composer offer the
+            // Persona heraldry source without the full GetPlayer() profile build.
+            'HasHeraldry' => (int) $this->mundane->has_heraldry,
+            // Home park, so a kingdom scroll can offer the Park heraldry source.
+            'ParkId' => (int) $this->mundane->park_id,
         ];
     }
 
@@ -1058,8 +1065,9 @@ class Player extends Ork3
      *
      * A bulk render resolved its recipients one yapo find() at a time — 200
      * round trips for a full run. This is the same five fields for every id at
-     * once, keyed by mundane_id, and returns exactly the shape
-     * GetScrollRecipient() returns per row so a caller can use either.
+     * once, keyed by mundane_id, and returns the same
+     * shape GetScrollRecipient() returns per row, minus its HasHeraldry and ParkId
+     * (which the bulk callers do not need) and plus Suspended/Active.
      *
      * Two columns beyond the certificate's own needs come back as well:
      * `suspended` and `active`. A suspended member's past award is still theirs

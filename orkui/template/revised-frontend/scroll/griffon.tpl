@@ -13,7 +13,17 @@
 ?>
 <div class="award-template" data-order="griffon" data-rank="<?= (int) $s['rank'] ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
     <?php scroll_partial('parchment'); ?>
+<?php /* Custom Border: the knot takes the border pass's place, griffon plate and all —
+         the plate is drawn inside that pass. Match mode draws it here, under the
+         heraldry; exact mode just below the heraldry too. At column 0 so a certificate
+         without one prints the bytes it always did. */ ?>
+<?php if (!scroll_custom_border_active($s)): ?>
     <?php scroll_partial('border', ['primary' => $s['primary'], 'secondary' => $s['secondary'], 'griffons' => true]); ?>
+<?php endif; ?>
+<?php scroll_custom_border_slot($s, 'match'); ?>
+<?php /* The exact-colour knot sits BELOW the heraldry (spec), so arms an officer scales
+         or moves into the frame stay on top of it. Nothing else lies between. */ ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php

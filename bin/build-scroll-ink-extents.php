@@ -321,6 +321,18 @@ foreach ($masters as $relative) {
         $box = [(int) round($box[0] / $scale), (int) round($box[1] / $scale)];
     }
 
+    // A <symbol> library (common/knot/knot.svg) paints nothing by itself: its art is
+    // drawn elsewhere through <use>. It has no ink of its own, so it is recorded as
+    // blank, truthfully and without rasterising. Rasterising it would fail outright:
+    // its fills are CSS custom properties, which ImageMagick's SVG reader rejects.
+    if (strtolower(pathinfo($source, PATHINFO_EXTENSION)) === 'svg' && svgPaintsNothing($source)) {
+        $blank[] = $relative;
+        if ($verbose) {
+            printf("  %-52s %5dx%-5d  symbol library, paints nothing\n", $relative, $box[0], $box[1]);
+        }
+        continue;
+    }
+
     // -background none is REQUIRED. See the header: without it an SVG rasterises onto
     // white, every pixel reads opaque, and the alpha term collapses to a constant 1.
     @unlink($tmpPng);
@@ -540,6 +552,11 @@ function flourishFiles(string $root): array
         }
     }
 
+    // The tintable ribbons replace the three flourishes when Custom Ribbon is on, so they need grids too.
+    foreach (glob($root . '/assets/scrolls/common/ribbon/ribbon-*.png') ?: [] as $ribbon) {
+        $paths[] = 'scrolls/common/ribbon/' . basename($ribbon);
+    }
+
     $out = [];
     foreach ($paths as $path) {
         $out[(string) preg_replace('#^scrolls/#', '', $path)] = true;
@@ -643,6 +660,25 @@ function masterBox(string $source): ?array
     }
 
     return [(int) $size[0], (int) $size[1]];
+}
+
+/**
+ * True when an SVG draws nothing outside <symbol> and <defs>: a sprite of symbols that
+ * other markup references with <use>. Anything else, including a stray <use>, is art.
+ */
+function svgPaintsNothing(string $source): bool
+{
+    $svg = (string) @file_get_contents($source);
+    if ($svg === '') {
+        return false;
+    }
+    $rest = (string) preg_replace(
+        ['/<!--.*?-->/s', '#<symbol\b.*?</symbol>#s', '#<defs\b.*?</defs>#s'],
+        '',
+        $svg
+    );
+
+    return !preg_match('/<(path|g|use|rect|circle|ellipse|line|polyline|polygon|image|text)\b/i', $rest);
 }
 
 /**

@@ -141,6 +141,28 @@ $placeLen   = max(10, mb_strlen(trim($issuerArticle . ' ' . $issuerPlace), 'UTF-
 $placeGuess = min(1.3, max(1.0, 1 + 0.5 * (14 / $placeLen)));
 $fmtEm      = static fn (float $v): string => number_format($v, 4, '.', '');
 
+/*
+ * The Custom Ribbon. When the design asks for one, the three flourishes become the
+ * neutral ribbon bases (Scroll::RIBBON_RESOURCES) whatever the order's own were, and
+ * every flourish <img> is tinted through #sc-ribbon-tint: the base multiplied by the
+ * colour, clipped back to its own alpha. The bases share jovious's alpha, so the ink
+ * grids below are read from the new paths with no further work.
+ *
+ * $ribbonClass and $ribbonFilter carry the class and the filter, and are '' without a
+ * ribbon, so a certificate without one prints exactly the bytes it always did.
+ *
+ * The colour is normalised again here: it reaches an attribute, and Render() is
+ * reachable with any scroll array, not only one BuildScroll() made.
+ */
+$ribbon = isset($s['customRibbon']) && $s['customRibbon'] !== null && $s['customRibbon'] !== ''
+    ? Scroll::NormaliseHexColour((string) $s['customRibbon'], Scroll::RIBBON_DEFAULT)
+    : null;
+if ($ribbon !== null) {
+    $res = array_merge($res, Scroll::RIBBON_RESOURCES);
+}
+$ribbonClass  = $ribbon !== null ? ' sc-ribbon' : '';
+$ribbonFilter = $ribbon !== null ? ' style="filter:url(#sc-ribbon-tint)"' : '';
+
 $freeSpace = Scroll::FreeSpaceAttr($s);
 /** The flourish's ink grid as an attribute, or nothing when the file has none. */
 $inkAttr   = static function (string $resource): string {
@@ -149,13 +171,23 @@ $inkAttr   = static function (string $resource): string {
     return $grid === '' ? '' : ' data-sc-ink="' . scroll_e($grid) . '"';
 };
 ?>
+<?php if ($ribbon !== null): ?>
+<?php /* Once per certificate, and OUTSIDE .Award: every child of .Award is a flex
+         item that grows (`.Award > * { flex-grow: 1 }`) and scrollery-autofit.js walks
+         them, so a zero-size <svg> in there would take a share of the column. Out here
+         `.award-template > *` positions it absolutely, its width/height of 0 hold (a
+         replaced element keeps its own size), and it paints nothing. Every certificate
+         on a page carries the same design, so a duplicated id resolves to the same
+         filter. The composer repaints by setting flood-color on every .sc-ribbon-flood. */ ?>
+<svg aria-hidden="true" width="0" height="0"><filter id="sc-ribbon-tint" color-interpolation-filters="sRGB"><feFlood class="sc-ribbon-flood" flood-color="<?= scroll_e($ribbon) ?>" result="tint"/><feBlend in="tint" in2="SourceGraphic" mode="multiply" result="tinted"/><feComposite in="tinted" in2="SourceAlpha" operator="in"/></filter></svg>
+<?php endif; ?>
 <div class="Award"<?= $freeSpace !== '' ? ' data-sc-free="' . scroll_e($freeSpace) . '"' : '' ?>>
 
     <section class="IssuingTextSection" data-sc-comp="classic">
         <p class="ScLead">
             <span class="ScVersal">Amtgard
-                <img id="TopTextFlourish" src="<?= scroll_resource($res['flourish_top']) ?>" class="Flourish"<?= $inkAttr($res['flourish_top']) ?> alt="">
-                <img id="BottomTextFlourish" src="<?= scroll_resource($res['flourish_bottom']) ?>" class="Flourish"<?= $inkAttr($res['flourish_bottom']) ?> alt="">
+                <img id="TopTextFlourish" src="<?= scroll_resource($res['flourish_top']) ?>" class="Flourish<?= $ribbonClass ?>"<?= $ribbonFilter ?><?= $inkAttr($res['flourish_top']) ?> alt="">
+                <img id="BottomTextFlourish" src="<?= scroll_resource($res['flourish_bottom']) ?>" class="Flourish<?= $ribbonClass ?>"<?= $ribbonFilter ?><?= $inkAttr($res['flourish_bottom']) ?> alt="">
             </span>
             <span id="IssuerTitle" data-scroll-text="issuerTitle" data-sc-role="lead"><?= scroll_e($issuerLead) ?></span>
         </p>
@@ -165,14 +197,14 @@ $inkAttr   = static function (string $resource): string {
                      --sc-art-size is the article's size relative to this span, so "the"
                      comes out at the lead's 1.04em whatever the place was guessed at. */ ?>
             <span data-scroll-text="issuerName" data-sc-role="place" style="font-size:min(1.3em, max(1em, calc(1em + 0.5em * (14 / <?= $placeLen ?>))));--sc-art-size:calc(1.04em / <?= $fmtEm($placeGuess) ?>)"><?php if ($issuerArticle !== ''): ?><span class="sc-art"><?= scroll_e($issuerArticle) ?></span> <?php endif; ?><?= scroll_e($issuerPlace) ?></span>
-            <img id="RightTextFlourish" src="<?= scroll_resource($res['flourish_right']) ?>" class="Flourish"<?= $inkAttr($res['flourish_right']) ?> alt="">
+            <img id="RightTextFlourish" src="<?= scroll_resource($res['flourish_right']) ?>" class="Flourish<?= $ribbonClass ?>"<?= $ribbonFilter ?><?= $inkAttr($res['flourish_right']) ?> alt="">
         </p>
         <?php /* Centered's rule pair: two copies of the order's bottom swash, mirrored,
                  that close the issuing block under its last line. Hidden until the engine
                  chooses Centered (scrollery.css). They are children of the section and not
                  of a paragraph so they cannot become the section's first or second <p>. */ ?>
-        <img class="Flourish ScRule ScRule--l" src="<?= scroll_resource($res['flourish_bottom']) ?>"<?= $inkAttr($res['flourish_bottom']) ?> alt="">
-        <img class="Flourish ScRule ScRule--r" src="<?= scroll_resource($res['flourish_bottom']) ?>"<?= $inkAttr($res['flourish_bottom']) ?> alt="">
+        <img class="Flourish<?= $ribbonClass ?> ScRule ScRule--l" src="<?= scroll_resource($res['flourish_bottom']) ?>"<?= $ribbonFilter ?><?= $inkAttr($res['flourish_bottom']) ?> alt="">
+        <img class="Flourish<?= $ribbonClass ?> ScRule ScRule--r" src="<?= scroll_resource($res['flourish_bottom']) ?>"<?= $ribbonFilter ?><?= $inkAttr($res['flourish_bottom']) ?> alt="">
         <p class="IssuingVerb Body">
             <span>presents</span>
         </p>

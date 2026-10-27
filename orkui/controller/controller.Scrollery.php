@@ -150,6 +150,23 @@ class Controller_Scrollery extends Controller
          * with a word the table does not carry is no worse off than before.
          */
         $this->data['Pronouns'] = $this->Scrollery->possessive_suggestions();
+        /*
+         * The "Customize Design" card. The rule data is the SAME file
+         * Scroll::CustomBorderRule() reads, handed to scrollery.js so the Custom Border
+         * checkbox can hide itself on an incompatible award without a round trip — the
+         * server still applies the rule and ignores a border it cannot honour.
+         *
+         * The scope's own arms are known now. The Park arms on a kingdom scope follow
+         * the recipient's home park, and Persona the recipient too, so both come back
+         * on every preview response instead. heraldry_sources() with no player
+         * asks only the two cached scope lookups.
+         */
+        $this->data['CustomBorderRules'] = Scroll::CustomBorderRules();
+        $this->data['DesignDefaults']    = Scroll::DEFAULT_DESIGN;
+        $this->data['HeraldryAvailable'] = array_map(
+            static fn (string $u): bool => $u !== '',
+            $this->Scrollery->heraldry_sources($scopeType, $scopeId, 0)
+        );
         $this->data['page_title'] = 'Print a new scroll';
         $this->template           = '../revised-frontend/Scrollery_create.tpl';
     }
@@ -725,6 +742,13 @@ class Controller_Scrollery extends Controller
         $pronoun  = $override !== '' ? $this->Scrollery->resolve_pronoun_override($override)
             : ($playerId > 0 ? $this->Scrollery->possessive_pronoun_for_player($playerId) : '');
 
+        $sources        = $this->Scrollery->heraldry_sources($scopeType, $scopeId, $playerId);
+        $heraldrySource = Scroll::ResolveHeraldrySource(
+            (string) ($_GET['heraldrySource'] ?? ''),
+            $scopeType,
+            array_map(static fn (string $u): bool => $u !== '', $sources)
+        );
+
         $scroll = Scroll::BuildScroll(
             [
                 'AwardId'          => $choice['AwardId'],
@@ -740,7 +764,7 @@ class Controller_Scrollery extends Controller
             [
                 'player'      => (string) ($_GET['player'] ?? ''),
                 'pronoun'     => $pronoun !== '' ? $pronoun : 'their',
-                'heraldry'    => (string) ($scope['Heraldry'] ?? ''),
+                'heraldry'    => $sources[$heraldrySource],
                 // Provenance for the print log. A composed scroll has no award row, so
                 // these three can only come from context — and a composed row carries no
                 // awards_id either, which makes mundaneId its ONLY link to a person.
@@ -768,6 +792,18 @@ class Controller_Scrollery extends Controller
                 'useThe'      => ($_GET['useThe'] ?? '') === '1',
                 'useOf'       => ($_GET['useOf'] ?? '') === '1',
                 'variant'     => preg_replace('/[^a-z]/', '', strtolower((string) ($_GET['variant'] ?? ''))),
+                // Passed raw like the recipe: Scroll::NormaliseDesign() inside BuildScroll()
+                // is the one allowlist. Only the heraldry source is resolved here, because
+                // it needs the arms lookup that BuildScroll() must stay free of.
+                'design'      => [
+                    'heraldrySource' => $heraldrySource,
+                    'customBorder'   => (string) ($_GET['customBorder'] ?? ''),
+                    'color1'         => (string) ($_GET['color1'] ?? ''),
+                    'color2'         => (string) ($_GET['color2'] ?? ''),
+                    'matchStyle'     => (string) ($_GET['matchStyle'] ?? ''),
+                    'customRibbon'   => (string) ($_GET['customRibbon'] ?? ''),
+                    'ribbonColor'    => (string) ($_GET['ribbonColor'] ?? ''),
+                ],
                 // Passed through raw on purpose: Scroll::NormaliseRecipe() is the one
                 // allowlist for these, and it runs inside BuildScroll(). Sanitising
                 // here as well would be a second, weaker opinion about a closed
@@ -885,7 +921,9 @@ class Controller_Scrollery extends Controller
             'OrderId'     => (string) ($scroll['order'] ?? ''),
             'Rank'        => (int) ($scroll['rank'] ?? 0),
             'Variant'     => (string) ($scroll['variant'] ?? ''),
-            'Recipe'      => $scroll['recipe'] ?? null,
+            // The drawn design rides in the same JSON, beside the custom recipe keys, and
+            // only when it is not the default (see Scroll::PrintRecipe()).
+            'Recipe'      => Scroll::PrintRecipe($scroll),
         ]);
     }
 

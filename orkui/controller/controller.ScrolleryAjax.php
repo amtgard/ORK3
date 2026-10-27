@@ -63,6 +63,13 @@ class Controller_ScrolleryAjax extends Controller
             exit;
         }
 
+        $sources        = $this->Scrollery->heraldry_sources($scopeType, $scopeId, (int) ($_POST['playerId'] ?? 0));
+        $heraldrySource = Scroll::ResolveHeraldrySource(
+            (string) ($_POST['heraldrySource'] ?? ''),
+            $scopeType,
+            array_map(static fn (string $u): bool => $u !== '', $sources)
+        );
+
         $scroll = Scroll::BuildScroll(
             [
                 'AwardId'          => $choice['AwardId'],
@@ -78,11 +85,9 @@ class Controller_ScrolleryAjax extends Controller
             [
                 'player'      => (string) ($_POST['player'] ?? ''),
                 'pronoun'     => $this->requested_pronoun(),
-                // Reads the $scope already resolved above rather than calling
-                // heraldry_for(), which used to re-run scope_context() — a second
-                // GetKingdomShortInfo/park_details plus GetHeraldryUrl round trip
-                // per request — exactly as compose() already reads $scope['Heraldry'].
-                'heraldry'    => (string) ($scope['Heraldry'] ?? ''),
+                // The resolved source's URL from heraldry_sources(), which reads the
+                // cached kingdom/park lookups; $scope['Heraldry'] is no longer read.
+                'heraldry'    => $sources[$heraldrySource],
                 'issuerTitle' => (string) ($_POST['issuerTitle'] ?? ''),
                 'useThe'      => ($_POST['useThe'] ?? '') === '1',
                 'useOf'       => ($_POST['useOf'] ?? '') === '1',
@@ -116,6 +121,18 @@ class Controller_ScrolleryAjax extends Controller
                 ? ['titlePhrase' => (string) $_POST['titlePhrase']]
                 : []) + [
                 'variant'     => preg_replace('/[^a-z]/', '', strtolower((string) ($_POST['variant'] ?? ''))),
+                // Passed raw like the recipe: Scroll::NormaliseDesign() inside BuildScroll()
+                // is the one allowlist. Only the heraldry source is resolved here, because
+                // it needs the arms lookup that BuildScroll() must stay free of.
+                'design'      => [
+                    'heraldrySource' => $heraldrySource,
+                    'customBorder'   => (string) ($_POST['customBorder'] ?? ''),
+                    'color1'         => (string) ($_POST['color1'] ?? ''),
+                    'color2'         => (string) ($_POST['color2'] ?? ''),
+                    'matchStyle'     => (string) ($_POST['matchStyle'] ?? ''),
+                    'customRibbon'   => (string) ($_POST['customRibbon'] ?? ''),
+                    'ribbonColor'    => (string) ($_POST['ribbonColor'] ?? ''),
+                ],
                 // Passed through raw on purpose: Scroll::NormaliseRecipe() is the one
                 // allowlist for these, and it runs inside BuildScroll(). Sanitising
                 // here as well would be a second, weaker opinion about a closed
@@ -134,6 +151,9 @@ class Controller_ScrolleryAjax extends Controller
 
         echo json_encode([
             'Status' => ['Status' => 0],
+            // Which sources have arms for this scope and recipient, and which one drew.
+            'HeraldrySources' => array_map(static fn (string $u): bool => $u !== '', $sources),
+            'HeraldrySource'  => $heraldrySource,
             /*
              * ART_DISPLAY, not the master. The composer's preview stage is about
              * 600 px wide and was downloading 300 dpi print plates to fill it — a

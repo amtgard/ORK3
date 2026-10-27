@@ -256,6 +256,24 @@
       "print": { "file": "common/rank_9.webp", "bytes": 13056 },
       "display": { "file": "common/rank_9_display.webp", "bytes": 2140, "dimensions": "97x57" }
     },
+    "common/ribbon/ribbon-bottom.png": {
+      "sha": "0783470f7f6922e9",
+      "bytes": 90505,
+      "print": { "file": "common/ribbon/ribbon-bottom.webp", "bytes": 60074 },
+      "display": { "file": "common/ribbon/ribbon-bottom_display.webp", "bytes": 8062, "dimensions": "297x144" }
+    },
+    "common/ribbon/ribbon-right.png": {
+      "sha": "34df6f266ff43209",
+      "bytes": 120063,
+      "print": { "file": "common/ribbon/ribbon-right.webp", "bytes": 76962 },
+      "display": { "file": "common/ribbon/ribbon-right_display.webp", "bytes": 9756, "dimensions": "271x242" }
+    },
+    "common/ribbon/ribbon-top.png": {
+      "sha": "01202e800ea116be",
+      "bytes": 108744,
+      "print": { "file": "common/ribbon/ribbon-top.webp", "bytes": 73262 },
+      "display": { "file": "common/ribbon/ribbon-top_display.webp", "bytes": 8934, "dimensions": "414x144" }
+    },
     "crown/border.png": {
       "sha": "4a7bb6a7e564cb6a",
       "bytes": 1448496,
@@ -976,6 +994,12 @@
       "print": { "file": "icons/reset.webp", "bytes": 1568 },
       "display": { "file": "icons/reset_display.webp", "bytes": 670, "dimensions": "33x33" }
     },
+    "jovious/bg-noborder.jpg": {
+      "sha": "4eb3cabbafce603c",
+      "bytes": 932564,
+      "print": { "file": "jovious/bg-noborder.webp", "bytes": 554704 },
+      "display": { "file": "jovious/bg-noborder_display.webp", "bytes": 122636, "dimensions": "850x1100" }
+    },
     "jovious/bg.jpg": {
       "sha": "bd156d73c268c143",
       "bytes": 3426835,
@@ -1329,6 +1353,12 @@
       "bytes": 41385,
       "print": { "file": "smith/symbol.webp", "bytes": 17598 },
       "display": { "file": "smith/symbol_display.webp", "bytes": 3806, "dimensions": "290x147" }
+    },
+    "warrior/bg_10-noborder.jpg": {
+      "sha": "105a61665ce4f923",
+      "bytes": 399636,
+      "print": { "file": "warrior/bg_10-noborder.webp", "bytes": 210160 },
+      "display": { "file": "warrior/bg_10-noborder_display.webp", "bytes": 33328, "dimensions": "850x1100" }
     },
     "warrior/bg_10.jpg": {
       "sha": "5e951d32db902167",

@@ -18,8 +18,15 @@
 
     <?php /* Two passes of the same border: multiply, then a normal pass at .6.
              DELIBERATE — stacking them deepens the blend. */ ?>
+<?php /* Custom Border: the knot replaces both passes — one knot per pass, with its
+         blend, in match mode; one plain knot in exact mode, still below the symbol.
+         At column 0 so a certificate without one prints the bytes it always did. */ ?>
+<?php if (!scroll_custom_border_active($s)): ?>
     <img <?= scroll_art_attrs('smith/border.png') ?> style="mix-blend-mode:multiply;" alt="">
     <img <?= scroll_art_attrs('smith/border.png') ?> style="opacity:0.6;" alt="">
+<?php endif; ?>
+<?php scroll_custom_border_slot($s, 'match'); ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
 
     <?php /* smith's symbol is UNRANKED — there is no symbol_${rank}.png, only the
              one smith/symbol.png, drawn twice. Never deduplicate these. */ ?>

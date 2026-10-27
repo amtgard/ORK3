@@ -1353,6 +1353,45 @@ class Model_Scrollery extends Model
     }
 
     /**
+     * Master heraldry URLs for each source the Customize Design card can pick, '' where
+     * there are none. Kingdom follows the park's own kingdom; park is '' on a kingdom
+     * scope unless a recipient is given, in which case it is the recipient's home park's
+     * arms; persona is the recipient's own arms and needs a real player.
+     *
+     * @return array{kingdom:string,park:string,persona:string}
+     */
+    public function heraldry_sources(string $scopeType, int $scopeId, int $playerId): array
+    {
+        $out = ['kingdom' => '', 'park' => '', 'persona' => ''];
+
+        $kingdomId = $scopeId;
+        if ($scopeType === 'park') {
+            $kingdomId = (int) ($this->park_details($scopeId)['KingdomId'] ?? 0);
+        }
+        $recipientParkId = $playerId > 0 ? (int) ($this->scroll_recipient($playerId)['ParkId'] ?? 0) : 0;
+        $parkId          = Scroll::HeraldryParkId($scopeType, $scopeId, $recipientParkId);
+        if ($parkId > 0 && (int) ($this->park_details($parkId)['HasHeraldry'] ?? 0) === 1) {
+            $out['park'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                ['Type' => 'Park', 'Id' => $parkId, 'Size' => 'master']
+            )['Url'];
+        }
+        if ($kingdomId > 0 && (int) ($this->kingdom_short_info($kingdomId)['HasHeraldry'] ?? 0) === 1) {
+            $out['kingdom'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                ['Type' => 'Kingdom', 'Id' => $kingdomId, 'Size' => 'master']
+            )['Url'];
+        }
+        if ($playerId > 0) {
+            if ((int) ($this->scroll_recipient($playerId)['HasHeraldry'] ?? 0) === 1) {
+                $out['persona'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                    ['Type' => 'Player', 'Id' => $playerId, 'Size' => 'master']
+                )['Url'];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * The issuing body's rank word — "and the Freehold of ...".
      *
      * ORK stores this per park (ork_park.parktitle_id -> ork_parktitle.title,
@@ -1406,6 +1445,22 @@ class Model_Scrollery extends Model
         return $cache[$kingdomId];
     }
 
+    /**
+     * GetScrollRecipient() held per request: a preview needs the pronoun and the
+     * arms flag from the same single-row find.
+     *
+     * @return array<string, mixed>
+     */
+    private function scroll_recipient(int $mundaneId): array
+    {
+        static $cache = [];
+        if (!array_key_exists($mundaneId, $cache)) {
+            $cache[$mundaneId] = Ork3::$Lib->player->GetScrollRecipient($mundaneId);
+        }
+
+        return $cache[$mundaneId];
+    }
+
     /** The recipient's possessive pronoun, by player id. Never blank. */
     public function possessive_pronoun_for_player(int $mundaneId): string
     {
@@ -1413,7 +1468,7 @@ class Model_Scrollery extends Model
             return '';
         }
 
-        return $this->possessive_pronoun(Ork3::$Lib->player->GetScrollRecipient($mundaneId));
+        return $this->possessive_pronoun($this->scroll_recipient($mundaneId));
     }
 
     /**
