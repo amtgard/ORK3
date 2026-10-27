@@ -34,8 +34,13 @@
 
     <?php /* Same two-pass treatment for the phoenix. It sits in .centre — vertically
              centred — not .centre-bottom like the rank symbol below. */ ?>
+<?php /* The phoenixes perch ON the frame: each tail crosses the side band (x 114-235 and
+         2315-2434 at 1x), so over a Custom Border knot they read as a misprint. They
+         go with the border, in both modes (Task 6 ruling; an owner question). */ ?>
+<?php if (!scroll_custom_border_active($s)): ?>
     <div class="centre"><img <?= scroll_art_attrs('crown/phoenix.png') ?> style="mix-blend-mode:multiply;" alt=""></div>
     <div class="centre"><img <?= scroll_art_attrs('crown/phoenix.png') ?> style="opacity:0.5;" alt=""></div>
+<?php endif; ?>
 
     <?php /* crown ships symbol_0.png, so the path is unguarded — as in the source. */ ?>
     <div class="centre-bottom"><img <?= scroll_art_attrs('crown/symbol_' . (int) $s['rank'] . '.png') ?> alt=""></div>

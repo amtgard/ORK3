@@ -147,6 +147,59 @@ final class ScrollCustomBorderRenderTest extends TestCase
         }
     }
 
+    /**
+     * Devices an order draws ON its frame line go with the frame under a Custom Border,
+     * in both modes, and stay without one: battle's sword/arrow band, crown's
+     * phoenixes, dragon's side-diamond heads (owner feedback, Task 6). Interior art —
+     * symbols, rank art — stays (asserted per order elsewhere).
+     */
+    public function testOnFrameDevicesGoWithTheBorder(): void
+    {
+        $devices = [
+            ['battle', 'arcane', 'battle/border_symbols'],
+            ['battle', 'martial', 'battle/border_symbols'],
+            ['crown', '', 'crown/phoenix'],
+            ['dragon', '', 'dragon/dragons'],
+        ];
+        foreach ($devices as [$id, $variant, $needle]) {
+            $label = "{$id} {$variant}";
+            $this->assertStringContainsString($needle, $this->render($id, null, ['variant' => $variant]), $label . ' no design');
+            foreach ([false, true] as $match) {
+                $html = $this->render($id, $this->border($match), ['variant' => $variant]);
+                $this->assertStringContainsString('class="sc-knot"', $html, $label);
+                $this->assertStringNotContainsString($needle, $html, $label . ($match ? ' match' : ' exact'));
+            }
+        }
+        // Owl's rank plate is rank art and stays, but its construction hairlines run
+        // into the knot's bottom terminals, so under a Custom Border the plate is
+        // clipped off those corners — every pass of it, in every variant.
+        foreach (Scroll::Orders()['owl']['variants'] as $variant) {
+            $this->assertStringNotContainsString('clip-path', $this->render('owl', null, ['variant' => $variant]), $variant);
+            foreach ([false, true] as $match) {
+                $html = $this->render('owl', $this->border($match), ['variant' => $variant]);
+                preg_match_all('/<img [^>]*owl\/rank_3[^>]*>/', $html, $m);
+                $this->assertNotEmpty($m[0], $variant);
+                foreach ($m[0] as $img) {
+                    $this->assertStringContainsString('clip-path:polygon(', $img, $variant);
+                }
+            }
+        }
+        // custom's full-bleed rank plates (garber, flame) are clipped to the paper
+        // inside the knot: garber's thread and tape otherwise cross it.
+        foreach (['garber', 'flame'] as $set) {
+            $recipe = ['ground' => 'parchment', 'border' => 'knot', 'rankSet' => $set];
+            $plain  = $this->render('custom', null, ['recipe' => $recipe]);
+            $this->assertMatchesRegularExpression('/<img class="bleed custom-rank"(?![^>]*clip-path)[^>]*>/', $plain, $set);
+            foreach ([false, true] as $match) {
+                $html = $this->render('custom', $this->border($match), ['recipe' => $recipe]);
+                $this->assertMatchesRegularExpression('/<img class="bleed custom-rank"[^>]*clip-path:polygon\(/', $html, $set);
+            }
+        }
+        // The interior art of the same orders stays.
+        $this->assertStringContainsString('dragon/under_3', $this->render('dragon', $this->border(false)));
+        $this->assertStringContainsString('battle/martial/symbol_3', $this->render('battle', $this->border(false), ['variant' => 'martial']));
+    }
+
     public function testCrownExactModeReplacesBothPasses(): void
     {
         $html = $this->render('crown', $this->border(false));
@@ -156,8 +209,9 @@ final class ScrollCustomBorderRenderTest extends TestCase
         $this->assertStringContainsString('--knot-c2:#E84C92', $html);
         $this->assertStringContainsString('mix-blend-mode:normal;', $html);
         $this->assertStringNotContainsString('crown/border', $html);
-        // The phoenix and the rank symbol are order identity, not border: they stay.
-        $this->assertStringContainsString('crown/phoenix', $html);
+        // The rank symbol is order identity: it stays. The phoenixes perch ON the frame
+        // (their tails cross the side band), so they go with it (Task 6 ruling).
+        $this->assertStringNotContainsString('crown/phoenix', $html);
         $this->assertStringContainsString('crown/symbol_3', $html);
     }
 
@@ -273,16 +327,18 @@ final class ScrollCustomBorderRenderTest extends TestCase
                 $this->assertStringContainsString('mix-blend-mode:multiply;', $m[0][0], $label);
                 $this->assertGreaterThan(strrpos($html, 'class="sc-knot"'), strpos($html, 'sc-rank-keep'), $label);
             }
-            foreach ([9, 10] as $rank) {
-                $html = $this->render('warrior', $this->border($match), ['rank' => $rank]);
-                $this->assertStringContainsString('class="sc-knot"', $html, "rank {$rank}");
-                $this->assertStringNotContainsString('sc-rank-keep', $html, "rank {$rank}");
-            }
+            $html = $this->render('warrior', $this->border($match), ['rank' => 10]);
+            $this->assertStringContainsString('class="sc-knot"', $html, 'rank 10');
+            $this->assertStringNotContainsString('sc-rank-keep', $html, 'rank 10');
         }
-        $this->assertNull(Scroll::CustomBorderRule('warrior', 1, '', []));
-        $one = $this->render('warrior', $this->border(false), ['rank' => 1]);
-        $this->assertStringNotContainsString('sc-knot', $one);
-        $this->assertStringNotContainsString('sc-rank-keep', $one);
+        // Rank 1's snake crosses an unbroken band; rank 9's dragon stands on rocks
+        // across the whole frame foot. Neither can sit with the knot: incompatible.
+        foreach ([1, 9] as $rank) {
+            $this->assertNull(Scroll::CustomBorderRule('warrior', $rank, '', []), "rank {$rank}");
+            $html = $this->render('warrior', $this->border(false), ['rank' => $rank]);
+            $this->assertStringNotContainsString('sc-knot', $html, "rank {$rank}");
+            $this->assertStringNotContainsString('sc-rank-keep', $html, "rank {$rank}");
+        }
         for ($rank = 1; $rank <= 10; $rank++) {
             $this->assertStringNotContainsString('sc-rank-keep', $this->render('warrior', null, ['rank' => $rank]), "no design, rank {$rank}");
         }

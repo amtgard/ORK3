@@ -43,9 +43,13 @@ return [
     // back above the knot, clipped to the paper in the frame's bottom gap. Rank 1's
     // snake is coiled THROUGH an unbroken bottom band, so no clip keeps the snake
     // without keeping band too: it is incompatible until a snake cut-out exists.
+    // Rank 9's dragon (symbol_9.png) stands on rocks that run the full width of the
+    // page, across the frame's bottom band and up both sides, so it would sit on the
+    // knot; it is rank art and cannot go, so rank 9 is incompatible too (an owner
+    // question: the rocks-in-front look may be wanted).
     'warrior' => [
         'passes' => ['mix-blend-mode:multiply;'],
-        'ranks'  => [1 => false, 10 => 'warrior/bg_10-noborder.jpg'],
+        'ranks'  => [1 => false, 9 => false, 10 => 'warrior/bg_10-noborder.jpg'],
     ],
 
     'battle'  => ['passes' => [$partial]],

@@ -25,9 +25,10 @@ $variant = (string) $s['variant'];
     <?php scroll_partial('parchment'); ?>
 <?php /* Custom Border: the knot partial is battle's one border pass, so the knot takes
          its place — here in match mode, under the heraldry where the knotwork was; in
-         exact mode below the heraldry (martial) or over the wash (arcane, below). The band (border_symbols.png) is battle's
-         own device, not its frame, and stays either way. At column 0 so a certificate
-         without one prints the bytes it always did. */ ?>
+         exact mode below the heraldry (martial) or over the wash (arcane, below). The
+         band (border_symbols.png) goes too: its sword and arrow sit ON the frame line
+         at both sides, and over the knot they read as a faint misprint (owner, Task 6).
+         At column 0 so a certificate without one prints the bytes it always did. */ ?>
 <?php if (!scroll_custom_border_active($s)): ?>
     <?php scroll_partial('border', ['primary' => $s['primary'], 'secondary' => $s['secondary']]); ?>
 <?php endif; ?>
@@ -45,9 +46,11 @@ $variant = (string) $s['variant'];
 <?php if ($variant === 'arcane') { scroll_custom_border_slot($s, 'exact'); } ?>
     <?php /* width="2291" is the source's own value; the file is one pixel wider
              (2292). Kept as written — changing it would resize the layer. */ ?>
+<?php if (!scroll_custom_border_active($s)): ?>
     <div class="centre" style="margin-bottom:90px;">
         <img width="2291" height="292" src="<?= scroll_art('battle/border_symbols.png') ?>" style="mix-blend-mode: multiply;" alt="">
     </div>
+<?php endif; ?>
 
     <?php if ($variant === 'arcane'): ?>
         <div class="centre-bottom"><img <?= scroll_art_attrs('battle/arcane/glow.png') ?> style="mix-blend-mode: multiply;" alt=""></div>

@@ -36,7 +36,11 @@
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php /* Bare <img>, not wrapped in .centre-bottom — a full-bleed multiply layer. */ ?>
+<?php /* dragons.svg is the pair of dragon heads in the frame's side diamonds: it sits ON
+         the frame line, so it goes with the border under a Custom Border (Task 6). */ ?>
+<?php if (!scroll_custom_border_active($s)): ?>
     <img <?= scroll_art_attrs('dragon/dragons.svg') ?> style="mix-blend-mode:multiply;" alt="">
+<?php endif; ?>
 
     <?php /* under_0.png ships, so this path is unguarded across the whole rank range. */ ?>
     <div class="centre-bottom"><img <?= scroll_art_attrs('dragon/under_' . (int) $s['rank'] . '.png') ?> style="mix-blend-mode:multiply;" alt=""></div>

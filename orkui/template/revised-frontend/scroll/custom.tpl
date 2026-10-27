@@ -195,7 +195,14 @@ $knotStyle = Scroll::CustomKnotStyle((string) $recipe['ground']);
             <?php /* garber and flame ship full 2550x3300 transparent plates that place
                      their own numeral, so they are their own full-bleed layer — as in
                      garber.tpl and flame.tpl. A .centre-bottom box would shift them. */ ?>
-            <img class="bleed custom-rank" <?= $rankAttr ?> alt="">
+<?php /* Under a Custom Border the plate is clipped to the paper inside the knot (inner
+         edges x 204 / 2345, y 201 / 3102 at 1x, plus the bottom gap x 977-1573),
+         3px clear: garber's plates run a thread to both page edges and a tape over the
+         frame's foot, which would otherwise lie across the knot. '' without one. */ ?>
+<?php $plateClip = scroll_custom_border_active($s)
+    ? ' style="clip-path:polygon(8.1176% 6.1818%,91.8431% 6.1818%,91.8431% 93.9091%,61.6078% 93.9091%,61.6078% 100%,38.3922% 100%,38.3922% 93.9091%,8.1176% 93.9091%);"'
+    : ''; ?>
+            <img class="bleed custom-rank" <?= $rankAttr ?><?= $plateClip ?> alt="">
         <?php endif; ?>
     <?php endif; ?>
 

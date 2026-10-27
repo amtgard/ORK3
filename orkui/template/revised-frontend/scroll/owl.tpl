@@ -93,12 +93,19 @@ $heraldry = ['s' => $s, 'width' => 370, 'height' => 460, 'top' => 5];
              unranked owl certificate draws rank_0, it does not skip the layer.
              The source <img> carried both style= and css=; Aurelia merged them, so
              they are one attribute here. */ ?>
+<?php /* Under a Custom Border the rank plate's construction hairlines, which run out
+         to the plate's edges (box x 949-1601, y 2750-3200 at 1x), would cross the
+         knot's bottom terminals (ink from y 3103, outside the gap x 977-1573). The
+         plate is clipped off those two corners, 2px clear; '' without one. */
+$rankClip = scroll_custom_border_active($s)
+    ? 'clip-path:polygon(0 0,100% 0,100% 77.33%,95.469% 77.33%,95.469% 100%,4.531% 100%,4.531% 77.33%,0 77.33%);'
+    : ''; ?>
     <div class="centre-bottom">
-        <img <?= scroll_art_attrs('owl/rank_' . (int) $s['rank'] . '.png') ?> style="margin-bottom:75px;<?= $blend ?>" alt="">
+        <img <?= scroll_art_attrs('owl/rank_' . (int) $s['rank'] . '.png') ?> style="margin-bottom:75px;<?= $blend ?><?= $rankClip ?>" alt="">
     </div>
     <?php if ($variant === 'transparency'): ?>
         <div class="centre-bottom">
-            <img <?= scroll_art_attrs('owl/rank_' . (int) $s['rank'] . '.png') ?> style="margin-bottom:75px;<?= $blend ?>" alt="">
+            <img <?= scroll_art_attrs('owl/rank_' . (int) $s['rank'] . '.png') ?> style="margin-bottom:75px;<?= $blend ?><?= $rankClip ?>" alt="">
         </div>
     <?php endif; ?>
 
