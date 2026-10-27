@@ -336,6 +336,35 @@
     }
 
     /*
+     * Give a signature with no space in it somewhere sensible to break.
+     *
+     * A signature is a persona, and many are one long token (Smiles/Hobi/Can'tCallHim...)
+     * in a fixed 7em box whose overflow-wrap:anywhere is the last resort that keeps the
+     * line count honest. With nothing else to go on it breaks wherever the box runs out,
+     * mid-word. A <wbr> after / _ - . and at each lower-to-Upper camel seam gives the
+     * line a better place to break first; `anywhere` then only applies to a piece that
+     * cannot fit on a line by itself.
+     *
+     * Display only: <wbr> has no text, so textContent, copy and paste are unchanged. The
+     * pieces go in as text nodes, never as markup, so a signature is never parsed as
+     * HTML. Rebuilt from textContent each time, so a re-fit adds no second set. A signer
+     * with a space is left alone, byte for byte — it already breaks at the space.
+     */
+    function seamBreaks(el) {
+        var text = el.textContent;
+        if (/\s/.test(text)) { return; }
+
+        var parts = text.replace(/([\/_\-.])(?=.)|([a-z])(?=[A-Z])/g, '$1$2\u0000').split('\u0000');
+        if (parts.length < 2) { return; }
+
+        while (el.firstChild) { el.removeChild(el.firstChild); }
+        for (var i = 0; i < parts.length; i++) {
+            if (i > 0) { el.appendChild(doc.createElement('wbr')); }
+            el.appendChild(doc.createTextNode(parts[i]));
+        }
+    }
+
+    /*
      * Fit an inline element by MEASURING the line count at a size rather than solving
      * for it. The ladder is the policy's: the best tier that can be had at or above its
      * floor wins, and the floor is absolute em so both surfaces agree.
@@ -728,7 +757,10 @@
         if (date) { fitInline(date, POLICY.date); }
 
         var signer = award.querySelector(POLICY.signer.sel);
-        if (signer) { fitInline(signer, POLICY.signer); }
+        if (signer) {
+            seamBreaks(signer);
+            fitInline(signer, POLICY.signer);
+        }
 
         /* Last: it measures the gap the citation left, which is only final now. */
         liftSignature(award);
