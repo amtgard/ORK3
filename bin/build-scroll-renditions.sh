@@ -127,6 +127,17 @@ EOF
 fi
 
 sha_of() { shasum -a 256 "$1" 2>/dev/null | cut -c1-16 || sha256sum "$1" | cut -c1-16; }
+
+# Masters exported at a multiple of their layout size (the Arcanyst sources re-export at
+# 2x): "<relative path> <scale>" per line in $HIRES_LIST. Their display rendition is cut
+# at DISPLAY_SCALE / scale, so it keeps exactly the pixel size a 1x master's would have —
+# Scroll::ArtBox() derives each plate's layout box from that size, so nothing moves.
+HIRES_LIST="$ART_DIR/hires-masters.txt"
+master_scale() {
+    s=""
+    [ -f "$HIRES_LIST" ] && s=$(grep -v '^#' "$HIRES_LIST" | awk -v r="$1" '$1 == r { print $2; exit }')
+    echo "${s:-1}"
+}
 size_of() { wc -c < "$1" | tr -d ' '; }
 
 # --- collect masters -----------------------------------------------------------
@@ -166,6 +177,13 @@ if [ "$CHECK" -eq 1 ]; then
     for f in $(grep '"file":' "$MANIFEST" | sed 's/.*"file": *"\([^"]*\)".*/\1/'); do
         [ -f "$ART_DIR/$f" ] || { echo "FAIL: manifest promises $f, which does not exist" >&2; fails=$((fails + 1)); }
     done
+    # Every hi-res master listed must exist and must have a display rendition.
+    if [ -f "$HIRES_LIST" ]; then
+        for rel in $(grep -v '^#' "$HIRES_LIST" | awk 'NF { print $1 }'); do
+            [ -f "$ART_DIR/$rel" ] || { echo "FAIL: $HIRES_LIST lists $rel, which does not exist" >&2; fails=$((fails + 1)); continue; }
+            grep -A5 -F "    \"$rel\": {" "$MANIFEST" | grep -q '"display": {' || { echo "FAIL: hi-res master $rel has no display rendition" >&2; fails=$((fails + 1)); }
+        done
+    fi
     # And every manifest key must still be a real master (catches a deleted master).
     for rel in $(grep -E '^    "[^"]+\.(png|jpg|jpeg)": \{' "$MANIFEST" | sed 's/.*"\(.*\)": {.*/\1/'); do
         [ -f "$ART_DIR/$rel" ] || { echo "FAIL: manifest lists $rel, which no longer exists" >&2; fails=$((fails + 1)); }
@@ -232,10 +250,14 @@ for m in $MASTERS; do
     fi
 
     # -- display rendition
-    $MAGICK "$m" -strip -resize "${DISPLAY_SCALE}%" -define webp:method=6 \
+    mscale=$(master_scale "$rel")
+    dscale=$(awk -v d="$DISPLAY_SCALE" -v s="$mscale" 'BEGIN { printf "%.7f", d / s }')
+    $MAGICK "$m" -strip -resize "${dscale}%" -define webp:method=6 \
         -define webp:alpha-quality=100 -quality "$DISPLAY_QUALITY" "$TMP/disp.webp"
     dsize=$(size_of "$TMP/disp.webp")
-    if [ "$((dsize * 100))" -lt "$((msize * (100 - MIN_GAIN_PCT)))" ]; then
+    # A hi-res master ALWAYS gets its display rendition: without one, ArtBox() has no
+    # layout size to report and the plate would draw at its (doubled) intrinsic size.
+    if [ "$mscale" != "1" ] || [ "$((dsize * 100))" -lt "$((msize * (100 - MIN_GAIN_PCT)))" ]; then
         mv "$TMP/disp.webp" "$disp_file"
         dims=$($MAGICK identify -format '%wx%h' "$disp_file")
         tot_display=$((tot_display + dsize))

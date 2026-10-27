@@ -115,7 +115,7 @@ final class ScrolleryCourtPrintTest extends TestCase
     {
         $ka        = $this->printableKa();
         $printed   = $this->scrolleryLine($ka, ['sort_order' => 10]);
-        $custom    = $this->scrolleryLine($ka, ['sort_order' => 20, 'scroll_status' => Court::SCROLL_CUSTOM]);
+        $custom    = $this->scrolleryLine($ka, ['sort_order' => 20, 'scroll_status' => Court::SCROLL_ASSIGNED]);
         $cancelled = $this->scrolleryLine($ka, ['sort_order' => 30, 'status' => 'cancelled']);
 
         $otherCourt = $this->fixture->createCourt(['kingdom_id' => $this->kid]);
@@ -229,5 +229,47 @@ final class ScrolleryCourtPrintTest extends TestCase
         $run = $this->model->scrolls_for_court_awards($this->courtId, [], $this->playerId);
 
         $this->assertSame($giver['persona'], $run['Scrolls'][$line]['givenBy'] ?? null);
+    }
+
+    /**
+     * Review focus 2, end to end: a citation saved while the rec was public, and the
+     * rec hidden since, never prints — even for a court manager who cannot see the
+     * rec. That viewer's rows carry no RecReason, so the run cannot compare the
+     * citation against it; the court reader already withheld the citation.
+     */
+    public function testHiddenRecReasonNotPrintedForOfficerViewer(): void
+    {
+        $ka    = $this->printableKa();
+        $p     = $this->fixture->firstParkId($this->kid);
+        $recip = $this->fixture->createPlayer('scp-mo', $this->kid, $p)['mundane_id'];
+        $st    = $this->fixture->pdo()->prepare('SELECT award_id FROM ' . DB_PREFIX . 'kingdomaward WHERE kingdomaward_id = ?');
+        $st->execute([$ka]);
+        // Kingdom-level Monarchy Only: a park officer of the recipient's park cannot see it.
+        $rec = $this->fixture->createRecommendation($recip, $ka, (int) $st->fetchColumn(), [
+            'monarchy_only' => 2, 'reason' => 'secret reason',
+        ]);
+
+        $parkCourt = $this->fixture->createCourt(['kingdom_id' => $this->kid, 'park_id' => $p, 'court_date' => '2026-11-07']);
+        $line      = $this->fixture->createAward($parkCourt, $recip, [
+            'kingdomaward_id' => $ka,
+            'rank'            => 2,
+            'scroll_status'   => Court::SCROLL_SCROLLERY,
+            'public_comment'  => 'secret reason',
+        ]);
+        $this->fixture->pdo()->exec(
+            'UPDATE ' . DB_PREFIX . 'court_award SET recommendations_id = ' . $rec . ' WHERE court_award_id = ' . $line
+        );
+
+        $viewer = $this->fixture->createPlayer('scp-mopark', $this->kid, $p)['mundane_id'];
+        $this->fixture->insertOfficer($viewer, $this->kid, $p, 'Monarch');
+        $this->fixture->insertScopedAuth($viewer, $p, 0, 'edit');
+        $this->assertTrue((new Court())->canManage($viewer, $this->kid, $p), 'the viewer manages this park court');
+        $this->assertFalse(Ork3::$Lib->recommendationvisibility->canSeeRecId($viewer, $rec), 'the viewer cannot see the rec');
+        $this->assertNotSame($recip, $viewer);
+
+        $run = $this->model->scrolls_for_court_awards($parkCourt, [$line], $viewer);
+
+        $this->assertArrayHasKey($line, $run['Scrolls']);
+        $this->assertSame('', $run['Scrolls'][$line]['reason']);
     }
 }

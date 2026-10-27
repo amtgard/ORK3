@@ -29,13 +29,23 @@ class Court
     /** The refusal CourtAjax returns when a posted citation is a hidden rec's reason. */
     public const HIDDEN_CITATION_MESSAGE = 'This citation is the text of a Monarchy Only recommendation, which is never published. Edit or clear it to continue.';
 
-    /** Scroll tracking values. 3 = Scrollery Print (goes in the bulk print). */
-    public const SCROLL_NOT_TRACKED = 0;
-    public const SCROLL_CUSTOM      = 1;
+    /**
+     * Scroll/regalia tracking values (never renumbered). 3 = Scrollery Print
+     * (scroll only: goes in the bulk print). Display order is set by
+     * trackingStatusDefinitions(), not by value.
+     */
+    public const SCROLL_PENDING     = 0;
+    public const SCROLL_ASSIGNED    = 1;
     public const SCROLL_COMPLETE    = 2;
     public const SCROLL_SCROLLERY   = 3;
-    /** Regalia tracking: 0 Not Tracked, 1 Needed, 2 Complete (never 3). */
-    public const REGALIA_NEEDED     = 1;
+    public const SCROLL_IN_PROGRESS = 4;
+    public const SCROLL_NOT_NEEDED  = 5;
+    /** Regalia tracking: the same values, minus Scrollery Print (never 3). */
+    public const REGALIA_PENDING     = 0;
+    public const REGALIA_ASSIGNED    = 1;
+    public const REGALIA_COMPLETE    = 2;
+    public const REGALIA_IN_PROGRESS = 4;
+    public const REGALIA_NOT_NEEDED  = 5;
 
     /**
      * Effective is_ladder, including kingdom-original ladders.
@@ -2530,7 +2540,8 @@ class Court
      * Cheap heartbeat state for the live multi-manager poll (spec 6.4).
      * court_award has no updated_at column, so `version` is an md5 of the row set
      * (court_award_id:status:sort_order:given_by:modified) plus court mode/status,
-     * which changes on any edit, reorder, giver change, add, or remove.
+     * which changes on any edit, reorder, giver change, add, or remove. Notes and the
+     * court's artisan rows are folded in too, so their adds and removes flip it as well.
      */
     public function getCourtState($court_id)
     {
@@ -2589,6 +2600,21 @@ class Court
             while ($ns->Next()) {
                 $stampParts[] = 'n' . (int)$ns->court_note_id . ':' . (int)$ns->sort_order . ':' . (int)$ns->row_version;
             }
+        }
+        // Artisans: addArtisan/removeArtisan touch only court_award_artisan (they must
+        // not bump the line's row_version, or the officer's own next guarded write would
+        // read as stale), so fold that table in as one aggregate. Ids only ever grow, so
+        // COUNT + SUM + MAX moves on an add, a remove, and a remove-then-add.
+        $this->db->Clear();
+        $as = $this->db->DataSet(
+            'SELECT COUNT(*) AS n, COALESCE(SUM(caa.court_award_artisan_id), 0) AS s,
+                    COALESCE(MAX(caa.court_award_artisan_id), 0) AS m
+             FROM ' . DB_PREFIX . 'court_award_artisan caa
+             JOIN ' . DB_PREFIX . 'court_award ca ON ca.court_award_id = caa.court_award_id
+             WHERE ca.court_id = ' . $court_id
+        );
+        if ($as && $as->Next()) {
+            $stampParts[] = 'a' . (int)$as->n . ':' . (int)$as->s . ':' . (int)$as->m;
         }
         $version = md5($court_status . '|' . $mode . '|' . implode(',', $stampParts));
 
@@ -3061,43 +3087,33 @@ class Court
         return $events;
     }
 
-    public function updateAwardTrackingStatus($courtAwardId, $type)
+    /**
+     * The single definition of the tracking statuses, in display order:
+     * ['scroll' => [['value','label','hint','group'], ...], 'regalia' => [...]].
+     * Everything that lists, validates or groups a status derives from this.
+     */
+    public static function trackingStatusDefinitions(): array
     {
-        if (!in_array($type, ['scroll', 'regalia'])) {
-            return ['status' => 1, 'error' => 'Invalid type'];
-        }
-
-        $field = $type . '_status';
-
-        $this->db->Clear();
-        $rs = $this->db->DataSet(
-            'SELECT ' . $field . ' FROM ' . DB_PREFIX . 'court_award WHERE court_award_id = ' . (int)$courtAwardId
-        );
-        if (!$rs || !$rs->Next()) {
-            return ['status' => 1, 'error' => 'Award not found'];
-        }
-
-        $currentStatus = (int)$rs->{$field};
-        $nextStatus = ($currentStatus + 1) % 3;
-
-        $this->db->Clear();
-        $this->db->Execute(
-            'UPDATE ' . DB_PREFIX . 'court_award SET ' . $field . ' = ' . $nextStatus . ' WHERE court_award_id = ' . (int)$courtAwardId
-        );
-
-        return ['status' => 0, 'newStatus' => $nextStatus];
+        $pending    = ['value' => self::SCROLL_PENDING, 'label' => 'Pending', 'hint' => 'Needed — nobody has it yet', 'group' => 'pending'];
+        $print      = ['value' => self::SCROLL_SCROLLERY, 'label' => 'Scrollery Print', 'hint' => 'Goes in the bulk print', 'group' => 'print'];
+        $assigned   = ['value' => self::SCROLL_ASSIGNED, 'label' => 'Assigned', 'hint' => 'An artisan has agreed to make it', 'group' => 'assigned'];
+        $inProgress = ['value' => self::SCROLL_IN_PROGRESS, 'label' => 'In Progress', 'hint' => 'Being made', 'group' => 'inprogress'];
+        $complete   = ['value' => self::SCROLL_COMPLETE, 'label' => 'Complete', 'hint' => '', 'group' => 'done'];
+        $notNeeded  = ['value' => self::SCROLL_NOT_NEEDED, 'label' => 'Not Needed', 'hint' => "This line doesn't get one", 'group' => 'notneeded'];
+        return [
+            'scroll'  => [$pending, $print, $assigned, $inProgress, $complete, $notNeeded],
+            'regalia' => [$pending, $assigned, $inProgress, $complete, $notNeeded],
+        ];
     }
 
     /** Status values a tracking type accepts; [] for an unknown type. */
     public function allowedTrackingStatuses($type)
     {
-        if ($type === 'scroll') {
-            return [self::SCROLL_NOT_TRACKED, self::SCROLL_CUSTOM, self::SCROLL_COMPLETE, self::SCROLL_SCROLLERY];
+        $defs = self::trackingStatusDefinitions();
+        if (!is_string($type) || !isset($defs[$type])) {
+            return [];
         }
-        if ($type === 'regalia') {
-            return [0, self::REGALIA_NEEDED, 2];
-        }
-        return [];
+        return array_column($defs[$type], 'value');
     }
 
     /**
@@ -3141,14 +3157,34 @@ class Court
      * saw it), so a chip a peer changed mid-print is left alone and reported
      * in Stale.
      *
+     * The posted list is a request: elements that are not arrays are ignored, a
+     * repeated id keeps its first entry (so a line is completed, and its
+     * row_version bumped, at most once), and the list is capped at
+     * Scroll::MAX_PRINT_RUN, the most one print run can hold. Ids past the cap
+     * are neither completed nor reported as stale.
+     *
      * @param array $lines [['CourtAwardId' => int, 'RowVersion' => int], ...]
      */
     public function completePrintedScrolls($courtId, array $lines)
     {
+        $run = [];
+        foreach ($lines as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+            $id = (int)($line['CourtAwardId'] ?? 0);
+            if (isset($run[$id])) {
+                continue;
+            }
+            if (count($run) >= Scroll::MAX_PRINT_RUN) {
+                break;
+            }
+            $run[$id] = (int)($line['RowVersion'] ?? 0);
+        }
+
         $completed = [];
         $stale     = [];
-        foreach ($lines as $line) {
-            $id = (int)($line['CourtAwardId'] ?? 0);
+        foreach ($run as $id => $rowVersion) {
             $this->db->Clear();
             $rs = $this->db->DataSet(
                 'UPDATE ' . DB_PREFIX . 'court_award
@@ -3156,7 +3192,7 @@ class Court
                   WHERE court_award_id = ' . $id . '
                     AND court_id = ' . (int)$courtId . '
                     AND scroll_status = ' . self::SCROLL_SCROLLERY . '
-                    AND row_version = ' . (int)($line['RowVersion'] ?? 0)
+                    AND row_version = ' . $rowVersion
             );
             if ($rs && $rs->Size() == 1) {
                 $completed[] = $id;

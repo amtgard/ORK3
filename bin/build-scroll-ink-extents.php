@@ -304,6 +304,8 @@ $failed = [];
 $scanned = 0;
 $gridded = 0;
 
+$masterScales = hiresMasterScales($artDir);
+
 foreach ($masters as $relative) {
     $source = $artDir . '/' . $relative;
 
@@ -311,6 +313,12 @@ foreach ($masters as $relative) {
     if ($box === null) {
         $failed[] = $relative . ' (could not determine its pixel box)';
         continue;
+    }
+    // A master exported above layout size records its LAYOUT box, so the manifest is
+    // unchanged by a resolution upgrade. The ink fractions are scale-free already.
+    $scale = $masterScales[$relative] ?? 1;
+    if ($scale !== 1) {
+        $box = [(int) round($box[0] / $scale), (int) round($box[1] / $scale)];
     }
 
     // -background none is REQUIRED. See the header: without it an SVG rasterises onto
@@ -583,6 +591,34 @@ function collectMasters(string $artDir, string $only): array
     sort($out, SORT_STRING);
 
     return $out;
+}
+
+/**
+ * assets/scrolls/hires-masters.txt: "<relative path> <scale>" per line, for masters
+ * exported at a multiple of their layout size (the Arcanyst source re-exports at 2x).
+ * bin/build-scroll-renditions.sh reads the same file.
+ *
+ * @return array<string, int>
+ */
+function hiresMasterScales(string $artDir): array
+{
+    $path = $artDir . '/hires-masters.txt';
+    if (!is_file($path)) {
+        return [];
+    }
+    $scales = [];
+    foreach ((array) file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        $line = trim((string) $line);
+        if ($line === '' || $line[0] === '#') {
+            continue;
+        }
+        [$relative, $scale] = array_pad(preg_split('/\s+/', $line), 2, '1');
+        if ((int) $scale > 1) {
+            $scales[$relative] = (int) $scale;
+        }
+    }
+
+    return $scales;
 }
 
 /**

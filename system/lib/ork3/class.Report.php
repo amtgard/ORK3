@@ -6686,8 +6686,12 @@ class Report extends Ork3
         );
 
         // --- Scrolls, regalia & artisan credit --------------------------------
-        // Tracking status: 0 = not tracked, 1 = in progress, 2 = done.
+        // Tracking status: 0 Pending, 1 Assigned, 2 Complete, 3 Scrollery Print (scroll only),
+        // 4 In Progress, 5 Not Needed. Tracked = any non-zero value; done = 2; in progress =
+        // tracked minus done minus Not Needed (5, which needs no work).
         $scrollTracked  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_status > 0");
+        $scrollNotNeeded  = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_status = 5");
+        $regaliaNotNeeded = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_status = 5");
         $scrollDone     = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE scroll_status = 2");
         $regaliaTracked = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_status > 0");
         $regaliaDone    = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}court_award` WHERE regalia_status = 2");
@@ -6708,8 +6712,8 @@ class Report extends Ork3
             'title'       => 'Scrolls, Regalia & Artisans',
             'description' => 'Each court award can track whether its scroll and regalia are ready, and credit the people who made them — credit the herald reads out and the public Court Report prints.',
             'kpis' => array(
-                $this->_rfuKpi('Awards with scroll tracking', $scrollTracked, $courtAwards, $share($scrollTracked, $courtAwards), $scrollDone . ' marked done, ' . ($scrollTracked - $scrollDone) . ' in progress', null, null, 'of court awards'),
-                $this->_rfuKpi('Awards with regalia tracking', $regaliaTracked, $courtAwards, $share($regaliaTracked, $courtAwards), $regaliaDone . ' marked done, ' . ($regaliaTracked - $regaliaDone) . ' in progress', null, null, 'of court awards'),
+                $this->_rfuKpi('Awards with scroll tracking', $scrollTracked, $courtAwards, $share($scrollTracked, $courtAwards), $scrollDone . ' marked done, ' . ($scrollTracked - $scrollDone - $scrollNotNeeded) . ' in progress', null, null, 'of court awards'),
+                $this->_rfuKpi('Awards with regalia tracking', $regaliaTracked, $courtAwards, $share($regaliaTracked, $courtAwards), $regaliaDone . ' marked done, ' . ($regaliaTracked - $regaliaDone - $regaliaNotNeeded) . ' in progress', null, null, 'of court awards'),
                 $this->_rfuKpi('Awards with a scroll maker credited', $scrollMakers, $courtAwards, $share($scrollMakers, $courtAwards), 'court awards naming the scribe who made the scroll', null, null, 'of court awards'),
                 $this->_rfuKpi('Awards with a regalia maker credited', $regaliaMakers, $courtAwards, $share($regaliaMakers, $courtAwards), 'court awards naming who made the belt, medallion or other regalia', null, null, 'of court awards'),
                 $this->_rfuKpi('Contributing artisan credits', $artisanCredits, null, null, 'additional "artisans to thank" entries beyond the scroll and regalia makers'),

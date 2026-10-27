@@ -188,11 +188,6 @@ class Model_Court extends Model
         return $this->_court()->skipAward($court_award_id, $expectedRowVersion);
     }
 
-    public function update_award_tracking_status($courtAwardId, $type)
-    {
-        return $this->_court()->updateAwardTrackingStatus($courtAwardId, $type);
-    }
-
     public function set_award_tracking_status($courtAwardId, $type, $status, $rowVersion)
     {
         return $this->_court()->setAwardTrackingStatus($courtAwardId, $type, $status, $rowVersion);
@@ -241,6 +236,12 @@ class Model_Court extends Model
     public function hidden_citation_message()
     {
         return Court::HIDDEN_CITATION_MESSAGE;
+    }
+
+    // The scroll/regalia tracking status definitions (display order, labels, hints, groups).
+    public function tracking_status_definitions()
+    {
+        return Court::trackingStatusDefinitions();
     }
 
     public function get_staged_awards($court_id, $caller_uid = 0)
