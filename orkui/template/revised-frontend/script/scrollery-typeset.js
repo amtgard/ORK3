@@ -162,11 +162,13 @@
 
         /* The Custom Ribbon over the versal (A1, A2). A ribbon is a solid band, so unlike
            the squiggle it is held clear of the heraldry and of the "A" itself
-           (placeRibbonTop). It may rise off the "A" by RIBBON_LIFT of its own em, and
-           slide left of it by RIBBON_SLIDE in steps of RIBBON_STEP, before it is hidden. */
+           (placeRibbonTop). It may rise off the "A" by RIBBON_LIFT of its own em, slide
+           left by RIBBON_NUDGE at each size before it is made smaller, and by RIBBON_SLIDE
+           in all, in steps of RIBBON_STEP, before it is hidden. */
         RIBBON_LIFT: 0.35,
         RIBBON_SLIDE: 1.60,
         RIBBON_STEP: 0.05,
+        RIBBON_NUDGE: 0.40,
         HERALDRY_GRID: 48,        /* cells a side when the heraldry's ink is read (heraldryInk) */
 
         /* The Centered rule pair (§6.5.2): each half is min(RULE.share of the place's
@@ -1610,6 +1612,11 @@
     var heraldryCache = Object.create(null);
 
     function heraldryCells(img) {
+        /* Not before it is decoded: an image with its natural size known but its pixels
+           still arriving draws NOTHING (drawImage does not throw), every cell would read
+           as paper, and the ribbon would be judged as if there were no heraldry. Until
+           then the caller takes the whole drawn box, and nothing is cached. */
+        if (!(img.complete && img.naturalWidth > 0)) { return null; }
         var key = img.currentSrc || img.src;
         if (key in heraldryCache) { return heraldryCache[key]; }
         var n = CONST.HERALDRY_GRID, rows = null;
@@ -1632,7 +1639,7 @@
         } catch (e) {
             rows = null;
         }
-        if (img.complete && img.naturalWidth > 0) { heraldryCache[key] = rows; }
+        heraldryCache[key] = rows;
         return rows;
     }
 
@@ -2298,11 +2305,15 @@
      * citation, and c034's was clipped. So the ribbon yields, the type never does:
      *
      *   - at each scale of ORN_SCALES it rises off the "A" by what its ink lacks over
-     *     the letter, at most RIBBON_LIFT of its own em;
-     *   - failing every scale in place, it slides left, RIBBON_STEP at a time up to
-     *     RIBBON_SLIDE of its own em, taking the shortest slide that clears at any scale
-     *     (the largest scale at that slide), and a slid ribbon must also clear the
-     *     artwork, since it has left the place the artwork was drawn around;
+     *     the letter, at most RIBBON_LIFT of its own em, and may first slide left by up
+     *     to RIBBON_NUDGE before the next scale down is tried: a nudge off the "A" is
+     *     less of a change than a smaller ribbon, and on c122 the lift alone took the
+     *     0.85 ribbon up into a fleck of the device's wave, leaving it at 0.70;
+     *   - failing every scale that way, it slides further left, RIBBON_STEP at a time up
+     *     to RIBBON_SLIDE of its own em, taking the shortest slide that clears at any
+     *     scale (the largest scale at that slide);
+     *   - a slid ribbon must also clear the artwork, since it has left the place the
+     *     artwork was drawn around;
      *   - hidden only when nothing clears, as any flourish is.
      *
      * Each scale is laid out once; the lift and the slide move its ink as a whole, so
@@ -2346,17 +2357,19 @@
         }
 
         var steps = Math.floor(CONST.RIBBON_SLIDE / CONST.RIBBON_STEP + 1e-9);
-        for (var n = 0; n <= steps; n++) {
-            var dx = -n * CONST.RIBBON_STEP * fontPx;
-            for (var j = 0; j < inks.length; j++) {
-                var hit = fits(inks[j], dx);
-                if (!hit) { continue; }
-                var s = CONST.ORN_SCALES[j];
-                if (s === 1) { resetFlourish(img, ['width']); } else { setWidth(img, base * s); }
-                if (hit.lift > 0) { img.style.bottom = ((bottom0 + hit.lift) / fontPx).toFixed(4) + 'em'; }
-                if (dx !== 0) { img.style.left = ((left0 + dx) / fontPx).toFixed(4) + 'em'; }
-                return s === 1 ? 'placed' : 'scaled';
-            }
+        var near = Math.min(steps, Math.floor(CONST.RIBBON_NUDGE / CONST.RIBBON_STEP + 1e-9));
+        var order = [], n, j;
+        for (j = 0; j < inks.length; j++) { for (n = 0; n <= near; n++) { order.push([n, j]); } }
+        for (n = near + 1; n <= steps; n++) { for (j = 0; j < inks.length; j++) { order.push([n, j]); } }
+        for (var o = 0; o < order.length; o++) {
+            var dx = -order[o][0] * CONST.RIBBON_STEP * fontPx;
+            var hit = fits(inks[order[o][1]], dx);
+            if (!hit) { continue; }
+            var s = CONST.ORN_SCALES[order[o][1]];
+            if (s === 1) { resetFlourish(img, ['width']); } else { setWidth(img, base * s); }
+            if (hit.lift > 0) { img.style.bottom = ((bottom0 + hit.lift) / fontPx).toFixed(4) + 'em'; }
+            if (dx !== 0) { img.style.left = ((left0 + dx) / fontPx).toFixed(4) + 'em'; }
+            return s === 1 ? 'placed' : 'scaled';
         }
         resetFlourish(img, ['width']);
         img.style.display = 'none';

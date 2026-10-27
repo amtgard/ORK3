@@ -91,11 +91,13 @@ for (const short of SHORTS) {
   }
 }
 
-/* An opaque block of the given size, the device stand-in. */
-function block(w: number, h: number): Buffer {
+/* An opaque block of the given size, the device stand-in. `inkTo` < 1 leaves the rows
+   below that share of its height white, which multiply turns to paper. */
+function block(w: number, h: number, inkTo = 1): Buffer {
   const png = new PNG({ width: w, height: h });
   for (let i = 0; i < png.data.length; i += 4) {
-    png.data[i] = 0x33; png.data[i + 1] = 0x33; png.data[i + 2] = 0x33; png.data[i + 3] = 0xff;
+    const v = Math.floor(i / 4 / w) < inkTo * h ? 0x33 : 0xff;
+    png.data[i] = v; png.data[i + 1] = v; png.data[i + 2] = v; png.data[i + 3] = 0xff;
   }
   return PNG.sync.write(png);
 }
@@ -192,10 +194,12 @@ const meets = (cells: Box[], b: Box) =>
   cells.filter(c => c.x0 < b.x1 - EPS && c.x1 > b.x0 + EPS && c.y0 < b.y1 - EPS && c.y1 > b.y0 + EPS);
 
 const reads: Record<string, Read> = {};
+let fixtureDir = '';
 
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(240_000);
   const dir = renderFixtures(SPECS, TAG);
+  fixtureDir = dir;
   const page = await browser.newPage({ baseURL: process.env.ORK3_E2E_BASE_URL ?? 'http://127.0.0.1:19080/orkui/' });
   await page.setViewportSize({ width: 1280, height: 1700 });
   await serveFixtures(page, dir);
@@ -246,4 +250,40 @@ test('the squiggle is not moved: without a ribbon the top flourish carries no of
       expect(r.inline, `${short} ${h}`).not.toMatch(/\b(left|bottom)\s*:/);
     }
   }
+});
+
+/*
+ * The heraldry's ink is read only from a DECODED image. An image whose natural size is
+ * known but whose pixels are still arriving draws nothing onto a canvas, and its ink would
+ * read as bare paper. The engine must take the whole drawn box then. Shown here with a
+ * device whose lower half is white (paper, under multiply): decoded, the ribbon may use that
+ * paper; reported not yet complete, it must clear the whole box.
+ */
+test('heraldry not yet decoded is judged as its whole drawn box, never as no heraldry', async ({ browser }) => {
+  const page = await browser.newPage({ baseURL: process.env.ORK3_E2E_BASE_URL ?? 'http://127.0.0.1:19080/orkui/' });
+  await page.setViewportSize({ width: 1280, height: 1700 });
+  await serveFixtures(page, fixtureDir);
+  const half = block(417, 597, 0.5);
+  await page.route('**/orkui/__fixture/rc-halfink-*.png', route => route.fulfill({ status: 200, contentType: 'image/png', body: half }));
+  await openFixture(page, spec('c076', 'centered', 'device', true));
+
+  const refit = (complete: boolean, url: string) => page.evaluate(async ({ complete, url }) => {
+    const award = document.querySelector('.Award') as HTMLElement;
+    const her = (award.parentElement || document).querySelector('.centre-top img') as HTMLImageElement;
+    her.src = url;
+    await her.decode();
+    if (!complete) Object.defineProperty(her, 'complete', { configurable: true, get: () => false });
+    (window as any).ScrolleryTypeset.layoutTop(award);
+  }, { complete, url });
+
+  /* A fresh URL each time, so neither run reads the other's cached ink. */
+  await refit(true, '/orkui/__fixture/rc-halfink-a.png');
+  const decoded = await measure(page);
+  await refit(false, '/orkui/__fixture/rc-halfink-b.png');
+  const pending = await measure(page);
+  await page.close();
+
+  expect(decoded.shown, 'decoded: the ribbon is drawn').toBe(true);
+  expect(meets(decoded.ink, decoded.heraldry!).length, 'decoded: the ribbon uses the paper of the white lower half').toBeGreaterThan(0);
+  clearOf(pending, 'not yet decoded');
 });
