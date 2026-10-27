@@ -25,20 +25,24 @@ $variant = (string) $s['variant'];
     <?php scroll_partial('parchment'); ?>
 <?php /* Custom Border: the knot partial is battle's one border pass, so the knot takes
          its place — here in match mode, under the heraldry where the knotwork was; in
-         exact mode below, before the band. The band (border_symbols.png) is battle's
+         exact mode below the heraldry (martial) or over the wash (arcane, below). The band (border_symbols.png) is battle's
          own device, not its frame, and stays either way. At column 0 so a certificate
          without one prints the bytes it always did. */ ?>
 <?php if (!scroll_custom_border_active($s)): ?>
     <?php scroll_partial('border', ['primary' => $s['primary'], 'secondary' => $s['secondary']]); ?>
 <?php endif; ?>
 <?php scroll_custom_border_slot($s, 'match'); ?>
+<?php if ($variant !== 'arcane') { scroll_custom_border_slot($s, 'exact'); } ?>
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php if ($variant === 'arcane'): ?>
         <img class="bleed" <?= scroll_art_attrs('battle/arcane/wash.jpg') ?> style="mix-blend-mode: soft-light; opacity:0.8" alt="">
     <?php endif; ?>
 
-<?php scroll_custom_border_slot($s, 'exact'); ?>
+<?php /* Arcane's soft-light wash lies over the heraldry, so there the exact knot stays
+         above the wash (exact colours win) and so above the heraldry; martial has no
+         wash, and its exact knot sits below the heraldry like every other order's. */ ?>
+<?php if ($variant === 'arcane') { scroll_custom_border_slot($s, 'exact'); } ?>
     <?php /* width="2291" is the source's own value; the file is one pixel wider
              (2292). Kept as written — changing it would resize the layer. */ ?>
     <div class="centre" style="margin-bottom:90px;">

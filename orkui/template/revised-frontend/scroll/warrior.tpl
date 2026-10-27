@@ -34,6 +34,9 @@ $rank = (int) $s['rank'];
         <img <?= scroll_art_attrs(scroll_custom_ground($s, 'warrior/bg_10.jpg')) ?> style="mix-blend-mode:soft-light" alt="">
     <?php endif; ?>
 
+<?php /* The exact-colour knot sits BELOW the heraldry (spec), so arms an officer scales
+         or moves into the frame stay on top of it. Nothing else lies between. */ ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php /* All but tenth level have a separate border; there is no border_10.jpg. */ ?>
@@ -44,7 +47,6 @@ $rank = (int) $s['rank'];
          border_N on 1-9, and on the tenth where the frame came out of the ground.
          At column 0 so a certificate without one prints the bytes it always did. */ ?>
 <?php scroll_custom_border_slot($s, 'match'); ?>
-<?php scroll_custom_border_slot($s, 'exact'); ?>
 <?php /* The rank animal of levels 1-8 is painted INTO border_N.jpg, in the frame's
          bottom gap: warrior ships no other rank art below the ninth. So with a Custom
          Border the same file comes back, above the knot and clipped to the clear

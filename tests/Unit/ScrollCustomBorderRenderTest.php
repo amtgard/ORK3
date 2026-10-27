@@ -121,6 +121,32 @@ final class ScrollCustomBorderRenderTest extends TestCase
         }
     }
 
+    /**
+     * The exact-colour knot lies BELOW the heraldry, so arms scaled or moved into the
+     * frame stay on top — except where a whole-page effect already lies over the
+     * heraldry (mask's glow, smith's burn, battle arcane's wash): there exact colours
+     * win and the knot goes over the effect, hence over the heraldry too.
+     */
+    public function testExactKnotIsBelowTheHeraldryUnlessAnEffectCoversTheHeraldry(): void
+    {
+        $above = ['mask' => true, 'smith' => true, 'battle:arcane' => true];
+        foreach (array_keys(Scroll::CustomBorderRules()) as $id) {
+            foreach ((Scroll::Orders()[$id]['variants'] ?: ['']) as $variant) {
+                $html  = $this->render($id, $this->border(false), ['variant' => $variant]);
+                $label = $id . ($variant !== '' ? ':' . $variant : '');
+                $knot  = strpos($html, 'class="sc-knot"');
+                $arms  = strpos($html, 'class="centre-top"');
+                $this->assertNotFalse($knot, $label);
+                $this->assertNotFalse($arms, $label);
+                if (isset($above[$label]) || isset($above[$id])) {
+                    $this->assertGreaterThan($arms, $knot, $label);
+                } else {
+                    $this->assertLessThan($arms, $knot, $label);
+                }
+            }
+        }
+    }
+
     public function testCrownExactModeReplacesBothPasses(): void
     {
         $html = $this->render('crown', $this->border(false));

@@ -18,7 +18,7 @@
     <?php scroll_partial('parchment'); ?>
 <?php /* Custom Border: both border passes go, the glow included. Match mode draws two
          knots here — the plain pass and the blurred, dodged one, adjacent as they
-         were; exact mode draws one plain knot below, before the dragons. At column 0
+         were; exact mode draws one plain knot just below the heraldry. At column 0
          so a certificate without one prints the bytes it always did. */ ?>
 <?php if (!scroll_custom_border_active($s)): ?>
     <?php scroll_partial('border', ['primary' => $s['primary'], 'secondary' => $s['secondary']]); ?>
@@ -30,9 +30,11 @@
     ]); ?>
 <?php endif; ?>
 <?php scroll_custom_border_slot($s, 'match'); ?>
+<?php /* The exact-colour knot sits BELOW the heraldry (spec), so arms an officer scales
+         or moves into the frame stay on top of it. Nothing else lies between. */ ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
-<?php scroll_custom_border_slot($s, 'exact'); ?>
     <?php /* Bare <img>, not wrapped in .centre-bottom — a full-bleed multiply layer. */ ?>
     <img <?= scroll_art_attrs('dragon/dragons.svg') ?> style="mix-blend-mode:multiply;" alt="">
 

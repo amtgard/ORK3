@@ -21,19 +21,21 @@
              one. Keep it above parchment and under the device. */ ?>
     <img <?= scroll_art_attrs('rose/burn.svg') ?> style="mix-blend-mode:multiply;opacity:0.2;filter:hue-rotate(80deg);" alt="">
 
+<?php /* The exact-colour knot sits BELOW the heraldry (spec), so arms an officer scales
+         or moves into the frame stay on top of it. Nothing else lies between. */ ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php /* Two passes of the same border: a multiply to bite into the parchment,
              then a near-opaque normal pass to bring the ink back. DELIBERATE. */ ?>
 <?php /* Custom Border: the knot replaces both passes — one knot per pass, with its
-         blend, in match mode; one plain knot in exact mode, still below the symbol.
+         blend, in match mode; one plain knot in exact mode, just below the heraldry.
          At column 0 so a certificate without one prints the bytes it always did. */ ?>
 <?php if (!scroll_custom_border_active($s)): ?>
     <img <?= scroll_art_attrs('rose/border.png') ?> style="mix-blend-mode:multiply;" alt="">
     <img <?= scroll_art_attrs('rose/border.png') ?> style="opacity:0.85;" alt="">
 <?php endif; ?>
 <?php scroll_custom_border_slot($s, 'match'); ?>
-<?php scroll_custom_border_slot($s, 'exact'); ?>
 
     <?php /* rose ships symbol_0.png, so the path is unguarded — rank 0 draws the
              unranked device, exactly as the source does. No blend mode here. */ ?>

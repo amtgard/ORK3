@@ -22,12 +22,14 @@
     <?php /* Replaces the parchment partial. jovious paints its knot INTO bg.jpg, so a
              Custom Border swaps in bg-noborder.jpg — the same ground, frame removed —
              and draws its knot over it: in match mode straight on the ground, where
-             the painted one was; in exact mode at the slot before the symbol. */ ?>
+             the painted one was; in exact mode just below the heraldry. */ ?>
     <img <?= scroll_art_attrs(scroll_custom_ground($s, 'jovious/bg.jpg')) ?> alt="">
 <?php scroll_custom_border_slot($s, 'match'); ?>
 
-    <?php scroll_partial('heraldry', ['s' => $s]); ?>
+<?php /* The exact-colour knot sits BELOW the heraldry (spec), so arms an officer scales
+         or moves into the frame stay on top of it. Nothing else lies between. */ ?>
 <?php scroll_custom_border_slot($s, 'exact'); ?>
+    <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php /* jovious ships symbol_0.png, so the path is unguarded — as in the source. */ ?>
     <div class="centre-bottom"><img <?= scroll_art_attrs('jovious/symbol_' . (int) $s['rank'] . '.png') ?> alt=""></div>

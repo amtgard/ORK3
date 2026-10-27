@@ -115,8 +115,8 @@ $knotStyle = Scroll::CustomKnotStyle((string) $recipe['ground']);
 
 <?php /* Custom Border: the recipe's one border pass — knot, raster frame or band — is
          replaced, whichever it was (CustomBorderRule() derives the pass from the
-         recipe). Match mode draws the knot here, where the border was; exact mode at
-         the slot below, before the rank. At column 0 so a certificate without one
+         recipe). Match mode draws the knot here, where the border was; exact mode just
+         below the heraldry. At column 0 so a certificate without one
          prints the bytes it always did. */ ?>
 <?php $customBorder = scroll_custom_border_active($s); ?>
     <?php if ($knot && !$customBorder): ?>
@@ -132,6 +132,9 @@ $knotStyle = Scroll::CustomKnotStyle((string) $recipe['ground']);
     <?php endif; ?>
 <?php scroll_custom_border_slot($s, 'match'); ?>
 
+<?php /* The exact-colour knot sits BELOW the heraldry (spec), so arms an officer scales
+         or moves into the frame stay on top of it. Nothing else lies between. */ ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
     <?php if ($dark): ?>
         <?php /* On a dark ground the device cannot simply be screened: 624 of the 626
                  files under assets/heraldry are opaque JPEGs and most have a white
@@ -157,7 +160,6 @@ $knotStyle = Scroll::CustomKnotStyle((string) $recipe['ground']);
         </div>
     <?php endif; ?>
 
-<?php scroll_custom_border_slot($s, 'exact'); ?>
     <?php /* Guarded on rank > 0 for EVERY set: common, zodiac and flame ship rank_1..10
              only. garber also ships a rank_0, which is deliberately never used here so
              the rule stays one rule.
