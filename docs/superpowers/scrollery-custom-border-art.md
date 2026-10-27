@@ -226,8 +226,6 @@ and shading survive every colour.
 **Ink data:**
 - The real `ink-extents.json` gives the three files the same `box` and `ink` as their
   `jovious/ribbon-*` counterparts.
-- **No grid in the manifest yet.** `bin/build-scroll-ink-extents.php` emits a `grid` only for
-  files named as flourishes (`Scroll::DEFAULT_RESOURCES` or a `flourish_*` in
-  `scroll-orders.php`), and nothing names `common/ribbon/*` yet.
-- **The grids match.** A scratch copy of the script that also named them gave all three a grid
-  identical to the `jovious/ribbon-*` one.
+- **Grids:** `flourishFiles()` in `bin/build-scroll-ink-extents.php` also names
+  `common/ribbon/ribbon-*.png`, since they replace the flourishes when Custom Ribbon is on. Each
+  committed grid is byte-equal to its `jovious/ribbon-*` counterpart's (fix commit `2462577e5`).
