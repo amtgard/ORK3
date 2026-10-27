@@ -1355,7 +1355,8 @@ class Model_Scrollery extends Model
     /**
      * Master heraldry URLs for each source the Customize Design card can pick, '' where
      * there are none. Kingdom follows the park's own kingdom; park is '' on a kingdom
-     * scope; persona is the recipient's own arms and needs a real player.
+     * scope unless a recipient is given, in which case it is the recipient's home park's
+     * arms; persona is the recipient's own arms and needs a real player.
      *
      * @return array{kingdom:string,park:string,persona:string}
      */
@@ -1365,13 +1366,14 @@ class Model_Scrollery extends Model
 
         $kingdomId = $scopeId;
         if ($scopeType === 'park') {
-            $park      = $this->park_details($scopeId);
-            $kingdomId = (int) ($park['KingdomId'] ?? 0);
-            if ((int) ($park['HasHeraldry'] ?? 0) === 1) {
-                $out['park'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
-                    ['Type' => 'Park', 'Id' => $scopeId, 'Size' => 'master']
-                )['Url'];
-            }
+            $kingdomId = (int) ($this->park_details($scopeId)['KingdomId'] ?? 0);
+        }
+        $recipientParkId = $playerId > 0 ? (int) ($this->scroll_recipient($playerId)['ParkId'] ?? 0) : 0;
+        $parkId          = Scroll::HeraldryParkId($scopeType, $scopeId, $recipientParkId);
+        if ($parkId > 0 && (int) ($this->park_details($parkId)['HasHeraldry'] ?? 0) === 1) {
+            $out['park'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                ['Type' => 'Park', 'Id' => $parkId, 'Size' => 'master']
+            )['Url'];
         }
         if ($kingdomId > 0 && (int) ($this->kingdom_short_info($kingdomId)['HasHeraldry'] ?? 0) === 1) {
             $out['kingdom'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(

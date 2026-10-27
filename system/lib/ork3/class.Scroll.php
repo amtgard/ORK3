@@ -751,6 +751,20 @@ class Scroll extends Ork3
     }
 
     /**
+     * The park whose arms the Park heraldry source draws: the scope's own park on a
+     * park scope; on a kingdom scope (no single park) the recipient's home park;
+     * 0 when there is none.
+     */
+    public static function HeraldryParkId(string $scopeType, int $scopeId, int $recipientParkId): int
+    {
+        if ($scopeType === 'park') {
+            return max(0, $scopeId);
+        }
+
+        return max(0, $recipientParkId);
+    }
+
+    /**
      * Which heraldry source actually draws: the requested one when it has arms,
      * otherwise the scope's own (kingdom for a kingdom scope, park for a park scope).
      * Unknown or unavailable never reaches a URL lookup; a missing default simply

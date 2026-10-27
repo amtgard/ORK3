@@ -36,4 +36,20 @@ final class ScrollHeraldrySourceTest extends TestCase
     {
         $this->assertSame('park', Scroll::ResolveHeraldrySource('../x', 'park', self::ALL));
     }
+
+    public function testParkIdIsTheScopesOwnOnAParkScope(): void
+    {
+        $this->assertSame(12, Scroll::HeraldryParkId('park', 12, 99));
+    }
+
+    public function testParkIdIsTheRecipientsHomeParkOnAKingdomScope(): void
+    {
+        $this->assertSame(99, Scroll::HeraldryParkId('kingdom', 3, 99));
+    }
+
+    public function testParkIdIsZeroWithoutARecipientParkOnAKingdomScope(): void
+    {
+        $this->assertSame(0, Scroll::HeraldryParkId('kingdom', 3, 0));
+        $this->assertSame(0, Scroll::HeraldryParkId('kingdom', 3, -4));
+    }
 }

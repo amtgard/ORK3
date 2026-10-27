@@ -930,7 +930,9 @@
         if (src === 'persona') {
             return playerId.value ? 'This recipient has no heraldry on file' : 'Choose a recipient below first';
         }
-        if (src === 'park' && cfg.scopeType === 'kingdom') { return 'No single park for a kingdom scroll'; }
+        if (src === 'park' && cfg.scopeType === 'kingdom') {
+            return playerId.value ? "This recipient's park has no heraldry on file" : 'Choose a recipient below first';
+        }
         return 'This ' + src + ' has no heraldry on file';
     }
 
@@ -946,7 +948,11 @@
 
     /* What the server drew, from a preview response. */
     function takeHeraldry(d) {
-        if (d.HeraldrySources) { heraldryHave.persona = !!d.HeraldrySources.persona; }
+        if (d.HeraldrySources) {
+            heraldryHave.persona = !!d.HeraldrySources.persona;
+            // A kingdom scroll has no park of its own: Park is the recipient's home park.
+            if (cfg.scopeType === 'kingdom') { heraldryHave.park = !!d.HeraldrySources.park; }
+        }
         if (typeof d.HeraldrySource === 'string' && has(heraldryHave, d.HeraldrySource)) {
             heraldryChoice = d.HeraldrySource;
         }
@@ -970,10 +976,11 @@
      */
     function recipientCleared() {
         heraldryHave.persona = false;
-        var wasPersona = heraldryChoice === 'persona';
-        if (wasPersona) { heraldryChoice = scopeSource; }
+        if (cfg.scopeType === 'kingdom') { heraldryHave.park = false; }
+        var wasGone = heraldryChoice === 'persona' || (cfg.scopeType === 'kingdom' && heraldryChoice === 'park');
+        if (wasGone) { heraldryChoice = scopeSource; }
         paintHeraldryBar();
-        if (wasPersona) { reload(); }
+        if (wasGone) { reload(); }
     }
 
     /*
