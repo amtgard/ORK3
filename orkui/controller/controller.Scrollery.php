@@ -156,9 +156,9 @@ class Controller_Scrollery extends Controller
          * checkbox can hide itself on an incompatible award without a round trip — the
          * server still applies the rule and ignores a border it cannot honour.
          *
-         * Kingdom/park arms are fixed for the page (the scope does not change), so
-         * their availability is known now. Persona depends on the recipient and comes
-         * back on every preview response instead. heraldry_sources() with no player
+         * The scope's own arms are known now. The Park arms on a kingdom scope follow
+         * the recipient's home park, and Persona the recipient too, so both come back
+         * on every preview response instead. heraldry_sources() with no player
          * asks only the two cached scope lookups.
          */
         $this->data['CustomBorderRules'] = Scroll::CustomBorderRules();
@@ -921,9 +921,9 @@ class Controller_Scrollery extends Controller
             'OrderId'     => (string) ($scroll['order'] ?? ''),
             'Rank'        => (int) ($scroll['rank'] ?? 0),
             'Variant'     => (string) ($scroll['variant'] ?? ''),
-            // The design rides in the same JSON, beside the custom recipe keys (which stay
-            // as they were), so a reprint can tell what the certificate looked like.
-            'Recipe'      => array_merge($scroll['recipe'] ?? [], ['design' => $scroll['design'] ?? null]),
+            // The drawn design rides in the same JSON, beside the custom recipe keys, and
+            // only when it is not the default (see Scroll::PrintRecipe()).
+            'Recipe'      => Scroll::PrintRecipe($scroll),
         ]);
     }
 

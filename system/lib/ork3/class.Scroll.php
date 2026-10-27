@@ -2086,6 +2086,11 @@ class Scroll extends Ork3
             }
         }
 
+        // The design handed back (and logged) is what was DRAWN, not what was asked for:
+        // a border the order cannot lose is not a border the certificate has.
+        $design['customBorder'] = $customBorder !== null;
+        $design['matchStyle']   = $customBorder !== null && $design['matchStyle'];
+
         return [
             'mundaneId'   => max(0, $mundaneId),
             'scopeType'   => $scopeType,
@@ -2156,6 +2161,24 @@ class Scroll extends Ork3
             'customRibbon' => $design['customRibbon'] ? $design['ribbonColor'] : null,
             'customBorder' => $customBorder,
         ];
+    }
+
+    /**
+     * What a print logs in recipe_json: the custom recipe's keys at the top level (as
+     * ever) plus a 'design' key ONLY when the drawn design differs from the default, so
+     * a print that chose nothing logs exactly what it did before designs existed.
+     *
+     * @param array<string, mixed> $scroll a BuildScroll() result
+     * @return array<string, mixed>
+     */
+    public static function PrintRecipe(array $scroll): array
+    {
+        $recipe = is_array($scroll['recipe'] ?? null) ? $scroll['recipe'] : [];
+        $design = $scroll['design'] ?? null;
+        if (is_array($design) && $design !== self::DEFAULT_DESIGN) {
+            $recipe['design'] = $design;
+        }
+        return $recipe;
     }
 
     /**

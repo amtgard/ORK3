@@ -915,8 +915,9 @@
      * choice whose recipient was cleared, or has no arms, comes back as the scope
      * default, and the bar says so rather than claiming arms that are not there.
      *
-     * Kingdom and Park are fixed for the page (cfg.heraldryAvailable). Persona is the
-     * recipient's, so only a preview response can say whether it exists.
+     * The scope's own arms are known on page load (cfg.heraldryAvailable). On a kingdom
+     * scope the Park arms follow the recipient's home park, and Persona is the
+     * recipient's, so only a preview response can say whether either exists.
      */
     var scopeSource    = cfg.scopeType === 'kingdom' ? 'kingdom' : 'park',
         heraldryChoice = scopeSource,

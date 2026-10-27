@@ -210,4 +210,46 @@ final class ScrollDesignTest extends TestCase
         $this->assertNull($s['customRibbon']);
         $this->assertSame(Scroll::DEFAULT_DESIGN, $s['design']);
     }
+
+    public function testLoggedDesignReflectsWhatWasDrawn(): void
+    {
+        $req = ['customBorder' => '1', 'matchStyle' => '1'];
+        $flame = $this->build('flame', $req);
+        $this->assertNull($flame['customBorder']);
+        $this->assertFalse($flame['design']['customBorder']);
+        $this->assertFalse($flame['design']['matchStyle']);
+
+        $crown = $this->build('crown', $req);
+        $this->assertTrue($crown['design']['customBorder']);
+        $this->assertTrue($crown['design']['matchStyle']);
+    }
+
+    public function testPrintRecipeOmitsDefaultDesign(): void
+    {
+        $s = $this->build('crown', []);
+        $this->assertSame([], Scroll::PrintRecipe($s));
+
+        $flame = $this->build('flame', ['customBorder' => '1']);
+        $this->assertSame([], Scroll::PrintRecipe($flame));
+    }
+
+    public function testPrintRecipeStoresDrawnDesign(): void
+    {
+        $r = Scroll::PrintRecipe($this->build('crown', ['customBorder' => '1']));
+        $this->assertTrue($r['design']['customBorder']);
+    }
+
+    public function testPrintRecipeKeepsCustomRecipeKeysAtTopLevel(): void
+    {
+        $s = Scroll::BuildScroll($this->row(94), ['player' => 'T', 'recipe' => ['ground' => 'parchment'], 'design' => ['customBorder' => '1']]);
+        $this->assertNotSame([], $s['recipe']);
+        $r = Scroll::PrintRecipe($s);
+        foreach ($s['recipe'] as $k => $v) {
+            $this->assertSame($v, $r[$k]);
+        }
+        $this->assertArrayHasKey('design', $r);
+        $d = Scroll::PrintRecipe(Scroll::BuildScroll($this->row(94), ['player' => 'T', 'recipe' => ['ground' => 'parchment']]));
+        $this->assertArrayNotHasKey('design', $d);
+        $this->assertSame($s['recipe'], array_diff_key($r, ['design' => 1]));
+    }
 }

@@ -54,11 +54,11 @@ $rank = (int) $s['rank'];
          x 238 / 2312) above the bottom band (ink starts at y 3057), plus the band's
          own gap (x 985-1564). Measured on the shipped art: no frame ink in that
          region on any rank and no knot ink either, and on ranks 2-7 every animal
-         pixel is inside it. The snake (1) and the panther's tail (8) cross the band
-         and are cut at the gap's edges, where they run under the knot; the tail's
+         pixel is inside it. The panther's tail (8) crosses the band and is cut at
+         the gap's edges, where it runs under the knot; the tail's
          tip, which lies on the band's top edge right of the gap (x 1630-1760,
          y 3007-3056), is notched out on 8 so it does not float free of the tail. */ ?>
-<?php if ($rank >= 1 && $rank <= 8 && scroll_custom_border_active($s)): ?>
+<?php if ($rank >= 2 && $rank <= 8 && scroll_custom_border_active($s)): ?>
 <?php $keepRight = $rank === 8 ? '90.1961% 90.9091%,62.7451% 90.9091%,62.7451% 92.4242%' : '90.1961% 92.4242%'; ?>
     <img <?= scroll_art_attrs('warrior/border_' . $rank . '.jpg') ?> class="sc-rank-keep" style="mix-blend-mode:multiply;clip-path:polygon(9.8039% 65.1515%,90.1961% 65.1515%,<?= $keepRight ?>,61.3725% 92.4242%,61.3725% 100%,38.6275% 100%,38.6275% 92.4242%,9.8039% 92.4242%);" alt="">
 <?php endif; ?>
