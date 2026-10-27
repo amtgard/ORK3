@@ -976,6 +976,12 @@
       "print": { "file": "icons/reset.webp", "bytes": 1568 },
       "display": { "file": "icons/reset_display.webp", "bytes": 670, "dimensions": "33x33" }
     },
+    "jovious/bg-noborder.jpg": {
+      "sha": "4eb3cabbafce603c",
+      "bytes": 932564,
+      "print": { "file": "jovious/bg-noborder.webp", "bytes": 554704 },
+      "display": { "file": "jovious/bg-noborder_display.webp", "bytes": 122636, "dimensions": "850x1100" }
+    },
     "jovious/bg.jpg": {
       "sha": "bd156d73c268c143",
       "bytes": 3426835,
@@ -1329,6 +1335,12 @@
       "bytes": 41385,
       "print": { "file": "smith/symbol.webp", "bytes": 17598 },
       "display": { "file": "smith/symbol_display.webp", "bytes": 3806, "dimensions": "290x147" }
+    },
+    "warrior/bg_10-noborder.jpg": {
+      "sha": "105a61665ce4f923",
+      "bytes": 399636,
+      "print": { "file": "warrior/bg_10-noborder.webp", "bytes": 210160 },
+      "display": { "file": "warrior/bg_10-noborder_display.webp", "bytes": 33328, "dimensions": "850x1100" }
     },
     "warrior/bg_10.jpg": {
       "sha": "5e951d32db902167",
