@@ -625,6 +625,24 @@ symbol {
     margin-bottom: -20px;
 }
 
+/* The reason's six ruled lines. scrollery-autofit.js shrinks the reason's font toward its
+   0.55em floor, but the rule kept its 13px thickness, so against shrunk type it read 40%
+   heavier (0.24em against 0.167em at the full-size 77.8px) and crowded the descenders of
+   g, p, q and y. The thickness is therefore em-based: 0.1671em is 13px at the full-size reason.
+
+   The offset is NOT em-based, on purpose. The rule's top sits 7px under the baseline (its
+   bottom edge is the negative margin-bottom, its top is that less the height). Scaling that
+   7px with the font moved the top of the rule 2px TOWARD the type at the floor and shifted
+   every mid-size reason, which is the opposite of the fix. So the top stays at 7px at every
+   size and only the lower edge follows the font: margin-top + height + margin-bottom is
+   still zero, so the line box, and with it the rule pitch, is unchanged. Scoped to the
+   reason; the date and signature rules keep their px. */
+.Award .Award_Reason .Underline {
+    height: 0.1671em;
+    margin-top: 7px;
+    margin-bottom: calc(-7px - 0.1671em);
+}
+
 .Award .Flourish {
     /* The extra images around text, e.g. the squigglies around the issuing text. */
     position: absolute;
