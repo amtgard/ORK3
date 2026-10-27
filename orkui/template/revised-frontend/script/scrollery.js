@@ -8,6 +8,8 @@
      * text fields write into the preview's own DOM
      * the heraldry sliders write CSS custom properties, exactly as Arcanyst's
        --heraldry-filter / --heraldry-transform did
+     * the Customize Design colours write --knot-c1 / --knot-c2 on the knot and
+       flood-color on the ribbon filter (its toggles and heraldry source re-fetch)
 
    so dragging a slider or typing a name costs no round trip. With no Aurelia
    there is no shadow root either, so this is plain querySelector again.
@@ -494,9 +496,22 @@
          * the control did nothing. Read from the option's stamp, never from a copy of
          * the list — the template stamped it from Scroll::GroundDrawsOwnBorder().
          */
-        var ownBorder = !!(g && g.dataset.ownBorder === '1');
-        if (borderFd)  { borderFd.classList.toggle('is-inert', ownBorder); }
-        if (borderEl)  { borderEl.setAttribute('aria-disabled', ownBorder ? 'true' : 'false'); }
+        /*
+         * A live Custom Border (Customize Design) on the custom order supersedes both
+         * of this card's border controls: the knot is drawn whatever they say, and on a
+         * framed ground the ground is swapped for its frameless twin. So they are
+         * genuinely DISABLED — not merely inert — with one line saying why, and the
+         * notes that explain them are dropped as no longer true. Their values still
+         * travel in addRecipe(); they come back the moment the box is unticked.
+         */
+        var cbLock = customBorderActive() && !!selected() && selected().dataset.order === 'custom';
+        if (borderEl)     { borderEl.disabled = cbLock; }
+        if (paletteEl)    { paletteEl.disabled = cbLock; }
+        if (recipeCbHint) { recipeCbHint.hidden = !cbLock; }
+
+        var ownBorder = !cbLock && !!(g && g.dataset.ownBorder === '1');
+        if (borderFd)  { borderFd.classList.toggle('is-inert', ownBorder || cbLock); }
+        if (borderEl)  { borderEl.setAttribute('aria-disabled', (ownBorder || cbLock) ? 'true' : 'false'); }
         if (ownBorder) {
             notes.push('The ' + (g ? g.textContent.trim() : 'chosen') + ' background already has its '
                      + 'own border drawn into it, so no separate border is added — a second one '
@@ -504,7 +519,7 @@
         }
 
         // The palette reaches the border, so a suppressed border makes it inert too.
-        var knot = !ownBorder && borderDrawsKnot();
+        var knot = !cbLock && !ownBorder && borderDrawsKnot();
         if (paletteFd) { paletteFd.classList.toggle('is-inert', !knot); }
         // The swatch is the loudest part of the lie — two colours painted beside a
         // control that reaches nothing — so it comes off entirely rather than fading.
@@ -512,7 +527,7 @@
         // .is-inert is pointer-events only, which is invisible to a screen reader;
         // aria-disabled is the same fact said in the other channel.
         if (paletteEl) { paletteEl.setAttribute('aria-disabled', knot ? 'false' : 'true'); }
-        if (!knot && !ownBorder) {
+        if (!knot && !ownBorder && !cbLock) {
             notes.push('The ' + (b ? b.textContent.trim() : 'chosen') + ' border is a fixed '
                      + 'illustration, so the border colours have no effect on it. Choose Knotwork '
                      + 'or Battle to colour the border.');
@@ -565,13 +580,25 @@
         if (recipeEl && recipeEl.style.display !== 'none') {
             parts.push(optionLabel(groundEl) + ' ground');
 
-            var border = optionLabel(borderEl);
-            parts.push(borderDrawsKnot()
-                ? border + ' border in ' + optionLabel(paletteEl)
-                : border + ' border (a fixed illustration, so the border colours do not apply)');
+            // Under a live Custom Border these two controls are disabled and the
+            // knot below is the border, so naming them would describe the wrong one.
+            if (!customBorderActive()) {
+                var border = optionLabel(borderEl);
+                parts.push(borderDrawsKnot()
+                    ? border + ' border in ' + optionLabel(paletteEl)
+                    : border + ' border (a fixed illustration, so the border colours do not apply)');
+            }
 
             if (rank >= 1) { parts.push(optionLabel(rankSetEl) + ' numerals'); }
         }
+
+        // The Customize Design choices that change the picture — only when honoured,
+        // for the same reason the inert recipe parts are left out above.
+        if (customBorderActive()) {
+            parts.push('custom knot border in ' + colors.c1 + ' and ' + colors.c2
+                + (matchEl && matchEl.checked ? ', matched to the scroll style' : ''));
+        }
+        if (ribbonEl && ribbonEl.checked) { parts.push('ribbons in ' + colors.ribbon); }
 
         parts.push(rank >= 1 ? 'rank ' + rank : 'unranked, with a blank line for the rank');
 
@@ -654,6 +681,327 @@
         params.set('rankSet',   rankSetEl.value);
     }
 
+    /* ---- Customize Design: heraldry source, Custom Border, Custom Ribbon -- */
+
+    var cbEl         = $('sc-custom-border'),
+        cbOpt        = $('sc-custom-border-opt'),
+        cbNa         = $('sc-custom-border-na'),
+        cbColors     = $('sc-custom-border-colors'),
+        matchEl      = $('sc-match-style'),
+        ribbonEl     = $('sc-custom-ribbon'),
+        ribbonColors = $('sc-custom-ribbon-colors'),
+        recipeCbHint = $('sc-recipe-cb-hint'),
+        heraldryBtns = document.querySelectorAll('[data-heraldry-source]');
+
+    /*
+     * Hex input, the one shape the server accepts (Scroll::NormaliseHexColour): six
+     * hex digits, '#' optional, any case, surrounding space forgiven. Anything else —
+     * '#abc', 'red', a CSS injection — is null, and null never reaches a style.
+     * Returned as uppercase #RRGGBB, the form the server stores and prints.
+     */
+    function normHex(raw) {
+        var m = /^#?([0-9a-f]{6})$/i.exec(String(raw == null ? '' : raw).trim());
+        return m ? '#' + m[1].toUpperCase() : null;
+    }
+
+    /*
+     * The three live colours. They open on what the template stamped into the hex
+     * boxes — Scroll::DEFAULT_DESIGN, via the controller — and are then corrected from
+     * the officer's remembered set, if there is one. Every later write goes through
+     * setColor(), so these, the two inputs and the preview never disagree.
+     */
+    var colors = {};
+
+    var COLOR_CONTROLS = [
+        { key: 'c1',     id: 'sc-color1',       paint: paintKnot },
+        { key: 'c2',     id: 'sc-color2',       paint: paintKnot },
+        { key: 'ribbon', id: 'sc-ribbon-color', paint: paintRibbon }
+    ].filter(function (c) {
+        c.picker = $(c.id);
+        c.hex    = $(c.id + '-hex');
+        c.err    = $(c.id + '-err');
+        return !!(c.picker && c.hex);
+    });
+
+    /*
+     * The officer's last colours, remembered per browser as a convenience — a kingdom's
+     * officer will want their kingdom's pair every time. Every access is wrapped:
+     * storage throws in a private window, with site data blocked, or when full, and
+     * none of that may cost the page anything but the memory.
+     */
+    var COLOR_STORE = 'scrollery.customBorder.colors';
+
+    function recallColors() {
+        try {
+            var saved = JSON.parse(window.localStorage.getItem(COLOR_STORE) || 'null');
+            return saved && typeof saved === 'object' ? saved : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function rememberColors() {
+        try {
+            window.localStorage.setItem(COLOR_STORE, JSON.stringify(
+                { c1: colors.c1, c2: colors.c2, ribbon: colors.ribbon }));
+        } catch (e) { /* convenience only — see above */ }
+    }
+
+    /*
+     * The repaints. _knot.tpl carries the pair as --knot-c1 / --knot-c2 on every .sc-knot
+     * layer (dragon draws two), and _text.tpl's ribbon filter takes its colour from the
+     * flood-color of .sc-ribbon-flood — so a colour change is a handful of attribute
+     * writes on markup already in the preview, exactly like the heraldry sliders, and
+     * costs no request. With the box unticked there is nothing to find, and that is
+     * the correct no-op: the colours still travel on the next reload() and the print.
+     */
+    function paintKnot() {
+        mount.querySelectorAll('.sc-knot').forEach(function (el) {
+            el.style.setProperty('--knot-c1', colors.c1);
+            el.style.setProperty('--knot-c2', colors.c2);
+        });
+    }
+
+    function paintRibbon() {
+        mount.querySelectorAll('.sc-ribbon-flood').forEach(function (el) {
+            el.setAttribute('flood-color', colors.ribbon);
+        });
+    }
+
+    function markHex(ctl, ok) {
+        if (ok) { ctl.hex.removeAttribute('aria-invalid'); } else { ctl.hex.setAttribute('aria-invalid', 'true'); }
+        if (ctl.err) { ctl.err.hidden = ok; }
+    }
+
+    /*
+     * One colour, from whichever input moved. The input the officer is typing in is
+     * left alone — rewriting a box mid-keystroke moves the caret — and the other one
+     * follows. The native picker only speaks lowercase #rrggbb.
+     */
+    function setColor(ctl, hex, from) {
+        colors[ctl.key] = hex;
+        if (from !== 'picker') { ctl.picker.value = hex.toLowerCase(); }
+        if (from !== 'hex')    { ctl.hex.value = hex; }
+        markHex(ctl, true);
+        ctl.paint();
+        rememberColors();
+    }
+
+    /*
+     * Could this text still BECOME a colour if the officer kept typing? '#1e4' can;
+     * '#1e4g' and '#1e4fa3b' cannot. Only the hopeless ones are flagged while typing —
+     * flagging every half-typed value would put an error under the box on the first
+     * keystroke. The rest are judged on 'change', when the officer is done.
+     */
+    function hexCouldComplete(v) {
+        return /^#?[0-9a-f]{0,5}$/i.test(v.trim());
+    }
+
+    COLOR_CONTROLS.forEach(function (ctl) {
+        var saved = normHex(recallColors()[ctl.key]);
+        colors[ctl.key] = saved || normHex(ctl.hex.value) || normHex(ctl.picker.value) || '';
+        ctl.hex.value    = colors[ctl.key];
+        ctl.picker.value = colors[ctl.key].toLowerCase();
+
+        // 'input' fires all the way through a drag across the picker, so the band
+        // follows the cursor live.
+        ctl.picker.addEventListener('input', function () {
+            var hex = normHex(ctl.picker.value);
+            if (hex) { setColor(ctl, hex, 'picker'); }
+        });
+
+        ctl.hex.addEventListener('input', function () {
+            var hex = normHex(ctl.hex.value);
+            if (hex) { setColor(ctl, hex, 'hex'); return; }
+            // Not applied either way: the preview keeps the last valid colour.
+            markHex(ctl, hexCouldComplete(ctl.hex.value) && ctl.hex.getAttribute('aria-invalid') !== 'true');
+        });
+
+        ctl.hex.addEventListener('change', function () {
+            var hex = normHex(ctl.hex.value);
+            if (hex) {
+                // Done typing: show the canonical spelling the print will use.
+                ctl.hex.value = hex;
+                markHex(ctl, true);
+            } else {
+                markHex(ctl, false);
+            }
+            syncSummary();
+        });
+
+        // The spoken sentence names the colours, but it is an aria-live region, so it
+        // is re-said once the officer settles on one ('change'), not on every 'input'
+        // tick of a drag.
+        ctl.picker.addEventListener('change', syncSummary);
+    });
+
+    /*
+     * Can the chosen award take a Custom Border, right now?
+     *
+     * A line-for-line mirror of Scroll::CustomBorderRule()'s yes/no over the SAME data
+     * (data/scroll-custom-border.php, handed over by the controller as
+     * cfg.customBorderRules) — not a second list. The server applies the rule again
+     * and silently ignores a border it cannot honour, so this decides only whether
+     * the checkbox is offered; it cannot make a certificate wrong.
+     *
+     *   - an order absent from the data is incompatible (flame, garber, zodiac);
+     *   - variant-keyed passes need the variant BuildScroll() would pick: the one
+     *     asked for if the order has it, otherwise its first;
+     *   - a rank mapped to false is incompatible, at the CLAMPED rank the art is
+     *     drawn from (Scroll::ClampRank, the order's own from/to — the option's
+     *     data-min/data-max);
+     *   - the custom order on a ground that paints its own frame is compatible only
+     *     where recipeGrounds maps that ground to a frameless twin.
+     */
+    function has(obj, key) { return !!obj && Object.prototype.hasOwnProperty.call(obj, key); }
+
+    function customBorderCompatible() {
+        var opt   = selected(),
+            rules = cfg.customBorderRules || {},
+            order = opt ? opt.dataset.order : '';
+        if (!order || !has(rules, order)) { return false; }
+        var rule = rules[order] || {};
+
+        // A list arrives as a JSON array; a variant-keyed map as an object.
+        if (rule.passes && typeof rule.passes === 'object' && !Array.isArray(rule.passes)) {
+            var variants = (opt.dataset.variants || '').split(',').filter(Boolean),
+                variant  = variants.indexOf(variantEl.value) !== -1 ? variantEl.value : (variants[0] || '');
+            if (!has(rule.passes, variant)) { return false; }
+        }
+
+        var min  = parseInt(opt.dataset.min, 10) || 0,
+            max  = parseInt(opt.dataset.max, 10) || 10,
+            rank = Math.max(min, Math.min(max, parseInt(rankEl.value, 10) || 0));
+        if (has(rule.ranks, String(rank)) && rule.ranks[rank] === false) { return false; }
+
+        if (rule.recipeGrounds && groundEl) {
+            var g = groundEl.options[groundEl.selectedIndex];
+            if (g && g.dataset.ownBorder === '1' && typeof rule.recipeGrounds[groundEl.value] !== 'string') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /* Ticked AND honoured — the state the certificate is actually drawn in. */
+    function customBorderActive() {
+        return !!(cbEl && cbEl.checked && customBorderCompatible());
+    }
+
+    /*
+     * The card follows the award. On an incompatible one the checkbox is HIDDEN, not
+     * unticked, and a muted label carrying the reason stands in its place — so an
+     * officer who taps a Flame award to look at it and comes back finds their border
+     * still on. The colours show only under a live, honoured box.
+     *
+     * Then the recipe card's note, which reads customBorderActive() to lock the custom
+     * order's own border and palette — so every caller gets both in one call.
+     */
+    function syncDesign() {
+        var ok = customBorderCompatible();
+        if (cbOpt)        { cbOpt.hidden = !ok; }
+        if (cbNa)         { cbNa.hidden = ok; }
+        if (cbColors)     { cbColors.hidden = !(ok && cbEl && cbEl.checked); }
+        if (ribbonColors) { ribbonColors.hidden = !(ribbonEl && ribbonEl.checked); }
+        syncRecipeNote();
+    }
+
+    /*
+     * The heraldry source.
+     *
+     * heraldryChoice is what goes out as heraldrySource. It opens on the scope's own
+     * arms — what every scroll has always drawn — and then follows each preview
+     * response's HeraldrySource, which is what the server actually drew: a Persona
+     * choice whose recipient was cleared, or has no arms, comes back as the scope
+     * default, and the bar says so rather than claiming arms that are not there.
+     *
+     * Kingdom and Park are fixed for the page (cfg.heraldryAvailable). Persona is the
+     * recipient's, so only a preview response can say whether it exists.
+     */
+    var scopeSource    = cfg.scopeType === 'kingdom' ? 'kingdom' : 'park',
+        heraldryChoice = scopeSource,
+        heraldryHave   = {
+            kingdom: !!(cfg.heraldryAvailable && cfg.heraldryAvailable.kingdom),
+            park:    !!(cfg.heraldryAvailable && cfg.heraldryAvailable.park),
+            persona: false
+        };
+
+    function heraldryTip(src) {
+        if (src === 'persona') {
+            return playerId.value ? 'This recipient has no heraldry on file' : 'Choose a recipient below first';
+        }
+        if (src === 'park' && cfg.scopeType === 'kingdom') { return 'No single park for a kingdom scroll'; }
+        return 'This ' + src + ' has no heraldry on file';
+    }
+
+    function paintHeraldryBar() {
+        heraldryBtns.forEach(function (btn) {
+            var src = btn.dataset.heraldrySource,
+                on  = !!heraldryHave[src];
+            btn.setAttribute('aria-pressed', src === heraldryChoice ? 'true' : 'false');
+            btn.setAttribute('aria-disabled', on ? 'false' : 'true');
+            if (on) { btn.removeAttribute('data-tip'); } else { btn.setAttribute('data-tip', heraldryTip(src)); }
+        });
+    }
+
+    /* What the server drew, from a preview response. */
+    function takeHeraldry(d) {
+        if (d.HeraldrySources) { heraldryHave.persona = !!d.HeraldrySources.persona; }
+        if (typeof d.HeraldrySource === 'string' && has(heraldryHave, d.HeraldrySource)) {
+            heraldryChoice = d.HeraldrySource;
+        }
+        paintHeraldryBar();
+    }
+
+    heraldryBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var src = btn.dataset.heraldrySource;
+            if (btn.getAttribute('aria-disabled') === 'true' || src === heraldryChoice) { return; }
+            heraldryChoice = src;
+            paintHeraldryBar();
+            reload();
+        });
+    });
+
+    /*
+     * The recipient box was typed into after a pick, which drops the chosen player.
+     * Their arms go with them: Persona disables at once, and if it was drawing, the
+     * preview re-fetches so it stops showing arms the print would no longer carry.
+     */
+    function recipientCleared() {
+        heraldryHave.persona = false;
+        var wasPersona = heraldryChoice === 'persona';
+        if (wasPersona) { heraldryChoice = scopeSource; }
+        paintHeraldryBar();
+        if (wasPersona) { reload(); }
+    }
+
+    /*
+     * The toggles change which layers are drawn (the knot and its frameless ground, the
+     * blend slot, the ribbon art), so like the award they cost a round trip. The
+     * colours do not — see paintKnot().
+     */
+    if (cbEl)     { cbEl.addEventListener('change', function () { syncDesign(); syncSummary(); reload(); }); }
+    if (matchEl)  { matchEl.addEventListener('change', reload); }
+    if (ribbonEl) { ribbonEl.addEventListener('change', function () { syncDesign(); reload(); }); }
+
+    /*
+     * Every design field the server needs, on whichever body/query object is going out
+     * — the twin of addRecipe(), called beside it on the preview POST and the print GET.
+     * The colours go out whether or not their box is ticked; NormaliseDesign() ignores
+     * them unless it is, and they are the officer's current choice either way. The
+     * last VALID colours, never a box's half-typed text.
+     */
+    function addDesign(params) {
+        params.set('heraldrySource', heraldryChoice);
+        if (cbEl && cbEl.checked)         { params.set('customBorder', '1'); }
+        if (matchEl && matchEl.checked)   { params.set('matchStyle', '1'); }
+        if (ribbonEl && ribbonEl.checked) { params.set('customRibbon', '1'); }
+        if (colors.c1)     { params.set('color1', colors.c1); }
+        if (colors.c2)     { params.set('color2', colors.c2); }
+        if (colors.ribbon) { params.set('ribbonColor', colors.ribbon); }
+    }
+
     /* ---- the round trip: order / rank / variant ------------------------- */
 
     /*
@@ -692,6 +1040,7 @@
         // Sent on every order, not only custom: Scroll::BuildScroll() ignores the
         // recipe for anything else, so there is nothing to branch on here.
         addRecipe(body);
+        addDesign(body);
         body.set('pronounOverride', pronounOverride());
         // Sent raw and on every order, exactly as the recipe is: BuildScroll() is the
         // one place that decides whether this award may be renamed at all, and it
@@ -722,6 +1071,11 @@
                 mount.innerHTML = d.Html;
                 applyText();
                 applyHeraldry();
+                // The server drew the colours this request carried; the officer may
+                // have moved a picker since it left, so the live ones go back on.
+                paintKnot();
+                paintRibbon();
+                takeHeraldry(d);
                 // applyText() already asked for a fit; this is the one that matters for
                 // markup the server just sent, whose sizes are its first guess for an
                 // EMPTY recipient. Both go through the same rAF-coalesced call, so the
@@ -911,7 +1265,9 @@
         acEl.style.zIndex = '9999';
 
         playerEl.addEventListener('input', function () {
+            var hadPlayer = !!playerId.value;
             playerId.value = '';
+            if (hadPlayer) { recipientCleared(); }
             applyText();
             var term = this.value.trim();
             if (term.length < 2) { acEl.classList.remove(OPEN); return; }
@@ -983,17 +1339,21 @@
         syncCustomName();
         syncWithPhrase();
         syncRecipeVisibility();
-        syncRecipeNote();
+        syncDesign();
         reload();
     });
-    rankEl.addEventListener('change', function () { syncRecipeNote(); reload(); });
-    variantEl.addEventListener('change', reload);
+    // Rank and variant can each flip Custom Border's compatibility (warrior's rank 10,
+    // owl's variants), so they re-ask before the round trip.
+    rankEl.addEventListener('change', function () { syncDesign(); reload(); });
+    variantEl.addEventListener('change', function () { syncDesign(); reload(); });
 
     // The recipe controls change which art is drawn, so unlike the text fields they
     // cost a round trip.
     [groundEl, borderEl, rankSetEl].forEach(function (el) {
         if (!el) { return; }
-        el.addEventListener('change', function () { syncSwatch(); syncRecipeNote(); reload(); });
+        // syncDesign(), which ends in syncRecipeNote(): the ground decides whether a
+        // custom scroll can take a Custom Border at all.
+        el.addEventListener('change', function () { syncSwatch(); syncDesign(); reload(); });
     });
 
     // The palette is the exception, twice over.
@@ -1154,6 +1514,7 @@
         qs.set('useThe',      useTheEl.checked ? '1' : '0');
         qs.set('useOf',       useOfEl.checked ? '1' : '0');
         addRecipe(qs);
+        addDesign(qs);
         qs.set('pronounOverride', pronounOverride());
         qs.set('customName',  customName());
         var wpq = withPhrase();
@@ -1216,10 +1577,11 @@
 
     syncRankAndVariant();
     syncCustomName();
-        syncWithPhrase();
+    syncWithPhrase();
     syncRecipeVisibility();
     syncSwatch();
-    syncRecipeNote();
+    syncDesign();
+    paintHeraldryBar();
     // Filled here as well as on every reload(), so the live region carries a sentence
     // even when the very first preview fetch fails.
     syncSummary();

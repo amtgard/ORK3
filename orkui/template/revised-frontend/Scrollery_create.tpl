@@ -250,6 +250,65 @@ $awardOption = static function (array $c) use ($customKind): string {
 /* The picker trigger is a button, so it needs the field's own full width. */
 .sc-field .aw-picker-trigger { width: 100%; }
 
+/* Customize Design. The heraldry bar is a segmented row that wraps rather than
+   squeezing: three equal buttons, each at least wide enough for "Persona". */
+.sc-seg         { display: flex; flex-wrap: wrap; gap: 4px; }
+.sc-seg-btn     { flex: 1 1 0; min-width: 72px; padding: 6px 8px; font: inherit; font-size: 12px;
+                  font-weight: 600; line-height: 1.2; color: var(--rp-text-body);
+                  background: var(--ork-input-bg); border: 1.5px solid var(--ork-input-border);
+                  border-radius: 6px; cursor: pointer; }
+.sc-seg-btn:hover:not([aria-pressed="true"]):not([aria-disabled="true"]) {
+                  background: var(--rp-bg-light); border-color: var(--rp-border-strong); }
+.sc-seg-btn:focus-visible { outline: 2px solid var(--rp-accent); outline-offset: 1px; }
+.sc-seg-btn[aria-pressed="true"] { background: var(--rp-accent); border-color: var(--rp-accent); color: #fff; }
+/* aria-disabled, not [disabled] — see the template note: the tip must still hover.
+   Muted by colour, NOT opacity: opacity would fade the ::after tip bubble with it.
+   Pressed-and-disabled is the scope default with no arms on file (nothing draws,
+   as ever): an outline in the accent, so it still reads as the chosen one. */
+.sc-seg-btn[aria-disabled="true"] { color: var(--rp-text-hint); border-style: dashed; cursor: not-allowed; }
+.sc-seg-btn[aria-pressed="true"][aria-disabled="true"] { background: transparent; color: var(--rp-accent); }
+/* The generic data-tip bubble is centred and refuses to wrap (min-width:max-content),
+   which pushes it off a 220px sidebar's edge. These wrap, and sit inside the card:
+   left-anchored from the left of the bar, right-anchored at its right end.
+   !important for the same reason as .ev-meal-card-header's: the generic rule's
+   five :not()s outweigh any sane selector. */
+#sc-design [data-tip]:hover::after {
+                  left: 0 !important; right: auto !important; transform: none !important;
+                  min-width: 0 !important; width: max-content; max-width: 220px !important;
+                  white-space: normal !important; text-transform: none; letter-spacing: normal;
+                  font-weight: 400; }
+#sc-design .sc-seg-btn:last-child[data-tip]:hover::after { left: auto !important; right: 0 !important; }
+
+/* The three checkboxes. A direct-child <label> of .sc-field is the 10px uppercase
+   field caption above; these are sentences, so they restate the type. */
+.sc-field > label.sc-opt,
+.sc-opt         { display: flex; gap: 7px; align-items: center; font-size: 13px; font-weight: 600;
+                  letter-spacing: normal; text-transform: none; color: var(--rp-text-body);
+                  margin: 0; cursor: pointer; }
+.sc-design-sub .sc-opt { margin-top: 10px; font-weight: 500; }
+.sc-opt input[type=checkbox] { margin: 0; accent-color: var(--rp-accent); width: 15px; height: 15px; flex: 0 0 auto; }
+/* An author display outranks the UA [hidden] rule, as for .sc-rank-legend. */
+.sc-opt[hidden], .sc-field > label.sc-opt[hidden], .sc-design-sub[hidden] { display: none; }
+/* The incompatible state: the same words, muted, with the reason on hover. */
+.sc-opt-na      { display: inline-flex; color: var(--rp-text-hint); cursor: help; font-weight: 600; }
+.sc-opt-na i    { font-size: 12px; }
+.sc-opt-na:focus-visible { outline: 2px solid var(--rp-accent); outline-offset: 2px; border-radius: 3px; }
+.sc-design-sub  { margin: 8px 0 0 22px; }
+.sc-design-sub > .sc-field { margin-bottom: 0; }
+
+/* A colour control: the native swatch picker beside the hex box it stays in step with. */
+.sc-color-pair  { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.sc-color-pair input[type=color] { flex: 0 0 34px; width: 34px; height: 32px; padding: 2px;
+                  border: 1.5px solid var(--ork-input-border); border-radius: 6px;
+                  background: var(--ork-input-bg); cursor: pointer; }
+.sc-color-pair .sc-hex { flex: 1 1 auto; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                  text-transform: uppercase; }
+.sc-hex[aria-invalid="true"] { border-color: #e53e3e; }
+.sc-hex-err     { color: #c53030; }
+html[data-theme="dark"] .sc-seg-btn[aria-pressed="true"] { background: #4c51bf; border-color: #818cf8; color: #fff; }
+html[data-theme="dark"] .sc-hex-err { color: #feb2b2; }
+html[data-theme="dark"] .sc-hex[aria-invalid="true"] { border-color: #fc8181; }
+
 html[data-theme="dark"] .sc-rank-pill { border-color: var(--ork-border); }
 html[data-theme="dark"] .sc-key-held  { background: linear-gradient(135deg, #2f6b4f, #1d4733); color: #c6f6d5; }
 html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345083, #23375a); color: #bee3f8; }
@@ -367,6 +426,99 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                     <div class="sc-field" id="sc-variant-field" style="display:none">
                         <label for="sc-variant">Variant</label>
                         <select id="sc-variant" class="adm-select"></select>
+                    </div>
+                </div>
+            </div>
+
+            <?php /* 1b — CUSTOMIZE DESIGN. Right after the award because two of its three
+                     controls answer to it: whether Custom Border can be offered at all
+                     depends on the award's order, rank, variant and (for the custom
+                     order) ground, and scrollery.js re-asks every time one changes.
+                     Collapsed: a plain certificate is still the common case.
+
+                     Every control here is OFF or at Scroll::DEFAULT_DESIGN when the page
+                     opens, which is exactly the certificate a design-less request (a
+                     reprint, a bulk run) produces. The colours shown are corrected
+                     client-side from the officer's remembered pair, if any.
+
+                     The heraldry buttons start disabled-or-not from the scope's own
+                     arms; Persona starts disabled and is decided by each preview
+                     response, because only the server knows whether the recipient has
+                     arms. aria-disabled rather than `disabled`, deliberately: a disabled
+                     button takes no pointer events, and its data-tip is the only place
+                     the officer learns WHY it is off. The tips themselves are written by
+                     scrollery.js (paintHeraldryBar), which owns that wording in one place
+                     because Persona's changes with the recipient. */ ?>
+            <?php
+            $designDefaults = is_array($DesignDefaults ?? null) ? $DesignDefaults : Scroll::DEFAULT_DESIGN;
+            $heraldryHave   = is_array($HeraldryAvailable ?? null) ? $HeraldryAvailable : [];
+            $scopeDefault   = ($ScopeType ?? 'park') === 'kingdom' ? 'kingdom' : 'park';
+            $colorControl = static function (string $id, string $label, string $value): string {
+                $v = scroll_e($value);
+
+                return '<div class="sc-field sc-color">'
+                    . '<label for="' . $id . '-hex">' . scroll_e($label) . '</label>'
+                    . '<div class="sc-color-pair">'
+                    . '<input type="color" id="' . $id . '" value="' . $v . '" aria-label="' . scroll_e($label) . ' picker">'
+                    . '<input type="text" id="' . $id . '-hex" class="adm-input sc-hex" value="' . $v . '"'
+                    . ' maxlength="7" spellcheck="false" autocomplete="off" inputmode="text"'
+                    . ' aria-describedby="' . $id . '-err">'
+                    . '</div>'
+                    . '<p class="sc-hint sc-hex-err" id="' . $id . '-err" hidden>Use six hex digits, like #1E4FA3. '
+                    . 'The last valid colour is still applied.</p>'
+                    . '</div>';
+            };
+            ?>
+            <div class="rp-filter-card" id="sc-design">
+                <button type="button" class="rp-filter-card-header" data-sc-collapse="sc-design-body" aria-expanded="false" aria-controls="sc-design-body">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Customize Design
+                    <i class="fa-solid fa-chevron-down rp-filter-card-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="rp-filter-card-body" id="sc-design-body" hidden>
+                    <div class="sc-field">
+                        <span class="sc-field-label" id="sc-heraldry-source-label">Heraldry</span>
+                        <div class="sc-seg" role="group" aria-labelledby="sc-heraldry-source-label">
+                            <?php foreach (['kingdom' => 'Kingdom', 'park' => 'Park', 'persona' => 'Persona'] as $src => $srcLabel):
+                                $on = $src !== 'persona' && !empty($heraldryHave[$src]); ?>
+                                <button type="button" class="sc-seg-btn" data-heraldry-source="<?= $src ?>"
+                                        aria-pressed="<?= $src === $scopeDefault ? 'true' : 'false' ?>"
+                                        aria-disabled="<?= $on ? 'false' : 'true' ?>"><?= $srcLabel ?></button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <div class="sc-field" id="sc-custom-border-field">
+                        <label class="sc-opt" id="sc-custom-border-opt">
+                            <input type="checkbox" id="sc-custom-border"<?= !empty($designDefaults['customBorder']) ? ' checked' : '' ?>>
+                            <span>Custom Border</span>
+                        </label>
+                        <span class="sc-opt sc-opt-na" id="sc-custom-border-na" tabindex="0" hidden
+                              data-tip="This award style is not compatible with custom borders.">
+                            <span>Custom Border</span>
+                            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                        </span>
+                        <div class="sc-design-sub" id="sc-custom-border-colors" hidden>
+                            <div class="sc-row">
+                                <?= $colorControl('sc-color1', 'Color 1', (string) $designDefaults['color1']) ?>
+                                <?= $colorControl('sc-color2', 'Color 2', (string) $designDefaults['color2']) ?>
+                            </div>
+                            <p class="sc-hint">Color 1 is the band that is blue on the Jovious scroll, Color 2 the pink one.</p>
+                            <label class="sc-opt">
+                                <input type="checkbox" id="sc-match-style"<?= !empty($designDefaults['matchStyle']) ? ' checked' : '' ?>>
+                                <span>Match scroll style?</span>
+                            </label>
+                            <p class="sc-hint">Blends the knot into the paper the way the original border was, so the colours shift with it.</p>
+                        </div>
+                    </div>
+
+                    <div class="sc-field">
+                        <label class="sc-opt">
+                            <input type="checkbox" id="sc-custom-ribbon"<?= !empty($designDefaults['customRibbon']) ? ' checked' : '' ?>>
+                            <span>Custom Ribbon</span>
+                        </label>
+                        <div class="sc-design-sub" id="sc-custom-ribbon-colors" hidden>
+                            <?= $colorControl('sc-ribbon-color', 'Ribbon Color', (string) $designDefaults['ribbonColor']) ?>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -618,6 +770,10 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                             </select>
                         </div>
                     </div>
+                    <?php /* Shown while Customize Design's Custom Border is on and honoured:
+                             the knot replaces whatever these two controls would draw, so
+                             scrollery.js disables them and says why in one line. */ ?>
+                    <p class="sc-hint" id="sc-recipe-cb-hint" hidden>Custom Border is drawing this scroll&rsquo;s border.</p>
                     <?php /* The dark-ground, band, numeral and palette explanations live
                              ONLY here, and were written with textContent and never
                              announced. polite, not assertive: it is an explanation of a
@@ -724,7 +880,13 @@ window.ScConfig = {
     uir:        <?= json_encode(UIR) ?>,
     scopeType:  <?= json_encode((string) ($ScopeType ?? 'park')) ?>,
     scopeId:    <?= (int) ($ScopeId ?? 0) ?>,
-    kingdomId:  <?= (int) ($scope['KingdomId'] ?? 0) ?>
+    kingdomId:  <?= (int) ($scope['KingdomId'] ?? 0) ?>,
+    /* The Customize Design card's server-side truths: the rule data
+       Scroll::CustomBorderRule() reads (scrollery.js mirrors that method over it),
+       the default design, and which of the scope's own arms exist. */
+    customBorderRules: <?= json_encode(is_array($CustomBorderRules ?? null) ? $CustomBorderRules : Scroll::CustomBorderRules(), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+    designDefaults:    <?= json_encode(is_array($DesignDefaults ?? null) ? $DesignDefaults : Scroll::DEFAULT_DESIGN, JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+    heraldryAvailable: <?= json_encode(is_array($HeraldryAvailable ?? null) ? $HeraldryAvailable : new stdClass()) ?>
 };
 </script>
 

@@ -150,6 +150,23 @@ class Controller_Scrollery extends Controller
          * with a word the table does not carry is no worse off than before.
          */
         $this->data['Pronouns'] = $this->Scrollery->possessive_suggestions();
+        /*
+         * The "Customize Design" card. The rule data is the SAME file
+         * Scroll::CustomBorderRule() reads, handed to scrollery.js so the Custom Border
+         * checkbox can hide itself on an incompatible award without a round trip — the
+         * server still applies the rule and ignores a border it cannot honour.
+         *
+         * Kingdom/park arms are fixed for the page (the scope does not change), so
+         * their availability is known now. Persona depends on the recipient and comes
+         * back on every preview response instead. heraldry_sources() with no player
+         * asks only the two cached scope lookups.
+         */
+        $this->data['CustomBorderRules'] = Scroll::CustomBorderRules();
+        $this->data['DesignDefaults']    = Scroll::DEFAULT_DESIGN;
+        $this->data['HeraldryAvailable'] = array_map(
+            static fn (string $u): bool => $u !== '',
+            $this->Scrollery->heraldry_sources($scopeType, $scopeId, 0)
+        );
         $this->data['page_title'] = 'Print a new scroll';
         $this->template           = '../revised-frontend/Scrollery_create.tpl';
     }
