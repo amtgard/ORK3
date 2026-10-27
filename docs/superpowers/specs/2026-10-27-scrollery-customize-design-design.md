@@ -93,6 +93,36 @@ A three-button segmented bar: **Kingdom | Park | Persona**.
   When Custom Border is on, the custom order's own border selection is superseded: disable those
   two controls with a one-line note.
 
+### Custom Ribbon (added 2026-10-27, owner-approved)
+
+- **The control.** A **Custom Ribbon** checkbox under Custom Border, with ONE **Ribbon Color**
+  control: a native colour picker + `#RRGGBB` hex field, kept in sync, same validation as Color 1/2.
+- **What it replaces.** The text-section flourishes (`flourish_top`, `flourish_right`,
+  `flourish_bottom`, including the two centred-layout side rules `ScRule--l` / `ScRule--r`,
+  which reuse `flourish_bottom`) are replaced by the three Jovious ribbons
+  (`jovious/ribbon-{top,right,bottom}.png` shapes), tinted the chosen colour.
+  - It applies to **every** award: every order draws these flourishes.
+  - On a Jovious scroll it recolours the ribbons it already has.
+- **Exact colour always** (my call). Flourishes are plain overlay images, not blended into the
+  plate, so "Match scroll style?" stays border-only.
+- **Default colour.** The Jovious ribbon blue, measured from the source/shipped art and
+  recorded with the artwork.
+- **The text layout must not move.** The tinted ribbons keep the exact outline/alpha of the
+  shipped Jovious ribbons, so their ink grids (`data-sc-ink`) and the typeset engine's fit
+  are unchanged.
+- **Live preview.** Colour changes repaint in place, with no round trip; toggling the
+  checkbox may round-trip.
+- **Artwork.** The likely source is the Jovious master's hidden group `/3/5` (three pink
+  "Curves" in the top text area) in `Award Templates Trim.af`. Extract it, and check it by eye
+  against the shipped ribbons.
+  - **Fallback**, if the source isn't the same art: derive a neutral version from the shipped
+    PNGs (luminance relative to the ribbon's base colour), keeping the shading and stitching
+    at today's resolution.
+  - **Acceptance:** tinting the neutral art with the default colour reproduces the shipped
+    ribbons (mean RGB error ≤ 0.03 on opaque pixels), and the alpha is identical.
+- **Saved with the print** like the other design choices: `customRibbon` (bool) and
+  `ribbonColor` (`#RRGGBB`).
+
 ## Which award styles are compatible
 
 How each order (template in `orkui/template/revised-frontend/scroll/<order>.tpl`) draws its border
@@ -179,7 +209,8 @@ today decides what "replace" means:
   - `heraldrySource` ∈ {`kingdom`, `park`, `persona`};
   - `customBorder` (bool);
   - `color1` / `color2` (`#RRGGBB`);
-  - `matchStyle` (bool).
+  - `matchStyle` (bool);
+  - `customRibbon` (bool) / `ribbonColor` (`#RRGGBB`).
 - **Validation.**
   - Normalise server-side in one place, with an allowlist / regex.
   - Unknown values fall back to the defaults, with no error.
@@ -206,6 +237,7 @@ today decides what "replace" means:
 - Custom Border works on every compatible order and is hidden (with the tooltip) on the rest.
 - The colour pickers recolour the preview live; the print matches the preview.
 - "Match scroll style?" switches between exact colours and the replaced border's own blending.
+- Custom Ribbon replaces the text flourishes on every award with the Jovious ribbons in one chosen colour, without moving the text.
 - The choices are recorded with the print.
 
 ## Non-goals

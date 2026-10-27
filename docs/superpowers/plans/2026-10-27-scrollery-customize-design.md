@@ -5,7 +5,8 @@
 **Goal:** Add a collapsed "Customize Design" card to the Scrollery builder, holding two controls:
 a Kingdom/Park/Persona heraldry switch, and a Custom Border. The Custom Border replaces any
 compatible award's border with the Jovious two-band knot in two user-picked colours, with an
-optional "Match scroll style?".
+optional "Match scroll style?", plus a Custom Ribbon that swaps the text flourishes for the
+Jovious ribbons in one chosen colour.
 
 **Architecture:**
 - **Server owns the decisions.** One normaliser (`Scroll::NormaliseDesign`) validates the new
@@ -31,7 +32,8 @@ git-ignored Affinity tool `tools/affinity-extract/` (see its README).
   pattern.
 - **Copy.**
   - Heraldry buttons: "Kingdom", "Park", "Persona".
-  - Checkboxes: "Custom Border" and "Match scroll style?".
+  - Checkboxes: "Custom Border", "Match scroll style?" and "Custom Ribbon".
+  - Ribbon colour label: "Ribbon Color".
   - Colour labels: "Color 1" and "Color 2".
   - Incompatible tooltip, exact: `This award style is not compatible with custom borders.`
   - Persona-disabled tip: `Choose a recipient below first`.
@@ -144,6 +146,58 @@ git-ignored Affinity tool `tools/affinity-extract/` (see its README).
   `ink-extents.json`, `hires-masters.txt` (only if it changed) and the verdict doc. Message:
   `Enhancement: Scrollery — Jovious knot artwork and border-free grounds for custom borders`.
 
+### Task 1R: Ribbon artwork (neutral, tintable)
+
+**Files:**
+- Create: `assets/scrolls/common/ribbon/ribbon-top.png`, `ribbon-right.png`, `ribbon-bottom.png`.
+  - Each has the SAME pixel dimensions and alpha as `assets/scrolls/jovious/ribbon-<name>.png`
+    (1242×432, 812×726, 892×432).
+  - Their RGB is a neutral tint base (see Interfaces).
+- Modify: `docs/superpowers/scrollery-custom-border-art.md`. Add a Ribbon section: source used,
+  `RIBBON_DEFAULT` hex, and the acceptance numbers.
+- Regenerate whatever the art pipeline regenerates for new files: renditions, `renditions.json`,
+  `ink-extents.json`.
+
+**Interfaces:**
+- **Produces:**
+  - The three neutral ribbon files.
+  - `RIBBON_DEFAULT` (uppercase `#RRGGBB`): the ribbon base colour. Task 2 copies it into
+    `Scroll::DEFAULT_DESIGN['ribbonColor']`.
+  - The **tint contract**: `shipped ≈ neutral × RIBBON_DEFAULT` per channel (multiply). Tinting
+    = an SVG filter that floods the colour, multiplies it with the image, and clips to the
+    image's alpha.
+
+- [ ] **Step 1: Investigate the source.** In `Award Templates Trim.af`, master 1005
+  "Overlay (Jovious)", hidden group `/3/5` (three PolyCurve "Curves", fill 225,81,136, box
+  ≈ 337,376 1866×502):
+  - read its layer effects (pattern: the probe in `tools/affinity-extract`, effects via
+    `node.layerEffectsInterface.effects`);
+  - export each curve with its group made visible, alone, at scale 2 then at 1×; never save;
+    undo everything;
+  - compare shapes with the shipped ribbons.
+- [ ] **Step 2: Choose the source and build the neutral files.**
+  - **If** the source matches the shipped ribbons by eye (outline, stitch line, shading), build
+    the neutral art from it. The base colour set to white, via the overlay/fill, gives the
+    neutral directly.
+  - **Otherwise**, build it from the shipped PNGs:
+    - `RIBBON_DEFAULT` = the dominant body colour of the shipped ribbons;
+    - neutral RGB = `clip(shipped / RIBBON_DEFAULT, 0, 1)` per channel;
+    - alpha copied unchanged.
+  - Either way, keep the exact alpha of the shipped files.
+- [ ] **Step 3: Verify.**
+  - **Numerically:** `neutral × RIBBON_DEFAULT` vs shipped, mean RGB error ≤ 0.03 on pixels
+    with alpha > 200, and identical alpha.
+  - **By eye:** a contact sheet with the shipped ribbon, plus the neutral tinted
+    `RIBBON_DEFAULT`, `#1E4FA3`, `#F6B323` and `#2E7D32`. Stitching and shading must survive
+    every colour.
+- [ ] **Step 4: Run the art pipeline checks.** Run
+  `sh bin/build-scroll-renditions.sh && php bin/build-scroll-ink-extents.php`.
+  - `sh bin/build-scroll-renditions.sh --check` must be OK.
+  - The ink grid for each `common/ribbon/*` file must equal its `jovious/ribbon-*` counterpart's.
+  - Run `php vendor/bin/phpunit --no-coverage --filter Scroll`; expected: all pass.
+- [ ] **Step 5: Commit** by pathspec.
+  `Enhancement: Scrollery — tintable Jovious ribbon artwork for custom ribbons`.
+
 ### Task 2: Design normalisation + compatibility rules (lib)
 
 **Files:**
@@ -155,7 +209,7 @@ git-ignored Affinity tool `tools/affinity-extract/` (see its README).
 **Interfaces:**
 - **Consumes:** Task 1's verdict list and asset paths.
 - **Produces:**
-  - `Scroll::DEFAULT_DESIGN = ['heraldrySource' => '', 'customBorder' => false, 'color1' => '#6AC1FF', 'color2' => '#E84C92', 'matchStyle' => false]`
+  - `Scroll::DEFAULT_DESIGN = ['heraldrySource' => '', 'customBorder' => false, 'color1' => '#6AC1FF', 'color2' => '#E84C92', 'matchStyle' => false, 'customRibbon' => false, 'ribbonColor' => RIBBON_DEFAULT /* from Task 1R */]`
     - `heraldrySource` `''` means the scope default.
   - `Scroll::HERALDRY_SOURCES = ['kingdom', 'park', 'persona']`
   - `Scroll::NormaliseHexColour(string $raw, string $fallback): string` returns uppercase
@@ -171,6 +225,8 @@ git-ignored Affinity tool `tools/affinity-extract/` (see its README).
       - `ground` = the replacement ground path relative to `assets/scrolls/`, or `null`.
   - New `BuildScroll()` keys:
     - `'design' => NormaliseDesign($context['design'] ?? [])`
+    - `'customRibbon' => ?string`: the normalised `ribbonColor` when `design.customRibbon` is
+      true, else `null`. Every order is eligible.
     - `'customBorder' => ?array`, which is `null` unless `design.customBorder` is true AND
       `CustomBorderRule(...)` is non-null. When set, it is
       `['color1' => …, 'color2' => …, 'matchStyle' => bool, 'passes' => [...], 'ground' => ?string]`.
@@ -222,6 +278,10 @@ return [
     - `recipe.ground 'linen'` (absent from `recipeGrounds`) → `null`.
   - `testEveryRuleNamesARealOrderAndRealFiles`: every key is in `Scroll::Orders()`, and every
     `ground` / `ranks` / `recipeGrounds` string exists under `DIR_ASSETS . 'scrolls/'`.
+  - `testRibbonColourNormalisedAndOnlyWhenTicked`:
+    - `{customRibbon: '1', ribbonColor: '2e7d32'}` → `$s['customRibbon'] === '#2E7D32'`;
+    - `{ribbonColor: '#2E7D32'}` alone → `null`;
+    - a hostile `ribbonColor` → `RIBBON_DEFAULT`.
   - `testBuildScrollCarriesDesignAndResolvedBorder`:
     - crown with design `{customBorder: '1', color1: '#1e4fa3'}` → `$s['customBorder']['color1'] === '#1E4FA3'`;
     - `$s['customBorder']['passes']` is crown's.
@@ -248,6 +308,7 @@ return [
   - `system/lib/ork3/class.Scroll.php`, the helper functions near `scroll_art_attrs()` (~L2610).
   - Each compatible order's `scroll/<order>.tpl`.
   - `scrollery.css`: the `.sc-knot` rules.
+- Modify: `scroll/_text.tpl`, the flourish `<img>`s at ~L157, L158, L168, L174, L175.
 - Test: `tests/Unit/ScrollCustomBorderRenderTest.php`
 
 **Interfaces:**
@@ -263,6 +324,19 @@ return [
     - in `'match'` it emits `_knot.tpl` once per entry in `passes`, with that style;
     - in `'exact'` it emits it once, with `mix-blend-mode:normal;`.
   - `scroll_custom_border_active(array $s): bool`
+  - **Custom ribbon** (Task 1R's tint contract):
+    - When `$s['customRibbon']` is set, `_text.tpl` uses `scrolls/common/ribbon/ribbon-<name>.png`
+      for the three flourish resources, and the two `ScRule`s use the bottom one.
+    - The same ink grids apply, because the alpha is identical.
+    - Each flourish `<img>` gets `class="Flourish sc-ribbon"` and inline
+      `filter:url(#sc-ribbon-tint)`.
+    - `_text.tpl` emits, once per certificate, a zero-size inline
+      `<svg aria-hidden="true" width="0" height="0"><filter id="sc-ribbon-tint" color-interpolation-filters="sRGB">`.
+      The filter is: an `feFlood` carrying `flood-color` = the colour and class
+      `sc-ribbon-flood`, then `feBlend mode="multiply"` with `SourceGraphic`, then
+      `feComposite operator="in"` with `SourceAlpha`.
+    - Page JS repaints by setting `flood-color` on every `.sc-ribbon-flood`.
+    - Without `customRibbon`, `_text.tpl` output is unchanged.
   - `scroll_custom_ground(array $s, string $default): string` returns `customBorder['ground']`
     when active and non-null, else `$default`.
 - **Wiring rule for each compatible template:**
@@ -293,6 +367,12 @@ return [
     asset names listed in a per-order expectation map (`crown/border`, `rose/border`,
     `owl/border`, `warrior/border_`, …, and `<svg viewBox="0 0 2550 3300"` with
     `--primary-color` for the `_border.tpl` orders).
+  - `testCustomRibbonSwapsAllFiveFlourishes`:
+    - crown with `customRibbon` `'#2E7D32'` → output contains `common/ribbon/ribbon-top`, `-right`
+      and `-bottom`, `sc-ribbon-tint`, and `flood-color="#2E7D32"`;
+    - it no longer contains `squiggly-top`.
+  - `testNoRibbonLeavesFlourishesAlone`: design-less crown contains `squiggly-top` and no
+    `sc-ribbon`.
   - `testColoursOnlyReachMarkupNormalised`: a hostile `color1` in the design never appears in
     output; `#6AC1FF` does.
 - [ ] **Step 2: Run, verify they fail.** `--filter ScrollCustomBorderRenderTest` → FAIL.
@@ -333,7 +413,8 @@ return [
       `GetHeraldryUrl(['Type' => 'Player', 'Id' => $playerId, 'Size' => 'master'])`; `''` when
       `$playerId <= 0` or there are no arms.
   - **Request params**, on both the preview POST and the compose GET:
-    `heraldrySource`, `customBorder`, `color1`, `color2`, `matchStyle`.
+    `heraldrySource`, `customBorder`, `color1`, `color2`, `matchStyle`, `customRibbon`,
+    `ribbonColor`.
     - Pass them to `BuildScroll()` as `$context['design']`.
     - `$context['heraldry']` becomes the URL for the resolved source.
   - **Preview JSON response** gains:
@@ -387,7 +468,8 @@ return [
   - heraldry buttons `[data-heraldry-source="kingdom|park|persona"]`;
   - `sc-custom-border`, `sc-custom-border-na` (the muted label with the tooltip);
   - `sc-color1`, `sc-color1-hex`, `sc-color2`, `sc-color2-hex`;
-  - `sc-match-style`.
+  - `sc-match-style`;
+  - `sc-custom-ribbon`, `sc-ribbon-color`, `sc-ribbon-color-hex`.
 - **JS behaviour:**
   - **Request params.** `addDesign(params)` sets the five params on every preview POST and
     compose GET (call it wherever `addRecipe` is called).
@@ -410,8 +492,14 @@ return [
       disabled, it carries `data-tip="Choose a recipient below first"` if no recipient is
       chosen, or a no-arms tip otherwise.
     - The active button follows the response's `HeraldrySource`.
-  - **Remembered colours.** The last valid colour pair is kept in `localStorage` key
-    `scrollery.customBorder.colors`, as JSON `{c1, c2}`. Every access is wrapped in try/catch,
+  - **Custom Ribbon.**
+    - The checkbox shows the colour row.
+    - A valid colour sets `flood-color` on every `.sc-ribbon-flood` in the preview, with no
+      round trip.
+    - Toggling the checkbox calls `reload()`.
+    - It is always available, with no compatibility gate.
+  - **Remembered colours.** The last valid colours are kept in `localStorage` key
+    `scrollery.customBorder.colors`, as JSON `{c1, c2, ribbon}`. Every access is wrapped in try/catch,
     and the page works without it.
   - **The custom order.** While Custom Border is on and the order is `custom`, disable the
     "Scroll design" border select and palette with a one-line `sc-hint`: "Custom Border is
@@ -436,7 +524,9 @@ return [
   - **switch back** → still ticked;
   - **Persona** is disabled until a recipient with arms is chosen, then enabled; choosing it
     switches the arms;
-  - **Print** opens compose with the same knot and colours;
+  - **Custom Ribbon** on Crown → the three ribbons replace the squiggles, the text does not
+    move, and typing `2e7d32` repaints them live;
+  - **Print** opens compose with the same knot, ribbons and colours;
   - **dark mode and a 390px-wide frame** (iframe harness): no overflow, readable controls.
 - [ ] **Step 5: Commit.** Stage the template, controller, JS and CSS.
   `Enhancement: Scrollery — Customize Design card with heraldry source and custom border`.
