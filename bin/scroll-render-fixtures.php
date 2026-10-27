@@ -117,6 +117,12 @@ foreach ($specs as $c) {
             'variant' => $c['variant'],
             'recipe' => $c['recipe'] ?? [],
         ];
+        // The Customize Design choices (customRibbon, ribbonColor, ...), passed as compose
+        // passes them. Set only when the spec carries one, so every other spec builds
+        // exactly the context it always did.
+        if (isset($c['design']) && is_array($c['design'])) {
+            $ctx['design'] = $c['design'];
+        }
         $scroll = Scroll::BuildScroll($row, $ctx);
 
         // What the compose URL would carry. `face` is the hand; `heading` is the composition

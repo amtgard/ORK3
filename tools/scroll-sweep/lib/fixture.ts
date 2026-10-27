@@ -38,6 +38,8 @@ export type FixtureSpec = {
   recipe?: { ground: string; border: string; rankSet: string };
   heading?: 'auto' | 'classic' | 'centered';
   heraldry?: string;
+  /** The Customize Design choices, as compose sends them (Scroll::NormaliseDesign() reads them). */
+  design?: { customRibbon?: boolean; ribbonColor?: string; customBorder?: boolean; matchStyle?: boolean; color1?: string; color2?: string; heraldrySource?: string };
   up?: 0 | 2 | 4;
   /** Left unset to match compose, which sends no IsLadder; see bin/scroll-render-fixtures.php. */
   isLadder?: boolean;

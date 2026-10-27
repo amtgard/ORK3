@@ -637,6 +637,27 @@ symbol {
     bottom: 0.9em;
 }
 
+/* The Custom Ribbon's top piece (A1, A2). It used the squiggle's rule above, and the
+   ribbon is not the squiggle: a solid band 22% taller for its width (box 2.875:1
+   against 3.52:1), whose lower edge runs the full width where the squiggle's thins to
+   one stem. At the squiggle's size its top stood in the heraldry slot in Centered, and
+   its stem came down onto the "A" (c099, c011, and on every Classic ribbon in the A1/A2
+   rerun: c005, c016, c077, c084, c136).
+
+   3.4em rather than 3.8em, with `left` taken in by 0.15em so the stem still drops where
+   the squiggle's did, between the "A" and the "m" (0.81 to 1.45em, against 0.79 to
+   1.50em). 3.0em was tried: clear, but thin beside the type where nothing crowds it
+   (c122, c142). `bottom` 1.1em rather than 0.9em lifts the stem's end to 0.66 to 0.74em
+   above the baseline in the four proof hands (fondamento, chancery, uncial, gotisch,
+   measured), whose tallest "A" reaches 0.71em: the stem clears most "A"s as drawn, and
+   scrollery-typeset.js (placeRibbonTop) lifts it off the rest, scales it, or slides it
+   left, clear of the heraldry as drawn, which the stylesheet cannot see. */
+.Award .Flourish.sc-ribbon#TopTextFlourish {
+    width: 3.4em;
+    left: -0.25em;
+    bottom: 1.1em;
+}
+
 /* The swash beside the issuing body's NAME.
 
    `top` is measured against the "Amtgard" span, the FIRST line, and that is where it
