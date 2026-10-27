@@ -322,6 +322,20 @@ class Scroll extends Ork3
     }
 
     /**
+     * The style custom.tpl appends to the knot partial for a ground: screen on a dark
+     * ground (multiplied, the knot reads as a dim silhouette), nothing otherwise. Shared
+     * with CustomBorderRule() so match-style blends the replacement knot the way the
+     * custom scroll's own knot is blended.
+     */
+    public static function CustomKnotStyle(string $ground): string
+    {
+        return in_array($ground, self::DARK_GROUNDS, true) ? 'mix-blend-mode:screen;' : '';
+    }
+
+    /** _border.tpl's outer layer style, before any per-pass $style is appended. */
+    public const KNOT_PARTIAL_STYLE = 'mix-blend-mode:multiply;padding:1px;margin:-1px;';
+
+    /**
      * The one rank set whose numerals are a small glyph (292x171) rather than a
      * whole-page plate, so it alone needs a box and a bottom offset.
      */
@@ -763,14 +777,28 @@ class Scroll extends Ork3
         }
         $ground = $rule['ground'] ?? null;
 
+        // A string-valued rank swaps the ground ONLY; the order's own passes stay, so
+        // match-style still has something to draw the knot with. false = incompatible.
         if (isset($rule['ranks']) && array_key_exists($rank, $rule['ranks'])) {
-            // false = this rank is incompatible; a string swaps the ground, and the
-            // rank draws no border layer of its own to restyle.
             if ($rule['ranks'][$rank] === false) {
                 return null;
             }
             $ground = $rule['ranks'][$rank];
-            $passes = [];
+        }
+
+        if ($orderId === 'custom') {
+            // The recipe, not a fixed list, decides what is being replaced: custom.tpl
+            // draws the knot (or the band strip, which the custom border replaces too)
+            // with the ground's knot style, and a raster with BORDER_STYLES[border][tone].
+            // BORDER_NONE is a framed ground that was swapped, or a plain sheet: the knot.
+            $recipe = self::NormaliseRecipe($recipe);
+            $tone   = in_array($recipe['ground'], self::DARK_GROUNDS, true) ? 'dark' : 'light';
+            $border = (string) $recipe['border'];
+            $passes = [
+                $border === self::BORDER_NONE || self::BorderDrawsKnot($border)
+                    ? self::KNOT_PARTIAL_STYLE . self::CustomKnotStyle($recipe['ground'])
+                    : (self::BORDER_STYLES[$border][$tone] ?? self::BORDER_STYLE_DEFAULT[$tone]),
+            ];
         }
 
         if (isset($rule['recipeGrounds'])) {
@@ -783,6 +811,10 @@ class Scroll extends Ork3
                 $ground = $mapped;
             }
         }
+
+        // A compatible rule always draws at least one pass; an empty list would mean
+        // match-style paints no border at all.
+        assert($passes !== [], "custom-border rule for {$orderId} has no passes");
 
         return ['passes' => array_values($passes), 'ground' => $ground];
     }

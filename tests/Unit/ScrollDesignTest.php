@@ -93,8 +93,9 @@ final class ScrollDesignTest extends TestCase
         // Warrior rank 10 is compatible, by ground swap rather than by a border layer.
         $r = Scroll::CustomBorderRule('warrior', 10, '', []);
         $this->assertSame('warrior/bg_10-noborder.jpg', $r['ground']);
-        $this->assertSame([], $r['passes']);
-        $this->assertSame('mix-blend-mode:multiply;', Scroll::CustomBorderRule('warrior', 4, '', [])['passes'][0]);
+        // The ground swap keeps the order's own passes: match-style still draws a knot.
+        $this->assertSame(['mix-blend-mode:multiply;'], $r['passes']);
+        $this->assertSame($r['passes'], Scroll::CustomBorderRule('warrior', 4, '', [])['passes']);
     }
 
     public function testCustomOrderFramedGrounds(): void
@@ -111,6 +112,40 @@ final class ScrollDesignTest extends TestCase
         $this->assertNull(Scroll::CustomBorderRule('custom', 3, '', ['ground' => 'flame']));
         $this->assertNull(Scroll::CustomBorderRule('custom', 3, '', ['ground' => 'map']));
         $this->assertNotNull(Scroll::CustomBorderRule('custom', 3, '', ['ground' => 'parchment']));
+    }
+
+    public function testCustomPassesFollowTheRecipe(): void
+    {
+        $knot = Scroll::KNOT_PARTIAL_STYLE;
+
+        $dark = Scroll::CustomBorderRule('custom', 3, '', ['ground' => 'cyanotype', 'border' => 'knot']);
+        $this->assertSame([$knot . 'mix-blend-mode:screen;'], $dark['passes']);
+
+        $owl = Scroll::CustomBorderRule('custom', 3, '', ['ground' => 'parchment', 'border' => 'owl']);
+        $this->assertSame([Scroll::BORDER_STYLES['owl']['light']], $owl['passes']);
+
+        $light = Scroll::CustomBorderRule('custom', 3, '', ['ground' => 'parchment', 'border' => 'knot']);
+        $this->assertSame([$knot], $light['passes']);
+
+        $jov = Scroll::CustomBorderRule('custom', 3, '', ['ground' => 'jovious']);
+        $this->assertSame('jovious/bg-noborder.jpg', $jov['ground']);
+        $this->assertSame([$knot], $jov['passes']);
+    }
+
+    public function testEveryCompatibleCombinationDrawsAtLeastOnePass(): void
+    {
+        foreach (array_keys(Scroll::CustomBorderRules()) as $id) {
+            $order = Scroll::Orders()[$id];
+            $from  = $order['ranks']['from'] ?? 0;
+            $to    = $order['ranks']['to'] ?? 0;
+            foreach (($order['variants'] ?: ['']) as $variant) {
+                for ($rank = $from; $rank <= $to; $rank++) {
+                    $r = Scroll::CustomBorderRule($id, $rank, $variant, []);
+                    $this->assertNotNull($r, "{$id} rank {$rank} {$variant}");
+                    $this->assertNotEmpty($r['passes'], "{$id} rank {$rank} {$variant}");
+                }
+            }
+        }
     }
 
     public function testEveryRuleNamesARealOrderAndRealFiles(): void

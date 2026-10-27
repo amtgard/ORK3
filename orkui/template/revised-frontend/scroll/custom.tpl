@@ -79,7 +79,7 @@ $borderStyle = Scroll::BORDER_STYLES[$recipe['border']][$tone] ?? Scroll::BORDER
  * own declarations, so the later mix-blend-mode wins; dragon.tpl overrides the same
  * way for its glow pass.
  */
-$knotStyle = $dark ? 'mix-blend-mode:screen;' : '';
+$knotStyle = Scroll::CustomKnotStyle((string) $recipe['ground']);
 ?>
 <?php /* data-rankset is here for the same reason data-ground is: the numeral's
          legibility is a property of the PAIR, and only the pair is known here.

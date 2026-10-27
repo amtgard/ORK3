@@ -57,8 +57,8 @@ return [
     // custom draws the knot partial itself. Of the grounds that carry their own frame
     // (groundsWithOwnBorder), only these two have a frameless twin; linen, flame and
     // map stay unmapped, which makes them incompatible.
+    // `passes` is derived from the recipe by CustomBorderRule(), not listed here.
     'custom'  => [
-        'passes'        => [$partial],
         'recipeGrounds' => [
             'jovious'  => 'jovious/bg-noborder.jpg',
             'sunburst' => 'warrior/bg_10-noborder.jpg',
