@@ -271,3 +271,19 @@ rows in the **local** database. That is the price of driving the real print surf
 through the real route instead of adding a dev-only one to a shipped module. It was a
 deliberate trade; if it ever stops being the right one, the alternative is a gated no-log
 route and this is the note that says so.
+
+## Targeted rerun of 150-combination cases
+
+`npm run sweep:scrolls:combo150:rerun` re-renders only the named cases from the SAVED
+`out/combo150/matrix.json` (never regenerated) and compares them with the original images and
+results, which are only read.
+
+```
+ORK3_E2E_USERNAME=heraldsbridge ORK3_E2E_PASSWORD=x \
+ORK3_COMBO_IDS=c045-jovious-r5-park-plain,c003-crown-r8-park-plain ORK3_COMBO_TAG=baseline \
+npm run sweep:scrolls:combo150:rerun
+```
+
+Output: `out/combo150-rerun/<tag>/` with `images/`, `results.json`, `sheets/<id>.jpg` (before beside
+after, then zoomed crops of the changed regions) and `diff.md` (per case: unchanged/changed,
+pixel-diff fraction, changed bounding box, metric deltas). Ids are exact; an unknown id fails.

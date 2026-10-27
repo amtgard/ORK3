@@ -175,7 +175,14 @@ async function plateSignature(page: Page): Promise<string> {
   return page.evaluate(() => {
     const t = document.querySelector('.award-template') as HTMLElement | null;
     if (!t) return '';
-    return [t.dataset.order, t.dataset.variant, t.dataset.rank, t.dataset.ground, t.dataset.border]
+    /* The cached answer is a list of CHILD INDICES, so the signature has to pin the child
+       list too. A Custom Border swaps an order's border images for .sc-knot layers and a
+       Custom Ribbon adds a filter <svg> beside .Award, on the same order/rank/ground: keyed
+       on the dataset alone, a design case would reuse another case's indices and could
+       promote the wrong layer (even the knot) to ground. */
+    const kids = Array.from(t.children).map(el =>
+      el.tagName + '.' + (el.getAttribute('class') ?? '') + '@' + ((el as HTMLImageElement).getAttribute?.('src') ?? ''));
+    return [t.dataset.order, t.dataset.variant, t.dataset.rank, t.dataset.ground, t.dataset.border, kids.join(',')]
       .join('|');
   });
 }

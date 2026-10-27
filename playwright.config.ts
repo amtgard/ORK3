@@ -117,6 +117,62 @@ export default defineConfig({
       },
     },
     {
+      // The 150-combination procedural sweep, step 1: deal the seeded matrix and ask PHP what
+      // each case should draw. See combo150-matrix.spec.ts. No browser state needed.
+      name: 'scroll-combo150-matrix',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'combo150-matrix.spec.ts',
+      timeout: 0,
+    },
+    {
+      // Step 2: render and measure every case through Scrollery/compose with the shared login.
+      // Same page geometry as scroll-sweep, which the ink measurement depends on.
+      name: 'scroll-combo150',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'combo150.spec.ts',
+      fullyParallel: true,
+      dependencies: ['scroll-sweep-setup', 'scroll-combo150-matrix'],
+      timeout: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 2600, height: 3400 },
+        deviceScaleFactor: 1,
+        storageState: (process.env.ORK3_SWEEP_OUT ?? './tools/scroll-sweep/out') + '/.auth.json',
+      },
+    },
+    {
+      // Targeted rerun of named cases from the SAVED matrix (ORK3_COMBO_IDS + ORK3_COMBO_TAG), into
+      // out/combo150-rerun/<tag>/. No matrix dependency: the matrix is never regenerated.
+      name: 'scroll-combo150-rerun',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'combo150.spec.ts',
+      fullyParallel: true,
+      dependencies: ['scroll-sweep-setup'],
+      timeout: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 2600, height: 3400 },
+        deviceScaleFactor: 1,
+        storageState: (process.env.ORK3_SWEEP_OUT ?? './tools/scroll-sweep/out') + '/.auth.json',
+      },
+    },
+    {
+      // Rerun step 2: grade the rerun, before/after sheets and diff.md against out/combo150/.
+      name: 'scroll-combo150-rerun-report',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'combo150-report.spec.ts',
+      dependencies: ['scroll-combo150-rerun'],
+      timeout: 0,
+    },
+    {
+      // Step 3: join the shards, grade, contact sheets, summary.md. See combo150-report.spec.ts.
+      name: 'scroll-combo150-report',
+      testDir: './tools/scroll-sweep',
+      testMatch: 'combo150-report.spec.ts',
+      dependencies: ['scroll-combo150'],
+      timeout: 0,
+    },
+    {
       // Re-emits the report from an existing results.json. See rescore.spec.ts.
       name: 'scroll-sweep-rescore',
       testDir: './tools/scroll-sweep',
