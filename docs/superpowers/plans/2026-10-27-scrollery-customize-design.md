@@ -551,3 +551,46 @@ return [
 - [ ] **Step 3: Full suite.** Run `php vendor/bin/phpunit --no-coverage --filter Scroll` and
   `sh bin/build-scroll-renditions.sh --check`; expected: all pass.
 - [ ] **Step 4: Commit any fixes** by pathspec, `Fix: Scrollery custom border — <what>`.
+
+### Task 7: Park heraldry from the recipient's home park on kingdom scrolls
+
+**Files:**
+- Modify:
+  - `system/lib/ork3/class.Player.php`: `GetScrollRecipient()` also returns
+    `'ParkId' => (int) $this->mundane->park_id`, with `0` in its empty shape; update the docblock.
+  - `orkui/model/model.Scrollery.php`: `heraldry_sources()`.
+  - `orkui/template/revised-frontend/script/scrollery.js`: the Park button's state and tips.
+  - `orkui/template/revised-frontend/Scrollery_create.tpl`: only if the initial Park tip/state
+    is rendered there.
+- Test: `tests/Unit/ScrollHeraldrySourceTest.php`, extended or a sibling test.
+
+**Interfaces:**
+- **Consumes:** Task 4's `heraldry_sources()`, `scroll_recipient()`, and the preview response
+  `HeraldrySources`.
+- **Produces:**
+  - On a **kingdom** scope with `$playerId > 0`, `heraldry_sources()['park']` = the master
+    heraldry URL of the recipient's `ParkId` when that park has heraldry, else `''`.
+  - On a park scope it is unchanged: the scope's own park.
+  - The preview's `HeraldrySources.park` reflects it, so Park backfills when the recipient is
+    picked.
+- **Park button tips on a kingdom scope:**
+  - no recipient → `Choose a recipient below first`;
+  - the recipient's park has no arms (or no park) → `This recipient's park has no heraldry on file`.
+  - Remove the old `No single park for a kingdom scroll` tip.
+
+- [ ] **Step 1: Write the failing test.** Cover the park lookup decision as a pure piece where
+  possible. If `heraldry_sources()` is DB-bound, extract a small pure helper (e.g. the
+  park-id choice: scope park on a park scope, recipient park on a kingdom scope, 0 otherwise)
+  and test it.
+- [ ] **Step 2: Run it and verify it fails.**
+- [ ] **Step 3: Implement** the lib field, the model change and the JS tips/state.
+- [ ] **Step 4: Verify.**
+  - Run `--filter Scroll`.
+  - curl a kingdom-scope preview POST with a recipient whose park has arms →
+    `HeraldrySources.park: true`; choosing `heraldrySource=park` draws that park's arms.
+  - curl again with a recipient whose park has none → `park: false`.
+  - In Chrome on `Scrollery/create/kingdom/<id>`:
+    - Park starts disabled with "Choose a recipient below first";
+    - picking a recipient enables it, with no page reload.
+- [ ] **Step 5: Commit** by pathspec.
+  `Enhancement: Scrollery — Park heraldry follows the recipient's home park on kingdom scrolls`.

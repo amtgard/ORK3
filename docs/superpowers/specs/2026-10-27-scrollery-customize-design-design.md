@@ -34,9 +34,10 @@ A three-button segmented bar: **Kingdom | Park | Persona**.
 - **Disabled buttons.** A button is disabled, with a `data-tip` saying why, when that heraldry
   doesn't exist:
   - Persona: no recipient chosen yet, or the recipient has no heraldry.
-  - Park, on a kingdom-scoped builder: there is no single park, so it stays disabled.
-    *(Builder: if there is an obvious park — e.g. the recipient's home park — you may offer it;
-    otherwise disabled.)*
+  - Park, on a kingdom-scoped builder: it uses the **recipient's home park** (owner decision,
+    2026-10-27). It is disabled with "Choose a recipient below first" until a recipient is picked,
+    then enabled when that park has heraldry, or disabled with "This recipient's park has no
+    heraldry on file". It backfills live when the recipient is chosen, exactly like Persona.
   - Any entity with no heraldry uploaded.
 - **Effect.** Choosing a button changes the top-centre heraldry in the live preview and on the
   print.
