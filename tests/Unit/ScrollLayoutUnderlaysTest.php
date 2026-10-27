@@ -29,6 +29,28 @@ final class ScrollLayoutUnderlaysTest extends TestCase
     }
 
     /** @return list<string> every file under assets/scrolls/, relative to it */
+    /**
+     * Masters exported above layout size (assets/scrolls/hires-masters.txt, "<path> <scale>").
+     * A plate's pixels are layout pixels times this; a .webp rendition shares its master's scale.
+     */
+    private static function scaleOf(string $plate): int
+    {
+        static $scales = null;
+        if ($scales === null) {
+            $scales = [];
+            $list = self::ART . '/hires-masters.txt';
+            foreach (is_file($list) ? (array) file($list, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : [] as $line) {
+                $line = trim((string) $line);
+                if ($line !== '' && $line[0] !== '#') {
+                    [$path, $scale] = array_pad(preg_split('/\s+/', $line), 2, '1');
+                    $scales[preg_replace('/\.[a-z]+$/i', '', $path)] = max(1, (int) $scale);
+                }
+            }
+        }
+
+        return $scales[preg_replace('/\.[a-z]+$/i', '', $plate)] ?? 1;
+    }
+
     private function plates(): array
     {
         $root = (string) realpath(self::ART);
@@ -164,7 +186,8 @@ final class ScrollLayoutUnderlaysTest extends TestCase
                 foreach ($hits as $file) {
                     $size = getimagesize(self::ART . '/' . $file);
                     $this->assertNotFalse($size, "{$order}: cannot read {$file}");
-                    $this->assertSame([2550, 3300], [$size[0], $size[1]], "{$order}: window pattern '{$entry['pattern']}' matches {$file}, which is not the 2550x3300 frame");
+                    $k = self::scaleOf($file);
+                    $this->assertSame([2550 * $k, 3300 * $k], [$size[0], $size[1]], "{$order}: window pattern '{$entry['pattern']}' matches {$file}, which is not the 2550x3300 frame (at {$k}x)");
                     $seen++;
                 }
             }
@@ -215,17 +238,20 @@ final class ScrollLayoutUnderlaysTest extends TestCase
                     // A palette PNG has no alpha channel in the pixel value: read it as truecolour so the
                     // check below sees the transparency rather than a palette index.
                     imagepalettetotruecolor($im);
+                    // A hi-res master is checked on the layout grid: rows and columns step by its
+                    // scale, so the window (in layout rows) and the cost are the same as at 1x.
+                    $k = self::scaleOf($file);
                     $w = imagesx($im);
-                    $h = min(imagesy($im), $clearTo);
+                    $h = min(imagesy($im), $clearTo * $k);
                     $stray = [];
-                    for ($y = 0; $y < $h; $y++) {
-                        if ($y >= $y0 && $y < $y1) {
-                            $y = $y1 - 1;   // the window itself may hold anything
+                    for ($y = 0; $y < $h; $y += $k) {
+                        if ($y >= $y0 * $k && $y < $y1 * $k) {
+                            $y = $y1 * $k - $k;   // the window itself may hold anything
                             continue;
                         }
-                        for ($x = 0; $x < $w; $x++) {
+                        for ($x = 0; $x < $w; $x += $k) {
                             if (((imagecolorat($im, $x, $y) >> 24) & 0x7F) < $alphaMax) {
-                                $stray[] = "({$x},{$y})";
+                                $stray[] = '(' . intdiv($x, $k) . ',' . intdiv($y, $k) . ')';
                                 break 2;
                             }
                         }

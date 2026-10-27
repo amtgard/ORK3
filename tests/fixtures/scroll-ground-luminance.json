@@ -85,11 +85,11 @@
         },
         "forge": {
             "file": "smith/burn.jpg",
-            "sha1": "3fe3505dbe3e8dd3ccbb82d06ac02a5e51a85fd6",
+            "sha1": "fb8ac322540f5a94318d0a5127bb54fdced29133",
             "wash": "mix-blend-mode:soft-light;",
-            "luminance": 0.554557,
-            "contrastOnBlack": 12.091,
-            "contrastOnWhite": 1.737,
+            "luminance": 0.554714,
+            "contrastOnBlack": 12.094,
+            "contrastOnWhite": 1.736,
             "dark": false,
             "underlaySha1": "c96691a94902d4a0f5baec34db189155616364c2"
         },

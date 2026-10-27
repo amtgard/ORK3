@@ -113,10 +113,10 @@
       "display": { "file": "battle/martial/over_7_display.webp", "bytes": 5828, "dimensions": "667x400" }
     },
     "battle/martial/over_8.png": {
-      "sha": "45e160717568f48e",
-      "bytes": 48872,
-      "print": { "file": "battle/martial/over_8.webp", "bytes": 25224 },
-      "display": { "file": "battle/martial/over_8_display.webp", "bytes": 5654, "dimensions": "667x400" }
+      "sha": "1ef75307486e18f5",
+      "bytes": 135830,
+      "print": { "file": "battle/martial/over_8.webp", "bytes": 72266 },
+      "display": { "file": "battle/martial/over_8_display.webp", "bytes": 5586, "dimensions": "667x400" }
     },
     "battle/martial/over_9.png": {
       "sha": "535d2781f7b15b77",
@@ -263,16 +263,16 @@
       "display": { "file": "crown/border_display.webp", "bytes": 135188, "dimensions": "850x1100" }
     },
     "crown/phoenix.png": {
-      "sha": "3e9f32c37fc26f15",
-      "bytes": 133240,
-      "print": { "file": "crown/phoenix.webp", "bytes": 81362 },
-      "display": { "file": "crown/phoenix_display.webp", "bytes": 10524, "dimensions": "850x217" }
+      "sha": "378e3d75f97c707d",
+      "bytes": 280823,
+      "print": { "file": "crown/phoenix.webp", "bytes": 161464 },
+      "display": { "file": "crown/phoenix_display.webp", "bytes": 10412, "dimensions": "850x217" }
     },
     "crown/symbol_0.png": {
-      "sha": "db50798879a971d7",
-      "bytes": 221614,
-      "print": { "file": "crown/symbol_0.webp", "bytes": 137468 },
-      "display": { "file": "crown/symbol_0_display.webp", "bytes": 19458, "dimensions": "250x250" }
+      "sha": "9cab5bd120d96055",
+      "bytes": 488943,
+      "print": { "file": "crown/symbol_0.webp", "bytes": 309804 },
+      "display": { "file": "crown/symbol_0_display.webp", "bytes": 19362, "dimensions": "250x250" }
     },
     "crown/symbol_1.png": {
       "sha": "836871be3076f126",
@@ -305,10 +305,10 @@
       "display": { "file": "crown/symbol_4_display.webp", "bytes": 20564, "dimensions": "250x250" }
     },
     "crown/symbol_5.png": {
-      "sha": "8c377a447adb8e54",
-      "bytes": 204431,
-      "print": { "file": "crown/symbol_5.webp", "bytes": 126972 },
-      "display": { "file": "crown/symbol_5_display.webp", "bytes": 19606, "dimensions": "250x250" }
+      "sha": "aa342b00ed441fa0",
+      "bytes": 457928,
+      "print": { "file": "crown/symbol_5.webp", "bytes": 289772 },
+      "display": { "file": "crown/symbol_5_display.webp", "bytes": 19430, "dimensions": "250x250" }
     },
     "crown/symbol_6.png": {
       "sha": "e94c937b646e9668",
@@ -335,82 +335,82 @@
       "display": { "file": "crown/symbol_9_display.webp", "bytes": 22618, "dimensions": "250x250" }
     },
     "dragon/over_10.png": {
-      "sha": "1b5cfe8640a768e0",
-      "bytes": 112028,
-      "print": { "file": "dragon/over_10.webp", "bytes": 60066 },
-      "display": { "file": "dragon/over_10_display.webp", "bytes": 14332, "dimensions": "422x289" }
+      "sha": "3543879a1e31c92a",
+      "bytes": 231494,
+      "print": { "file": "dragon/over_10.webp", "bytes": 97140 },
+      "display": { "file": "dragon/over_10_display.webp", "bytes": 13098, "dimensions": "422x289" }
     },
     "dragon/over_6.png": {
-      "sha": "020446fee27c933e",
-      "bytes": 41457,
-      "print": { "file": "dragon/over_6.webp", "bytes": 20602 },
-      "display": { "file": "dragon/over_6_display.webp", "bytes": 5252, "dimensions": "422x289" }
+      "sha": "b6fd2d3c9e7b04e4",
+      "bytes": 91693,
+      "print": { "file": "dragon/over_6.webp", "bytes": 40098 },
+      "display": { "file": "dragon/over_6_display.webp", "bytes": 4792, "dimensions": "422x289" }
     },
     "dragon/over_7.png": {
-      "sha": "c1ea8ab4557e2426",
-      "bytes": 55066,
-      "print": { "file": "dragon/over_7.webp", "bytes": 27176 },
-      "display": { "file": "dragon/over_7_display.webp", "bytes": 6952, "dimensions": "422x289" }
+      "sha": "ec95cd0053a2bafc",
+      "bytes": 120356,
+      "print": { "file": "dragon/over_7.webp", "bytes": 53346 },
+      "display": { "file": "dragon/over_7_display.webp", "bytes": 6404, "dimensions": "422x289" }
     },
     "dragon/over_8.png": {
-      "sha": "6270d7bc87c83c1e",
-      "bytes": 80042,
-      "print": { "file": "dragon/over_8.webp", "bytes": 46882 },
-      "display": { "file": "dragon/over_8_display.webp", "bytes": 9244, "dimensions": "422x289" }
+      "sha": "c073840c132b6843",
+      "bytes": 173502,
+      "print": { "file": "dragon/over_8.webp", "bytes": 98240 },
+      "display": { "file": "dragon/over_8_display.webp", "bytes": 8592, "dimensions": "422x289" }
     },
     "dragon/over_9.png": {
-      "sha": "6fc23bf74a129663",
-      "bytes": 121937,
-      "print": { "file": "dragon/over_9.webp", "bytes": 68944 },
-      "display": { "file": "dragon/over_9_display.webp", "bytes": 13962, "dimensions": "422x289" }
+      "sha": "5302af2caf933852",
+      "bytes": 254903,
+      "print": { "file": "dragon/over_9.webp", "bytes": 139776 },
+      "display": { "file": "dragon/over_9_display.webp", "bytes": 13018, "dimensions": "422x289" }
     },
     "dragon/under_0.png": {
-      "sha": "a81ec920ce1b01ae",
-      "bytes": 145747,
-      "print": { "file": "dragon/under_0.webp", "bytes": 49820 },
-      "display": { "file": "dragon/under_0_display.webp", "bytes": 20470, "dimensions": "422x289" }
+      "sha": "1d48fd5b95837d96",
+      "bytes": 295000,
+      "print": { "file": "dragon/under_0.webp", "bytes": 103242 },
+      "display": { "file": "dragon/under_0_display.webp", "bytes": 18706, "dimensions": "422x289" }
     },
     "dragon/under_1.png": {
-      "sha": "089b10247220cc3c",
-      "bytes": 95277,
-      "print": { "file": "dragon/under_1.webp", "bytes": 32116 },
-      "display": { "file": "dragon/under_1_display.webp", "bytes": 12628, "dimensions": "422x289" }
+      "sha": "23ae3b8e11017691",
+      "bytes": 194059,
+      "print": { "file": "dragon/under_1.webp", "bytes": 65238 },
+      "display": { "file": "dragon/under_1_display.webp", "bytes": 11584, "dimensions": "422x289" }
     },
     "dragon/under_10.png": {
-      "sha": "986dd836f96cf576",
-      "bytes": 186681,
-      "print": { "file": "dragon/under_10.webp", "bytes": 63742 },
-      "display": { "file": "dragon/under_10_display.webp", "bytes": 27598, "dimensions": "422x289" }
+      "sha": "20b59bc5d9e7f330",
+      "bytes": 377585,
+      "print": { "file": "dragon/under_10.webp", "bytes": 131822 },
+      "display": { "file": "dragon/under_10_display.webp", "bytes": 25152, "dimensions": "422x289" }
     },
     "dragon/under_2.png": {
-      "sha": "878ed379f7c628cd",
-      "bytes": 114788,
-      "print": { "file": "dragon/under_2.webp", "bytes": 38984 },
-      "display": { "file": "dragon/under_2_display.webp", "bytes": 15358, "dimensions": "422x289" }
+      "sha": "518de69cd433e303",
+      "bytes": 231731,
+      "print": { "file": "dragon/under_2.webp", "bytes": 80398 },
+      "display": { "file": "dragon/under_2_display.webp", "bytes": 14510, "dimensions": "422x289" }
     },
     "dragon/under_3.png": {
-      "sha": "ef65325d1fdedc20",
-      "bytes": 121872,
-      "print": { "file": "dragon/under_3.webp", "bytes": 41208 },
-      "display": { "file": "dragon/under_3_display.webp", "bytes": 16454, "dimensions": "422x289" }
+      "sha": "25e52fc0bbe3012e",
+      "bytes": 247303,
+      "print": { "file": "dragon/under_3.webp", "bytes": 84794 },
+      "display": { "file": "dragon/under_3_display.webp", "bytes": 15342, "dimensions": "422x289" }
     },
     "dragon/under_4.png": {
-      "sha": "d45d47c084a2c3af",
-      "bytes": 137990,
-      "print": { "file": "dragon/under_4.webp", "bytes": 47112 },
-      "display": { "file": "dragon/under_4_display.webp", "bytes": 19066, "dimensions": "422x289" }
+      "sha": "0c7692c705c27108",
+      "bytes": 278704,
+      "print": { "file": "dragon/under_4.webp", "bytes": 96638 },
+      "display": { "file": "dragon/under_4_display.webp", "bytes": 17672, "dimensions": "422x289" }
     },
     "dragon/under_5.png": {
-      "sha": "a81ec920ce1b01ae",
-      "bytes": 145747,
-      "print": { "file": "dragon/under_5.webp", "bytes": 49820 },
-      "display": { "file": "dragon/under_5_display.webp", "bytes": 20470, "dimensions": "422x289" }
+      "sha": "1d48fd5b95837d96",
+      "bytes": 295000,
+      "print": { "file": "dragon/under_5.webp", "bytes": 103242 },
+      "display": { "file": "dragon/under_5_display.webp", "bytes": 18706, "dimensions": "422x289" }
     },
     "dragon/under_6.png": {
-      "sha": "ebb313ce8229ac72",
-      "bytes": 145136,
-      "print": { "file": "dragon/under_6.webp", "bytes": 49540 },
-      "display": { "file": "dragon/under_6_display.webp", "bytes": 20422, "dimensions": "422x289" }
+      "sha": "58325b0468f1e523",
+      "bytes": 294176,
+      "print": { "file": "dragon/under_6.webp", "bytes": 102236 },
+      "display": { "file": "dragon/under_6_display.webp", "bytes": 18690, "dimensions": "422x289" }
     },
     "dragon/under_7.png": {
       "sha": "445eddc6d3f8a18b",
@@ -419,16 +419,16 @@
       "display": { "file": "dragon/under_7_display.webp", "bytes": 20676, "dimensions": "422x289" }
     },
     "dragon/under_8.png": {
-      "sha": "441522758f5c7ad1",
-      "bytes": 160642,
-      "print": { "file": "dragon/under_8.webp", "bytes": 55446 },
-      "display": { "file": "dragon/under_8_display.webp", "bytes": 23346, "dimensions": "422x289" }
+      "sha": "ea0d46523a19553a",
+      "bytes": 323294,
+      "print": { "file": "dragon/under_8.webp", "bytes": 114626 },
+      "display": { "file": "dragon/under_8_display.webp", "bytes": 21232, "dimensions": "422x289" }
     },
     "dragon/under_9.png": {
-      "sha": "f8791663cc584a83",
-      "bytes": 161049,
-      "print": { "file": "dragon/under_9.webp", "bytes": 55646 },
-      "display": { "file": "dragon/under_9_display.webp", "bytes": 23110, "dimensions": "422x289" }
+      "sha": "92ebe5e1a9ca7b09",
+      "bytes": 325461,
+      "print": { "file": "dragon/under_9.webp", "bytes": 113968 },
+      "display": { "file": "dragon/under_9_display.webp", "bytes": 21338, "dimensions": "422x289" }
     },
     "flame/bg.jpg": {
       "sha": "f6e660f96058931f",
@@ -527,10 +527,10 @@
       "display": { "file": "garber/rank_10_display.webp", "bytes": 35510, "dimensions": "850x1100" }
     },
     "garber/rank_2.png": {
-      "sha": "e6ead4d798f06328",
-      "bytes": 160715,
-      "print": { "file": "garber/rank_2.webp", "bytes": 78880 },
-      "display": { "file": "garber/rank_2_display.webp", "bytes": 13880, "dimensions": "850x1100" }
+      "sha": "71a3fa73d1126c1a",
+      "bytes": 467766,
+      "print": { "file": "garber/rank_2.webp", "bytes": 229748 },
+      "display": { "file": "garber/rank_2_display.webp", "bytes": 13882, "dimensions": "850x1100" }
     },
     "garber/rank_3.png": {
       "sha": "b2261642014fb2bb",
@@ -581,16 +581,16 @@
       "display": { "file": "griffon/symbol_1_display.webp", "bytes": 10858, "dimensions": "366x283" }
     },
     "griffon/symbol_10.png": {
-      "sha": "ed37d991cc2896a7",
-      "bytes": 135588,
-      "print": { "file": "griffon/symbol_10.webp", "bytes": 73726 },
-      "display": { "file": "griffon/symbol_10_display.webp", "bytes": 14470, "dimensions": "366x283" }
+      "sha": "f48fe0e0a685178f",
+      "bytes": 334811,
+      "print": { "file": "griffon/symbol_10.webp", "bytes": 185048 },
+      "display": { "file": "griffon/symbol_10_display.webp", "bytes": 14442, "dimensions": "366x283" }
     },
     "griffon/symbol_2.png": {
-      "sha": "0cbf801ab83e2eaf",
-      "bytes": 94686,
-      "print": { "file": "griffon/symbol_2.webp", "bytes": 48146 },
-      "display": { "file": "griffon/symbol_2_display.webp", "bytes": 8270, "dimensions": "366x283" }
+      "sha": "fa07ebd54b6438ff",
+      "bytes": 261266,
+      "print": { "file": "griffon/symbol_2.webp", "bytes": 128314 },
+      "display": { "file": "griffon/symbol_2_display.webp", "bytes": 8296, "dimensions": "366x283" }
     },
     "griffon/symbol_3.png": {
       "sha": "e69175d1f8aaa212",
@@ -611,28 +611,28 @@
       "display": { "file": "griffon/symbol_5_display.webp", "bytes": 19450, "dimensions": "366x283" }
     },
     "griffon/symbol_6.png": {
-      "sha": "d4f6e37c9b73b40c",
-      "bytes": 201648,
-      "print": { "file": "griffon/symbol_6.webp", "bytes": 110676 },
-      "display": { "file": "griffon/symbol_6_display.webp", "bytes": 18764, "dimensions": "366x283" }
+      "sha": "d9e8c5dd30e4ae32",
+      "bytes": 562192,
+      "print": { "file": "griffon/symbol_6.webp", "bytes": 299522 },
+      "display": { "file": "griffon/symbol_6_display.webp", "bytes": 18722, "dimensions": "366x283" }
     },
     "griffon/symbol_7.png": {
-      "sha": "d4f6e37c9b73b40c",
-      "bytes": 201648,
-      "print": { "file": "griffon/symbol_7.webp", "bytes": 110676 },
-      "display": { "file": "griffon/symbol_7_display.webp", "bytes": 18764, "dimensions": "366x283" }
+      "sha": "d9e8c5dd30e4ae32",
+      "bytes": 562192,
+      "print": { "file": "griffon/symbol_7.webp", "bytes": 299522 },
+      "display": { "file": "griffon/symbol_7_display.webp", "bytes": 18722, "dimensions": "366x283" }
     },
     "griffon/symbol_8.png": {
-      "sha": "5deb8f26b1072d1a",
-      "bytes": 205714,
-      "print": { "file": "griffon/symbol_8.webp", "bytes": 111170 },
-      "display": { "file": "griffon/symbol_8_display.webp", "bytes": 19896, "dimensions": "366x283" }
+      "sha": "8c2665e4469a8881",
+      "bytes": 564968,
+      "print": { "file": "griffon/symbol_8.webp", "bytes": 297448 },
+      "display": { "file": "griffon/symbol_8_display.webp", "bytes": 19920, "dimensions": "366x283" }
     },
     "griffon/symbol_9.png": {
-      "sha": "2ce1c03346988d23",
-      "bytes": 94283,
-      "print": { "file": "griffon/symbol_9.webp", "bytes": 46692 },
-      "display": { "file": "griffon/symbol_9_display.webp", "bytes": 11244, "dimensions": "366x283" }
+      "sha": "b66dc0de3359db0b",
+      "bytes": 236287,
+      "print": { "file": "griffon/symbol_9.webp", "bytes": 114590 },
+      "display": { "file": "griffon/symbol_9_display.webp", "bytes": 11240, "dimensions": "366x283" }
     },
     "hunter/border.png": {
       "sha": "04b1c9b855790fdb",
@@ -1001,70 +1001,70 @@
       "display": { "file": "jovious/ribbon-top_display.webp", "bytes": 7758, "dimensions": "414x144" }
     },
     "jovious/symbol_0.png": {
-      "sha": "62646c2975fe55ab",
-      "bytes": 378212,
-      "print": { "file": "jovious/symbol_0.webp", "bytes": 218898 },
-      "display": { "file": "jovious/symbol_0_display.webp", "bytes": 13790, "dimensions": "183x208" }
+      "sha": "a74bcaa77aaa143d",
+      "bytes": 1035543,
+      "print": { "file": "jovious/symbol_0.webp", "bytes": 629836 },
+      "display": { "file": "jovious/symbol_0_display.webp", "bytes": 13636, "dimensions": "183x208" }
     },
     "jovious/symbol_1.png": {
-      "sha": "9917027547625c32",
-      "bytes": 382355,
-      "print": { "file": "jovious/symbol_1.webp", "bytes": 229082 },
-      "display": { "file": "jovious/symbol_1_display.webp", "bytes": 14980, "dimensions": "183x208" }
+      "sha": "6e6898bce0f3f9c1",
+      "bytes": 1048191,
+      "print": { "file": "jovious/symbol_1.webp", "bytes": 645624 },
+      "display": { "file": "jovious/symbol_1_display.webp", "bytes": 14794, "dimensions": "183x208" }
     },
     "jovious/symbol_10.png": {
-      "sha": "908cf86107f006d9",
-      "bytes": 389467,
-      "print": { "file": "jovious/symbol_10.webp", "bytes": 232702 },
-      "display": { "file": "jovious/symbol_10_display.webp", "bytes": 15978, "dimensions": "183x208" }
+      "sha": "32b0564a65d818fe",
+      "bytes": 1057311,
+      "print": { "file": "jovious/symbol_10.webp", "bytes": 659832 },
+      "display": { "file": "jovious/symbol_10_display.webp", "bytes": 15760, "dimensions": "183x208" }
     },
     "jovious/symbol_2.png": {
-      "sha": "19f82e006a41aa2c",
-      "bytes": 379241,
-      "print": { "file": "jovious/symbol_2.webp", "bytes": 226698 },
-      "display": { "file": "jovious/symbol_2_display.webp", "bytes": 15248, "dimensions": "183x208" }
+      "sha": "f016e204dca27c2f",
+      "bytes": 1032511,
+      "print": { "file": "jovious/symbol_2.webp", "bytes": 644670 },
+      "display": { "file": "jovious/symbol_2_display.webp", "bytes": 14912, "dimensions": "183x208" }
     },
     "jovious/symbol_3.png": {
-      "sha": "3e30dbe68c68af77",
-      "bytes": 376249,
-      "print": { "file": "jovious/symbol_3.webp", "bytes": 224574 },
-      "display": { "file": "jovious/symbol_3_display.webp", "bytes": 15492, "dimensions": "183x208" }
+      "sha": "5388aff51d2190eb",
+      "bytes": 1024160,
+      "print": { "file": "jovious/symbol_3.webp", "bytes": 633478 },
+      "display": { "file": "jovious/symbol_3_display.webp", "bytes": 15284, "dimensions": "183x208" }
     },
     "jovious/symbol_4.png": {
-      "sha": "d555b4ebdeeace47",
-      "bytes": 385879,
-      "print": { "file": "jovious/symbol_4.webp", "bytes": 232920 },
-      "display": { "file": "jovious/symbol_4_display.webp", "bytes": 15998, "dimensions": "183x208" }
+      "sha": "b0b8ec61b185ae7b",
+      "bytes": 1048923,
+      "print": { "file": "jovious/symbol_4.webp", "bytes": 657814 },
+      "display": { "file": "jovious/symbol_4_display.webp", "bytes": 15736, "dimensions": "183x208" }
     },
     "jovious/symbol_5.png": {
-      "sha": "3037ab089ecd8c64",
-      "bytes": 388272,
-      "print": { "file": "jovious/symbol_5.webp", "bytes": 232906 },
-      "display": { "file": "jovious/symbol_5_display.webp", "bytes": 15802, "dimensions": "183x208" }
+      "sha": "2625800cdb623d07",
+      "bytes": 1057603,
+      "print": { "file": "jovious/symbol_5.webp", "bytes": 653316 },
+      "display": { "file": "jovious/symbol_5_display.webp", "bytes": 15570, "dimensions": "183x208" }
     },
     "jovious/symbol_6.png": {
-      "sha": "69a2335ce78b343d",
-      "bytes": 385909,
-      "print": { "file": "jovious/symbol_6.webp", "bytes": 229768 },
-      "display": { "file": "jovious/symbol_6_display.webp", "bytes": 15994, "dimensions": "183x208" }
+      "sha": "893a3f90a775eebd",
+      "bytes": 1049088,
+      "print": { "file": "jovious/symbol_6.webp", "bytes": 657032 },
+      "display": { "file": "jovious/symbol_6_display.webp", "bytes": 15770, "dimensions": "183x208" }
     },
     "jovious/symbol_7.png": {
-      "sha": "be3d395bf8984f4f",
-      "bytes": 380429,
-      "print": { "file": "jovious/symbol_7.webp", "bytes": 229158 },
-      "display": { "file": "jovious/symbol_7_display.webp", "bytes": 16208, "dimensions": "183x208" }
+      "sha": "66d40f5dded78aa6",
+      "bytes": 1033966,
+      "print": { "file": "jovious/symbol_7.webp", "bytes": 648276 },
+      "display": { "file": "jovious/symbol_7_display.webp", "bytes": 16024, "dimensions": "183x208" }
     },
     "jovious/symbol_8.png": {
-      "sha": "926b5d1b962e3d33",
-      "bytes": 376773,
-      "print": { "file": "jovious/symbol_8.webp", "bytes": 228196 },
-      "display": { "file": "jovious/symbol_8_display.webp", "bytes": 16344, "dimensions": "183x208" }
+      "sha": "3bcc10eee61f275c",
+      "bytes": 1022699,
+      "print": { "file": "jovious/symbol_8.webp", "bytes": 642162 },
+      "display": { "file": "jovious/symbol_8_display.webp", "bytes": 16100, "dimensions": "183x208" }
     },
     "jovious/symbol_9.png": {
-      "sha": "ba5979a627bd4b29",
-      "bytes": 384858,
-      "print": { "file": "jovious/symbol_9.webp", "bytes": 231274 },
-      "display": { "file": "jovious/symbol_9_display.webp", "bytes": 16138, "dimensions": "183x208" }
+      "sha": "1c5b9988bf343148",
+      "bytes": 1044918,
+      "print": { "file": "jovious/symbol_9.webp", "bytes": 653334 },
+      "display": { "file": "jovious/symbol_9_display.webp", "bytes": 15858, "dimensions": "183x208" }
     },
     "lion/border.png": {
       "sha": "787d17fb2bb79456",
@@ -1073,70 +1073,70 @@
       "display": { "file": "lion/border_display.webp", "bytes": 144528, "dimensions": "850x1100" }
     },
     "lion/symbol_0.png": {
-      "sha": "216becc8eeb047de",
-      "bytes": 301559,
-      "print": { "file": "lion/symbol_0.webp", "bytes": 180920 },
-      "display": { "file": "lion/symbol_0_display.webp", "bytes": 11916, "dimensions": "217x249" }
+      "sha": "a4c927dd2a8f84af",
+      "bytes": 631829,
+      "print": { "file": "lion/symbol_0.webp", "bytes": 382334 },
+      "display": { "file": "lion/symbol_0_display.webp", "bytes": 11822, "dimensions": "217x249" }
     },
     "lion/symbol_1.png": {
-      "sha": "1e337c616e80f55d",
-      "bytes": 242503,
-      "print": { "file": "lion/symbol_1.webp", "bytes": 145054 },
-      "display": { "file": "lion/symbol_1_display.webp", "bytes": 10526, "dimensions": "217x249" }
+      "sha": "1219aaad9e3847d9",
+      "bytes": 505191,
+      "print": { "file": "lion/symbol_1.webp", "bytes": 307712 },
+      "display": { "file": "lion/symbol_1_display.webp", "bytes": 10404, "dimensions": "217x249" }
     },
     "lion/symbol_10.png": {
-      "sha": "60c971f877a92b9c",
-      "bytes": 358716,
-      "print": { "file": "lion/symbol_10.webp", "bytes": 227060 },
-      "display": { "file": "lion/symbol_10_display.webp", "bytes": 13904, "dimensions": "217x249" }
+      "sha": "ed60f09307a5bc8b",
+      "bytes": 806174,
+      "print": { "file": "lion/symbol_10.webp", "bytes": 517292 },
+      "display": { "file": "lion/symbol_10_display.webp", "bytes": 13992, "dimensions": "217x249" }
     },
     "lion/symbol_2.png": {
-      "sha": "3e8d4be6ce6befa9",
-      "bytes": 257609,
-      "print": { "file": "lion/symbol_2.webp", "bytes": 154704 },
-      "display": { "file": "lion/symbol_2_display.webp", "bytes": 10928, "dimensions": "217x249" }
+      "sha": "94f01e651b721118",
+      "bytes": 532685,
+      "print": { "file": "lion/symbol_2.webp", "bytes": 326492 },
+      "display": { "file": "lion/symbol_2_display.webp", "bytes": 10828, "dimensions": "217x249" }
     },
     "lion/symbol_3.png": {
-      "sha": "5718311c9011423a",
-      "bytes": 269413,
-      "print": { "file": "lion/symbol_3.webp", "bytes": 163910 },
-      "display": { "file": "lion/symbol_3_display.webp", "bytes": 11224, "dimensions": "217x249" }
+      "sha": "1dbc0dd3fdf0f184",
+      "bytes": 555432,
+      "print": { "file": "lion/symbol_3.webp", "bytes": 340970 },
+      "display": { "file": "lion/symbol_3_display.webp", "bytes": 11160, "dimensions": "217x249" }
     },
     "lion/symbol_4.png": {
-      "sha": "e8332bbe454194cc",
-      "bytes": 304527,
-      "print": { "file": "lion/symbol_4.webp", "bytes": 183440 },
-      "display": { "file": "lion/symbol_4_display.webp", "bytes": 12172, "dimensions": "217x249" }
+      "sha": "cb9f1dd7f4fa17b6",
+      "bytes": 636498,
+      "print": { "file": "lion/symbol_4.webp", "bytes": 387042 },
+      "display": { "file": "lion/symbol_4_display.webp", "bytes": 12046, "dimensions": "217x249" }
     },
     "lion/symbol_5.png": {
-      "sha": "cc8a5155af3c706f",
-      "bytes": 311077,
-      "print": { "file": "lion/symbol_5.webp", "bytes": 184204 },
-      "display": { "file": "lion/symbol_5_display.webp", "bytes": 12328, "dimensions": "217x249" }
+      "sha": "6465bdacc8dac39d",
+      "bytes": 649949,
+      "print": { "file": "lion/symbol_5.webp", "bytes": 395784 },
+      "display": { "file": "lion/symbol_5_display.webp", "bytes": 12172, "dimensions": "217x249" }
     },
     "lion/symbol_6.png": {
-      "sha": "b7baf70367fe1b25",
-      "bytes": 345322,
-      "print": { "file": "lion/symbol_6.webp", "bytes": 217914 },
-      "display": { "file": "lion/symbol_6_display.webp", "bytes": 13242, "dimensions": "217x249" }
+      "sha": "791605c1075b16ad",
+      "bytes": 777414,
+      "print": { "file": "lion/symbol_6.webp", "bytes": 500460 },
+      "display": { "file": "lion/symbol_6_display.webp", "bytes": 13182, "dimensions": "217x249" }
     },
     "lion/symbol_7.png": {
-      "sha": "de899d30604bbbac",
-      "bytes": 352744,
-      "print": { "file": "lion/symbol_7.webp", "bytes": 224418 },
-      "display": { "file": "lion/symbol_7_display.webp", "bytes": 13246, "dimensions": "217x249" }
+      "sha": "2305ac59e3d14f2e",
+      "bytes": 797730,
+      "print": { "file": "lion/symbol_7.webp", "bytes": 518604 },
+      "display": { "file": "lion/symbol_7_display.webp", "bytes": 13166, "dimensions": "217x249" }
     },
     "lion/symbol_8.png": {
-      "sha": "7914056d1b3d6996",
-      "bytes": 348562,
-      "print": { "file": "lion/symbol_8.webp", "bytes": 221756 },
-      "display": { "file": "lion/symbol_8_display.webp", "bytes": 13514, "dimensions": "217x249" }
+      "sha": "6aef36232d579747",
+      "bytes": 785616,
+      "print": { "file": "lion/symbol_8.webp", "bytes": 507474 },
+      "display": { "file": "lion/symbol_8_display.webp", "bytes": 13530, "dimensions": "217x249" }
     },
     "lion/symbol_9.png": {
-      "sha": "ee22145402b8df4f",
-      "bytes": 356420,
-      "print": { "file": "lion/symbol_9.webp", "bytes": 226110 },
-      "display": { "file": "lion/symbol_9_display.webp", "bytes": 13898, "dimensions": "217x249" }
+      "sha": "96558ac5b61a9fcc",
+      "bytes": 800886,
+      "print": { "file": "lion/symbol_9.webp", "bytes": 513660 },
+      "display": { "file": "lion/symbol_9_display.webp", "bytes": 13846, "dimensions": "217x249" }
     },
     "mask/border.png": {
       "sha": "426cb0d99fae946e",
@@ -1193,10 +1193,10 @@
       "display": { "file": "owl/rank_3_display.webp", "bytes": 6970, "dimensions": "217x150" }
     },
     "owl/rank_4.png": {
-      "sha": "265be378c199239c",
-      "bytes": 66951,
-      "print": { "file": "owl/rank_4.webp", "bytes": 35172 },
-      "display": { "file": "owl/rank_4_display.webp", "bytes": 5782, "dimensions": "217x150" }
+      "sha": "ad8f4b36f6b7b5ab",
+      "bytes": 215695,
+      "print": { "file": "owl/rank_4.webp", "bytes": 120824 },
+      "display": { "file": "owl/rank_4_display.webp", "bytes": 5916, "dimensions": "217x150" }
     },
     "owl/rank_5.png": {
       "sha": "ce29128f8f22ccd4",
@@ -1241,70 +1241,70 @@
       "display": { "file": "rose/burn_display.webp", "bytes": 46084, "dimensions": "850x1100" }
     },
     "rose/symbol_0.png": {
-      "sha": "8c955baf2727dae0",
-      "bytes": 131116,
-      "print": { "file": "rose/symbol_0.webp", "bytes": 74444 },
-      "display": { "file": "rose/symbol_0_display.webp", "bytes": 8206, "dimensions": "207x177" }
+      "sha": "f2eefe665d530469",
+      "bytes": 274513,
+      "print": { "file": "rose/symbol_0.webp", "bytes": 154834 },
+      "display": { "file": "rose/symbol_0_display.webp", "bytes": 8056, "dimensions": "207x177" }
     },
     "rose/symbol_1.png": {
-      "sha": "80b43a599d547b7b",
-      "bytes": 58052,
-      "print": { "file": "rose/symbol_1.webp", "bytes": 33026 },
-      "display": { "file": "rose/symbol_1_display.webp", "bytes": 3702, "dimensions": "207x177" }
+      "sha": "a2eed16c91d0dd5a",
+      "bytes": 136001,
+      "print": { "file": "rose/symbol_1.webp", "bytes": 74930 },
+      "display": { "file": "rose/symbol_1_display.webp", "bytes": 3606, "dimensions": "207x177" }
     },
     "rose/symbol_10.png": {
-      "sha": "6e2882f952e398b7",
-      "bytes": 88803,
-      "print": { "file": "rose/symbol_10.webp", "bytes": 50924 },
-      "display": { "file": "rose/symbol_10_display.webp", "bytes": 5372, "dimensions": "207x177" }
+      "sha": "96c4e4fa0d25eced",
+      "bytes": 206493,
+      "print": { "file": "rose/symbol_10.webp", "bytes": 119958 },
+      "display": { "file": "rose/symbol_10_display.webp", "bytes": 5280, "dimensions": "207x177" }
     },
     "rose/symbol_2.png": {
-      "sha": "1a845189c8cceb95",
-      "bytes": 76142,
-      "print": { "file": "rose/symbol_2.webp", "bytes": 44564 },
-      "display": { "file": "rose/symbol_2_display.webp", "bytes": 5036, "dimensions": "207x177" }
+      "sha": "8744cfa1a17bd16a",
+      "bytes": 174316,
+      "print": { "file": "rose/symbol_2.webp", "bytes": 103404 },
+      "display": { "file": "rose/symbol_2_display.webp", "bytes": 4812, "dimensions": "207x177" }
     },
     "rose/symbol_3.png": {
-      "sha": "f80a21d5edd9523f",
-      "bytes": 113027,
-      "print": { "file": "rose/symbol_3.webp", "bytes": 67028 },
-      "display": { "file": "rose/symbol_3_display.webp", "bytes": 7286, "dimensions": "207x177" }
+      "sha": "555ee7b28d5a0b33",
+      "bytes": 259615,
+      "print": { "file": "rose/symbol_3.webp", "bytes": 156320 },
+      "display": { "file": "rose/symbol_3_display.webp", "bytes": 7006, "dimensions": "207x177" }
     },
     "rose/symbol_4.png": {
-      "sha": "8656c9f5f02ac814",
-      "bytes": 105766,
-      "print": { "file": "rose/symbol_4.webp", "bytes": 62940 },
-      "display": { "file": "rose/symbol_4_display.webp", "bytes": 6672, "dimensions": "207x177" }
+      "sha": "6ba481437f796d34",
+      "bytes": 243869,
+      "print": { "file": "rose/symbol_4.webp", "bytes": 147014 },
+      "display": { "file": "rose/symbol_4_display.webp", "bytes": 6546, "dimensions": "207x177" }
     },
     "rose/symbol_5.png": {
-      "sha": "414a23dfbe738bcd",
-      "bytes": 90600,
-      "print": { "file": "rose/symbol_5.webp", "bytes": 52164 },
-      "display": { "file": "rose/symbol_5_display.webp", "bytes": 5340, "dimensions": "207x177" }
+      "sha": "81b4ac41397bfc92",
+      "bytes": 209786,
+      "print": { "file": "rose/symbol_5.webp", "bytes": 124496 },
+      "display": { "file": "rose/symbol_5_display.webp", "bytes": 5160, "dimensions": "207x177" }
     },
     "rose/symbol_6.png": {
-      "sha": "78dc3f1675db269e",
-      "bytes": 108062,
-      "print": { "file": "rose/symbol_6.webp", "bytes": 62292 },
-      "display": { "file": "rose/symbol_6_display.webp", "bytes": 6782, "dimensions": "207x177" }
+      "sha": "64f868446f95aed3",
+      "bytes": 250490,
+      "print": { "file": "rose/symbol_6.webp", "bytes": 146176 },
+      "display": { "file": "rose/symbol_6_display.webp", "bytes": 6604, "dimensions": "207x177" }
     },
     "rose/symbol_7.png": {
-      "sha": "f0a698e0b0c5e37f",
-      "bytes": 139282,
-      "print": { "file": "rose/symbol_7.webp", "bytes": 82464 },
-      "display": { "file": "rose/symbol_7_display.webp", "bytes": 8764, "dimensions": "207x177" }
+      "sha": "b7b03f8348b7842b",
+      "bytes": 322970,
+      "print": { "file": "rose/symbol_7.webp", "bytes": 194408 },
+      "display": { "file": "rose/symbol_7_display.webp", "bytes": 8634, "dimensions": "207x177" }
     },
     "rose/symbol_8.png": {
-      "sha": "89506bf29903f7b5",
-      "bytes": 160184,
-      "print": { "file": "rose/symbol_8.webp", "bytes": 96934 },
-      "display": { "file": "rose/symbol_8_display.webp", "bytes": 10032, "dimensions": "207x177" }
+      "sha": "4316c105256a0c6b",
+      "bytes": 370670,
+      "print": { "file": "rose/symbol_8.webp", "bytes": 224456 },
+      "display": { "file": "rose/symbol_8_display.webp", "bytes": 9814, "dimensions": "207x177" }
     },
     "rose/symbol_9.png": {
-      "sha": "0a4a83ad3df08442",
-      "bytes": 115827,
-      "print": { "file": "rose/symbol_9.webp", "bytes": 68568 },
-      "display": { "file": "rose/symbol_9_display.webp", "bytes": 7438, "dimensions": "207x177" }
+      "sha": "1f9778adfbd8a2f2",
+      "bytes": 264145,
+      "print": { "file": "rose/symbol_9.webp", "bytes": 160210 },
+      "display": { "file": "rose/symbol_9_display.webp", "bytes": 7254, "dimensions": "207x177" }
     },
     "smith/bg.jpg": {
       "sha": "73e4cfe427c49860",
@@ -1319,10 +1319,10 @@
       "display": { "file": "smith/border_display.webp", "bytes": 130990, "dimensions": "850x1100" }
     },
     "smith/burn.jpg": {
-      "sha": "42cd58b7dfda714e",
-      "bytes": 796046,
-      "print": { "file": "smith/burn.webp", "bytes": 496312 },
-      "display": { "file": "smith/burn_display.webp", "bytes": 93986, "dimensions": "850x1100" }
+      "sha": "3433f6936f0ce5b2",
+      "bytes": 3206702,
+      "print": { "file": "smith/burn.webp", "bytes": 1163940 },
+      "display": { "file": "smith/burn_display.webp", "bytes": 94954, "dimensions": "850x1100" }
     },
     "smith/symbol.png": {
       "sha": "a4d18a421ca60ae1",
