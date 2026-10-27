@@ -687,3 +687,42 @@ test('the place line still fits its band after the article is resized to the lea
     }
   }
 });
+
+// Scrollery Customize Design, Task 6: a flourish whose image arrives AFTER a refit was asked for.
+// The composer replaces the preview's markup wholesale and refits on the next frame
+// (ScrolleryAutofit.fitSoon); an image the browser has not fetched yet has no box then, so the
+// engine cannot read its ink and drops the right flourish's reserve — the place widened into the
+// Custom Ribbon (whose files are first requested by that very preview) and its last letter landed
+// on the ribbon. The refit must be repeated once the image has a box, and land where a page whose
+// image was ready all along lands.
+const AUTOFIT = path.resolve(__dirname, '../../../orkui/template/revised-frontend/script/scrollery-autofit.js');
+
+test('a flourish image that loads after fitSoon is refitted once it arrives: the reserve comes back', async ({ page }) => {
+  await load(page, { place: 'Mordengaard' });
+  await page.addScriptTag({ path: AUTOFIT });
+  await page.evaluate(() => (window as any).ScrolleryAutofit.ready);
+  const reserve = () => page.evaluate(() => document.querySelector<HTMLElement>('.IssuingTextSection')!.style.getPropertyValue('--sc-place-reserve'));
+  const ready = await reserve();
+  expect(parseFloat(ready)).toBeGreaterThan(0);
+
+  // The same flourish, re-requested from a slow server and with no intrinsic size until it lands
+  // (the real markup carries no width/height on a flourish), then a refit asked for at once.
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="414" height="354"/>';
+  await page.route('http://late.test/**', async (r) => {
+    await new Promise((z) => setTimeout(z, 600));
+    await r.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg });
+  });
+  await page.evaluate(() => {
+    // A NEW element, as the composer's innerHTML write makes: re-pointing the old one's src
+    // would keep painting its current image until the new one lands, box and all.
+    const old = document.querySelector<HTMLImageElement>('#RightTextFlourish')!;
+    const img = old.cloneNode() as HTMLImageElement;
+    img.removeAttribute('width'); img.removeAttribute('height');
+    img.src = 'http://late.test/right.svg';
+    old.replaceWith(img);
+    (window as any).ScrolleryAutofit.fitSoon(document);
+  });
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => document.querySelector<HTMLImageElement>('#RightTextFlourish')!.complete), 'the image must still be in flight here').toBe(false);
+  await expect.poll(reserve, { timeout: 3000 }).toBe(ready);
+});

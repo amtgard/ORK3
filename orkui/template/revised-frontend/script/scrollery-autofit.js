@@ -884,14 +884,47 @@
         }
     }
 
+    /*
+     * A flourish that has not arrived yet is fitted again when it does.
+     *
+     * The first pass waits for the page's images (whenImages, below); fitSoon cannot,
+     * because the composer calls it straight after replacing the preview's markup
+     * wholesale, and a flourish the browser has never fetched has no box on that frame.
+     * The engine then reads no ink for it and drops the room it keeps for it: with the
+     * right swash unread, --sc-place-reserve went to 0 and the place line widened into
+     * the swash. The Custom Ribbon hit it every time — its files are first requested by
+     * the very preview that turns it on — and printed the place's last letter on the
+     * ribbon until something else happened to refit.
+     *
+     * So every ink-bearing image still in flight gets one load listener that asks for
+     * another fitSoon. Armed once per element (a keystroke burst must not stack
+     * listeners), and a broken image never fires `load`, so it costs nothing.
+     */
+    var armed = typeof global.WeakSet === 'function' ? new global.WeakSet() : null;
+    function refitOnFlourishLoad(root) {
+        var scope = root || doc;
+        if (!scope.querySelectorAll) { return; }
+        var imgs = scope.querySelectorAll('img[data-sc-ink]');
+        for (var i = 0; i < imgs.length; i++) {
+            var img = imgs[i];
+            if (img.complete && img.naturalWidth > 0) { continue; }
+            if (armed) {
+                if (armed.has(img)) { continue; }
+                armed.add(img);
+            }
+            img.addEventListener('load', function () { fitSoon(root); }, { once: true });
+        }
+    }
+
     /* Coalesce bursts — a live preview fires on every keystroke. */
     var pending = null;
     function fitSoon(root) {
-        if (!global.requestAnimationFrame) { fit(root); return; }
+        if (!global.requestAnimationFrame) { fit(root); refitOnFlourishLoad(root); return; }
         if (pending) { global.cancelAnimationFrame(pending); }
         pending = global.requestAnimationFrame(function () {
             pending = null;
             fit(root);
+            refitOnFlourishLoad(root);
         });
     }
 

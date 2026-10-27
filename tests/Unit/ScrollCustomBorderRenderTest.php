@@ -267,6 +267,36 @@ final class ScrollCustomBorderRenderTest extends TestCase
         );
     }
 
+    /**
+     * The typeset engine places the type against each flourish's ink grid, so a Custom
+     * Ribbon on ANY order must hand it exactly the grids the Jovious order's own ribbons
+     * do — flourish for flourish, including the two Centered rules. Equal grids are what
+     * make the ribbon set the type the same way on every order as on Jovious.
+     */
+    public function testCustomRibbonGivesEveryOrderTheJoviousFlourishInk(): void
+    {
+        $inkByFlourish = static function (string $html): array {
+            preg_match_all('/<img (?:id="(\w+)" )?[^>]*class="Flourish[^"]*?(ScRule--[lr])?"[^>]*data-sc-ink="([^"]+)"/', $html, $m, PREG_SET_ORDER);
+            $out = [];
+            foreach ($m as $hit) {
+                $out[$hit[1] !== '' ? $hit[1] : ($hit[2] ?? '?')] = $hit[3];
+            }
+            ksort($out);
+
+            return $out;
+        };
+        $jovious = $inkByFlourish($this->render('jovious', null));
+        $this->assertSame(
+            ['BottomTextFlourish', 'RightTextFlourish', 'ScRule--l', 'ScRule--r', 'TopTextFlourish'],
+            array_keys($jovious)
+        );
+
+        foreach (array_keys(Scroll::Orders()) as $id) {
+            $html = $this->render($id, ['customRibbon' => '1']);
+            $this->assertSame($jovious, $inkByFlourish($html), $id);
+        }
+    }
+
     public function testNoRibbonLeavesFlourishesAlone(): void
     {
         $html = $this->render('crown', null);
