@@ -2868,8 +2868,9 @@ function scroll_custom_border_active(array $s): bool
  *
  * 'match' sits where the order's border passes were and draws one knot per entry in
  * `passes`, each blended with that pass's own style — the knot goes into the paper
- * the way the art it replaces did. 'exact' sits immediately before the order's
- * symbol/rank layer and draws one plain knot, so the colours print as picked. Every
+ * the way the art it replaces did. 'exact' draws one plain knot, so the colours print
+ * as picked: just below the heraldry, or — on mask, smith and battle arcane, whose
+ * glow/burn/wash already lies over the heraldry — just over that effect. Every
  * template calls both; whichever does not match `matchStyle` echoes nothing, which is
  * what lets one template serve both modes without a branch of its own.
  */
