@@ -510,6 +510,42 @@
                 "y1": 0.9043
             }
         },
+        "common/ribbon/ribbon-bottom.png": {
+            "box": [
+                892,
+                432
+            ],
+            "ink": {
+                "x0": 0.0312,
+                "y0": 0.0801,
+                "x1": 0.9423,
+                "y1": 0.8809
+            }
+        },
+        "common/ribbon/ribbon-right.png": {
+            "box": [
+                812,
+                726
+            ],
+            "ink": {
+                "x0": 0.0628,
+                "y0": 0.0547,
+                "x1": 0.9372,
+                "y1": 0.9297
+            }
+        },
+        "common/ribbon/ribbon-top.png": {
+            "box": [
+                1242,
+                432
+            ],
+            "ink": {
+                "x0": 0.0414,
+                "y0": 0.1172,
+                "x1": 0.9742,
+                "y1": 0.9141
+            }
+        },
         "common/text/squiggly-bottom.svg": {
             "box": [
                 424,

@@ -143,3 +143,91 @@ The pass criteria, per order:
 | `assets/scrolls/warrior/bg_10-noborder.webp` / `_display.webp` | 210,160 / 33,328 |
 
 Neither ground is a 2× master, so `hires-masters.txt` is unchanged.
+
+## The ribbon: neutral, tintable raster
+
+Task 1R. **Files:** `assets/scrolls/common/ribbon/ribbon-top.png` (1242×432), `ribbon-right.png`
+(812×726) and `ribbon-bottom.png` (892×432), plus their `.webp` / `_display.webp` renditions.
+
+**`RIBBON_DEFAULT` = `#4473CF`**, the Jovious ribbon blue. It is the most common exact colour of
+the opaque ribbon body across the three shipped `jovious/ribbon-*.png` files. Next most common
+are `#4574D0` and `#4370CA`; the median of all body pixels within 10/255 of it is `#4371CC`.
+
+**Tint contract:** `jovious/ribbon-<name>.png ≈ common/ribbon/ribbon-<name>.png × RIBBON_DEFAULT`,
+multiplied per channel in sRGB, with the alpha unchanged. The page tints them with an SVG filter:
+`feFlood(colour)`, then `feBlend mode="multiply"` with `SourceGraphic`, then `feComposite
+operator="in"` with `SourceAlpha`, all under `color-interpolation-filters="sRGB"`.
+
+### Source: same art, but not usable for the colours
+
+**Where:** `Award Templates Trim.af`, master 1005 "Overlay (Jovious)", hidden group `/3/5`. A copy
+sits at `/10/8`, at opacity 0.8, inside the hidden `/10`.
+
+**Same art as shipped.** The group was exported alone at 2× (everything else hidden, every edit
+undone, nothing saved):
+- each ribbon's ink box has the shipped file's pixel size, to within 1 px: top 1157×342 against
+  1157×343, bottom 810×344 against 810×344, right 708×633 against 709×634;
+- the alpha matches closely: IoU 0.993 / 0.988 / 0.987, mean alpha error 0.003–0.004;
+- the outline, the stitch line and the shading are the same by eye.
+
+**How the source is built:**
+- no layer effects anywhere in the group;
+- the colour comes from **fills**:
+  - the body is pink `225,81,136` / `232,74,145`;
+  - each ribbon has three strokes: black outline, light blue `106,193,255` edge, and the stitching
+    as a 33 % black dashed stroke;
+- the shading is black curves at 20–40 % opacity, plus one 10 % VividLight "Poly Line" highlight.
+
+**Why it was not used:**
+- The shipped blue cannot be rebuilt from it by swapping fills. The shipped edge band is
+  `72,136,184`, not the source's `106,193,255`.
+- A white-fill export with its alpha registered to the shipped files misses the error budget:
+  mean error 0.033 / 0.029 / 0.046 (limit 0.03).
+- Its alpha is also not bit-identical, and the ink grids need it to be.
+
+**Route taken:** the brief's fallback, deriving the neutral from the shipped PNGs:
+- `neutral = round(clip(shipped / RIBBON_DEFAULT, 0, 1) × 255)` per channel;
+- alpha copied byte for byte;
+- the ICC profile and the 192 dpi tag copied from the shipped file.
+
+The black curves that make up the source's shading compose like a multiply, which is why
+tinting this way keeps the shading.
+
+### What the neutral looks like
+
+- The body is near white: the median neutral body pixel is 255,253,254 (top), 248,246,248 (right)
+  and 251,251,250 (bottom).
+- The shading and stitching keep their relative darkness.
+- The outline stays black.
+- **The edge band** is lighter than the body in red and green, and darker in blue (`72,136,184`
+  against `68,115,207`). Red and green clip to 1, so the neutral edge comes out pale
+  yellow-green (≈ 1, 1, 0.89). Tinted, it reads as a slightly warmer band of the chosen colour.
+- **The cyan VividLight streak** where the top ribbon crosses itself is brighter than the body, so
+  it clips and is lost.
+
+### Acceptance
+
+The tint is simulated exactly as described above.
+
+| File | Alpha identical | Mean RGB error (alpha > 200) | p99 per pixel | Opaque pixels clipped (any channel) |
+|---|---|---|---|---|
+| `ribbon-top.png` | yes | 0.0040 | 0.058 | 14.3 % |
+| `ribbon-right.png` | yes | 0.0046 | 0.055 | 13.2 % |
+| `ribbon-bottom.png` | yes | 0.0045 | 0.057 | 12.3 % |
+
+- The limit is a mean error of 0.03.
+- The clipped pixels are the edge band and highlights. Their error is already counted in the mean.
+- The lossless `.webp` renditions decode to the same alpha, with RGB identical wherever alpha > 0.
+
+**Contact sheet** (by eye): the shipped ribbon, then the neutral tinted `#4473CF`, `#1E4FA3`,
+`#F6B323` and `#2E7D32`, on parchment, plus zoomed crops of the top ribbon's crossing. The stitching
+and shading survive every colour.
+
+**Ink data:**
+- The real `ink-extents.json` gives the three files the same `box` and `ink` as their
+  `jovious/ribbon-*` counterparts.
+- **No grid in the manifest yet.** `bin/build-scroll-ink-extents.php` emits a `grid` only for
+  files named as flourishes (`Scroll::DEFAULT_RESOURCES` or a `flourish_*` in
+  `scroll-orders.php`), and nothing names `common/ribbon/*` yet.
+- **The grids match.** A scratch copy of the script that also named them gave all three a grid
+  identical to the `jovious/ribbon-*` one.
