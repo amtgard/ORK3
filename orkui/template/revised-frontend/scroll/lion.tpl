@@ -19,8 +19,15 @@
 
     <?php /* Border drawn twice: a multiply pass, then a soft-light wash over it.
              DELIBERATE — the second pass lifts the first. Never merge these. */ ?>
+<?php /* Custom Border: the knot replaces both passes — one knot per pass, with its
+         blend, in match mode; one plain knot in exact mode, still below the symbol.
+         At column 0 so a certificate without one prints the bytes it always did. */ ?>
+<?php if (!scroll_custom_border_active($s)): ?>
     <img <?= scroll_art_attrs('lion/border.png') ?> style="mix-blend-mode:multiply;" alt="">
     <img <?= scroll_art_attrs('lion/border.png') ?> style="mix-blend-mode:soft-light;opacity:0.3;" alt="">
+<?php endif; ?>
+<?php scroll_custom_border_slot($s, 'match'); ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
 
     <?php /* lion ships symbol_0.png, so the symbol path is UNGUARDED. Same two-pass
              treatment as the border — multiply, then a screen wash. */ ?>

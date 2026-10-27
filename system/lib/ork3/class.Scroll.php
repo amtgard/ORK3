@@ -165,6 +165,24 @@ class Scroll extends Ork3
     public const RIBBON_DEFAULT = '#4473CF';
 
     /**
+     * The three flourishes a Custom Ribbon swaps in, in the same `scrolls/`-prefixed
+     * form as an order's `resources`. Neutral tint bases: _text.tpl multiplies them by
+     * the chosen colour through #sc-ribbon-tint. Their alpha is jovious/ribbon-*.png's,
+     * so ink-extents.json carries the same grids under these paths.
+     */
+    public const RIBBON_RESOURCES = [
+        'flourish_top'    => 'scrolls/common/ribbon/ribbon-top.png',
+        'flourish_right'  => 'scrolls/common/ribbon/ribbon-right.png',
+        'flourish_bottom' => 'scrolls/common/ribbon/ribbon-bottom.png',
+    ];
+
+    /**
+     * The Custom Border's two-band knot, relative to assets/scrolls/: a symbols-only
+     * sprite (Knot-Band-1, Knot-Band-2) that _knot_defs.tpl inlines once per page.
+     */
+    public const KNOT_SPRITE = 'common/knot/knot.svg';
+
+    /**
      * The "Customize Design" card's choices. A design is per print and travels with the
      * request like a recipe, so nothing persists it; a caller that passes none gets
      * exactly this, which renders as the certificate always did.
@@ -2816,4 +2834,74 @@ function scroll_resource(string $relative): string
 function scroll_ink_grid(string $relative): string
 {
     return Scroll::InkGrid($relative);
+}
+
+/**
+ * Is a Custom Border drawing on this certificate? BuildScroll() sets
+ * `customBorder` only where the order, at this rank/variant/recipe, can lose its
+ * frame, so an order template wraps its border passes in `if (!…)` and nothing more.
+ */
+function scroll_custom_border_active(array $s): bool
+{
+    return is_array($s['customBorder'] ?? null);
+}
+
+/**
+ * Draw the Custom Border's knot at one of an order template's two slots.
+ *
+ * 'match' sits where the order's border passes were and draws one knot per entry in
+ * `passes`, each blended with that pass's own style — the knot goes into the paper
+ * the way the art it replaces did. 'exact' sits immediately before the order's
+ * symbol/rank layer and draws one plain knot, so the colours print as picked. Every
+ * template calls both; whichever does not match `matchStyle` echoes nothing, which is
+ * what lets one template serve both modes without a branch of its own.
+ */
+function scroll_custom_border_slot(array $s, string $mode): void
+{
+    if (!scroll_custom_border_active($s)) {
+        return;
+    }
+    $cb    = $s['customBorder'];
+    $match = $mode === 'match';
+    if ((bool) ($cb['matchStyle'] ?? false) !== $match) {
+        return;
+    }
+
+    $styles = $match ? (array) ($cb['passes'] ?? []) : ['mix-blend-mode:normal;'];
+    foreach ($styles as $style) {
+        scroll_partial('knot', [
+            'color1' => (string) ($cb['color1'] ?? ''),
+            'color2' => (string) ($cb['color2'] ?? ''),
+            'style'  => (string) $style,
+        ]);
+    }
+}
+
+/**
+ * The ground an order draws: its frameless twin while a Custom Border is active and
+ * the rule names one (jovious, warrior's tenth, custom on a framed ground), else
+ * $default. Only a ground the compatibility data actually lists is honoured — the
+ * value reaches an <img src>, and Render() is reachable with any scroll array.
+ */
+function scroll_custom_ground(array $s, string $default): string
+{
+    $ground = scroll_custom_border_active($s) ? ($s['customBorder']['ground'] ?? null) : null;
+    if (!is_string($ground) || $ground === '') {
+        return $default;
+    }
+
+    static $known = null;
+    if ($known === null) {
+        $known = [];
+        foreach (Scroll::CustomBorderRules() as $rule) {
+            $known = array_merge(
+                $known,
+                isset($rule['ground']) ? [$rule['ground']] : [],
+                array_filter($rule['ranks'] ?? [], 'is_string'),
+                array_filter($rule['recipeGrounds'] ?? [], 'is_string')
+            );
+        }
+    }
+
+    return in_array($ground, $known, true) ? $ground : $default;
 }

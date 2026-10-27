@@ -19,10 +19,15 @@
  */
 ?>
 <div class="award-template" data-order="jovious" data-rank="<?= (int) $s['rank'] ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
-    <?php /* Replaces the parchment partial. */ ?>
-    <img <?= scroll_art_attrs('jovious/bg.jpg') ?> alt="">
+    <?php /* Replaces the parchment partial. jovious paints its knot INTO bg.jpg, so a
+             Custom Border swaps in bg-noborder.jpg — the same ground, frame removed —
+             and draws its knot over it: in match mode straight on the ground, where
+             the painted one was; in exact mode at the slot before the symbol. */ ?>
+    <img <?= scroll_art_attrs(scroll_custom_ground($s, 'jovious/bg.jpg')) ?> alt="">
+<?php scroll_custom_border_slot($s, 'match'); ?>
 
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
 
     <?php /* jovious ships symbol_0.png, so the path is unguarded — as in the source. */ ?>
     <div class="centre-bottom"><img <?= scroll_art_attrs('jovious/symbol_' . (int) $s['rank'] . '.png') ?> alt=""></div>

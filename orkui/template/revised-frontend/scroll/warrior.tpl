@@ -26,17 +26,25 @@ $rank = (int) $s['rank'];
     <?php /* Tenth level has the flame distortion to worry about, so it brings its
              own ground instead of the shared parchment. No .bleed class — the
              source's <img> had none, and .award-template > * already full-bleeds
-             it. */ ?>
+             it.
+
+             With a Custom Border it draws bg_10-noborder.jpg instead: the same ground
+             with its painted frame taken out, so the knot is the only frame. */ ?>
     <?php if ($rank === 10): ?>
-        <img <?= scroll_art_attrs('warrior/bg_10.jpg') ?> style="mix-blend-mode:soft-light" alt="">
+        <img <?= scroll_art_attrs(scroll_custom_ground($s, 'warrior/bg_10.jpg')) ?> style="mix-blend-mode:soft-light" alt="">
     <?php endif; ?>
 
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php /* All but tenth level have a separate border; there is no border_10.jpg. */ ?>
-    <?php if ($rank !== 10): ?>
+    <?php if ($rank !== 10 && !scroll_custom_border_active($s)): ?>
         <img <?= scroll_art_attrs('warrior/border_' . $rank . '.jpg') ?> style="mix-blend-mode:multiply;" alt="">
     <?php endif; ?>
+<?php /* Custom Border: the knot draws in the border's slot at every rank — in place of
+         border_N on 1-9, and on the tenth where the frame came out of the ground.
+         At column 0 so a certificate without one prints the bytes it always did. */ ?>
+<?php scroll_custom_border_slot($s, 'match'); ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
 
     <?php /* Ninth level Big Scary Dragon. The source interpolated the rank into the
              filename inside a rank == 9 guard, so this only ever resolves to

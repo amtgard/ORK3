@@ -24,13 +24,14 @@ final class ScrollPartialsTest extends TestCase
     }
 
     /**
-     * _border_defs.tpl emits once per request and remembers in $GLOBALS that it has.
-     * Every case in a run shares one process, so the flag is cleared here rather
-     * than left to whichever test happened to render a page first.
+     * _border_defs.tpl and _knot_defs.tpl emit once per request and remember in
+     * $GLOBALS that they have. Every case in a run shares one process, so the flags
+     * are cleared here rather than left to whichever test happened to render a page
+     * first.
      */
     protected function setUp(): void
     {
-        unset($GLOBALS['scroll_border_defs']);
+        unset($GLOBALS['scroll_border_defs'], $GLOBALS['scroll_knot_defs']);
     }
 
     private function render(string $name, array $vars): string
@@ -158,7 +159,10 @@ final class ScrollPartialsTest extends TestCase
         }
 
         $this->assertStringContainsString('OWL_edge-detect', $page);
-        $this->assertSame(32, substr_count($page, '<symbol '));
+        // Counted by id prefix: the seam also carries the Custom Border's two knot
+        // symbols (_knot_defs.tpl), which are not part of the border library.
+        $this->assertSame(32, substr_count($page, '<symbol id="Border-'));
+        $this->assertSame(2, substr_count($page, '<symbol id="Knot-Band-'));
         $this->assertStringContainsString('id="Border-Griffons"', $page);
     }
 
@@ -173,7 +177,8 @@ final class ScrollPartialsTest extends TestCase
             $page = (string) ob_get_clean();
         }
 
-        $this->assertSame(32, substr_count($page, '<symbol '));
+        $this->assertSame(32, substr_count($page, '<symbol id="Border-'));
+        $this->assertSame(2, substr_count($page, '<symbol id="Knot-Band-'));
     }
 
     /**

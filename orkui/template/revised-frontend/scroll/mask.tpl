@@ -20,8 +20,15 @@ $glow = 'filter:sepia(1) contrast(0.5) hue-rotate(200deg) saturate(5) blur(200px
 
     <?php /* Two passes of the same border: screen at .6 lifts it, multiply then
              sets the ink back down. DELIBERATE. */ ?>
+<?php /* Custom Border: the knot replaces both passes — one knot per pass, with its
+         blend, in match mode; one plain knot in exact mode, still below the symbol.
+         At column 0 so a certificate without one prints the bytes it always did. */ ?>
+<?php if (!scroll_custom_border_active($s)): ?>
     <img <?= scroll_art_attrs('mask/border.png') ?> style="mix-blend-mode:screen;opacity:0.6;" alt="">
     <img <?= scroll_art_attrs('mask/border.png') ?> style="mix-blend-mode:multiply;opacity:1;" alt="">
+<?php endif; ?>
+<?php scroll_custom_border_slot($s, 'match'); ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
 
     <?php /* mask's symbol is UNRANKED — one mask/symbol.png, drawn THREE times:
              glow, plain, then glow AGAIN after the rank numeral. That last pass is

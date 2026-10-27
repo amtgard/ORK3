@@ -23,13 +23,22 @@ $variant = (string) $s['variant'];
 ?>
 <div class="award-template" data-order="battle" data-rank="<?= $rank ?>" data-variant="<?= scroll_e($variant) ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
     <?php scroll_partial('parchment'); ?>
+<?php /* Custom Border: the knot partial is battle's one border pass, so the knot takes
+         its place — here in match mode, under the heraldry where the knotwork was; in
+         exact mode below, before the band. The band (border_symbols.png) is battle's
+         own device, not its frame, and stays either way. At column 0 so a certificate
+         without one prints the bytes it always did. */ ?>
+<?php if (!scroll_custom_border_active($s)): ?>
     <?php scroll_partial('border', ['primary' => $s['primary'], 'secondary' => $s['secondary']]); ?>
+<?php endif; ?>
+<?php scroll_custom_border_slot($s, 'match'); ?>
     <?php scroll_partial('heraldry', ['s' => $s]); ?>
 
     <?php if ($variant === 'arcane'): ?>
         <img class="bleed" <?= scroll_art_attrs('battle/arcane/wash.jpg') ?> style="mix-blend-mode: soft-light; opacity:0.8" alt="">
     <?php endif; ?>
 
+<?php scroll_custom_border_slot($s, 'exact'); ?>
     <?php /* width="2291" is the source's own value; the file is one pixel wider
              (2292). Kept as written — changing it would resize the layer. */ ?>
     <div class="centre" style="margin-bottom:90px;">

@@ -106,10 +106,20 @@ $knotStyle = Scroll::CustomKnotStyle((string) $recipe['ground']);
         <?php scroll_partial('parchment'); ?>
         <img class="bleed" src="<?= scroll_e(scroll_art($v['grounds'][$recipe['ground']])) ?>" width="2550" height="3300" style="<?= $wash ?>" alt="">
     <?php else: ?>
-        <img class="bleed" src="<?= scroll_e(scroll_art($v['grounds'][$recipe['ground']])) ?>" width="2550" height="3300" alt="">
+<?php /* scroll_custom_ground(): with a Custom Border on a framed ground (jovious,
+         sunburst) the frameless twin is drawn instead, so the knot is the only frame
+         on the page. A wash is never a framed ground, so the branch above needs no
+         such swap. At column 0 so a certificate without one prints its old bytes. */ ?>
+        <img class="bleed" src="<?= scroll_e(scroll_art(scroll_custom_ground($s, $v['grounds'][$recipe['ground']]))) ?>" width="2550" height="3300" alt="">
     <?php endif; ?>
 
-    <?php if ($knot): ?>
+<?php /* Custom Border: the recipe's one border pass — knot, raster frame or band — is
+         replaced, whichever it was (CustomBorderRule() derives the pass from the
+         recipe). Match mode draws the knot here, where the border was; exact mode at
+         the slot below, before the rank. At column 0 so a certificate without one
+         prints the bytes it always did. */ ?>
+<?php $customBorder = scroll_custom_border_active($s); ?>
+    <?php if ($knot && !$customBorder): ?>
         <?php scroll_partial('border', [
             'primary'   => $recipe['primary'],
             'secondary' => $recipe['secondary'],
@@ -117,9 +127,10 @@ $knotStyle = Scroll::CustomKnotStyle((string) $recipe['ground']);
         ]); ?>
     <?php endif; ?>
 
-    <?php if ($frame): ?>
+    <?php if ($frame && !$customBorder): ?>
         <img class="bleed" <?= scroll_art_attrs($v['borders'][$recipe['border']]) ?> style="<?= $borderStyle ?>" alt="">
     <?php endif; ?>
+<?php scroll_custom_border_slot($s, 'match'); ?>
 
     <?php if ($dark): ?>
         <?php /* On a dark ground the device cannot simply be screened: 624 of the 626
@@ -135,7 +146,7 @@ $knotStyle = Scroll::CustomKnotStyle((string) $recipe['ground']);
         <?php scroll_partial('heraldry', ['s' => $s]); ?>
     <?php endif; ?>
 
-    <?php if ($band): ?>
+    <?php if ($band && !$customBorder): ?>
         <?php /* width="2291" is battle.tpl's own value; the file is one pixel wider
                  (2292). Kept as written there — changing it would resize the layer.
 
@@ -146,6 +157,7 @@ $knotStyle = Scroll::CustomKnotStyle((string) $recipe['ground']);
         </div>
     <?php endif; ?>
 
+<?php scroll_custom_border_slot($s, 'exact'); ?>
     <?php /* Guarded on rank > 0 for EVERY set: common, zodiac and flame ship rank_1..10
              only. garber also ships a rank_0, which is deliberately never used here so
              the rule stays one rule.

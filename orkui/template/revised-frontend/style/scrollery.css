@@ -500,6 +500,26 @@ symbol {
     overflow: visible;
 }
 
+/* The Custom Border (_knot.tpl): the Jovious two-band knot drawn in place of an
+   order's own border. Each .sc-knot is one full-page layer carrying its colour pair
+   as --knot-c1 / --knot-c2; the Knot-Band-1/2 symbols (inlined once per page by
+   _knot_defs.tpl) fill from those through the <use> shadow trees, and the composer
+   repaints by setting the two properties on every .sc-knot. Stated here rather than
+   left to `.award-template > *`, so the layer stays full-page wherever it is placed,
+   and it never takes a click meant for the composer's text boxes. */
+.sc-knot {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+.sc-knot > svg {
+    display: block;
+}
+
 /* --------------------------------------------------------------------------
    3. Typography — the whole <style> block from text.html.
 

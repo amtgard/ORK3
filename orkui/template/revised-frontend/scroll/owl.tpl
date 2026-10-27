@@ -70,6 +70,11 @@ $heraldry = ['s' => $s, 'width' => 370, 'height' => 460, 'top' => 5];
         <div class="owl-heraldry" style="<?= $blend ?>"><?php scroll_partial('heraldry', $heraldry); ?></div>
     <?php endif; ?>
 
+<?php /* Custom Border: the knot replaces all 2/1/3 border passes. Its rule's passes
+         are keyed by variant, so match mode draws the same 2/1/3 knots with $blend;
+         exact mode draws one plain knot, still below the rank. At column 0 so a
+         certificate without one prints the bytes it always did. */ ?>
+<?php if (!scroll_custom_border_active($s)): ?>
     <?php /* Border pass 1 of 2/1/3 — always drawn. */ ?>
     <img <?= scroll_art_attrs('owl/border.jpg') ?> style="<?= $blend ?>" alt="">
     <?php if ($variant === 'transparency' || $variant === 'parchment'): ?>
@@ -78,6 +83,9 @@ $heraldry = ['s' => $s, 'width' => 370, 'height' => 460, 'top' => 5];
     <?php if ($variant === 'transparency'): ?>
         <img <?= scroll_art_attrs('owl/border.jpg') ?> style="<?= $blend ?>" alt="">
     <?php endif; ?>
+<?php endif; ?>
+<?php scroll_custom_border_slot($s, 'match'); ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
 
     <?php /* owl ships its own rank_0.png, so the rank layer is UNGUARDED — an
              unranked owl certificate draws rank_0, it does not skip the layer.

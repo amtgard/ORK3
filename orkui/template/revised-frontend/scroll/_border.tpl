@@ -45,8 +45,12 @@
  * $style — optional extra declarations on the outer layer. dragon draws this
  * partial twice: once normally, then again as a glow (black primary, blurred,
  * color-dodge). Every other order leaves it unset.
+ *
+ * The base declarations are Scroll::KNOT_PARTIAL_STYLE rather than a literal here:
+ * the Custom Border's match mode re-uses this layer's style for the knot that
+ * replaces it, and two copies of the string would drift.
  */
-$borderStyle = 'mix-blend-mode:multiply;padding:1px;margin:-1px;'
+$borderStyle = Scroll::KNOT_PARTIAL_STYLE
     . (isset($style) ? (string) $style : '');
 ?>
     <div style="<?= scroll_e($borderStyle) ?>">

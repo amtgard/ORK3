@@ -50,3 +50,9 @@
     and serve it to pages where it was wrong. See _border_defs.tpl.
 */ ?>
 <?php scroll_partial('border_defs'); ?>
+<?php /*
+    The Custom Border's knot, on the same seam for the same reason: _knot.tpl emits only
+    <use> references, so the symbols must already be on the page, put there by the page
+    and never by a (cached) certificate. See _knot_defs.tpl.
+*/ ?>
+<?php scroll_partial('knot_defs'); ?>

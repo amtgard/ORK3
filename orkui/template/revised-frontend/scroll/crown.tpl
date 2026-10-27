@@ -20,8 +20,15 @@
 
     <?php /* Two passes of the same border: a multiply, then a half-opacity plain
              pass over it. DELIBERATE — never "deduplicate" this. */ ?>
+<?php /* Custom Border: the knot replaces both passes — one knot per pass, with its
+         blend, in match mode; one plain knot in exact mode, still below the symbol.
+         At column 0 so a certificate without one prints the bytes it always did. */ ?>
+<?php if (!scroll_custom_border_active($s)): ?>
     <img <?= scroll_art_attrs('crown/border.png') ?> style="mix-blend-mode:multiply;" alt="">
     <img <?= scroll_art_attrs('crown/border.png') ?> style="opacity:0.5;" alt="">
+<?php endif; ?>
+<?php scroll_custom_border_slot($s, 'match'); ?>
+<?php scroll_custom_border_slot($s, 'exact'); ?>
 
     <?php /* Same two-pass treatment for the phoenix. It sits in .centre — vertically
              centred — not .centre-bottom like the rank symbol below. */ ?>
