@@ -85,10 +85,8 @@ class Controller_ScrolleryAjax extends Controller
             [
                 'player'      => (string) ($_POST['player'] ?? ''),
                 'pronoun'     => $this->requested_pronoun(),
-                // Reads the $scope already resolved above rather than calling
-                // heraldry_for(), which used to re-run scope_context() — a second
-                // GetKingdomShortInfo/park_details plus GetHeraldryUrl round trip
-                // per request — exactly as compose() already reads $scope['Heraldry'].
+                // The resolved source's URL from heraldry_sources(), which reads the
+                // cached kingdom/park lookups; $scope['Heraldry'] is no longer read.
                 'heraldry'    => $sources[$heraldrySource],
                 'issuerTitle' => (string) ($_POST['issuerTitle'] ?? ''),
                 'useThe'      => ($_POST['useThe'] ?? '') === '1',

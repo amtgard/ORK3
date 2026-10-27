@@ -1013,7 +1013,7 @@ class Player extends Ork3
      * unconditionally to every viewer, so it can skip the gate rather than restate
      * it — persona is public on every profile in the ORK.
      *
-     * @return array{MundaneId:int, Persona:string, PronounId:int, PronounCustom:string, PronounFreetext:string}
+     * @return array{MundaneId:int, Persona:string, PronounId:int, PronounCustom:string, PronounFreetext:string, HasHeraldry:int}
      */
     public function GetScrollRecipient(int $mundaneId): array
     {
@@ -1023,6 +1023,7 @@ class Player extends Ork3
             'PronounId' => 0,
             'PronounCustom' => '',
             'PronounFreetext' => '',
+            'HasHeraldry' => 0,
         ];
         if (!valid_id($mundaneId)) {
             return $empty;
@@ -1050,6 +1051,9 @@ class Player extends Ork3
             'PronounId' => (int) $this->mundane->pronoun_id,
             'PronounCustom' => (string) $this->mundane->pronoun_custom,
             'PronounFreetext' => $freetext,
+            // Public on every profile (the arms image is); lets the composer offer the
+            // Persona heraldry source without the full GetPlayer() profile build.
+            'HasHeraldry' => (int) $this->mundane->has_heraldry,
         ];
     }
 

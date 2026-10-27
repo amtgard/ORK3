@@ -1379,9 +1379,7 @@ class Model_Scrollery extends Model
             )['Url'];
         }
         if ($playerId > 0) {
-            $player = Ork3::$Lib->player->GetPlayer(['MundaneId' => $playerId, 'Token' => '']);
-            // GetPlayer() nests its fields under 'Player'.
-            if ((int) ($player['Player']['HasHeraldry'] ?? 0) === 1) {
+            if ((int) ($this->scroll_recipient($playerId)['HasHeraldry'] ?? 0) === 1) {
                 $out['persona'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
                     ['Type' => 'Player', 'Id' => $playerId, 'Size' => 'master']
                 )['Url'];
@@ -1445,6 +1443,22 @@ class Model_Scrollery extends Model
         return $cache[$kingdomId];
     }
 
+    /**
+     * GetScrollRecipient() held per request: a preview needs the pronoun and the
+     * arms flag from the same single-row find.
+     *
+     * @return array<string, mixed>
+     */
+    private function scroll_recipient(int $mundaneId): array
+    {
+        static $cache = [];
+        if (!array_key_exists($mundaneId, $cache)) {
+            $cache[$mundaneId] = Ork3::$Lib->player->GetScrollRecipient($mundaneId);
+        }
+
+        return $cache[$mundaneId];
+    }
+
     /** The recipient's possessive pronoun, by player id. Never blank. */
     public function possessive_pronoun_for_player(int $mundaneId): string
     {
@@ -1452,7 +1466,7 @@ class Model_Scrollery extends Model
             return '';
         }
 
-        return $this->possessive_pronoun(Ork3::$Lib->player->GetScrollRecipient($mundaneId));
+        return $this->possessive_pronoun($this->scroll_recipient($mundaneId));
     }
 
     /**
