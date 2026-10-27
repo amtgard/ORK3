@@ -552,6 +552,11 @@ function flourishFiles(string $root): array
         }
     }
 
+    // The tintable ribbons replace the three flourishes when Custom Ribbon is on, so they need grids too.
+    foreach (glob($root . '/assets/scrolls/common/ribbon/ribbon-*.png') ?: [] as $ribbon) {
+        $paths[] = 'scrolls/common/ribbon/' . basename($ribbon);
+    }
+
     $out = [];
     foreach ($paths as $path) {
         $out[(string) preg_replace('#^scrolls/#', '', $path)] = true;

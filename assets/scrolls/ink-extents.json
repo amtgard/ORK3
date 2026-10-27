@@ -520,6 +520,11 @@
                 "y0": 0.0801,
                 "x1": 0.9423,
                 "y1": 0.8809
+            },
+            "grid": {
+                "w": 32,
+                "h": 32,
+                "rows": ["00000000","0000e000","0000e000","0000fc00","0001fc00","0001fc00","7001fc00","7c01fc00","7e01fc00","7f81fc78","7fe1fffc","7ffdfffe","fffffffe","fffffffe","ffffffff","ffffffff","ffffffff","7fffffff","1fffffff","07ffffff","01ffffbf","003fffff","0007fffe","00003ffe","00003ffe","00001ffe","00001ffc","00000ffc","000007f8","000001f0","00000000","00000000"]
             }
         },
         "common/ribbon/ribbon-right.png": {
@@ -532,6 +537,11 @@
                 "y0": 0.0547,
                 "x1": 0.9372,
                 "y1": 0.9297
+            },
+            "grid": {
+                "w": 32,
+                "h": 32,
+                "rows": ["000001c0","000001f0","000001f8","000001fc","000007fc","000007fe","000007fe","000007fe","000000fe","0000007e","0000003e","0000003e","0000007e","000000fe","000000fe","000001fe","000003fc","000003fc","000007f8","3f003ff0","7f80fff8","7fc1fffc","7fe3fffe","7fe7fffe","7ffffffe","7ffffffe","7ffffffe","7fffeffe","7fffcffe","3fff8ffc","0ffc07f8","00000000"]
             }
         },
         "common/ribbon/ribbon-top.png": {
@@ -544,6 +554,11 @@
                 "y0": 0.1172,
                 "x1": 0.9742,
                 "y1": 0.9141
+            },
+            "grid": {
+                "w": 32,
+                "h": 32,
+                "rows": ["00000000","00000000","0f000000","3fc00000","3fe00000","7ff00000","7ff00000","7ff80000","fff80000","ffff0000","fffff800","ffffff00","fbffffe0","fffffff8","fffffffe","ffffffff","ffffffff","ffffffff","ffffffff","ffffffff","7fffffff","7fff1fff","003f07ff","003f01ff","003f007f","003f001f","003e000f","003e0000","003e0000","003e0000","00380000","00000000"]
             }
         },
         "common/text/squiggly-bottom.svg": {
