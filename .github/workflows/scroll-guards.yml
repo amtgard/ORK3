@@ -21,8 +21,8 @@
 # the CONNECTION but no schema — 313 tests pass against a completely empty `ork_test`.
 # Hence a bare MariaDB service and no fixture load.
 #
-# Never executed on GitHub as of 2026-09-06 (Actions is not enabled on this repo);
-# every command in it was run locally.
+# First ran on GitHub with the Scrollery PR (2026-10); it failed at composer install
+# because it pinned PHP 8.2 against a lock that needs 8.4 — see the setup-php note.
 
 name: Scroll guards
 
@@ -77,15 +77,31 @@ jobs:
       - name: Renditions in step with masters
         run: sh bin/build-scroll-renditions.sh --check
 
+      # Production runs PHP 8.1 (Dockerfile.prod: Ubuntu 22.04's php8.1-fpm), but the
+      # locked test toolchain cannot: PHPUnit 11 needs 8.2, and composer.lock pins
+      # infection/abstract-testframework-adapter (^8.3) and symfony/string v8.1
+      # (>=8.4.1). So the scroll code is first parsed on production's 8.1 — the
+      # failure that would actually take a certificate down — and PHPUnit then runs
+      # on 8.4, the lowest version the lock installs on.
       - uses: shivammathur/setup-php@v2
         with:
-          # composer.json requires >=8.2; the app containers run 8.1/8.5, and the
-          # guards are version-agnostic.
-          php-version: '8.2'
+          php-version: '8.1'
+          coverage: none
+
+      - name: Scroll code parses on production PHP (8.1)
+        run: |
+          git ls-files system/lib/ork3/class.Scroll.php 'system/lib/ork3/data/scroll-*.php' \
+            'orkui/template/revised-frontend/scroll/' \
+            | xargs -n1 php -l
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
           # gd only affects ScrollGroundContrastTest's recompute-from-pixels check.
           # Without it that one test skips and the fixture still carries the guard —
           # it is included because verifying the numbers is cheap and worth having.
-          extensions: pdo_mysql, gd, mbstring
+          # redis: composer.json requires ext-redis, so the install refuses without it.
+          extensions: pdo_mysql, gd, mbstring, redis
           coverage: none
 
       - uses: ramsey/composer-install@v3
