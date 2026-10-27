@@ -39,9 +39,13 @@ return [
 
     // Ranks 1-9 draw warrior/border_N.jpg; rank 10 draws none (its frame is painted
     // into bg_10.jpg), so there the ground is swapped for the frameless one.
+    // Ranks 1-8 also carry their rank animal inside border_N.jpg; warrior.tpl brings it
+    // back above the knot, clipped to the paper in the frame's bottom gap. Rank 1's
+    // snake is coiled THROUGH an unbroken bottom band, so no clip keeps the snake
+    // without keeping band too: it is incompatible until a snake cut-out exists.
     'warrior' => [
         'passes' => ['mix-blend-mode:multiply;'],
-        'ranks'  => [10 => 'warrior/bg_10-noborder.jpg'],
+        'ranks'  => [1 => false, 10 => 'warrior/bg_10-noborder.jpg'],
     ],
 
     'battle'  => ['passes' => [$partial]],

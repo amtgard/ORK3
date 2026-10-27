@@ -200,11 +200,48 @@ final class ScrollCustomBorderRenderTest extends TestCase
                 $label = $id . ($match ? ' match' : ' exact');
                 $this->assertStringContainsString('class="sc-knot"', $html, $label);
                 if (isset(self::BORDER_NEEDLES[$id])) {
-                    $this->assertStringNotContainsString(self::BORDER_NEEDLES[$id], $html, $label);
+                    // warrior's rank animal comes back from its border file, clipped
+                    // (testWarriorKeepsItsRankAnimalAboveTheKnot); the FRAME must not.
+                    $frame = (string) preg_replace('/<img [^>]*class="sc-rank-keep"[^>]*>/', '', $html);
+                    $this->assertStringNotContainsString(self::BORDER_NEEDLES[$id], $frame, $label);
                 }
             }
         }
         $this->assertStringNotContainsString('Border-Griffons', $this->render('griffon', $this->border(false)));
+    }
+
+    /**
+     * Warrior ranks 1-8 paint their rank animal into border_N.jpg. Under a Custom
+     * Border that file comes back once, clipped to the frame's bottom gap and drawn
+     * ABOVE the knot (the animal is rank art, which stays); rank 1's snake cannot be
+     * clipped clear of its band, so rank 1 is incompatible; ranks 9 and 10 have no
+     * animal in a border file and draw none.
+     */
+    public function testWarriorKeepsItsRankAnimalAboveTheKnot(): void
+    {
+        foreach ([false, true] as $match) {
+            for ($rank = 2; $rank <= 8; $rank++) {
+                $html  = $this->render('warrior', $this->border($match), ['rank' => $rank]);
+                $label = "rank {$rank}" . ($match ? ' match' : ' exact');
+                $this->assertSame(1, preg_match_all('/<img [^>]*class="sc-rank-keep"[^>]*>/', $html, $m), $label);
+                $this->assertStringContainsString($this->artPath('warrior/border_' . $rank . '.jpg'), $m[0][0], $label);
+                $this->assertStringContainsString('clip-path:polygon(', $m[0][0], $label);
+                $this->assertStringContainsString('mix-blend-mode:multiply;', $m[0][0], $label);
+                $this->assertGreaterThan(strrpos($html, 'class="sc-knot"'), strpos($html, 'sc-rank-keep'), $label);
+            }
+            foreach ([9, 10] as $rank) {
+                $html = $this->render('warrior', $this->border($match), ['rank' => $rank]);
+                $this->assertStringContainsString('class="sc-knot"', $html, "rank {$rank}");
+                $this->assertStringNotContainsString('sc-rank-keep', $html, "rank {$rank}");
+            }
+        }
+        $this->assertNull(Scroll::CustomBorderRule('warrior', 1, '', []));
+        $one = $this->render('warrior', $this->border(false), ['rank' => 1]);
+        $this->assertStringNotContainsString('sc-knot', $one);
+        $this->assertStringNotContainsString('sc-rank-keep', $one);
+        for ($rank = 1; $rank <= 10; $rank++) {
+            $this->assertStringNotContainsString('sc-rank-keep', $this->render('warrior', null, ['rank' => $rank]), "no design, rank {$rank}");
+        }
     }
 
     public function testIncompatibleOrdersIgnoreTheCustomBorder(): void

@@ -141,6 +141,11 @@ final class ScrollDesignTest extends TestCase
             foreach (($order['variants'] ?: ['']) as $variant) {
                 for ($rank = $from; $rank <= $to; $rank++) {
                     $r = Scroll::CustomBorderRule($id, $rank, $variant, []);
+                    if ((Scroll::CustomBorderRules()[$id]['ranks'][$rank] ?? null) === false) {
+                        // A rank the data file marks incompatible (warrior 1) draws nothing.
+                        $this->assertNull($r, "{$id} rank {$rank} {$variant}");
+                        continue;
+                    }
                     $this->assertNotNull($r, "{$id} rank {$rank} {$variant}");
                     $this->assertNotEmpty($r['passes'], "{$id} rank {$rank} {$variant}");
                 }

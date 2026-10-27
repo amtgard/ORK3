@@ -45,6 +45,21 @@ $rank = (int) $s['rank'];
          At column 0 so a certificate without one prints the bytes it always did. */ ?>
 <?php scroll_custom_border_slot($s, 'match'); ?>
 <?php scroll_custom_border_slot($s, 'exact'); ?>
+<?php /* The rank animal of levels 1-8 is painted INTO border_N.jpg, in the frame's
+         bottom gap: warrior ships no other rank art below the ninth. So with a Custom
+         Border the same file comes back, above the knot and clipped to the clear
+         paper the animal sits on: the column between the frame's sides (ink ends at
+         x 238 / 2312) above the bottom band (ink starts at y 3057), plus the band's
+         own gap (x 985-1564). Measured on the shipped art: no frame ink in that
+         region on any rank and no knot ink either, and on ranks 2-7 every animal
+         pixel is inside it. The snake (1) and the panther's tail (8) cross the band
+         and are cut at the gap's edges, where they run under the knot; the tail's
+         tip, which lies on the band's top edge right of the gap (x 1630-1760,
+         y 3007-3056), is notched out on 8 so it does not float free of the tail. */ ?>
+<?php if ($rank >= 1 && $rank <= 8 && scroll_custom_border_active($s)): ?>
+<?php $keepRight = $rank === 8 ? '90.1961% 90.9091%,62.7451% 90.9091%,62.7451% 92.4242%' : '90.1961% 92.4242%'; ?>
+    <img <?= scroll_art_attrs('warrior/border_' . $rank . '.jpg') ?> class="sc-rank-keep" style="mix-blend-mode:multiply;clip-path:polygon(9.8039% 65.1515%,90.1961% 65.1515%,<?= $keepRight ?>,61.3725% 92.4242%,61.3725% 100%,38.6275% 100%,38.6275% 92.4242%,9.8039% 92.4242%);" alt="">
+<?php endif; ?>
 
     <?php /* Ninth level Big Scary Dragon. The source interpolated the rank into the
              filename inside a rank == 9 guard, so this only ever resolves to
