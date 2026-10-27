@@ -212,6 +212,11 @@
        the full size resolve to well under a percent. */
     var STEPS = 8;
 
+    /* An empty name's handwriting blank (relieveBlank): 8% a round, down to 1.36em of its
+       parent, which is the floor _text.tpl already gives it for a long name. */
+    var BLANK_SHRINK = 0.92;
+    var BLANK_MIN_EM = 1.36;
+
     /* A 200-certificate bulk document is the worst case, and every measurement forces
        a layout of a very large page. Past this budget the remaining certificates keep
        the server's first guess rather than making somebody wait at the print dialog.
@@ -606,6 +611,45 @@
      * failure is left on the element, where a test or a person with devtools can see
      * which certificate it was and what it said.
      */
+    /*
+     * An empty name is not free space. The template reserves a hand-written blank in
+     * .AwardeeName (_text.tpl: 2.55em inline, an <img class="Underline"> and no text),
+     * and the engine's budget has nothing to lower for it, since it only ever shrinks
+     * name TEXT. So a long citation under an empty name could be clipped at its 0.34em
+     * floor with the largest rigid element on the page not yielding (sweep B2).
+     *
+     * This is the citation's lever, so it runs only when the citation is clipped: a
+     * certificate whose citation fits keeps its full 2.55em blank untouched. Each round
+     * takes 8% off the blank toward 1.36em, the size _text.tpl already floors it at for
+     * a long name, which still leaves room to write on, and re-sizes the citation into
+     * what that frees. The citation's own floor and the clip notice are unchanged.
+     * Returns true when the blank moved, so the engine can re-judge its budget.
+     */
+    function relieveBlank(award, reason) {
+        var blank = award.querySelector('.AwardeeName');
+        var parent = blank ? blank.parentElement : null;
+        if (!reason || !blank || !parent || !blank.querySelector('img.Underline')) { return false; }
+        if (!reason.hasAttribute('data-scroll-clipped')) { return false; }
+        var cur = px(blank, 'fontSize') / px(parent, 'fontSize');
+        if (!(cur > BLANK_MIN_EM)) { return false; }
+
+        blank.setAttribute('data-af-blank-base', blank.getAttribute('style') ? blank.style.fontSize : '');
+        while (cur > BLANK_MIN_EM + 1e-6 && reason.hasAttribute('data-scroll-clipped')) {
+            cur = Math.max(BLANK_SHRINK * cur, BLANK_MIN_EM);
+            blank.style.fontSize = cur + 'em';
+            fitReason(reason);
+        }
+        return true;
+    }
+
+    function restoreBlank(award) {
+        var blank = award.querySelector('.AwardeeName[data-af-blank-base]');
+        if (!blank) { return; }
+        blank.style.fontSize = blank.getAttribute('data-af-blank-base');
+        if (!blank.getAttribute('style')) { blank.removeAttribute('style'); }
+        blank.removeAttribute('data-af-blank-base');
+    }
+
     function runEngine(award, engine) {
         try {
             engine.layoutTop(award);
@@ -630,6 +674,7 @@
         /* Restore the root first: everything below is measured in em against it. */
         var rootBase = baseEm(award);
         if (rootBase > 0) { setEm(award, rootBase); }
+        restoreBlank(award);
 
         /*
          * The top of the certificate — issuing body, name, award line, and the
@@ -652,6 +697,13 @@
 
         var reason = award.querySelector(POLICY.reason.sel);
         if (reason) { fitReason(reason); }
+
+        /* The engine judged its budget with the blank at 2.55em; when the blank gave
+           way, it judges again with the room it has now and the citation follows. */
+        if (relieveBlank(award, reason) && engine) {
+            runEngine(award, engine);
+            fitReason(reason);
+        }
 
         /*
          * Pass 3 last, and then the passes it invalidates if it fired. Shrinking the
@@ -881,6 +933,7 @@
                the next measurement start from an already-raised block. */
             var tpl = templateOf(award);
             if (tpl) { tpl.style.removeProperty('--sc-sign-lift'); }
+            restoreBlank(award);
         }
     }
 

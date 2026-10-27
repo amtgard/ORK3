@@ -26,6 +26,7 @@ interface Opts {
   name?: string; award?: string; lead?: string; place?: string; art?: boolean;
   free?: string; up?: number; face?: string; heading?: string; height?: number; scale?: number;
   spacing?: string; signMin?: number; leadSpacing?: string;
+  blankName?: boolean; reason?: string;
 }
 
 function pageHtml(o: Opts = {}): string {
@@ -92,11 +93,11 @@ function pageHtml(o: Opts = {}): string {
       <img class="Flourish ScRule ScRule--r" data-sc-ink="${grid('common/text/squiggly-bottom.svg')}" src="${blank(424, 161)}" width="424" height="161" alt="">
       <p class="IssuingVerb Body"><span>presents</span></p>
     </section>
-    <section class="ScName"><p class="AwardeeName"><span data-scroll-text="player" data-sc-role="name">${esc(o.name ?? 'Halo')}</span></p></section>
+    <section class="ScName"><p class="AwardeeName"${o.blankName ? ' style="font-size:max(1.36em, calc(2.55em + -0.374em * ((0 / 8))));"' : ''}><span data-scroll-text="player" data-sc-role="name">${o.blankName ? '<img class="Underline" src="' + blank(10, 10) + '" alt="">' : esc(o.name ?? 'Halo')}</span></p></section>
     <section class="Order" data-sc-role="award">${esc(o.award ?? 'Order of the Rose')}</section>
     <div class="ScSpacer" aria-hidden="true"></div>
     <section class="For">for</section>
-    <section class="Award_Reason"><p data-scroll-text="reason">Valour in the lists and kindness in the tents.</p></section>
+    <section class="Award_Reason"><p data-scroll-text="reason">${esc(o.reason ?? 'Valour in the lists and kindness in the tents.')}</p></section>
     <section class="SignAndDate"></section>
   </div></div></foreignObject></svg></body></html>`;
 }
@@ -531,6 +532,56 @@ test('the budget loop lowers the name, by 8% a round and three rounds at most', 
   expect((await state(page)).name).toBeGreaterThan(2.3 * 0.92 ** 3 - 0.01);
 });
 
+const AUTOFIT = path.resolve(__dirname, '../../../orkui/template/revised-frontend/script/scrollery-autofit.js');
+
+// B2: an empty name leaves the engine's budget nothing to lower, and the 2.55em handwriting blank
+// is the largest rigid piece. The citation's pass (scrollery-autofit) takes from it, toward 1.36em,
+// and only when the citation would be clipped. The real citation box is overflow:hidden and takes
+// what the flex column leaves it, so the page is given that.
+const blankEm = (page: Page) =>
+  page.evaluate(() => {
+    const p = document.querySelector<HTMLElement>('.AwardeeName')!;
+    return parseFloat(getComputedStyle(p).fontSize) / parseFloat(getComputedStyle(p.parentElement!).fontSize);
+  });
+
+const fitB2 = async (page: Page, o: Opts) => {
+  await load(page, { blankName: true, ...o });
+  await page.addStyleTag({ content: '.Award_Reason { flex: 1 1 0; min-height: 2em; overflow: hidden; }' });
+  await page.addScriptTag({ path: AUTOFIT });
+  await page.evaluate(() => (window as any).ScrolleryAutofit.ready);
+  await page.evaluate(() => (window as any).ScrolleryAutofit.fitAward(document.querySelector('.Award')));
+  return page.evaluate(() => {
+    const r = document.querySelector<HTMLElement>('.Award_Reason')!;
+    return { clipped: r.hasAttribute('data-scroll-clipped'), cut: r.scrollHeight - r.clientHeight };
+  });
+};
+
+const LONG = 'Valour in the lists and kindness in the tents, shown at every muster of the realm. '.repeat(8);
+
+test('an empty name\'s blank gives way, no lower than 1.36em, only when the citation would clip', async ({ page }) => {
+  // Roomy page: nothing clipped, the blank is untouched.
+  let r = await fitB2(page, { reason: LONG, height: 3300 });
+  expect(r.clipped).toBe(false);
+  expect(await blankEm(page)).toBeCloseTo(2.55, 2);
+
+  // Tight: clipped with the blank at 2.55em (proved by the control below), not clipped once it gave.
+  r = await fitB2(page, { reason: LONG, height: 2000 });
+  const em = await blankEm(page);
+  expect(r.clipped).toBe(false);
+  expect(r.cut).toBeLessThanOrEqual(1);
+  expect(em).toBeLessThan(2.55 - 0.05);
+  expect(em).toBeGreaterThanOrEqual(1.36 - 0.001);
+
+  // Idempotent: a second pass starts from the template's 2.55em and lands the same.
+  await page.evaluate(() => (window as any).ScrolleryAutofit.fitAward(document.querySelector('.Award')));
+  expect(await blankEm(page)).toBeCloseTo(em, 3);
+
+  // Out of reach even with the blank at its floor: it stops there and the clip notice stays.
+  r = await fitB2(page, { reason: LONG.repeat(6), height: 1500 });
+  expect(await blankEm(page)).toBeCloseTo(1.36, 2);
+  expect(r.clipped).toBe(true);
+});
+
 test('running twice changes nothing, in either composition', async ({ page }) => {
   const cases: Opts[] = [
     { place: 'Everglade Sentinels' },
@@ -833,7 +884,6 @@ test('the place line still fits its band after the article is resized to the lea
 // Custom Ribbon (whose files are first requested by that very preview) and its last letter landed
 // on the ribbon. The refit must be repeated once the image has a box, and land where a page whose
 // image was ready all along lands.
-const AUTOFIT = path.resolve(__dirname, '../../../orkui/template/revised-frontend/script/scrollery-autofit.js');
 
 test('a flourish image that loads after fitSoon is refitted once it arrives: the reserve comes back', async ({ page }) => {
   await load(page, { place: 'Mordengaard' });
