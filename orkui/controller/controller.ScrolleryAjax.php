@@ -88,6 +88,8 @@ class Controller_ScrolleryAjax extends Controller
                 // The resolved source's URL from heraldry_sources(), which reads the
                 // cached kingdom/park lookups; $scope['Heraldry'] is no longer read.
                 'heraldry'    => $sources[$heraldrySource],
+                // Every source's arms, for a layout that draws more than one (EXPERIMENT).
+                'heraldryArms' => $sources,
                 'issuerTitle' => (string) ($_POST['issuerTitle'] ?? ''),
                 'useThe'      => ($_POST['useThe'] ?? '') === '1',
                 'useOf'       => ($_POST['useOf'] ?? '') === '1',
@@ -126,6 +128,9 @@ class Controller_ScrolleryAjax extends Controller
                 // it needs the arms lookup that BuildScroll() must stay free of.
                 'design'      => [
                     'heraldrySource' => $heraldrySource,
+                    'heraldryLayout' => (string) ($_POST['heraldryLayout'] ?? ''),
+                    'heraldryStamp'  => (string) ($_POST['heraldryStamp'] ?? ''),
+                    'drawIn'         => (string) ($_POST['drawIn'] ?? ''),
                     'customBorder'   => (string) ($_POST['customBorder'] ?? ''),
                     'color1'         => (string) ($_POST['color1'] ?? ''),
                     'color2'         => (string) ($_POST['color2'] ?? ''),
@@ -175,6 +180,9 @@ class Controller_ScrolleryAjax extends Controller
             // True when match-style was asked for but drawn exact, because a colour is
             // too dark to survive a screen-blended pass (Scroll::BuildScroll decides).
             'MatchFallback' => (bool) ($scroll['customBorder']['matchFallback'] ?? false),
+            // What the experiment's layout and stamp actually drew, after their fallbacks.
+            'HeraldryLayout' => (string) $scroll['design']['heraldryLayout'],
+            'HeraldryStamp'  => (bool) $scroll['design']['heraldryStamp'],
         ]);
         exit;
     }

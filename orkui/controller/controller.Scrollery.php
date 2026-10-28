@@ -783,6 +783,8 @@ class Controller_Scrollery extends Controller
                 'player'      => (string) ($_GET['player'] ?? ''),
                 'pronoun'     => $pronoun !== '' ? $pronoun : 'their',
                 'heraldry'    => $sources[$heraldrySource],
+                // Every source's arms, for a layout that draws more than one (EXPERIMENT).
+                'heraldryArms' => $sources,
                 // Provenance for the print log. A composed scroll has no award row, so
                 // these three can only come from context — and a composed row carries no
                 // awards_id either, which makes mundaneId its ONLY link to a person.
@@ -815,6 +817,9 @@ class Controller_Scrollery extends Controller
                 // it needs the arms lookup that BuildScroll() must stay free of.
                 'design'      => [
                     'heraldrySource' => $heraldrySource,
+                    'heraldryLayout' => (string) ($_GET['heraldryLayout'] ?? ''),
+                    'heraldryStamp'  => (string) ($_GET['heraldryStamp'] ?? ''),
+                    'drawIn'         => (string) ($_GET['drawIn'] ?? ''),
                     'customBorder'   => (string) ($_GET['customBorder'] ?? ''),
                     'color1'         => (string) ($_GET['color1'] ?? ''),
                     'color2'         => (string) ($_GET['color2'] ?? ''),

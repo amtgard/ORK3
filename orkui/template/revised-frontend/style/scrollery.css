@@ -2058,6 +2058,93 @@ section.SignAndDate {
    -------------------------------------------------------------------------- */
 
 /* --------------------------------------------------------------------------
+   4z. EXPERIMENT (scrollery-heraldry) — heraldry layouts.
+
+   Frame px throughout (the certificate is 2550 x 3300 and .Award's 1em is 100px), so
+   the arms keep their size whatever the hand or the fitted type sizes. Every device
+   multiplies onto the parchment like the single one, so a white field reads as paper.
+   Dark grounds (owl and custom cyanotype) are not handled yet: multiply on a dark
+   ground draws the arms nearly black.
+   -------------------------------------------------------------------------- */
+
+/* overlap: the pair box is sized inline by _heraldry.tpl. Isolated and multiplied as
+   one, so the park (in front) covers the kingdom where they cross. */
+.ScArmsPair {
+    display: inline-block;
+    position: relative;
+    isolation: isolate;
+    mix-blend-mode: multiply;
+}
+
+.ScArmsPair > img {
+    position: absolute;
+    left: 0;
+    top: 0;
+    object-fit: contain;
+}
+
+.Award .ScArms {
+    position: absolute;
+    object-fit: contain;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+}
+
+/* flank: either side of the issuing lines, vertically on the block's middle. The
+   section becomes the arms' containing block; the engine places the Centered rules
+   against their offsetParent, so they follow. Two halves to making room: the padding
+   moves where Classic anchors its left and right lines, and the arms being obstacles
+   (scrollery-typeset.js readObstacles) is what makes the engine fit the lines to the
+   width that is left. Arms 340 wide hung 80 out leave 260; 300 of padding is a 40 gap.
+   Hung 80 past the column puts them at x 353, inside most frames but not hunter (592). */
+.Award[data-sc-arms="flank"] > section.IssuingTextSection {
+    position: relative;
+    box-sizing: border-box;
+    padding-inline: 300px;
+}
+
+.Award .ScArms--flank {
+    width: 340px;
+    height: 340px;
+    top: calc(50% - 170px);
+}
+
+.Award .ScArms--l { left: -80px; }
+.Award .ScArms--r { right: -80px; }
+
+/* seals: over the date and over the signature, centred on each box. */
+.Award[data-sc-arms="seals"] section.SignAndDate > div {
+    position: relative;
+}
+
+.Award .ScArms--seal {
+    width: 280px;
+    height: 280px;
+    left: calc(50% - 140px);
+    bottom: calc(100% + 30px);
+}
+
+/* stamp: the issuing body's arms, faint, centred on the signature line and turned a
+   little, as if the hand signed over the seal. Its siblings are positioned so they
+   paint after it (positioned boxes paint in document order, and it comes first). */
+.Award[data-sc-stamp] .AwardSignatory {
+    position: relative;
+}
+
+.Award[data-sc-stamp] .AwardSignatory > :not(.ScArms) {
+    position: relative;
+}
+
+.Award .ScArms--stamp {
+    width: 440px;
+    height: 440px;
+    left: calc(50% - 220px);
+    top: calc(50% - 250px);
+    opacity: 0.28;
+    transform: rotate(-9deg);
+}
+
+/* --------------------------------------------------------------------------
    5a. The render route's own chrome — toolbar, advisory, overflow notice.
 
    This page loads no orkui.css and nothing on it sets html[data-theme], so the

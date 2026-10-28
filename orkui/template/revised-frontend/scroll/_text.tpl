@@ -163,6 +163,27 @@ if ($ribbon !== null) {
 $ribbonClass  = $ribbon !== null ? ' sc-ribbon' : '';
 $ribbonFilter = $ribbon !== null ? ' style="filter:url(#sc-ribbon-tint)"' : '';
 
+/*
+ * EXPERIMENT (scrollery-heraldry): arms placed in the text layer. BuildScroll() has
+ * already resolved the layout against what is on file, so a layout named here has every
+ * URL it needs. 'single' and 'overlap' draw nothing here (_heraldry.tpl owns the top).
+ *   flank  kingdom and park either side of the issuing lines, as obstacles the typeset
+ *          engine fits the lines between (scrollery-typeset.js readObstacles)
+ *   seals  kingdom over the date, park over the signature
+ *   stamp  the issuing body's arms, faint, under the signature line
+ */
+$armsLayout = (string) ($s['heraldryLayout'] ?? 'single');
+$arms       = is_array($s['heraldryArms'] ?? null) ? $s['heraldryArms'] : [];
+$stampUrl   = (string) ($s['heraldryStamp'] ?? '');
+$armsImg    = static function (string $source, string $class, bool $obstacle = false) use ($arms): string {
+    $url = (string) ($arms[$source] ?? '');
+
+    return $url === '' ? '' : '<img class="ScArms ' . $class . '" src="' . scroll_e($url) . '"'
+        . ($obstacle ? ' data-sc-obstacle' : '') . ' alt="">';
+};
+$armsAttr = ($armsLayout === 'flank' || $armsLayout === 'seals' ? ' data-sc-arms="' . $armsLayout . '"' : '')
+    . ($stampUrl !== '' ? ' data-sc-stamp' : '');
+
 $freeSpace = Scroll::FreeSpaceAttr($s);
 /** The flourish's ink grid as an attribute, or nothing when the file has none. */
 $inkAttr   = static function (string $resource): string {
@@ -181,7 +202,7 @@ $inkAttr   = static function (string $resource): string {
          filter. The composer repaints by setting flood-color on every .sc-ribbon-flood. */ ?>
 <svg aria-hidden="true" width="0" height="0"><filter id="sc-ribbon-tint" color-interpolation-filters="sRGB"><feFlood class="sc-ribbon-flood" flood-color="<?= scroll_e($ribbon) ?>" result="tint"/><feBlend in="tint" in2="SourceGraphic" mode="multiply" result="tinted"/><feComposite in="tinted" in2="SourceAlpha" operator="in"/></filter></svg>
 <?php endif; ?>
-<div class="Award"<?= $freeSpace !== '' ? ' data-sc-free="' . scroll_e($freeSpace) . '"' : '' ?>>
+<div class="Award"<?= $freeSpace !== '' ? ' data-sc-free="' . scroll_e($freeSpace) . '"' : '' ?><?= $armsAttr ?>>
 
     <section class="IssuingTextSection" data-sc-comp="classic">
         <p class="ScLead">
@@ -208,6 +229,10 @@ $inkAttr   = static function (string $resource): string {
         <p class="IssuingVerb Body">
             <span>presents</span>
         </p>
+        <?php if ($armsLayout === 'flank'): ?>
+        <?= $armsImg('kingdom', 'ScArms--flank ScArms--l', true) ?>
+        <?= $armsImg('park', 'ScArms--flank ScArms--r', true) ?>
+        <?php endif; ?>
     </section>
 
     <section class="ScName">
@@ -265,6 +290,7 @@ $inkAttr   = static function (string $resource): string {
     <div style="flex-grow:0.7;"></div>
     <section class="SignAndDate">
         <div class="AwardDate">
+            <?php if ($armsLayout === 'seals'): ?><?= $armsImg('kingdom', 'ScArms--seal') ?><?php endif; ?>
             <p data-scroll-text="date" style="min-height:1.2em;font-style:normal;font-size:0.7em;" class="Body"><?= scroll_e($s['date']) ?></p>
             <p style="font-size:0em">
                 <img class="Underline" src="<?= scroll_resource($res['writing_line']) ?>" alt="">
@@ -272,6 +298,10 @@ $inkAttr   = static function (string $resource): string {
             <p class="Body" style="display:inline-block;margin-block-start:0.4em;"><b><span>On this day...</span></b></p>
         </div>
         <div class="AwardSignatory">
+            <?php /* First, so the stamp paints under the signature (its siblings are made
+                     position:relative in stamp mode, and positioned boxes paint in order). */ ?>
+            <?php if ($stampUrl !== ''): ?><img class="ScArms ScArms--stamp" src="<?= scroll_e($stampUrl) ?>" alt=""><?php endif; ?>
+            <?php if ($armsLayout === 'seals'): ?><?= $armsImg('park', 'ScArms--seal') ?><?php endif; ?>
             <p data-scroll-text="givenBy" style="min-height:1.2em;font-style:normal;font-size:0.7em;" class="Body"><?= scroll_e($s['givenBy']) ?></p>
             <p style="font-size:0em">
                 <img class="Underline" src="<?= scroll_resource($res['writing_line']) ?>" alt="">

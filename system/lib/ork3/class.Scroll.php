@@ -198,10 +198,41 @@ class Scroll extends Ork3
         'matchStyle'     => false,
         'customRibbon'   => false,
         'ribbonColor'    => self::RIBBON_DEFAULT,
+        'heraldryLayout' => 'single',
+        'heraldryStamp'  => false,
+        'drawIn'         => '',
     ];
 
     /** @var string[] */
     public const HERALDRY_SOURCES = ['kingdom', 'park', 'persona'];
+
+    /*
+     * EXPERIMENT (scrollery-heraldry): where the arms go when more than one set is drawn.
+     * Each layout names the arms it cannot be drawn without; a layout whose arms are not
+     * all on file falls back to 'single', the one device top centre it has always been.
+     *
+     *   single  the chosen heraldry source, top centre
+     *   overlap kingdom behind, park in front and offset down-right, top centre
+     *   flank   recipient top centre; kingdom left and park right of the issuing lines
+     *   seals   recipient top centre; kingdom over the date, park over the signature
+     */
+    public const HERALDRY_LAYOUTS = [
+        'single'  => [],
+        'overlap' => ['kingdom', 'park'],
+        'flank'   => ['kingdom', 'park', 'persona'],
+        'seals'   => ['kingdom', 'park', 'persona'],
+    ];
+
+    /*
+     * EXPERIMENT (scrollery-heraldry): "Draw In Heraldry". The top-centre arms are
+     * replaced by a blank white shape, outlined in black, for the arms to be drawn in by
+     * hand. With it the recipient's arms are never drawn, so no layout needs them; and
+     * Overlap, whose pair IS the top-centre arms, has nothing left to draw.
+     */
+    public const DRAW_IN_SHAPES = ['heater', 'circle'];
+
+    /** The outline, in frame px: the knotwork borders' own outline measures 10-12. */
+    public const DRAW_IN_STROKE = 11;
 
     /*
      * ------------------------------------------------------------------------------
@@ -747,7 +778,41 @@ class Scroll extends Ork3
         $d['color2']       = self::NormaliseHexColour((string) ($requested['color2'] ?? ''), $d['color2']);
         $d['ribbonColor']  = self::NormaliseHexColour((string) ($requested['ribbonColor'] ?? ''), $d['ribbonColor']);
 
+        $layout = (string) ($requested['heraldryLayout'] ?? '');
+        if (array_key_exists($layout, self::HERALDRY_LAYOUTS)) {
+            $d['heraldryLayout'] = $layout;
+        }
+        $d['heraldryStamp'] = $bool($requested['heraldryStamp'] ?? false);
+
+        $drawIn = (string) ($requested['drawIn'] ?? '');
+        if (in_array($drawIn, self::DRAW_IN_SHAPES, true)) {
+            $d['drawIn'] = $drawIn;
+        }
+
         return $d;
+    }
+
+    /**
+     * The heraldry layout that actually draws: the requested one when every set of arms
+     * it needs is on file, otherwise 'single'.
+     *
+     * @param array{kingdom?:bool,park?:bool,persona?:bool} $available
+     */
+    public static function ResolveHeraldryLayout(string $requested, array $available, bool $drawIn = false): string
+    {
+        if (!array_key_exists($requested, self::HERALDRY_LAYOUTS) || ($drawIn && $requested === 'overlap')) {
+            return 'single';
+        }
+        foreach (self::HERALDRY_LAYOUTS[$requested] as $source) {
+            if ($drawIn && $source === 'persona') {
+                continue;
+            }
+            if (empty($available[$source])) {
+                return 'single';
+            }
+        }
+
+        return $requested;
     }
 
     /**
@@ -2355,6 +2420,35 @@ class Scroll extends Ork3
         $design['customBorder'] = $customBorder !== null;
         $design['matchStyle']   = $customBorder !== null && $design['matchStyle'];
 
+        // Every set of arms the caller looked up, by source; '' where there are none.
+        // Only a multi-arms layout or the stamp reads them. The layout and the stamp are
+        // resolved against what is on file here, so the design logged is what drew.
+        $arms = ['kingdom' => '', 'park' => '', 'persona' => ''];
+        foreach (array_keys($arms) as $source) {
+            $arms[$source] = (string) ($context['heraldryArms'][$source] ?? '');
+        }
+        $design['heraldryLayout'] = self::ResolveHeraldryLayout(
+            $design['heraldryLayout'],
+            array_map(static fn (string $u): bool => $u !== '', $arms),
+            $design['drawIn'] !== ''
+        );
+        // The stamp is the issuing body's own arms under the signature. Seals already
+        // puts the park's there, so the two never draw together.
+        $stamp = $design['heraldryStamp'] && $design['heraldryLayout'] !== 'seals' && $scopeType !== ''
+            ? $arms[$scopeType]
+            : '';
+        $design['heraldryStamp'] = $stamp !== '';
+
+        // Top centre: the chosen source on a single layout, the recipient's arms on the
+        // two that move the kingdom and park elsewhere, and nothing on overlap, whose
+        // pair _heraldry.tpl draws from heraldryArms.
+        $heraldry = match (true) {
+            $design['drawIn'] !== ''                                    => '',
+            in_array($design['heraldryLayout'], ['flank', 'seals'], true) => $arms['persona'],
+            $design['heraldryLayout'] === 'overlap'                     => '',
+            default                                                     => (string) ($context['heraldry'] ?? ''),
+        };
+
         return [
             'mundaneId'   => max(0, $mundaneId),
             'scopeType'   => $scopeType,
@@ -2406,7 +2500,11 @@ class Scroll extends Ork3
             'issuerLead'    => $issuerLines['lead'],
             'issuerArticle' => $issuerLines['article'],
             'issuerPlace'   => $issuerLines['place'],
-            'heraldry'    => (string) ($context['heraldry'] ?? ''),
+            'heraldry'    => $heraldry,
+            'heraldryLayout' => $design['heraldryLayout'],
+            'heraldryArms'   => $design['heraldryLayout'] === 'single' ? [] : $arms,
+            'heraldryStamp'  => $stamp,
+            'heraldryDrawIn' => $design['drawIn'],
             'flavour'     => self::ExpandFlavour(
                 (string) ($order['flavour'][(string) $rank] ?? ''),
                 // "a shining star of <<ISSUER>>" wants the issuer as it reads after "of":

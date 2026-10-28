@@ -199,6 +199,11 @@ $awardOption = static function (array $c) use ($customKind, $awardLumAttr): stri
    every container is .rp-*; what is left here is the preview stage and the
    handful of field-level affordances that are genuinely this page's. */
 .sc-wrap        { max-width: 1500px; margin: 0 auto 60px; }
+/* The shell's header is drawn to carry an .rp-context strip or a stats row beneath it
+   (square bottom corners, and the stats row's 16px margin is the gap to the body). This
+   page has neither, so the header closes its own corners and the body keeps the gap. */
+.sc-wrap > .rp-header             { border-radius: 8px; }
+.sc-wrap > .rp-header + .rp-body  { margin-top: 16px; }
 .sc-field       { margin-bottom: 11px; position: relative; }
 .sc-field:last-child { margin-bottom: 0; }
 /* .sc-field-label is the same slot for a group that has no labelable control to
@@ -295,6 +300,48 @@ $awardOption = static function (array $c) use ($customKind, $awardLumAttr): stri
                   font-weight: 400; }
 #sc-design .sc-seg-btn:last-child[data-tip]:hover::after { left: auto !important; right: 0 !important; }
 
+/* Customize Design, compact. scrollery.css styles the PRINT page's options sheet with the
+   same class names — .sc-seg-btn at a 44px floor and .sc-opt with 14px of padding a
+   side, both sized for that sheet's thumb targets — and both leaked in here, which is
+   what made this card tall and gappy. Scoped to the card so the sheet keeps its own.
+   44px still applies where the pointer is a finger. */
+#sc-design .sc-seg-btn { min-height: 32px; padding: 5px 8px; }
+#sc-design .sc-opt     { padding: 0; min-height: 22px; }
+#sc-design .sc-field   { margin-bottom: 12px; }
+#sc-design .sc-field:last-child { margin-bottom: 0; }
+#sc-design .sc-opt--after-seg { margin-top: 8px; }
+#sc-design .sc-opt-info { font-size: 12px; color: var(--rp-text-hint); cursor: help; }
+/* The info icons sit mid-row, where a 220px bubble anchored to the icon runs off one
+   side of the card or the other. So the icon is NOT the bubble's containing block: it is
+   made static, and the tip spans its whole row instead (the Draw In row is a positioned
+   .sc-field; the stamp's label is positioned below). The bubble inherits the icon's
+   font-family, which is Font Awesome's, so the text face is restated or it falls back to
+   a serif. Shown on keyboard focus too. */
+#sc-design .sc-opt-info[data-tip] { position: static !important; }
+#sc-design .sc-opt--after-seg { position: relative; }
+#sc-design .sc-opt-info[data-tip]:hover::after,
+#sc-design .sc-opt-info[data-tip]:focus-visible::after {
+                  content: attr(data-tip); position: absolute; bottom: calc(100% + 4px);
+                  left: 0 !important; right: 0 !important; transform: none !important;
+                  width: auto; max-width: none !important; min-width: 0 !important;
+                  white-space: normal !important; text-align: left;
+                  font: 400 11px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+                  padding: 6px 10px; border-radius: 4px; background: #1a202c; color: #fff;
+                  pointer-events: none; z-index: 500; box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+html[data-theme="dark"] #sc-design .sc-opt-info[data-tip]:hover::after,
+html[data-theme="dark"] #sc-design .sc-opt-info[data-tip]:focus-visible::after { background: #f7fafc; color: #1a202c; }
+#sc-design .sc-opt-info:focus-visible { outline: 2px solid var(--rp-accent); outline-offset: 2px; border-radius: 50%; }
+/* A checkbox with its choice beside it on the same line (Draw In: Heater | Circle). */
+#sc-design .sc-inline-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+#sc-design .sc-seg--mini { flex: 0 0 auto; flex-wrap: nowrap; gap: 3px; }
+#sc-design .sc-seg--mini .sc-seg-btn { flex: 0 0 auto; min-width: 0; min-height: 26px; padding: 3px 9px; font-size: 11.5px; }
+#sc-design .sc-seg[hidden] { display: none; }
+@media (pointer: coarse) {
+    #sc-design .sc-seg-btn,
+    #sc-design .sc-seg--mini .sc-seg-btn { min-height: 44px; }
+    #sc-design .sc-opt { min-height: 44px; }
+}
+
 /* The three checkboxes. A direct-child <label> of .sc-field is the 10px uppercase
    field caption above; these are sentences, so they restate the type. */
 .sc-field > label.sc-opt,
@@ -387,9 +434,12 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
             <?php /* 1 — THE AWARD. First because it decides everything below it: the
                      rank range, the variant list, and whether this is a custom scroll
                      with a design block at all. */ ?>
-            <div class="rp-filter-card">
-                <div class="rp-filter-card-header"><i class="fa-solid fa-award"></i> Award</div>
-                <div class="rp-filter-card-body">
+            <div class="rp-filter-card" id="sc-award-card">
+                <button type="button" class="rp-filter-card-header" data-sc-collapse="sc-award-body" aria-expanded="true" aria-controls="sc-award-body">
+                    <i class="fa-solid fa-award"></i> Award
+                    <i class="fa-solid fa-chevron-down rp-filter-card-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="rp-filter-card-body" id="sc-award-body">
                     <div class="sc-field">
                         <label for="sc-award">Which award</label>
                         <select id="sc-award" class="adm-select">
@@ -505,6 +555,42 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                         </div>
                     </div>
 
+                    <?php /* EXPERIMENT (scrollery-heraldry): Draw In Heraldry — a blank shape in
+                             place of the top-centre arms, for drawing them in by hand. */ ?>
+                    <div class="sc-field sc-inline-row">
+                        <label class="sc-opt">
+                            <input type="checkbox" id="sc-draw-in" autocomplete="off">
+                            <span>Draw In Heraldry</span>
+                            <i class="fa-solid fa-circle-info sc-opt-info" tabindex="0" aria-label="About Draw In Heraldry"
+                               data-tip="A blank white shape replaces the arms at the top, for drawing them in by hand."></i>
+                        </label>
+                        <div class="sc-seg sc-seg--mini" id="sc-draw-in-shapes" role="group" aria-label="Shape to draw in" hidden>
+                            <button type="button" class="sc-seg-btn" data-draw-in="heater" aria-pressed="true">Heater</button>
+                            <button type="button" class="sc-seg-btn" data-draw-in="circle" aria-pressed="false">Circle</button>
+                        </div>
+                    </div>
+
+                    <?php /* EXPERIMENT (scrollery-heraldry): where the arms go. Every layout but
+                             Single needs arms the scope or the recipient may not have, so
+                             each starts disabled and scrollery.js (paintLayoutBar) decides
+                             from the preview response, as Persona above. */ ?>
+                    <div class="sc-field">
+                        <span class="sc-field-label" id="sc-heraldry-layout-label">Heraldry layout</span>
+                        <div class="sc-seg" role="group" aria-labelledby="sc-heraldry-layout-label">
+                            <?php foreach (['single' => 'Single', 'overlap' => 'Overlap', 'flank' => 'Flank', 'seals' => 'Seals'] as $lay => $layLabel): ?>
+                                <button type="button" class="sc-seg-btn" data-heraldry-layout="<?= $lay ?>"
+                                        aria-pressed="<?= $lay === 'single' ? 'true' : 'false' ?>"
+                                        aria-disabled="<?= $lay === 'single' ? 'false' : 'true' ?>"><?= $layLabel ?></button>
+                            <?php endforeach; ?>
+                        </div>
+                        <label class="sc-opt sc-opt--after-seg" id="sc-heraldry-stamp-opt">
+                            <input type="checkbox" id="sc-heraldry-stamp" autocomplete="off">
+                            <span>Stamp arms under the signature</span>
+                            <i class="fa-solid fa-circle-info sc-opt-info" tabindex="0" aria-label="About the signature stamp"
+                               data-tip="The <?= $scopeDefault ?>'s arms, faint, behind the signature line."></i>
+                        </label>
+                    </div>
+
                     <div class="sc-field" id="sc-custom-border-field">
                         <label class="sc-opt" id="sc-custom-border-opt">
                             <input type="checkbox" id="sc-custom-border"<?= !empty($designDefaults['customBorder']) ? ' checked' : '' ?>>
@@ -545,9 +631,12 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
             <?php /* 2 — THE WORDING, top to bottom exactly as scroll/_text.tpl lays it
                      out: the issuing line, then the recipient, then the rank phrase
                      ("with her third"), then the reason, then the date and signature. */ ?>
-            <div class="rp-filter-card">
-                <div class="rp-filter-card-header"><i class="fa-solid fa-feather-pointed"></i> Wording</div>
-                <div class="rp-filter-card-body">
+            <div class="rp-filter-card" id="sc-wording">
+                <button type="button" class="rp-filter-card-header" data-sc-collapse="sc-wording-body" aria-expanded="true" aria-controls="sc-wording-body">
+                    <i class="fa-solid fa-feather-pointed"></i> Wording
+                    <i class="fa-solid fa-chevron-down rp-filter-card-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="rp-filter-card-body" id="sc-wording-body">
 
                     <?php /* The hand. In Wording rather than in Scroll design, and that is
                              the whole point: "Scroll design" is display:none for every order
@@ -854,6 +943,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
 <?php /* The typeset engine, which sets the top of the certificate. The autofit below
          calls it and has no fallback, so it comes first. */ ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-typeset.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-typeset.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-arms.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-arms.js') ?>"></script>
 <?php /* The measured autofit, the same one Scrollery_render.tpl loads. It must be
          parsed BEFORE scrollery.js, which calls ScrolleryAutofit.fitSoon() out of
          applyText() and reload() — without it the preview keeps the server's first

@@ -688,7 +688,12 @@
         ribbonEl     = $('sc-custom-ribbon'),
         ribbonColors = $('sc-custom-ribbon-colors'),
         recipeCbHint = $('sc-recipe-cb-hint'),
-        heraldryBtns = document.querySelectorAll('[data-heraldry-source]');
+        heraldryBtns = document.querySelectorAll('[data-heraldry-source]'),
+        layoutBtns   = document.querySelectorAll('[data-heraldry-layout]'),
+        stampEl      = $('sc-heraldry-stamp'),
+        drawInEl     = $('sc-draw-in'),
+        drawInShapes = $('sc-draw-in-shapes'),
+        drawInBtns   = document.querySelectorAll('[data-draw-in]');
 
     /*
      * Hex input, the one shape the server accepts (Scroll::NormaliseHexColour): six
@@ -1061,6 +1066,95 @@
         });
     }
 
+    /*
+     * EXPERIMENT (scrollery-heraldry): the heraldry layout and the signature stamp.
+     *
+     * A layout is offered only when every set of arms it draws is on file (the twin of
+     * Scroll::HERALDRY_LAYOUTS); the server falls back to Single otherwise, and each
+     * preview response's HeraldryLayout is what actually drew. The stamp is the scope's
+     * own arms, and Seals already puts the park's under the signature.
+     */
+    var LAYOUT_NEEDS = {
+            single:  [],
+            overlap: ['kingdom', 'park'],
+            flank:   ['kingdom', 'park', 'persona'],
+            seals:   ['kingdom', 'park', 'persona']
+        },
+        layoutChoice = 'single',
+        drawInShape  = 'heater';
+
+    function drawingIn() { return !!(drawInEl && drawInEl.checked); }
+
+    /* With Draw In on, the top centre is the blank, so the recipient's arms are never
+       needed; Overlap's pair IS the top centre, so it has nothing to draw. Mirrors
+       Scroll::ResolveHeraldryLayout(). */
+    function layoutMissing(lay) {
+        if (drawingIn() && lay === 'overlap') { return ['central arms']; }
+        return (LAYOUT_NEEDS[lay] || []).filter(function (src) {
+            return !(drawingIn() && src === 'persona') && !heraldryHave[src];
+        });
+    }
+
+    function paintLayoutBar() {
+        layoutBtns.forEach(function (btn) {
+            var lay = btn.dataset.heraldryLayout,
+                missing = layoutMissing(lay);
+            btn.setAttribute('aria-pressed', lay === layoutChoice ? 'true' : 'false');
+            btn.setAttribute('aria-disabled', missing.length ? 'true' : 'false');
+            if (missing.length) {
+                btn.setAttribute('data-tip', missing[0] === 'central arms'
+                    ? 'Overlap is the central arms; turn off Draw In Heraldry to use it'
+                    : 'Needs ' + missing.join(', ') + ' heraldry on file');
+            } else {
+                btn.removeAttribute('data-tip');
+            }
+        });
+        if (stampEl) {
+            stampEl.disabled = !heraldryHave[scopeSource] || layoutChoice === 'seals';
+        }
+    }
+
+    layoutBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var lay = btn.dataset.heraldryLayout;
+            if (btn.getAttribute('aria-disabled') === 'true' || lay === layoutChoice) { return; }
+            layoutChoice = lay;
+            paintLayoutBar();
+            reload();
+        });
+    });
+    if (stampEl) { stampEl.addEventListener('change', function () { reload(); }); }
+
+    function paintDrawIn() {
+        if (drawInShapes) { drawInShapes.hidden = !drawingIn(); }
+        drawInBtns.forEach(function (btn) {
+            btn.setAttribute('aria-pressed', btn.dataset.drawIn === drawInShape ? 'true' : 'false');
+        });
+    }
+
+    if (drawInEl) {
+        drawInEl.addEventListener('change', function () {
+            if (layoutMissing(layoutChoice).length) { layoutChoice = 'single'; }
+            paintDrawIn();
+            paintLayoutBar();
+            reload();
+        });
+    }
+    /* The info icons sit inside their checkbox's <label> so they read as one line; a
+       click on one is for the tip, and must not tick the box. */
+    document.querySelectorAll('#sc-design .sc-opt-info').forEach(function (icon) {
+        icon.addEventListener('click', function (e) { e.preventDefault(); });
+    });
+
+    drawInBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (btn.dataset.drawIn === drawInShape) { return; }
+            drawInShape = btn.dataset.drawIn;
+            paintDrawIn();
+            reload();
+        });
+    });
+
     /* What the server drew, from a preview response. */
     function takeHeraldry(d) {
         if (d.HeraldrySources) {
@@ -1071,7 +1165,11 @@
         if (typeof d.HeraldrySource === 'string' && has(heraldryHave, d.HeraldrySource)) {
             heraldryChoice = d.HeraldrySource;
         }
+        if (typeof d.HeraldryLayout === 'string' && has(LAYOUT_NEEDS, d.HeraldryLayout)) {
+            layoutChoice = d.HeraldryLayout;
+        }
         paintHeraldryBar();
+        paintLayoutBar();
     }
 
     heraldryBtns.forEach(function (btn) {
@@ -1094,7 +1192,9 @@
         if (cfg.scopeType === 'kingdom') { heraldryHave.park = false; }
         var wasGone = heraldryChoice === 'persona' || (cfg.scopeType === 'kingdom' && heraldryChoice === 'park');
         if (wasGone) { heraldryChoice = scopeSource; }
+        if (layoutMissing(layoutChoice).length) { layoutChoice = 'single'; wasGone = true; }
         paintHeraldryBar();
+        paintLayoutBar();
         if (wasGone) { reload(); }
     }
 
@@ -1116,6 +1216,9 @@
      */
     function addDesign(params) {
         params.set('heraldrySource', heraldryChoice);
+        params.set('heraldryLayout', layoutChoice);
+        if (stampEl && stampEl.checked && !stampEl.disabled) { params.set('heraldryStamp', '1'); }
+        if (drawingIn()) { params.set('drawIn', drawInShape); }
         if (cbEl && cbEl.checked)         { params.set('customBorder', '1'); }
         if (matchEl && matchEl.checked)   { params.set('matchStyle', '1'); }
         if (ribbonEl && ribbonEl.checked) { params.set('customRibbon', '1'); }
@@ -1192,6 +1295,7 @@
                 }
                 errEl.textContent = '';
                 mount.innerHTML = d.Html;
+                if (window.ScrolleryArms) { window.ScrolleryArms.knockout(mount); }
                 applyText();
                 // The server drew the colours this request carried; the officer may
                 // have moved a picker since it left, so the live ones go back on.
@@ -1669,6 +1773,8 @@
     syncSwatch();
     syncDesign();
     paintHeraldryBar();
+    paintLayoutBar();
+    paintDrawIn();
     // Filled here as well as on every reload(), so the live region carries a sentence
     // even when the very first preview fetch fails.
     syncSummary();
