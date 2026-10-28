@@ -670,46 +670,48 @@ class BonusCredit
     // -----------------------------------------------------------------------
 
     /**
-     * May other kingdoms' bonus credits reach this kingdom's players? Yes when
-     * the kingdom itself, or a kingdom above it, has said so. No row means no.
+     * May other kingdoms' bonus credits reach this kingdom's players? ON unless
+     * someone turned it off: the kingdom's own row decides; with none, the
+     * nearest ancestor's row (a principality follows its parent); with none
+     * at all, yes.
      */
     public function acceptsOutsideCredits(int $kingdomId): bool
     {
-        foreach ($this->kingdomAncestry($kingdomId) as $kid) {
-            $row = $this->outsideSettingRow($kid);
-            if ($row !== null && $row['AcceptsOutside']) {
-                return true;
-            }
-        }
-        return false;
+        return $this->outsideCreditSetting($kingdomId)['Effective'];
     }
 
     /**
-     * The setting as the Settings tab shows it: the kingdom's own answer and who
-     * gave it, plus the parent whose yes covers it when its own answer is no.
+     * The setting as the Settings tab shows it. Source says where the answer
+     * came from: 'own' (this kingdom chose, AcceptsOutside is its choice),
+     * 'inherited' (a parent chose; InheritedFrom names it, AcceptsOutside is
+     * null) or 'default' (nobody has touched it; on). Effective is the answer
+     * that applies either way.
      *
-     * @return array{AcceptsOutside:bool, Effective:bool, InheritedFrom:string, UpdatedBy:int, UpdatedByPersona:string, UpdatedAt:string}
+     * @return array{AcceptsOutside:?bool, Effective:bool, Source:string, InheritedFrom:string, UpdatedBy:int, UpdatedByPersona:string, UpdatedAt:string}
      */
     public function outsideCreditSetting(int $kingdomId): array
     {
-        $own = $this->outsideSettingRow($kingdomId) ?? ['AcceptsOutside' => false, 'UpdatedBy' => 0, 'UpdatedByPersona' => '', 'UpdatedAt' => ''];
-        $inheritedFrom = '';
-        if (!$own['AcceptsOutside']) {
-            foreach (array_slice($this->kingdomAncestry($kingdomId), 1) as $kid) {
-                $row = $this->outsideSettingRow($kid);
-                if ($row !== null && $row['AcceptsOutside']) {
-                    $inheritedFrom = $this->kingdomName($kid);
-                    break;
-                }
+        $own = $this->outsideSettingRow($kingdomId);
+        if ($own !== null) {
+            return $own + ['Effective' => $own['AcceptsOutside'], 'Source' => 'own', 'InheritedFrom' => ''];
+        }
+        foreach (array_slice($this->kingdomAncestry($kingdomId), 1) as $kid) {
+            $row = $this->outsideSettingRow($kid);
+            if ($row !== null) {
+                return ['AcceptsOutside' => null, 'UpdatedBy' => $row['UpdatedBy'], 'UpdatedByPersona' => $row['UpdatedByPersona'], 'UpdatedAt' => $row['UpdatedAt'],
+                        'Effective' => $row['AcceptsOutside'], 'Source' => 'inherited', 'InheritedFrom' => $this->kingdomName($kid)];
             }
         }
-        return $own + ['Effective' => $own['AcceptsOutside'] || $inheritedFrom !== '', 'InheritedFrom' => $inheritedFrom];
+        return ['AcceptsOutside' => null, 'UpdatedBy' => 0, 'UpdatedByPersona' => '', 'UpdatedAt' => '',
+                'Effective' => true, 'Source' => 'default', 'InheritedFrom' => ''];
     }
 
     /**
      * Say yes or no to outside credits for a kingdom. Kingdom CREATE, or an
-     * ORK admin on the kingdom's behalf. Idempotent; audited. Turning it off
-     * stops new grants only: credits already given stay.
+     * ORK admin on the kingdom's behalf. A no-op when the answer already
+     * applies (by default, by inheritance or by its own row); otherwise the
+     * kingdom gets a row of its own, and is audited. Turning it off stops new
+     * grants only: credits already given stay.
      */
     public function setAcceptsOutside(int $uid, int $kingdomId, bool $accept): array
     {
@@ -720,7 +722,7 @@ class BonusCredit
             return $this->denied('Only Kingdom officers with CREATE authority, or an ORK admin, can change whether a Kingdom accepts credits from other Kingdoms.');
         }
         $row  = $this->outsideSettingRow($kingdomId);
-        $live = $row !== null && $row['AcceptsOutside'];
+        $live = $this->outsideCreditSetting($kingdomId)['Effective'];
         if ($accept === $live) {
             return ['Status' => 0, 'AcceptsOutside' => $live];
         }

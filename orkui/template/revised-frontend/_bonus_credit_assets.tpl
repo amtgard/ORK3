@@ -794,23 +794,24 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
             ', and only if their Kingdom accepts credits from other Kingdoms.';
         if (!isKingdom || !canDefine || !outside) return;
         var box = gid('bc-outside-toggle'), status = gid('bc-outside-status');
-        box.checked = !!outside.AcceptsOutside;
+        var on = !!outside.Effective;
+        box.checked = on;
         box.disabled = false;
+        var who = (outside.UpdatedByPersona ? ' · set by ' + esc(outside.UpdatedByPersona) : '') + (outside.UpdatedAt ? ' ' + esc(String(outside.UpdatedAt).slice(0, 10)) : '');
         var s = '';
-        if (outside.AcceptsOutside) {
-            s = 'On' + (outside.UpdatedByPersona ? ' · set by ' + esc(outside.UpdatedByPersona) : '') + (outside.UpdatedAt ? ' ' + esc(String(outside.UpdatedAt).slice(0, 10)) : '');
-        } else if (outside.InheritedFrom) {
-            s = 'Off here, but ' + esc(outside.InheritedFrom) + ' has it on, and that covers this principality.';
+        if (outside.Source === 'default') {
+            s = 'On by default — no one has changed it yet.';
+        } else if (outside.Source === 'inherited') {
+            s = (on ? 'On' : 'Off') + ' · inherited from ' + esc(outside.InheritedFrom) + who + '. This principality has not chosen for itself; flipping the switch here makes its own choice.';
         } else {
-            s = 'Off' + (outside.UpdatedByPersona ? ' · set by ' + esc(outside.UpdatedByPersona) : '') + (outside.UpdatedAt ? ' ' + esc(String(outside.UpdatedAt).slice(0, 10)) : '');
+            s = (on ? 'On' : 'Off') + who;
         }
         status.innerHTML = s;
         gid('bc-outside-desc').innerHTML =
-            '<p><strong>What it does.</strong> When this is on, another Kingdom that offers a bonus credit can grant that credit to players whose home is in ' + esc(name) + '. ' +
+            '<p><strong>What it does.</strong> Credits from other Kingdoms are accepted unless a Kingdom turns this off. While it is on, another Kingdom that offers a bonus credit can grant that credit to players whose home is in ' + esc(name) + '. ' +
             'Their Kingdom officers, park officers or granters do the granting, from their own Kingdom or park pages; the credit counts toward the player\'s class levels exactly like one of ours. It is never attendance.</p>' +
             '<p><strong>What it does not do.</strong> It does not let anyone here hand out other Kingdoms\' credits, and it does not change who can grant ours. Amtgard-wide credits are separate: those reach our players only when adopted on the Categories tab.</p>' +
-            '<p><strong>When it is off</strong> (the default), only ' + esc(name) + '\'s own credits and the Amtgard-wide ones it has adopted can reach its players. Turning it off later stops new grants from other Kingdoms; credits already given stay.' +
-            (outside.InheritedFrom ? ' Because ' + esc(outside.InheritedFrom) + ' has it on, its yes covers this principality regardless of the switch here.' : '') + '</p>';
+            '<p><strong>When it is off</strong>, only ' + esc(name) + '\'s own credits and the Amtgard-wide ones it has adopted can reach its players. Turning it off stops new grants from other Kingdoms; credits already given stay. A principality follows its parent Kingdom\'s choice until it makes its own here.</p>';
     }
     gid('bc-outside-toggle').addEventListener('change', function () {
         var box = this, want = box.checked;

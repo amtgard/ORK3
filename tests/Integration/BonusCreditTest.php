@@ -293,24 +293,28 @@ final class BonusCreditTest extends TestCase
             $this->assertStringContainsString('authority', (string) $r['Error']);
             $this->assertSame([], $this->bonus->totalsByClass($sibling));
         }
-        // Another kingdom's player: no authority there either.
+        // Another kingdom's player: that is a visitor, and visitors are fine while their kingdom
+        // accepts outside credits (the default), because the officer speaks for the defining kingdom.
         $away = $this->playerAt($this->otherPark, 'bc-away');
-        $this->assertSame(3, $this->grant($parkOfficer, $away, $purple['CategoryId'])['Status']);
-        $this->assertSame([], $this->bonus->totalsByClass($away));
+        $this->assertSame(0, $this->grant($parkOfficer, $away, $purple['CategoryId'])['Status']);
+        $this->assertSame([$this->classId => 1.0], $this->bonus->totalsByClass($away));
     }
 
-    public function testACreditNeverLeavesItsKingdomUnlessTheOtherKingdomAcceptsOutsideCredits(): void
+    public function testACreditNeverLeavesItsKingdomOnceTheOtherKingdomDeclinesOutsideCredits(): void
     {
+        $this->settingKingdoms = [$this->otherKingdom];
         $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');
         $purple   = $this->category($kOfficer, $this->kingdom, 'Being purple');
-        // An officer who holds the OTHER kingdom's park cannot hand out THIS kingdom's credit there.
+        // An officer who holds the OTHER kingdom's park cannot hand out THIS kingdom's credit there, on or off.
         $awayOfficer = $this->parkOfficer($this->otherPark, 'bc-away-officer');
         $away        = $this->playerAt($this->otherPark, 'bc-away');
         $r = $this->grant($awayOfficer, $away, $purple['CategoryId']);
         $this->assertSame(3, $r['Status']);
-        $this->assertStringContainsString('does not accept bonus credits from other Kingdoms', (string) $r['Error']);
+        $this->assertStringContainsString('park officers or granters', (string) $r['Error']);
         $this->assertSame([], $this->bonus->totalsByClass($away));
-        // Nor can this kingdom's own officer, from its own kingdom page, while the other kingdom has not said yes.
+        // Once the other kingdom turns outside credits off, this kingdom's own officer is refused too, and told where the switch is.
+        $awayCreate = $this->kingdomOfficer($this->otherKingdom, $this->otherPark, 'bc-away-create');
+        $this->assertSame(0, $this->bonus->setAcceptsOutside($awayCreate, $this->otherKingdom, false)['Status']);
         $r = $this->grant($kOfficer, $away, $purple['CategoryId'], ['HostType' => 'kingdom', 'HostId' => $this->kingdom]);
         $this->assertSame(3, $r['Status']);
         $this->assertStringContainsString('does not accept bonus credits from other Kingdoms', (string) $r['Error']);
@@ -330,26 +334,39 @@ final class BonusCreditTest extends TestCase
         $awayPark   = $this->parkOfficer($this->otherPark, 'bc-away-park');
         $fromKingdomPage = ['HostType' => 'kingdom', 'HostId' => $this->kingdom];
 
-        // The default is no, and no row at all reads as no.
+        // On by default: no row at all reads as yes, and nobody is named.
+        $this->assertTrue($this->bonus->acceptsOutsideCredits($this->otherKingdom));
+        $s = $this->bonus->outsideCreditSetting($this->otherKingdom);
+        $this->assertNull($s['AcceptsOutside']);
+        $this->assertTrue($s['Effective']);
+        $this->assertSame('default', $s['Source']);
+        $this->assertSame('', $s['InheritedFrom']);
+        $this->assertSame(0, $s['UpdatedBy']);
+        // Saying yes to what already applies writes nothing: it stays "by default".
+        $this->assertSame(0, $this->bonus->setAcceptsOutside($awayCreate, $this->otherKingdom, true)['Status']);
+        $this->assertSame('default', $this->bonus->outsideCreditSetting($this->otherKingdom)['Source']);
+
+        // Only the RECEIVING kingdom's CREATE (or an ORK admin) turns it off: not its EDIT, not the giving kingdom.
+        $this->assertSame(3, $this->bonus->setAcceptsOutside($awayEdit, $this->otherKingdom, false)['Status']);
+        $this->assertSame(3, $this->bonus->setAcceptsOutside($kOfficer, $this->otherKingdom, false)['Status']);
+        $this->assertSame(1, $this->bonus->setAcceptsOutside($awayCreate, 999999999, false)['Status']);
+        $this->assertSame(0, $this->bonus->setAcceptsOutside($awayCreate, $this->otherKingdom, false)['Status']);
+        $this->assertSame(0, $this->bonus->setAcceptsOutside($awayCreate, $this->otherKingdom, false)['Status'], 'saying no twice is a no-op');
         $this->assertFalse($this->bonus->acceptsOutsideCredits($this->otherKingdom));
         $s = $this->bonus->outsideCreditSetting($this->otherKingdom);
         $this->assertFalse($s['AcceptsOutside']);
         $this->assertFalse($s['Effective']);
-        $this->assertSame('', $s['InheritedFrom']);
-
-        // Only the RECEIVING kingdom's CREATE (or an ORK admin) says yes: not its EDIT, not the giving kingdom.
-        $this->assertSame(3, $this->bonus->setAcceptsOutside($awayEdit, $this->otherKingdom, true)['Status']);
-        $this->assertSame(3, $this->bonus->setAcceptsOutside($kOfficer, $this->otherKingdom, true)['Status']);
-        $this->assertSame(1, $this->bonus->setAcceptsOutside($awayCreate, 999999999, true)['Status']);
+        $this->assertSame('own', $s['Source']);
+        $this->assertSame($awayCreate, $s['UpdatedBy']);
+        $this->assertSame(3, $this->grant($kEditor, $away, $purple['CategoryId'], $fromKingdomPage)['Status'], 'off means off');
+        // Turning it back on is now that kingdom's own, recorded choice.
         $this->assertSame(0, $this->bonus->setAcceptsOutside($awayCreate, $this->otherKingdom, true)['Status']);
-        $this->assertSame(0, $this->bonus->setAcceptsOutside($awayCreate, $this->otherKingdom, true)['Status'], 'saying yes twice is a no-op');
-        $this->assertTrue($this->bonus->acceptsOutsideCredits($this->otherKingdom));
         $s = $this->bonus->outsideCreditSetting($this->otherKingdom);
         $this->assertTrue($s['AcceptsOutside']);
         $this->assertTrue($s['Effective']);
-        $this->assertSame($awayCreate, $s['UpdatedBy']);
-        // Saying yes for yourself does not let other kingdoms' credits flow the other way.
-        $this->assertFalse($this->bonus->acceptsOutsideCredits($this->kingdom));
+        $this->assertSame('own', $s['Source']);
+        // One kingdom's choice says nothing about the other direction: the giving kingdom is still on its default.
+        $this->assertSame('default', $this->bonus->outsideCreditSetting($this->kingdom)['Source']);
 
         // Now the defining kingdom's EDIT officer can grant it from the kingdom page, and the credit counts for the player.
         $g = $this->grant($kEditor, $away, $purple['CategoryId'], $fromKingdomPage);
