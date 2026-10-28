@@ -365,7 +365,7 @@ the stamp is the file's mtime and nothing else.
 ## 8. The guards (item 45)
 
 - **Ground contrast** — `tests/Unit/ScrollGroundContrastTest.php`, backed by
-  `tests/fixtures/scroll-ground-luminance.json`. See the file's own header for the
+  `system/lib/ork3/data/scroll-ground-luminance.json`. See the file's own header for the
   method and the regeneration command.
 - **Asset paths** — `bin/check-scroll-assets.sh`, run by `.githooks/pre-push` and by
   `.github/workflows/scroll-guards.yml`.

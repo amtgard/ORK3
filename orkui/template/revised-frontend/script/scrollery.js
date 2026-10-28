@@ -734,8 +734,96 @@
     }
 
     function paintMatchHint() {
-        if (!matchHint) { return; }
-        matchHint.hidden = !(matchState.fallback && matchEl && matchEl.checked && cbEl && cbEl.checked);
+        if (matchHint) {
+            matchHint.hidden = !(matchState.fallback && matchEl && matchEl.checked && cbEl && cbEl.checked);
+        }
+        paintContrast();
+    }
+
+    /*
+     * The colour-contrast hint (A5). A knot or ribbon colour close to the paper's own
+     * tone reads only through its outline, and nothing about it is wrong enough to
+     * refuse — so the control says so, under itself, and prints nothing.
+     *
+     * The paper's tone is Scroll's measured number, stamped on the options (the award's
+     * order/variant, or the custom order's ground); the page measures nothing.
+     *
+     * The effective colour is what the preview really draws:
+     *   - the ribbon has no match option: always its exact colour;
+     *   - the knot with match off, or with match on but drawn exact because the server
+     *     reported MatchFallback: its exact colour;
+     *   - the knot blended into the paper: the colour combined with the paper by the
+     *     blend its own passes use — multiply, or screen when any pass screens (the
+     *     same test as Scroll::PassesScreen, over the same cfg.customBorderRules; the
+     *     custom order screens exactly on the grounds in cfg.darkGrounds). The paper is
+     *     taken as a neutral of its measured luminance; a sheet's warm cast does not
+     *     move a 1.5:1 judgement.
+     * Advisory only: it never blocks, and it is not part of the certificate markup.
+     */
+    var CONTRAST_MIN = 1.5;
+
+    function numAttr(el, name) {
+        var v = el ? parseFloat(el.dataset[name]) : NaN;
+        return isNaN(v) ? null : v;
+    }
+
+    function variantInUse(opt) {
+        var variants = (opt.dataset.variants || '').split(',').filter(Boolean);
+        return variants.indexOf(variantEl.value) !== -1 ? variantEl.value : (variants[0] || '');
+    }
+
+    function paperLuminance() {
+        var opt = selected();
+        if (!opt) { return null; }
+        if (opt.dataset.order === 'custom') {
+            return numAttr(groundEl && groundEl.options[groundEl.selectedIndex], 'groundLum');
+        }
+        if (opt.dataset.variantLum) {
+            try {
+                var byVariant = JSON.parse(opt.dataset.variantLum), v = variantInUse(opt);
+                if (v && typeof byVariant[v] === 'number') { return byVariant[v]; }
+            } catch (e) { /* fall through to the order's own number */ }
+        }
+        return numAttr(opt, 'groundLum');
+    }
+
+    function knotPassesScreen() {
+        var opt = selected(), order = opt && opt.dataset.order;
+        if (!order) { return false; }
+        if (order === 'custom') { return (cfg.darkGrounds || []).indexOf(groundEl ? groundEl.value : '') !== -1; }
+        var rule = (cfg.customBorderRules || {})[order];
+        if (!rule || !rule.passes) { return false; }
+        var passes = rule.passes;
+        if (!Array.isArray(passes)) { passes = passes[variantInUse(opt)] || []; }
+        return passes.some(function (p) { return String(p).indexOf('mix-blend-mode:screen') !== -1; });
+    }
+
+    function toLinear(c) { return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+    function toEncoded(l) { return l <= 0.0031308 ? l * 12.92 : 1.055 * Math.pow(l, 1 / 2.4) - 0.055; }
+
+    function effectiveLuminance(key, paperL) {
+        var blended = key !== 'ribbon' && matchEl && matchEl.checked && cbEl && cbEl.checked && !matchState.fallback;
+        if (!blended) { return relLum(colors[key]); }
+        var h = normHex(colors[key]);
+        if (!h) { return paperL; }
+        var g = toEncoded(paperL), screen = knotPassesScreen();
+        var ch = [1, 3, 5].map(function (i) {
+            var c = parseInt(h.substr(i, 2), 16) / 255;
+            return toLinear(screen ? 1 - (1 - c) * (1 - g) : c * g);
+        });
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    }
+
+    function paintContrast() {
+        var paperL = paperLuminance();
+        COLOR_CONTROLS.forEach(function (ctl) {
+            var hint = $(ctl.id + '-contrast');
+            if (!hint) { return; }
+            if (paperL === null || !colors[ctl.key]) { hint.hidden = true; return; }
+            var l = effectiveLuminance(ctl.key, paperL),
+                ratio = (Math.max(l, paperL) + 0.05) / (Math.min(l, paperL) + 0.05);
+            hint.hidden = !(ratio < CONTRAST_MIN);
+        });
     }
 
     var matchTimer = null;
@@ -818,6 +906,7 @@
         markHex(ctl, true);
         ctl.paint();
         rememberColors();
+        paintContrast();
         if (ctl.key !== 'ribbon') { colourMayChangeMatch(); }
     }
 
@@ -926,6 +1015,7 @@
         if (cbColors)     { cbColors.hidden = !(ok && cbEl && cbEl.checked); }
         if (ribbonColors) { ribbonColors.hidden = !(ribbonEl && ribbonEl.checked); }
         syncRecipeNote();
+        paintContrast();
     }
 
     /*

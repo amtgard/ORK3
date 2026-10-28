@@ -26,7 +26,7 @@ use PHPUnit\Framework\TestCase;
  * The brief allowed either a live image-library computation or a precomputed
  * fixture. This does BOTH, keyed on content:
  *
- *   tests/fixtures/scroll-ground-luminance.json records, per ground, the sha1 of the
+ *   system/lib/ork3/data/scroll-ground-luminance.json records, per ground, the sha1 of the
  *   art file (and of the parchment underlay, for the wash grounds) alongside the
  *   composited text-box luminance.
  *
@@ -60,7 +60,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class ScrollGroundContrastTest extends TestCase
 {
-    private const FIXTURE = __DIR__ . '/../fixtures/scroll-ground-luminance.json';
+    private const FIXTURE = __DIR__ . '/../../system/lib/ork3/data/scroll-ground-luminance.json';
 
     /** The parchment plate every wash ground is laid over. */
     private const UNDERLAY = 'common/parchment.jpg';
@@ -211,7 +211,7 @@ final class ScrollGroundContrastTest extends TestCase
         $this->assertSame(
             $vocab,
             $recorded,
-            'tests/fixtures/scroll-ground-luminance.json is out of step with the grounds '
+            'system/lib/ork3/data/scroll-ground-luminance.json is out of step with the grounds '
             . 'vocabulary. Regenerate: SCROLL_CONTRAST_REGEN=1 ENVIRONMENT=TEST '
             . 'vendor/bin/phpunit --filter ScrollGroundContrast'
         );
@@ -312,7 +312,7 @@ final class ScrollGroundContrastTest extends TestCase
     {
         if (getenv('SCROLL_CONTRAST_REGEN') !== '1') {
             $this->markTestSkipped(
-                'Set SCROLL_CONTRAST_REGEN=1 to rewrite tests/fixtures/scroll-ground-luminance.json.'
+                'Set SCROLL_CONTRAST_REGEN=1 to rewrite system/lib/ork3/data/scroll-ground-luminance.json.'
             );
         }
         if (!function_exists('imagecreatefromjpeg')) {
@@ -576,7 +576,7 @@ final class ScrollGroundContrastTest extends TestCase
     {
         if (!is_file(self::FIXTURE)) {
             throw new RuntimeException(
-                'tests/fixtures/scroll-ground-luminance.json is missing. Regenerate: '
+                'system/lib/ork3/data/scroll-ground-luminance.json is missing. Regenerate: '
                 . 'SCROLL_CONTRAST_REGEN=1 ENVIRONMENT=TEST vendor/bin/phpunit --filter ScrollGroundContrast'
             );
         }
