@@ -91,6 +91,21 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->withdraw($uid, $categoryId, $kingdomId);
     }
 
+    public function outside_credit_setting(int $kingdomId): array
+    {
+        return $this->_bonus()->outsideCreditSetting($kingdomId);
+    }
+
+    public function set_accepts_outside(int $uid, int $kingdomId, bool $accept): array
+    {
+        return $this->_bonus()->setAcceptsOutside($uid, $kingdomId, $accept);
+    }
+
+    public function can_grant_for_defining_kingdom(int $uid, array $category): bool
+    {
+        return $this->_bonus()->canGrantForDefiningKingdom($uid, $category);
+    }
+
     public function categories_for_park(int $parkId): array
     {
         return $this->_bonus()->categoriesForPark($parkId);

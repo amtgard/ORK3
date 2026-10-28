@@ -3956,12 +3956,16 @@ window.OrkRsCfg = {
 		var btn = e.target.closest ? e.target.closest('.pn-bonus-revoke') : null;
 		if (!btn) return;
 		var who = btn.getAttribute('data-who') || 'this credit';
+		// The styled alert from revised.js; the browser's only if it is missing.
+		function oops(message) {
+			if (typeof window.orkAlert === 'function') { window.orkAlert(message, { title: 'Could not remove the credit' }); } else { alert(message); }
+		}
 		function go() {
 			btn.disabled = true;
 			jQuery.post(<?= json_encode(UIR) ?> + 'BonusCreditAjax/revoke', { BonusCreditId: btn.getAttribute('data-id') }, function (r) {
-				if (!r || r.status !== 0) { btn.disabled = false; alert((r && r.error) || 'Could not remove the credit.'); return; }
+				if (!r || r.status !== 0) { btn.disabled = false; oops((r && r.error) || 'Could not remove the credit.'); return; }
 				location.reload();
-			}, 'json').fail(function () { btn.disabled = false; alert('Request failed.'); });
+			}, 'json').fail(function () { btn.disabled = false; oops('Request failed.'); });
 		}
 		var msg = 'The “' + who + '” credit is removed from this player. It can be granted again.';
 		var oc = window.orkConfirm;
