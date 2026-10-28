@@ -830,52 +830,31 @@
         ctl.picker.addEventListener('change', syncSummary);
     });
 
+    function has(obj, key) { return !!obj && Object.prototype.hasOwnProperty.call(obj, key); }
+
     /*
      * Can the chosen award take a Custom Border, right now?
      *
-     * A line-for-line mirror of Scroll::CustomBorderRule()'s yes/no over the SAME data
-     * (data/scroll-custom-border.php, handed over by the controller as
-     * cfg.customBorderRules) — not a second list. The server applies the rule again
-     * and silently ignores a border it cannot honour, so this decides only whether
-     * the checkbox is offered; it cannot make a certificate wrong.
-     *
-     *   - an order absent from the data is incompatible (flame, garber, zodiac);
-     *   - variant-keyed passes need the variant BuildScroll() would pick: the one
-     *     asked for if the order has it, otherwise its first;
-     *   - a rank mapped to false is incompatible, at the CLAMPED rank the art is
-     *     drawn from (Scroll::ClampRank, the order's own from/to — the option's
-     *     data-min/data-max);
-     *   - the custom order on a ground that paints its own frame is compatible only
-     *     where recipeGrounds maps that ground to a frameless twin.
+     * The rule itself lives in scrollery-customborder.js (a pure mirror of
+     * Scroll::CustomBorderRule() over cfg.customBorderRules, shared-fixture tested);
+     * this only reads the controls. Guarded on the global: a cached older page that
+     * lacks the module just does not offer the box.
      */
-    function has(obj, key) { return !!obj && Object.prototype.hasOwnProperty.call(obj, key); }
-
     function customBorderCompatible() {
-        var opt   = selected(),
-            rules = cfg.customBorderRules || {},
-            order = opt ? opt.dataset.order : '';
-        if (!order || !has(rules, order)) { return false; }
-        var rule = rules[order] || {};
-
-        // A list arrives as a JSON array; a variant-keyed map as an object.
-        if (rule.passes && typeof rule.passes === 'object' && !Array.isArray(rule.passes)) {
-            var variants = (opt.dataset.variants || '').split(',').filter(Boolean),
-                variant  = variants.indexOf(variantEl.value) !== -1 ? variantEl.value : (variants[0] || '');
-            if (!has(rule.passes, variant)) { return false; }
-        }
-
-        var min  = parseInt(opt.dataset.min, 10) || 0,
-            max  = parseInt(opt.dataset.max, 10) || 10,
-            rank = Math.max(min, Math.min(max, parseInt(rankEl.value, 10) || 0));
-        if (has(rule.ranks, String(rank)) && rule.ranks[rank] === false) { return false; }
-
-        if (rule.recipeGrounds && groundEl) {
-            var g = groundEl.options[groundEl.selectedIndex];
-            if (g && g.dataset.ownBorder === '1' && typeof rule.recipeGrounds[groundEl.value] !== 'string') {
-                return false;
-            }
-        }
-        return true;
+        var M = window.ScrolleryCustomBorder, opt = selected();
+        if (!M || !opt) { return false; }
+        var g = groundEl ? groundEl.options[groundEl.selectedIndex] : null;
+        return M.compatible(cfg.customBorderRules || {}, {
+            order:           opt.dataset.order || '',
+            variants:        (opt.dataset.variants || '').split(',').filter(Boolean),
+            variant:         variantEl.value,
+            min:             parseInt(opt.dataset.min, 10) || 0,
+            max:             isNaN(parseInt(opt.dataset.max, 10)) ? 10 : parseInt(opt.dataset.max, 10),
+            rank:            parseInt(rankEl.value, 10) || 0,
+            rankSet:         rankSetEl ? rankSetEl.value : '',
+            ground:          groundEl ? groundEl.value : '',
+            groundOwnBorder: !!(g && g.dataset.ownBorder === '1')
+        });
     }
 
     /* Ticked AND honoured — the state the certificate is actually drawn in. */

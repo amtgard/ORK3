@@ -84,6 +84,19 @@ final class ScrollDesignTest extends TestCase
         $this->assertCount(3, Scroll::CustomBorderRule('owl', 3, 'transparency', [])['passes']);
     }
 
+    /** Garber numeral plates at rank 7+ straddle the knot gap, so custom + garber drops the knot there. */
+    public function testCustomGarberRankSevenUpTakesNoCustomBorder(): void
+    {
+        foreach ([6 => true, 7 => false, 8 => false, 9 => false, 10 => false] as $rank => $ok) {
+            $recipe = ['ground' => 'parchment', 'rankSet' => 'garber'];
+            $this->assertSame($ok, Scroll::CustomBorderRule('custom', $rank, '', $recipe) !== null, "rank {$rank}");
+            $s = Scroll::BuildScroll($this->row(94, $rank), ['player' => 'T', 'recipe' => $recipe, 'design' => ['customBorder' => '1']]);
+            $this->assertSame($ok, $s['customBorder'] !== null, "BuildScroll rank {$rank}");
+        }
+        $s = Scroll::BuildScroll($this->row(94, 10), ['player' => 'T', 'recipe' => ['ground' => 'parchment', 'rankSet' => 'flame'], 'design' => ['customBorder' => '1']]);
+        $this->assertNotNull($s['customBorder']);
+    }
+
     public function testIncompatibleOrdersIgnoreTheRequest(): void
     {
         $this->assertNull(Scroll::CustomBorderRule('flame', 3, '', []));

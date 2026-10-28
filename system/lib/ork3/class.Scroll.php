@@ -934,6 +934,14 @@ class Scroll extends Ork3
             ];
         }
 
+        if (isset($rule['recipeRankSets'])) {
+            $set = (string) (self::NormaliseRecipe($recipe)['rankSet'] ?? '');
+            $min = $rule['recipeRankSets'][$set]['minIncompatibleRank'] ?? null;
+            if ($min !== null && $rank >= $min) {
+                return null;
+            }
+        }
+
         if (isset($rule['recipeGrounds'])) {
             $rg = (string) ($recipe['ground'] ?? '');
             if (self::GroundDrawsOwnBorder($rg)) {

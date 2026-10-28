@@ -70,5 +70,11 @@ return [
             'jovious'  => 'jovious/bg-noborder.jpg',
             'sunburst' => 'warrior/bg_10-noborder.jpg',
         ],
+        // The garber numeral plates at rank 7 and up ship art that straddles the knot
+        // gap's edges, so the gap's rectangular clip hard-cuts it beside the knot
+        // terminals. Those ranks are incompatible (ranks 0-6 draw nothing there).
+        'recipeRankSets' => [
+            'garber' => ['minIncompatibleRank' => 7],
+        ],
     ],
 ];

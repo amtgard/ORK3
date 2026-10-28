@@ -818,6 +818,9 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
          ScrolleryText.issuerLines() out of applyText(), and it must split a typed
          "The Kingdom of the Wetlands" the way print does. */ ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-textmodel.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-textmodel.js') ?>"></script>
+<?php /* The Custom Border compatibility mirror, before scrollery.js, which asks it
+         whether the checkbox is offered. */ ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-customborder.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-customborder.js') ?>"></script>
 <?php /* The typeset engine, which sets the top of the certificate. The autofit below
          calls it and has no fallback, so it comes first. */ ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-typeset.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-typeset.js') ?>"></script>
