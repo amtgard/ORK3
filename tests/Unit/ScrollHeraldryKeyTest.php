@@ -1,0 +1,215 @@
+<?php
+
+declare(strict_types=1);
+
+use PHPUnit\Framework\TestCase;
+
+/**
+ * B6: heraldry uploaded on an opaque black square printed as a black block, because
+ * _heraldry.tpl draws it with mix-blend-mode: multiply (white vanishes, black stays).
+ * ScrollHeraldry keys the corner-connected black out of a scroll-only copy, and only
+ * when the image plainly is a device on a black ground.
+ *
+ * Fixtures are synthetic; see tests/fixtures/heraldry/make-fixtures.php.
+ */
+final class ScrollHeraldryKeyTest extends TestCase
+{
+    private const FIX = ORK3_ROOT . '/tests/fixtures/heraldry/';
+    private const URL = 'http://localhost/assets/heraldry/scroll/';
+
+    private string $cache;
+
+    protected function setUp(): void
+    {
+        if (!function_exists('imagecreatefromstring')) {
+            $this->markTestSkipped('GD is not available.');
+        }
+        $this->cache = sys_get_temp_dir() . '/scroll-heraldry-test-' . bin2hex(random_bytes(4)) . '/';
+    }
+
+    protected function tearDown(): void
+    {
+        if (isset($this->cache) && is_dir($this->cache)) {
+            foreach (glob($this->cache . '*') ?: [] as $f) {
+                unlink($f);
+            }
+            rmdir($this->cache);
+        }
+    }
+
+    private function key(string $path, string $url = 'http://localhost/src.jpg'): string
+    {
+        return ScrollHeraldry::KeyedUrl($path, $url, $this->cache, self::URL);
+    }
+
+    /** The file a returned cache URL names. */
+    private function cached(string $url): string
+    {
+        $this->assertStringStartsWith(self::URL, $url);
+        $path = $this->cache . substr($url, strlen(self::URL));
+        $this->assertFileExists($path);
+
+        return $path;
+    }
+
+    /** @return array{int,int,int,int} r, g, b, GD alpha (0 opaque .. 127 clear) */
+    private function px($im, int $x, int $y): array
+    {
+        $c = imagecolorat($im, $x, $y);
+
+        return [($c >> 16) & 0xFF, ($c >> 8) & 0xFF, $c & 0xFF, ($c >> 24) & 0x7F];
+    }
+
+    public function testAShieldOnABlackSquareIsKeyed(): void
+    {
+        $src    = self::FIX . 'shield-on-black.jpg';
+        $before = sha1_file($src);
+
+        $url = $this->key($src);
+        $im  = imagecreatefrompng($this->cached($url));
+        $this->assertStringEndsWith('.png', $url);
+        $this->assertSame([200, 240], [imagesx($im), imagesy($im)]);
+
+        // Corners, and the black square beside the shield, are clear.
+        foreach ([[0, 0], [199, 0], [0, 239], [199, 239], [10, 120], [100, 236]] as [$x, $y]) {
+            $this->assertSame(127, $this->px($im, $x, $y)[3], "($x,$y) should be transparent");
+        }
+        // The shield's gold field is untouched and opaque.
+        [$r, $g, $b, $a] = $this->px($im, 100, 150);
+        $this->assertSame(0, $a);
+        $this->assertGreaterThan(180, $r);
+        $this->assertGreaterThan(140, $g);
+        // Gold right at the shield's top edge keeps full opacity (the feather fades dark
+        // fringe, never ink).
+        $this->assertSame(0, $this->px($im, 100, 37)[3]);
+
+        // The original is never modified.
+        $this->assertSame($before, sha1_file($src));
+    }
+
+    public function testDarkArtInsideTheShieldIsNotTouched(): void
+    {
+        $im = imagecreatefrompng($this->cached($this->key(self::FIX . 'shield-on-black.jpg')));
+
+        // The black roundel is not connected to a corner: it stays black and opaque.
+        [$r, $g, $b, $a] = $this->px($im, 100, 72);
+        $this->assertSame(0, $a);
+        $this->assertLessThan(30, max($r, $g, $b));
+    }
+
+    public function testADarkFieldRunningToTheCornersIsUntouched(): void
+    {
+        $info = ScrollHeraldry::Analyse(self::FIX . 'dark-field.jpg');
+        $this->assertFalse($info['qualifies']);
+        $this->assertGreaterThan(0.60, $info['region']);
+        $this->assertSame('http://localhost/src.jpg', $this->key(self::FIX . 'dark-field.jpg'));
+        $this->assertSame([], glob($this->cache . '*.png') ?: []);
+    }
+
+    public function testLineArtOnBlackIsUntouched(): void
+    {
+        $info = ScrollHeraldry::Analyse(self::FIX . 'line-art-on-black.png');
+        $this->assertFalse($info['qualifies']);
+        $this->assertGreaterThan(0.60, $info['region']);
+        $this->assertSame('http://localhost/src.png', $this->key(self::FIX . 'line-art-on-black.png', 'http://localhost/src.png'));
+    }
+
+    public function testAnAlreadyTransparentPngIsUntouched(): void
+    {
+        $info = ScrollHeraldry::Analyse(self::FIX . 'transparent-shield.png');
+        $this->assertFalse($info['qualifies']);
+        $this->assertSame('http://localhost/src.png', $this->key(self::FIX . 'transparent-shield.png', 'http://localhost/src.png'));
+    }
+
+    /**
+     * Found by the dry run's hand-check (park 00768, player 044269): dark art that
+     * touches the black ground through a gap is corner-connected and inside 5-60%, so the
+     * briefed rules alone eat it. No straight row or column ray from an edge reaches it.
+     */
+    public function testDarkArtJoinedToTheGroundThroughAGapIsUntouched(): void
+    {
+        $src  = self::FIX . 'silhouette-through-gap.png';
+        $info = ScrollHeraldry::Analyse($src);
+        $this->assertGreaterThanOrEqual(0.05, $info['region']);
+        $this->assertLessThanOrEqual(0.60, $info['region']);
+        $this->assertFalse($info['qualifies']);
+        $this->assertSame('hidden', $info['reason']);
+        $this->assertSame('http://localhost/src.png', $this->key($src, 'http://localhost/src.png'));
+    }
+
+    public function testTheBlackSquareAroundAShieldIsAllInSightOfAnEdge(): void
+    {
+        $this->assertLessThanOrEqual(ScrollHeraldry::HIDDEN_MAX, ScrollHeraldry::Analyse(self::FIX . 'shield-on-black.jpg')['hidden']);
+    }
+
+    public function testTheShieldQualifiesWithinTheBriefedBounds(): void
+    {
+        $info = ScrollHeraldry::Analyse(self::FIX . 'shield-on-black.jpg');
+        $this->assertTrue($info['qualifies']);
+        $this->assertGreaterThanOrEqual(0.05, $info['region']);
+        $this->assertLessThanOrEqual(0.60, $info['region']);
+    }
+
+    public function testACacheHitReturnsTheSameUrlWithoutRegenerating(): void
+    {
+        $src   = self::FIX . 'shield-on-black.jpg';
+        $first = $this->key($src);
+        $file  = $this->cached($first);
+        file_put_contents($file, 'sentinel');
+
+        $this->assertSame($first, $this->key($src));
+        $this->assertSame('sentinel', file_get_contents($file));
+    }
+
+    public function testAReuploadedSourceGetsANewKeyedFile(): void
+    {
+        $copy = $this->cache . 'upload.jpg';
+        @mkdir($this->cache, 0775, true);
+        copy(self::FIX . 'shield-on-black.jpg', $copy);
+        touch($copy, 1_700_000_000);
+        clearstatcache();
+        $first = $this->key($copy);
+
+        touch($copy, 1_700_000_500);
+        clearstatcache();
+        $second = $this->key($copy);
+
+        $this->assertNotSame($first, $second);
+        $this->cached($second);
+    }
+
+    public function testAMissingSourceReturnsItsUrlUnchanged(): void
+    {
+        $this->assertSame('http://localhost/none.jpg', $this->key(self::FIX . 'no-such-file.jpg', 'http://localhost/none.jpg'));
+    }
+
+    public function testForUrlLeavesUrlsOutsideTheHeraldryTreeAlone(): void
+    {
+        $this->assertSame('https://example.com/x.jpg', ScrollHeraldry::ForUrl('https://example.com/x.jpg'));
+        $this->assertSame('', ScrollHeraldry::ForUrl(''));
+        $this->assertSame(HTTP_HERALDRY . '../config.php', ScrollHeraldry::ForUrl(HTTP_HERALDRY . '../config.php'));
+        $this->assertSame(HTTP_PLAYER_HERALDRY . '999999999.jpg', ScrollHeraldry::ForUrl(HTTP_PLAYER_HERALDRY . '999999999.jpg'));
+    }
+
+    /**
+     * Every scroll-render heraldry path — court Automatic (scope_context), reprint
+     * Automatic (heraldry_url), a run's chosen source (master_heraldry_url) and the
+     * composer (heraldry_sources) — goes through the one keyed helper, so composer,
+     * reprint and court draw the same arms.
+     */
+    public function testEveryScrollHeraldryPathAsksForTheKeyedUrl(): void
+    {
+        $src = (string) file_get_contents(DIR_UI . 'model/model.Scrollery.php');
+
+        $this->assertSame(1, substr_count($src, '->GetHeraldryUrl('), 'only scroll_heraldry_url() may call GetHeraldryUrl()');
+        $this->assertStringContainsString('ScrollHeraldry::ForUrl(', $src);
+        foreach (['scope_context', 'heraldry_url', 'master_heraldry_url', 'heraldry_sources'] as $fn) {
+            $this->assertMatchesRegularExpression(
+                '/function ' . $fn . '\(.*?\n    }\n/s',
+                $src
+            );
+            preg_match('/function ' . $fn . '\(.*?\n    }\n/s', $src, $m);
+            $this->assertStringContainsString('scroll_heraldry_url(', $m[0], "$fn() must use scroll_heraldry_url()");
+        }
+    }
+}

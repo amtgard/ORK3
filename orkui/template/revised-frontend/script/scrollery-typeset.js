@@ -1604,9 +1604,10 @@
      * the image is drawn with mix-blend-mode: multiply, so its white ground vanishes into
      * the paper and only what is darker than near-white, and not transparent, is seen. A
      * heater shield on white is therefore a shield, tapering to its point, and the
-     * ribbon may tuck in beside the point as the squiggle was drawn to; a device on an
-     * opaque black square is that square (B6). The ink is read once per image, on a
-     * HERALDRY_GRID canvas, as one box per run of inked cells in each row. An image the
+     * ribbon may tuck in beside the point as the squiggle was drawn to. A device on an
+     * opaque black square arrives with the square keyed out when ScrollHeraldry could key
+     * it (B6), so the ribbon reads the device; one it left alone is still that square.
+     * The ink is read once per image, on a HERALDRY_GRID canvas, as one box per run of inked cells in each row. An image the
      * page may not read (not decoded yet, or another origin) is its whole drawn box.
      */
     var heraldryCache = Object.create(null);
