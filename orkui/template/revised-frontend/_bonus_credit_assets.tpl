@@ -80,6 +80,8 @@
 .bc-link { background:none; border:0; padding:0; color:#2b6cb0; cursor:pointer; font:inherit; font-size:12px; }
 .bc-link:hover { text-decoration:underline; }
 .bc-link-danger { color:#c53030; }
+.bc-inline { font:inherit; font-size:12px; padding:2px 4px; max-width:9em; }
+.bc-inline-num { width:4.5em; text-align:right; }
 .bc-empty { font-size:13px; color:var(--ork-text-muted,#a0aec0); padding:10px 0; }
 .bc-new { border:1px dashed var(--ork-input-border,#cbd5e0); border-radius:8px; padding:12px; margin-bottom:16px; background:var(--ork-bg-secondary,#f7fafc); }
 .bc-new .bc-list-label { margin-top:0; }
@@ -423,16 +425,55 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
             renderGranted(r.credits || []);
         });
     }
+    // The rows as the server sent them, by credit id, so an edit can be cancelled or redrawn.
+    var rowData = {};
     function rowHtml(c, justAdded) {
+        rowData[c.BonusCreditId] = c;
         return '<tr data-id="' + c.BonusCreditId + '" data-mid="' + c.MundaneId + '"' + (justAdded ? ' class="bc-just-added"' : '') + '>' +
             '<td><a href="' + Cfg.uir + 'Player/profile/' + c.MundaneId + '">' + esc(c.Persona) + '</a>' + awayTag(c) + '</td>' +
             '<td>' + esc(c.ClassName) + '</td>' +
             '<td class="bc-num">' + fmtCredits(c.Credits) + '</td>' +
             '<td class="bc-muted">' + esc(c.Date) + '</td>' +
             '<td class="bc-muted">' + esc(c.GrantedByPersona) + '</td>' +
-            '<td class="bc-num"><button type="button" class="bc-link bc-link-danger bc-revoke" data-id="' + c.BonusCreditId + '" title="Remove this credit">Remove</button></td>' +
+            '<td class="bc-num"><button type="button" class="bc-link bc-edit" data-id="' + c.BonusCreditId + '" title="Change the amount or class">Edit</button> · ' +
+            '<button type="button" class="bc-link bc-link-danger bc-revoke" data-id="' + c.BonusCreditId + '" title="Remove this credit">Remove</button></td>' +
             '</tr>';
     }
+    // Editing in place: the class and amount cells become controls; Save posts
+    // them, Cancel (or Escape) redraws the row as it was. Date, note and
+    // category are not editable: a credit for something else is a new grant.
+    function startEdit(tr) {
+        var c = rowData[tr.getAttribute('data-id')];
+        if (!c) return;
+        var cells = tr.children, opts = '';
+        classes.forEach(function (k) { opts += '<option value="' + k.ClassId + '"' + (String(k.ClassId) === String(c.ClassId) ? ' selected' : '') + '>' + esc(k.ClassName) + '</option>'; });
+        cells[1].innerHTML = '<select class="bc-inline bc-edit-class" aria-label="Class">' + opts + '</select>';
+        cells[2].innerHTML = '<input type="number" class="bc-inline bc-inline-num bc-edit-credits" aria-label="Credits" step="0.25" min="0.25" value="' + fmtCredits(c.Credits) + '">';
+        cells[5].innerHTML = '<button type="button" class="bc-link bc-save">Save</button> · <button type="button" class="bc-link bc-cancel">Cancel</button>';
+        tr.querySelector('.bc-edit-credits').focus();
+    }
+    function cancelEdit(tr) {
+        var c = rowData[tr.getAttribute('data-id')];
+        if (c) tr.outerHTML = rowHtml(c, false);
+    }
+    function saveEdit(tr) {
+        var id = tr.getAttribute('data-id'), c = rowData[id];
+        var cls = tr.querySelector('.bc-edit-class'), amt = tr.querySelector('.bc-edit-credits'), save = tr.querySelector('.bc-save');
+        if (!c || !cls || !amt) return;
+        save.disabled = true;
+        jQuery.post(base + 'update', { BonusCreditId: id, ClassId: cls.value, Credits: amt.value }, function (r) {
+            if (!r || r.status !== 0) { save.disabled = false; feedback((r && r.error) || 'Could not save the change.', false); return; }
+            tr.outerHTML = rowHtml(r.credit || c, !!r.changed);
+            if (tr.getAttribute('data-mid') && gid('bc-player-id').value === tr.getAttribute('data-mid')) loadAllowance();
+            feedback(r.changed ? 'Changed ' + esc(c.Persona) + '’s credit: ' + fmtCredits(r.credit.Credits) + ' ' + esc(r.credit.ClassName) + '.' : 'Nothing changed.', true);
+        }, 'json').fail(function () { save.disabled = false; feedback('Request failed.', false); });
+    }
+    gid('bc-tbody').addEventListener('keydown', function (e) {
+        var tr = e.target.closest ? e.target.closest('tr') : null;
+        if (!tr || !tr.querySelector('.bc-save')) return;
+        if (e.key === 'Enter') { e.preventDefault(); saveEdit(tr); }
+        else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(tr); }
+    });
     // A holder whose home kingdom is not this page's: say where they are from.
     function awayTag(c) {
         if (isOrk || !Cfg.kingdomId || !c.PlayerKingdomId || String(c.PlayerKingdomId) === String(Cfg.kingdomId)) return '';
@@ -452,6 +493,12 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
             : (Cfg.scopeType === 'kingdom' ? 'None of this Kingdom\'s players has this credit yet.' : 'Nobody has this credit yet.');
     }
     gid('bc-tbody').addEventListener('click', function (e) {
+        var hit = e.target.closest ? e.target.closest('.bc-edit, .bc-save, .bc-cancel') : null;
+        if (hit) {
+            var row = hit.closest('tr');
+            if (hit.classList.contains('bc-edit')) startEdit(row); else if (hit.classList.contains('bc-save')) saveEdit(row); else cancelEdit(row);
+            return;
+        }
         var btn = e.target.closest ? e.target.closest('.bc-revoke') : null;
         if (!btn) return;
         var tr = btn.closest('tr'), id = btn.getAttribute('data-id');
@@ -497,7 +544,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         var mid = gid('bc-player-id').value;
         if (!current || !mid) { setAmountBounds(null); return; }
         var cid = current.CategoryId;
-        jQuery.getJSON(base + 'allowance&CategoryId=' + cid + '&MundaneId=' + mid, function (r) {
+        jQuery.getJSON(base + 'allowance&CategoryId=' + cid + '&MundaneId=' + mid + '&' + scopeQS, function (r) {
             if (!current || current.CategoryId !== cid || gid('bc-player-id').value !== mid) return;
             if (r && r.status === 0) setAmountBounds(r.allowance);
         });
@@ -789,28 +836,29 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         var name = Cfg.scopeName || 'this Kingdom';
         var hint = gid('bc-outside-hint');
         hint.hidden = false;
-        hint.innerHTML = 'Players of other Kingdoms can be searched too (type their Kingdom\'s abbreviation first to narrow, e.g. <code>NB: name</code>). ' +
-            (isKingdom ? 'Only this Kingdom\'s own categories can go to them' : 'Only your Kingdom\'s own categories can go to them') +
+        hint.innerHTML = 'Anyone you could sign in here can be given a credit here, whichever park or Kingdom is their home. Players of other Kingdoms can be searched too (type their Kingdom\'s abbreviation first to narrow, e.g. <code>NB: name</code>); ' +
+            (isKingdom ? 'only this Kingdom\'s own categories can go to them' : 'only your Kingdom\'s own categories can go to them') +
             ', and only if their Kingdom accepts credits from other Kingdoms.';
         if (!isKingdom || !canDefine || !outside) return;
         var box = gid('bc-outside-toggle'), status = gid('bc-outside-status');
-        box.checked = !!outside.AcceptsOutside;
+        var on = !!outside.Effective;
+        box.checked = on;
         box.disabled = false;
+        var who = (outside.UpdatedByPersona ? ' · set by ' + esc(outside.UpdatedByPersona) : '') + (outside.UpdatedAt ? ' ' + esc(String(outside.UpdatedAt).slice(0, 10)) : '');
         var s = '';
-        if (outside.AcceptsOutside) {
-            s = 'On' + (outside.UpdatedByPersona ? ' · set by ' + esc(outside.UpdatedByPersona) : '') + (outside.UpdatedAt ? ' ' + esc(String(outside.UpdatedAt).slice(0, 10)) : '');
-        } else if (outside.InheritedFrom) {
-            s = 'Off here, but ' + esc(outside.InheritedFrom) + ' has it on, and that covers this principality.';
+        if (outside.Source === 'default') {
+            s = 'On by default — no one has changed it yet.';
+        } else if (outside.Source === 'inherited') {
+            s = (on ? 'On' : 'Off') + ' · inherited from ' + esc(outside.InheritedFrom) + who + '. This principality has not chosen for itself; flipping the switch here makes its own choice.';
         } else {
-            s = 'Off' + (outside.UpdatedByPersona ? ' · set by ' + esc(outside.UpdatedByPersona) : '') + (outside.UpdatedAt ? ' ' + esc(String(outside.UpdatedAt).slice(0, 10)) : '');
+            s = (on ? 'On' : 'Off') + who;
         }
         status.innerHTML = s;
         gid('bc-outside-desc').innerHTML =
-            '<p><strong>What it does.</strong> When this is on, another Kingdom that offers a bonus credit can grant that credit to players whose home is in ' + esc(name) + '. ' +
+            '<p><strong>What it does.</strong> Credits from other Kingdoms are accepted unless a Kingdom turns this off. While it is on, another Kingdom that offers a bonus credit can grant that credit to players whose home is in ' + esc(name) + '. ' +
             'Their Kingdom officers, park officers or granters do the granting, from their own Kingdom or park pages; the credit counts toward the player\'s class levels exactly like one of ours. It is never attendance.</p>' +
             '<p><strong>What it does not do.</strong> It does not let anyone here hand out other Kingdoms\' credits, and it does not change who can grant ours. Amtgard-wide credits are separate: those reach our players only when adopted on the Categories tab.</p>' +
-            '<p><strong>When it is off</strong> (the default), only ' + esc(name) + '\'s own credits and the Amtgard-wide ones it has adopted can reach its players. Turning it off later stops new grants from other Kingdoms; credits already given stay.' +
-            (outside.InheritedFrom ? ' Because ' + esc(outside.InheritedFrom) + ' has it on, its yes covers this principality regardless of the switch here.' : '') + '</p>';
+            '<p><strong>When it is off</strong>, only ' + esc(name) + '\'s own credits and the Amtgard-wide ones it has adopted can reach its players. Turning it off stops new grants from other Kingdoms; credits already given stay. A principality follows its parent Kingdom\'s choice until it makes its own here.</p>';
     }
     gid('bc-outside-toggle').addEventListener('change', function () {
         var box = this, want = box.checked;

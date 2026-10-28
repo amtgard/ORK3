@@ -49,6 +49,7 @@ $_actionLabels = [
 	'Unit::TransferOwnership'          => 'Unit Ownership Transferred',
 	'BonusCredit::grant'               => 'Bonus Credit Granted',
 	'BonusCredit::revoke'              => 'Bonus Credit Removed',
+	'BonusCredit::update'              => 'Bonus Credit Changed',
 	'BonusCredit::createCategory'      => 'Bonus Credit Category Defined',
 	'BonusCredit::archiveCategory'     => 'Bonus Credit Category Archived',
 	'BonusCredit::restoreCategory'     => 'Bonus Credit Category Restored',
@@ -440,6 +441,11 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$_cls  = ($_c['ClassName'] ?? '') !== '' ? ' (' . $_cr . ' ' . htmlspecialchars($_c['ClassName']) . ($_cr === '1' ? ' credit' : ' credits') . ')' : '';
 			$_note = $method === 'BonusCredit::revoke' && ($_c['RevokeNote'] ?? '') !== '' ? ': "' . htmlspecialchars(mb_strimwidth($_c['RevokeNote'], 0, 60, '…')) . '"' : '';
 			return ($method === 'BonusCredit::grant' ? 'Granted ' : 'Removed ') . $_what . $_cls . $_note;
+		case 'BonusCredit::update':
+			// Amount or class changed: prior is the row before, post the row after.
+			$_fc = function ($c) { $_v = rtrim(rtrim(number_format((float)($c['Credits'] ?? 0), 2, '.', ''), '0'), '.'); return $_v . ' ' . htmlspecialchars($c['ClassName'] ?? ''); };
+			$_what = ($a['CategoryName'] ?? $b['CategoryName'] ?? '') !== '' ? '“' . htmlspecialchars($a['CategoryName'] ?? $b['CategoryName']) . '”' : 'bonus credit';
+			return 'Changed ' . $_what . ': ' . $_fc($b) . ' → ' . $_fc($a);
 		case 'BonusCredit::adopt':
 		case 'BonusCredit::withdraw':
 			$_n = ($a['CategoryName'] ?? $b['CategoryName'] ?? '') !== '' ? '“' . htmlspecialchars($a['CategoryName'] ?? $b['CategoryName']) . '”' : 'an Amtgard-wide credit';
@@ -1307,6 +1313,23 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			}
 			if (!empty($_c['BonusCreditId'])) $html .= '<tr><td class="al-diff-field">Credit ID</td><td colspan="2">' . (int)$_c['BonusCreditId'] . '</td></tr>';
 			if (($_c['ScopeType'] ?? '') === 'kingdom' && !empty($_c['ScopeId'])) $html .= '<tr><td class="al-diff-field">Defined By</td><td colspan="2">' . _auditIdLink('kingdom', (int)$_c['ScopeId'], $kingdomMap + [(int)$_c['ScopeId'] => $_c['ScopeName'] ?? '']) . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'BonusCredit::update':
+			if (empty($a) || empty($b)) return '<em style="color:#a0aec0">No detail available.</em>';
+			$_fmtCr = function ($v) { return rtrim(rtrim(number_format((float)$v, 2, '.', ''), '0'), '.'); };
+			$_clsChanged = (int)($a['ClassId'] ?? 0) !== (int)($b['ClassId'] ?? 0);
+			$_crChanged  = abs((float)($a['Credits'] ?? 0) - (float)($b['Credits'] ?? 0)) > 0.0001;
+			$html = '<table class="al-diff-table"><tbody>';
+			$html .= '<tr><td class="al-diff-field">Category</td><td colspan="2">' . htmlspecialchars($a['CategoryName'] ?? '') . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', (int)($a['MundaneId'] ?? 0), $mundaneMap + [(int)($a['MundaneId'] ?? 0) => $a['Persona'] ?? '']) . '</td></tr>';
+			$html .= '<tr' . ($_clsChanged ? ' class="al-diff-changed"' : '') . '><td class="al-diff-field">Class</td><td colspan="2">' . htmlspecialchars($b['ClassName'] ?? '') . ($_clsChanged ? ' → ' . htmlspecialchars($a['ClassName'] ?? '') : '') . '</td></tr>';
+			$html .= '<tr' . ($_crChanged ? ' class="al-diff-changed"' : '') . '><td class="al-diff-field">Credits</td><td colspan="2">' . htmlspecialchars($_fmtCr($b['Credits'] ?? 0)) . ($_crChanged ? ' → ' . htmlspecialchars($_fmtCr($a['Credits'] ?? 0)) : '') . '</td></tr>';
+			if (!empty($a['Date'])) $html .= '<tr><td class="al-diff-field">Date</td><td colspan="2">' . htmlspecialchars($a['Date']) . '</td></tr>';
+			if (!empty($a['GrantedBy'])) $html .= '<tr><td class="al-diff-field">Granted By</td><td colspan="2">' . _auditIdLink('player', (int)$a['GrantedBy'], $mundaneMap + [(int)$a['GrantedBy'] => $a['GrantedByPersona'] ?? '']) . '</td></tr>';
+			if (!empty($p['by_whom_id'])) $html .= '<tr><td class="al-diff-field">Changed By</td><td colspan="2">' . _auditIdLink('player', (int)$p['by_whom_id'], $mundaneMap) . '</td></tr>';
+			if (!empty($a['BonusCreditId'])) $html .= '<tr><td class="al-diff-field">Credit ID</td><td colspan="2">' . (int)$a['BonusCreditId'] . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
