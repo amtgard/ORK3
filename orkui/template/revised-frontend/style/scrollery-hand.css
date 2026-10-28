@@ -178,27 +178,3 @@ html[data-theme="light"] .sc-hand {
         display: none !important;
     }
 }
-
-/* A checkbox in the print toolbar — the reason-lines switch. Sized and coloured off
-   the same tokens as the hand picker so the two read as one control group. */
-.sc-toolbar-check {
-    display: flex;
-    gap: 7px;
-    align-items: center;
-    white-space: nowrap;
-    cursor: pointer;
-    user-select: none;
-}
-
-.sc-toolbar-check input {
-    width: 15px;
-    height: 15px;
-    margin: 0;
-    cursor: pointer;
-}
-
-@media print {
-    .sc-toolbar-check {
-        display: none !important;
-    }
-}

@@ -6,12 +6,10 @@
    applied in place —
 
      * text fields write into the preview's own DOM
-     * the heraldry sliders write CSS custom properties, exactly as Arcanyst's
-       --heraldry-filter / --heraldry-transform did
      * the Customize Design colours write --knot-c1 / --knot-c2 on the knot and
        flood-color on the ribbon filter (its toggles and heraldry source re-fetch)
 
-   so dragging a slider or typing a name costs no round trip. With no Aurelia
+   so picking a colour or typing a name costs no round trip. With no Aurelia
    there is no shadow root either, so this is plain querySelector again.
    ========================================================================== */
 (function () {
@@ -60,7 +58,6 @@
         mount     = $('sc-mount'),
         stage     = $('sc-stage'),
         summaryEl = $('sc-summary'),
-        frame     = $('sc-frame'),
         errEl     = $('sc-err');
 
     if (!awardEl || !mount) { return; }
@@ -615,8 +612,7 @@
      * style on the border <svg>, and the only two rules that read them —
      * use.border-primary / use.border-secondary, in scrollery.css — resolve them
      * through that element. Nothing else in the certificate consumes either. So a
-     * palette change is two custom property writes, exactly like the heraldry
-     * sliders, and used to cost a POST that re-ran BuildScroll() and re-serialised
+     * palette change is two custom property writes, and used to cost a POST that re-ran BuildScroll() and re-serialised
      * the whole certificate to produce a page differing in two strings.
      *
      * The elements are found by the property rather than by a selector, deliberately:
@@ -751,8 +747,7 @@
      * The repaints. _knot.tpl carries the pair as --knot-c1 / --knot-c2 on every .sc-knot
      * layer (dragon draws two), and _text.tpl's ribbon filter takes its colour from the
      * flood-color of .sc-ribbon-flood — so a colour change is a handful of attribute
-     * writes on markup already in the preview, exactly like the heraldry sliders, and
-     * costs no request. With the box unticked there is nothing to find, and that is
+     * writes on markup already in the preview, and costs no request. With the box unticked there is nothing to find, and that is
      * the correct no-op: the colours still travel on the next reload() and the print.
      */
     function paintKnot() {
@@ -1078,7 +1073,6 @@
                 errEl.textContent = '';
                 mount.innerHTML = d.Html;
                 applyText();
-                applyHeraldry();
                 // The server drew the colours this request carried; the officer may
                 // have moved a picker since it left, so the live ones go back on.
                 paintKnot();
@@ -1249,21 +1243,6 @@
         fitPreview();
     }
 
-    /*
-     * The heraldry adjustments are pure custom-property writes on the frame — the
-     * same two properties Arcanyst published, and only the heraldry layer consumes
-     * them. Dragging a slider costs no network request.
-     */
-    var heraldry = { brightness: 1, contrast: 1, scale: 1, x: 0, y: 0 };
-
-    function applyHeraldry() {
-        if (!frame) { return; }
-        frame.style.setProperty('--heraldry-filter',
-            'brightness(' + heraldry.brightness + ') contrast(' + heraldry.contrast + ')');
-        frame.style.setProperty('--heraldry-transform',
-            'translateX(' + heraldry.x + '%) translateY(' + heraldry.y + '%) scale(' + heraldry.scale + ')');
-    }
-
     /* ---- recipient autocomplete ---------------------------------------- */
 
     var acTimer = null, OPEN = 'kn-ac-open';
@@ -1373,8 +1352,7 @@
     //
     // On a KNOT border — the case that actually matters, and the control an officer
     // exercises most — the change is two custom properties on an element already in
-    // the preview, so it is applied in place for the same reason the heraldry sliders
-    // are. It used to POST, re-run BuildScroll() and re-render the whole certificate
+    // the preview, so it is applied in place. It used to POST, re-run BuildScroll() and re-render the whole certificate
     // to redraw a page that differed in two colour strings; instant feedback is
     // what makes a design space explorable, and this was the slowest control on it.
     // The pair still travels on every later reload() and on the print URL through
@@ -1452,27 +1430,6 @@
         });
     }
     [useTheEl, useOfEl].forEach(function (el) { el.addEventListener('change', applyText); });
-    // Translate is a percentage; the rest are percentages of 1x.
-    function readControl(input) {
-        var key = input.dataset.heraldryControl,
-            raw = parseFloat(input.value);
-        heraldry[key] = (key === 'x' || key === 'y') ? raw : raw / 100;
-    }
-
-    document.querySelectorAll('[data-heraldry-control]').forEach(function (input) {
-        readControl(input);
-        input.addEventListener('input', function () { readControl(input); applyHeraldry(); });
-    });
-
-    document.querySelectorAll('[data-reset]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var input = document.querySelector('[data-heraldry-control="' + btn.dataset.reset + '"]');
-            if (!input) { return; }
-            input.value = input.dataset.default;
-            readControl(input);
-            applyHeraldry();
-        });
-    });
 
     // Guarded like every other element in this file. The header button can be absent
     // (a template variant, a permission-gated header), and an unguarded listener here
@@ -1593,6 +1550,5 @@
     // Filled here as well as on every reload(), so the live region carries a sentence
     // even when the very first preview fetch fails.
     syncSummary();
-    applyHeraldry();
     reload();
 }());

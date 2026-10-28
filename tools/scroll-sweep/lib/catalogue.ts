@@ -18,9 +18,12 @@ export type Choice = { awardId: number; title: string; minRank: number; maxRank:
  *
  * UNREACHABLE ORDERS ARE A RESULT, NOT AN ERROR. `hunter` points at award_id 6969,
  * which scroll-orders.php says in as many words is "Arcanyst's invention, not an ORK
- * award id" — no ork_kingdomaward row resolves to it, so hunter.tpl cannot be reached
- * as an ORDER by any route. Its border.png is still live as a custom-recipe border
- * and stage C sweeps that. Reporting it is the honest answer; ScrollSweepCoverageTest
+ * award id", so nothing resolves to it by id. Archery resolves by kingdomaward NAME
+ * (Scroll::OrderForAwardRow(), award_id 0 or Custom Award), so render reprints real
+ * archery grants as hunter and compose offers it in a kingdom whose catalogue has such
+ * a row (kingdom 10) — but kingdom 1's has none, so against the default catalogue it is
+ * unreachable here. Its border.png is still live as a custom-recipe border and stage C
+ * sweeps that. Reporting it is the honest answer; ScrollSweepCoverageTest
  * is what stops the list quietly growing.
  */
 export async function loadCatalogue(

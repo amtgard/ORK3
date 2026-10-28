@@ -181,7 +181,7 @@ class Controller_PlayerAjax extends Controller
             if (($r['Status'] ?? 1) == 0) {
                 $awards_id = (int)($r['AwardsId'] ?? 0);
                 $this->load_model('Scrollery');
-                $printable = $awards_id > 0 && $this->Scrollery->award_is_printable($awards_id);
+                $printable = $awards_id > 0 && $this->Scrollery->award_is_printable($awards_id, (int)$this->session->user_id);
                 echo json_encode(['status' => 0, 'awardsId' => $awards_id, 'printable' => $printable]);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);

@@ -158,7 +158,7 @@ final class PlayerAjaxAddAwardTest extends TestCase
 
         $scrollery = new Model_Scrollery();
         $this->assertTrue(
-            $scrollery->award_is_printable($awardsId),
+            $scrollery->award_is_printable($awardsId, (int) $grantor['mundane_id']),
             'A fresh grant of a ladder award (21, Order of the Rose) must be printable.'
         );
     }

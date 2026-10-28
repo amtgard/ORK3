@@ -4,9 +4,13 @@
 # which `npm install` sets through package.json's "prepare" script, or
 # `sh bin/setup-dev-hooks.sh`).
 #
-# This is the repo's ONLY automated gate that can actually fail. .githooks/pre-commit
-# is deliberately advisory — it formats and never blocks — and there is no
-# .github/workflows/. So the Scrollery asset guard lives here, where it runs.
+# This is the repo's only LOCAL gate that can actually fail. .githooks/pre-commit
+# is deliberately advisory — it formats and never blocks. So the Scrollery asset
+# guard lives here, where it runs before anything leaves the machine. Its PR-side
+# twin is .github/workflows/scroll-guards.yml, which runs the same
+# bin/check-scroll-assets.sh (with --require-db, plus the rendition manifest check and
+# a PHP 8.1 parse) on pull requests that touch the scroll paths and on pushes to
+# master — the half that catches a contributor whose hooks are not installed.
 #
 # It runs only when the push touches something the guard is about: the scroll art,
 # the recipe vocabulary, class.Scroll.php, the certificate partials or the guard's own

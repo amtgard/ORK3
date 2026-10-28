@@ -41,7 +41,7 @@ A three-button segmented bar: **Kingdom | Park | Persona**.
   - Any entity with no heraldry uploaded.
 - **Effect.** Choosing a button changes the top-centre heraldry in the live preview and on the
   print.
-- **Adjustments still apply.** The existing "Heraldry adjustments" sliders keep working on
+- **Adjustments still apply.** *(Superseded 2026-10-27: the "Heraldry adjustments" sliders were removed from every Scrollery surface — heraldry is sized dynamically.)* The existing "Heraldry adjustments" sliders keep working on
   whichever arms are shown.
 - **Fallback.** If the default source has no heraldry, behaviour is unchanged from today: no arms
   drawn. The bar does not auto-jump to another source.

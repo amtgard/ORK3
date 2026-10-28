@@ -111,7 +111,7 @@
     - `Note` = `RecommendationVisibility::publishable_citation($line['PublicComment'], $line['RecReason'], $line['RecMonarchyOnly'])`
     - `GivenBy` = `$givenBy`
     - `ParkId`, `KingdomId`, `ParkName` and `KingdomName` from `$court`, the way `compose()` fills them for park and kingdom scope
-  - Route `Scrollery/court/{courtId}` with `&lines=1,2,3`:
+  - Route `Scrollery/court/{courtId}` with `&courtLines=1,2,3` (not `&lines=`, which the render page owns as its Reason-lines switch):
     - no session → `Login/login/Scrollery/court/{id}`
     - fails `can_manage` → `deny()`
     - nothing printable → `deny()` naming the first skip reason
@@ -137,7 +137,7 @@
 - [ ] **Step 3: Run them and confirm they fail.** Run `php vendor/bin/phpunit --filter ScrolleryCourt`. Expected: FAIL (undefined method).
 - [ ] **Step 4: Implement** the model methods, the route, the endpoint and the `$Skipped` notice. Reuse `possessive_pronoun_for_player`, `heraldry_url`/`issuer_title` (private, same class) and `scope_context` rather than re-deriving them. Resolve a line's choice by `KingdomAwardId` from the court kingdom's `printable_award_choices()`; no choice means "can't print". Call `Scroll::BuildScroll()`, and treat a `trim($scroll['title']) === ''` result as "no name". Call `getCourtGiverOptions` once per run, not once per line.
 - [ ] **Step 5: Run them and confirm they pass.** Run `php vendor/bin/phpunit --filter Scroll`, then `php vendor/bin/phpunit --filter Court`. Expected: all PASS.
-- [ ] **Step 6: Check the route with curl.** Log in under the bypass (`heraldsbridge`, one cookie jar) and set a local court line to 3. `curl -b jar 'http://localhost:19080/orkui/index.php?Route=Scrollery/court/<id>&lines=<caId>'` returns HTML with one certificate and no ORK nav. Logged out, the same request gives a 302 to Login.
+- [ ] **Step 6: Check the route with curl.** Log in under the bypass (`heraldsbridge`, one cookie jar) and set a local court line to 3. `curl -b jar 'http://localhost:19080/orkui/index.php?Route=Scrollery/court/<id>&courtLines=<caId>'` returns HTML with one certificate and no ORK nav. Logged out, the same request gives a 302 to Login.
 - [ ] **Step 7: Commit.** Use the pathspec for the six files: `Enhancement: Scrollery — print a court's Scrollery Print lines in one run, with a planner preflight`.
 
 ### Task 3: Planner chips and dropdown
@@ -196,7 +196,7 @@
 **Interfaces:**
 - Consumes:
   - `window.cpScrolleryCount()` and the chip re-render (Task 3)
-  - `scrollery_print_plan` and the route `Scrollery/court/{courtId}&lines=` (Task 2)
+  - `scrollery_print_plan` and the route `Scrollery/court/{courtId}&courtLines=` (Task 2)
   - `complete_printed_scrolls` (Task 1)
 
 - [ ] **Step 1: Button.** Add `Print Scrollery scrolls (N)` (icon `fa-print`) to the list toolbar for any court that isn't complete.
@@ -204,7 +204,7 @@
   - N updates from every chip change and every heartbeat.
 - [ ] **Step 2: Print flow.** On click, POST `scrollery_print_plan`.
   - If `Printable` is empty, `cpAlert` lists the `Skipped` reasons and nothing opens.
-  - Otherwise, open `UIR + 'Scrollery/court/' + courtId + '&lines=' + ids.join(',')` in a new tab, synchronously on the click so it isn't popup-blocked. Open a blank tab first and set its location when the preflight resolves.
+  - Otherwise, open `UIR + 'Scrollery/court/' + courtId + '&courtLines=' + ids.join(',')` in a new tab, synchronously on the click so it isn't popup-blocked. Open a blank tab first and set its location when the preflight resolves.
   - Store `Printable` (ids and `RowVersion`s) in memory as the pending run.
 - [ ] **Step 3: The bar.**
   - It reads `Printed N Scrollery scrolls.`, then `Set these scrolls to complete?` (primary) and `Not yet`.

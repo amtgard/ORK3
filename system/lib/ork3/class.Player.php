@@ -1066,8 +1066,12 @@ class Player extends Ork3
      * A bulk render resolved its recipients one yapo find() at a time — 200
      * round trips for a full run. This is the same five fields for every id at
      * once, keyed by mundane_id, and returns the same
-     * shape GetScrollRecipient() returns per row, minus its HasHeraldry and ParkId
-     * (which the bulk callers do not need) and plus Suspended/Active.
+     * shape GetScrollRecipient() returns per row, minus its ParkId (which the bulk
+     * callers do not need) and plus Suspended/Active.
+     *
+     * HasHeraldry rides along so the print page's run-level heraldry choice can tell
+     * which recipients have arms of their own from this one statement, rather than
+     * one find() per certificate. NOT NULL in ork_mundane.
      *
      * Two columns beyond the certificate's own needs come back as well:
      * `suspended` and `active`. A suspended member's past award is still theirs
@@ -1086,7 +1090,7 @@ class Player extends Ork3
      *
      * @param array<int, mixed> $mundaneIds
      * @return array<int, array{MundaneId:int, Persona:string, PronounId:int, PronounCustom:string,
-     *                          PronounFreetext:string, Suspended:int, Active:int}>
+     *                          PronounFreetext:string, HasHeraldry:int, Suspended:int, Active:int}>
      */
     public function GetScrollRecipients(array $mundaneIds): array
     {
@@ -1104,7 +1108,7 @@ class Player extends Ork3
 
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT mundane_id, persona, pronoun_id, pronoun_custom, suspended, active'
+            'SELECT mundane_id, persona, pronoun_id, pronoun_custom, has_heraldry, suspended, active'
             . ($hasFreetext ? ', pronoun_freetext' : '')
             . ' FROM ' . DB_PREFIX . 'mundane
               WHERE mundane_id IN (' . implode(',', array_keys($ids)) . ')'
@@ -1122,6 +1126,7 @@ class Player extends Ork3
                 'PronounId' => (int) $rs->pronoun_id,
                 'PronounCustom' => (string) $rs->pronoun_custom,
                 'PronounFreetext' => $hasFreetext ? trim((string) $rs->pronoun_freetext) : '',
+                'HasHeraldry' => (int) $rs->has_heraldry,
                 'Suspended' => (int) $rs->suspended,
                 'Active' => (int) $rs->active,
             ];

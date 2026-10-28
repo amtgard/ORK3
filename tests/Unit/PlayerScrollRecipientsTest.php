@@ -93,7 +93,9 @@ final class PlayerScrollRecipientsTest extends TestCase
         $single = $this->player->GetScrollRecipient(self::A);
         $batch  = $this->player->GetScrollRecipients([self::A])[self::A];
 
-        foreach (['MundaneId', 'Persona', 'PronounId', 'PronounCustom', 'PronounFreetext'] as $key) {
+        // HasHeraldry too: the print page's run-level heraldry choice reads it off the
+        // batch where the composer reads it off the single row.
+        foreach (['MundaneId', 'Persona', 'PronounId', 'PronounCustom', 'PronounFreetext', 'HasHeraldry'] as $key) {
             $this->assertArrayHasKey($key, $batch, $key . ' is missing from the batch shape');
             $this->assertSame($single[$key], $batch[$key], $key . ' disagrees between the two readers');
         }
@@ -116,6 +118,24 @@ final class PlayerScrollRecipientsTest extends TestCase
         $this->assertSame(1, $rows[self::A]['Active']);
         $this->assertSame(0, $rows[self::B]['Suspended']);
         $this->assertSame(0, $rows[self::B]['Active']);
+    }
+
+    /**
+     * The arms flag is carried, so a run-level "Persona arms" choice on the print page
+     * knows which recipients have arms without a find() per certificate.
+     */
+    public function testTheHeraldryFlagIsCarried(): void
+    {
+        global $DB;
+        $this->seed(self::A, 'Arms Bearer', 5, 0, 1);
+        $this->seed(self::B, 'No Arms', 5, 0, 1);
+        $DB->Clear();
+        $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET has_heraldry = 1 WHERE mundane_id = ' . self::A);
+
+        $rows = $this->player->GetScrollRecipients([self::A, self::B]);
+
+        $this->assertSame(1, $rows[self::A]['HasHeraldry']);
+        $this->assertSame(0, $rows[self::B]['HasHeraldry']);
     }
 
     /**

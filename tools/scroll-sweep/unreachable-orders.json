@@ -1,7 +1,7 @@
 {
-  "_comment": "Order partials that no route can reach, with the reason. The sweep cannot cover these; ScrollSweepCoverageTest requires each to be declared here rather than silently skipped.",
+  "_comment": "Order partials the main sweep cannot reach, with the reason. The sweep composes against one kingdom's catalogue (ORK3_SWEEP_KINGDOM, default 1), so 'unreachable' here means unreachable from Scrollery/compose against that catalogue — not from every route. ScrollSweepCoverageTest requires each to be declared here rather than silently skipped.",
   "unreachable": ["hunter"],
   "reasons": {
-    "hunter": "award_id 6969 is Arcanyst's invention and is not an ORK award id — system/lib/ork3/data/scroll-orders.php says so in as many words. No ork_kingdomaward row can resolve to it (verified against kingdom 1, which carries all sixteen other orders), so Scrollery/compose and Scrollery/render can never select hunter.tpl as an ORDER. hunter/border.png IS live as a custom-recipe border and stage C sweeps it."
+    "hunter": "hunter's award_id 6969 is Arcanyst's invention, not an ORK award id (system/lib/ork3/data/scroll-orders.php says so), so no row resolves to hunter BY ID. Archery resolves BY NAME instead: Scroll::OrderForAwardRow() matches ARCHERY_NAMES on rows whose award_id is 0 or Custom Award, so real archery grants DO reprint as hunter through Scrollery/render, and compose offers it in any kingdom whose catalogue carries such a row (kingdom 10 as 'Order of the Archer', kingdom 20 as 'Order of the Hunter' — combo150 drives it on kingdom 10). Kingdom 1, the sweep's default catalogue, carries none, so the main sweep cannot compose it. hunter/border.png is also live as a custom-recipe border and stage C sweeps that."
   }
 }

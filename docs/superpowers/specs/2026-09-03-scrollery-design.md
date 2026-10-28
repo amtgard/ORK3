@@ -262,6 +262,7 @@ Reusing the existing checks; no new concepts.
 
 ### 6. Live preview
 
+*(2026-10-27: the heraldry sliders and their `--heraldry-*` properties were removed; heraldry is sized dynamically.)*
 Heraldry sliders and the issuer / date / given-by fields write CSS custom properties and
 text content directly in `scrollery.js`, exactly as `--heraldry-filter` and
 `--heraldry-transform` already work — no round trip on a slider drag. Only order, rank or

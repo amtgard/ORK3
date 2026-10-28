@@ -259,6 +259,184 @@ return [
                 'Grenze-SemiBoldItalic.woff2',
             ],
         ],
+
+        /*
+         * Fifteen more over the same Grenze companion — see scrollery.css section
+         * 1a-iv for their coverage table, and for the four first picks that were
+         * swapped out and why.
+         *
+         * Period hands first, in the order an officer would scan them: two book
+         * faces, two pen hands, two blackletters, a decorative display, then the two
+         * capitals-only faces. The themed hands follow.
+         */
+        'fell' => [
+            'label'  => 'IM Fell English Scroll Font',
+            'family' => 'IM Fell English',
+            'file'   => 'IMFellEnglish-Regular.woff2',
+            'fonts' => [
+                'IMFellEnglish-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'luxurious' => [
+            'label'  => 'Luxurious Roman Scroll Font',
+            'family' => 'Luxurious Roman',
+            'file'   => 'LuxuriousRoman-Regular.woff2',
+            'fonts' => [
+                'LuxuriousRoman-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'eagle' => [
+            'label'  => 'Eagle Lake Scroll Font',
+            'family' => 'Eagle Lake',
+            'file'   => 'EagleLake-Regular.woff2',
+            'fonts' => [
+                'EagleLake-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'kings' => [
+            'label'  => 'Kings Scroll Font',
+            'family' => 'Kings',
+            'file'   => 'Kings-Regular.woff2',
+            'fonts' => [
+                'Kings-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'texturina' => [
+            'label'  => 'Texturina Scroll Font',
+            'family' => 'Texturina',
+            'file'   => 'Texturina-Regular.woff2',
+            'fonts' => [
+                'Texturina-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'rocker' => [
+            'label'  => 'New Rocker Scroll Font',
+            'family' => 'New Rocker',
+            'file'   => 'NewRocker-Regular.woff2',
+            'fonts' => [
+                'NewRocker-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'amarante' => [
+            'label'  => 'Amarante Scroll Font',
+            'family' => 'Amarante',
+            'file'   => 'Amarante-Regular.woff2',
+            'fonts' => [
+                'Amarante-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'decorative' => [
+            'label'  => 'Cinzel Decorative Scroll Font',
+            'family' => 'Cinzel Decorative',
+            'file'   => 'CinzelDecorative-Regular.woff2',
+            'fonts' => [
+                'CinzelDecorative-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'marcellus' => [
+            'label'  => 'Marcellus SC Scroll Font',
+            'family' => 'Marcellus SC',
+            'file'   => 'MarcellusSC-Regular.woff2',
+            'fonts' => [
+                'MarcellusSC-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+
+        /* The themed hands — a certificate for a particular kind of event rather
+           than for the order. Celebration first, then by how narrow the occasion is. */
+        'berkshire' => [
+            'label'  => 'Berkshire Swash Scroll Font',
+            'family' => 'Berkshire Swash',
+            'file'   => 'BerkshireSwash-Regular.woff2',
+            'fonts' => [
+                'BerkshireSwash-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'macondo' => [
+            'label'  => 'Macondo Scroll Font',
+            'family' => 'Macondo',
+            'file'   => 'Macondo-Regular.woff2',
+            'fonts' => [
+                'Macondo-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'candy' => [
+            'label'  => 'Emilys Candy Scroll Font',
+            'family' => 'Emilys Candy',
+            'file'   => 'EmilysCandy-Regular.woff2',
+            'fonts' => [
+                'EmilysCandy-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'mystery' => [
+            'label'  => 'Mystery Quest Scroll Font',
+            'family' => 'Mystery Quest',
+            'file'   => 'MysteryQuest-Regular.woff2',
+            'fonts' => [
+                'MysteryQuest-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'rye' => [
+            'label'  => 'Rye Scroll Font',
+            'family' => 'Rye',
+            'file'   => 'Rye-Regular.woff2',
+            'fonts' => [
+                'Rye-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
+        'creepster' => [
+            'label'  => 'Creepster Scroll Font',
+            'family' => 'Creepster',
+            'file'   => 'Creepster-Regular.woff2',
+            'fonts' => [
+                'Creepster-Regular.woff2',
+                'Grenze-Regular.woff2',
+                'Grenze-Italic.woff2',
+                'Grenze-SemiBoldItalic.woff2',
+            ],
+        ],
     ],
 
     /*

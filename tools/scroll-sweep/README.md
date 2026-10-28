@@ -43,7 +43,7 @@ is behaving oddly; they are fast and they check the things everything else rests
 `ORK3_SWEEP_DRIVER=fixture` renders each case through `bin/scroll-render-fixtures.php`
 (`Scroll::BuildScroll()` plus the render template, one `docker exec` per shard) instead of
 fetching `Scrollery/compose`. It needs no login and writes no print-log rows, and it reaches
-`hunter`, which no composer route can. It draws a flat dark square in the heraldry slot as a
+`hunter`, which compose cannot against the default kingdom 1 catalogue. It draws a flat dark square in the heraldry slot as a
 stand-in for the kingdom's device, so a fixture figure is not a compose figure; compare
 fixture runs with fixture runs. It cannot render the composer preview, `trim` or `lines=0`,
 and refuses those cases rather than rendering their plain twins; the sweep drops them and
@@ -259,10 +259,15 @@ files and writes `axes.json`; `lib/cases.ts` enumerates from it. So:
 - **a new text block in `_text.tpl`** — add it to `BLOCK_SEL` in `lib/isolate.ts`, or
   text-on-text will not see it. It will be stamped `data-sweep-orphan` and hidden rather
   than silently faking a collision, which is the safe failure, but it will not be measured.
-- **an order no route can reach** — declare it in `unreachable-orders.json` with the
-  reason. `hunter` is there: its `award_id` 6969 is not an ORK award id, so no
-  `ork_kingdomaward` row resolves to it and `hunter.tpl` cannot be composed. Its
-  `border.png` is live as a custom recipe border and stage C does sweep that.
+- **an order the sweep's catalogue cannot reach** — declare it in `unreachable-orders.json`
+  with the reason. `hunter` is there: its `award_id` 6969 is not an ORK award id, so nothing
+  resolves to it by id. Archery resolves by kingdomaward NAME instead
+  (`Scroll::OrderForAwardRow()`, on rows with award_id 0 or Custom Award), so real archery
+  grants do reprint as `hunter` through `Scrollery/render`, and compose offers it in kingdoms
+  whose catalogue has such a row (kingdom 10's "Order of the Archer", which the combo150
+  harness drives). Kingdom 1, the default `ORK3_SWEEP_KINGDOM`, has none, so the main sweep
+  cannot compose it. Its `border.png` is also live as a custom recipe border and stage C
+  sweeps that.
 
 ## What it costs
 

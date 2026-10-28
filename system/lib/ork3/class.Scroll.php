@@ -781,6 +781,65 @@ class Scroll extends Ork3
         return $scopeType === 'park' ? 'park' : 'kingdom';
     }
 
+    /** The print page's run-level heraldry choice that means "as it always drew". */
+    public const HERALDRY_AUTO = 'auto';
+
+    /**
+     * The order a run-level heraldry choice falls back through when a scroll has no
+     * arms from the chosen source: the issuing park, then its kingdom, then the
+     * recipient's own arms — the chosen source itself skipped.
+     *
+     * @var string[]
+     */
+    public const HERALDRY_FALLBACK_ORDER = ['park', 'kingdom', 'persona'];
+
+    /**
+     * The print page's &heraldry= — a run-level choice of whose arms every certificate
+     * on the page draws. Allowlist: 'auto' or one of HERALDRY_SOURCES, and anything
+     * else (absent, empty, a stranger) is 'auto', which draws exactly what the page
+     * drew before the choice existed.
+     */
+    public static function NormaliseRunHeraldry(?string $raw): string
+    {
+        $raw = strtolower(trim((string) $raw));
+
+        return in_array($raw, self::HERALDRY_SOURCES, true) ? $raw : self::HERALDRY_AUTO;
+    }
+
+    /**
+     * Which source one certificate in a run draws, or '' for none.
+     *
+     * 'auto' walks $autoOrder — the surface's own legacy order, which differs by
+     * surface: a reprint has always drawn its park's arms and then its kingdom's
+     * (['park', 'kingdom']), a court run only its court's own (['park'] or
+     * ['kingdom']). Passing it in keeps 'auto' byte-for-byte what each surface drew.
+     *
+     * A chosen source is tried first and then HERALDRY_FALLBACK_ORDER without it, so
+     * a run set to Persona arms still puts SOME arms on the scroll of a recipient who
+     * has none. Only when no source has arms does the certificate draw none.
+     *
+     * Pure: availability is the caller's lookup, so the rule is pinned without a
+     * database (ScrollRunHeraldryTest).
+     *
+     * @param array{kingdom?:bool,park?:bool,persona?:bool} $available
+     * @param string[] $autoOrder
+     */
+    public static function ResolveRunHeraldrySource(string $choice, array $available, array $autoOrder): string
+    {
+        $choice = self::NormaliseRunHeraldry($choice);
+        $order  = $choice === self::HERALDRY_AUTO
+            ? $autoOrder
+            : array_merge([$choice], array_diff(self::HERALDRY_FALLBACK_ORDER, [$choice]));
+
+        foreach ($order as $source) {
+            if (in_array($source, self::HERALDRY_SOURCES, true) && !empty($available[$source])) {
+                return $source;
+            }
+        }
+
+        return '';
+    }
+
     /** @var array<string, array>|null */
     private static ?array $customBorderRules = null;
 

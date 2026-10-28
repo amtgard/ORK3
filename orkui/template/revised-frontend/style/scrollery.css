@@ -249,6 +249,180 @@
 }
 
 /* --------------------------------------------------------------------------
+   1a-iv. Fifteen more display faces: nine period hands, six themed ones.
+
+   Same terms as 1a-iii — SIL OFL 1.1, self-hosted, display face only, Grenze as
+   the companion — and measured the same way, against the 169 personas with a
+   non-ASCII character today. That list has moved since 1a-iii was written:
+   re-run now, Uncial and Fondamento break 2 rather than 3 and Metamorphous 1
+   rather than 2. The method did not change; the personas did.
+
+                                         glyphs  Latin-1  Lat Ext-A  breaks  kern   KB
+     IM Fell English    17th-c. book face   372   100%      70.3%      1    kern*  91
+     Luxurious Roman    calligraphic roman  647   100%      96.9%      1    GPOS   57
+     Eagle Lake         calligraphic italic 370   100%      99.2%      2    GPOS   35
+     Kings              formal calligraphy 1009   100%      96.9%      1    GPOS   84
+     Texturina          readable textura    722   100%      99.2%      1    GPOS   32
+     New Rocker         heavy blackletter   442   100%      99.2%      1    GPOS   44
+     Amarante           decorative display  424   100%      98.4%      1    none   36
+     Cinzel Decorative  swash capitals      353    99%      80.5%      1    GPOS   20
+     Marcellus SC       Roman small caps    370   100%      99.2%      2    GPOS   19
+     Berkshire Swash    celebratory swash   379   100%      99.2%      2    GPOS   23
+     Macondo            festival            311  99.5%      21.9%      7    GPOS   16
+     Emilys Candy       midwinter           231    99%       7.8%      7    none   86
+     Mystery Quest      storybook           229   100%       7.8%      7    none   23
+     Rye                wood-type western   271   100%      18.0%     12    none   46
+     Creepster          horror              230  99.5%       7.8%      7    kern*  29
+
+     * a legacy `kern` table, not GPOS. HarfBuzz applies it when GPOS is absent.
+
+   Every period-hand break is one of the same two personas — the `ḩ`/`ǧ` in one
+   and the `ș` in another — which only EB Garamond draws. The themed six stop at
+   Latin-1 plus a handful of Extended-A, so `Hāno`, `Mōja` and (in Rye) `Juna
+   Šumski` print the marked letter in Grenze through the fallback in section 3.
+   That is acceptable for a hand an officer picks for the occasion, and is why
+   none of them is a default or a fallback; it would not be for a period hand.
+
+   Four first picks failed and were swapped for a face in the same role:
+     Almendra -> Luxurious Roman. Almendra's default-on `liga` turns "ardilla"
+       into a drawn squirrel: Maguntia's rlig problem, as an easter egg.
+     Lancelot -> Amarante. 4.7% of Latin Extended-A; 10 broken personas.
+     Henny Penny -> Mystery Quest. Its `liga` fuses ss, tt, ee, oo, ll, nn and th
+       by default (`Moss` prints with an ss that reads as two swirls), and it
+       breaks 12.
+     Mountains of Christmas -> Emilys Candy. Apache 2.0, not OFL.
+
+   IM Fell English was rejected in 1a as a TEXT pair — both styles, 186 KB, no
+   oldstyle figures. As a display face it needs one style and none of its
+   figures. Its `liga` includes long-s ligatures, which fire only on a ſ typed
+   into the name.
+
+   Texturina ships only as a variable font; this is a static instance cut at
+   wght 400, opsz 72 — the optical size a browser would pick for itself at the
+   size a name is set. No face here ships a non-Latin script, so none is subset.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+    font-family: 'IM Fell English';
+    src: url('fonts/IMFellEnglish-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Luxurious Roman';
+    src: url('fonts/LuxuriousRoman-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Eagle Lake';
+    src: url('fonts/EagleLake-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Kings';
+    src: url('fonts/Kings-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Texturina';
+    src: url('fonts/Texturina-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'New Rocker';
+    src: url('fonts/NewRocker-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Amarante';
+    src: url('fonts/Amarante-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Cinzel Decorative';
+    src: url('fonts/CinzelDecorative-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Marcellus SC';
+    src: url('fonts/MarcellusSC-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Berkshire Swash';
+    src: url('fonts/BerkshireSwash-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Macondo';
+    src: url('fonts/Macondo-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Emilys Candy';
+    src: url('fonts/EmilysCandy-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Mystery Quest';
+    src: url('fonts/MysteryQuest-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Rye';
+    src: url('fonts/Rye-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Creepster';
+    src: url('fonts/Creepster-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+/* --------------------------------------------------------------------------
    1a-ii. The hand: a per-print typeface choice.
 
    Four tokens, set once per certificate, consumed by the type rules in section 3.
@@ -386,6 +560,145 @@
     --sc-display-face: "Fondamento";
     --sc-text-face: "Grenze";
     --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* The fifteen from section 1a-iv, on the same Grenze companion and so with the same
+   --sc-figures. Tracking is gated as above: 0 where the face carries no kerning,
+   positive for the capitals-only faces, and tightened only on a kerned roman or
+   blackletter — never on a pen hand whose strokes reach for the next letter. */
+
+/* Printed rather than written: a 17th-century book face cut from the Fell types,
+   for a certificate that should read like an entry in a chronicle. Tracked like EB
+   Garamond, the other book face at display size; its kerning is a legacy `kern`
+   table, which Chrome applies all the same. */
+[data-scroll-face="fell"] .award-template {
+    --sc-display-face: "IM Fell English";
+    --sc-text-face: "Grenze";
+    --sc-display-track: -0.01em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* A pen-made roman with a fantasy lean — the book hand Almendra was picked to be.
+   Kerned and upright, so tightened like the other romans. */
+[data-scroll-face="luxurious"] .award-template {
+    --sc-display-face: "Luxurious Roman";
+    --sc-text-face: "Grenze";
+    --sc-display-track: -0.01em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* A calligraphic italic. Not tightened, for the Fondamento reason: the exit strokes
+   reach for the next letter, and negative tracking overlaps them. */
+[data-scroll-face="eagle"] .award-template {
+    --sc-display-face: "Eagle Lake";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Formal calligraphy with long entry flourishes on the capitals. Not tightened: the
+   flourishes already sit over the neighbouring letter. */
+[data-scroll-face="kings"] .award-template {
+    --sc-display-face: "Kings";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* A textura that can still be read at a glance — lighter than Grenze Gotisch and far
+   more open. Tightened for the same reason Grenze Gotisch is. */
+[data-scroll-face="texturina"] .award-template {
+    --sc-display-face: "Texturina";
+    --sc-text-face: "Grenze";
+    --sc-display-track: -0.01em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* The heavy blackletter: for a war, a battle game, a warlord. Tightened like the
+   other blackletters; the colour is the point. */
+[data-scroll-face="rocker"] .award-template {
+    --sc-display-face: "New Rocker";
+    --sc-text-face: "Grenze";
+    --sc-display-track: -0.01em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Decorative display with a medieval lean, and no kerning at all, so not tightened;
+   see MedievalSharp. */
+[data-scroll-face="amarante"] .award-template {
+    --sc-display-face: "Amarante";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Cinzel with swash capitals — the hand for a knighthood or a peerage. Capitals only
+   like Cinzel, so letterspaced like Cinzel. */
+[data-scroll-face="decorative"] .award-template {
+    --sc-display-face: "Cinzel Decorative";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0.02em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Roman inscriptional small caps, for a classical or Roman-themed court. Capitals,
+   so letterspaced positively. */
+[data-scroll-face="marcellus"] .award-template {
+    --sc-display-face: "Marcellus SC";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0.02em;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Celebratory swash, for a coronation or a celebration. Not tightened: the swashes on
+   its capitals already reach into the next letter. */
+[data-scroll-face="berkshire"] .award-template {
+    --sc-display-face: "Berkshire Swash";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Festive and hand-cut, for a fair or a feast day. Its uneven spacing is part of the
+   look, so it is set as drawn. */
+[data-scroll-face="macondo"] .award-template {
+    --sc-display-face: "Macondo";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Curled and sweet, for a midwinter feast. No kerning; not tightened. */
+[data-scroll-face="candy"] .award-template {
+    --sc-display-face: "Emilys Candy";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* A storybook hand for a youth or children's event. No kerning; not tightened. */
+[data-scroll-face="mystery"] .award-template {
+    --sc-display-face: "Mystery Quest";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Wood-type western, for a frontier-themed event. No kerning; not tightened. */
+[data-scroll-face="rye"] .award-template {
+    --sc-display-face: "Rye";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0;
+    --sc-figures: oldstyle-nums;
+}
+
+/* Horror, for a Halloween or haunted event. Capitals only, so letterspaced like the
+   other caps faces — which also gives the drips room. */
+[data-scroll-face="creepster"] .award-template {
+    --sc-display-face: "Creepster";
+    --sc-text-face: "Grenze";
+    --sc-display-track: 0.02em;
     --sc-figures: oldstyle-nums;
 }
 
@@ -1771,6 +2084,9 @@ section.SignAndDate {
     --sc-notice-bg: #fff8e1;
     --sc-notice-line: #b58900;
     --sc-notice-ink: #5b4600;
+    --sc-scrim: rgba(20, 24, 29, 0.28);
+    --sc-shadow: 0 18px 48px rgba(20, 24, 29, 0.22);
+    --sc-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1786,6 +2102,9 @@ section.SignAndDate {
         --sc-notice-bg: #2a2416;
         --sc-notice-line: #c9a227;
         --sc-notice-ink: #f0e2b8;
+        --sc-scrim: rgba(0, 0, 0, 0.5);
+        --sc-shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
+        --sc-scheme: dark;
     }
 }
 
@@ -1801,6 +2120,9 @@ section.SignAndDate {
     --sc-notice-bg: #2a2416;
     --sc-notice-line: #c9a227;
     --sc-notice-ink: #f0e2b8;
+    --sc-scrim: rgba(0, 0, 0, 0.5);
+    --sc-shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
+    --sc-scheme: dark;
 }
 
 .scroll-surface {
@@ -1834,6 +2156,11 @@ section.SignAndDate {
 }
 
 .sc-toolbar-title {
+    /* min-width: 0 is what lets a long title ellipsize instead of pushing the three
+       buttons off a narrow window — a flex item will not shrink below its content
+       otherwise. */
+    flex: 1 1 auto;
+    min-width: 0;
     margin-right: auto;
     font-weight: 600;
     color: var(--sc-ink-dim);
@@ -1842,16 +2169,14 @@ section.SignAndDate {
     white-space: nowrap;
 }
 
-/* The hand picker. A labelled control rather than a bare <select>: "Cinzel — Roman
-   capitals" in a toolbar with a Back and a Print button needs to say what it is. */
-.sc-toolbar-field {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    color: var(--sc-ink-dim);
+.sc-toolbar .sc-btn {
+    flex: 0 0 auto;
     white-space: nowrap;
 }
 
+/* The heading picker in the options sheet. The hand and signature pickers are
+   scrollery-hand.css's listbox; this one stays a native <select> (its options are
+   words, not specimens) and is sized to match them. */
 .sc-select {
     /* Wide enough for "Cormorant Unicase Scroll Font" set in Cormorant Unicase — the
        longest label in the widest of the ten faces. The labels are specimens now, so
@@ -1898,6 +2223,321 @@ section.SignAndDate {
 .sc-btn-primary:focus-visible {
     background: var(--sc-accent);
     filter: brightness(1.12);
+}
+
+/* Phone widths: the module's own 640px break (Scrollery_bulk, Scrollery_mine). Three
+   buttons fit one row; they only need to be tappable. Below 420px the title gives way
+   and "Configure Scroll Options" says "Options" (its accessible name stays whole). */
+@media (max-width: 640px) {
+    .sc-toolbar {
+        gap: 8px;
+        padding: 8px 12px;
+    }
+
+    .sc-toolbar .sc-btn {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 14px;
+    }
+}
+
+@media (max-width: 420px) {
+    .sc-toolbar-title,
+    .sc-btn-long {
+        display: none;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   The options sheet — Configure Scroll Options.
+
+   A modal on a desktop, a bottom sheet on a phone. On a desktop it is anchored to
+   the top right under the toolbar with a light scrim rather than centred over the
+   certificate, because four of its five choices re-letter the page in place and the
+   point is to watch them do it. The scrim takes the click that closes it; it does
+   not lock the page's scroll, so a wheel or a swipe over it still scrolls the
+   certificates behind.
+
+   Chrome, never paper: display:none under @media print with the toolbar.
+   -------------------------------------------------------------------------- */
+
+.sc-sheet-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 80;          /* over the toolbar (5) and the hand listbox (60) outside it */
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 64px 16px 16px;
+    background: var(--sc-scrim);
+    color: var(--sc-ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.sc-sheet-layer[hidden] {
+    display: none;
+}
+
+.sc-sheet {
+    display: flex;
+    flex-direction: column;
+    width: 400px;
+    max-width: 100%;
+    max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
+    border: 1px solid var(--sc-line);
+    border-radius: 10px;
+    background: var(--sc-panel);
+    color: var(--sc-ink);
+    box-shadow: var(--sc-shadow);
+    /* Native controls inside (the heading <select>, the checkbox) follow the theme. */
+    color-scheme: var(--sc-scheme);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .sc-sheet {
+        animation: sc-sheet-in 0.14s ease-out;
+    }
+}
+
+@keyframes sc-sheet-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.sc-sheet-head {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 14px 12px 12px 20px;
+    border-bottom: 1px solid var(--sc-line);
+}
+
+.sc-sheet-title {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--sc-ink);
+    font-size: 17px;
+    font-weight: 650;
+    line-height: 1.3;
+}
+
+.sc-sheet-sub {
+    margin: 2px 0 0;
+    color: var(--sc-ink-dim);
+    font-size: 13px;
+}
+
+.sc-sheet-x {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    margin: -6px 0 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--sc-ink-dim);
+    font: 26px/1 system-ui, sans-serif;
+    cursor: pointer;
+}
+
+.sc-sheet-x:hover,
+.sc-sheet-x:focus-visible {
+    background: var(--sc-hover);
+    color: var(--sc-ink);
+}
+
+.sc-sheet-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px 20px 12px;
+}
+
+.sc-opt {
+    padding: 14px 0;
+}
+
+.sc-opt + .sc-opt {
+    border-top: 1px solid var(--sc-line);
+}
+
+.sc-opt-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--sc-ink);
+    font-weight: 600;
+}
+
+.sc-opt-help {
+    margin: 6px 0 0;
+    color: var(--sc-ink-dim);
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.sc-opt-note {
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    border: 1px solid var(--sc-notice-line);
+    border-radius: 4px;
+    background: var(--sc-notice-bg);
+    color: var(--sc-notice-ink);
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+/* The two listbox pickers fill the sheet's width, and every control is a 44px
+   target. scrollery-hand.css draws .sc-hand inline-block with a 12rem floor, which is
+   right for a toolbar and wrong here. */
+.sc-sheet .sc-hand {
+    display: block;
+}
+
+.sc-sheet .sc-hand-trigger {
+    min-width: 0;
+    min-height: 44px;
+}
+
+.sc-sheet .sc-select {
+    display: block;
+    width: 100%;
+    max-width: none;
+    min-height: 44px;
+    padding: 8px 12px;
+}
+
+.sc-opt-check {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    min-height: 44px;
+    color: var(--sc-ink);
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sc-opt-check input {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--sc-accent);
+    cursor: pointer;
+}
+
+/* The arms: four buttons, two by two, aria-pressed on the one in effect. */
+.sc-seg {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.sc-seg-btn {
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--sc-line);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--sc-ink);
+    font: inherit;
+    cursor: pointer;
+}
+
+.sc-seg-btn:hover,
+.sc-seg-btn:focus-visible {
+    background: var(--sc-hover);
+}
+
+.sc-seg-btn[aria-pressed="true"] {
+    border-color: var(--sc-accent);
+    background: var(--sc-accent);
+    color: var(--sc-accent-ink);
+    font-weight: 600;
+}
+
+.sc-seg[aria-busy="true"] .sc-seg-btn {
+    cursor: progress;
+    opacity: 0.7;
+}
+
+.sc-sheet-foot {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 12px 20px;
+    border-top: 1px solid var(--sc-line);
+}
+
+.sc-sheet-foot .sc-btn {
+    min-height: 40px;
+    min-width: 88px;
+}
+
+.sc-sheet :focus-visible {
+    outline: 2px solid var(--sc-accent);
+    outline-offset: 2px;
+}
+
+/* The bottom sheet. Full width, rounded on top, capped below the full height so the
+   head of the certificate stays in view above it, scrolling inside, and padded clear
+   of a home indicator (env() is 0 where there is none). */
+@media (max-width: 640px) {
+    .sc-sheet-layer {
+        align-items: flex-end;
+        justify-content: stretch;
+        padding: 0;
+    }
+
+    .sc-sheet {
+        width: 100%;
+        max-height: 82vh;
+        max-height: 82dvh;
+        border-bottom: 0;
+        border-radius: 14px 14px 0 0;
+    }
+
+    .sc-sheet::before {
+        content: "";
+        display: block;
+        flex: 0 0 auto;
+        width: 36px;
+        height: 4px;
+        margin: 8px auto 0;
+        border-radius: 2px;
+        background: var(--sc-line);
+    }
+
+    .sc-sheet-head {
+        padding-top: 8px;
+    }
+
+    .sc-sheet-foot {
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .sc-sheet-foot .sc-btn {
+        flex: 1 1 0;
+        min-height: 44px;
+    }
+
+    .sc-sheet-body {
+        padding: 4px 16px 12px;
+    }
 }
 
 .scroll-page {
@@ -2024,6 +2664,7 @@ section.SignAndDate {
        notice left visible, three certificates paginate to FOUR sheets and sheet one
        is blank but for the notice. */
     .sc-toolbar,
+    .sc-sheet-layer,
     .sc-advisory,
     .sc-overflow-notice,
     .sc-clip-notice {
