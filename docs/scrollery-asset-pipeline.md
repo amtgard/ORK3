@@ -370,3 +370,25 @@ the stamp is the file's mtime and nothing else.
 - **Asset paths** — `bin/check-scroll-assets.sh`, run by `.githooks/pre-push` and by
   `.github/workflows/scroll-guards.yml`.
 - **Upstreaming** — `docs/scrollery-upstreaming-gate.md`.
+
+---
+
+## 9. The keyed heraldry cache (`assets/heraldry/scroll/`)
+
+`ScrollHeraldry` (B6) writes a scroll-only PNG of any heraldry that is plainly a device
+on an opaque black square, with the black keyed out, plus a zero-byte `.skip` marker for
+every image it judged and left alone. Operators need to know three things:
+
+- **It is a generated cache, safe to delete.** Nothing in it is a source. Delete the
+  directory (or any file in it) and the next scroll render regenerates what it needs.
+  It is gitignored by the `assets/heraldry/*` rule, and nothing deploys it.
+- **It must be writable by the web user.** It is created lazily, with `mkdir`, under
+  `DIR_HERALDRY`. Production bind-mounts the host checkout, so `Dockerfile.prod`'s
+  chown does not reach it: `assets/heraldry/` itself must be writable by `www-data`.
+  If the directory cannot be created, scroll heraldry prints un-keyed (it fails open)
+  and PHP's error log gets one `ScrollHeraldry: cannot create the keyed heraldry cache`
+  line per process.
+- **Bumping `ScrollHeraldry::RULES_VERSION` re-judges everything.** The version is in
+  every cached name, so after a bump each source is keyed or skipped again on its next
+  render, and that source's old files are removed as the new one is made. Bump it
+  whenever a rule or threshold in the class changes.

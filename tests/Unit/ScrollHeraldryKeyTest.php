@@ -203,6 +203,70 @@ final class ScrollHeraldryKeyTest extends TestCase
         $this->assertSame($skips, glob($this->cache . '*.skip') ?: []);
     }
 
+    /**
+     * A chromatic dark field touching the black ground is ink, not fringe: the flood
+     * refuses it (NEAR_BLACK_CHROMA), and so must the feather. Navy (16,13,116) has
+     * luminance 0.08, under NEAR_BLACK_LUMINANCE, so a luminance-only feather cleared it.
+     */
+    public function testANavyFieldTouchingTheGroundKeepsFullAlpha(): void
+    {
+        @mkdir($this->cache, 0775, true);
+        $im = imagecreatetruecolor(100, 100);
+        imagefill($im, 0, 0, imagecolorallocate($im, 0, 0, 0));
+        imagefilledrectangle($im, 15, 15, 84, 84, imagecolorallocate($im, 16, 13, 116));
+        $src = $this->cache . 'navy-on-black.png';
+        imagepng($im, $src);
+
+        $out = imagecreatefrompng($this->cached($this->key($src)));
+        $this->assertSame(127, $this->px($out, 0, 0)[3], 'the ground is keyed');
+        $this->assertSame(127, $this->px($out, 14, 50)[3], 'the ground beside the field is keyed');
+        foreach ([[15, 50], [16, 50], [50, 15], [84, 84], [50, 50]] as [$x, $y]) {
+            $this->assertSame(0, $this->px($out, $x, $y)[3], "navy at ($x,$y) keeps full alpha");
+        }
+    }
+
+    /** An image over MAX_PIXELS is not decoded at all: it is left alone and judged once. */
+    public function testAnImageOverMaxPixelsIsSkippedWithoutDecoding(): void
+    {
+        $src = self::FIX . 'shield-on-black.jpg';     // 200 x 240 = 48,000 px; qualifies
+        ScrollHeraldry::OverrideMaxPixels(40000);
+        try {
+            $this->assertSame('http://localhost/big.jpg', $this->key($src, 'http://localhost/big.jpg'));
+            $this->assertCount(1, glob($this->cache . '*.skip') ?: []);
+            $this->assertCount(0, glob($this->cache . '*.png') ?: []);
+            $this->assertFalse(ScrollHeraldry::Analyse($src)['qualifies']);
+            $this->assertSame('unreadable', ScrollHeraldry::Analyse($src)['reason']);
+        } finally {
+            ScrollHeraldry::OverrideMaxPixels(null);
+        }
+        $this->assertSame(16000000, ScrollHeraldry::MAX_PIXELS, 'the production limit is unchanged');
+        $this->assertTrue(ScrollHeraldry::Analyse($src)['qualifies'], 'and with it restored the same image qualifies');
+    }
+
+    /** An uncreatable cache directory fails open, and says so once per process. */
+    public function testAnUncreatableCacheDirectoryFailsOpenAndLogsOnce(): void
+    {
+        @mkdir($this->cache, 0775, true);
+        $blocker = $this->cache . 'not-a-dir';
+        file_put_contents($blocker, 'x');
+        $log = $this->cache . 'php-error.log';
+        $old = ini_set('error_log', $log);
+        try {
+            ScrollHeraldry::ResetForTests();
+            foreach ([1, 2] as $_) {
+                $this->assertSame(
+                    'http://localhost/s.jpg',
+                    ScrollHeraldry::KeyedUrl(self::FIX . 'shield-on-black.jpg', 'http://localhost/s.jpg', $blocker . '/scroll/', self::URL)
+                );
+            }
+        } finally {
+            ini_set('error_log', (string) $old);
+        }
+        $lines = array_values(array_filter(explode("\n", (string) @file_get_contents($log)), static fn ($l) => str_contains($l, 'ScrollHeraldry')));
+        $this->assertCount(1, $lines);
+        $this->assertStringContainsString('not-a-dir/scroll/', $lines[0]);
+    }
+
     public function testAMissingSourceReturnsItsUrlUnchanged(): void
     {
         $this->assertSame('http://localhost/none.jpg', $this->key(self::FIX . 'no-such-file.jpg', 'http://localhost/none.jpg'));

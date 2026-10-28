@@ -37,6 +37,14 @@ declare(strict_types=1);
  *
  * Fails open: any GD, file or permission problem returns the source URL unchanged.
  *
+ * Deploy / ops (see also docs/scrollery-asset-pipeline.md §9):
+ *   - DIR_HERALDRY/scroll/ is a generated cache, gitignored and safe to delete; the next
+ *     render regenerates what it needs.
+ *   - It must be writable by the web user. It is created lazily under DIR_HERALDRY, so
+ *     DIR_HERALDRY itself must be writable; if it cannot be created this logs one
+ *     error_log line per process and prints un-keyed.
+ *   - Bumping RULES_VERSION re-judges every image on its next render.
+ *
  * NOTE: startup.php instantiates every class in system/lib/ork3 with `new ClassName()`,
  * so this takes no constructor arguments; everything useful is static.
  */
@@ -86,7 +94,8 @@ class ScrollHeraldry
     /**
      * Feather: a pixel 1 px outside the keyed region loses opacity in proportion to how
      * dark it is between NEAR_BLACK_LUMINANCE (fully cleared) and this (untouched); at
-     * 2 px it loses half that. Ink brighter than this is never faded.
+     * 2 px it loses half that. Ink brighter than this is never faded, and neither is
+     * chromatic dark ink (chroma > NEAR_BLACK_CHROMA, e.g. a navy field on the ground).
      */
     public const FEATHER_LUMINANCE = 0.30;
 
@@ -100,10 +109,16 @@ class ScrollHeraldry
      * every image is judged again under the new rules (each source's old files are
      * removed as its new one is made).
      */
-    private const RULES_VERSION = 1;
+    private const RULES_VERSION = 2;
 
     /** How many times load() has tried to decode a source this process (tests). */
     private static int $decodes = 0;
+
+    /** A lower MAX_PIXELS for tests (OverrideMaxPixels); null = the production limit. */
+    private static ?int $maxPixels = null;
+
+    /** Whether an uncreatable cache directory has been logged this process. */
+    private static bool $loggedCacheDir = false;
 
     /**
      * The scroll rendition of a heraldry URL from GetHeraldryUrl(): the keyed copy's
@@ -149,6 +164,19 @@ class ScrollHeraldry
         return self::$decodes;
     }
 
+    /** Tests only: judge against a lower pixel limit; null restores MAX_PIXELS. */
+    public static function OverrideMaxPixels(?int $pixels): void
+    {
+        self::$maxPixels = $pixels;
+    }
+
+    /** Tests and long-lived CLI: forget the once-per-process state (the cache-dir log). */
+    public static function ResetForTests(): void
+    {
+        self::$loggedCacheDir = false;
+        self::$maxPixels      = null;
+    }
+
     /**
      * A URL to a keyed PNG when $sourcePath qualifies, else $sourceUrl unchanged.
      *
@@ -185,6 +213,11 @@ class ScrollHeraldry
             }
 
             if (!is_dir($cacheDir) && !@mkdir($cacheDir, 0775, true) && !is_dir($cacheDir)) {
+                if (!self::$loggedCacheDir) {
+                    self::$loggedCacheDir = true;
+                    error_log('ScrollHeraldry: cannot create the keyed heraldry cache ' . $cacheDir
+                        . ' (it must be writable by the web user); scroll heraldry prints un-keyed.');
+                }
                 return $sourceUrl;
             }
             if (!is_writable($cacheDir)) {
@@ -264,7 +297,7 @@ class ScrollHeraldry
             return null;
         }
         $size = @getimagesizefromstring($data);
-        if (!is_array($size) || $size[0] * $size[1] > self::MAX_PIXELS) {
+        if (!is_array($size) || $size[0] * $size[1] > (self::$maxPixels ?? self::MAX_PIXELS)) {
             return null;
         }
         $im = @imagecreatefromstring($data);
@@ -466,6 +499,13 @@ class ScrollHeraldry
                 $x = $i % $w;
                 $y = intdiv($i, $w);
                 $c = imagecolorat($im, $x, $y);
+                // Chromatic dark is ink (a navy field), as in the flood: never faded.
+                $r = ($c >> 16) & 0xFF;
+                $g = ($c >> 8) & 0xFF;
+                $b = $c & 0xFF;
+                if (max($r, $g, $b) - min($r, $g, $b) > self::NEAR_BLACK_CHROMA) {
+                    continue;
+                }
                 $t = max(0.0, min(1.0, (self::FEATHER_LUMINANCE - self::luminance($c)) / $span)) * $falloff;
                 if ($t <= 0.0) {
                     continue;
