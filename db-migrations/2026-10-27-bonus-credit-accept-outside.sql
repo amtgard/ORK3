@@ -10,12 +10,13 @@
 -- here; no row means no. A parent kingdom's yes covers its principalities, the
 -- same way an Amtgard-wide credit's adoption does.
 --
--- Who may grant across the line is decided in BonusCredit::grant(): only an
--- officer or granter of the kingdom that DEFINED the category, from that
--- kingdom's own page, to a player whose kingdom (or a kingdom above it) has
--- said yes here. The receiving kingdom's own officers cannot hand out another
--- kingdom's credit, and a park page still credits its own members only.
+-- Who may grant across the line is decided in BonusCredit::grant(), and
+-- follows attendance: whoever may sign players in on a park or kingdom page
+-- inside the kingdom that DEFINED the category may give it from that page, to
+-- a player whose kingdom (or a kingdom above it) has said yes here. The
+-- receiving kingdom's own officers cannot hand out another kingdom's credit.
 -- Amtgard-wide credits are untouched: adoption governs those.
+-- (Since 2026-10-28 the default is yes: no row means yes. PR #548.)
 --
 -- Flipping the setting needs kingdom CREATE, or an ORK admin on the kingdom's
 -- behalf; both are audited (BonusCredit::setAcceptsOutside).

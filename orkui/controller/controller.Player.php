@@ -537,11 +537,17 @@ class Controller_Player extends Controller
         // Class Levels tab so a credit never reads as an unexplained number.
         // Live ones only; revoked history is kept for a management tool, not
         // shown here. Officers with authority over the player's park may
-        // remove one.
+        // remove one; so may whoever gave it (the template checks per row).
         $this->load_model('BonusCredit');
         $__bcPark = (int)($this->data['Details']['ParkId'] ?? $this->data['Player']['ParkId'] ?? 0);
         $this->data['CanRevokeBonus'] = $uid > 0 && $__bcPark > 0 && $this->BonusCredit->can_grant($uid, $__bcPark);
         $this->data['BonusCredits']   = $this->BonusCredit->for_player((int)$id);
+        $this->data['ViewerId']       = (int)$uid;
+        // The class picker for editing a credit's class in place.
+        $this->load_model('Attendance');
+        $this->data['BonusClasses']   = array_map(function ($c) {
+            return ['ClassId' => (int)$c['ClassId'], 'ClassName' => (string)$c['Name']];
+        }, $this->Attendance->get_classes()['Classes'] ?? []);
 
 
         // Beltline peers, associates, and title list (domain aggregate)

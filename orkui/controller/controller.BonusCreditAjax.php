@@ -197,7 +197,7 @@ class Controller_BonusCreditAjax extends Controller
         } elseif (!$this->BonusCredit->can_define($uid, $category['ScopeType'], $category['ScopeId'])) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
-        $this->jsonOut(['status' => 0, 'category' => $category, 'credits' => $this->BonusCredit->for_category($category['CategoryId'], $parkId, 200, $kingdomId)]);
+        $this->jsonOut(['status' => 0, 'category' => $category, 'credits' => $this->BonusCredit->for_category($category['CategoryId'], $parkId, 200, $kingdomId, $uid)]);
     }
 
     public function grant($p = null)
@@ -227,17 +227,39 @@ class Controller_BonusCreditAjax extends Controller
         if (!valid_id($categoryId) || !valid_id($mundaneId)) {
             $this->jsonOut(['status' => 1, 'error' => 'Choose a category and a player.']);
         }
-        $this->load_model('Player');
-        $info   = $this->Player->player_info($mundaneId);
-        $parkId = is_array($info) ? (int) ($info['ParkId'] ?? 0) : 0;
-        // The defining kingdom's officers may ask about a player of another kingdom
-        // (the grant itself still checks that the player's kingdom accepts outside credits).
-        $category  = $this->BonusCredit->category($categoryId);
-        $definer   = $category !== null && $this->BonusCredit->can_grant_for_defining_kingdom($uid, $category);
-        if ($parkId <= 0 || !($definer || $this->BonusCredit->can_grant($uid, $parkId))) {
+        $category = $this->BonusCredit->category($categoryId);
+        if ($category === null) {
+            $this->jsonOut(['status' => 1, 'error' => 'Unknown credit.']);
+        }
+        // The modal says which park or kingdom page it is on: whoever may grant
+        // this credit from there may ask (the grant itself still checks the player).
+        $hostType = (string) ($_GET['ScopeType'] ?? $_POST['ScopeType'] ?? '');
+        $hostId   = (int) ($_GET['ScopeId'] ?? $_POST['ScopeId'] ?? 0);
+        if (in_array($hostType, ['park', 'kingdom'], true) && valid_id($hostId)) {
+            $hostKingdom = $hostType === 'park' ? $this->BonusCredit->park_kingdom($hostId) : $hostId;
+            $ok = $this->BonusCredit->offered_at($hostKingdom, $category) && $this->BonusCredit->can_grant_from($uid, $hostType, $hostId, $category);
+        } else {
+            // No page named: authority over the player's own park, or the defining kingdom's people.
+            $this->load_model('Player');
+            $info   = $this->Player->player_info($mundaneId);
+            $parkId = is_array($info) ? (int) ($info['ParkId'] ?? 0) : 0;
+            $ok = $parkId > 0 && ($this->BonusCredit->can_grant_for_defining_kingdom($uid, $category) || $this->BonusCredit->can_grant($uid, $parkId));
+        }
+        if (!$ok) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
         $this->jsonOut(['status' => 0, 'allowance' => $this->BonusCredit->allowance($categoryId, $mundaneId)]);
+    }
+
+    /** Change a credit's amount or class (the Edit control on a credit row). */
+    public function update($p = null)
+    {
+        $uid = $this->requireLogin();
+        $r = $this->BonusCredit->update($uid, (int) ($_POST['BonusCreditId'] ?? 0), [
+            'ClassId' => $_POST['ClassId'] ?? '',
+            'Credits' => $_POST['Credits'] ?? '',
+        ]);
+        $this->envelope($r, ['credit' => $r['Credit'] ?? null, 'changed' => !empty($r['Changed']), 'remaining' => $r['Remaining'] ?? null]);
     }
 
     public function revoke($p = null)

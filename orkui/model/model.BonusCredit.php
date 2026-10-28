@@ -41,6 +41,12 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->grant($uid, $fields);
     }
 
+    /** Change a live credit's amount or class. */
+    public function update(int $uid, int $bonusCreditId, array $fields): array
+    {
+        return $this->_bonus()->update($uid, $bonusCreditId, $fields);
+    }
+
     public function revoke(int $uid, int $bonusCreditId, string $note = ''): array
     {
         return $this->_bonus()->revoke($uid, $bonusCreditId, $note);
@@ -56,9 +62,9 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->forPlayer($mundaneId, $includeRevoked);
     }
 
-    public function for_category(int $categoryId, int $parkId = 0, int $limit = 200, int $kingdomId = 0): array
+    public function for_category(int $categoryId, int $parkId = 0, int $limit = 200, int $kingdomId = 0, int $viewerId = 0): array
     {
-        return $this->_bonus()->forCategory($categoryId, $parkId, $limit, $kingdomId);
+        return $this->_bonus()->forCategory($categoryId, $parkId, $limit, $kingdomId, $viewerId);
     }
 
     public function is_ork_admin(int $uid): bool
@@ -111,11 +117,6 @@ class Model_BonusCredit extends Model
         return $this->_bonus()->categoriesForPark($parkId);
     }
 
-    public function park_kingdom(int $parkId): int
-    {
-        return $this->_bonus()->parkKingdom($parkId);
-    }
-
     public function kingdom_ancestry(int $kingdomId): array
     {
         return $this->_bonus()->kingdomAncestry($kingdomId);
@@ -137,6 +138,23 @@ class Model_BonusCredit extends Model
     public function can_grant(int $uid, int $parkId): bool
     {
         return $this->_bonus()->canGrant($uid, $parkId);
+    }
+
+    /** May $uid hand out this credit from this park or kingdom page? */
+    public function can_grant_from(int $uid, string $hostType, int $hostId, array $category): bool
+    {
+        return $this->_bonus()->canGrantFrom($uid, $hostType, $hostId, $category);
+    }
+
+    /** Is this credit on offer in a kingdom (and so on its parks' pages)? */
+    public function offered_at(int $kingdomId, array $category): bool
+    {
+        return $this->_bonus()->offeredAt($kingdomId, $category);
+    }
+
+    public function park_kingdom(int $parkId): int
+    {
+        return $this->_bonus()->parkKingdom($parkId);
     }
 
     public function can_appoint(int $uid, int $kingdomId): bool
