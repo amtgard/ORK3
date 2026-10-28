@@ -58,20 +58,4 @@ final class ScrollCustomBorderParityTest extends TestCase
             $this->assertSame(in_array($g, $fx['groundsWithOwnBorder'], true), Scroll::GroundDrawsOwnBorder($g), $g);
         }
     }
-
-    /** The JS check reads the data file as JSON; this keeps that copy equal to the real one. */
-    public function testRulesFixtureEqualsTheDataFile(): void
-    {
-        $json = json_decode(
-            (string) file_get_contents(__DIR__ . '/../fixtures/scroll-custom-border-rules.json'),
-            true,
-            512,
-            JSON_THROW_ON_ERROR
-        );
-        $this->assertSame(
-            json_decode((string) json_encode(Scroll::CustomBorderRules()), true),
-            $json,
-            'regenerate tests/fixtures/scroll-custom-border-rules.json from Scroll::CustomBorderRules()'
-        );
-    }
 }

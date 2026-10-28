@@ -840,9 +840,18 @@
      * this only reads the controls. Guarded on the global: a cached older page that
      * lacks the module just does not offer the box.
      */
+    var warnedNoCustomBorder = false;
+
     function customBorderCompatible() {
         var M = window.ScrolleryCustomBorder, opt = selected();
-        if (!M || !opt) { return false; }
+        if (!M) {
+            if (!warnedNoCustomBorder) {
+                warnedNoCustomBorder = true;
+                console.warn('Scrollery: scrollery-customborder.js did not load; Custom Border is unavailable.');
+            }
+            return false;
+        }
+        if (!opt) { return false; }
         var g = groundEl ? groundEl.options[groundEl.selectedIndex] : null;
         return M.compatible(cfg.customBorderRules || {}, {
             order:           opt.dataset.order || '',
