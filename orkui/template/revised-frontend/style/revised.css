@@ -6476,6 +6476,25 @@ html[data-theme="dark"] .pn-award-action-btn.pn-award-view-btn:hover { color:#63
 
 /* ---- Shared: award recommendations table (pk, kn) ---- */
 .pk-recs-empty { padding: 32px 0; text-align: center; color: #a0aec0; font-size: 14px; }
+/* Recommendation age badge ("3mo", "1y+") and the "passed to local" chip on the
+   park and kingdom Recommendations tabs. These used to live in the Court
+   Planner <style> block, which only renders for court managers, so everyone
+   else (logged-out visitors included) saw the badge unstyled and glued to the
+   date: "2026-09-101mo". Reported 2026-10-26 from a phone. */
+.kn-rec-age-badge { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 10px; font-weight: 600; margin-left: 4px; white-space: nowrap; vertical-align: middle; }
+.kn-rec-age-green  { background: #c6f6d5; color: #22543d; }
+.kn-rec-age-yellow { background: #fefcbf; color: #744210; }
+.kn-rec-age-orange { background: #fed7aa; color: #7b341e; }
+.kn-rec-age-red    { background: #fed7d7; color: #742a2a; }
+html[data-theme="dark"] .kn-rec-age-green  { background: rgba(72,187,120,.22); color: #9ae6b4; }
+html[data-theme="dark"] .kn-rec-age-yellow { background: rgba(236,201,75,.22); color: #faf089; }
+html[data-theme="dark"] .kn-rec-age-orange { background: rgba(237,137,54,.22); color: #fbd38d; }
+html[data-theme="dark"] .kn-rec-age-red    { background: rgba(252,129,129,.22); color: #feb2b2; }
+.pk-rec-passlocal { display: inline-block; margin-left: 6px; font-size: 11px; color: #2c5f8b; border: 1px solid rgba(44,95,139,.4); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
+html[data-theme="dark"] .pk-rec-passlocal { color: #6fb0e6; border-color: rgba(111,176,230,.4); }
+.pk-rec-passlocal[data-tip] { position: relative; }
+.pk-rec-passlocal[data-tip]:hover::after { content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 4px); white-space: normal; width: 220px; background: #1a202c; color: #fff; font-size: 11px; padding: 6px 8px; border-radius: 4px; z-index: 50; }
+
 .pk-recs-table-wrap { overflow-x: auto; width: 100%; }
 .pk-recs-table-wrap .dataTables_wrapper { width: 100%; }
 table.dataTable.pk-recs-table { width: 100% !important; }

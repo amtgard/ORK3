@@ -401,6 +401,31 @@ html[data-theme="dark"] .kn-md-help-btn[data-tip]:hover::after {
 	width: max-content; max-width: 200px;
 }
 
+/* The roster is a DataTables scrollX table: its body is an overflow box, so the
+   CSS ::after tip on the Actions buttons is clipped at the box's top edge
+   (reported by a user 2026-10-26: the bubble appeared as a dark sliver above
+   the row). Those tips are drawn instead by the script below as a
+   position:fixed bubble on <body>, the same approach as the recommendation
+   seconding buttons. html.un-jstip is set by that script, so without JS the
+   CSS tip still appears. */
+html.un-jstip #un-roster-table [data-tip]:hover::after { display: none !important; }
+.un-jstip-bubble {
+	position: fixed; z-index: 10000; pointer-events: none;
+	background: #1a202c; color: #fff; padding: 6px 10px; border-radius: 4px;
+	font-size: 11px; line-height: 1.4; box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+	max-width: 240px; width: max-content; white-space: normal; text-align: center;
+}
+.un-jstip-bubble[hidden] { display: none; }
+.un-jstip-bubble::before {
+	content: ''; position: absolute; left: var(--un-arrow-x, 50%); transform: translateX(-50%);
+	border: 5px solid transparent;
+}
+.un-jstip-bubble.un-jstip-above::before { top: 100%; border-top-color: #1a202c; }
+.un-jstip-bubble.un-jstip-below::before { bottom: 100%; border-bottom-color: #1a202c; }
+html[data-theme="dark"] .un-jstip-bubble { background: #4a5568; color: #f7fafc; }
+html[data-theme="dark"] .un-jstip-bubble.un-jstip-above::before { border-top-color: #4a5568; }
+html[data-theme="dark"] .un-jstip-bubble.un-jstip-below::before { border-bottom-color: #4a5568; }
+
 /* Destructive-action color preserved across themes. Inline color:#e53e3e on
    buttons gets stomped by a dark-mode rule in revised.css; this class wins. */
 .un-btn-danger { color: #e53e3e !important; border-color: #feb2b2 !important; }
@@ -1300,6 +1325,57 @@ var UnBannerConfig = {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 
 <script>
+// Roster action-button tooltips, drawn position:fixed on <body> so the
+// DataTables scroll box cannot clip them (see the .un-jstip-bubble CSS).
+// Delegated, so rows DataTables redraws need no rebinding.
+(function () {
+	if (!document.getElementById('un-roster-table')) return;
+	var bubble = null, cur = null;
+	function ensure() {
+		if (!bubble) {
+			bubble = document.createElement('div');
+			bubble.className = 'un-jstip-bubble';
+			bubble.setAttribute('role', 'tooltip');
+			bubble.hidden = true;
+			document.body.appendChild(bubble);
+		}
+		return bubble;
+	}
+	function show(el) {
+		var text = el.getAttribute('data-tip');
+		if (!text) return;
+		var b = ensure();
+		b.textContent = text;
+		b.className = 'un-jstip-bubble';
+		b.hidden = false;
+		var r = el.getBoundingClientRect(), bw = b.offsetWidth, bh = b.offsetHeight, vw = window.innerWidth;
+		var above = r.top - bh - 8 >= 4;
+		var top = above ? r.top - bh - 8 : r.bottom + 8;
+		// Actions sit in the right-most column: hang the bubble from the button's
+		// right edge when centring it would run past the viewport.
+		var centred = r.left + r.width / 2 - bw / 2;
+		var left = (centred + bw > vw - 6) ? r.right - bw : centred;
+		left = Math.max(6, Math.min(left, vw - bw - 6));
+		b.style.top = top + 'px';
+		b.style.left = left + 'px';
+		b.style.setProperty('--un-arrow-x', Math.max(8, Math.min(bw - 8, r.left + r.width / 2 - left)) + 'px');
+		b.classList.add(above ? 'un-jstip-above' : 'un-jstip-below');
+		cur = el;
+	}
+	function hide() { if (bubble) bubble.hidden = true; cur = null; }
+	function target(e) { return e.target.closest ? e.target.closest('#un-roster-table [data-tip]') : null; }
+	document.addEventListener('mouseover', function (e) { var el = target(e); if (el && el !== cur) show(el); });
+	document.addEventListener('mouseout', function (e) {
+		if (!cur) return;
+		if (e.relatedTarget && cur.contains(e.relatedTarget)) return;
+		if (e.target === cur || cur.contains(e.target)) hide();
+	});
+	document.addEventListener('focusin', function (e) { var el = target(e); if (el) show(el); });
+	document.addEventListener('focusout', hide);
+	document.addEventListener('scroll', hide, true);
+	document.addEventListener('click', hide, true);
+	document.documentElement.classList.add('un-jstip');
+})();
 $(function () {
 	if ($('#un-roster-table').length) {
 		$('#un-roster-table').DataTable({
