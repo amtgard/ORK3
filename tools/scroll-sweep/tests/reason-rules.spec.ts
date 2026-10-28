@@ -9,7 +9,7 @@ import { renderFixtures, serveFixtures, openFixture, type FixtureSpec } from '..
  * lowest dark pixel of each text line is its real descender bottom (g, p, q, y); that is
  * compared with the top of the rule the line sits on (the rule is a lens: its thick centre
  * starts at the image's top edge).
- *   - at the font floor (a long reason) the rule's top must be at least 0.05em of the
+ *   - at the font floor (a long reason) the rule's top must be at least 0.2em of the
  *     reason's fitted size below that descender bottom, on every line;
  *   - at full size (a short reason, nothing shrunk) every rule keeps the position it had
  *     before the rules went em-based, within 1px (FULL_SIZE_RULE_TOPS, measured on BASE
@@ -38,13 +38,13 @@ const SPECS: FixtureSpec[] = [
   base({ id: 'rr-c024-short', reason: SHORT, ...c024 }),
 ];
 
-/* Each rule's top in layout px (the certificate is 2550 wide) at full size, on BASE 251f1bc3f. */
+/* Each rule's top in layout px BELOW THE TOP OF THE REASON BOX (so layout changes above the reason
+   do not matter), on BASE 251f1bc3f. The rule top is deliberately not em-based (see .Underline). */
 const FULL_SIZE_RULE_TOPS: Record<string, number[]> = {
-  'rr-c150-short': [3036.99, 3192.59, 3348.18, 3503.78, 3659.37, 3814.96],
-  'rr-c024-short': [2831.7, 2987.29, 3142.88, 3298.48, 3454.07, 3609.67],
-  /* The same at the floor: the rule's top is deliberately not em-based (see the .Underline rule). */
-  'rr-c150-long': [2615.45, 2724.79, 2834.13, 2943.48, 3052.82, 3162.17],
-  'rr-c024-long': [2642.81, 2751.34, 2859.87, 2968.4, 3076.93, 3185.46],
+  'rr-c150-short': [142.67, 298.27, 453.86, 609.45, 765.05, 920.64],
+  'rr-c024-short': [144.67, 300.27, 455.86, 611.45, 767.05, 922.64],
+  'rr-c150-long': [102.95, 212.3, 321.64, 430.98, 540.33, 649.67],
+  'rr-c024-long': [102.78, 211.31, 319.84, 428.38, 536.91, 645.44],
 };
 
 type Read = { fontPx: number; gaps: number[]; ruleTops: number[]; ruleH: number; info: string };
@@ -74,7 +74,7 @@ test.beforeAll(async ({ browser }) => {
       const b = box.getBoundingClientRect();
       return {
         k, fontPx: parseFloat(getComputedStyle(p).fontSize),
-        clip: { x: b.left, y: b.top, width: b.width, height: b.height },
+        clip: { x: b.left, y: b.top, width: b.width, height: b.height }, boxTop: b.top,
         rules: rules.map(r => ({ top: r.top, bottom: r.bottom })),
         lines: Array.from(lines.values()).sort((a, c) => a.top - c.top),
       };
@@ -103,7 +103,7 @@ test.beforeAll(async ({ browser }) => {
       if (rule && !Number.isNaN(desc)) gaps.push((rule.top - desc) / g.k);
     });
     reads[s.id] = {
-      fontPx: g.fontPx, gaps, ruleTops: g.rules.map(r => r.top / g.k), ruleH: (g.rules[0].bottom - g.rules[0].top) / g.k,
+      fontPx: g.fontPx, gaps, ruleTops: g.rules.map(r => (r.top - g.boxTop) / g.k), ruleH: (g.rules[0].bottom - g.rules[0].top) / g.k,
       info: `font ${g.fontPx.toFixed(2)}px, ${g.lines.length} lines, gaps ${gaps.map(x => x.toFixed(1)).join(' ')}`,
     };
   }
@@ -111,10 +111,10 @@ test.beforeAll(async ({ browser }) => {
 });
 
 for (const id of ['rr-c150-long', 'rr-c024-long']) {
-  test(`${id}: at the font floor every rule clears the line's descender bottom by 0.05em`, () => {
+  test(`${id}: at the font floor every rule clears the line's descender bottom by 0.2em`, () => {
     const r = reads[id];
     expect(r.gaps.length, 'lines measured').toBeGreaterThan(2);
-    const min = 0.05 * r.fontPx;
+    const min = 0.2 * r.fontPx; /* base 0.22-0.28em; the rejected fully-em variant measured 0.185em and fails */
     expect(r.gaps.filter(x => x < min), `${r.info}; need >= ${min.toFixed(2)}px`).toEqual([]);
   });
 }
