@@ -684,6 +684,7 @@
         cbNa         = $('sc-custom-border-na'),
         cbColors     = $('sc-custom-border-colors'),
         matchEl      = $('sc-match-style'),
+        matchHint    = $('sc-match-fallback-hint'),
         ribbonEl     = $('sc-custom-ribbon'),
         ribbonColors = $('sc-custom-ribbon-colors'),
         recipeCbHint = $('sc-recipe-cb-hint'),
@@ -707,6 +708,43 @@
      * setColor(), so these, the two inputs and the preview never disagree.
      */
     var colors = {};
+
+    /*
+     * What the last preview said about match-style. `fallback` is the server's own
+     * MatchFallback: match was asked for but drawn exact, because a colour is too dark
+     * for a screen-blended pass. The hint reads it, and so does anything later that
+     * needs to know which colours were really drawn. `askedDark` is the CLIENT's guess
+     * at the same question, used only to decide whether a colour edit needs a fresh
+     * round trip — the server stays the one that decides.
+     */
+    var matchState = { fallback: false, askedDark: false };
+
+    function relLum(hex) {
+        var h = normHex(hex);
+        if (!h) { return 1; }
+        var ch = [1, 3, 5].map(function (i) {
+            var c = parseInt(h.substr(i, 2), 16) / 255;
+            return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    }
+
+    function knotLooksDark() {
+        return relLum(colors.c1) < 0.08 || relLum(colors.c2) < 0.08;
+    }
+
+    function paintMatchHint() {
+        if (!matchHint) { return; }
+        matchHint.hidden = !(matchState.fallback && matchEl && matchEl.checked && cbEl && cbEl.checked);
+    }
+
+    var matchTimer = null;
+    function colourMayChangeMatch() {
+        if (!(matchEl && matchEl.checked && cbEl && cbEl.checked)) { return; }
+        if (knotLooksDark() === matchState.askedDark) { return; }
+        clearTimeout(matchTimer);
+        matchTimer = setTimeout(reload, 250);
+    }
 
     var COLOR_CONTROLS = [
         { key: 'c1',     id: 'sc-color1',       paint: paintKnot },
@@ -780,6 +818,7 @@
         markHex(ctl, true);
         ctl.paint();
         rememberColors();
+        if (ctl.key !== 'ribbon') { colourMayChangeMatch(); }
     }
 
     /*
@@ -973,7 +1012,7 @@
      * colours do not — see paintKnot().
      */
     if (cbEl)     { cbEl.addEventListener('change', function () { syncDesign(); syncSummary(); reload(); }); }
-    if (matchEl)  { matchEl.addEventListener('change', reload); }
+    if (matchEl)  { matchEl.addEventListener('change', function () { paintMatchHint(); reload(); }); }
     if (ribbonEl) { ribbonEl.addEventListener('change', function () { syncDesign(); reload(); }); }
 
     /*
@@ -991,6 +1030,7 @@
         if (colors.c1)     { params.set('color1', colors.c1); }
         if (colors.c2)     { params.set('color2', colors.c2); }
         if (colors.ribbon) { params.set('ribbonColor', colors.ribbon); }
+        matchState.askedDark = knotLooksDark();
     }
 
     /* ---- the round trip: order / rank / variant ------------------------- */
@@ -1066,6 +1106,8 @@
                 paintKnot();
                 paintRibbon();
                 takeHeraldry(d);
+                matchState.fallback = !!d.MatchFallback;
+                paintMatchHint();
                 // applyText() already asked for a fit; this is the one that matters for
                 // markup the server just sent, whose sizes are its first guess for an
                 // EMPTY recipient. Both go through the same rAF-coalesced call, so the

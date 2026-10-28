@@ -237,6 +237,47 @@ final class ScrollDesignTest extends TestCase
         $this->assertTrue($crown['design']['matchStyle']);
     }
 
+    public function testNearBlackInAScreenBlendedMatchPassFallsBackToExact(): void
+    {
+        $req = ['customBorder' => '1', 'matchStyle' => '1', 'color1' => '#000000'];
+
+        // owl cyanotype's only pass is mix-blend-mode:screen, which erases black.
+        $dark = $this->build('owl', $req, 8, ['variant' => 'cyanotype']);
+        $this->assertFalse($dark['customBorder']['matchStyle']);
+        $this->assertTrue($dark['customBorder']['matchFallback']);
+        $this->assertFalse($dark['design']['matchStyle']);
+        $this->assertTrue($dark['design']['customBorder']);
+
+        // Colour 2 counts too.
+        $two = $this->build('owl', ['color1' => '#1E4FA3', 'color2' => '#050505'] + $req, 8, ['variant' => 'cyanotype']);
+        $this->assertTrue($two['customBorder']['matchFallback']);
+
+        // A colour screen does not erase keeps match on.
+        $blue = $this->build('owl', ['color1' => '#1E4FA3'] + $req, 8, ['variant' => 'cyanotype']);
+        $this->assertTrue($blue['customBorder']['matchStyle']);
+        $this->assertFalse($blue['customBorder']['matchFallback']);
+        $this->assertTrue($blue['design']['matchStyle']);
+
+        // A multiply-only order keeps black.
+        $parch = $this->build('owl', $req, 8, ['variant' => 'parchment']);
+        $this->assertTrue($parch['customBorder']['matchStyle']);
+        $this->assertFalse($parch['customBorder']['matchFallback']);
+
+        // Match off never reports a fallback.
+        $off = $this->build('owl', ['matchStyle' => ''] + $req, 8, ['variant' => 'cyanotype']);
+        $this->assertFalse($off['customBorder']['matchFallback']);
+    }
+
+    public function testPartialReprintDesignStillMeansNoCustomBorder(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row($this->awardId('owl'), 8),
+            ['player' => 'T', 'variant' => 'cyanotype', 'design' => ['heraldrySource' => 'kingdom']]
+        );
+        $this->assertNull($s['customBorder']);
+        $this->assertFalse($s['design']['matchStyle']);
+    }
+
     public function testPrintRecipeOmitsDefaultDesign(): void
     {
         $s = $this->build('crown', []);

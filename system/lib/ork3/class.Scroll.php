@@ -865,6 +865,37 @@ class Scroll extends Ork3
         return '';
     }
 
+    /** Below this relative luminance a colour does not survive a screen-blended pass. */
+    public const MATCH_SCREEN_MIN_LUMINANCE = 0.08;
+
+    /** Whether any of a custom-border rule's resolved passes composites with screen. */
+    public static function PassesScreen(array $passes): bool
+    {
+        foreach ($passes as $style) {
+            if (str_contains((string) $style, 'mix-blend-mode:screen')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** WCAG relative luminance of a normalised #RRGGBB colour. */
+    public static function RelativeLuminance(string $hex): float
+    {
+        $hex = ltrim($hex, '#');
+        if (strlen($hex) !== 6 || !ctype_xdigit($hex)) {
+            return 1.0;
+        }
+        $lin = static function (string $pair): float {
+            $c = hexdec($pair) / 255;
+
+            return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+        };
+
+        return 0.2126 * $lin(substr($hex, 0, 2)) + 0.7152 * $lin(substr($hex, 2, 2)) + 0.0722 * $lin(substr($hex, 4, 2));
+    }
+
     /** @var array<string, array>|null */
     private static ?array $customBorderRules = null;
 
@@ -2168,12 +2199,25 @@ class Scroll extends Ork3
         if ($design['customBorder']) {
             $rule = self::CustomBorderRule((string) $order['id'], $rank, $variant, $recipe);
             if ($rule !== null) {
+                // Match mode blends the knot through each pass's own style. A pass that
+                // screens (owl cyanotype, custom on a dark ground, mask's glow) cannot
+                // draw a near-black colour: screen(black, ground) is the ground, so the
+                // band and its outlines vanish and the knot reads as dashes. Draw those
+                // exact instead, and say so, so the builder can tell the officer.
+                $fallback = $design['matchStyle']
+                    && self::PassesScreen($rule['passes'])
+                    && (self::RelativeLuminance($design['color1']) < self::MATCH_SCREEN_MIN_LUMINANCE
+                        || self::RelativeLuminance($design['color2']) < self::MATCH_SCREEN_MIN_LUMINANCE);
+                if ($fallback) {
+                    $design['matchStyle'] = false;
+                }
                 $customBorder = [
-                    'color1'     => $design['color1'],
-                    'color2'     => $design['color2'],
-                    'matchStyle' => $design['matchStyle'],
-                    'passes'     => $rule['passes'],
-                    'ground'     => $rule['ground'],
+                    'color1'        => $design['color1'],
+                    'color2'        => $design['color2'],
+                    'matchStyle'    => $design['matchStyle'],
+                    'matchFallback' => $fallback,
+                    'passes'        => $rule['passes'],
+                    'ground'        => $rule['ground'],
                 ];
             }
         }

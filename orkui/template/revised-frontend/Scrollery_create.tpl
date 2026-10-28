@@ -498,6 +498,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                                 <span>Match scroll style?</span>
                             </label>
                             <p class="sc-hint">Blends the knot into the paper the way the original border was, so the colours shift with it.</p>
+                            <p class="sc-hint" id="sc-match-fallback-hint" role="status" hidden>Very dark colours can't blend on this background — printed in exact colours.</p>
                         </div>
                     </div>
 

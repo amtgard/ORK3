@@ -237,6 +237,13 @@ final class ScrollCustomBorderRenderTest extends TestCase
         }
     }
 
+    public function testBlackKnotOnCyanotypeDrawsOneExactKnot(): void
+    {
+        $html = $this->render('owl', $this->border(true, ['color1' => '#000000']), ['variant' => 'cyanotype', 'rank' => 8]);
+        $this->assertSame(1, substr_count($html, 'sc-knot'));
+        $this->assertStringContainsString('mix-blend-mode:normal', $html);
+    }
+
     public function testDragonMatchModeReplacesBothPartialPassesIncludingTheGlow(): void
     {
         $html = $this->render('dragon', $this->border(true));
