@@ -3802,8 +3802,12 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                 return;
             }
             var ids = printable.map(function(p) { return parseInt(p.CourtAwardId, 10) || 0; });
-            // &print=1: the render page opens the print dialog itself once its fonts load.
-            var url = uir + 'Scrollery/court/' + courtId + '&lines=' + ids.join(',') + '&print=1';
+            // &courtLines=, not &lines=: the render page owns &lines= as its Reason-lines
+            // switch and rewrites it when that box is toggled.
+            // &configure=1, not &print=1: the tab opens on the render page's options sheet
+            // (hand, signature, heading, reason lines, arms) and the officer prints from
+            // there, so nothing prints before the run's options have been seen.
+            var url = uir + 'Scrollery/court/' + courtId + '&courtLines=' + ids.join(',') + '&configure=1';
             var opened = false;
             if (tab && !tab.closed) {
                 try { tab.location.href = url; opened = true; } catch (e) {}
@@ -3817,11 +3821,17 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
 
     // printUrl is set only when the tab could not be opened (a blocked popup): the bar
     // then carries a link, and following a link is never blocked.
+    // The tab no longer prints on load — it opens on its options sheet — so the bar says
+    // where the scrolls went rather than claiming they printed; the complete prompt
+    // stays, for after the officer has printed them there.
     function cpShowPrintBar(n, skipped, dropped, printUrl) {
         var bar = gid('cp-print-bar');
         if (!bar) return;
         var text = gid('cp-print-bar-text');
-        text.textContent = 'Printed ' + n + ' Scrollery ' + cpPlural(n, 'scroll', 'scrolls') + '.';
+        var what = n + ' Scrollery ' + cpPlural(n, 'scroll', 'scrolls');
+        text.textContent = printUrl
+            ? what + ' ready to print.'
+            : what + ' opened in a new tab — choose the options and print there.';
         if (printUrl) {
             var a = document.createElement('a');
             a.href = printUrl; a.target = '_blank'; a.rel = 'noopener';
@@ -3837,7 +3847,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         sk.innerHTML = '';
         if (skipped.length) {
             var head = document.createElement('div');
-            head.textContent = skipped.length + ' ' + cpPlural(skipped.length, "line wasn't printed:", "lines weren't printed:");
+            head.textContent = skipped.length + ' ' + cpPlural(skipped.length, "line isn't in the print:", "lines aren't in the print:");
             var ul = document.createElement('ul');
             skipped.forEach(function(s) {
                 var li = document.createElement('li');

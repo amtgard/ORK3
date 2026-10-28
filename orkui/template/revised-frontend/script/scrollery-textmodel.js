@@ -65,6 +65,15 @@
             }
         }
 
+        // The name can already carry the title's rank word ("The Principality of the
+        // Crimson Sands" under title Principality), which printed it twice. Keep the
+        // title and let the name be the place. Same rank word plus " of" only. Twin of
+        // ScrollText::IssuerLines().
+        if (title !== '') {
+            m = new RegExp('^(?:(?:The|Þe)\\s+)?' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+of\\s+(.+)$', 'i').exec(name);
+            if (m) { name = m[1]; }
+        }
+
         // "the" and "of" need a rank word to hang on; with none they would print
         // "and the  of".
         var lead = 'and';

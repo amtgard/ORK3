@@ -177,8 +177,9 @@ class Controller_ScrolleryAjax extends Controller
     }
 
     /**
-     * The recipient's own possessive pronoun when a real player was picked, so the
-     * preview matches what a reprint would say; otherwise whatever was typed.
+     * The officer's typed override first, then the recipient's own possessive pronoun
+     * when a real player was picked (so the preview matches what a reprint would say),
+     * otherwise 'their'.
      */
     private function requested_pronoun(): string
     {
@@ -203,8 +204,6 @@ class Controller_ScrolleryAjax extends Controller
             }
         }
 
-        $typed = trim((string) ($_POST['pronoun'] ?? ''));
-
-        return $typed !== '' ? $typed : 'their';
+        return 'their';
     }
 }

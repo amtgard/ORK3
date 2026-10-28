@@ -2176,6 +2176,13 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php if (!empty($awardsList)): ?>
 				<button class="pn-btn pn-btn-sm btn-danger-confirm" style="margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				<?php endif; ?>
+				<?php if ($isOwnProfile): ?>
+				<?php /* An officer on their own profile takes this branch, not the one below,
+				          so the self-service link has to be offered here as well. */ ?>
+				<a href="<?= UIR ?>Scrollery/mine" class="pn-btn pn-btn-sm" style="margin-left:8px">
+					<i class="fas fa-scroll"></i> Print My Certificates
+				</a>
+				<?php endif; ?>
 				</div>
 				<?php elseif ($isOwnProfile): ?>
 				<div class="pn-tab-toolbar">
@@ -2302,8 +2309,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 									        data-award="<?= htmlspecialchars($awardData, ENT_QUOTES) ?>"
 									        data-tip="Revoke award"><i class="fas fa-ban"></i></button>
 									<?php /* Scrollery: only where certificate artwork exists — no dead buttons.
-									          Shares $canManageAwards with the buttons above rather than computing a
-									          second visibility rule; a player prints their own from Scrollery/mine.
+									          Sits under $canManageAwards with the buttons above, but CanPrintScroll is
+									          viewer-aware: for an officer, controller.Player.php runs the rows through
+									          Model_Scrollery::flag_viewer_printable_awards(), the render route's own
+									          gate (where GIVEN, not the recipient's home park), so an award given
+									          elsewhere or unattributed shows no button the render tab would refuse.
+									          A player prints their own from Scrollery/mine.
 
 									          Revoked rows are covered by this same flag — Model_Player folds
 									          ork_awards.revoked into CanPrintScroll — so there is deliberately no
@@ -3218,7 +3229,8 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 				         put for as long as the modal is open. It points at the LAST printable
 				         award granted in this session, and stays hidden until there is one —
 				         printability is decided server-side by Model_Scrollery::award_is_printable()
-				         on the AwardsId the grant actually wrote, so it is never a dead link. */ ?>
+				         on the AwardsId the grant actually wrote, for THIS officer (the render
+				         route's own permission gate), so it is never a dead link. */ ?>
 				<a href="#" id="pn-award-print-link" class="pn-award-print-icon" style="display:none"
 				   target="_blank" rel="noopener"
 				   data-tip="Print the certificate for the award you just granted"

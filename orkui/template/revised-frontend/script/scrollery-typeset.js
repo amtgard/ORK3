@@ -135,6 +135,19 @@
         MINOR_PENALTY: 6,
         MINOR_LINES: true,
         CLASSIC_PLACE_MIN: 0.85,  /* floor for the place in the Classic composition */
+
+        /* B1 (combo150 sweep). The last floor a FORCED Classic tries before it gives the
+           place up to Centered. Classic holds the place to one line, so a place too long
+           for that line at the table's floor (0.62em) used to print at 0.62em anyway and
+           run off the right edge of the page: c064, c104 and c106 needed about 0.34em,
+           c132 0.43em. 0.5em is 12pt on the letter sheet, still legible, and it rescues
+           a near miss (c091, a 3% overshoot at 0.62em, sets Classic at 0.60em). c131
+           needs 0.497em, just under it, and goes Centered with the rest. Below it the
+           place is unreadable and far under 0.75 of the name, so Centered, which wraps
+           the place onto two lines and set the same words at 104px in c022, is the honest
+           answer; the issuer section and the .Award say so in data-sc-fallback. Scaled by
+           floorScale like every floor, and never above the table's own. */
+        FORCED_CLASSIC_PLACE_MIN: 0.50,
         ORN_GAP: 0.12,            /* em of clearance kept between text ink and an ornament */
         H_TOP_MIN: 0.40,          /* share of the content height the top block must keep */
 
@@ -146,6 +159,17 @@
            §6.6), and the line-two rule's own two (§6.5.2: scale 0.8, then hidden). */
         ORN_SCALES: [1, 0.85, 0.70],
         RULE_SCALES: [1, 0.8],
+
+        /* The Custom Ribbon over the versal (A1, A2). A ribbon is a solid band, so unlike
+           the squiggle it is held clear of the heraldry and of the "A" itself
+           (placeRibbonTop). It may rise off the "A" by RIBBON_LIFT of its own em, slide
+           left by RIBBON_NUDGE at each size before it is made smaller, and by RIBBON_SLIDE
+           in all, in steps of RIBBON_STEP, before it is hidden. */
+        RIBBON_LIFT: 0.35,
+        RIBBON_SLIDE: 1.60,
+        RIBBON_STEP: 0.05,
+        RIBBON_NUDGE: 0.40,
+        HERALDRY_GRID: 48,        /* cells a side when the heraldry's ink is read (heraldryInk) */
 
         /* The Centered rule pair (§6.5.2): each half is min(RULE.share of the place's
            widest line, RULE.maxEm of its own em) wide; the halves meet with RULE.gapEm
@@ -1499,6 +1523,8 @@
      * engine role, the lead (one run of text, no lines) and the two quiet lines under
      * the issuer. NOT the versal: the top and bottom flourishes are drawn around
      * "Amtgard" by design, and the versal is not a role, so it is simply not listed.
+     * The one exception is the Custom Ribbon's top piece, which also keeps clear of the
+     * "A" alone: versalGlyph() below, added for it in placeOrnaments().
      */
     function textBoxes(award, k) {
         var out = [];
@@ -1524,6 +1550,137 @@
             }
         }
         return false;
+    }
+
+    var glyphCanvas = null;
+
+    /*
+     * The ink box of the versal's first letter, the "A", in frame px, or null.
+     *
+     * Its left edge comes from a Range on the one character, its ink from the browser's
+     * own glyph metrics (canvas measureText) in the versal's computed font, and its
+     * baseline from a zero-size inline-block set on the line beside it and taken out
+     * again before anything paints. Not the Range's top plus the font's ascent: the
+     * Range's box is the line's, not the face's, and measured on the four proof hands it
+     * put the baseline 25px high. A browser without the glyph metrics gets the Range's
+     * box, which is taller than the ink and so errs clear.
+     */
+    function versalGlyph(award, k, versal) {
+        if (!versal) { return null; }
+        var walker = document.createTreeWalker(versal, NodeFilter.SHOW_TEXT), node = walker.nextNode();
+        var i = node ? node.data.search(/\S/) : -1;
+        if (i < 0) { return null; }
+        var range = document.createRange();
+        range.setStart(node, i);
+        range.setEnd(node, i + 1);
+        var r = range.getBoundingClientRect(), a = award.getBoundingClientRect();
+        if (!(r.width > 0 && r.height > 0)) { return null; }
+        var box = { x0: (r.left - a.left) / k, y0: (r.top - a.top) / k, x1: (r.right - a.left) / k, y1: (r.bottom - a.top) / k };
+        glyphCanvas = glyphCanvas || document.createElement('canvas');
+        var g = glyphCanvas.getContext && glyphCanvas.getContext('2d');
+        if (!g) { return box; }
+        var cs = computed(versal);
+        g.font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+        var m = g.measureText(node.data.charAt(i));
+        if (m.actualBoundingBoxAscent == null) { return box; }
+        var probe = document.createElement('span');
+        probe.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline';
+        node.parentNode.insertBefore(probe, node);
+        var baseline = (probe.getBoundingClientRect().top - a.top) / k;
+        node.parentNode.removeChild(probe);
+        return {
+            x0: box.x0 - m.actualBoundingBoxLeft, x1: box.x0 + m.actualBoundingBoxRight,
+            y0: baseline - m.actualBoundingBoxAscent, y1: baseline + m.actualBoundingBoxDescent
+        };
+    }
+
+    /*
+     * The heraldry as it is drawn, in frame px: a list of boxes, empty when the
+     * certificate has none.
+     *
+     * The <img> is a fixed 420px slot with object-fit: contain, so a device that is not
+     * square fills only part of it, and getBoundingClientRect carries the officer's own
+     * move and scale (--heraldry-transform). Inside that, what shows is the device's ink:
+     * the image is drawn with mix-blend-mode: multiply, so its white ground vanishes into
+     * the paper and only what is darker than near-white, and not transparent, is seen. A
+     * heater shield on white is therefore a shield, tapering to its point, and the
+     * ribbon may tuck in beside the point as the squiggle was drawn to; a device on an
+     * opaque black square is that square (B6). The ink is read once per image, on a
+     * HERALDRY_GRID canvas, as one box per run of inked cells in each row. An image the
+     * page may not read (not decoded yet, or another origin) is its whole drawn box.
+     */
+    var heraldryCache = Object.create(null);
+
+    function heraldryCells(img) {
+        /* Not before it is decoded: an image with its natural size known but its pixels
+           still arriving draws NOTHING (drawImage does not throw), every cell would read
+           as paper, and the ribbon would be judged as if there were no heraldry. Until
+           then the caller takes the whole drawn box, and nothing is cached. */
+        if (!(img.complete && img.naturalWidth > 0)) { return null; }
+        var key = img.currentSrc || img.src;
+        if (key in heraldryCache) { return heraldryCache[key]; }
+        var n = CONST.HERALDRY_GRID, rows = null;
+        try {
+            var c = document.createElement('canvas');
+            c.width = n;
+            c.height = n;
+            var g = c.getContext('2d');
+            g.drawImage(img, 0, 0, n, n);
+            var px = g.getImageData(0, 0, n, n).data;
+            rows = [];
+            for (var y = 0; y < n; y++) {
+                var row = [];
+                for (var x = 0; x < n; x++) {
+                    var i = (y * n + x) * 4;
+                    row.push(px[i + 3] > 40 && Math.min(px[i], px[i + 1], px[i + 2]) < 235);
+                }
+                rows.push(row);
+            }
+        } catch (e) {
+            rows = null;
+        }
+        heraldryCache[key] = rows;
+        return rows;
+    }
+
+    function heraldryInk(award, k) {
+        var host = award.closest('.award-template') || award.parentElement;
+        var img = host ? host.querySelector('.centre-top img') : null;
+        if (!img || !img.getAttribute('src')) { return []; }
+        var r = img.getBoundingClientRect(), a = award.getBoundingClientRect();
+        if (!(r.width > 0 && r.height > 0)) { return []; }
+        var w = r.width, h = r.height, nw = img.naturalWidth, nh = img.naturalHeight;
+        if (nw > 0 && nh > 0) {
+            var s = Math.min(r.width / nw, r.height / nh);
+            w = nw * s;
+            h = nh * s;
+        }
+        var X = (r.left + (r.width - w) / 2 - a.left) / k, Y = (r.top + (r.height - h) / 2 - a.top) / k;
+        w /= k;
+        h /= k;
+        var rows = nw > 0 && nh > 0 ? heraldryCells(img) : null;
+        if (!rows) { return [{ x0: X, y0: Y, x1: X + w, y1: Y + h }]; }
+        var n = rows.length, cw = w / n, ch = h / n, out = [];
+        rows.forEach(function (row, y) {
+            for (var x = 0; x < n; x++) {
+                if (!row[x]) { continue; }
+                var x1 = x;
+                while (x1 + 1 < n && row[x1 + 1]) { x1++; }
+                out.push({ x0: X + x * cw, y0: Y + y * ch, x1: X + (x1 + 1) * cw, y1: Y + (y + 1) * ch });
+                x = x1;
+            }
+        });
+        return out;
+    }
+
+    /* How far the ink must rise to clear `box` grown by `gap`, over the columns it shares
+       with it: 0 when it already does, or shares none. */
+    function liftOver(rects, box, gap) {
+        var need = 0;
+        rects.forEach(function (c) {
+            if (c[0] < box.x1 + gap - INK_EPS && c[2] > box.x0 - gap + INK_EPS) { need = Math.max(need, c[3] - (box.y0 - gap)); }
+        });
+        return need > INK_EPS ? need : 0;
     }
 
     /*
@@ -1619,7 +1776,7 @@
         A.section.style.removeProperty('--sc-place-gutter');
         A.section.style.removeProperty('--sc-place-reserve');
         if (!A.section.getAttribute('style')) { A.section.removeAttribute('style'); }
-        if (A.top) { resetFlourish(A.top, ['width', 'display']); }
+        if (A.top) { resetFlourish(A.top, ['width', 'display', 'bottom', 'left']); }
         if (A.bottom) { resetFlourish(A.bottom, ['width', 'display']); }
         if (A.right) { resetFlourish(A.right); }
         A.rules.forEach(function (r) { resetFlourish(r); });
@@ -1815,7 +1972,7 @@
     }
 
     /* Classic (§6.5.1). */
-    function issuerClassic(ctx, A, caps, st, relaxed) {
+    function issuerClassic(ctx, A, caps, st, floor) {
         var award = ctx.award, root = ctx.rootPx, col = ctx.column, gap = CONST.ORN_GAP * root;
         var P = CONST.ROLES.placeClassic, lh = P.lineHeight;
 
@@ -1831,8 +1988,9 @@
         var leadM = prepareLead(A);
 
         /* The place's smallest size for Classic to count as feasible. A forced Classic
-           that cannot meet it is solved again at the table's own floor. */
-        var pmin = relaxed ? caps.placeMin
+           that cannot meet it is solved again at a `floor` of its own: the table's, then
+           FORCED_CLASSIC_PLACE_MIN (layoutIssuer). */
+        var pmin = floor != null ? floor
             : Math.max(caps.placeMin, Math.min(CONST.CLASSIC_PLACE_MIN * ctx.floorScale, caps.placeMax));
 
         /* The geometry that does not depend on the place's text: the place's box
@@ -2054,19 +2212,38 @@
         if (forced === 'centered') {
             res = issuerCentered(ctx, A, caps);
         } else {
-            res = issuerClassic(ctx, A, caps, st, false);
+            res = issuerClassic(ctx, A, caps, st, null);
             if (!res.feasible) {
                 if (forced === 'classic') {
-                    /* A forced Classic renders anyway, at the floors, and says so. */
-                    res = issuerClassic(ctx, A, caps, st, true);
-                    res.feasible = false;
-                    if (res.place) { A.place.setAttribute('data-sc-overflow', '1'); res.place.overflow = true; }
-                    if (!res.lead.fits) { reportLead(A, res.lead.size, true); }
+                    /* A forced Classic renders anyway, at the floors. Infeasible says only
+                       that one of three things failed (the place at CLASSIC_PLACE_MIN, the
+                       lead at its floor, the profile across the column), so the place is
+                       judged on its OWN measured overflow from here on, which setRole and
+                       reverifyPlace write truthfully. It used to be stamped overflowing
+                       whenever the composition was infeasible, and c050, c098, c049 and c052
+                       reported a place overflow over a place that fitted, the lead or the
+                       artwork being what failed. A lead or a profile that fails keeps Classic
+                       at the floors, as before. */
+                    res = issuerClassic(ctx, A, caps, st, caps.placeMin);
+                    /* B1: the place still overflows its one line. Only for the reader's own
+                       choice (ctx.heading): the right-flourish re-solve of an AUTOMATIC
+                       Classic arrives here forced by st.comp, and Automatic must not change. */
+                    if (ctx.heading === 'classic' && res.place && res.place.overflow) {
+                        res = issuerClassic(ctx, A, caps, st, Math.min(CONST.FORCED_CLASSIC_PLACE_MIN * fs, caps.placeMin));
+                        if (res.place && res.place.overflow) {
+                            res = issuerCentered(ctx, A, caps);
+                            res.fellBack = 'classic';
+                        }
+                    }
+                    if (!res.fellBack) { res.feasible = false; }
                 } else {
                     res = issuerCentered(ctx, A, caps);
                 }
             }
         }
+        /* Every solve says whether it fell back, so a re-solve that no longer needs to
+           (the name shrank, the right flourish went) takes the stamp off. */
+        if (res.fellBack) { A.section.setAttribute('data-sc-fallback', res.fellBack); } else { A.section.removeAttribute('data-sc-fallback'); }
         if (res.lead) { reportLead(A, res.lead.size, !res.lead.fits); }
         res.caps = caps;
         return res;
@@ -2098,6 +2275,107 @@
         if (res.lead) { setArticle(ctx, A, res.lead.size); }
     }
 
+    /* ------------------------------------------------------------ the Custom Ribbon */
+
+    function ribbonOn(A) {
+        return !!(A.top && A.top.classList.contains('sc-ribbon'));
+    }
+
+    function shiftedY(rects, dy) {
+        return rects.map(function (c) { return [c[0], c[1] + dy, c[2], c[3] + dy]; });
+    }
+
+    function shiftedX(rects, dx) {
+        return rects.map(function (c) { return [c[0] + dx, c[1], c[2] + dx, c[3]]; });
+    }
+
+    /*
+     * Place the Custom Ribbon's top piece (A1, A2).
+     *
+     * The ribbon starts where the stylesheet puts it, over the "A", and is kept only
+     * where its ink is clear of the text, of the "A" itself and of the heraldry as drawn.
+     * In Centered that is straight under the heraldry slot, with about half a root em
+     * between the slot's foot and the versal: the squiggle lives with that because it is
+     * a thin stroke and a device tapers, but a ribbon is a solid band. Under a tall
+     * device that fills its box (c076's arms sit on a black square) there is no size at
+     * which it fits between the two, in place: measured, none down to 0.70. What is clear
+     * there is the paper to the left of the device, above the "A". Making room by
+     * bringing the type down was tried and is not done: the top block is usually at its
+     * budget already (c076 had 9px to spare, c034 15px), so the room came out of the
+     * citation, and c034's was clipped. So the ribbon yields, the type never does:
+     *
+     *   - at each scale of ORN_SCALES it rises off the "A" by what its ink lacks over
+     *     the letter, at most RIBBON_LIFT of its own em, and may first slide left by up
+     *     to RIBBON_NUDGE before the next scale down is tried: a nudge off the "A" is
+     *     less of a change than a smaller ribbon, and on c122 the lift alone took the
+     *     0.85 ribbon up into a fleck of the device's wave, leaving it at 0.70;
+     *   - failing every scale that way, it slides further left, RIBBON_STEP at a time up
+     *     to RIBBON_SLIDE of its own em, taking the shortest slide that clears at any
+     *     scale (the largest scale at that slide);
+     *   - a slid ribbon must also clear the artwork, since it has left the place the
+     *     artwork was drawn around;
+     *   - hidden only when nothing clears, as any flourish is.
+     *
+     * Each scale is laid out once; the lift and the slide move its ink as a whole, so
+     * they are arithmetic on the grid, and only the answer is written back.
+     * Returns 'placed' (full size), 'scaled' or 'hidden'.
+     */
+    function placeRibbonTop(ctx, A, k, boxes, gap) {
+        var award = ctx.award, img = A.top;
+        resetFlourish(img, ['width', 'bottom', 'left']);
+        if (!(img.offsetWidth > 0)) { return computed(img).display === 'none' ? 'hidden' : 'placed'; }
+        var cs = computed(img), base = img.offsetWidth, fontPx = pxOf(cs.fontSize) || 100;
+        /* num, not pxOf: the stylesheet's left is negative, and pxOf floors at 0. */
+        var bottom0 = num(cs.bottom), left0 = num(cs.left);
+        var V = versalGlyph(award, k, A.versal);
+        var avoid = boxes.concat(V ? [V] : [], heraldryInk(award, k));
+        var maxLift = CONST.RIBBON_LIFT * fontPx + INK_EPS;
+
+        var inks = [];
+        for (var i = 0; i < CONST.ORN_SCALES.length; i++) {
+            if (CONST.ORN_SCALES[i] === 1) { resetFlourish(img, ['width']); } else { setWidth(img, base * CONST.ORN_SCALES[i]); }
+            var ink = inkOf(award, img);
+            if (!ink) { resetFlourish(img, ['width']); return 'placed'; }
+            inks.push(ink.rects);
+        }
+
+        /* A slid ribbon stays inside the column, or no further out than it already hung:
+           the profile below is the artwork's edge only where the order has one. */
+        function leftmost(rects) {
+            return rects.reduce(function (m, c) { return Math.min(m, c[0]); }, Infinity);
+        }
+        var floorX = Math.min(ctx.column.left, leftmost(inks.length ? inks[0] : []));
+
+        function fits(rects, dx) {
+            var moved = shiftedX(rects, dx);
+            if (dx !== 0 && leftmost(moved) < floorX - INK_EPS) { return null; }
+            var lift = V ? liftOver(moved, V, gap) : 0;
+            if (lift > maxLift) { return null; }
+            moved = shiftedY(moved, -lift);
+            if (hitsText(moved, avoid, gap) || (dx !== 0 && hitsArtwork(ctx, moved))) { return null; }
+            return { lift: lift };
+        }
+
+        var steps = Math.floor(CONST.RIBBON_SLIDE / CONST.RIBBON_STEP + 1e-9);
+        var near = Math.min(steps, Math.floor(CONST.RIBBON_NUDGE / CONST.RIBBON_STEP + 1e-9));
+        var order = [], n, j;
+        for (j = 0; j < inks.length; j++) { for (n = 0; n <= near; n++) { order.push([n, j]); } }
+        for (n = near + 1; n <= steps; n++) { for (j = 0; j < inks.length; j++) { order.push([n, j]); } }
+        for (var o = 0; o < order.length; o++) {
+            var dx = -order[o][0] * CONST.RIBBON_STEP * fontPx;
+            var hit = fits(inks[order[o][1]], dx);
+            if (!hit) { continue; }
+            var s = CONST.ORN_SCALES[order[o][1]];
+            if (s === 1) { resetFlourish(img, ['width']); } else { setWidth(img, base * s); }
+            if (hit.lift > 0) { img.style.bottom = ((bottom0 + hit.lift) / fontPx).toFixed(4) + 'em'; }
+            if (dx !== 0) { img.style.left = ((left0 + dx) / fontPx).toFixed(4) + 'em'; }
+            return s === 1 ? 'placed' : 'scaled';
+        }
+        resetFlourish(img, ['width']);
+        img.style.display = 'none';
+        return 'hidden';
+    }
+
     /*
      * Ornament placement (§6.6), after the text is final. Each flourish is tried placed,
      * then at 0.85 and 0.70, then hidden; the Centered rule pair at 1 and 0.8. Returns
@@ -2121,8 +2399,10 @@
         /* #TopTextFlourish and #BottomTextFlourish are one piece with the versal: where
            they sit is where the artwork was designed to leave room for "Amtgard", so they
            are not judged against the artwork, only against the text. Only the right
-           flourish and the rule pair give way to the artwork. */
-        out.top = inPlace(A.top, true);
+           flourish and the rule pair give way to the artwork. The Custom Ribbon's top
+           piece is the exception: it is not the drawing the artwork left room for, so it
+           is also kept off the heraldry and the "A" (placeRibbonTop). */
+        out.top = ribbonOn(A) ? placeRibbonTop(ctx, A, k, boxes, gap) : inPlace(A.top, true);
 
         if (comp === 'classic') {
             out.bottom = inPlace(A.bottom, true);
@@ -2331,7 +2611,7 @@
                    the type could have had: solve the issuer again without it. */
                 res = layoutIssuer(ctx, I, { nameSize: nameSize, nameEff: nameEff, awardSize: awardSize, rightOff: true, comp: 'classic' });
                 enforceHierarchy(ctx, I, res, nameSize, awardSize, nameEff);
-                orn = placeOrnaments(ctx, I, 'classic', { rightOff: true });
+                orn = placeOrnaments(ctx, I, res.comp, { rightOff: true });
             }
 
             report.comp = res.comp;
@@ -2339,10 +2619,21 @@
             if (res.lead) { report.roles.lead = { size: res.lead.size, lines: Number(I.lead.getAttribute('data-sc-lines')), planned: 1, overflow: !res.lead.fits }; }
             if (res.place) { report.roles.place = res.place; }
             award.setAttribute('data-sc-comp', res.comp);
+            /* A forced Classic that could not fit and was set Centered (B1). data-sc-comp
+               stays truthful ('centered'); this says why, for the heading control
+               (ScrolleryHeading in scrollery-hand.js) and the sweep. */
+            if (res.fellBack) {
+                report.fallback = res.fellBack;
+                award.setAttribute('data-sc-fallback', res.fellBack);
+            } else {
+                award.removeAttribute('data-sc-fallback');
+            }
         } else if (report.comp) {
             award.setAttribute('data-sc-comp', report.comp);
+            award.removeAttribute('data-sc-fallback');
         } else {
             award.removeAttribute('data-sc-comp');
+            award.removeAttribute('data-sc-fallback');
         }
         award.setAttribute('data-sc-budget', report.budget);
 

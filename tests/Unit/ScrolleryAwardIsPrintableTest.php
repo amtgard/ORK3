@@ -17,9 +17,19 @@ use PHPUnit\Framework\TestCase;
  * load_model('Scrollery') plus a full award lookup running on every award grant
  * in the ORK. Before the single-row branch in Player::AwardsForPlayer(), that
  * lookup materialised 3,076 rows to keep one, at ~124 ms a grant.
+ *
+ * It now also takes the viewer and runs print_permission(): the officer granting
+ * need not hold the park/kingdom the award was given AT, and a link the render
+ * route then refuses is exactly the dead link this exists to prevent.
  */
 final class ScrolleryAwardIsPrintableTest extends TestCase
 {
+    /** insertLadderGrant()'s recipient — print_permission()'s recipient branch. */
+    private const RECIPIENT = 100000057;
+
+    /** Holds no authority over the seed kingdom (see ScrolleryPrintDecisionTest). */
+    private const STRANGER = 100000058;
+
     private Model_Scrollery $model;
 
     protected function setUp(): void
@@ -33,17 +43,17 @@ final class ScrolleryAwardIsPrintableTest extends TestCase
 
     public function testZeroIdIsNeverPrintable(): void
     {
-        $this->assertFalse($this->model->award_is_printable(0));
+        $this->assertFalse($this->model->award_is_printable(0, self::RECIPIENT));
     }
 
     public function testNegativeIdIsNeverPrintable(): void
     {
-        $this->assertFalse($this->model->award_is_printable(-1));
+        $this->assertFalse($this->model->award_is_printable(-1, self::RECIPIENT));
     }
 
     public function testNonexistentIdIsNotPrintable(): void
     {
-        $this->assertFalse($this->model->award_is_printable(999999));
+        $this->assertFalse($this->model->award_is_printable(999999, self::RECIPIENT));
     }
 
     /**
@@ -67,7 +77,7 @@ final class ScrolleryAwardIsPrintableTest extends TestCase
         }
 
         $this->assertFalse(
-            $this->model->award_is_printable($awardsId),
+            $this->model->award_is_printable($awardsId, self::RECIPIENT),
             'award_id 245 is Knight of Battle, a knighthood — Scrollery must not offer it.'
         );
     }
@@ -86,7 +96,7 @@ final class ScrolleryAwardIsPrintableTest extends TestCase
         }
 
         try {
-            $this->assertTrue($this->model->award_is_printable($awardsId));
+            $this->assertTrue($this->model->award_is_printable($awardsId, self::RECIPIENT));
         } finally {
             $this->deleteAward($awardsId);
         }
@@ -106,7 +116,7 @@ final class ScrolleryAwardIsPrintableTest extends TestCase
         }
 
         try {
-            $this->assertTrue($this->model->award_is_printable($awardsId), 'precondition');
+            $this->assertTrue($this->model->award_is_printable($awardsId, self::RECIPIENT), 'precondition');
 
             global $DB;
             $DB->Clear();
@@ -115,9 +125,29 @@ final class ScrolleryAwardIsPrintableTest extends TestCase
             );
 
             $this->assertFalse(
-                $this->model->award_is_printable($awardsId),
+                $this->model->award_is_printable($awardsId, self::RECIPIENT),
                 'A revoked award must never be printable.'
             );
+        } finally {
+            $this->deleteAward($awardsId);
+        }
+    }
+
+    /**
+     * A printable row is still not printable for a viewer the render route would
+     * refuse — the grant-modal link must not open onto a denial.
+     */
+    public function testAPrintableGrantIsNotPrintableForAViewerWithoutAuthority(): void
+    {
+        $awardsId = $this->insertLadderGrant(21);
+        if ($awardsId <= 0) {
+            $this->markTestSkipped('No kingdomaward row for award_id 21 in the seed data.');
+        }
+
+        try {
+            $this->assertTrue($this->model->award_is_printable($awardsId, self::RECIPIENT), 'precondition');
+            $this->assertFalse($this->model->award_is_printable($awardsId, self::STRANGER));
+            $this->assertFalse($this->model->award_is_printable($awardsId, 0));
         } finally {
             $this->deleteAward($awardsId);
         }
@@ -145,7 +175,7 @@ final class ScrolleryAwardIsPrintableTest extends TestCase
                 (kingdomaward_id, mundane_id, rank, date, given_by_id, note,
                  at_park_id, at_kingdom_id, at_event_id, custom_name, award_id,
                  by_whom_id, entered_at, revoked)
-             VALUES ({$kingdomAwardId}, 100000057, 3, '2026-05-01', 1, '',
+             VALUES ({$kingdomAwardId}, " . self::RECIPIENT . ", 3, '2026-05-01', 1, '',
                  0, {$kingdomId}, 0, '', " . (int) $awardId . ", 0, NOW(), 0)"
         );
 

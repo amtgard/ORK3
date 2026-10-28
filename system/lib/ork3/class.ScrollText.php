@@ -80,6 +80,15 @@ class ScrollText
             }
         }
 
+        // The name can already carry the rank word the title names ("The Principality
+        // of the Crimson Sands" under title Principality), which printed it twice. Keep
+        // the title and let the name be the place. Only the same rank word followed by
+        // " of" counts: a different one ("Principality of X" under Barony) is as typed.
+        if ($title !== ''
+            && preg_match('/^(?:(?:The|Þe)\s+)?' . preg_quote($title, '/') . '\s+of\s+(.+)$/iu', $name, $m) === 1) {
+            $name = $m[1];
+        }
+
         // "the" and "of" cannot stand without a rank word to hang on: with an empty
         // title they printed "and the  of".
         $lead = 'and';

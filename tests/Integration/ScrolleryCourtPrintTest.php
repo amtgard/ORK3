@@ -272,4 +272,35 @@ final class ScrolleryCourtPrintTest extends TestCase
         $this->assertArrayHasKey($line, $run['Scrolls']);
         $this->assertSame('', $run['Scrolls'][$line]['reason']);
     }
+
+    /**
+     * The print page's run-level arms choice. Automatic is the court's own arms with no
+     * design key (the print log records it as it always did); Persona arms draws the
+     * recipient's own and says so on the design; a recipient with none falls back
+     * through park (a kingdom court has none) to the court's kingdom — exactly the arms
+     * Automatic drew — or to no arms at all.
+     */
+    public function testARunLevelHeraldryChoiceDrawsFallsBackAndIsRecorded(): void
+    {
+        $line = $this->scrolleryLine($this->printableKa());
+        $arms = function (int $has): void {
+            $this->fixture->pdo()->exec(
+                'UPDATE ' . DB_PREFIX . 'mundane SET has_heraldry = ' . $has . ' WHERE mundane_id = ' . $this->playerId
+            );
+        };
+
+        $arms(0);
+        $auto = $this->model->scrolls_for_court_awards($this->courtId, [$line], $this->playerId)['Scrolls'][$line];
+        $this->assertSame('', $auto['design']['heraldrySource'], 'Automatic adds no design');
+        $this->assertSame($auto, $this->model->scrolls_for_court_awards($this->courtId, [$line], $this->playerId, 'auto')['Scrolls'][$line]);
+
+        $fell = $this->model->scrolls_for_court_awards($this->courtId, [$line], $this->playerId, 'persona')['Scrolls'][$line];
+        $this->assertSame($auto['heraldry'], $fell['heraldry'], 'no persona arms: the court kingdom\'s, as Automatic drew');
+        $this->assertSame($auto['heraldry'] !== '' ? 'kingdom' : '', $fell['design']['heraldrySource']);
+
+        $arms(1);
+        $persona = $this->model->scrolls_for_court_awards($this->courtId, [$line], $this->playerId, 'persona')['Scrolls'][$line];
+        $this->assertSame('persona', $persona['design']['heraldrySource']);
+        $this->assertStringContainsString(sprintf('%06d', $this->playerId), $persona['heraldry']);
+    }
 }

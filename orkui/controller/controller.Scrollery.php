@@ -421,8 +421,11 @@ class Controller_Scrollery extends Controller
         //
         // The permission decision is still per (viewer, award) inside the model, and
         // still uncached. Only the READ is batched.
-        $run     = $this->Scrollery->scrolls_for_awards_ids($awardsIds, $viewerId, $variant);
-        $scrolls = [];
+        // &heraldry= — whose arms every certificate in the run draws, chosen in the
+        // page's options sheet. Absent or unknown is 'auto': what reprints always drew.
+        $heraldry = Scroll::NormaliseRunHeraldry(isset($_GET['heraldry']) ? (string) $_GET['heraldry'] : null);
+        $run      = $this->Scrollery->scrolls_for_awards_ids($awardsIds, $viewerId, $variant, $heraldry);
+        $scrolls  = [];
         foreach ($run['Scrolls'] as $awardsId => $scroll) {
             $scrolls[] = $scroll;
             $this->record_print((int) $awardsId, $scroll, $viewerId);
@@ -456,6 +459,10 @@ class Controller_Scrollery extends Controller
         $this->render_bare('Scrollery_render.tpl', [
             'Scrolls'    => $scrolls,
             'AutoPrint'  => isset($_GET['print']),
+            // The options sheet offers the run-level arms choice here and on court(),
+            // never on compose(), whose arms were already chosen in the composer.
+            'HeraldryChoice' => true,
+            'Heraldry'       => $heraldry,
             'Dropped'    => $dropped,
             'MaxRun'     => Scroll::MAX_PRINT_RUN,
             'PageTitle'  => count($scrolls) === 1
@@ -466,10 +473,15 @@ class Controller_Scrollery extends Controller
 
     /**
      * A court's Scrollery Print lines, as one bare print run — the Court Planner's
-     * "Print Scrollery scrolls" button opens this in a new tab.
+     * "Print Scrollery scrolls" button opens this in a new tab, with &configure=1 rather
+     * than &print=1: the page opens on its options sheet (the hand, signature, heading,
+     * reason lines and arms for the whole run) and the officer prints from there.
      *
-     * Route is Scrollery/court/{courtId}, with &lines=1,2,3 naming the court lines
-     * the planner meant to print (absent or empty: every Scrollery Print line).
+     * Route is Scrollery/court/{courtId}, with &courtLines=1,2,3 naming the court lines
+     * the planner meant to print (absent or empty: every Scrollery Print line). Not
+     * &lines=: Scrollery_render.tpl reads that as its Reason-lines on/off switch and
+     * rewrites it when the box is toggled, which turned "these three lines" into
+     * "every line" on reload.
      * The list is a request, never a grant: Model_Scrollery::scrolls_for_court_awards()
      * re-reads the court, drops ids that are not this court's, and drops lines a peer
      * has since moved off Scrollery Print or cancelled.
@@ -508,11 +520,13 @@ class Controller_Scrollery extends Controller
         }
 
         $lineIds = array_values(array_unique(array_filter(
-            array_map('intval', explode(',', (string) ($_GET['lines'] ?? '')))
+            array_map('intval', explode(',', (string) ($_GET['courtLines'] ?? '')))
         )));
 
-        $run     = $this->Scrollery->scrolls_for_court_awards($courtId, $lineIds, $viewerId);
-        $planner = 'Court/detail/' . $courtId;
+        // &heraldry= as on render(): 'auto' (the default) is the court's own arms.
+        $heraldry = Scroll::NormaliseRunHeraldry(isset($_GET['heraldry']) ? (string) $_GET['heraldry'] : null);
+        $run      = $this->Scrollery->scrolls_for_court_awards($courtId, $lineIds, $viewerId, $heraldry);
+        $planner  = 'Court/detail/' . $courtId;
 
         if ($run['Scrolls'] === []) {
             $first = reset($run['Skipped']);
@@ -555,6 +569,11 @@ class Controller_Scrollery extends Controller
             'Dropped'   => (int) $run['Dropped'],
             'MaxRun'    => Scroll::MAX_PRINT_RUN,
             'AutoPrint' => isset($_GET['print']),
+            'HeraldryChoice' => true,
+            'Heraldry'       => $heraldry,
+            // The print tab is opened blank and then pointed here, so it rarely has a
+            // referrer; Back should still lead to the planner it came from.
+            'BackUrl'   => UIR . $planner,
             'PageTitle' => count($scrolls) . (count($scrolls) === 1 ? ' scroll' : ' scrolls'),
         ]);
     }

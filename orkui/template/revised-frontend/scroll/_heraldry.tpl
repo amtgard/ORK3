@@ -13,6 +13,6 @@ $hHeight = (isset($height) && $height !== '' && $height !== null) ? (int) $heigh
 <div class="centre-top" style="margin-top:<?= $hTop ?>px;padding:1px;">
 <?php if (($s['heraldry'] ?? '') !== ''): ?>
     <img src="<?= scroll_e($s['heraldry']) ?>" width="<?= $hWidth ?>" height="<?= $hHeight ?>"
-         style="mix-blend-mode: multiply;object-fit:contain;filter: var(--heraldry-filter);transform: var(--heraldry-transform);" alt="">
+         style="mix-blend-mode: multiply;object-fit:contain;" alt="">
 <?php endif; ?>
 </div>

@@ -83,6 +83,60 @@ $scrollery_lines = Scroll::NormaliseShowLines($_GET['lines'] ?? null);
 $scrollery_heading = Scroll::NormaliseHeading(isset($_GET['heading']) ? (string) $_GET['heading'] : null);
 
 /*
+ * The run's arms — &heraldry=, and whether the options sheet offers it.
+ *
+ * Unlike the four above it is not stamped on <body>: the arms are drawn server-side,
+ * so the controller has already resolved it into every certificate (render() and
+ * court() pass HeraldryChoice and the normalised Heraldry; compose() passes neither,
+ * because its arms were chosen in the composer). Normalised again here only because
+ * this template is also included by the fixture renderer, which passes nothing.
+ *
+ * The note says how the choice landed on THIS run — how many certificates had no arms
+ * from the chosen source and fell back, and how many have none at all — off each
+ * scroll's design.heraldrySource, which is the source that was actually drawn.
+ */
+$scrollery_heraldry_choice = !empty($HeraldryChoice);
+$scrollery_heraldry        = Scroll::NormaliseRunHeraldry(isset($Heraldry) ? (string) $Heraldry : null);
+$scrollery_arms_note       = '';
+if ($scrollery_heraldry_choice && $scrollery_heraldry !== Scroll::HERALDRY_AUTO) {
+    $scrollery_arms_label = ['kingdom' => 'kingdom arms', 'park' => 'park arms', 'persona' => 'persona arms'][$scrollery_heraldry];
+    $scrollery_arms_fell  = 0;
+    $scrollery_arms_none  = 0;
+    foreach ($Scrolls as $scrollery_scan) {
+        if ((string) ($scrollery_scan['heraldry'] ?? '') === '') {
+            $scrollery_arms_none++;
+        } elseif ((string) ($scrollery_scan['design']['heraldrySource'] ?? '') !== $scrollery_heraldry) {
+            $scrollery_arms_fell++;
+        }
+    }
+    $scrollery_arms_total = count($Scrolls);
+    $scrollery_arms_parts = [];
+    if ($scrollery_arms_fell > 0) {
+        $scrollery_arms_parts[] = $scrollery_arms_total === 1
+            ? 'This scroll has no ' . $scrollery_arms_label . ', so it uses the next arms available.'
+            : $scrollery_arms_fell . ' of ' . $scrollery_arms_total . ' scrolls have no ' . $scrollery_arms_label
+                . ' and use the next arms available.';
+    }
+    if ($scrollery_arms_none > 0) {
+        $scrollery_arms_parts[] = $scrollery_arms_total === 1
+            ? 'No arms were found for this scroll from any source.'
+            : $scrollery_arms_none . ' ' . ($scrollery_arms_none === 1 ? 'scroll has' : 'scrolls have')
+                . ' no arms from any source.';
+    }
+    $scrollery_arms_note = $scrollery_arms_parts !== []
+        ? implode(' ', $scrollery_arms_parts)
+        : ($scrollery_arms_total === 1 ? 'This scroll draws ' : 'Every scroll draws ') . $scrollery_arms_label . '.';
+}
+
+/*
+ * &configure=1 — open on the options sheet. The Court Planner's print tab arrives this
+ * way instead of with &print=1, and an arms reload sets it so the sheet comes back.
+ * Closing the sheet takes it off the URL again (replaceState), so a copied link or a
+ * refresh opens on the certificates.
+ */
+$scrollery_configure = isset($_GET['configure']) && (string) $_GET['configure'] === '1';
+
+/*
  * Sheet geometry — &trim=1 and &up=2|4.
  *
  * Both are print-shop and bulk affordances that a normal print must never see, so
@@ -109,15 +163,21 @@ if (!in_array($scrollery_up, [2, 4], true)) {
  *
  * It is a $_SERVER value, so it is checked rather than trusted: it must start with
  * this installation's own UI root (an open redirect on a page an officer is about to
- * click is exactly the wrong place to be casual), and it must not be another render
- * or compose URL, which would only bounce between previews.
+ * click is exactly the wrong place to be casual), and it must not be another render,
+ * compose or court URL, which would only bounce between previews — an arms reload
+ * from the options sheet is exactly that, and the sheet's script carries the Back
+ * target across it instead.
+ *
+ * Without a referrer it goes to $BackUrl where the controller names one (court():
+ * the planner the print tab was opened from), else the module's landing page.
  */
-$scrollery_back = UIR . 'Scrollery';
+$scrollery_back = isset($BackUrl) && is_string($BackUrl) && $BackUrl !== '' ? $BackUrl : UIR . 'Scrollery';
 $scrollery_ref  = (string) ($_SERVER['HTTP_REFERER'] ?? '');
 if ($scrollery_ref !== ''
     && strpos($scrollery_ref, HTTP_UI) === 0
     && strpos($scrollery_ref, 'Scrollery/render') === false
-    && strpos($scrollery_ref, 'Scrollery/compose') === false) {
+    && strpos($scrollery_ref, 'Scrollery/compose') === false
+    && strpos($scrollery_ref, 'Scrollery/court') === false) {
     $scrollery_back = $scrollery_ref;
 }
 ?>
@@ -134,46 +194,12 @@ if ($scrollery_ref !== ''
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery.css?v=<?= filemtime($scrollery_css) ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-signature.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-signature.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
-<style>
-/* An instant data-tip tooltip for the toolbar (project convention: never title=). The
-   bare print page loads none of the CRM's stylesheets, so the rule lives here. It drops
-   BELOW the label because the toolbar is stuck to the top edge, wraps, and is
-   right-anchored so a control near the right of a narrow window cannot push it off
-   screen. Chrome only: the toolbar is display:none under @media print. */
-/* The toolbar gained a third picker. It is a single nowrap flex row in scrollery.css, so
-   on a narrow window it would push Print off the edge; let it wrap instead. */
-.sc-toolbar { flex-wrap: wrap; }
-.sc-tip { position: relative; }
-.sc-tip[data-tip]:hover::after,
-.sc-tip[data-tip]:focus-within::after {
-    content: attr(data-tip);
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    z-index: 70;
-    width: max-content;
-    max-width: 240px;
-    padding: 6px 10px;
-    border-radius: 4px;
-    background: #2d3748;
-    color: #fff;
-    font-size: 12px;
-    line-height: 1.35;
-    text-align: left;
-    white-space: normal;
-    pointer-events: none;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, .3);
-}
-@media (prefers-color-scheme: dark) {
-    .sc-tip[data-tip]:hover::after,
-    .sc-tip[data-tip]:focus-within::after { background: #e2e8f0; color: #1a202c; }
-}
-</style>
 </head>
 <body class="scroll-surface"
       data-scroll-face="<?= scroll_e($scrollery_face) ?>"
       data-sc-heading="<?= scroll_e($scrollery_heading) ?>"
       data-scroll-sig="<?= scroll_e($scrollery_sig) ?>"
+      <?php if ($scrollery_configure): ?>data-sc-configure="1"<?php endif; ?>
       <?php if (!$scrollery_lines): ?>data-scroll-lines="0"<?php endif; ?>
       <?php if ($scrollery_trim): ?>data-scroll-trim="1"<?php endif; ?>
       <?php if ($scrollery_up): ?>data-scroll-up="<?= $scrollery_up ?>"<?php endif; ?>>
@@ -207,9 +233,15 @@ foreach ($Scrolls as $scrollery_scan) {
 <?php scroll_partial('border_defs', ['griffons' => $scrollery_needs_griffons]); ?>
 <?php scroll_partial('filters'); ?>
 <?php /*
-    Print / Back. Chrome, not content: it sits OUTSIDE .scroll-page so it cannot
-    reach a certificate's page-break-inside, and scrollery.css hides it under
-    @media print alongside the advisory, so it never reaches the paper.
+    Back / Configure Scroll Options / Print. Chrome, not content: it sits OUTSIDE
+    .scroll-page so it cannot reach a certificate's page-break-inside, and
+    scrollery.css hides it under @media print alongside the advisory, so it never
+    reaches the paper.
+
+    The per-print choices that used to sit inline here — hand, signature, heading,
+    reason lines — are in the options sheet below, with the run's arms beside them.
+    Four selects and a checkbox in one sticky row wrapped into three rows on a phone
+    and pushed Print off the edge on a narrow window; one button does not.
 
     The Print button calls window.print() directly. It is the same call the
     ?print=1 gate makes, minus the gate — by the time somebody has looked at the
@@ -218,88 +250,153 @@ foreach ($Scrolls as $scrollery_scan) {
 */ ?>
 <div class="sc-toolbar" role="toolbar" aria-label="Certificate actions">
     <span class="sc-toolbar-title"><?= scroll_e($PageTitle ?? 'Scroll') ?></span>
-    <?php /*
-        The hand picker.
-
-        One of four — the composer, `mine` and `bulk` carry the same control off the
-        same list. This one is the last chance to change it, with the certificate
-        already on screen, which is why it is the only one that re-letters in place
-        rather than handing the choice to a page that has not loaded yet.
-
-        Each option is drawn in the face it names, so the list is a specimen sheet
-        rather than a list of adjectives. Chrome and Firefox honour font-family on an
-        <option>; Safari and the mobile pickers do not, and there the label still
-        reads as the font's name, which is the fallback being asked for.
-
-        It changes the attribute rather than reloading. scrollery.css switches hands on
-        `[data-scroll-face]` on ANY ancestor (section 1a-ii says so in as many words),
-        so swapping it on <body> re-letters the page with no round trip, and the URL is
-        rewritten underneath so a copied link still carries the choice.
-    */ ?>
-    <label class="sc-toolbar-field" for="sc-face">
-        <span>Hand</span>
-        <select id="sc-face" class="sc-select">
-            <?php /* Not $scrollery_hand as the loop variable: that name is the PATH to
-                     scrollery-hand.js, and filemtime() on it further down would get a
-                     hand definition instead of a file. */ ?>
-            <?php foreach ($scrollery_hands as $scrollery_key => $scrollery_def): ?>
-            <option value="<?= scroll_e($scrollery_key) ?>" data-face-family="<?= scroll_e($scrollery_def['family']) ?>"<?= $scrollery_key === $scrollery_face ? ' selected' : '' ?>><?= scroll_e($scrollery_def['label']) ?></option>
-            <?php endforeach; ?>
-        </select>
-    </label>
-    <?php /*
-        The heading picker, beside the hand because it is the same kind of choice: how
-        this one print is set, not what the award is. The same label and select classes
-        as the hand, so it takes the same light and dark styling. The options are
-        Scroll::Headings() and the selection is the page's own normalised heading, so a
-        stranger in &heading= shows as Automatic, which is what the page rendered.
-
-        Like the hand it re-sets the page in place. The engine reads data-sc-heading off
-        any ancestor of a certificate, so changing it on <body> and calling the fit again
-        re-composes the top (Classic and Centered are different arrangements of the same
-        words) with no round trip. Chrome, so it is inside .sc-toolbar, which
-        scrollery.css hides whole under @media print; the choice reaches the paper
-        through the attribute it leaves on <body>, not through this control.
-
-        Unlike the hand it is not remembered: a forced heading is a rescue for a name that
-        sets badly, and would force a name that sets fine on the next certificate.
-
-        The Automatic option names what Automatic chose — "Automatic (Classic)", or
-        "(mixed)" on a bulk page whose certificates disagree — because on most
-        certificates Automatic and Classic look identical. See ScrolleryHeading in
-        script/scrollery-hand.js.
-    */ ?>
-    <?php /* The signature hand, beside the hand it is a sibling of: how the given-by line is
-             lettered, for a REPRINT where the signer would rather sign in script. Same
-             listbox as the hand (each option drawn in its own face), re-lettered in place
-             like it; "Match the lettering" is the default. */ ?>
-    <label class="sc-toolbar-field" for="sc-sig">
-        <span>Signature</span>
-        <select id="sc-sig" class="sc-select">
-            <?php foreach ($scrollery_sigs as $scrollery_skey => $scrollery_sdef): ?>
-            <option value="<?= scroll_e($scrollery_skey) ?>"<?= $scrollery_sdef['family'] !== '' ? ' data-face-family="' . scroll_e($scrollery_sdef['family']) . '"' : '' ?><?= $scrollery_skey === $scrollery_sig ? ' selected' : '' ?>><?= scroll_e($scrollery_sdef['label']) ?></option>
-            <?php endforeach; ?>
-        </select>
-    </label>
-    <label class="sc-toolbar-field sc-tip" for="sc-heading" data-tip="Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. Applies to this print only.">
-        <span>Heading</span>
-        <select id="sc-heading" class="sc-select">
-            <?php foreach (Scroll::Headings() as $scrollery_hkey => $scrollery_hlabel): ?>
-            <option value="<?= scroll_e($scrollery_hkey) ?>"<?= $scrollery_hkey === $scrollery_heading ? ' selected' : '' ?>><?= scroll_e($scrollery_hlabel) ?></option>
-            <?php endforeach; ?>
-        </select>
-    </label>
-    <?php /* The reason-lines switch. Beside the hand because it is the same kind of
-             thing — a per-print presentation choice that changes nothing about the
-             award — and on this page rather than only in the composer because a
-             REPRINT of an existing award is exactly when somebody wants a clean sheet
-             or a ruled one. */ ?>
-    <label class="sc-toolbar-check">
-        <input type="checkbox" id="sc-lines"<?= $scrollery_lines ? ' checked' : '' ?>>
-        <span>Reason lines</span>
-    </label>
-    <a class="sc-btn" href="<?= scroll_e($scrollery_back) ?>">&larr; Back</a>
+    <a class="sc-btn" id="sc-back" href="<?= scroll_e($scrollery_back) ?>">&larr; Back</a>
+    <?php /* The visible label shortens to "Options" on a phone (scrollery.css); the
+             accessible name stays whole, and still contains the visible word. */ ?>
+    <button type="button" class="sc-btn" id="sc-configure" aria-haspopup="dialog" aria-controls="sc-sheet"
+            aria-expanded="false" aria-label="Configure Scroll Options"><span class="sc-btn-long">Configure Scroll </span>Options</button>
     <button type="button" class="sc-btn sc-btn-primary" onclick="window.print();">Print</button>
+</div>
+<?php /*
+    The options sheet — a modal on a desktop, a bottom sheet on a phone (scrollery.css
+    section 5a). Only choices that make sense for the WHOLE run are in it: every one
+    applies to every certificate on the page. &trim= and &up= are print-shop geometry
+    and stay URL-only.
+
+    Hidden by default, so a fixture, a sweep screenshot or an auto-print never sees it;
+    it opens on the button, or on load when the URL carries &configure=1 (the Court
+    Planner's print tab, and every arms reload, which is how the sheet comes back
+    after one). It is chrome: scrollery.css hides the layer under @media print.
+
+    It is anchored to the top right on a desktop with a light scrim, rather than centred
+    over the certificate, so the hand, signature, heading and lines can be seen
+    re-lettering behind it — those four are applied in place, as they always were.
+*/ ?>
+<div class="sc-sheet-layer" id="sc-sheet-layer" hidden>
+    <div class="sc-sheet" id="sc-sheet" role="dialog" aria-modal="true" aria-labelledby="sc-sheet-title" aria-describedby="sc-sheet-sub">
+        <div class="sc-sheet-head">
+            <div>
+                <h2 class="sc-sheet-title" id="sc-sheet-title">Scroll options</h2>
+                <p class="sc-sheet-sub" id="sc-sheet-sub"><?= count($Scrolls) === 1 ? 'For the scroll on this page.' : 'For all ' . (int) count($Scrolls) . ' scrolls on this page.' ?></p>
+            </div>
+            <button type="button" class="sc-sheet-x" data-sc-sheet-close aria-label="Close">&times;</button>
+        </div>
+        <div class="sc-sheet-body">
+            <?php /*
+                The hand picker.
+
+                One of four — the composer, `mine` and `bulk` carry the same control off the
+                same list. This one is the last chance to change it, with the certificate
+                already on screen, which is why it is the only one that re-letters in place
+                rather than handing the choice to a page that has not loaded yet.
+
+                Each option is drawn in the face it names, so the list is a specimen sheet
+                rather than a list of adjectives. Chrome and Firefox honour font-family on an
+                <option>; Safari and the mobile pickers do not, and there the label still
+                reads as the font's name, which is the fallback being asked for.
+
+                It changes the attribute rather than reloading. scrollery.css switches hands on
+                `[data-scroll-face]` on ANY ancestor (section 1a-ii says so in as many words),
+                so swapping it on <body> re-letters the page with no round trip, and the URL is
+                rewritten underneath so a copied link still carries the choice.
+            */ ?>
+            <div class="sc-opt">
+                <label class="sc-opt-label" for="sc-face">Lettering hand</label>
+                <select id="sc-face" class="sc-select">
+                    <?php /* Not $scrollery_hand as the loop variable: that name is the PATH to
+                             scrollery-hand.js, and filemtime() on it further down would get a
+                             hand definition instead of a file. */ ?>
+                    <?php foreach ($scrollery_hands as $scrollery_key => $scrollery_def): ?>
+                    <option value="<?= scroll_e($scrollery_key) ?>" data-face-family="<?= scroll_e($scrollery_def['family']) ?>"<?= $scrollery_key === $scrollery_face ? ' selected' : '' ?>><?= scroll_e($scrollery_def['label']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="sc-opt-help">Remembered for your next print. Not stored on the award.</p>
+            </div>
+            <?php /* The signature hand, beside the hand it is a sibling of: how the given-by line is
+                     lettered, for a REPRINT where the signer would rather sign in script. Same
+                     listbox as the hand (each option drawn in its own face), re-lettered in place
+                     like it; "Match the lettering" is the default. */ ?>
+            <div class="sc-opt">
+                <label class="sc-opt-label" for="sc-sig">Signature hand</label>
+                <select id="sc-sig" class="sc-select">
+                    <?php foreach ($scrollery_sigs as $scrollery_skey => $scrollery_sdef): ?>
+                    <option value="<?= scroll_e($scrollery_skey) ?>"<?= $scrollery_sdef['family'] !== '' ? ' data-face-family="' . scroll_e($scrollery_sdef['family']) . '"' : '' ?><?= $scrollery_skey === $scrollery_sig ? ' selected' : '' ?>><?= scroll_e($scrollery_sdef['label']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php /*
+                The heading picker, beside the hand because it is the same kind of choice: how
+                this one print is set, not what the award is. The options are
+                Scroll::Headings() and the selection is the page's own normalised heading, so a
+                stranger in &heading= shows as Automatic, which is what the page rendered.
+
+                Like the hand it re-sets the page in place. The engine reads data-sc-heading off
+                any ancestor of a certificate, so changing it on <body> and calling the fit again
+                re-composes the top (Classic and Centered are different arrangements of the same
+                words) with no round trip. The choice reaches the paper through the attribute it
+                leaves on <body>, not through this control.
+
+                Unlike the hand it is not remembered: a forced heading is a rescue for a name that
+                sets badly, and would force a name that sets fine on the next certificate.
+
+                The Automatic option names what Automatic chose — "Automatic (Classic)", or
+                "(mixed)" on a bulk page whose certificates disagree — because on most
+                certificates Automatic and Classic look identical. See ScrolleryHeading in
+                script/scrollery-hand.js. What used to be its hover tip is helper text now: a
+                tip cannot be read on a phone, which is where the sheet most often opens.
+            */ ?>
+            <div class="sc-opt">
+                <label class="sc-opt-label" for="sc-heading">Heading</label>
+                <select id="sc-heading" class="sc-select">
+                    <?php foreach (Scroll::Headings() as $scrollery_hkey => $scrollery_hlabel): ?>
+                    <option value="<?= scroll_e($scrollery_hkey) ?>"<?= $scrollery_hkey === $scrollery_heading ? ' selected' : '' ?>><?= scroll_e($scrollery_hlabel) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="sc-opt-help">Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. Applies to this print only.</p>
+            </div>
+            <?php /* The reason-lines switch. Beside the hand because it is the same kind of
+                     thing — a per-print presentation choice that changes nothing about the
+                     award — and on this page rather than only in the composer because a
+                     REPRINT of an existing award is exactly when somebody wants a clean sheet
+                     or a ruled one. */ ?>
+            <div class="sc-opt">
+                <label class="sc-opt-check">
+                    <input type="checkbox" id="sc-lines"<?= $scrollery_lines ? ' checked' : '' ?>>
+                    <span>Reason lines</span>
+                </label>
+                <p class="sc-opt-help">The ruled lines behind the citation, for finishing a certificate by hand.</p>
+            </div>
+            <?php if ($scrollery_heraldry_choice): ?>
+            <?php /*
+                The run's arms — &heraldry=. Offered on a reprint and a court run only; a
+                composed scroll's arms were already chosen in the composer.
+
+                The other four re-letter in place; this one cannot. The arms are a URL the
+                server resolved per certificate (Model_Scrollery::run_heraldry()), so a
+                change RELOADS the page, without &print and with &configure=1 so the sheet
+                comes straight back. Buttons rather than radios or a select on purpose:
+                arrowing through a radio group or a closed select fires `change` on every
+                step, and here every change is a page load.
+            */ ?>
+            <div class="sc-opt" role="group" aria-labelledby="sc-arms-label" aria-describedby="sc-arms-help">
+                <span class="sc-opt-label" id="sc-arms-label">Heraldry</span>
+                <div class="sc-seg" id="sc-arms">
+                    <?php foreach ([Scroll::HERALDRY_AUTO => 'Automatic', 'kingdom' => 'Kingdom', 'park' => 'Park', 'persona' => 'Persona arms'] as $scrollery_akey => $scrollery_alabel): ?>
+                    <button type="button" class="sc-seg-btn" data-heraldry="<?= scroll_e($scrollery_akey) ?>" aria-pressed="<?= $scrollery_akey === $scrollery_heraldry ? 'true' : 'false' ?>"><?= scroll_e($scrollery_alabel) ?></button>
+                    <?php endforeach; ?>
+                </div>
+                <p class="sc-opt-help" id="sc-arms-help">Automatic keeps the arms these scrolls usually draw. A scroll with no arms from the source you pick uses the next one that has some &mdash; park, kingdom, then the recipient&rsquo;s own. Changing this reloads the page.</p>
+                <?php if ($scrollery_arms_note !== ''): ?>
+                <p class="sc-opt-note" role="status"><?= scroll_e($scrollery_arms_note) ?></p>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <div class="sc-sheet-foot">
+            <button type="button" class="sc-btn" data-sc-sheet-close>Done</button>
+            <button type="button" class="sc-btn sc-btn-primary" id="sc-sheet-print">Print</button>
+        </div>
+    </div>
 </div>
 <?php /*
     The advisory. Three facts about printing this page that CSS cannot assert, said
@@ -404,7 +501,7 @@ foreach ($Scrolls as $scrollery_scan) {
              2550x3300 CSS px drawn at 8.5x11in, which IS 300dpi; nothing had to
              declare it. */ ?>
     <svg viewBox="0 0 2550 3300"
-         style="aspect-ratio:8.5/11;width:100%;height:100%;position:relative;overflow:hidden;--heraldry-filter:brightness(1) contrast(1);--heraldry-transform:translateX(0%) translateY(0%) scale(1);"
+         style="aspect-ratio:8.5/11;width:100%;height:100%;position:relative;overflow:hidden;"
          data-scroll-frame>
         <foreignObject x="0" y="0" width="2550" height="3300" style="overflow:visible;">
             <?= Scroll::Render($s) ?>
@@ -472,6 +569,10 @@ foreach ($Scrolls as $scrollery_scan) {
         sel.value = urlFace;
         Hand.paint(sel);
         Hand.armSpecimens(sel);
+        /* Enhanced here too, as the signature's URL branch is: beside an enhanced
+           signature picker in the options sheet, a native select read as a different
+           control, and only the listbox draws every option in its own face on a Mac. */
+        Hand.enhance(sel);
         sel.addEventListener('change', function () {
             Hand.paint(sel);
             repaint(Hand.set(sel.value));
@@ -630,6 +731,201 @@ foreach ($Scrolls as $scrollery_scan) {
             window.history.replaceState(null, '', window.location.pathname + next + window.location.hash);
         } catch (e) { /* older browser: the attribute swap and the fit still worked */ }
     });
+}());
+</script>
+<script>
+/*
+ * The options sheet — open, close, focus, and the run's arms.
+ *
+ * The five controls inside it are bound by the blocks above exactly as they were when
+ * they sat in the toolbar (they find their elements by id, and moving the markup moved
+ * nothing they depend on). This block only owns the dialog around them, plus the one
+ * choice that cannot be applied in place.
+ *
+ * A dialog by the usual contract: focus moves in on open and back to the button on
+ * close; Esc, the scrim and Done close it; Tab is held inside. No native dialogs.
+ */
+(function () {
+    var layer  = document.getElementById('sc-sheet-layer');
+    var sheet  = document.getElementById('sc-sheet');
+    var opener = document.getElementById('sc-configure');
+    if (!layer || !sheet || !opener) { return; }
+
+    /* One query-string edit, done as text for the reason the blocks above give:
+       URLSearchParams would re-encode every other parameter, Route's slashes
+       included. value === null removes the parameter. */
+    function withParam(search, name, value) {
+        var re = new RegExp('([?&])' + name + '(?:=[^&]*)?(&|$)');
+        var s = search || '';
+        while (re.test(s)) {
+            s = s.replace(re, function (m, lead, tail) { return tail ? lead : ''; });
+        }
+        if (value === null) { return s; }
+        return (s === '' || s === '?' ? '?' : s + '&') + name + '=' + encodeURIComponent(value);
+    }
+
+    function replaceSearch(next) {
+        try {
+            window.history.replaceState(null, '', window.location.pathname + next + window.location.hash);
+        } catch (e) { /* older browser: nothing depends on it */ }
+    }
+
+    function isOpen() { return !layer.hidden; }
+
+    /* A hand or signature listbox open inside the sheet. Its own Escape and outside
+       click close it, and the first of either must do only that. */
+    function menuOpen() { return !!sheet.querySelector('.sc-hand-menu:not([hidden])'); }
+
+    /* Visible, enabled controls in document order. The enhanced <select>s are
+       display:none behind their listbox triggers, so offsetParent filters them out. */
+    function focusables() {
+        var all = sheet.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled])');
+        var out = [];
+        for (var i = 0; i < all.length; i++) {
+            if (all[i].offsetParent !== null) { out.push(all[i]); }
+        }
+        return out;
+    }
+
+    function open() {
+        if (isOpen()) { return; }
+        layer.hidden = false;
+        opener.setAttribute('aria-expanded', 'true');
+        /* The first CHOICE, not the header's close button, which comes first in the
+           DOM — landing on "Close" invites closing what was just opened. */
+        var body = sheet.querySelector('.sc-sheet-body');
+        var f = focusables();
+        var first = null;
+        for (var i = 0; i < f.length && !first; i++) { if (body && body.contains(f[i])) { first = f[i]; } }
+        (first || f[0] || sheet).focus();
+    }
+
+    function close() {
+        if (!isOpen()) { return; }
+        /* An open listbox is closed the way scrollery-hand.js closes one on any
+           outside press, so its own state does not outlive the sheet. */
+        if (menuOpen()) { document.body.dispatchEvent(new Event('pointerdown', { bubbles: true })); }
+        layer.hidden = true;
+        opener.setAttribute('aria-expanded', 'false');
+        /* &configure=1 has done its job; a copied link or a refresh should open on the
+           certificates, not on the sheet. */
+        replaceSearch(withParam(window.location.search, 'configure', null));
+        opener.focus();
+    }
+
+    opener.addEventListener('click', open);
+
+    var closers = sheet.querySelectorAll('[data-sc-sheet-close]');
+    for (var c = 0; c < closers.length; c++) { closers[c].addEventListener('click', close); }
+
+    /* The scrim. Remembered at pointerdown because scrollery-hand.js closes an open
+       listbox on that same press, before the click arrives. */
+    var menuWasOpen = false;
+    layer.addEventListener('pointerdown', function (e) {
+        if (e.target === layer) { menuWasOpen = menuOpen(); }
+    });
+    layer.addEventListener('click', function (e) {
+        if (e.target === layer && !menuWasOpen) { close(); }
+        menuWasOpen = false;
+    });
+
+    /* Capture on window, so this runs before the listbox's own handlers and can see
+       whether a list was open when the key went down. */
+    window.addEventListener('keydown', function (e) {
+        if (!isOpen()) { return; }
+        if (e.key === 'Escape' || e.key === 'Esc') {
+            if (menuOpen()) { return; }
+            e.preventDefault();
+            close();
+            return;
+        }
+        if (e.key !== 'Tab') { return; }
+        var f = focusables();
+        if (!f.length) { e.preventDefault(); return; }
+        var first = f[0], last = f[f.length - 1], at = document.activeElement;
+        if (e.shiftKey && (at === first || !sheet.contains(at))) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && (at === last || !sheet.contains(at))) {
+            e.preventDefault();
+            first.focus();
+        }
+    }, true);
+
+    /* Focus that escapes anyway (a click on the page behind through a gap, a screen
+       reader's own navigation) is brought back. */
+    document.addEventListener('focusin', function (e) {
+        if (isOpen() && !sheet.contains(e.target)) {
+            var f = focusables();
+            (f[0] || sheet).focus();
+        }
+    });
+
+    /* The sheet's own Print. Gated like ?print=1 is, on the fonts, the fit and any
+       re-lettering still in flight: the court planner's tab lands here straight from
+       a load, so "by the time somebody clicks the fonts have resolved" — the toolbar
+       button's assumption — does not hold. The failsafe ends at the dialog regardless. */
+    var printBtn = document.getElementById('sc-sheet-print');
+    if (printBtn) {
+        printBtn.addEventListener('click', function () {
+            close();
+            var fired = false;
+            function go() { if (!fired) { fired = true; window.print(); } }
+            function settled(p) {
+                return (p && typeof p.then === 'function') ? p.then(function () {}, function () {}) : Promise.resolve();
+            }
+            var A = window.ScrolleryAutofit, Hand = window.ScrolleryHand, Sig = Hand && Hand.sig;
+            Promise.all([
+                settled(A ? A.ready : (document.fonts && document.fonts.ready)),
+                settled(Hand && Hand.ready ? Hand.ready() : null),
+                settled(Sig && Sig.ready ? Sig.ready() : null)
+            ]).then(go, go);
+            window.setTimeout(go, 10000);
+        });
+    }
+
+    /* The run's arms. Drawn server-side, so a change is a reload: &heraldry= set (or
+       removed, for Automatic, which is what an absent parameter means), &print dropped
+       so the reload does not throw up the print dialog, and &configure=1 so the sheet
+       is open again when the page comes back. replace(), not a new history entry, for
+       the reason the other four use replaceState.
+
+       Back would lose its target across the reload (the referrer becomes this page,
+       which the server refuses as a Back target), so it rides in sessionStorage for
+       exactly one load and is taken back off below. */
+    var BACK_KEY = 'sc-back-keep';
+    var back = document.getElementById('sc-back');
+    try {
+        var kept = window.sessionStorage.getItem(BACK_KEY);
+        if (kept !== null) {
+            window.sessionStorage.removeItem(BACK_KEY);
+            if (back && kept.indexOf(window.location.origin + '/') === 0) { back.href = kept; }
+        }
+    } catch (e) { /* private mode: Back falls back to the server's choice */ }
+
+    var arms = document.getElementById('sc-arms');
+    if (arms) {
+        arms.addEventListener('click', function (e) {
+            var btn = e.target.closest ? e.target.closest('[data-heraldry]') : null;
+            if (!btn || btn.getAttribute('aria-pressed') === 'true' || arms.getAttribute('aria-busy') === 'true') { return; }
+            var key = btn.getAttribute('data-heraldry');
+
+            var pressed = arms.querySelectorAll('[data-heraldry]');
+            for (var i = 0; i < pressed.length; i++) {
+                pressed[i].setAttribute('aria-pressed', pressed[i] === btn ? 'true' : 'false');
+            }
+            arms.setAttribute('aria-busy', 'true');
+
+            try { if (back) { window.sessionStorage.setItem(BACK_KEY, back.href); } } catch (err) { /* see above */ }
+
+            var next = withParam(window.location.search, 'print', null);
+            next = withParam(next, 'heraldry', key === 'auto' ? null : key);
+            next = withParam(next, 'configure', '1');
+            window.location.replace(window.location.pathname + next + window.location.hash);
+        });
+    }
+
+    if (document.body.getAttribute('data-sc-configure') === '1') { open(); }
 }());
 </script>
 <?php if (!empty($AutoPrint)): ?>

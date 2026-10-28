@@ -125,11 +125,21 @@ class Model_Scrollery extends Model
      *   Refused  — awards_id => a Model_Scrollery::DENIED_* reason, for ids that did not.
      * Order follows the ids as given.
      *
+     * $heraldry is the print page's run-level arms choice (Scroll::NormaliseRunHeraldry()).
+     * 'auto' — the default, and what every caller but the print page passes — draws
+     * exactly what heraldry_url() always drew. See run_heraldry() for the rest.
+     *
      * @param array<int, mixed> $awardsIds
      * @return array{Scrolls: array<int, array>, Refused: array<int, string>}
      */
-    public function scrolls_for_awards_ids(array $awardsIds, int $viewerId, string $variant = ''): array
-    {
+    public function scrolls_for_awards_ids(
+        array $awardsIds,
+        int $viewerId,
+        string $variant = '',
+        string $heraldry = Scroll::HERALDRY_AUTO
+    ): array {
+        $heraldry = Scroll::NormaliseRunHeraldry($heraldry);
+
         $ids = [];
         foreach ($awardsIds as $id) {
             $id = (int) $id;
@@ -186,15 +196,33 @@ class Model_Scrollery extends Model
 
         $scrolls = [];
         foreach ($allowed as $id => $row) {
-            $player = $recipients[(int) ($row['MundaneId'] ?? 0)] ?? [];
-
-            $scrolls[$id] = Scroll::BuildScroll($row, [
+            $player  = $recipients[(int) ($row['MundaneId'] ?? 0)] ?? [];
+            $context = [
                 'player'      => (string) ($player['Persona'] ?? ''),
                 'pronoun'     => $this->possessive_pronoun($player),
-                'heraldry'    => $this->heraldry_url($row),
+                'heraldry'    => '',
                 'issuerTitle' => $this->issuer_title($row),
                 'variant'     => $variant,
-            ]);
+            ];
+
+            if ($heraldry === Scroll::HERALDRY_AUTO) {
+                // Untouched on purpose: Automatic is the reprint as it always printed,
+                // and no design key, so the print log records it as it always did.
+                $context['heraldry'] = $this->heraldry_url($row);
+            } else {
+                // A park-only row names no kingdom of its own; its park's kingdom is
+                // the one that stands behind it.
+                $parkId    = (int) ($row['ParkId'] ?? 0);
+                $kingdomId = (int) ($row['KingdomId'] ?? 0);
+                if ($kingdomId <= 0 && $parkId > 0) {
+                    $kingdomId = (int) ($this->park_details($parkId)['KingdomId'] ?? 0);
+                }
+                $arms = $this->run_heraldry($heraldry, $parkId, $kingdomId, $player, ['park', 'kingdom']);
+                $context['heraldry'] = $arms['Url'];
+                $context['design']   = ['heraldrySource' => $arms['Source']];
+            }
+
+            $scrolls[$id] = Scroll::BuildScroll($row, $context);
         }
 
         return ['Scrolls' => $scrolls, 'Refused' => $refused];
@@ -309,12 +337,21 @@ class Model_Scrollery extends Model
      * print route can name a skipped line and the planner's preflight can hand back
      * each printable line's row version without reading the court a second time.
      *
+     * $heraldry is the print page's run-level arms choice, as for scrolls_for_awards_ids():
+     * 'auto' draws the court's own arms exactly as before; a source draws the court's
+     * park, the court's kingdom or the line's recipient, with run_heraldry()'s fallback.
+     *
      * @param array<int, mixed> $courtAwardIds
      * @return array{Scrolls: array<int, array>, Skipped: array<int, string>, Dropped: int,
      *               Lines: array<int, array{Persona: string, AwardName: string, RowVersion: int}>}
      */
-    public function scrolls_for_court_awards(int $courtId, array $courtAwardIds, int $viewerId): array
-    {
+    public function scrolls_for_court_awards(
+        int $courtId,
+        array $courtAwardIds,
+        int $viewerId,
+        string $heraldry = Scroll::HERALDRY_AUTO
+    ): array {
+        $heraldry = Scroll::NormaliseRunHeraldry($heraldry);
         $empty = ['Scrolls' => [], 'Skipped' => [], 'Dropped' => 0, 'Lines' => []];
         if ($courtId <= 0) {
             return $empty;
@@ -357,6 +394,10 @@ class Model_Scrollery extends Model
         $parkId    = (int) ($court['ParkId'] ?? 0);
         $scopeType = $parkId > 0 ? 'park' : 'kingdom';
         $scopeId   = $parkId > 0 ? $parkId : $kingdomId;
+        // Only the run-level arms choice reads this: a park court's Kingdom arms are its
+        // park's kingdom's if the court row carries none of its own.
+        $armsKingdomId = $kingdomId > 0 ? $kingdomId
+            : ($parkId > 0 ? (int) ($this->park_details($parkId)['KingdomId'] ?? 0) : 0);
 
         // The issuing body, named the way the composer names it: scope_context()'s
         // split Title/Name plus its article and "of" flags, and its master-size
@@ -414,20 +455,28 @@ class Model_Scrollery extends Model
                     $givenBy = (string) (is_array($defaultGiver) ? ($defaultGiver['persona'] ?? '') : '');
                 }
 
+                $context = [
+                    'player'      => (string) ($recipient['Persona'] ?? ''),
+                    'pronoun'     => $this->possessive_pronoun($recipient),
+                    'heraldry'    => (string) $scope['Heraldry'],
+                    'issuerTitle' => (string) $scope['Title'],
+                    'useThe'      => (bool) $scope['UseThe'],
+                    'useOf'       => (bool) $scope['UseOf'],
+                    'mundaneId'   => (int) $line['MundaneId'],
+                    'scopeType'   => $scopeType,
+                    'scopeId'     => $scopeId,
+                ];
+                if ($heraldry !== Scroll::HERALDRY_AUTO) {
+                    // Automatic stays the court's own arms above, with no design key.
+                    $arms = $this->run_heraldry($heraldry, $parkId, $armsKingdomId, $recipient, [$scopeType]);
+                    $context['heraldry'] = $arms['Url'];
+                    $context['design']   = ['heraldrySource' => $arms['Source']];
+                }
+
                 try {
                     $scroll = Scroll::BuildScroll(
                         self::courtLineScrollRowForTest($line, $choice, $courtRow, $givenBy),
-                        [
-                            'player'      => (string) ($recipient['Persona'] ?? ''),
-                            'pronoun'     => $this->possessive_pronoun($recipient),
-                            'heraldry'    => (string) $scope['Heraldry'],
-                            'issuerTitle' => (string) $scope['Title'],
-                            'useThe'      => (bool) $scope['UseThe'],
-                            'useOf'       => (bool) $scope['UseOf'],
-                            'mundaneId'   => (int) $line['MundaneId'],
-                            'scopeType'   => $scopeType,
-                            'scopeId'     => $scopeId,
-                        ]
+                        $context
                     );
                 } catch (InvalidArgumentException $e) {
                     // The choice came from the same allowlist BuildScroll() resolves
@@ -1200,15 +1249,9 @@ class Model_Scrollery extends Model
         $kingdomId = (int) ($row['KingdomId'] ?? 0);
         $auth      = Ork3::$Lib->authorization;
 
-        // The global-admin branch. HasAuthority() short-circuits on a TRUE global
-        // grant (role=admin with park_id/kingdom_id/unit_id/event_id all zero) before
-        // its own `0 == $id` bail-out, so AUTH_ADMIN with id 0 is the shape the rest
-        // of the CRM already uses — see controller.Admin.php. Checked before the
-        // attribution gate so an admin can reach the 120,284 unattributed rows.
-        //
-        // HasAuthority() returns NULL on denial, not false, so it is cast rather than
-        // returned through a bool-typed expression.
-        if ($viewerId > 0 && (bool) $auth->HasAuthority($viewerId, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        // The global-admin branch, checked before the attribution gate so an admin
+        // can reach the 120,284 unattributed rows. See viewer_is_print_admin().
+        if ($this->viewer_is_print_admin($viewerId)) {
             return self::allowed();
         }
 
@@ -1228,6 +1271,75 @@ class Model_Scrollery extends Model
         }
 
         return self::denial(self::DENIED_AUTH);
+    }
+
+    /**
+     * print_permission()'s global-admin branch, on its own so
+     * flag_viewer_printable_awards() can ask it once per call through the same
+     * expression rather than a copy of it.
+     *
+     * HasAuthority() short-circuits on a TRUE global grant (role=admin with
+     * park_id/kingdom_id/unit_id/event_id all zero) before its own `0 == $id`
+     * bail-out, so AUTH_ADMIN with id 0 is the shape the rest of the CRM already
+     * uses — see controller.Admin.php. It returns NULL on denial, not false, so it
+     * is cast rather than returned through a bool-typed expression.
+     */
+    private function viewer_is_print_admin(int $viewerId): bool
+    {
+        return $viewerId > 0
+            && (bool) Ork3::$Lib->authorization->HasAuthority($viewerId, AUTH_ADMIN, 0, AUTH_ADMIN);
+    }
+
+    /**
+     * Narrows each AwardsForPlayer() row's CanPrintScroll to "AND this viewer may
+     * print it", so the player profile only offers View/Print where the render route
+     * will actually build the certificate.
+     *
+     * Model_Player::fetch_player_details() stamps CanPrintScroll from the row alone
+     * (not revoked, has art). The profile showed it to anyone holding park CREATE at
+     * the RECIPIENT'S home park — but print_permission() keys on where the award was
+     * GIVEN (at_park_id / at_kingdom_id) and refuses unattributed rows outright, so
+     * an officer saw Print on awards given elsewhere and the render tab refused.
+     *
+     * A PER-CALL memo, by (ParkId, KingdomId). A profile carries up to ~280 rows and
+     * every HasAuthority() is a query, but a handful of distinct scopes. The
+     * no-caching rule on print_permission() is about decisions outliving the
+     * (viewer, award) pair they were made for; this memo lives for one viewer inside
+     * one call, and the only per-row inputs print_permission() reads besides the
+     * scope — Revoked and "is the viewer the recipient" — are settled before the
+     * memo is consulted, so two rows that share a key really do share an answer.
+     * Admin is likewise constant for the call and asked once.
+     *
+     * @param array<int|string, mixed> $rows AwardsForPlayer()-shaped rows carrying CanPrintScroll
+     * @return array<int|string, mixed> the same rows, CanPrintScroll narrowed
+     */
+    public function flag_viewer_printable_awards(array $rows, int $viewerId): array
+    {
+        $isAdmin = $this->viewer_is_print_admin($viewerId);
+        $byScope = [];
+
+        foreach ($rows as $i => $row) {
+            if (!is_array($row) || empty($row['CanPrintScroll'])) {
+                continue;
+            }
+
+            // Same order as print_permission(): revoked, admin, recipient, then scope.
+            if ($viewerId <= 0 || (int) ($row['Revoked'] ?? 0) === 1) {
+                $allowed = false;
+            } elseif ($isAdmin || (int) ($row['MundaneId'] ?? 0) === $viewerId) {
+                $allowed = true;
+            } else {
+                $key = (int) ($row['ParkId'] ?? 0) . ':' . (int) ($row['KingdomId'] ?? 0);
+                if (!isset($byScope[$key])) {
+                    $byScope[$key] = $this->print_permission($row, $viewerId)['Allowed'];
+                }
+                $allowed = $byScope[$key];
+            }
+
+            $rows[$i]['CanPrintScroll'] = $allowed;
+        }
+
+        return $rows;
     }
 
     /**
@@ -1350,6 +1462,59 @@ class Model_Scrollery extends Model
         }
 
         return '';
+    }
+
+    /**
+     * One certificate's arms under the print page's run-level heraldry choice.
+     *
+     * Availability is decided from what the run already holds — the memoised park and
+     * kingdom lookups, and the recipient row GetScrollRecipients() fetched for the whole
+     * run (it carries HasHeraldry for exactly this) — so a 200-certificate run adds no
+     * per-certificate query. Scroll::ResolveRunHeraldrySource() then picks: the chosen
+     * source, else park -> kingdom -> persona without it, else none. Only the winner's
+     * URL is built.
+     *
+     * Source is recorded on the scroll's design so the print log says which arms were
+     * drawn ('' when none could be).
+     *
+     * @param array<string, mixed> $recipient a GetScrollRecipients() row, or []
+     * @param string[] $autoOrder the surface's own legacy order, for 'auto'
+     * @return array{Source: string, Url: string}
+     */
+    private function run_heraldry(string $choice, int $parkId, int $kingdomId, array $recipient, array $autoOrder): array
+    {
+        $mundaneId = (int) ($recipient['MundaneId'] ?? 0);
+        $available = [
+            'park'    => $parkId > 0 && (int) ($this->park_details($parkId)['HasHeraldry'] ?? 0) === 1,
+            'kingdom' => $kingdomId > 0 && (int) ($this->kingdom_short_info($kingdomId)['HasHeraldry'] ?? 0) === 1,
+            'persona' => $mundaneId > 0 && (int) ($recipient['HasHeraldry'] ?? 0) === 1,
+        ];
+
+        $source = Scroll::ResolveRunHeraldrySource($choice, $available, $autoOrder);
+        $ids    = ['park' => ['Park', $parkId], 'kingdom' => ['Kingdom', $kingdomId], 'persona' => ['Player', $mundaneId]];
+
+        return [
+            'Source' => $source,
+            'Url'    => $source === '' ? '' : $this->master_heraldry_url($ids[$source][0], $ids[$source][1]),
+        ];
+    }
+
+    /**
+     * GetHeraldryUrl() at master size, held per request: a run drawing one kingdom's
+     * arms on 200 scrolls stats the file once, not 200 times. See heraldry_url() on
+     * why 'Size' => 'master' is asked for.
+     */
+    private function master_heraldry_url(string $type, int $id): string
+    {
+        static $cache = [];
+        $key = $type . ':' . $id;
+        if (!array_key_exists($key, $cache)) {
+            $cache[$key] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                ['Type' => $type, 'Id' => $id, 'Size' => 'master']
+            )['Url'];
+        }
+
+        return $cache[$key];
     }
 
     /**
@@ -1616,18 +1781,26 @@ class Model_Scrollery extends Model
     }
 
     /**
-     * Whether a freshly-granted award row can actually be printed — used by the
-     * award-grant success path to decide whether to offer a "Print this
-     * certificate" link. Deliberately does not check viewer authority: it is
-     * called immediately after the officer's own grant succeeds.
+     * Whether a freshly-granted award row can actually be printed BY THIS VIEWER —
+     * used by the award-grant success path to decide whether to offer a "Print this
+     * certificate" link.
+     *
+     * It used to skip viewer authority on the reasoning that the officer had just
+     * granted it. But granting needs park CREATE at the recipient's home park, while
+     * printing keys on the park/kingdom the award was given AT, which the officer
+     * picks in the modal and need not hold — so the link could open a refusal. It
+     * now runs print_permission() too, the same gate the render route applies.
      */
-    public function award_is_printable(int $awardsId): bool
+    public function award_is_printable(int $awardsId, int $viewerId): bool
     {
-        if ($awardsId <= 0) {
+        if ($awardsId <= 0 || $viewerId <= 0) {
             return false;
         }
         $row = $this->award_row($awardsId);
 
-        return $row !== null && (int) ($row['Revoked'] ?? 0) !== 1 && Scroll::HasArt($row);
+        return $row !== null
+            && (int) ($row['Revoked'] ?? 0) !== 1
+            && Scroll::HasArt($row)
+            && $this->print_permission($row, $viewerId)['Allowed'];
     }
 }

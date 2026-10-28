@@ -4,8 +4,7 @@
  *
  * Controls on the left, live preview on the right. Only order, rank and variant
  * need a round trip (they change which art layers are drawn); the text fields
- * write straight into the preview's DOM, and the heraldry sliders write CSS
- * custom properties, so neither costs a fetch.
+ * write straight into the preview's DOM, so typing costs no fetch.
  *
  * The page wears the shared .rp-* tool-page shell from default/style/reports.css
  * — header, body, sidebar, filter cards — rather than a private layout. Two
@@ -171,8 +170,8 @@ $awardOption = static function (array $c) use ($customKind): string {
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
 <style>
 /* Page layout only. Every control is .adm-input / .adm-select / .adm-textarea and
-   every container is .rp-*; what is left here is the preview stage, the slider
-   grid and the handful of field-level affordances that are genuinely this page's. */
+   every container is .rp-*; what is left here is the preview stage and the
+   handful of field-level affordances that are genuinely this page's. */
 .sc-wrap        { max-width: 1500px; margin: 0 auto 60px; }
 .sc-field       { margin-bottom: 11px; position: relative; }
 .sc-field:last-child { margin-bottom: 0; }
@@ -200,15 +199,6 @@ $awardOption = static function (array $c) use ($customKind): string {
 .sc-stage.is-busy { opacity: .45; transition: opacity .12s; }
 .sc-err         { color: #e53e3e; font-size: 12px; margin-top: 8px; }
 .sc-err:empty   { display: none; }
-
-/* Heraldry sliders. */
-.sc-slider      { display: grid; grid-template-columns: 66px 1fr 22px; gap: 8px; align-items: center;
-                  font-size: 11px; color: var(--rp-text-muted); margin-bottom: 6px; }
-.sc-slider:last-child { margin-bottom: 0; }
-.sc-slider input[type=range] { width: 100%; accent-color: var(--rp-accent); }
-.sc-reset       { background: none; border: 0; color: var(--rp-text-hint); cursor: pointer;
-                  padding: 2px; font-size: 10px; border-radius: 3px; line-height: 1; }
-.sc-reset:hover { color: var(--rp-text); background: rgba(128,128,128,.15); }
 
 /* Rank pills. The pill itself is the shared .sc-rank-pill scheme in revised.css —
    identical to the grant and recommend surfaces. Only the legend is local. */
@@ -782,41 +772,6 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                 </div>
             </div>
 
-            <?php /* 4 — THE DEVICE. Last, and collapsed: the sliders only matter once
-                     the officer has looked at the preview and decided the heraldry sits
-                     wrong on this particular ground. */ ?>
-            <div class="rp-filter-card">
-                <button type="button" class="rp-filter-card-header" data-sc-collapse="sc-heraldry-body" aria-expanded="false" aria-controls="sc-heraldry-body">
-                    <i class="fa-solid fa-shield"></i> Heraldry adjustments
-                    <i class="fa-solid fa-chevron-down rp-filter-card-chevron" aria-hidden="true"></i>
-                </button>
-                <div class="rp-filter-card-body" id="sc-heraldry-body" hidden>
-                    <?php
-                    // value/default are in PERCENT for brightness, contrast and scale, and
-                    // in percent-of-box for the translates — the JS divides by 100. Reset
-                    // restores Arcanyst's SetupPanel defaults: 1x and no offset.
-                    $sliders = [
-                        ['brightness', 'Brightness', 50, 150, 100],
-                        ['contrast',   'Contrast',   50, 200, 100],
-                        ['scale',      'Scale',      50, 150, 100],
-                        ['x',          'Move X',    -50,  50,   0],
-                        ['y',          'Move Y',    -50,  50,   0],
-                    ];
-                    foreach ($sliders as [$key, $label, $min, $max, $dflt]): ?>
-                        <div class="sc-slider">
-                            <span><?= $label ?></span>
-                            <input type="range" data-heraldry-control="<?= $key ?>"
-                                   aria-label="<?= $label ?>"
-                                   min="<?= $min ?>" max="<?= $max ?>" value="<?= $dflt ?>"
-                                   data-default="<?= $dflt ?>">
-                            <button type="button" class="sc-reset" data-reset="<?= $key ?>" data-tip="Reset">
-                                <i class="fa-solid fa-rotate-left"></i>
-                            </button>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
             <div class="sc-err" id="sc-err" role="alert"></div>
         </div>
 
@@ -847,7 +802,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                      data-scroll-face="chancery" data-sc-heading="<?= scroll_e(Scroll::DEFAULT_HEADING) ?>"
                      aria-label="Certificate preview">
                     <svg viewBox="0 0 2550 3300" id="sc-frame" data-scroll-frame
-                         style="image-resolution:300dpi;aspect-ratio:8.5/11;width:100%;height:100%;position:relative;overflow:hidden;--heraldry-filter:brightness(1) contrast(1);--heraldry-transform:translateX(0%) translateY(0%) scale(1);">
+                         style="image-resolution:300dpi;aspect-ratio:8.5/11;width:100%;height:100%;position:relative;overflow:hidden;">
                         <foreignObject x="0" y="0" width="2550" height="3300" style="overflow:visible;">
                             <div id="sc-mount"></div>
                         </foreignObject>

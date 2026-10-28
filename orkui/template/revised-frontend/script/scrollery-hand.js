@@ -610,6 +610,14 @@
      * While a forced composition is in effect the engine reports the FORCED one, which
      * says nothing about what Automatic would have done, so the label is left on its
      * last resolved text until the select goes back to Automatic.
+     *
+     * The one thing a forced value can report is that it was NOT honoured: a forced
+     * Classic whose place cannot be set on Classic's one line even at the engine's last
+     * floor is set Centered instead, and the engine stamps data-sc-fallback="classic" on
+     * that .Award (B1 of the combo150 sweep). Left unsaid, the reader chose Classic and
+     * got Centered with no reason given, so while Classic is selected its own option
+     * names it: "Classic (didn't fit — used Centered)", or "Classic (some used
+     * Centered)" on a bulk page where only some certificates fell back.
      * -------------------------------------------------------------------- */
     var COMP_WORD = { classic: 'Classic', centered: 'Centered' };
 
@@ -624,10 +632,36 @@
         return 'Automatic (' + (seen.length === 1 ? COMP_WORD[seen[0]] : 'mixed') + ')';
     }
 
+    /* The Classic option's label for `fell` fallbacks out of `total` fitted
+       certificates: plain when none fell back. Pure, so it is unit-tested. */
+    function classicLabel(fell, total) {
+        if (!(fell > 0) || !(total > 0)) { return 'Classic'; }
+        return fell >= total ? 'Classic (didn\'t fit \u2014 used Centered)' : 'Classic (some used Centered)';
+    }
+
     function bindHeading(select, root) {
         if (!select || !root || typeof global.MutationObserver !== 'function') { return; }
 
+        /* The Classic option's own text, from the server's Headings() list, put back
+           whenever there is no fallback to report. */
+        var classicOpt = null, classicText = '';
+        for (var c = 0; c < select.options.length; c++) {
+            if (select.options[c].value === 'classic') { classicOpt = select.options[c]; classicText = classicOpt.textContent; }
+        }
+
+        function syncClassic() {
+            if (!classicOpt) { return; }
+            var text = classicText;
+            if (select.value === 'classic') {
+                var total = root.querySelectorAll('.Award[data-sc-comp]').length;
+                var fell = root.querySelectorAll('.Award[data-sc-comp][data-sc-fallback="classic"]').length;
+                if (fell > 0) { text = classicLabel(fell, total); }
+            }
+            if (classicOpt.textContent !== text) { classicOpt.textContent = text; }
+        }
+
         function sync() {
+            syncClassic();
             if (select.value !== 'auto') { return; }
             var comps = [];
             var els = root.querySelectorAll('.Award[data-sc-comp]');
@@ -642,13 +676,13 @@
         }
 
         new global.MutationObserver(sync).observe(root, {
-            subtree: true, childList: true, attributes: true, attributeFilter: ['data-sc-comp']
+            subtree: true, childList: true, attributes: true, attributeFilter: ['data-sc-comp', 'data-sc-fallback']
         });
         select.addEventListener('change', sync);
         sync();
     }
 
-    global.ScrolleryHeading = { label: headingLabel, bind: bindHeading };
+    global.ScrolleryHeading = { label: headingLabel, classicLabel: classicLabel, bind: bindHeading };
 
     /* ----------------------------------------------------------------------
      * The signature hand — the typeface of the given-by line.
