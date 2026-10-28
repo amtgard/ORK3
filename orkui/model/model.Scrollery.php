@@ -1490,20 +1490,12 @@ class Model_Scrollery extends Model
     }
 
     /**
-     * scroll_heraldry_url(), held per request: a run drawing one kingdom's arms on 200
-     * scrolls stats and hashes the file once, not 200 times. The cached value is the
-     * scroll rendition (keyed when ScrollHeraldry keyed it), never the bare master, and
-     * the key names that rendition so nothing else can share the slot.
+     * A run's chosen source's arms: scroll_heraldry_url(), which holds each source for
+     * the request.
      */
     private function master_heraldry_url(string $type, int $id): string
     {
-        static $cache = [];
-        $key = 'scroll:' . $type . ':' . $id;
-        if (!array_key_exists($key, $cache)) {
-            $cache[$key] = $this->scroll_heraldry_url($type, $id);
-        }
-
-        return $cache[$key];
+        return $this->scroll_heraldry_url($type, $id);
     }
 
     /**
@@ -1513,12 +1505,24 @@ class Model_Scrollery extends Model
      * cache). Every scroll-render path comes through here — court and reprint Automatic,
      * a run's chosen source, and the composer — so the preview matches the print. Profile
      * and every other heraldry surface keep calling GetHeraldryUrl() directly.
+     *
+     * Held per request and per source: reprint Automatic asks heraldry_url() once per
+     * row and a court or reprint run asks master_heraldry_url() once per certificate, so
+     * a 200-certificate run of one kingdom's arms stats and hashes the file once, not 200
+     * times. The cached value is the scroll rendition, never the bare master, and the key
+     * names that rendition so nothing else can share the slot.
      */
     private function scroll_heraldry_url(string $type, int $id): string
     {
-        return ScrollHeraldry::ForUrl((string) Ork3::$Lib->heraldry->GetHeraldryUrl(
-            ['Type' => $type, 'Id' => $id, 'Size' => 'master']
-        )['Url']);
+        static $cache = [];
+        $key = 'scroll:' . $type . ':' . $id;
+        if (!array_key_exists($key, $cache)) {
+            $cache[$key] = ScrollHeraldry::ForUrl((string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                ['Type' => $type, 'Id' => $id, 'Size' => 'master']
+            )['Url']);
+        }
+
+        return $cache[$key];
     }
 
     /**

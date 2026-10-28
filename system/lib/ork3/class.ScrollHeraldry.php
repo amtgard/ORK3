@@ -24,7 +24,9 @@ declare(strict_types=1);
  * device that does not touch the ground is untouched: it is not connected to a corner.
  * Residual risk, accepted by the brief: a sable tincture running to the device's own
  * edge with no outline (a black chief, a per-bend sable half) joins the ground and is
- * keyed with it when the guards above do not catch it.
+ * keyed with it when the guards above do not catch it. Also accepted: soft-glow art (a
+ * dim glow at luminance 0.10-0.30 more than 2 px from the region) is not feathered and
+ * keeps a hard, ragged rim where the near-black ground used to meet it.
  *
  * The keyed copy is a PNG in DIR_HERALDRY/scroll/, named by the source's sha1 and mtime
  * (plus RULES_VERSION) and made lazily on first request. A re-upload changes both, so
@@ -100,6 +102,9 @@ class ScrollHeraldry
      */
     private const RULES_VERSION = 1;
 
+    /** How many times load() has tried to decode a source this process (tests). */
+    private static int $decodes = 0;
+
     /**
      * The scroll rendition of a heraldry URL from GetHeraldryUrl(): the keyed copy's
      * URL when the file it names qualifies, else the URL unchanged. Only URLs under
@@ -107,24 +112,41 @@ class ScrollHeraldry
      */
     public static function ForUrl(string $url): string
     {
-        if ($url === '' || !defined('HTTP_HERALDRY') || !defined('DIR_HERALDRY')) {
-            return $url;
-        }
-        $base = (string) HTTP_HERALDRY;
-        if (strncmp($url, $base, strlen($base)) !== 0) {
-            return $url;
-        }
-        $rel = (string) strtok(substr($url, strlen($base)), '?#');
-        if (!preg_match('~^([a-z-]+)/([A-Za-z0-9_-]+\.(?:jpe?g|png|gif|webp))$~i', $rel, $m)
-            || $m[1] . '/' === self::CACHE_SUBDIR) {
-            return $url;
-        }
-        $path = DIR_HERALDRY . $rel;
-        if (!is_file($path)) {
+        $path = self::SourcePath($url);
+        if ($path === null || !is_file($path)) {
             return $url;
         }
 
         return self::KeyedUrl($path, $url);
+    }
+
+    /**
+     * The file a heraldry URL names (existing or not), or null when the URL is not one
+     * of ours: outside HTTP_HERALDRY, not <type>/<name>.<image ext>, or in the keyed
+     * cache directory itself (a keyed copy is never keyed again).
+     */
+    public static function SourcePath(string $url): ?string
+    {
+        if ($url === '' || !defined('HTTP_HERALDRY') || !defined('DIR_HERALDRY')) {
+            return null;
+        }
+        $base = (string) HTTP_HERALDRY;
+        if (strncmp($url, $base, strlen($base)) !== 0) {
+            return null;
+        }
+        $rel = (string) strtok(substr($url, strlen($base)), '?#');
+        if (!preg_match('~^([a-z-]+)/([A-Za-z0-9_-]+\.(?:jpe?g|png|gif|webp))$~i', $rel, $m)
+            || $m[1] . '/' === self::CACHE_SUBDIR) {
+            return null;
+        }
+
+        return DIR_HERALDRY . $rel;
+    }
+
+    /** Decode attempts so far (tests: a .skip marker must stop re-decoding). */
+    public static function DecodeCount(): int
+    {
+        return self::$decodes;
     }
 
     /**
@@ -170,11 +192,13 @@ class ScrollHeraldry
             }
 
             $im = self::load($sourcePath);
+            self::forget_stale($cacheDir, $prefix, $name);
             if ($im === null) {
+                // Too large, or a file GD cannot decode: judged once, like a skip.
+                @touch($cacheDir . $name . '.skip');
                 return $sourceUrl;
             }
             $judged = self::judge($im);
-            self::forget_stale($cacheDir, $prefix, $name);
 
             if (!$judged['qualifies']) {
                 @touch($cacheDir . $name . '.skip');
@@ -234,6 +258,7 @@ class ScrollHeraldry
 
     private static function load(string $path): ?\GdImage
     {
+        self::$decodes++;
         $data = @file_get_contents($path);
         if ($data === false || $data === '') {
             return null;

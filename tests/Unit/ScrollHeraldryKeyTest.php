@@ -176,11 +176,46 @@ final class ScrollHeraldryKeyTest extends TestCase
 
         $this->assertNotSame($first, $second);
         $this->cached($second);
+        // The superseded copy is removed when the new one is made.
+        $this->assertFileDoesNotExist($this->cache . substr($first, strlen(self::URL)));
+        $this->assertCount(1, glob($this->cache . '*.png') ?: []);
+    }
+
+    /**
+     * A file GD cannot decode (or one over MAX_PIXELS) is judged once: it leaves a .skip
+     * marker, so later renders short-circuit instead of re-reading and re-parsing it.
+     */
+    public function testAnUndecodableSourceLeavesASkipMarkerAndShortCircuits(): void
+    {
+        @mkdir($this->cache, 0775, true);
+        $bad = $this->cache . 'broken.jpg';
+        file_put_contents($bad, "\xFF\xD8\xFF not really a jpeg");
+
+        $this->assertSame('http://localhost/b.jpg', $this->key($bad, 'http://localhost/b.jpg'));
+        $skips = glob($this->cache . '*.skip') ?: [];
+        $this->assertCount(1, $skips);
+
+        // Short-circuit: with the marker in place the source is hashed for its key but
+        // never decoded again.
+        $decodes = ScrollHeraldry::DecodeCount();
+        $this->assertSame('http://localhost/b.jpg', $this->key($bad, 'http://localhost/b.jpg'));
+        $this->assertSame($decodes, ScrollHeraldry::DecodeCount());
+        $this->assertSame($skips, glob($this->cache . '*.skip') ?: []);
     }
 
     public function testAMissingSourceReturnsItsUrlUnchanged(): void
     {
         $this->assertSame('http://localhost/none.jpg', $this->key(self::FIX . 'no-such-file.jpg', 'http://localhost/none.jpg'));
+    }
+
+    public function testSourcePathMapsAHeraldryUrlAndRefusesTheCacheDirectory(): void
+    {
+        $this->assertSame(DIR_PLAYER_HERALDRY . '000001.jpg', ScrollHeraldry::SourcePath(HTTP_PLAYER_HERALDRY . '000001.jpg?v=123'));
+        $this->assertNull(ScrollHeraldry::SourcePath(HTTP_HERALDRY . 'scroll/park-00797-' . str_repeat('a', 40) . '-1-r1.png'));
+        $this->assertNull(ScrollHeraldry::SourcePath(HTTP_HERALDRY . '../config.php'));
+        $this->assertNull(ScrollHeraldry::SourcePath('https://example.com/x.jpg'));
+        $scroll = HTTP_HERALDRY . 'scroll/x.png';
+        $this->assertSame($scroll, ScrollHeraldry::ForUrl($scroll));
     }
 
     public function testForUrlLeavesUrlsOutsideTheHeraldryTreeAlone(): void
@@ -211,5 +246,10 @@ final class ScrollHeraldryKeyTest extends TestCase
             preg_match('/function ' . $fn . '\(.*?\n    }\n/s', $src, $m);
             $this->assertStringContainsString('scroll_heraldry_url(', $m[0], "$fn() must use scroll_heraldry_url()");
         }
+
+        // Memoised per source for the request: reprint Automatic calls heraldry_url()
+        // once per row, and a 200-row run must hash each file once, not 200 times.
+        preg_match('/function scroll_heraldry_url\(.*?\n    }\n/s', $src, $m);
+        $this->assertStringContainsString('static $cache', $m[0], 'scroll_heraldry_url() must memoise per source');
     }
 }
