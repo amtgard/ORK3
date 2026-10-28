@@ -49,6 +49,8 @@ final class BonusCreditTest extends TestCase
     private array $mundaneIds = [];
     /** @var int[] */
     private array $categoryIds = [];
+    /** @var int[] kingdoms whose accept-outside setting a test touched */
+    private array $settingKingdoms = [];
 
     protected function setUp(): void
     {
@@ -92,6 +94,9 @@ final class BonusCreditTest extends TestCase
             }
             if ($this->categoryIds) {
                 $pdo->exec('DELETE FROM ' . DB_PREFIX . 'bonus_credit_adoption WHERE category_id IN (' . implode(',', $this->categoryIds) . ')');
+            }
+            if ($this->settingKingdoms) {
+                $pdo->exec('DELETE FROM ' . DB_PREFIX . 'bonus_credit_kingdom_setting WHERE kingdom_id IN (' . implode(',', $this->settingKingdoms) . ')');
             }
             $this->fixture->cleanup();
         }
@@ -294,7 +299,7 @@ final class BonusCreditTest extends TestCase
         $this->assertSame([], $this->bonus->totalsByClass($away));
     }
 
-    public function testACreditNeverLeavesItsKingdom(): void
+    public function testACreditNeverLeavesItsKingdomUnlessTheOtherKingdomAcceptsOutsideCredits(): void
     {
         $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');
         $purple   = $this->category($kOfficer, $this->kingdom, 'Being purple');
@@ -303,8 +308,118 @@ final class BonusCreditTest extends TestCase
         $away        = $this->playerAt($this->otherPark, 'bc-away');
         $r = $this->grant($awayOfficer, $away, $purple['CategoryId']);
         $this->assertSame(3, $r['Status']);
-        $this->assertStringContainsString('can only go to its own players', (string) $r['Error']);
+        $this->assertStringContainsString('does not accept bonus credits from other Kingdoms', (string) $r['Error']);
         $this->assertSame([], $this->bonus->totalsByClass($away));
+        // Nor can this kingdom's own officer, from its own kingdom page, while the other kingdom has not said yes.
+        $r = $this->grant($kOfficer, $away, $purple['CategoryId'], ['HostType' => 'kingdom', 'HostId' => $this->kingdom]);
+        $this->assertSame(3, $r['Status']);
+        $this->assertStringContainsString('does not accept bonus credits from other Kingdoms', (string) $r['Error']);
+        $this->assertStringContainsString('Settings', (string) $r['Error']);
+        $this->assertSame([], $this->bonus->totalsByClass($away));
+    }
+
+    public function testAKingdomMayAcceptOtherKingdomsCredits(): void
+    {
+        $this->settingKingdoms = [$this->kingdom, $this->otherKingdom];
+        $kOfficer   = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');                 // CREATE on the defining kingdom
+        $kEditor    = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-kedit', AUTH_EDIT);     // EDIT on it: grants, cannot define
+        $purple     = $this->category($kOfficer, $this->kingdom, 'Being purple');
+        $away       = $this->playerAt($this->otherPark, 'bc-away');
+        $awayCreate = $this->kingdomOfficer($this->otherKingdom, $this->otherPark, 'bc-away-create');
+        $awayEdit   = $this->kingdomOfficer($this->otherKingdom, $this->otherPark, 'bc-away-edit', AUTH_EDIT);
+        $awayPark   = $this->parkOfficer($this->otherPark, 'bc-away-park');
+        $fromKingdomPage = ['HostType' => 'kingdom', 'HostId' => $this->kingdom];
+
+        // The default is no, and no row at all reads as no.
+        $this->assertFalse($this->bonus->acceptsOutsideCredits($this->otherKingdom));
+        $s = $this->bonus->outsideCreditSetting($this->otherKingdom);
+        $this->assertFalse($s['AcceptsOutside']);
+        $this->assertFalse($s['Effective']);
+        $this->assertSame('', $s['InheritedFrom']);
+
+        // Only the RECEIVING kingdom's CREATE (or an ORK admin) says yes: not its EDIT, not the giving kingdom.
+        $this->assertSame(3, $this->bonus->setAcceptsOutside($awayEdit, $this->otherKingdom, true)['Status']);
+        $this->assertSame(3, $this->bonus->setAcceptsOutside($kOfficer, $this->otherKingdom, true)['Status']);
+        $this->assertSame(1, $this->bonus->setAcceptsOutside($awayCreate, 999999999, true)['Status']);
+        $this->assertSame(0, $this->bonus->setAcceptsOutside($awayCreate, $this->otherKingdom, true)['Status']);
+        $this->assertSame(0, $this->bonus->setAcceptsOutside($awayCreate, $this->otherKingdom, true)['Status'], 'saying yes twice is a no-op');
+        $this->assertTrue($this->bonus->acceptsOutsideCredits($this->otherKingdom));
+        $s = $this->bonus->outsideCreditSetting($this->otherKingdom);
+        $this->assertTrue($s['AcceptsOutside']);
+        $this->assertTrue($s['Effective']);
+        $this->assertSame($awayCreate, $s['UpdatedBy']);
+        // Saying yes for yourself does not let other kingdoms' credits flow the other way.
+        $this->assertFalse($this->bonus->acceptsOutsideCredits($this->kingdom));
+
+        // Now the defining kingdom's EDIT officer can grant it from the kingdom page, and the credit counts for the player.
+        $g = $this->grant($kEditor, $away, $purple['CategoryId'], $fromKingdomPage);
+        $this->assertSame(0, $g['Status'], (string) ($g['Error'] ?? ''));
+        $this->assertSame($this->otherKingdom, $g['Credit']['PlayerKingdomId']);
+        $this->assertSame([$this->classId => 1.0], $this->bonus->totalsByClass($away));
+        $this->assertSame(1.0, (float) ($this->classRow($away)['Credits'] ?? 0));
+        // The defining kingdom's holder list shows the outside player; the allowance holds across the line.
+        $this->assertContains($away, array_column($this->bonus->forCategory($purple['CategoryId'], 0, 200, $this->kingdom), 'MundaneId'));
+        $this->assertSame(1, $this->grant($kEditor, $away, $purple['CategoryId'], $fromKingdomPage)['Status']);
+
+        // A park officer of the defining kingdom can do it too, from their own park page (the visiting player's case)...
+        $away2    = $this->playerAt($this->otherPark, 'bc-away2');
+        $homePark = $this->parkOfficer($this->park, 'bc-home-park');
+        $pg = $this->grant($homePark, $away2, $purple['CategoryId'], ['HostType' => 'park', 'HostId' => $this->park]);
+        $this->assertSame(0, $pg['Status'], (string) ($pg['Error'] ?? ''));
+        $this->assertSame(0, $this->bonus->revoke($homePark, (int) $pg['BonusCreditId'])['Status'], 'and take it back');
+        // ...but not from a park page outside the defining kingdom.
+        $r = $this->grant($kEditor, $away2, $purple['CategoryId'], ['HostType' => 'park', 'HostId' => $this->otherPark]);
+        $this->assertSame(3, $r['Status']);
+        $this->assertStringContainsString('from a page inside', (string) $r['Error']);
+        // And the receiving kingdom's own officers cannot hand out the other kingdom's credit, even to their own players.
+        foreach ([$awayCreate, $awayEdit, $awayPark] as $who) {
+            $r = $this->grant($who, $away2, $purple['CategoryId']);
+            $this->assertSame(3, $r['Status']);
+            $this->assertStringContainsString('park officers or granters', (string) $r['Error']);
+        }
+        $this->assertSame([], $this->bonus->totalsByClass($away2));
+        // A granter of the defining kingdom, scoped to the credit, can.
+        $granter = $this->playerAt($this->park, 'bc-granter');
+        $this->assertSame(0, $this->bonus->addGranter($kOfficer, $this->kingdom, $granter, $purple['CategoryId'])['Status']);
+        $this->assertSame(0, $this->grant($granter, $away2, $purple['CategoryId'], $fromKingdomPage)['Status']);
+        // A granter scoped to a DIFFERENT credit cannot carry this one across.
+        $other   = $this->category($kOfficer, $this->kingdom, 'Being orange');
+        $granter2 = $this->playerAt($this->park, 'bc-granter2');
+        $this->assertSame(0, $this->bonus->addGranter($kOfficer, $this->kingdom, $granter2, $other['CategoryId'])['Status']);
+        $this->assertSame(3, $this->grant($granter2, $this->playerAt($this->otherPark, 'bc-away4'), $purple['CategoryId'], $fromKingdomPage)['Status']);
+
+        // Taking it back: either side may, not a bystander.
+        $id = (int) $g['BonusCreditId'];
+        $nobody = $this->playerAt($this->otherPark, 'bc-nobody');
+        $r = $this->bonus->revoke($nobody, $id);
+        $this->assertSame(3, $r['Status']);
+        $this->assertStringContainsString('own park or Kingdom', (string) $r['Error']);
+        $this->assertSame(0, $this->bonus->revoke($awayPark, $id)['Status'], 'the player\'s own park officer can');
+        $this->assertSame([], $this->bonus->totalsByClass($away));
+        $this->assertSame(0, $this->bonus->revoke($kEditor, $id)['Status'], 'idempotent for the giving side too');
+        $g2 = $this->grant($kEditor, $away, $purple['CategoryId'], $fromKingdomPage);
+        $this->assertSame(0, $g2['Status']);
+        $this->assertSame(0, $this->bonus->revoke($kEditor, (int) $g2['BonusCreditId'])['Status'], 'and so can the giving kingdom');
+        $this->assertSame([], $this->bonus->totalsByClass($away));
+
+        // Saying no again stops new grants; what was given stays.
+        $this->assertSame(0, $this->bonus->setAcceptsOutside($awayCreate, $this->otherKingdom, false)['Status']);
+        $this->assertFalse($this->bonus->acceptsOutsideCredits($this->otherKingdom));
+        $this->assertSame(3, $this->grant($kEditor, $this->playerAt($this->otherPark, 'bc-away3'), $purple['CategoryId'], $fromKingdomPage)['Status']);
+        $this->assertSame([$this->classId => 1.0], $this->bonus->totalsByClass($away2));
+
+        // An ORK admin may say yes on the kingdom's behalf.
+        $admin = $this->orkAdmin('bc-admin');
+        $this->assertSame(0, $this->bonus->setAcceptsOutside($admin, $this->otherKingdom, true)['Status']);
+        $this->assertTrue($this->bonus->acceptsOutsideCredits($this->otherKingdom));
+        // Amtgard-wide credits are not affected: adoption, not this switch, governs them.
+        $r = $this->bonus->createCategory($admin, ['ScopeType' => 'ork', 'Name' => 'T12BC Census', 'DefaultCredits' => 1]);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $this->categoryIds[] = (int) $r['CategoryId'];
+        $census = (int) $r['CategoryId'];
+        $this->assertSame(3, $this->grant($kEditor, $away2, $census, $fromKingdomPage)['Status'], 'the switch opens nothing for Amtgard-wide credits');
+        $this->assertSame(3, $this->grant($admin, $away2, $census, $fromKingdomPage)['Status'], 'not even for an ORK admin until the kingdom adopts it');
+        $this->assertSame([$this->classId => 1.0], $this->bonus->totalsByClass($away2));
     }
 
     public function testInputsAreValidated(): void

@@ -28,6 +28,7 @@ class Controller_BonusCreditAjax extends Controller
         $uid = $this->requireLogin();
         [$scopeType, $scopeId] = $this->scope();
         $orkCredits = [];
+        $outside    = null;
         if ($scopeType === 'ork') {
             // Amtgard-wide: ORK admins only. They define, and may grant anywhere a kingdom has adopted.
             if (!$this->BonusCredit->is_ork_admin($uid)) {
@@ -51,6 +52,8 @@ class Controller_BonusCreditAjax extends Controller
             $granters   = $canAppoint ? $this->BonusCredit->granters($scopeId) : [];
             // Every live Amtgard-wide credit, flagged with this kingdom's adoption, for the Credits tab.
             $orkCredits = $canDefine ? $this->BonusCredit->ork_credits_for($scopeId) : [];
+            // Whether this kingdom's players may receive other kingdoms' credits (the Settings tab; the Grant tab's hint).
+            $outside = $this->BonusCredit->outside_credit_setting($scopeId);
         } else {
             if (!$this->BonusCredit->can_grant($uid, $scopeId)) {
                 $this->jsonOut(['status' => 3, 'error' => 'You do not have authority over this park.']);
@@ -65,7 +68,20 @@ class Controller_BonusCreditAjax extends Controller
             return ['ClassId' => (int) $c['ClassId'], 'ClassName' => (string) $c['Name']];
         }, $this->Attendance->get_classes()['Classes'] ?? []);
         $this->jsonOut(['status' => 0, 'categories' => $categories, 'classes' => $classes, 'canDefine' => $canDefine, 'canAppoint' => $canAppoint,
-                        'granters' => $granters, 'orkCredits' => $orkCredits]);
+                        'granters' => $granters, 'orkCredits' => $orkCredits, 'outside' => $outside]);
+    }
+
+    /**
+     * Say yes or no to credits from other kingdoms reaching this kingdom's
+     * players (kingdom CREATE, or an ORK admin on its behalf). Accept = 1/0.
+     */
+    public function outside_set($p = null)
+    {
+        $uid = $this->requireLogin();
+        $kingdomId = (int) ($_POST['KingdomId'] ?? 0);
+        $accept    = in_array(strtolower(trim((string) ($_POST['Accept'] ?? ''))), ['1', 'true', 'yes', 'on'], true);
+        $r = $this->BonusCredit->set_accepts_outside($uid, $kingdomId, $accept);
+        $this->envelope($r, ['outside' => $this->BonusCredit->outside_credit_setting($kingdomId)]);
     }
 
     /** Adopt an Amtgard-wide credit for a kingdom (kingdom CREATE, or an ORK admin on its behalf). */
@@ -214,7 +230,11 @@ class Controller_BonusCreditAjax extends Controller
         $this->load_model('Player');
         $info   = $this->Player->player_info($mundaneId);
         $parkId = is_array($info) ? (int) ($info['ParkId'] ?? 0) : 0;
-        if ($parkId <= 0 || !$this->BonusCredit->can_grant($uid, $parkId)) {
+        // The defining kingdom's officers may ask about a player of another kingdom
+        // (the grant itself still checks that the player's kingdom accepts outside credits).
+        $category  = $this->BonusCredit->category($categoryId);
+        $definer   = $category !== null && $this->BonusCredit->can_grant_for_defining_kingdom($uid, $category);
+        if ($parkId <= 0 || !($definer || $this->BonusCredit->can_grant($uid, $parkId))) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
         $this->jsonOut(['status' => 0, 'allowance' => $this->BonusCredit->allowance($categoryId, $mundaneId)]);
