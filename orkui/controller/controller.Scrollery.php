@@ -162,6 +162,7 @@ class Controller_Scrollery extends Controller
          * asks only the two cached scope lookups.
          */
         $this->data['CustomBorderRules'] = Scroll::CustomBorderRules();
+        $this->data['MatchScreens']      = Scroll::MatchScreens();
         $this->data['DesignDefaults']    = Scroll::DEFAULT_DESIGN;
         $this->data['HeraldryAvailable'] = array_map(
             static fn (string $u): bool => $u !== '',
@@ -519,9 +520,7 @@ class Controller_Scrollery extends Controller
             return;
         }
 
-        $lineIds = array_values(array_unique(array_filter(
-            array_map('intval', explode(',', (string) ($_GET['courtLines'] ?? '')))
-        )));
+        $lineIds = Scroll::CourtLineIds($_GET);   // &courtLines=, or an old link's &lines=12,13
 
         // &heraldry= as on render(): 'auto' (the default) is the court's own arms.
         $heraldry = Scroll::NormaliseRunHeraldry(isset($_GET['heraldry']) ? (string) $_GET['heraldry'] : null);

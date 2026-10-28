@@ -150,7 +150,32 @@ $customKind = static function (array $c): string {
     return strcasecmp(trim((string) $c['Name']), 'Custom Title') === 0 ? 'title' : 'award';
 };
 
-$awardOption = static function (array $c) use ($customKind): string {
+/*
+ * The paper tone behind each fixed order, for the colour-contrast hint: Scroll's own
+ * measured numbers (Scroll::GroundLuminance), never re-measured here. A number is
+ * emitted as a plain decimal — never through locale-aware float formatting.
+ */
+$groundLum    = Scroll::GroundLuminance();
+$lumAttr      = static fn (float $v): string => number_format($v, 6, '.', '');
+$awardLumAttr = static function (string $order, array $variants) use ($groundLum, $lumAttr): string {
+    $entry = $groundLum['orders'][$order] ?? null;
+    if ($entry === null) {
+        return '';
+    }
+    if (!is_array($entry)) {
+        return ' data-ground-lum="' . $lumAttr((float) $entry) . '"';
+    }
+    $byVariant = [];
+    foreach ($entry as $v => $lum) {
+        $byVariant[(string) $v] = round((float) $lum, 6);
+    }
+    $first = $variants[0] ?? array_key_first($entry);
+
+    return ' data-ground-lum="' . $lumAttr((float) ($entry[$first] ?? reset($entry))) . '"'
+        . ' data-variant-lum="' . scroll_e(json_encode($byVariant)) . '"';
+};
+
+$awardOption = static function (array $c) use ($customKind, $awardLumAttr): string {
     $kind = $customKind($c);
 
     return '<option value="' . (int) $c['AwardId'] . '"'
@@ -158,6 +183,7 @@ $awardOption = static function (array $c) use ($customKind): string {
         . ' data-min="' . (int) $c['MinRank'] . '"'
         . ' data-max="' . (int) $c['MaxRank'] . '"'
         . ' data-variants="' . scroll_e(implode(',', $c['Variants'])) . '"'
+        . $awardLumAttr((string) $c['Order'], (array) $c['Variants'])
         . ($kind !== '' ? ' data-custom-name="' . $kind . '"' : '')
         . ' data-name="' . scroll_e($c['Name']) . '">'
         . scroll_e(ScrollText::RepairMojibake((string) $c['Name'])) . '</option>';
@@ -454,6 +480,8 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                     . ' maxlength="7" spellcheck="false" autocomplete="off" inputmode="text"'
                     . ' aria-describedby="' . $id . '-err">'
                     . '</div>'
+                    . '<p class="sc-hint sc-contrast-hint" id="' . $id . '-contrast" role="status" hidden>'
+                    . 'Low contrast on this background — this colour may be hard to see.</p>'
                     . '<p class="sc-hint sc-hex-err" id="' . $id . '-err" hidden>Use six hex digits, like #1E4FA3. '
                     . 'The last valid colour is still applied.</p>'
                     . '</div>';
@@ -498,6 +526,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                                 <span>Match scroll style?</span>
                             </label>
                             <p class="sc-hint">Blends the knot into the paper the way the original border was, so the colours shift with it.</p>
+                            <p class="sc-hint" id="sc-match-fallback-hint" role="status" hidden>Very dark colours can't blend on this background — printed in exact colours.</p>
                         </div>
                     </div>
 
@@ -566,7 +595,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                             <option value="<?= scroll_e($headingKey) ?>"<?= $headingKey === Scroll::DEFAULT_HEADING ? ' selected' : '' ?>><?= scroll_e($headingLabel) ?></option>
                             <?php endforeach; ?>
                         </select>
-                        <p class="sc-hint">Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. Applies to this print only.</p>
+                        <p class="sc-hint">Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. A forced Classic that can&rsquo;t fit prints centred. Applies to this print only.</p>
                     </div>
 
                     <div class="sc-row">
@@ -720,6 +749,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                                              JS — the same rule data-knot follows on the border options. */ ?>
                                     <option value="<?= scroll_e($key) ?>"
                                             data-own-border="<?= Scroll::GroundDrawsOwnBorder($key) ? '1' : '0' ?>"
+                                            data-ground-lum="<?= $lumAttr((float) ($groundLum['grounds'][$key] ?? 1.0)) ?>"
                                             <?= isset($groundNotes[$key]) ? 'data-note="' . scroll_e($groundNotes[$key]) . '"' : '' ?>
                                             <?= $key === $default['ground'] ? 'selected' : '' ?>><?= scroll_e($recipeLabel($key)) ?></option>
                                 <?php endforeach; ?>
@@ -818,6 +848,9 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
          ScrolleryText.issuerLines() out of applyText(), and it must split a typed
          "The Kingdom of the Wetlands" the way print does. */ ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-textmodel.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-textmodel.js') ?>"></script>
+<?php /* The Custom Border compatibility mirror, before scrollery.js, which asks it
+         whether the checkbox is offered. */ ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-customborder.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-customborder.js') ?>"></script>
 <?php /* The typeset engine, which sets the top of the certificate. The autofit below
          calls it and has no fallback, so it comes first. */ ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-typeset.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-typeset.js') ?>"></script>
@@ -840,6 +873,12 @@ window.ScConfig = {
        Scroll::CustomBorderRule() reads (scrollery.js mirrors that method over it),
        the default design, and which of the scope's own arms exist. */
     customBorderRules: <?= json_encode(is_array($CustomBorderRules ?? null) ? $CustomBorderRules : Scroll::CustomBorderRules(), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+    /* Whether match-style draws the knot screened, per order/variant and per custom
+       ground: Scroll::PassesScreen() already answered, so the contrast hint never
+       re-derives it. Below matchScreenMinLuminance a colour vanishes on such a knot
+       (Scroll::MATCH_SCREEN_MIN_LUMINANCE, the server's MatchFallback line). */
+    matchScreens: <?= json_encode(is_array($MatchScreens ?? null) ? $MatchScreens : Scroll::MatchScreens(), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+    matchScreenMinLuminance: <?= json_encode(Scroll::MATCH_SCREEN_MIN_LUMINANCE) ?>,
     designDefaults:    <?= json_encode(is_array($DesignDefaults ?? null) ? $DesignDefaults : Scroll::DEFAULT_DESIGN, JSON_HEX_TAG | JSON_HEX_AMP) ?>,
     heraldryAvailable: <?= json_encode(is_array($HeraldryAvailable ?? null) ? $HeraldryAvailable : new stdClass()) ?>
 };

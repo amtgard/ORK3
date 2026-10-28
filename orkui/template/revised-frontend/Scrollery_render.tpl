@@ -352,7 +352,7 @@ foreach ($Scrolls as $scrollery_scan) {
                     <option value="<?= scroll_e($scrollery_hkey) ?>"<?= $scrollery_hkey === $scrollery_heading ? ' selected' : '' ?>><?= scroll_e($scrollery_hlabel) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <p class="sc-opt-help">Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. Applies to this print only.</p>
+                <p class="sc-opt-help">Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. A forced Classic that can&rsquo;t fit prints centred. Applies to this print only.</p>
             </div>
             <?php /* The reason-lines switch. Beside the hand because it is the same kind of
                      thing — a per-print presentation choice that changes nothing about the
@@ -607,12 +607,23 @@ foreach ($Scrolls as $scrollery_scan) {
        flow, so this is a pure repaint — but the URL is kept honest for the same reason
        the hand's is: this page's link gets copied. */
     var box = document.getElementById('sc-lines');
-    var urlLines = /[?&]lines=/.test(window.location.search);
+    /* &lines= is the switch only as 0 or 1. Anything else is an older court link's line
+       selection (Scroll::CourtLineIds reads it when &courtLines= is absent). */
+    var legacy = /[?&]lines=([^&]*)/.exec(window.location.search);
+    var legacyIds = legacy && !/[?&]courtLines=/.test(window.location.search)
+        && !/^[01]?$/.test(legacy[1].replace(/^(?:\+|%20)+|(?:\+|%20)+$/g, '')) ? legacy[1] : null;
+    var urlLines = !!legacy && legacyIds === null;
 
     Lines.bind(box, function (on) {
         Lines.apply(document.body, on);
         try {
-            var next = Lines.decorate(window.location.search || '?', on);
+            var search = window.location.search || '?';
+            /* Rewriting lines= would drop that selection, so carry it over first. */
+            if (legacyIds !== null) {
+                search = search.replace(/([?&])lines=[^&]*/, '$1courtLines=' + legacyIds);
+                legacyIds = null;
+            }
+            var next = Lines.decorate(search, on);
             /* decorate() only ever ADDS lines=0, so turning them back on has to
                clear the parameter rather than set it to 1 — otherwise the URL
                accumulates a value that means "the default" and reads as a choice. */

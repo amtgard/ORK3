@@ -794,6 +794,31 @@ class Scroll extends Ork3
     public const HERALDRY_FALLBACK_ORDER = ['park', 'kingdom', 'persona'];
 
     /**
+     * The court print route's selected line ids, from the query. &courtLines= is the
+     * parameter; when it is absent, an older link's &lines=12,13 is read the same way.
+     * A bare 0 or 1 is the render page's Reason-lines switch, not a line id, so it
+     * selects nothing. Positive ints only, de-duplicated, in the order given.
+     *
+     * @param array<string, mixed> $query
+     * @return int[]
+     */
+    public static function CourtLineIds(array $query): array
+    {
+        $raw = (string) ($query['courtLines'] ?? '');
+        if ($raw === '' && !isset($query['courtLines'])) {
+            $legacy = trim((string) ($query['lines'] ?? ''));
+            if ($legacy !== '' && $legacy !== '0' && $legacy !== '1') {
+                $raw = $legacy;
+            }
+        }
+
+        return array_values(array_unique(array_filter(
+            array_map('intval', explode(',', $raw)),
+            static fn (int $id): bool => $id > 0
+        )));
+    }
+
+    /**
      * The print page's &heraldry= — a run-level choice of whose arms every certificate
      * on the page draws. Allowlist: 'auto' or one of HERALDRY_SOURCES, and anything
      * else (absent, empty, a stranger) is 'auto', which draws exactly what the page
@@ -838,6 +863,164 @@ class Scroll extends Ork3
         }
 
         return '';
+    }
+
+    /** Below this relative luminance a colour does not survive a screen-blended pass. */
+    public const MATCH_SCREEN_MIN_LUMINANCE = 0.08;
+
+    /** At or above this opacity a multiply/normal pass is the one that draws the band. */
+    public const MATCH_BAND_MIN_OPACITY = 0.5;
+
+    /**
+     * Whether a custom-border rule's resolved passes draw the knot screened — i.e. a
+     * near-black colour vanishes. That is true only when some pass screens and NO pass
+     * carries the band with multiply or normal at opacity >= MATCH_BAND_MIN_OPACITY:
+     * owl cyanotype (screen only) screens; mask (a screen@0.6 glow under a multiply@1
+     * band) does not, because the multiply pass draws a dark knot perfectly well.
+     * Within one pass the last declaration wins, as in CSS (the knot partial's
+     * multiply followed by a dark ground's screen is a screen pass).
+     */
+    public static function PassesScreen(array $passes): bool
+    {
+        $screens = false;
+        foreach ($passes as $style) {
+            $blend   = 'normal';
+            $opacity = 1.0;
+            foreach (explode(';', (string) $style) as $decl) {
+                $pair = explode(':', $decl, 2);
+                if (count($pair) !== 2) {
+                    continue;
+                }
+                $prop = strtolower(trim($pair[0]));
+                if ($prop === 'mix-blend-mode') {
+                    $blend = strtolower(trim($pair[1]));
+                } elseif ($prop === 'opacity') {
+                    $opacity = (float) trim($pair[1]);
+                }
+            }
+            if ($blend === 'screen') {
+                $screens = true;
+            } elseif (in_array($blend, ['multiply', 'normal'], true) && $opacity >= self::MATCH_BAND_MIN_OPACITY) {
+                return false;
+            }
+        }
+
+        return $screens;
+    }
+
+    /**
+     * PassesScreen() answered for every order/variant (and, for the custom order, every
+     * recipe ground), so the builder's contrast hint reads the server's answer instead of
+     * re-deriving it: `orders[order]` is a bool, or bool-per-variant for variant-keyed
+     * rules; `grounds[ground]` is the custom order's answer on that ground (its knot and
+     * raster borders both screen exactly on DARK_GROUNDS).
+     *
+     * @return array{orders: array<string, bool|array<string, bool>>, grounds: array<string, bool>}
+     */
+    public static function MatchScreens(): array
+    {
+        $orders = [];
+        foreach (self::CustomBorderRules() as $order => $rule) {
+            if ($order === 'custom') {
+                continue;
+            }
+            $passes         = $rule['passes'] ?? [];
+            $orders[$order] = array_is_list($passes)
+                ? self::PassesScreen($passes)
+                : array_map(static fn (array $list): bool => self::PassesScreen($list), $passes);
+        }
+
+        $grounds = [];
+        foreach (array_keys(self::Recipes()['grounds']) as $ground) {
+            $grounds[$ground] = self::PassesScreen([self::KNOT_PARTIAL_STYLE . self::CustomKnotStyle((string) $ground)]);
+        }
+
+        return ['orders' => $orders, 'grounds' => $grounds];
+    }
+
+    /** WCAG relative luminance of a normalised #RRGGBB colour. */
+    public static function RelativeLuminance(string $hex): float
+    {
+        $hex = ltrim($hex, '#');
+        if (strlen($hex) !== 6 || !ctype_xdigit($hex)) {
+            return 1.0;
+        }
+        $lin = static function (string $pair): float {
+            $c = hexdec($pair) / 255;
+
+            return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+        };
+
+        return 0.2126 * $lin(substr($hex, 0, 2)) + 0.7152 * $lin(substr($hex, 2, 2)) + 0.0722 * $lin(substr($hex, 4, 2));
+    }
+
+    /**
+     * Which ground each fixed order draws as its paper, for the builder's colour-contrast
+     * hint. A string is a key of Recipes()['grounds'] (washes already composited over the
+     * parchment in the measurement); an array is keyed by variant; PAPER_WHITE is no
+     * ground at all (owl "transparency" prints on the page itself).
+     *
+     * The ground is the one the order's own template draws at its common rank:
+     * warrior's rank 10 swaps in sunburst (0.70 against parchment 0.58) and zodiac's
+     * unranked plate is starfield (0.58 against starfield II 0.55); neither moves a
+     * 1.5:1 line far enough to matter, so each order carries one number per variant.
+     *
+     * @var array<string, string|array<string, string>>
+     */
+    public const ORDER_GROUNDS = [
+        'battle'  => ['martial' => 'parchment', 'arcane' => 'arcane'],
+        'crown'   => 'parchment',
+        'dragon'  => 'parchment',
+        'flame'   => 'flame',
+        'garber'  => 'linen',
+        'griffon' => 'parchment',
+        'hunter'  => 'parchment',
+        'hydra'   => 'parchment',
+        'jovious' => 'jovious',
+        'lion'    => 'parchment',
+        'mask'    => 'parchment',
+        'owl'     => ['parchment' => 'parchment', 'cyanotype' => 'cyanotype', 'transparency' => self::PAPER_WHITE],
+        'rose'    => 'parchment',
+        'smith'   => 'forge',
+        'warrior' => 'parchment',
+        'zodiac'  => 'starfield2',
+    ];
+
+    /** Sentinel in ORDER_GROUNDS: bare white paper, relative luminance 1. */
+    public const PAPER_WHITE = '@paper';
+
+    /** @var array<string, mixed>|null */
+    private static ?array $groundLuminance = null;
+
+    /**
+     * Mean WCAG relative luminance of the text box, per ground and per fixed order/variant.
+     * The grounds are measured (data/scroll-ground-luminance.json, regenerated by
+     * ScrollGroundContrastTest); the orders point at them through ORDER_GROUNDS.
+     *
+     * @return array{grounds: array<string, float>, orders: array<string, float|array<string, float>>}
+     */
+    public static function GroundLuminance(): array
+    {
+        if (self::$groundLuminance !== null) {
+            return self::$groundLuminance;
+        }
+
+        $file    = json_decode((string) file_get_contents(DIR_ORK3 . 'data/scroll-ground-luminance.json'), true);
+        $grounds = [];
+        foreach (($file['grounds'] ?? []) as $name => $row) {
+            $grounds[$name] = (float) $row['luminance'];
+        }
+        // An unmeasured ground reads as white paper (1.0) rather than failing the page;
+        // ScrollGroundLuminanceTest::testEveryOrderGroundIsMeasured keeps that from
+        // happening to any ground ORDER_GROUNDS names.
+        $lum = static fn (string $g): float => $g === self::PAPER_WHITE ? 1.0 : ($grounds[$g] ?? 1.0);
+
+        $orders = [];
+        foreach (self::ORDER_GROUNDS as $order => $ground) {
+            $orders[$order] = is_array($ground) ? array_map($lum, $ground) : $lum($ground);
+        }
+
+        return self::$groundLuminance = ['grounds' => $grounds, 'orders' => $orders];
     }
 
     /** @var array<string, array>|null */
@@ -907,6 +1090,14 @@ class Scroll extends Ork3
                     ? self::KNOT_PARTIAL_STYLE . self::CustomKnotStyle($recipe['ground'])
                     : (self::BORDER_STYLES[$border][$tone] ?? self::BORDER_STYLE_DEFAULT[$tone]),
             ];
+        }
+
+        if (isset($rule['recipeRankSets'])) {
+            $set = (string) (self::NormaliseRecipe($recipe)['rankSet'] ?? '');
+            $min = $rule['recipeRankSets'][$set]['minIncompatibleRank'] ?? null;
+            if ($min !== null && $rank >= $min) {
+                return null;
+            }
         }
 
         if (isset($rule['recipeGrounds'])) {
@@ -2135,12 +2326,26 @@ class Scroll extends Ork3
         if ($design['customBorder']) {
             $rule = self::CustomBorderRule((string) $order['id'], $rank, $variant, $recipe);
             if ($rule !== null) {
+                // Match mode blends the knot through each pass's own style. A knot whose
+                // band is screened (owl cyanotype, custom on a dark ground — see
+                // PassesScreen(); mask's glow is not, its band is multiply) cannot draw
+                // a near-black colour: screen(black, ground) is the ground, so the band
+                // and its outlines vanish and the knot reads as dashes. Draw those
+                // exact instead, and say so, so the builder can tell the officer.
+                $fallback = $design['matchStyle']
+                    && self::PassesScreen($rule['passes'])
+                    && (self::RelativeLuminance($design['color1']) < self::MATCH_SCREEN_MIN_LUMINANCE
+                        || self::RelativeLuminance($design['color2']) < self::MATCH_SCREEN_MIN_LUMINANCE);
+                if ($fallback) {
+                    $design['matchStyle'] = false;
+                }
                 $customBorder = [
-                    'color1'     => $design['color1'],
-                    'color2'     => $design['color2'],
-                    'matchStyle' => $design['matchStyle'],
-                    'passes'     => $rule['passes'],
-                    'ground'     => $rule['ground'],
+                    'color1'        => $design['color1'],
+                    'color2'        => $design['color2'],
+                    'matchStyle'    => $design['matchStyle'],
+                    'matchFallback' => $fallback,
+                    'passes'        => $rule['passes'],
+                    'ground'        => $rule['ground'],
                 ];
             }
         }

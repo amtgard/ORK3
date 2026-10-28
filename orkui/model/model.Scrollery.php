@@ -776,12 +776,7 @@ class Model_Scrollery extends Model
                 'UseOf'     => $issuer['useOf'],
                 'KingdomId' => $scopeId,
                 'Heraldry'  => (int) ($info['HasHeraldry'] ?? 0) === 1
-                    ? (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
-                        // See heraldry_url(): inert today, and the guard against the
-                        // renditions branch silently serving a 256px thumbnail onto a
-                        // 300 dpi certificate once it merges.
-                        ['Type' => 'Kingdom', 'Id' => $scopeId, 'Size' => 'master']
-                    )['Url']
+                    ? $this->scroll_heraldry_url('Kingdom', $scopeId)
                     : '',
             ];
         }
@@ -805,9 +800,7 @@ class Model_Scrollery extends Model
             'UseOf'     => true,
             'KingdomId' => (int) ($park['KingdomId'] ?? 0),
             'Heraldry'  => (int) ($park['HasHeraldry'] ?? 0) === 1
-                ? (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
-                    ['Type' => 'Park', 'Id' => $scopeId, 'Size' => 'master']
-                )['Url']
+                ? $this->scroll_heraldry_url('Park', $scopeId)
                 : '',
         ];
     }
@@ -1439,6 +1432,7 @@ class Model_Scrollery extends Model
      * certificate; without the key, the day that branch merges is the day every
      * scroll silently starts printing a thumbnail, with nothing failing and nobody
      * told. Asking for the master now costs nothing and closes that.
+     * scroll_heraldry_url() asks for it, and keys a black square out (B6).
      */
     private function heraldry_url(array $row): string
     {
@@ -1446,18 +1440,14 @@ class Model_Scrollery extends Model
         if ($parkId > 0) {
             $park = $this->park_details($parkId);
             if ((int) ($park['HasHeraldry'] ?? 0) === 1) {
-                return (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
-                    ['Type' => 'Park', 'Id' => $parkId, 'Size' => 'master']
-                )['Url'];
+                return $this->scroll_heraldry_url('Park', $parkId);
             }
         }
 
         $kingdomId = (int) ($row['KingdomId'] ?? 0);
         if ($kingdomId > 0) {
             if ((int) ($this->kingdom_short_info($kingdomId)['HasHeraldry'] ?? 0) === 1) {
-                return (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
-                    ['Type' => 'Kingdom', 'Id' => $kingdomId, 'Size' => 'master']
-                )['Url'];
+                return $this->scroll_heraldry_url('Kingdom', $kingdomId);
             }
         }
 
@@ -1500,28 +1490,58 @@ class Model_Scrollery extends Model
     }
 
     /**
-     * GetHeraldryUrl() at master size, held per request: a run drawing one kingdom's
-     * arms on 200 scrolls stats the file once, not 200 times. See heraldry_url() on
-     * why 'Size' => 'master' is asked for.
+     * A run's chosen source's arms: scroll_heraldry_url(), which holds each source for
+     * the request.
      */
     private function master_heraldry_url(string $type, int $id): string
     {
-        static $cache = [];
-        $key = $type . ':' . $id;
-        if (!array_key_exists($key, $cache)) {
-            $cache[$key] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
-                ['Type' => $type, 'Id' => $id, 'Size' => 'master']
-            )['Url'];
-        }
-
-        return $cache[$key];
+        return $this->scroll_heraldry_url($type, $id);
     }
 
     /**
-     * Master heraldry URLs for each source the Customize Design card can pick, '' where
-     * there are none. Kingdom follows the park's own kingdom; park is '' on a kingdom
-     * scope unless a recipient is given, in which case it is the recipient's home park's
-     * arms; persona is the recipient's own arms and needs a real player.
+     * Heraldry as a scroll draws it: the master (see heraldry_url() on why 'Size' =>
+     * 'master' is asked for), with an opaque black square keyed out when the image is
+     * plainly a device on a black ground (B6; ScrollHeraldry has the rules and the
+     * cache). Every scroll-render path comes through here — court and reprint Automatic,
+     * a run's chosen source, and the composer — so the preview matches the print. Profile
+     * and every other heraldry surface keep calling GetHeraldryUrl() directly.
+     *
+     * Held per request and per source: reprint Automatic asks heraldry_url() once per
+     * row and a court or reprint run asks master_heraldry_url() once per certificate, so
+     * a 200-certificate run of one kingdom's arms stats and hashes the file once, not 200
+     * times. The cached value is the scroll rendition, never the bare master, and the key
+     * names that rendition so nothing else can share the slot.
+     *
+     * The memo lives for the process. Under FPM that is one request; a long-lived CLI
+     * or a test that re-uploads arms calls reset_scroll_heraldry_urls() between runs.
+     */
+    private function scroll_heraldry_url(string $type, int $id): string
+    {
+        $key = 'scroll:' . $type . ':' . $id;
+        if (!array_key_exists($key, self::$scrollHeraldryUrls)) {
+            self::$scrollHeraldryUrls[$key] = ScrollHeraldry::ForUrl((string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+                ['Type' => $type, 'Id' => $id, 'Size' => 'master']
+            )['Url']);
+        }
+
+        return self::$scrollHeraldryUrls[$key];
+    }
+
+    /** @var array<string, string> scroll_heraldry_url()'s per-process memo. */
+    private static array $scrollHeraldryUrls = [];
+
+    /** Forget every memoised scroll heraldry URL (long-lived CLI, tests). */
+    public static function reset_scroll_heraldry_urls(): void
+    {
+        self::$scrollHeraldryUrls = [];
+    }
+
+    /**
+     * Scroll heraldry URLs (scroll_heraldry_url()) for each source the Customize Design
+     * card can pick, '' where there are none. Kingdom follows the park's own kingdom; park
+     * is '' on a kingdom scope unless a recipient is given, in which case it is the
+     * recipient's home park's arms; persona is the recipient's own arms and needs a real
+     * player.
      *
      * @return array{kingdom:string,park:string,persona:string}
      */
@@ -1536,20 +1556,14 @@ class Model_Scrollery extends Model
         $recipientParkId = $playerId > 0 ? (int) ($this->scroll_recipient($playerId)['ParkId'] ?? 0) : 0;
         $parkId          = Scroll::HeraldryParkId($scopeType, $scopeId, $recipientParkId);
         if ($parkId > 0 && (int) ($this->park_details($parkId)['HasHeraldry'] ?? 0) === 1) {
-            $out['park'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
-                ['Type' => 'Park', 'Id' => $parkId, 'Size' => 'master']
-            )['Url'];
+            $out['park'] = $this->scroll_heraldry_url('Park', $parkId);
         }
         if ($kingdomId > 0 && (int) ($this->kingdom_short_info($kingdomId)['HasHeraldry'] ?? 0) === 1) {
-            $out['kingdom'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
-                ['Type' => 'Kingdom', 'Id' => $kingdomId, 'Size' => 'master']
-            )['Url'];
+            $out['kingdom'] = $this->scroll_heraldry_url('Kingdom', $kingdomId);
         }
         if ($playerId > 0) {
             if ((int) ($this->scroll_recipient($playerId)['HasHeraldry'] ?? 0) === 1) {
-                $out['persona'] = (string) Ork3::$Lib->heraldry->GetHeraldryUrl(
-                    ['Type' => 'Player', 'Id' => $playerId, 'Size' => 'master']
-                )['Url'];
+                $out['persona'] = $this->scroll_heraldry_url('Player', $playerId);
             }
         }
 

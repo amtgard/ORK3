@@ -684,6 +684,7 @@
         cbNa         = $('sc-custom-border-na'),
         cbColors     = $('sc-custom-border-colors'),
         matchEl      = $('sc-match-style'),
+        matchHint    = $('sc-match-fallback-hint'),
         ribbonEl     = $('sc-custom-ribbon'),
         ribbonColors = $('sc-custom-ribbon-colors'),
         recipeCbHint = $('sc-recipe-cb-hint'),
@@ -707,6 +708,133 @@
      * setColor(), so these, the two inputs and the preview never disagree.
      */
     var colors = {};
+
+    /*
+     * What the last preview said about match-style. `fallback` is the server's own
+     * MatchFallback: match was asked for but drawn exact, because a colour is too dark
+     * for a screen-blended pass. The hint reads it, and so does anything later that
+     * needs to know which colours were really drawn. `askedDark` is the CLIENT's guess
+     * at the same question, used only to decide whether a colour edit needs a fresh
+     * round trip — the server stays the one that decides.
+     */
+    var matchState = { fallback: false, askedDark: false };
+
+    function relLum(hex) {
+        var h = normHex(hex);
+        if (!h) { return 1; }
+        var ch = [1, 3, 5].map(function (i) {
+            var c = parseInt(h.substr(i, 2), 16) / 255;
+            return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    }
+
+    /* Scroll::MATCH_SCREEN_MIN_LUMINANCE, stamped by the template — not a copy. */
+    var MATCH_SCREEN_MIN = Number(cfg.matchScreenMinLuminance);
+
+    function knotLooksDark() {
+        return relLum(colors.c1) < MATCH_SCREEN_MIN || relLum(colors.c2) < MATCH_SCREEN_MIN;
+    }
+
+    function paintMatchHint() {
+        if (matchHint) {
+            matchHint.hidden = !(matchState.fallback && matchEl && matchEl.checked && cbEl && cbEl.checked);
+        }
+        paintContrast();
+    }
+
+    /*
+     * The colour-contrast hint (A5). A knot or ribbon colour close to the paper's own
+     * tone reads only through its outline, and nothing about it is wrong enough to
+     * refuse — so the control says so, under itself, and prints nothing.
+     *
+     * The paper's tone is Scroll's measured number, stamped on the options (the award's
+     * order/variant, or the custom order's ground); the page measures nothing.
+     *
+     * The effective colour is what the preview really draws:
+     *   - the ribbon has no match option: always its exact colour;
+     *   - the knot with match off, or with match on but drawn exact because the server
+     *     reported MatchFallback: its exact colour;
+     *   - the knot blended into the paper: the colour combined with the paper by the
+     *     blend that draws its band — screen when Scroll::PassesScreen says the knot is
+     *     screened (owl cyanotype, custom on a dark ground; read from cfg.matchScreens,
+     *     never re-derived), otherwise multiply, c x g (mask's band is its multiply
+     *     pass; its screen pass is only a glow). The paper is
+     *     taken as a neutral of its measured luminance; a sheet's warm cast does not
+     *     move a 1.5:1 judgement.
+     * Advisory only: it never blocks, and it is not part of the certificate markup.
+     */
+    var CONTRAST_MIN = 1.5;
+
+    function numAttr(el, name) {
+        var v = el ? parseFloat(el.dataset[name]) : NaN;
+        return isNaN(v) ? null : v;
+    }
+
+    function variantInUse(opt) {
+        var variants = (opt.dataset.variants || '').split(',').filter(Boolean);
+        return variants.indexOf(variantEl.value) !== -1 ? variantEl.value : (variants[0] || '');
+    }
+
+    function paperLuminance() {
+        var opt = selected();
+        if (!opt) { return null; }
+        if (opt.dataset.order === 'custom') {
+            return numAttr(groundEl && groundEl.options[groundEl.selectedIndex], 'groundLum');
+        }
+        if (opt.dataset.variantLum) {
+            try {
+                var byVariant = JSON.parse(opt.dataset.variantLum), v = variantInUse(opt);
+                if (v && typeof byVariant[v] === 'number') { return byVariant[v]; }
+            } catch (e) { /* fall through to the order's own number */ }
+        }
+        return numAttr(opt, 'groundLum');
+    }
+
+    function knotPassesScreen() {
+        var opt = selected(), order = opt && opt.dataset.order, m = cfg.matchScreens || {};
+        if (!order) { return false; }
+        if (order === 'custom') { return !!(m.grounds || {})[groundEl ? groundEl.value : '']; }
+        var screens = (m.orders || {})[order];
+        if (screens && typeof screens === 'object') { screens = screens[variantInUse(opt)]; }
+        return screens === true;
+    }
+
+    function toLinear(c) { return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+    function toEncoded(l) { return l <= 0.0031308 ? l * 12.92 : 1.055 * Math.pow(l, 1 / 2.4) - 0.055; }
+
+    function effectiveLuminance(key, paperL) {
+        var blended = key !== 'ribbon' && matchEl && matchEl.checked && cbEl && cbEl.checked && !matchState.fallback;
+        if (!blended) { return relLum(colors[key]); }
+        var h = normHex(colors[key]);
+        if (!h) { return paperL; }
+        var g = toEncoded(paperL), screen = knotPassesScreen();
+        var ch = [1, 3, 5].map(function (i) {
+            var c = parseInt(h.substr(i, 2), 16) / 255;
+            return toLinear(screen ? 1 - (1 - c) * (1 - g) : c * g);
+        });
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    }
+
+    function paintContrast() {
+        var paperL = paperLuminance();
+        COLOR_CONTROLS.forEach(function (ctl) {
+            var hint = $(ctl.id + '-contrast');
+            if (!hint) { return; }
+            if (paperL === null || !colors[ctl.key]) { hint.hidden = true; return; }
+            var l = effectiveLuminance(ctl.key, paperL),
+                ratio = (Math.max(l, paperL) + 0.05) / (Math.min(l, paperL) + 0.05);
+            hint.hidden = !(ratio < CONTRAST_MIN);
+        });
+    }
+
+    var matchTimer = null;
+    function colourMayChangeMatch() {
+        if (!(matchEl && matchEl.checked && cbEl && cbEl.checked)) { return; }
+        if (knotLooksDark() === matchState.askedDark) { return; }
+        clearTimeout(matchTimer);
+        matchTimer = setTimeout(reload, 250);
+    }
 
     var COLOR_CONTROLS = [
         { key: 'c1',     id: 'sc-color1',       paint: paintKnot },
@@ -780,6 +908,8 @@
         markHex(ctl, true);
         ctl.paint();
         rememberColors();
+        paintContrast();
+        if (ctl.key !== 'ribbon') { colourMayChangeMatch(); }
     }
 
     /*
@@ -830,52 +960,40 @@
         ctl.picker.addEventListener('change', syncSummary);
     });
 
+    function has(obj, key) { return !!obj && Object.prototype.hasOwnProperty.call(obj, key); }
+
     /*
      * Can the chosen award take a Custom Border, right now?
      *
-     * A line-for-line mirror of Scroll::CustomBorderRule()'s yes/no over the SAME data
-     * (data/scroll-custom-border.php, handed over by the controller as
-     * cfg.customBorderRules) — not a second list. The server applies the rule again
-     * and silently ignores a border it cannot honour, so this decides only whether
-     * the checkbox is offered; it cannot make a certificate wrong.
-     *
-     *   - an order absent from the data is incompatible (flame, garber, zodiac);
-     *   - variant-keyed passes need the variant BuildScroll() would pick: the one
-     *     asked for if the order has it, otherwise its first;
-     *   - a rank mapped to false is incompatible, at the CLAMPED rank the art is
-     *     drawn from (Scroll::ClampRank, the order's own from/to — the option's
-     *     data-min/data-max);
-     *   - the custom order on a ground that paints its own frame is compatible only
-     *     where recipeGrounds maps that ground to a frameless twin.
+     * The rule itself lives in scrollery-customborder.js (a pure mirror of
+     * Scroll::CustomBorderRule() over cfg.customBorderRules, shared-fixture tested);
+     * this only reads the controls. Guarded on the global: a cached older page that
+     * lacks the module just does not offer the box.
      */
-    function has(obj, key) { return !!obj && Object.prototype.hasOwnProperty.call(obj, key); }
+    var warnedNoCustomBorder = false;
 
     function customBorderCompatible() {
-        var opt   = selected(),
-            rules = cfg.customBorderRules || {},
-            order = opt ? opt.dataset.order : '';
-        if (!order || !has(rules, order)) { return false; }
-        var rule = rules[order] || {};
-
-        // A list arrives as a JSON array; a variant-keyed map as an object.
-        if (rule.passes && typeof rule.passes === 'object' && !Array.isArray(rule.passes)) {
-            var variants = (opt.dataset.variants || '').split(',').filter(Boolean),
-                variant  = variants.indexOf(variantEl.value) !== -1 ? variantEl.value : (variants[0] || '');
-            if (!has(rule.passes, variant)) { return false; }
-        }
-
-        var min  = parseInt(opt.dataset.min, 10) || 0,
-            max  = parseInt(opt.dataset.max, 10) || 10,
-            rank = Math.max(min, Math.min(max, parseInt(rankEl.value, 10) || 0));
-        if (has(rule.ranks, String(rank)) && rule.ranks[rank] === false) { return false; }
-
-        if (rule.recipeGrounds && groundEl) {
-            var g = groundEl.options[groundEl.selectedIndex];
-            if (g && g.dataset.ownBorder === '1' && typeof rule.recipeGrounds[groundEl.value] !== 'string') {
-                return false;
+        var M = window.ScrolleryCustomBorder, opt = selected();
+        if (!M) {
+            if (!warnedNoCustomBorder) {
+                warnedNoCustomBorder = true;
+                console.warn('Scrollery: scrollery-customborder.js did not load; Custom Border is unavailable.');
             }
+            return false;
         }
-        return true;
+        if (!opt) { return false; }
+        var g = groundEl ? groundEl.options[groundEl.selectedIndex] : null;
+        return M.compatible(cfg.customBorderRules || {}, {
+            order:           opt.dataset.order || '',
+            variants:        (opt.dataset.variants || '').split(',').filter(Boolean),
+            variant:         variantEl.value,
+            min:             parseInt(opt.dataset.min, 10) || 0,
+            max:             isNaN(parseInt(opt.dataset.max, 10)) ? 10 : parseInt(opt.dataset.max, 10),
+            rank:            parseInt(rankEl.value, 10) || 0,
+            rankSet:         rankSetEl ? rankSetEl.value : '',
+            ground:          groundEl ? groundEl.value : '',
+            groundOwnBorder: !!(g && g.dataset.ownBorder === '1')
+        });
     }
 
     /* Ticked AND honoured — the state the certificate is actually drawn in. */
@@ -899,6 +1017,7 @@
         if (cbColors)     { cbColors.hidden = !(ok && cbEl && cbEl.checked); }
         if (ribbonColors) { ribbonColors.hidden = !(ribbonEl && ribbonEl.checked); }
         syncRecipeNote();
+        paintContrast();
     }
 
     /*
@@ -985,7 +1104,7 @@
      * colours do not — see paintKnot().
      */
     if (cbEl)     { cbEl.addEventListener('change', function () { syncDesign(); syncSummary(); reload(); }); }
-    if (matchEl)  { matchEl.addEventListener('change', reload); }
+    if (matchEl)  { matchEl.addEventListener('change', function () { paintMatchHint(); reload(); }); }
     if (ribbonEl) { ribbonEl.addEventListener('change', function () { syncDesign(); reload(); }); }
 
     /*
@@ -1003,6 +1122,7 @@
         if (colors.c1)     { params.set('color1', colors.c1); }
         if (colors.c2)     { params.set('color2', colors.c2); }
         if (colors.ribbon) { params.set('ribbonColor', colors.ribbon); }
+        matchState.askedDark = knotLooksDark();
     }
 
     /* ---- the round trip: order / rank / variant ------------------------- */
@@ -1078,6 +1198,8 @@
                 paintKnot();
                 paintRibbon();
                 takeHeraldry(d);
+                matchState.fallback = !!d.MatchFallback;
+                paintMatchHint();
                 // applyText() already asked for a fit; this is the one that matters for
                 // markup the server just sent, whose sizes are its first guess for an
                 // EMPTY recipient. Both go through the same rAF-coalesced call, so the

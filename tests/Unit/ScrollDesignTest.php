@@ -84,6 +84,19 @@ final class ScrollDesignTest extends TestCase
         $this->assertCount(3, Scroll::CustomBorderRule('owl', 3, 'transparency', [])['passes']);
     }
 
+    /** Garber numeral plates at rank 7+ straddle the knot gap, so custom + garber drops the knot there. */
+    public function testCustomGarberRankSevenUpTakesNoCustomBorder(): void
+    {
+        foreach ([6 => true, 7 => false, 8 => false, 9 => false, 10 => false] as $rank => $ok) {
+            $recipe = ['ground' => 'parchment', 'rankSet' => 'garber'];
+            $this->assertSame($ok, Scroll::CustomBorderRule('custom', $rank, '', $recipe) !== null, "rank {$rank}");
+            $s = Scroll::BuildScroll($this->row(94, $rank), ['player' => 'T', 'recipe' => $recipe, 'design' => ['customBorder' => '1']]);
+            $this->assertSame($ok, $s['customBorder'] !== null, "BuildScroll rank {$rank}");
+        }
+        $s = Scroll::BuildScroll($this->row(94, 10), ['player' => 'T', 'recipe' => ['ground' => 'parchment', 'rankSet' => 'flame'], 'design' => ['customBorder' => '1']]);
+        $this->assertNotNull($s['customBorder']);
+    }
+
     public function testIncompatibleOrdersIgnoreTheRequest(): void
     {
         $this->assertNull(Scroll::CustomBorderRule('flame', 3, '', []));
@@ -222,6 +235,110 @@ final class ScrollDesignTest extends TestCase
         $crown = $this->build('crown', $req);
         $this->assertTrue($crown['design']['customBorder']);
         $this->assertTrue($crown['design']['matchStyle']);
+    }
+
+    public function testNearBlackInAScreenBlendedMatchPassFallsBackToExact(): void
+    {
+        $req = ['customBorder' => '1', 'matchStyle' => '1', 'color1' => '#000000'];
+
+        // owl cyanotype's only pass is mix-blend-mode:screen, which erases black.
+        $dark = $this->build('owl', $req, 8, ['variant' => 'cyanotype']);
+        $this->assertFalse($dark['customBorder']['matchStyle']);
+        $this->assertTrue($dark['customBorder']['matchFallback']);
+        $this->assertFalse($dark['design']['matchStyle']);
+        $this->assertTrue($dark['design']['customBorder']);
+
+        // Colour 2 counts too.
+        $two = $this->build('owl', ['color1' => '#1E4FA3', 'color2' => '#050505'] + $req, 8, ['variant' => 'cyanotype']);
+        $this->assertTrue($two['customBorder']['matchFallback']);
+
+        // A colour screen does not erase keeps match on.
+        $blue = $this->build('owl', ['color1' => '#1E4FA3'] + $req, 8, ['variant' => 'cyanotype']);
+        $this->assertTrue($blue['customBorder']['matchStyle']);
+        $this->assertFalse($blue['customBorder']['matchFallback']);
+        $this->assertTrue($blue['design']['matchStyle']);
+
+        // A multiply-only order keeps black.
+        $parch = $this->build('owl', $req, 8, ['variant' => 'parchment']);
+        $this->assertTrue($parch['customBorder']['matchStyle']);
+        $this->assertFalse($parch['customBorder']['matchFallback']);
+
+        // Match off never reports a fallback.
+        $off = $this->build('owl', ['matchStyle' => ''] + $req, 8, ['variant' => 'cyanotype']);
+        $this->assertFalse($off['customBorder']['matchFallback']);
+    }
+
+    public function testMaskMixedBlendKeepsMatchForBlack(): void
+    {
+        // mask = screen@0.6 (a glow) + multiply@1 (the band itself): the band is the
+        // multiply pass, so black draws, and match stays on.
+        $req  = ['customBorder' => '1', 'matchStyle' => '1', 'color1' => '#000000'];
+        $mask = $this->build('mask', $req);
+        $this->assertNotNull($mask['customBorder']);
+        $this->assertTrue($mask['customBorder']['matchStyle']);
+        $this->assertFalse($mask['customBorder']['matchFallback']);
+        $this->assertTrue($mask['design']['matchStyle']);
+
+        $red = $this->build('mask', ['color1' => '#7A1F1F'] + $req);
+        $this->assertFalse($red['customBorder']['matchFallback']);
+    }
+
+    public function testOwlCyanotypeStillFallsBackForNearBlack(): void
+    {
+        $req = ['customBorder' => '1', 'matchStyle' => '1', 'color1' => '#0A0A0A'];
+        $owl = $this->build('owl', $req, 8, ['variant' => 'cyanotype']);
+        $this->assertTrue($owl['customBorder']['matchFallback']);
+        $this->assertFalse($owl['customBorder']['matchStyle']);
+    }
+
+    public function testPassesScreenOnlyWhenNoPassCarriesTheBand(): void
+    {
+        $this->assertFalse(Scroll::PassesScreen(['mix-blend-mode:screen;opacity:0.6;', 'mix-blend-mode:multiply;opacity:1;']));
+        $this->assertTrue(Scroll::PassesScreen(['mix-blend-mode:screen;']));
+        // The last declaration wins, as in CSS: the knot partial on a dark custom ground.
+        $this->assertTrue(Scroll::PassesScreen([Scroll::KNOT_PARTIAL_STYLE . 'mix-blend-mode:screen;']));
+        $this->assertFalse(Scroll::PassesScreen([Scroll::KNOT_PARTIAL_STYLE]));
+        // A faint normal/multiply pass under half opacity does not carry the band.
+        $this->assertTrue(Scroll::PassesScreen(['mix-blend-mode:screen;', 'opacity:0.3;']));
+        $this->assertFalse(Scroll::PassesScreen(['mix-blend-mode:screen;', 'opacity:0.5;']));
+        // No screen pass at all: not screened.
+        $this->assertFalse(Scroll::PassesScreen(['mix-blend-mode:soft-light;opacity:0.5;']));
+        $this->assertFalse(Scroll::PassesScreen([]));
+    }
+
+    public function testMatchScreensIsTheBuildScrollPredicatePerOrderAndGround(): void
+    {
+        $m = Scroll::MatchScreens();
+        $this->assertFalse($m['orders']['mask']);
+        $this->assertFalse($m['orders']['crown']);
+        $this->assertTrue($m['orders']['owl']['cyanotype']);
+        $this->assertFalse($m['orders']['owl']['parchment']);
+        $this->assertArrayNotHasKey('custom', $m['orders']);
+        $this->assertTrue($m['grounds']['cyanotype']);
+        $this->assertFalse($m['grounds']['parchment']);
+
+        // Every fixed order/variant agrees with what BuildScroll decides for black.
+        foreach (Scroll::CustomBorderRules() as $order => $rule) {
+            if ($order === 'custom') {
+                continue;
+            }
+            $passes = $rule['passes'];
+            $sets   = array_is_list($passes) ? ['' => $passes] : $passes;
+            foreach ($sets as $variant => $list) {
+                $want = is_array($m['orders'][$order]) ? $m['orders'][$order][$variant] : $m['orders'][$order];
+                $this->assertSame(Scroll::PassesScreen($list), $want, "{$order}/{$variant}");
+            }
+        }
+    }
+
+    public function testPartialReprintDesignStillMeansNoCustomBorder(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row($this->awardId('owl'), 8),
+            ['player' => 'T', 'variant' => 'cyanotype', 'design' => ['heraldrySource' => 'kingdom']]
+        );
+        $this->assertNull($s['customBorder']);
+        $this->assertFalse($s['design']['matchStyle']);
     }
 
     public function testPrintRecipeOmitsDefaultDesign(): void

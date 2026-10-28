@@ -172,6 +172,9 @@ class Controller_ScrolleryAjax extends Controller
              */
             'Html'   => Scroll::Render($scroll, Scroll::ART_DISPLAY),
             'Rank'   => $scroll['rank'],
+            // True when match-style was asked for but drawn exact, because a colour is
+            // too dark to survive a screen-blended pass (Scroll::BuildScroll decides).
+            'MatchFallback' => (bool) ($scroll['customBorder']['matchFallback'] ?? false),
         ]);
         exit;
     }
