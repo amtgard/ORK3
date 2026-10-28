@@ -1001,8 +1001,28 @@
             floorScale: floorScale(),
             column: { left: left, right: right, width: right - left, cx: (left + right) / 2 },
             free: parseFree(award.getAttribute('data-sc-free')),
+            obstacles: readObstacles(award),
             heading: (heading === 'classic' || heading === 'centered') ? heading : null
         };
+    }
+
+    /*
+     * readObstacles(award) -> [{ x0, x1, y0, y1 }]
+     *
+     * EXPERIMENT (scrollery-heraldry): arms the certificate places INSIDE the text column
+     * (the flank layout's kingdom and park), marked [data-sc-obstacle]. freeSpan() treats
+     * each as artwork on whichever side of the column centre it sits, so the issuing lines
+     * fit between them rather than running underneath. Read once per fit, like the rest of
+     * the context; no transforms on these, since offsetTop does not see them.
+     */
+    function readObstacles(award) {
+        var out = [];
+        award.querySelectorAll('[data-sc-obstacle]').forEach(function (el) {
+            if (!(el.offsetWidth > 0)) { return; }
+            var b = relBox(award, el);
+            out.push({ x0: b.x, x1: b.x + b.w, y0: b.y, y1: b.y + b.h });
+        });
+        return out;
     }
 
     /*
@@ -1026,6 +1046,12 @@
             lArt = l > col.left + INK_EPS;
             rArt = r < col.right - INK_EPS;
         }
+        (ctx.obstacles || []).forEach(function (o) {
+            if (o.y1 <= yTop || o.y0 >= yBottom) { return; }
+            if ((o.x0 + o.x1) / 2 < col.cx) {
+                if (o.x1 > l) { l = o.x1; lArt = true; }
+            } else if (o.x0 < r) { r = o.x0; rArt = true; }
+        });
         return { l: l, r: r, lArt: lArt, rArt: rArt };
     }
 
@@ -1646,6 +1672,13 @@
     function heraldryInk(award, k) {
         var host = award.closest('.award-template') || award.parentElement;
         var img = host ? host.querySelector('.centre-top img') : null;
+        /* EXPERIMENT (scrollery-heraldry): a drawn-in blank is all ink, edge to edge. */
+        var blank = img ? null : (host ? host.querySelector('.centre-top .ScDrawIn') : null);
+        if (blank) {
+            var br = blank.getBoundingClientRect(), ba = award.getBoundingClientRect();
+            return br.width > 0 ? [{ x0: (br.left - ba.left) / k, y0: (br.top - ba.top) / k,
+                x1: (br.right - ba.left) / k, y1: (br.bottom - ba.top) / k }] : [];
+        }
         if (!img || !img.getAttribute('src')) { return []; }
         var r = img.getBoundingClientRect(), a = award.getBoundingClientRect();
         if (!(r.width > 0 && r.height > 0)) { return []; }

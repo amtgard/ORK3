@@ -520,6 +520,7 @@ foreach ($Scrolls as $scrollery_scan) {
 */ ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-textmodel.js?v=<?= filemtime($scrollery_tm) ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-typeset.js?v=<?= filemtime($scrollery_ts) ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-arms.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-arms.js') ?>"></script>
 <?php /*
     The measured autofit. It self-runs once on document.fonts.ready and exposes
     window.ScrolleryAutofit for anything that needs to re-fit after the DOM changes
