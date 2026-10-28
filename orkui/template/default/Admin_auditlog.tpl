@@ -56,6 +56,7 @@ $_actionLabels = [
 	'BonusCredit::removeGranter'       => 'Bonus Credit Granter Removed',
 	'BonusCredit::adopt'               => 'Bonus Credit Adopted',
 	'BonusCredit::withdraw'            => 'Bonus Credit Withdrawn',
+	'BonusCredit::setAcceptsOutside'   => 'Bonus Credits From Other Kingdoms',
 ];
 
 // ── JSON helpers (defined early — used in batch collector and render functions) ──
@@ -443,6 +444,10 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 		case 'BonusCredit::withdraw':
 			$_n = ($a['CategoryName'] ?? $b['CategoryName'] ?? '') !== '' ? '“' . htmlspecialchars($a['CategoryName'] ?? $b['CategoryName']) . '”' : 'an Amtgard-wide credit';
 			return ($method === 'BonusCredit::adopt' ? 'Adopted ' : 'Withdrew ') . $_n . (!empty($p['as_ork_admin']) ? ' (as ORK admin)' : '');
+		case 'BonusCredit::setAcceptsOutside':
+			// The per-Kingdom yes/no: may other Kingdoms' bonus credits reach its players?
+			$_on = !empty($a['AcceptsOutside']);
+			return ($_on ? 'Turned ON' : 'Turned OFF') . ' accepting bonus credits from other Kingdoms' . (!empty($p['as_ork_admin']) ? ' (as ORK admin)' : '');
 		case 'BonusCredit::addGranter':
 		case 'BonusCredit::removeGranter':
 			$_m = $a ?: $b;
@@ -1314,6 +1319,20 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			if (!empty($p['KingdomId'])) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', (int)$p['KingdomId'], $kingdomMap) . '</td></tr>';
 			$html .= '<tr class="al-diff-changed"><td class="al-diff-field">Status</td><td colspan="2">' . ($method === 'BonusCredit::adopt' ? 'Adopted — may now be granted to this kingdom\'s players' : 'Withdrawn — no longer offered here; credits already granted stay') . '</td></tr>';
 			$html .= '<tr><td class="al-diff-field">Acting As</td><td colspan="2">' . (!empty($p['as_ork_admin']) ? 'ORK admin, on the kingdom\'s behalf' : 'Kingdom officer') . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'BonusCredit::setAcceptsOutside':
+			$_was = !empty($b['AcceptsOutside']);
+			$_now = !empty($a['AcceptsOutside']);
+			$html = '<table class="al-diff-table"><tbody>';
+			$html .= '<tr><td class="al-diff-field">Setting</td><td colspan="2">Let this Kingdom\'s players receive bonus credits from other Kingdoms</td></tr>';
+			if (!empty($p['KingdomId'])) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', (int)$p['KingdomId'], $kingdomMap) . '</td></tr>';
+			$html .= '<tr class="al-diff-changed"><td class="al-diff-field">Changed</td><td colspan="2">' . ($_was ? 'On' : 'Off') . ' &rarr; <strong>' . ($_now ? 'On' : 'Off') . '</strong></td></tr>';
+			$html .= '<tr><td class="al-diff-field">Effect</td><td colspan="2">' . ($_now
+				? 'Other Kingdoms\' officers, park officers and granters may now grant their own Kingdom\'s bonus credits to this Kingdom\'s players. Amtgard-wide credits are unaffected (adoption governs those).'
+				: 'Other Kingdoms can no longer grant bonus credits to this Kingdom\'s players. Credits already given stay.') . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Acting As</td><td colspan="2">' . (!empty($p['as_ork_admin']) ? 'ORK admin, on the Kingdom\'s behalf' : 'Kingdom officer') . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
