@@ -467,6 +467,7 @@ test('the print page says what Automatic chose, in visible help text and no titl
   await page.locator('#sc-configure').click();
   const label = page.locator('.sc-sheet label[for="sc-heading"]');
   await expect(page.locator('#sc-heading + .sc-opt-help')).toContainText('Automatic sets the classic heading');
+  await expect(page.locator('#sc-heading + .sc-opt-help')).toContainText('A forced Classic that can\u2019t fit prints centred.');
   expect(await label.getAttribute('title')).toBeNull();
   expect(await page.locator('#sc-heading').getAttribute('title')).toBeNull();
 
@@ -809,6 +810,32 @@ test('the print page: the Reason lines checkbox works when the URL carries face=
   await page.locator('#sc-lines').check();
   await expect(page.locator('body')).not.toHaveAttribute('data-scroll-lines', '0');
   expect(await page.evaluate(() => window.location.search)).not.toContain('lines=');
+  await page.evaluate(() => localStorage.removeItem('sc-lines'));
+});
+
+/* ----------------------------------------------------------------------------------------------
+ * An old court link's &lines=12,13 is a line selection (Scroll::CourtLineIds). The Reason-lines
+ * switch rewrites lines=, so it must carry that selection over as &courtLines=, not drop it.
+ * ---------------------------------------------------------------------------------------------- */
+test('the print page: toggling Reason lines keeps a legacy &lines=<ids> selection as courtLines', async ({ page }) => {
+  await openComposer(page, 'kingdom');
+  await composerSettled(page);
+  const url = (await printUrlOf(page)).replace(/[?&]lines=[^&]*/, '') + '&lines=12,13';
+
+  await page.evaluate(() => localStorage.removeItem('sc-lines'));
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
+  await page.locator('#sc-configure').click();
+
+  const search = () => page.evaluate(() => decodeURIComponent(window.location.search));
+  await page.locator('#sc-lines').uncheck();
+  await expect(page.locator('body')).toHaveAttribute('data-scroll-lines', '0');
+  expect(await search()).toContain('courtLines=12,13');
+  expect(await search()).toMatch(/[?&]lines=0(&|$)/);
+
+  await page.locator('#sc-lines').check();
+  expect(await search()).toContain('courtLines=12,13');
+  expect(await search()).not.toMatch(/[?&]lines=/);
   await page.evaluate(() => localStorage.removeItem('sc-lines'));
 });
 

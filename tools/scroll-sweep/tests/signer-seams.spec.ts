@@ -77,6 +77,15 @@ test('markup in a signature is text, never parsed', async ({ page }) => {
   expect(r.text).toBe('<img src=x onerror=1>/Foo<b>Bar');
 });
 
+test('the camel seam is Unicode-aware: an accented lower-to-Upper step is a seam too', async ({ page }) => {
+  const pieces = (signer: string) => load(page, signer).then(() => page.evaluate(() => {
+    const el = document.querySelector('[data-scroll-text="givenBy"]')!;
+    return Array.from(el.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent);
+  }));
+  expect(await pieces('JoséÁlvarez')).toEqual(['José', 'Álvarez']);
+  expect(await pieces('ÉtienneÉcuyerDuBois')).toEqual(['Étienne', 'Écuyer', 'Du', 'Bois']);
+});
+
 test('a spaced signer is byte-identical', async ({ page }) => {
   await load(page, 'Sir Hobi the Mighty, Knight/Marshal');
   const html = await page.evaluate(() => document.querySelector('[data-scroll-text="givenBy"]')!.innerHTML);

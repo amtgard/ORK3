@@ -1010,6 +1010,9 @@ class Scroll extends Ork3
         foreach (($file['grounds'] ?? []) as $name => $row) {
             $grounds[$name] = (float) $row['luminance'];
         }
+        // An unmeasured ground reads as white paper (1.0) rather than failing the page;
+        // ScrollGroundLuminanceTest::testEveryOrderGroundIsMeasured keeps that from
+        // happening to any ground ORDER_GROUNDS names.
         $lum = static fn (string $g): float => $g === self::PAPER_WHITE ? 1.0 : ($grounds[$g] ?? 1.0);
 
         $orders = [];

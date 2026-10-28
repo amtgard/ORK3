@@ -194,6 +194,7 @@ final class ScrollTextModelTest extends TestCase
         yield 'park with no article' => ['Barony', 'Iron Keep', true, true, 'park', 'Iron Keep'];
         yield 'park whose title is Inactive' => ['Inactive', 'Foo', true, true, 'park', 'Foo'];
         yield 'park exactly as stored, spacing included' => ['Shire', "  The  River's End ", true, true, 'park', "  The  River's End "];
+        yield 'composed kingdom, of unticked: the name keeps its of, the phrase says it once' => ['Principality', 'The Principality of the Crimson Sands', true, false, 'kingdom', 'the Principality of the Crimson Sands'];
         yield 'unknown scope is the stored name' => ['', 'The Kingdom of the Wetlands', false, false, '', 'The Kingdom of the Wetlands'];
     }
 

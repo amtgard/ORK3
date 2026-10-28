@@ -84,9 +84,11 @@ class ScrollText
         // of the Crimson Sands" under title Principality), which printed it twice. Keep
         // the title and let the name be the place. Only the same rank word followed by
         // " of" counts: a different one ("Principality of X" under Barony) is as typed.
+        // The name's own "of" goes only when the lead supplies one (useOf); otherwise it
+        // stays with the place, so "and Barony" + "of Iron Keep" still reads.
         if ($title !== ''
-            && preg_match('/^(?:(?:The|Þe)\s+)?' . preg_quote($title, '/') . '\s+of\s+(.+)$/iu', $name, $m) === 1) {
-            $name = $m[1];
+            && preg_match('/^(?:(?:The|Þe)\s+)?' . preg_quote($title, '/') . '\s+(of\s+(.+))$/iu', $name, $m) === 1) {
+            $name = $useOf ? $m[2] : $m[1];
         }
 
         // "the" and "of" cannot stand without a rank word to hang on: with an empty
@@ -112,7 +114,7 @@ class ScrollText
         $phrase = $stored;
         if ($scopeType === 'kingdom') {
             $phrase = $title !== ''
-                ? 'the ' . $title . ' of ' . ($article !== '' ? 'the ' : '') . $place
+                ? 'the ' . $title . ' of ' . ($article !== '' ? 'the ' : '') . preg_replace('/^of\s+/iu', '', $place)
                 : $place;
         }
 

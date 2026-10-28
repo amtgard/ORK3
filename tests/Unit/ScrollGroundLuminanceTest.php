@@ -56,13 +56,30 @@ final class ScrollGroundLuminanceTest extends TestCase
         $this->assertArrayHasKey($order, $map['orders'], "$order has no luminance entry");
         $entry = $map['orders'][$order];
         if ($variant === '') {
-            $this->assertIsFloat($entry + 0.0);
             $this->assertGreaterThan(0.0, (float) $entry);
             return;
         }
         $this->assertIsArray($entry, "$order has variants, so its entry is keyed by variant");
         $this->assertArrayHasKey($variant, $entry);
         $this->assertGreaterThan(0.0, (float) $entry[$variant]);
+    }
+
+    /**
+     * GroundLuminance() falls back to 1.0 (white paper) for a ground the data file does
+     * not measure, which would silently judge that order against the wrong tone. Every
+     * ground an order points at must therefore be measured.
+     */
+    public function testEveryOrderGroundIsMeasured(): void
+    {
+        $measured = Scroll::GroundLuminance()['grounds'];
+        foreach (Scroll::ORDER_GROUNDS as $order => $ground) {
+            foreach ((array) $ground as $variant => $g) {
+                if ($g === Scroll::PAPER_WHITE) {
+                    continue;
+                }
+                $this->assertArrayHasKey($g, $measured, "ORDER_GROUNDS[$order]" . (is_array($ground) ? "[$variant]" : '') . " = $g has no measured luminance");
+            }
+        }
     }
 
     public function testNumbersAreTheMeasuredOnes(): void

@@ -1511,18 +1511,29 @@ class Model_Scrollery extends Model
      * a 200-certificate run of one kingdom's arms stats and hashes the file once, not 200
      * times. The cached value is the scroll rendition, never the bare master, and the key
      * names that rendition so nothing else can share the slot.
+     *
+     * The memo lives for the process. Under FPM that is one request; a long-lived CLI
+     * or a test that re-uploads arms calls reset_scroll_heraldry_urls() between runs.
      */
     private function scroll_heraldry_url(string $type, int $id): string
     {
-        static $cache = [];
         $key = 'scroll:' . $type . ':' . $id;
-        if (!array_key_exists($key, $cache)) {
-            $cache[$key] = ScrollHeraldry::ForUrl((string) Ork3::$Lib->heraldry->GetHeraldryUrl(
+        if (!array_key_exists($key, self::$scrollHeraldryUrls)) {
+            self::$scrollHeraldryUrls[$key] = ScrollHeraldry::ForUrl((string) Ork3::$Lib->heraldry->GetHeraldryUrl(
                 ['Type' => $type, 'Id' => $id, 'Size' => 'master']
             )['Url']);
         }
 
-        return $cache[$key];
+        return self::$scrollHeraldryUrls[$key];
+    }
+
+    /** @var array<string, string> scroll_heraldry_url()'s per-process memo. */
+    private static array $scrollHeraldryUrls = [];
+
+    /** Forget every memoised scroll heraldry URL (long-lived CLI, tests). */
+    public static function reset_scroll_heraldry_urls(): void
+    {
+        self::$scrollHeraldryUrls = [];
     }
 
     /**

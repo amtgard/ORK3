@@ -41,7 +41,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     break
 done
 
-GUARDED='^(assets/scrolls/|system/lib/ork3/class\.Scroll\.php|system/lib/ork3/data/scroll-|orkui/template/revised-frontend/scroll/|orkui/template/revised-frontend/style/scrollery\.css|tests/Unit/ScrollAssetPathsTest\.php|tests/Unit/ScrollGroundContrastTest\.php|tests/fixtures/scroll-ground-luminance\.json|bin/build-scroll-renditions\.sh|bin/check-scroll-assets\.sh)'
+GUARDED='^(assets/scrolls/|system/lib/ork3/class\.Scroll\.php|system/lib/ork3/data/scroll-|orkui/template/revised-frontend/scroll/|orkui/template/revised-frontend/style/scrollery\.css|tests/Unit/ScrollAssetPathsTest\.php|tests/Unit/ScrollGroundContrastTest\.php|bin/build-scroll-renditions\.sh|bin/check-scroll-assets\.sh)'
 
 if [ -n "$RANGE" ] && [ "${RANGE#..}" = "$RANGE" ]; then
     # A resolvable range is authoritative: an empty diff means there is genuinely

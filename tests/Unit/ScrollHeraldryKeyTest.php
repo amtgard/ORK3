@@ -314,6 +314,22 @@ final class ScrollHeraldryKeyTest extends TestCase
         // Memoised per source for the request: reprint Automatic calls heraldry_url()
         // once per row, and a 200-row run must hash each file once, not 200 times.
         preg_match('/function scroll_heraldry_url\(.*?\n    }\n/s', $src, $m);
-        $this->assertStringContainsString('static $cache', $m[0], 'scroll_heraldry_url() must memoise per source');
+        $this->assertStringContainsString('self::$scrollHeraldryUrls', $m[0], 'scroll_heraldry_url() must memoise per source');
+    }
+
+    /**
+     * The memo is per process: per request under FPM, but a long-lived CLI (or a test)
+     * would serve a stale URL after a re-upload. reset_scroll_heraldry_urls() empties it.
+     */
+    public function testTheScrollHeraldryUrlMemoHasAResetSeam(): void
+    {
+        $memo = new \ReflectionProperty(Model_Scrollery::class, 'scrollHeraldryUrls');
+        $memo->setValue(null, ['scroll:park:424242' => 'http://localhost/sentinel.png']);
+        $get = new \ReflectionMethod(Model_Scrollery::class, 'scroll_heraldry_url');
+        $model = (new \ReflectionClass(Model_Scrollery::class))->newInstanceWithoutConstructor();
+        $this->assertSame('http://localhost/sentinel.png', $get->invoke($model, 'park', 424242), 'served from the memo');
+
+        Model_Scrollery::reset_scroll_heraldry_urls();
+        $this->assertSame([], $memo->getValue());
     }
 }

@@ -595,7 +595,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                             <option value="<?= scroll_e($headingKey) ?>"<?= $headingKey === Scroll::DEFAULT_HEADING ? ' selected' : '' ?>><?= scroll_e($headingLabel) ?></option>
                             <?php endforeach; ?>
                         </select>
-                        <p class="sc-hint">Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. Applies to this print only.</p>
+                        <p class="sc-hint">Automatic sets the classic heading, and switches to centred when a name or place won&rsquo;t fit. A forced Classic that can&rsquo;t fit prints centred. Applies to this print only.</p>
                     </div>
 
                     <div class="sc-row">

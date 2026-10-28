@@ -292,3 +292,14 @@ npm run sweep:scrolls:combo150:rerun
 Output: `out/combo150-rerun/<tag>/` with `images/`, `results.json`, `sheets/<id>.jpg` (before beside
 after, then zoomed crops of the changed regions) and `diff.md` (per case: unchanged/changed,
 pixel-diff fraction, changed bounding box, metric deltas). Ids are exact; an unknown id fails.
+
+The saved matrix also freezes each case's `expect` (what the app's rules said it should draw on
+the day it was dealt). When a rule changes on purpose — keyed scroll heraldry, a Custom Border
+rule — refresh the expectations in place, so correct renders stop flagging `design:*`:
+
+```
+node tools/scroll-sweep/bin/combo150-refresh-expect.mjs
+```
+
+It re-asks `bin/combo150-expect.php` in the app container and replaces only `expect`; ids, urls
+and summaries are untouched. The first run keeps the original as `matrix.json.orig`.

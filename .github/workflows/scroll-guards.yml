@@ -36,7 +36,7 @@ on:
       - 'orkui/template/revised-frontend/style/scrollery.css'
       - 'tests/Unit/ScrollAssetPathsTest.php'
       - 'tests/Unit/ScrollGroundContrastTest.php'
-      - 'tests/fixtures/scroll-ground-luminance.json'
+      - 'system/lib/ork3/data/scroll-ground-luminance.json'
       - 'bin/build-scroll-renditions.sh'
       - 'bin/check-scroll-assets.sh'
       - '.github/workflows/scroll-guards.yml'
