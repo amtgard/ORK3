@@ -868,16 +868,74 @@ class Scroll extends Ork3
     /** Below this relative luminance a colour does not survive a screen-blended pass. */
     public const MATCH_SCREEN_MIN_LUMINANCE = 0.08;
 
-    /** Whether any of a custom-border rule's resolved passes composites with screen. */
+    /** At or above this opacity a multiply/normal pass is the one that draws the band. */
+    public const MATCH_BAND_MIN_OPACITY = 0.5;
+
+    /**
+     * Whether a custom-border rule's resolved passes draw the knot screened — i.e. a
+     * near-black colour vanishes. That is true only when some pass screens and NO pass
+     * carries the band with multiply or normal at opacity >= MATCH_BAND_MIN_OPACITY:
+     * owl cyanotype (screen only) screens; mask (a screen@0.6 glow under a multiply@1
+     * band) does not, because the multiply pass draws a dark knot perfectly well.
+     * Within one pass the last declaration wins, as in CSS (the knot partial's
+     * multiply followed by a dark ground's screen is a screen pass).
+     */
     public static function PassesScreen(array $passes): bool
     {
+        $screens = false;
         foreach ($passes as $style) {
-            if (str_contains((string) $style, 'mix-blend-mode:screen')) {
-                return true;
+            $blend   = 'normal';
+            $opacity = 1.0;
+            foreach (explode(';', (string) $style) as $decl) {
+                $pair = explode(':', $decl, 2);
+                if (count($pair) !== 2) {
+                    continue;
+                }
+                $prop = strtolower(trim($pair[0]));
+                if ($prop === 'mix-blend-mode') {
+                    $blend = strtolower(trim($pair[1]));
+                } elseif ($prop === 'opacity') {
+                    $opacity = (float) trim($pair[1]);
+                }
+            }
+            if ($blend === 'screen') {
+                $screens = true;
+            } elseif (in_array($blend, ['multiply', 'normal'], true) && $opacity >= self::MATCH_BAND_MIN_OPACITY) {
+                return false;
             }
         }
 
-        return false;
+        return $screens;
+    }
+
+    /**
+     * PassesScreen() answered for every order/variant (and, for the custom order, every
+     * recipe ground), so the builder's contrast hint reads the server's answer instead of
+     * re-deriving it: `orders[order]` is a bool, or bool-per-variant for variant-keyed
+     * rules; `grounds[ground]` is the custom order's answer on that ground (its knot and
+     * raster borders both screen exactly on DARK_GROUNDS).
+     *
+     * @return array{orders: array<string, bool|array<string, bool>>, grounds: array<string, bool>}
+     */
+    public static function MatchScreens(): array
+    {
+        $orders = [];
+        foreach (self::CustomBorderRules() as $order => $rule) {
+            if ($order === 'custom') {
+                continue;
+            }
+            $passes         = $rule['passes'] ?? [];
+            $orders[$order] = array_is_list($passes)
+                ? self::PassesScreen($passes)
+                : array_map(static fn (array $list): bool => self::PassesScreen($list), $passes);
+        }
+
+        $grounds = [];
+        foreach (array_keys(self::Recipes()['grounds']) as $ground) {
+            $grounds[$ground] = self::PassesScreen([self::KNOT_PARTIAL_STYLE . self::CustomKnotStyle((string) $ground)]);
+        }
+
+        return ['orders' => $orders, 'grounds' => $grounds];
     }
 
     /** WCAG relative luminance of a normalised #RRGGBB colour. */
@@ -2265,10 +2323,11 @@ class Scroll extends Ork3
         if ($design['customBorder']) {
             $rule = self::CustomBorderRule((string) $order['id'], $rank, $variant, $recipe);
             if ($rule !== null) {
-                // Match mode blends the knot through each pass's own style. A pass that
-                // screens (owl cyanotype, custom on a dark ground, mask's glow) cannot
-                // draw a near-black colour: screen(black, ground) is the ground, so the
-                // band and its outlines vanish and the knot reads as dashes. Draw those
+                // Match mode blends the knot through each pass's own style. A knot whose
+                // band is screened (owl cyanotype, custom on a dark ground — see
+                // PassesScreen(); mask's glow is not, its band is multiply) cannot draw
+                // a near-black colour: screen(black, ground) is the ground, so the band
+                // and its outlines vanish and the knot reads as dashes. Draw those
                 // exact instead, and say so, so the builder can tell the officer.
                 $fallback = $design['matchStyle']
                     && self::PassesScreen($rule['passes'])

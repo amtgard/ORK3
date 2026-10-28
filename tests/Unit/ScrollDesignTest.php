@@ -268,6 +268,69 @@ final class ScrollDesignTest extends TestCase
         $this->assertFalse($off['customBorder']['matchFallback']);
     }
 
+    public function testMaskMixedBlendKeepsMatchForBlack(): void
+    {
+        // mask = screen@0.6 (a glow) + multiply@1 (the band itself): the band is the
+        // multiply pass, so black draws, and match stays on.
+        $req  = ['customBorder' => '1', 'matchStyle' => '1', 'color1' => '#000000'];
+        $mask = $this->build('mask', $req);
+        $this->assertNotNull($mask['customBorder']);
+        $this->assertTrue($mask['customBorder']['matchStyle']);
+        $this->assertFalse($mask['customBorder']['matchFallback']);
+        $this->assertTrue($mask['design']['matchStyle']);
+
+        $red = $this->build('mask', ['color1' => '#7A1F1F'] + $req);
+        $this->assertFalse($red['customBorder']['matchFallback']);
+    }
+
+    public function testOwlCyanotypeStillFallsBackForNearBlack(): void
+    {
+        $req = ['customBorder' => '1', 'matchStyle' => '1', 'color1' => '#0A0A0A'];
+        $owl = $this->build('owl', $req, 8, ['variant' => 'cyanotype']);
+        $this->assertTrue($owl['customBorder']['matchFallback']);
+        $this->assertFalse($owl['customBorder']['matchStyle']);
+    }
+
+    public function testPassesScreenOnlyWhenNoPassCarriesTheBand(): void
+    {
+        $this->assertFalse(Scroll::PassesScreen(['mix-blend-mode:screen;opacity:0.6;', 'mix-blend-mode:multiply;opacity:1;']));
+        $this->assertTrue(Scroll::PassesScreen(['mix-blend-mode:screen;']));
+        // The last declaration wins, as in CSS: the knot partial on a dark custom ground.
+        $this->assertTrue(Scroll::PassesScreen([Scroll::KNOT_PARTIAL_STYLE . 'mix-blend-mode:screen;']));
+        $this->assertFalse(Scroll::PassesScreen([Scroll::KNOT_PARTIAL_STYLE]));
+        // A faint normal/multiply pass under half opacity does not carry the band.
+        $this->assertTrue(Scroll::PassesScreen(['mix-blend-mode:screen;', 'opacity:0.3;']));
+        $this->assertFalse(Scroll::PassesScreen(['mix-blend-mode:screen;', 'opacity:0.5;']));
+        // No screen pass at all: not screened.
+        $this->assertFalse(Scroll::PassesScreen(['mix-blend-mode:soft-light;opacity:0.5;']));
+        $this->assertFalse(Scroll::PassesScreen([]));
+    }
+
+    public function testMatchScreensIsTheBuildScrollPredicatePerOrderAndGround(): void
+    {
+        $m = Scroll::MatchScreens();
+        $this->assertFalse($m['orders']['mask']);
+        $this->assertFalse($m['orders']['crown']);
+        $this->assertTrue($m['orders']['owl']['cyanotype']);
+        $this->assertFalse($m['orders']['owl']['parchment']);
+        $this->assertArrayNotHasKey('custom', $m['orders']);
+        $this->assertTrue($m['grounds']['cyanotype']);
+        $this->assertFalse($m['grounds']['parchment']);
+
+        // Every fixed order/variant agrees with what BuildScroll decides for black.
+        foreach (Scroll::CustomBorderRules() as $order => $rule) {
+            if ($order === 'custom') {
+                continue;
+            }
+            $passes = $rule['passes'];
+            $sets   = array_is_list($passes) ? ['' => $passes] : $passes;
+            foreach ($sets as $variant => $list) {
+                $want = is_array($m['orders'][$order]) ? $m['orders'][$order][$variant] : $m['orders'][$order];
+                $this->assertSame(Scroll::PassesScreen($list), $want, "{$order}/{$variant}");
+            }
+        }
+    }
+
     public function testPartialReprintDesignStillMeansNoCustomBorder(): void
     {
         $s = Scroll::BuildScroll(

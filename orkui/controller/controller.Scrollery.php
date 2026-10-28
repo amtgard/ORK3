@@ -162,6 +162,7 @@ class Controller_Scrollery extends Controller
          * asks only the two cached scope lookups.
          */
         $this->data['CustomBorderRules'] = Scroll::CustomBorderRules();
+        $this->data['MatchScreens']      = Scroll::MatchScreens();
         $this->data['DesignDefaults']    = Scroll::DEFAULT_DESIGN;
         $this->data['HeraldryAvailable'] = array_map(
             static fn (string $u): bool => $u !== '',

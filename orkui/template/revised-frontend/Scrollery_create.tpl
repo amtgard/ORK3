@@ -872,8 +872,13 @@ window.ScConfig = {
     /* The Customize Design card's server-side truths: the rule data
        Scroll::CustomBorderRule() reads (scrollery.js mirrors that method over it),
        the default design, and which of the scope's own arms exist. */
-    darkGrounds: <?= json_encode(Scroll::DARK_GROUNDS) ?>,
     customBorderRules: <?= json_encode(is_array($CustomBorderRules ?? null) ? $CustomBorderRules : Scroll::CustomBorderRules(), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+    /* Whether match-style draws the knot screened, per order/variant and per custom
+       ground: Scroll::PassesScreen() already answered, so the contrast hint never
+       re-derives it. Below matchScreenMinLuminance a colour vanishes on such a knot
+       (Scroll::MATCH_SCREEN_MIN_LUMINANCE, the server's MatchFallback line). */
+    matchScreens: <?= json_encode(is_array($MatchScreens ?? null) ? $MatchScreens : Scroll::MatchScreens(), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+    matchScreenMinLuminance: <?= json_encode(Scroll::MATCH_SCREEN_MIN_LUMINANCE) ?>,
     designDefaults:    <?= json_encode(is_array($DesignDefaults ?? null) ? $DesignDefaults : Scroll::DEFAULT_DESIGN, JSON_HEX_TAG | JSON_HEX_AMP) ?>,
     heraldryAvailable: <?= json_encode(is_array($HeraldryAvailable ?? null) ? $HeraldryAvailable : new stdClass()) ?>
 };

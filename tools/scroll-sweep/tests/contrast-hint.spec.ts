@@ -148,3 +148,35 @@ test('every ground option carries the measured luminance, and the hint is never 
   expect(cert).not.toContain('Low contrast');
   expect(cert).not.toContain('hard to see');
 });
+
+// Mask draws its knot through a screen@0.6 glow AND a multiply@1 band. The band is the
+// multiply pass, so dark heraldic colours draw on its parchment: match stays on (no
+// MatchFallback) and the hint judges the multiply result (colour x paper), not screen.
+test('mask (mixed blend): match keeps dark colours and does not flag a visible blue', async ({ page }) => {
+  await open(page);
+  await pickOrder(page, ['mask']);
+  await openDesign(page);
+  await page.setChecked('#sc-custom-border', true);
+  await idle(page);
+  await page.setChecked('#sc-match-style', true);
+  await idle(page);
+  const fallback = page.locator('#sc-match-fallback-hint');
+  const c1 = page.locator('#sc-color1-contrast');
+
+  await page.fill('#sc-color1-hex', '#1E4FA3');
+  await idle(page);
+  await expect(c1).toBeHidden();
+  await expect(fallback).toBeHidden();
+
+  await page.fill('#sc-color1-hex', '#7A1F1F');
+  await idle(page);
+  await expect(fallback).toBeHidden();
+  await expect(c1).toBeHidden();
+
+  await page.fill('#sc-color1-hex', '#000000');
+  await idle(page);
+  await expect(fallback).toBeHidden();
+  await expect(c1).toBeHidden();
+  // The preview really drew match (the server kept it on): one knot per mask pass.
+  await expect(page.locator('#sc-mount .sc-knot')).toHaveCount(2);
+});

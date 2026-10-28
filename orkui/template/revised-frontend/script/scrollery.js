@@ -729,8 +729,11 @@
         return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
     }
 
+    /* Scroll::MATCH_SCREEN_MIN_LUMINANCE, stamped by the template — not a copy. */
+    var MATCH_SCREEN_MIN = Number(cfg.matchScreenMinLuminance);
+
     function knotLooksDark() {
-        return relLum(colors.c1) < 0.08 || relLum(colors.c2) < 0.08;
+        return relLum(colors.c1) < MATCH_SCREEN_MIN || relLum(colors.c2) < MATCH_SCREEN_MIN;
     }
 
     function paintMatchHint() {
@@ -753,9 +756,10 @@
      *   - the knot with match off, or with match on but drawn exact because the server
      *     reported MatchFallback: its exact colour;
      *   - the knot blended into the paper: the colour combined with the paper by the
-     *     blend its own passes use — multiply, or screen when any pass screens (the
-     *     same test as Scroll::PassesScreen, over the same cfg.customBorderRules; the
-     *     custom order screens exactly on the grounds in cfg.darkGrounds). The paper is
+     *     blend that draws its band — screen when Scroll::PassesScreen says the knot is
+     *     screened (owl cyanotype, custom on a dark ground; read from cfg.matchScreens,
+     *     never re-derived), otherwise multiply, c x g (mask's band is its multiply
+     *     pass; its screen pass is only a glow). The paper is
      *     taken as a neutral of its measured luminance; a sheet's warm cast does not
      *     move a 1.5:1 judgement.
      * Advisory only: it never blocks, and it is not part of the certificate markup.
@@ -788,14 +792,12 @@
     }
 
     function knotPassesScreen() {
-        var opt = selected(), order = opt && opt.dataset.order;
+        var opt = selected(), order = opt && opt.dataset.order, m = cfg.matchScreens || {};
         if (!order) { return false; }
-        if (order === 'custom') { return (cfg.darkGrounds || []).indexOf(groundEl ? groundEl.value : '') !== -1; }
-        var rule = (cfg.customBorderRules || {})[order];
-        if (!rule || !rule.passes) { return false; }
-        var passes = rule.passes;
-        if (!Array.isArray(passes)) { passes = passes[variantInUse(opt)] || []; }
-        return passes.some(function (p) { return String(p).indexOf('mix-blend-mode:screen') !== -1; });
+        if (order === 'custom') { return !!(m.grounds || {})[groundEl ? groundEl.value : '']; }
+        var screens = (m.orders || {})[order];
+        if (screens && typeof screens === 'object') { screens = screens[variantInUse(opt)]; }
+        return screens === true;
     }
 
     function toLinear(c) { return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
