@@ -82,3 +82,64 @@ test('a spaced signer is byte-identical', async ({ page }) => {
   const html = await page.evaluate(() => document.querySelector('[data-scroll-text="givenBy"]')!.innerHTML);
   expect(html).toBe('Sir Hobi the Mighty, Knight/Marshal');
 });
+
+// The lift (liftSignature) measures the gap between the lowest citation ink and the top
+// of what the signature block draws. seamBreaks gives an unspaced, seamed signer <wbr>
+// children; the block's top must still be read from the signer's own text, not from the
+// underline below it, or the block rises into the citation (c046). SIGN_MIN_GAP = 40.
+const SIGN_MIN_GAP = 40;
+
+async function loadLift(page: Page, signer: string, date: string) {
+  await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>
+    html, body { margin: 0; }
+    .award-template { position: relative; --sc-sign-lift-want: 5000px; }
+    .Award { width: 2550px; height: 3300px; display: flex; flex-direction: column; font: 100px/1.2 Arial, Helvetica, sans-serif; }
+    .cite { margin: 200px 0 0; }
+    .grow { flex-grow: 1; }
+    section.SignAndDate { position: relative; bottom: var(--sc-sign-lift, var(--sc-sign-lift-want, 0px));
+      display: flex; justify-content: space-around; align-items: flex-end; margin-bottom: 200px; }
+    section.SignAndDate > div { width: 7em; }
+    section.SignAndDate p { margin: 0; }
+    section.SignAndDate > div > p.Body { overflow-wrap: anywhere; }
+    img.Underline { display: block; width: 100%; height: 13px; background: #000; }
+  </style></head><body><div class="award-template"><div class="Award">
+    <p class="Body cite">For valour upon the field of battle.</p>
+    <div class="grow"></div>
+    <section class="SignAndDate">
+      <div class="AwardDate"><p data-scroll-text="date" class="Body" style="min-height:1.2em;font-size:0.7em;"></p>
+        <p style="font-size:0em"><img class="Underline" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></p>
+        <p class="Body"><b><span>On this day...</span></b></p></div>
+      <div class="AwardSignatory"><p data-scroll-text="givenBy" class="Body" style="min-height:1.2em;font-size:0.7em;"></p>
+        <p style="font-size:0em"><img class="Underline" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></p>
+        <p class="Body"><b><span>By my hand...</span></b></p></div>
+    </section></div></div></body></html>`);
+  await page.evaluate(([s, d]) => {
+    document.querySelector('[data-scroll-text="givenBy"]')!.textContent = s;
+    document.querySelector('[data-scroll-text="date"]')!.textContent = d;
+  }, [signer, date]);
+  await page.addScriptTag({ path: AUTOFIT });
+  await page.evaluate(() => (window as any).ScrolleryAutofit.fitAward(document.querySelector('.Award')));
+  return page.evaluate(() => {
+    const signerEl = document.querySelector('[data-scroll-text="givenBy"]')!;
+    const r = document.createRange(); r.selectNodeContents(signerEl);
+    const tops = Array.from(r.getClientRects()).map(x => x.top);
+    return {
+      signerTop: Math.min(...tops),
+      citeBottom: document.querySelector('.cite')!.getBoundingClientRect().bottom,
+      lift: (document.querySelector('.award-template') as HTMLElement).style.getPropertyValue('--sc-sign-lift'),
+      wbrs: signerEl.querySelectorAll('wbr').length,
+    };
+  });
+}
+
+for (const [label, signer, date] of [
+  ['a hyphenated one-token signer, no date', 'Jean-Luc', ''],
+  ['a hyphenated signer that wraps beside a one-line date', 'Jean-Luc-de-Montferrand-Delacroix', 'May 1, 2026'],
+] as const) {
+  test(`the lift keeps SIGN_MIN_GAP under the citation: ${label}`, async ({ page }) => {
+    const m = await loadLift(page, signer, date);
+    expect(m.wbrs).toBeGreaterThan(0);                       // seamBreaks did split it
+    expect(parseFloat(m.lift)).toBeGreaterThan(0);           // and the block was lifted
+    expect(m.signerTop - m.citeBottom).toBeGreaterThanOrEqual(SIGN_MIN_GAP - 1);
+  });
+}

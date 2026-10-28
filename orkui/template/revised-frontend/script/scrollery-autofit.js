@@ -860,6 +860,17 @@
         return lowest;
     }
 
+    /* A leaf for the ink walkers: no element children other than <wbr>. seamBreaks()
+       gives an unspaced signer <wbr> children, and the signer's text is still the ink
+       it draws — skipping it measured the block's top from the underline below. */
+    function isInkLeaf(el) {
+        var kids = el.children;
+        for (var i = 0; i < kids.length; i++) {
+            if (kids[i].tagName !== 'WBR') { return false; }
+        }
+        return true;
+    }
+
     /* The top of what the block actually DRAWS, which is well below the top of the
        block itself: it reserves 350-650px of height and sits its content at the end. */
     function contentTop(block) {
@@ -867,7 +878,7 @@
         var top = null;
         for (var i = 0; i < all.length; i++) {
             var el = all[i];
-            if (el.children.length) { continue; }
+            if (!isInkLeaf(el)) { continue; }
             if (el.tagName !== 'IMG' && !(el.textContent || '').trim()) { continue; }
             var r = el.getBoundingClientRect();
             if (r.width <= 0 || r.height <= 0) { continue; }
