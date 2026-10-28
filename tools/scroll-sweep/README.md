@@ -271,7 +271,7 @@ files and writes `axes.json`; `lib/cases.ts` enumerates from it. So:
 
 ## What it costs
 
-`Scrollery/compose` writes a print-log row per case, so a full sweep leaves roughly 1,400
+`Scrollery/compose` writes a print-log row per case, so a full sweep leaves roughly 2,500
 rows in the **local** database. That is the price of driving the real print surface
 through the real route instead of adding a dev-only one to a shipped module. It was a
 deliberate trade; if it ever stops being the right one, the alternative is a gated no-log

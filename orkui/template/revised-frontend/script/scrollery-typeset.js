@@ -1599,8 +1599,8 @@
      * certificate has none.
      *
      * The <img> is a fixed 420px slot with object-fit: contain, so a device that is not
-     * square fills only part of it, and getBoundingClientRect carries the officer's own
-     * move and scale (--heraldry-transform). Inside that, what shows is the device's ink:
+     * square fills only part of it, and getBoundingClientRect reports that
+     * slot, not the ink. Inside that, what shows is the device's ink:
      * the image is drawn with mix-blend-mode: multiply, so its white ground vanishes into
      * the paper and only what is darker than near-white, and not transparent, is seen. A
      * heater shield on white is therefore a shield, tapering to its point, and the

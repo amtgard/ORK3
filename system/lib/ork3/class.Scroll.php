@@ -794,6 +794,31 @@ class Scroll extends Ork3
     public const HERALDRY_FALLBACK_ORDER = ['park', 'kingdom', 'persona'];
 
     /**
+     * The court print route's selected line ids, from the query. &courtLines= is the
+     * parameter; when it is absent, an older link's &lines=12,13 is read the same way.
+     * A bare 0 or 1 is the render page's Reason-lines switch, not a line id, so it
+     * selects nothing. Positive ints only, de-duplicated, in the order given.
+     *
+     * @param array<string, mixed> $query
+     * @return int[]
+     */
+    public static function CourtLineIds(array $query): array
+    {
+        $raw = (string) ($query['courtLines'] ?? '');
+        if ($raw === '' && !isset($query['courtLines'])) {
+            $legacy = trim((string) ($query['lines'] ?? ''));
+            if ($legacy !== '' && $legacy !== '0' && $legacy !== '1') {
+                $raw = $legacy;
+            }
+        }
+
+        return array_values(array_unique(array_filter(
+            array_map('intval', explode(',', $raw)),
+            static fn (int $id): bool => $id > 0
+        )));
+    }
+
+    /**
      * The print page's &heraldry= — a run-level choice of whose arms every certificate
      * on the page draws. Allowlist: 'auto' or one of HERALDRY_SOURCES, and anything
      * else (absent, empty, a stranger) is 'auto', which draws exactly what the page

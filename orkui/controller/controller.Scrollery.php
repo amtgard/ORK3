@@ -519,9 +519,7 @@ class Controller_Scrollery extends Controller
             return;
         }
 
-        $lineIds = array_values(array_unique(array_filter(
-            array_map('intval', explode(',', (string) ($_GET['courtLines'] ?? '')))
-        )));
+        $lineIds = Scroll::CourtLineIds($_GET);   // &courtLines=, or an old link's &lines=12,13
 
         // &heraldry= as on render(): 'auto' (the default) is the court's own arms.
         $heraldry = Scroll::NormaliseRunHeraldry(isset($_GET['heraldry']) ? (string) $_GET['heraldry'] : null);

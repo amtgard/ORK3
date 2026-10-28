@@ -7,7 +7,7 @@ test('axes carry the whole published vocabulary', () => {
   // 17 partials - 2 that carry variants + battle{arcane,martial} + owl{parchment,cyanotype,transparency}
   expect(a.orderVariants).toHaveLength(20);
   expect(a.ranks).toEqual([0,1,2,3,4,5,6,7,8,9,10]);
-  expect(a.hands).toHaveLength(10);
+  expect(a.hands).toHaveLength(25);
   expect(a.grounds).toHaveLength(12);
   expect(a.borders).toHaveLength(11);
   expect(a.rankSets).toHaveLength(4);
@@ -26,7 +26,7 @@ test('stage B is order-variant x hand x text at one rank each', () => {
     loadAxes().orderVariants.map(o => [o.order + '/' + o.variant, 7])
   );
   const cases = enumerate(loadAxes(), 'B', tightest);
-  expect(cases).toHaveLength(20 * 10 * 5);          // 1000
+  expect(cases).toHaveLength(20 * 25 * 5);          // 2500
   expect(cases.every(c => c.rank === 7)).toBe(true);
 });
 
@@ -83,7 +83,7 @@ test('sampled stage A is every order-variant x ranks {0,5,10} x profiles {max,em
 
 test('sampled stage B is every order-variant x every hand x {max}, at rank 10', () => {
   const cases = enumerate(axes, 'B', undefined, true);
-  expect(cases).toHaveLength(20 * 10 * 1);                                  // 200
+  expect(cases).toHaveLength(20 * 25 * 1);                                  // 500
   expect(new Set(cases.map(c => c.id)).size).toBe(cases.length);
   expect(cases.every(c => c.text === 'max' && c.rank === 10)).toBe(true);
   expect(new Set(cases.map(c => c.hand))).toEqual(new Set(axes.hands));
@@ -116,7 +116,7 @@ test('every sampled case is also a case of the full matrix, so a sampled baselin
 test('stage N and the full matrix are untouched by sampling', () => {
   expect(namedCases()).toHaveLength(9);
   expect(enumerate(axes, 'A', undefined, false)).toHaveLength(1100);
-  expect(enumerate(axes, 'B', undefined, false)).toHaveLength(1000);
+  expect(enumerate(axes, 'B', undefined, false)).toHaveLength(2500);
   expect(enumerate(axes, 'C', undefined, false)).toHaveLength(125);
 });
 

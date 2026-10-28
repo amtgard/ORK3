@@ -296,6 +296,7 @@ test('the print page heading picker re-letters in place and keeps the URL honest
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
   await settle(page);
+  await page.locator('#sc-configure').click();     // the Heading picker lives in the options sheet
 
   const select = page.locator('#sc-heading');
   const award = page.locator('.scroll-flow .Award').first();
@@ -332,16 +333,19 @@ test('the print page heading picker is chrome, and is not on the paper', async (
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForSelector('.scroll-flow .Award', { state: 'attached' });
 
-  const label = page.locator('.sc-toolbar label[for="sc-heading"]');
+  await page.locator('#sc-configure').click();
+  const label = page.locator('.sc-sheet label[for="sc-heading"]');
   await expect(label).toBeVisible();
   expect(await page.locator('#sc-heading').getAttribute('title'), 'tooltips are data-tip, never title').toBeNull();
-  // The same control as the hand's: the same label and select classes.
-  // Plus sc-tip, which carries the heading's data-tip tooltip.
-  expect(await label.getAttribute('class')).toBe((await page.locator('.sc-toolbar label[for="sc-face"]').getAttribute('class')) + ' sc-tip');
+  // The same control as the hand's: the same label and select classes. The label no
+  // longer carries sc-tip: its help is visible text beside the control.
+  expect(await label.getAttribute('class')).toBe('sc-opt-label');
+  expect(await label.getAttribute('class')).toBe(await page.locator('.sc-sheet label[for="sc-face"]').getAttribute('class'));
   expect(await page.locator('#sc-heading').getAttribute('class')).toBe(await page.locator('#sc-face').getAttribute('class'));
 
   await page.emulateMedia({ media: 'print' });
   await expect(page.locator('#sc-heading')).toBeHidden();
+  await expect(page.locator('.sc-sheet-layer')).toBeHidden();
   await expect(page.locator('.sc-toolbar')).toBeHidden();
 });
 
@@ -446,7 +450,7 @@ test('the Heading and Hand fields each have usable width in the composer', async
   }
 });
 
-test('the print page says what Automatic chose, with a data-tip and no title', async ({ page }) => {
+test('the print page says what Automatic chose, in visible help text and no title', async ({ page }) => {
   await openComposer(page, 'kingdom');
   await page.fill('#sc-issuer-title', 'Kingdom');
   await page.fill('#sc-issuer-name', 'Wetlands');
@@ -460,9 +464,11 @@ test('the print page says what Automatic chose, with a data-tip and no title', a
   await expect(award).toHaveAttribute('data-sc-comp', 'classic');
   await expect(page.locator('#sc-heading option[value="auto"]')).toHaveText('Automatic (Classic)');
 
-  const label = page.locator('.sc-toolbar label[for="sc-heading"]');
-  expect(await label.getAttribute('data-tip')).toContain('Automatic sets the classic heading');
+  await page.locator('#sc-configure').click();
+  const label = page.locator('.sc-sheet label[for="sc-heading"]');
+  await expect(page.locator('#sc-heading + .sc-opt-help')).toContainText('Automatic sets the classic heading');
   expect(await label.getAttribute('title')).toBeNull();
+  expect(await page.locator('#sc-heading').getAttribute('title')).toBeNull();
 
   // Forcing each composition re-sets the page, and the Automatic label keeps its last answer.
   await page.selectOption('#sc-heading', 'centered');
@@ -794,6 +800,7 @@ test('the print page: the Reason lines checkbox works when the URL carries face=
   await expect(page.locator('#sc-lines')).toBeChecked();
   await expect(page.locator('body')).not.toHaveAttribute('data-scroll-lines', '0');
 
+  await page.locator('#sc-configure').click();
   await page.locator('#sc-lines').uncheck();
   await expect(page.locator('body')).toHaveAttribute('data-scroll-lines', '0');
   expect(await page.evaluate(() => window.location.search)).toContain('lines=0');

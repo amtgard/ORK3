@@ -114,6 +114,7 @@ html[data-theme="light"] .sc-hand {
 
 .sc-hand-menu {
     position: absolute;
+    box-sizing: border-box;   /* max-height caps the whole box, padding and border included */
     z-index: 60;         /* over the render page's sticky toolbar (z-index 5) and
                             the CRM's own filter cards */
     top: calc(100% + 4px);
