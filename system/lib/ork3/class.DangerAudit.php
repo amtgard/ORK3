@@ -63,6 +63,12 @@ class Dangeraudit extends Ork3
         // on the $_SESSION cache. That short-circuit was removed so eviction takes
         // effect on every request, so read the cache here instead of round-tripping.
         $mundane_id = (int)($_SESSION['is_authorized_mundane_id'] ?? 0);
+        // That cache is filled by a token check, which a page load always makes
+        // but a bare Ajax or API session may not have made yet. Callers that
+        // know their actor name it in the parameters; take it from there then.
+        if ($mundane_id <= 0 && is_array($parameters) && (int)($parameters['by_whom_id'] ?? 0) > 0) {
+            $mundane_id = (int)$parameters['by_whom_id'];
+        }
         $this->audit->clear();
         $this->audit->method_call = $call;
         $this->audit->parameters = json_encode($this->scrub($parameters));
