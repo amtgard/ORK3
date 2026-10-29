@@ -996,11 +996,7 @@
 			.kn-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
 			.kn-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
 			.kn-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
-			.kn-rec-age-badge { font-size:11px; padding:1px 6px; border-radius:10px; font-weight:600; margin-left:4px; }
-			.kn-rec-age-green  { background:#c6f6d5; color:#22543d; }
-			.kn-rec-age-yellow { background:#fefcbf; color:#744210; }
-			.kn-rec-age-orange { background:#fed7aa; color:#7b341e; }
-			.kn-rec-age-red    { background:#fed7d7; color:#742a2a; }
+			/* .kn-rec-age-* live in revised.css: this block only renders for court managers. */
 			/* Collapsible subsection chrome (relocated court) */
 			.kn-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
 			.kn-cp-header { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; cursor:pointer; padding:10px 4px; font-size:15px; font-weight:700; color:#2d3748; text-align:left; }
