@@ -106,6 +106,9 @@ if (!function_exists('cp_track_by_group')) {
         return ['value' => 0, 'label' => '', 'hint' => '', 'group' => $group];
     }
 }
+// The Scrollery Print value, read from the definition (the print count and the
+// hidden Scroll Maker field compare against it).
+$cpScrolleryValue = (int)cp_track_by_group('scroll', 'print')['value'];
 // The scroll/regalia status label (mirrors the JS cpTrackLabel). The chip shows it as
 // text, so state is never carried by colour alone.
 if (!function_exists('cp_track_label')) {
@@ -1594,7 +1597,7 @@ button.cp-rp-need-btn:focus-visible, button.cp-rp-fchip:focus-visible { outline:
 #cp-rp-root:focus:not(:focus-visible) { outline: none; }
 
 /* The filter buttons, then the active bar filter's chip (beside them; on a phone,
-   above them — see the 640px block). */
+   above them — see the 600px block). */
 .cp-rp-filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
 .cp-rp-filters { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 button.cp-rp-filter {
@@ -1785,7 +1788,7 @@ html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
 
 /* Phone: each line is a card — recipient and award on top, then Scroll (chip + maker),
    Regalia (chip + maker) and the artisans. The filters scroll sideways; the page never does. */
-@media (max-width: 640px) {
+@media (max-width: 600px) {
     .cp-view-tabs { gap: 0; }
     button.cp-view-tab { flex: 1 1 auto; justify-content: center; min-height: 44px; padding: 6px 8px; font-size: 14px; }
     button.cp-view-tab .cp-h2-icon { display: none; }
@@ -2180,7 +2183,7 @@ $_stat_html = function ($type) use ($_track_counts) {
             // Mirrors window.cpScrolleryCount(): Scrollery Print lines that aren't skipped.
             $_scrolleryN = 0;
             foreach ($courtAwards ?? [] as $_ca) {
-                if (($_ca['Status'] ?? '') !== 'cancelled' && (int)($_ca['ScrollStatus'] ?? 0) === 3) $_scrolleryN++;
+                if (($_ca['Status'] ?? '') !== 'cancelled' && (int)($_ca['ScrollStatus'] ?? 0) === $cpScrolleryValue) $_scrolleryN++;
             }
         ?>
         <button type="button" class="cp-btn-outline cp-btn-sm cp-scrollery-btn" id="cp-scrollery-print-btn" onclick="cpPrintScrollery()"<?= $_scrolleryN ? '' : ' disabled data-tip="Set a scroll chip to Scrollery Print to add it here."' ?>>
@@ -2431,7 +2434,7 @@ $_stat_html = function ($type) use ($_track_counts) {
                 <div class="cp-expand-grid" style="margin-top:8px">
                     <?php /* Hidden while the line is Scrollery Print: the system prints it, so
                              there is no maker (the server clears scroll_maker_id). */ ?>
-                    <div class="cp-scroll-maker-field" id="cp-scroll-maker-field-<?= (int)$aw['CourtAwardId'] ?>"<?= (int)$aw['ScrollStatus'] === 3 ? ' hidden' : '' ?>>
+                    <div class="cp-scroll-maker-field" id="cp-scroll-maker-field-<?= (int)$aw['CourtAwardId'] ?>"<?= (int)$aw['ScrollStatus'] === $cpScrolleryValue ? ' hidden' : '' ?>>
                         <div class="cp-expand-label">Scroll Maker</div>
                         <div style="position:relative">
                             <input type="text" id="cp-scroll-maker-text-<?= (int)$aw['CourtAwardId'] ?>"
@@ -3687,7 +3690,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     // the expand panel hides the field and clears it locally — a later Save cannot post
     // the old maker back. Any other state shows it again.
     function cpSyncScrollMakerField(caid, status) {
-        var isScrollery = (parseInt(status, 10) || 0) === 3;
+        var isScrollery = cpTrackGroup('scroll', status) === 'print';
         var field = gid('cp-scroll-maker-field-' + caid);
         if (field) field.hidden = isScrollery;
         if (!isScrollery) return;
@@ -3717,7 +3720,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     // Lines (not skipped) set to Scrollery Print — what the bulk print would take.
     window.cpScrolleryCount = function() {
         return courtAwards.filter(function(a) {
-            return a.Status !== 'cancelled' && (parseInt(a.ScrollStatus, 10) || 0) === 3;
+            return a.Status !== 'cancelled' && cpTrackGroup('scroll', a.ScrollStatus) === 'print';
         }).length;
     };
 
@@ -4102,57 +4105,18 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     var cpLineWrites = {};   // caid -> the line's last queued tracking write
 
     // ---- Maker rules (both tabs, both types) ----
-    // The status a maker change moves an item to, or null: assigning a maker to a Pending
-    // item makes it Assigned; clearing the maker from an Assigned item makes it Pending.
-    // Every other status is left alone.
-    function cpMakerRuleTarget(type, status, hadMaker, hasMaker) {
-        var g = cpTrackGroup(type, status);
-        if (!hadMaker && hasMaker && g === 'pending')  return cpTrackValue(type, 'assigned');
-        if (hadMaker && !hasMaker && g === 'assigned') return cpTrackValue(type, 'pending');
-        return null;
+    // The server owns the rule (Court::applyMakerTrackingRule, run by update_award):
+    // assigning a maker to a Pending item makes it Assigned; clearing the maker from an
+    // Assigned item makes it Pending. When it moved a status, update_award answers with
+    // ScrollStatus, RegaliaStatus and the line's RowVersion; this applies them. savedRv
+    // is the token the maker write itself left the line at (sent + 1).
+    function cpApplyMakerTracking(caid, savedRv, d) {
+        if (!d || d.RowVersion == null) return;
+        var rv = parseInt(d.RowVersion, 10) || 0;
+        cpPendingRunAdvance(caid, savedRv, rv);
+        cpSetLineTracking(caid, 'scroll',  d.ScrollStatus, Math.max(cpGetRowVersion(caid), rv));
+        cpSetLineTracking(caid, 'regalia', d.RegaliaStatus);
     }
-    // The status link of a maker write, run at its turn on the line's chain: it reads the
-    // status and RowVersion from the model THEN, so a chip write queued ahead of it (or a
-    // peer's change the heartbeat brought in) is what the rule judges.
-    function cpMakerRuleWrite(caid, type, hadMaker, hasMaker) {
-        var a = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
-        if (!a) return;   // the line left the court while this waited its turn
-        var target = cpMakerRuleTarget(type, type === 'regalia' ? a.RegaliaStatus : a.ScrollStatus, hadMaker, hasMaker);
-        if (target === null) return;
-        var fd = new FormData();
-        fd.append('CourtAwardId', caid);
-        fd.append('Type', type);
-        fd.append('Status', target);
-        var sentRv = cpGetRowVersion(caid);
-        fd.append('RowVersion', sentRv);
-        return post('CourtAjax/set_award_tracking_status', fd).then(function(d) {
-            if (d && d.status === 0) {
-                cpPendingRunAdvance(caid, sentRv, d.RowVersion);
-                cpSetLineTracking(caid, type, d.newStatus, d.RowVersion);
-                return;
-            }
-            // A stale answer drops this rule write: the reload refreshes the model, and the rule
-            // is deliberately not re-judged (the heartbeat reload is async, and looping here
-            // could fight a peer's change). The maker is saved; the officer can set the status.
-            if (d && d.status === 9) { cpStale(caid); return; }
-            if (!d || !d._postFailed) cpAlert((d && d.error) || 'The maker was saved, but the ' + (type === 'scroll' ? 'scroll' : 'regalia') + ' status could not be updated.');
-        });
-    }
-    // Queue the maker rule's status write on the line's chain, after whatever is already
-    // queued there (the maker write that called for it has already settled). A maker
-    // change that neither adds nor removes a maker (one artisan for another) does nothing.
-    function cpApplyMakerRule(caid, type, hadMaker, hasMaker) {
-        caid = parseInt(caid, 10) || 0;
-        type = type === 'regalia' ? 'regalia' : 'scroll';
-        if (!caid || !!hadMaker === !!hasMaker) return Promise.resolve();
-        var prev = cpLineWrites[caid] || Promise.resolve();
-        var run = prev.catch(function() {}).then(function() { return cpMakerRuleWrite(caid, type, !!hadMaker, !!hasMaker); });
-        cpLineWrites[caid] = run;
-        var settle = function() { if (cpLineWrites[caid] === run) delete cpLineWrites[caid]; };
-        run.then(settle, settle);
-        return run;
-    }
-    window.cpApplyMakerRule = cpApplyMakerRule;
 
     // Recompute the status bar's tracking counts from the row chips. The PHP render
     // owns the bar's wording (the definition's labels); this rewrites only the
@@ -4321,10 +4285,6 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         // S5 optimistic lock: thread our last-known row_version so a stale save is rejected.
         var sentRv = cpGetRowVersion(caid);
         fd.append('RowVersion',    sentRv);
-        // The makers the line had when this save was sent. Read now, not when the answer
-        // lands: a heartbeat arriving between the commit and the response would already
-        // carry the new makers, and the maker rule would see no change and not fire.
-        var smBefore = 0, rmBefore = 0;
         // The makers and persona text this save posts, captured at the same moment: the
         // .then below uses these, not a re-read of the hidden inputs, which a later pick
         // may have changed by the time the answer lands.
@@ -4334,13 +4294,11 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         var rmTxEl = gid('cp-regalia-maker-text-' + caid);
         var smTxVal = smTxEl ? smTxEl.value : '';
         var rmTxVal = rmTxEl ? rmTxEl.value : '';
-        var sb = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
-        if (sb) { smBefore = parseInt(sb.ScrollMakerId, 10) || 0; rmBefore = parseInt(sb.RegaliaMakerId, 10) || 0; }
         post('CourtAjax/update_award', fd).then(function(d) {
             if (d && d.status === 9) { cpStale(caid); return; }
             if (d.status === 0) {
-                // Guarded write won: the server row is now old+1. update_award does not
-                // return the new token, so bump locally (the heartbeat also reconciles it).
+                // Guarded write won: the server row is now old+1. update_award returns a
+                // token only when the maker rule moved a status, so bump locally (the heartbeat also reconciles it).
                 cpBumpRowVersion(caid);
                 cpPendingRunAdvance(caid, sentRv, sentRv + 1);
                 // The makers this save posted are now the line's makers: write them to
@@ -4355,12 +4313,9 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                     sa.RegaliaMakerPersona = !rmId ? '' : (rmId !== rmWas && rmTxEl ? rmTxVal : (sa.RegaliaMakerPersona || ''));
                     sa.ScrollMakerId       = smId || null;
                     sa.RegaliaMakerId      = rmId || null;
-                    // Maker rules: a maker set on a Pending item makes it Assigned, a maker
-                    // cleared from an Assigned item makes it Pending (queued after the save).
-                    // Judged against the makers captured before the post (see smBefore).
-                    if ((smId > 0) !== (smBefore > 0)) cpApplyMakerRule(caid, 'scroll',  smBefore > 0, smId > 0);
-                    if ((rmId > 0) !== (rmBefore > 0)) cpApplyMakerRule(caid, 'regalia', rmBefore > 0, rmId > 0);
                 }
+                // Maker rules ran server-side; apply any status they moved.
+                cpApplyMakerTracking(caid, sentRv + 1, d);
                 cpRpInvalidate();
                 // Update Pass-to-Local badge in row header — but ONLY when this
                 // save actually carried the flag. On a kingdom court the checkbox
@@ -5630,7 +5585,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             '</div>' +
             '</div>' +
             '<div class="cp-expand-grid" style="margin-top:8px">' +
-            '<div class="cp-scroll-maker-field" id="cp-scroll-maker-field-' + aw.CourtAwardId + '"' + ((parseInt(aw.ScrollStatus, 10) || 0) === 3 ? ' hidden' : '') + '><div class="cp-expand-label">Scroll Maker</div><div style="position:relative"><input type="text" id="cp-scroll-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-scroll-drop-' + aw.CourtAwardId + '" data-hidden="cp-scroll-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-scroll-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-scroll-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
+            '<div class="cp-scroll-maker-field" id="cp-scroll-maker-field-' + aw.CourtAwardId + '"' + (cpTrackGroup('scroll', aw.ScrollStatus) === 'print' ? ' hidden' : '') + '><div class="cp-expand-label">Scroll Maker</div><div style="position:relative"><input type="text" id="cp-scroll-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-scroll-drop-' + aw.CourtAwardId + '" data-hidden="cp-scroll-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-scroll-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-scroll-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
             '<div><div class="cp-expand-label">Regalia Maker</div><div style="position:relative"><input type="text" id="cp-regalia-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-regalia-drop-' + aw.CourtAwardId + '" data-hidden="cp-regalia-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-regalia-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-regalia-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
             '</div>' +
             '<div style="margin-bottom:10px"><div class="cp-expand-label" style="margin-bottom:6px">Contributing Artisans</div><div id="cp-artisans-' + aw.CourtAwardId + '">' + (Array.isArray(aw.Artisans) ? aw.Artisans.map(cpArtisanRowHtml).join('') : '') + '</div>' +
@@ -6587,8 +6542,8 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     // chain (cpLineWrites, as cpPickTrackOpt), so it serializes with chip writes and
     // each write reads the RowVersion the one before it returned. update_award is
     // partial: only this maker's column and the RowVersion are posted. The maker rules
-    // (cpMakerRuleWrite: Pending -> Assigned on assign, Assigned -> Pending on clear)
-    // run as the next link of the same chain.
+    // (Pending -> Assigned on assign, Assigned -> Pending on clear) run server-side in
+    // the same request; cpApplyMakerTracking applies what they moved.
     window.cpRpSetMaker = function(caid, kind, mundaneId, persona) {
         caid = cpRpInt(caid);
         kind = kind === 'regalia' ? 'regalia' : 'scroll';
@@ -6604,7 +6559,6 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         var run = prev.catch(function() {}).then(function() {
             var a = cpRpFind(caid);
             if (!a) return;   // the line left the court while this waited its turn
-            var had = cpTrackMakerId(a, kind) > 0;   // the maker before this write, at its turn
             // A peer (or this officer's queued chip write) may have moved the scroll to
             // Scrollery Print meanwhile: it has no maker, so nothing is posted.
             // A clear needs nothing more: the line already has no maker.
@@ -6619,14 +6573,15 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             fd.append('RowVersion', sentRv);
             return post('CourtAjax/update_award', fd).then(function(d) {
                 if (d && d.status === 0) {
-                    // update_award returns no token; the guarded write won, so the server
-                    // row is sent+1 (cpSaveAward's convention). A heartbeat that already
+                    // update_award returns no token unless the maker rule moved a status;
+                    // the guarded write won, so the server row is sent+1 (cpSaveAward's convention). A heartbeat that already
                     // brought a newer token in the meantime is kept, never wound back.
                     var newRv = sentRv + 1;
                     cpSetRowVersion(caid, Math.max(cpGetRowVersion(caid), newRv));
                     cpPendingRunAdvance(caid, sentRv, newRv);
                     cpRpApplyMaker(caid, kind, id, persona);
-                    return cpMakerRuleWrite(caid, kind, had, id > 0);
+                    cpApplyMakerTracking(caid, newRv, d);
+                    return;
                 }
                 if (d && d.status === 9) { cpStale(caid); return; }
                 if (!d || !d._postFailed) cpAlert((d && d.error) || 'Could not save the ' + (kind === 'scroll' ? 'scroll' : 'regalia') + ' maker.');

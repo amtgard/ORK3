@@ -1618,7 +1618,6 @@ html[data-theme="dark"] .pn-award-print-icon:hover {
    default above-anchoring is correct here — it needs only to be kept on screen and
    allowed to wrap (see reference_data_tip_tooltips.md). Right-anchored because the
    icon is near the right edge of the footer. */
-#pn-award-print-icon[data-tip]:hover::after,
 #pn-award-print-link[data-tip]:hover::after {
     left: auto !important;
     right: 0 !important;
@@ -6683,7 +6682,7 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
    scoped to one page because every form surface in the CRM that needed a textarea
    so far restated the same rule locally (.pn-acct-field, .ec-field, .ev-modal-field,
    #kn-rec-overlay …); this is the shared one those should collapse onto. */
-.adm-textarea { padding: 6px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px; font-size: 13px; color: #2d3748; background: #fff; width: 100%; box-sizing: border-box; font-family: inherit; line-height: 1.5; resize: vertical; }
+.adm-textarea { padding: 6px 10px; border: 1.5px solid var(--ork-input-border); border-radius: 6px; font-size: 13px; color: var(--ork-text); background: var(--ork-input-bg); width: 100%; box-sizing: border-box; font-family: inherit; line-height: 1.5; resize: vertical; }
 .adm-textarea:focus { outline: none; border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(66,153,225,0.15); }
 .adm-toggle input[type=checkbox] { position: absolute; opacity: 0; width: 0; height: 0; }
 .adm-toggle-track { display: inline-block; width: 34px; height: 18px; border-radius: 9px; background: #e2e8f0; transition: background 0.2s; flex-shrink: 0; position: relative; }
@@ -9138,7 +9137,6 @@ html[data-theme="dark"] .adm-input { background: var(--ork-input-bg); color: var
 html[data-theme="dark"] .adm-input:focus { border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(144,205,244,0.15); }
 html[data-theme="dark"] .adm-select { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
 html[data-theme="dark"] .adm-select:focus { border-color: #90cdf4; }
-html[data-theme="dark"] .adm-textarea { background: var(--ork-input-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
 html[data-theme="dark"] .adm-textarea:focus { border-color: #90cdf4; box-shadow: 0 0 0 3px rgba(144,205,244,0.15); }
 
 html[data-theme="dark"] .adm-toggle-track { background: var(--ork-bg-tertiary); }

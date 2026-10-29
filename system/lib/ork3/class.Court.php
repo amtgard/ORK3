@@ -1122,6 +1122,65 @@ class Court
     }
 
     /**
+     * ['ScrollMakerId' => int, 'RegaliaMakerId' => int] for a court_award (0 = no
+     * maker), or null if it does not exist. Read before a maker write so the maker
+     * rule (applyMakerTrackingRule) can tell an assign or a clear from a no-op.
+     */
+    public function getCourtAwardMakers($courtAwardId): ?array
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet('SELECT scroll_maker_id, regalia_maker_id FROM ' . DB_PREFIX . 'court_award
+                            WHERE court_award_id = ' . (int)$courtAwardId . ' LIMIT 1');
+        if (!$r || !$r->Next()) {
+            return null;
+        }
+        return ['ScrollMakerId' => (int)$r->scroll_maker_id, 'RegaliaMakerId' => (int)$r->regalia_maker_id];
+    }
+
+    /**
+     * The maker rule: assigning a maker to a Pending item makes it Assigned;
+     * clearing the maker from an Assigned item makes it Pending. Every other
+     * status is left alone, and a maker swapped for another does nothing.
+     * updateAward() stays fields-only (QW4): this is its own guarded UPDATE, which
+     * moves the status only if it is still the rule's source status and the maker
+     * is still in the state the rule judged. Returns the line's ScrollStatus,
+     * RegaliaStatus and RowVersion after a move, or null when nothing moved.
+     */
+    public function applyMakerTrackingRule(int $courtAwardId, string $type, bool $hadMaker, bool $hasMaker): ?array
+    {
+        if (!valid_id($courtAwardId) || $hadMaker === $hasMaker || !in_array($type, ['scroll', 'regalia'], true)) {
+            return null;
+        }
+        $pending  = $type === 'scroll' ? self::SCROLL_PENDING : self::REGALIA_PENDING;
+        $assigned = $type === 'scroll' ? self::SCROLL_ASSIGNED : self::REGALIA_ASSIGNED;
+        [$from, $to] = $hasMaker ? [$pending, $assigned] : [$assigned, $pending];
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_award
+                SET ' . $type . '_status = ' . $to . ', row_version = row_version + 1
+              WHERE court_award_id = ' . $courtAwardId . '
+                AND ' . $type . '_status = ' . $from . '
+                AND ' . $type . '_maker_id ' . ($hasMaker ? 'IS NOT NULL' : 'IS NULL')
+        );
+        if (!$rs || $rs->Size() != 1) {
+            return null;
+        }
+
+        $this->db->Clear();
+        $r = $this->db->DataSet('SELECT scroll_status, regalia_status, row_version FROM ' . DB_PREFIX . 'court_award
+                            WHERE court_award_id = ' . $courtAwardId . ' LIMIT 1');
+        if (!$r || !$r->Next()) {
+            return null;
+        }
+        return [
+            'ScrollStatus'  => (int)$r->scroll_status,
+            'RegaliaStatus' => (int)$r->regalia_status,
+            'RowVersion'    => (int)$r->row_version,
+        ];
+    }
+
+    /**
      * Persist a new display order. $order is the running order top to bottom: an
      * integer is a court_award_id, a string 'n<id>' is a court_note_id. Awards and
      * notes share one sort_order number space, so each entry takes the next slot

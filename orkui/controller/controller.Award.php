@@ -99,11 +99,10 @@ class Controller_Award extends Controller
             $this->data['Error'] = 'Who gave this award? Award not added!';
             return false;
         }
-        // "Where given" is required, server-side, on every grant path. Blank used to
-        // fall through to at_park_id = 0 / at_kingdom_id = 0, and 120,284 rows (30.7%
-        // of ork_awards) carry that pair -- printable and reportable by nobody but the
-        // recipient. Every real Search/Location result carries a KingdomId, so a park
-        // OR a kingdom is always available once a location has actually been chosen.
+        // "Where given" is required. Player::AddAward enforces it for every grant
+        // path; this pre-check only gives the form a friendlier message. Every real
+        // Search/Location result carries a KingdomId, so a park OR a kingdom is
+        // always available once a location has actually been chosen.
         if (!valid_id($this->request->Award_addawards->ParkId)
             && !valid_id($this->request->Award_addawards->KingdomId)) {
             $this->data['Error'] = 'Where was this award given? Choose a location from the list. Award not added!';
@@ -181,7 +180,27 @@ class Controller_Award extends Controller
             }
         }
         $this->data['PreloadOfficers'] = $preloadOfficers;
-        $this->data['DefaultScope'] = $this->default_given_at_scope();
+        // "Where given" is one decision, not three: the re-shown request wins as a whole,
+        // or the officer's own scope does as a whole. Resolving the name and the ids
+        // separately let the box read "The Celestial Kingdom" while still submitting a
+        // park id left over from the last grant.
+        $saved = $this->data['Award_addawards'] ?? array();
+        $savedScope = (valid_id($saved['ParkId'] ?? 0) || valid_id($saved['KingdomId'] ?? 0))
+            && strlen(trim((string)($saved['GivenAt'] ?? ''))) > 0;
+        if ($savedScope) {
+            $this->data['GivenAtScope'] = array(
+                'ParkId' => (int)($saved['ParkId'] ?? 0),
+                'KingdomId' => (int)($saved['KingdomId'] ?? 0),
+                'Name' => (string)$saved['GivenAt'],
+            );
+        } else {
+            $default = $this->default_given_at_scope();
+            $this->data['GivenAtScope'] = array(
+                'ParkId' => (int)($default['ParkId'] ?? 0),
+                'KingdomId' => (int)($default['KingdomId'] ?? 0),
+                'Name' => (string)($default['Name'] ?? ''),
+            );
+        }
     }
 
     /**

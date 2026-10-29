@@ -120,6 +120,8 @@ html[data-theme="light"] .sc-hand {
     top: calc(100% + 4px);
     left: 0;
     min-width: 100%;
+    max-width: calc(100vw - 32px);   /* a long specimen truncates inside the 16px gutters
+                                        instead of widening the page on a phone */
     max-height: 60vh;
     overflow-y: auto;
     margin: 0;
@@ -152,6 +154,16 @@ html[data-theme="light"] .sc-hand {
     font-size: 1.25em;
     line-height: 1.3;
     white-space: nowrap;
+}
+
+/* The flex item has to do the ellipsizing: text-overflow on the flex row itself
+   never reaches the text inside a blockified child. clip, not hidden: hidden
+   would also crop the swash faces' ascenders and descenders vertically. */
+.sc-hand-text {
+    min-width: 0;
+    overflow-x: clip;
+    overflow-y: visible;
+    text-overflow: ellipsis;
 }
 
 .sc-hand-opt[aria-selected="true"] {

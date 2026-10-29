@@ -116,41 +116,6 @@ foreach ($choices as $c) {
 }
 
 /*
- * Which choices have no name of their own, so the officer has to type one.
- *
- * Custom Award (94) and Custom Title (246) are the ORK's internal placeholders for
- * "this kingdom made something up". Most kingdoms leave the catalogue row named
- * literally "Custom Award", and Scroll::ResolveTitle() will not letter that phrase
- * onto a certificate — it returns '' and the scroll prints a blank line. Some
- * kingdoms did name the row (kingdom 1 holds "Order of the Hellrider", "Order of the
- * Awesome" and five more on base 94), and those already have a real title.
- *
- * ResolveTitle() itself is the test, deliberately — asked with no typed name it
- * answers '' for exactly the rows that have none, so nothing here restates
- * Scroll::CUSTOM_PLACEHOLDER_NAMES (which is private) or duplicates that precedence.
- * Reading a static off Scroll is what this page already does for the vocabulary, the
- * dark grounds and BorderDrawsKnot(); it is the renderer's own answer, not a second
- * opinion that can drift from it.
- *
- * The award/title split that comes back is wording only — which of the two labels
- * the field wears — and by construction the name is one of the two placeholders.
- */
-$customKind = static function (array $c): string {
-    if (!Scroll::IsCustomAwardId((int) $c['AwardId'])) {
-        return '';
-    }
-    $resolved = Scroll::ResolveTitle([
-        'AwardId'          => (int) $c['AwardId'],
-        'KingdomAwardName' => (string) $c['Name'],
-    ]);
-    if ($resolved !== '') {
-        return '';
-    }
-
-    return strcasecmp(trim((string) $c['Name']), 'Custom Title') === 0 ? 'title' : 'award';
-};
-
-/*
  * The paper tone behind each fixed order, for the colour-contrast hint: Scroll's own
  * measured numbers (Scroll::GroundLuminance), never re-measured here. A number is
  * emitted as a plain decimal — never through locale-aware float formatting.
@@ -175,8 +140,9 @@ $awardLumAttr = static function (string $order, array $variants) use ($groundLum
         . ' data-variant-lum="' . scroll_e(json_encode($byVariant)) . '"';
 };
 
-$awardOption = static function (array $c) use ($customKind, $awardLumAttr): string {
-    $kind = $customKind($c);
+// CustomKind ('' | 'award' | 'title') is Scroll::CustomNameKind(), set by the model.
+$awardOption = static function (array $c) use ($awardLumAttr): string {
+    $kind = (string) ($c['CustomKind'] ?? '');
 
     return '<option value="' . (int) $c['AwardId'] . '"'
         . ' data-order="' . scroll_e($c['Order']) . '"'
@@ -228,7 +194,6 @@ $awardOption = static function (array $c) use ($customKind, $awardLumAttr): stri
 
 /* Rank pills. The pill itself is the shared .sc-rank-pill scheme in revised.css —
    identical to the grant and recommend surfaces. Only the legend is local. */
-.sc-rank-pill   { border: 2px solid #e2e8f0; }
 .sc-rank-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10.5px;
                   color: var(--rp-text-muted); margin-top: 7px; }
 /* An author `display: flex` outranks the UA sheet's `[hidden] { display: none }`,
@@ -244,7 +209,7 @@ $awardOption = static function (array $c) use ($customKind, $awardLumAttr): stri
 .sc-key-held    { background: linear-gradient(135deg, #a7ecbd, #7fd99e); border: 1px solid #48bb78;
                   color: #1c4532; }
 .sc-key-fwd     { background: linear-gradient(135deg, #9fd6f7, #6cb8ef); border: 1px solid #3182ce;
-                  color: #1a365d; }
+                  color: #15314f; }
 
 /* Border-colour pair swatch. */
 .sc-swatch      { display: inline-flex; width: 30px; height: 10px; border-radius: 2px; overflow: hidden;
@@ -325,7 +290,6 @@ html[data-theme="dark"] .sc-seg-btn[aria-pressed="true"] { background: #4c51bf; 
 html[data-theme="dark"] .sc-hex-err { color: #feb2b2; }
 html[data-theme="dark"] .sc-hex[aria-invalid="true"] { border-color: #fc8181; }
 
-html[data-theme="dark"] .sc-rank-pill { border-color: var(--ork-border); }
 html[data-theme="dark"] .sc-key-held  { background: linear-gradient(135deg, #2f6b4f, #1d4733); color: #c6f6d5; }
 html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345083, #23375a); color: #bee3f8; }
 
@@ -402,7 +366,7 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                         </select>
                     </div>
                     <?php /* The typed name for the entries that have none of their own —
-                             see $customKind above. Hidden for every other choice, exactly
+                             see Scroll::CustomNameKind(). Hidden for every other choice, exactly
                              as the variant field below is: the award it would rename
                              already has a name. scrollery.js swaps the label, placeholder
                              and hint between the award and title wordings, and marks it

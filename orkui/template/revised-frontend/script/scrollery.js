@@ -86,11 +86,6 @@
 
     function selected() { return awardEl.options[awardEl.selectedIndex]; }
 
-    function ordinal(n) {
-        return ['', 'first', 'second', 'third', 'fourth', 'fifth',
-                'sixth', 'seventh', 'eighth', 'ninth', 'tenth'][n] || '';
-    }
-
     /* Certificate date, matching Scroll::FormatDate() — "13th May 2024". */
     function prettyDate(iso) {
         if (!iso) { return ''; }
@@ -1252,8 +1247,10 @@
      * lead is plain text; placeHtml is HTML because the article is a span, so the
      * place goes through esc() — it is the one value here an officer types straight
      * into markup. Guarded on the global, not assumed: a cached older page that
-     * lacks scrollery-textmodel.js must keep today's behaviour (the unsplit name,
-     * the lead built from the boxes) rather than throw out of every keystroke.
+     * lacks scrollery-textmodel.js gets null, and the caller leaves the server's
+     * last rendered lines in place rather than recomputing them here — a third
+     * copy of ScrollText::IssuerLines() would drift and preview what never prints.
+     * The next reload() brings fresh server-built lines.
      */
     function issuerParts() {
         var T = window.ScrolleryText;
@@ -1265,13 +1262,7 @@
                 placeHtml: (r.article ? '<span class="sc-art">the</span> ' : '') + esc(r.place)
             };
         }
-        return {
-            lead: 'and'
-                + (useTheEl.checked ? ' the' : '')
-                + ' ' + titleEl.value.trim()
-                + (useOfEl.checked ? ' of' : ''),
-            placeHtml: esc(nameEl.value.trim())
-        };
+        return null;
     }
 
     /*
@@ -1337,8 +1328,8 @@
          */
         var issuer = field('issuerTitle');
         var issuerName = field('issuerName');
-        if (issuer || issuerName) {
-            var parts = issuerParts();
+        var parts = (issuer || issuerName) ? issuerParts() : null;
+        if (parts) {
             if (issuer) { issuer.textContent = parts.lead; }
             if (issuerName) { issuerName.innerHTML = parts.placeHtml; }
         }

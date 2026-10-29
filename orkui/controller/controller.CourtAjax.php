@@ -530,6 +530,11 @@ class Controller_CourtAjax extends Controller
         $expectedRowVersion = (isset($_POST['RowVersion']) && $_POST['RowVersion'] !== '')
             ? (int)$_POST['RowVersion'] : null;
 
+        // The makers before this write, so the maker rule can tell an assign or a
+        // clear from a no-op (read only when a maker is posted).
+        $makersBefore = (array_key_exists('ScrollMakerId', $fields) || array_key_exists('RegaliaMakerId', $fields))
+            ? $this->Court->get_court_award_makers($court_award_id) : null;
+
         $ok = $this->Court->update_award($court_award_id, $fields, $expectedRowVersion);
         if (!$ok && $expectedRowVersion !== null) {
             // status 9 = optimistic-lock conflict: the client's row_version was stale.
@@ -542,7 +547,29 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'This award could not be updated — it may have changed. Reload.']);
         }
 
-        $this->jsonOut(array_merge(['status' => 0], $fields));
+        // Maker rule (domain, its own guarded write): a maker assigned to a Pending
+        // item makes it Assigned; a maker cleared from an Assigned item makes it
+        // Pending. When it moves a status, the answer carries both statuses and the
+        // line's new RowVersion.
+        $tracking = null;
+        if ($makersBefore !== null) {
+            foreach (['scroll' => 'ScrollMakerId', 'regalia' => 'RegaliaMakerId'] as $type => $key) {
+                if (!array_key_exists($key, $fields)) {
+                    continue;
+                }
+                $moved = $this->Court->apply_maker_tracking_rule(
+                    $court_award_id,
+                    $type,
+                    $makersBefore[$key] > 0,
+                    $fields[$key] > 0
+                );
+                if ($moved !== null) {
+                    $tracking = $moved;
+                }
+            }
+        }
+
+        $this->jsonOut(array_merge(['status' => 0], $fields, $tracking ?? []));
     }
 
     // -----------------------------------------------------------------------
