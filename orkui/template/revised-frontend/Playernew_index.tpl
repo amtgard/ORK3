@@ -764,6 +764,11 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-bonus-note{font-size:12px;color:var(--ork-text-muted,#718096)}
 .pn-bonus-revoke{background:none;border:0;color:#c53030;cursor:pointer;font-size:12px;padding:2px 6px}
 .pn-bonus-revoke:hover{text-decoration:underline}
+.pn-bonus-edit,.pn-bonus-save,.pn-bonus-cancel{background:none;border:0;color:#2b6cb0;cursor:pointer;font-size:12px;padding:2px 6px}
+.pn-bonus-edit:hover,.pn-bonus-save:hover,.pn-bonus-cancel:hover{text-decoration:underline}
+.pn-bonus-inline{font:inherit;font-size:12px;padding:2px 4px;max-width:9em}
+.pn-bonus-inline-num{width:4.5em;text-align:right}
+.pn-bonus-actions{white-space:nowrap}
 html[data-theme="dark"] .pn-bonus-badge{background:#4a3f12;color:#fbd38d}
 
 /* Shared yellow warning banner (about visibility, milestones accuracy, name entitlement, reconcile) */
@@ -2625,7 +2630,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					// Each one says what it was for and who granted it. Live credits only; officers
 					// with authority over the player's park can remove one.
 					$pnBonus = is_array($BonusCredits ?? null) ? $BonusCredits : [];
-					$pnCanRevokeBonus = !empty($CanRevokeBonus);
+					$pnViewerId = (int)($ViewerId ?? 0);
+					// Whoever gave a credit may take it back, so the column shows if any row is theirs.
+					$pnMine = $pnViewerId > 0 ? array_filter($pnBonus, function ($b) use ($pnViewerId) { return (int)($b['GrantedBy'] ?? 0) === $pnViewerId; }) : [];
+					$pnCanRevokeBonus = !empty($CanRevokeBonus) || count($pnMine) > 0;
 				?>
 				<?php if (count($pnBonus) > 0): ?>
 				<div class="pn-bonus-section" id="pn-bonus-section">
@@ -2653,13 +2661,16 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 									<?php if (!empty($bc['Note'])): ?><div class="pn-bonus-note"><?= htmlspecialchars($bc['Note']) ?></div><?php endif; ?>
 								</td>
 								<td class="pn-bonus-scope"><?= htmlspecialchars($bc['ScopeName']) ?></td>
-								<td><?= htmlspecialchars($bc['ClassName']) ?></td>
-								<td class="pn-col-numeric"><?= rtrim(rtrim(number_format((float)$bc['Credits'], 2, '.', ''), '0'), '.') ?></td>
+								<td class="pn-bonus-class" data-class-id="<?= (int)$bc['ClassId'] ?>"><?= htmlspecialchars($bc['ClassName']) ?></td>
+								<td class="pn-col-numeric pn-bonus-credits" data-credits="<?= rtrim(rtrim(number_format((float)$bc['Credits'], 2, '.', ''), '0'), '.') ?>"><?= rtrim(rtrim(number_format((float)$bc['Credits'], 2, '.', ''), '0'), '.') ?></td>
 								<td><?= htmlspecialchars($bc['Date']) ?></td>
 								<td><?= htmlspecialchars($bc['GrantedByPersona']) ?></td>
 								<?php if ($pnCanRevokeBonus): ?>
-								<td class="pn-col-numeric">
+								<td class="pn-col-numeric pn-bonus-actions">
+									<?php if (!empty($CanRevokeBonus) || (int)($bc['GrantedBy'] ?? 0) === $pnViewerId): ?>
+									<button type="button" class="pn-bonus-edit" data-id="<?= (int)$bc['BonusCreditId'] ?>" title="Change the amount or class">Edit</button>
 									<button type="button" class="pn-bonus-revoke" data-id="<?= (int)$bc['BonusCreditId'] ?>" data-who="<?= htmlspecialchars($bc['CategoryName'], ENT_QUOTES) ?>">Remove</button>
+									<?php endif; ?>
 								</td>
 								<?php endif; ?>
 							</tr>
@@ -3987,23 +3998,78 @@ window.OrkRsCfg = {
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
 <?php include __DIR__ . '/_monarchy_only_assets.tpl'; ?>
-<?php if (!empty($CanRevokeBonus) && !empty($BonusCredits)): ?>
+<?php if (!empty($pnCanRevokeBonus) && !empty($BonusCredits)): ?>
 <script>
 // Remove a bonus credit from the Class Levels tab. The page reloads afterwards so
 // the class totals and levels (computed server-side and by revised.js) agree.
 (function () {
 	var tbl = document.getElementById('pn-bonus-table');
 	if (!tbl) return;
+	// Editing a credit's class or amount in place. Save posts the change and
+	// reloads (class totals and levels must agree); Cancel or Escape puts the
+	// row back. Date, note and category stay: a credit for something else is
+	// a new grant.
+	var bonusClasses = <?= json_encode(is_array($BonusClasses ?? null) ? $BonusClasses : []) ?>;
+	function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); }
+	function bonusOops(message) {
+		if (typeof window.orkAlert === 'function') { window.orkAlert(message, { title: 'Could not change the credit' }); } else { alert(message); }
+	}
+	function startBonusEdit(tr) {
+		var clsCell = tr.querySelector('.pn-bonus-class'), crCell = tr.querySelector('.pn-bonus-credits'), act = tr.querySelector('.pn-bonus-actions');
+		if (!clsCell || !crCell || !act || tr.getAttribute('data-editing')) return;
+		tr.setAttribute('data-editing', '1');
+		tr.setAttribute('data-orig-class', clsCell.innerHTML);
+		tr.setAttribute('data-orig-credits', crCell.innerHTML);
+		tr.setAttribute('data-orig-actions', act.innerHTML);
+		var cur = clsCell.getAttribute('data-class-id'), opts = '';
+		bonusClasses.forEach(function (k) { opts += '<option value="' + k.ClassId + '"' + (String(k.ClassId) === String(cur) ? ' selected' : '') + '>' + escapeHtml(k.ClassName) + '</option>'; });
+		clsCell.innerHTML = '<select class="pn-bonus-inline pn-bonus-edit-class" aria-label="Class">' + opts + '</select>';
+		crCell.innerHTML = '<input type="number" class="pn-bonus-inline pn-bonus-inline-num pn-bonus-edit-credits" aria-label="Credits" step="0.25" min="0.25" value="' + escapeHtml(crCell.getAttribute('data-credits') || '') + '">';
+		act.innerHTML = '<button type="button" class="pn-bonus-save">Save</button><button type="button" class="pn-bonus-cancel">Cancel</button>';
+		crCell.querySelector('input').focus();
+	}
+	function cancelBonusEdit(tr) {
+		if (!tr.getAttribute('data-editing')) return;
+		tr.querySelector('.pn-bonus-class').innerHTML = tr.getAttribute('data-orig-class');
+		tr.querySelector('.pn-bonus-credits').innerHTML = tr.getAttribute('data-orig-credits');
+		tr.querySelector('.pn-bonus-actions').innerHTML = tr.getAttribute('data-orig-actions');
+		tr.removeAttribute('data-editing');
+	}
+	function saveBonusEdit(tr) {
+		var cls = tr.querySelector('.pn-bonus-edit-class'), amt = tr.querySelector('.pn-bonus-edit-credits'), save = tr.querySelector('.pn-bonus-save');
+		if (!cls || !amt) return;
+		save.disabled = true;
+		jQuery.post(<?= json_encode(UIR) ?> + 'BonusCreditAjax/update', { BonusCreditId: tr.getAttribute('data-bonus-id'), ClassId: cls.value, Credits: amt.value }, function (r) {
+			if (!r || r.status !== 0) { save.disabled = false; bonusOops((r && r.error) || 'Could not change the credit.'); return; }
+			if (r.changed) { location.reload(); } else { cancelBonusEdit(tr); }
+		}, 'json').fail(function () { save.disabled = false; bonusOops('Request failed.'); });
+	}
+	tbl.addEventListener('keydown', function (e) {
+		var tr = e.target.closest ? e.target.closest('tr') : null;
+		if (!tr || !tr.getAttribute('data-editing')) return;
+		if (e.key === 'Enter') { e.preventDefault(); saveBonusEdit(tr); }
+		else if (e.key === 'Escape') { e.preventDefault(); cancelBonusEdit(tr); }
+	});
 	tbl.addEventListener('click', function (e) {
+		var hit = e.target.closest ? e.target.closest('.pn-bonus-edit, .pn-bonus-save, .pn-bonus-cancel') : null;
+		if (hit) {
+			var row = hit.closest('tr');
+			if (hit.classList.contains('pn-bonus-edit')) startBonusEdit(row); else if (hit.classList.contains('pn-bonus-save')) saveBonusEdit(row); else cancelBonusEdit(row);
+			return;
+		}
 		var btn = e.target.closest ? e.target.closest('.pn-bonus-revoke') : null;
 		if (!btn) return;
 		var who = btn.getAttribute('data-who') || 'this credit';
+		// The styled alert from revised.js; the browser's only if it is missing.
+		function oops(message) {
+			if (typeof window.orkAlert === 'function') { window.orkAlert(message, { title: 'Could not remove the credit' }); } else { alert(message); }
+		}
 		function go() {
 			btn.disabled = true;
 			jQuery.post(<?= json_encode(UIR) ?> + 'BonusCreditAjax/revoke', { BonusCreditId: btn.getAttribute('data-id') }, function (r) {
-				if (!r || r.status !== 0) { btn.disabled = false; alert((r && r.error) || 'Could not remove the credit.'); return; }
+				if (!r || r.status !== 0) { btn.disabled = false; oops((r && r.error) || 'Could not remove the credit.'); return; }
 				location.reload();
-			}, 'json').fail(function () { btn.disabled = false; alert('Request failed.'); });
+			}, 'json').fail(function () { btn.disabled = false; oops('Request failed.'); });
 		}
 		var msg = 'The “' + who + '” credit is removed from this player. It can be granted again.';
 		var oc = window.orkConfirm;

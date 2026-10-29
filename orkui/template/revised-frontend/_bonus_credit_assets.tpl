@@ -80,6 +80,8 @@
 .bc-link { background:none; border:0; padding:0; color:#2b6cb0; cursor:pointer; font:inherit; font-size:12px; }
 .bc-link:hover { text-decoration:underline; }
 .bc-link-danger { color:#c53030; }
+.bc-inline { font:inherit; font-size:12px; padding:2px 4px; max-width:9em; }
+.bc-inline-num { width:4.5em; text-align:right; }
 .bc-empty { font-size:13px; color:var(--ork-text-muted,#a0aec0); padding:10px 0; }
 .bc-new { border:1px dashed var(--ork-input-border,#cbd5e0); border-radius:8px; padding:12px; margin-bottom:16px; background:var(--ork-bg-secondary,#f7fafc); }
 .bc-new .bc-list-label { margin-top:0; }
@@ -88,6 +90,13 @@
 .bc-granter-list li:last-child { border-bottom:0; }
 .bc-granter-list .bc-muted { flex:1; color:var(--ork-text-muted,#718096); font-size:12px; }
 .bc-archived-tag { font-size:11px; font-weight:600; color:#c53030; margin-left:6px; }
+.bc-away-tag { display:inline-block; font-size:11px; font-weight:600; color:var(--ork-text-muted,#718096); border:1px solid var(--ork-divider,#e2e8f0); border-radius:10px; padding:0 6px; margin-left:6px; vertical-align:middle; }
+.bc-setting { display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid var(--ork-divider,#e2e8f0); border-radius:8px; background:var(--ork-bg-secondary,#f7fafc); margin:0 0 12px; cursor:pointer; }
+.bc-setting input { margin-top:3px; }
+.bc-setting strong { display:block; font-size:14px; }
+.bc-setting .bc-muted { display:block; margin-top:2px; }
+.bc-setting-text p { font-size:13px; margin:0 0 8px; }
+.bc-setting-text p:last-child { margin-bottom:0; }
 html[data-theme="dark"] .bc-table tr.bc-just-added td { background:#1c2f24; }
 html[data-theme="dark"] .bc-feedback.bc-ok { background:#1c2f24; border-color:#276749; color:#9ae6b4; }
 html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#9b2c2c; color:#feb2b2; }
@@ -114,6 +123,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                 <button type="button" class="bc-tab bc-tab-active" data-pane="bc-pane-grant" role="tab"><i class="fas fa-plus"></i> Grant</button>
                 <button type="button" class="bc-tab" data-pane="bc-pane-credits" id="bc-tab-credits" role="tab" hidden><i class="fas fa-list"></i> Categories</button>
                 <button type="button" class="bc-tab" data-pane="bc-pane-granters" id="bc-tab-granters" role="tab" hidden><i class="fas fa-user-check"></i> Granters</button>
+                <button type="button" class="bc-tab" data-pane="bc-pane-settings" id="bc-tab-settings" role="tab" hidden><i class="fas fa-sliders-h"></i> Settings</button>
             </div>
 
             <!-- ───────── Grant ───────── -->
@@ -145,6 +155,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                     </div>
                 </div>
                 <div class="bc-info" id="bc-allowance" hidden></div>
+                <div class="bc-info" id="bc-outside-hint" hidden></div>
                 <div class="bc-list-label"><span>Granted</span><span id="bc-count"></span></div>
                 <table class="bc-table" id="bc-table" style="display:none">
                     <thead><tr><th>Player</th><th>Class</th><th class="bc-num">Credits</th><th>Date</th><th>By</th><th></th></tr></thead>
@@ -177,7 +188,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                     </div>
                 </div>
                 <div class="bc-list-label">
-                    <span id="bc-categories-label">This kingdom's credit categories</span>
+                    <span id="bc-categories-label">This Kingdom's credit categories</span>
                     <label class="bc-check bc-check-sm"><input type="checkbox" id="bc-show-archived"> Show archived</label>
                 </div>
                 <table class="bc-table" id="bc-categories-table" style="display:none">
@@ -189,7 +200,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                 <!-- Kingdom hosts only: the Amtgard-wide credits this kingdom may adopt. -->
                 <div id="bc-ork-section" hidden>
                     <div class="bc-list-label" style="margin-top:18px"><span>Amtgard-wide credit categories</span></div>
-                    <p class="bc-info">Credit categories defined by ORK admins for all of Amtgard. They reach this kingdom's players only once this kingdom adopts them; a parent kingdom's adoption also covers its principalities. The amount is Amtgard's and cannot be changed here.</p>
+                    <p class="bc-info">Credit categories defined by ORK admins for all of Amtgard. They reach this Kingdom's players only once this Kingdom adopts them; a parent Kingdom's adoption also covers its principalities. The amount is Amtgard's and cannot be changed here.</p>
                     <table class="bc-table" id="bc-ork-table" style="display:none">
                         <thead><tr><th>Category</th><th class="bc-num">Per player</th><th>Earned</th><th>Status</th><th></th></tr></thead>
                         <tbody id="bc-ork-tbody"></tbody>
@@ -200,7 +211,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
 
             <!-- ───────── Granters (kingdom CREATE) ───────── -->
             <div class="bc-pane" id="bc-pane-granters" hidden>
-                <p class="bc-info" style="margin-top:0">Granters can hand out and remove this kingdom's credits anywhere in the kingdom without holding kingdom rights: all of them, or one specific category. They cannot define new categories. Only officers with CREATE authority can appoint or remove them.</p>
+                <p class="bc-info" style="margin-top:0">Granters can hand out and remove this Kingdom's credits anywhere in the Kingdom without holding Kingdom rights: all of them, or one specific category. They cannot define new categories. Only officers with CREATE authority can appoint or remove them.</p>
                 <div class="bc-list-label"><span>Granters</span><span id="bc-granters-count"></span></div>
                 <ul class="bc-granter-list" id="bc-granter-list"></ul>
                 <div class="bc-row" style="margin-bottom:0">
@@ -218,6 +229,16 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                         <button type="button" class="bc-btn bc-btn-ghost" id="bc-granter-add" disabled><i class="fas fa-user-plus"></i> Add granter</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- ───────── Settings (kingdom CREATE) ───────── -->
+            <div class="bc-pane" id="bc-pane-settings" hidden>
+                <div class="bc-list-label" style="margin-top:0"><span>Credits from other Kingdoms</span></div>
+                <label class="bc-setting" for="bc-outside-toggle">
+                    <input type="checkbox" id="bc-outside-toggle">
+                    <span><strong>Let this Kingdom's players receive bonus credits from other Kingdoms</strong><span class="bc-muted" id="bc-outside-status"></span></span>
+                </label>
+                <div class="bc-setting-text" id="bc-outside-desc"></div>
             </div>
         </div>
         <div class="bc-foot">
@@ -262,7 +283,9 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
     // orkCredits: on a kingdom host, every live Amtgard-wide credit with this kingdom's adoption status.
     var categories = [], classes = [], granters = [], orkCredits = [], loaded = false, current = null, lastClass = 0, release = null;
     var canDefine = false, canAppoint = false;
-    var isOrk = Cfg.scopeType === 'ork';
+    var isOrk = Cfg.scopeType === 'ork', isKingdom = Cfg.scopeType === 'kingdom';
+    // outside: on a kingdom host, whether its players may receive other kingdoms' credits (own answer, inherited answer, who set it).
+    var outside = null;
 
     function feedback(msg, ok) {
         var el = gid('bc-feedback');
@@ -291,8 +314,8 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
     window.bcOpen = function () {
         var ov = gid('bc-overlay');
         gid('bc-sub').textContent = (Cfg.scopeName || '') + ' — credits that count toward class levels, not attendance.' +
-            (Cfg.scopeType === 'park' ? ' Your kingdom defines them; you hand them out.' : '') +
-            (isOrk ? ' Each kingdom chooses whether to adopt them.' : '');
+            (Cfg.scopeType === 'park' ? ' Your Kingdom defines them; you hand them out.' : '') +
+            (isOrk ? ' Each Kingdom chooses whether to adopt them.' : '');
         ov.classList.add('bc-open');
         ov.setAttribute('aria-hidden', 'false');
         feedback('');
@@ -326,19 +349,22 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
             classes = r.classes || [];
             granters = r.granters || [];
             orkCredits = r.orkCredits || [];
+            outside = r.outside || null;
             canDefine = !!r.canDefine;
             canAppoint = !!r.canAppoint;
             loaded = true;
             gid('bc-tabs').hidden = !(canDefine || canAppoint);
             gid('bc-tab-credits').hidden = !canDefine;
             gid('bc-tab-granters').hidden = !canAppoint;
-            gid('bc-categories-label').textContent = isOrk ? 'Amtgard-wide credit categories' : 'This kingdom\'s credit categories';
+            gid('bc-tab-settings').hidden = !(canDefine && isKingdom);
+            gid('bc-categories-label').textContent = isOrk ? 'Amtgard-wide credit categories' : 'This Kingdom\'s credit categories';
             gid('bc-ork-section').hidden = isOrk || !canDefine;
             fillClasses();
             fillGrantPicker(keep);
             renderCategories();
             renderOrkCredits();
             renderGranters();
+            renderOutside();
             if (!keep) { showTab('bc-pane-grant'); gid('bc-category').focus(); }
         }).fail(function () { feedback('Could not load credits.', false); });
     }
@@ -352,7 +378,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
     // ================= Grant tab =================
     function fillGrantPicker(selectValue) {
         var sel = gid('bc-category'), live = liveCategories(), html = '';
-        if (!live.length) html += '<option value="">' + (canDefine ? 'No credit categories yet — see the Categories tab' : 'No credit categories set up by your kingdom yet') + '</option>';
+        if (!live.length) html += '<option value="">' + (canDefine ? 'No credit categories yet — see the Categories tab' : 'No credit categories set up by your Kingdom yet') + '</option>';
         live.forEach(function (rs) {
             // Name the defining org when it is not this page's own: a park sees its
             // kingdom's credits, and any host sees adopted Amtgard-wide ones.
@@ -384,7 +410,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
             info.hidden = true;
             renderGranted([]);
             gid('bc-empty').textContent = canDefine ? 'Define a credit category on the Categories tab, then grant it here.'
-                : (Cfg.scopeType === 'park' ? 'A kingdom officer with CREATE authority sets up credit categories on the kingdom page.' : 'No credits to grant yet.');
+                : (Cfg.scopeType === 'park' ? 'A Kingdom officer with CREATE authority sets up credit categories on the Kingdom page.' : 'No credits to grant yet.');
         }
         updateAdd();
     }
@@ -399,15 +425,59 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
             renderGranted(r.credits || []);
         });
     }
+    // The rows as the server sent them, by credit id, so an edit can be cancelled or redrawn.
+    var rowData = {};
     function rowHtml(c, justAdded) {
+        rowData[c.BonusCreditId] = c;
         return '<tr data-id="' + c.BonusCreditId + '" data-mid="' + c.MundaneId + '"' + (justAdded ? ' class="bc-just-added"' : '') + '>' +
-            '<td><a href="' + Cfg.uir + 'Player/profile/' + c.MundaneId + '">' + esc(c.Persona) + '</a></td>' +
+            '<td><a href="' + Cfg.uir + 'Player/profile/' + c.MundaneId + '">' + esc(c.Persona) + '</a>' + awayTag(c) + '</td>' +
             '<td>' + esc(c.ClassName) + '</td>' +
             '<td class="bc-num">' + fmtCredits(c.Credits) + '</td>' +
             '<td class="bc-muted">' + esc(c.Date) + '</td>' +
             '<td class="bc-muted">' + esc(c.GrantedByPersona) + '</td>' +
-            '<td class="bc-num"><button type="button" class="bc-link bc-link-danger bc-revoke" data-id="' + c.BonusCreditId + '" title="Remove this credit">Remove</button></td>' +
+            '<td class="bc-num"><button type="button" class="bc-link bc-edit" data-id="' + c.BonusCreditId + '" title="Change the amount or class">Edit</button> · ' +
+            '<button type="button" class="bc-link bc-link-danger bc-revoke" data-id="' + c.BonusCreditId + '" title="Remove this credit">Remove</button></td>' +
             '</tr>';
+    }
+    // Editing in place: the class and amount cells become controls; Save posts
+    // them, Cancel (or Escape) redraws the row as it was. Date, note and
+    // category are not editable: a credit for something else is a new grant.
+    function startEdit(tr) {
+        var c = rowData[tr.getAttribute('data-id')];
+        if (!c) return;
+        var cells = tr.children, opts = '';
+        classes.forEach(function (k) { opts += '<option value="' + k.ClassId + '"' + (String(k.ClassId) === String(c.ClassId) ? ' selected' : '') + '>' + esc(k.ClassName) + '</option>'; });
+        cells[1].innerHTML = '<select class="bc-inline bc-edit-class" aria-label="Class">' + opts + '</select>';
+        cells[2].innerHTML = '<input type="number" class="bc-inline bc-inline-num bc-edit-credits" aria-label="Credits" step="0.25" min="0.25" value="' + fmtCredits(c.Credits) + '">';
+        cells[5].innerHTML = '<button type="button" class="bc-link bc-save">Save</button> · <button type="button" class="bc-link bc-cancel">Cancel</button>';
+        tr.querySelector('.bc-edit-credits').focus();
+    }
+    function cancelEdit(tr) {
+        var c = rowData[tr.getAttribute('data-id')];
+        if (c) tr.outerHTML = rowHtml(c, false);
+    }
+    function saveEdit(tr) {
+        var id = tr.getAttribute('data-id'), c = rowData[id];
+        var cls = tr.querySelector('.bc-edit-class'), amt = tr.querySelector('.bc-edit-credits'), save = tr.querySelector('.bc-save');
+        if (!c || !cls || !amt) return;
+        save.disabled = true;
+        jQuery.post(base + 'update', { BonusCreditId: id, ClassId: cls.value, Credits: amt.value }, function (r) {
+            if (!r || r.status !== 0) { save.disabled = false; feedback((r && r.error) || 'Could not save the change.', false); return; }
+            tr.outerHTML = rowHtml(r.credit || c, !!r.changed);
+            if (tr.getAttribute('data-mid') && gid('bc-player-id').value === tr.getAttribute('data-mid')) loadAllowance();
+            feedback(r.changed ? 'Changed ' + esc(c.Persona) + '’s credit: ' + fmtCredits(r.credit.Credits) + ' ' + esc(r.credit.ClassName) + '.' : 'Nothing changed.', true);
+        }, 'json').fail(function () { save.disabled = false; feedback('Request failed.', false); });
+    }
+    gid('bc-tbody').addEventListener('keydown', function (e) {
+        var tr = e.target.closest ? e.target.closest('tr') : null;
+        if (!tr || !tr.querySelector('.bc-save')) return;
+        if (e.key === 'Enter') { e.preventDefault(); saveEdit(tr); }
+        else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(tr); }
+    });
+    // A holder whose home kingdom is not this page's: say where they are from.
+    function awayTag(c) {
+        if (isOrk || !Cfg.kingdomId || !c.PlayerKingdomId || String(c.PlayerKingdomId) === String(Cfg.kingdomId)) return '';
+        return '<span class="bc-away-tag" title="' + esc(c.PlayerKingdomName || '') + '">' + esc(c.PlayerKingdomAbbr || c.PlayerKingdomName || 'other Kingdom') + '</span>';
     }
     function setCount(n) {
         gid('bc-count').textContent = n ? plural(n, 'player', 'players') : '';
@@ -420,9 +490,15 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         tb.innerHTML = html;
         setCount(list.length);
         gid('bc-empty').textContent = Cfg.scopeType === 'park' ? 'None of this park\'s players has this credit yet.'
-            : (Cfg.scopeType === 'kingdom' ? 'None of this kingdom\'s players has this credit yet.' : 'Nobody has this credit yet.');
+            : (Cfg.scopeType === 'kingdom' ? 'None of this Kingdom\'s players has this credit yet.' : 'Nobody has this credit yet.');
     }
     gid('bc-tbody').addEventListener('click', function (e) {
+        var hit = e.target.closest ? e.target.closest('.bc-edit, .bc-save, .bc-cancel') : null;
+        if (hit) {
+            var row = hit.closest('tr');
+            if (hit.classList.contains('bc-edit')) startEdit(row); else if (hit.classList.contains('bc-save')) saveEdit(row); else cancelEdit(row);
+            return;
+        }
         var btn = e.target.closest ? e.target.closest('.bc-revoke') : null;
         if (!btn) return;
         var tr = btn.closest('tr'), id = btn.getAttribute('data-id');
@@ -468,20 +544,22 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         var mid = gid('bc-player-id').value;
         if (!current || !mid) { setAmountBounds(null); return; }
         var cid = current.CategoryId;
-        jQuery.getJSON(base + 'allowance&CategoryId=' + cid + '&MundaneId=' + mid, function (r) {
+        jQuery.getJSON(base + 'allowance&CategoryId=' + cid + '&MundaneId=' + mid + '&' + scopeQS, function (r) {
             if (!current || current.CategoryId !== cid || gid('bc-player-id').value !== mid) return;
             if (r && r.status === 0) setAmountBounds(r.allowance);
         });
     }
 
-    // Player search: the org's own players only (a credit cannot leave its scope).
-    // An Amtgard host searches everyone; the server still refuses a player whose
-    // kingdom has not adopted the credit.
+    // Player search: all of Amtgard, nearest first. A park host lists its own
+    // members, then its kingdom, then everyone; a kingdom host its own players
+    // first. The kingdom's credits may cross into a kingdom that accepts
+    // outside credits, and the server refuses the rest with a message that
+    // says why. An Amtgard host searches everyone; the server still refuses a
+    // player whose kingdom has not adopted the credit.
     function searchUrl(term) {
         if (isOrk) return Cfg.uir + 'KingdomAjax/playersearch/0&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
-        var u = Cfg.uir + 'KingdomAjax/playersearch/' + Cfg.kingdomId + '&scope=own&include_inactive=1&q=' + encodeURIComponent(term);
-        if (Cfg.scopeType === 'park') u += '&park_id=' + Cfg.scopeId;
-        return u;
+        if (isKingdom) return Cfg.uir + 'KingdomAjax/playersearch/' + Cfg.kingdomId + '&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
+        return Cfg.uir + 'ParkAjax/park/' + Cfg.scopeId + '/playersearch&scope=all&prioritize=1&include_inactive=1&q=' + encodeURIComponent(term);
     }
     function acItems(list, withInactive) {
         return jQuery.map(list || [], function (v) {
@@ -619,13 +697,13 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                 renderOrkCredits();
                 renderCategories();
                 fillGrantPicker(current ? current.CategoryId : null);
-                feedback((adopt ? 'Adopted the “' : 'Withdrew the “') + rs.Name + '” category' + (adopt ? '. Its credits can now be granted to this kingdom\'s players.' : '. Credits already granted stay.'), true);
+                feedback((adopt ? 'Adopted the “' : 'Withdrew the “') + rs.Name + '” category' + (adopt ? '. Its credits can now be granted to this Kingdom\'s players.' : '. Credits already granted stay.'), true);
             }, 'json').fail(function () { btn.disabled = false; feedback('Request failed.', false); });
         };
         if (adopt) {
             go();
         } else {
-            confirmThen('Withdraw this category?', 'The “' + rs.Name + '” category will no longer be offered in this kingdom. Credits already granted stay. You can adopt it again later.', 'Withdraw', go);
+            confirmThen('Withdraw this category?', 'The “' + rs.Name + '” category will no longer be offered in this Kingdom. Credits already granted stay. You can adopt it again later.', 'Withdraw', go);
         }
     });
     gid('bc-show-archived').addEventListener('change', renderCategories);
@@ -701,7 +779,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
             // The park is where the granter plays, not where they may grant: that is the whole kingdom.
             html += '<li data-id="' + m.GranterId + '"><a href="' + Cfg.uir + 'Player/profile/' + m.MundaneId + '">' + esc(m.Persona) + '</a>' +
                     (m.Park ? '<span class="bc-muted" style="flex:0 0 auto">(' + esc(m.Park) + ')</span>' : '') +
-                    '<span class="bc-muted">can grant ' + scope + ' across the kingdom' + dormant + (m.AddedByPersona ? ' · added by ' + esc(m.AddedByPersona) : '') + '</span>' +
+                    '<span class="bc-muted">can grant ' + scope + ' across the Kingdom' + dormant + (m.AddedByPersona ? ' · added by ' + esc(m.AddedByPersona) : '') + '</span>' +
                     '<button type="button" class="bc-link bc-link-danger bc-granter-remove" data-id="' + m.GranterId + '" data-who="' + esc(m.Persona) + '" data-scope="' + scope + '">Remove</button></li>';
         });
         ul.innerHTML = html || '<li class="bc-empty">No granters yet. Kingdom officers can still grant credits.</li>';
@@ -732,14 +810,14 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
             granters = r.granters || [];
             renderGranters();
             gid('bc-granter-search').value = ''; gid('bc-granter-id').value = ''; scopeSel.value = '0';
-            feedback(who + ' can now grant ' + (rid === '0' ? 'this kingdom\'s credits.' : scopeText.replace(/ only$/, '') + '.'), true);
+            feedback(who + ' can now grant ' + (rid === '0' ? 'this Kingdom\'s credits.' : scopeText.replace(/ only$/, '') + '.'), true);
         }, 'json').fail(function () { btn.disabled = false; feedback('Request failed.', false); });
     });
     gid('bc-granter-list').addEventListener('click', function (e) {
         var btn = e.target.closest ? e.target.closest('.bc-granter-remove') : null;
         if (!btn) return;
         var rowId = btn.getAttribute('data-id'), who = btn.getAttribute('data-who') || 'this player', scope = btn.getAttribute('data-scope') || 'all categories';
-        confirmThen('Remove this granter?', who + ' will no longer be able to grant ' + scope + ' in this kingdom. Credits they already granted stay.', 'Remove', function () {
+        confirmThen('Remove this granter?', who + ' will no longer be able to grant ' + scope + ' in this Kingdom. Credits they already granted stay.', 'Remove', function () {
             btn.disabled = true;
             jQuery.post(base + 'granter_remove', { KingdomId: Cfg.kingdomId, GranterId: rowId }, function (r) {
                 if (!r || r.status !== 0) { btn.disabled = false; feedback((r && r.error) || 'Could not remove the granter.', false); return; }
@@ -748,6 +826,51 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
                 feedback('Removed ' + who + ' as a granter.', true);
             }, 'json').fail(function () { btn.disabled = false; feedback('Request failed.', false); });
         });
+    });
+
+    // ================= Settings tab (kingdom CREATE) =================
+    // One yes/no: may other kingdoms' bonus credits reach this kingdom's
+    // players? The Grant tab's hint reads the same answer.
+    function renderOutside() {
+        if (isOrk) return;
+        var name = Cfg.scopeName || 'this Kingdom';
+        var hint = gid('bc-outside-hint');
+        hint.hidden = false;
+        hint.innerHTML = 'Anyone you could sign in here can be given a credit here, whichever park or Kingdom is their home. Players of other Kingdoms can be searched too (type their Kingdom\'s abbreviation first to narrow, e.g. <code>NB: name</code>); ' +
+            (isKingdom ? 'only this Kingdom\'s own categories can go to them' : 'only your Kingdom\'s own categories can go to them') +
+            ', and only if their Kingdom accepts credits from other Kingdoms.';
+        if (!isKingdom || !canDefine || !outside) return;
+        var box = gid('bc-outside-toggle'), status = gid('bc-outside-status');
+        var on = !!outside.Effective;
+        box.checked = on;
+        box.disabled = false;
+        var who = (outside.UpdatedByPersona ? ' · set by ' + esc(outside.UpdatedByPersona) : '') + (outside.UpdatedAt ? ' ' + esc(String(outside.UpdatedAt).slice(0, 10)) : '');
+        var s = '';
+        if (outside.Source === 'default') {
+            s = 'On by default — no one has changed it yet.';
+        } else if (outside.Source === 'inherited') {
+            s = (on ? 'On' : 'Off') + ' · inherited from ' + esc(outside.InheritedFrom) + who + '. This principality has not chosen for itself; flipping the switch here makes its own choice.';
+        } else {
+            s = (on ? 'On' : 'Off') + who;
+        }
+        status.innerHTML = s;
+        gid('bc-outside-desc').innerHTML =
+            '<p><strong>What it does.</strong> Credits from other Kingdoms are accepted unless a Kingdom turns this off. While it is on, another Kingdom that offers a bonus credit can grant that credit to players whose home is in ' + esc(name) + '. ' +
+            'Their Kingdom officers, park officers or granters do the granting, from their own Kingdom or park pages; the credit counts toward the player\'s class levels exactly like one of ours. It is never attendance.</p>' +
+            '<p><strong>What it does not do.</strong> It does not let anyone here hand out other Kingdoms\' credits, and it does not change who can grant ours. Amtgard-wide credits are separate: those reach our players only when adopted on the Categories tab.</p>' +
+            '<p><strong>When it is off</strong>, only ' + esc(name) + '\'s own credits and the Amtgard-wide ones it has adopted can reach its players. Turning it off stops new grants from other Kingdoms; credits already given stay. A principality follows its parent Kingdom\'s choice until it makes its own here.</p>';
+    }
+    gid('bc-outside-toggle').addEventListener('change', function () {
+        var box = this, want = box.checked;
+        box.disabled = true;
+        jQuery.post(base + 'outside_set', { KingdomId: Cfg.kingdomId, Accept: want ? 1 : 0 }, function (r) {
+            box.disabled = false;
+            if (!r || r.status !== 0) { box.checked = !want; feedback((r && r.error) || 'Could not save the setting.', false); return; }
+            outside = r.outside || outside;
+            renderOutside();
+            feedback(want ? 'Other Kingdoms can now grant their bonus credits to ' + (Cfg.scopeName || 'this Kingdom') + '\'s players.'
+                          : 'Other Kingdoms can no longer grant bonus credits to ' + (Cfg.scopeName || 'this Kingdom') + '\'s players. Credits already given stay.', true);
+        }, 'json').fail(function () { box.disabled = false; box.checked = !want; feedback('Request failed.', false); });
     });
 })();
 </script>

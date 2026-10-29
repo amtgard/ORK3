@@ -40,6 +40,21 @@ function tnHeldRank(ranks, opt, baseAwardId) {
 }
 if (typeof window !== 'undefined') { window.tnHeldRank = tnHeldRank; }
 
+/* The top of a ladder is rank 10 (12 for Zodiac) and nothing above it can be
+   recommended or granted. When the player already holds that rank the rank
+   row cannot lead anywhere, so say so under it and point at the only way
+   forward: a different award. `verb` is 'recommend' or 'grant'. Returns true
+   when the note was shown, so callers can word their own messages to match. */
+function tnTopRankHint(hint, held, maxRank, verb) {
+    if (!hint || !(held >= maxRank)) return false;
+    hint.textContent = '\u2014 This player already holds rank ' + maxRank + ', the highest this award goes. Consider ' + (verb === 'grant' ? 'granting' : 'recommending') + ' a different award instead.';
+    return true;
+}
+function tnTopRankMessage(maxRank, verb) {
+    return 'This player already holds rank ' + maxRank + ', the highest this award goes. Please pick a different award to ' + (verb === 'grant' ? 'grant' : 'recommend') + '.';
+}
+if (typeof window !== 'undefined') { window.tnTopRankHint = tnTopRankHint; window.tnTopRankMessage = tnTopRankMessage; }
+
 /* Note the player's rank on the SAME ladder in another kingdom.
 
    Held ranks for kingdom-original ladders are keyed "k<kingdomaward_id>", so a
@@ -1079,7 +1094,8 @@ if (PnConfig.recError) {
             var held = pnRecHeldRankForSelected();
             var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
             if (held > 0 && chosen > 0 && chosen <= held) {
-                pnRecShowWarn('The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
+                var top = /zodiac/i.test(opt.textContent) ? 12 : 10;
+                pnRecShowWarn(held >= top ? tnTopRankMessage(top, 'recommend') : 'The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
             } else {
                 pnRecHideWarn();
             }
@@ -1112,7 +1128,8 @@ if (PnConfig.recError) {
             var held = pnRecHeldRankForSelected();
             var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
             if (held > 0 && chosen > 0 && chosen <= held) {
-                pnRecShowWarn('The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
+                var top = /zodiac/i.test(opt.textContent) ? 12 : 10;
+                pnRecShowWarn(held >= top ? tnTopRankMessage(top, 'recommend') : 'The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
                 return;
             }
         }
@@ -1153,6 +1170,7 @@ if (PnConfig.recError) {
         // Informational only: never changes the suggested rank above.
         tnSiblingLadderNote(wrap, pnAwardRanks, opt.value, 'pn-rec');
         wrap.dataset.rankHeld = held;
+        tnTopRankHint(hint, held, maxRank, 'recommend');
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('div');
             pill.className = 'pn-rank-pill';
@@ -2316,6 +2334,7 @@ if (PnConfig.recError) {
             }
             var pills = gid('pn-rank-pills');
             pills.dataset.rankHeld = held;
+            tnTopRankHint(hint, held, maxRank, 'grant');
             pills.innerHTML = html;
             selectRankPill(suggested, pills);
         }
@@ -3569,6 +3588,7 @@ $(document).ready(function() {
         tnSiblingLadderNote(wrap, knPlayerRanks, opt.value, 'kn-add');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
+        tnTopRankHint(hint, held, maxRank, 'grant');
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type      = 'button';
@@ -4382,6 +4402,7 @@ $(document).ready(function() {
         tnSiblingLadderNote(wrap, knRecRanks, opt.value, 'kn-rec');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
+        tnTopRankHint(hint, held, maxRank, 'recommend');
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type = 'button';
@@ -7688,6 +7709,7 @@ $(document).ready(function() {
         tnSiblingLadderNote(wrap, pkPlayerRanks, opt.value, 'pk-add');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
+        tnTopRankHint(hint, held, maxRank, 'grant');
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type      = 'button';
@@ -8213,6 +8235,7 @@ $(document).ready(function() {
         tnSiblingLadderNote(wrap, pkRecRanks, opt.value, 'pk-rec');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
+        tnTopRankHint(hint, held, maxRank, 'recommend');
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type = 'button';

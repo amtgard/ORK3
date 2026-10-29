@@ -49,6 +49,7 @@ $_actionLabels = [
 	'Unit::TransferOwnership'          => 'Unit Ownership Transferred',
 	'BonusCredit::grant'               => 'Bonus Credit Granted',
 	'BonusCredit::revoke'              => 'Bonus Credit Removed',
+	'BonusCredit::update'              => 'Bonus Credit Changed',
 	'BonusCredit::createCategory'      => 'Bonus Credit Category Defined',
 	'BonusCredit::archiveCategory'     => 'Bonus Credit Category Archived',
 	'BonusCredit::restoreCategory'     => 'Bonus Credit Category Restored',
@@ -56,6 +57,7 @@ $_actionLabels = [
 	'BonusCredit::removeGranter'       => 'Bonus Credit Granter Removed',
 	'BonusCredit::adopt'               => 'Bonus Credit Adopted',
 	'BonusCredit::withdraw'            => 'Bonus Credit Withdrawn',
+	'BonusCredit::setAcceptsOutside'   => 'Bonus Credits From Other Kingdoms',
 ];
 
 // ── JSON helpers (defined early — used in batch collector and render functions) ──
@@ -439,10 +441,19 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$_cls  = ($_c['ClassName'] ?? '') !== '' ? ' (' . $_cr . ' ' . htmlspecialchars($_c['ClassName']) . ($_cr === '1' ? ' credit' : ' credits') . ')' : '';
 			$_note = $method === 'BonusCredit::revoke' && ($_c['RevokeNote'] ?? '') !== '' ? ': "' . htmlspecialchars(mb_strimwidth($_c['RevokeNote'], 0, 60, '…')) . '"' : '';
 			return ($method === 'BonusCredit::grant' ? 'Granted ' : 'Removed ') . $_what . $_cls . $_note;
+		case 'BonusCredit::update':
+			// Amount or class changed: prior is the row before, post the row after.
+			$_fc = function ($c) { $_v = rtrim(rtrim(number_format((float)($c['Credits'] ?? 0), 2, '.', ''), '0'), '.'); return $_v . ' ' . htmlspecialchars($c['ClassName'] ?? ''); };
+			$_what = ($a['CategoryName'] ?? $b['CategoryName'] ?? '') !== '' ? '“' . htmlspecialchars($a['CategoryName'] ?? $b['CategoryName']) . '”' : 'bonus credit';
+			return 'Changed ' . $_what . ': ' . $_fc($b) . ' → ' . $_fc($a);
 		case 'BonusCredit::adopt':
 		case 'BonusCredit::withdraw':
 			$_n = ($a['CategoryName'] ?? $b['CategoryName'] ?? '') !== '' ? '“' . htmlspecialchars($a['CategoryName'] ?? $b['CategoryName']) . '”' : 'an Amtgard-wide credit';
 			return ($method === 'BonusCredit::adopt' ? 'Adopted ' : 'Withdrew ') . $_n . (!empty($p['as_ork_admin']) ? ' (as ORK admin)' : '');
+		case 'BonusCredit::setAcceptsOutside':
+			// The per-Kingdom yes/no: may other Kingdoms' bonus credits reach its players?
+			$_on = !empty($a['AcceptsOutside']);
+			return ($_on ? 'Turned ON' : 'Turned OFF') . ' accepting bonus credits from other Kingdoms' . (!empty($p['as_ork_admin']) ? ' (as ORK admin)' : '');
 		case 'BonusCredit::addGranter':
 		case 'BonusCredit::removeGranter':
 			$_m = $a ?: $b;
@@ -1305,6 +1316,23 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			$html .= '</tbody></table>';
 			return $html;
 
+		case 'BonusCredit::update':
+			if (empty($a) || empty($b)) return '<em style="color:#a0aec0">No detail available.</em>';
+			$_fmtCr = function ($v) { return rtrim(rtrim(number_format((float)$v, 2, '.', ''), '0'), '.'); };
+			$_clsChanged = (int)($a['ClassId'] ?? 0) !== (int)($b['ClassId'] ?? 0);
+			$_crChanged  = abs((float)($a['Credits'] ?? 0) - (float)($b['Credits'] ?? 0)) > 0.0001;
+			$html = '<table class="al-diff-table"><tbody>';
+			$html .= '<tr><td class="al-diff-field">Category</td><td colspan="2">' . htmlspecialchars($a['CategoryName'] ?? '') . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">' . _auditIdLink('player', (int)($a['MundaneId'] ?? 0), $mundaneMap + [(int)($a['MundaneId'] ?? 0) => $a['Persona'] ?? '']) . '</td></tr>';
+			$html .= '<tr' . ($_clsChanged ? ' class="al-diff-changed"' : '') . '><td class="al-diff-field">Class</td><td colspan="2">' . htmlspecialchars($b['ClassName'] ?? '') . ($_clsChanged ? ' → ' . htmlspecialchars($a['ClassName'] ?? '') : '') . '</td></tr>';
+			$html .= '<tr' . ($_crChanged ? ' class="al-diff-changed"' : '') . '><td class="al-diff-field">Credits</td><td colspan="2">' . htmlspecialchars($_fmtCr($b['Credits'] ?? 0)) . ($_crChanged ? ' → ' . htmlspecialchars($_fmtCr($a['Credits'] ?? 0)) : '') . '</td></tr>';
+			if (!empty($a['Date'])) $html .= '<tr><td class="al-diff-field">Date</td><td colspan="2">' . htmlspecialchars($a['Date']) . '</td></tr>';
+			if (!empty($a['GrantedBy'])) $html .= '<tr><td class="al-diff-field">Granted By</td><td colspan="2">' . _auditIdLink('player', (int)$a['GrantedBy'], $mundaneMap + [(int)$a['GrantedBy'] => $a['GrantedByPersona'] ?? '']) . '</td></tr>';
+			if (!empty($p['by_whom_id'])) $html .= '<tr><td class="al-diff-field">Changed By</td><td colspan="2">' . _auditIdLink('player', (int)$p['by_whom_id'], $mundaneMap) . '</td></tr>';
+			if (!empty($a['BonusCreditId'])) $html .= '<tr><td class="al-diff-field">Credit ID</td><td colspan="2">' . (int)$a['BonusCreditId'] . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
 		case 'BonusCredit::adopt':
 		case 'BonusCredit::withdraw':
 			$_n = (string)($a['CategoryName'] ?? $b['CategoryName'] ?? '');
@@ -1314,6 +1342,20 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			if (!empty($p['KingdomId'])) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', (int)$p['KingdomId'], $kingdomMap) . '</td></tr>';
 			$html .= '<tr class="al-diff-changed"><td class="al-diff-field">Status</td><td colspan="2">' . ($method === 'BonusCredit::adopt' ? 'Adopted — may now be granted to this kingdom\'s players' : 'Withdrawn — no longer offered here; credits already granted stay') . '</td></tr>';
 			$html .= '<tr><td class="al-diff-field">Acting As</td><td colspan="2">' . (!empty($p['as_ork_admin']) ? 'ORK admin, on the kingdom\'s behalf' : 'Kingdom officer') . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'BonusCredit::setAcceptsOutside':
+			$_was = !empty($b['AcceptsOutside']);
+			$_now = !empty($a['AcceptsOutside']);
+			$html = '<table class="al-diff-table"><tbody>';
+			$html .= '<tr><td class="al-diff-field">Setting</td><td colspan="2">Let this Kingdom\'s players receive bonus credits from other Kingdoms</td></tr>';
+			if (!empty($p['KingdomId'])) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', (int)$p['KingdomId'], $kingdomMap) . '</td></tr>';
+			$html .= '<tr class="al-diff-changed"><td class="al-diff-field">Changed</td><td colspan="2">' . ($_was ? 'On' : 'Off') . ' &rarr; <strong>' . ($_now ? 'On' : 'Off') . '</strong></td></tr>';
+			$html .= '<tr><td class="al-diff-field">Effect</td><td colspan="2">' . ($_now
+				? 'Other Kingdoms\' officers, park officers and granters may now grant their own Kingdom\'s bonus credits to this Kingdom\'s players. Amtgard-wide credits are unaffected (adoption governs those).'
+				: 'Other Kingdoms can no longer grant bonus credits to this Kingdom\'s players. Credits already given stay.') . '</td></tr>';
+			$html .= '<tr><td class="al-diff-field">Acting As</td><td colspan="2">' . (!empty($p['as_ork_admin']) ? 'ORK admin, on the Kingdom\'s behalf' : 'Kingdom officer') . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 
