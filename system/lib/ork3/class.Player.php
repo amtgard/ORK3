@@ -3917,6 +3917,14 @@ class Player extends Ork3
             return InvalidParameter();
         }
 
+        // "Where given" is required on every grant. A blank pair used to be written
+        // as at_park_id = 0 / at_kingdom_id = 0 -- printable and reportable by nobody
+        // but the recipient. This is the enforcement point; controllers only
+        // pre-check it for a friendlier message.
+        if (!valid_id($request['ParkId'] ?? 0) && !valid_id($request['KingdomId'] ?? 0)) {
+            return InvalidParameter('Where was this award given? Choose a location from the list.');
+        }
+
         if (valid_id($mundane_id)
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_CREATE)) {
             if (valid_id($request['ParkId'])) {

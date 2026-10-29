@@ -128,6 +128,16 @@ class Model_Court extends Model
         return $this->_court()->updateAward($court_award_id, $fields, $expectedRowVersion);
     }
 
+    public function get_court_award_makers($court_award_id)
+    {
+        return $this->_court()->getCourtAwardMakers($court_award_id);
+    }
+
+    public function apply_maker_tracking_rule($court_award_id, $type, $had_maker, $has_maker)
+    {
+        return $this->_court()->applyMakerTrackingRule((int)$court_award_id, (string)$type, (bool)$had_maker, (bool)$has_maker);
+    }
+
     public function remove_award($court_award_id)
     {
         return $this->_court()->removeAward($court_award_id);

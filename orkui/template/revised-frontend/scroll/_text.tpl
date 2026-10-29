@@ -49,7 +49,6 @@
  * guessed a size for a 37-character name and shrank to the floor.
  */
 $res         = $s['resources'];
-$ordinals    =['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth'];
 
 /*
  * `ordinalRank`, not `rank`. They are the same number for every grant up to the
@@ -64,19 +63,11 @@ $ordinals    =['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seve
 $rank        = (int) ($s['ordinalRank'] ?? $s['rank']);
 
 /*
- * Past the last named ordinal, print the NUMERAL rather than nothing. The old
- * `$ordinals[$rank] ?? ''` printed "with their " and stopped. This branch is live
- * now rather than defensive: ranks 13 and up exist in the data and reach here.
- * Rank 0 keeps its empty string on purpose: the ordinal is a hand-written blank
- * there, drawn as the writing-line image below.
+ * The printed word is Scroll::BuildScroll()'s `ordinalWord` (see Scroll::OrdinalWord()).
+ * The fallback covers arrays built without it (hand-built fixtures, older callers).
+ * $rank above also drives the rank-0 hand-write underline below.
  */
-$ordinalWord = $ordinals[$rank] ?? '';
-if ($ordinalWord === '' && $rank > 0) {
-    $mod100      = $rank % 100;
-    $ordinalWord = $rank . (($mod100 >= 11 && $mod100 <= 13)
-        ? 'th'
-        : ([1 => 'st', 2 => 'nd', 3 => 'rd'][$rank % 10] ?? 'th'));
-}
+$ordinalWord = (string) ($s['ordinalWord'] ?? Scroll::OrdinalWord($rank));
 
 // ${award.player.length}
 $playerLen   = mb_strlen((string) $s['player'], 'UTF-8');

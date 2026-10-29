@@ -703,29 +703,6 @@
 }
 
 /* --------------------------------------------------------------------------
-   1b. Chrome headings.
-
-   orkui.css gives every h1-h6 a grey pill box (background, border, padding,
-   radius, text-shadow), and repeats it under html[data-theme="dark"] with MORE
-   type selectors — so a plain class reset wins in light mode and loses in dark.
-   Both are reset here, at matching specificity.
-   -------------------------------------------------------------------------- */
-
-.adm-page-header h1,
-.sc-door h2,
-html[data-theme="dark"] .adm-page-header h1,
-html[data-theme="dark"] .sc-door h2 {
-    background: none;
-    background-color: transparent;
-    border: 0;
-    padding: 0;
-    border-radius: 0;
-    box-shadow: none;
-    text-shadow: none;
-    color: inherit;
-}
-
-/* --------------------------------------------------------------------------
    2. Layer stacking — from award-render.html
 
    Document order is z-order: every direct child of .award-template is an
@@ -2312,10 +2289,11 @@ section.SignAndDate {
     filter: brightness(1.12);
 }
 
-/* Phone widths: the module's own 640px break (Scrollery_bulk, Scrollery_mine). Three
-   buttons fit one row; they only need to be tappable. Below 420px the title gives way
-   and "Configure Scroll Options" says "Options" (its accessible name stays whole). */
-@media (max-width: 640px) {
+/* Phone widths: the house 600px break. Three buttons fit one row; they only need to
+   be tappable. Below 420px — measured: where the title and three buttons stop fitting
+   one row — the title gives way and "Configure Scroll Options" says "Options" (its
+   accessible name stays whole). */
+@media (max-width: 600px) {
     .sc-toolbar {
         gap: 8px;
         padding: 8px 12px;
@@ -2583,7 +2561,7 @@ section.SignAndDate {
 /* The bottom sheet. Full width, rounded on top, capped below the full height so the
    head of the certificate stays in view above it, scrolling inside, and padded clear
    of a home indicator (env() is 0 where there is none). */
-@media (max-width: 640px) {
+@media (max-width: 600px) {
     .sc-sheet-layer {
         align-items: flex-end;
         justify-content: stretch;

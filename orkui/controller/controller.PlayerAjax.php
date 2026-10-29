@@ -152,12 +152,8 @@ class Controller_PlayerAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Please enter the award date.']);
                 exit;
             }
-            // "Where given" is required, server-side, on every grant path. A blank pair
-            // used to be written as at_park_id = 0 / at_kingdom_id = 0 -- the state
-            // 120,284 existing rows (30.7% of ork_awards) are stuck in, printable and
-            // reportable by nobody but the recipient. The modal defaults the field and
-            // blocks its own submit, but a client that skipped that is refused here
-            // rather than silently writing the unattributed pair.
+            // "Where given" is required. Player::AddAward enforces it for every grant
+            // path; this pre-check only gives the modal a friendlier message.
             $at_park_id    = valid_id($_POST['ParkId']    ?? 0) ? (int)$_POST['ParkId'] : 0;
             $at_kingdom_id = valid_id($_POST['KingdomId'] ?? 0) ? (int)$_POST['KingdomId'] : 0;
             if ($at_park_id <= 0 && $at_kingdom_id <= 0) {

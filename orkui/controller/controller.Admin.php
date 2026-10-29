@@ -1108,14 +1108,10 @@ class Controller_Admin extends Controller
                             $this->reject_award_grant('Who gave this award? Award not added!');
                             break;
                         }
-                        // "Where given" is required, server-side, on every grant path.
-                        // A blank pair used to be written as at_park_id = 0 /
-                        // at_kingdom_id = 0 -- the state 120,284 existing rows (30.7% of
-                        // ork_awards) are stuck in, printable and reportable by nobody
-                        // but the recipient. This is the endpoint the kingdom and park
-                        // Enter Awards modals post to (knDoSave / pkDoSave), and they
-                        // block their own submit on the same rule; a client that skipped
-                        // that is refused here rather than writing the unattributed pair.
+                        // "Where given" is required. Player::AddAward enforces it for
+                        // every grant path; this pre-check only gives the kingdom and
+                        // park Enter Awards modals (knDoSave / pkDoSave) a friendlier
+                        // message.
                         if (!valid_id($this->request->Admin_player->ParkId)
                             && !valid_id($this->request->Admin_player->KingdomId)) {
                             $this->reject_award_grant('Where was this award given? Choose a location from the list. Award not added!');
@@ -2599,7 +2595,8 @@ class Controller_Admin extends Controller
 
     private function admin_can_print_scrolls(int $uid, string $authType, int $scopeId): bool
     {
-        return $uid > 0 && $this->Authorization->has_authority($uid, $authType, $scopeId, AUTH_EDIT);
+        $this->load_model('Scrollery');
+        return $this->Scrollery->may_issue_for($uid, $authType === AUTH_KINGDOM ? 'kingdom' : 'park', $scopeId);
     }
 
     /**

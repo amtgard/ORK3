@@ -229,17 +229,6 @@
 <?php if (strlen($Message) > 0) : ?>
 	<div class='success-message'><?=$Message ?></div>
 <?php endif; ?>	
-<?php
-	/* "Where given" is one decision, not three: the saved request wins as a whole, or
-	   the officer's own scope does as a whole (Controller_Award::default_given_at_scope()).
-	   Resolving the name and the ids separately let the box read "The Celestial Kingdom"
-	   while still submitting a park id left over from the last grant. */
-	$_savedScope     = (valid_id($Award_addawards['ParkId']) || valid_id($Award_addawards['KingdomId']))
-	                   && strlen(trim((string)$Award_addawards['GivenAt'])) > 0;
-	$_scopeParkId    = $_savedScope ? (int)$Award_addawards['ParkId']    : (int)($DefaultScope['ParkId'] ?? 0);
-	$_scopeKingdomId = $_savedScope ? (int)$Award_addawards['KingdomId'] : (int)($DefaultScope['KingdomId'] ?? 0);
-	$_scopeName      = $_savedScope ? (string)$Award_addawards['GivenAt'] : (string)($DefaultScope['Name'] ?? '');
-?>
 	<form class='form-container' method='post' action='<?=UIR ?>Award/<?=$Call ?>/<?=$Id ?>/addaward'>
 		<div id='AwardType'>
 			<span>Type:</span>
@@ -276,7 +265,7 @@
 		</div>
 		<div>
 			<span>Given At:</span>
-			<span><input type='text' value='<?=htmlspecialchars($_scopeName, ENT_QUOTES) ?>' name='GivenAt' id='GivenAt' /></span>
+			<span><input type='text' value='<?=htmlspecialchars($GivenAtScope['Name'], ENT_QUOTES) ?>' name='GivenAt' id='GivenAt' /></span>
 		</div>
 		<div>
 			<span>Given For:</span>
@@ -292,8 +281,8 @@
 		         blank when they hold neither) -- Controller_Award::default_given_at_scope().
 		         checkRequiredFields() above refuses the submit while it is still blank, and
 		         Controller_Award::is_request_valid() refuses it again server-side. */ ?>
-		<input type='hidden' id='ParkId' name='ParkId' value='<?=$_scopeParkId ?>' />
-		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=$_scopeKingdomId ?>' />
+		<input type='hidden' id='ParkId' name='ParkId' value='<?=$GivenAtScope['ParkId'] ?>' />
+		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=$GivenAtScope['KingdomId'] ?>' />
 		<input type='hidden' id='EventId' name='EventId' value='<?=$Award_addawards['EventId'] ?>' />
 	</form>
 </div>

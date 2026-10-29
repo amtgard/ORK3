@@ -8,14 +8,14 @@
  * more than 25 and 1,045 more than 60. It used to arrive as one unsorted,
  * unfiltered, unpaginated table with a Print button per row.
  *
- * So the page now carries a text filter, a sort, a checkbox per row with one
+ * So the page now carries a DataTables filter, sort and paging, a checkbox per row with one
  * "Print selected", a Design column (the order's own artwork, or the composed
  * scroll) and — the thing that was silently missing — a VARIANT control for the
  * two orders that ship more than one plate. Scrollery/render has always read
  * &variant=; nothing on this page ever set it, so an Owl reprint could only ever
  * reach the first of its three.
  *
- * Filtering, sorting and revealing all happen in the browser over the whole set.
+ * Filtering, sorting and paging all happen in the browser over the whole set.
  * The rows are already in memory and already authorised; putting any of that
  * behind a round trip would make the page slower and no more correct.
  */
@@ -49,27 +49,18 @@ $displayTitle = static function (array $a): string {
     return $t !== '' ? $t : 'Unnamed award';
 };
 
-/* One row's search haystack. Everything the eye can read in the row goes in, so a
-   filter box that looks like a search box behaves like one. */
-$haystack = static function (array $a) use ($displayTitle): string {
-    return strtolower(trim(implode(' ', [
-        $displayTitle($a),
-        (string) ($a['GivenBy'] ?? ''),
-        (string) ($a['IssuerTitle'] ?? ''),
-        (string) ($a['IssuerName'] ?? ''),
-        (string) ($a['PrettyDate'] ?? ''),
-        (int) ($a['Rank'] ?? 0) > 0 ? 'rank ' . (int) $a['Rank'] : '',
-        !empty($a['HasOrderArt']) ? 'order artwork' : 'composed scroll',
-    ])));
-};
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/reports.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-list.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-list.css') ?>">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
 <style>
 .sc-wrap        { max-width: 1100px; margin: 0 auto 60px; }
 /* .rp-context supplies surface, border, size and colour. */
-.sc-lede        { margin-bottom: 14px; border-radius: 0 0 8px 8px; }
+/* .rp-context is a flex row (icon + text); this one holds three paragraphs, which
+   stack — the p margins below are the spacing. */
+.sc-lede        { margin-bottom: 14px; border-radius: 0 0 8px 8px; flex-direction: column; gap: 0; }
 .sc-lede p      { margin: 0 0 8px; text-align: left; }
 .sc-lede p:last-child { margin-bottom: 0; }
 .sc-order       { font-weight: 600; color: var(--rp-text); }
@@ -81,26 +72,15 @@ $haystack = static function (array $a) use ($displayTitle): string {
    flex row keeps the gap honest once the phone breakpoint left-aligns. */
 .sc-actions     { text-align: right; white-space: nowrap; }
 .sc-actions .adm-btn + .adm-btn { margin-left: 6px; }
-.sc-empty       { padding: 34px 18px; text-align: center; color: var(--rp-text-muted); }
 .sc-credit      { margin-top: 22px; font-size: 11px; color: var(--rp-text-muted); line-height: 1.6;
                   text-align: left; }
-.sc-table       { width: 100%; border-collapse: collapse; font-size: 13px; }
-.sc-table th    { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
-                  color: var(--rp-text-muted); padding: 8px 12px; border-bottom: 1px solid var(--rp-border); }
-.sc-table td    { padding: 9px 12px; border-bottom: 1px solid var(--rp-border); vertical-align: top; }
-.sc-table tr:last-child td { border-bottom: 0; }
-.sc-check       { width: 34px; text-align: center; }
-
-/* The toolbar above the table: filter, sort, and how much of the list is showing. */
+/* The toolbar above the table: the hand and the reason lines every link carries.
+   Filter, sort and paging are DataTables' own. */
 .sc-tools       { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;
                   margin-bottom: 12px; }
 .sc-tool        { display: flex; flex-direction: column; gap: 4px; }
 .sc-tool label  { font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
                   color: var(--rp-text-muted); font-weight: 700; }
-.sc-tool-grow   { flex: 1 1 220px; min-width: 180px; }
-.sc-tool-grow .adm-input { width: 100%; }
-.sc-showing     { color: var(--rp-text-muted); font-size: 12px; margin-left: auto;
-                  padding-bottom: 8px; }
 
 /* The design cell. Deliberately typographic rather than a coloured pill: it is a
    statement of fact about the certificate, not a status that needs an alarm. */
@@ -108,42 +88,18 @@ $haystack = static function (array $a) use ($displayTitle): string {
 .sc-design i    { margin-right: 4px; opacity: .75; }
 .sc-variant     { font-size: 12px; padding: 3px 6px; max-width: 150px; }
 
-.sc-bar         { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px;
-                  padding-top: 12px; border-top: 1px solid var(--rp-border); }
-.sc-count       { color: var(--rp-text-muted); font-size: 12px; }
-/* The batch links only exist once a run needs more than one tab; an empty bar would
-   otherwise draw its own top rule across the page. */
-.sc-batches:empty { display: none; }
-/* `.adm-btn { display: inline-flex }` (revised.css:6566) is an AUTHOR rule, and an
-   author rule beats the UA's own `[hidden] { display: none }` — so `hidden` on a
-   .adm-btn does nothing at all and the "Show more" button stayed on screen after the
-   last row was revealed. Measured, not guessed: computed display was inline-flex with
-   the attribute set. Restated at 0,3,0 so it wins locally.
-   This belongs in revised.css as a bare `.adm-btn[hidden] { display: none }`, beside
-   the rule that causes it — reported rather than written, since that sheet is another
-   workstream's this round. Every .adm-btn in the CRM has the same latent bug. */
-.sc-bar .adm-btn[hidden] { display: none; }
-.sc-warn        { color: #c05621; font-weight: 600; }
-.sc-hint        { font-size: 11px; line-height: 1.5; color: var(--rp-text-muted);
-                  margin: 12px 0 0; text-align: left; }
-.sc-none        { padding: 26px 12px; text-align: center; color: var(--rp-text-muted); }
-
 html[data-theme="dark"] .sc-order { color: var(--ork-text); }
 /* The unnamed row carries BOTH classes, and the dark override above is 0,2,0 against
    .sc-unnamed's 0,1,0 — so in dark mode the muted italic came back at full text
    colour and stopped reading as a gap. Confirmed by computed style, not by eye. */
 html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
-html[data-theme="dark"] .sc-table th,
-html[data-theme="dark"] .sc-table td { border-bottom-color: #4a5568; }
-html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
-/* The table needs a stacked-card mode on a phone; the shell has no opinion here. */
-@media (max-width: 640px) {
-    .sc-table thead { display: none; }
-    .sc-table tr    { display: block; border-bottom: 1px solid var(--rp-border); padding: 10px 0; }
-    .sc-table td    { display: block; border: 0; padding: 2px 12px; }
-    .sc-table td.sc-check { display: inline-block; width: auto; }
+/* The stacked-card mode itself is in scrollery-list.css. reports.css's
+   `.rp-table-area table.dataTable tbody td` (0,2,3) restates padding and a bottom
+   rule on every cell, which would rule each stacked line; matched here so the card
+   stays one card. */
+@media (max-width: 600px) {
+    .rp-table-area table.dataTable.sc-table tbody td { border: 0; padding: 2px 10px; }
     .sc-actions     { text-align: left; padding-top: 8px !important; }
-    .sc-showing     { margin-left: 0; }
 }
 </style>
 
@@ -210,20 +166,6 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
             </div>
         <?php else: ?>
             <div class="sc-tools">
-                <div class="sc-tool sc-tool-grow">
-                    <label for="sc-filter">Filter</label>
-                    <input type="search" id="sc-filter" class="adm-input" autocomplete="off"
-                           placeholder="Order, year, who gave it">
-                </div>
-                <div class="sc-tool">
-                    <label for="sc-sort">Sort</label>
-                    <select id="sc-sort" class="adm-select">
-                        <option value="date-desc">Date — newest first</option>
-                        <option value="date-asc">Date — oldest first</option>
-                        <option value="order-asc">Order — A to Z</option>
-                        <option value="order-desc">Order — Z to A</option>
-                    </select>
-                </div>
                 <?php /* The hand. Here rather than only on the print page because this is
                          the list an officer works through, and the choice has to be made
                          BEFORE the links are followed — every View and Print href below is
@@ -244,18 +186,15 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
                     <label class="sc-check" for="sc-lines">Reason lines</label>
                     <input type="checkbox" id="sc-lines" checked>
                 </div>
-                <?php /* role="status", not "alert": it changes on every keystroke and an
-                         assertive region would interrupt the typing that caused it. */ ?>
-                <span class="sc-showing" id="sc-showing" role="status"></span>
             </div>
 
-            <table class="sc-table">
+            <table class="sc-table" id="sc-table">
                 <thead>
                     <tr>
                         <?php /* Unchecked. "Print all of them" is not a safe default for
                                  an action that commits card stock, and one player here
                                  can hold 278. */ ?>
-                        <th class="sc-check"><input type="checkbox" id="sc-all" aria-label="Select all shown"></th>
+                        <th class="sc-check"><input type="checkbox" id="sc-all" aria-label="Select all matching"></th>
                         <th>Order</th>
                         <th>Rank</th>
                         <th>Awarded</th>
@@ -266,7 +205,7 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
                     </tr>
                 </thead>
                 <tbody id="sc-rows">
-                <?php foreach ($awards as $i => $a): ?>
+                <?php foreach ($awards as $a): ?>
                     <?php
                     $awardsId = (int) $a['AwardsId'];
                     $revoked  = (int) ($a['Revoked'] ?? 0) === 1;
@@ -275,20 +214,22 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
                     $named    = trim((string) ($a['Title'] ?? '')) !== '';
                     $label    = $displayTitle($a);
                     ?>
-                    <tr data-sc-row
-                        data-id="<?= $awardsId ?>"
-                        data-date="<?= htmlspecialchars((string) ($a['Date'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                        data-order="<?= htmlspecialchars(strtolower($label), ENT_QUOTES, 'UTF-8') ?>"
-                        data-unnamed="<?= $named ? '0' : '1' ?>"
-                        data-seq="<?= (int) $i ?>"
-                        data-text="<?= htmlspecialchars($haystack($a), ENT_QUOTES, 'UTF-8') ?>">
+                    <tr data-sc-row data-id="<?= $awardsId ?>">
                         <td class="sc-check">
                             <?php if (!$revoked): ?>
                                 <input type="checkbox" class="sc-pick" value="<?= $awardsId ?>"
                                        aria-label="Print <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>">
                             <?php endif; ?>
                         </td>
-                        <td>
+                        <?php /* data-order is DataTables' sort key. An award the record
+                                 holds no name for has no place in an alphabet, so its key
+                                 sorts after every name in A-to-Z. Dates are ISO from the
+                                 database, so the raw value sorts as a date. */ ?>
+                        <?php /* data-search keeps the filter on readable text: the
+                                 string-typed column would otherwise search its markup,
+                                 so "order" or "where" matched every row. */ ?>
+                        <td data-order="<?= htmlspecialchars(($named ? '' : '~') . strtolower($label), ENT_QUOTES, 'UTF-8') ?>"
+                            data-search="<?= htmlspecialchars(trim($label . ' ' . trim(($a['IssuerTitle'] ?? '') . ' ' . ($a['IssuerName'] ?? ''))), ENT_QUOTES, 'UTF-8') ?>">
                             <div class="sc-order<?= $named ? '' : ' sc-unnamed' ?>">
                                 <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>
                             </div>
@@ -304,8 +245,8 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
                                 </div>
                             <?php endif; ?>
                         </td>
-                        <td><?= (int) $a['Rank'] > 0 ? (int) $a['Rank'] : '&mdash;' ?></td>
-                        <td><?= htmlspecialchars((string) ($a['PrettyDate'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                        <td data-order="<?= (int) $a['Rank'] ?>"><?= (int) $a['Rank'] > 0 ? (int) $a['Rank'] : '&mdash;' ?></td>
+                        <td data-order="<?= htmlspecialchars((string) ($a['Date'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) ($a['PrettyDate'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                         <td><?= htmlspecialchars((string) ($a['GivenBy'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                         <?php /* The two things this module prints, named apart. An order's
                                  own plates are fixed art; the composed scroll is a ground,
@@ -371,15 +312,12 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
                 </tbody>
             </table>
 
-            <div class="sc-none" id="sc-nomatch" hidden>Nothing on your record matches that filter.</div>
-
             <div class="sc-bar">
                 <button type="button" class="adm-btn adm-btn-primary" id="sc-print-bulk" disabled>
                     <i class="fa-solid fa-print"></i> <span id="sc-print-label">Print selected</span>
                 </button>
-                <button type="button" class="adm-btn adm-btn-ghost" id="sc-select-all">Select all shown</button>
+                <button type="button" class="adm-btn adm-btn-ghost" id="sc-select-all">Select all matching</button>
                 <button type="button" class="adm-btn adm-btn-ghost" id="sc-select-none">Select none</button>
-                <button type="button" class="adm-btn adm-btn-ghost" id="sc-more" hidden></button>
                 <?php /* role="alert" because past the print cap it is the ONLY feedback the
                          button gives — it otherwise appears to do nothing at all. */ ?>
                 <span class="sc-count" id="sc-selected-count" role="alert"></span>
@@ -420,6 +358,7 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
 <template id="sc-face-fonts"><style><?= Scroll::HandSpecimenStyles(HTTP_TEMPLATE . 'revised-frontend/style/fonts/') ?></style></template>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-hand.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-hand.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/revised.js') ?>"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
 (function () {
     'use strict';
@@ -432,31 +371,22 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
         CHUNK    = <?= $chunk ?>,
         // Above this many pages, "Print" stops being a click and starts being a
         // decision about a stack of card stock, so it asks first.
-        CONFIRM_OVER = 20,
-        // How many rows are revealed at a time. The full list is in the DOM and every
-        // filter and sort runs over ALL of it — this only caps what is painted, which
-        // is what a 278-row record needs and a 3-row one never notices.
-        PAGE     = 50;
+        CONFIRM_OVER = 20;
 
     var tbody   = document.getElementById('sc-rows'),
-        filter  = document.getElementById('sc-filter'),
-        sortEl  = document.getElementById('sc-sort'),
-        showing = document.getElementById('sc-showing'),
-        noMatch = document.getElementById('sc-nomatch'),
         all     = document.getElementById('sc-all'),
         btn     = document.getElementById('sc-print-bulk'),
         label   = document.getElementById('sc-print-label'),
         selAll  = document.getElementById('sc-select-all'),
         selNone = document.getElementById('sc-select-none'),
-        more    = document.getElementById('sc-more'),
         batchBar = document.getElementById('sc-batches'),
         count   = document.getElementById('sc-selected-count');
 
     if (!tbody || !btn) { return; }
 
-    var rows    = Array.prototype.slice.call(tbody.querySelectorAll('[data-sc-row]')),
-        limit   = PAGE,
-        matched = rows.slice();
+    // Captured before DataTables pages the table: it detaches the rows that are not
+    // on the current page, and every row still needs its links kept in step.
+    var rows    = Array.prototype.slice.call(tbody.querySelectorAll('[data-sc-row]'));
 
     function plural(n) { return n === 1 ? 'certificate' : 'certificates'; }
 
@@ -538,78 +468,55 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
         rows.forEach(syncRowLinks);
     }());
 
-    /* ---- filter, sort, reveal ------------------------------------------ */
+    /* ---- filter, sort, paging: DataTables ------------------------------ */
 
-    function compare(a, b) {
-        var mode = sortEl ? sortEl.value : 'date-desc';
-        if (mode === 'order-asc' || mode === 'order-desc') {
-            // An award the record holds no name for has no place in an alphabet, so
-            // it goes to the END whichever way the sort runs, rather than heading the
-            // A-to-Z list because '' sorts before everything.
-            if (a.dataset.unnamed !== b.dataset.unnamed) {
-                return a.dataset.unnamed === '1' ? 1 : -1;
+    /* Only the table's filter/sort/paging needs the CDN. If it did not load, the
+       variant links, the hand and Print selected still work over the plain rows. */
+    var hasDT   = !!(window.jQuery && jQuery.fn.DataTable),
+        lastCol = hasDT ? jQuery('#sc-table thead th').length - 1 : 0,
+        table   = !hasDT ? null : jQuery('#sc-table').DataTable({
+            dom: 'lfrtip',
+            autoWidth: false,
+            pageLength: 50,
+            // Newest first, as the record is read.
+            order: [[3, 'desc']],
+            // Order, Rank, Awarded and Given by sort; the checkbox, the design, the
+            // version picker and the actions do not.
+            columnDefs: [{ targets: [0, 5, lastCol].concat(<?= $hasVariants ? '[6]' : '[]' ?>), orderable: false }],
+            language: {
+                search: 'Filter:',
+                searchPlaceholder: 'Order, year, who gave it',
+                zeroRecords: 'Nothing on your record matches that filter.'
             }
-            var c = a.dataset.order.localeCompare(b.dataset.order);
-            // Ties fall back to the server's own order, so a re-sort is stable and
-            // rows do not shuffle under the reader between two identical keys.
-            if (c === 0) { return (+a.dataset.seq) - (+b.dataset.seq); }
-            return mode === 'order-asc' ? c : -c;
-        }
-        // Dates are ISO from the database, so a string compare IS a date compare, and
-        // the ORK's '0000-00-00' rows sort to the far end either way rather than
-        // becoming NaN.
-        var d = a.dataset.date < b.dataset.date ? -1 : (a.dataset.date > b.dataset.date ? 1 : 0);
-        if (d === 0) { return (+a.dataset.seq) - (+b.dataset.seq); }
-        return mode === 'date-asc' ? d : -d;
-    }
-
-    function apply() {
-        var term = (filter ? filter.value : '').trim().toLowerCase();
-
-        matched = rows.filter(function (r) {
-            return term === '' || r.dataset.text.indexOf(term) !== -1;
         });
-        matched.sort(compare);
 
-        // One reflow: detach nothing, just re-append in the new order. Appending an
-        // element already in the DOM moves it, so this is a reorder rather than a
-        // rebuild and every checkbox keeps its state.
-        matched.forEach(function (r) { tbody.appendChild(r); });
-
-        rows.forEach(function (r) { r.hidden = true; });
-        matched.slice(0, limit).forEach(function (r) { r.hidden = false; });
-
-        var shownCount = Math.min(limit, matched.length);
-        if (showing) {
-            showing.textContent = matched.length === rows.length
-                ? 'Showing ' + shownCount + ' of ' + rows.length
-                : 'Showing ' + shownCount + ' of ' + matched.length + ' matching (' + rows.length + ' in all)';
-        }
-        if (noMatch) { noMatch.hidden = matched.length !== 0; }
-        if (more) {
-            var rest = matched.length - shownCount;
-            more.hidden = rest <= 0;
-            more.textContent = 'Show ' + Math.min(PAGE, rest) + ' more';
-        }
-
-        // A hidden row's checkbox is still checked, and printing it would be a
-        // surprise. Clear the ones the filter just took away.
-        rows.forEach(function (r) {
-            if (!r.hidden) { return; }
-            var box = r.querySelector('.sc-pick');
-            if (box) { box.checked = false; }
-        });
-        sync();
-    }
-
+    /* Every row the filter keeps, across all pages, in the table's current order.
+       "Select all matching" and shift-click work over this, so a selection never
+       reaches through a filtered-out row. Without DataTables, every row matches. */
     function visibleBoxes() {
-        return matched.slice(0, limit).map(function (r) {
+        if (!table) {
+            return rows.map(function (r) { return r.querySelector('.sc-pick'); }).filter(Boolean);
+        }
+        return table.rows({ search: 'applied', order: 'applied' }).nodes().toArray().map(function (r) {
             return r.querySelector('.sc-pick');
         }).filter(Boolean);
     }
 
     function picks() {
         return visibleBoxes().filter(function (c) { return c.checked; });
+    }
+
+    // A filtered-out row's checkbox is still checked, and printing it would be a
+    // surprise. Clear the ones the filter just took away.
+    if (table) {
+        table.on('search.dt', function () {
+            var kept = visibleBoxes();
+            rows.forEach(function (r) {
+                var box = r.querySelector('.sc-pick');
+                if (box && box.checked && kept.indexOf(box) === -1) { box.checked = false; }
+            });
+            sync();
+        });
     }
 
     function sync() {
@@ -620,7 +527,7 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
         if (label) { label.textContent = n === 0 ? 'Print selected' : 'Print ' + n + ' ' + plural(n); }
         count.textContent = n > MAX_RUN
             ? n + ' selected — ' + MAX_RUN + ' max per print run'
-            : (n === 0 ? '' : n + ' of ' + boxes.length + ' shown selected');
+            : (n === 0 ? '' : n + ' of ' + boxes.length + ' matching selected');
         count.classList.toggle('sc-warn', n > MAX_RUN);
         btn.disabled = n === 0;
         if (all) {
@@ -634,11 +541,6 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
         sync();
     }
 
-    if (filter) {
-        filter.addEventListener('input', function () { limit = PAGE; apply(); });
-    }
-    if (sortEl) { sortEl.addEventListener('change', apply); }
-    if (more)   { more.addEventListener('click', function () { limit += PAGE; apply(); }); }
     if (all)     { all.addEventListener('change', function () { setAll(all.checked); }); }
     if (selAll)  { selAll.addEventListener('click',  function () { setAll(true); }); }
     if (selNone) { selNone.addEventListener('click', function () { setAll(false); }); }
@@ -770,7 +672,7 @@ html[data-theme="dark"] .sc-warn  { color: #f6ad55; }
     });
 
     rows.forEach(syncRowLinks);
-    apply();
+    sync();
 }());
 </script>
 <?php endif; ?>

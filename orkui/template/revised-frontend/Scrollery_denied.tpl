@@ -15,10 +15,9 @@
  * The page wears the shared .rp-* tool-page shell from default/style/reports.css,
  * like its three siblings. It used to be the only page in the module that did not —
  * a bare .adm-wrap whose <h1> therefore picked up the orkui.css global h1..h6 grey
- * pill box in BOTH themes, because the .adm-page-header h1 reset lives in
- * scrollery.css and this page never loaded it. .rp-header-title carries its own
- * reset in reports.css, in both the light and the dark block, so the shell fixes the
- * heading as a side effect of being the right shell.
+ * pill box in BOTH themes, because nothing on the page reset it. .rp-header-title
+ * carries its own reset in reports.css, in both the light and the dark block, so the
+ * shell fixes the heading as a side effect of being the right shell.
  */
 $error     = trim((string) ($Error ?? ''));
 $nextUrl   = (string) ($NextUrl ?? 'Scrollery');
@@ -30,19 +29,11 @@ if ($error === '') {
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/reports.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-list.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-list.css') ?>">
 <style>
 .sc-wrap      { max-width: 720px; margin: 0 auto 60px; }
-/* reports.css carries no alert primitive; this is the one tone this page needs, and
-   it is the same shape Scrollery_bulk.tpl uses so the module reads as one module. */
-.sc-alert     { border: 1px solid var(--rp-border); border-left: 4px solid #c53030;
-                background: var(--rp-bg-light); border-radius: 6px; padding: 12px 16px;
-                font-size: 13px; line-height: 1.6; color: var(--rp-text-body);
-                text-align: left; }
+/* .sc-alert / .sc-alert-error come from scrollery-list.css, shared with Bulk. */
 .sc-next      { margin-top: 18px; text-align: left; }
-/* The dark border-left has to be restated: the shorthand below would otherwise reset
-   all four sides and the alert would lose the red edge that makes it an alert. */
-html[data-theme="dark"] .sc-alert { background: #2d3748; border-color: #4a5568;
-                                    border-left-color: #fc8181; color: #e2e8f0; }
 </style>
 
 <div class="rp-root sc-wrap">
@@ -62,7 +53,7 @@ html[data-theme="dark"] .sc-alert { background: #2d3748; border-color: #4a5568;
 
     <div class="rp-body">
         <div class="rp-table-area">
-            <div class="sc-alert" role="alert">
+            <div class="sc-alert sc-alert-error" role="alert">
                 <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
             </div>
             <p class="sc-next">

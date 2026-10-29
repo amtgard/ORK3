@@ -49,6 +49,7 @@ $pageQuery = static function (string $cursor) use ($base, $EventId, $From, $To):
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/reports.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-list.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-list.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/scrollery-hand.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/scrollery-hand.css') ?>">
 <style>
 .sc-wrap     { max-width: 1300px; margin: 0 auto 60px; }
@@ -58,21 +59,6 @@ $pageQuery = static function (string $cursor) use ($base, $EventId, $From, $To):
                color: var(--rp-text-muted); font-weight: 700; margin-bottom: 4px; }
 .sc-f-row    { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .sc-submit   { display: flex; gap: 8px; margin-top: 14px; }
-
-.sc-table    { width: 100%; border-collapse: collapse; font-size: 13px; }
-.sc-table th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
-               color: var(--rp-text-muted); padding: 8px 10px; border-bottom: 2px solid var(--rp-border); }
-.sc-table td { padding: 8px 10px; border-bottom: 1px solid var(--rp-border); }
-.sc-table tr:last-child td { border-bottom: 0; }
-.sc-check    { width: 34px; text-align: center; }
-.sc-bar      { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px;
-               padding-top: 12px; border-top: 1px solid var(--rp-border); }
-.sc-count    { color: var(--rp-text-muted); font-size: 12px; }
-/* The batch links only exist once a run needs more than one tab; an empty bar would
-   otherwise draw its own top rule across the page. */
-.sc-batches:empty { display: none; }
-.sc-empty    { padding: 30px 16px; text-align: center; color: var(--rp-text-muted); }
-.sc-warn     { color: #c05621; font-weight: 600; }
 
 /* The recipient's standing, in the SAME chip the composer's own player
    autocomplete draws (scrollery.js render(), and revised.js's canonical kn-ac
@@ -84,7 +70,7 @@ $pageQuery = static function (string $cursor) use ($base, $EventId, $From, $To):
    MEASURED, not assumed. "suspended" carries its own ground, so white on #c53030 is
    5.47:1 in either theme and needs nothing. "inactive" is bare text on the table, and
    #e53e3e falls to 3.96:1 against the dark body — so it gets the dark lift every other
-   red on this page already has (.sc-warn does the same two lines below). #fc8181 is
+   red on this page already has (.sc-warn does the same in scrollery-list.css). #fc8181 is
    6.68:1 there, and is the tone revised.css already uses for dark-mode red text.
 
    Left alone in LIGHT mode on purpose, at the autocomplete's own #e53e3e — which is
@@ -97,32 +83,11 @@ $pageQuery = static function (string $cursor) use ($base, $EventId, $From, $To):
                      font-weight: 600; padding: 1px 5px; border-radius: 3px; }
 .sc-chip-inactive  { margin-left: 6px; color: #e53e3e; font-size: 10px; font-weight: 600; }
 
-/* reports.css carries no alert; these are the two tones this page needs. */
-.sc-alert    { border: 1px solid var(--rp-border); border-left: 4px solid var(--rp-accent);
-               background: var(--rp-bg-light); border-radius: 6px; padding: 10px 14px;
-               font-size: 12.5px; line-height: 1.55; color: var(--rp-text-body);
-               margin-bottom: 12px; text-align: left; }
-.sc-alert-error { border-left-color: #c53030; }
-
-.sc-hint     { font-size: 11px; line-height: 1.5; color: var(--rp-text-muted);
-               margin: 12px 0 0; text-align: left; }
-
-html[data-theme="dark"] .sc-table th,
-html[data-theme="dark"] .sc-table td { border-bottom-color: #4a5568; }
-html[data-theme="dark"] .sc-alert    { background: #2d3748; border-color: #4a5568; color: #e2e8f0; }
-html[data-theme="dark"] .sc-warn     { color: #f6ad55; }
 html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
 
 @media (max-width: 1000px) {
     .rp-body { flex-direction: column; }
     .rp-sidebar, .rp-sidebar-wide { width: 100%; }
-}
-/* Stacked-card mode on a phone — the shell has no opinion about this table. */
-@media (max-width: 640px) {
-    .sc-table thead { display: none; }
-    .sc-table tr    { display: block; border-bottom: 1px solid var(--rp-border); padding: 8px 0; }
-    .sc-table td    { display: block; border: 0; padding: 2px 10px; }
-    .sc-table td.sc-check { display: inline-block; width: auto; }
 }
 </style>
 

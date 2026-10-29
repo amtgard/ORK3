@@ -293,18 +293,7 @@ class Controller_Scrollery extends Controller
     /** The same gate Controller_Award uses to grant an award in the first place. */
     private function may_issue_for(int $viewerId, string $scopeType, int $scopeId): bool
     {
-        if ($viewerId <= 0 || $scopeId <= 0) {
-            return false;
-        }
-
-        // (bool) is load-bearing: HasAuthority() returns NULL on denial, not false,
-        // so returning it straight through a : bool signature is a TypeError.
-        return (bool) Ork3::$Lib->authorization->HasAuthority(
-            $viewerId,
-            $scopeType === 'kingdom' ? AUTH_KINGDOM : AUTH_PARK,
-            $scopeId,
-            AUTH_EDIT
-        );
+        return $this->Scrollery->may_issue_for($viewerId, $scopeType, $scopeId);
     }
 
     /**
@@ -424,7 +413,7 @@ class Controller_Scrollery extends Controller
         // still uncached. Only the READ is batched.
         // &heraldry= — whose arms every certificate in the run draws, chosen in the
         // page's options sheet. Absent or unknown is 'auto': what reprints always drew.
-        $heraldry = Scroll::NormaliseRunHeraldry(isset($_GET['heraldry']) ? (string) $_GET['heraldry'] : null);
+        $heraldry = $this->Scrollery->normalise_run_heraldry(isset($_GET['heraldry']) ? (string) $_GET['heraldry'] : null);
         $run      = $this->Scrollery->scrolls_for_awards_ids($awardsIds, $viewerId, $variant, $heraldry);
         $scrolls  = [];
         foreach ($run['Scrolls'] as $awardsId => $scroll) {
@@ -523,7 +512,7 @@ class Controller_Scrollery extends Controller
         $lineIds = Scroll::CourtLineIds($_GET);   // &courtLines=, or an old link's &lines=12,13
 
         // &heraldry= as on render(): 'auto' (the default) is the court's own arms.
-        $heraldry = Scroll::NormaliseRunHeraldry(isset($_GET['heraldry']) ? (string) $_GET['heraldry'] : null);
+        $heraldry = $this->Scrollery->normalise_run_heraldry(isset($_GET['heraldry']) ? (string) $_GET['heraldry'] : null);
         $run      = $this->Scrollery->scrolls_for_court_awards($courtId, $lineIds, $viewerId, $heraldry);
         $planner  = 'Court/detail/' . $courtId;
 
@@ -681,7 +670,7 @@ class Controller_Scrollery extends Controller
     {
         $token = trim((string) ($_GET['token'] ?? ''));
         if ($token !== '') {
-            $verdict = Scroll::VerifyPrintToken($token, $awardsIds);
+            $verdict = $this->Scrollery->verify_print_token($token, $awardsIds);
             if (!empty($verdict['Valid'])) {
                 return (int) $verdict['ViewerId'];
             }
@@ -716,25 +705,12 @@ class Controller_Scrollery extends Controller
             return;
         }
 
-        $awardId = (int) ($_GET['awardId'] ?? 0);
-        $title   = (string) ($_GET['title'] ?? '');
-        $scope   = $this->Scrollery->scope_context($scopeType, $scopeId);
-        // award_order_for_compose(), not Scroll::OrderForAwardId(): custom's own
-        // award_id is the 0 sentinel OrderForAwardId() always returns null for, so a
-        // custom-eligible choice from the create dropdown could never pass this
-        // gate. Re-resolving against the kingdom's own catalog (rather than trusting
-        // a client-supplied award id + title with no OfficerRole behind it) is what
-        // still keeps an officer position from composing a certificate.
-        //
-        // The returned CHOICE, not just a pass/fail, is what BuildScroll() gets its
-        // AwardId/KingdomAwardName from below — never the client's own strings. That
-        // fixes a cosmetic drift (matching is case/whitespace-insensitive, so
-        // "  sheriff  " would otherwise print with the submitted casing rather than
-        // the catalogue's) and guarantees BuildScroll() sees a real OfficerRole
-        // rather than an absent key, which — since Scroll::IsOfficerPosition() now
-        // fails closed on a missing key — would otherwise throw.
-        $choice = $this->Scrollery->award_order_for_compose((int) ($scope['KingdomId'] ?? 0), $awardId, $title);
-        if ($choice === null) {
+        // The composition rules (catalogue re-resolve, pronoun, heraldry source,
+        // BuildScroll(), and the refusal of a nameless custom title) are the model's,
+        // shared with the preview endpoint. Both refusals come back before
+        // record_print(), because a print that was refused did not happen.
+        $composed = $this->Scrollery->compose_scroll($scopeType, $scopeId, $_GET, true);
+        if ($composed['Error'] === Model_Scrollery::COMPOSE_NO_AWARD) {
             // Reached by a stale or hand-edited URL, and by an officer position or an
             // excluded class that never had a certificate to compose. Bouncing back to
             // the composer with no message reads as the form having eaten the click.
@@ -748,128 +724,7 @@ class Controller_Scrollery extends Controller
             );
             return;
         }
-
-        $playerId = (int) ($_GET['playerId'] ?? 0);
-
-        // The officer's correction wins over anything inferred. Per-print only —
-        // nothing is written back to the profile. The control is free text, not
-        // a closed vocabulary, so it goes through the same subject/object ->
-        // possessive resolution a stored pronoun_freetext value gets — "he/him"
-        // typed into the box is exactly as reachable as it is from a profile.
-        $override = trim((string) ($_GET['pronounOverride'] ?? ''));
-        $pronoun  = $override !== '' ? $this->Scrollery->resolve_pronoun_override($override)
-            : ($playerId > 0 ? $this->Scrollery->possessive_pronoun_for_player($playerId) : '');
-
-        $sources        = $this->Scrollery->heraldry_sources($scopeType, $scopeId, $playerId);
-        $heraldrySource = Scroll::ResolveHeraldrySource(
-            (string) ($_GET['heraldrySource'] ?? ''),
-            $scopeType,
-            array_map(static fn (string $u): bool => $u !== '', $sources)
-        );
-
-        $scroll = Scroll::BuildScroll(
-            [
-                'AwardId'          => $choice['AwardId'],
-                'OfficerRole'      => 'none',
-                'Rank'             => (int) ($_GET['rank'] ?? 0),
-                'Date'             => (string) ($_GET['date'] ?? ''),
-                'Note'             => (string) ($_GET['reason'] ?? ''),
-                'GivenBy'          => (string) ($_GET['givenBy'] ?? ''),
-                'KingdomAwardName' => $choice['Name'],
-                'ParkName'         => $scopeType === 'park' ? (string) ($_GET['issuerName'] ?? '') : '',
-                'KingdomName'      => $scopeType === 'kingdom' ? (string) ($_GET['issuerName'] ?? '') : '',
-            ],
-            [
-                'player'      => (string) ($_GET['player'] ?? ''),
-                'pronoun'     => $pronoun !== '' ? $pronoun : 'their',
-                'heraldry'    => $sources[$heraldrySource],
-                // Every source's arms, for a layout that draws more than one (EXPERIMENT).
-                'heraldryArms' => $sources,
-                // Provenance for the print log. A composed scroll has no award row, so
-                // these three can only come from context — and a composed row carries no
-                // awards_id either, which makes mundaneId its ONLY link to a person.
-                // $scopeType is already normalised to park|kingdom at :369.
-                'mundaneId'   => $playerId,
-                'scopeType'   => $scopeType,
-                'scopeId'     => $scopeId,
-                // The printed name for a Custom Award / Custom Title, whose catalogue
-                // name is the slot rather than the award. Passed through RAW for the
-                // same reason the recipe below is: BuildScroll() is the one place that
-                // decides whether this award may be renamed at all, and it caps and
-                // sanitises the string there. A second, weaker opinion here would let
-                // nothing extra through and could only disagree about the length.
-                'customName'  => (string) ($_GET['customName'] ?? ''),
-                // The "With phrase" box — the interstitial line between the recipient's
-                // name and the title, offered only for the two custom entries. Passed
-                // with array_key_exists semantics all the way down: an ABSENT parameter
-                // takes the per-entry default, a PRESENT but empty one means "print no
-                // phrase", and those are different choices. isset() would collapse them.
-                // Sanitising is BuildScroll()'s, for the same reason as customName above.
-            ] + (array_key_exists('titlePhrase', $_GET)
-                ? ['titlePhrase' => (string) $_GET['titlePhrase']]
-                : []) + [
-                'issuerTitle' => (string) ($_GET['issuerTitle'] ?? ''),
-                'useThe'      => ($_GET['useThe'] ?? '') === '1',
-                'useOf'       => ($_GET['useOf'] ?? '') === '1',
-                'variant'     => preg_replace('/[^a-z]/', '', strtolower((string) ($_GET['variant'] ?? ''))),
-                // Passed raw like the recipe: Scroll::NormaliseDesign() inside BuildScroll()
-                // is the one allowlist. Only the heraldry source is resolved here, because
-                // it needs the arms lookup that BuildScroll() must stay free of.
-                'design'      => [
-                    'heraldrySource' => $heraldrySource,
-                    'heraldryLayout' => (string) ($_GET['heraldryLayout'] ?? ''),
-                    'heraldryStamp'  => (string) ($_GET['heraldryStamp'] ?? ''),
-                    'drawIn'         => (string) ($_GET['drawIn'] ?? ''),
-                    'customBorder'   => (string) ($_GET['customBorder'] ?? ''),
-                    'color1'         => (string) ($_GET['color1'] ?? ''),
-                    'color2'         => (string) ($_GET['color2'] ?? ''),
-                    'matchStyle'     => (string) ($_GET['matchStyle'] ?? ''),
-                    'customRibbon'   => (string) ($_GET['customRibbon'] ?? ''),
-                    'ribbonColor'    => (string) ($_GET['ribbonColor'] ?? ''),
-                ],
-                // Passed through raw on purpose: Scroll::NormaliseRecipe() is the one
-                // allowlist for these, and it runs inside BuildScroll(). Sanitising
-                // here as well would be a second, weaker opinion about a closed
-                // vocabulary — and anything it let through would still be rejected
-                // there. BuildScroll() ignores the key entirely for every order but
-                // custom, so a recipe on a Knighthood costs nothing.
-                'recipe'      => [
-                    'ground'    => (string) ($_GET['ground'] ?? ''),
-                    'border'    => (string) ($_GET['border'] ?? ''),
-                    'primary'   => (string) ($_GET['primary'] ?? ''),
-                    'secondary' => (string) ($_GET['secondary'] ?? ''),
-                    'rankSet'   => (string) ($_GET['rankSet'] ?? ''),
-                ],
-            ]
-        );
-
-        /*
-         * A HAND-COMPOSED scroll must not print with no award name on it.
-         *
-         * Scroll::ResolveTitle() answers '' for a Custom Award / Custom Title row that
-         * nobody has named — it will not letter the ORK's own placeholder onto a
-         * certificate — and a blank award line is the deliberate, correct answer when
-         * REPRINTING one of the 5,867 historical grants whose name the ORK genuinely
-         * does not know. It is not the right answer here. compose() is an officer
-         * standing at the composer with the award in front of them, and the composer
-         * now has a box to type its name into; printing a nameless certificate from
-         * that surface is a slip, not a data limitation.
-         *
-         * So this refuses only on the composed path. render() — the reprint surface —
-         * is untouched and still prints the blank line to complete by hand.
-         *
-         * Tested on the RESOLVED title rather than on the request, deliberately:
-         * $scroll['title'] is the string that is about to be drawn, so this holds
-         * however BuildScroll() decides to apply $context['customName'], including
-         * when Scroll::SanitiseCustomName() rejects a value this controller forwarded
-         * (an all-control-character string, or invalid UTF-8, both of which come back
-         * as ''). It also cannot fire for a kingdom that NAMED its award-94 row —
-         * kingdom 1 holds seven of those — because such a row resolves to its own
-         * title and never to ''.
-         *
-         * Before record_print(), because a print that was refused did not happen.
-         */
-        if (trim((string) $scroll['title']) === '') {
+        if ($composed['Error'] === Model_Scrollery::COMPOSE_BLANK_TITLE) {
             $this->deny(
                 'That certificate would print with no award name on it. Custom Award and Custom '
                 . 'Title are the ORK\'s own placeholders rather than names, so a certificate '
@@ -881,6 +736,7 @@ class Controller_Scrollery extends Controller
             );
             return;
         }
+        $scroll = $composed['Scroll'];
 
         // AwardsId null: a composed certificate has no award row behind it, so the log
         // records the print without pretending it does.
@@ -935,19 +791,7 @@ class Controller_Scrollery extends Controller
      */
     private function record_print(?int $awardsId, array $scroll, int $viewerId): void
     {
-        Ork3::$Lib->scrollprintlog->RecordPrint([
-            'AwardsId'    => $awardsId,
-            'MundaneId'   => (int) ($scroll['mundaneId'] ?? 0),
-            'PrintedById' => $viewerId,
-            'ScopeType'   => $scroll['scopeType'] ?? '',
-            'ScopeId'     => (int) ($scroll['scopeId'] ?? 0),
-            'OrderId'     => (string) ($scroll['order'] ?? ''),
-            'Rank'        => (int) ($scroll['rank'] ?? 0),
-            'Variant'     => (string) ($scroll['variant'] ?? ''),
-            // The drawn design rides in the same JSON, beside the custom recipe keys, and
-            // only when it is not the default (see Scroll::PrintRecipe()).
-            'Recipe'      => Scroll::PrintRecipe($scroll),
-        ]);
+        $this->Scrollery->record_print($awardsId, $scroll, $viewerId);
     }
 
     /**

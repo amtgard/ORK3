@@ -1419,6 +1419,34 @@ class Scroll extends Ork3
     }
 
     /**
+     * Whether a catalogue row has no name of its own, so it cannot print until the
+     * officer types one — and if so, whether that typed name is an award or a title.
+     *
+     * Returns '' for every row that already resolves to a real title (including a
+     * custom placeholder a kingdom did rename); otherwise 'title' for the row named
+     * "Custom Title" and 'award' for the rest. ResolveTitle() asked with no typed name
+     * is the test, so this never restates CUSTOM_PLACEHOLDER_NAMES or its precedence.
+     *
+     * @param array{AwardId:int, KingdomAwardName:string} $awardRow
+     */
+    public static function CustomNameKind(array $awardRow): string
+    {
+        if (!self::IsCustomAwardId((int) ($awardRow['AwardId'] ?? 0))) {
+            return '';
+        }
+        $name     = (string) ($awardRow['KingdomAwardName'] ?? '');
+        $resolved = self::ResolveTitle([
+            'AwardId'          => (int) $awardRow['AwardId'],
+            'KingdomAwardName' => $name,
+        ]);
+        if ($resolved !== '') {
+            return '';
+        }
+
+        return strcasecmp(trim($name), 'Custom Title') === 0 ? 'title' : 'award';
+    }
+
+    /**
      * Whether an award ROW is a grant of one of the two custom placeholder entries —
      * the rows whose real title lives in custom_name rather than in the catalogue.
      *
@@ -1499,10 +1527,10 @@ class Scroll extends Ork3
      * one of them lettered "with their tenth" onto a certificate that was in fact
      * the eleventh or the twenty-second.
      *
-     * _text.tpl has always been ready for this: it names ordinals through "twelfth"
-     * and falls back to "13th"/"22nd" past that. Its own comment anticipated "the
-     * moment anything lifts Scroll::ClampRank() past its current ceiling" — the data
-     * had already lifted it, so that branch was unreachable rather than unnecessary.
+     * Scroll::OrdinalWord() is ready for this: it names ordinals through "twelfth"
+     * and falls back to "13th"/"22nd" past that. The old _text.tpl comment anticipated
+     * "the moment anything lifts Scroll::ClampRank() past its current ceiling" — the
+     * data had already lifted it, so that branch was unreachable rather than unnecessary.
      *
      * The LOWER bound is kept deliberately. `from` is 1 only on warrior, whose art
      * starts at rank 1, and a warrior row recorded at 0 has always printed "first".
@@ -1512,6 +1540,26 @@ class Scroll extends Ork3
     public static function OrdinalRank(array $order, int $rank): int
     {
         return max($order['ranks']['from'], $rank);
+    }
+
+    /**
+     * The word the certificate prints for an ordinal rank: "first" through "twelfth",
+     * then the numeral with its suffix ("13th", "21st", "22nd"). Rank 0 (or below) is
+     * '' on purpose: the ordinal is a hand-written blank there, drawn as a writing line.
+     */
+    public static function OrdinalWord(int $rank): string
+    {
+        $ordinals = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth'];
+        if ($rank <= 0) {
+            return '';
+        }
+        if (isset($ordinals[$rank])) {
+            return $ordinals[$rank];
+        }
+        $mod100 = $rank % 100;
+        return $rank . (($mod100 >= 11 && $mod100 <= 13)
+            ? 'th'
+            : ([1 => 'st', 2 => 'nd', 3 => 'rd'][$rank % 10] ?? 'th'));
     }
 
     /**
@@ -1715,6 +1763,170 @@ class Scroll extends Ork3
     public static function HasArt(array $awardRow): bool
     {
         return self::OrderForAwardRow($awardRow) !== null;
+    }
+
+    /**
+     * Whether an AwardsForPlayer()-shaped row may be offered for printing at all:
+     * not revoked (ork_awards.revoked — revocation normally nulls mundane_id, but
+     * some stripped rows still carry a live one) and has certificate art once the
+     * dangling-officer correction (Award::correct_dangling_officer_role()) has run.
+     * Viewer authority is a separate question — see PrintDecision().
+     */
+    public static function IsPrintableRow(array $awardRow): bool
+    {
+        return (int) ($awardRow['Revoked'] ?? 0) !== 1
+            && self::HasArt(Award::correct_dangling_officer_role($awardRow));
+    }
+
+    /**
+     * Why a print was refused. Returned by PrintPermission() so a caller can render a
+     * real message instead of a silent redirect.
+     *
+     * Fail-closed by construction: DENIED_AUTH is the default, and every branch that
+     * returns a different reason has already decided the answer is no. A new reason
+     * added here can never widen access — only relabel a refusal.
+     */
+    public const PRINT_ALLOWED = '';
+    public const DENIED_MISSING = 'missing';
+    public const DENIED_REVOKED = 'revoked';
+    public const DENIED_UNATTRIBUTED = 'unattributed';
+    public const DENIED_NO_ART = 'no-art';
+    public const DENIED_EXCLUDED = 'excluded-class';
+    public const DENIED_AUTH = 'not-authorised';
+
+    /**
+     * The officer-facing sentence for each refusal. Kept beside the reasons so every
+     * surface — the render route, the Ajax preview, the post-grant link, a JSON
+     * client — says the same thing.
+     *
+     * @var array<string, string>
+     */
+    public const DENIAL_MESSAGES = [
+        self::DENIED_MISSING => 'That award record could not be found. It may have been deleted.',
+        self::DENIED_REVOKED => 'That award has been revoked, so its certificate can no longer be printed.',
+        self::DENIED_UNATTRIBUTED => 'That award is not attributed to a park or kingdom, so there is no issuing body '
+            . 'to print it under. An officer can set "where given" on the award record, after which it will print.',
+        self::DENIED_NO_ART => 'That award has no certificate artwork, so there is nothing to print.',
+        self::DENIED_EXCLUDED => 'Scrollery prints certificates for the ladder orders — Order of the Rose, the '
+            . 'Lion, the Warrior and the rest — and for a kingdom\'s own Custom Award and Custom Title. Titles, '
+            . 'masterhoods, paragons, knighthoods and officer positions are awarded by other means.',
+        self::DENIED_AUTH => 'You do not have permission to print that certificate. Printing is open to the '
+            . 'recipient, to an officer with edit rights over the park or kingdom that granted it, and to an ORK '
+            . 'administrator.',
+    ];
+
+    /** @return array{Allowed: bool, Reason: string, Message: string} */
+    public static function PrintAllowed(): array
+    {
+        return ['Allowed' => true, 'Reason' => self::PRINT_ALLOWED, 'Message' => ''];
+    }
+
+    /** @return array{Allowed: bool, Reason: string, Message: string} */
+    public static function PrintDenial(string $reason): array
+    {
+        return [
+            'Allowed' => false,
+            'Reason'  => $reason,
+            'Message' => self::DenialMessage($reason),
+        ];
+    }
+
+    public static function DenialMessage(string $reason): string
+    {
+        return self::DENIAL_MESSAGES[$reason] ?? self::DENIAL_MESSAGES[self::DENIED_AUTH];
+    }
+
+    /**
+     * The global-admin branch of PrintPermission(), on its own so a batch caller can
+     * ask it once per call through the same expression rather than a copy of it.
+     *
+     * HasAuthority() short-circuits on a TRUE global grant (role=admin with
+     * park_id/kingdom_id/unit_id/event_id all zero) before its own `0 == $id`
+     * bail-out, so AUTH_ADMIN with id 0 is the shape the rest of the CRM already
+     * uses. It returns NULL on denial, not false, so it is cast.
+     */
+    public static function IsPrintAdmin(int $viewerId): bool
+    {
+        return $viewerId > 0
+            && (bool) Ork3::$Lib->authorization->HasAuthority($viewerId, AUTH_ADMIN, 0, AUTH_ADMIN);
+    }
+
+    /**
+     * WHO MAY PRINT an award row's certificate — the module's whole authorization
+     * ladder, in order: revoked refuses; a global admin may; the recipient may; an
+     * unattributed row (no at_park_id and no at_kingdom_id) refuses; park AUTH_EDIT
+     * at the park it was given at may; kingdom AUTH_EDIT at the kingdom it was given
+     * at may; everyone else is refused.
+     *
+     * Fail-closed order: revocation is checked before identity, so neither a
+     * recipient nor an admin can reprint a stripped award (2,856 rows are revoked,
+     * 59 still carry a live mundane_id). ~120k rows (30.74%) carry neither
+     * at_park_id nor at_kingdom_id, so there is no issuing body to name and no scope
+     * for an officer's authority to attach to; the admin branch is checked before
+     * that attribution gate so an admin can still reach them. DELIBERATELY NOT WIDENED to the awards.park_id /
+     * awards.kingdom_id fallback columns (the recipient's home park at grant time):
+     * that would hand a park officer print rights over awards their park never
+     * granted, and the maintainer has not ruled on it.
+     *
+     * Art is NOT checked here: an unauthorised viewer must not learn from the reason
+     * whether an award id has a certificate, so callers test HasArt() after this.
+     *
+     * NEVER CACHED. An authority decision keyed on anything less than
+     * (viewer, award) is a cross-tenant disclosure waiting to happen. $isAdmin lets a
+     * batch caller pass IsPrintAdmin() asked once for the same viewer; null asks it.
+     *
+     * $awardRow carries Revoked, MundaneId, ParkId (at_park_id), KingdomId
+     * (at_kingdom_id) — the AwardsForPlayer() shape.
+     *
+     * @return array{Allowed: bool, Reason: string, Message: string}
+     */
+    public static function PrintPermission(array $awardRow, int $viewerId, ?bool $isAdmin = null): array
+    {
+        if ((int) ($awardRow['Revoked'] ?? 0) === 1) {
+            return self::PrintDenial(self::DENIED_REVOKED);
+        }
+
+        $parkId    = (int) ($awardRow['ParkId'] ?? 0);
+        $kingdomId = (int) ($awardRow['KingdomId'] ?? 0);
+        $auth      = Ork3::$Lib->authorization;
+
+        if ($isAdmin ?? self::IsPrintAdmin($viewerId)) {
+            return self::PrintAllowed();
+        }
+
+        if ((int) ($awardRow['MundaneId'] ?? 0) === $viewerId && $viewerId > 0) {
+            return self::PrintAllowed();
+        }
+
+        if ($parkId <= 0 && $kingdomId <= 0) {
+            return self::PrintDenial(self::DENIED_UNATTRIBUTED);
+        }
+
+        if ($parkId > 0 && (bool) $auth->HasAuthority($viewerId, AUTH_PARK, $parkId, AUTH_EDIT)) {
+            return self::PrintAllowed();
+        }
+        if ($kingdomId > 0 && (bool) $auth->HasAuthority($viewerId, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)) {
+            return self::PrintAllowed();
+        }
+
+        return self::PrintDenial(self::DENIED_AUTH);
+    }
+
+    /**
+     * The whole gate for an award row: PrintPermission() first, then art — so a
+     * refusal never discloses whether the award has a certificate. Art missing is
+     * the allowlist refusing it (DENIED_EXCLUDED).
+     *
+     * @return array{Allowed: bool, Reason: string, Message: string}
+     */
+    public static function PrintDecision(array $awardRow, int $viewerId): array
+    {
+        $permission = self::PrintPermission($awardRow, $viewerId);
+        if (!$permission['Allowed']) {
+            return $permission;
+        }
+
+        return self::HasArt($awardRow) ? self::PrintAllowed() : self::PrintDenial(self::DENIED_EXCLUDED);
     }
 
     /**
@@ -2352,7 +2564,7 @@ class Scroll extends Ork3
         // Scrollery/compose builds its row out of $_GET and carries none of the
         // three, so its controller passes them in context.
         //
-        // Park beats kingdom, matching Model_Award::kingdom_for_grant_row(): a park
+        // Park beats kingdom, matching Award::kingdom_for_grant_row(): a park
         // grant leaves at_kingdom_id blank, and the park is the narrower truth.
         $rowParkId    = (int) ($awardRow['ParkId'] ?? 0);
         $rowKingdomId = (int) ($awardRow['KingdomId'] ?? 0);
@@ -2459,6 +2671,7 @@ class Scroll extends Ork3
             // word beside it is written from a different number.
             'rank'        => $rank,
             'ordinalRank' => $ordinalRank,
+            'ordinalWord' => self::OrdinalWord($ordinalRank),
             // A blank ordinal is an invitation to write the rank in by hand. That is right
             // for a ladder — including one recorded at rank 0, which 292 of Walker in the
             // Middle's 379 grants are — and wrong for a Knighthood, which has no ordinal to
