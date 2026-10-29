@@ -435,6 +435,14 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
 
+        } elseif ($action === 'monarchyonlyeligible') {
+            // Add Rec modal: may the session user mark a rec about this recipient Monarchy
+            // Only? Reveals only the caller's OWN officer standing over the recipient.
+            $this->load_model('Player');
+            $recipient = (int)($_GET['MundaneId'] ?? $_POST['MundaneId'] ?? 0);
+            $level     = valid_id($recipient) ? $this->Player->monarchy_only_level_for((int)$this->session->user_id, $recipient) : 0;
+            echo json_encode(['status' => 0, 'eligible' => $level > 0, 'level' => $level]);
+
         } elseif ($action === 'addrecommendation') {
             if (!isset($this->session->user_id)) {
                 echo json_encode(['status' => 1, 'error' => 'You must be logged in to submit a recommendation.']);
@@ -470,6 +478,7 @@ class Controller_KingdomAjax extends Controller
                 'GivenById'      => $this->session->user_id,
                 'Reason'         => $reason,
                 'Anonymous'      => $anonymous,
+                'MonarchyOnly'   => !empty($_POST['MonarchyOnly']) ? 1 : 0,
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
@@ -505,7 +514,7 @@ class Controller_KingdomAjax extends Controller
             $limit  = (int)($_POST['Limit'] ?? $_GET['Limit'] ?? 200);
             $limit  = ($limit > 0 && $limit <= 500) ? $limit : 200;
             $offset = max(0, (int)($_POST['Offset'] ?? $_GET['Offset'] ?? 0));
-            $recs = $this->Reports->deleted_recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'Limit' => $limit, 'Offset' => $offset]);
+            $recs = $this->Reports->deleted_recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'Limit' => $limit, 'Offset' => $offset, 'Token' => $this->session->token]);
             $recs = is_array($recs) ? array_values($recs) : [];
             echo json_encode([
                 'status'          => 0,

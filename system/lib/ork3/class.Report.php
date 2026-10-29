@@ -17,8 +17,9 @@ class Report extends Ork3
      * selected predicate or the row shape changes, so entries written under the old
      * rule are not served for the rest of their TTL. Player::bust_player_award_recs_cache
      * reads this constant, so the bust keys can never drift out of step with the reads.
+     * v4: the row shape gained monarchy_only, and the badge count became public-only.
      */
-    public const REC_CACHE_VERSION = 3;
+    public const REC_CACHE_VERSION = 4;
 
     /**
      * Ladder-terminal masterhoods that ork_award.peerage still records as 'None'.
@@ -515,7 +516,14 @@ class Report extends Ork3
             $masters_clause = "or COALESCE(alias.peerage, a.peerage) = 'Master'";
         }
         if (valid_id($request['IncludeLadder']) && is_numeric($request['LadderMinimum'])) {
-            $ladder_clause = " or (COALESCE(alias.is_ladder, a.is_ladder) = 1 and ma.rank >= $request[LadderMinimum])";
+            // Ladder = the alias says so, else the kingdom row, the catalog row, or
+            // the curated kingdom-original list (Award::sqlEffectiveIsLadder). The
+            // catalog flag alone misses every kingdom-original ladder -- Order of the
+            // Sharpshooter, Hunter, Raider and friends sit on award 94 "Custom Award"
+            // (is_ladder 0) or no catalog row at all -- so their grants never reached
+            // this report while the ladder grid and recommendations already listed
+            // them. Reported 2026-10-22 (Lichwood Grove: two Sharpshooters missing).
+            $ladder_clause = " or (COALESCE(alias.is_ladder, " . Award::sqlEffectiveIsLadder('ka', 'a') . ") = 1 and ma.rank >= $request[LadderMinimum])";
         }
         if (valid_id($request['IncludeTitles'])) {
             $title_clause =  "or COALESCE(alias.is_title, a.is_title) = 1";
@@ -687,6 +695,10 @@ class Report extends Ork3
                     'MundaneId'      => $mid,
                     'KingdomAwardId' => $kaid,
                     'Rank'           => $rank,
+                    // Carried from PlayerAwardRecommendations, which resolves it via
+                    // Award::effectiveIsLadder. The row templates used to recompute it
+                    // as `Rank > 0`, which is circular for a rank-less ladder rec.
+                    'IsLadder'       => !empty($rec['IsLadder']),
                     'Persona'        => $rec['Persona'] ?? '',
                     'AwardName'      => $rec['AwardName'] ?? '',
                     'ParkId'         => (int)($rec['ParkId'] ?? 0),
@@ -716,6 +728,8 @@ class Report extends Ork3
                     '_hasNamedRec'   => false,
                     '_allSnoozed'    => true,
                     '_allPassed'     => true,
+                    '_moMax'         => 0,
+                    '_moAll'         => true,
                 ];
             }
             $g = &$groups[$key];
@@ -748,6 +762,13 @@ class Report extends Ork3
             if (empty($rec['PassedToLocal'])) {
                 $g['_allPassed'] = false;
             }
+            $moLevel = (int)($rec['MonarchyOnlyLevel'] ?? 0);
+            if ($moLevel > $g['_moMax']) {
+                $g['_moMax'] = $moLevel;
+            }
+            if ($moLevel === 0) {
+                $g['_moAll'] = false;
+            }
             unset($g);
         }
         foreach ($groups as $k => $g) {
@@ -756,7 +777,16 @@ class Report extends Ork3
             $groups[$k]['IsDismissed']   = !isset($liveByKey[$k]);
             $groups[$k]['IsSnoozed']     = $g['_allSnoozed'];
             $groups[$k]['PassedToLocal'] = $g['_allPassed'];
-            unset($groups[$k]['_advocates'], $groups[$k]['_hasNamedRec'], $groups[$k]['_allSnoozed'], $groups[$k]['_allPassed']);
+            $groups[$k]['MonarchyOnlyLevel'] = $g['_moMax'];
+            $groups[$k]['MonarchyOnlyAll']   = $g['_moMax'] > 0 && $g['_moAll'];
+            unset(
+                $groups[$k]['_advocates'],
+                $groups[$k]['_hasNamedRec'],
+                $groups[$k]['_allSnoozed'],
+                $groups[$k]['_allPassed'],
+                $groups[$k]['_moMax'],
+                $groups[$k]['_moAll']
+            );
         }
         return array_values($groups);
     }
@@ -768,6 +798,10 @@ class Report extends Ork3
         // Viewer-specific flags (ViewerCanSecond, ViewerCanEditReason, IsMine) are
         // computed after the cache hit so one bust clears the data for everyone.
         $viewer_id = (int)($request['RequestedBy'] ?? 0);
+        // Monarchy Only visibility keys on the TOKEN, never RequestedBy: JSON callers
+        // choose RequestedBy freely. The cached response keeps every row (it is
+        // viewer-agnostic); hidden rows are dropped per request below.
+        $hideViewer = Ork3::$Lib->recommendationvisibility->viewerFromToken($request['Token'] ?? '');
         $recIdList = isset($request['RecommendationsIdIn']) ? (array)$request['RecommendationsIdIn'] : null;
         $skipCache = !empty($request['SkipCache']) || $recIdList !== null;
         // Opt-in: fold soft-deleted (dismissed) recommendations back in. Off by
@@ -789,7 +823,9 @@ class Report extends Ork3
             'V'                => self::REC_CACHE_VERSION,
         ]);
         if (!$skipCache && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
-            return $this->applyViewerFlags($cache, $viewer_id);
+            // Filter BEFORE applyViewerFlags: masking nulls RecommendedById, which the
+            // author rule in RecommendationVisibility reads.
+            return $this->applyViewerFlags(Ork3::$Lib->recommendationvisibility->filterRecommendations($cache, $hideViewer), $viewer_id);
         }
 
         if (valid_id($request['KingdomId'])) {
@@ -839,6 +875,7 @@ class Report extends Ork3
 			recs.passed_to_local,
 			recs.passed_to_local_by,
 			recs.passed_to_local_at,
+			recs.monarchy_only,
 			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id) AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id) AND o.role = 'Monarch' ORDER BY o.officer_id DESC LIMIT 1), 0) AS current_monarch_id,
 			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id) AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id) AND o.role = 'Regent'  ORDER BY o.officer_id DESC LIMIT 1), 0) AS current_regent_id,
 			(SELECT COUNT(*) FROM " . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.status != 'cancelled') AS on_court_count,
@@ -869,6 +906,7 @@ class Report extends Ork3
 			  $location_clause
 			  $idClause
 			order by m.persona, a.name, recs.rank, m.persona";
+        $this->db->Clear();
         $r = $this->db->query($sql);
         $response = array();
         if ($r !== false && $r->size() > 0) {
@@ -927,6 +965,7 @@ class Report extends Ork3
                     'passed_to_local'    => (int)$r->passed_to_local,
                     'passed_to_local_by' => $r->passed_to_local_by,
                     'passed_to_local_at' => $r->passed_to_local_at,
+                    'monarchy_only'      => (int)$r->monarchy_only,
                     'current_monarch_id' => (int)$r->current_monarch_id,
                     'current_regent_id'  => (int)$r->current_regent_id,
                     'on_court_count'     => (int)$r->on_court_count,
@@ -982,9 +1021,26 @@ class Report extends Ork3
                 // row still reads 0 would look infinitely repeatable here. "Either side says
                 // so" — the same reading as Court::SQL_EFFECTIVE_IS_TITLE.
                 $effIsTitle  = max((int)$row->ka_is_title, (int)$row->a_is_title);
-                $effIsLadder = max((int)$row->ka_is_ladder, (int)$row->a_is_ladder);
+                // Third case: a kingdom-original ladder has no catalog row, so neither
+                // is_ladder column can ever be 1 for it. Award::effectiveIsLadder adds
+                // the curated list. This also corrects $isCustom below -- such an award
+                // was being treated as a repeatable custom award, which suppressed its
+                // AlreadyHas detection entirely.
+                $effIsLadder = Award::effectiveIsLadder(
+                    (int)$row->ka_kaward_id,
+                    (int)$row->ka_is_ladder,
+                    (int)$row->a_is_ladder
+                ) ? 1 : 0;
                 $isCustom    = ($effIsLadder === 0 && $effIsTitle === 0);
-                $alreadyHas = $isCustom ? false : ($row->kacount > 0 || $row->awcount > 0);
+                // A ladder recommendation with no rank means "rank unspecified", NOT
+                // "rank 0" -- and AlreadyHas compares held_rank >= rec_rank, which any
+                // held rank satisfies against 0. So every such rec for someone who
+                // already holds the award would read "already has" and drop out of the
+                // Open list: exactly the recs an officer needs to see, hidden. Until a
+                // rank is chosen the question is undecidable, so answer no, which is
+                // also what these recs did before their award was recognised as a ladder.
+                $rankUnset   = ($effIsLadder === 1 && (int)$row->rank === 0);
+                $alreadyHas = ($isCustom || $rankUnset) ? false : ($row->kacount > 0 || $row->awcount > 0);
                 $coveredByMaster = false;
                 if (!$isCustom && !$alreadyHas && isset($ladderMap[$recAwardId])) {
                     foreach ((array)$ladderMap[$recAwardId]['MasterAwardIds'] as $mAid) {
@@ -1030,6 +1086,8 @@ class Report extends Ork3
                     'RecommendedById'   => $row->recommended_by_id,
                     'MaskGiver' => $row->mask_giver,
                     'KingdomAwardId' => $row->ka_kaward_id,
+                    // Authoritative ladder flag. Consumers must use this, never `Rank > 0`.
+                    'IsLadder' => (bool)$effIsLadder,
                     'AwardId' => $recAwardId,
                     'ParkId' => $row->park_id,
                     'KingdomId' => $row->kingdom_id,
@@ -1053,11 +1111,15 @@ class Report extends Ork3
                     'PassedToLocal'   => (int)$row->passed_to_local === 1,
                     'PassedToLocalBy' => $row->passed_to_local_by ? (int)$row->passed_to_local_by : null,
                     'PassedToLocalAt' => $row->passed_to_local_at,
+                    'MonarchyOnly'      => (int)$row->monarchy_only,
+                    'MonarchyOnlyLevel' => RecommendationVisibility::effectiveLevel((int)$row->monarchy_only, (int)$row->passed_to_local === 1),
                 );
             }
 
             // Batch-fetch all active seconds (IsMine = false; applyViewerFlags sets it per-viewer).
-            $seconds_by_rec = Ork3::$Lib->player->GetSecondsForRecommendations($rec_ids, 0);
+            // The unfiltered in-process variant: hidden rows are cached here and dropped
+            // per request, so their seconds must be cached alongside them.
+            $seconds_by_rec = Ork3::$Lib->player->seconds_for_recommendations($rec_ids, 0);
 
             // Attach seconds; viewer flags are left false and filled in by applyViewerFlags.
             foreach ($response['AwardRecommendations'] as &$rec) {
@@ -1076,7 +1138,9 @@ class Report extends Ork3
         } else {
             $cached = Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
         }
-        return $this->applyViewerFlags($cached, $viewer_id);
+        // Filter BEFORE applyViewerFlags (masking nulls RecommendedById, which the
+        // author rule reads) and AFTER the cache write, so the cache stays viewer-agnostic.
+        return $this->applyViewerFlags(Ork3::$Lib->recommendationvisibility->filterRecommendations($cached, $hideViewer), $viewer_id);
     }
 
     /**
@@ -1115,6 +1179,17 @@ class Report extends Ork3
         } elseif (valid_id($request['ParkId'] ?? 0)) {
             $scope = ' AND m.park_id = ' . (int)$request['ParkId'];
         }
+
+        // Monarchy Only: the same rule PlayerAwardRecommendations applies per row, as SQL,
+        // so the paging/total and the hydrated rows agree (else batches come back short).
+        $vis        = Ork3::$Lib->recommendationvisibility;
+        $hideViewer = $vis->viewerFromToken($request['Token'] ?? '');
+        if (valid_id($request['KingdomId'] ?? 0)) {
+            $scopeKids = Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId']);
+        } else {
+            $scopeKids = [$vis->kingdomOfPark((int)($request['ParkId'] ?? 0))];
+        }
+        $visClause = ' AND ' . $vis->sqlPredicate($hideViewer, 'recs', 'm', $scopeKids);
 
         $where = [];
         $search = trim((string)($request['Search'] ?? ''));
@@ -1174,23 +1249,35 @@ class Report extends Ork3
         // dev snapshot: 9 kingdomawards mark a non-ladder base award as their own ladder,
         // and those were classified "custom" (infinitely repeatable) while the title axis
         // was already fixed. A custom award is one that is neither, under either reading.
-        $customExpr = '(GREATEST(COALESCE(ka.is_ladder, 0), COALESCE(a.is_ladder, 0)) = 0'
+        // Third case folded in via Award::sqlEffectiveIsLadder: a kingdom-original
+        // ladder has no catalog row, so neither is_ladder column is ever 1 for it.
+        $ladderExpr = Award::sqlEffectiveIsLadder('ka', 'a');
+        $customExpr = '(' . $ladderExpr . ' = 0'
             . ' AND GREATEST(COALESCE(ka.is_title, 0), COALESCE(a.is_title, 0)) = 0)';
+        // Mirrors $rankUnset in PlayerAwardRecommendations: for a ladder rec with no
+        // rank, "already has" is undecidable (held_rank >= 0 is always true), so it is
+        // treated like a custom award -- never filtered out as already held. Keep these
+        // two definitions in step or the prefilter and the PHP post-filter disagree and
+        // batches come back short.
+        $undecidableExpr = '(' . $customExpr . ' OR (' . $ladderExpr . ' = 1 AND COALESCE(recs.rank,0) = 0))';
 
         $elig = (string)($request['Eligibility'] ?? 'open');
         if ($elig === 'snoozed') {
             $where[] = $snoozedExpr;
         } elseif ($elig === 'nonladder') {
-            $where[] = 'COALESCE(recs.rank,0) = 0';
+            // Was 'COALESCE(recs.rank,0) = 0' -- i.e. "has no rank", which swept every
+            // rank-less LADDER recommendation in here and was exactly what hid them
+            // from the officer who needed to set their rank.
+            $where[] = $ladderExpr . ' = 0';
             $where[] = "NOT $snoozedExpr";
         } elseif ($elig === 'ator') {
-            $where[] = "NOT $customExpr AND $alreadyExpr";
+            $where[] = "NOT $undecidableExpr AND $alreadyExpr";
             $where[] = "NOT $snoozedExpr";
         } elseif ($elig === 'below') {
-            $where[] = "(COALESCE(recs.rank,0) > 0) AND ($customExpr OR NOT $alreadyExpr)";
+            $where[] = "($ladderExpr = 1) AND ($undecidableExpr OR NOT $alreadyExpr)";
             $where[] = "NOT $snoozedExpr";
         } elseif ($elig === 'open') {
-            $where[] = "($customExpr OR NOT $alreadyExpr)";
+            $where[] = "($undecidableExpr OR NOT $alreadyExpr)";
             $where[] = "NOT $snoozedExpr";
         }
 
@@ -1201,10 +1288,15 @@ class Report extends Ork3
         // the outer `recs` alias through a derived table (UNION-in-FROM → "Unknown column
         // recs.mundane_id"), so count distinct recommenders + distinct seconders as two
         // single-level correlated subqueries summed, each excluding the recipient.
+        // Hidden recs the viewer may not see must not leak into the support count either.
+        // r2/r3 share the outer recipient (recs.mundane_id = m.mundane_id), so `m` is the
+        // right mundane alias for the predicate.
+        $visR2 = ' AND ' . $vis->sqlPredicate($hideViewer, 'r2', 'm', $scopeKids);
+        $visR3 = ' AND ' . $vis->sqlPredicate($hideViewer, 'r3', 'm', $scopeKids);
         $supportSub = "("
-            . "(SELECT COUNT(DISTINCT r2.recommended_by_id) FROM " . DB_PREFIX . "recommendations r2 WHERE r2.mundane_id = recs.mundane_id AND r2.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r2.rank,0)=COALESCE(recs.rank,0) AND r2.recommended_by_id IS NOT NULL AND r2.recommended_by_id <> recs.mundane_id AND (r2.deleted_by IS NULL OR r2.deleted_by=0))"
+            . "(SELECT COUNT(DISTINCT r2.recommended_by_id) FROM " . DB_PREFIX . "recommendations r2 WHERE r2.mundane_id = recs.mundane_id AND r2.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r2.rank,0)=COALESCE(recs.rank,0) AND r2.recommended_by_id IS NOT NULL AND r2.recommended_by_id <> recs.mundane_id AND (r2.deleted_by IS NULL OR r2.deleted_by=0)" . $visR2 . ")"
             . " + "
-            . "(SELECT COUNT(DISTINCT s.supporter_mundane_id) FROM " . DB_PREFIX . "recommendation_seconds s JOIN " . DB_PREFIX . "recommendations r3 ON r3.recommendations_id = s.recommendations_id WHERE r3.mundane_id = recs.mundane_id AND r3.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r3.rank,0)=COALESCE(recs.rank,0) AND s.supporter_mundane_id <> recs.mundane_id AND s.deleted_at IS NULL)"
+            . "(SELECT COUNT(DISTINCT s.supporter_mundane_id) FROM " . DB_PREFIX . "recommendation_seconds s JOIN " . DB_PREFIX . "recommendations r3 ON r3.recommendations_id = s.recommendations_id WHERE r3.mundane_id = recs.mundane_id AND r3.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r3.rank,0)=COALESCE(recs.rank,0) AND s.supporter_mundane_id <> recs.mundane_id AND s.deleted_at IS NULL" . $visR3 . ")"
             . ")";
 
         $dir = (strtolower((string)($request['SortDir'] ?? 'desc')) === 'asc') ? 'ASC' : 'DESC';
@@ -1228,7 +1320,7 @@ class Report extends Ork3
             . " LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id"
             . " WHERE $pageDismissedClause"
             . " AND (m.suspended IS NULL OR m.suspended = 0)"
-            . $scope . $whereSql;
+            . $scope . $whereSql . $visClause;
 
         if ($knownTotal !== null) {
             $total = $knownTotal;
@@ -1266,7 +1358,7 @@ class Report extends Ork3
             $orParts[] = '(recs.mundane_id = ' . $c[0] . ' AND recs.kingdomaward_id = ' . $c[1] . ' AND COALESCE(recs.rank,0) = ' . $c[2] . ')';
         }
         $this->db->Clear();
-        $ir = $this->db->query("SELECT recs.recommendations_id FROM " . DB_PREFIX . "recommendations recs LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE $pageDismissedClause AND (" . implode(' OR ', $orParts) . ")");
+        $ir = $this->db->query("SELECT recs.recommendations_id FROM " . DB_PREFIX . "recommendations recs LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE $pageDismissedClause AND (" . implode(' OR ', $orParts) . ")" . $visClause);
         $pageRecIds = [];
         if ($ir !== false) {
             while ($ir->next()) {
@@ -1279,6 +1371,7 @@ class Report extends Ork3
             'ParkId'      => (int)($request['ParkId'] ?? 0),
             'PlayerId'    => 0,
             'RequestedBy' => (int)($request['RequestedBy'] ?? 0),
+            'Token'       => $request['Token'] ?? '',
             'RecommendationsIdIn' => $pageRecIds,
             'SkipCache'   => true,
             'IncludeDismissed' => $includeDismissed,
@@ -1290,13 +1383,15 @@ class Report extends Ork3
         $groups = array_values(array_filter($groups, function ($g) use ($elig) {
             $already = !empty($g['AlreadyHas']);
             $snoozed = !empty($g['IsSnoozed']);
-            $rank    = (int)$g['Rank'];
+            // Must mirror the SQL prefilter above exactly, or batches come back
+            // short. Both now key on the ladder flag, not on `Rank > 0`.
+            $isLadder = !empty($g['IsLadder']);
             switch ($elig) {
                 case 'all':       return true;
                 case 'snoozed':   return $snoozed;
-                case 'nonladder': return $rank === 0 && !$snoozed;
+                case 'nonladder': return !$isLadder && !$snoozed;
                 case 'ator':      return $already && !$snoozed;
-                case 'below':     return $rank > 0 && !$already && !$snoozed;
+                case 'below':     return $isLadder && !$already && !$snoozed;
                 case 'open':
                 default:          return !$already && !$snoozed;
             }
@@ -1435,22 +1530,31 @@ class Report extends Ork3
         // kingdom's IncludePrincipalityInStatistics flag is on, so the badge stays
         // in sync with what the lazy-loaded panel actually shows.
         $kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kid)));
+        // Only the kingdom-wide badge (RecommendedBy 0) is cached. A RecommendedBy-scoped
+        // count is one user's own recs — an indexed, per-user query nothing else shares —
+        // and no write busts its key: the author's entry kept counting a rec as public
+        // after it was hidden, and the uncached hidden half counted it again (the badge
+        // read N+1 for up to the TTL). Not caching it removes that whole class of drift.
+        $cacheable = empty($request['RecommendedBy']);
         $key = Ork3::$Lib->ghettocache->key([
             'KingdomIds'    => $kidList,
-            'RecommendedBy' => (int)($request['RecommendedBy'] ?? 0),
+            'RecommendedBy' => 0,
             // Bumped when the counted predicate changes, so entries cached under the
             // previous rule are not served for the rest of their TTL.
             'V'             => self::REC_CACHE_VERSION,
         ]);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
-            return (int)$cache;
+        if ($cacheable && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
+            return (int)$cache + $this->hiddenRecommendationsCount($kidList, $request);
         }
 
         // Must carry the same recipient-status predicate as PlayerAwardRecommendations and
         // PlayerAwardRecommendationsPage, or the badge counts rows the Manager can never
         // show and the counter can never be worked down to zero.
+        // Public recs only: hidden (Monarchy Only) recs are counted per viewer below,
+        // uncached, so the shared cache entry never depends on who warmed it.
         $where = "m.kingdom_id IN ($kidList) AND (m.suspended IS NULL OR m.suspended = 0)"
-            . " AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)";
+            . " AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)"
+            . " AND recs.monarchy_only = 0";
         if (!empty($request['RecommendedBy'])) {
             $rb = (int)$request['RecommendedBy'];
             $where .= " AND recs.recommended_by_id = $rb";
@@ -1459,12 +1563,45 @@ class Report extends Ork3
 				FROM " . DB_PREFIX . "recommendations recs
 				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id
 				WHERE $where";
+        $this->db->Clear();
         $r = $this->db->query($sql);
         $n = 0;
         if ($r !== false && $r->size() > 0 && $r->next()) {
             $n = (int)$r->n;
         }
-        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $n);
+        if ($cacheable) {
+            $n = (int) Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $n);
+        }
+        return $n + $this->hiddenRecommendationsCount($kidList, $request);
+    }
+
+    // The viewer-dependent half of the tab badge: Monarchy Only recs this TOKEN's
+    // viewer may see. Never cached (the predicate is per viewer); cheap because
+    // idx_recs_monarchy_only narrows to the few hidden rows. This runs on every
+    // kingdom profile load, so it first asks the index whether the scope has ANY live
+    // hidden rec, and only then resolves the viewer's officer grants.
+    private function hiddenRecommendationsCount(string $kidList, array $request): int
+    {
+        $vis    = Ork3::$Lib->recommendationvisibility;
+        $viewer = $vis->viewerFromToken($request['Token'] ?? '');
+        if ($viewer <= 0) {
+            return 0;
+        }
+        $base = "recs.monarchy_only <> 0 AND m.kingdom_id IN ($kidList) AND (m.suspended IS NULL OR m.suspended = 0)"
+            . " AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)";
+        if (!empty($request['RecommendedBy'])) {
+            $base .= ' AND recs.recommended_by_id = ' . (int)$request['RecommendedBy'];
+        }
+        $this->db->Clear();
+        $any = $this->db->DataSet('SELECT 1 AS x FROM ' . DB_PREFIX . 'recommendations recs JOIN ' . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE $base LIMIT 1");
+        if (!$any || !$any->Next()) {
+            return 0;
+        }
+        $where = $base . ' AND ' . $vis->sqlPredicate($viewer, 'recs', 'm', array_map('intval', explode(',', $kidList)));
+        $this->db->Clear();
+        $r = $this->db->query('SELECT COUNT(*) AS n FROM ' . DB_PREFIX . 'recommendations recs JOIN ' . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE $where");
+
+        return ($r !== false && $r->size() > 0 && $r->next()) ? (int)$r->n : 0;
     }
 
     /**
@@ -1475,38 +1612,37 @@ class Report extends Ork3
      * consumers reach this through Model_Reports::deleted_recommended_awards, which
      * returns just the rows, and the Kingdom/Park AJAX panels derive hasMore from a
      * short batch — a COUNT(*) here would be a full scan nothing can read.
+     *
+     * Not cached: Monarchy Only rows are filtered per TOKEN viewer in SQL, so no
+     * entry could be shared between viewers. The panel is officer-only and
+     * click-to-open, so the uncached read is cheap in practice.
      */
     public function DeletedAwardRecommendations($request)
     {
         $limit  = max(1, min(1000, (int)($request['Limit'] ?? 200)));
         $offset = max(0, (int)($request['Offset'] ?? 0));
-        // Only the default first page is cached. Deeper slices are rare (someone
-        // walking back through years of dismissals) and there is no wildcard bust, so
-        // caching them would leave entries no dismiss/undelete could ever clear —
-        // Player::bust_player_award_recs_cache busts this exact key shape.
-        $cacheable = ($offset === 0 && $limit === 200);
-        $key = Ork3::$Lib->ghettocache->key([
-            'KingdomId' => (int)($request['KingdomId'] ?? 0),
-            'ParkId'    => (int)($request['ParkId']    ?? 0),
-            'PlayerId'  => (int)($request['PlayerId']  ?? 0),
-            'Deleted'   => 1,
-            'V'         => self::REC_CACHE_VERSION,
-        ]);
-        if ($cacheable && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
-            return $cache;
-        }
+        $vis    = Ork3::$Lib->recommendationvisibility;
 
+        // $scopeKids is the set of recipient kingdoms the query can return, resolved
+        // with the same last-match-wins precedence as $location_clause.
         $location_clause = '';
-        if (valid_id($request['KingdomId'])) {
-            $kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+        $scopeKids = [];
+        if (valid_id($request['KingdomId'] ?? 0)) {
+            $scopeKids = Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId']);
+            $kidList = implode(',', array_map('intval', $scopeKids));
             $location_clause = " AND m.kingdom_id IN (" . $kidList . ")";
         }
-        if (valid_id($request['ParkId'])) {
+        if (valid_id($request['ParkId'] ?? 0)) {
+            $scopeKids = [$vis->kingdomOfPark((int)$request['ParkId'])];
             $location_clause = " AND m.park_id = " . (int)$request['ParkId'];
         }
-        if (valid_id($request['PlayerId'])) {
+        if (valid_id($request['PlayerId'] ?? 0)) {
+            $this->db->Clear();
+            $kr = $this->db->DataSet('SELECT kingdom_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int)$request['PlayerId']);
+            $scopeKids = ($kr && $kr->Next()) ? [(int)$kr->kingdom_id] : [];
             $location_clause = " AND recs.mundane_id = " . (int)$request['PlayerId'];
         }
+        $visClause = ' AND ' . $vis->sqlPredicate($vis->viewerFromToken($request['Token'] ?? ''), 'recs', 'm', $scopeKids);
 
         $sql = "select
 			a.peerage, ifnull(ka.name, a.name) as award_name,
@@ -1536,7 +1672,7 @@ class Report extends Ork3
 			LEFT join " . DB_PREFIX . "mundane dm on dm.mundane_id = recs.deleted_by
 			LEFT join " . DB_PREFIX . "park p on p.park_id = m.park_id
 			LEFT join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
-			WHERE recs.deleted_at IS NOT NULL $location_clause
+			WHERE recs.deleted_at IS NOT NULL $location_clause $visClause
 			order by recs.deleted_at DESC
 			LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
         $this->db->Clear();
@@ -1571,10 +1707,7 @@ class Report extends Ork3
             $response['Status'] = Success();
         }
         $response['NextOffset'] = $offset + count($response['AwardRecommendations']);
-        if (!$cacheable) {
-            return $response;
-        }
-        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
+        return $response;
     }
 
     public function Guilds($request)
@@ -4380,6 +4513,7 @@ class Report extends Ork3
         $show_event_count        = !empty($request['ShowEventCount']); // emit a separate count of event-based sign-ins (informational only, not excluded)
         $exclude_events          = !empty($request['ExcludeEvents']);  // count only non-event (park-day) sign-ins
         $waiver_age_months       = isset($request['WaiverAgeMonths']) ? (int)$request['WaiverAgeMonths'] : 0; // months waiver must be on file — cannot auto-verify, shown as caveat only
+        $min_distinct_months     = isset($request['MinDistinctMonths']) ? (int)$request['MinDistinctMonths'] : 0; // the counted sign-ins must fall in at least this many different calendar months
 
         // Compute start date.
         // display_start_date: shown in the report header (raw date for DaysWindow, snapped for MonthsWindow).
@@ -4483,6 +4617,11 @@ class Report extends Ork3
         } else {
             // Monday-start: use pre-computed columns (fastest)
             $att_expr = "COUNT(DISTINCT CONCAT(a.date_year, '-', a.date_week3))";
+        }
+        // MinDistinctMonths: how many different calendar months the counted sign-ins
+        // fall in (same rows, same filters as att_count). Standard path only.
+        if ($min_distinct_months > 0) {
+            $att_extra_cols .= ", COUNT(DISTINCT DATE_FORMAT(a.date, '%Y-%m')) AS month_count";
         }
 
         // Pre-build the att LEFT JOIN clause. Two paths:
@@ -4651,6 +4790,7 @@ class Report extends Ork3
 				k.kingdom_id, k.name AS kingdom_name,
 				COALESCE(att.att_count, 0) AS att_count
 				$att_select_extra
+				" . ($min_distinct_months > 0 && $max_outside_kingdom_creds <= 0 ? ", COALESCE(att.month_count, 0) AS month_count" : "") . "
 				$online_count_select
 				$event_count_select
 				" . ($home_park_only && $kingdom_evt_bonus ? ", COALESCE(att.kingdom_evt_credit, 0) AS kingdom_evt_credit" : "") . "
@@ -4707,7 +4847,8 @@ class Report extends Ork3
                      'MembershipMode' => $membership_mode,
                      'ShowEventCount' => $show_event_count,
                      'ExcludeEvents' => $exclude_events,
-                     'WaiverAgeMonths' => $waiver_age_months];
+                     'WaiverAgeMonths' => $waiver_age_months,
+                     'MinDistinctMonths' => $min_distinct_months];
         if ($r !== false && $r->size() > 0) {
             while ($r->next()) {
                 $_member_date    = $membership_mode === 'first_attendance' ? $r->first_att_date : $r->park_member_since;
@@ -4716,7 +4857,9 @@ class Report extends Ork3
                 $suspended       = (int)$r->suspended === 1;
                 $att_count       = (int)$r->att_count;
                 $base_ok         = !$suspended && $r->waivered == 1 && $r->dues_paid == 1 && $membership_ok;
-                $kingdom_eligible = $base_ok && $att_count >= $att_req;
+                $month_count     = $min_distinct_months > 0 ? (int)($r->month_count ?? 0) : null;
+                $months_ok       = $min_distinct_months <= 0 || $month_count >= $min_distinct_months;
+                $kingdom_eligible = $base_ok && $att_count >= $att_req && $months_ok;
 
                 $row = [
                     'MundaneId'       => (int)$r->mundane_id,
@@ -4741,6 +4884,8 @@ class Report extends Ork3
                     'ActiveKnight'       => false,
                     'OnlineExcluded'     => $exclude_online ? (int)$r->online_excluded_count : null,
                     'EventCount'         => $show_event_count ? (int)$r->event_att_count : null,
+                    'MonthCount'         => $month_count,
+                    'MonthsOk'           => $months_ok,
                 ];
                 if ($active_knight_threshold > 0) {
                     $raw_att_count        = (int)$r->raw_att_count;
@@ -5181,7 +5326,146 @@ class Report extends Ork3
             'RequestsGlobal'       => $global['requests'] ?? null,
             'BytesGlobal'          => $global['bytes'] ?? null,
             'BlockedGlobal'        => $global !== null ? $this->_cfFirewallTotal($token, $zone, $win, null, null) : null,
+            // v2 (2026-10-19): what actually reached a server we run, and how much
+            // of the edge-stopped traffic is Cloudflare's own challenge/block pages.
+            // See RecapPlatformBreakdown() for how the digest derives its buckets.
+            'OriginRequests'       => $ork['originRequests'],
+            'CfPageRequests'       => $ork['cfPageRequests'],
+            'CacheHitsGlobal'      => $global['cacheHits'] ?? null,
+            'CachedBytesGlobal'    => $global['cachedBytes'] ?? null,
+            'OriginRequestsGlobal' => $global['originRequests'] ?? null,
+            'CfPageRequestsGlobal' => $global['cfPageRequests'] ?? null,
+            'TopOtherHost'         => $global['topOtherHost'] ?? null,
+            'StatsVersion'         => 2,
         );
+    }
+
+    // Cache statuses that mean Cloudflare went to an origin for the response.
+    // "revalidated" is a conditional request the origin answered with 304: cheap,
+    // but it still touched the server, so it counts as handled by us.
+    private const CF_ORIGIN_CACHE_STATUSES = '["dynamic","miss","expired","bypass","revalidated"]';
+
+    /**
+     * Fetch a complete, fresh PlatformStats block for an already-computed week,
+     * for the backfill (bin/backfill-recap-platform-stats.php). Returns null when
+     * Cloudflare cannot answer (no credentials, past retention, error) so the
+     * caller leaves the stored week untouched.
+     *
+     * The WHOLE block is refetched, not just the v2 keys: every bucket in the
+     * digest is a remainder of the others, so the numbers must come from one
+     * query window. Grafting fresh origin counts onto a total stored earlier
+     * (say, by a mid-week manual run) produces percentages over 100.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function RecapPlatformStatsForWeek($week_start)
+    {
+        $win = $this->_WeeklyRecapWindow($week_start);
+        $ps  = $this->_RecapCloudflareStats($win);
+        return is_array($ps) ? $ps : null;
+    }
+
+    /**
+     * Replace ONLY the PlatformStats block of a stored week's payload, with a
+     * single JSON_SET. Every other key (HumanUsers, the peerage and event lists,
+     * the hand-blanked bot-wave weeks) stays byte-for-byte as it was, and
+     * computed_at is left alone so the page footer still says when the recap
+     * itself was built. Returns false if no row exists for the week.
+     *
+     * @param array<string, mixed> $platform_stats a block from _RecapCloudflareStats()
+     */
+    public function ReplaceWeeklyRecapPlatformStats($week_start, array $platform_stats)
+    {
+        $win = $this->_WeeklyRecapWindow($week_start);
+        $r = $this->db->query(
+            "SELECT 1 AS present FROM " . DB_PREFIX . "weekly_recap WHERE week_start = :ws",
+            array(':ws' => $win['WeekStart'])
+        );
+        if (!$r || $r->size() == 0) {
+            return false;
+        }
+        // JSON_EXTRACT of the bound literal makes MariaDB store real JSON, not a
+        // string containing JSON.
+        $sql = "UPDATE " . DB_PREFIX . "weekly_recap
+				   SET payload_json = JSON_SET(payload_json, '$.PlatformStats', JSON_EXTRACT(:ps, '$'))
+				 WHERE week_start = :ws";
+        return $this->db->query($sql, array(':ws' => $win['WeekStart'], ':ps' => json_encode($platform_stats)));
+    }
+
+    /**
+     * PURE. Turn a stored PlatformStats block into the three buckets the recap
+     * digest reports, for one scope ('ork' = ork.amtgard.com US+CA, 'global' =
+     * the whole zone):
+     *
+     *   servers   requests Cloudflare forwarded to an origin we run
+     *   cache     answered from Cloudflare's cache
+     *   stopped   never reached us: malicious (blocked/challenged) + the
+     *             challenge/block pages those clients then fetched + other
+     *             edge responses (redirects, not-found, non-firewall 403s)
+     *
+     * 'other' is a remainder, so the three always sum to the total. Returns
+     * null when the block predates v2 (no OriginRequests) so the template can
+     * fall back to the old sentence for weeks that can no longer be backfilled.
+     *
+     * @param array<string, mixed> $ps
+     * @return array<string, int>|null
+     */
+    public static function RecapPlatformBreakdown(array $ps, $scope = 'ork')
+    {
+        $g = $scope === 'global' ? 'Global' : '';
+        $totalKey = $scope === 'global' ? 'RequestsGlobal' : 'Requests';
+        $cacheKey = $scope === 'global' ? 'CacheHitsGlobal' : 'CacheHits';
+        $malKey   = $scope === 'global' ? 'BlockedGlobal' : 'BlockedOrChallenged';
+        if (!isset($ps['OriginRequests' . $g]) || !isset($ps[$totalKey])) {
+            return null;
+        }
+        $total   = max(0, (int)$ps[$totalKey]);
+        $servers = max(0, (int)$ps['OriginRequests' . $g]);
+        $cache   = max(0, (int)($ps[$cacheKey] ?? 0));
+        $stopped = max(0, $total - $servers - $cache);
+        $mal     = min($stopped, max(0, (int)($ps[$malKey] ?? 0)));
+        $cfPages = min($stopped - $mal, max(0, (int)($ps['CfPageRequests' . $g] ?? 0)));
+        $other   = $stopped - $mal - $cfPages;
+        $pct = function ($n) use ($total) {
+            return $total > 0 ? (int)round(100 * $n / $total) : 0;
+        };
+        return array(
+            'total'       => $total,
+            'servers'     => $servers,
+            'cache'       => $cache,
+            'stopped'     => $stopped,
+            'malicious'   => $mal,
+            'cfPages'     => $cfPages,
+            'other'       => $other,
+            'serversPct'  => $pct($servers),
+            'cachePct'    => $pct($cache),
+            'stoppedPct'  => $pct($stopped),
+        );
+    }
+
+    /**
+     * PURE. Given per-host totals, cache hits and origin counts (host => count),
+     * return the host other than $exclude with the most edge-stopped traffic,
+     * or null when no other host appears. Stopped = total - cache - origin.
+     *
+     * @param array<string, int> $totals
+     * @param array<string, int> $hits
+     * @param array<string, int> $origins
+     * @return array{Host: string, Requests: int, Stopped: int}|null
+     */
+    public static function RecapTopOtherHost(array $totals, array $hits, array $origins, $exclude = 'ork.amtgard.com')
+    {
+        $best = null;
+        foreach ($totals as $host => $count) {
+            if ($host === $exclude || $host === '') {
+                continue;
+            }
+            $stopped = max(0, (int)$count - (int)($hits[$host] ?? 0) - (int)($origins[$host] ?? 0));
+            if ($best === null || $stopped > $best['Stopped']) {
+                $best = array('Host' => (string)$host, 'Requests' => (int)$count, 'Stopped' => $stopped);
+            }
+        }
+        return $best;
     }
 
     // One httpRequestsAdaptiveGroups round trip for a given (optional) host and
@@ -5197,9 +5481,28 @@ class Report extends Ork3
             $filterParts[] = 'clientCountryName_in:["' . implode('","', $countries) . '"]';
         }
         $filter = '{' . implode(', ', $filterParts) . '}';
-        $cacheFilterParts = $filterParts;
-        $cacheFilterParts[] = 'cacheStatus:"hit"';
-        $cacheFilter = '{' . implode(', ', $cacheFilterParts) . '}';
+        $withExtra = function ($extra) use ($filterParts) {
+            return '{' . implode(', ', array_merge($filterParts, array($extra))) . '}';
+        };
+        $cacheFilter  = $withExtra('cacheStatus:"hit"');
+        $originFilter = $withExtra('cacheStatus_in:' . self::CF_ORIGIN_CACHE_STATUSES);
+        $cfPageFilter = $withExtra('clientRequestPath_like:"/cdn-cgi/%"');
+
+        // Per-host breakdown only makes sense zone-wide (no host filter): it is
+        // what names the busiest OTHER host in the worldwide sentence.
+        $byHost = '';
+        if ($host === null) {
+            $byHost = '
+				byHost: httpRequestsAdaptiveGroups(limit:6, filter:' . $filter . ', orderBy:[count_DESC]) {
+					count dimensions { clientRequestHTTPHost }
+				}
+				byHostHit: httpRequestsAdaptiveGroups(limit:6, filter:' . $cacheFilter . ', orderBy:[count_DESC]) {
+					count dimensions { clientRequestHTTPHost }
+				}
+				byHostOrigin: httpRequestsAdaptiveGroups(limit:6, filter:' . $originFilter . ', orderBy:[count_DESC]) {
+					count dimensions { clientRequestHTTPHost }
+				}';
+        }
 
         $gql = 'query($zone:String!,$since:Time!,$until:Time!) {
 			viewer { zones(filter:{zoneTag:$zone}) {
@@ -5212,6 +5515,12 @@ class Report extends Ork3
 				cacheHit: httpRequestsAdaptiveGroups(limit:1, filter:' . $cacheFilter . ') {
 					count sum { edgeResponseBytes }
 				}
+				origin: httpRequestsAdaptiveGroups(limit:1, filter:' . $originFilter . ') {
+					count
+				}
+				cfPages: httpRequestsAdaptiveGroups(limit:1, filter:' . $cfPageFilter . ') {
+					count
+				}' . $byHost . '
 			} }
 		}';
         $json = $this->_cfGraphQL($token, $gql, array('zone' => $zone, 'since' => $since, 'until' => $until));
@@ -5226,15 +5535,27 @@ class Report extends Ork3
         foreach (($zones['byCountry'] ?? array()) as $row) {
             $by_country[$row['dimensions']['clientCountryName']] = (int)$row['count'];
         }
+        $hostCounts = function ($key) use ($zones) {
+            $out = array();
+            foreach (($zones[$key] ?? array()) as $row) {
+                $out[$row['dimensions']['clientRequestHTTPHost']] = (int)$row['count'];
+            }
+            return $out;
+        };
         $total_bytes  = (int)$totals['sum']['edgeResponseBytes'];
         $cached_bytes = (int)($cache['sum']['edgeResponseBytes'] ?? 0);
         return array(
-            'requests'    => (int)$totals['count'],
-            'bytes'       => $total_bytes,
-            'cacheHits'   => (int)$cache['count'],
-            'cachedBytes' => $cached_bytes,
-            'originBytes' => max(0, $total_bytes - $cached_bytes),
-            'byCountry'   => $by_country,
+            'requests'       => (int)$totals['count'],
+            'bytes'          => $total_bytes,
+            'cacheHits'      => (int)$cache['count'],
+            'cachedBytes'    => $cached_bytes,
+            'originBytes'    => max(0, $total_bytes - $cached_bytes),
+            'byCountry'      => $by_country,
+            'originRequests' => (int)($zones['origin'][0]['count'] ?? 0),
+            'cfPageRequests' => (int)($zones['cfPages'][0]['count'] ?? 0),
+            'topOtherHost'   => $host === null
+                ? self::RecapTopOtherHost($hostCounts('byHost'), $hostCounts('byHostHit'), $hostCounts('byHostOrigin'))
+                : null,
         );
     }
 
@@ -6059,6 +6380,71 @@ class Report extends Ork3
             ),
         );
 
+        // --- shared question library opt-in -----------------------------------
+        // Opting in is ork_qual_config.share_questions = 1 on the kingdom's REEVE
+        // row (sharing is Reeve-only). No saved row means NOT opted in — the same
+        // rule QualTest::getConfig() and getLibraryQuestions() apply. One pass
+        // over the active kingdoms feeds the KPIs, the pie and both lists, so the
+        // counts and the lists can never disagree.
+        $shareRows = $this->_rfuQualSharingKingdoms();
+        $shareIn = array();
+        $shareOut = array();
+        $shareContributing = 0;
+        $shareOutNoReeve = 0;
+        foreach ($shareRows as $row) {
+            if ($row['shares']) {
+                if ($row['shared_q'] > 0) {
+                    $shareContributing++;
+                }
+                $shareIn[] = array(
+                    'label' => $row['name'],
+                    'route' => 'Kingdom/index/' . $row['kingdom_id'],
+                    'sub'   => ($row['shared_q'] > 0)
+                        ? number_format($row['shared_q']) . ' question' . ($row['shared_q'] === 1 ? '' : 's') . ' in the library'
+                        : 'No published questions shared yet',
+                );
+            } else {
+                if (!$row['reeve_on']) {
+                    $shareOutNoReeve++;
+                }
+                $shareOut[] = array(
+                    'label' => $row['name'],
+                    'route' => 'Kingdom/index/' . $row['kingdom_id'],
+                    'sub'   => $row['reeve_on'] ? "Reeve's Test enabled" : "Reeve's Test off",
+                );
+            }
+        }
+        $shareInCount  = count($shareIn);
+        $shareOutCount = count($shareOut);
+        // The pie splits opted-out kingdoms by whether they run the Reeve's Test
+        // at all, so "declined to share" reads apart from "nothing to share".
+        // Opting in takes precedence: a kingdom that opted in with its Reeve's
+        // Test switched off still has library access, so it stays "opted in" and
+        // the pie agrees with the KPI.
+        $featQualSharing = array(
+            'key'         => 'qual_sharing',
+            'title'       => 'Question Library Sharing',
+            'description' => "Kingdoms opt in to share their published Reeve's Test questions with other kingdoms, and in return can import from the shared library.",
+            'kpis' => array(
+                $this->_rfuKpi('Kingdoms opted in', $shareInCount, $activeKingdoms, $kPct($shareInCount), "active kingdoms with sharing turned on in their Reeve's Test settings", null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Kingdoms opted out', $shareOutCount, $activeKingdoms, $kPct($shareOutCount), 'active kingdoms that have not opted in — never saving test settings counts as opted out', null, null, 'of active kingdoms'),
+                $this->_rfuKpi('Opted in and contributing', $shareContributing, $activeKingdoms, $kPct($shareContributing), 'opted in AND at least one active question in a published version — actually adding to the library', null, null, 'of active kingdoms'),
+            ),
+            'charts' => array(
+                array(
+                    'id'         => 'rfu-qual-sharing',
+                    'type'       => 'pie',
+                    'title'      => 'Active kingdoms: library sharing',
+                    'categories' => array('Kingdoms opted in', 'Kingdoms opted out', "Kingdoms without the Reeve's Test enabled"),
+                    'data'       => array($shareInCount, $shareOutCount - $shareOutNoReeve, $shareOutNoReeve),
+                ),
+            ),
+            'links' => array(
+                $this->_rfuLinkTile('Opted in to sharing', $shareIn),
+                $this->_rfuLinkTile('Opted out of sharing', $shareOut),
+            ),
+        );
+
         // --- taking the test --------------------------------------------------
         // ork_qual_attempt logs EVERY submission, pass or fail, so pass rate is
         // per attempt (SUM(passed)/COUNT(*)). ork_qual_result is pass-only current
@@ -6114,23 +6500,26 @@ class Report extends Ork3
         $sessPlayers = $this->_rfuScalar(
             "SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}session` WHERE expires > NOW()"
         );
+        // The cap lives in one place; every threshold and label below derives
+        // from it so raising it again cannot leave this report counting the
+        // old number.
+        $sessCap = (int)Authorization::MAX_SESSIONS_PER_USER;
         $sessMulti2 = $this->_rfuScalar(
             "SELECT COUNT(*) AS c FROM (
 			    SELECT mundane_id FROM `{$p}session` WHERE expires > NOW()
-			     GROUP BY mundane_id HAVING COUNT(*) = 2) m"
+			     GROUP BY mundane_id HAVING COUNT(*) >= 2 AND COUNT(*) < {$sessCap}) m"
         );
         // At the cap: one more login silently evicts their oldest session. A
-        // persistently large number here is the signal the 3-session cap is
-        // too tight.
+        // persistently large number here is the signal the cap is too tight.
         $sessAtCap = $this->_rfuScalar(
             "SELECT COUNT(*) AS c FROM (
 			    SELECT mundane_id FROM `{$p}session` WHERE expires > NOW()
-			     GROUP BY mundane_id HAVING COUNT(*) >= 3) m"
+			     GROUP BY mundane_id HAVING COUNT(*) >= {$sessCap}) m"
         );
         // Accumulating sign-in counts come from ork_signin_tally (anonymous
         // per-day/per-client counters bumped in CreateSession) — ork_session
         // itself can't provide them, since logout / Log Out Everywhere / the
-        // three-session cap all DELETE rows.
+        // session cap all DELETE rows.
         $signins7 = $this->_rfuScalar(
             "SELECT COALESCE(SUM(signins),0) AS c FROM `{$p}signin_tally`
 			  WHERE day >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)"
@@ -6184,11 +6573,11 @@ class Report extends Ork3
         $featSessions = array(
             'key'         => 'multi_sessions',
             'title'       => 'Multi-Device Sessions',
-            'description' => 'Up to three concurrent sign-ins per player, with session visibility and Log Out Everywhere in the account menu. Live snapshot: these numbers reflect sessions open right now, not a running total.',
+            'description' => 'Up to ' . $sessCap . ' concurrent sign-ins per player, with session visibility and Log Out Everywhere in the account menu. Live snapshot: these numbers reflect sessions open right now, not a running total.',
             'kpis' => array(
                 $this->_rfuKpi('Signed-in players right now', $sessPlayers, null, null, 'distinct players with at least one unexpired session'),
-                $this->_rfuKpi('Active sessions', $sessActive, null, null, 'unexpired sessions — at most three per player'),
-                $this->_rfuKpi('Players with 2+ sessions', $sessMulti2 + $sessAtCap, $sessPlayers, $sessPlayers > 0 ? round((($sessMulti2 + $sessAtCap) / $sessPlayers) * 100, 1) : null, $sessMulti2 . ' on two sessions, ' . $sessAtCap . ' at the three-session cap (their next sign-in evicts their oldest session — if the capped share stays high, the cap may be too tight)', null, null, 'of signed-in players'),
+                $this->_rfuKpi('Active sessions', $sessActive, null, null, 'unexpired sessions — at most ' . $sessCap . ' per player'),
+                $this->_rfuKpi('Players with 2+ sessions', $sessMulti2 + $sessAtCap, $sessPlayers, $sessPlayers > 0 ? round((($sessMulti2 + $sessAtCap) / $sessPlayers) * 100, 1) : null, $sessMulti2 . ' on 2–' . ($sessCap - 1) . ' sessions, ' . $sessAtCap . ' at the ' . $sessCap . '-session cap (their next sign-in evicts their oldest session — if the capped share stays high, the cap may be too tight)', null, null, 'of signed-in players'),
                 $this->_rfuKpi('Sign-ins (7 days)', $signins7, null, null, 'sessions created in the last 7 days — anonymous daily tally, no player attribution'),
                 $this->_rfuKpi('Sign-ins (30 days)', $signins30, null, null, 'sessions created in the last 30 days — anonymous daily tally, no player attribution'),
             ),
@@ -6605,6 +6994,7 @@ class Report extends Ork3
             'features' => array(
                 $featQualAdoption,
                 $featQualBank,
+                $featQualSharing,
                 $featQualTaking,
             ),
         );
@@ -7774,6 +8164,58 @@ class Report extends Ork3
             }
         }
         return $this->_rfuLinkTile($title, $rows);
+    }
+
+    /**
+     * Every active kingdom with its shared-question-library state, by name.
+     * shares   — a saved REEVE qual_config row with share_questions = 1 (no row = out).
+     * reeve_on — the QualTestReeveEnabled switch is on ('"1"', JSON round-tripped).
+     * shared_q — active Reeve questions in a PUBLISHED version, i.e. what the
+     *            kingdom would put in the library; mirrors the join in
+     *            QualTest::getLibraryQuestions() minus the share filter.
+     *
+     * @return array list of ['kingdom_id' => int, 'name' => string, 'shares' => bool, 'reeve_on' => bool, 'shared_q' => int]
+     */
+    private function _rfuQualSharingKingdoms()
+    {
+        $p = DB_PREFIX;
+        $this->db->Clear();
+        $rows = array();
+        $r = $this->db->query(
+            "SELECT k.kingdom_id, k.name,
+					COALESCE(qc.share_questions, 0) AS shares,
+					EXISTS (
+						SELECT 1 FROM `{$p}configuration` cfg
+						 WHERE cfg.type = 'Kingdom' AND cfg.id = k.kingdom_id
+						   AND cfg.`key` = 'QualTestReeveEnabled' AND cfg.value = '\"1\"'
+					) AS reeve_on,
+					(
+						SELECT COUNT(DISTINCT q.qual_question_id)
+						  FROM `{$p}qual_question` q
+						  JOIN `{$p}qual_set_question` sq ON sq.qual_question_id = q.qual_question_id
+						  JOIN `{$p}qual_question_set` s
+						    ON s.qual_question_set_id = sq.qual_question_set_id
+						   AND s.kingdom_id = q.kingdom_id AND s.test_type = 'reeve' AND s.status = 'published'
+						 WHERE q.kingdom_id = k.kingdom_id AND q.test_type = 'reeve' AND q.status = 'active'
+					) AS shared_q
+			   FROM `{$p}kingdom` k
+			   LEFT JOIN `{$p}qual_config` qc
+			     ON qc.kingdom_id = k.kingdom_id AND qc.test_type = 'reeve'
+			  WHERE k.active = 'Active'
+			  ORDER BY k.name ASC"
+        );
+        if ($r !== false) {
+            while ($r->next()) {
+                $rows[] = array(
+                    'kingdom_id' => (int)$r->kingdom_id,
+                    'name'       => $r->name,
+                    'shares'     => ((int)$r->shares === 1),
+                    'reeve_on'   => ((int)$r->reeve_on === 1),
+                    'shared_q'   => (int)$r->shared_q,
+                );
+            }
+        }
+        return $rows;
     }
 
     /**

@@ -59,6 +59,10 @@ class Controller_Park extends Controller
 
     public function profile($park_id = null)
     {
+        // Same-slug kingdom-original ladders, so the rank pickers can say when the
+        // recipient already holds the equivalent ladder in another kingdom.
+        // Informational only -- see Award::pseudoLadderSiblings().
+        $this->data['PseudoLadderSiblings'] = (new Award())->pseudoLadderSiblings();
         $this->template = '../revised-frontend/Parknew_index.tpl';
         $park_id = preg_replace('/[^0-9]/', '', $park_id);
         if (!valid_id($park_id)) {
@@ -282,6 +286,9 @@ class Controller_Park extends Controller
         $this->data['IsOwnPark']     = $uid > 0 && (int)($this->session->park_id ?? 0) === (int)$park_id;
         $this->data['CanManagePark'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$park_id, AUTH_EDIT);
+        // Bonus Credits button + modal: park EDIT, or a manager of the park's kingdom.
+        $this->load_model('BonusCredit');
+        $this->data['CanBonusCredits'] = $uid > 0 && $this->BonusCredit->can_grant($uid, (int)$park_id);
         $this->data['CanAdminPark']  = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
         // Park admins can merge two players who both belong to THIS park.
@@ -300,18 +307,22 @@ class Controller_Park extends Controller
 
         $this->data['AwardRecommendations'] = [];
         $canManagePark = $this->data['CanManagePark'] ?? false;
+        // An empty list may only mean the viewer isn't allowed to see it.
+        $this->data['RecsHiddenBySetting'] = !$recsPublic && !$canManagePark;
         if ($recsPublic || $canManagePark) {
             $this->data['ShowRecsTab'] = true;
-            $recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+            $recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid, 'Token' => $this->session->token]);
             $this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
         } elseif ($uid > 0) {
-            $recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+            $recs = $this->Reports->recommended_awards(['KingdomId' => 0, 'ParkId' => $park_id, 'PlayerId' => 0, 'RequestedBy' => $uid, 'Token' => $this->session->token]);
             $allRecs = is_array($recs) ? $recs : [];
             $myRecs = array_values(array_filter($allRecs, function ($r) use ($uid) {
                 return (int)$r['RecommendedById'] === $uid;
             }));
             $this->data['AwardRecommendations'] = $myRecs;
-            $this->data['ShowRecsTab'] = !empty($myRecs);
+            // Shown even with none of their own: the tab then says why it is
+            // empty and still offers the Recommend button.
+            $this->data['ShowRecsTab'] = true;
         } else {
             $this->data['ShowRecsTab'] = false;
         }
@@ -324,6 +335,10 @@ class Controller_Park extends Controller
 
         $this->load_model('Court');
         $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$this->session->kingdom_id, (int)$park_id);
+        // Offered to an officer of this park or its kingdom. The player search is
+        // kingdom-wide, so the modal re-checks against each picked recipient
+        // (ParkAjax monarchyonlyeligible); the server's create path stays the authority.
+        $this->data['CanMonarchyOnlyRec']  = $uid > 0 && $this->Player->monarchy_only_level($uid, (int)($this->data['park_info']['ParkInfo']['KingdomId'] ?? 0), (int)$park_id) > 0;
         $this->data['CourtList']           = [];
         $this->data['CourtUpcomingEvents'] = [];
         if ($this->data['CanManageCourt']) {

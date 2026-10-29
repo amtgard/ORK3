@@ -132,10 +132,10 @@ class Controller_Kingdom extends Controller
 
         $AwardRecommendations = [];
         if ($recsPublic || $canManageKingdom) {
-            $recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+            $recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid, 'Token' => $this->session->token]);
             $AwardRecommendations = is_array($recs) ? $recs : [];
         } elseif ($uid > 0) {
-            $recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+            $recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid, 'Token' => $this->session->token]);
             $allRecs = is_array($recs) ? $recs : [];
             $AwardRecommendations = array_values(array_filter($allRecs, function ($r) use ($uid) {
                 return (int)$r['RecommendedById'] === $uid;
@@ -148,6 +148,8 @@ class Controller_Kingdom extends Controller
         // Variables the partial template expects in scope:
         $IsLoggedIn       = $uid > 0;
         $CanManageKingdom = $canManageKingdom;
+        // An empty list here may only mean the viewer isn't allowed to see it.
+        $RecsHiddenBySetting = !$recsPublic && !$canManageKingdom;
         $kingdom_name     = $this->Kingdom->get_kingdom_name($kingdom_id);
 
         // "My Circles" filter: the viewer's peerage voting circle, as a set of award_ids.
@@ -202,6 +204,10 @@ class Controller_Kingdom extends Controller
 
     public function profile($kingdom_id = null)
     {
+        // Same-slug kingdom-original ladders, so the rank pickers can say when the
+        // recipient already holds the equivalent ladder in another kingdom.
+        // Informational only -- see Award::pseudoLadderSiblings().
+        $this->data['PseudoLadderSiblings'] = (new Award())->pseudoLadderSiblings();
         $this->template = '../revised-frontend/Kingdomnew_index.tpl';
         $kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
         if (!valid_id($kingdom_id)) {
@@ -376,6 +382,10 @@ class Controller_Kingdom extends Controller
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+        // Bonus Credits button + modal: kingdom EDIT hands credits out, CREATE
+        // also defines them, and a named manager does both with no kingdom row.
+        $this->load_model('BonusCredit');
+        $this->data['CanBonusCredits'] = $uid > 0 && $this->BonusCredit->can_grant_in_kingdom($uid, (int)$kingdom_id);
         // Park creation is GLOBAL ADMIN ONLY, by design -- see Park::CreatePark,
         // which checks HasAuthority(AUTH_ADMIN, 0, AUTH_CREATE). This affordance
         // must mirror that check exactly; gating it on kingdom authority showed
@@ -435,13 +445,15 @@ class Controller_Kingdom extends Controller
         $canManageKingdom = $this->data['CanManageKingdom'] ?? false;
         if ($recsPublic || $canManageKingdom) {
             $this->data['ShowRecsTab'] = true;
-            $this->data['AwardRecommendationsCount'] = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id]);
+            $this->data['AwardRecommendationsCount'] = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);
         } elseif ($uid > 0) {
-            // Logged-in non-admin on a private-recs kingdom — tab is shown only if
-            // the user has their own recs. Cheap COUNT query, no row hydration.
-            $n = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id, 'RecommendedBy' => $uid]);
+            // Logged-in non-admin on a private-recs kingdom — the tab lists only
+            // their own recs, and when they have none it says why it is empty
+            // and still offers the Recommend button. Cheap COUNT query, no row
+            // hydration.
+            $n = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id, 'RecommendedBy' => $uid, 'Token' => $this->session->token]);
             $this->data['AwardRecommendationsCount'] = $n;
-            $this->data['ShowRecsTab'] = $n > 0;
+            $this->data['ShowRecsTab'] = true;
         } else {
             $this->data['ShowRecsTab'] = false;
         }
@@ -523,6 +535,10 @@ class Controller_Kingdom extends Controller
 
         $this->data['CallerIsOrkAdmin']    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
         $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$kingdom_id, 0);
+        $this->load_model('Player');
+        // Offered to any officer in the kingdom (its own or any of its parks'); the modal
+        // re-checks against each picked recipient (KingdomAjax monarchyonlyeligible).
+        $this->data['CanMonarchyOnlyRec']  = $uid > 0 && $this->Player->monarchy_only_eligible_in_kingdom($uid, (int)$kingdom_id);
         $this->data['CourtList']           = [];
         $this->data['CourtUpcomingEvents'] = [];
         if ($this->data['CanManageCourt']) {

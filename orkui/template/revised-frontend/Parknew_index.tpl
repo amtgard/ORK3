@@ -352,6 +352,11 @@
 						<i class="fas fa-clipboard-list"></i> Enter Attendance
 					</button>
 				<?php endif; ?>
+				<?php if (!empty($CanBonusCredits)): ?>
+					<button class="pk-btn pk-btn-outline" onclick="bcOpen()">
+						<i class="fas fa-star"></i> Bonus Credits
+					</button>
+				<?php endif; ?>
 				<?php if (!empty($CanAdminPark)): ?>
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAwardModal()">
 						<i class="fas fa-medal"></i> Enter Awards
@@ -425,7 +430,7 @@
 	<div class="pk-stat-card pk-stat-card-link" onclick="pkActivateTab('players')">
 		<div class="pk-stat-icon"><i class="fas fa-users"></i></div>
 		<div class="pk-stat-value"><?= $activePlayersYear ?></div>
-		<div class="pk-stat-label">Active Players</div>
+		<div class="pk-stat-label">Players, Last 6 Months <span class="pk-stat-tip" data-tip="Everyone who signed in at this park in the past 6 months. This is not the same as the Active Players report, which only counts players who meet the kingdom's attendance requirements, so that report's total is usually lower."><i class="fas fa-info-circle"></i></span></div>
 	</div>
 	<div class="pk-stat-card">
 		<div class="pk-stat-icon"><i class="fas fa-chart-bar"></i></div>
@@ -534,15 +539,8 @@
 		<!-- Map Widget -->
 		<?php if (!is_null($parkLat)): ?>
 		<div class="pk-card" style="padding:0;overflow:hidden;border-radius:10px;">
-			<iframe
-				src="https://maps.google.com/maps?q=<?= $parkLat ?>,<?= $parkLng ?>&output=embed&z=11"
-				width="100%"
-				height="200"
-				style="border:0;display:block"
-				allowfullscreen=""
-				loading="lazy"
-				referrerpolicy="no-referrer-when-downgrade">
-			</iframe>
+			<?php // JS-API pin map (not an embed iframe) so touch devices pan with one finger — see .ork-pin-map in revised.js ?>
+			<div class="ork-pin-map" role="region" aria-label="Park location map" data-lat="<?= $parkLat ?>" data-lng="<?= $parkLng ?>" data-zoom="11" style="height:200px"></div>
 		</div>
 		<?php endif; ?>
 
@@ -1018,7 +1016,7 @@
 				<?php if (count($allPlayers) > 0): ?>
 					<div class="pk-players-toolbar">
 						<span class="pk-players-toolbar-left">
-							<?= count($playerList) ?> active member<?= count($playerList) != 1 ? 's' : '' ?> (past 6 months)<?php if (count($allPlayers) > count($playerList)): ?> &middot; <?= count($allPlayers) ?> total<?php endif; ?>
+							<?= count($playerList) ?> member<?= count($playerList) != 1 ? 's' : '' ?> with a sign-in in the past 6 months <span class="pk-stat-tip" data-tip="Anyone who signed in in the past 6 months. The Active Players report instead applies the kingdom's attendance requirements, so its total is usually lower."><i class="fas fa-info-circle"></i></span><?php if (count($allPlayers) > count($playerList)): ?> &middot; <?= count($allPlayers) ?> total<?php endif; ?>
 						</span>
 						<div class="pk-players-toolbar-right">
 							<div class="pk-player-search-wrap">
@@ -1277,6 +1275,7 @@
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/tournaments&ParkId=<?= $park_id ?>"><i class="fas fa-trophy"></i> Tournament Report</a></li>
+							<li><a href="<?= UIR ?>Reports/population_explorer&ParkId=<?= $park_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
 							<?php endif; ?>
 						</ul>
 					</div>
@@ -1308,6 +1307,7 @@
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Ladder Award Grid</a></li>
 							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
+							<li><a href="<?= UIR ?>Reports/award_explorer&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>"><i class="fas fa-award"></i> Award Explorer</a></li>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -1361,15 +1361,7 @@
 			.pk-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
 			.pk-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
 			.pk-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
-			.kn-rec-age-badge { font-size:11px; padding:1px 6px; border-radius:10px; font-weight:600; margin-left:4px; }
-			.kn-rec-age-green  { background:#c6f6d5; color:#22543d; }
-			.kn-rec-age-yellow { background:#fefcbf; color:#744210; }
-			.kn-rec-age-orange { background:#fed7aa; color:#7b341e; }
-			.kn-rec-age-red    { background:#fed7d7; color:#742a2a; }
-			.pk-rec-passlocal { display:inline-block; margin-left:6px; font-size:11px; color:#2c5f8b; border:1px solid rgba(44,95,139,.4); border-radius:3px; padding:0 5px; white-space:nowrap; }
-			html[data-theme="dark"] .pk-rec-passlocal { color:#6fb0e6; border-color:rgba(111,176,230,.4); }
-			.pk-rec-passlocal[data-tip] { position:relative; }
-			.pk-rec-passlocal[data-tip]:hover::after { content:attr(data-tip); position:absolute; left:0; top:calc(100% + 4px); white-space:normal; width:220px; background:#1a202c; color:#fff; font-size:11px; padding:6px 8px; border-radius:4px; z-index:50; }
+			/* .kn-rec-age-* and .pk-rec-passlocal live in revised.css: this block only renders for court managers. */
 			/* Delegated-by-the-Kingdom pinned section (officer-only, to-schedule list) */
 			.pk-delegated { border:1px solid rgba(44,95,139,.4); background:rgba(44,95,139,.07); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
 			.pk-delegated-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
@@ -1710,6 +1702,7 @@
 
 			<!-- Recommendations Tab -->
 			<?php if (!empty($ShowRecsTab)): ?>
+			<?php include_once __DIR__ . '/_monarchy_only_badge.tpl'; ?>
 			<div class="pk-tab-panel" id="pk-tab-recommendations" style="display:none">
 				<?php if (!empty($CanAdminPark)):
 					$pkDelegated = array_values(array_filter($AwardRecommendations ?? [], function ($r) {
@@ -1732,7 +1725,7 @@
 						<li class="pk-delegated-item">
 							<a href="<?= UIR ?>Player/profile/<?= (int)$dr['MundaneId'] ?>"><?= htmlspecialchars($dr['Persona']) ?></a>
 							<span class="pk-delegated-sep">&middot;</span>
-							<span class="pk-delegated-award"><?= htmlspecialchars(preg_replace('/^Order of(?:\s+the)?\s+/i', '', $dr['AwardName'])) ?></span>
+							<span class="pk-delegated-award"><?= htmlspecialchars(preg_replace('/^Order of(?:\s+the)?\s+/i', '', $dr['AwardName'])) ?></span><?= ork_monarchy_only_badge((int)($dr['MonarchyOnlyLevel'] ?? 0)) ?>
 							<?php if ((int)$dr['Rank'] > 0): ?><span class="pk-delegated-rank">Rank <?= (int)$dr['Rank'] ?></span><?php endif; ?>
 							<?php if (!empty($dr['PassedToLocalAt'])): ?><span class="pk-delegated-approved">Approved on: <?= htmlspecialchars(date('F j, Y', strtotime($dr['PassedToLocalAt']))) ?></span><?php endif; ?>
 						</li>
@@ -1752,7 +1745,10 @@
 					<?php endif; ?>
 				</div>
 				<?php endif; ?>
-				<?php if (empty($AwardRecommendations)): ?>
+				<?php include __DIR__ . '/_recs_hidden_notice.tpl'; ?>
+				<?php if (empty($AwardRecommendations) && !empty($RecsHiddenBySetting)): ?>
+				<div class="pk-recs-empty"><?= htmlspecialchars(ork_recs_hidden_notice(!empty($IsLoggedIn))) ?></div>
+				<?php elseif (empty($AwardRecommendations)): ?>
 				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>.</div>
 				<?php else: ?>
 				<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
@@ -1776,9 +1772,9 @@
 								<dt>Below Rec'd</dt>
 								<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
 								<dt>Non-Ladder</dt>
-								<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Delete as appropriate.</dd>
+								<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Dismiss as appropriate.</dd>
 								<dt>At or Above Rec'd</dt>
-								<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
+								<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Dismiss these to keep the list tidy.</dd>
 								<dt>All</dt>
 								<dd>Every recommendation regardless of status. Use for a full audit.</dd>
 								<?php if (!empty($ViewerHasCircle)): ?>
@@ -1813,10 +1809,10 @@
 							data-rec-id="<?= (int)$rec['RecommendationsId'] ?>" data-award-id="<?= (int)$rec['AwardId'] ?>"
 							data-snoozed="<?= !empty($rec['IsSnoozed']) ? '1' : '0' ?>"
 							data-passlocal="<?= !empty($rec['PassedToLocal']) ? '1' : '0' ?>"
-							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
+							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((array_key_exists('IsLadder', $rec) ? !empty($rec['IsLadder']) : (int)$rec['Rank'] > 0) ? 'below' : 'nonladder') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
-							<td><?= htmlspecialchars(preg_replace('/^Order of(?:\\s+the)?\\s+/i', '', $rec['AwardName'])) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="pk-rec-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?></td>
-							<td style="white-space:nowrap">
+							<td><?= htmlspecialchars(preg_replace('/^Order of(?:\\s+the)?\\s+/i', '', $rec['AwardName'])) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="pk-rec-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?><?= ork_monarchy_only_badge((int)($rec['MonarchyOnlyLevel'] ?? 0)) ?></td>
+							<td style="white-space:nowrap" data-order="<?= max(0, (int)$rec['Rank']) ?>">
 								<?php if ((int)$rec['Rank'] > 0): ?><span class="ladder-rank" data-lvl="<?= min((int)$rec['Rank'], 10) ?>"><?= (int)$rec['Rank'] ?></span><?php else: ?>&mdash;<?php endif; ?>
 								<?php if (!empty($rec['AlreadyHas'])): ?>
 								<span class="pk-rec-has-tip"
@@ -1835,7 +1831,10 @@
 										<a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a>
 									<?php else: ?>&mdash;<?php endif; ?>
 								</td>
-							<td><?= htmlspecialchars($rec['DateRecommended']) ?>
+							<?php /* data-order: DataTables sorts this column by the attribute, not the cell text.
+							   The cell also holds the age badge, and the built-in 'date' sorter ran Date.parse()
+							   over that markup, got NaN for every row and so never reordered anything. */ ?>
+							<td data-order="<?= (int)strtotime((string)$rec['DateRecommended']) ?>"><?= htmlspecialchars($rec['DateRecommended']) ?>
 <?php
 $_d = (int)($rec['AgeDays'] ?? 0);
 if ($_d < 1)        { $_al = 'today'; $_ac = 'kn-rec-age-green'; }
@@ -1879,12 +1878,12 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 				<div class="pk-deleted-recs" id="pk-deleted-recs" data-loaded="0">
 					<button type="button" class="pk-deleted-recs-toggle" id="pk-deleted-recs-toggle" aria-expanded="false">
 						<span class="pk-deleted-recs-caret">&#9654;</span>
-						<span class="pk-deleted-recs-toggle-label">Show Deleted Recommendations</span>
+						<span class="pk-deleted-recs-toggle-label">Show Dismissed Recommendations</span>
 						<span class="pk-deleted-recs-count" id="pk-deleted-recs-count" style="display:none">0</span>
 					</button>
 					<div class="pk-deleted-recs-body" id="pk-deleted-recs-body" style="display:none">
 						<div class="pk-deleted-recs-loading" id="pk-deleted-recs-loading">Loading&hellip;</div>
-						<div class="pk-deleted-recs-empty" id="pk-deleted-recs-empty" style="display:none">No deleted recommendations.</div>
+						<div class="pk-deleted-recs-empty" id="pk-deleted-recs-empty" style="display:none">No dismissed recommendations.</div>
 						<div class="pk-deleted-recs-table-wrap" id="pk-deleted-recs-table-wrap" style="display:none">
 							<table class="pk-deleted-recs-table">
 								<thead>
@@ -1895,8 +1894,8 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 										<th>Notes</th>
 										<th>Date Rec.</th>
 										<th>Recommended By</th>
-										<th>Deleted At</th>
-										<th>Deleted By</th>
+										<th>Dismissed At</th>
+										<th>Dismissed By</th>
 										<th class="no-export"></th>
 									</tr>
 								</thead>
@@ -1918,6 +1917,7 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
      JavaScript
      ============================================= -->
 <script>
+window.tnPseudoLadderInfo = <?= json_encode(is_array($PseudoLadderSiblings ?? null) ? $PseudoLadderSiblings : (object)[]) ?>;
 var PkConfig = {
 	uir:            '<?= UIR ?>',
 	httpService:    '<?= HTTP_SERVICE ?>',
@@ -2361,6 +2361,15 @@ var PkBannerConfig = {
 				</label>
 				<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
 			</div>
+			<?php if (!empty($CanMonarchyOnlyRec)): ?>
+			<div class="pk-acct-field" style="margin-top:12px">
+				<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+					<input type="checkbox" id="pk-rec-monarchy" value="1" style="width:16px;height:16px;cursor:pointer">
+					<span>Monarchy Only</span>
+				</label>
+				<div class="mo-check-hint">Only officers will see this recommendation; the player will not.</div>
+			</div>
+			<?php endif; ?>
 		</div>
 		<div class="pk-modal-footer">
 			<button class="pk-btn-ghost" id="pk-rec-cancel">Cancel</button>
@@ -3777,7 +3786,8 @@ function pkCopyEventLink(el) {
 		setTimeout(function() { el.classList.remove('pk-copied'); }, 1500);
 	});
 }
-window.pkRecActiveFilter = 'open';
+// Only default to 'open' when the viewer can see the pill bar to change it; otherwise show everything.
+window.pkRecActiveFilter = '<?= (!empty($CanAdminPark) || !empty($ViewerHasCircle)) ? 'open' : 'all' ?>';
 window.pkRecCircleAwardIds = <?= json_encode($ViewerCircleAwardIds ?? array()) ?>;
 $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	if (settings.nTable.id !== 'pk-rec-table') return true;
@@ -3798,7 +3808,8 @@ $(function() {
 		window.pkRecDT = $('#pk-rec-table').DataTable({
 			order: [[4, 'desc']],
 			columnDefs: [
-				{ targets: [4], type: 'date' },
+				// Column 4 (Date) sorts on its numeric data-order attribute; see the <td>.
+				{ targets: [4], type: 'num' },
 				<?php if (!empty($CanAdminPark)): ?>
 				{ targets: [-1], orderable: false, searchable: false },
 				<?php endif; ?>
@@ -3844,4 +3855,17 @@ window.OrkRsCfg = {
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php include __DIR__ . '/_monarchy_only_assets.tpl'; ?>
+<?php endif; ?>
+<?php if (!empty($CanBonusCredits)): ?>
+<script>
+window.OrkBcCfg = {
+	uir:       '<?= UIR ?>',
+	scopeType: 'park',
+	scopeId:   <?= (int)($park_id ?? 0) ?>,
+	scopeName: <?= json_encode($park_name ?? '') ?>,
+	kingdomId: <?= (int)($kingdom_id ?? 0) ?>
+};
+</script>
+<?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
 <?php endif; ?>

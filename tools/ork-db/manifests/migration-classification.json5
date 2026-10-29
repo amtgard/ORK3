@@ -143,6 +143,10 @@
     "2026-09-09-recommendations-cluster-index.sql": { "class": "S", "render": "full", "notes": "Composite index backing the Recommendations Manager cluster paging query" },
     "2026-10-09-court-notes.sql": { "class": "S", "render": "full", "notes": "Court Planner non-award line items (ork_court_note); CREATE TABLE IF NOT EXISTS, idempotent" },
     "2026-08-22-signin-tally.sql": { "class": "S", "render": "full", "notes": "Anonymous per-day/per-client sign-in counters (no player attribution); CREATE TABLE IF NOT EXISTS, idempotent" },
-    "2026-10-02-bracket-draw-size.sql": { "class": "S", "render": "full", "notes": "Quick Bracket starting draw size; nullable column, idempotent ADD COLUMN IF NOT EXISTS" }
+    "2026-10-02-bracket-draw-size.sql": { "class": "S", "render": "full", "notes": "Quick Bracket starting draw size; nullable column, idempotent ADD COLUMN IF NOT EXISTS" },
+    "2026-10-04-qual-report-comment.sql": { "class": "S", "render": "full", "notes": "Free-text comment on a qual question report; ADD COLUMN IF NOT EXISTS, idempotent" },
+    "2026-10-14-bonus-credits.sql": { "class": "S", "render": "full", "notes": "Non-attendance class credits (ork_bonus_credit ledger); CREATE TABLE IF NOT EXISTS, idempotent" },
+    "2026-10-15-recommendation-monarchy-only.sql": { "class": "S", "render": "full", "notes": "Monarchy Only visibility level on recommendations; ADD COLUMN/INDEX IF NOT EXISTS, idempotent" },
+    "2026-10-27-bonus-credit-accept-outside.sql": { "class": "S", "render": "full", "notes": "Per-kingdom yes/no: may other kingdoms' bonus credits reach its players; CREATE TABLE IF NOT EXISTS, idempotent" }
   }
 }

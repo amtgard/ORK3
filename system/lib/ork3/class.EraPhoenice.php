@@ -42,6 +42,7 @@ class EraPhoenice
         '03-24' => 'Et Clauserunt',
         '04-01' => 'The Day of the Seventh Annunciation',
         '07-09' => 'Yum Hismorai Haelectroni',
+        '07-25' => 'Blessing of Ham',
         '07-27' => 'Floodmas',
         '07-31' => 'Dautas Nazgul',
         '08-13' => 'The Assumption of St. Sinister',

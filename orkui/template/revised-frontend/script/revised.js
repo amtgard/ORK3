@@ -40,6 +40,73 @@ function tnHeldRank(ranks, opt, baseAwardId) {
 }
 if (typeof window !== 'undefined') { window.tnHeldRank = tnHeldRank; }
 
+/* The top of a ladder is rank 10 (12 for Zodiac) and nothing above it can be
+   recommended or granted. When the player already holds that rank the rank
+   row cannot lead anywhere, so say so under it and point at the only way
+   forward: a different award. `verb` is 'recommend' or 'grant'. Returns true
+   when the note was shown, so callers can word their own messages to match. */
+function tnTopRankHint(hint, held, maxRank, verb) {
+    if (!hint || !(held >= maxRank)) return false;
+    hint.textContent = '\u2014 This player already holds rank ' + maxRank + ', the highest this award goes. Consider ' + (verb === 'grant' ? 'granting' : 'recommending') + ' a different award instead.';
+    return true;
+}
+function tnTopRankMessage(maxRank, verb) {
+    return 'This player already holds rank ' + maxRank + ', the highest this award goes. Please pick a different award to ' + (verb === 'grant' ? 'grant' : 'recommend') + '.';
+}
+if (typeof window !== 'undefined') { window.tnTopRankHint = tnTopRankHint; window.tnTopRankMessage = tnTopRankMessage; }
+
+/* Note the player's rank on the SAME ladder in another kingdom.
+
+   Held ranks for kingdom-original ladders are keyed "k<kingdomaward_id>", so a
+   principality's row of a ladder and its parent kingdom's row never see each
+   other -- Painted Skies' "Hunter" and Northern Lights' "Order of the Hunter"
+   are separate buckets. The State of Amtgard grid DOES merge them by slug
+   ("a principality that splits off keeps running the parent's ladder").
+
+   This does not merge the buckets: on production only 2 of the 5 multi-kingdom
+   slug groups are parent/child and only 9 players are affected, so merging would
+   move suggested ranks far more widely than the problem warrants. It states the
+   fact under the pills and leaves every default alone.
+
+   tnPseudoLadderInfo is kaid -> {Slug, Name, Kingdom}, emitted per page. Absent
+   (older page, or none configured) -> renders nothing. The note element is
+   created on demand right after `wrap`, so no template needs a placeholder. */
+function tnSiblingLadderNote(wrap, ranks, kaid, prefix) {
+    if (!wrap || !wrap.parentNode) return;
+    var id   = prefix + '-ladder-peers';
+    var box  = document.getElementById(id);
+    if (!box) {
+        box = document.createElement('div');
+        box.id = id;
+        box.className = 'tn-ladder-peers';
+        wrap.parentNode.insertBefore(box, wrap.nextSibling);
+    }
+    box.style.display = 'none';
+    box.textContent   = '';
+    var info = (typeof window !== 'undefined') ? window.tnPseudoLadderInfo : null;
+    if (!info || !ranks) return;
+    var self = info[String(kaid)];
+    if (!self || !self.Slug) return;              // not a kingdom-original ladder
+    var found = [];
+    for (var k in info) {
+        if (!Object.prototype.hasOwnProperty.call(info, k)) continue;
+        if (String(k) === String(kaid)) continue;
+        if (!info[k] || info[k].Slug !== self.Slug) continue;
+        var r = parseInt(ranks['k' + k], 10) || 0;
+        if (r > 0) found.push({ name: info[k].Name, kingdom: info[k].Kingdom, rank: r });
+    }
+    if (!found.length) return;
+    found.sort(function(a, b) { return b.rank - a.rank; });
+    var esc = function(x) {
+        return String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    };
+    box.innerHTML = 'Also holds ' + found.map(function(f) {
+        return esc(f.name) + (f.kingdom ? ' (' + esc(f.kingdom) + ')' : '') + ' at rank ' + f.rank;
+    }).join('; ') + '. That is a separate ladder in the ORK \u2014 shown in case the ranks should continue.';
+    box.style.display = '';
+}
+if (typeof window !== 'undefined') { window.tnSiblingLadderNote = tnSiblingLadderNote; }
+
 /* ============================================================
    Viewport-safe positioner for position:fixed autocomplete dropdowns.
    Anchors `el` to `inputEl`, but (a) clamps width + left so the list
@@ -54,26 +121,45 @@ function tnPositionAcFixed(inputEl, el, opts) {
     opts = opts || {};
     var rect   = inputEl.getBoundingClientRect();
     var vw     = window.innerWidth;
-    var vh     = window.innerHeight;
+    var frame  = tnFixedFrame(el);
     var w      = Math.min(rect.width || opts.width || 300, vw - 16);
     el.style.width = w + 'px';
-    el.style.left  = Math.max(8, Math.min(rect.left, vw - w - 8)) + 'px';
+    el.style.left  = (Math.max(8, Math.min(rect.left, vw - w - 8)) - frame.left) + 'px';
     el.style.right = 'auto';
 
-    var spaceBelow = vh - rect.bottom;
-    var spaceAbove = rect.top;
+    // An on-screen keyboard shrinks the visual viewport but not innerHeight, so
+    // measure the room against what is actually showing.
+    var vv         = window.visualViewport;
+    var viewTop    = vv ? vv.offsetTop : 0;
+    var viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    var spaceBelow = viewBottom - rect.bottom;
+    var spaceAbove = rect.top - viewTop;
     var flipAbove  = spaceBelow < 200 && spaceAbove > spaceBelow;
     var avail      = flipAbove ? spaceAbove : spaceBelow;
 
     if (flipAbove) {
         el.style.top    = 'auto';
-        el.style.bottom = (vh - rect.top + 2) + 'px';
+        el.style.bottom = (frame.bottom - rect.top + 2) + 'px';
     } else {
         el.style.bottom = 'auto';
-        el.style.top    = (rect.bottom + 2) + 'px';
+        el.style.top    = (rect.bottom + 2 - frame.top) + 'px';
     }
     el.style.maxHeight = Math.max(140, avail - 12) + 'px';
     el.style.overflowY = 'auto';
+}
+/* The box a position:fixed element is really measured from. That is the
+   viewport unless an ancestor has a transform (or filter/perspective), which
+   makes that ancestor the containing block instead -- .pn-modal-box keeps its
+   open-state transform, so fixed coordinates inside it start at the box. */
+function tnFixedFrame(el) {
+    for (var p = el.parentElement; p; p = p.parentElement) {
+        var cs = window.getComputedStyle(p);
+        if (cs.transform !== 'none' || cs.perspective !== 'none' || cs.filter !== 'none') {
+            var r = p.getBoundingClientRect();
+            return { left: r.left + p.clientLeft, top: r.top + p.clientTop, bottom: r.top + p.clientTop + p.clientHeight };
+        }
+    }
+    return { left: 0, top: 0, bottom: window.innerHeight };
 }
 if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixed; }
 
@@ -92,11 +178,11 @@ if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixe
 (function () {
     if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
 
-    var AC_SELECTOR = '.pk-ac-results, .kn-ac-results';
+    var AC_SELECTOR = '.pk-ac-results, .kn-ac-results, .pn-ac-results';
     var open = [];
 
     function isOpen(el) {
-        return el.classList.contains('pk-ac-open') || el.classList.contains('kn-ac-open');
+        return el.classList.contains('pk-ac-open') || el.classList.contains('kn-ac-open') || el.classList.contains('pn-ac-open');
     }
 
     /* Nearest preceding text input, else the first one in the same field. */
@@ -142,6 +228,8 @@ if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixe
         Array.prototype.forEach.call(document.querySelectorAll(AC_SELECTOR), watch);
         window.addEventListener('scroll', sync, true); // capture: inner scrolls do not bubble
         window.addEventListener('resize', sync);
+        // The keyboard sliding in or out resizes the visual viewport only.
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', sync);
     });
 })();
 
@@ -298,7 +386,12 @@ var AWARD_DESCRIPTIONS = {
 function orkInitTheme() {
     if (orkInitTheme._done) return;
     orkInitTheme._done = true;
-    var stored = localStorage.getItem('ork_theme');
+    // localStorage can THROW, not merely return null: blocked site data, a
+    // private window, some privacy extensions. Unguarded, the exception escaped
+    // before data-theme was set and the page fell through to the OS preference,
+    // showing dark to someone who had chosen light.
+    var stored = null;
+    try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
     if (stored === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
     } else if (stored === 'light') {
@@ -311,19 +404,20 @@ function orkInitTheme() {
     var btn = document.getElementById('ork-theme-toggle');
     if (btn) {
         btn.addEventListener('click', function() {
-            var stored = localStorage.getItem('ork_theme');
+            var stored = null;
+            try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
             // Cycle: auto → dark → light → auto (keyed off stored pref, not data-theme)
             if (!stored) {
                 // auto → dark
                 document.documentElement.setAttribute('data-theme', 'dark');
-                localStorage.setItem('ork_theme', 'dark');
+                try { localStorage.setItem('ork_theme', 'dark'); } catch (e) { /* preference is not persisted */ }
             } else if (stored === 'dark') {
                 // dark → light
                 document.documentElement.setAttribute('data-theme', 'light');
-                localStorage.setItem('ork_theme', 'light');
+                try { localStorage.setItem('ork_theme', 'light'); } catch (e) { /* preference is not persisted */ }
             } else {
                 // light → auto: remove pref, re-apply OS preference live
-                localStorage.removeItem('ork_theme');
+                try { localStorage.removeItem('ork_theme'); } catch (e) { /* nothing to clear */ }
                 if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     document.documentElement.setAttribute('data-theme', 'dark');
                 } else {
@@ -348,7 +442,10 @@ function orkInitTheme() {
     // Live OS preference listener — only fires when user is in auto mode (no stored pref)
     if (window.matchMedia) {
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
-            if (localStorage.getItem('ork_theme')) return; // user has a manual pref, ignore
+            var manual = null;
+            try { manual = null;
+ try { manual = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ } } catch (e) { /* treat as unset */ }
+            if (manual) return; // user has a manual pref, ignore
             if (e.matches) {
                 document.documentElement.setAttribute('data-theme', 'dark');
             } else {
@@ -369,7 +466,8 @@ function orkInitTheme() {
 function orkUpdateThemeIcon() {
     var btn = document.getElementById('ork-theme-toggle');
     if (!btn) return;
-    var stored = localStorage.getItem('ork_theme');
+    var stored = null;
+    try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
     // Sun icon (light mode)
     var sunSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9A9.01 9.01 0 0 0 12 3zm0 16a7 7 0 1 1 7-7 7.008 7.008 0 0 1-7 7z"/><path d="M12 7a5 5 0 1 0 5 5 5.006 5.006 0 0 0-5-5z"/></svg>';
     // Moon icon (dark mode)
@@ -391,7 +489,8 @@ function orkUpdateThemeIcon() {
 // Run theme init on DOMContentLoaded to ensure button is in DOM
 // Theme attr is applied immediately via stored value in case it was already set server-side
 (function() {
-    var stored = localStorage.getItem('ork_theme');
+    var stored = null;
+    try { stored = localStorage.getItem('ork_theme'); } catch (e) { /* treat as unset */ }
     if (stored === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
     } else if (stored === 'light') {
@@ -513,7 +612,24 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
             var item = e.target.closest('.aw-pick-item');
             if (!item) return;
             if (!activeSelect) return;
-            activeSelect.value = item.getAttribute('data-value');
+            var val = item.getAttribute('data-value');
+
+            // A multiple select toggles and STAYS OPEN: closing after each pick
+            // would make choosing three awards three trips through the list.
+            if (activeSelect.multiple) {
+                var opt = null, i;
+                for (i = 0; i < activeSelect.options.length; i++) {
+                    if (activeSelect.options[i].value === val) { opt = activeSelect.options[i]; break; }
+                }
+                if (!opt) return;
+                opt.selected = !opt.selected;
+                item.classList.toggle('aw-active', opt.selected);
+                activeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                syncTrigger(activeSelect);
+                return;
+            }
+
+            activeSelect.value = val;
             activeSelect.dispatchEvent(new Event('change', { bubbles: true }));
             syncTrigger(activeSelect);
             closeDropdown();
@@ -544,37 +660,44 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
     }
 
     function buildHTML(sel) {
+        var multi = !!sel.multiple;
         var html = '', cur = sel.value, ch = sel.children;
         for (var i = 0; i < ch.length; i++) {
             if (ch[i].tagName === 'OPTGROUP') {
                 html += '<div class="aw-pick-group"><div class="aw-pick-group-label">' + escHtml(ch[i].label) + '</div>';
-                for (var j = 0; j < ch[i].children.length; j++) html += itemHTML(ch[i].children[j], cur);
+                for (var j = 0; j < ch[i].children.length; j++) html += itemHTML(ch[i].children[j], cur, multi);
                 html += '</div>';
             } else if (ch[i].tagName === 'OPTION' && ch[i].value) {
-                html += '<div class="aw-pick-standalone">' + itemHTML(ch[i], cur) + '</div>';
+                html += '<div class="aw-pick-standalone">' + itemHTML(ch[i], cur, multi) + '</div>';
             }
         }
         return html;
     }
 
-    function itemHTML(opt, cur) {
+    function itemHTML(opt, cur, multi) {
         var aid = parseInt(opt.getAttribute('data-award-id')) || 0;
         var isL = opt.getAttribute('data-is-ladder') === '1';
         var desc = isL && typeof AWARD_DESCRIPTIONS !== 'undefined' ? (AWARD_DESCRIPTIONS[aid] || '') : '';
-        var cls = 'aw-pick-item' + (opt.value === cur && cur ? ' aw-active' : '');
+        // A multiple select has many chosen values, so "active" follows the
+        // option's own selected state rather than one current value.
+        var cls = 'aw-pick-item' + ((multi ? opt.selected : (opt.value === cur && cur)) ? ' aw-active' : '');
         var h = '<div class="' + cls + '" data-value="' + opt.value + '" tabindex="0">';
         h += '<span class="aw-pick-name">' + escHtml(opt.textContent) + '</span>';
         if (desc) h += '<span class="aw-pick-desc">' + escHtml(desc) + '</span>';
         return h + '</div>';
     }
 
-    function openDropdown(sel, trigger) {
-        ensureDOM();
-        if (activeSelect === sel && dropdown.classList.contains('aw-open')) { closeDropdown(); return; }
-        activeSelect = sel; activeTrigger = trigger;
-        body.innerHTML = buildHTML(sel);
-        var empty = body.querySelector('.aw-pick-empty'); if (empty) empty.remove();
-        searchInput.value = '';
+    /**
+     * Place the dropdown against its trigger.
+     *
+     * Split out of openDropdown so it can be re-run: the dropdown is
+     * position:fixed and was measured once at open, so any scroll afterwards left
+     * it floating away from the control it belongs to. That never showed on the
+     * modal pages, where there is nothing behind to scroll, but a full-page report
+     * scrolls freely.
+     */
+    function positionDropdown(trigger) {
+        if (!dropdown || !trigger) { return; }
         var rect = trigger.getBoundingClientRect();
         var vw = window.innerWidth, vh = window.innerHeight;
         var mobile = vw <= 600;
@@ -613,11 +736,42 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
             dropdown.style.maxHeight = maxH + 'px';
             dropdown.style.borderRadius = '6px';
         }
+    }
+
+    function openDropdown(sel, trigger) {
+        ensureDOM();
+        if (activeSelect === sel && dropdown.classList.contains('aw-open')) { closeDropdown(); return; }
+        activeSelect = sel; activeTrigger = trigger;
+        body.innerHTML = buildHTML(sel);
+        var empty = body.querySelector('.aw-pick-empty'); if (empty) empty.remove();
+        searchInput.value = '';
+        positionDropdown(trigger);
         dropdown.classList.add('aw-open');
         searchInput.focus();
         var active = body.querySelector('.aw-active');
         if (active) active.scrollIntoView({ block: 'center' });
     }
+
+    /**
+     * Follow the trigger while open. Capture phase, because the page may scroll
+     * inside a container rather than the window, and those events do not bubble.
+     * Scrolling the dropdown's OWN list must not move it, or the list jumps as you
+     * read it. If the trigger has scrolled out of sight entirely the dropdown
+     * closes, rather than clinging to the edge of the viewport.
+     */
+    function trackTrigger(e) {
+        if (!dropdown || !dropdown.classList.contains('aw-open') || !activeTrigger) { return; }
+        if (e && e.target && e.target.nodeType === 1 && dropdown.contains(e.target)) { return; }
+        // On a phone the dropdown is fullscreen and owes nothing to the trigger's
+        // position, so it must not close just because the trigger scrolled away.
+        if (window.innerWidth > 600) {
+            var rect = activeTrigger.getBoundingClientRect();
+            if (rect.bottom < 0 || rect.top > window.innerHeight) { closeDropdown(); return; }
+        }
+        positionDropdown(activeTrigger);
+    }
+    window.addEventListener('scroll', trackTrigger, true);
+    window.addEventListener('resize', trackTrigger);
 
     function closeDropdown() {
         if (!dropdown) return;
@@ -626,11 +780,43 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         activeSelect = null; activeTrigger = null;
     }
 
+    /**
+     * The trigger's empty-state wording. The widget started life as the award
+     * chooser and said so; it works on any select, so the caller can name what
+     * is being chosen with data-aw-placeholder. Defaults to the award wording so
+     * every existing call site reads exactly as before.
+     */
+    function placeholderFor(sel, plural) {
+        var custom = sel.getAttribute('data-aw-placeholder');
+        if (custom) { return custom; }
+        return plural ? 'Select awards\u2026' : 'Select award\u2026';
+    }
+
     function syncTrigger(sel) {
         var btn = sel._awTrigger; if (!btn) return;
+        if (sel.multiple) {
+            var chosen = [], i;
+            for (i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].selected && sel.options[i].value) { chosen.push(sel.options[i].text); }
+            }
+            // Name them while they fit. A bare "2 selected" hides WHAT is selected,
+            // which matters most on a shared link: the person opening it has to be
+            // able to read the filter, not just see that one exists.
+            var label;
+            if (chosen.length === 0) {
+                label = placeholderFor(sel, true);
+            } else {
+                var joined = chosen.join(', ');
+                label = joined.length <= 60 ? joined : chosen.length + ' selected';
+            }
+            btn.querySelector('.aw-trigger-label').textContent = label;
+            btn.classList.toggle('aw-has-value', chosen.length > 0);
+            btn.title = chosen.join(', ');
+            return;
+        }
         var opt = sel.options[sel.selectedIndex];
         var hasVal = opt && opt.value;
-        btn.querySelector('.aw-trigger-label').textContent = hasVal ? opt.text : 'Select award\u2026';
+        btn.querySelector('.aw-trigger-label').textContent = hasVal ? opt.text : placeholderFor(sel, false);
         btn.classList.toggle('aw-has-value', !!hasVal);
     }
 
@@ -638,13 +824,13 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         sel.style.display = 'none';
         var btn = document.createElement('button');
         btn.type = 'button'; btn.className = 'aw-picker-trigger';
-        var opt = sel.options[sel.selectedIndex];
-        var hasVal = opt && opt.value;
-        btn.innerHTML = '<span class="aw-trigger-label">' + (hasVal ? escHtml(opt.text) : 'Select award\u2026') + '</span>' +
+        btn.innerHTML = '<span class="aw-trigger-label"></span>' +
             '<i class="fas fa-chevron-down" style="color:#a0aec0;font-size:11px"></i>';
-        if (hasVal) btn.classList.add('aw-has-value');
         sel.parentNode.insertBefore(btn, sel.nextSibling);
         sel._awTrigger = btn;
+        // One place decides the label, so a multiple select does not start out
+        // saying "Select award..." in the singular.
+        syncTrigger(sel);
         btn.addEventListener('click', function() { openDropdown(sel, btn); });
 
         var desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
@@ -837,6 +1023,9 @@ $(document).ready(function() {
         } else if (badge === 'soon') {
             $nameCell.append('<span class="pn-level-badge pn-level-badge-soon"><i class="fas fa-hourglass-half"></i> Soon to Level!</span>');
         }
+        // The bonus-credit badge is server-rendered, so it would sit ahead of the
+        // level badges just appended; keep it last in the cell.
+        $nameCell.find('.pn-bonus-badge').appendTo($nameCell);
     });
 
     // Profile data tables use DataTables for sorting/paging/search/CSV — see pnInitDataTable().
@@ -905,7 +1094,8 @@ if (PnConfig.recError) {
             var held = pnRecHeldRankForSelected();
             var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
             if (held > 0 && chosen > 0 && chosen <= held) {
-                pnRecShowWarn('The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
+                var top = /zodiac/i.test(opt.textContent) ? 12 : 10;
+                pnRecShowWarn(held >= top ? tnTopRankMessage(top, 'recommend') : 'The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
             } else {
                 pnRecHideWarn();
             }
@@ -938,7 +1128,8 @@ if (PnConfig.recError) {
             var held = pnRecHeldRankForSelected();
             var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
             if (held > 0 && chosen > 0 && chosen <= held) {
-                pnRecShowWarn('The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
+                var top = /zodiac/i.test(opt.textContent) ? 12 : 10;
+                pnRecShowWarn(held >= top ? tnTopRankMessage(top, 'recommend') : 'The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
                 return;
             }
         }
@@ -976,7 +1167,10 @@ if (PnConfig.recError) {
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(pnAwardRanks, opt, baseAwardId);
         var suggested = Math.min(held + 1, maxRank);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, pnAwardRanks, opt.value, 'pn-rec');
         wrap.dataset.rankHeld = held;
+        tnTopRankHint(hint, held, maxRank, 'recommend');
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('div');
             pill.className = 'pn-rank-pill';
@@ -1125,11 +1319,11 @@ if (PnConfig.recError) {
         if (!dimBtn) return;
         if (!dimBtn.dataset.confirm) {
             dimBtn.dataset.confirm = '1';
-            dimBtn.textContent = 'Confirm Delete?';
+            dimBtn.textContent = 'Confirm Dismiss?';
             dimBtn.classList.add('pk-rec-dismiss-confirm');
             dimBtn._confirmTimer = setTimeout(function() {
                 dimBtn.dataset.confirm = '';
-                dimBtn.innerHTML = '<i class="fas fa-times"></i> Delete';
+                dimBtn.innerHTML = '<i class="fas fa-times"></i> Dismiss';
                 dimBtn.classList.remove('pk-rec-dismiss-confirm');
             }, 3000);
             return;
@@ -1639,19 +1833,96 @@ if (PnConfig.recError) {
             }
             return helpBubble;
         }
+        var helpTipOpenEl = null;
+        function hideHelp() { helpTipOpenEl = null; if (helpBubble) helpBubble.style.display = 'none'; }
+        function showHelp(el) {
+            var b = ensureBubble();
+            b.textContent = el.getAttribute('data-tip');
+            var r = el.getBoundingClientRect();
+            b.style.display = 'block';
+            b.style.top  = (r.bottom + 6) + 'px';
+            b.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 286)) + 'px';
+            helpTipOpenEl = el;
+        }
         gid('pn-acct-overlay').querySelectorAll('.pn-acct-help-tip[data-tip]').forEach(function(el) {
-            el.addEventListener('mouseenter', function() {
-                var b = ensureBubble();
-                b.textContent = el.getAttribute('data-tip');
-                var r = el.getBoundingClientRect();
-                b.style.display = 'block';
-                b.style.top  = (r.bottom + 6) + 'px';
-                b.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 286)) + 'px';
-            });
-            el.addEventListener('mouseleave', function() {
-                if (helpBubble) helpBubble.style.display = 'none';
+            el.addEventListener('mouseenter', function() { showHelp(el); el._tapShown = false; });
+            el.addEventListener('mouseleave', hideHelp);
+            // The tip sits inside a <label>; don't let a click toggle the checkbox. Tap toggles the bubble (touch).
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (helpTipOpenEl === el && el._tapShown) { hideHelp(); return; }
+                showHelp(el); el._tapShown = true;
             });
         });
+        // Hide on scroll of any ancestor (capture), tap elsewhere, Escape, and modal close
+        window.addEventListener('scroll', hideHelp, true);
+        document.addEventListener('click', function(e) {
+            if (helpTipOpenEl && !(e.target.closest && e.target.closest('.pn-acct-help-tip'))) hideHelp();
+        }, true);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideHelp(); });
+        if (window.MutationObserver) {
+            new MutationObserver(function() {
+                if (!gid('pn-acct-overlay').classList.contains('pn-open')) hideHelp();
+            }).observe(gid('pn-acct-overlay'), { attributes: true, attributeFilter: ['class', 'style'] });
+        }
+    })();
+
+    // ---- Persona Display Controls tooltips (fixed-position so the scrolling modal can't clip them) ----
+    (function() {
+        var triggers = document.querySelectorAll('.pn-tooltip-trigger');
+        if (!triggers.length) return;
+        var bubble = null;
+        function show(t) {
+            var txt = t.querySelector('.pn-tooltip-text');
+            if (!txt) return;
+            if (!bubble) {
+                bubble = document.createElement('div');
+                bubble.className = 'pn-acct-help-bubble';
+                bubble.style.display = 'none';
+                document.body.appendChild(bubble);
+            }
+            bubble.textContent = txt.textContent;
+            bubble.style.display = 'block';
+            var r = t.getBoundingClientRect();
+            var w = bubble.offsetWidth, h = bubble.offsetHeight;
+            var left = Math.max(6, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 6));
+            var top = r.bottom + 6;
+            if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 6);
+            bubble.style.left = left + 'px';
+            bubble.style.top = top + 'px';
+        }
+        var openTrigger = null;
+        function hide() { openTrigger = null; if (bubble) bubble.style.display = 'none'; }
+        triggers.forEach(function(t) {
+            t.addEventListener('mouseenter', function() { show(t); openTrigger = t; t._tapShown = false; });
+            t.addEventListener('mouseleave', hide);
+            t.addEventListener('focus', function() { show(t); openTrigger = t; });
+            t.addEventListener('blur', hide);
+            // Tap/click toggles (touch); never let the tap reach an enclosing <label>/checkbox
+            t.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (openTrigger === t && t._tapShown) { hide(); return; }
+                show(t); openTrigger = t; t._tapShown = true;
+            });
+        });
+        window.addEventListener('scroll', hide, true);
+        document.addEventListener('click', function(e) {
+            if (openTrigger && !(e.target.closest && e.target.closest('.pn-tooltip-trigger'))) hide();
+        }, true);
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') hide(); });
+        if (window.MutationObserver) {
+            var seenOv = [];
+            triggers.forEach(function(t) {
+                var ov = t.closest('.pn-overlay, [id$="-overlay"]');
+                if (!ov || seenOv.indexOf(ov) !== -1) return;
+                seenOv.push(ov);
+                new MutationObserver(function() {
+                    if (!ov.classList.contains('pn-open')) hide();
+                }).observe(ov, { attributes: true, attributeFilter: ['class', 'style'] });
+            });
+        }
     })();
 
     // ---- Add Dues Modal ----
@@ -2053,6 +2324,8 @@ if (PnConfig.recError) {
             var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
             var held      = tnHeldRank(playerRanks, opt, awardId);
             var suggested = Math.min(held + 1, maxRank);
+            // Informational only: never changes the suggested rank above.
+            tnSiblingLadderNote(gid('pn-rank-pills'), playerRanks, opt ? opt.value : 0, 'pn-add');
             var hint = gid('pn-rank-hint');
             if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
             var html = '';
@@ -2061,6 +2334,7 @@ if (PnConfig.recError) {
             }
             var pills = gid('pn-rank-pills');
             pills.dataset.rankHeld = held;
+            tnTopRankHint(hint, held, maxRank, 'grant');
             pills.innerHTML = html;
             selectRankPill(suggested, pills);
         }
@@ -2203,11 +2477,13 @@ if (PnConfig.recError) {
 
         // ---- Open / Close ----
         window.pnOpenAwardModal = function(type) {
+            pnActiveRecId = null; // set again by pnGiveFromRec when opened from a rec
             // Reset
             gid('pn-award-error').style.display   = 'none';
             gid('pn-award-error').textContent      = '';
             gid('pn-award-success').style.display  = 'none';
             gid('pn-award-note').value            = '';
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), false);
             gid('pn-award-char-count').textContent = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
             gid('pn-award-givenby-text').value    = '';
@@ -2239,21 +2515,29 @@ if (PnConfig.recError) {
         };
         var pnAwardsDirty = false;
         window.pnCloseAwardModal = function() {
+            pnActiveRecId = null;
             gid('pn-award-overlay').classList.remove('pn-open');
             document.body.style.overflow = '';
             if (pnAwardsDirty) { pnAwardsDirty = false; window.location.reload(); }
         };
 
+        // The rec a "Give from rec" opened this modal from: sent with the save so the
+        // server's Monarchy Only gate can check the note (cleared on every other open).
+        var pnActiveRecId = null;
         // Pre-populate the award modal from a recommendation row
         window.pnGiveFromRec = function(rec) {
             pnOpenAwardModal('awards');
+            pnActiveRecId = rec.RecommendationsId || null;
             var sel = gid('pn-award-select');
             sel.value = String(rec.KingdomAwardId || '');
             sel.dispatchEvent(new Event('change'));
             if (rec.Rank) {
                 setTimeout(function() { selectRankPill(parseInt(rec.Rank)); }, 0);
             }
-            if (rec.Reason) {
+            // Monarchy Only: the reason is officer-only and never becomes the public note.
+            var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), recMo);
+            if (rec.Reason && !recMo) {
                 var noteEl = gid('pn-award-note');
                 noteEl.value = rec.Reason;
                 var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -2295,6 +2579,7 @@ if (PnConfig.recError) {
             gid('pn-award-rank-row').style.display   = 'none';
             gid('pn-rank-pills').innerHTML           = '';
             gid('pn-award-note').value               = '';
+            if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), false);
             gid('pn-award-char-count').textContent   = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
             gid('pn-award-info-line').innerHTML      = '';
@@ -2330,6 +2615,7 @@ if (PnConfig.recError) {
             fd.append('KingdomId',      gid('pn-award-kingdom-id').value || '0');
             fd.append('EventId',        gid('pn-award-event-id').value   || '0');
             fd.append('Note',           gid('pn-award-note').value       || '');
+            if (pnActiveRecId) fd.append('RecommendationsId', String(pnActiveRecId));
             var rank = gid('pn-award-rank-val').value;
             if (rank) fd.append('Rank', rank);
             var customName = gid('pn-award-custom-name').value.trim();
@@ -2345,6 +2631,8 @@ if (PnConfig.recError) {
             fetch(AWARD_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                    if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
+                    pnActiveRecId = null;
                     onSuccess();
                 })
                 .catch(function(err) {
@@ -2366,6 +2654,7 @@ if (PnConfig.recError) {
     pnInitDataTable('#pn-awards-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Awards' });
     pnInitDataTable('#pn-titles-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Titles' });
     pnInitDataTable('#pn-classes-table',        { order: [[2, 'desc']],              filename: 'Class Levels' });
+    pnInitDataTable('#pn-bonus-table',          { order: [[4, 'desc']],              filename: 'Bonus Credits', pageLength: 10 });
     pnInitDataTable('#pn-revoked-awards-table', { order: [[3, 'desc']],              filename: 'Revoked Awards' });
     pnInitDataTable('#pn-revoked-titles-table', { order: [[3, 'desc']],              filename: 'Revoked Titles' });
     pnInitDataTable('#pn-tourneys-table',       { order: [[0, 'desc']],              filename: 'Tournaments' });
@@ -2597,6 +2886,7 @@ window.knInitMap = async function() {
     var map = new google.maps.Map(document.getElementById('kn-map'), {
         center: {lat: 0, lng: 0},
         zoom: 2,
+        gestureHandling: orkMapGestureHandling(),
         mapId: 'ORK3_MAP_ID'
     });
 
@@ -2828,14 +3118,19 @@ function knPageRange(current, total) {
 
 function knPaginate($table, page) {
     var pageSize = 25;
-    var $rows = $table.find('tbody tr').filter(function() { return $(this).css('display') !== 'none'; });
+    // Paging hides rows with a class and the type filters with inline display,
+    // so clearing the class first leaves only filtered-out rows reading as
+    // hidden. Sharing inline display dropped every row past page 1 from the
+    // list the next time this ran.
+    var $rows = $table.find('tbody tr').removeClass('kn-page-hidden')
+        .filter(function() { return $(this).css('display') !== 'none'; });
     var total = $rows.length;
     if (total === 0) { $table.next('.kn-pagination').empty().hide(); return; }
     var totalPages = Math.max(1, Math.ceil(total / pageSize));
     page = Math.max(1, Math.min(page, totalPages));
     $table.data('kn-page', page);
     $rows.each(function(i) {
-        $(this).toggle(i >= (page - 1) * pageSize && i < page * pageSize);
+        $(this).toggleClass('kn-page-hidden', i < (page - 1) * pageSize || i >= page * pageSize);
     });
     var $pg = $table.next('.kn-pagination');
     if ($pg.length === 0) $pg = $('<div class="kn-pagination"></div>').insertAfter($table);
@@ -3112,8 +3407,12 @@ $(document).ready(function() {
                 $(this).toggle(persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1);
             });
             $root.find('.kn-year-section').each(function() {
-                var hasVisible =
-                    $(this).find('.kn-player-card:visible, .kn-year-table tbody tr:visible').length > 0;
+                // Own display state, not :visible, for the same reason as the park
+                // filter (pkApplyPlayerFilters): a section hidden by a no-match query
+                // would otherwise never come back until the box was emptied.
+                var hasVisible = $(this).find('.kn-player-card, .kn-year-table tbody tr').filter(function() {
+                    return this.style.display !== 'none';
+                }).length > 0;
                 $(this).toggle(hasVisible);
                 if (hasVisible) this.open = true;
             });
@@ -3284,8 +3583,11 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(knPlayerRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, knPlayerRanks, opt.value, 'kn-add');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
+        tnTopRankHint(hint, held, maxRank, 'grant');
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type      = 'button';
@@ -3473,6 +3775,7 @@ $(document).ready(function() {
         gid('kn-award-player-id').value          = '';
         gid('kn-award-player-results').classList.remove('kn-ac-open');
         gid('kn-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), false);
         gid('kn-award-char-count').textContent   = '400 characters remaining';
         gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-givenby-text').value       = '';
@@ -3556,7 +3859,10 @@ $(document).ready(function() {
                 if (pill) pill.click();
             }, 0);
         }
-        if (rec.Reason) {
+        // Monarchy Only: the reason is officer-only and never becomes the public note.
+        var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), recMo);
+        if (rec.Reason && !recMo) {
             var noteEl = gid('kn-award-note');
             noteEl.value = rec.Reason;
             var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -3593,11 +3899,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#kn-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Delete?';
+                dimBtn.textContent = 'Confirm Dismiss?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Delete';
+                    dimBtn.textContent = 'Dismiss';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -3614,7 +3920,7 @@ $(document).ready(function() {
                     if (d.status === 0) {
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to delete recommendation.');
+                        alert(d.error || 'Failed to dismiss recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -3955,6 +4261,7 @@ $(document).ready(function() {
         gid('kn-award-rank-row').style.display   = 'none';
         gid('kn-rank-pills').innerHTML           = '';
         gid('kn-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('kn-award-note'), false);
         gid('kn-award-char-count').textContent   = '400 characters remaining';
         gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-info-line').innerHTML      = '';
@@ -3985,6 +4292,7 @@ $(document).ready(function() {
         fd.append('KingdomId',      gid('kn-award-kingdom-id').value || '0');
         fd.append('EventId',        gid('kn-award-event-id').value   || '0');
         fd.append('Note',           gid('kn-award-note').value       || '');
+        if (knActiveRecId) fd.append('RecommendationsId', String(knActiveRecId));
         var rank = gid('kn-award-rank-val').value;
         if (rank) fd.append('Rank', rank);
         var customName = gid('kn-award-custom-name') ? gid('kn-award-custom-name').value.trim() : '';
@@ -4005,6 +4313,7 @@ $(document).ready(function() {
         fetch(saveUrl, { method: 'POST', body: fd })
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
                 onSuccess();
             })
             .catch(function(err) {
@@ -4088,8 +4397,11 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(knRecRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, knRecRanks, opt.value, 'kn-rec');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
+        tnTopRankHint(hint, held, maxRank, 'recommend');
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type = 'button';
@@ -4121,8 +4433,15 @@ $(document).ready(function() {
         });
     }
 
+    // Monarchy Only eligibility follows the PICKED recipient, not the page.
+    function knMoRecheck(recipientId) {
+        if (window.orkMonarchyOnlyRecheck) {
+            window.orkMonarchyOnlyRecheck(gid('kn-rec-monarchy'), UIR_JS + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/monarchyonlyeligible', recipientId);
+        }
+    }
     gid('kn-rec-player-text').addEventListener('input', function() {
         gid('kn-rec-player-id').value = '';
+        knMoRecheck(0);
         checkRequired();
         var term = this.value.trim();
         clearTimeout(playerTimer);
@@ -4148,6 +4467,7 @@ $(document).ready(function() {
         gid('kn-rec-player-text').value = decodeURIComponent(item.dataset.name);
         gid('kn-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
+        knMoRecheck(item.dataset.id);
         knRecRanks = {};
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
@@ -4179,6 +4499,8 @@ $(document).ready(function() {
         gid('kn-rec-reason').value          = '';
         gid('kn-rec-char-count').textContent = '400 characters remaining';
         var knAnonEl = gid('kn-rec-anon'); if (knAnonEl) knAnonEl.checked = false;
+        var knMoEl = gid('kn-rec-monarchy'); if (knMoEl) knMoEl.checked = false;
+        knMoRecheck(0);
         knRecRanks = {};
         checkRequired();
         gid('kn-rec-overlay').classList.add('kn-open');
@@ -4206,6 +4528,7 @@ $(document).ready(function() {
         if (rank) fd.append('Rank', rank);
         var anonEl = gid('kn-rec-anon');
         if (anonEl && anonEl.checked) fd.append('Anonymous', 1);
+        var moEl = gid('kn-rec-monarchy'); if (moEl && moEl.checked) fd.append('MonarchyOnly', '1');
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         fetch(UIR_JS + 'KingdomAjax/kingdom/' + KINGDOM_ID + '/addrecommendation', { method: 'POST', body: fd })
@@ -4222,6 +4545,8 @@ $(document).ready(function() {
                     gid('kn-rec-reason').value = '';
                     gid('kn-rec-char-count').textContent = '400 characters remaining';
                     var knAnonElS = gid('kn-rec-anon'); if (knAnonElS) knAnonElS.checked = false;
+                    var knMoElS = gid('kn-rec-monarchy'); if (knMoElS) knMoElS.checked = false;
+                    knMoRecheck(0);
                     knRecRanks = {};
                     setTimeout(function() { gid('kn-rec-success').style.display = 'none'; }, 3000);
                 } else {
@@ -4487,6 +4812,8 @@ $(document).ready(function() {
         row.className = 'kn-row-link' + (officerOnly ? ' kn-officer-only' : '') + (localsOnly ? ' kn-locals-only' : '');
         row.innerHTML = knCiRowCellsHtml(name, parkName, startVal, officerOnly, localsOnly, color);
         if (typeof knFilters !== 'undefined' && knFilters['calendar-item'] === false) row.style.display = 'none';
+        // Replacing className dropped the paging class, so put the current page back.
+        if (window.jQuery) knPaginate(jQuery('#kn-events-table'), jQuery('#kn-events-table').data('kn-page') || 1);
         return true;
     }
 
@@ -6915,6 +7242,7 @@ function pkToggleFilter(btn, type) {
     var isOn = pkFilters[type];
     $(btn).toggleClass('pk-filter-on', isOn);
     $('#pk-events-table').find('tr[data-type="' + type + '"]').css('display', isOn ? '' : 'none');
+    pkPaginate($('#pk-events-table'), 1);
     if (pkCalendar) pkCalendar.refetchEvents();
 }
 
@@ -7038,11 +7366,15 @@ function pkRenderPagination($table, current, total, containerId) {
 
 function pkPaginate($table, page) {
     var perPage = 10;
-    var $rows = $table.find('tbody tr');
-    var total = Math.ceil($rows.length / perPage);
-    if (total <= 1) return;
-    $rows.hide();
-    $rows.slice((page-1)*perPage, page*perPage).show();
+    // Paging hides rows with a class and the type filters with inline display,
+    // so a page turn neither reveals a filtered-out row nor counts it.
+    var $rows = $table.find('tbody tr').removeClass('pk-page-hidden')
+        .filter(function() { return $(this).css('display') !== 'none'; });
+    var total = Math.max(1, Math.ceil($rows.length / perPage));
+    page = Math.max(1, Math.min(page, total));
+    $rows.each(function(i) {
+        $(this).toggleClass('pk-page-hidden', i < (page - 1) * perPage || i >= page * perPage);
+    });
     var containerId = $table.attr('id') + '-pages';
     pkRenderPagination($table, page, total, containerId);
     $table.data('pk-page', page);
@@ -7185,8 +7517,17 @@ $(document).ready(function() {
             });
             $root.find('.pk-year-section').each(function() {
                 if (!filtering) { $(this).show(); return; }
-                var hasVisible =
-                    $(this).find('.pk-player-card:visible, .pk-year-table tbody tr:visible').length > 0;
+                // Count matches by each card's/row's OWN display state, not jQuery's
+                // :visible. :visible is false for anything inside a hidden ancestor,
+                // so once this section had been hidden for a query with no matches
+                // ("Macrus"), the cards un-hidden by the next keystroke still read as
+                // invisible, the section stayed hidden, and no later query could bring
+                // it back until the box was emptied. (Reported 2026-10-26, park 277.)
+                // Same reason not to rely on :visible with content-visibility:auto,
+                // which gives off-screen children no boxes either.
+                var hasVisible = $(this).find('.pk-player-card, .pk-year-table tbody tr').filter(function() {
+                    return this.style.display !== 'none';
+                }).length > 0;
                 $(this).toggle(hasVisible);
                 if (hasVisible) this.open = true;
             });
@@ -7351,8 +7692,11 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = tnHeldRank(pkPlayerRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, pkPlayerRanks, opt.value, 'pk-add');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
+        tnTopRankHint(hint, held, maxRank, 'grant');
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type      = 'button';
@@ -7545,6 +7889,7 @@ $(document).ready(function() {
         gid('pk-award-player-id').value          = '';
         gid('pk-award-player-results').classList.remove('pk-ac-open');
         gid('pk-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), false);
         gid('pk-award-char-count').textContent   = '400 characters remaining';
         gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-givenby-text').value       = '';
@@ -7607,7 +7952,10 @@ $(document).ready(function() {
                 if (pill) pill.click();
             }, 0);
         }
-        if (rec.Reason) {
+        // Monarchy Only: the reason is officer-only and never becomes the public note.
+        var recMo = (parseInt(rec.MonarchyOnlyLevel, 10) || 0) !== 0;
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), recMo);
+        if (rec.Reason && !recMo) {
             var noteEl = gid('pk-award-note');
             noteEl.value = rec.Reason;
             var rem = AWARD_NOTE_MAX_CHARS - rec.Reason.length;
@@ -7644,11 +7992,11 @@ $(document).ready(function() {
         if (dimBtn && dimBtn.closest('#pk-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
                 dimBtn.dataset.confirm = '1';
-                dimBtn.textContent = 'Confirm Delete?';
+                dimBtn.textContent = 'Confirm Dismiss?';
                 dimBtn.classList.add('pk-rec-dismiss-confirm');
                 dimBtn._confirmTimer = setTimeout(function() {
                     dimBtn.dataset.confirm = '';
-                    dimBtn.textContent = 'Delete';
+                    dimBtn.textContent = 'Dismiss';
                     dimBtn.classList.remove('pk-rec-dismiss-confirm');
                 }, 3000);
                 return;
@@ -7665,7 +8013,7 @@ $(document).ready(function() {
                     if (d.status === 0) {
                         if (row) { row.classList.add('pk-rec-dismissed'); setTimeout(function() { row.remove(); }, 600); }
                     } else {
-                        alert(d.error || 'Failed to delete recommendation.');
+                        alert(d.error || 'Failed to dismiss recommendation.');
                     }
                 })
                 .catch(function() { alert('Network error.'); });
@@ -7730,6 +8078,7 @@ $(document).ready(function() {
         gid('pk-award-rank-row').style.display   = 'none';
         gid('pk-rank-pills').innerHTML           = '';
         gid('pk-award-note').value               = '';
+        if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pk-award-note'), false);
         gid('pk-award-char-count').textContent   = '400 characters remaining';
         gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-info-line').innerHTML      = '';
@@ -7760,6 +8109,7 @@ $(document).ready(function() {
         fd.append('KingdomId',      gid('pk-award-kingdom-id').value || '0');
         fd.append('EventId',        gid('pk-award-event-id').value   || '0');
         fd.append('Note',           gid('pk-award-note').value       || '');
+        if (pkActiveRecId) fd.append('RecommendationsId', String(pkActiveRecId));
         var rank = gid('pk-award-rank-val').value;
         if (rank) fd.append('Rank', rank);
         var customName = gid('pk-award-custom-name') ? gid('pk-award-custom-name').value.trim() : '';
@@ -7778,6 +8128,7 @@ $(document).ready(function() {
         fetch(saveUrl, { method: 'POST', body: fd })
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
                 onSuccess();
             })
             .catch(function(err) {
@@ -7867,8 +8218,11 @@ $(document).ready(function() {
         if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held     = tnHeldRank(pkRecRanks, opt, baseAwardId);
+        // Informational only: never changes the suggested rank above.
+        tnSiblingLadderNote(wrap, pkRecRanks, opt.value, 'pk-rec');
         var suggested = Math.min(held + 1, maxRank);
         wrap.dataset.rankHeld = held;
+        tnTopRankHint(hint, held, maxRank, 'recommend');
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type = 'button';
@@ -7901,8 +8255,16 @@ $(document).ready(function() {
     }
 
     // Player search
+    // Monarchy Only eligibility follows the PICKED recipient (this search is
+    // kingdom-wide, so the recipient need not be of this park).
+    function pkMoRecheck(recipientId) {
+        if (window.orkMonarchyOnlyRecheck) {
+            window.orkMonarchyOnlyRecheck(gid('pk-rec-monarchy'), UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/monarchyonlyeligible', recipientId);
+        }
+    }
     gid('pk-rec-player-text').addEventListener('input', function() {
         gid('pk-rec-player-id').value = '';
+        pkMoRecheck(0);
         checkRequired();
         var term = this.value.trim();
         clearTimeout(playerTimer);
@@ -7928,6 +8290,7 @@ $(document).ready(function() {
         gid('pk-rec-player-text').value = decodeURIComponent(item.dataset.name);
         gid('pk-rec-player-id').value   = item.dataset.id;
         this.classList.remove('pk-ac-open');
+        pkMoRecheck(item.dataset.id);
         pkRecRanks = {};
         fetch(UIR_JS + 'PlayerAjax/player/' + item.dataset.id + '/awardranks')
             .then(function(r) { return r.json(); })
@@ -7959,6 +8322,8 @@ $(document).ready(function() {
         gid('pk-rec-reason').value          = '';
         gid('pk-rec-char-count').textContent = '400 characters remaining';
         var pkAnonEl = gid('pk-rec-anon'); if (pkAnonEl) pkAnonEl.checked = false;
+        var pkMoEl = gid('pk-rec-monarchy'); if (pkMoEl) pkMoEl.checked = false;
+        pkMoRecheck(0);
         pkRecRanks = {};
         checkRequired();
         gid('pk-rec-overlay').classList.add('pk-open');
@@ -7996,6 +8361,7 @@ $(document).ready(function() {
             if (rank) fd.append('Rank', rank);
             var anonEl = gid('pk-rec-anon');
             if (anonEl && anonEl.checked) fd.append('Anonymous', 1);
+            var moEl = gid('pk-rec-monarchy'); if (moEl && moEl.checked) fd.append('MonarchyOnly', '1');
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             if (warnEl) warnEl.style.display = 'none';
@@ -8013,6 +8379,9 @@ $(document).ready(function() {
                         gid('pk-rec-rank-pills').innerHTML = '';
                         gid('pk-rec-reason').value = '';
                         gid('pk-rec-char-count').textContent = '400 characters remaining';
+                        var pkAnonElS = gid('pk-rec-anon'); if (pkAnonElS) pkAnonElS.checked = false;
+                        var pkMoElS = gid('pk-rec-monarchy'); if (pkMoElS) pkMoElS.checked = false;
+                        pkMoRecheck(0);
                         pkRecRanks = {};
                         setTimeout(function() { gid('pk-rec-success').style.display = 'none'; }, 3000);
                     } else {
@@ -8323,6 +8692,8 @@ $(document).ready(function() {
         row.className = pkCiClassName(officerOnly, localsOnly);
         row.innerHTML = pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color);
         if (typeof pkFilters !== 'undefined' && pkFilters['calendar-item'] === false) row.style.display = 'none';
+        // Replacing className dropped the paging class, so put the current page back.
+        if (window.jQuery) pkPaginate(jQuery('#pk-events-table'), jQuery('#pk-events-table').data('pk-page') || 1);
         return true;
     }
 
@@ -8562,8 +8933,12 @@ $(document).ready(function() {
 
         function evAttendedIds() {
             var ids = {};
-            document.querySelectorAll('#ev-attendance-table tbody tr[data-mundane-id]').forEach(function(tr) {
-                ids[parseInt(tr.dataset.mundaneId, 10)] = true;
+            // DataTables only keeps the current page in the DOM — ask it for every row.
+            var trs = window._evAttDt
+                ? window._evAttDt.rows().nodes().toArray()
+                : document.querySelectorAll('#ev-attendance-table tbody tr[data-mundane-id]');
+            Array.prototype.forEach.call(trs, function(tr) {
+                if (tr.dataset.mundaneId) ids[parseInt(tr.dataset.mundaneId, 10)] = true;
             });
             return ids;
         }
@@ -9039,9 +9414,7 @@ $(document).ready(function() {
                 if (creditsField) creditsField.value = evGetSavedCredits();
                 $('#ev-PlayerName').val('');
                 $('#ev-MundaneId').val('');
-
-                var tabCount = document.querySelector('[data-tab="ev-tab-attendance"] .ev-tab-count');
-                if (tabCount) { tabCount.textContent = '(' + ((parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0) + 1) + ')'; }
+                // Tab badge is bumped once, inside evAppendAttendanceRow().
             } else {
                 var errorDiv = document.querySelector('.ev-att-form .ev-error') || document.createElement('div');
                 errorDiv.className = 'ev-error';
@@ -16817,7 +17190,7 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 var $delTable = $(panel).find('.pk-deleted-recs-table');
                 panel.__dt = window.orkInitDataTable($delTable, {
                     order: [[6, 'desc']],   // Deleted At, newest first
-                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Deleted Recommendations',
+                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Dismissed Recommendations',
                     columnDefs: [{ targets: 8, orderable: false, searchable: false }]
                 });
                 window.orkAdjustDataTables($(panel));
@@ -16847,7 +17220,7 @@ window.initUsernameAvailabilityCheck = function(opts) {
             var open = panel.classList.toggle('pk-deleted-open');
             toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
             var lbl = toggle.querySelector('.pk-deleted-recs-toggle-label');
-            if (lbl) lbl.textContent = open ? 'Hide Deleted Recommendations' : 'Show Deleted Recommendations';
+            if (lbl) lbl.textContent = open ? 'Hide Dismissed Recommendations' : 'Show Dismissed Recommendations';
             body.style.display = open ? '' : 'none';
             if (open && panel.dataset.loaded !== '1') {
                 loadDeleted(panel, listUrl);
@@ -17883,6 +18256,66 @@ window.evSetEventStatus = function(eventId, status, btn) {
 };
 
 // =============================================================================
+// Google Maps — shared touch gestures, loader, and pin maps
+// =============================================================================
+// Touch devices pan the map with ONE finger ('greedy') instead of Google's
+// default two-finger 'cooperative' mode. Mouse pointers keep 'auto' so the
+// desktop scroll wheel still scrolls the page rather than zooming the map.
+window.orkMapGestureHandling = function() {
+    return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ? 'greedy' : 'auto';
+};
+
+// One Maps JS API load per page, however many maps ask for it.
+window.orkEnsureGoogleMaps = (function() {
+    var loading = false;
+    return function(cb) {
+        if (typeof google !== 'undefined' && google.maps && google.maps.Map) return cb();
+        window.addEventListener('orkGmapsReady', cb, { once: true });
+        if (loading) return;
+        loading = true;
+        window.__orkGmapsCb = function() { window.dispatchEvent(new Event('orkGmapsReady')); };
+        var s = document.createElement('script');
+        // key and region pinned, as in knInitMap's loader.
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=__orkGmapsCb&v=weekly&region=CA';
+        s.async = true; s.defer = true;
+        document.head.appendChild(s);
+    };
+})();
+
+// Single-pin location maps: <div class="ork-pin-map" data-lat data-lng data-zoom>.
+// Built the first time the element is on screen, so a map inside a hidden tab
+// panel waits until the tab opens (Google Maps renders blank at zero size) and
+// pages that never scroll to a map never load the API.
+(function() {
+    function build(el) {
+        var pos = { lat: parseFloat(el.getAttribute('data-lat')), lng: parseFloat(el.getAttribute('data-lng')) };
+        if (isNaN(pos.lat) || isNaN(pos.lng)) return;
+        orkEnsureGoogleMaps(function() {
+            var map = new google.maps.Map(el, {
+                center: pos,
+                zoom: parseInt(el.getAttribute('data-zoom'), 10) || 14,
+                gestureHandling: orkMapGestureHandling(),
+                mapTypeControl: false, streetViewControl: false
+            });
+            new google.maps.Marker({ position: pos, map: map });
+        });
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        var els = document.querySelectorAll('.ork-pin-map');
+        if (!els.length) return;
+        if (!('IntersectionObserver' in window)) { els.forEach(build); return; }
+        var io = new IntersectionObserver(function(entries) {
+            entries.forEach(function(en) {
+                if (!en.isIntersecting) return;
+                io.unobserve(en.target);
+                build(en.target);
+            });
+        });
+        els.forEach(function(el) { io.observe(el); });
+    });
+})();
+
+// =============================================================================
 // Calendar Enhancements R2: RSVP dropdowns, Map view
 // Works on both Kingdomnew (kn-*) and Parknew (pk-*) surfaces.
 // =============================================================================
@@ -18061,28 +18494,9 @@ window.evSetEventStatus = function(eventId, status, btn) {
     });
 
     // ---- Events Map view (lazy Google Maps) ----
-    var GMAPS_API_KEY = 'AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8'; // mirrors knInitMap's key
-    var gmapsLoading  = false;
-    var gmapsReady    = (typeof google !== 'undefined' && google.maps && google.maps.Map);
-
-    function ensureGoogleMaps(cb) {
-        if (gmapsReady) return cb();
-        if (gmapsLoading) {
-            window.addEventListener('orkGmapsReady', cb, { once: true });
-            return;
-        }
-        gmapsLoading = true;
-        window.__orkGmapsCb = function() {
-            gmapsReady = true;
-            window.dispatchEvent(new Event('orkGmapsReady'));
-            cb();
-        };
-        var s = document.createElement('script');
-        // region pinned, as in knInitMap's loader.
-        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_API_KEY + '&callback=__orkGmapsCb&v=weekly&region=CA';
-        s.async = true; s.defer = true;
-        document.head.appendChild(s);
-    }
+    // Shared loader, so a Park page's events map and its sidebar pin map
+    // never pull the API in twice.
+    var ensureGoogleMaps = window.orkEnsureGoogleMaps;
 
     function popoverHtml(loc) {
         // Pre-render the RSVP button's inner HTML rather than leaving the wrap span
@@ -18156,6 +18570,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
         var bounds = new google.maps.LatLngBounds();
         var map = new google.maps.Map(el, {
             zoom: 4, center: { lat: locations[0].lat, lng: locations[0].lng },
+            gestureHandling: orkMapGestureHandling(),
             mapTypeControl: false, streetViewControl: false, fullscreenControl: false
         });
         var infow = new google.maps.InfoWindow();

@@ -498,9 +498,7 @@ html[data-theme="dark"] .pn-persona { color: #fff !important; background: transp
 .pn-sub-pronouns{font-style:italic;color:rgba(255,255,255,0.6)}
 .pn-sub-sep{margin:0 6px;color:rgba(255,255,255,0.4);font-size:10px}
 .pn-tooltip-trigger{position:relative;display:inline-flex;align-items:center}
-.pn-tooltip-trigger .pn-tooltip-text{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#2d3748;color:#fff;font-size:12px;font-weight:400;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
-.pn-tooltip-trigger:hover .pn-tooltip-text,.pn-tooltip-trigger:focus-within .pn-tooltip-text{display:block}
-html[data-theme="dark"] .pn-tooltip-trigger .pn-tooltip-text{background:var(--ork-bg-tertiary,#1a202c);border:1px solid var(--ork-border)}
+.pn-tooltip-trigger .pn-tooltip-text{display:none} /* text is shown via the fixed-position .pn-acct-help-bubble (revised.js) so the modal cannot clip it */
 .pn-about-empty{text-align:center;padding:40px 20px;color:#a0aec0;font-size:14px}
 .pn-about-layout{display:flex;gap:24px;align-items:flex-start}
 .pn-about-main{flex:1;min-width:0;position:relative}
@@ -734,6 +732,24 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-font-card.pn-active{border-color:var(--pn-accent,#4299e1);box-shadow:0 0 0 2px rgba(66,153,225,0.2);background:#ebf8ff}
 .pn-font-card-sample{font-size:16px;line-height:1.3;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}
 .pn-font-card-label{font-size:10px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:.04em}
+/* Bonus credits on the Class Levels tab */
+.pn-bonus-badge{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:600;background:#fefcbf;color:#744210;vertical-align:middle;white-space:nowrap}
+.pn-bonus-badge i{font-size:10px;color:#d69e2e}
+.pn-bonus-section{margin-top:22px}
+#theme_container .pn-bonus-heading,.pn-bonus-heading{margin:0 0 4px;padding:0;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;background:none;border:0;box-shadow:none;text-shadow:none;color:inherit}
+.pn-bonus-heading i{color:#d69e2e}
+.pn-bonus-hint{margin:0 0 10px;font-size:12px;color:var(--ork-text-muted,#718096)}
+.pn-bonus-scope{font-size:12px;color:var(--ork-text-muted,#718096)}
+.pn-bonus-note{font-size:12px;color:var(--ork-text-muted,#718096)}
+.pn-bonus-revoke{background:none;border:0;color:#c53030;cursor:pointer;font-size:12px;padding:2px 6px}
+.pn-bonus-revoke:hover{text-decoration:underline}
+.pn-bonus-edit,.pn-bonus-save,.pn-bonus-cancel{background:none;border:0;color:#2b6cb0;cursor:pointer;font-size:12px;padding:2px 6px}
+.pn-bonus-edit:hover,.pn-bonus-save:hover,.pn-bonus-cancel:hover{text-decoration:underline}
+.pn-bonus-inline{font:inherit;font-size:12px;padding:2px 4px;max-width:9em}
+.pn-bonus-inline-num{width:4.5em;text-align:right}
+.pn-bonus-actions{white-space:nowrap}
+html[data-theme="dark"] .pn-bonus-badge{background:#4a3f12;color:#fbd38d}
+
 /* Shared yellow warning banner (about visibility, milestones accuracy, name entitlement, reconcile) */
 .pn-about-visibility-warn,
 .pn-warn-banner{margin-bottom:16px;padding:10px 12px;background:#fffaf0;border:1px solid #f6e05e;border-radius:6px;font-size:12px;color:#744210;line-height:1.5}
@@ -794,7 +810,7 @@ html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,
 .pn-dm-hint i{color:#3182ce;margin-top:2px;flex-shrink:0}
 .pn-dm-hint strong{color:#1a365d}
 @media(max-width:600px){
-.pn-design-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pn-design-tabs{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
 .pn-name-part{flex:0 0 100%;min-width:0}
 .pn-name-core{flex:1 1 0;min-width:0}
 .pn-color-row{flex-direction:column;gap:8px}
@@ -2592,6 +2608,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 										<?php if ($hasParagon): ?>
 											<span class="pn-paragon-badge" title="Paragon title earned"><i class="fas fa-crown"></i> Paragon</span>
 										<?php endif; ?>
+										<?php /* The Credits cell must stay a bare number: revised.js reads it with Number() to compute the level. */ ?>
+										<?php if ((float)($detail['BonusCredits'] ?? 0) > 0): ?>
+											<span class="pn-bonus-badge" title="Includes bonus credits — see Bonus Credits below"><i class="fas fa-star"></i> <?= rtrim(rtrim(number_format((float)$detail['BonusCredits'], 2, '.', ''), '0'), '.') ?> bonus</span>
+										<?php endif; ?>
 									</td>
 									<td class="pn-col-numeric pn-credits"><?= $totalCredits ?></td>
 									<td class="pn-col-numeric pn-level">-</td>
@@ -2601,6 +2621,61 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					</table>
 				<?php else: ?>
 					<div class="pn-empty">No class records</div>
+				<?php endif; ?>
+
+				<?php
+					// Bonus credits: class credits that are not attendance (class.BonusCredit.php).
+					// Each one says what it was for and who granted it. Live credits only; officers
+					// with authority over the player's park can remove one.
+					$pnBonus = is_array($BonusCredits ?? null) ? $BonusCredits : [];
+					$pnViewerId = (int)($ViewerId ?? 0);
+					// Whoever gave a credit may take it back, so the column shows if any row is theirs.
+					$pnMine = $pnViewerId > 0 ? array_filter($pnBonus, function ($b) use ($pnViewerId) { return (int)($b['GrantedBy'] ?? 0) === $pnViewerId; }) : [];
+					$pnCanRevokeBonus = !empty($CanRevokeBonus) || count($pnMine) > 0;
+				?>
+				<?php if (count($pnBonus) > 0): ?>
+				<div class="pn-bonus-section" id="pn-bonus-section">
+					<h4 class="pn-bonus-heading"><i class="fas fa-star"></i> Bonus Credits</h4>
+					<p class="pn-bonus-hint">Credits granted for something other than attendance. They count toward class levels only, never as attendance.</p>
+					<?php // pn-table display: the shared DataTables setup (pnInitDataTable in revised.js) gives
+					      // it paging, sort, search and CSV export, like the award and attendance tables. ?>
+					<table class="pn-table display" id="pn-bonus-table">
+						<thead>
+							<tr>
+								<th data-sorttype="text">Category</th>
+								<th data-sorttype="text">From</th>
+								<th data-sorttype="text">Class</th>
+								<th data-sorttype="numeric" class="pn-col-numeric">Credits</th>
+								<th data-sorttype="date">Date</th>
+								<th data-sorttype="text">Granted by</th>
+								<?php if ($pnCanRevokeBonus): ?><th class="pn-nosort"></th><?php endif; ?>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($pnBonus as $bc): ?>
+							<tr data-bonus-id="<?= (int)$bc['BonusCreditId'] ?>">
+								<td>
+									<?= htmlspecialchars($bc['CategoryName']) ?>
+									<?php if (!empty($bc['Note'])): ?><div class="pn-bonus-note"><?= htmlspecialchars($bc['Note']) ?></div><?php endif; ?>
+								</td>
+								<td class="pn-bonus-scope"><?= htmlspecialchars($bc['ScopeName']) ?></td>
+								<td class="pn-bonus-class" data-class-id="<?= (int)$bc['ClassId'] ?>"><?= htmlspecialchars($bc['ClassName']) ?></td>
+								<td class="pn-col-numeric pn-bonus-credits" data-credits="<?= rtrim(rtrim(number_format((float)$bc['Credits'], 2, '.', ''), '0'), '.') ?>"><?= rtrim(rtrim(number_format((float)$bc['Credits'], 2, '.', ''), '0'), '.') ?></td>
+								<td><?= htmlspecialchars($bc['Date']) ?></td>
+								<td><?= htmlspecialchars($bc['GrantedByPersona']) ?></td>
+								<?php if ($pnCanRevokeBonus): ?>
+								<td class="pn-col-numeric pn-bonus-actions">
+									<?php if (!empty($CanRevokeBonus) || (int)($bc['GrantedBy'] ?? 0) === $pnViewerId): ?>
+									<button type="button" class="pn-bonus-edit" data-id="<?= (int)$bc['BonusCreditId'] ?>" title="Change the amount or class">Edit</button>
+									<button type="button" class="pn-bonus-revoke" data-id="<?= (int)$bc['BonusCreditId'] ?>" data-who="<?= htmlspecialchars($bc['CategoryName'], ENT_QUOTES) ?>">Remove</button>
+									<?php endif; ?>
+								</td>
+								<?php endif; ?>
+							</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
 				<?php endif; ?>
 			</div>
 
@@ -3891,6 +3966,15 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 					</label>
 					<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
 				</div>
+				<?php if (!empty($CanMonarchyOnlyRec)): ?>
+				<div style="margin-top:12px">
+					<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+						<input type="checkbox" name="MonarchyOnly" id="pn-rec-monarchy" value="1" style="width:16px;height:16px;cursor:pointer">
+						<span>Monarchy Only</span>
+					</label>
+					<div class="mo-check-hint">Only officers will see this recommendation; the player will not.</div>
+				</div>
+				<?php endif; ?>
 			</form>
 		</div>
 		<div class="pn-modal-footer">
@@ -3911,6 +3995,91 @@ window.OrkRsCfg = {
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php include __DIR__ . '/_monarchy_only_assets.tpl'; ?>
+<?php if (!empty($pnCanRevokeBonus) && !empty($BonusCredits)): ?>
+<script>
+// Remove a bonus credit from the Class Levels tab. The page reloads afterwards so
+// the class totals and levels (computed server-side and by revised.js) agree.
+(function () {
+	var tbl = document.getElementById('pn-bonus-table');
+	if (!tbl) return;
+	// Editing a credit's class or amount in place. Save posts the change and
+	// reloads (class totals and levels must agree); Cancel or Escape puts the
+	// row back. Date, note and category stay: a credit for something else is
+	// a new grant.
+	var bonusClasses = <?= json_encode(is_array($BonusClasses ?? null) ? $BonusClasses : []) ?>;
+	function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); }
+	function bonusOops(message) {
+		if (typeof window.orkAlert === 'function') { window.orkAlert(message, { title: 'Could not change the credit' }); } else { alert(message); }
+	}
+	function startBonusEdit(tr) {
+		var clsCell = tr.querySelector('.pn-bonus-class'), crCell = tr.querySelector('.pn-bonus-credits'), act = tr.querySelector('.pn-bonus-actions');
+		if (!clsCell || !crCell || !act || tr.getAttribute('data-editing')) return;
+		tr.setAttribute('data-editing', '1');
+		tr.setAttribute('data-orig-class', clsCell.innerHTML);
+		tr.setAttribute('data-orig-credits', crCell.innerHTML);
+		tr.setAttribute('data-orig-actions', act.innerHTML);
+		var cur = clsCell.getAttribute('data-class-id'), opts = '';
+		bonusClasses.forEach(function (k) { opts += '<option value="' + k.ClassId + '"' + (String(k.ClassId) === String(cur) ? ' selected' : '') + '>' + escapeHtml(k.ClassName) + '</option>'; });
+		clsCell.innerHTML = '<select class="pn-bonus-inline pn-bonus-edit-class" aria-label="Class">' + opts + '</select>';
+		crCell.innerHTML = '<input type="number" class="pn-bonus-inline pn-bonus-inline-num pn-bonus-edit-credits" aria-label="Credits" step="0.25" min="0.25" value="' + escapeHtml(crCell.getAttribute('data-credits') || '') + '">';
+		act.innerHTML = '<button type="button" class="pn-bonus-save">Save</button><button type="button" class="pn-bonus-cancel">Cancel</button>';
+		crCell.querySelector('input').focus();
+	}
+	function cancelBonusEdit(tr) {
+		if (!tr.getAttribute('data-editing')) return;
+		tr.querySelector('.pn-bonus-class').innerHTML = tr.getAttribute('data-orig-class');
+		tr.querySelector('.pn-bonus-credits').innerHTML = tr.getAttribute('data-orig-credits');
+		tr.querySelector('.pn-bonus-actions').innerHTML = tr.getAttribute('data-orig-actions');
+		tr.removeAttribute('data-editing');
+	}
+	function saveBonusEdit(tr) {
+		var cls = tr.querySelector('.pn-bonus-edit-class'), amt = tr.querySelector('.pn-bonus-edit-credits'), save = tr.querySelector('.pn-bonus-save');
+		if (!cls || !amt) return;
+		save.disabled = true;
+		jQuery.post(<?= json_encode(UIR) ?> + 'BonusCreditAjax/update', { BonusCreditId: tr.getAttribute('data-bonus-id'), ClassId: cls.value, Credits: amt.value }, function (r) {
+			if (!r || r.status !== 0) { save.disabled = false; bonusOops((r && r.error) || 'Could not change the credit.'); return; }
+			if (r.changed) { location.reload(); } else { cancelBonusEdit(tr); }
+		}, 'json').fail(function () { save.disabled = false; bonusOops('Request failed.'); });
+	}
+	tbl.addEventListener('keydown', function (e) {
+		var tr = e.target.closest ? e.target.closest('tr') : null;
+		if (!tr || !tr.getAttribute('data-editing')) return;
+		if (e.key === 'Enter') { e.preventDefault(); saveBonusEdit(tr); }
+		else if (e.key === 'Escape') { e.preventDefault(); cancelBonusEdit(tr); }
+	});
+	tbl.addEventListener('click', function (e) {
+		var hit = e.target.closest ? e.target.closest('.pn-bonus-edit, .pn-bonus-save, .pn-bonus-cancel') : null;
+		if (hit) {
+			var row = hit.closest('tr');
+			if (hit.classList.contains('pn-bonus-edit')) startBonusEdit(row); else if (hit.classList.contains('pn-bonus-save')) saveBonusEdit(row); else cancelBonusEdit(row);
+			return;
+		}
+		var btn = e.target.closest ? e.target.closest('.pn-bonus-revoke') : null;
+		if (!btn) return;
+		var who = btn.getAttribute('data-who') || 'this credit';
+		// The styled alert from revised.js; the browser's only if it is missing.
+		function oops(message) {
+			if (typeof window.orkAlert === 'function') { window.orkAlert(message, { title: 'Could not remove the credit' }); } else { alert(message); }
+		}
+		function go() {
+			btn.disabled = true;
+			jQuery.post(<?= json_encode(UIR) ?> + 'BonusCreditAjax/revoke', { BonusCreditId: btn.getAttribute('data-id') }, function (r) {
+				if (!r || r.status !== 0) { btn.disabled = false; oops((r && r.error) || 'Could not remove the credit.'); return; }
+				location.reload();
+			}, 'json').fail(function () { btn.disabled = false; oops('Request failed.'); });
+		}
+		var msg = 'The “' + who + '” credit is removed from this player. It can be granted again.';
+		var oc = window.orkConfirm;
+		// The player page's own pnConfirm first; then revised.js's callback-style orkConfirm; then orkui.js's promise version.
+		if (typeof window.pnConfirm === 'function') { window.pnConfirm({ title: 'Remove this credit?', message: msg, confirmText: 'Remove', danger: true }, go); }
+		else if (typeof oc === 'function' && oc.length >= 2) { oc(msg, go, { title: 'Remove this credit?', okLabel: 'Remove', danger: true }); }
+		else if (typeof oc === 'function') { oc({ title: 'Remove this credit?', body: msg, confirmLabel: 'Remove', danger: true }).then(function (ok) { if (ok) go(); }); }
+		else if (window.confirm(msg)) { go(); }
+	});
+})();
+</script>
+<?php endif; ?>
 <?php endif; ?>
 
 <?php
@@ -3978,6 +4147,8 @@ $ladderMasterMap           = is_array($LadderMasterMap ?? null) ? $LadderMasterM
     btn.addEventListener('blur',       hide);
 })();
 
+<?php include __DIR__ . '/_recs_hidden_notice.tpl'; ?>
+window.tnPseudoLadderInfo = <?= json_encode(is_array($PseudoLadderSiblings ?? null) ? $PseudoLadderSiblings : (object)[]) ?>;
 var PnConfig = {
 	uir:            '<?= UIR ?>',
 	httpService:    '<?= HTTP_SERVICE ?>',
@@ -4017,6 +4188,7 @@ var PnConfig = {
 	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
+	recsHiddenNotice: <?= json_encode(htmlspecialchars(ork_recs_hidden_notice(isset($this->__session->user_id)))) ?>,
 	loggedInUserId: <?= isset($this->__session->user_id) ? (int)$this->__session->user_id : 0 ?>,
 	aboutPersona:   <?= json_encode($Player['AboutPersona'] ?? '') ?>,
 	aboutStory:     <?= json_encode($Player['AboutStory'] ?? '') ?>,
@@ -5886,10 +6058,18 @@ html[data-theme="dark"] .pn-quiz-instructions-meta strong { color: var(--ork-tex
 #pn-quiz-report-reason { padding: 5px 8px; background: var(--ork-input-bg); border: 1px solid var(--ork-input-border); border-radius: 4px; font-size: 0.85rem;
                          max-width: 100%; min-width: 0; box-sizing: border-box; }
 #pn-quiz-report-reason:focus { background: var(--ork-card-bg); }
+/* Shown only for "Other", which says nothing without the reporter's own words. */
+#pn-quiz-report-comment { display: block; box-sizing: border-box; width: 100%; max-width: 480px; margin: 8px 0; padding: 6px 8px;
+                          background: var(--ork-input-bg); border: 1px solid var(--ork-input-border); border-radius: 4px;
+                          font: inherit; font-size: 0.85rem; resize: vertical; }
+#pn-quiz-report-comment[hidden] { display: none; }
+#pn-quiz-report-comment:focus { background: var(--ork-card-bg); }
+#pn-quiz-report-comment:not([hidden]) + #pn-quiz-report-submit { margin-left: 0; }
 #pn-quiz-report-submit { margin-left: 6px; font-size: 0.82rem; }
 #pn-quiz-report-cancel { margin-left: 4px; font-size: 0.82rem; }
 #pn-quiz-report-thanks { font-size: 0.82rem; color: #276749; }
-html[data-theme="dark"] #pn-quiz-report-reason {
+html[data-theme="dark"] #pn-quiz-report-reason,
+html[data-theme="dark"] #pn-quiz-report-comment {
 	background: var(--ork-input-bg, #374151);
 	border-color: var(--ork-input-border, #4a5568);
 	color: var(--ork-text, #e2e8f0);
@@ -5900,6 +6080,7 @@ html[data-theme="dark"] #pn-quiz-report-thanks { color: #68d391; }
 	/* Report form — a native select takes its width from its longest option, which
 	   ran 105px past the modal on a 320px viewport; 16px also stops iOS zooming on focus. */
 	#pn-quiz-report-reason { width: 100%; font-size: 16px; min-height: 44px; }
+	#pn-quiz-report-comment { max-width: none; margin-bottom: 0; font-size: 16px; }
 	#pn-quiz-report-submit,
 	#pn-quiz-report-cancel { margin: 8px 6px 0 0; min-height: 44px; }
 }
@@ -6225,6 +6406,8 @@ function pnOpenTestChooser() {
 							<option value="outdated">This has not been updated for recent changes</option>
 							<option value="other">Other</option>
 						</select>
+						<label class="pn-quiz-sr-only" for="pn-quiz-report-comment">Describe the problem with this question</label>
+						<textarea id="pn-quiz-report-comment" rows="2" maxlength="500" placeholder="What's wrong with this question?" hidden></textarea>
 						<button class="pn-btn pn-btn-sm pn-btn-primary" id="pn-quiz-report-submit">Submit</button>
 						<button class="pn-btn pn-btn-sm pn-btn-ghost" id="pn-quiz-report-cancel">Cancel</button>
 					</div>
@@ -6290,6 +6473,7 @@ function pnOpenTestChooser() {
 	var reportForm     = document.getElementById('pn-quiz-report-form');
 	var reportReason   = document.getElementById('pn-quiz-report-reason');
 	var reportCorrectOpt = reportReason ? reportReason.querySelector('option[value="correct"]') : null;
+	var reportComment  = document.getElementById('pn-quiz-report-comment');
 	var reportSubmit   = document.getElementById('pn-quiz-report-submit');
 	var reportCancel   = document.getElementById('pn-quiz-report-cancel');
 	var reportThanks   = document.getElementById('pn-quiz-report-thanks');
@@ -6432,6 +6616,8 @@ function pnOpenTestChooser() {
 		// A report submitted on the previous question leaves the button hidden.
 		reportBtn.style.display  = 'inline-block';
 		reportReason.value = '';
+		reportComment.value = '';
+		syncReportComment();
 		if (reportCorrectOpt) reportCorrectOpt.hidden = false;
 		reportThanks.style.display = 'none';
 
@@ -6698,9 +6884,18 @@ function pnOpenTestChooser() {
 	function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
 	function escHtml(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
 
+	// The text box follows the select's value rather than its change event: a
+	// browser that restores "Other" on reload or back fires no change, so the
+	// form re-checks whenever it opens too.
+	function syncReportComment() {
+		reportComment.hidden = reportReason.value !== 'other';
+	}
+	reportReason.addEventListener('change', syncReportComment);
+	reportReason.addEventListener('input', syncReportComment);
 	reportBtn.addEventListener('click', function() {
 		reportForm.style.display = 'block';
 		reportBtn.style.display  = 'none';
+		syncReportComment();
 	});
 	reportCancel.addEventListener('click', function() {
 		reportForm.style.display = 'none';
@@ -6709,9 +6904,17 @@ function pnOpenTestChooser() {
 	reportSubmit.addEventListener('click', function() {
 		var reason = reportReason.value;
 		if (!reason) { showError('Please select a reason.'); return; }
+		var comment = reason === 'other' ? reportComment.value.trim() : '';
+		if (reason === 'other' && !comment) {
+			syncReportComment();
+			showError('Please describe the problem with this question.');
+			reportComment.focus();
+			return;
+		}
 		var fd = new FormData();
 		fd.append('QuestionId', reportBtn.dataset.questionId);
 		fd.append('Reason', reason);
+		fd.append('Comment', comment);
 		fetch(PnConfig.uir + 'QualTestAjax/reportquestion', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })
 			.then(function(j) {
@@ -6723,6 +6926,7 @@ function pnOpenTestChooser() {
 				}
 				reportForm.style.display   = 'none';
 				reportThanks.style.display = 'inline';
+				errorMsg.style.display = 'none';
 			})
 			.catch(function() {
 				reportForm.style.display = 'none';
@@ -7792,7 +7996,14 @@ $(function() {
 			var recList = PnConfig.showRecsTab ? allRecs : myRecs;
 			var countEl = document.getElementById('pn-recs-tab-count');
 			if (countEl) countEl.textContent = '(' + recList.length + ')';
-			if (!recList.length) { body.innerHTML = '<div class="pn-empty">There are no open award recommendations for <?= htmlspecialchars($Player['Persona'] ?? 'this player') ?>.</div>'; return; }
+			if (!recList.length) {
+				// showRecsTab is off when the kingdom keeps recommendations private and
+				// the viewer can't manage this player, so "none" would be a guess.
+				body.innerHTML = '<div class="pn-empty">' + (PnConfig.showRecsTab
+					? 'There are no open award recommendations for <?= htmlspecialchars($Player['Persona'] ?? 'this player') ?>.'
+					: PnConfig.recsHiddenNotice) + '</div>';
+				return;
+			}
 			var hasActions = PnConfig.loggedInUserId > 0;
 			var esc = function(s) { return $('<div>').text(s || '').html(); };
 			var attr = function(s) { return esc(s).replace(/"/g, '&quot;'); };
@@ -7848,7 +8059,7 @@ $(function() {
 				}
 
 				html += '<tr data-rec-id="' + recId + '">'
-					+ '<td>' + esc(rec.AwardName) + '</td>'
+					+ '<td>' + esc(rec.AwardName) + (window.orkMonarchyOnlyBadge ? orkMonarchyOnlyBadge(rec.MonarchyOnlyLevel) : '') + '</td>'
 					+ '<td class="pn-col-numeric">' + rank + '</td>'
 					+ '<td class="pn-col-nowrap">' + esc(rec.DateRecommended) + '</td>'
 					+ '<td><a href="' + PnConfig.uir + 'Player/profile/' + parseInt(rec.RecommendedById) + '">' + esc(rec.RecommendedByName) + '</a></td>'
@@ -7862,11 +8073,11 @@ $(function() {
 						actions += '<button class="rs-action-btn" data-rec="' + recId + '" data-award="' + attr(rec.AwardName) + '" data-recipient="' + attr(rec.Persona) + '" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>';
 					}
 					if (PnConfig.canManageAwards && kaid > 0) {
-						var rd = JSON.stringify({KingdomAwardId: kaid, Rank: parseInt(rec.Rank)||0, Reason: rec.Reason||'', AwardName: rec.AwardName||''});
+						var rd = JSON.stringify({RecommendationsId: parseInt(rec.RecommendationsId, 10)||0, KingdomAwardId: kaid, Rank: parseInt(rec.Rank)||0, Reason: rec.Reason||'', AwardName: rec.AwardName||'', MonarchyOnlyLevel: parseInt(rec.MonarchyOnlyLevel, 10)||0});
 						actions += '<button class="pk-btn pk-btn-primary pn-rec-grant-btn" data-rec="' + rd.replace(/"/g, '&quot;') + '"><i class="fas fa-medal"></i> Grant</button> ';
 					}
 					var canDel = PnConfig.canDeleteRec || rec.RecommendedById == PnConfig.loggedInUserId || mid == PnConfig.loggedInUserId;
-					if (canDel) actions += '<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn" data-href="' + PnConfig.uir + 'Player/profile/' + mid + '/deleterecommendation/' + recId + '"><i class="fas fa-times"></i> Delete</button>';
+					if (canDel) actions += '<button class="pk-rec-dismiss-btn pn-rec-dismiss-btn" data-href="' + PnConfig.uir + 'Player/profile/' + mid + '/deleterecommendation/' + recId + '"><i class="fas fa-times"></i> Dismiss</button>';
 					html += '<td class="pk-rec-actions rs-tip-right" style="white-space:nowrap;text-align:right;width:1%">' + actions + '</td>';
 				}
 				html += '</tr>';

@@ -7,6 +7,97 @@ class Model_Reports extends Model
         parent::__construct();
         $this->Report = new APIModel('Report');
         $this->TournamentReport = new APIModel('TournamentReport');
+        $this->PopulationExplorer = new APIModel('PopulationExplorer');
+        $this->AwardExplorer = new APIModel('AwardExplorer');
+    }
+
+    /**
+     * Access gate for a Population Explorer scope: null = allowed (any logged-in
+     * viewer, any existing kingdom or park), else an error Status array.
+     */
+    public function population_authorize(string $token, string $scopeType, int $scopeId): ?array
+    {
+        return $this->PopulationExplorer->AuthorizeScope($token, $scopeType, $scopeId);
+    }
+
+    // ---------------------------------------------------------------- Award Explorer
+
+    /** Login gate only: award data is public, the report is not open to anonymous callers. */
+    public function award_authorize(string $token): ?array
+    {
+        return $this->AwardExplorer->Authorize($token);
+    }
+
+    /** Criteria + columns. [] when the viewer is not logged in or the DB could not be read. */
+    public function award_registry(string $token): array
+    {
+        if ($this->award_authorize($token) !== null) {
+            return [];
+        }
+        try {
+            return $this->AwardExplorer->Registry($this->AwardExplorer->LoadKnown());
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+
+    /** Display name for the opening scope; '' when the id names nothing. */
+    public function award_scope_name(string $scopeType, int $scopeId): string
+    {
+        return (string)$this->AwardExplorer->ScopeName($scopeType, $scopeId);
+    }
+
+    public function award_run(array $request): array
+    {
+        return $this->AwardExplorer->Run($request);
+    }
+
+    /** Whether the viewer is an officer of the scope (unlocks restricted criteria). Fails closed. */
+    public function population_is_officer(string $token, string $scopeType, int $scopeId): bool
+    {
+        return $this->PopulationExplorer->IsScopeOfficer($token, $scopeType, $scopeId);
+    }
+
+    /** Registry + option lists for a scope ([] when denied or the DB could not be read). */
+    public function population_registry(string $token, string $scopeType, int $scopeId): array
+    {
+        $denied = $this->population_authorize($token, $scopeType, $scopeId);
+        if ($denied !== null) {
+            return [];
+        }
+        try {
+            $officer = $this->population_is_officer($token, $scopeType, $scopeId);
+            return $this->PopulationExplorer->PublicRegistry($scopeType, $scopeId, $officer);
+        } catch (Throwable $e) {
+            // A DB failure must not render a builder with empty pickers; the page shows an error.
+            logtrace('Model_Reports::population_registry failure', $e->getMessage());
+            return [];
+        }
+    }
+
+    public function population_run(array $request): array
+    {
+        return $this->PopulationExplorer->Run($request);
+    }
+
+    public function population_export(array $request): array
+    {
+        return $this->PopulationExplorer->BuildExport($request);
+    }
+
+    /**
+     * Decode and re-validate a share-link payload (see PopulationExplorer::DecodeLink)
+     * for this viewer and scope, so restricted criteria are checked exactly as on Run.
+     */
+    public function population_decode_link(string $q, string $token, string $scopeType, int $scopeId): array
+    {
+        try {
+            $known = $this->PopulationExplorer->LoadKnownForScope($token, $scopeType, $scopeId);
+        } catch (Throwable $e) {
+            logtrace('Model_Reports::population_decode_link failure', $e->getMessage());
+            return ['ok' => false, 'state' => null, 'error' => 'That link could not be opened.'];
+        }
+        return PopulationExplorer::DecodeLink($q, $known);
     }
 
     public function ReleaseFeatureUtilization()

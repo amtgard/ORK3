@@ -140,8 +140,23 @@
 	$atParkCity       = trim($AtParkCity       ?? '');
 	$atParkProvince   = trim($AtParkProvince   ?? '');
 	$atParkPostalCode = trim($AtParkPostalCode ?? '');
-	$locationFallback = (!$locationDisplay && ($atParkCity || $atParkProvince))
-		? implode(', ', array_filter([$atParkCity, $atParkProvince])) : '';
+	// Prefer the park's street address ("123 Main St, City, ST") and fall back to "City, Province".
+	// City/province are skipped when the street field already embeds them (same dedupe as above).
+	$locationFallback = '';
+	// The occurrence form defaults Country to "United States", so a country alone is not a real location.
+	$_countryOnly = (trim($address) === '' && trim($city) === '' && trim($province) === '');
+	if ((!$locationDisplay || $_countryOnly) && ($atParkAddress || $atParkCity || $atParkProvince)) {
+		$_fbParts = [];
+		$_fbLower = strtolower($atParkAddress);
+		if ($atParkAddress !== '') $_fbParts[] = $atParkAddress;
+		if ($atParkCity !== '' && ($atParkAddress === '' || stripos($_fbLower, strtolower($atParkCity)) === false)) $_fbParts[] = $atParkCity;
+		// A map-picker address that already names the city also carries the state ("WA 98662, USA"), so
+		// don't append the spelled-out province after it.
+		$_fbHasCity = ($atParkAddress !== '' && $atParkCity !== '' && stripos($_fbLower, strtolower($atParkCity)) !== false);
+		if ($atParkProvince !== '' && ($atParkAddress === '' || (!$_fbHasCity && stripos($_fbLower, strtolower($atParkProvince)) === false))) $_fbParts[] = $atParkProvince;
+		$locationFallback = implode(', ', $_fbParts);
+		if (!$mapQueryAddress || $_countryOnly) $mapQueryAddress = implode(', ', array_filter([$atParkAddress, $atParkCity, $atParkProvince, $atParkPostalCode]));
+	}
 
 	// Park map link fallback: parse park location JSON when event has no map link
 	if (!$mapLink && $locationFallback) {
@@ -957,7 +972,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 		<div class="ev-stat-label">Starts At</div>
 	</div>
 	<?php $hasMapTab = (bool)($locationDisplay ?: $locationFallback); ?>
-	<?php $_dispLoc = $locationDisplay ?: $locationFallback; ?>
+	<?php $_dispLoc = ($_countryOnly && $locationFallback) ? $locationFallback : ($locationDisplay ?: $locationFallback); ?>
 	<div class="ev-stat-card ev-stat-card-location">
 		<div class="ev-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
 		<div class="ev-stat-value" style="font-size:14px;padding-top:3px">
@@ -971,7 +986,8 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				<i class="fas fa-map-marked-alt"></i> Map
 			</button>
 			<?php endif; ?>
-			<?php $_mapHref = $mapLink ?: ($mapQueryAddress ? 'https://maps.google.com/maps?q=' . urlencode($mapQueryAddress) : ''); ?>
+			<?php // Prefer the street address: Google Maps shows a named place for it, a bare pin for coordinates. ?>
+			<?php $_mapHref = $mapQueryAddress ? 'https://maps.google.com/maps?q=' . urlencode($mapQueryAddress) : $mapLink; ?>
 			<?php if ($_mapHref): ?>
 			<a href="<?= htmlspecialchars($_mapHref) ?>" target="_blank" rel="noopener" class="ev-stat-action" data-tip="Open in Google Maps">
 				<i class="fas fa-map"></i> Google Maps
@@ -2087,14 +2103,14 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 
 			<?php if ($hasMapTab): ?>
 			<?php
-				$mapOpenUrl  = $mapLink ?: null;
 				$mapQuery    = urlencode($mapQueryAddress);
-				if ($mapLink && strpos($mapLink, 'q=@') !== false) {
-					// lat/lng link — strip @ for embed (Google Maps embed doesn't accept @)
-					$mapEmbedUrl = str_replace('?q=@', '?q=', $mapLink) . '&output=embed&z=14';
-				} else {
-					$mapEmbedUrl = 'https://maps.google.com/maps?q=' . $mapQuery . '&output=embed';
-				}
+				$mapOpenUrl  = $mapQueryAddress ? 'https://maps.google.com/maps?q=' . $mapQuery : ($mapLink ?: null);
+				// Coordinates → JS-API pin map, so touch devices pan with one finger
+				// (embed iframes are locked to two-finger panning). An address-only
+				// event has no coordinates to pin, so it keeps the embed iframe.
+				$mapPin = ($mapLink && preg_match('/q=@(-?[0-9.]+),(-?[0-9.]+)/', $mapLink, $_mapPt))
+					? ['lat' => (float)$_mapPt[1], 'lng' => (float)$_mapPt[2]] : null;
+				$mapEmbedUrl = 'https://maps.google.com/maps?q=' . $mapQuery . '&output=embed';
 				if (!$mapOpenUrl) $mapOpenUrl = 'https://maps.google.com/maps?q=' . $mapQuery;
 			?>
 			<?php // ---- Map Tab ---- ?>
@@ -2105,6 +2121,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					</a>
 				</div>
 				<div style="width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--ork-border)">
+					<?php if ($mapPin): ?>
+					<div class="ork-pin-map" role="region" aria-label="Event location map" data-lat="<?= $mapPin['lat'] ?>" data-lng="<?= $mapPin['lng'] ?>" data-zoom="14" style="height:400px"></div>
+					<?php else: ?>
 					<iframe
 						src="<?= htmlspecialchars($mapEmbedUrl) ?>"
 						width="100%"
@@ -2114,6 +2133,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 						loading="lazy"
 						referrerpolicy="no-referrer-when-downgrade"
 					></iframe>
+					<?php endif; ?>
 				</div>
 			</div><!-- /.ev-tab-panel -->
 			<?php endif; ?>
@@ -3281,16 +3301,23 @@ function evPrintSection(contentHtml, title) {
 	w.document.close();
 	setTimeout(function() { w.print(); }, 250);
 }
+var evAttCols = ['Player','Kingdom','Park','Class','Credits'];
+// DataTables only keeps the current page's rows in the DOM, so anything that needs
+// every attendee must ask the API. filtered=true honours the search box and sort order.
+function evAttRowNodes(filtered) {
+	if (window._evAttDt) {
+		return window._evAttDt.rows(filtered ? { search: 'applied', order: 'applied' } : {}).nodes().toArray();
+	}
+	return Array.prototype.slice.call(document.querySelectorAll('#ev-attendance-table tbody tr[data-att-id]'));
+}
 function evPrintAttendance() {
-	var tbl = document.querySelector('#ev-attendance-table');
+	var trs = evAttRowNodes(true);
 	var tblHtml = '<p>No attendance recorded.</p>';
-	if (tbl) {
-		var clone = tbl.cloneNode(true);
-		clone.querySelectorAll('tr').forEach(function(tr) {
-			var last = tr.lastElementChild;
-			if (last) last.remove();
-		});
-		tblHtml = clone.outerHTML;
+	if (trs.length) {
+		tblHtml = '<table><thead><tr>' + evAttCols.map(function(h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+			trs.map(function(tr) {
+				return '<tr>' + evAttCols.map(function(_, i) { return '<td>' + (tr.cells[i] ? tr.cells[i].innerHTML : '') + '</td>'; }).join('') + '</tr>';
+			}).join('') + '</tbody></table>';
 	}
 	var sub = EvConfig.eventDate || '';
 	var header = '<h2>' + (EvConfig.eventName || 'Event') + ' — Attendance</h2>' + (sub ? '<p class="ev-print-sub">' + sub + '</p>' : '');
@@ -3309,12 +3336,10 @@ function evCsvSlug() {
 	return (date ? date + '-' : '') + name;
 }
 function evExportAttendanceCsv() {
-	var rows = [];
-	document.querySelectorAll('#ev-attendance-table tbody tr').forEach(function(tr) {
-		var c = tr.querySelectorAll('td');
-		rows.push([c[0]?c[0].textContent.trim():'', c[1]?c[1].textContent.trim():'', c[2]?c[2].textContent.trim():'', c[3]?c[3].textContent.trim():'', c[4]?c[4].textContent.trim():'']);
+	var rows = evAttRowNodes(true).map(function(tr) {
+		return evAttCols.map(function(_, i) { return tr.cells[i] ? tr.cells[i].textContent.trim() : ''; });
 	});
-	evExportCsv(evCsvSlug() + '-attendance.csv', ['Player','Kingdom','Park','Class','Credits'], rows);
+	evExportCsv(evCsvSlug() + '-attendance.csv', evAttCols, rows);
 }
 function evExportRsvpCsv() {
 	var rows = [];
