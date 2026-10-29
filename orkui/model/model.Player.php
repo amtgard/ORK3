@@ -9,6 +9,11 @@ class Model_Player extends Model
         $this->Award = new APIModel('Award');
     }
 
+    public function get_ladder_standing($request)
+    {
+        return $this->Player->GetLadderStanding($request);
+    }
+
     public function remove_note($request)
     {
         return $this->Player->RemoveNote($request);

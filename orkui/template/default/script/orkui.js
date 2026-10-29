@@ -14146,7 +14146,8 @@ $(function() {
             });
     });
     $('.name-field').change(function() {
-        if (!isValidName($(this).val())) {
+        // isValidName lives in default.js, which not every default-theme page loads.
+        if (typeof isValidName === 'function' && !isValidName($(this).val())) {
             $( this ).val('').fadeOut('slow', function() {
                 $( this ).css('background-color', '#fff0f0');
                 $( this ).css('border-color', 'red');
