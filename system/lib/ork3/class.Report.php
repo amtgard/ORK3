@@ -4429,6 +4429,7 @@ class Report extends Ork3
         $show_event_count        = !empty($request['ShowEventCount']); // emit a separate count of event-based sign-ins (informational only, not excluded)
         $exclude_events          = !empty($request['ExcludeEvents']);  // count only non-event (park-day) sign-ins
         $waiver_age_months       = isset($request['WaiverAgeMonths']) ? (int)$request['WaiverAgeMonths'] : 0; // months waiver must be on file — cannot auto-verify, shown as caveat only
+        $min_distinct_months     = isset($request['MinDistinctMonths']) ? (int)$request['MinDistinctMonths'] : 0; // the counted sign-ins must fall in at least this many different calendar months
 
         // Compute start date.
         // display_start_date: shown in the report header (raw date for DaysWindow, snapped for MonthsWindow).
@@ -4532,6 +4533,11 @@ class Report extends Ork3
         } else {
             // Monday-start: use pre-computed columns (fastest)
             $att_expr = "COUNT(DISTINCT CONCAT(a.date_year, '-', a.date_week3))";
+        }
+        // MinDistinctMonths: how many different calendar months the counted sign-ins
+        // fall in (same rows, same filters as att_count). Standard path only.
+        if ($min_distinct_months > 0) {
+            $att_extra_cols .= ", COUNT(DISTINCT DATE_FORMAT(a.date, '%Y-%m')) AS month_count";
         }
 
         // Pre-build the att LEFT JOIN clause. Two paths:
@@ -4700,6 +4706,7 @@ class Report extends Ork3
 				k.kingdom_id, k.name AS kingdom_name,
 				COALESCE(att.att_count, 0) AS att_count
 				$att_select_extra
+				" . ($min_distinct_months > 0 && $max_outside_kingdom_creds <= 0 ? ", COALESCE(att.month_count, 0) AS month_count" : "") . "
 				$online_count_select
 				$event_count_select
 				" . ($home_park_only && $kingdom_evt_bonus ? ", COALESCE(att.kingdom_evt_credit, 0) AS kingdom_evt_credit" : "") . "
@@ -4756,7 +4763,8 @@ class Report extends Ork3
                      'MembershipMode' => $membership_mode,
                      'ShowEventCount' => $show_event_count,
                      'ExcludeEvents' => $exclude_events,
-                     'WaiverAgeMonths' => $waiver_age_months];
+                     'WaiverAgeMonths' => $waiver_age_months,
+                     'MinDistinctMonths' => $min_distinct_months];
         if ($r !== false && $r->size() > 0) {
             while ($r->next()) {
                 $_member_date    = $membership_mode === 'first_attendance' ? $r->first_att_date : $r->park_member_since;
@@ -4765,7 +4773,9 @@ class Report extends Ork3
                 $suspended       = (int)$r->suspended === 1;
                 $att_count       = (int)$r->att_count;
                 $base_ok         = !$suspended && $r->waivered == 1 && $r->dues_paid == 1 && $membership_ok;
-                $kingdom_eligible = $base_ok && $att_count >= $att_req;
+                $month_count     = $min_distinct_months > 0 ? (int)($r->month_count ?? 0) : null;
+                $months_ok       = $min_distinct_months <= 0 || $month_count >= $min_distinct_months;
+                $kingdom_eligible = $base_ok && $att_count >= $att_req && $months_ok;
 
                 $row = [
                     'MundaneId'       => (int)$r->mundane_id,
@@ -4790,6 +4800,8 @@ class Report extends Ork3
                     'ActiveKnight'       => false,
                     'OnlineExcluded'     => $exclude_online ? (int)$r->online_excluded_count : null,
                     'EventCount'         => $show_event_count ? (int)$r->event_att_count : null,
+                    'MonthCount'         => $month_count,
+                    'MonthsOk'           => $months_ok,
                 ];
                 if ($active_knight_threshold > 0) {
                     $raw_att_count        = (int)$r->raw_att_count;

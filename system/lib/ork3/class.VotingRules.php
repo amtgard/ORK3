@@ -70,12 +70,17 @@ class VotingRules
                 'WeekSnap' => true,
             ],
             40 => [
+                // Painted Skies corpora 1.2 (2026-10): six sign-ins within the
+                // Principality in the past six months, spread across at least two
+                // different months; dues-paid; 14 or older (no birth dates in the
+                // ORK, so MinAge is a caveat the report states for officers to confirm
+                // by hand). Online and in-person sign-ins are no longer distinguished.
                 'AttendanceRequired' => 6,
                 'MonthsWindow' => 6,
                 'MinMembershipMonths' => 0,
                 'AttendanceMode' => 'count',
+                'MinDistinctMonths' => 2,
                 'ProvinceMode' => false,
-                'ExcludeOnline' => true,
                 'MinAge' => 14,
             ],
             36 => [
