@@ -155,6 +155,44 @@ final class ReportDomainCoverageTest extends TestCase
         $this->assertFalse($result['ProvinceMode']);
     }
 
+    public function testVotingEligibleMinDistinctMonths(): void
+    {
+        // Painted Skies' rule: the sign-ins must be spread across at least two months.
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $player = $this->fixture->createPlayer($parkId, 'vote-months');
+        $this->fixture->makeVotingReady($player['mundane_id']);
+        $this->fixture->insertDues($player['mundane_id'], $parkId, $kid);
+        foreach (['2025-11-01', '2025-11-08', '2025-11-15', '2025-11-22', '2025-11-29', '2025-11-30'] as $date) {
+            $this->fixture->insertAttendance($player['mundane_id'], $parkId, $kid, $date);
+        }
+        $rules = ['KingdomId' => $kid, 'MundaneId' => $player['mundane_id'], 'AttendanceMode' => 'count',
+                  'AttendanceRequired' => 6, 'MonthsWindow' => 12, 'MinMembershipMonths' => 0,
+                  'StartDate' => '2025-10-01', 'ProvinceMode' => false, 'MinDistinctMonths' => 2];
+
+        // Six sign-ins, all in November: enough sign-ins, not enough months.
+        $result = $this->report->GetVotingEligible($rules);
+        $this->assertSame(2, $result['MinDistinctMonths']);
+        $row = $result['Players'][0];
+        $this->assertSame(6, $row['AttCount']);
+        $this->assertSame(1, $row['MonthCount']);
+        $this->assertFalse($row['MonthsOk']);
+        $this->assertFalse($row['VotingEligible']);
+
+        // Without the months rule the same player is eligible.
+        $row = $this->report->GetVotingEligible(['MinDistinctMonths' => 0] + $rules)['Players'][0];
+        $this->assertNull($row['MonthCount']);
+        $this->assertTrue($row['VotingEligible']);
+
+        // One more sign-in in December satisfies it.
+        $this->fixture->insertAttendance($player['mundane_id'], $parkId, $kid, '2025-12-06');
+        $row = $this->report->GetVotingEligible($rules)['Players'][0];
+        $this->assertSame(7, $row['AttCount']);
+        $this->assertSame(2, $row['MonthCount']);
+        $this->assertTrue($row['MonthsOk']);
+        $this->assertTrue($row['VotingEligible']);
+    }
+
     public function testVotingEligibleCountModeWithFixturePlayer(): void
     {
         $kid = $this->fixture->firstKingdomId();

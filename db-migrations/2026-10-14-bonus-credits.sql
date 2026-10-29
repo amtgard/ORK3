@@ -24,8 +24,9 @@
 -- its kingdom (admin-level); granting one needs EDIT on the player's park (which kingdom
 -- officers hold for every park in their kingdom) AND the player's home must
 -- lie inside the category's kingdom or one of its principalities. So a kingdom
--- can never credit another kingdom's players, and a park can only credit its
--- own. A category is granted once per player unless marked repeatable. An
+-- cannot credit another kingdom's players (unless that kingdom has opted in to
+-- outside credits; see 2026-10-27-bonus-credit-accept-outside.sql), and a park
+-- can only credit its own. A category is granted once per player unless marked repeatable. An
 -- automated source (a survey) is a category too, linked by source_type/id, so
 -- "once per survey" is the same rule.
 --

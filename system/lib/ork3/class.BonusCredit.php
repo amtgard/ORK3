@@ -27,6 +27,16 @@
  * cannot credit a Kingdom B player, a park can only credit its own, and an
  * ORK-wide survey becomes a per-kingdom decision.
  *
+ * The one exception is a kingdom that ACCEPTS OUTSIDE CREDITS
+ * (ork_bonus_credit_kingdom_setting, a yes/no per kingdom; a parent's yes covers
+ * its principalities). Then an officer or granter of the kingdom that defined
+ * a category may grant it, from that kingdom's own page, to a player whose home
+ * is in the accepting kingdom. The receiving kingdom's own officers still cannot
+ * hand out another kingdom's credit, a park page still credits its own members
+ * only, and Amtgard-wide credits are untouched (adoption governs those). Only
+ * kingdom CREATE, or an ORK admin on the kingdom's behalf, flips the setting;
+ * both are audited.
+ *
  * A kingdom can also name GRANTERS (ork_bonus_credit_granter, modelled on the
  * qualification tests' manager list): people who may grant and remove credits
  * anywhere in that kingdom without holding a kingdom authorization row, so the
@@ -153,8 +163,10 @@ class BonusCredit
     }
 
     /**
-     * May $uid grant THIS credit to a player at THIS park? EDIT on the park,
-     * or a granter row for the credit's kingdom that covers the credit.
+     * May $uid deal in THIS credit for players of THIS park? EDIT on the park,
+     * EDIT on the kingdom that defined the credit, or a granter row for that
+     * kingdom that covers the credit. Revoking asks this of the player's own
+     * park; granting asks canGrantFrom() of the page the grant is made from.
      */
     public function canGrantCategory(int $uid, int $parkId, array $category): bool
     {
@@ -166,7 +178,8 @@ class BonusCredit
         }
         $rid = (int) ($category['CategoryId'] ?? 0);
         if (($category['ScopeType'] ?? '') === 'kingdom') {
-            return $this->isGranter($uid, (int) $category['ScopeId'], $rid);
+            return (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int) $category['ScopeId'], AUTH_EDIT)
+                || $this->isGranter($uid, (int) $category['ScopeId'], $rid);
         }
         if (($category['ScopeType'] ?? '') === 'ork') {
             // A kingdom's granters can be scoped to an adopted Amtgard-wide credit.
@@ -175,6 +188,104 @@ class BonusCredit
                     return true;
                 }
             }
+        }
+        return false;
+    }
+
+    /**
+     * Does $uid speak for the kingdom that DEFINED this kingdom-scope credit?
+     * EDIT on that kingdom, EDIT on one of its parks, or a granter row of it
+     * that covers the credit. This is what lets a credit cross into a kingdom
+     * that accepts outside credits: only the defining kingdom's people (its
+     * officers, its parks' officers, its granters) may carry it there.
+     */
+    public function canGrantForDefiningKingdom(int $uid, array $category): bool
+    {
+        if ($uid <= 0 || ($category['ScopeType'] ?? '') !== 'kingdom' || !valid_id((int) ($category['ScopeId'] ?? 0))) {
+            return false;
+        }
+        $kingdomId = (int) $category['ScopeId'];
+        return (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)
+            || $this->isGranter($uid, $kingdomId, (int) ($category['CategoryId'] ?? 0))
+            || $this->holdsAParkIn($uid, $this->kingdomFamily($kingdomId));
+    }
+
+    /** Does $uid hold EDIT (or higher) on any park of these kingdoms? A direct park row, as a park officer has. */
+    private function holdsAParkIn(int $uid, array $kingdomIds): bool
+    {
+        if ($uid <= 0 || !$kingdomIds) {
+            return false;
+        }
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT 1 AS ok FROM ' . DB_PREFIX . 'authorization a
+             JOIN ' . DB_PREFIX . 'park p ON p.park_id = a.park_id
+             WHERE a.mundane_id = ' . (int) $uid . ' AND a.park_id > 0
+               AND a.role IN (\'' . AUTH_EDIT . '\', \'' . AUTH_CREATE . '\', \'' . AUTH_ADMIN . '\')
+               AND p.kingdom_id IN (' . implode(',', array_map('intval', $kingdomIds)) . ')
+             LIMIT 1'
+        );
+        return (bool) ($r && $r->Next());
+    }
+
+    /**
+     * May $uid hand out THIS credit from THIS page? The same question
+     * attendance asks: whoever may sign players in at a park (EDIT on it, which
+     * its kingdom's officers inherit) or for a kingdom (EDIT on it) may give the
+     * credits that page offers, to whoever is in front of them. The credit's
+     * own kingdom's EDIT officers and granters may too, as may a granter of the
+     * host's kingdom (or one above it) whose row covers the credit.
+     */
+    public function canGrantFrom(int $uid, string $hostType, int $hostId, array $category): bool
+    {
+        if ($uid <= 0 || !valid_id($hostId)) {
+            return false;
+        }
+        if ($hostType === 'park') {
+            if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $hostId, AUTH_EDIT)) {
+                return true;
+            }
+            $kingdomId = $this->parkKingdom($hostId);
+        } elseif ($hostType === 'kingdom') {
+            if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $hostId, AUTH_EDIT)) {
+                return true;
+            }
+            $kingdomId = $hostId;
+        } else {
+            return false;
+        }
+        $rid = (int) ($category['CategoryId'] ?? 0);
+        if (($category['ScopeType'] ?? '') === 'kingdom' && valid_id((int) ($category['ScopeId'] ?? 0))) {
+            if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int) $category['ScopeId'], AUTH_EDIT)
+                || $this->isGranter($uid, (int) $category['ScopeId'], $rid)) {
+                return true;
+            }
+        }
+        foreach ($this->kingdomAncestry($kingdomId) as $kid) {
+            if ($this->isGranter($uid, $kid, $rid)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Is this credit on offer in a kingdom (so on its page and its parks'
+     * pages)? A kingdom's own credit is offered in it and in every principality
+     * under it; an Amtgard-wide one where it, or a kingdom above it, adopted it.
+     * The same rule categoriesForKingdom() lists by.
+     */
+    public function offeredAt(int $kingdomId, array $category): bool
+    {
+        if (!valid_id($kingdomId)) {
+            return false;
+        }
+        $chain = $this->kingdomAncestry($kingdomId);
+        if (($category['ScopeType'] ?? '') === 'kingdom') {
+            return in_array((int) ($category['ScopeId'] ?? 0), $chain, true);
+        }
+        if (($category['ScopeType'] ?? '') === 'ork') {
+            return $this->isAdoptedIn((int) ($category['CategoryId'] ?? 0), $chain);
         }
         return false;
     }
@@ -258,10 +369,10 @@ class BonusCredit
     public function addGranter(int $uid, int $kingdomId, int $mundaneId, int $categoryId = 0): array
     {
         if (!valid_id($kingdomId) || !$this->orgExists('kingdom', $kingdomId)) {
-            return $this->fail('That kingdom does not exist.');
+            return $this->fail('That Kingdom does not exist.');
         }
         if ($uid <= 0 || !$this->canAppoint($uid, $kingdomId)) {
-            return $this->denied('Only kingdom officers with CREATE authority can appoint granters.');
+            return $this->denied('Only Kingdom officers with CREATE authority can appoint granters.');
         }
         $player = $this->playerRow($mundaneId);
         if ($player === null) {
@@ -274,7 +385,7 @@ class BonusCredit
             $own     = $category !== null && $category['ScopeType'] === 'kingdom' && $category['ScopeId'] === $kingdomId;
             $adopted = $category !== null && $category['ScopeType'] === 'ork' && $this->isAdoptedIn($categoryId, $this->kingdomAncestry($kingdomId));
             if (!$own && !$adopted) {
-                return $this->fail('That credit is not one of this kingdom\'s (an Amtgard-wide credit must be adopted first).');
+                return $this->fail('That credit is not one of this Kingdom\'s (an Amtgard-wide credit must be adopted first).');
             }
         }
         if ($this->isGranter($mundaneId, $kingdomId, $categoryId > 0 ? $categoryId : 0) && ($categoryId > 0 || $this->hasAllCreditsRow($mundaneId, $kingdomId))) {
@@ -308,10 +419,10 @@ class BonusCredit
     public function removeGranter(int $uid, int $kingdomId, int $granterId): array
     {
         if (!valid_id($kingdomId)) {
-            return $this->fail('That kingdom does not exist.');
+            return $this->fail('That Kingdom does not exist.');
         }
         if ($uid <= 0 || !$this->canAppoint($uid, $kingdomId)) {
-            return $this->denied('Only kingdom officers with CREATE authority can remove granters.');
+            return $this->denied('Only Kingdom officers with CREATE authority can remove granters.');
         }
         $row = null;
         foreach ($this->granters($kingdomId) as $g) {
@@ -382,7 +493,7 @@ class BonusCredit
             $next = [];
             $this->db->Clear();
             $r = $this->db->DataSet(
-                'SELECT kingdom_id FROM ' . DB_PREFIX . 'kingdom
+                'SELECT kingdom_id FROM ' . DB_PREFIX . 'Kingdom
                  WHERE parent_kingdom_id IN (' . implode(',', array_map('intval', $frontier)) . ')'
             );
             while ($r && $r->Next()) {
@@ -550,10 +661,10 @@ class BonusCredit
             return $this->fail('That is not an Amtgard-wide credit.');
         }
         if (!valid_id($kingdomId) || !$this->orgExists('kingdom', $kingdomId)) {
-            return $this->fail('That kingdom does not exist.');
+            return $this->fail('That Kingdom does not exist.');
         }
         if ($uid <= 0 || !($this->canAppoint($uid, $kingdomId) || $this->isOrkAdmin($uid))) {
-            return $this->denied('Only kingdom officers with CREATE authority, or an ORK admin, can adopt or withdraw a credit for a kingdom.');
+            return $this->denied('Only Kingdom officers with CREATE authority, or an ORK admin, can adopt or withdraw a credit for a Kingdom.');
         }
         if ($adopt && $category['ArchivedAt'] !== null) {
             return $this->fail('That credit is archived and cannot be adopted.');
@@ -611,6 +722,118 @@ class BonusCredit
                 'AdoptedByPersona' => (string) ($f['adopted_by_persona'] ?? ''),
                 'AdoptedAt'        => (string) $f['adopted_at'],
                 'WithdrawnAt'      => ($f['withdrawn_at'] === null || $f['withdrawn_at'] === '') ? null : (string) $f['withdrawn_at'],
+            ];
+        }
+        return null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Accepting other kingdoms' credits (ork_bonus_credit_kingdom_setting)
+    // -----------------------------------------------------------------------
+
+    /**
+     * May other kingdoms' bonus credits reach this kingdom's players? ON unless
+     * someone turned it off: the kingdom's own row decides; with none, the
+     * nearest ancestor's row (a principality follows its parent); with none
+     * at all, yes.
+     */
+    public function acceptsOutsideCredits(int $kingdomId): bool
+    {
+        return $this->outsideCreditSetting($kingdomId)['Effective'];
+    }
+
+    /**
+     * The setting as the Settings tab shows it. Source says where the answer
+     * came from: 'own' (this kingdom chose, AcceptsOutside is its choice),
+     * 'inherited' (a parent chose; InheritedFrom names it, AcceptsOutside is
+     * null) or 'default' (nobody has touched it; on). Effective is the answer
+     * that applies either way.
+     *
+     * @return array{AcceptsOutside:?bool, Effective:bool, Source:string, InheritedFrom:string, UpdatedBy:int, UpdatedByPersona:string, UpdatedAt:string}
+     */
+    public function outsideCreditSetting(int $kingdomId): array
+    {
+        $own = $this->outsideSettingRow($kingdomId);
+        if ($own !== null) {
+            return $own + ['Effective' => $own['AcceptsOutside'], 'Source' => 'own', 'InheritedFrom' => ''];
+        }
+        foreach (array_slice($this->kingdomAncestry($kingdomId), 1) as $kid) {
+            $row = $this->outsideSettingRow($kid);
+            if ($row !== null) {
+                return ['AcceptsOutside' => null, 'UpdatedBy' => $row['UpdatedBy'], 'UpdatedByPersona' => $row['UpdatedByPersona'], 'UpdatedAt' => $row['UpdatedAt'],
+                        'Effective' => $row['AcceptsOutside'], 'Source' => 'inherited', 'InheritedFrom' => $this->kingdomName($kid)];
+            }
+        }
+        return ['AcceptsOutside' => null, 'UpdatedBy' => 0, 'UpdatedByPersona' => '', 'UpdatedAt' => '',
+                'Effective' => true, 'Source' => 'default', 'InheritedFrom' => ''];
+    }
+
+    /**
+     * Say yes or no to outside credits for a kingdom. Kingdom CREATE, or an
+     * ORK admin on the kingdom's behalf. A no-op when the answer already
+     * applies (by default, by inheritance or by its own row); otherwise the
+     * kingdom gets a row of its own, and is audited. Turning it off stops new
+     * grants only: credits already given stay.
+     */
+    public function setAcceptsOutside(int $uid, int $kingdomId, bool $accept): array
+    {
+        if (!valid_id($kingdomId) || !$this->orgExists('kingdom', $kingdomId)) {
+            return $this->fail('That Kingdom does not exist.');
+        }
+        if ($uid <= 0 || !($this->canAppoint($uid, $kingdomId) || $this->isOrkAdmin($uid))) {
+            return $this->denied('Only Kingdom officers with CREATE authority, or an ORK admin, can change whether a Kingdom accepts credits from other Kingdoms.');
+        }
+        $row  = $this->outsideSettingRow($kingdomId);
+        $live = $this->outsideCreditSetting($kingdomId)['Effective'];
+        if ($accept === $live) {
+            return ['Status' => 0, 'AcceptsOutside' => $live];
+        }
+        $this->db->Clear();
+        if ($row === null) {
+            $ok = $this->db->ExecuteChecked(
+                'INSERT INTO ' . DB_PREFIX . 'bonus_credit_kingdom_setting (kingdom_id, accepts_outside, updated_by, updated_at)
+                 VALUES (' . (int) $kingdomId . ', ' . ($accept ? 1 : 0) . ', ' . $uid . ', NOW())'
+            );
+        } else {
+            $ok = $this->db->ExecuteChecked(
+                'UPDATE ' . DB_PREFIX . 'bonus_credit_kingdom_setting
+                 SET accepts_outside = ' . ($accept ? 1 : 0) . ', updated_by = ' . $uid . ', updated_at = NOW()
+                 WHERE kingdom_id = ' . (int) $kingdomId
+            );
+        }
+        if ($ok === false) {
+            return $this->fail('Could not save the setting.');
+        }
+        $this->audit(
+            'setAcceptsOutside',
+            ['KingdomId' => $kingdomId, 'AcceptsOutside' => $accept, 'by_whom_id' => $uid, 'as_ork_admin' => !$this->canAppoint($uid, $kingdomId)],
+            'Kingdom',
+            $kingdomId,
+            ['AcceptsOutside' => $live],
+            ['AcceptsOutside' => $accept]
+        );
+        return ['Status' => 0, 'AcceptsOutside' => $accept];
+    }
+
+    /** @return ?array{AcceptsOutside:bool, UpdatedBy:int, UpdatedByPersona:string, UpdatedAt:string} */
+    private function outsideSettingRow(int $kingdomId): ?array
+    {
+        if (!valid_id($kingdomId)) {
+            return null;
+        }
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT s.accepts_outside, s.updated_by, s.updated_at, u.persona AS updated_by_persona
+             FROM ' . DB_PREFIX . 'bonus_credit_kingdom_setting s
+             LEFT JOIN ' . DB_PREFIX . 'mundane u ON u.mundane_id = s.updated_by
+             WHERE s.kingdom_id = ' . (int) $kingdomId
+        );
+        if ($r && $r->Next()) {
+            return [
+                'AcceptsOutside'   => (int) $r->accepts_outside === 1,
+                'UpdatedBy'        => (int) $r->updated_by,
+                'UpdatedByPersona' => (string) ($r->updated_by_persona ?? ''),
+                'UpdatedAt'        => (string) $r->updated_at,
             ];
         }
         return null;
@@ -694,13 +917,13 @@ class BonusCredit
         if ($scopeType === 'ork') {
             $scopeId = 0;
         } elseif ($scopeType !== 'kingdom' || !valid_id($scopeId)) {
-            return $this->fail('Credits are defined by a kingdom or Amtgard-wide; choose which.');
+            return $this->fail('Credits are defined by a Kingdom or Amtgard-wide; choose which.');
         }
         if ($uid <= 0 || !$this->canDefine($uid, $scopeType, $scopeId)) {
-            return $this->denied($scopeType === 'ork' ? 'Only ORK admins can set up Amtgard-wide credits.' : 'Only kingdom officers with CREATE authority can set up credits.');
+            return $this->denied($scopeType === 'ork' ? 'Only ORK admins can set up Amtgard-wide credits.' : 'Only Kingdom officers with CREATE authority can set up credits.');
         }
         if (!$this->orgExists($scopeType, $scopeId)) {
-            return $this->fail('That kingdom does not exist.');
+            return $this->fail('That Kingdom does not exist.');
         }
         if ($name === '' || mb_strlen($name) > 100) {
             return $this->fail('Give the credit a name (up to 100 characters).');
@@ -716,7 +939,7 @@ class BonusCredit
             return $this->fail('Bad credit source id.');
         }
         if ($sourceType !== self::SOURCE_MANUAL && $sourceId > 0 && $this->categoryForSource($scopeType, $scopeId, $sourceType, $sourceId) !== null) {
-            return $this->fail('That source already has a credit set up for this kingdom.');
+            return $this->fail('That source already has a credit set up for this Kingdom.');
         }
         $desc = mb_substr($desc, 0, 500);
 
@@ -729,7 +952,7 @@ class BonusCredit
         if ($ex && $ex->Next()) {
             $existingId = (int) $ex->category_id;
             if ($ex->archived_at === null || $ex->archived_at === '') {
-                return $this->fail('This kingdom already has a credit with that name.');
+                return $this->fail('This Kingdom already has a credit with that name.');
             }
             $this->db->Clear();
             $this->db->ExecuteChecked(
@@ -844,49 +1067,61 @@ class BonusCredit
         if ($player === null) {
             return $this->fail('Player not found.');
         }
-        if ($uid <= 0 || !$this->canGrantCategory($uid, $player['park_id'], $category)) {
-            return $this->denied('You do not have authority to grant this credit to this player.');
-        }
+        $family  = $category['ScopeType'] === 'kingdom' ? $this->kingdomFamily($category['ScopeId']) : [];
+        $covered = self::covers($category['ScopeType'], $category['ScopeId'], $player, $family);
+        // Who may grant follows the page the grant is made from, as attendance
+        // does: if you can sign a player in here, you can give them a bonus
+        // credit here, whichever park or Kingdom they call home. The credit
+        // must be one this page offers. With no page given (nothing in the UI
+        // does that) the player's own park stands in.
         $hostType = (string) ($r['HostType'] ?? '');
         $hostId   = (int) ($r['HostId'] ?? 0);
-        if ($hostType === 'kingdom' && valid_id($hostId) && !in_array($player['kingdom_id'], $this->kingdomFamily($hostId), true)) {
-            $who  = $player['persona'] !== '' ? $player['persona'] : 'This player';
-            $home = $player['kingdom_id'] > 0 ? $this->kingdomName($player['kingdom_id']) : '';
-            return $this->denied(
-                ($home !== '' ? $who . ' belongs to ' . $home . '. ' : $who . ' has no home kingdom. ')
-                . 'From this page you can only grant to players of ' . $this->kingdomName($hostId) . '; use their own kingdom\'s page.'
-            );
+        if (!in_array($hostType, ['park', 'kingdom'], true) || !valid_id($hostId)) {
+            $hostType = 'park';
+            $hostId   = (int) $player['park_id'];
         }
-        if ($hostType === 'park' && valid_id($hostId) && $player['park_id'] !== $hostId) {
-            $who  = $player['persona'] !== '' ? $player['persona'] : 'This player';
-            $home = $player['park_id'] > 0 ? $this->parkName($player['park_id']) : '';
-            return $this->denied(
-                ($home !== '' ? $who . ' belongs to ' . $home . '. ' : $who . ' has no home park. ')
-                . 'From this page you can only grant to members of ' . $this->parkName($hostId) . '; use their own park\'s page.'
-            );
+        if (!valid_id($hostId)) {
+            return $this->denied('This player has no home park; give the credit from a park or Kingdom page.');
         }
-        $family = $category['ScopeType'] === 'kingdom' ? $this->kingdomFamily($category['ScopeId']) : [];
-        if (!self::covers($category['ScopeType'], $category['ScopeId'], $player, $family)) {
-            // The player is the odd one out, not the credit: the actor is
-            // looking at their own kingdom's category and typed a name from
-            // somewhere else. Name both sides so the fix is obvious.
-            $who   = $player['persona'] !== '' ? $player['persona'] : 'This player';
-            $owner = $category['ScopeName'] !== '' ? $category['ScopeName'] : $this->kingdomName((int) $category['ScopeId']);
-            $home  = $player['kingdom_id'] > 0 ? $this->kingdomName($player['kingdom_id']) : '';
-            return $this->denied(
-                ($home !== '' ? $who . ' belongs to ' . $home . '. ' : $who . ' has no home kingdom. ')
-                . '“' . $category['Name'] . '” is defined by ' . $owner . ' and can only go to its own players.'
-            );
+        $hostKingdom = $hostType === 'park' ? $this->parkKingdom($hostId) : $hostId;
+        $hostName    = $hostType === 'park' ? $this->parkName($hostId) : $this->kingdomName($hostId);
+        $owner       = $category['ScopeType'] === 'kingdom'
+            ? ($category['ScopeName'] !== '' ? $category['ScopeName'] : $this->kingdomName((int) $category['ScopeId']))
+            : 'Amtgard';
+        if (!$this->offeredAt($hostKingdom, $category)) {
+            return $this->denied($category['ScopeType'] === 'ork'
+                ? $this->kingdomName($hostKingdom) . ' has not adopted the Amtgard-wide credit “' . $category['Name'] . '”, so it cannot be given from ' . $hostName . '.'
+                : '“' . $category['Name'] . '” is ' . $owner . '\'s credit and is not offered at ' . $hostName . '. Give it from a page inside ' . $owner . '.');
+        }
+        if ($uid <= 0 || !$this->canGrantFrom($uid, $hostType, $hostId, $category)) {
+            return $this->denied('You do not have authority to grant credits ' . ($hostType === 'park' ? 'at ' : 'for ') . $hostName . '.');
+        }
+        $who   = $player['persona'] !== '' ? $player['persona'] : 'This player';
+        $home  = $player['kingdom_id'] > 0 ? $this->kingdomName($player['kingdom_id']) : '';
+        $whose = $home !== '' ? $who . ' belongs to ' . $home . '. ' : $who . ' has no home Kingdom. ';
+        if (!$covered) {
+            // The player's home is outside the credit's Kingdom: a visitor, or
+            // someone looked up from another Kingdom. Their own Kingdom decides
+            // whether other Kingdoms' credits may reach them.
+            if ($player['kingdom_id'] <= 0) {
+                return $this->denied($whose . '“' . $category['Name'] . '” can only go to a player with a home Kingdom.');
+            }
+            if (!$this->acceptsOutsideCredits($player['kingdom_id'])) {
+                return $this->denied(
+                    $whose . $home . ' does not accept bonus credits from other Kingdoms, so “' . $category['Name'] . '” (defined by ' . $owner . ') cannot go to its players. '
+                    . 'Its Kingdom officers can change that under Bonus Credits → Settings.'
+                );
+            }
         }
         if ($category['ScopeType'] === 'ork' && !$this->isAdoptedIn($category['CategoryId'], $this->kingdomAncestry($player['kingdom_id']))) {
-            return $this->denied('This player\'s kingdom has not adopted this Amtgard-wide credit.');
+            return $this->denied('This player\'s Kingdom has not adopted this Amtgard-wide credit.');
         }
         if (!$this->classActive($classId)) {
             return $this->fail('Choose an active class for the credit.');
         }
         $allowance = self::normalizeCredits($category['DefaultCredits']);
         if ($allowance === null) {
-            return $this->fail('This credit has no usable amount; ask a kingdom officer to fix it.');
+            return $this->fail('This credit has no usable amount; ask a Kingdom officer to fix it.');
         }
         $who   = $player['persona'] !== '' ? $player['persona'] : 'This player';
         $held  = $this->liveForCategory($categoryId, $mundaneId);
@@ -944,8 +1179,9 @@ class BonusCredit
     }
 
     /**
-     * Revoke a credit. The same authority as granting it, on the category's
-     * scope: a park cannot undo a kingdom's credit. Idempotent.
+     * Revoke a credit. The officers over the player's own park, the defining
+     * kingdom's people, or whoever gave it (an undo of one's own entry, the
+     * least dangerous removal there is). Idempotent.
      */
     public function revoke(int $uid, int $bonusCreditId, string $note = ''): array
     {
@@ -955,8 +1191,14 @@ class BonusCredit
         }
         $player = $this->playerRow((int) $row['MundaneId']);
         $category = $this->category((int) $row['CategoryId']) ?? ['ScopeType' => $row['ScopeType'], 'ScopeId' => $row['ScopeId'], 'CategoryId' => $row['CategoryId']];
-        if ($uid <= 0 || $player === null || !$this->canGrantCategory($uid, $player['park_id'], $category)) {
+        if ($uid <= 0 || $player === null) {
             return $this->denied('You do not have authority to remove this credit.');
+        }
+        $crossed = $this->crossed($player, $category);
+        if (!$this->mayChange($uid, $row, $player, $category)) {
+            return $this->denied($crossed
+                ? 'Only ' . $this->kingdomName((int) $category['ScopeId']) . '\'s Kingdom officers, park officers or granters, or the officers of the player\'s own park or Kingdom, can remove this credit.'
+                : 'You do not have authority to remove this credit.');
         }
         if ($row['RevokedAt'] !== null) {
             return ['Status' => 0, 'BonusCreditId' => $bonusCreditId];
@@ -973,6 +1215,96 @@ class BonusCredit
         $this->bust($row['MundaneId']);
         $this->audit('revoke', ['BonusCreditId' => $bonusCreditId, 'Note' => $note, 'by_whom_id' => $uid], 'Player', (int) $row['MundaneId'], $row, $this->credit($bonusCreditId));
         return ['Status' => 0, 'BonusCreditId' => $bonusCreditId];
+    }
+
+    /**
+     * Change a live credit's amount or class. The same people who may remove
+     * it, within the same limits as granting it, with this credit's own amount
+     * not counted against the allowance. Date, note and category stay: a
+     * credit for something else is a new grant. Audited with before and after.
+     */
+    public function update(int $uid, int $bonusCreditId, array $r): array
+    {
+        $row = $this->credit($bonusCreditId);
+        if ($row === null) {
+            return $this->fail('Credit not found.');
+        }
+        if ($row['RevokedAt'] !== null) {
+            return $this->fail('That credit was removed; grant it again instead.');
+        }
+        $player   = $this->playerRow((int) $row['MundaneId']);
+        $category = $this->category((int) $row['CategoryId']);
+        if ($category === null) {
+            return $this->fail('This credit\'s category no longer exists; remove the credit and grant another.');
+        }
+        if ($uid <= 0 || $player === null || !$this->mayChange($uid, $row, $player, $category)) {
+            return $this->denied($this->crossed($player ?? [], $category)
+                ? 'Only ' . $this->kingdomName((int) $category['ScopeId']) . '\'s Kingdom officers, park officers or granters, the officers of the player\'s own park or Kingdom, or whoever gave it, can change this credit.'
+                : 'You do not have authority to change this credit.');
+        }
+        $classId = array_key_exists('ClassId', $r) && $r['ClassId'] !== '' && $r['ClassId'] !== null ? (int) $r['ClassId'] : (int) $row['ClassId'];
+        if (!$this->classActive($classId)) {
+            return $this->fail('Choose an active class for the credit.');
+        }
+        $allowance = self::normalizeCredits($category['DefaultCredits']);
+        if ($allowance === null) {
+            return $this->fail('This credit has no usable amount; ask a Kingdom officer to fix it.');
+        }
+        $who       = $player['persona'] !== '' ? $player['persona'] : 'This player';
+        $elsewhere = round(max(0, $this->liveForCategory((int) $row['CategoryId'], (int) $row['MundaneId']) - (float) $row['Credits']), 2);
+        $limit     = $category['Repeatable'] ? $allowance : round($allowance - $elsewhere, 2);
+        $raw       = array_key_exists('Credits', $r) && $r['Credits'] !== '' && $r['Credits'] !== null ? $r['Credits'] : $row['Credits'];
+        $credits   = self::normalizeCredits($raw);
+        if ($credits === null || $limit <= 0) {
+            return $this->fail('Credits must be between 0.25 and ' . self::fmt(max(0.25, $limit)) . ', in quarters.');
+        }
+        if ($credits > $limit + 0.0001) {
+            return $this->fail($category['Repeatable']
+                ? 'A single grant of “' . $category['Name'] . '” can be at most ' . self::fmt($allowance) . '.'
+                : $who . ' has ' . self::fmt($elsewhere) . ' of ' . self::fmt($allowance) . ' for “' . $category['Name'] . '” in other grants; this one can be at most ' . self::fmt($limit) . '.');
+        }
+        $remaining = $category['Repeatable'] ? null : round(max(0, $allowance - $elsewhere - $credits), 2);
+        if ($classId === (int) $row['ClassId'] && abs($credits - (float) $row['Credits']) < 0.0001) {
+            return ['Status' => 0, 'BonusCreditId' => $bonusCreditId, 'Credit' => $row, 'Changed' => false, 'Remaining' => $remaining];
+        }
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'UPDATE ' . DB_PREFIX . 'bonus_credit
+             SET class_id = ' . $classId . ', credits = ' . number_format($credits, 2, '.', '') . '
+             WHERE bonus_credit_id = ' . (int) $bonusCreditId . ' AND revoked_at IS NULL'
+        );
+        if ($ok === false) {
+            return $this->fail('Could not save the change.');
+        }
+        $this->bust((int) $row['MundaneId']);
+        $after = $this->credit($bonusCreditId);
+        $this->audit('update', ['BonusCreditId' => $bonusCreditId, 'ClassId' => $classId, 'Credits' => $credits, 'by_whom_id' => $uid], 'Player', (int) $row['MundaneId'], $row, $after);
+        return ['Status' => 0, 'BonusCreditId' => $bonusCreditId, 'Credit' => $after, 'Changed' => true, 'Remaining' => $remaining];
+    }
+
+    /**
+     * May $uid remove or change this credit? The officers over the player's
+     * own park (kingdom officers inherit that), the defining kingdom's people
+     * for a credit that crossed into another kingdom (the hands that gave it),
+     * or whoever gave this one (an undo of one's own entry).
+     */
+    private function mayChange(int $uid, array $row, array $player, array $category): bool
+    {
+        if ($uid <= 0) {
+            return false;
+        }
+        return (int) ($row['GrantedBy'] ?? 0) === $uid
+            || $this->canGrantCategory($uid, (int) ($player['park_id'] ?? 0), $category)
+            || ($this->crossed($player, $category) && $this->canGrantForDefiningKingdom($uid, $category));
+    }
+
+    /** Did this kingdom-scope credit cross into another kingdom: is the player's home outside the defining family? */
+    private function crossed(array $player, array $category): bool
+    {
+        if (($category['ScopeType'] ?? '') !== 'kingdom' || !$player) {
+            return false;
+        }
+        return !self::covers('kingdom', (int) $category['ScopeId'], $player, $this->kingdomFamily((int) $category['ScopeId']));
     }
 
     // -----------------------------------------------------------------------
@@ -1007,17 +1339,32 @@ class BonusCredit
         return $this->credits('b.mundane_id = ' . (int) $mundaneId . ($includeRevoked ? '' : ' AND b.revoked_at IS NULL'), 500);
     }
 
-    /** Who has a category's credit, newest first: the modal's "already granted" list. A park host sees its own players only. */
-    public function forCategory(int $categoryId, int $parkId = 0, int $limit = 200, int $kingdomId = 0): array
+    /**
+     * Who has a category's credit, newest first: the modal's "already granted"
+     * list. A park host sees its own players, plus (with $viewerId) whatever
+     * the viewer gave to visitors and sibling-park players, so they can take
+     * one of those back.
+     */
+    public function forCategory(int $categoryId, int $parkId = 0, int $limit = 200, int $kingdomId = 0, int $viewerId = 0): array
     {
         if (!valid_id($categoryId)) {
             return [];
         }
         $where = 'b.category_id = ' . (int) $categoryId . ' AND b.revoked_at IS NULL';
         if ($parkId > 0) {
-            $where .= ' AND m.park_id = ' . (int) $parkId;
+            $where .= $viewerId > 0
+                ? ' AND (m.park_id = ' . (int) $parkId . ' OR b.granted_by = ' . (int) $viewerId . ')'
+                : ' AND m.park_id = ' . (int) $parkId;
         } elseif ($kingdomId > 0) {
-            $where .= ' AND m.kingdom_id IN (' . implode(',', array_map('intval', $this->kingdomFamily($kingdomId))) . ')';
+            // A kingdom sees every holder of a credit it (or a principality of
+            // it) defined, outside players included: it gave them. For an
+            // adopted Amtgard-wide credit it sees only its own family.
+            $family   = $this->kingdomFamily($kingdomId);
+            $category = $this->category($categoryId);
+            $ownsIt   = $category !== null && $category['ScopeType'] === 'kingdom' && in_array((int) $category['ScopeId'], $family, true);
+            if (!$ownsIt) {
+                $where .= ' AND m.kingdom_id IN (' . implode(',', array_map('intval', $family)) . ')';
+            }
         }
         return $this->credits($where, $limit);
     }
@@ -1038,6 +1385,7 @@ class BonusCredit
         $this->db->Clear();
         $r = $this->db->DataSet(
             'SELECT b.*, c.name AS class_name, m.persona,
+                    m.kingdom_id AS player_kingdom_id, pk.abbreviation AS player_kingdom_abbr, pk.name AS player_kingdom_name,
                     r.name AS category_name, r.scope_type, r.scope_id, r.source_type, r.source_id,
                     CASE r.scope_type WHEN \'kingdom\' THEN k.name ELSE \'Amtgard\' END AS scope_name,
                     g.persona AS granted_by_persona, rv.persona AS revoked_by_persona
@@ -1045,6 +1393,7 @@ class BonusCredit
              JOIN ' . DB_PREFIX . 'bonus_credit_category r ON r.category_id = b.category_id
              LEFT JOIN ' . DB_PREFIX . 'class c ON c.class_id = b.class_id
              LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = b.mundane_id
+             LEFT JOIN ' . DB_PREFIX . 'kingdom pk ON pk.kingdom_id = m.kingdom_id
              LEFT JOIN ' . DB_PREFIX . 'kingdom k ON r.scope_type = \'kingdom\' AND k.kingdom_id = r.scope_id
              LEFT JOIN ' . DB_PREFIX . 'mundane g ON g.mundane_id = b.granted_by
              LEFT JOIN ' . DB_PREFIX . 'mundane rv ON rv.mundane_id = b.revoked_by
@@ -1058,6 +1407,9 @@ class BonusCredit
                 'BonusCreditId'    => (int) $f['bonus_credit_id'],
                 'MundaneId'        => (int) $f['mundane_id'],
                 'Persona'          => (string) ($f['persona'] ?? ''),
+                'PlayerKingdomId'   => (int) ($f['player_kingdom_id'] ?? 0),
+                'PlayerKingdomAbbr' => (string) ($f['player_kingdom_abbr'] ?? ''),
+                'PlayerKingdomName' => (string) ($f['player_kingdom_name'] ?? ''),
                 'ClassId'          => (int) $f['class_id'],
                 'ClassName'        => (string) ($f['class_name'] ?? ''),
                 'Credits'          => (float) $f['credits'],
