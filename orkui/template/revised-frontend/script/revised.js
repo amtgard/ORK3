@@ -15985,7 +15985,7 @@ window.pnCloseUnitCreateModal = function() {
                 // the kingdom and clear the park filter, so out-of-park hits
                 // can sneak through. The client filter guarantees same-park
                 // regardless of how the server interpreted the term.
-                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, park_id: PkConfig.parkId, IncludeLegend: 1 },
+                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, park_id: PkConfig.parkId },
                     function(data) {
                         var local = (data || []).filter(function(pl) {
                             return String(pl.ParkId) === String(PkConfig.parkId);
@@ -15998,7 +15998,7 @@ window.pnCloseUnitCreateModal = function() {
                                     + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
                                     + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                     + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
-                                    + '>' + escHtml(pl.Persona) + (pl.Legend ? ' <span class="legend-pill">Legend</span>' : '') + '</div>';
+                                    + '>' + escHtml(pl.Persona) + '</div>';
                             }).join('')
                             : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players at this park match</div>';
                         results.classList.add('pk-ac-open');

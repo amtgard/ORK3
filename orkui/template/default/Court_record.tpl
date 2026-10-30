@@ -787,7 +787,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
                     <span class="cp-rec-c-label">Recipient</span>
                     <div class="cp-ac-wrap">
                         <input type="text" id="cp-rec-walkon-persona" class="cp-rec-walkon-input" placeholder="Search player name…" autocomplete="off"
-                               oninput="cpAcSearch(this,'cp-rec-walkon-ac','cp-rec-walkon-mundane-id')"
+                               oninput="cpAcSearch(this,'cp-rec-walkon-ac','cp-rec-walkon-mundane-id',null,true)"
                                onkeydown="cpRecWalkOnKeydown(event,'recipient')">
                         <div class="cp-ac-dropdown" id="cp-rec-walkon-ac"></div>
                     </div>

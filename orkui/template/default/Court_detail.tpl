@@ -2054,7 +2054,7 @@ $_total_awards = count($courtAwards ?? []);
             <div class="cp-field">
                 <label for="cp-adhoc-persona">Recipient <span style="color:#e53e3e">*</span></label>
                 <div class="cp-ac-wrap">
-                    <input type="text" id="cp-adhoc-persona" placeholder="Search player name…" autocomplete="off" aria-required="true" oninput="cpAcSearch(this,'cp-adhoc-ac','cp-adhoc-mundane-id',cpAdhocRecipientPicked)">
+                    <input type="text" id="cp-adhoc-persona" placeholder="Search player name…" autocomplete="off" aria-required="true" oninput="cpAcSearch(this,'cp-adhoc-ac','cp-adhoc-mundane-id',cpAdhocRecipientPicked,true)">
                     <div class="cp-ac-dropdown" id="cp-adhoc-ac"></div>
                 </div>
                 <input type="hidden" id="cp-adhoc-mundane-id">
@@ -2155,7 +2155,7 @@ $_total_awards = count($courtAwards ?? []);
             <div class="cp-field">
                 <label for="cp-art-persona">Artisan <span style="color:#e53e3e">*</span></label>
                 <div class="cp-ac-wrap">
-                    <input type="text" id="cp-art-persona" placeholder="Search player name…" autocomplete="off" aria-required="true" oninput="cpAcSearch(this,'cp-art-ac','cp-art-mundane-id')">
+                    <input type="text" id="cp-art-persona" placeholder="Search player name…" autocomplete="off" aria-required="true" oninput="cpAcSearch(this,'cp-art-ac','cp-art-mundane-id',null,true)">
                     <div class="cp-ac-dropdown" id="cp-art-ac"></div>
                 </div>
                 <input type="hidden" id="cp-art-mundane-id">
