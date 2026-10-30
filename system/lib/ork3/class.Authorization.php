@@ -135,6 +135,10 @@ class Authorization extends Ork3
 		$this->mundane->username = trim($request['UserName']);
 		$this->mundane->email = trim($request['Email']);
 		if ($this->mundane->find()) {
+			// A Legend's account is closed: answer as for a normal reset, send and change nothing.
+			if ($this->mundane->is_legend == 1) {
+				return Success();
+			}
 			// Bail out before touching the account if there is nowhere to send the
 			// temporary password to. The reset rewrites the stored password, so
 			// sending nothing would lock the player out of an account they could
@@ -288,7 +292,7 @@ class Authorization extends Ork3
 					$this->mundane->clear();
 					$this->mundane->mundane_id = $this->app_auth->mundane_id;
 					if ($this->mundane->find()) {
-						if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+						if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1 || $this->mundane->is_legend == 1) {
 							$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 						} else {
 							$this->app_auth->token = md5(openssl_random_pseudo_bytes(16) . microtime());
@@ -316,7 +320,7 @@ class Authorization extends Ork3
 				$this->mundane->clear();
 				$this->mundane->mundane_id = $this->app_auth->mundane_id;
 				if ($this->mundane->find()) {
-					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1 || $this->mundane->is_legend == 1) {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else if (strtotime($this->mundane->token_expires) > time()) {
 						$this->app_auth->token = md5(openssl_random_pseudo_bytes(16) . microtime());
@@ -371,7 +375,7 @@ class Authorization extends Ork3
 					Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']), $this->mundane->password_expires);
 				}
 				if (Authorization::KeyExists($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']))) {
-					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1 || $this->mundane->is_legend == 1) {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
 						// jsork (and mORK, which embeds it) self-identifies via a
@@ -416,7 +420,7 @@ class Authorization extends Ork3
 				$this->mundane->mundane_id = $mundane_id;
 				if (!$this->mundane->find()) {
 					$response['Status'] = ProcessingError();
-				} else if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+				} else if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1 || $this->mundane->is_legend == 1) {
 					$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 				} else {
 					$_rotated = $this->RotateSession($request['Token']);
@@ -475,7 +479,7 @@ class Authorization extends Ork3
 			$response['Status'] = ProcessingError();
 			return $response;
 		}
-		if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+		if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1 || $this->mundane->is_legend == 1) {
 			$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 			return $response;
 		}
@@ -532,7 +536,7 @@ class Authorization extends Ork3
 			return ['Status' => ProcessingError("Linked user not found.")];
 		}
 
-		if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+		if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1 || $this->mundane->is_legend == 1) {
 			return ['Status' => NoAuthorization('Your access to the ORK has been restricted.')];
 		}
 
@@ -587,6 +591,9 @@ class Authorization extends Ork3
 	private function createIdpLink($request)
 	{
 		error_log("AuthorizeIdp: Creating link for MundaneId: " . $this->mundane->mundane_id);
+		if ($this->mundane->is_legend == 1) {
+			return ['Status' => NoAuthorization(Legend::REFUSED)];
+		}
 		// Link found
 		$this->idp_auth->clear();
 		$this->idp_auth->mundane_id = $this->mundane->mundane_id;
@@ -1066,7 +1073,7 @@ class Authorization extends Ork3
 		if (strlen($token) != self::TOKEN_LENGTH)
 			return 0;
 		if (isset(self::$token_memo[$token]))
-			return self::$token_memo[$token];
+			return Legend::isLegend((int)self::$token_memo[$token]) ? 0 : self::$token_memo[$token];
 		$mundane_id = $this->ValidateSessionByToken($token);
 		if ($mundane_id === 0) {
 			if (isset($_SESSION['is_authorized_mundane_id']))
@@ -1075,7 +1082,7 @@ class Authorization extends Ork3
 		}
 		$this->mundane->clear();
 		$this->mundane->mundane_id = $mundane_id;
-		if (!$this->mundane->find() || $this->mundane->penalty_box == 1) {
+		if (!$this->mundane->find() || $this->mundane->penalty_box == 1 || $this->mundane->is_legend == 1) {
 			return 0;
 		}
 		logtrace("IsAuthorized(): authorized", null);
@@ -1095,7 +1102,7 @@ class Authorization extends Ork3
 			$this->mundane->clear();
 			$this->mundane->mundane_id = $this->app_auth->mundane_id;
 			if ($this->mundane->find()) {
-				if ($this->mundane->penalty_box == 1)
+				if ($this->mundane->penalty_box == 1 || $this->mundane->is_legend == 1)
 					return 0;
 				logtrace("IsAuthorized(): authorized", null);
 				return $this->app_auth->mundane_id;
