@@ -59,6 +59,9 @@ class Controller
         } else {
             $this->data[ 'page_title' ] = $this->method;
         }
+        // A Legend's open browser stops working on its next request, including on the
+        // Ajax controllers below that skip the token check.
+        Legend::endSessionIfLegend($this->session);
         $this->data['LoggedIn'] = isset($this->session->user_id);
 
         // Proactive stale-session check: if the session token no longer matches the DB,

@@ -678,6 +678,9 @@ class Attendance extends Ork3
         if (!valid_id($mundane_id)) {
             return NoAuthorization('Must be logged in.');
         }
+        if (Legend::isLegend((int)$mundane_id)) {
+            return NoAuthorization(Legend::REFUSED);
+        }
 
         $token = preg_replace('/[^a-f0-9]/', '', (string)($request['LinkToken'] ?? ''));
         if (strlen($token) !== 48) {
@@ -866,6 +869,9 @@ class Attendance extends Ork3
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         if (!valid_id($mundane_id)) {
             return NoAuthorization('Must be logged in.');
+        }
+        if (Legend::isLegend((int)$mundane_id)) {
+            return NoAuthorization(Legend::REFUSED);
         }
 
         $attendance_id = (int)($request['AttendanceId'] ?? 0);

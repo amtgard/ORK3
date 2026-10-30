@@ -246,6 +246,22 @@ class Legend
         self::write('UPDATE ' . DB_PREFIX . "application_auth SET token = '', token_expires = NOW() WHERE mundane_id = " . $mundaneId);
     }
 
+    /**
+     * Ends a Legend's browser session on a controller that skips the per-request
+     * token check. Drops the signed-in user so the request proceeds logged out.
+     * Returns true if it did.
+     */
+    public static function endSessionIfLegend(object $session): bool
+    {
+        $uid = isset($session->user_id) ? (int) $session->user_id : 0;
+        if (!self::isLegend($uid)) {
+            return false;
+        }
+        unset($session->user_id, $session->token, $_SESSION['is_authorized_mundane_id']);
+
+        return true;
+    }
+
     /** @return array{Status: int, Error: string} */
     private static function refuse(int $status, string $error): array
     {
