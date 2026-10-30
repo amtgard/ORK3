@@ -4430,6 +4430,7 @@ class Report extends Ork3
         $exclude_events          = !empty($request['ExcludeEvents']);  // count only non-event (park-day) sign-ins
         $waiver_age_months       = isset($request['WaiverAgeMonths']) ? (int)$request['WaiverAgeMonths'] : 0; // months waiver must be on file — cannot auto-verify, shown as caveat only
         $min_distinct_months     = isset($request['MinDistinctMonths']) ? (int)$request['MinDistinctMonths'] : 0; // the counted sign-ins must fall in at least this many different calendar months
+        $dues_home_park_only     = !empty($request['DuesHomeParkOnly']); // dues must be paid at the player's home park, not merely somewhere in the kingdom (Freeholds)
 
         // Compute start date.
         // display_start_date: shown in the report header (raw date for DaysWindow, snapped for MonthsWindow).
@@ -4554,6 +4555,7 @@ class Report extends Ork3
         // truth, so we filter via park membership + a fallback branch for kingdom-only
         // events (which have no park_id by definition).
         $_park_subq        = "SELECT park_id FROM " . DB_PREFIX . "park WHERE kingdom_id = $kingdom_id";
+        $_dues_park_clause = $dues_home_park_only ? "d.park_id = m.park_id" : "d.park_id IN ($_park_subq)";
         $_in_scope_clause  = "(a.park_id IN ($_park_subq) OR (a.kingdom_id = $kingdom_id AND a.park_id = 0))";
         $att_select_extra = '';
         if ($max_outside_kingdom_creds > 0) {
@@ -4716,7 +4718,7 @@ class Report extends Ork3
 				CASE WHEN EXISTS (
 					SELECT 1 FROM " . DB_PREFIX . "dues d
 					WHERE d.mundane_id = m.mundane_id
-					  AND d.park_id IN ($_park_subq)
+					  AND $_dues_park_clause
 					  AND d.revoked != 1
 					  AND (d.dues_until >= CURDATE() OR d.dues_for_life = 1)
 				) THEN 1 ELSE 0 END AS dues_paid,
@@ -4724,7 +4726,7 @@ class Report extends Ork3
 				             ELSE MAX(d.dues_until) END
 				 FROM " . DB_PREFIX . "dues d
 				 WHERE d.mundane_id = m.mundane_id
-				   AND d.park_id IN ($_park_subq)
+				   AND $_dues_park_clause
 				   AND d.revoked != 1
 				   AND (d.dues_until >= CURDATE() OR d.dues_for_life = 1)
 				) AS dues_until
@@ -4764,7 +4766,8 @@ class Report extends Ork3
                      'ShowEventCount' => $show_event_count,
                      'ExcludeEvents' => $exclude_events,
                      'WaiverAgeMonths' => $waiver_age_months,
-                     'MinDistinctMonths' => $min_distinct_months];
+                     'MinDistinctMonths' => $min_distinct_months,
+                     'DuesHomeParkOnly' => $dues_home_park_only];
         if ($r !== false && $r->size() > 0) {
             while ($r->next()) {
                 $_member_date    = $membership_mode === 'first_attendance' ? $r->first_att_date : $r->park_member_since;

@@ -83,6 +83,22 @@ class VotingRules
                 'ProvinceMode' => false,
                 'MinAge' => 14,
             ],
+            8 => [
+                // Freeholds of Amtgard (2026-10): each freehold is its own electorate.
+                // A "Contributing Member" has six sign-ins at their own freehold in the
+                // past six months, dues paid at that freehold (dues at another freehold
+                // do not count), is 14 or older (caveat only: no birth dates in the ORK),
+                // and is a standard member, which the waiver + home-park requirement
+                // already covers. Run from a freehold's Park page for that freehold.
+                'AttendanceRequired' => 6,
+                'MonthsWindow' => 6,
+                'MinMembershipMonths' => 0,
+                'AttendanceMode' => 'count',
+                'ProvinceMode' => false,
+                'HomeParkOnly' => true,
+                'DuesHomeParkOnly' => true,
+                'MinAge' => 14,
+            ],
             36 => [
                 'AttendanceRequired' => 12,
                 'MonthsWindow' => 0,

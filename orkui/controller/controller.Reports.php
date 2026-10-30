@@ -783,6 +783,7 @@ class Controller_Reports extends Controller
         $this->data['DaysWindow']             = $result['DaysWindow']             ?? 0;
         $this->data['MinAge']                 = $result['MinAge']                 ?? 0;
         $this->data['MinDistinctMonths']  = $result['MinDistinctMonths']  ?? 0;
+        $this->data['DuesHomeParkOnly']   = $result['DuesHomeParkOnly']   ?? false;
         $this->data['StartDate']              = $result['StartDate']              ?? '';
         $this->data['DisplayStartDate']       = $result['DisplayStartDate']       ?? '';
         $this->data['AllKingdoms']            = $result['AllKingdoms']            ?? false;

@@ -35,13 +35,13 @@ final class VotingRulesTest extends TestCase
 
     public function testSupportedKingdomIds(): void
     {
-        $expected = [14, 31, 3, 17, 10, 25, 20, 40, 36, 27, 38, 4, 6, 19, 12, 24];
+        $expected = [14, 31, 3, 17, 10, 25, 20, 40, 8, 36, 27, 38, 4, 6, 19, 12, 24];
         $actual = $this->reportsModel->supported_voting_kingdom_ids();
         sort($expected);
         sort($actual);
 
         $this->assertSame($expected, $actual);
-        $this->assertCount(16, $actual);
+        $this->assertCount(17, $actual);
     }
 
     public function testProvinceModeEligibility(): void

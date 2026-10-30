@@ -24,6 +24,8 @@ if (!empty($NotSupported)) {
 	$DaysWindow              = $DaysWindow              ?? 0;
 	$MinAge                  = $MinAge                  ?? 0;
 	$MinDistinctMonths       = $MinDistinctMonths       ?? 0;
+	$DuesHomeParkOnly        = $DuesHomeParkOnly        ?? false;
+	$DuesPhrase              = $DuesHomeParkOnly ? 'current dues paid at home park' : 'current dues';
 	$AllKingdoms             = $AllKingdoms             ?? false;
 	$MaxCreditsPerEvent      = $MaxCreditsPerEvent      ?? 0;
 	$MaxOutsideKingdomCredits= $MaxOutsideKingdomCredits?? 0;
@@ -156,7 +158,7 @@ if (!empty($Players)) {
 				<strong>Kingdom:</strong> <?=$AttendanceRequired?>+ sign-ins anywhere in the Kingdom in the last <?=$WindowPhrase?><?=$KingdomEventBonus ? ' (attending a Kingdom-sponsored event counts as +1, once)' : ''?>.
 				<strong>Provincial:</strong> <?=$AttendanceRequired?>+ sign-ins at home park in the last <?=$WindowPhrase?>. Provincial eligibility implies Kingdom eligibility.
 			<?php elseif ($HomeParkOnly): ?>
-			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ sign-ins at home park in the last <?=$WindowPhrase?><?=$KingdomEventBonus ? ' (attending a Kingdom-sponsored event counts as +1, once)' : ''?><?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.
+			Eligibility requires: signed waiver &bull; <?=$DuesPhrase?> &bull; <?=$AttendanceRequired?>+ sign-ins at home park in the last <?=$WindowPhrase?><?=$KingdomEventBonus ? ' (attending a Kingdom-sponsored event counts as +1, once)' : ''?><?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.<?php if ($MinAge > 0): ?> <em style="color:#c05621;">Players must also be <?=$MinAge?> or older &mdash; the ORK holds no birth dates, so this cannot be checked here; confirm it by hand.</em><?php endif; ?>
 			<?php else: ?>
 			<?php if ($ActiveMemberThreshold > 0): ?>
 			Requires signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ <?=$AttendanceMode === 'days' ? 'calendar days' : ($AttendanceMode === 'count' ? 'sign-ins' : $WeekPeriodLabel . ' attendance weeks')?> in the last <?=$WindowPhrase?> <?=$AllKingdoms ? 'at any Amtgard event' : 'anywhere in the Kingdom'?> = <strong>Contributing Member</strong>. <?=$ActiveMemberThreshold?>+ = <strong>Active Member</strong>.
@@ -278,7 +280,7 @@ if (!empty($Players)) {
 					</div>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Dues</span>
-						<span class="rp-col-guide-desc">Current dues status and expiry date.</span>
+						<span class="rp-col-guide-desc">Current dues status and expiry date<?=$DuesHomeParkOnly ? '. Only dues paid at the player&rsquo;s home park count; dues paid at another park do not' : ''?>.</span>
 					</div>
 <?php if ($ProvinceMode) : ?>
 					<div class="rp-col-guide-item">
