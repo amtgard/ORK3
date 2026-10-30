@@ -36,6 +36,11 @@ class Model_Legend extends Model
         return Legend::blocksEdit($uid, $mundaneId);
     }
 
+    public function profile_view(int $uid, int $mundaneId, int $parkId): array
+    {
+        return Legend::profileView($uid, $mundaneId, $parkId);
+    }
+
     public function parse_year($raw): int
     {
         return Legend::parseYear($raw);

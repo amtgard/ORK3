@@ -7,7 +7,9 @@
 
 	$can_delete_recommendation = !empty($canDeleteRecommendation);
 
-	$isSuspended = ($Player['Suspended'] == 1);
+	$isLegend = !empty($IsLegend);
+	// A Legend's suspension data stays on the record; the Legend status takes priority in the display.
+	$isSuspended = ($Player['Suspended'] == 1) && !$isLegend;
 	$isActive = ($Player['Active'] == 1 && !$isSuspended);
 	$pronounDisplay = (!empty($Player['PronounCustomText'])) ? $Player['PronounCustomText'] : $Player['PronounText'];
 	$heraldryUrl = $Player['HasHeraldry'] > 0 ? $Player['Heraldry'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
@@ -72,11 +74,15 @@
 	// Auth helpers (precomputed in Controller_Player::profile)
 	$isOwnProfile  = !empty($IsOwnProfile);
 	$canEditAdmin  = !empty($canEditAdmin);
+	// Same as $canEditAdmin except on a Legend, where a park officer keeps read access only.
+	$canViewAdmin  = !empty($canViewAdmin);
 	// Moving a player is a park CREATE power, not EDIT -- see Admin_permissions.tpl
 	// and Player::MovePlayer, which checks AUTH_CREATE over either end.
 	$canMovePlayer = !empty($canMovePlayer);
 	$pnCanManageBanner = !empty($pnCanManageBanner);
 	$canManageAwards = !empty($canManageAwards);
+	// Add Award stays on $canManageAwards; changing an award already given also needs this.
+	$canEditAwards = !empty($canEditAwards);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$callerIsOrkAdmin = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_EDIT);
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
@@ -84,14 +90,18 @@
 
 	// Display privacy: monarchy/admin always see; others see if player opted in
 	$isLoggedIn = isset($this->__session->user_id) && (int)$this->__session->user_id > 0;
-	$canSeePrivate = $isOwnProfile || $canEditAdmin;
+	$canSeePrivate = $isOwnProfile || $canViewAdmin;
+	// Hides a modal field that does not apply to a Legend. The inputs stay in the DOM so a
+	// save resubmits their values unchanged; the server refuses a change to most of them.
+	$_lgHide = $isLegend ? ' style="display:none"' : '';
 	// "Restrict Mundane Name Visibility" hard-overrides the per-field toggles —
 	// if the player flipped that, none of the per-field opt-ins should leak info
 	// to ordinary logged-in viewers (only admins / the player themselves see it).
 	$_isRestricted = (int)($Player['Restricted'] ?? 0) === 1;
 	$showFirstName = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneFirst'] ?? 0));
 	$showLastName  = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneLast']  ?? 0));
-	$showEmail     = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
+	// No public mailto on a memorial: mail must not be invited to a Legend's address.
+	$showEmail     = $canSeePrivate || (!$isLegend && !$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
 
 	// Account-security details (username, password expiry) -- never public.
 	// $canSeePrivate alone is not enough here: $canEditAdmin is a park-scoped
@@ -103,7 +113,7 @@
 			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN));
 
 	// Historical ladder flags from domain (Controller_Player::profile via get_reconcile_suggestions)
-	$hasHistorical = !empty($HasHistorical);
+	$hasHistorical = !empty($HasHistorical) && $canEditAwards;
 	$hasHistoricalTip = !empty($HasHistoricalTip);
 
 	// Kingdom dues period config
@@ -1083,6 +1093,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 	if ($pnCanManageBanner)            $_heroClasses .= ' pn-hero-editable';
 	if ($_pnHeroGradientKey)           $_heroClasses .= ' pn-hero-pride';
 	if (!empty($Player['NameShadow']))  $_heroClasses .= ' pn-hero-name-shadow';
+	if ($isLegend)                     $_heroClasses .= ' pn-legend';
 	$_bgStyle = '';
 	if ($_heroBgUrl) {
 		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
@@ -1162,6 +1173,9 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php endif; ?>
 			</div>
 			<div class="pn-badges">
+				<?php if ($isLegend): ?>
+					<span class="pn-badge legend-pill">&#10022; Legend</span>
+				<?php else: ?>
 				<?php if ($isActive): ?>
 					<span class="pn-badge pn-badge-green"><i class="fas fa-check-circle"></i> Active</span>
 				<?php else: ?>
@@ -1199,6 +1213,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php if ($IsOrkAdmin): ?>
 					<span class="pn-badge pn-badge-purple"><i class="fas fa-cog"></i> ORK Administrator</span>
 				<?php endif; ?>
+				<?php endif; // $isLegend ?>
 			</div>
 			<?php if ($isSuspended): ?>
 				<div class="pn-suspended-detail">
@@ -1220,7 +1235,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<button class="pn-btn pn-btn-white" id="pn-design-btn" onclick="pnOpenDesignModal()"><i class="fas fa-palette"></i> <?= $isOwnProfile ? 'Design My Profile' : 'Edit Profile Design' ?></button>
 			<?php endif; ?>
 			<?php if ($LoggedIn): ?>
-				<button class="pn-btn pn-btn-white" id="pn-recommend-btn"><i class="fas fa-award"></i> Recommend Award</button>
+				<button class="pn-btn pn-btn-white" id="pn-recommend-btn"><i class="fas fa-award"></i> <?= $isLegend ? 'Recommend Posthumous Award' : 'Recommend Award' ?></button>
 			<?php endif; ?>
 		</div>
 	</div>
@@ -1232,6 +1247,8 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 <?php if (strlen($Message) > 0): ?>
 	<div class='success-message' style="margin-bottom: 14px;"><?= $Message ?></div>
 <?php endif; ?>
+
+<?php if ($isLegend) include __DIR__ . '/_legend_memorial.tpl'; ?>
 
 <!-- =============================================
      ZONE 2: Dashboard Stats
@@ -1303,7 +1320,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			   correctly gated; these two rows had no gate at all, so an anonymous
 			   visitor was handed a valid login name plus the fact that its password had
 			   expired. Gated to the player themselves and their monarchy/admin. */ ?>
-			<?php if ($canSeeAccount): ?>
+			<?php if ($canSeeAccount && !$isLegend): ?>
 			<div class="pn-detail-row"<?= ($passwordExpired || $passwordSoon) ? ' style="background:var(--ork-alert-warning-bg,#fffbe6);border-left:3px solid var(--ork-alert-warning-border,#f6ad55);padding-left:6px;margin-left:-6px;"' : '' ?>>
 				<span class="pn-detail-label">Password Expires</span>
 				<span class="pn-detail-value" style="<?= $passwordExpired ? 'color:#c53030;font-weight:600;' : ($passwordSoon ? 'color:#b7791f;font-weight:600;' : '') ?>"><?= $passwordExpiring ?><?= $passwordSoon ? ' <i class="fas fa-exclamation-triangle" style="margin-left:5px;font-size:12px;" title="Expires within 2 weeks"></i>' : '' ?></span>
@@ -1400,7 +1417,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 
 		<!-- Dues -->
 		<div class="pn-card">
-			<h4><i class="fas fa-receipt"></i> Dues<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesModal()" title="Add dues entry"><i class="fas fa-pencil-alt"></i></button><?php elseif (isset($this->__session->user_id)): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesHistoryModal()" title="View dues history"><i class="fas fa-history"></i></button><?php endif; ?></h4>
+			<h4><i class="fas fa-receipt"></i> Dues<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesModal()" <?= $isLegend ? 'data-tip="Dues history" aria-label="Dues history"' : 'title="Add dues entry"' ?>><i class="fas <?= $isLegend ? 'fa-history' : 'fa-pencil-alt' ?>"></i></button><?php elseif (isset($this->__session->user_id)): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesHistoryModal()" title="View dues history"><i class="fas fa-history"></i></button><?php endif; ?></h4>
 			<?php if (is_array($Dues) && count($Dues) > 0): ?>
 				<table class="pn-mini-table">
 					<thead>
@@ -1476,7 +1493,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 		<div class="pn-card">
 			<h4 style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-users"></i> Companies &amp; Households</span>
-				<?php if ($canEditAdmin || $isOwnProfile): ?>
+				<?php if (($canEditAdmin || $isOwnProfile) && !$isLegend): ?>
 				<button class="pn-card-edit-btn" id="pn-unit-create-btn" title="Create new unit" onclick="pnOpenUnitCreateModal()">
 					<i class="fas fa-plus"></i>
 				</button>
@@ -1490,7 +1507,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<div class="pn-unit-row">
 						<a class="pn-unit-link" href="<?= UIR ?>Unit/index/<?= $unit['UnitId'] ?>&from_player=<?= (int)$Player['MundaneId'] ?>"><?= htmlspecialchars($unit['Name'] ?? '') ?: '(Unnamed)' ?></a>
 						<span class="pn-unit-type"><?= htmlspecialchars(ucfirst($unit['Type'] ?? '')) ?></span>
-						<?php if ($canEditAdmin || $isOwnProfile): ?>
+						<?php if (($canEditAdmin || $isOwnProfile) && !$isLegend): ?>
 						<span class="pn-delete-cell pn-unit-quit-cell">
 							<a class="pn-delete-link pn-confirm-quit-unit" href="#" title="Leave unit">&times;</a>
 							<span class="pn-delete-confirm">
@@ -1507,12 +1524,33 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			<?php endif; ?>
 		</div>
 
+		<?php if (!empty($CanManageLegend)): ?>
+		<!-- Legend status: officers only. Modals and handlers below and in revised.js. -->
+		<div class="pn-card" id="pn-legend-admin">
+			<h4><i class="fas fa-feather-alt"></i> Legend Status<?php if ($isLegend): ?><button type="button" class="pn-card-edit-btn" id="pn-legend-year-btn" data-tip="Edit year of passing" aria-label="Edit year of passing"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
+			<?php if ($isLegend): ?>
+				<div class="pn-detail-row">
+					<span class="pn-detail-label">Year of Passing</span>
+					<span class="pn-detail-value"><?= (int)$LegendYear ?></span>
+				</div>
+				<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-undo-btn">Remove Legend Status</button>
+			<?php else: ?>
+				<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-mark-btn">Mark as Legend</button>
+			<?php endif; ?>
+		</div>
+		<?php endif; ?>
+
 	</div>
 
 	<!-- ========== MAIN CONTENT (Tabbed) ========== -->
 	<div class="pn-main">
 		<div class="pn-tabs">
 			<ul class="pn-tab-nav">
+				<?php if ($isLegend): ?>
+				<li class="pn-tab-active" data-tab="memories">
+					<i class="fas fa-feather-alt"></i><span class="pn-tab-label"> Memory Wall</span> <span class="pn-tab-count">(<?= is_array($Memories ?? null) ? count($Memories) : 0 ?>)</span>
+				</li>
+				<?php endif; ?>
 				<?php if ($isOwnProfile): ?>
 				<li class="pn-tab-active" data-tab="myamtgard">
 					<i class="fas fa-home"></i><span class="pn-tab-label"> My Amtgard</span>
@@ -1544,14 +1582,16 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					// filled in their About content (Persona/Story text). Otherwise default to
 					// Awards as before. Auto-derived stuff like milestones/beltline doesn't
 					// count — only deliberate text content from the design modal.
-					$_aboutIsDefault = !$isOwnProfile && ($_hasAboutPersona || $_hasAboutStory);
+					// A Legend's profile always opens on the Memory Wall.
+					$_aboutIsDefault = !$isOwnProfile && !$isLegend && ($_hasAboutPersona || $_hasAboutStory);
+					$_awardsIsDefault = !$isOwnProfile && !$isLegend && !$_aboutIsDefault;
 				?>
 				<?php if ($_showAboutTab): ?>
 				<li<?= $_aboutIsDefault ? ' class="pn-tab-active"' : '' ?> data-tab="about">
 					<i class="fas fa-scroll"></i><span class="pn-tab-label"> About</span>
 				</li>
 				<?php endif; ?>
-				<li<?= ($isOwnProfile || $_aboutIsDefault) ? '' : ' class="pn-tab-active"' ?> data-tab="awards">
+				<li<?= $_awardsIsDefault ? ' class="pn-tab-active"' : '' ?> data-tab="awards">
 					<i class="fas fa-medal"></i><span class="pn-tab-label"> Awards</span> <span class="pn-tab-count">(<?= $Stats['TotalAwards'] ?>)</span>
 				</li>
 				<li data-tab="titles">
@@ -1564,7 +1604,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			<?php if ($_showRecs): ?><li data-tab="recommendations">
 					<i class="fas fa-star"></i><span class="pn-tab-label"> Recommendations</span> <span class="pn-tab-count" id="pn-recs-tab-count"></span>
 				</li><?php endif; ?>
-				<?php if (($canEditAdmin && !$isOwnProfile) || ($LoggedIn && $isOwnProfile && !empty($HasNotes))): ?>
+				<?php if (($canViewAdmin && !$isOwnProfile) || ($LoggedIn && $isOwnProfile && !empty($HasNotes))): ?>
 				<li data-tab="history">
 					<i class="fas fa-sticky-note"></i><span class="pn-tab-label"> Notes</span> <span class="pn-tab-count" id="pn-notes-tab-count"></span>
 				</li>
@@ -1573,7 +1613,13 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<i class="fas fa-shield-alt"></i><span class="pn-tab-label"> Class Levels</span>
 				</li>
 			</ul>
-			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isOwnProfile ? 'My Amtgard' : ($_aboutIsDefault ? 'About' : 'Awards') ?></div>
+			<div class="pn-active-tab-label" id="pn-active-tab-label"><?= $isLegend ? 'Memory Wall' : ($isOwnProfile ? 'My Amtgard' : ($_aboutIsDefault ? 'About' : 'Awards')) ?></div>
+
+			<?php if ($isLegend): ?>
+			<div class="pn-tab-panel" id="pn-tab-memories">
+				<?php include __DIR__ . '/_legend_wall.tpl'; ?>
+			</div>
+			<?php endif; ?>
 
 			<!-- My Amtgard Tab (own profile default) -->
 			<?php if ($isOwnProfile): ?>
@@ -2077,7 +2123,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								// Feast Preferences sidebar card (opt-in via Show My Feast Preferences).
 								// Only rendered when the toggle is on AND the player has meaningful data.
 								// NoRestrictions=1 counts as meaningful — "I have none" is intentional.
-								$_showFeastPrefs = (int)($Player['ShowFeastPrefs'] ?? 0);
+								$_showFeastPrefs = $isLegend ? 0 : (int)($Player['ShowFeastPrefs'] ?? 0);
 								$_fp = $FeastPrefs ?? null;
 								if ($_showFeastPrefs && is_array($_fp)) {
 									$_fpDiets = array_filter([
@@ -2165,7 +2211,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php endif; ?>
 
 				<!-- Awards Tab -->
-			<div class="pn-tab-panel" id="pn-tab-awards"<?= ($isOwnProfile || $_aboutIsDefault) ? ' style="display:none"' : '' ?>>
+			<div class="pn-tab-panel" id="pn-tab-awards"<?= $_awardsIsDefault ? '' : ' style="display:none"' ?>>
 				<?php
 					$awardsList = is_array($Details['Awards']) ? $Details['Awards'] : array();
 				?>
@@ -2178,7 +2224,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<i class="fas fa-history"></i> Reconcile Historical Awards
 				</a>
 				<?php endif; ?>
-				<?php if (!empty($awardsList)): ?>
+				<?php if (!empty($awardsList) && $canEditAwards): ?>
 				<button class="pn-btn pn-btn-sm btn-danger-confirm" style="margin-left:8px" onclick="pnOpenRevokeAllModal()"><i class="fas fa-ban"></i> Revoke All</button>
 				<?php endif; ?>
 				</div>
@@ -2247,7 +2293,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<th data-sorttype="text">Given At</th>
 							<th data-sorttype="text">Note</th>
 							<th data-sorttype="text">Entered By</th>
-							<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
+							<?php if ($canEditAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody>
@@ -2265,7 +2311,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<td><?php if (valid_id($detail['EventId'])) echo $detail['EventName']; elseif (trimlen($detail['ParkName']) > 0) echo $detail['ParkName'] . (trimlen($detail['KingdomName']) > 0 ? ', ' . $detail['KingdomName'] : ''); else echo $detail['KingdomName']; ?></td>
 								<td><?= $detail['Note'] ?></td>
 								<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
-								<?php if ($canManageAwards): ?>
+								<?php if ($canEditAwards): ?>
 								<td class="pn-award-actions-cell">
 									<?php $awardData = json_encode([
 										'AwardsId'      => (int)$detail['AwardsId'],
@@ -2320,7 +2366,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<th data-sorttype="date">Revoked On</th>
 								<th data-sorttype="text">Revoked By</th>
 								<th data-sorttype="text">Reason</th>
-								<th class="pn-nosort"></th>
+								<?php if ($canEditAwards): ?><th class="pn-nosort"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -2332,9 +2378,11 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<td class="pn-col-nowrap"><?= ($rev['RevokedAt'] && $rev['RevokedAt'] !== '0000-00-00') ? $rev['RevokedAt'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['RevokedBy'] ?? '') ?></td>
 								<td><?= htmlspecialchars($rev['Revocation'] ?? '') ?></td>
+								<?php if ($canEditAwards): ?>
 								<td class="pn-col-nowrap">
 									<button class="pn-btn pn-btn-sm pn-reactivate-btn" data-awards-id="<?= (int)$rev['AwardsId'] ?>" title="Reactivate this award"><i class="fas fa-undo"></i> Reactivate</button>
 								</td>
+								<?php endif; ?>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -2369,7 +2417,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<th data-sorttype="text">Given At</th>
 								<th data-sorttype="text">Note</th>
 								<th data-sorttype="text">Entered By</th>
-								<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
+								<?php if ($canEditAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -2414,7 +2462,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 									</td>
 									<td><?= $detail['Note'] ?></td>
 									<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
-									<?php if ($canManageAwards): ?>
+									<?php if ($canEditAwards): ?>
 									<td class="pn-award-actions-cell">
 										<?php $titleData = json_encode([
 											'AwardsId'       => (int)$detail['AwardsId'],
@@ -2472,7 +2520,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<th data-sorttype="date">Revoked On</th>
 								<th data-sorttype="text">Revoked By</th>
 								<th data-sorttype="text">Reason</th>
-								<th class="pn-nosort"></th>
+								<?php if ($canEditAwards): ?><th class="pn-nosort"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -2484,9 +2532,11 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<td class="pn-col-nowrap"><?= ($rev['RevokedAt'] && $rev['RevokedAt'] !== '0000-00-00') ? $rev['RevokedAt'] : '' ?></td>
 								<td class="pn-col-nowrap"><?= htmlspecialchars($rev['RevokedBy'] ?? '') ?></td>
 								<td><?= htmlspecialchars($rev['Revocation'] ?? '') ?></td>
+								<?php if ($canEditAwards): ?>
 								<td class="pn-col-nowrap">
 									<button class="pn-btn pn-btn-sm pn-reactivate-btn" data-awards-id="<?= (int)$rev['AwardsId'] ?>" title="Reactivate this title"><i class="fas fa-undo"></i> Reactivate</button>
 								</td>
+								<?php endif; ?>
 							</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -2497,7 +2547,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 
 			<!-- Attendance Tab (populated by attendance AJAX) -->
 			<div class="pn-tab-panel" id="pn-tab-attendance" style="display:none">
-				<?php if ($canEditAdmin): ?>
+				<?php if ($canEditAdmin && !$isLegend): ?>
 				<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
 					<button class="pn-btn pn-btn-primary" onclick="pnOpenPlayerAttModal()"><i class="fas fa-plus"></i> Add Attendance</button>
 				</div>
@@ -2510,7 +2560,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			<?php if ($_showRecs): ?><div class="pn-tab-panel" id="pn-tab-recommendations" style="display:none">
 				<?php if ($this->__session->user_id): ?>
 				<div class="pn-tab-toolbar">
-					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenModal()"><i class="fas fa-plus"></i> Recommend an Award</button>
+					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenModal()"><i class="fas fa-plus"></i> <?= $isLegend ? 'Recommend Posthumous Award' : 'Recommend an Award' ?></button>
 				</div>
 				<?php endif; ?>
 				<div id="pn-recs-body"><div class="pn-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
@@ -2541,7 +2591,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					$classList = is_array($Details['Classes']) ? $Details['Classes'] : array();
 					// ClassParagonMap and $pnHeldAwardIds come from controller / preamble
 				?>
-				<?php if ($canManageAwards): ?>
+				<?php if ($canEditAwards): ?>
 				<div class="pn-tab-toolbar">
 					<button class="pn-btn pn-btn-sm pn-btn-secondary" onclick="pnOpenReconcileModal()"><i class="fas fa-sliders-h"></i> Edit Reconciliation</button>
 				</div>
@@ -2591,7 +2641,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					$pnViewerId = (int)($ViewerId ?? 0);
 					// Whoever gave a credit may take it back, so the column shows if any row is theirs.
 					$pnMine = $pnViewerId > 0 ? array_filter($pnBonus, function ($b) use ($pnViewerId) { return (int)($b['GrantedBy'] ?? 0) === $pnViewerId; }) : [];
-					$pnCanRevokeBonus = !empty($CanRevokeBonus) || count($pnMine) > 0;
+					$pnCanRevokeBonus = (!empty($CanRevokeBonus) || count($pnMine) > 0) && (!$isLegend || $canEditAdmin);
 				?>
 				<?php if (count($pnBonus) > 0): ?>
 				<div class="pn-bonus-section" id="pn-bonus-section">
@@ -2626,7 +2676,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<?php if ($pnCanRevokeBonus): ?>
 								<td class="pn-col-numeric pn-bonus-actions">
 									<?php if (!empty($CanRevokeBonus) || (int)($bc['GrantedBy'] ?? 0) === $pnViewerId): ?>
-									<button type="button" class="pn-bonus-edit" data-id="<?= (int)$bc['BonusCreditId'] ?>" title="Change the amount or class">Edit</button>
+									<?php if (!$isLegend): ?><button type="button" class="pn-bonus-edit" data-id="<?= (int)$bc['BonusCreditId'] ?>" title="Change the amount or class">Edit</button><?php endif; ?>
 									<button type="button" class="pn-bonus-revoke" data-id="<?= (int)$bc['BonusCreditId'] ?>" data-who="<?= htmlspecialchars($bc['CategoryName'], ENT_QUOTES) ?>">Remove</button>
 									<?php endif; ?>
 								</td>
@@ -2733,7 +2783,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<label for="pn-acct-persona">Persona <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-persona" name="Persona" value="<?= htmlspecialchars($Player['Persona']) ?>" />
 			</div>
-			<div class="pn-acct-field">
+			<div class="pn-acct-field"<?= $_lgHide ?>>
 				<label for="pn-acct-email">Email</label>
 				<input type="email" id="pn-acct-email" name="Email" value="<?= htmlspecialchars($Player['Email'] ?? '') ?>" />
 				<div id="pn-acct-email-warn" style="display:none;color:#e53e3e;font-size:0.82rem;margin-top:4px;">Double check the format of your email address.</div>
@@ -2744,12 +2794,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<button type="button" class="esc-suggestion-dismiss" aria-label="Dismiss">&times;</button>
 				</div>
 			</div>
-			<div class="pn-acct-field">
+			<div class="pn-acct-field"<?= $_lgHide ?>>
 				<label for="pn-acct-username">Username <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-username" name="UserName" value="<?= htmlspecialchars($Player['UserName']) ?>" />
 					<div class="pn-acct-hint" id="pn-acct-username-status" style="display:none"></div>
 			</div>
-			<div class="pn-acct-two-col">
+			<div class="pn-acct-two-col"<?= $_lgHide ?>>
 				<div class="pn-acct-field">
 					<label for="pn-acct-password">New Password</label>
 					<input type="password" id="pn-acct-password" name="Password" autocomplete="new-password" />
@@ -2820,6 +2870,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			</div>
 
 			<!-- Preferences (own + admin) -->
+			<div<?= $_lgHide ?>>
 			<div class="pn-acct-section-title"><i class="fas fa-sliders-h" style="margin-right:5px"></i>Preferences</div>
 
 			<div class="pn-acct-field">
@@ -2837,12 +2888,13 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<span class="pn-acct-help-tip" data-tip="When enabled, the ORK uses Lexend &mdash; a typeface designed to improve reading proficiency for people with reading difficulties such as Dyslexia &mdash; site-wide for your account." aria-label="Help">?</span>
 				</label>
 			</div>
+			</div>
 
 			<?php if ($canEditAdmin): ?>
 			<!-- Admin-only fields -->
 			<div class="pn-acct-section-title"><i class="fas fa-shield-alt" style="margin-right:5px"></i>Administrative</div>
 
-			<div class="pn-acct-two-col">
+			<div class="pn-acct-two-col"<?= $_lgHide ?>>
 				<div class="pn-acct-field">
 					<label>Status</label>
 					<div class="pn-acct-radio-group">
@@ -2882,7 +2934,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 <div class="pn-overlay" id="pn-dues-overlay">
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-receipt pn-modal-title-icon"></i>Add Dues Entry</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-receipt pn-modal-title-icon"></i><?= $isLegend ? 'Dues History' : 'Add Dues Entry' ?></h3>
 			<button class="pn-modal-close-btn" id="pn-dues-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -2895,6 +2947,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<div id="pn-dues-history-body"><div class="pn-dues-modal-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 			</div>
 
+			<div<?= $_lgHide ?>>
 			<div class="pn-acct-field">
 				<label for="pn-dues-from">Date Paid <span class="required-indicator">*</span></label>
 				<input type="date" id="pn-dues-from" name="DuesFrom" value="<?= date('Y-m-d') ?>" />
@@ -2913,6 +2966,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<label><input type="radio" name="DuesForLife" value="0" checked /> No</label>
 				</div>
 			</div>
+			</div>
 
 			<input type="hidden" name="MundaneId"      value="<?= (int)$Player['MundaneId'] ?>" />
 			<input type="hidden" name="ParkId"         value="<?= (int)$Player['ParkId'] ?>" />
@@ -2922,7 +2976,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-dues-cancel">Cancel</button>
-			<button class="pn-btn pn-btn-primary" id="pn-dues-save"><i class="fas fa-save"></i> Add Dues</button>
+			<button class="pn-btn pn-btn-primary" id="pn-dues-save"<?= $_lgHide ?>><i class="fas fa-save"></i> Add Dues</button>
 		</div>
 	</div>
 </div>
@@ -3894,7 +3948,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 <div class="pn-overlay" id="pn-rec-overlay">
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-award pn-modal-title-icon"></i>Recommend an Award</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-award pn-modal-title-icon"></i><?= $isLegend ? 'Recommend Posthumous Award' : 'Recommend an Award' ?></h3>
 			<button class="pn-modal-close-btn" id="pn-modal-close-btn" type="button">&times;</button>
 		</div>
 		<div class="pn-modal-body">
@@ -3932,7 +3986,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 						<input type="checkbox" name="MonarchyOnly" id="pn-rec-monarchy" value="1" style="width:16px;height:16px;cursor:pointer">
 						<span>Monarchy Only</span>
 					</label>
-					<div class="mo-check-hint">Only officers will see this recommendation; the player will not.</div>
+					<div class="mo-check-hint"><?= $isLegend ? 'Only officers will see this recommendation.' : 'Only officers will see this recommendation; the player will not.' ?></div>
 				</div>
 				<?php endif; ?>
 			</form>
@@ -3940,6 +3994,34 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-rec-cancel" type="button">Cancel</button>
 			<button class="pn-btn pn-btn-primary" id="pn-rec-submit" type="button"><i class="fas fa-paper-plane"></i> Submit Recommendation</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($CanManageLegend)): ?>
+<!-- =============================================
+     Legend Status Modal: Mark as Legend, Remove Legend Status, Edit Year.
+     revised.js fills it per action, all of it as text.
+     ============================================= -->
+<div class="pn-overlay" id="pn-legend-overlay" role="dialog" aria-modal="true" aria-labelledby="pn-legend-title">
+	<div class="pn-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-feather-alt pn-modal-title-icon"></i><span id="pn-legend-title"></span></h3>
+			<button class="pn-modal-close-btn" id="pn-legend-close-btn" type="button" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<div class="pn-form-error" id="pn-legend-error"></div>
+			<p class="pn-legend-intro" id="pn-legend-intro"></p>
+			<div class="pn-rec-field" id="pn-legend-year-row">
+				<label for="pn-legend-year">Year of Passing <span class="required-indicator">*</span></label>
+				<input type="number" id="pn-legend-year" min="1983" max="<?= (int)date('Y') ?>" step="1" />
+			</div>
+			<div id="pn-legend-detail"></div>
+		</div>
+		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-legend-cancel" type="button">Cancel</button>
+			<button class="pn-btn pn-btn-primary" id="pn-legend-confirm" type="button"></button>
 		</div>
 	</div>
 </div>
@@ -4121,6 +4203,9 @@ var PnConfig = {
 	canEditAccount: <?= !empty($canEditAccount) ? 'true' : 'false' ?>,
 	canEditAdmin:   <?= !empty($canEditAdmin)   ? 'true' : 'false' ?>,
 	canManageAwards:<?= !empty($canManageAwards) ? 'true' : 'false' ?>,
+	isLegend:       <?= $isLegend ? 'true' : 'false' ?>,
+	canManageLegend:<?= !empty($CanManageLegend) ? 'true' : 'false' ?>,
+	legendYear:     <?= (int)($LegendYear ?? 0) ?>,
 	classList:      <?= json_encode(array_values(array_map(function($c) { return ['ClassId' => (int)$c['ClassId'], 'ClassName' => $c['ClassName'], 'Credits' => (float)($c['Credits'] ?? 0), 'Reconciled' => (int)($c['Reconciled'] ?? 0)]; }, $classList ?? []))) ?>,
 	awardRanks:     <?= json_encode($playerAwardRanks) ?>,
 	heldAwardIds:        <?= json_encode(array_values($playerHeldAwardIds)) ?>,
@@ -4134,7 +4219,7 @@ var PnConfig = {
 	playerPersona:    <?= json_encode($Player['Persona'] ?? '') ?>,
 	duesPeriodType:   <?= json_encode($_duesPeriodType) ?>,
 	duesPeriod:       <?= (int)$_duesPeriod ?>,
-	canCreateUnit:    <?= (!empty($canEditAdmin) || !empty($isOwnProfile)) && !empty($LoggedIn) ? 'true' : 'false' ?>,
+	canCreateUnit:    <?= (!empty($canEditAdmin) || !empty($isOwnProfile)) && !empty($LoggedIn) && !$isLegend ? 'true' : 'false' ?>,
 	lastClassId:      <?= $_lastClassId ?>,
 	attendanceDates:  [],  // populated async by PlayerAjax/attendance
 	canEditAnyAttendance: <?= !empty($canEditAdmin) ? 'true' : 'false' ?>,
@@ -7527,7 +7612,7 @@ function pnOpenTestChooser() {
 <script>
 $(function() {
 	// Voting eligibility badge — loaded async so it doesn't block page render
-	if (PnConfig.playerId) {
+	if (PnConfig.playerId && !PnConfig.isLegend) {
 		$.getJSON(PnConfig.uir + 'PlayerAjax/voting_eligible/' + PnConfig.playerId, function(r) {
 			if (r.status === 0 && r.eligible) {
 				var sub = '';

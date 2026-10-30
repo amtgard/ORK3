@@ -108,6 +108,33 @@ class Legend
         return self::isLegend($mundaneId) && !self::mayManage($uid, $mundaneId);
     }
 
+    /**
+     * What $uid gets on this player's profile. CanViewAdmin is the park-level
+     * read access an officer has on anyone, Legend or not; CanEditAdmin and
+     * CanEditAwards take a Legend's gate into account, so on a living player the
+     * first two match. A park officer may still grant a new award to a Legend,
+     * which is why the award row controls are a separate flag from the grant.
+     *
+     * @return array{IsLegend: bool, CanManageLegend: bool, CanViewAdmin: bool, CanEditAdmin: bool, CanEditAwards: bool, Memories: list<array<string, mixed>>}
+     */
+    public static function profileView(int $uid, int $mundaneId, int $parkId): array
+    {
+        $auth         = Ork3::$Lib->authorization;
+        $blocked      = self::blocksEdit($uid, $mundaneId);
+        $viewAdmin    = $uid > 0 && (bool) $auth->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_EDIT);
+        $manageAwards = $uid > 0 && (bool) $auth->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_CREATE);
+
+        return [
+            'IsLegend'        => self::isLegend($mundaneId),
+            // The same refusals as refuseConversion: nobody marks themselves, and player 1 never.
+            'CanManageLegend' => $mundaneId !== 1 && $uid !== $mundaneId && self::mayManage($uid, $mundaneId),
+            'CanViewAdmin'    => $viewAdmin,
+            'CanEditAdmin'    => $viewAdmin && !$blocked,
+            'CanEditAwards'   => $manageAwards && !$blocked,
+            'Memories'        => self::memories($mundaneId),
+        ];
+    }
+
     /** A form field as a year: its value if it is a whole four-digit number, else 0, which every year check refuses. */
     public static function parseYear($raw): int
     {

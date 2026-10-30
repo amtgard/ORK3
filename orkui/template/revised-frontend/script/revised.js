@@ -1014,6 +1014,8 @@ $(document).ready(function() {
                 else if (credits === t - 1 || credits === t - 2) { badge = 'soon'; break; }
             }
         }
+        // A Legend's levels are history: no prompts about levelling up.
+        if (PnConfig.isLegend && badge !== 'max') badge = '';
         var $nameCell = $(this).find('td:first');
         $nameCell.find('.pn-level-badge').remove();
         if (badge === 'max') {
@@ -20880,3 +20882,257 @@ window.orkEnsureGoogleMaps = (function() {
     }, true);
 })();
 
+
+// ---- Playernew: Legend status (Mark as Legend, Remove Legend Status, year) and the Memory Wall ----
+// Names, labels and memories can hold anything, so everything from the server goes in as text.
+(function() {
+    if (typeof PnConfig === 'undefined' || !(PnConfig.isLegend || PnConfig.canManageLegend)) return;
+
+    var SERVER_ERROR = 'Something went wrong and nothing was changed. Please try again.';
+    function gid(id) { return document.getElementById(id); }
+
+    // A database failure can answer with a page rather than JSON; that counts as a failure, not a hang.
+    function legendRead(resp) {
+        return resp.text().then(function(text) {
+            var data;
+            try { data = JSON.parse(text); } catch (e) { throw new Error(SERVER_ERROR); }
+            if (!data || typeof data.status !== 'number') throw new Error(SERVER_ERROR);
+            if (data.status !== 0) throw new Error(data.error || SERVER_ERROR);
+            return data;
+        });
+    }
+    function legendGet(route, id) {
+        return fetch(PnConfig.uir + 'LegendAjax/' + route + '/' + id, { credentials: 'same-origin' })
+            .then(legendRead, function() { throw new Error(SERVER_ERROR); });
+    }
+    function legendPost(route, id, fields) {
+        return fetch(PnConfig.uir + 'LegendAjax/' + route + '/' + id, {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: new URLSearchParams(fields || {})
+        }).then(legendRead, function() { throw new Error(SERVER_ERROR); });
+    }
+    function showError(el, message) {
+        el.textContent = message;
+        el.style.display = 'block';
+    }
+
+    // ---- Officer modal ----
+    (function() {
+        var overlay = gid('pn-legend-overlay');
+        if (!overlay) return;
+        var titleEl = gid('pn-legend-title'), introEl = gid('pn-legend-intro'), errEl = gid('pn-legend-error'),
+            yearRow = gid('pn-legend-year-row'), yearEl = gid('pn-legend-year'), detailEl = gid('pn-legend-detail'),
+            cancelBtn = gid('pn-legend-cancel'), confirmBtn = gid('pn-legend-confirm');
+        var onConfirm = null, reloadOnClose = false, previewRun = 0;
+
+        function open(opts) {
+            previewRun++;
+            onConfirm = opts.onConfirm;
+            reloadOnClose = false;
+            titleEl.textContent = opts.title;
+            introEl.textContent = opts.intro;
+            errEl.style.display = 'none';
+            detailEl.textContent = '';
+            yearRow.style.display = opts.year ? '' : 'none';
+            yearEl.value = opts.yearValue || '';
+            cancelBtn.style.display = '';
+            confirmBtn.textContent = opts.confirmText;
+            confirmBtn.className = 'pn-btn ' + (opts.danger ? 'pn-legend-btn-danger' : 'pn-btn-primary');
+            confirmBtn.style.display = '';
+            confirmBtn.disabled = !!opts.startDisabled;
+            overlay.classList.add('pn-open');
+            document.body.style.overflow = 'hidden';
+            if (opts.year) yearEl.focus();
+        }
+        function close() {
+            previewRun++;
+            if (reloadOnClose) { window.location.reload(); return; }
+            overlay.classList.remove('pn-open');
+            document.body.style.overflow = '';
+        }
+        function appendList(heading, labels, className) {
+            var h = document.createElement('div');
+            h.className = 'pn-legend-list-title';
+            h.textContent = heading;
+            var ul = document.createElement('ul');
+            ul.className = 'pn-legend-list' + (className ? ' ' + className : '');
+            labels.forEach(function(label) {
+                var li = document.createElement('li');
+                li.textContent = label;
+                ul.appendChild(li);
+            });
+            detailEl.appendChild(h);
+            detailEl.appendChild(ul);
+        }
+        function appendNote(text) {
+            var p = document.createElement('p');
+            p.className = 'pn-legend-note';
+            p.textContent = text;
+            detailEl.appendChild(p);
+        }
+        function labelsOf(items) {
+            return (items || []).map(function(item) { return item.Label; });
+        }
+        function readYear() {
+            var raw = yearEl.value.trim();
+            if (!/^\d{4}$/.test(raw) || +raw < +yearEl.min || +raw > +yearEl.max) {
+                showError(errEl, 'Enter a year from ' + yearEl.min + ' through ' + yearEl.max + '.');
+                yearEl.focus();
+                return '';
+            }
+            return raw;
+        }
+        function run(request, done) {
+            errEl.style.display = 'none';
+            confirmBtn.disabled = true;
+            request().then(done).catch(function(err) {
+                showError(errEl, err.message);
+                confirmBtn.disabled = false;
+            });
+        }
+        function reload() { window.location.reload(); }
+
+        var markBtn = gid('pn-legend-mark-btn');
+        if (markBtn) markBtn.addEventListener('click', function() {
+            open({
+                title: 'Mark as Legend',
+                intro: 'This marks ' + PnConfig.playerPersona + ' as having passed away. Their login stops working, and their profile becomes a memorial with a Memory Wall.',
+                year: true,
+                confirmText: 'Mark as Legend',
+                startDisabled: true,
+                onConfirm: function() {
+                    var year = readYear();
+                    if (!year) return;
+                    run(function() { return legendPost('convert', PnConfig.playerId, { Year: year }); }, reload);
+                }
+            });
+            appendNote('Checking what will be cleared…');
+            var thisRun = previewRun;
+            legendGet('preview', PnConfig.playerId).then(function(r) {
+                if (thisRun !== previewRun) return;
+                detailEl.textContent = '';
+                if (r.warnings && r.warnings.length) appendList('Please review', r.warnings, 'pn-legend-warnings');
+                if (r.items && r.items.length) {
+                    appendList('These will be cleared', labelsOf(r.items));
+                } else {
+                    appendNote('Nothing needs to be cleared.');
+                }
+                confirmBtn.disabled = false;
+            }).catch(function(err) {
+                if (thisRun !== previewRun) return;
+                detailEl.textContent = '';
+                showError(errEl, err.message);
+            });
+        });
+
+        var undoBtn = gid('pn-legend-undo-btn');
+        if (undoBtn) undoBtn.addEventListener('click', function() {
+            open({
+                title: 'Remove Legend Status',
+                intro: 'This returns ' + PnConfig.playerPersona + ' to a regular profile. Login, search and normal editing come back. The Memory Wall is hidden, not deleted, and anything cleared at conversion does not return automatically. The next step lists it.',
+                confirmText: 'Remove Legend Status',
+                danger: true,
+                onConfirm: function() {
+                    run(function() { return legendPost('undo', PnConfig.playerId); }, function(r) {
+                        reloadOnClose = true;
+                        introEl.textContent = 'Legend status was removed.';
+                        cancelBtn.style.display = 'none';
+                        confirmBtn.className = 'pn-btn pn-btn-primary';
+                        confirmBtn.textContent = 'Done';
+                        confirmBtn.disabled = false;
+                        onConfirm = close;
+                        if (r.cleared && r.cleared.length) {
+                            appendList('Cleared at conversion, to restore by hand if needed', labelsOf(r.cleared));
+                        } else {
+                            appendNote('Nothing was cleared at conversion.');
+                        }
+                    });
+                }
+            });
+        });
+
+        var yearBtn = gid('pn-legend-year-btn');
+        if (yearBtn) yearBtn.addEventListener('click', function() {
+            open({
+                title: 'Edit Year of Passing',
+                intro: 'Correct the year shown on ' + PnConfig.playerPersona + "'s memorial.",
+                year: true,
+                yearValue: PnConfig.legendYear || '',
+                confirmText: 'Save Year',
+                onConfirm: function() {
+                    var year = readYear();
+                    if (!year) return;
+                    run(function() { return legendPost('year', PnConfig.playerId, { Year: year }); }, reload);
+                }
+            });
+        });
+
+        confirmBtn.addEventListener('click', function() { if (onConfirm) onConfirm(); });
+        cancelBtn.addEventListener('click', close);
+        gid('pn-legend-close-btn').addEventListener('click', close);
+        overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && overlay.classList.contains('pn-open')) close();
+        });
+    })();
+
+    // ---- Memory Wall ----
+    var panel = gid('pn-tab-memories');
+    if (!panel) return;
+
+    var form = gid('pn-lg-form');
+    if (form) {
+        var bodyEl = gid('pn-lg-body'), countEl = gid('pn-lg-count'), errEl = gid('pn-lg-error'),
+            shareBtn = gid('pn-lg-share-btn'), postBtn = gid('pn-lg-post');
+        shareBtn.addEventListener('click', function() {
+            var opening = form.style.display === 'none';
+            form.style.display = opening ? '' : 'none';
+            shareBtn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+            if (opening) bodyEl.focus();
+        });
+        bodyEl.addEventListener('input', function() {
+            var left = bodyEl.maxLength - bodyEl.value.length;
+            countEl.textContent = left + (left === 1 ? ' character remaining' : ' characters remaining');
+        });
+        postBtn.addEventListener('click', function() {
+            var body = bodyEl.value.trim();
+            if (!body) {
+                showError(errEl, 'Please write a memory first.');
+                bodyEl.focus();
+                return;
+            }
+            errEl.style.display = 'none';
+            postBtn.disabled = true;
+            legendPost('add', PnConfig.playerId, { Body: body }).then(function() {
+                window.location.reload();
+            }).catch(function(err) {
+                showError(errEl, err.message);
+                postBtn.disabled = false;
+            });
+        });
+    }
+
+    // Inline remove confirmation, officers only.
+    panel.addEventListener('click', function(e) {
+        var box = e.target.closest ? e.target.closest('.pn-lg-remove') : null;
+        if (!box) return;
+        var link = box.querySelector('.pn-lg-remove-link'), confirmEl = box.querySelector('.pn-lg-remove-confirm');
+        if (e.target.closest('.pn-lg-remove-link')) {
+            link.style.display = 'none';
+            confirmEl.style.display = '';
+        } else if (e.target.closest('.pn-lg-remove-no')) {
+            confirmEl.style.display = 'none';
+            link.style.display = '';
+        } else if (e.target.closest('.pn-lg-remove-yes')) {
+            var yes = e.target.closest('.pn-lg-remove-yes');
+            yes.disabled = true;
+            legendPost('remove', box.getAttribute('data-id')).then(function() {
+                window.location.reload();
+            }).catch(function(err) {
+                yes.disabled = false;
+                confirmEl.textContent = err.message;
+            });
+        }
+    });
+})();
