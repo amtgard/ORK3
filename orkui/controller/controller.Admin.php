@@ -940,6 +940,12 @@ class Controller_Admin extends Controller
         $_is_self_post = ($_uid === $id
             && isset($action) && $action === 'update'
             && in_array($this->request->Update, ['Update Media', 'Update Details'], true));
+        // A Legend's account and media are editable only by kingdom officers and ORK admins.
+        $this->load_model('Legend');
+        if ($this->Legend->blocks_edit($_uid, $id)) {
+            header('Location: ' . UIR . 'Player/profile/' . $id);
+            exit;
+        }
         if (!$_is_self_post
             && !$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_EDIT)
             && !(valid_id($_target_park) && $this->Authorization->has_authority($_uid, AUTH_PARK, $_target_park, AUTH_EDIT))) {

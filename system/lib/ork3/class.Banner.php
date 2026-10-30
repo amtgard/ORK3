@@ -305,6 +305,9 @@ class Banner extends Ork3
     {
         switch ($type) {
             case 'Player':
+                if (Legend::blocksEdit($mundaneId, $id)) {
+                    return false;
+                }
                 if ($mundaneId === $id) {
                     return true;
                 }
