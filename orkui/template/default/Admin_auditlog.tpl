@@ -1759,10 +1759,10 @@ var AL_SCOPES = {
 	Player: {
 		source: function(term, cb) {
 			$.getJSON('../orkservice/Search/SearchService.php', {
-				Action: 'Search/Player', type: 'all', search: term, limit: 8
+				Action: 'Search/Player', type: 'all', search: term, limit: 8, IncludeLegend: 1
 			}, function(data) {
 				cb($.map(data || [], function(v) {
-					return { label: v.Persona + ' (' + v.KAbbr + ':' + v.PAbbr + ')', value: v.MundaneId, display: v.Persona };
+					return { label: v.Persona + ' (' + v.KAbbr + ':' + v.PAbbr + ')' + (v.Legend ? ' - Legend' : ''), value: v.MundaneId, display: v.Persona };
 				}));
 			});
 		}

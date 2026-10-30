@@ -940,6 +940,12 @@ class Controller_Admin extends Controller
         $_is_self_post = ($_uid === $id
             && isset($action) && $action === 'update'
             && in_array($this->request->Update, ['Update Media', 'Update Details'], true));
+        // A Legend's account and media are editable only by kingdom officers and ORK admins.
+        $this->load_model('Legend');
+        if ($this->Legend->blocks_edit($_uid, $id)) {
+            header('Location: ' . UIR . 'Player/profile/' . $id);
+            exit;
+        }
         if (!$_is_self_post
             && !$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_EDIT)
             && !(valid_id($_target_park) && $this->Authorization->has_authority($_uid, AUTH_PARK, $_target_park, AUTH_EDIT))) {
@@ -1436,6 +1442,9 @@ class Controller_Admin extends Controller
     public function moveplayer($post = null)
     {
         $this->load_model('Player');
+        // Only an ORK admin may move a Legend, so only their Move Player search asks for Legends.
+        $_uid = (int)($this->session->user_id ?? 0);
+        $this->data['IsOrkAdmin'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (strlen($post) > 0) {
             $this->request->save('Admin_moveplayer', true);
             if (!isset($this->session->user_id)) {

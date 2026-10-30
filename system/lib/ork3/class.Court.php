@@ -228,6 +228,7 @@ class Court
             'ParkId'                => (int)$rs->park_id,
             'Name'                  => $rs->name,
             'CourtDate'             => $rs->court_date,
+            'HeldBeforeToday'       => $this->dateBeforeToday($rs->court_date),
             'Status'                => $rs->status,
             'EventCalendarDetailId' => (int)$rs->event_calendardetail_id,
             'EventName'             => $rs->event_name,
@@ -388,6 +389,10 @@ class Court
             'EventCalendarDetailId' => 'event_calendardetail_id',
             'RecorderMundaneId'     => 'recorder_mundane_id',
         ];
+
+        if (!empty($fields['RecorderMundaneId']) && Legend::isLegend((int)$fields['RecorderMundaneId'])) {
+            return false;
+        }
 
         $sets = [];
         foreach ($map as $key => $column) {
@@ -785,6 +790,7 @@ class Court
         $award_name  = '';
         $is_ladder   = false;
         $is_title    = false;
+        $is_legend   = false;
         $rec_reason  = '';
         $rec_hidden  = false;
 
@@ -792,7 +798,7 @@ class Court
             // Fetch persona + award_name for response
             $this->db->Clear();
             $info = $this->db->DataSet(
-                'SELECT m.persona, p.abbreviation AS park_abbrev, IFNULL(ka.name, a.name) AS award_name,
+                'SELECT m.persona, m.is_legend, p.abbreviation AS park_abbrev, IFNULL(ka.name, a.name) AS award_name,
                         ' . self::sqlEffectiveIsLadder() . ' AS is_ladder,
                         ' . self::SQL_EFFECTIVE_IS_TITLE . ' AS is_title
                  FROM ' . DB_PREFIX . 'mundane m
@@ -804,6 +810,7 @@ class Court
             );
             if ($info && $info->Next()) {
                 $persona     = $info->persona;
+                $is_legend   = (int)$info->is_legend === 1;
                 $park_abbrev = $info->park_abbrev ?? '';
                 $award_name  = $info->award_name;
                 $is_ladder   = (bool)(int)$info->is_ladder;
@@ -831,6 +838,7 @@ class Court
             'CourtAwardId'      => $court_award_id,
             'MundaneId'         => $mundane_id,
             'Persona'           => $persona,
+            'IsLegend'          => $is_legend,
             'ParkAbbrev'        => $park_abbrev,
             'KingdomAwardId'    => $kingdomaward_id,
             'AwardName'         => $award_name,
@@ -1289,13 +1297,16 @@ class Court
         $artisan_id = ($idr && $idr->Next()) ? (int)$idr->court_award_artisan_id : 0;
 
         $this->db->Clear();
-        $pr = $this->db->DataSet('SELECT persona FROM ' . DB_PREFIX . 'mundane
+        $pr = $this->db->DataSet('SELECT persona, is_legend FROM ' . DB_PREFIX . 'mundane
                               WHERE mundane_id = ' . $mundane_id . ' LIMIT 1');
-        $persona = ($pr && $pr->Next()) ? (string)$pr->persona : '';
+        $found   = $pr && $pr->Next();
+        $persona = $found ? (string)$pr->persona : '';
         return [
             'CourtAwardArtisanId' => $artisan_id,
             'MundaneId'           => $mundane_id,
             'Persona'             => $persona,
+            // The planner draws the Legend pill from this on a freshly added row, as it does on a reload.
+            'IsLegend'            => $found && (int)$pr->is_legend === 1,
             'Contribution'        => $contribution,
         ];
     }
@@ -1402,6 +1413,11 @@ class Court
     public function stageAward($court_award_id, $given_by_mundane_id, $public_comment, $rank, $expectedRowVersion = null)
     {
         if ($this->isHiddenRecCitation((int)$court_award_id, (string)$public_comment)) {
+            return false;
+        }
+        // Recipients and artisans may be Legends; the one giving the award may not,
+        // unless the court was held before today.
+        if (Legend::isLegend((int)$given_by_mundane_id) && !$this->courtHeldBeforeToday($this->getCourtAwardCourtId($court_award_id))) {
             return false;
         }
         $where = 'court_award_id = ' . (int)$court_award_id . '
@@ -2576,6 +2592,9 @@ class Court
     {
         $court_id = (int)$court_id;
         $giver    = (int)$default_giver_mundane_id;
+        if (Legend::isLegend($giver) && !$this->courtHeldBeforeToday($court_id)) {
+            return 0;
+        }
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'UPDATE ' . DB_PREFIX . 'court_award SET
@@ -2669,7 +2688,7 @@ class Court
                     ca.scroll_maker_id, ca.regalia_maker_id, ca.row_version,
                     ca.given_by_mundane_id, gb.persona AS given_by_persona,
                     sm.persona AS scroll_maker_persona, rm.persona AS regalia_maker_persona,
-                    m.persona, p.abbreviation AS park_abbrev,
+                    m.persona, m.is_legend, p.abbreviation AS park_abbrev,
                     IFNULL(ka.name, a.name) AS award_name, a.peerage,
                     ' . self::sqlEffectiveIsLadder() . ' AS is_ladder,
                     ' . self::SQL_EFFECTIVE_IS_TITLE . ' AS is_title,
@@ -2696,6 +2715,7 @@ class Court
                     'CourtAwardId'      => (int)$rs->court_award_id,
                     'MundaneId'         => (int)$rs->mundane_id,
                     'Persona'           => $rs->persona,
+                    'IsLegend'          => (int)$rs->is_legend === 1,
                     'ParkAbbrev'        => $rs->park_abbrev ?? '',
                     'KingdomAwardId'    => (int)$rs->kingdomaward_id,
                     // Base catalog id, so the Grant modal can look up what the
@@ -2745,7 +2765,7 @@ class Court
             $this->db->Clear();
             $ars = $this->db->DataSet(
                 'SELECT caa.court_award_artisan_id, caa.court_award_id,
-                        caa.mundane_id, caa.contribution, m.persona
+                        caa.mundane_id, caa.contribution, m.persona, m.is_legend
                  FROM ' . DB_PREFIX . 'court_award_artisan caa
                  LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = caa.mundane_id
                  WHERE caa.court_award_id IN (' . $ids . ')
@@ -2759,6 +2779,7 @@ class Court
                             'CourtAwardArtisanId' => (int)$ars->court_award_artisan_id,
                             'MundaneId'           => (int)$ars->mundane_id,
                             'Persona'             => $ars->persona,
+                            'IsLegend'            => (int)$ars->is_legend === 1,
                             'Contribution'        => $ars->contribution,
                         ];
                     }
@@ -2876,6 +2897,7 @@ class Court
                 'RecommendationsId' => $rid,
                 'MundaneId'         => (int)$r['MundaneId'],
                 'Persona'           => $r['Persona'],
+                'IsLegend'          => !empty($r['IsLegend']),
                 'KingdomAwardId'    => (int)$r['KingdomAwardId'],
                 'AwardName'         => $r['AwardName'],
                 'IsLadder'          => (int)($r['Rank'] ?? 0) > 0,  // proxy: only used for "Rank N" suffix display
@@ -3046,6 +3068,25 @@ class Court
     // -----------------------------------------------------------------------
     // Court Report (public, read-only) — see docs/superpowers/specs/2026-05-28-court-report-design.md
     // -----------------------------------------------------------------------
+
+    /**
+     * Was this court dated before today? Such a court may have been held in a
+     * Legend's lifetime and typed up after, so it may credit them as giver. An
+     * undated court counts as today, as it does when finalized.
+     */
+    private function courtHeldBeforeToday($court_id)
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet('SELECT court_date FROM ' . DB_PREFIX . 'court WHERE court_id = ' . (int)$court_id . ' LIMIT 1');
+        return ($r && $r->Next()) ? $this->dateBeforeToday($r->court_date) : false;
+    }
+
+    /** The rule for courtHeldBeforeToday, given a court_date already in hand. */
+    private function dateBeforeToday($date)
+    {
+        $date = $this->validDate((string)$date);
+        return $date !== null && $date < date('Y-m-d');
+    }
 
     /**
      * Validate a Y-m-d date string; return it if valid, else null.
@@ -3572,8 +3613,8 @@ class Court
             }
 
             try {
-                Ork3::$Lib->notification->Add($uid, 'court_awaiting_record', $message, $link);
-                $sent++;
+                // Add() returns 0 for a Legend, who is skipped, so only count real sends.
+                $sent += (int)Ork3::$Lib->notification->Add($uid, 'court_awaiting_record', $message, $link);
             } catch (\Throwable $e) {
                 // Non-blocking by design.
             }

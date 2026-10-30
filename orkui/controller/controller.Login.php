@@ -70,6 +70,7 @@ class Controller_Login extends Controller
         } else {
             $this->data["error"] = $r['Status']['Error'];
             $this->data["detail"] = $r['Status']['Detail'];
+            $this->data["refusal"] = $r['Refusal'] ?? '';
         }
     }
 

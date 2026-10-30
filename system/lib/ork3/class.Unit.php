@@ -265,6 +265,11 @@ class Unit extends Ork3
                 $this->members->clear();
                 $this->members->unit_mundane_id = $request['UnitMundaneId'];
                 $this->members->find();
+                // A Legend's active state is frozen; an unchanged save (role, title) still works.
+                if ($request['Active'] !== $this->members->active
+                        && Legend::isLegend((int)$this->members->mundane_id)) {
+                    return NoAuthorization(Legend::REFUSED);
+                }
                 $this->members->active = $request['Active'];
                 $this->members->role = $request['Role'];
                 $this->members->title = $request['Title'];
@@ -298,6 +303,10 @@ class Unit extends Ork3
             $this->members->unit_mundane_id = $request['UnitMundaneId'];
             if (!$this->members->find()) {
                 return InvalidParameter();
+            }
+            // Spec: a Legend's unit memberships stay; nobody retires or removes one.
+            if (Legend::isLegend((int)$this->members->mundane_id)) {
+                return NoAuthorization(Legend::REFUSED);
             }
             $mundane_id = $this->members->mundane_id;
             $unit_id = $this->members->unit_id;
@@ -343,6 +352,10 @@ class Unit extends Ork3
             $this->members->unit_mundane_id = $request['UnitMundaneId'];
             if (!$this->members->find()) {
                 return InvalidParameter();
+            }
+            // Spec: a Legend's unit memberships stay; nobody retires or removes one.
+            if (Legend::isLegend((int)$this->members->mundane_id)) {
+                return NoAuthorization(Legend::REFUSED);
             }
             $mundane_id = $this->members->mundane_id;
             $unit_id = $this->members->unit_id;
@@ -501,6 +514,10 @@ class Unit extends Ork3
             if ($this->members->find()) {
                 return InvalidParameter('Player is already an active member of this ' . $this->unit->type . '.');
             }
+            // Existing active rows are untouched above; a new add or a revival is what is refused.
+            if (Legend::isLegend((int)$request['MundaneId'])) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             $this->members->clear();
             $this->members->mundane_id = $request['MundaneId'];
             $this->members->unit_id = $request['UnitId'];
@@ -641,8 +658,11 @@ class Unit extends Ork3
         // retire any unit in the world.
         $is_officer = Ork3::$Lib->authorization->HasUnitOfficerAuthority($mundane_id, $unit_id);
         // Sole-member exception: the only remaining active roster member may
-        // retire even without management rights.
-        $members = $this->_active_member_roles($unit_id);
+        // retire even without management rights. A Legend stays on the roster but
+        // does not count; their membership row is left as it is.
+        $members = array_filter($this->_active_member_roles($unit_id), function ($member_id) {
+            return !Legend::isLegend((int)$member_id);
+        }, ARRAY_FILTER_USE_KEY);
         $is_sole_member = (count($members) === 1 && isset($members[$mundane_id]));
 
         if ($is_manager || $is_officer || $is_sole_member) {
@@ -711,6 +731,9 @@ class Unit extends Ork3
         $target_id = (int)$request['MundaneId'];
         if (!valid_id($target_id)) {
             return InvalidParameter();
+        }
+        if (Legend::isLegend($target_id)) {
+            return NoAuthorization(Legend::REFUSED);
         }
 
         $is_manager = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE);

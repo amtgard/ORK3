@@ -23,7 +23,7 @@
  * stylesheet link, above the page's inline script.
  *
  * Exposed on window, under the names the two pages already call:
- *   cpAcSearch(input, dropdownId, hiddenId, onPick)
+ *   cpAcSearch(input, dropdownId, hiddenId, onPick, includeLegend)
  *   cpPositionAc(input, drop)     cpAcUnbind()
  *   cpHideAcDropdowns(except)     cpAcOpenDrop   (read-only for callers)
  */
@@ -121,7 +121,11 @@
     // whose court this is. `onPick` is optional: the Record view's strip fields use it
     // to auto-save on pick, because the hidden id is cleared on every keystroke and a
     // save on blur alone would post the stale/empty id before the click lands.
-    function cpAcSearch(input, dropdownId, hiddenId, onPick) {
+    // `includeLegend` opts in to Legends: true only where a Legend can be picked, the
+    // recipient and artisan fields, the scroll and regalia makers among them, and the
+    // giver on a court dated before today (courtMeta.heldBeforeToday). The recorder
+    // stays off, like every other search.
+    function cpAcSearch(input, dropdownId, hiddenId, onPick, includeLegend) {
         var q = input.value.trim();
         var drop = gid(dropdownId);
         if (!drop) return;
@@ -143,7 +147,7 @@
             // was the only way to reach them. kingdom_all drops the filter and keeps
             // the ordering, floating this kingdom to the top before everyone else.
             // c.kingdomId is the COURT's kingdom, not the signed-in user's.
-            fetch(c.uir + 'KingdomAjax/playersearch/' + c.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=all')
+            fetch(c.uir + 'KingdomAjax/playersearch/' + c.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=all' + (includeLegend ? '&include_legend=1' : ''))
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 drop.innerHTML = '';
@@ -162,7 +166,8 @@
                 data.slice(0, 12).forEach(function (p) {
                     var div = document.createElement('div');
                     div.className = 'cp-ac-item';
-                    div.innerHTML = esc(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + esc(p.KAbbr || '') + ':' + esc(p.PAbbr || '') + ')</span>';
+                    div.innerHTML = esc(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + esc(p.KAbbr || '') + ':' + esc(p.PAbbr || '') + ')</span>'
+                        + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '');
                     div.addEventListener('click', function () {
                         input.value = p.Persona;
                         if (hidden) hidden.value = p.MundaneId;

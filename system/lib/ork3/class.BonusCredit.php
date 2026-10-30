@@ -51,9 +51,11 @@
  * source (a survey) is a category with source_type/source_id set, so "once per
  * survey" is the same rule.
  *
- * Not registered on Ork3::$Lib on purpose: the JSON gateway exposes every
- * public method of a $Lib class, and these take a caller uid, not a token.
- * Callers reach it through Model_BonusCredit.
+ * startup.php instantiates every class in this directory, so
+ * Ork3::$Lib->bonuscredit exists. What keeps these methods, which take a caller
+ * uid and not a token, off the JSON gateway is the explicit class list in
+ * orkservice/Json/index.php, where BonusCredit must never be added. Callers reach
+ * it through Model_BonusCredit.
  *
  * Envelope: ['Status' => 0, ...] ok; 1 bad request; 3 not authorized.
  */
@@ -377,6 +379,9 @@ class BonusCredit
         $player = $this->playerRow($mundaneId);
         if ($player === null) {
             return $this->fail('Player not found.');
+        }
+        if (Legend::isLegend($mundaneId)) {
+            return $this->denied(Legend::REFUSED);
         }
         $categoryId = max(0, $categoryId);
         $category = null;
@@ -1056,6 +1061,9 @@ class BonusCredit
         $note      = trim((string) ($r['Note'] ?? ''));
         $date      = trim((string) ($r['Date'] ?? date('Y-m-d')));
 
+        if (Legend::isLegend($mundaneId)) {
+            return $this->denied(Legend::REFUSED);
+        }
         $category = $this->category($categoryId);
         if ($category === null) {
             return $this->fail('Choose what the credit is for.');
@@ -1200,6 +1208,9 @@ class BonusCredit
                 ? 'Only ' . $this->kingdomName((int) $category['ScopeId']) . '\'s Kingdom officers, park officers or granters, or the officers of the player\'s own park or Kingdom, can remove this credit.'
                 : 'You do not have authority to remove this credit.');
         }
+        if (Legend::blocksEdit($uid, (int) $row['MundaneId'])) {
+            return $this->denied(Legend::REFUSED);
+        }
         if ($row['RevokedAt'] !== null) {
             return ['Status' => 0, 'BonusCreditId' => $bonusCreditId];
         }
@@ -1236,6 +1247,9 @@ class BonusCredit
         $category = $this->category((int) $row['CategoryId']);
         if ($category === null) {
             return $this->fail('This credit\'s category no longer exists; remove the credit and grant another.');
+        }
+        if (Legend::isLegend((int) $row['MundaneId'])) {
+            return $this->denied(Legend::REFUSED);
         }
         if ($uid <= 0 || $player === null || !$this->mayChange($uid, $row, $player, $category)) {
             return $this->denied($this->crossed($player ?? [], $category)

@@ -34,6 +34,9 @@ class Controller_AdminAjax extends Controller
             $results = $this->Search->scoped_player_search([
                 'Query' => $q,
                 'Scope' => 'global',
+                // Already behind the global-admin gate above; Legends only on explicit opt-in.
+                'IncludeLegend' => $_GET['include_legend'] ?? '',
+                'CallerUserId'  => $uid,
                 'Limit' => 20,
                 'Format' => 'admin',
             ]);
