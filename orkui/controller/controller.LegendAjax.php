@@ -49,6 +49,28 @@ class Controller_LegendAjax extends Controller
         $this->envelope($r, []);
     }
 
+    /** A Legend's Memory Wall, newest first. Public: readable logged out, like the profile. */
+    public function memories($p = null)
+    {
+        $this->jsonOut(['status' => 0, 'memories' => $this->Legend->memories($this->playerId($p))]);
+    }
+
+    /** Leave a memory. Body is a form field. */
+    public function add($p = null)
+    {
+        $uid = $this->requirePost();
+        $r = $this->Legend->add_memory($uid, $this->playerId($p), (string) ($_POST['Body'] ?? ''));
+        $this->envelope($r, ['memoryId' => $r['MemoryId'] ?? 0]);
+    }
+
+    /** Remove a memory ({memoryId} in the route). Kingdom officers and ORK admins only. */
+    public function remove($p = null)
+    {
+        $uid = $this->requirePost();
+        $r = $this->Legend->remove_memory($uid, $this->playerId($p));
+        $this->envelope($r, []);
+    }
+
     // -----------------------------------------------------------------------
 
     private function requireLogin(): int

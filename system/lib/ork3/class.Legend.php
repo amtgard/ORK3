@@ -8,9 +8,8 @@
  * memorial and the account is closed to edits by anyone but the people who may
  * manage the status: an officer of the player's kingdom (or of a kingdom above
  * it, for a principality player) or an ORK admin. This class holds the status
- * checks every guard shares; it is deliberately small and static-friendly so a
- * guard in any layer can ask "is this player a Legend, and may this caller
- * edit them anyway?" in one call.
+ * checks every guard shares, static so a guard in any layer can ask "is this
+ * player a Legend, and may this caller edit them anyway?" in one call.
  *
  * It also does the conversion itself: preview(), convert(), undo() and
  * setYear(). Each returns ['Status' => 0, ...], or Status 1 for a bad request and
@@ -21,6 +20,9 @@
  * because a lost app token costs only a re-authorization. Every other table it
  * touches is InnoDB.
  *
+ * The Memory Wall (memories(), addMemory(), removeMemory()) is its own section
+ * below, after the conversion code.
+ *
  * Not registered on Ork3::$Lib on purpose: the JSON gateway exposes every
  * public method of a $Lib class, and these take a caller uid, not a token.
  * Callers reach it through Model_Legend.
@@ -29,6 +31,9 @@ class Legend
 {
     /** The one refusal message every guard uses. */
     public const REFUSED = 'This player is a Legend and can no longer be changed this way.';
+
+    /** The longest memory, in characters. */
+    public const MAX_MEMORY_CHARS = 2000;
 
     /** Nothing in the ORK predates this. */
     public const MIN_YEAR = 1983;
@@ -260,6 +265,119 @@ class Legend
         unset($session->user_id, $session->token, $_SESSION['is_authorized_mundane_id']);
 
         return true;
+    }
+
+    // =======================================================================
+    // Memory Wall: notes left on a Legend's profile by friends and family.
+    // Bodies are stored and returned raw; escaping is the UI's job.
+    // =======================================================================
+
+    /**
+     * A Legend's visible memories, newest first. Empty for anyone who is not a
+     * Legend, so undoing hides the wall without deleting it.
+     *
+     * @return list<array{MemoryId: int, AuthorId: int, AuthorPersona: string, Body: string, Created: string}>
+     */
+    public static function memories(int $mundaneId): array
+    {
+        if (!self::isLegend($mundaneId)) {
+            return [];
+        }
+        $p = DB_PREFIX;
+        $out = [];
+        foreach (self::rows(
+            "SELECT lm.legend_memory_id, lm.author_id, m.persona, lm.body, lm.created
+             FROM {$p}legend_memory lm
+             LEFT JOIN {$p}mundane m ON m.mundane_id = lm.author_id
+             WHERE lm.mundane_id = {$mundaneId} AND lm.removed_by_id = 0
+             ORDER BY lm.created DESC, lm.legend_memory_id DESC"
+        ) as $r) {
+            $out[] = [
+                'MemoryId'      => (int) $r['legend_memory_id'],
+                'AuthorId'      => (int) $r['author_id'],
+                'AuthorPersona' => (string) $r['persona'],
+                'Body'          => (string) $r['body'],
+                'Created'       => (string) $r['created'],
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Leave a memory on a Legend's wall. The author must be a signed-in player
+     * who is not suspended, in the penalty box or a Legend.
+     *
+     * @return array{Status: int, Error?: string, MemoryId?: int}
+     */
+    public static function addMemory(int $uid, int $mundaneId, string $body): array
+    {
+        if ($uid <= 0) {
+            return self::refuse(5, 'Not logged in');
+        }
+        $author = self::rows('SELECT suspended, penalty_box, is_legend FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $uid);
+        if (!$author || (int) $author[0]['suspended'] !== 0 || (int) $author[0]['penalty_box'] !== 0 || (int) $author[0]['is_legend'] !== 0) {
+            return self::refuse(3, 'Your account cannot leave memories right now.');
+        }
+        if (!self::isLegend($mundaneId)) {
+            return self::refuse(1, 'Memories can only be left for a Legend.');
+        }
+        $body = trim($body);
+        if ($body === '' || !mb_check_encoding($body, 'UTF-8')) {
+            return self::refuse(1, 'Please write a memory.');
+        }
+        if (mb_strlen($body, 'UTF-8') > self::MAX_MEMORY_CHARS) {
+            return self::refuse(1, 'A memory can be at most ' . self::MAX_MEMORY_CHARS . ' characters.');
+        }
+        if ((new ProfanityFilter())->containsProfanity($body)) {
+            return self::refuse(1, ProfanityFilter::ERROR_MESSAGE);
+        }
+        try {
+            global $DB;
+            $DB->Clear();
+            $DB->body = $body;
+            $ok = $DB->ExecuteChecked(
+                'INSERT INTO ' . DB_PREFIX . "legend_memory (mundane_id, author_id, body, created)
+                 VALUES ({$mundaneId}, {$uid}, :body, NOW())"
+            );
+            $DB->Clear();
+            if (!$ok) {
+                throw new RuntimeException('memory write failed');
+            }
+            $id = (int) (self::rows('SELECT LAST_INSERT_ID() AS id')[0]['id'] ?? 0);
+        } catch (Throwable $e) {
+            error_log('Legend: memory not saved for player ' . $mundaneId . ': ' . $e->getMessage());
+            return self::refuse(1, 'That could not be saved. Please try again.');
+        }
+        return ['Status' => 0, 'MemoryId' => $id];
+    }
+
+    /**
+     * Take a memory off the wall (soft: the row stays). Only those who may
+     * manage the Legend's status; an author may not remove their own.
+     *
+     * @return array{Status: int, Error?: string}
+     */
+    public static function removeMemory(int $uid, int $memoryId): array
+    {
+        if ($uid <= 0) {
+            return self::refuse(5, 'Not logged in');
+        }
+        $row = $memoryId > 0
+            ? self::rows('SELECT mundane_id, removed_by_id FROM ' . DB_PREFIX . 'legend_memory WHERE legend_memory_id = ' . $memoryId)
+            : [];
+        if (!$row || (int) $row[0]['removed_by_id'] !== 0) {
+            return self::refuse(1, 'Memory not found.');
+        }
+        if (!self::mayManage($uid, (int) $row[0]['mundane_id'])) {
+            return self::refuse(3, 'You do not have authority over this player.');
+        }
+        try {
+            self::write('UPDATE ' . DB_PREFIX . "legend_memory SET removed_by_id = {$uid}, removed_at = NOW() WHERE legend_memory_id = {$memoryId} AND removed_by_id = 0");
+        } catch (Throwable $e) {
+            error_log('Legend: memory ' . $memoryId . ' not removed: ' . $e->getMessage());
+            return self::refuse(1, 'That could not be removed. Please try again.');
+        }
+        return ['Status' => 0];
     }
 
     /** @return array{Status: int, Error: string} */

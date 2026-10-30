@@ -60,4 +60,19 @@ class Model_Legend extends Model
     {
         return Legend::setYear($uid, $mundaneId, $year);
     }
+
+    public function memories(int $mundaneId): array
+    {
+        return Legend::memories($mundaneId);
+    }
+
+    public function add_memory(int $uid, int $mundaneId, string $body): array
+    {
+        return Legend::addMemory($uid, $mundaneId, $body);
+    }
+
+    public function remove_memory(int $uid, int $memoryId): array
+    {
+        return Legend::removeMemory($uid, $memoryId);
+    }
 }
