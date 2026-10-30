@@ -4378,6 +4378,11 @@ class Report extends Ork3
             return InvalidParameter('Player not found.');
         }
 
+        // A Legend's Active flag is fixed: reactivating would undo conversion's safety call.
+        if ((int)$mundane->is_legend === 1) {
+            return NoAuthorization(Legend::REFUSED);
+        }
+
         // Auth check: requester must have AUTH_PARK + AUTH_CREATE on the player's park
         if (!Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane->park_id, AUTH_CREATE)
             && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $mundane->kingdom_id, AUTH_EDIT)

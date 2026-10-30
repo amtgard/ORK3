@@ -166,7 +166,7 @@ class Banner extends Ork3
             return BadToken();
         }
         if (!$this->canEditBanner($mundaneId, $type, $id)) {
-            return NoAuthorization();
+            return NoAuthorization($type === 'Player' && Legend::isLegend($id) ? Legend::REFUSED : null);
         }
 
         $meta = $this->entityMeta($type);

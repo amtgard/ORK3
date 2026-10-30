@@ -2466,6 +2466,27 @@ class Player extends Ork3
                 'to'   => $to_player['Player'],
             ];
 
+            // Memories and audit rows follow the survivor. Done first, and checked: if
+            // one write fails, stop before anything else changes or the source row goes.
+            $_lf = (int)$fromMundane['id'];
+            $_lt = (int)$toMundane['id'];
+            $_rehome = [
+                // Memories the merged-away player wrote on any wall now credit the survivor.
+                'UPDATE ' . DB_PREFIX . 'legend_memory SET author_id = ' . $_lt . ' WHERE author_id = ' . $_lf,
+            ];
+            if ($_fromLegend) {
+                // The survivor keeps its own year. Re-homed log rows are wrapped as an object so
+                // Legend::undo, which reads only list-shaped convert rows, never takes the source's snapshot.
+                $_rehome[] = 'UPDATE ' . DB_PREFIX . 'legend_memory SET mundane_id = ' . $_lt . ' WHERE mundane_id = ' . $_lf;
+                $_rehome[] = 'UPDATE ' . DB_PREFIX . 'legend_log SET mundane_id = ' . $_lt . ", cleared_json = CONCAT('{\"mergedFrom\":" . $_lf . ",\"cleared\":', cleared_json, '}') WHERE mundane_id = " . $_lf;
+            }
+            foreach ($_rehome as $_q) {
+                $this->db->Clear();
+                if (!$this->db->ExecuteChecked($_q)) {
+                    return ProcessingError('The merge was stopped before the player was removed: memories could not be moved.');
+                }
+            }
+
             $sql = "DELETE FROM
 						" . DB_PREFIX . "attendance
 					WHERE
@@ -2563,16 +2584,6 @@ class Player extends Ork3
             $this->db->query($sql);
             $sql = "UPDATE " . DB_PREFIX . "recommendation_seconds SET supporter_mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE supporter_mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "' AND deleted_at IS NULL";
             $this->db->query($sql);
-            // Memories the merged-away player wrote on any wall now credit the survivor.
-            $this->db->Clear();
-            $this->db->query('UPDATE ' . DB_PREFIX . 'legend_memory SET author_id = ' . (int)$toMundane['id'] . ' WHERE author_id = ' . (int)$fromMundane['id']);
-            if ($_fromLegend) {
-                // The survivor keeps its own year; the memories and audit rows follow it.
-                $this->db->Clear();
-                $this->db->query('UPDATE ' . DB_PREFIX . 'legend_memory SET mundane_id = ' . (int)$toMundane['id'] . ' WHERE mundane_id = ' . (int)$fromMundane['id']);
-                $this->db->Clear();
-                $this->db->query('UPDATE ' . DB_PREFIX . 'legend_log SET mundane_id = ' . (int)$toMundane['id'] . ' WHERE mundane_id = ' . (int)$fromMundane['id']);
-            }
             $sql = "UPDATE " . DB_PREFIX . "dues SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
             $this->db->query($sql);
             $sql = "UPDATE " . DB_PREFIX . "bracket_officiant SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
@@ -2898,7 +2909,7 @@ class Player extends Ork3
                 $_legendUser   = (string)$this->mundane->username;
                 $_legendEmail  = (string)$this->mundane->email;
                 $_legendActive = (int)$this->mundane->active;
-                if ((!is_null($request['UserName']) && trim($request['UserName']) !== '' && trim($request['UserName']) !== $_legendUser)
+                if ((!is_null($request['UserName']) && trim($request['UserName']) !== $_legendUser)
                     || (!is_null($request['Email']) && (string)$request['Email'] !== $_legendEmail)
                     || trimlen($request['Password']) > 0
                     || (!is_null($request['Active']) && ($request['Active'] ? 1 : 0) !== $_legendActive)) {
@@ -3600,7 +3611,7 @@ class Player extends Ork3
         $cleared = array();
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            "SELECT mundane_id FROM " . DB_PREFIX . "mundane WHERE " . $scope_col . " = " . $scope_id . " AND waivered = 1"
+            "SELECT mundane_id FROM " . DB_PREFIX . "mundane WHERE " . $scope_col . " = " . $scope_id . " AND waivered = 1 AND is_legend = 0"
         );
         if ($rs) {
             while ($rs->Next()) {
@@ -3608,7 +3619,7 @@ class Player extends Ork3
             }
         }
         $this->db->Clear();
-        $this->db->query("UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE " . $scope_col . " = " . $scope_id);
+        $this->db->query("UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE " . $scope_col . " = " . $scope_id . " AND is_legend = 0");
 
         Ork3::$Lib->dangeraudit->audit(
             __CLASS__ . '::' . __FUNCTION__,

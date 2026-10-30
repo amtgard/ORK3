@@ -135,7 +135,7 @@ final class LegendEditAuthorityTest extends TestCase
         $this->assertSame(0, $control['Status'], 'control: the same login-field change works for a plain player');
 
         foreach (['king', 'admin'] as $who) {
-            foreach ([['UserName' => 'renamed_legend'], ['Email' => 'x@example.invalid'], ['Password' => 'NewPassw0rd!'], ['Active' => $row['active'] ? 0 : 1]] as $change) {
+            foreach ([['UserName' => 'renamed_legend'], ['UserName' => ''], ['Email' => 'x@example.invalid'], ['Password' => 'NewPassw0rd!'], ['Active' => $row['active'] ? 0 : 1]] as $change) {
                 $this->assertRefused($this->player()->UpdatePlayer($this->update($who, $this->legend, $change + ['Persona' => 'Edited Legend'])), "$who: " . json_encode($change));
             }
         }
@@ -176,8 +176,8 @@ final class LegendEditAuthorityTest extends TestCase
         $this->assertRefused($this->player()->ClearNotes($base));
         $this->assertRefused($this->player()->RevokeDues($base + ['DuesId' => $duesId]));
         $this->assertRefused($this->player()->SetPlayerReconciledCredits($base + ['Reconcile' => []]));
-        $banner = (new Banner())->RemoveBanner($base + ['Type' => 'Player', 'Id' => $this->legend]);
-        $this->assertNotSame(0, $banner['Status']['Status'] ?? $banner['Status']);
+        $this->assertRefused((new Banner())->RemoveBanner($base + ['Type' => 'Player', 'Id' => $this->legend]));
+        $this->assertRefused(Ork3::$Lib->treasury->RemoveLastDuesPaid($base));
 
         $this->assertSame(1, $this->fixture->count('mundane_note', 'mundane_note_id = ' . $noteId), 'note intact');
         $this->assertSame(0, (int) $this->fixture->value('dues', 'revoked', 'dues_id = ' . $duesId), 'dues intact');
@@ -345,5 +345,79 @@ final class LegendEditAuthorityTest extends TestCase
         $this->assertFalse(Legend::blocksEdit($this->kingdomOfficer, $this->legend));
         $this->assertFalse(Legend::blocksEdit($this->admin, $this->legend));
         $this->assertRefused($this->player()->UpdatePlayer($this->update('park', $this->legend, ['Persona' => 'Zero'])));
+    }
+
+    // ---- Fix round 1 -------------------------------------------------------
+
+    public function test_active_status_report_call_refused_for_a_legend(): void
+    {
+        $this->fixture->addAuthorization($this->parkOfficer, ['park_id' => $this->park], AUTH_CREATE);
+        $plain = $this->plain('act');
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'mundane SET active = 0 WHERE mundane_id IN (' . $plain . ',' . $this->legend . ')');
+        $report = new Report();
+
+        $control = $report->SetPlayerActiveStatus(['Token' => $this->tokens['park'], 'MundaneId' => $plain, 'Active' => 1]);
+        $this->assertSame(0, $control['Status'], 'control: a park officer reactivates a plain player');
+        $this->assertSame(1, (int) $this->fixture->value('mundane', 'active', 'mundane_id = ' . $plain));
+
+        foreach (['park', 'king', 'admin'] as $who) {
+            $this->assertRefused($report->SetPlayerActiveStatus(['Token' => $this->tokens[$who], 'MundaneId' => $this->legend, 'Active' => 1]), $who);
+        }
+        $this->assertSame(0, (int) $this->fixture->value('mundane', 'active', 'mundane_id = ' . $this->legend));
+    }
+
+    public function test_reset_waivers_skips_legends(): void
+    {
+        $plain = $this->plain('waiver');
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'mundane SET waivered = 1 WHERE mundane_id IN (' . $plain . ',' . $this->legend . ')');
+
+        $r = $this->player()->ResetWaivers(['Token' => $this->tokens['park'], 'ParkId' => $this->park]);
+
+        $this->assertSame(0, $r['Status'], json_encode($r));
+        $this->assertSame(0, (int) $this->fixture->value('mundane', 'waivered', 'mundane_id = ' . $plain), 'control: a plain player is reset');
+        $this->assertSame(1, (int) $this->fixture->value('mundane', 'waivered', 'mundane_id = ' . $this->legend), 'the Legend keeps its waiver');
+    }
+
+    public function test_remove_last_dues_paid_refused_for_park_officer_but_not_kingdom_officer(): void
+    {
+        $base = ['MundaneId' => $this->legend];
+
+        $this->assertRefused(Ork3::$Lib->treasury->RemoveLastDuesPaid(['Token' => $this->tokens['park']] + $base));
+        $king = Ork3::$Lib->treasury->RemoveLastDuesPaid(['Token' => $this->tokens['king']] + $base);
+
+        $this->assertNotSame(Legend::REFUSED, $king['Detail'] ?? null, 'a kingdom officer is not refused by the Legend gate');
+    }
+
+    public function test_undo_after_merging_two_legends_uses_the_survivors_own_snapshot(): void
+    {
+        $pdo = $this->fixture->pdo();
+        $survivor = $this->plain('surv');
+        $source = $this->plain('src');
+        $pdo->exec('UPDATE ' . DB_PREFIX . 'mundane SET active = 0 WHERE mundane_id = ' . $survivor);
+        $pdo->exec('UPDATE ' . DB_PREFIX . 'mundane SET active = 1 WHERE mundane_id = ' . $source);
+        $this->assertSame(0, Legend::convert($this->admin, $survivor, 2001)['Status']);
+        $this->assertSame(0, Legend::convert($this->admin, $source, 2002)['Status']);
+
+        $r = $this->merge('admin', $source, $survivor);
+        $this->assertSame(0, $r['Status'], json_encode($r));
+        Legend::clearMemo();
+        $undo = Legend::undo($this->admin, $survivor);
+
+        $this->assertSame(0, $undo['Status'], json_encode($undo));
+        $this->assertSame(0, (int) $this->fixture->value('mundane', 'active', 'mundane_id = ' . $survivor), "restored to the survivor's own prior state, not the source's");
+        $pdo->exec('DELETE FROM ' . DB_PREFIX . 'legend_log WHERE mundane_id = ' . $survivor);
+    }
+
+    public function test_merge_recredits_memories_a_merged_away_living_player_wrote(): void
+    {
+        $gone = $this->plain('gone');
+        $keeper = $this->plain('keeper');
+        $memory = $this->fixture->addMemory($this->legend, $gone);
+
+        $r = $this->merge('admin', $gone, $keeper);
+
+        $this->assertSame(0, $r['Status'], json_encode($r));
+        $this->assertSame($keeper, (int) $this->fixture->value('legend_memory', 'author_id', 'legend_memory_id = ' . $memory));
+        $this->assertSame($this->legend, (int) $this->fixture->value('legend_memory', 'mundane_id', 'legend_memory_id = ' . $memory));
     }
 }

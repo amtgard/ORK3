@@ -193,7 +193,7 @@ class Legend
             }
             $last = self::rows(
                 'SELECT prior_active, cleared_json FROM ' . DB_PREFIX . 'legend_log
-                 WHERE mundane_id = ' . $mundaneId . " AND action = 'convert'
+                 WHERE mundane_id = ' . $mundaneId . " AND action = 'convert' AND cleared_json NOT LIKE '{%'
                  ORDER BY legend_log_id DESC LIMIT 1"
             );
             // A Legend with no conversion on the log stays inactive: reactivating is one edit away, a wrong guess isn't.
