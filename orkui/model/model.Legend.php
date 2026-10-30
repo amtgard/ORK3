@@ -51,6 +51,11 @@ class Model_Legend extends Model
         return Legend::preview($uid, $mundaneId);
     }
 
+    public function cleared(int $uid, int $mundaneId): array
+    {
+        return Legend::cleared($uid, $mundaneId);
+    }
+
     public function convert(int $uid, int $mundaneId, int $year): array
     {
         return Legend::convert($uid, $mundaneId, $year);

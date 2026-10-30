@@ -1364,12 +1364,13 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<?php if ($Player['ReeveQualified'] != 0): ?>
 						<?php
 							$reeveUntil = (!empty($Player['ReeveQualifiedUntil']) && $Player['ReeveQualifiedUntil'] !== '0000-00-00') ? $Player['ReeveQualifiedUntil'] : '';
-							$reeveExpired = $reeveUntil && strtotime($reeveUntil) < time();
+							// A date gone by says nothing on a memorial: keep the record, without the Expired flag.
+							$reeveExpired = $reeveUntil && strtotime($reeveUntil) < time() && !$isLegend;
 						?>
 						<?php if (!$reeveUntil): ?>
 							<span class="pn-badge pn-badge-green">No end date</span>
 						<?php else: ?>
-							<span class="pn-badge <?= $reeveExpired ? 'pn-badge-red' : 'pn-badge-green' ?>"><?= $reeveExpired ? 'Expired' : 'Until' ?> <?= $reeveUntil ?></span>
+							<span class="pn-badge <?= $isLegend ? 'pn-badge-gray' : ($reeveExpired ? 'pn-badge-red' : 'pn-badge-green') ?>"><?= $reeveExpired ? 'Expired' : 'Until' ?> <?= $reeveUntil ?></span>
 						<?php endif; ?>
 					<?php else: ?>
 						<span class="pn-badge pn-badge-gray">No</span>
@@ -1382,12 +1383,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<?php if ($Player['CorporaQualified'] != 0): ?>
 						<?php
 							$corporaUntil = (!empty($Player['CorporaQualifiedUntil']) && $Player['CorporaQualifiedUntil'] !== '0000-00-00') ? $Player['CorporaQualifiedUntil'] : '';
-							$corporaExpired = $corporaUntil && strtotime($corporaUntil) < time();
+							$corporaExpired = $corporaUntil && strtotime($corporaUntil) < time() && !$isLegend;
 						?>
 						<?php if (!$corporaUntil): ?>
 							<span class="pn-badge pn-badge-green">No end date</span>
 						<?php else: ?>
-							<span class="pn-badge <?= $corporaExpired ? 'pn-badge-red' : 'pn-badge-green' ?>"><?= $corporaExpired ? 'Expired' : 'Until' ?> <?= $corporaUntil ?></span>
+							<span class="pn-badge <?= $isLegend ? 'pn-badge-gray' : ($corporaExpired ? 'pn-badge-red' : 'pn-badge-green') ?>"><?= $corporaExpired ? 'Expired' : 'Until' ?> <?= $corporaUntil ?></span>
 						<?php endif; ?>
 					<?php else: ?>
 						<span class="pn-badge pn-badge-gray">No</span>

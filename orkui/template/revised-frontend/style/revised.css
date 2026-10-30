@@ -11161,6 +11161,7 @@ a.pn-lg-login, a.pn-lg-login:visited {
 .pn-lg-remove .pn-lg-remove-link { text-decoration: none; }
 .pn-lg-remove .pn-lg-remove-link:hover { text-decoration: underline; }
 .pn-lg-remove-yes { margin: 0 4px; font-weight: 700 !important; }
+.pn-lg-remove-error { max-width: 240px; margin-top: 3px; text-align: right; }
 .pn-legend-intro {
     margin: 0 0 12px;
     text-align: left;
@@ -11255,4 +11256,7 @@ html[data-theme="dark"] .pn-legend-warnings { color: #f6c37a; }
 @media (max-width: 600px) {
     .pn-legend-card { padding: 14px 16px 15px; }
     .pn-legend-card p { font-size: 15px; }
+    .pn-lg-remove { margin: -8px -8px 2px 8px; font-size: 13px; }
+    .pn-lg-remove button { min-width: 44px; min-height: 44px; padding: 0 8px; }
+    .pn-lg-remove-yes { margin: 0; }
 }

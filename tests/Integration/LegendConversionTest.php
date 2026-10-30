@@ -484,6 +484,60 @@ final class LegendConversionTest extends TestCase
         $this->assertTrue($this->isLegendInDb($target));
     }
 
+    public function test_cleared_lists_the_snapshot_without_changing_anything(): void
+    {
+        $target = $this->player();
+        $this->fixture->addRsvp($this->fixture->futureEvent($this->park), $target);
+        $this->assertSame(0, Legend::convert($this->officer, $target, 2018)['Status']);
+
+        $r = Legend::cleared($this->officer, $target);
+
+        $this->assertSame(0, $r['Status']);
+        $this->assertSame(['rsvp'], $this->typesOf($r['Cleared']));
+        $this->assertSame($r['Cleared'], Legend::undo($this->officer, $target)['Cleared'], 'what is shown is what undo reports');
+    }
+
+    public function test_cleared_writes_nothing(): void
+    {
+        $target = $this->player();
+        $this->assertSame(0, Legend::convert($this->officer, $target, 2018)['Status']);
+        $before = $this->fixture->checksums();
+        $logs   = count($this->logRows($target));
+
+        Legend::cleared($this->officer, $target);
+
+        $this->assertSame($before, $this->fixture->checksums());
+        $this->assertCount($logs, $this->logRows($target));
+        $this->assertTrue($this->isLegendInDb($target));
+    }
+
+    public function test_cleared_skips_a_merge_rehomed_row_and_takes_the_latest_conversion(): void
+    {
+        $target = $this->player();
+        $this->fixture->addRsvp($this->fixture->futureEvent($this->park), $target);
+        $this->assertSame(0, Legend::convert($this->officer, $target, 2018)['Status']);
+        $this->fixture->pdo()->exec(
+            'INSERT INTO ' . DB_PREFIX . "legend_log (mundane_id, action, legend_year, prior_active, cleared_json, actor_id)
+             VALUES ({$target}, 'convert', 2018, 1, '{\"MergedFrom\":1}', {$this->officer})"
+        );
+
+        $this->assertSame(['rsvp'], $this->typesOf(Legend::cleared($this->officer, $target)['Cleared']));
+    }
+
+    public function test_cleared_refused_for_park_officer_and_non_legend(): void
+    {
+        $target = $this->player();
+        $living = $this->player('living');
+        $parkOfficer = $this->fixture->addParkOfficer($this->park);
+        $this->assertSame(0, Legend::convert($this->officer, $target, 2020)['Status']);
+
+        $refused = Legend::cleared($parkOfficer, $target);
+        $this->assertSame(3, $refused['Status']);
+        $this->assertArrayNotHasKey('Cleared', $refused);
+        $this->assertSame(1, Legend::cleared($this->officer, $living)['Status']);
+        $this->assertSame(3, Legend::cleared(0, $target)['Status']);
+    }
+
     public function test_reconvert_writes_a_second_snapshot(): void
     {
         $target = $this->player();

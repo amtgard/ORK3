@@ -201,7 +201,9 @@ final class LegendProfileTest extends TestCase
         $forOfficer = $this->render('_legend_wall.tpl', $this->wallVars(['Memories' => [$memory], 'CanManageLegend' => true]));
 
         $this->assertStringNotContainsString('pn-lg-remove', $forViewer);
-        $this->assertStringContainsString('pn-lg-remove', $forOfficer);
+        $this->assertStringContainsString('pn-lg-remove-yes', $forOfficer);
+        $this->assertStringContainsString('pn-lg-remove-no', $forOfficer);
+        $this->assertStringContainsString('pn-lg-remove-error', $forOfficer, 'a failed removal must not replace Yes and No');
     }
 
     public function test_memoryless_author_and_empty_wall_still_render(): void

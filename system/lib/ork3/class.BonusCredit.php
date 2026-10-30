@@ -1206,6 +1206,9 @@ class BonusCredit
                 ? 'Only ' . $this->kingdomName((int) $category['ScopeId']) . '\'s Kingdom officers, park officers or granters, or the officers of the player\'s own park or Kingdom, can remove this credit.'
                 : 'You do not have authority to remove this credit.');
         }
+        if (Legend::blocksEdit($uid, (int) $row['MundaneId'])) {
+            return $this->denied(Legend::REFUSED);
+        }
         if ($row['RevokedAt'] !== null) {
             return ['Status' => 0, 'BonusCreditId' => $bonusCreditId];
         }

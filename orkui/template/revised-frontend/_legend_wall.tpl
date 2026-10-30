@@ -46,6 +46,7 @@ $_lgPersona  = htmlspecialchars($Player['Persona'] ?? '', ENT_QUOTES);
 				<button type="button" class="pn-lg-remove-yes">Yes</button>
 				<button type="button" class="pn-lg-remove-no">No</button>
 			</span>
+			<span class="pn-lg-remove-error" style="display:none"></span>
 		</span>
 		<?php endif; ?>
 		<p><?= htmlspecialchars((string)$_lgM['Body'], ENT_QUOTES) ?></p>

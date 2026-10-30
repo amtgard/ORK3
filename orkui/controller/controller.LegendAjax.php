@@ -41,6 +41,14 @@ class Controller_LegendAjax extends Controller
         $this->envelope($r, ['cleared' => $r['Cleared'] ?? []]);
     }
 
+    /** What the conversion cleared, shown before Remove Legend Status is confirmed. Read-only. */
+    public function cleared($p = null)
+    {
+        $uid = $this->requireLogin();
+        $r = $this->Legend->cleared($uid, $this->playerId($p));
+        $this->envelope($r, ['cleared' => $r['Cleared'] ?? []]);
+    }
+
     /** Correct a Legend's year. */
     public function year($p = null)
     {

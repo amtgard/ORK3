@@ -608,6 +608,34 @@ final class BonusCreditTest extends TestCase
         $this->assertSame(1, $this->bonus->adopt($kOfficer, $census, $this->kingdom)['Status']);
     }
 
+    public function testALegendsCreditIsRemovedOnlyByThoseWhoMayEditTheLegend(): void
+    {
+        $kOfficer    = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-legend-king', AUTH_EDIT);
+        $definer     = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-legend-def');
+        $granter     = $this->parkOfficer($this->park, 'bc-legend-granter');
+        $parkOfficer = $this->parkOfficer($this->park, 'bc-legend-park');
+        $player      = $this->playerAt($this->park, 'bc-legend');
+        $credit      = $this->category($definer, $this->kingdom, 'Legend credit');
+        $r = $this->grant($granter, $player, $credit['CategoryId'], ['Date' => '2026-10-01']);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $id = (int) $r['BonusCreditId'];
+
+        $this->pdo()->exec('UPDATE ' . DB_PREFIX . 'mundane SET is_legend = 1, legend_year = 2020 WHERE mundane_id = ' . $player);
+        Legend::clearMemo();
+        $revokedAt = 'SELECT revoked_at FROM ' . DB_PREFIX . 'bonus_credit WHERE bonus_credit_id = ' . $id;
+
+        foreach (['a park officer' => $parkOfficer, 'the original granter' => $granter] as $who => $uid) {
+            $refused = $this->bonus->revoke($uid, $id, 'no');
+            $this->assertSame(3, $refused['Status'], $who);
+            $this->assertSame(Legend::REFUSED, $refused['Error'], $who);
+            $this->assertNull($this->pdo()->query($revokedAt)->fetchColumn() ?: null, $who . ' changed nothing');
+        }
+
+        $this->assertSame(0, $this->bonus->revoke($kOfficer, $id, 'correction')['Status']);
+        $this->assertNotNull($this->pdo()->query($revokedAt)->fetchColumn() ?: null);
+        Legend::clearMemo();
+    }
+
     public function testACreditsAmountOrClassCanBeChangedByThoseWhoMayRemoveIt(): void
     {
         $kOfficer    = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');

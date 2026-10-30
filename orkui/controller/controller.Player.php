@@ -55,6 +55,12 @@ class Controller_Player extends Controller
 
         $params = explode('/', $id);
         $id = $params[0];
+        // The legacy page is for a living player; a Legend's page is the memorial.
+        $this->load_model('Legend');
+        if ($this->Legend->is_legend((int)$id)) {
+            header('Location: ' . UIR . 'Player/profile/' . (int)$id);
+            exit;
+        }
         $action = '';
         $roastbeef = '';
         if (count($params) > 1) {
@@ -467,6 +473,9 @@ class Controller_Player extends Controller
         $legendView = $this->Legend->profile_view($uid, (int)$id, $playerParkId);
         $canEdit    = $legendView['CanEditAdmin'];
         $canView    = $legendView['CanViewAdmin'];
+        if ($legendView['IsLegend'] && !$canEdit) {
+            unset($this->data['menu']['admin']);
+        }
         $this->data['canEditAdmin']    = $canEdit;
         $this->data['canViewAdmin']    = $canView;
         $this->data['canEditAwards']   = $legendView['CanEditAwards'];

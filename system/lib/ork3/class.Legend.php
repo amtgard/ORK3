@@ -223,14 +223,10 @@ class Legend
             if ((int) $player['is_legend'] !== 1) {
                 return self::refuse(1, 'This player is not a Legend.');
             }
-            $last = self::rows(
-                'SELECT prior_active, cleared_json FROM ' . DB_PREFIX . 'legend_log
-                 WHERE mundane_id = ' . $mundaneId . " AND action = 'convert' AND cleared_json NOT LIKE '{%'
-                 ORDER BY legend_log_id DESC LIMIT 1"
-            );
+            $last = self::lastConversion($mundaneId);
             // A Legend with no conversion on the log stays inactive: reactivating is one edit away, a wrong guess isn't.
-            $priorActive = $last ? (int) $last[0]['prior_active'] : 0;
-            $cleared     = $last ? (json_decode((string) $last[0]['cleared_json'], true) ?: []) : [];
+            $priorActive = $last ? (int) $last['prior_active'] : 0;
+            $cleared     = $last ? (json_decode((string) $last['cleared_json'], true) ?: []) : [];
             $year        = (int) $player['legend_year'];
 
             self::write('UPDATE ' . DB_PREFIX . 'mundane SET is_legend = 0, legend_year = 0, active = ' . $priorActive . ' WHERE mundane_id = ' . $mundaneId);
@@ -239,6 +235,41 @@ class Legend
 
             return ['Status' => 0, 'Cleared' => $cleared];
         });
+    }
+
+    /**
+     * What the last conversion cleared, for the officer to read before undoing.
+     * Writes nothing.
+     *
+     * @return array{Status: int, Error?: string, Cleared?: list<array{Type: string, Label: string, Id: int}>}
+     */
+    public static function cleared(int $uid, int $mundaneId): array
+    {
+        $refused = self::refuseManagement($uid, $mundaneId);
+        if ($refused !== null) {
+            return $refused;
+        }
+        if (!self::isLegend($mundaneId)) {
+            return self::refuse(1, 'This player is not a Legend.');
+        }
+        $last = self::lastConversion($mundaneId);
+        return ['Status' => 0, 'Cleared' => $last ? (json_decode((string) $last['cleared_json'], true) ?: []) : []];
+    }
+
+    /**
+     * This player's own latest conversion on the log. A merge re-homes a source
+     * Legend's rows here with a JSON object in cleared_json; those are not theirs.
+     *
+     * @return array{prior_active: mixed, cleared_json: mixed}|null
+     */
+    private static function lastConversion(int $mundaneId): ?array
+    {
+        $rows = self::rows(
+            'SELECT prior_active, cleared_json FROM ' . DB_PREFIX . 'legend_log
+             WHERE mundane_id = ' . $mundaneId . " AND action = 'convert' AND cleared_json NOT LIKE '{%'
+             ORDER BY legend_log_id DESC LIMIT 1"
+        );
+        return $rows[0] ?? null;
     }
 
     /**

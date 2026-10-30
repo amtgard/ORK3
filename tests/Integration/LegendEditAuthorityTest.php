@@ -207,6 +207,57 @@ final class LegendEditAuthorityTest extends TestCase
         ]);
     }
 
+    /** @return array<string, mixed> a SetAttendance or RemoveAttendance request by this officer */
+    private function attendanceRow(string $who, int $attendanceId, int $owner, int $credits): array
+    {
+        return [
+            'Token' => $this->tokens[$who], 'AttendanceId' => $attendanceId, 'MundaneId' => $owner,
+            'ClassId' => (int) $this->fixture->value('attendance', 'class_id', 'attendance_id = ' . $attendanceId),
+            'Date' => '2020-01-04', 'Credits' => $credits, 'ParkId' => $this->park, 'KingdomId' => $this->kingdom,
+            'EventCalendarDetailId' => 0, 'EventId' => 0,
+        ];
+    }
+
+    public function test_park_officer_cannot_edit_or_remove_legend_attendance(): void
+    {
+        $id = $this->fixture->addAttendance($this->park, $this->kingdom, $this->legend);
+        $credits = $this->fixture->value('attendance', 'credits', 'attendance_id = ' . $id);
+
+        $this->assertRefused((new Attendance())->SetAttendance($this->attendanceRow('park', $id, $this->legend, 3)));
+        unset($_SESSION['is_authorized_mundane_id']);
+        $this->assertRefused((new Attendance())->RemoveAttendance($this->attendanceRow('park', $id, $this->legend, 3)));
+
+        $this->assertSame($credits, $this->fixture->value('attendance', 'credits', 'attendance_id = ' . $id));
+        $this->assertSame(1, $this->fixture->count('attendance', 'attendance_id = ' . $id));
+    }
+
+    public function test_kingdom_officer_corrects_legend_attendance(): void
+    {
+        $id = $this->fixture->addAttendance($this->park, $this->kingdom, $this->legend);
+
+        $set = (new Attendance())->SetAttendance($this->attendanceRow('king', $id, $this->legend, 3));
+        $this->assertSame(0, $set['Status']['Status'] ?? $set['Status']);
+        $this->assertSame(3, (int) $this->fixture->value('attendance', 'credits', 'attendance_id = ' . $id));
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $removed = (new Attendance())->RemoveAttendance($this->attendanceRow('king', $id, $this->legend, 3));
+        $this->assertSame(0, $removed['Status']['Status'] ?? $removed['Status']);
+        $this->assertSame(0, $this->fixture->count('attendance', 'attendance_id = ' . $id));
+    }
+
+    public function test_park_officer_still_edits_a_living_players_attendance(): void
+    {
+        $plain = $this->plain('att');
+        $id = $this->fixture->addAttendance($this->park, $this->kingdom, $plain);
+
+        $r = (new Attendance())->SetAttendance($this->attendanceRow('park', $id, $plain, 3));
+
+        $this->assertSame(0, $r['Status']['Status'] ?? $r['Status']);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $removed = (new Attendance())->RemoveAttendance($this->attendanceRow('park', $id, $plain, 3));
+        $this->assertSame(0, $removed['Status']['Status'] ?? $removed['Status']);
+    }
+
     public function test_park_officer_can_grant_new_award_to_legend(): void
     {
         $this->fixture->addAuthorization($this->parkOfficer, ['park_id' => $this->park], AUTH_CREATE);
