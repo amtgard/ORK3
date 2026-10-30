@@ -2642,7 +2642,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					$pnViewerId = (int)($ViewerId ?? 0);
 					// Whoever gave a credit may take it back, so the column shows if any row is theirs.
 					$pnMine = $pnViewerId > 0 ? array_filter($pnBonus, function ($b) use ($pnViewerId) { return (int)($b['GrantedBy'] ?? 0) === $pnViewerId; }) : [];
-					$pnCanRevokeBonus = (!empty($CanRevokeBonus) || count($pnMine) > 0) && (!$isLegend || $canEditAdmin);
+					$pnCanRevokeBonus = (!empty($CanRevokeBonus) || count($pnMine) > 0) && empty($BonusRevokeBlocked);
 				?>
 				<?php if (count($pnBonus) > 0): ?>
 				<div class="pn-bonus-section" id="pn-bonus-section">
@@ -2677,7 +2677,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<?php if ($pnCanRevokeBonus): ?>
 								<td class="pn-col-numeric pn-bonus-actions">
 									<?php if (!empty($CanRevokeBonus) || (int)($bc['GrantedBy'] ?? 0) === $pnViewerId): ?>
-									<?php if (!$isLegend): ?><button type="button" class="pn-bonus-edit" data-id="<?= (int)$bc['BonusCreditId'] ?>" title="Change the amount or class">Edit</button><?php endif; ?>
+									<?php if (!empty($BonusEditable)): ?><button type="button" class="pn-bonus-edit" data-id="<?= (int)$bc['BonusCreditId'] ?>" title="Change the amount or class">Edit</button><?php endif; ?>
 									<button type="button" class="pn-bonus-revoke" data-id="<?= (int)$bc['BonusCreditId'] ?>" data-who="<?= htmlspecialchars($bc['CategoryName'], ENT_QUOTES) ?>">Remove</button>
 									<?php endif; ?>
 								</td>
@@ -4016,7 +4016,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 			<p class="pn-legend-intro" id="pn-legend-intro"></p>
 			<div class="pn-rec-field" id="pn-legend-year-row">
 				<label for="pn-legend-year">Year of Passing <span class="required-indicator">*</span></label>
-				<input type="number" id="pn-legend-year" min="1983" max="<?= (int)date('Y') ?>" step="1" />
+				<input type="number" id="pn-legend-year" min="<?= (int)$LegendMinYear ?>" max="<?= (int)date('Y') ?>" step="1" />
 			</div>
 			<div id="pn-legend-detail"></div>
 		</div>

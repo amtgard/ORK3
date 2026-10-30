@@ -8811,7 +8811,9 @@ class Report extends Ork3
             }
         }
         foreach ($playerData as $mid => &$pRow) {
-            $pRow['RecentSignIn'] = isset($recentIds[$mid]);
+            // A Legend never signs in again; they stay on the grid as honors
+            // history, so they are never filed under inactive.
+            $pRow['RecentSignIn'] = isset($recentIds[$mid]) || !empty($pRow['IsLegend']);
             $pRow['KnightGroups'] = [];
         }
         unset($pRow);

@@ -112,6 +112,20 @@ class Legend
         return self::isLegend($mundaneId) && !self::mayManage($uid, $mundaneId);
     }
 
+    /** May $uid move this player between parks? A Legend moves only by an ORK admin, whatever park authority $uid holds. */
+    public static function mayMove(int $uid, int $mundaneId): bool
+    {
+        return !self::isLegend($mundaneId) || self::isOrkAdmin($uid);
+    }
+
+    /** May $uid edit this player from the park-level admin surfaces? Park EDIT, less a Legend's gate. */
+    public static function canEditAdmin(int $uid, int $mundaneId, int $parkId): bool
+    {
+        return $uid > 0
+            && (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_EDIT)
+            && !self::blocksEdit($uid, $mundaneId);
+    }
+
     /**
      * What $uid gets on this player's profile. CanViewAdmin is the park-level
      * read access an officer has on anyone, Legend or not; CanEditAdmin and
@@ -119,7 +133,7 @@ class Legend
      * first two match. A park officer may still grant a new award to a Legend,
      * which is why the award row controls are a separate flag from the grant.
      *
-     * @return array{IsLegend: bool, CanManageLegend: bool, CanViewAdmin: bool, CanEditAdmin: bool, CanEditAwards: bool, Memories: list<array<string, mixed>>}
+     * @return array{IsLegend: bool, CanManageLegend: bool, CanViewAdmin: bool, CanEditAdmin: bool, CanEditAwards: bool, Memories: list<array<string, mixed>>, MinYear: int, MaxMemoryChars: int}
      */
     public static function profileView(int $uid, int $mundaneId, int $parkId): array
     {
@@ -133,9 +147,11 @@ class Legend
             // The same refusals as refuseConversion: nobody marks themselves, and player 1 never.
             'CanManageLegend' => $mundaneId !== 1 && $uid !== $mundaneId && self::mayManage($uid, $mundaneId),
             'CanViewAdmin'    => $viewAdmin,
-            'CanEditAdmin'    => $viewAdmin && !$blocked,
+            'CanEditAdmin'    => self::canEditAdmin($uid, $mundaneId, $parkId),
             'CanEditAwards'   => $manageAwards && !$blocked,
             'Memories'        => self::memories($mundaneId),
+            'MinYear'         => self::MIN_YEAR,
+            'MaxMemoryChars'  => self::MAX_MEMORY_CHARS,
         ];
     }
 

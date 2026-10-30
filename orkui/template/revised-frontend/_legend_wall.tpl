@@ -1,7 +1,7 @@
 <?php
 /**
  * Memory Wall tab body on a Legend's profile: one column, newest first.
- * Expects $Player, $Memories, $LoggedIn, $CanManageLegend, $ViewerPersona.
+ * Expects $Player, $Memories, $LoggedIn, $CanManageLegend, $ViewerPersona, $LegendMaxMemoryChars.
  * Posting and removing are wired in revised.js and reload the page, so a memory
  * is only ever rendered here, escaped; white-space: pre-line keeps its line breaks.
  */
@@ -22,8 +22,8 @@ $_lgPersona  = htmlspecialchars($Player['Persona'] ?? '', ENT_QUOTES);
 	<h4>Share a memory of <?= $_lgPersona ?></h4>
 	<p>Please remain respectful. This wall honors a member of our community and is read by friends and family. Inappropriate content is subject to removal.</p>
 	<div class="pn-form-error" id="pn-lg-error"></div>
-	<textarea id="pn-lg-body" rows="4" maxlength="2000" placeholder="Your memory&hellip;" aria-label="Your memory"></textarea>
-	<div class="pn-char-count" id="pn-lg-count">2000 characters remaining</div>
+	<textarea id="pn-lg-body" rows="4" maxlength="<?= (int)$LegendMaxMemoryChars ?>" placeholder="Your memory&hellip;" aria-label="Your memory"></textarea>
+	<div class="pn-char-count" id="pn-lg-count"><?= (int)$LegendMaxMemoryChars ?> characters remaining</div>
 	<div class="pn-lg-foot">
 		<span>Remembered by <b><?= htmlspecialchars((string)($ViewerPersona ?? ''), ENT_QUOTES) ?></b></span>
 		<button type="button" class="pn-lg-btn" id="pn-lg-post">Post Memory</button>

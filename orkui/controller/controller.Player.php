@@ -483,6 +483,8 @@ class Controller_Player extends Controller
         $this->data['LegendYear']      = (int)($this->data['Player']['LegendYear'] ?? 0);
         $this->data['CanManageLegend'] = $legendView['CanManageLegend'];
         $this->data['Memories']        = $legendView['Memories'];
+        $this->data['LegendMinYear']        = $legendView['MinYear'];
+        $this->data['LegendMaxMemoryChars'] = $legendView['MaxMemoryChars'];
         // Who a memory will be credited to, shown on the Share a Memory form.
         $this->data['ViewerPersona']   = ($legendView['IsLegend'] && $uid > 0) ? (string)($this->Player->fetch_player($uid)['Persona'] ?? '') : '';
         $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, AUTH_CREATE);
@@ -569,6 +571,9 @@ class Controller_Player extends Controller
         $this->load_model('BonusCredit');
         $__bcPark = (int)($this->data['Details']['ParkId'] ?? $this->data['Player']['ParkId'] ?? 0);
         $this->data['CanRevokeBonus'] = $uid > 0 && $__bcPark > 0 && $this->BonusCredit->can_grant($uid, $__bcPark);
+        // BonusCredit's own Legend gates: blocksEdit on revoke, isLegend on change.
+        $this->data['BonusRevokeBlocked'] = $this->Legend->blocks_edit($uid, (int)$id);
+        $this->data['BonusEditable']      = !$legendView['IsLegend'];
         $this->data['BonusCredits']   = $this->BonusCredit->for_player((int)$id);
         $this->data['ViewerId']       = (int)$uid;
         // The class picker for editing a credit's class in place.
@@ -701,8 +706,7 @@ class Controller_Player extends Controller
 
         $playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
         $this->load_model('Legend');
-        $canEditAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_EDIT)
-            && !$this->Legend->blocks_edit($uid, (int)$id);
+        $canEditAdmin = $this->Legend->can_edit_admin($uid, (int)$id, $playerParkId);
         $isOwnProfile = $uid === $id;
         if (!$canEditAdmin && !$isOwnProfile) {
             header('Location: ' . UIR . "Player/profile/$id");
@@ -715,7 +719,7 @@ class Controller_Player extends Controller
         // too loose to gate the Move Player modal with.
         $this->data['canMovePlayer'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE)
-            && (!$this->Legend->is_legend((int)$id) || $this->Legend->is_ork_admin($uid));
+            && $this->Legend->may_move($uid, (int)$id);
 
         $this->load_model('Kingdom');
         $preloadOfficers = [];

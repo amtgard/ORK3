@@ -68,6 +68,7 @@ final class LegendProfileTest extends TestCase
             'LoggedIn'        => true,
             'CanManageLegend' => false,
             'ViewerPersona'   => 'Wren',
+            'LegendMaxMemoryChars' => Legend::MAX_MEMORY_CHARS,
         ];
     }
 

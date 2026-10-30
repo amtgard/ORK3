@@ -20939,7 +20939,7 @@ window.orkEnsureGoogleMaps = (function() {
             yearEl.value = opts.yearValue || '';
             cancelBtn.style.display = '';
             confirmBtn.textContent = opts.confirmText;
-            confirmBtn.className = 'pn-btn ' + (opts.danger ? 'pn-legend-btn-danger' : 'pn-btn-primary');
+            confirmBtn.className = 'pn-btn ' + (opts.danger ? 'btn-danger-confirm' : 'pn-btn-primary');
             confirmBtn.style.display = '';
             confirmBtn.disabled = !!opts.startDisabled;
             overlay.classList.add('pn-open');

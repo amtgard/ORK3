@@ -21,19 +21,29 @@ class Model_Legend extends Model
         Legend::clearMemo();
     }
 
+    public function end_session_if_legend(object $session): bool
+    {
+        return Legend::endSessionIfLegend($session);
+    }
+
     public function may_manage(int $uid, int $mundaneId): bool
     {
         return Legend::mayManage($uid, $mundaneId);
     }
 
-    public function is_ork_admin(int $uid): bool
-    {
-        return Legend::isOrkAdmin($uid);
-    }
-
     public function blocks_edit(int $uid, int $mundaneId): bool
     {
         return Legend::blocksEdit($uid, $mundaneId);
+    }
+
+    public function may_move(int $uid, int $mundaneId): bool
+    {
+        return Legend::mayMove($uid, $mundaneId);
+    }
+
+    public function can_edit_admin(int $uid, int $mundaneId, int $parkId): bool
+    {
+        return Legend::canEditAdmin($uid, $mundaneId, $parkId);
     }
 
     public function profile_view(int $uid, int $mundaneId, int $parkId): array

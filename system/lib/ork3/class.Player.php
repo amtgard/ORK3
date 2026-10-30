@@ -2647,7 +2647,7 @@ class Player extends Ork3
 
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         // A Legend moves only by an ORK admin, whatever park authority the caller holds.
-        if (Legend::isLegend((int)$request['MundaneId']) && !Legend::isOrkAdmin((int)$mundane_id)) {
+        if (!Legend::mayMove((int)$mundane_id, (int)$request['MundaneId'])) {
             return NoAuthorization(Legend::REFUSED);
         }
         // Park-level authority over EITHER end is enough to move a player. The

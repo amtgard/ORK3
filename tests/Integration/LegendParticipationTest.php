@@ -330,6 +330,46 @@ final class LegendParticipationTest extends TestCase
         $this->assertSame('x', $this->fixture->value('unit_mundane', 'title', 'unit_mundane_id = ' . $legendRow));
     }
 
+    public function test_unit_member_calls_refused_on_an_active_legend_and_work_on_a_plain_player(): void
+    {
+        $unit = $this->fixture->addUnit();
+        $domain = new Unit();
+        $legendRow = $this->fixture->addUnitMember($unit, $this->legend);
+        $plainRow = $this->fixture->addUnitMember($unit, $this->player('plainunit'));
+        $active = fn (int $row) => $this->fixture->value('unit_mundane', 'active', 'unit_mundane_id = ' . $row);
+        $set = fn (int $row, string $a) => $domain->SetMember([
+            'Token' => $this->token, 'UnitMundaneId' => $row, 'Active' => $a, 'Role' => 'member', 'Title' => 'y',
+        ]);
+
+        $this->assertRefused($set($legendRow, 'Retired'));
+        $this->assertRefused($domain->RetireMember(['Token' => $this->token, 'UnitMundaneId' => $legendRow]));
+        $this->assertRefused($domain->RemoveMember(['Token' => $this->token, 'UnitMundaneId' => $legendRow, 'UnitId' => $unit]));
+        $this->assertSame('Active', $active($legendRow));
+        $this->assertSame(1, $this->fixture->count('unit_mundane', 'unit_mundane_id = ' . $legendRow));
+
+        $this->assertSame(0, $set($plainRow, 'Retired')['Status'], 'control: SetMember retires a plain player');
+        $this->assertSame('Retired', $active($plainRow));
+        $this->assertSame(0, $set($plainRow, 'Active')['Status']);
+        $this->assertSame(0, $domain->RetireMember(['Token' => $this->token, 'UnitMundaneId' => $plainRow])['Status'], 'control: RetireMember');
+        $this->assertSame(0, $domain->RemoveMember(['Token' => $this->token, 'UnitMundaneId' => $plainRow, 'UnitId' => $unit])['Status'], 'control: RemoveMember');
+        $this->assertSame(0, $this->fixture->count('unit_mundane', 'unit_mundane_id = ' . $plainRow));
+    }
+
+    public function test_may_move_and_can_edit_admin_gates(): void
+    {
+        $plain = $this->player('movable');
+        $officer = $this->fixture->addParkOfficer($this->park);
+
+        $this->assertTrue(Legend::mayMove($officer, $plain), 'anyone may move a plain player');
+        $this->assertFalse(Legend::mayMove($officer, $this->legend), 'a park officer may not move a Legend');
+        $this->assertTrue(Legend::mayMove($this->admin, $this->legend), 'an ORK admin may');
+
+        $this->assertTrue(Legend::canEditAdmin($officer, $plain, $this->park));
+        $this->assertFalse(Legend::canEditAdmin($officer, $this->legend, $this->park), 'park EDIT alone is gated on a Legend');
+        $this->assertTrue(Legend::canEditAdmin($this->admin, $this->legend, $this->park));
+        $this->assertFalse(Legend::canEditAdmin(0, $plain, $this->park), 'logged out');
+    }
+
     public function test_face_image_never_posted_for_a_legend(): void
     {
         $r = (new Player())->AddOneShotFaceImage(['Token' => $this->token, 'MundaneId' => $this->legend, 'Base64FaceImage' => 'x']);

@@ -265,8 +265,8 @@ class Unit extends Ork3
                 $this->members->clear();
                 $this->members->unit_mundane_id = $request['UnitMundaneId'];
                 $this->members->find();
-                // A Legend can't be revived; an already-active member keeps working.
-                if ($request['Active'] === 'Active' && $this->members->active !== 'Active'
+                // A Legend's active state is frozen; an unchanged save (role, title) still works.
+                if ($request['Active'] !== $this->members->active
                         && Legend::isLegend((int)$this->members->mundane_id)) {
                     return NoAuthorization(Legend::REFUSED);
                 }
@@ -303,6 +303,10 @@ class Unit extends Ork3
             $this->members->unit_mundane_id = $request['UnitMundaneId'];
             if (!$this->members->find()) {
                 return InvalidParameter();
+            }
+            // Spec: a Legend's unit memberships stay; nobody retires or removes one.
+            if (Legend::isLegend((int)$this->members->mundane_id)) {
+                return NoAuthorization(Legend::REFUSED);
             }
             $mundane_id = $this->members->mundane_id;
             $unit_id = $this->members->unit_id;
@@ -348,6 +352,10 @@ class Unit extends Ork3
             $this->members->unit_mundane_id = $request['UnitMundaneId'];
             if (!$this->members->find()) {
                 return InvalidParameter();
+            }
+            // Spec: a Legend's unit memberships stay; nobody retires or removes one.
+            if (Legend::isLegend((int)$this->members->mundane_id)) {
+                return NoAuthorization(Legend::REFUSED);
             }
             $mundane_id = $this->members->mundane_id;
             $unit_id = $this->members->unit_id;
