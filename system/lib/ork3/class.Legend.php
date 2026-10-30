@@ -23,9 +23,10 @@
  * The Memory Wall (memories(), addMemory(), removeMemory()) is its own section
  * below, after the conversion code.
  *
- * Not registered on Ork3::$Lib on purpose: the JSON gateway exposes every
- * public method of a $Lib class, and these take a caller uid, not a token.
- * Callers reach it through Model_Legend.
+ * startup.php instantiates every class in this directory, so Ork3::$Lib->legend
+ * exists. What keeps these methods, which take a caller uid and not a token, off
+ * the JSON gateway is the explicit class list in orkservice/Json/index.php, where
+ * Legend must never be added. Callers reach it through Model_Legend.
  */
 class Legend
 {
@@ -46,6 +47,9 @@ class Legend
         'qual_manager'         => ['qual_manager', 'qual_manager_id'],
         'bonus_credit_granter' => ['bonus_credit_granter', 'granter_id'],
     ];
+
+    /** When an occurrence (`cd`) ends. A zero or backwards event_end falls back to its start. */
+    private const EVENT_END_SQL = 'CASE WHEN cd.event_end >= cd.event_start THEN cd.event_end ELSE cd.event_start END';
 
     /** @var array<int,bool> per-request memo of isLegend() */
     private static $memo = [];
@@ -599,7 +603,8 @@ class Legend
 
     /**
      * What a conversion clears for this player, each item labelled well enough
-     * to restore it by hand. A seat's own authorization row isn't listed: it
+     * to restore it by hand. Event roles go until the event has ended, so an
+     * event under way doesn't keep offering them for check-in. A seat's own authorization row isn't listed: it
      * stays with the seat for the next officer. A Champion's or GMR's isn't part
      * of the seat (set_officer leaves it alone), so that one is listed and goes.
      *
@@ -618,7 +623,7 @@ class Legend
              FROM {$p}event_rsvp r
              JOIN {$p}event_calendardetail cd ON cd.event_calendardetail_id = r.event_calendardetail_id
              LEFT JOIN {$p}event e ON e.event_id = cd.event_id
-             WHERE r.mundane_id = {$mundaneId} AND cd.event_start > NOW()
+             WHERE r.mundane_id = {$mundaneId} AND " . self::EVENT_END_SQL . " > NOW()
              ORDER BY r.rsvp_id"
         ) as $r) {
             $add('rsvp', 'RSVP for ' . self::onDate((string) $r['name'], (string) $r['event_start']), $r['rsvp_id']);
@@ -628,7 +633,7 @@ class Legend
              FROM {$p}event_staff s
              JOIN {$p}event_calendardetail cd ON cd.event_calendardetail_id = s.event_calendardetail_id
              LEFT JOIN {$p}event e ON e.event_id = cd.event_id
-             WHERE s.mundane_id = {$mundaneId} AND cd.event_start > NOW()
+             WHERE s.mundane_id = {$mundaneId} AND " . self::EVENT_END_SQL . " > NOW()
              ORDER BY s.event_staff_id"
         ) as $r) {
             $role = trim((string) $r['role_name']) !== '' ? trim((string) $r['role_name']) : 'Staff';
@@ -640,7 +645,7 @@ class Legend
              JOIN {$p}event_schedule sc ON sc.event_schedule_id = l.event_schedule_id
              JOIN {$p}event_calendardetail cd ON cd.event_calendardetail_id = sc.event_calendardetail_id
              LEFT JOIN {$p}event e ON e.event_id = cd.event_id
-             WHERE l.mundane_id = {$mundaneId} AND cd.event_start > NOW()
+             WHERE l.mundane_id = {$mundaneId} AND " . self::EVENT_END_SQL . " > NOW()
              ORDER BY l.event_schedule_lead_id"
         ) as $r) {
             $add('schedule_lead', 'Lead of ' . $r['title'] . ' at ' . self::onDate((string) $r['name'], (string) $r['event_start']), $r['event_schedule_lead_id']);

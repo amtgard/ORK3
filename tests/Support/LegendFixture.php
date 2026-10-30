@@ -152,6 +152,31 @@ final class LegendFixture
         return $detailId;
     }
 
+    /** A published event that started yesterday and ends tomorrow: under way now. */
+    public function runningEvent(int $parkId, string $suffix = 'running'): int
+    {
+        $detailId = $this->futureEvent($parkId, $suffix);
+        $this->pdo->prepare(
+            'UPDATE ' . DB_PREFIX . 'event_calendardetail
+             SET event_start = NOW() - INTERVAL 1 DAY, event_end = NOW() + INTERVAL 1 DAY
+             WHERE event_calendardetail_id = ?'
+        )->execute([$detailId]);
+
+        return $detailId;
+    }
+
+    /** A future occurrence stored with no real end: legacy rows carry a zero date. */
+    public function futureEventWithZeroEnd(int $parkId, string $suffix = 'zeroend'): int
+    {
+        $detailId = $this->futureEvent($parkId, $suffix);
+        $this->pdo->exec("SET SESSION sql_mode = ''");
+        $this->pdo->prepare(
+            'UPDATE ' . DB_PREFIX . "event_calendardetail SET event_end = '0000-00-00 00:00:00' WHERE event_calendardetail_id = ?"
+        )->execute([$detailId]);
+
+        return $detailId;
+    }
+
     public function eventIdForDetail(int $detailId): int
     {
         return $this->scalar('SELECT event_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . $detailId);

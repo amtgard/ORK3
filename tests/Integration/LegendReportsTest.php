@@ -151,6 +151,19 @@ final class LegendReportsTest extends TestCase
         return ['award_id' => $awardId, 'kingdomaward_id' => $this->rf->insertKingdomAward($this->kingdom, $awardId, 'LRP crown ' . $awardId)];
     }
 
+    public function test_recent_park_attendees_excludes_legend(): void
+    {
+        $this->fx->addAttendance($this->park, $this->kingdom, $this->legend);
+        $this->fx->addAttendance($this->park, $this->kingdom, $this->living);
+
+        $r = (new Report())->RecentParkAttendees(['ParkId' => $this->park]);
+
+        $this->assertSame(0, $r['Status']['Status']);
+        $ids = $this->ids($r['Attendees']);
+        $this->assertContains($this->living, $ids);
+        $this->assertNotContains($this->legend, $ids, 'a Legend is never offered for sign-in');
+    }
+
     public function test_voting_eligibility_excludes_legend_and_never_prompts_reactivation(): void
     {
         foreach ([$this->legend, $this->living] as $who) {
@@ -285,6 +298,21 @@ final class LegendReportsTest extends TestCase
         $roster = (new Report())->GetPlayerRoster(['Type' => AUTH_UNIT, 'Id' => $unit])['Roster'];
         $this->assertSame(1, (int) $this->rowFor($roster, $this->legend)['IsLegend']);
         $this->assertSame(0, (int) $this->rowFor($roster, $this->living)['IsLegend']);
+    }
+
+    public function test_rsvp_list_flags_a_legend(): void
+    {
+        $detail = $this->fx->pastEvent($this->park);
+        $this->fx->addRsvp($detail, $this->legend);
+        $this->fx->addRsvp($detail, $this->living);
+        $admin = $this->fx->addOrkAdmin($this->park, 'rsvpadm');
+        $token = $this->fx->addSession($admin);
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $list = (new Model_Event())->get_rsvp_list($detail, $token);
+
+        $this->assertTrue($this->rowFor($list, $this->legend)['IsLegend']);
+        $this->assertFalse($this->rowFor($list, $this->living)['IsLegend']);
     }
 
     public function test_recommendations_flag_legend_and_retired_stays(): void

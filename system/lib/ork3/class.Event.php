@@ -427,7 +427,7 @@ class Event extends Ork3
         }
         $this->db->Clear();
         $r = $this->db->DataSet(
-            "SELECT m.mundane_id, m.persona, er.status, m.waivered, p.park_id, p.abbreviation AS park_abbr,
+            "SELECT m.mundane_id, m.persona, m.is_legend, er.status, m.waivered, p.park_id, p.abbreviation AS park_abbr,
 			        k.kingdom_id, k.abbreviation AS kingdom_abbr, la.class_id AS last_class_id, c.name AS last_class_name
 			 FROM " . DB_PREFIX . "event_rsvp er
 			 JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id
@@ -447,6 +447,7 @@ class Event extends Ork3
                 $list[] = [
                     'MundaneId' => (int)$r->mundane_id,
                     'Persona' => $r->persona,
+                    'IsLegend' => (bool)(int)$r->is_legend,
                     'Status' => $r->status,
                     'Waivered' => (bool)$r->waivered,
                     'KingdomId' => $r->kingdom_id,

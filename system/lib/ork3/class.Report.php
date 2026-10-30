@@ -3958,6 +3958,7 @@ class Report extends Ork3
 				  AND a.date >= DATE_SUB(NOW(), INTERVAL 90 DAY)
 				  AND a.mundane_id > 0
 				  AND m.mundane_id IS NOT NULL
+				  AND m.is_legend = 0
 				GROUP BY a.mundane_id, m.persona
 				ORDER BY m.persona";
         $r = $this->db->query($sql);

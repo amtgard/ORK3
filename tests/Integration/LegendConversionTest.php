@@ -195,6 +195,39 @@ final class LegendConversionTest extends TestCase
         $this->assertSame(1, $this->fixture->count('event_rsvp', 'rsvp_id = ' . $otherRsvp));
     }
 
+    public function test_convert_clears_roles_on_an_event_under_way(): void
+    {
+        $target = $this->player();
+        $running = $this->fixture->runningEvent($this->park);
+        $rsvp = $this->fixture->addRsvp($running, $target);
+        $staff = $this->fixture->addEventStaff($running, $target);
+        $lead = $this->fixture->addScheduleLead($running, $target);
+
+        $preview = Legend::preview($this->officer, $target);
+        $this->assertSame(['event_staff', 'rsvp', 'schedule_lead'], $this->typesOf($preview['Items']));
+        $r = Legend::convert($this->officer, $target, 2020);
+
+        $this->assertSame(0, $r['Status']);
+        $this->assertSame(0, $this->fixture->count('event_rsvp', 'rsvp_id = ' . $rsvp));
+        $this->assertSame(0, $this->fixture->count('event_staff', 'event_staff_id = ' . $staff));
+        $this->assertSame(0, $this->fixture->count('event_schedule_lead', 'event_schedule_lead_id = ' . $lead));
+    }
+
+    public function test_convert_treats_a_zero_end_date_as_ending_at_its_start(): void
+    {
+        $target = $this->player();
+        $zeroEnd = $this->fixture->futureEventWithZeroEnd($this->park);
+        $rsvp = $this->fixture->addRsvp($zeroEnd, $target);
+        $staff = $this->fixture->addEventStaff($zeroEnd, $target);
+        $lead = $this->fixture->addScheduleLead($zeroEnd, $target);
+
+        $this->assertSame(0, Legend::convert($this->officer, $target, 2020)['Status']);
+
+        $this->assertSame(0, $this->fixture->count('event_rsvp', 'rsvp_id = ' . $rsvp));
+        $this->assertSame(0, $this->fixture->count('event_staff', 'event_staff_id = ' . $staff));
+        $this->assertSame(0, $this->fixture->count('event_schedule_lead', 'event_schedule_lead_id = ' . $lead));
+    }
+
     public function test_convert_clears_future_staff_and_leads_keeps_past(): void
     {
         $target = $this->player();

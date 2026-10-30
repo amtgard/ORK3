@@ -51,9 +51,11 @@
  * source (a survey) is a category with source_type/source_id set, so "once per
  * survey" is the same rule.
  *
- * Not registered on Ork3::$Lib on purpose: the JSON gateway exposes every
- * public method of a $Lib class, and these take a caller uid, not a token.
- * Callers reach it through Model_BonusCredit.
+ * startup.php instantiates every class in this directory, so
+ * Ork3::$Lib->bonuscredit exists. What keeps these methods, which take a caller
+ * uid and not a token, off the JSON gateway is the explicit class list in
+ * orkservice/Json/index.php, where BonusCredit must never be added. Callers reach
+ * it through Model_BonusCredit.
  *
  * Envelope: ['Status' => 0, ...] ok; 1 bad request; 3 not authorized.
  */
