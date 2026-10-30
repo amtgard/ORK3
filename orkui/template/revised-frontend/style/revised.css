@@ -10961,39 +10961,12 @@ html[data-theme="dark"] .tn-ladder-peers { background: #1a202c; border-color: #2
     }
 }
 
-/* Legend (In Memoriam) pill: shown beside a deceased player in pickers and search.
-   Mirrored in default/style/orkui.css for pages that do not load this file. */
-.legend-pill {
-    display: inline-block;
-    padding: 0 6px;
-    border: 1px solid #c9a86a;
-    border-radius: 10px;
-    background: #f3e6cf;
-    color: #6b4a1f;
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 16px;
-    vertical-align: middle;
-    white-space: nowrap;
-}
-html[data-theme="dark"] .legend-pill {
-    background: #3a2e1c;
-    color: #e3c58a;
-    border-color: #8a6a35;
-}
-
 /* Legend profile: sepia photo, In Memoriam card, Memory Wall. `#theme_container` on the
    headings and the textarea is deliberate: orkui.css styles those elements globally and
    wins over a plain class selector, in dark mode especially. The same goes for the
    global justified <p>, hence text-align on every paragraph here. */
 #pn-hero.pn-legend .pn-avatar img {
     filter: sepia(.85) saturate(.75) contrast(.95) brightness(1.02);
-}
-.pn-badge.legend-pill {
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-size: 11px;
-    line-height: 1.4;
 }
 .pn-legend-card {
     margin: 0 0 20px;
@@ -11193,11 +11166,6 @@ a.pn-lg-login, a.pn-lg-login:visited {
     color: var(--ork-text-muted);
     font-size: 13px;
 }
-.pn-btn.pn-legend-btn-danger {
-    background: #c53030;
-    color: #fff;
-}
-.pn-btn.pn-legend-btn-danger:hover:not(:disabled) { background: #9b2c2c; }
 #pn-legend-admin .pn-detail-row { margin-bottom: 10px; }
 #theme_container #pn-legend-year,
 #pn-legend-year {
@@ -11216,26 +11184,16 @@ html[data-theme="dark"] .pn-lg-form {
     border-color: #5e4a2c;
     color: #e8dbc2;
 }
-html[data-theme="dark"] .pn-legend-rule { background: #b08d4f; }
-html[data-theme="dark"] #theme_container .pn-legend-card h4 {
-    background: none;
-    border: 0;
-    box-shadow: none;
-    color: #d8b878;
-}
-html[data-theme="dark"] #theme_container .pn-lg-form h4 {
-    background: none;
-    border: 0;
-    box-shadow: none;
-    color: #e8dbc2;
-}
+html[data-theme="dark"] #theme_container .pn-legend-card h4 { color: #d8b878; }
+html[data-theme="dark"] #theme_container .pn-lg-form h4 { color: #e8dbc2; }
 html[data-theme="dark"] .pn-tab-nav li[data-tab="memories"].pn-tab-active {
     color: #d8b878;
     border-bottom-color: #d8b878;
 }
 html[data-theme="dark"] .pn-tab-nav:has(li[data-tab="memories"].pn-tab-active) + .pn-active-tab-label { color: #d8b878; }
-html[data-theme="dark"] a.pn-lg-login,
-html[data-theme="dark"] a.pn-lg-login:visited { color: #d8b878; }
+html[data-theme="dark"] #theme_container a.pn-lg-login,
+html[data-theme="dark"] #theme_container a.pn-lg-login:visited,
+html[data-theme="dark"] #theme_container a.pn-lg-login:hover { color: #d8b878; }
 html[data-theme="dark"] #theme_container .pn-lg-form textarea {
     background: #231c11;
     border-color: #5e4a2c;
@@ -11256,6 +11214,8 @@ html[data-theme="dark"] .pn-legend-warnings { color: #f6c37a; }
 @media (max-width: 600px) {
     .pn-legend-card { padding: 14px 16px 15px; }
     .pn-legend-card p { font-size: 15px; }
+    .pn-lg-btn { min-height: 44px; }
+    a.pn-lg-login { display: inline-block; padding: 12px 0; }
     .pn-lg-remove { margin: -8px -8px 2px 8px; font-size: 13px; }
     .pn-lg-remove button { min-width: 44px; min-height: 44px; padding: 0 8px; }
     .pn-lg-remove-yes { margin: 0; }
