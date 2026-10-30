@@ -1021,6 +1021,8 @@ class Player extends Ork3
                     'Image' => $this->resolve_player_image_url($this->mundane->mundane_id, $this->mundane->modified),
                     'PenaltyBox' => $this->mundane->penalty_box,
                     'Active' => $this->mundane->active,
+                    'IsLegend' => (int)$this->mundane->is_legend,
+                    'LegendYear' => (int)$this->mundane->legend_year,
                     'PasswordExpires' => $this->mundane->password_expires,
                     //'ParkMemberSince' => date('d/m/Y', strtotime($this->mundane->park_member_since))
                     'ParkMemberSince' => $this->mundane->park_member_since,
