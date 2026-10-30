@@ -291,14 +291,14 @@ class Report extends Ork3
         $masters_clause = "or a.award_id IN (select aw.award_id from " . DB_PREFIX . "award aw where aw.peerage = 'Paragon')";
         $attendance = "(SELECT max(att.date) FROM " . DB_PREFIX . "attendance att WHERE att.mundane_id = m.mundane_id) as last_attended";
 
-        $sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank, m.suspended, $attendance
+        $sql = "select distinct p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, a.peerage, ifnull(ka.name, a.name) as award_name, m.persona, ma.date, m.mundane_id, ma.rank, m.suspended, m.is_legend, $attendance
 					from " . DB_PREFIX . "awards ma
 						left join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = ma.kingdomaward_id
 							left join " . DB_PREFIX . "award a on a.award_id = ka.award_id
 								left join " . DB_PREFIX . "mundane m on m.mundane_id = ma.mundane_id
 									left join " . DB_PREFIX . "park p on p.park_id = m.park_id
 									left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
-					where (0 $masters_clause) and m.active = 1 $location_clause
+					where (0 $masters_clause) and (m.active = 1 OR m.is_legend = 1) $location_clause
 					order by $order a.peerage, a.name, m.persona
 			";
         logtrace("ClassMasters", $sql);
@@ -319,7 +319,8 @@ class Report extends Ork3
                         'Rank' => $r->rank,
                         'AwardName' => $r->award_name,
                         'LastAttended' => $r->last_attended,
-                        'Suspended' => (int)$r->suspended
+                        'Suspended' => (int)$r->suspended,
+                        'IsLegend' => (int)$r->is_legend
                     );
             }
             $response['Status'] = Success();
@@ -373,7 +374,7 @@ class Report extends Ork3
                     group by m.mundane_id, a.award_id) kterms
                   group by mundane_id, peerage) kingdom_terms
                 on m.mundane_id = kingdom_terms.mundane_id
-              where m.kingdom_id IN ($kidList) and (ducal_terms.mundane_id is not null or kingdom_terms.mundane_id is not null)
+              where m.kingdom_id IN ($kidList) and m.is_legend = 0 and (ducal_terms.mundane_id is not null or kingdom_terms.mundane_id is not null)
                 and (kingdom_points >= 4 or (kingdom_points + ducal_points) >= 6 or ducal_points >= 6)
                 order by m.mundane_id";
         logtrace("CrownQualedPlayerAwards", $sql);
@@ -452,7 +453,7 @@ class Report extends Ork3
               k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id,
               COALESCE(alias.peerage, a.peerage) as peerage,
               COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) as award_name,
-              m.persona, ma.date, m.mundane_id, ma.rank, m.suspended,
+              m.persona, ma.date, m.mundane_id, ma.rank, m.suspended, m.is_legend,
               bwm.mundane_id as by_whom_id, bwm.persona as by_whom_persona,
               ma.awards_id
 					from " . DB_PREFIX . "awards ma
@@ -463,7 +464,7 @@ class Report extends Ork3
 								left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = ma.by_whom_id
 									left join " . DB_PREFIX . "park p on p.park_id = m.park_id
 									left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
-					where (0 $knights_clause $masters_clause $ladder_clause $title_clause) and m.active = 1 $location_clause $awards_clause
+					where (0 $knights_clause $masters_clause $ladder_clause $title_clause) and (m.active = 1 OR m.is_legend = 1) $location_clause $awards_clause
 					order by $order COALESCE(alias.peerage, a.peerage), COALESCE(alias.name, a.name), m.persona
 			";
 
@@ -487,7 +488,8 @@ class Report extends Ork3
                         'Peerage' => $r->peerage,
                         'EnteredBy' => $r->by_whom_persona,
                         'EnteredById' => $r->by_whom_id,
-                        'Suspended' => (int)$r->suspended
+                        'Suspended' => (int)$r->suspended,
+                        'IsLegend' => (int)$r->is_legend
                     );
             }
             $response['Status'] = Success();
@@ -522,7 +524,7 @@ class Report extends Ork3
         $sql = "select
 				distinct p.park_id, p.name as park_name,
 				k.kingdom_id, k.name as kingdom_name,
-				m.persona, m.mundane_id,
+				m.persona, m.mundane_id, m.is_legend,
 				ma.custom_name, ma.date, ma.note,
 				gbm.mundane_id as given_by_id, gbm.persona as given_by_persona
 			from " . DB_PREFIX . "awards ma
@@ -536,13 +538,13 @@ class Report extends Ork3
 				and ma.custom_name != ''
 				and (ma.revoked = 0 or ma.revoked is null)
 				and (a.is_ladder = 0 or a.is_ladder is null)
-				and m.active = 1
+				and (m.active = 1 OR m.is_legend = 1)
 				$location_clause
-				and exists (
+				and (m.is_legend = 1 OR exists (
 					select 1 from " . DB_PREFIX . "attendance att
 					where att.mundane_id = m.mundane_id
 						and att.date > '$past_year'
-				)
+				))
 			order by $order p.name, m.persona, ma.date
 		";
 
@@ -563,7 +565,8 @@ class Report extends Ork3
                     'ParkId' => $r->park_id,
                     'KingdomId' => $r->kingdom_id,
                     'ParkName' => $r->park_name,
-                    'KingdomName' => $r->kingdom_name
+                    'KingdomName' => $r->kingdom_name,
+                    'IsLegend' => (int)$r->is_legend
                 );
             }
             $response['Status'] = Success();
@@ -622,6 +625,8 @@ class Report extends Ork3
                     // already includes MundaneId, so every member shares it — no
                     // aggregation needed, just carry it through to the template layer.
                     'IsRetired'      => !empty($rec['IsRetired']),
+                    // A Legend is also inactive; the UI shows the Legend pill instead of "retired".
+                    'IsLegend'       => !empty($rec['IsLegend']),
                     'AlreadyHas'     => !empty($rec['AlreadyHas']),
                     // Why AlreadyHas is set, not just that it is. A Master peerage that
                     // supersedes the order is not the same thing as having been granted
@@ -775,6 +780,7 @@ class Report extends Ork3
 			m.park_id,
 			m.kingdom_id,
 			m.active as m_active,
+			m.is_legend as m_is_legend,
 			p.name as park_name,
 			k.name as kingdom_name,
 			recs.rank,
@@ -860,6 +866,7 @@ class Report extends Ork3
                     // precisely the awards given to players who have stopped playing, so
                     // these rows stay visible; the flag lets the UI badge them.
                     'm_active'           => (int)$r->m_active,
+                    'm_is_legend'        => (int)$r->m_is_legend,
                     'park_name'          => $r->park_name,
                     'kingdom_name'       => $r->kingdom_name,
                     'kacount'            => (int)$r->kacount,
@@ -1010,6 +1017,7 @@ class Report extends Ork3
                     'ParkName' => $row->park_name,
                     'KingdomName' => $row->kingdom_name,
                     'IsRetired' => ((int)$row->m_active !== 1),
+                    'IsLegend' => ((int)$row->m_is_legend === 1),
                     'AlreadyHas' => $alreadyHas,
                     'CoveredByMaster' => $coveredByMaster,
                     'CurrentRank' => $alreadyHas ? ($row->player_ka_rank ?: null) : null,
@@ -2260,8 +2268,13 @@ class Report extends Ork3
             array(
                 'm.mundane_id','m.persona','m.park_id','m.kingdom_id','m.restricted','m.waivered','m.given_name', 'm.surname', 'm.other_name',
                 'm.suspended', 'm.suspended_at', 'm.suspended_until', 'm.suspension', 'm.suspension_propagates', 'suspended_by.persona suspendator', 'suspended_by.mundane_id suspended_by_id',
-                'p.name as park_name','k.name as kingdom_name','m.penalty_box')
+                'p.name as park_name','k.name as kingdom_name','m.penalty_box','m.is_legend')
         );
+        // A Legend is not a current player. A unit roster is a record of who belonged, so it
+        // keeps them (flagged); every other roster drops them unless the caller opts in.
+        if (AUTH_UNIT != $request['Type'] && !valid_id($request['IncludeLegend'])) {
+            $restrict_clause[] = ' m.is_legend = 0 ';
+        }
         if (true == $request['Active']) {
             $restrict_clause[] = ' m.active = 1 ';
         }
@@ -2383,6 +2396,7 @@ class Report extends Ork3
                                 'UnitRole' => $r->unit_role,
                                 'UnitTitle' => $r->unit_title,
                                 'PenaltyBox' => $r->penalty_box,
+                                'IsLegend' => (int)$r->is_legend,
                                 'LastSignIn' => $r->last_sign_in,
                                 'Displayable' => $restricted_access || $r->restricted == 0
                             );
@@ -3063,7 +3077,7 @@ class Report extends Ork3
         							from " . DB_PREFIX . "attendance a
         								left join " . DB_PREFIX . "mundane m on a.mundane_id = m.mundane_id
         							where
-												m.suspended = 0 and date > '$per_period' $park_comparator $activity_location $waiver_clause
+												m.suspended = 0 and m.is_legend = 0 and date > '$per_period' $park_comparator $activity_location $waiver_clause
         							group by date_week3, date_year, mundane_id) attendance_summary
         					left join " . DB_PREFIX . "mundane mundane on mundane.mundane_id = attendance_summary.mundane_id
         						left join " . DB_PREFIX . "kingdom kingdom on kingdom.kingdom_id = mundane.kingdom_id
@@ -3171,6 +3185,7 @@ class Report extends Ork3
 						left join " . DB_PREFIX . "park p on m.park_id = p.park_id
 					where
 						m.suspended = 0 
+						and m.is_legend = 0
 						and m.reeve_qualified = 1
 						and m.reeve_qualified_until >= CAST(CURRENT_TIMESTAMP AS DATE) 
 						$where
@@ -3215,6 +3230,7 @@ class Report extends Ork3
 						left join " . DB_PREFIX . "park p on m.park_id = p.park_id
 					where
 						m.suspended = 0 
+						and m.is_legend = 0
 						and m.corpora_qualified = 1
 						and m.corpora_qualified_until >= CAST(CURRENT_TIMESTAMP AS DATE) 
 						$where
@@ -3298,6 +3314,7 @@ class Report extends Ork3
 			left join " . DB_PREFIX . "park p on d.park_id = p.park_id
 			where 
 				d.revoked = 0
+				AND m.is_legend = 0
 				AND (d.dues_until >= CAST(CURRENT_TIMESTAMP AS DATE) OR d.dues_for_life = 1)";
         $sql .= $where;
         $sql .= "  group by d.mundane_id order by m.kingdom_id ASC, m.park_id ASC, m.persona ASC, d.dues_until DESC";
@@ -4288,7 +4305,7 @@ class Report extends Ork3
 					AND a.date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
 				LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
 				LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
-			WHERE m.active = 0 AND m.suspended = 0 AND m.persona IS NOT NULL AND m.persona != '' $location
+			WHERE m.active = 0 AND m.is_legend = 0 AND m.suspended = 0 AND m.persona IS NOT NULL AND m.persona != '' $location
 			GROUP BY m.mundane_id
 			ORDER BY p.name, m.persona";
 
@@ -4322,7 +4339,7 @@ class Report extends Ork3
 			FROM " . DB_PREFIX . "mundane m
 				LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
 				LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
-			WHERE m.active = 1 AND m.suspended = 0 AND m.persona IS NOT NULL AND m.persona != '' $location
+			WHERE m.active = 1 AND m.is_legend = 0 AND m.suspended = 0 AND m.persona IS NOT NULL AND m.persona != '' $location
 				AND (m.park_member_since IS NULL OR m.park_member_since < DATE_SUB(CURDATE(), INTERVAL 24 MONTH))
 				AND NOT EXISTS (
 					SELECT 1 FROM " . DB_PREFIX . "attendance a
@@ -4743,6 +4760,7 @@ class Report extends Ork3
 				$event_count_join
 			WHERE m.kingdom_id = $kingdom_id
 			  AND m.active = 1
+			  AND m.is_legend = 0
 			  AND p.active = 'Active'
 			  $park_clause
 			  $mundane_clause
@@ -8675,7 +8693,7 @@ class Report extends Ork3
         // "award_id = 0": 12 of the 25 point at award_id 94 ("Custom Award"), so
         // testing award_id would file Order of the Sharpshooter and friends under
         // column 94 -- which is not even a column here, so they would vanish again.
-        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name,
+        $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, m.is_legend, p.park_id, p.name AS park_name,
                            {$pseudoCaseSql} AS col_key,
                            MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count
                     FROM " . DB_PREFIX . 'mundane m
@@ -8683,7 +8701,7 @@ class Report extends Ork3
                     JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
                     JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
                     LEFT JOIN ' . DB_PREFIX . "award a ON a.award_id = ka.award_id
-                    WHERE m.active = 1
+                    WHERE (m.active = 1 OR m.is_legend = 1)
                       AND (
                             (a.is_ladder = 1 AND a.award_id IN ({$realIdList}))
                          OR ka.kingdomaward_id IN ({$pseudoIdList})
@@ -8712,6 +8730,7 @@ class Report extends Ork3
                         'ParkId' => (int) $dataResult->park_id,
                         'ParkName' => $dataResult->park_name ?? '',
                         'Suspended' => (int) $dataResult->suspended,
+                        'IsLegend' => (int) $dataResult->is_legend,
                         'Awards' => [],
                     ];
                 }

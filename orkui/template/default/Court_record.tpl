@@ -656,7 +656,7 @@ html[data-theme="dark"] .cp-rec-cite-status.cp-rec-cite-status-error { color: #f
                 </span>
                 <span class="cp-rec-c cp-rec-c-recip" data-tip="<?= htmlspecialchars($aw['Persona'] ?? '') ?>">
                     <span class="cp-rec-c-label">Recipient</span>
-                    <?= htmlspecialchars($aw['Persona'] ?? '') ?><?php if (!empty($aw['ParkAbbrev'])): ?> <span class="cp-rec-park"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?>
+                    <?= htmlspecialchars($aw['Persona'] ?? '') ?><?php if (!empty($aw['IsLegend'])): ?> <span class="legend-pill">Legend</span><?php endif; ?><?php if (!empty($aw['ParkAbbrev'])): ?> <span class="cp-rec-park"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?>
                 </span>
                 <span class="cp-rec-c cp-rec-c-award" data-tip="<?= htmlspecialchars($aw['AwardName'] ?? '') ?>">
                     <span class="cp-rec-c-label">Award</span>
@@ -2000,7 +2000,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
             '<button type="button" class="cp-rec-seg-btn cp-rec-seg-skipped" aria-pressed="false" onclick="cpRecMark(' + caid + ',\'skipped\')">Skipped</button>' +
             '<button type="button" class="cp-rec-seg-btn cp-rec-seg-none" aria-pressed="true" onclick="cpRecMark(' + caid + ',\'none\')" data-tip="Clear this mark">&mdash;</button>' +
             '</span>';
-        html += '<span class="cp-rec-c cp-rec-c-recip" data-tip="' + esc(aw.Persona || '') + '"><span class="cp-rec-c-label">Recipient</span>' + esc(aw.Persona || '') +
+        html += '<span class="cp-rec-c cp-rec-c-recip" data-tip="' + esc(aw.Persona || '') + '"><span class="cp-rec-c-label">Recipient</span>' + esc(aw.Persona || '') + (aw.IsLegend ? ' <span class="legend-pill">Legend</span>' : '') +
             (aw.ParkAbbrev ? ' <span class="cp-rec-park">' + esc(aw.ParkAbbrev) + '</span>' : '') + '</span>';
         html += '<span class="cp-rec-c cp-rec-c-award" data-tip="' + esc(aw.AwardName || '') + '"><span class="cp-rec-c-label">Award</span>' + esc(aw.AwardName || '') + '</span>';
 
@@ -2058,6 +2058,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
             CourtAwardId: aw.CourtAwardId,
             MundaneId: aw.MundaneId,
             Persona: aw.Persona,
+            IsLegend: !!aw.IsLegend,
             ParkAbbrev: aw.ParkAbbrev || '',
             KingdomAwardId: aw.KingdomAwardId,
             AwardName: aw.AwardName,

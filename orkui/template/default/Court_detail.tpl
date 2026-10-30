@@ -1659,7 +1659,7 @@ $_total_awards = count($courtAwards ?? []);
                 </div>
                 <div class="cp-cell cp-cell-num"><?= $_rowIndex ?></div>
                 <div class="cp-cell cp-cell-recipient cp-award-name">
-                    <span class="cp-recipient-name"><?= htmlspecialchars($aw['Persona']) ?></span>
+                    <span class="cp-recipient-name"><?= htmlspecialchars($aw['Persona']) ?></span><?php if (!empty($aw['IsLegend'])): ?> <span class="legend-pill">Legend</span><?php endif; ?>
                     <?php if (!empty($aw['ParkAbbrev'])): ?><span class="cp-award-park"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?>
                     <?php if (!empty($aw['Notes'])): ?><button class="cp-note-btn" data-note="<?= htmlspecialchars($aw['Notes']) ?>" onclick="event.stopPropagation();cpShowNote(this)" data-tip="View note" aria-label="View internal note"><i class="fas fa-comment-alt"></i></button><?php endif; ?>
                 </div>
@@ -1842,7 +1842,7 @@ $_total_awards = count($courtAwards ?? []);
                         <?php foreach ($aw['Artisans'] as $art): ?>
                         <div class="cp-artisan-row" id="cp-art-<?= (int)$art['CourtAwardArtisanId'] ?>">
                             <i class="fas fa-paint-brush" style="color:#9f7aea"></i>
-                            <strong><?= htmlspecialchars($art['Persona']) ?></strong>
+                            <strong><?= htmlspecialchars($art['Persona']) ?></strong><?php if (!empty($art['IsLegend'])): ?> <span class="legend-pill">Legend</span><?php endif; ?>
                             <?php if ($art['Contribution']): ?>
                             <span style="color:#718096">— <?= htmlspecialchars($art['Contribution']) ?></span>
                             <?php endif; ?>
@@ -1982,7 +1982,7 @@ $_total_awards = count($courtAwards ?? []);
                     <div class="cp-rm-avatar" style="background:<?= $avatarBg ?>"><?= htmlspecialchars($initial) ?></div>
                     <div class="cp-rm-main">
                         <div class="cp-rm-head">
-                            <span class="cp-rm-persona"><?= htmlspecialchars($rec['Persona']) ?></span>
+                            <span class="cp-rm-persona"><?= htmlspecialchars($rec['Persona']) ?></span><?php if (!empty($rec['IsLegend'])): ?> <span class="legend-pill">Legend</span><?php endif; ?>
                             <?php if (!empty($rec['ParkAbbrev'])): ?><span class="cp-rm-park"><?= htmlspecialchars($rec['ParkAbbrev']) ?></span><?php endif; ?>
                             <span class="cp-rm-sep">&middot;</span>
                             <span class="cp-rm-award" data-tip="<?= htmlspecialchars($rec['AwardName']) ?>"><?= htmlspecialchars($rec['AwardName']) ?></span>
@@ -4373,7 +4373,7 @@ $_total_awards = count($courtAwards ?? []);
             '</div></div>' +
             '<div class="cp-cell cp-cell-num"></div>' +
             '<div class="cp-cell cp-cell-recipient cp-award-name">' +
-                '<span class="cp-recipient-name">' + esc(aw.Persona) + '</span>' +
+                '<span class="cp-recipient-name">' + esc(aw.Persona) + '</span>' + (aw.IsLegend ? ' <span class="legend-pill">Legend</span>' : '') +
                 (aw.ParkAbbrev ? '<span class="cp-award-park">' + esc(aw.ParkAbbrev) + '</span>' : '') +
                 noteBtn +
             '</div>' +
@@ -4625,7 +4625,7 @@ $_total_awards = count($courtAwards ?? []);
                 var a   = d.artisan;
                 var row = '<div class="cp-artisan-row" id="cp-art-' + a.CourtAwardArtisanId + '">' +
                     '<i class="fas fa-paint-brush" style="color:#9f7aea"></i>' +
-                    '<strong>' + esc(a.Persona) + '</strong>' +
+                    '<strong>' + esc(a.Persona) + '</strong>' + (a.IsLegend ? ' <span class="legend-pill">Legend</span>' : '') +
                     (a.Contribution ? '<span style="color:#718096">— ' + esc(a.Contribution) + '</span>' : '') +
                     '<button class="cp-btn-danger-sm" onclick="cpRemoveArtisan(' + a.CourtAwardArtisanId + ')"><i class="fas fa-times"></i></button>' +
                     '</div>';

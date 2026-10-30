@@ -789,6 +789,7 @@ class Court
         $award_name  = '';
         $is_ladder   = false;
         $is_title    = false;
+        $is_legend   = false;
         $rec_reason  = '';
         $rec_hidden  = false;
 
@@ -796,7 +797,7 @@ class Court
             // Fetch persona + award_name for response
             $this->db->Clear();
             $info = $this->db->DataSet(
-                'SELECT m.persona, p.abbreviation AS park_abbrev, IFNULL(ka.name, a.name) AS award_name,
+                'SELECT m.persona, m.is_legend, p.abbreviation AS park_abbrev, IFNULL(ka.name, a.name) AS award_name,
                         ' . self::sqlEffectiveIsLadder() . ' AS is_ladder,
                         ' . self::SQL_EFFECTIVE_IS_TITLE . ' AS is_title
                  FROM ' . DB_PREFIX . 'mundane m
@@ -808,6 +809,7 @@ class Court
             );
             if ($info && $info->Next()) {
                 $persona     = $info->persona;
+                $is_legend   = (int)$info->is_legend === 1;
                 $park_abbrev = $info->park_abbrev ?? '';
                 $award_name  = $info->award_name;
                 $is_ladder   = (bool)(int)$info->is_ladder;
@@ -835,6 +837,7 @@ class Court
             'CourtAwardId'      => $court_award_id,
             'MundaneId'         => $mundane_id,
             'Persona'           => $persona,
+            'IsLegend'          => $is_legend,
             'ParkAbbrev'        => $park_abbrev,
             'KingdomAwardId'    => $kingdomaward_id,
             'AwardName'         => $award_name,
@@ -2680,7 +2683,7 @@ class Court
                     ca.scroll_maker_id, ca.regalia_maker_id, ca.row_version,
                     ca.given_by_mundane_id, gb.persona AS given_by_persona,
                     sm.persona AS scroll_maker_persona, rm.persona AS regalia_maker_persona,
-                    m.persona, p.abbreviation AS park_abbrev,
+                    m.persona, m.is_legend, p.abbreviation AS park_abbrev,
                     IFNULL(ka.name, a.name) AS award_name, a.peerage,
                     ' . self::sqlEffectiveIsLadder() . ' AS is_ladder,
                     ' . self::SQL_EFFECTIVE_IS_TITLE . ' AS is_title,
@@ -2707,6 +2710,7 @@ class Court
                     'CourtAwardId'      => (int)$rs->court_award_id,
                     'MundaneId'         => (int)$rs->mundane_id,
                     'Persona'           => $rs->persona,
+                    'IsLegend'          => (int)$rs->is_legend === 1,
                     'ParkAbbrev'        => $rs->park_abbrev ?? '',
                     'KingdomAwardId'    => (int)$rs->kingdomaward_id,
                     // Base catalog id, so the Grant modal can look up what the
@@ -2756,7 +2760,7 @@ class Court
             $this->db->Clear();
             $ars = $this->db->DataSet(
                 'SELECT caa.court_award_artisan_id, caa.court_award_id,
-                        caa.mundane_id, caa.contribution, m.persona
+                        caa.mundane_id, caa.contribution, m.persona, m.is_legend
                  FROM ' . DB_PREFIX . 'court_award_artisan caa
                  LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = caa.mundane_id
                  WHERE caa.court_award_id IN (' . $ids . ')
@@ -2770,6 +2774,7 @@ class Court
                             'CourtAwardArtisanId' => (int)$ars->court_award_artisan_id,
                             'MundaneId'           => (int)$ars->mundane_id,
                             'Persona'             => $ars->persona,
+                            'IsLegend'            => (int)$ars->is_legend === 1,
                             'Contribution'        => $ars->contribution,
                         ];
                     }
@@ -2887,6 +2892,7 @@ class Court
                 'RecommendationsId' => $rid,
                 'MundaneId'         => (int)$r['MundaneId'],
                 'Persona'           => $r['Persona'],
+                'IsLegend'          => !empty($r['IsLegend']),
                 'KingdomAwardId'    => (int)$r['KingdomAwardId'],
                 'AwardName'         => $r['AwardName'],
                 'IsLadder'          => (int)($r['Rank'] ?? 0) > 0,  // proxy: only used for "Rank N" suffix display

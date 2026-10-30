@@ -715,7 +715,8 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 							style="color:var(--ork-link);text-decoration:none;font-weight:500;">
 							<?=htmlspecialchars($_persona)?>
 						</a>
-						<?php if (!$_is_active && !empty($_last_signin)): ?>
+						<?php if (!empty($_m['IsLegend'])): ?><span class="legend-pill">Legend</span><?php endif; ?>
+						<?php if (!$_is_active && !empty($_last_signin) && empty($_m['IsLegend'])): ?>
 						<span style="font-size:10px;color:var(--ork-text-lighter);margin-left:4px;">(inactive)</span>
 						<?php endif; ?>
 					</td>

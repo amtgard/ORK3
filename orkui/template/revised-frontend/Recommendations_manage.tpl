@@ -1243,7 +1243,8 @@ function rmOpenGrantModal(rec, tr, courts) {
     // just the row badge the officer scrolled past. Memorial honors are legitimate —
     // this states the fact, it does not block.
     rmGid('rm-grant-sub').textContent = 'Grant ' + (rec.AwardName || 'this award') + rankTxt + ' to “' + (rec.Persona || '') + '”.'
-        + (rec.IsRetired ? ' This recipient is retired or deceased in the ORK — confirm this is an intended memorial honor.' : '');
+        + (rec.IsLegend ? ' This recipient is a Legend of Amtgard, so this honor would be posthumous — confirm that is intended.'
+            : (rec.IsRetired ? ' This recipient is retired or deceased in the ORK — confirm this is an intended memorial honor.' : ''));
     rmGrantErr('');
     rmSetGrantDate(rmTodayYMD());
     rmGid('rm-grant-givenby').value = RmConfig.userName || '';
@@ -1520,13 +1521,18 @@ function rmOpenCourtModal(targets) {
     rmCourtTargets = targets;
     // Same retired signal as the Grant modal: staging a memorial honor on a live
     // court agenda is legitimate, but the officer must be told at the moment of it.
-    var retired = targets.filter(function (t) { return t && t.IsRetired; });
+    var legends = targets.filter(function (t) { return t && t.IsLegend; });
+    var retired = targets.filter(function (t) { return t && t.IsRetired && !t.IsLegend; });
+    var legTxt = !legends.length ? ''
+        : (legends.length === 1
+            ? ' “' + (legends[0].Persona || 'One recipient') + '” is a Legend of Amtgard, so this honor would be posthumous — confirm that is intended.'
+            : ' ' + legends.length + ' of these recipients are Legends of Amtgard, so these honors would be posthumous — confirm that is intended.');
     var retTxt = !retired.length ? ''
         : (retired.length === 1
             ? ' “' + (retired[0].Persona || 'One recipient') + '” is retired or deceased in the ORK — confirm this is an intended memorial honor.'
             : ' ' + retired.length + ' of these recipients are retired or deceased in the ORK — confirm these are intended memorial honors.');
     document.getElementById('rm-court-sub').textContent = (targets.length === 1
-        ? 'Adding 1 recommendation.' : 'Adding ' + targets.length + ' recommendations.') + retTxt;
+        ? 'Adding 1 recommendation.' : 'Adding ' + targets.length + ' recommendations.') + legTxt + retTxt;
     document.getElementById('rm-court-overlay').hidden = false;
     // Same shared trap as the Grant modal: Escape, Tab wrapping, focus restore.
     rmCourtRelease = rmDialogTrap(document.getElementById('rm-court-overlay'), { onEscape: rmCloseCourtModal });
