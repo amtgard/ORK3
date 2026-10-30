@@ -51,7 +51,7 @@ The feature fails, even if it technically works, if any of these happen:
 - Kingdom officers and ORK admins can edit the profile. Park officers can't.
 - Only ORK admins can move them between parks or kingdoms, and they don't appear in move searches for anyone else.
 - Login is blocked.
-- Future RSVPs are removed.
+- RSVPs for events that haven't ended are removed.
 
 ### Profile
 - **Photo:** the profile picture gets a sepia overlay.
@@ -73,7 +73,7 @@ The feature fails, even if it technically works, if any of these happen:
 - Award and title reports keep Legends, with a Legend marker.
 
 ### Cleared at conversion
-- Future RSVPs, officer seats, event staff roles, permission grants and non-artisan Court Planner roles such as recorder.
+- RSVPs for events that haven't ended, officer seats, event staff roles, permission grants and non-artisan Court Planner roles such as recorder.
 
 ### Undo
 - Kingdom officers and ORK admins can remove Legend status.
@@ -151,8 +151,8 @@ The gate applies to:
 
 ### Clearing at conversion
 Use existing vacate and removal paths where they exist, and record each item in the audit snapshot:
-- Future `ork_event_rsvp` rows. Past rows stay.
-- Staff, lead and grant roles on future events.
+- `ork_event_rsvp` rows for events that haven't ended. Past rows stay.
+- Staff, lead and grant roles on events that haven't ended.
 - Officer seats and `ork_authorization` rows.
 - Registrations for tournaments that haven't started.
 - Court Planner recorder seats and other non-award, non-artisan roles.
