@@ -375,7 +375,10 @@ class Authorization extends Ork3
 					Authorization::SaltPassword($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']), $this->mundane->password_expires);
 				}
 				if (Authorization::KeyExists($this->mundane->password_salt, strtoupper(trim($request['UserName'])) . trim($request['Password']))) {
-					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1 || $this->mundane->is_legend == 1) {
+					if ($this->mundane->is_legend == 1) {
+						$response['Status'] = NoAuthorization(Legend::LOGIN_REFUSED);
+						$response['Refusal'] = Legend::LOGIN_REFUSED;
+					} else if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
 						// jsork (and mORK, which embeds it) self-identifies via a
