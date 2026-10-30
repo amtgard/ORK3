@@ -8,17 +8,24 @@
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-10-09');
+    define('WHATS_NEW_VERSION', '2026-10-30');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
 if (!defined('ORK_VERSION')) {
-    define('ORK_VERSION', '3.5.6 Crown');
+    define('ORK_VERSION', '3.5.7 Legend');
 }
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
+    ['version' => '3.5.7 Legend', 'date' => '2026-10-30', 'items' => [
+        ['icon' => 'fas fa-dove', 'title' => 'Remembering Our Legends', 'body' => 'When a member of our community passes away, a kingdom officer can now mark them as a Legend. Their profile becomes a memorial: a gentle In Memoriam card shows the year they passed, and their photo is softened to sepia. Their awards, titles, attendance and history stay exactly as they earned them.'],
+        ['icon' => 'fas fa-comments', 'title' => 'The Memory Wall', 'body' => 'Every Legend\'s profile opens to a Memory Wall, where friends, family and fellow players can leave a few words in remembrance. Please be kind and respectful. Kingdom officers can remove anything that does not belong.'],
+        ['icon' => 'fas fa-award', 'title' => 'Honors Can Still Be Given', 'body' => 'A Legend can still be recommended for a posthumous award from their profile, and they stay on award and title lists with a Legend marker so their honors are never lost. They no longer appear in attendance searches or current-player lists, and their login is closed.'],
+        ['icon' => 'fas fa-undo', 'title' => 'If It Was a Mistake', 'notes_only' => true, 'body' => 'Kingdom officers and ORK admins can remove Legend status. Sign-in, searches and normal editing return, and the officer sees a list of what was cleared, such as officer seats and future RSVPs, so it can be restored by hand. The Memory Wall is hidden rather than deleted.'],
+        ['icon' => 'fas fa-file-csv', 'title' => 'Also in Legend', 'notes_only' => true, 'body' => 'The Recommendations CSV export gained a Legend column, so officers can tell at a glance which recipients would be receiving a posthumous honor.'],
+    ]],
     ['version' => '3.5.6 Crown', 'date' => '2026-10-09', 'items' => [
         ['icon' => 'fas fa-gavel', 'title' => 'Plan Your Court in the ORK', 'body' => 'Monarchs, Regents, Prime Ministers and kingdom or park editors can now plan a court before it is held. Open Court Planner under Admin Tasks on your kingdom or park page, pull awards from pending recommendations or add them by hand, and drag them into running order.'],
         ['icon' => 'fas fa-bullhorn', 'title' => 'Run It Live, or From Paper', 'body' => 'Publish the court and work it your way. Run at Court lets you mark each award from your phone as it is called. Or print the packet — an order of court for the herald, a record sheet and a prep sheet — and type it in afterwards on the Record Court screen. Nothing reaches a player\'s record until you press Complete Court.'],

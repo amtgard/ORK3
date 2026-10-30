@@ -3589,8 +3589,8 @@ class Court
             }
 
             try {
-                Ork3::$Lib->notification->Add($uid, 'court_awaiting_record', $message, $link);
-                $sent++;
+                // Add() returns 0 for a Legend, who is skipped, so only count real sends.
+                $sent += (int)Ork3::$Lib->notification->Add($uid, 'court_awaiting_record', $message, $link);
             } catch (\Throwable $e) {
                 // Non-blocking by design.
             }
