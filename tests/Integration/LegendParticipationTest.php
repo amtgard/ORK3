@@ -213,9 +213,20 @@ final class LegendParticipationTest extends TestCase
         $court = $this->fixture->addCourt($this->kingdom, $this->park);
         $line = $this->fixture->addCourtLine($court, $this->player('recipient'));
 
-        (new Court())->addArtisan($line, $this->legend, 'Scroll');
+        $artisan = (new Court())->addArtisan($line, $this->legend, 'Scroll');
 
         $this->assertSame(1, $this->fixture->count('court_award_artisan', 'mundane_id = ' . $this->legend));
+        $this->assertTrue($artisan['IsLegend'], 'the add response carries the flag the planner draws the pill from');
+    }
+
+    public function test_court_artisan_living_player_is_not_flagged(): void
+    {
+        $court = $this->fixture->addCourt($this->kingdom, $this->park);
+        $line = $this->fixture->addCourtLine($court, $this->player('recipient'));
+
+        $artisan = (new Court())->addArtisan($line, $this->player('giver'), 'Scroll');
+
+        $this->assertFalse($artisan['IsLegend']);
     }
 
     // ---- Units, seats and authority ---------------------------------------

@@ -1296,13 +1296,16 @@ class Court
         $artisan_id = ($idr && $idr->Next()) ? (int)$idr->court_award_artisan_id : 0;
 
         $this->db->Clear();
-        $pr = $this->db->DataSet('SELECT persona FROM ' . DB_PREFIX . 'mundane
+        $pr = $this->db->DataSet('SELECT persona, is_legend FROM ' . DB_PREFIX . 'mundane
                               WHERE mundane_id = ' . $mundane_id . ' LIMIT 1');
-        $persona = ($pr && $pr->Next()) ? (string)$pr->persona : '';
+        $found   = $pr && $pr->Next();
+        $persona = $found ? (string)$pr->persona : '';
         return [
             'CourtAwardArtisanId' => $artisan_id,
             'MundaneId'           => $mundane_id,
             'Persona'             => $persona,
+            // The planner draws the Legend pill from this on a freshly added row, as it does on a reload.
+            'IsLegend'            => $found && (int)$pr->is_legend === 1,
             'Contribution'        => $contribution,
         ];
     }
