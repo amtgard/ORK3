@@ -459,6 +459,51 @@ final class LegendEditAuthorityTest extends TestCase
         $pdo->exec('DELETE FROM ' . DB_PREFIX . 'legend_log WHERE mundane_id = ' . $survivor);
     }
 
+    public function test_merging_away_an_undone_legend_carries_memories_and_log_to_the_survivor(): void
+    {
+        $source = $this->plain('undone');
+        $survivor = $this->plain('heir');
+        $author = $this->plain('mourner');
+        $this->assertSame(0, Legend::convert($this->admin, $source, 2001)['Status']);
+        $memory = $this->fixture->addMemory($source, $author);
+        $this->assertSame(0, Legend::undo($this->admin, $source)['Status']);
+        Legend::clearMemo();
+
+        $r = $this->merge('admin', $source, $survivor);
+
+        $this->assertSame(0, $r['Status'], json_encode($r));
+        $this->assertSame(0, $this->fixture->count('mundane', 'mundane_id = ' . $source));
+        $this->assertSame(0, $this->fixture->count('legend_memory', 'mundane_id = ' . $source), 'no memory orphaned');
+        $this->assertSame(0, $this->fixture->count('legend_log', 'mundane_id = ' . $source), 'no log row orphaned');
+        $this->assertSame(2, $this->fixture->count('legend_log', 'mundane_id = ' . $survivor));
+        $this->assertSame(2, $this->fixture->count('legend_log', 'mundane_id = ' . $survivor . " AND cleared_json LIKE '{%'"));
+
+        Legend::clearMemo();
+        $this->assertSame(0, Legend::convert($this->admin, $survivor, 2003)['Status']);
+        $this->assertSame([$memory], array_column(Legend::memories($survivor), 'MemoryId'));
+
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'mundane SET active = 0 WHERE mundane_id = ' . $survivor);
+        $this->assertSame(0, Legend::undo($this->admin, $survivor)['Status']);
+        $this->assertSame(1, (int) $this->fixture->value('mundane', 'active', 'mundane_id = ' . $survivor), "undo reads the survivor's own conversion");
+    }
+
+    public function test_legend_edit_with_browser_trimmed_login_fields_is_not_a_change(): void
+    {
+        $pdo = $this->fixture->pdo();
+        $user = 'spaced_' . $this->legend;
+        $pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET username = ?, email = ? WHERE mundane_id = ?')
+            ->execute(['  ' . $user . ' ', " spaced@example.invalid\t", $this->legend]);
+
+        $r = $this->player()->UpdatePlayer($this->update('king', $this->legend, [
+            'UserName' => $user, 'Email' => 'spaced@example.invalid', 'Persona' => 'Trimmed Legend',
+        ]));
+
+        $this->assertSame(0, $r['Status'], json_encode($r));
+        $this->assertSame('Trimmed Legend', $this->persona($this->legend));
+        $this->assertRefused($this->player()->UpdatePlayer($this->update('king', $this->legend, ['Email' => 'other@example.invalid'])));
+        $this->assertRefused($this->player()->UpdatePlayer($this->update('king', $this->legend, ['UserName' => 'other_' . $user])));
+    }
+
     public function test_merge_recredits_memories_a_merged_away_living_player_wrote(): void
     {
         $gone = $this->plain('gone');

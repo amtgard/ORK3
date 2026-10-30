@@ -2470,16 +2470,16 @@ class Player extends Ork3
             // one write fails, stop before anything else changes or the source row goes.
             $_lf = (int)$fromMundane['id'];
             $_lt = (int)$toMundane['id'];
+            // Not only for a Legend: a player whose status was undone still has hidden memories
+            // and log rows, and the source row is about to go. The survivor keeps its own year.
+            // Re-homed log rows are wrapped as an object so Legend::undo, which reads only
+            // list-shaped convert rows, never takes the source's snapshot.
             $_rehome = [
                 // Memories the merged-away player wrote on any wall now credit the survivor.
                 'UPDATE ' . DB_PREFIX . 'legend_memory SET author_id = ' . $_lt . ' WHERE author_id = ' . $_lf,
+                'UPDATE ' . DB_PREFIX . 'legend_memory SET mundane_id = ' . $_lt . ' WHERE mundane_id = ' . $_lf,
+                'UPDATE ' . DB_PREFIX . 'legend_log SET mundane_id = ' . $_lt . ", cleared_json = CONCAT('{\"mergedFrom\":" . $_lf . ",\"cleared\":', cleared_json, '}') WHERE mundane_id = " . $_lf,
             ];
-            if ($_fromLegend) {
-                // The survivor keeps its own year. Re-homed log rows are wrapped as an object so
-                // Legend::undo, which reads only list-shaped convert rows, never takes the source's snapshot.
-                $_rehome[] = 'UPDATE ' . DB_PREFIX . 'legend_memory SET mundane_id = ' . $_lt . ' WHERE mundane_id = ' . $_lf;
-                $_rehome[] = 'UPDATE ' . DB_PREFIX . 'legend_log SET mundane_id = ' . $_lt . ", cleared_json = CONCAT('{\"mergedFrom\":" . $_lf . ",\"cleared\":', cleared_json, '}') WHERE mundane_id = " . $_lf;
-            }
             foreach ($_rehome as $_q) {
                 $this->db->Clear();
                 if (!$this->db->ExecuteChecked($_q)) {
@@ -2909,8 +2909,10 @@ class Player extends Ork3
                 $_legendUser   = (string)$this->mundane->username;
                 $_legendEmail  = (string)$this->mundane->email;
                 $_legendActive = (int)$this->mundane->active;
-                if ((!is_null($request['UserName']) && trim($request['UserName']) !== $_legendUser)
-                    || (!is_null($request['Email']) && (string)$request['Email'] !== $_legendEmail)
+                // Trimmed on both sides: the browser trims a stored value with stray whitespace,
+                // and that isn't a change the officer made.
+                if ((!is_null($request['UserName']) && trim((string)$request['UserName']) !== trim($_legendUser))
+                    || (!is_null($request['Email']) && trim((string)$request['Email']) !== trim($_legendEmail))
                     || trimlen($request['Password']) > 0
                     || (!is_null($request['Active']) && ($request['Active'] ? 1 : 0) !== $_legendActive)) {
                     return NoAuthorization(Legend::REFUSED);
