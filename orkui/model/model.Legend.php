@@ -35,4 +35,29 @@ class Model_Legend extends Model
     {
         return Legend::blocksEdit($uid, $mundaneId);
     }
+
+    public function parse_year($raw): int
+    {
+        return Legend::parseYear($raw);
+    }
+
+    public function preview(int $uid, int $mundaneId): array
+    {
+        return Legend::preview($uid, $mundaneId);
+    }
+
+    public function convert(int $uid, int $mundaneId, int $year): array
+    {
+        return Legend::convert($uid, $mundaneId, $year);
+    }
+
+    public function undo(int $uid, int $mundaneId): array
+    {
+        return Legend::undo($uid, $mundaneId);
+    }
+
+    public function set_year(int $uid, int $mundaneId, int $year): array
+    {
+        return Legend::setYear($uid, $mundaneId, $year);
+    }
 }
