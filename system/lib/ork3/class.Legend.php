@@ -285,13 +285,13 @@ class Legend
         }
         $p = DB_PREFIX;
         $out = [];
-        foreach (self::rows(
+        foreach (self::asUtf8mb4(fn (): array => self::rows(
             "SELECT lm.legend_memory_id, lm.author_id, m.persona, lm.body, lm.created
              FROM {$p}legend_memory lm
              LEFT JOIN {$p}mundane m ON m.mundane_id = lm.author_id
              WHERE lm.mundane_id = {$mundaneId} AND lm.removed_by_id = 0
              ORDER BY lm.created DESC, lm.legend_memory_id DESC"
-        ) as $r) {
+        )) as $r) {
             $out[] = [
                 'MemoryId'      => (int) $r['legend_memory_id'],
                 'AuthorId'      => (int) $r['author_id'],
@@ -332,18 +332,20 @@ class Legend
             return self::refuse(1, ProfanityFilter::ERROR_MESSAGE);
         }
         try {
-            global $DB;
-            $DB->Clear();
-            $DB->body = $body;
-            $ok = $DB->ExecuteChecked(
-                'INSERT INTO ' . DB_PREFIX . "legend_memory (mundane_id, author_id, body, created)
-                 VALUES ({$mundaneId}, {$uid}, :body, NOW())"
-            );
-            $DB->Clear();
-            if (!$ok) {
-                throw new RuntimeException('memory write failed');
-            }
-            $id = (int) (self::rows('SELECT LAST_INSERT_ID() AS id')[0]['id'] ?? 0);
+            $id = self::asUtf8mb4(function () use ($mundaneId, $uid, $body): int {
+                global $DB;
+                $DB->Clear();
+                $DB->body = $body;
+                $ok = $DB->ExecuteChecked(
+                    'INSERT INTO ' . DB_PREFIX . "legend_memory (mundane_id, author_id, body, created)
+                     VALUES ({$mundaneId}, {$uid}, :body, NOW())"
+                );
+                $DB->Clear();
+                if (!$ok) {
+                    throw new RuntimeException('memory write failed');
+                }
+                return (int) (self::rows('SELECT LAST_INSERT_ID() AS id')[0]['id'] ?? 0);
+            });
         } catch (Throwable $e) {
             error_log('Legend: memory not saved for player ' . $mundaneId . ': ' . $e->getMessage());
             return self::refuse(1, 'That could not be saved. Please try again.');
@@ -378,6 +380,36 @@ class Legend
             return self::refuse(1, 'That could not be removed. Please try again.');
         }
         return ['Status' => 0];
+    }
+
+    /**
+     * Run $work with the connection speaking utf8mb4, then put the charset back
+     * exactly as it was, even when $work throws. The app's connection is
+     * `utf8` (three bytes a character), which turns an emoji into question
+     * marks; the memory column is utf8mb4. Only the memory read and write use
+     * this, so nothing else on the shared connection changes.
+     *
+     * @template T
+     * @param callable(): T $work
+     * @return T
+     */
+    private static function asUtf8mb4(callable $work)
+    {
+        global $DB;
+        $prior = (string) (self::rows('SELECT @@character_set_client AS cs')[0]['cs'] ?? '');
+        if (!preg_match('/^[a-z0-9_]+$/', $prior)) {
+            return $work();
+        }
+        $prior = $prior === 'utf8mb3' ? 'utf8' : $prior;
+        $DB->Clear();
+        $DB->Execute("SET NAMES 'utf8mb4'");
+        try {
+            return $work();
+        } finally {
+            $DB->Clear();
+            $DB->Execute("SET NAMES '{$prior}'");
+            $DB->Clear();
+        }
     }
 
     /** @return array{Status: int, Error: string} */

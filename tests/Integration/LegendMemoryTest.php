@@ -214,4 +214,40 @@ final class LegendMemoryTest extends TestCase
         $this->assertSame($body, Legend::memories($legend)[0]['Body']);
         $this->assertSame($body, $this->fixture->value('legend_memory', 'body', 'mundane_id = ' . $legend));
     }
+
+    /** Set (when given) and report the shared connection's client charset. */
+    private function connectionCharset(?string $set = null): string
+    {
+        global $DB;
+        if ($set !== null) {
+            $DB->Clear();
+            $DB->Execute("SET NAMES '{$set}'");
+        }
+        $DB->Clear();
+        $rs = $DB->DataSet('SELECT @@character_set_client AS cs');
+        $rs->Next();
+        $DB->Clear();
+
+        return (string) $rs->cs;
+    }
+
+    public function test_emoji_round_trips(): void
+    {
+        $legend = $this->legend();
+        $author = $this->player('author');
+        // The app's connection is `SET NAMES utf8`; force it so this test means the same anywhere.
+        $this->connectionCharset('utf8');
+        $body = "Rest easy \u{1F622} friend \u{1F54A}\u{FE0F}";
+
+        $r = Legend::addMemory($author, $legend, $body);
+
+        $this->assertSame(0, $r['Status'], $r['Error'] ?? '');
+        $this->assertSame($body, Legend::memories($legend)[0]['Body']);
+        $hex = $this->fixture->pdo()
+            ->query('SELECT HEX(CONVERT(body USING utf8mb4)) FROM ' . DB_PREFIX . 'legend_memory WHERE mundane_id = ' . $legend)
+            ->fetchColumn();
+        $this->assertSame(strtoupper(bin2hex($body)), $hex);
+        $this->assertSame('utf8mb3', $this->connectionCharset(), 'the shared connection is left as it was');
+        $this->connectionCharset('utf8mb4'); // this environment's default
+    }
 }
