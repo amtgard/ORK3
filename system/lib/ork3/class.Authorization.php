@@ -756,6 +756,9 @@ class Authorization extends Ork3
 				$response = InvalidParameter(null, 'Unrecognized Role: $request[Role].');
 				return $response;
 		}
+		if (Legend::isLegend((int)($request['MundaneId'] ?? 0))) {
+			return NoAuthorization(Legend::REFUSED);
+		}
 		if ($this->HasAuthority($requester_id, $request['Type'], $request['Id'], AUTH_CREATE)) {
 			$this->log->Write('Authorization', $requester_id, LOG_ADD, $request);
 			$response = $this->add_auth_h($request);
