@@ -240,8 +240,8 @@ html[data-theme="dark"] .sr-overflow-warning { background: #744210; color: #fbd3
 
 		// Sort: active first, then inactive, banned last
 		data.sort(function(a, b) {
-			var aBanned = a.Suspended == 1 ? 1 : 0;
-			var bBanned = b.Suspended == 1 ? 1 : 0;
+			var aBanned = (a.Suspended == 1 && !a.Legend) ? 1 : 0;
+			var bBanned = (b.Suspended == 1 && !b.Legend) ? 1 : 0;
 			if (aBanned !== bBanned) return aBanned - bBanned;
 			if (b.Active !== a.Active) return b.Active - a.Active;
 			var pa = (a.Persona || '').toLowerCase();
@@ -253,7 +253,7 @@ html[data-theme="dark"] .sr-overflow-warning { background: #744210; color: #fbd3
 		for (var i = 0; i < data.length; i++) {
 			var v       = data[i];
 			var active  = v.Active !== 0;
-			var banned  = v.Suspended == 1;
+			var banned  = v.Suspended == 1 && !v.Legend;
 			var rowCls  = banned ? ' sr-row-banned' : (active ? '' : ' sr-row-inactive');
 			var kingdom = v.KingdomName || '';
 			var park    = v.ParkName    || '';

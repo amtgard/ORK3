@@ -94,8 +94,22 @@ final class LegendLoginTest extends TestCase
         $after = $this->auth->Authorize_h($request);
 
         $this->assertSame(5, $after['Status']['Status']);
+        $this->assertStringContainsString(Legend::LOGIN_REFUSED, $after['Status']['Detail']);
+        $this->assertSame(Legend::LOGIN_REFUSED, $after['Refusal']);
         $this->assertArrayNotHasKey('Token', $after);
         $this->assertSame(0, $this->fixture->count('session', 'mundane_id = ' . $id));
+    }
+
+    public function test_only_the_right_password_learns_the_account_is_a_legend(): void
+    {
+        $id = $this->player();
+        $this->convert($id);
+
+        $r = $this->auth->Authorize_h(['UserName' => $this->username($id), 'Password' => 'wrong-password', 'Token' => null]);
+
+        $this->assertNotSame(0, $r['Status']['Status']);
+        $this->assertArrayNotHasKey('Refusal', $r);
+        $this->assertStringNotContainsString(Legend::LOGIN_REFUSED, (string) $r['Status']['Detail']);
     }
 
     public function test_token_reauth_refused(): void

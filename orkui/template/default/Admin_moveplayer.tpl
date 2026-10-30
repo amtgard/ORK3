@@ -65,9 +65,10 @@
 						Action: 'Search/Player',
 						type: 'all',
 						search: request.term,
-						park_id: park_id.length>0?park_id:null,
-						token: '<?= htmlspecialchars($Token ?? '', ENT_QUOTES) ?>',
-						IncludeLegend: 'admin'
+<?php if (!empty($IsOrkAdmin)): ?>
+						IncludeLegend: 1,
+<?php endif; ?>
+						park_id: park_id.length>0?park_id:null
 					},
 					function( data ) {
 						var suggestions = [];

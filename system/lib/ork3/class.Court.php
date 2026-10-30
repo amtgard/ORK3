@@ -228,6 +228,7 @@ class Court
             'ParkId'                => (int)$rs->park_id,
             'Name'                  => $rs->name,
             'CourtDate'             => $rs->court_date,
+            'HeldBeforeToday'       => $this->dateBeforeToday($rs->court_date),
             'Status'                => $rs->status,
             'EventCalendarDetailId' => (int)$rs->event_calendardetail_id,
             'EventName'             => $rs->event_name,
@@ -1414,8 +1415,9 @@ class Court
         if ($this->isHiddenRecCitation((int)$court_award_id, (string)$public_comment)) {
             return false;
         }
-        // Recipients and artisans may be Legends; the one giving the award may not.
-        if (Legend::isLegend((int)$given_by_mundane_id)) {
+        // Recipients and artisans may be Legends; the one giving the award may not,
+        // unless the court was held before today.
+        if (Legend::isLegend((int)$given_by_mundane_id) && !$this->courtHeldBeforeToday($this->getCourtAwardCourtId($court_award_id))) {
             return false;
         }
         $where = 'court_award_id = ' . (int)$court_award_id . '
@@ -2590,7 +2592,7 @@ class Court
     {
         $court_id = (int)$court_id;
         $giver    = (int)$default_giver_mundane_id;
-        if (Legend::isLegend($giver)) {
+        if (Legend::isLegend($giver) && !$this->courtHeldBeforeToday($court_id)) {
             return 0;
         }
         $this->db->Clear();
@@ -3066,6 +3068,25 @@ class Court
     // -----------------------------------------------------------------------
     // Court Report (public, read-only) — see docs/superpowers/specs/2026-05-28-court-report-design.md
     // -----------------------------------------------------------------------
+
+    /**
+     * Was this court dated before today? Such a court may have been held in a
+     * Legend's lifetime and typed up after, so it may credit them as giver. An
+     * undated court counts as today, as it does when finalized.
+     */
+    private function courtHeldBeforeToday($court_id)
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet('SELECT court_date FROM ' . DB_PREFIX . 'court WHERE court_id = ' . (int)$court_id . ' LIMIT 1');
+        return ($r && $r->Next()) ? $this->dateBeforeToday($r->court_date) : false;
+    }
+
+    /** The rule for courtHeldBeforeToday, given a court_date already in hand. */
+    private function dateBeforeToday($date)
+    {
+        $date = $this->validDate((string)$date);
+        return $date !== null && $date < date('Y-m-d');
+    }
 
     /**
      * Validate a Y-m-d date string; return it if valid, else null.

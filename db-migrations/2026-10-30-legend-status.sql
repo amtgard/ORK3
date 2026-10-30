@@ -15,7 +15,14 @@
 --
 -- Idempotent: ADD COLUMN / INDEX IF NOT EXISTS, CREATE TABLE IF NOT EXISTS;
 -- safe to re-run.
--- After applying: docker restart ork3-php8-app (APCu schema cache).
+--
+-- DEPLOY: apply this to production BEFORE running greenblue.sh. That order is safe
+-- because the new columns are NOT NULL with defaults and the old code ignores them.
+-- greenblue.sh neither migrates nor restarts, so if this is ever applied AFTER the
+-- code goes live, restart the live colour's container (ork3-php8-app-blue or -green)
+-- or delete the yapo_schema_ork_mundane APCu key. Yapo caches a table's schema for
+-- 24 hours, and until it refreshes every login guard reads is_legend as false.
+-- Local dev: docker restart ork3-php8-app.
 
 ALTER TABLE ork_mundane
   ADD COLUMN IF NOT EXISTS is_legend   TINYINT(1)        NOT NULL DEFAULT 0,
@@ -30,6 +37,7 @@ CREATE TABLE IF NOT EXISTS ork_legend_log (
   legend_year   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   prior_active  TINYINT NOT NULL DEFAULT 0,            -- ork_mundane.active before the conversion
   cleared_json  MEDIUMTEXT NOT NULL,                   -- what the conversion cleared, for undo
+  warnings_json MEDIUMTEXT NOT NULL,                   -- what it left needing attention (vacant seats, units with no manager)
   actor_id      INT NOT NULL,
   created       DATETIME NOT NULL,
   PRIMARY KEY (legend_log_id),
@@ -40,10 +48,13 @@ CREATE TABLE IF NOT EXISTS ork_legend_memory (
   legend_memory_id INT NOT NULL AUTO_INCREMENT,
   mundane_id       INT NOT NULL,                       -- the Legend the memory is about
   author_id        INT NOT NULL,
+  author_persona   VARCHAR(255) NOT NULL DEFAULT '',   -- the byline as it stood when posted
   body             TEXT NOT NULL,
   created          DATETIME NOT NULL,
   removed_by_id    INT NOT NULL DEFAULT 0,             -- 0 = not removed
   removed_at       DATETIME NULL DEFAULT NULL,
+  removed_reason   VARCHAR(255) NOT NULL DEFAULT '',
   PRIMARY KEY (legend_memory_id),
-  KEY idx_legend_memory_mundane (mundane_id)
+  KEY idx_legend_memory_mundane (mundane_id),
+  KEY idx_legend_memory_author (mundane_id, author_id, created)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

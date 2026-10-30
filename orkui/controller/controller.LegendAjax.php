@@ -23,7 +23,7 @@ class Controller_LegendAjax extends Controller
     {
         $uid = $this->requireLogin();
         $r = $this->Legend->preview($uid, $this->playerId($p));
-        $this->envelope($r, ['items' => $r['Items'] ?? [], 'warnings' => $r['Warnings'] ?? []]);
+        $this->envelope($r, ['items' => $r['Items'] ?? [], 'warnings' => $r['Warnings'] ?? [], 'player' => $r['Player'] ?? []]);
     }
 
     /** Mark a player as a Legend. Year is a form field. */
@@ -31,7 +31,7 @@ class Controller_LegendAjax extends Controller
     {
         $uid = $this->requirePost();
         $r = $this->Legend->convert($uid, $this->playerId($p), $this->Legend->parse_year($_POST['Year'] ?? ''));
-        $this->envelope($r, ['cleared' => $r['Cleared'] ?? []]);
+        $this->envelope($r, ['cleared' => $r['Cleared'] ?? [], 'warnings' => $r['Warnings'] ?? []]);
     }
 
     /** Remove Legend status; lists what the conversion cleared, to restore by hand. */
@@ -39,7 +39,7 @@ class Controller_LegendAjax extends Controller
     {
         $uid = $this->requirePost();
         $r = $this->Legend->undo($uid, $this->playerId($p));
-        $this->envelope($r, ['cleared' => $r['Cleared'] ?? []]);
+        $this->envelope($r, ['cleared' => $r['Cleared'] ?? [], 'warnings' => $r['Warnings'] ?? [], 'clearedOn' => $r['ClearedOn'] ?? '']);
     }
 
     /** What the conversion cleared, shown before Remove Legend Status is confirmed. Read-only. */
@@ -47,7 +47,7 @@ class Controller_LegendAjax extends Controller
     {
         $uid = $this->requireLogin();
         $r = $this->Legend->cleared($uid, $this->playerId($p));
-        $this->envelope($r, ['cleared' => $r['Cleared'] ?? []]);
+        $this->envelope($r, ['cleared' => $r['Cleared'] ?? [], 'warnings' => $r['Warnings'] ?? [], 'clearedOn' => $r['ClearedOn'] ?? '']);
     }
 
     /** Correct a Legend's year. */
@@ -58,10 +58,15 @@ class Controller_LegendAjax extends Controller
         $this->envelope($r, []);
     }
 
-    /** A Legend's Memory Wall, newest first. Public: readable logged out, like the profile. */
+    /** One page of a Legend's Memory Wall, newest first. Public: readable logged out, like the profile. */
     public function memories($p = null)
     {
-        $this->jsonOut(['status' => 0, 'memories' => $this->Legend->memories($this->playerId($p))]);
+        $id = $this->playerId($p);
+        $this->jsonOut([
+            'status'   => 0,
+            'memories' => $this->Legend->memories($id, (int) ($_GET['limit'] ?? 0), (int) ($_GET['offset'] ?? 0)),
+            'total'    => $this->Legend->memory_count($id),
+        ]);
     }
 
     /** Leave a memory. Body is a form field. */
@@ -72,15 +77,30 @@ class Controller_LegendAjax extends Controller
         $this->envelope($r, ['memoryId' => $r['MemoryId'] ?? 0]);
     }
 
-    /** Remove a memory ({memoryId} in the route). Kingdom officers and ORK admins only. */
+    /** Remove a memory ({memoryId} in the route). Reason is a form field. Kingdom officers and ORK admins only. */
     public function remove($p = null)
     {
         $uid = $this->requirePost();
-        $r = $this->Legend->remove_memory($uid, $this->playerId($p));
+        $r = $this->Legend->remove_memory($uid, $this->playerId($p), $this->reason());
         $this->envelope($r, []);
     }
 
+    /** Remove all of one author's memories from this wall. AuthorId and Reason are form fields. Same authority as remove. */
+    public function removeauthor($p = null)
+    {
+        $uid = $this->requirePost();
+        $r = $this->Legend->remove_author_memories($uid, $this->playerId($p), $this->playerId($_POST['AuthorId'] ?? ''), $this->reason());
+        $this->envelope($r, ['removed' => $r['Removed'] ?? 0]);
+    }
+
     // -----------------------------------------------------------------------
+
+    /** The Reason form field. An array (Reason[]=x) reads as blank, which the domain refuses. */
+    private function reason(): string
+    {
+        $reason = $_POST['Reason'] ?? '';
+        return is_string($reason) ? $reason : '';
+    }
 
     private function requireLogin(): int
     {

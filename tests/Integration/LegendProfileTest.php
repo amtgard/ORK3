@@ -119,6 +119,22 @@ final class LegendProfileTest extends TestCase
         $this->assertFalse($forRegular['CanEditAwards']);
     }
 
+    public function test_marked_by_and_on_only_for_those_who_may_manage(): void
+    {
+        $officer = $this->fixture->addKingdomOfficer($this->kingdom, $this->park);
+        $legend = $this->fixture->addPlayer($this->park, 'marked')['mundane_id'];
+        $this->assertSame(0, Legend::convert($officer, $legend, 2020)['Status']);
+        $persona = (string) $this->fixture->value('mundane', 'persona', 'mundane_id = ' . $officer);
+
+        $view = $this->view($officer, $legend);
+        $this->assertSame($persona, $view['MarkedBy']);
+        $this->assertSame(date('Y-m-d'), $view['MarkedOn']);
+
+        $stranger = $this->view($this->fixture->addParkOfficer($this->park), $legend);
+        $this->assertSame('', $stranger['MarkedBy']);
+        $this->assertSame('', $stranger['MarkedOn']);
+    }
+
     public function test_can_manage_legend_false_for_park_officer(): void
     {
         $legend  = $this->fixture->addPlayer($this->park, 'legend', 2019)['mundane_id'];
@@ -164,6 +180,7 @@ final class LegendProfileTest extends TestCase
             'AuthorPersona' => '<img src=x onerror=alert(1)>',
             'Body'          => $body,
             'Created'       => '2026-10-12 23:30:00',
+            'CreatedOn'     => 'October 12, 2026',
         ]]]));
 
         $this->assertStringNotContainsString('<script', $html);
@@ -171,7 +188,59 @@ final class LegendProfileTest extends TestCase
         $this->assertStringContainsString(htmlspecialchars($body, ENT_QUOTES), $html);
         $this->assertStringContainsString('Remembered by', $html);
         $this->assertStringContainsString('Player/profile/9"', $html);
-        $this->assertStringContainsString('October 12, 2026', $html, 'the date part only, with no timezone shift');
+        $this->assertStringContainsString('October 12, 2026', $html);
+    }
+
+    public function test_wall_shows_home_show_more_and_a_removed_list_to_managers_only(): void
+    {
+        $hostile = '<img src=x onerror=alert(1)>';
+        $memory  = [
+            'MemoryId' => 5, 'AuthorId' => 9, 'AuthorPersona' => 'Wren', 'AuthorHome' => 'GE:' . $hostile,
+            'AuthorMemoryCount' => 2, 'Body' => 'Remembered.', 'CreatedOn' => 'October 12, 2026',
+        ];
+        $removed = ['RemovedBy' => $hostile, 'RemovedOn' => 'October 13, 2026', 'RemovedReason' => $hostile, 'Body' => $hostile] + $memory;
+        $vars    = ['Memories' => [$memory], 'MemoryCount' => 30, 'RemovedMemories' => [$removed]];
+
+        $html = $this->render('_legend_wall.tpl', $this->wallVars($vars + ['CanManageLegend' => true]));
+
+        $this->assertStringNotContainsString('<img', $html);
+        $this->assertStringContainsString(' (GE:&lt;img', $html);
+        $this->assertStringContainsString('id="pn-lg-more"', $html);
+        $this->assertStringContainsString('<template id="pn-lg-row">', $html);
+        $this->assertStringContainsString('Removed memories (1)', $html);
+        $this->assertStringContainsString('October 13, 2026', $html);
+        $this->assertStringContainsString('Remove all by this author', $html);
+        $this->assertStringContainsString('pn-lg-remove-reason', $html);
+
+        $html = $this->render('_legend_wall.tpl', $this->wallVars($vars + ['CanManageLegend' => false]));
+
+        $this->assertStringContainsString('id="pn-lg-more"', $html);
+        $this->assertStringNotContainsString('Removed memories', $html);
+        $this->assertStringNotContainsString('pn-lg-remove', $html, 'not in the rows, nor in the row template');
+    }
+
+    public function test_wall_announces_errors_and_the_character_count(): void
+    {
+        $memory = ['MemoryId' => 5, 'AuthorId' => 9, 'AuthorPersona' => 'Wren', 'Body' => 'Remembered.'];
+        $html = $this->render('_legend_wall.tpl', $this->wallVars(['Memories' => [$memory], 'CanManageLegend' => true]));
+
+        $this->assertStringContainsString('id="pn-lg-error" role="alert"', $html);
+        $this->assertStringContainsString('class="pn-lg-remove-error" role="alert"', $html);
+        $this->assertStringContainsString('id="pn-lg-count" aria-live="polite"', $html);
+    }
+
+    /** The full page needs a whole request to render, so this pins the guard around the cards. */
+    public function test_tests_and_dues_cards_are_not_on_a_legends_page(): void
+    {
+        $page = (string) file_get_contents(DIR_TEMPLATE . 'revised-frontend/Playernew_index.tpl');
+        $open = strpos($page, '<?php if (!$isLegend): // Tests and dues');
+        $this->assertNotFalse($open);
+        $this->assertLessThan(strpos($page, '<!-- Qualifications -->'), $open);
+        $this->assertGreaterThan(strpos($page, 'No dues records'), strpos($page, '<?php endif; // !$isLegend ?>'));
+        foreach (['pn-dues-overlay', 'pn-qual-overlay'] as $overlay) {
+            $this->assertStringContainsString('id="' . $overlay . '"<?= $isLegend ? \' inert\' : \'\' ?>>', $page, 'hidden only by opacity, so a keyboard could still reach it');
+        }
+        $this->assertStringNotContainsString("\$isLegend ? 'Dues History'", $page);
     }
 
     public function test_wall_form_for_logged_in_viewer_has_exact_copy(): void

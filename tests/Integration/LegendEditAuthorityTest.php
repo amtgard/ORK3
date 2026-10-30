@@ -357,7 +357,7 @@ final class LegendEditAuthorityTest extends TestCase
         $survivor = $this->fixture->addPlayer($this->park, 'survivor', 2005)['mundane_id'];
         $author = $this->plain('author');
         $this->fixture->addMemory($this->legend, $author);
-        $this->fixture->pdo()->exec('INSERT INTO ' . DB_PREFIX . "legend_log (mundane_id, action, legend_year, prior_active, cleared_json, actor_id, created) VALUES ({$this->legend}, 'convert', 1999, 1, '[]', {$this->admin}, NOW())");
+        $this->fixture->pdo()->exec('INSERT INTO ' . DB_PREFIX . "legend_log (mundane_id, action, legend_year, prior_active, cleared_json, warnings_json, actor_id, created) VALUES ({$this->legend}, 'convert', 1999, 1, '[]', '[]', {$this->admin}, NOW())");
 
         $r = $this->merge('king', $this->legend, $survivor);
 

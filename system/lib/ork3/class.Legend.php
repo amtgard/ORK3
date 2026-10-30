@@ -20,8 +20,8 @@
  * because a lost app token costs only a re-authorization. Every other table it
  * touches is InnoDB.
  *
- * The Memory Wall (memories(), addMemory(), removeMemory()) is its own section
- * below, after the conversion code.
+ * The Memory Wall (memories(), addMemory(), removeMemory() and friends) is its
+ * own section below, after the conversion code.
  *
  * startup.php instantiates every class in this directory, so Ork3::$Lib->legend
  * exists. What keeps these methods, which take a caller uid and not a token, off
@@ -33,8 +33,20 @@ class Legend
     /** The one refusal message every guard uses. */
     public const REFUSED = 'This player is a Legend and can no longer be changed this way.';
 
+    /** What a Legend's account sees at login, with the right password and only then. */
+    public const LOGIN_REFUSED = "Your access to the ORK has been restricted. If you believe this is a mistake, contact your kingdom's officers.";
+
     /** The longest memory, in characters. */
     public const MAX_MEMORY_CHARS = 2000;
+
+    /** The most memories one author may post on one wall in any rolling 24 hours. */
+    public const MAX_MEMORIES_PER_DAY = 3;
+
+    /** Memories shown at a time; also the most one read returns. */
+    public const MEMORIES_PER_PAGE = 25;
+
+    /** The longest reason for removing a memory, in characters. */
+    public const MAX_REMOVAL_REASON_CHARS = 255;
 
     /** Nothing in the ORK predates this. */
     public const MIN_YEAR = 1983;
@@ -50,6 +62,9 @@ class Legend
 
     /** When an occurrence (`cd`) ends. A zero or backwards event_end falls back to its start. */
     private const EVENT_END_SQL = 'CASE WHEN cd.event_end >= cd.event_start THEN cd.event_end ELSE cd.event_start END';
+
+    /** The columns a memory read shares; memoryFrom() is its FROM. */
+    private const MEMORY_SQL_SELECT = 'SELECT lm.legend_memory_id, lm.author_id, lm.author_persona, m.persona, pk.abbreviation AS park_abbr, k.abbreviation AS kingdom_abbr, lm.body, lm.created';
 
     /** @var array<int,bool> per-request memo of isLegend() */
     private static $memo = [];
@@ -133,7 +148,10 @@ class Legend
      * first two match. A park officer may still grant a new award to a Legend,
      * which is why the award row controls are a separate flag from the grant.
      *
-     * @return array{IsLegend: bool, CanManageLegend: bool, CanViewAdmin: bool, CanEditAdmin: bool, CanEditAwards: bool, Memories: list<array<string, mixed>>, MinYear: int, MaxMemoryChars: int}
+     * MarkedBy and MarkedOn name who converted this Legend, for those who may
+     * manage them; empty for anyone else, or when the log has no conversion.
+     *
+     * @return array{IsLegend: bool, CanManageLegend: bool, MarkedBy: string, MarkedOn: string, CanViewAdmin: bool, CanEditAdmin: bool, CanEditAwards: bool, Memories: list<array<string, mixed>>, MemoryCount: int, RemovedMemories: list<array<string, mixed>>, MinYear: int, MaxMemoryChars: int}
      */
     public static function profileView(int $uid, int $mundaneId, int $parkId): array
     {
@@ -141,15 +159,22 @@ class Legend
         $blocked      = self::blocksEdit($uid, $mundaneId);
         $viewAdmin    = $uid > 0 && (bool) $auth->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_EDIT);
         $manageAwards = $uid > 0 && (bool) $auth->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_CREATE);
+        // refuseConversion's fixed refusals: nobody marks themselves, and player 1 never. A role
+        // outside the officer's authority is not one of them: it is refused when the modal opens.
+        $canManage    = $mundaneId !== 1 && $uid !== $mundaneId && self::mayManage($uid, $mundaneId);
+        $marked       = $canManage && self::isLegend($mundaneId) ? self::lastConversion($mundaneId) : null;
 
         return [
             'IsLegend'        => self::isLegend($mundaneId),
-            // The same refusals as refuseConversion: nobody marks themselves, and player 1 never.
-            'CanManageLegend' => $mundaneId !== 1 && $uid !== $mundaneId && self::mayManage($uid, $mundaneId),
+            'CanManageLegend' => $canManage,
+            'MarkedBy'        => (string) ($marked['persona'] ?? ''),
+            'MarkedOn'        => substr((string) ($marked['created'] ?? ''), 0, 10),
             'CanViewAdmin'    => $viewAdmin,
             'CanEditAdmin'    => self::canEditAdmin($uid, $mundaneId, $parkId),
             'CanEditAwards'   => $manageAwards && !$blocked,
             'Memories'        => self::memories($mundaneId),
+            'MemoryCount'     => self::memoryCount($mundaneId),
+            'RemovedMemories' => $canManage && self::isLegend($mundaneId) ? self::removedMemories($uid, $mundaneId)['Memories'] : [],
             'MinYear'         => self::MIN_YEAR,
             'MaxMemoryChars'  => self::MAX_MEMORY_CHARS,
         ];
@@ -165,7 +190,7 @@ class Legend
      * Everything a conversion would clear, for the officer to confirm. Writes
      * nothing.
      *
-     * @return array{Status: int, Error?: string, Items?: list<array{Type: string, Label: string, Id: int}>, Warnings?: list<string>}
+     * @return array{Status: int, Error?: string, Items?: list<array{Type: string, Label: string, Id: int}>, Warnings?: list<string>, Player?: array{Persona: string, ParkName: string, KingdomName: string, LastAttendance: string, LatestAward: string, Suspended: bool}}
      */
     public static function preview(int $uid, int $mundaneId): array
     {
@@ -176,6 +201,56 @@ class Legend
         if (self::isLegend($mundaneId)) {
             return self::refuse(1, self::REFUSED);
         }
+        $player   = self::previewPlayer($mundaneId);
+        $warnings = self::vacancyWarnings($mundaneId);
+        if ($player['LastAttendance'] >= date('Y-m-d', strtotime('-90 days'))) {
+            $warnings[] = 'Attended on ' . date('F j, Y', strtotime($player['LastAttendance'])) . ', within the last 90 days.';
+        }
+        if ($player['Suspended']) {
+            $warnings[] = 'This player is currently suspended or banned.';
+        }
+        return ['Status' => 0, 'Items' => self::clearable($mundaneId), 'Warnings' => $warnings, 'Player' => $player];
+    }
+
+    /**
+     * Who the officer is about to mark, and the last signs of them in the record.
+     * Dates are Y-m-d, or '' when there is none; a date still to come is no sign.
+     *
+     * @return array{Persona: string, ParkName: string, KingdomName: string, LastAttendance: string, LatestAward: string, Suspended: bool}
+     */
+    private static function previewPlayer(int $mundaneId): array
+    {
+        $p = DB_PREFIX;
+        $r = self::rows(
+            "SELECT m.persona, m.suspended, m.penalty_box, pk.name AS park_name, k.name AS kingdom_name,
+                    (SELECT MAX(a.date) FROM {$p}attendance a
+                      WHERE a.mundane_id = m.mundane_id AND a.date > '0000-00-00' AND a.date <= CURDATE()) AS last_attendance,
+                    (SELECT MAX(aw.date) FROM {$p}awards aw
+                      WHERE aw.mundane_id = m.mundane_id AND aw.date > '0000-00-00' AND aw.date <= CURDATE()
+                        AND (aw.revoked = 0 OR aw.revoked IS NULL)) AS latest_award
+             FROM {$p}mundane m
+             LEFT JOIN {$p}park pk ON pk.park_id = m.park_id
+             LEFT JOIN {$p}kingdom k ON k.kingdom_id = m.kingdom_id
+             WHERE m.mundane_id = {$mundaneId}"
+        )[0];
+        return [
+            'Persona'        => (string) $r['persona'],
+            'ParkName'       => (string) $r['park_name'],
+            'KingdomName'    => (string) $r['kingdom_name'],
+            'LastAttendance' => (string) $r['last_attendance'],
+            'LatestAward'    => (string) $r['latest_award'],
+            'Suspended'      => (int) $r['suspended'] === 1 || (int) $r['penalty_box'] === 1,
+        ];
+    }
+
+    /**
+     * What a conversion leaves for someone to fill: the officer's to-do list.
+     * Reads the seats and unit rows, so ask before they are cleared.
+     *
+     * @return list<string>
+     */
+    private static function vacancyWarnings(int $mundaneId): array
+    {
         $warnings = [];
         foreach (self::seats($mundaneId) as $seat) {
             $warnings[] = self::seatLabel($seat) . ' will become vacant.';
@@ -183,7 +258,7 @@ class Legend
         foreach (self::unitsLosingLastManager($mundaneId) as $unitName) {
             $warnings[] = $unitName . ' will have no manager.';
         }
-        return ['Status' => 0, 'Items' => self::clearable($mundaneId), 'Warnings' => $warnings];
+        return $warnings;
     }
 
     /**
@@ -192,7 +267,7 @@ class Legend
      * clearing goes straight to the tables, ahead of the status change, so no
      * guard on a Legend can stop a conversion's own writes.
      *
-     * @return array{Status: int, Error?: string, Cleared?: list<array{Type: string, Label: string, Id: int}>}
+     * @return array{Status: int, Error?: string, Cleared?: list<array{Type: string, Label: string, Id: int}>, Warnings?: list<string>}
      */
     public static function convert(int $uid, int $mundaneId, int $year): array
     {
@@ -206,6 +281,7 @@ class Legend
             }
             $priorActive = (int) $player['active'];
             $items       = self::clearable($mundaneId);
+            $warnings    = self::vacancyWarnings($mundaneId);
 
             // Seats first: set_officer finds the seat's authorization row, which the delete below would take away.
             self::vacateSeats($uid, $mundaneId);
@@ -214,14 +290,14 @@ class Legend
             self::clearCourtRoles($items);
 
             self::write('UPDATE ' . DB_PREFIX . 'mundane SET is_legend = 1, legend_year = ' . $year . ', active = 0 WHERE mundane_id = ' . $mundaneId);
-            self::log($mundaneId, 'convert', $year, $priorActive, $items, $uid);
+            self::log($mundaneId, 'convert', $year, $priorActive, $items, $uid, $warnings);
             self::audit('convert', $uid, $mundaneId, ['IsLegend' => 0, 'Active' => $priorActive], ['IsLegend' => 1, 'Active' => 0, 'LegendYear' => $year, 'ClearedCount' => count($items)]);
 
             // The MyISAM writes, last (see the class comment).
             self::purgeSessions($mundaneId);
             self::write(self::deleteSql('participant_mundane', 'participant_mundane_id', self::idsOf($items, 'tournament')));
 
-            return ['Status' => 0, 'Cleared' => $items];
+            return ['Status' => 0, 'Cleared' => $items, 'Warnings' => $warnings];
         });
     }
 
@@ -231,7 +307,7 @@ class Legend
      * player is not a Legend), and nothing cleared returns: the caller gets the
      * last conversion's snapshot to restore by hand.
      *
-     * @return array{Status: int, Error?: string, Cleared?: list<array{Type: string, Label: string, Id: int}>}
+     * @return array{Status: int, Error?: string, Cleared?: list<array{Type: string, Label: string, Id: int}>, Warnings?: list<string>, ClearedOn?: string}
      */
     public static function undo(int $uid, int $mundaneId): array
     {
@@ -246,14 +322,14 @@ class Legend
             $last = self::lastConversion($mundaneId);
             // A Legend with no conversion on the log stays inactive: reactivating is one edit away, a wrong guess isn't.
             $priorActive = $last ? (int) $last['prior_active'] : 0;
-            $cleared     = $last ? (json_decode((string) $last['cleared_json'], true) ?: []) : [];
+            $snapshot    = self::lastSnapshot($mundaneId);
             $year        = (int) $player['legend_year'];
 
             self::write('UPDATE ' . DB_PREFIX . 'mundane SET is_legend = 0, legend_year = 0, active = ' . $priorActive . ' WHERE mundane_id = ' . $mundaneId);
             self::log($mundaneId, 'undo', $year, $priorActive, [], $uid);
             self::audit('undo', $uid, $mundaneId, ['IsLegend' => 1, 'Active' => (int) $player['active'], 'LegendYear' => $year], ['IsLegend' => 0, 'Active' => $priorActive]);
 
-            return ['Status' => 0, 'Cleared' => $cleared];
+            return ['Status' => 0] + $snapshot;
         });
     }
 
@@ -261,7 +337,7 @@ class Legend
      * What the last conversion cleared, for the officer to read before undoing.
      * Writes nothing.
      *
-     * @return array{Status: int, Error?: string, Cleared?: list<array{Type: string, Label: string, Id: int}>}
+     * @return array{Status: int, Error?: string, Cleared?: list<array{Type: string, Label: string, Id: int}>, Warnings?: list<string>, ClearedOn?: string}
      */
     public static function cleared(int $uid, int $mundaneId): array
     {
@@ -272,24 +348,48 @@ class Legend
         if (!self::isLegend($mundaneId)) {
             return self::refuse(1, 'This player is not a Legend.');
         }
-        $last = self::lastConversion($mundaneId);
-        return ['Status' => 0, 'Cleared' => $last ? (json_decode((string) $last['cleared_json'], true) ?: []) : []];
+        return ['Status' => 0] + self::lastSnapshot($mundaneId);
     }
 
     /**
      * This player's own latest conversion on the log. A merge re-homes a source
      * Legend's rows here with a JSON object in cleared_json; those are not theirs.
      *
-     * @return array{prior_active: mixed, cleared_json: mixed}|null
+     * @return array{prior_active: mixed, created: mixed, persona: mixed}|null
      */
     private static function lastConversion(int $mundaneId): ?array
     {
+        $p = DB_PREFIX;
         $rows = self::rows(
-            'SELECT prior_active, cleared_json FROM ' . DB_PREFIX . 'legend_log
-             WHERE mundane_id = ' . $mundaneId . " AND action = 'convert' AND cleared_json NOT LIKE '{%'
-             ORDER BY legend_log_id DESC LIMIT 1"
+            "SELECT ll.prior_active, ll.created, m.persona
+             FROM {$p}legend_log ll
+             LEFT JOIN {$p}mundane m ON m.mundane_id = ll.actor_id
+             WHERE ll.mundane_id = {$mundaneId} AND ll.action = 'convert' AND ll.cleared_json NOT LIKE '{%'
+             ORDER BY ll.legend_log_id DESC LIMIT 1"
         );
         return $rows[0] ?? null;
+    }
+
+    /**
+     * The restoration list: the newest of this player's own conversions that
+     * cleared anything. Back-dating a record means undoing and converting again,
+     * and that second conversion finds nothing left to clear, so it must not hide
+     * the list from the first.
+     *
+     * @return array{Cleared: list<array{Type: string, Label: string, Id: int}>, Warnings: list<string>, ClearedOn: string}
+     */
+    private static function lastSnapshot(int $mundaneId): array
+    {
+        $rows = self::rows(
+            'SELECT cleared_json, warnings_json, created FROM ' . DB_PREFIX . 'legend_log
+             WHERE mundane_id = ' . $mundaneId . " AND action = 'convert' AND cleared_json NOT LIKE '{%' AND cleared_json <> '[]'
+             ORDER BY legend_log_id DESC LIMIT 1"
+        );
+        return [
+            'Cleared'   => json_decode((string) ($rows[0]['cleared_json'] ?? ''), true) ?: [],
+            'Warnings'  => json_decode((string) ($rows[0]['warnings_json'] ?? ''), true) ?: [],
+            'ClearedOn' => substr((string) ($rows[0]['created'] ?? ''), 0, 10),
+        ];
     }
 
     /**
@@ -351,39 +451,121 @@ class Legend
     // =======================================================================
 
     /**
-     * A Legend's visible memories, newest first. Empty for anyone who is not a
-     * Legend, so undoing hides the wall without deleting it.
+     * One page of a Legend's visible memories, newest first. Empty for anyone who
+     * is not a Legend, so undoing hides the wall without deleting it. The limit
+     * and offset come from a public route: a limit outside 1 to MEMORIES_PER_PAGE
+     * means a full page.
      *
-     * @return list<array{MemoryId: int, AuthorId: int, AuthorPersona: string, Body: string, Created: string}>
+     * @return list<array{MemoryId: int, AuthorId: int, AuthorPersona: string, KingdomAbbr: string, ParkAbbr: string, AuthorHome: string, AuthorMemoryCount: int, Body: string, Created: string, CreatedOn: string}>
      */
-    public static function memories(int $mundaneId): array
+    public static function memories(int $mundaneId, int $limit = self::MEMORIES_PER_PAGE, int $offset = 0): array
     {
         if (!self::isLegend($mundaneId)) {
             return [];
         }
+        $limit  = $limit > 0 && $limit < self::MEMORIES_PER_PAGE ? $limit : self::MEMORIES_PER_PAGE;
+        $offset = max(0, $offset);
         $p = DB_PREFIX;
-        $out = [];
-        foreach (self::asUtf8mb4(fn (): array => self::rows(
-            "SELECT lm.legend_memory_id, lm.author_id, m.persona, lm.body, lm.created
-             FROM {$p}legend_memory lm
-             LEFT JOIN {$p}mundane m ON m.mundane_id = lm.author_id
+        return array_map([self::class, 'memoryShape'], self::asUtf8mb4(fn (): array => self::rows(
+            self::MEMORY_SQL_SELECT . ",
+                    (SELECT COUNT(*) FROM {$p}legend_memory same
+                      WHERE same.mundane_id = lm.mundane_id AND same.author_id = lm.author_id AND same.removed_by_id = 0) AS author_memory_count
+             " . self::memoryFrom() . "
              WHERE lm.mundane_id = {$mundaneId} AND lm.removed_by_id = 0
-             ORDER BY lm.created DESC, lm.legend_memory_id DESC"
-        )) as $r) {
-            $out[] = [
-                'MemoryId'      => (int) $r['legend_memory_id'],
-                'AuthorId'      => (int) $r['author_id'],
-                'AuthorPersona' => (string) $r['persona'],
-                'Body'          => (string) $r['body'],
-                'Created'       => (string) $r['created'],
+             ORDER BY lm.created DESC, lm.legend_memory_id DESC
+             LIMIT {$limit} OFFSET {$offset}"
+        )));
+    }
+
+    /** How many visible memories a Legend has: 0 for anyone who is not a Legend. */
+    public static function memoryCount(int $mundaneId): int
+    {
+        if (!self::isLegend($mundaneId)) {
+            return 0;
+        }
+        return (int) (self::rows('SELECT COUNT(*) AS n FROM ' . DB_PREFIX . "legend_memory WHERE mundane_id = {$mundaneId} AND removed_by_id = 0")[0]['n'] ?? 0);
+    }
+
+    /**
+     * What has been taken off a wall, newest removal first, for those who may
+     * manage the Legend. There is no restoring: this is the record.
+     *
+     * @return array{Status: int, Error?: string, Memories?: list<array<string, mixed>>}
+     */
+    public static function removedMemories(int $uid, int $mundaneId): array
+    {
+        if ($uid <= 0) {
+            return self::refuse(5, 'Not logged in');
+        }
+        $refused = self::refuseManagement($uid, $mundaneId);
+        if ($refused !== null) {
+            return $refused;
+        }
+        $p = DB_PREFIX;
+        $rows = self::asUtf8mb4(fn (): array => self::rows(
+            self::MEMORY_SQL_SELECT . ", lm.removed_at, lm.removed_reason, rb.persona AS removed_by
+             " . self::memoryFrom() . "
+             LEFT JOIN {$p}mundane rb ON rb.mundane_id = lm.removed_by_id
+             WHERE lm.mundane_id = {$mundaneId} AND lm.removed_by_id <> 0
+             ORDER BY lm.removed_at DESC, lm.legend_memory_id DESC"
+        ));
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = self::memoryShape($r) + [
+                'RemovedBy'     => (string) $r['removed_by'],
+                'RemovedOn'     => self::longDate((string) $r['removed_at']),
+                'RemovedReason' => (string) $r['removed_reason'],
             ];
         }
-        return $out;
+        return ['Status' => 0, 'Memories' => $out];
+    }
+
+    /** The FROM a memory read shares: the byline's author and their current home. */
+    private static function memoryFrom(): string
+    {
+        $p = DB_PREFIX;
+        return "FROM {$p}legend_memory lm
+             LEFT JOIN {$p}mundane m ON m.mundane_id = lm.author_id
+             LEFT JOIN {$p}park pk ON pk.park_id = m.park_id
+             LEFT JOIN {$p}kingdom k ON k.kingdom_id = m.kingdom_id";
+    }
+
+    /**
+     * A memory row as the wall shows it, the server's page and revised.js alike.
+     * The byline is the persona as it stood when posted, or the live one for a
+     * memory from before that was kept. The home is always current.
+     *
+     * @param array<string, mixed> $r
+     * @return array<string, mixed>
+     */
+    private static function memoryShape(array $r): array
+    {
+        $kingdom = (string) $r['kingdom_abbr'];
+        $park    = (string) $r['park_abbr'];
+        return [
+            'MemoryId'          => (int) $r['legend_memory_id'],
+            'AuthorId'          => (int) $r['author_id'],
+            'AuthorPersona'     => (string) $r['author_persona'] !== '' ? (string) $r['author_persona'] : (string) $r['persona'],
+            'KingdomAbbr'       => $kingdom,
+            'ParkAbbr'          => $park,
+            'AuthorHome'        => $kingdom !== '' && $park !== '' ? $kingdom . ':' . $park : '',
+            'AuthorMemoryCount' => (int) ($r['author_memory_count'] ?? 0),
+            'Body'              => (string) $r['body'],
+            'Created'           => (string) $r['created'],
+            'CreatedOn'         => self::longDate((string) $r['created']),
+        ];
+    }
+
+    /** A stored DATETIME as "November 14, 2026": its date part as stored, no timezone conversion. */
+    private static function longDate(string $when): string
+    {
+        return date('F j, Y', strtotime(substr($when, 0, 10) . ' 12:00:00'));
     }
 
     /**
      * Leave a memory on a Legend's wall. The author must be a signed-in player
-     * who is not suspended, in the penalty box or a Legend.
+     * who is not suspended, in the penalty box or a Legend. The limits are
+     * checked under the wall's row lock, so a burst of posts can't slip past them.
      *
      * @return array{Status: int, Error?: string, MemoryId?: int}
      */
@@ -392,7 +574,7 @@ class Legend
         if ($uid <= 0) {
             return self::refuse(5, 'Not logged in');
         }
-        $author = self::rows('SELECT suspended, penalty_box, is_legend FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $uid);
+        $author = self::rows('SELECT persona, suspended, penalty_box, is_legend FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $uid);
         if (!$author || (int) $author[0]['suspended'] !== 0 || (int) $author[0]['penalty_box'] !== 0 || (int) $author[0]['is_legend'] !== 0) {
             return self::refuse(3, 'Your account cannot leave memories right now.');
         }
@@ -406,38 +588,55 @@ class Legend
         if (mb_strlen($body, 'UTF-8') > self::MAX_MEMORY_CHARS) {
             return self::refuse(1, 'A memory can be at most ' . self::MAX_MEMORY_CHARS . ' characters.');
         }
-        if ((new ProfanityFilter())->containsProfanity($body)) {
-            return self::refuse(1, ProfanityFilter::ERROR_MESSAGE);
+        // The weapon is an ordinary thing to remember someone by. Only the checked copy loses it.
+        $word = (new ProfanityFilter())->firstMatch(preg_replace('/\bbastard[ \-]+swords?\b/iu', ' ', $body));
+        if ($word !== null) {
+            return self::refuse(1, 'Our filter stopped the word "' . $word . '". Please reword it; your text has been kept.');
         }
-        try {
-            $id = self::asUtf8mb4(function () use ($mundaneId, $uid, $body): int {
+        $persona = (string) $author[0]['persona'];
+        return self::transaction($mundaneId, function (array $player) use ($mundaneId, $uid, $body, $persona): array {
+            if ((int) $player['is_legend'] !== 1) {
+                return self::refuse(1, 'Memories can only be left for a Legend.');
+            }
+            return self::asUtf8mb4(function () use ($mundaneId, $uid, $body, $persona): array {
+                // On the database's clock, the one `created` is written with. PHP's is on another zone.
+                $earlier = self::rows(
+                    'SELECT body, created > NOW() - INTERVAL 24 HOUR AS recent FROM ' . DB_PREFIX . "legend_memory
+                     WHERE mundane_id = {$mundaneId} AND author_id = {$uid}"
+                );
+                if (array_sum(array_column($earlier, 'recent')) >= self::MAX_MEMORIES_PER_DAY) {
+                    return self::refuse(1, 'Thank you for sharing so much. You can post up to ' . self::MAX_MEMORIES_PER_DAY . ' memories here in a day, so please come back tomorrow; your text has been kept.');
+                }
+                // Compared here, not in SQL: the column's collation treats some different texts as equal.
+                if (in_array($body, array_column($earlier, 'body'), true)) {
+                    return self::refuse(1, 'You have already shared this memory here.');
+                }
                 global $DB;
                 $DB->Clear();
                 $DB->body = $body;
+                $DB->author_persona = $persona;
                 $ok = $DB->ExecuteChecked(
-                    'INSERT INTO ' . DB_PREFIX . "legend_memory (mundane_id, author_id, body, created)
-                     VALUES ({$mundaneId}, {$uid}, :body, NOW())"
+                    'INSERT INTO ' . DB_PREFIX . "legend_memory (mundane_id, author_id, author_persona, body, created)
+                     VALUES ({$mundaneId}, {$uid}, :author_persona, :body, NOW())"
                 );
                 $DB->Clear();
                 if (!$ok) {
                     throw new RuntimeException('memory write failed');
                 }
-                return (int) (self::rows('SELECT LAST_INSERT_ID() AS id')[0]['id'] ?? 0);
+                return ['Status' => 0, 'MemoryId' => (int) (self::rows('SELECT LAST_INSERT_ID() AS id')[0]['id'] ?? 0)];
             });
-        } catch (Throwable $e) {
-            error_log('Legend: memory not saved for player ' . $mundaneId . ': ' . $e->getMessage());
-            return self::refuse(1, 'That could not be saved. Please try again.');
-        }
-        return ['Status' => 0, 'MemoryId' => $id];
+        });
     }
 
     /**
-     * Take a memory off the wall (soft: the row stays). Only those who may
-     * manage the Legend's status; an author may not remove their own.
+     * Take a memory off the wall (soft: the row stays, and nothing in the UI
+     * restores it). Only those who may manage the Legend's status, and only while
+     * the player is a Legend; an author may not remove their own. The removal and
+     * its audit row are one transaction.
      *
      * @return array{Status: int, Error?: string}
      */
-    public static function removeMemory(int $uid, int $memoryId): array
+    public static function removeMemory(int $uid, int $memoryId, string $reason): array
     {
         if ($uid <= 0) {
             return self::refuse(5, 'Not logged in');
@@ -451,13 +650,109 @@ class Legend
         if (!self::mayManage($uid, (int) $row[0]['mundane_id'])) {
             return self::refuse(3, 'You do not have authority over this player.');
         }
-        try {
-            self::write('UPDATE ' . DB_PREFIX . "legend_memory SET removed_by_id = {$uid}, removed_at = NOW() WHERE legend_memory_id = {$memoryId} AND removed_by_id = 0");
-        } catch (Throwable $e) {
-            error_log('Legend: memory ' . $memoryId . ' not removed: ' . $e->getMessage());
-            return self::refuse(1, 'That could not be removed. Please try again.');
+        $reason  = trim($reason);
+        $refused = self::refuseRemovalReason($reason);
+        if ($refused !== null) {
+            return $refused;
         }
-        return ['Status' => 0];
+        $mundaneId = (int) $row[0]['mundane_id'];
+        return self::transaction($mundaneId, function (array $player) use ($uid, $mundaneId, $memoryId, $reason): array {
+            if ((int) $player['is_legend'] !== 1) {
+                return self::refuse(1, 'This player is not a Legend.');
+            }
+            $memory = self::asUtf8mb4(fn (): array => self::rows(
+                'SELECT author_id, body FROM ' . DB_PREFIX . "legend_memory WHERE legend_memory_id = {$memoryId} AND removed_by_id = 0 FOR UPDATE"
+            ));
+            if (!$memory) {
+                return self::refuse(1, 'Memory not found.');
+            }
+            self::stampRemoved([$memoryId], $uid, $reason);
+            self::audit(
+                'removeMemory',
+                $uid,
+                $mundaneId,
+                ['MemoryId' => $memoryId, 'AuthorId' => (int) $memory[0]['author_id'], 'LegendId' => $mundaneId, 'Body' => (string) $memory[0]['body'], 'Reason' => $reason],
+                ['RemovedById' => $uid]
+            );
+            return ['Status' => 0];
+        });
+    }
+
+    /**
+     * Remove everything one author still has on one wall, on the same terms as
+     * removeMemory(), with one audit row for the lot.
+     *
+     * @return array{Status: int, Error?: string, Removed?: int}
+     */
+    public static function removeAuthorMemories(int $uid, int $mundaneId, int $authorId, string $reason): array
+    {
+        if ($uid <= 0) {
+            return self::refuse(5, 'Not logged in');
+        }
+        $refused = self::refuseManagement($uid, $mundaneId);
+        if ($refused !== null) {
+            return $refused;
+        }
+        $reason  = trim($reason);
+        $refused = self::refuseRemovalReason($reason);
+        if ($refused !== null) {
+            return $refused;
+        }
+        return self::transaction($mundaneId, function (array $player) use ($uid, $mundaneId, $authorId, $reason): array {
+            if ((int) $player['is_legend'] !== 1) {
+                return self::refuse(1, 'This player is not a Legend.');
+            }
+            $ids = array_map('intval', array_column(self::rows(
+                'SELECT legend_memory_id FROM ' . DB_PREFIX . "legend_memory
+                 WHERE mundane_id = {$mundaneId} AND author_id = {$authorId} AND removed_by_id = 0 FOR UPDATE"
+            ), 'legend_memory_id'));
+            if (!$ids) {
+                return self::refuse(1, 'Memory not found.');
+            }
+            self::stampRemoved($ids, $uid, $reason);
+            self::audit(
+                'removeAuthorMemories',
+                $uid,
+                $mundaneId,
+                ['MemoryIds' => $ids, 'AuthorId' => $authorId, 'LegendId' => $mundaneId, 'Reason' => $reason],
+                ['RemovedById' => $uid, 'RemovedCount' => count($ids)]
+            );
+            return ['Status' => 0, 'Removed' => count($ids)];
+        });
+    }
+
+    /** Why this removal reason can't be used, or null when it can. Plain text, trimmed already; no filter. */
+    private static function refuseRemovalReason(string $reason): ?array
+    {
+        if ($reason === '' || !mb_check_encoding($reason, 'UTF-8')) {
+            return self::refuse(1, 'Please give a reason for the removal.');
+        }
+        if (mb_strlen($reason, 'UTF-8') > self::MAX_REMOVAL_REASON_CHARS) {
+            return self::refuse(1, 'A reason can be at most ' . self::MAX_REMOVAL_REASON_CHARS . ' characters.');
+        }
+        return null;
+    }
+
+    /**
+     * Mark memories removed. Throws if the write fails.
+     *
+     * @param list<int> $memoryIds
+     */
+    private static function stampRemoved(array $memoryIds, int $uid, string $reason): void
+    {
+        self::asUtf8mb4(function () use ($memoryIds, $uid, $reason): void {
+            global $DB;
+            $DB->Clear();
+            $DB->removed_reason = $reason;
+            $ok = $DB->ExecuteChecked(
+                'UPDATE ' . DB_PREFIX . "legend_memory SET removed_by_id = {$uid}, removed_at = NOW(), removed_reason = :removed_reason
+                 WHERE legend_memory_id IN (" . implode(',', $memoryIds) . ') AND removed_by_id = 0'
+            );
+            $DB->Clear();
+            if (!$ok) {
+                throw new RuntimeException('memory removal failed');
+            }
+        });
     }
 
     /**
@@ -528,7 +823,38 @@ class Legend
         if ($refused === null && $uid === $mundaneId) {
             return self::refuse(1, 'You cannot mark yourself as a Legend.');
         }
+        if ($refused === null && !self::isOrkAdmin($uid) && self::holdsRoleBeyond($uid, $mundaneId)) {
+            return self::refuse(3, 'This player holds a role outside your authority. Please ask an ORK admin to mark them as a Legend.');
+        }
         return $refused;
+    }
+
+    /**
+     * Would converting this player take away something $uid has no authority
+     * over? Conversion vacates every seat and deletes every authorization row, and
+     * Move Player can bring anyone into a kingdom first. Unit and event rows don't
+     * count: a unit has no kingdom, so they would stop an officer converting any
+     * unit captain.
+     */
+    private static function holdsRoleBeyond(int $uid, int $mundaneId): bool
+    {
+        if (self::isOrkAdmin($mundaneId)) {
+            return true;
+        }
+        $auth   = Ork3::$Lib->authorization;
+        $scoped = self::rows(
+            'SELECT kingdom_id, park_id FROM ' . DB_PREFIX . 'authorization
+             WHERE mundane_id = ' . $mundaneId . ' AND event_id = 0 AND unit_id = 0 AND (kingdom_id > 0 OR park_id > 0)'
+        );
+        foreach (array_merge(self::seats($mundaneId), $scoped) as $held) {
+            $allowed = (int) $held['park_id'] > 0
+                ? $auth->HasAuthority($uid, AUTH_PARK, (int) $held['park_id'], AUTH_EDIT)
+                : $auth->HasAuthority($uid, AUTH_KINGDOM, (int) $held['kingdom_id'], AUTH_EDIT);
+            if (!$allowed) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -703,14 +1029,15 @@ class Legend
         ) as $r) {
             $add('court_recorder', 'Recorder of ' . self::onDate((string) $r['name'], (string) $r['court_date']), $r['court_id']);
         }
-        // Open lines only: a 'given' line records who actually conferred the award.
+        // Open lines only: a 'given' line records who actually conferred the award, and so
+        // does a 'staged' line unless its court is still to come.
         foreach (self::rows(
             "SELECT ca.court_award_id, c.name, c.court_date, m.persona
              FROM {$p}court_award ca
              JOIN {$p}court c ON c.court_id = ca.court_id
              LEFT JOIN {$p}mundane m ON m.mundane_id = ca.mundane_id
              WHERE ca.given_by_mundane_id = {$mundaneId} AND c.status <> 'complete'
-               AND ca.status IN ('planned', 'announced', 'staged')
+               AND (ca.status IN ('planned', 'announced') OR (ca.status = 'staged' AND c.court_date > CURDATE()))
              ORDER BY ca.court_award_id"
         ) as $r) {
             $add('court_given_by', 'Giving an award to ' . $r['persona'] . ' at ' . self::onDate((string) $r['name'], (string) $r['court_date']), $r['court_award_id']);
@@ -823,20 +1150,25 @@ class Legend
         }
     }
 
-    /** @param list<array{Type: string, Label: string, Id: int}> $cleared */
-    private static function log(int $mundaneId, string $action, int $year, int $priorActive, array $cleared, int $uid): void
+    /**
+     * @param list<array{Type: string, Label: string, Id: int}> $cleared
+     * @param list<string> $warnings
+     */
+    private static function log(int $mundaneId, string $action, int $year, int $priorActive, array $cleared, int $uid, array $warnings = []): void
     {
         global $DB;
         // Plain ASCII \u escapes: the connection is utf8 and the snapshot must survive it whole.
-        $json = json_encode($cleared, JSON_INVALID_UTF8_SUBSTITUTE);
-        if ($json === false) {
+        $json         = json_encode($cleared, JSON_INVALID_UTF8_SUBSTITUTE);
+        $warningsJson = json_encode($warnings, JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($json === false || $warningsJson === false) {
             throw new RuntimeException('snapshot would not encode');
         }
         $DB->Clear();
         $DB->cleared_json = $json;
+        $DB->warnings_json = $warningsJson;
         $ok = $DB->ExecuteChecked(
-            'INSERT INTO ' . DB_PREFIX . "legend_log (mundane_id, action, legend_year, prior_active, cleared_json, actor_id, created)
-             VALUES ({$mundaneId}, '{$action}', {$year}, {$priorActive}, :cleared_json, {$uid}, NOW())"
+            'INSERT INTO ' . DB_PREFIX . "legend_log (mundane_id, action, legend_year, prior_active, cleared_json, warnings_json, actor_id, created)
+             VALUES ({$mundaneId}, '{$action}', {$year}, {$priorActive}, :cleared_json, :warnings_json, {$uid}, NOW())"
         );
         $DB->Clear();
         if (!$ok) {
@@ -844,9 +1176,16 @@ class Legend
         }
     }
 
+    /** Write the audit row, throwing if it did not land: a Yapo save reports no failure, and an unaudited change must roll back. */
     private static function audit(string $action, int $uid, int $mundaneId, array $prior, array $post): void
     {
-        Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . $action, ['by_whom_id' => $uid, 'MundaneId' => $mundaneId], 'Player', $mundaneId, $prior, $post);
+        $call   = __CLASS__ . '::' . $action;
+        $latest = "SELECT COALESCE(MAX(danger_audit_id), 0) AS id FROM " . DB_PREFIX . "danger_audit WHERE method_call = '{$call}'";
+        $before = (int) self::rows($latest)[0]['id'];
+        Ork3::$Lib->dangeraudit->audit($call, ['by_whom_id' => $uid, 'MundaneId' => $mundaneId], 'Player', $mundaneId, $prior, $post);
+        if ((int) self::rows($latest)[0]['id'] <= $before) {
+            throw new RuntimeException('audit write failed: ' . $call);
+        }
     }
 
     /**

@@ -168,7 +168,7 @@
 					function( data ) {
 						var suggestions = [];
 						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId });
+							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')' + (val.Legend ? ' [Legend]' : ''), value: val.MundaneId });
 						});
 						response(suggestions);
 					}

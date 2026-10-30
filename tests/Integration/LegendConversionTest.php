@@ -159,11 +159,12 @@ final class LegendConversionTest extends TestCase
         $noPark = $this->player('nopark');
         $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'mundane SET park_id = 0 WHERE mundane_id = ' . $noPark);
         $admin = $this->fixture->addOrkAdmin($this->park, 'targetadmin');
+        $actor = $this->fixture->addOrkAdmin($this->park, 'actoradmin');
 
         $this->assertSame(0, Legend::convert($this->officer, $noPark, 2020)['Status']);
-        $preview = Legend::preview($this->officer, $admin);
+        $preview = Legend::preview($actor, $admin);
         $this->assertContains('ORK admin', array_column($preview['Items'], 'Label'));
-        $this->assertSame(0, Legend::convert($this->officer, $admin, 2020)['Status']);
+        $this->assertSame(0, Legend::convert($actor, $admin, 2020)['Status']);
 
         $this->assertFalse(Legend::isOrkAdmin($admin));
     }
@@ -296,8 +297,9 @@ final class LegendConversionTest extends TestCase
         $away = $this->fixture->addSeat($otherKingdom, $otherPark, 'Regent', $target);
         $bystander = $this->player('bystander');
         $sameRoleElsewhere = $this->fixture->addSeat($this->kingdom, 0, 'Regent', $bystander);
+        $admin = $this->fixture->addOrkAdmin($this->park);
 
-        $this->assertSame(0, Legend::convert($this->officer, $target, 2020)['Status']);
+        $this->assertSame(0, Legend::convert($admin, $target, 2020)['Status']);
 
         $this->assertSame(0, (int) $this->fixture->value('officer', 'mundane_id', 'officer_id = ' . $home['officer_id']));
         $this->assertSame(0, (int) $this->fixture->value('officer', 'mundane_id', 'officer_id = ' . $away['officer_id']));
@@ -550,8 +552,8 @@ final class LegendConversionTest extends TestCase
         $this->fixture->addRsvp($this->fixture->futureEvent($this->park), $target);
         $this->assertSame(0, Legend::convert($this->officer, $target, 2018)['Status']);
         $this->fixture->pdo()->exec(
-            'INSERT INTO ' . DB_PREFIX . "legend_log (mundane_id, action, legend_year, prior_active, cleared_json, actor_id)
-             VALUES ({$target}, 'convert', 2018, 1, '{\"MergedFrom\":1}', {$this->officer})"
+            'INSERT INTO ' . DB_PREFIX . "legend_log (mundane_id, action, legend_year, prior_active, cleared_json, warnings_json, actor_id)
+             VALUES ({$target}, 'convert', 2018, 1, '{\"MergedFrom\":1}', '[]', {$this->officer})"
         );
 
         $this->assertSame(['rsvp'], $this->typesOf(Legend::cleared($this->officer, $target)['Cleared']));
@@ -737,6 +739,321 @@ final class LegendConversionTest extends TestCase
         $this->assertCount(1, $this->logRows($target));
     }
 
+    // ---- Roles outside the officer's authority ------------------------------
+
+    private function assertRefusedAsOutsideAuthority(int $target, int $actor): void
+    {
+        $before = $this->fixture->checksums();
+
+        $preview = Legend::preview($actor, $target);
+        $convert = Legend::convert($actor, $target, 2020);
+
+        $this->assertSame(3, $preview['Status']);
+        $this->assertSame(3, $convert['Status']);
+        $this->assertStringContainsString('ask an ORK admin', $convert['Error']);
+        $this->assertSame($before, $this->fixture->checksums(), 'a refusal writes nothing');
+    }
+
+    public function test_ork_admin_target_needs_an_ork_admin(): void
+    {
+        $target = $this->fixture->addOrkAdmin($this->park, 'targetadmin');
+
+        $this->assertRefusedAsOutsideAuthority($target, $this->officer);
+
+        $admin = $this->fixture->addOrkAdmin($this->park);
+        $this->assertSame(0, Legend::preview($admin, $target)['Status']);
+        $this->assertSame(0, Legend::convert($admin, $target, 2020)['Status']);
+        $this->assertTrue($this->isLegendInDb($target));
+    }
+
+    public function test_moved_in_monarch_of_another_kingdom_is_refused(): void
+    {
+        $otherPark = $this->fixture->parkOutsideKingdom($this->kingdom);
+        $this->assertGreaterThan(0, $otherPark);
+        $target = $this->player('movedin');
+        $this->fixture->addSeat($this->fixture->kingdomIdForPark($otherPark), 0, 'Monarch', $target);
+
+        $this->assertRefusedAsOutsideAuthority($target, $this->officer);
+    }
+
+    public function test_park_seat_or_role_in_another_kingdom_is_refused(): void
+    {
+        $otherPark = $this->fixture->parkOutsideKingdom($this->kingdom);
+        $otherKingdom = $this->fixture->kingdomIdForPark($otherPark);
+
+        $seated = $this->player('otherparkseat');
+        $this->fixture->addSeat($otherKingdom, $otherPark, 'Regent', $seated, false);
+        $this->assertRefusedAsOutsideAuthority($seated, $this->officer);
+
+        $parkRole = $this->player('otherparkrole');
+        $this->fixture->addAuthorization($parkRole, ['park_id' => $otherPark]);
+        $this->assertRefusedAsOutsideAuthority($parkRole, $this->officer);
+
+        $kingdomRole = $this->player('otherkingdomrole');
+        $this->fixture->addAuthorization($kingdomRole, ['kingdom_id' => $otherKingdom]);
+        $this->assertRefusedAsOutsideAuthority($kingdomRole, $this->officer);
+    }
+
+    public function test_own_kingdom_monarch_may_be_converted_by_a_kingdom_officer(): void
+    {
+        $target = $this->player('ownmonarch');
+        $this->fixture->addSeat($this->kingdom, 0, 'Monarch', $target);
+
+        $this->assertSame(0, Legend::convert($this->officer, $target, 2020)['Status']);
+        $this->assertTrue($this->isLegendInDb($target));
+    }
+
+    public function test_unit_and_event_roles_never_block(): void
+    {
+        $target = $this->player('captain');
+        $this->fixture->addAuthorization($target, ['unit_id' => $this->fixture->addUnit()], AUTH_CREATE);
+        $this->fixture->addAuthorization($target, ['event_id' => $this->fixture->eventIdForDetail($this->fixture->futureEvent($this->fixture->parkOutsideKingdom($this->kingdom)))]);
+
+        $this->assertSame(0, Legend::convert($this->officer, $target, 2020)['Status']);
+    }
+
+    // ---- Staged awards and past courts -------------------------------------
+
+    public function test_convert_keeps_the_giver_on_a_staged_line_and_it_finalizes(): void
+    {
+        $target    = $this->player('crown');
+        $recipient = $this->player('recipient');
+        $kingdomAward = (int) $this->fixture->pdo()->query(
+            'SELECT ka.kingdomaward_id FROM ' . DB_PREFIX . 'kingdomaward ka JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+             WHERE ka.kingdom_id = ' . $this->kingdom . ' AND a.is_ladder = 0 AND a.is_title = 0 AND ka.is_title = 0 LIMIT 1'
+        )->fetchColumn();
+        $this->assertGreaterThan(0, $kingdomAward);
+        $court = $this->fixture->addCourt($this->kingdom, $this->park);
+        $line  = $this->fixture->addCourtLine($court, $recipient);
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'court_award SET kingdomaward_id = ' . $kingdomAward . ', rank = 0 WHERE court_award_id = ' . $line);
+        $this->assertTrue((new Court())->stageAward($line, $target, '', 0));
+
+        $r = Legend::convert($this->officer, $target, 2020);
+
+        $this->assertSame(0, $r['Status']);
+        $this->assertNotContains('court_given_by', array_column($r['Cleared'], 'Type'));
+        $this->assertSame($target, (int) $this->fixture->value('court_award', 'given_by_mundane_id', 'court_award_id = ' . $line));
+
+        $grantor = $this->fixture->addKingdomOfficer($this->kingdom, $this->park, 'grantor', AUTH_CREATE);
+        $commit  = (new Court())->commitStagedAward($line, ['Token' => $this->fixture->addSession($grantor)]);
+        $givenBy = $this->fixture->value('awards', 'given_by_id', 'mundane_id = ' . $recipient);
+        $this->fixture->pdo()->exec('DELETE FROM ' . DB_PREFIX . 'awards WHERE mundane_id = ' . $recipient);
+
+        $this->assertSame('given', $this->fixture->value('court_award', 'status', 'court_award_id = ' . $line), json_encode($commit));
+        $this->assertSame($target, (int) $givenBy);
+    }
+
+    public function test_a_staged_giver_clears_only_on_a_court_still_to_come(): void
+    {
+        $target    = $this->player('crown');
+        $recipient = $this->player('recipient');
+        $line = function (?string $date, string $status) use ($target, $recipient): int {
+            $court = $this->fixture->addCourt($this->kingdom, $this->park);
+            $this->fixture->pdo()->prepare('UPDATE ' . DB_PREFIX . 'court SET court_date = ? WHERE court_id = ?')->execute([$date, $court]);
+
+            return $this->fixture->addCourtLine($court, $recipient, $target, $status);
+        };
+        $future    = date('Y-m-d', strtotime('+7 days'));
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
+        $cleared = [$line($future, 'staged'), $line($future, 'planned'), $line($yesterday, 'planned'), $line($future, 'announced')];
+        $kept    = [$line(date('Y-m-d'), 'staged'), $line($yesterday, 'staged'), $line(null, 'staged')];
+
+        $this->assertSame(0, Legend::convert($this->officer, $target, 2020)['Status']);
+
+        foreach ($cleared as $id) {
+            $this->assertNull($this->fixture->value('court_award', 'given_by_mundane_id', 'court_award_id = ' . $id), 'line ' . $id);
+        }
+        foreach ($kept as $id) {
+            $this->assertSame($target, (int) $this->fixture->value('court_award', 'given_by_mundane_id', 'court_award_id = ' . $id), 'line ' . $id);
+        }
+    }
+
+    public function test_only_a_court_dated_before_today_may_credit_a_legend_as_giver(): void
+    {
+        $legend = $this->fixture->addPlayer($this->park, 'oldcrown', 2020)['mundane_id'];
+        $recipient = $this->player('recipient');
+        $dated = function (?string $date) use ($recipient): array {
+            $court = $this->fixture->addCourt($this->kingdom, $this->park);
+            $this->fixture->pdo()->prepare('UPDATE ' . DB_PREFIX . 'court SET court_date = ? WHERE court_id = ?')->execute([$date, $court]);
+
+            return [$court, $this->fixture->addCourtLine($court, $recipient)];
+        };
+
+        [$past, $pastLine] = $dated(date('Y-m-d', strtotime('-1 day')));
+        $this->assertTrue((new Court())->stageAward($pastLine, $legend, '', 1));
+        $this->assertSame($legend, (int) $this->fixture->value('court_award', 'given_by_mundane_id', 'court_award_id = ' . $pastLine));
+        $this->fixture->addCourtLine($past, $recipient);
+        $this->assertSame(1, (new Court())->bulkStagePlanned($past, $legend));
+
+        foreach ([date('Y-m-d'), date('Y-m-d', strtotime('+7 days')), null] as $date) {
+            [$court, $line] = $dated($date);
+            $this->assertFalse((new Court())->stageAward($line, $legend, '', 1), 'court dated ' . var_export($date, true));
+            $this->assertSame(0, (new Court())->bulkStagePlanned($court, $legend));
+            $this->assertSame('planned', $this->fixture->value('court_award', 'status', 'court_award_id = ' . $line));
+        }
+    }
+
+    // ---- Warnings, and what the officer gets back ---------------------------
+
+    public function test_preview_returns_the_player_and_warns_on_recent_attendance_and_suspension(): void
+    {
+        $target = $this->player('recent');
+        $this->fixture->addAttendance($this->park, $this->kingdom, $target);
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'mundane SET suspended = 1 WHERE mundane_id = ' . $target);
+
+        $r = Legend::preview($this->officer, $target);
+
+        $this->assertSame(0, $r['Status']);
+        $this->assertSame(date('Y-m-d'), $r['Player']['LastAttendance']);
+        $this->assertSame('', $r['Player']['LatestAward']);
+        $this->assertTrue($r['Player']['Suspended']);
+        $this->assertNotSame('', $r['Player']['Persona']);
+        $this->assertNotSame('', $r['Player']['ParkName']);
+        $this->assertNotSame('', $r['Player']['KingdomName']);
+        $this->assertContains('Attended on ' . date('F j, Y') . ', within the last 90 days.', $r['Warnings']);
+        $this->assertContains('This player is currently suspended or banned.', $r['Warnings']);
+        $this->assertSame(0, Legend::convert($this->officer, $target, (int) date('Y'))['Status'], 'a suspended player can still be marked');
+    }
+
+    public function test_preview_warns_on_a_banned_player(): void
+    {
+        $target = $this->player('banned');
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'mundane SET penalty_box = 1 WHERE mundane_id = ' . $target);
+
+        $r = Legend::preview($this->officer, $target);
+
+        $this->assertTrue($r['Player']['Suspended']);
+        $this->assertContains('This player is currently suspended or banned.', $r['Warnings']);
+    }
+
+    public function test_preview_ignores_future_and_zero_dates_and_revoked_awards(): void
+    {
+        $target = $this->player('baddates');
+        $attend = function (string $date) use ($target): void {
+            $id = $this->fixture->addAttendance($this->park, $this->kingdom, $target);
+            $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . "attendance SET date = {$date} WHERE attendance_id = {$id}");
+        };
+        $award = function (string $date, int $revoked) use ($target): void {
+            $this->fixture->pdo()->exec(
+                'INSERT INTO ' . DB_PREFIX . "awards (kingdomaward_id, mundane_id, rank, date, given_by_id, note, at_park_id, at_kingdom_id, at_event_id, custom_name, award_id, by_whom_id, entered_at, revoked)
+                 VALUES (0, {$target}, 0, {$date}, 0, '', 0, 0, 0, '', 0, 0, NOW(), {$revoked})"
+            );
+        };
+        $attend('CURDATE() + INTERVAL 30 DAY');
+        $attend("'0000-00-00'");
+        $award('CURDATE() + INTERVAL 30 DAY', 0);
+        $award("'0000-00-00'", 0);
+        $award('CURDATE() - INTERVAL 1 DAY', 1);
+
+        $none = Legend::preview($this->officer, $target);
+        $longAgo = date('Y-m-d', strtotime('-200 days'));
+        $attend("'{$longAgo}'");
+        $award("'{$longAgo}'", 0);
+        $real = Legend::preview($this->officer, $target);
+        $this->fixture->pdo()->exec('DELETE FROM ' . DB_PREFIX . 'awards WHERE mundane_id = ' . $target);
+
+        $this->assertSame('', $none['Player']['LastAttendance']);
+        $this->assertSame('', $none['Player']['LatestAward']);
+        $this->assertSame([], $none['Warnings']);
+        $this->assertSame($longAgo, $real['Player']['LastAttendance']);
+        $this->assertSame($longAgo, $real['Player']['LatestAward']);
+        $this->assertSame([], $real['Warnings']);
+    }
+
+    public function test_court_detail_says_whether_it_was_held_before_today(): void
+    {
+        $held = function (string $date): bool {
+            $court = $this->fixture->addCourt($this->kingdom, $this->park);
+            $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . "court SET court_date = {$date} WHERE court_id = {$court}");
+            return (new Court())->getCourtDetail($court)['HeldBeforeToday'];
+        };
+
+        $this->assertTrue($held("'" . date('Y-m-d', strtotime('-1 day')) . "'"));
+        $this->assertFalse($held("'" . date('Y-m-d') . "'"));
+        $this->assertFalse($held("'" . date('Y-m-d', strtotime('+1 day')) . "'"));
+        $this->assertFalse($held('NULL'), 'an undated court counts as today');
+    }
+
+    public function test_preview_ignores_attendance_older_than_90_days_and_a_revoked_award(): void
+    {
+        $target = $this->player('longago');
+        $attendance = $this->fixture->addAttendance($this->park, $this->kingdom, $target);
+        $longAgo = date('Y-m-d', strtotime('-91 days'));
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . "attendance SET date = '{$longAgo}' WHERE attendance_id = {$attendance}");
+        $award = function (int $revoked) use ($target): void {
+            $this->fixture->pdo()->exec(
+                'INSERT INTO ' . DB_PREFIX . "awards (kingdomaward_id, mundane_id, rank, date, given_by_id, note, at_park_id, at_kingdom_id, at_event_id, custom_name, award_id, by_whom_id, entered_at, revoked)
+                 VALUES (0, {$target}, 0, CURDATE() - INTERVAL {$revoked} DAY, 0, '', 0, 0, 0, '', 0, 0, NOW(), {$revoked})"
+            );
+        };
+        $award(1);
+
+        $r = Legend::preview($this->officer, $target);
+        $this->fixture->pdo()->exec('DELETE FROM ' . DB_PREFIX . 'awards WHERE mundane_id = ' . $target);
+
+        $this->assertSame($longAgo, $r['Player']['LastAttendance']);
+        $this->assertSame('', $r['Player']['LatestAward'], 'a revoked award is no sign of anything');
+        $this->assertSame([], $r['Warnings']);
+    }
+
+    public function test_convert_returns_and_stores_the_to_do_warnings_only(): void
+    {
+        $target = $this->player('todo');
+        $this->fixture->addSeat($this->kingdom, $this->park, 'Regent', $target);
+        $this->fixture->addAuthorization($target, ['unit_id' => $this->fixture->addUnit('Fixture Band')], AUTH_CREATE);
+        $this->fixture->addAttendance($this->park, $this->kingdom, $target);
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'mundane SET suspended = 1 WHERE mundane_id = ' . $target);
+
+        $r = Legend::convert($this->officer, $target, (int) date('Y'));
+
+        $this->assertSame(0, $r['Status']);
+        $this->assertCount(2, $r['Warnings']);
+        $this->assertStringEndsWith(' will become vacant.', $r['Warnings'][0]);
+        $this->assertSame('Fixture Band will have no manager.', $r['Warnings'][1]);
+        $this->assertSame($r['Warnings'], json_decode($this->logRows($target)[0]['warnings_json'], true));
+
+        $cleared = Legend::cleared($this->officer, $target);
+        $this->assertSame($r['Warnings'], $cleared['Warnings']);
+        $this->assertSame($this->dbDate('NOW()'), $cleared['ClearedOn']);
+        $undo = Legend::undo($this->officer, $target);
+        $this->assertSame($r['Warnings'], $undo['Warnings']);
+        $this->assertSame($this->dbDate('NOW()'), $undo['ClearedOn']);
+        $this->assertSame('[]', $this->logRows($target)[1]['warnings_json']);
+    }
+
+    public function test_undo_and_reconvert_keeps_the_restoration_list(): void
+    {
+        $target = $this->player('back');
+        $this->fixture->addSeat($this->kingdom, 0, 'Regent', $target);
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'mundane SET active = 1 WHERE mundane_id = ' . $target);
+        $first = Legend::convert($this->officer, $target, 2020);
+        $this->assertNotEmpty($first['Cleared']);
+        $this->assertSame(0, Legend::undo($this->officer, $target)['Status']);
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'mundane SET active = 0 WHERE mundane_id = ' . $target);
+
+        $this->assertSame([], Legend::convert($this->officer, $target, 2020)['Cleared']);
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . "legend_log SET created = NOW() - INTERVAL 3 DAY WHERE mundane_id = {$target} AND cleared_json <> '[]'");
+
+        $cleared = Legend::cleared($this->officer, $target);
+        $this->assertSame($first['Cleared'], $cleared['Cleared']);
+        $this->assertSame($first['Warnings'], $cleared['Warnings']);
+        $this->assertSame($this->dbDate('NOW() - INTERVAL 3 DAY'), $cleared['ClearedOn']);
+
+        $undo = Legend::undo($this->officer, $target);
+        $this->assertSame($first['Cleared'], $undo['Cleared']);
+        $this->assertSame(0, (int) $this->fixture->value('mundane', 'active', 'mundane_id = ' . $target), 'prior_active is the newest conversion\'s');
+    }
+
+    public function test_cleared_on_is_empty_when_nothing_was_ever_cleared(): void
+    {
+        $target = $this->player('nothing');
+        $this->assertSame([], Legend::convert($this->officer, $target, 2020)['Cleared']);
+
+        $r = Legend::cleared($this->officer, $target);
+
+        $this->assertSame(['Status' => 0, 'Cleared' => [], 'Warnings' => [], 'ClearedOn' => ''], $r);
+    }
+
     /** The controller's year comes from a form field; anything but a whole number reads as 0, which is refused. */
     public function test_parse_year(): void
     {
@@ -745,5 +1062,11 @@ final class LegendConversionTest extends TestCase
         foreach (['', 'abc', '1999abc', '1999.5', '19e2', null, []] as $raw) {
             $this->assertSame(0, Legend::parseYear($raw), var_export($raw, true));
         }
+    }
+
+    /** A date on the database's clock, for columns the code stamps with NOW(). */
+    private function dbDate(string $expression): string
+    {
+        return (string) $this->fixture->pdo()->query("SELECT DATE({$expression})")->fetchColumn();
     }
 }

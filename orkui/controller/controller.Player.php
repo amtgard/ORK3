@@ -482,7 +482,11 @@ class Controller_Player extends Controller
         $this->data['IsLegend']        = $legendView['IsLegend'];
         $this->data['LegendYear']      = (int)($this->data['Player']['LegendYear'] ?? 0);
         $this->data['CanManageLegend'] = $legendView['CanManageLegend'];
+        $this->data['LegendMarkedBy']  = $legendView['MarkedBy'];
+        $this->data['LegendMarkedOn']  = $legendView['MarkedOn'];
         $this->data['Memories']        = $legendView['Memories'];
+        $this->data['MemoryCount']     = $legendView['MemoryCount'];
+        $this->data['RemovedMemories'] = $legendView['RemovedMemories'];
         $this->data['LegendMinYear']        = $legendView['MinYear'];
         $this->data['LegendMaxMemoryChars'] = $legendView['MaxMemoryChars'];
         // Who a memory will be credited to, shown on the Share a Memory form.

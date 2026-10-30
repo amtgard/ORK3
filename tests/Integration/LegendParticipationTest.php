@@ -355,6 +355,36 @@ final class LegendParticipationTest extends TestCase
         $this->assertSame(0, $this->fixture->count('unit_mundane', 'unit_mundane_id = ' . $plainRow));
     }
 
+    public function test_last_living_member_may_retire_a_unit_and_the_legend_stays_on_its_roster(): void
+    {
+        $unit = $this->fixture->addUnit();
+        $legendRow = $this->fixture->addUnitMember($unit, $this->legend);
+        $survivor = $this->player('survivor');
+        $this->fixture->addUnitMember($unit, $survivor);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = (new Unit())->RetireUnit(['Token' => $this->fixture->addSession($survivor), 'UnitId' => $unit]);
+
+        $this->assertSame(0, $r['Status']);
+        $this->assertSame('Retired', $this->fixture->value('unit', 'active', 'unit_id = ' . $unit));
+        $this->assertSame('Active', $this->fixture->value('unit_mundane', 'active', 'unit_mundane_id = ' . $legendRow));
+    }
+
+    public function test_two_living_members_beside_a_legend_may_not_retire_a_unit(): void
+    {
+        $unit = $this->fixture->addUnit();
+        $this->fixture->addUnitMember($unit, $this->legend);
+        $first = $this->player('livingone');
+        $this->fixture->addUnitMember($unit, $first);
+        $this->fixture->addUnitMember($unit, $this->player('livingtwo'));
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = (new Unit())->RetireUnit(['Token' => $this->fixture->addSession($first), 'UnitId' => $unit]);
+
+        $this->assertNotSame(0, $r['Status']);
+        $this->assertSame('Active', $this->fixture->value('unit', 'active', 'unit_id = ' . $unit));
+    }
+
     public function test_may_move_and_can_edit_admin_gates(): void
     {
         $plain = $this->player('movable');

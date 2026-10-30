@@ -2388,7 +2388,7 @@ if (PnConfig.recError) {
                                 + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
                                 + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
                                 + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-                                + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
+                                + (p.Suspended && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
                                 + '</div>';
                         }).join('');
                     }
@@ -3706,7 +3706,7 @@ $(document).ready(function() {
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
                             + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
                             + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-                            + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
+                            + (p.Suspended && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 el.classList.add('kn-ac-open');
@@ -7832,7 +7832,7 @@ $(document).ready(function() {
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
                             + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
                             + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-                            + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
+                            + (p.Suspended && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 pkFixedAcPosition(gid('pk-award-givenby-text'), el);
@@ -13158,7 +13158,7 @@ function setupPronounPicker(cfg) {
                             editGbResults.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
                         } else {
                             function rank(p) {
-                                var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
+                                var banned   = !parseInt(p.Legend, 10) && !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
                                 var inactive = parseInt(p.Active, 10) === 0;
                                 if (banned)   return 2;
                                 if (inactive) return 1;
@@ -13171,7 +13171,7 @@ function setupPronounPicker(cfg) {
                             });
                             editGbResults.innerHTML = data.map(function(p) {
                                 var inactive = parseInt(p.Active, 10) === 0 && !parseInt(p.Legend, 10);
-                                var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
+                                var banned   = !parseInt(p.Legend, 10) && !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
                                 return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                                     + escHtml(p.Persona)
                                     + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
@@ -20924,13 +20924,16 @@ window.orkEnsureGoogleMaps = (function() {
         if (!overlay) return;
         var titleEl = gid('pn-legend-title'), introEl = gid('pn-legend-intro'), errEl = gid('pn-legend-error'),
             yearRow = gid('pn-legend-year-row'), yearEl = gid('pn-legend-year'), detailEl = gid('pn-legend-detail'),
-            cancelBtn = gid('pn-legend-cancel'), confirmBtn = gid('pn-legend-confirm'), closeBtn = gid('pn-legend-close-btn');
-        var onConfirm = null, reloadOnClose = false, previewRun = 0, busy = false;
+            cancelBtn = gid('pn-legend-cancel'), confirmBtn = gid('pn-legend-confirm'), closeBtn = gid('pn-legend-close-btn'),
+            copyBtn = gid('pn-legend-copy'), yearWarnEl = gid('pn-legend-year-warn');
+        var onConfirm = null, reloadOnClose = false, previewRun = 0, busy = false, release = null, playerFacts = null;
 
         function open(opts) {
             previewRun++;
             onConfirm = opts.onConfirm;
             reloadOnClose = false;
+            playerFacts = null;
+            yearWarnEl.textContent = '';
             titleEl.textContent = opts.title;
             introEl.textContent = opts.intro;
             errEl.style.display = 'none';
@@ -20944,7 +20947,13 @@ window.orkEnsureGoogleMaps = (function() {
             confirmBtn.disabled = !!opts.startDisabled;
             overlay.classList.add('pn-open');
             document.body.style.overflow = 'hidden';
-            if (opts.year) yearEl.focus();
+            // A phone's keyboard would cover the list and the confirm button.
+            var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+            // Once a result is up, only a button dismisses the list: a stray Escape must not lose it.
+            if (window.orkDialogTrap) release = window.orkDialogTrap(overlay, {
+                onEscape: function() { if (!reloadOnClose) close(); },
+                initialFocus: opts.year && !coarse ? yearEl : closeBtn
+            });
         }
         function close() {
             if (busy) return;
@@ -20952,6 +20961,8 @@ window.orkEnsureGoogleMaps = (function() {
             if (reloadOnClose) { window.location.reload(); return; }
             overlay.classList.remove('pn-open');
             document.body.style.overflow = '';
+            if (release) release();
+            release = null;
         }
         function appendList(heading, labels, className) {
             var h = document.createElement('div');
@@ -20976,6 +20987,22 @@ window.orkEnsureGoogleMaps = (function() {
         function labelsOf(items) {
             return (items || []).map(function(item) { return item.Label; });
         }
+        function humanDate(iso) {
+            return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        }
+        function markIntro(who) {
+            return 'This marks ' + who + ' as having passed away. Their login stops working, and their profile becomes a memorial with a Memory Wall.';
+        }
+        // A year earlier than the record shows is often a typo. It warns; it doesn't block.
+        function warnYear() {
+            var raw = yearEl.value.trim(), lines = [];
+            if (playerFacts && /^\d{4}$/.test(raw)) {
+                var attended = parseInt(playerFacts.LastAttendance, 10), awarded = parseInt(playerFacts.LatestAward, 10);
+                if (attended > +raw) lines.push('Attended in ' + attended + ', after the year entered.');
+                if (awarded > +raw) lines.push('Received an award in ' + awarded + ', after the year entered.');
+            }
+            yearWarnEl.textContent = lines.join(' ');
+        }
         function readYear() {
             var raw = yearEl.value.trim();
             if (!/^\d{4}$/.test(raw) || +raw < +yearEl.min || +raw > +yearEl.max) {
@@ -20995,10 +21022,26 @@ window.orkEnsureGoogleMaps = (function() {
             setBusy(true);
             request().then(done).catch(function(err) {
                 setBusy(false);
+                confirmBtn.focus();
                 showError(errEl, err.message);
             });
         }
         function reload() { window.location.reload(); }
+        // The list stays up: it is the officer's to-do list, gone once they reload.
+        function showResult(message, render) {
+            setBusy(false);
+            reloadOnClose = true;
+            introEl.textContent = message;
+            yearRow.style.display = 'none';
+            detailEl.textContent = '';
+            render();
+            copyBtn.style.display = detailEl.querySelector('li') ? '' : 'none';
+            cancelBtn.style.display = 'none';
+            confirmBtn.className = 'pn-btn pn-btn-primary';
+            confirmBtn.textContent = 'Done';
+            onConfirm = close;
+            confirmBtn.focus();
+        }
         // Shows what a read-only route reports. Confirm stays off until it has, so nobody confirms blind.
         function loadDetail(loadingText, route, render) {
             appendNote(loadingText);
@@ -21011,28 +21054,59 @@ window.orkEnsureGoogleMaps = (function() {
             }).catch(function(err) {
                 if (thisRun !== previewRun) return;
                 detailEl.textContent = '';
+                // A refusal is the end of it: nothing here to fill in or confirm.
+                if (document.activeElement === yearEl || !overlay.contains(document.activeElement)) closeBtn.focus();
+                yearRow.style.display = 'none';
+                confirmBtn.style.display = 'none';
                 showError(errEl, err.message);
             });
+        }
+        function appendWhatWasCleared(r) {
+            if (r.clearedOn) appendNote('Cleared on ' + humanDate(r.clearedOn));
+            if (r.cleared && r.cleared.length) {
+                appendList('Cleared at conversion, to restore by hand if needed', labelsOf(r.cleared));
+            } else {
+                appendNote('Nothing was cleared at conversion.');
+            }
+            if (r.warnings && r.warnings.length) appendList('Flagged at conversion', r.warnings, 'pn-legend-warnings');
         }
 
         var markBtn = gid('pn-legend-mark-btn');
         if (markBtn) markBtn.addEventListener('click', function() {
             open({
                 title: 'Mark as Legend',
-                intro: 'This marks ' + PnConfig.playerPersona + ' as having passed away. Their login stops working, and their profile becomes a memorial with a Memory Wall.',
+                intro: markIntro(PnConfig.playerPersona),
                 year: true,
                 confirmText: 'Mark as Legend',
+                danger: true,
                 startDisabled: true,
                 onConfirm: function() {
                     var year = readYear();
                     if (!year) return;
-                    run(function() { return legendPost('convert', PnConfig.playerId, { Year: year }); }, reload);
+                    run(function() { return legendPost('convert', PnConfig.playerId, { Year: year }); }, function(r) {
+                        showResult(PnConfig.playerPersona + ' is now a Legend.', function() {
+                            if (r.cleared && r.cleared.length) {
+                                appendList('Cleared', labelsOf(r.cleared));
+                            } else {
+                                appendNote('Nothing needed to be cleared.');
+                            }
+                            if (r.warnings && r.warnings.length) appendList('Needs filling', r.warnings, 'pn-legend-warnings');
+                        });
+                    });
                 }
             });
             loadDetail('Checking what will be cleared…', 'preview', function(r) {
+                playerFacts = r.player || null;
+                if (playerFacts) {
+                    var home = [playerFacts.ParkName, playerFacts.KingdomName].filter(Boolean).join(', ');
+                    introEl.textContent = markIntro(PnConfig.playerPersona + (home ? ' (' + home + ')' : ''));
+                }
+                warnYear();
                 if (r.warnings && r.warnings.length) appendList('Please review', r.warnings, 'pn-legend-warnings');
                 if (r.items && r.items.length) {
                     appendList('These will be cleared', labelsOf(r.items));
+                    appendNote('Removing Legend status later does not bring these back; they must be restored by hand.');
+                    confirmBtn.textContent = 'Mark as Legend and clear ' + r.items.length + (r.items.length === 1 ? ' item' : ' items');
                 } else {
                     appendNote('Nothing needs to be cleared.');
                 }
@@ -21045,28 +21119,14 @@ window.orkEnsureGoogleMaps = (function() {
                 title: 'Remove Legend Status',
                 intro: 'This returns ' + PnConfig.playerPersona + ' to a regular profile. Login, search and normal editing come back. The Memory Wall is hidden, not deleted. What was cleared at conversion does not return automatically.',
                 confirmText: 'Remove Legend Status',
-                danger: true,
                 startDisabled: true,
                 onConfirm: function() {
-                    run(function() { return legendPost('undo', PnConfig.playerId); }, function() {
-                        // The list stays up: it is the officer's to-do list, gone once they reload.
-                        setBusy(false);
-                        reloadOnClose = true;
-                        introEl.textContent = 'Legend status was removed.';
-                        cancelBtn.style.display = 'none';
-                        confirmBtn.className = 'pn-btn pn-btn-primary';
-                        confirmBtn.textContent = 'Done';
-                        onConfirm = close;
+                    run(function() { return legendPost('undo', PnConfig.playerId); }, function(r) {
+                        showResult('Legend status was removed.', function() { appendWhatWasCleared(r); });
                     });
                 }
             });
-            loadDetail('Checking what was cleared…', 'cleared', function(r) {
-                if (r.cleared && r.cleared.length) {
-                    appendList('Cleared at conversion, to restore by hand if needed', labelsOf(r.cleared));
-                } else {
-                    appendNote('Nothing was cleared at conversion.');
-                }
-            });
+            loadDetail('Checking what was cleared…', 'cleared', appendWhatWasCleared);
         });
 
         var yearBtn = gid('pn-legend-year-btn');
@@ -21088,11 +21148,18 @@ window.orkEnsureGoogleMaps = (function() {
         confirmBtn.addEventListener('click', function() { if (onConfirm) onConfirm(); });
         cancelBtn.addEventListener('click', close);
         closeBtn.addEventListener('click', close);
-        // Once undone, only a button dismisses the list: a stray click or Escape must not lose it.
-        overlay.addEventListener('click', function(e) { if (e.target === overlay && !reloadOnClose) close(); });
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && overlay.classList.contains('pn-open') && !reloadOnClose) close();
+        copyBtn.addEventListener('click', function() {
+            orkCopyToClipboard(introEl.textContent + '\n\n' + detailEl.innerText, copyBtn, 'Copied', 'Copy list');
+            copyBtn.focus();
         });
+        yearEl.addEventListener('input', warnYear);
+        yearEl.addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            if (!confirmBtn.disabled && onConfirm) onConfirm();
+        });
+        // Once a result is up, only a button dismisses the list: a stray click must not lose it.
+        overlay.addEventListener('click', function(e) { if (e.target === overlay && !reloadOnClose) close(); });
     })();
 
     // ---- Memory Wall ----
@@ -21107,7 +21174,7 @@ window.orkEnsureGoogleMaps = (function() {
             var opening = form.style.display === 'none';
             form.style.display = opening ? '' : 'none';
             shareBtn.setAttribute('aria-expanded', opening ? 'true' : 'false');
-            if (opening) bodyEl.focus();
+            if (opening) bodyEl.focus(); else shareBtn.focus();
         });
         bodyEl.addEventListener('input', function() {
             var left = bodyEl.maxLength - bodyEl.value.length;
@@ -21131,27 +21198,92 @@ window.orkEnsureGoogleMaps = (function() {
         });
     }
 
-    // Inline remove confirmation, officers only.
+    // Show more: the next page, built from the same row the server renders (the wall's
+    // <template>), which holds the officer controls only if the viewer may use them.
+    var moreBtn = gid('pn-lg-more');
+    if (moreBtn) {
+        var moreList = gid('pn-lg-list'), moreError = gid('pn-lg-more-error'), rowTpl = gid('pn-lg-row'),
+            moreOffset = moreList.children.length;
+        var memoryRow = function(m) {
+            var row = rowTpl.content.firstElementChild.cloneNode(true),
+                author = row.querySelector('.pn-lg-author'), box = row.querySelector('.pn-lg-remove');
+            row.setAttribute('data-id', m.MemoryId);
+            row.querySelector('p').textContent = m.Body;
+            if (m.AuthorPersona) {
+                author.setAttribute('href', PnConfig.uir + 'Player/profile/' + encodeURIComponent(m.AuthorId));
+                author.querySelector('b').textContent = m.AuthorPersona;
+            } else {
+                var nobody = document.createElement('b');
+                nobody.textContent = 'a community member';
+                author.parentNode.replaceChild(nobody, author);
+            }
+            row.querySelector('.pn-lg-home').textContent = m.AuthorHome ? ' (' + m.AuthorHome + ')' : '';
+            row.querySelector('.pn-lg-date').textContent = m.CreatedOn;
+            if (box) {
+                box.setAttribute('data-id', m.MemoryId);
+                box.setAttribute('data-author', m.AuthorId);
+                box.setAttribute('data-count', m.AuthorMemoryCount);
+            }
+            return row;
+        };
+        moreBtn.addEventListener('click', function() {
+            moreBtn.disabled = true;
+            moreError.style.display = 'none';
+            legendGet('memories', PnConfig.playerId + '&offset=' + moreOffset).then(function(data) {
+                data.memories.forEach(function(m) {
+                    // A memory posted since the page loaded shifts the pages by one.
+                    if (!moreList.querySelector('.pn-lg-memory[data-id="' + Number(m.MemoryId) + '"]')) moreList.appendChild(memoryRow(m));
+                });
+                moreOffset += data.memories.length;
+                moreBtn.disabled = false;
+                if (!data.memories.length || moreOffset >= data.total) moreBtn.style.display = 'none';
+            }).catch(function(err) {
+                moreBtn.disabled = false;
+                showError(moreError, err.message);
+            });
+        });
+    }
+
+    // Inline remove confirmation with its required reason, officers only: one memory, or all by one author.
     panel.addEventListener('click', function(e) {
         var box = e.target.closest ? e.target.closest('.pn-lg-remove') : null;
         if (!box) return;
-        var link = box.querySelector('.pn-lg-remove-link'), confirmEl = box.querySelector('.pn-lg-remove-confirm'),
-            errorEl = box.querySelector('.pn-lg-remove-error');
-        if (e.target.closest('.pn-lg-remove-link')) {
-            link.style.display = 'none';
+        var links = box.querySelector('.pn-lg-remove-links'), confirmEl = box.querySelector('.pn-lg-remove-confirm'),
+            errorEl = box.querySelector('.pn-lg-remove-error'), reasonEl = box.querySelector('.pn-lg-remove-reason');
+        if (e.target.closest('.pn-lg-remove-link, .pn-lg-remove-all-link')) {
+            var all = !!e.target.closest('.pn-lg-remove-all-link'), count = parseInt(box.getAttribute('data-count'), 10) || 0;
+            box.setAttribute('data-all', all ? '1' : '');
+            box.querySelector('.pn-lg-remove-message').textContent = (!all ? 'Remove permanently?'
+                : count === 1 ? 'Remove the 1 memory by this author permanently?'
+                : 'Remove all ' + count + ' memories by this author permanently?') + " This can't be restored.";
+            links.style.display = 'none';
             confirmEl.style.display = '';
+            box.classList.add('pn-lg-remove-open');
+            reasonEl.focus();
         } else if (e.target.closest('.pn-lg-remove-no')) {
             confirmEl.style.display = 'none';
             errorEl.style.display = 'none';
-            link.style.display = '';
+            reasonEl.value = '';
+            box.classList.remove('pn-lg-remove-open');
+            links.style.display = '';
+            box.querySelector(box.getAttribute('data-all') ? '.pn-lg-remove-all-link' : '.pn-lg-remove-link').focus();
         } else if (e.target.closest('.pn-lg-remove-yes')) {
-            var yes = e.target.closest('.pn-lg-remove-yes');
+            var yes = e.target.closest('.pn-lg-remove-yes'), reason = reasonEl.value.trim();
+            if (!reason) {
+                showError(errorEl, 'Please give a reason for the removal.');
+                reasonEl.focus();
+                return;
+            }
             yes.disabled = true;
             errorEl.style.display = 'none';
-            legendPost('remove', box.getAttribute('data-id')).then(function() {
+            (box.getAttribute('data-all')
+                ? legendPost('removeauthor', PnConfig.playerId, { AuthorId: box.getAttribute('data-author'), Reason: reason })
+                : legendPost('remove', box.getAttribute('data-id'), { Reason: reason })
+            ).then(function() {
                 window.location.reload();
             }).catch(function(err) {
                 yes.disabled = false;
+                yes.focus();
                 showError(errorEl, err.message);
             });
         }

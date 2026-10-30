@@ -81,9 +81,14 @@ class Model_Legend extends Model
         return Legend::setYear($uid, $mundaneId, $year);
     }
 
-    public function memories(int $mundaneId): array
+    public function memories(int $mundaneId, int $limit = Legend::MEMORIES_PER_PAGE, int $offset = 0): array
     {
-        return Legend::memories($mundaneId);
+        return Legend::memories($mundaneId, $limit, $offset);
+    }
+
+    public function memory_count(int $mundaneId): int
+    {
+        return Legend::memoryCount($mundaneId);
     }
 
     public function add_memory(int $uid, int $mundaneId, string $body): array
@@ -91,8 +96,13 @@ class Model_Legend extends Model
         return Legend::addMemory($uid, $mundaneId, $body);
     }
 
-    public function remove_memory(int $uid, int $memoryId): array
+    public function remove_memory(int $uid, int $memoryId, string $reason): array
     {
-        return Legend::removeMemory($uid, $memoryId);
+        return Legend::removeMemory($uid, $memoryId, $reason);
+    }
+
+    public function remove_author_memories(int $uid, int $mundaneId, int $authorId, string $reason): array
+    {
+        return Legend::removeAuthorMemories($uid, $mundaneId, $authorId, $reason);
     }
 }

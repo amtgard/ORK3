@@ -658,8 +658,11 @@ class Unit extends Ork3
         // retire any unit in the world.
         $is_officer = Ork3::$Lib->authorization->HasUnitOfficerAuthority($mundane_id, $unit_id);
         // Sole-member exception: the only remaining active roster member may
-        // retire even without management rights.
-        $members = $this->_active_member_roles($unit_id);
+        // retire even without management rights. A Legend stays on the roster but
+        // does not count; their membership row is left as it is.
+        $members = array_filter($this->_active_member_roles($unit_id), function ($member_id) {
+            return !Legend::isLegend((int)$member_id);
+        }, ARRAY_FILTER_USE_KEY);
         $is_sole_member = (count($members) === 1 && isset($members[$mundane_id]));
 
         if ($is_manager || $is_officer || $is_sole_member) {

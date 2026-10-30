@@ -915,6 +915,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
     var courtMeta        = window.courtMeta   = {
         name: <?= json_encode($court['Name'] ?? '') ?>,
         date: <?= json_encode($court['CourtDate'] ?? '') ?>,
+        heldBeforeToday: <?= json_encode(!empty($court['HeldBeforeToday'])) ?>,
         eventId: <?= (int)($court['EventCalendarDetailId'] ?? 0) ?>,
         eventName: <?= json_encode($court['EventName'] ?? '') ?>,
         recorderId: <?= (int)($court['RecorderMundaneId'] ?? 0) ?>,
@@ -1101,7 +1102,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
         if (status) { status.textContent = 'Saving…'; status.className = 'cp-rec-strip-status'; }
         post('CourtAjax/update_court', fd, true).then(function(d) {
             if (d.status === 0) {
-                if ('CourtDate' in fields) courtMeta.date = fields.CourtDate;
+                if ('CourtDate' in fields) { courtMeta.date = fields.CourtDate; courtMeta.heldBeforeToday = !!d.heldBeforeToday; }
                 if ('EventCalendarDetailId' in fields) courtMeta.eventId = parseInt(fields.EventCalendarDetailId, 10) || 0;
                 if ('RecorderMundaneId' in fields) courtMeta.recorderId = parseInt(fields.RecorderMundaneId, 10) || 0;
                 if (status) {
@@ -1618,7 +1619,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
     window.cpRecGiverPopInput = function(input) {
         cpAcSearch(input, 'cp-rec-giver-pop-ac', 'cp-rec-giver-pop-hidden', function(p) {
             cpRecGiverPopPick(p.MundaneId, p.Persona);
-        });
+        }, courtMeta.heldBeforeToday);
     };
     // "Apply to the rest below" — updates every row below the currently-open one to
     // the giver just picked for THIS row. Deliberately calls cpRecSetGiverChip() only

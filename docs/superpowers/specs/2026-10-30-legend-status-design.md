@@ -57,6 +57,7 @@ The feature fails, even if it technically works, if any of these happen:
 - **Photo:** the profile picture gets a sepia overlay.
 - **Banner:** Option C from the mockups, a separate card between the hero and the stats row. It has an "In Memoriam" heading and the text: "{Name} passed beyond this realm in {year}. Their spirit lives on as a legend of Amtgard and they will be missed."
 - **Pills:** a single Legend pill replaces the Active/Inactive, Waiver, Dues and Voting Eligible pills.
+- **Tests and dues:** the Qualifications and Dues cards are hidden on a Legend for every viewer, officers included; they no longer apply. The records stay. Last Sign-In shows only to officers.
 - **Button:** Recommend Award becomes Recommend Posthumous Award.
 
 ### Memory Wall
@@ -75,10 +76,18 @@ The feature fails, even if it technically works, if any of these happen:
 ### Cleared at conversion
 - RSVPs for events that haven't ended, officer seats, event staff roles, permission grants and non-artisan Court Planner roles such as recorder.
 
+### Who can convert
+- A kingdom officer can convert a player in their kingdom, including its Monarch and seat holders.
+- Only an ORK admin can convert an ORK admin, or a player holding a seat or a park or kingdom permission outside the officer's authority. Unit and event permissions don't count.
+
+### Court Planner lines
+- Open lines lose the Legend as giver: planned, announced, and staged lines on a court dated after today. Staged lines on a court held today or earlier stay, because the award was given.
+- A court dated before today can credit a Legend as giver.
+
 ### Undo
 - Kingdom officers and ORK admins can remove Legend status.
 - Login, search visibility, park-officer editing and normal moves return.
-- Cleared items don't return automatically. The officer sees a list of what was cleared so they can restore it by hand.
+- Cleared items don't return automatically. The officer sees a list of what was cleared so they can restore it by hand: the newest conversion that cleared anything, with its date, so an undo and re-convert doesn't lose it.
 - The Memory Wall is hidden, not deleted.
 
 ## Data model (builder's calls unless noted)
@@ -216,8 +225,8 @@ Any search work must follow the standing rule: scoped, `&q=` not `?q=`, and curl
 
 - **Reading:** anyone who can view the profile, including logged-out visitors, who see a prompt to log in to share.
 - **Posting:** any logged-in player. The Remembered By name is their persona, linked to their profile, and it can't be changed. The date is the posting date, displayed like "October 12, 2026".
-- **Limits:** plain text, up to 2,000 characters, checked with `ProfanityFilter`, and escaped on output. A player can post more than one memory.
-- **Removing:** an inline in-page confirmation, no native dialog. It's a soft removal that records who removed it and when. Nothing in the UI restores a removed memory.
+- **Limits:** plain text, up to 2,000 characters, checked with `ProfanityFilter`, and escaped on output. A player can post more than one memory, at most 3 on one wall in 24 hours, and never the same text twice. A refusal from the filter names the word and keeps the text; "bastard sword" is allowed. The byline keeps the persona as it stood at posting. The wall shows 25 at a time.
+- **Removing:** an inline in-page confirmation with a required reason, no native dialog. It's a soft removal that records who removed it, when and why, and writes an audit row. An officer can remove everything by one author on one wall in one action. Officers see a collapsed list of removed memories. Nothing in the UI restores a removed memory.
 - **Undo:** the tab disappears and memories remain stored. If the player is converted again, they reappear.
 
 ## Front-end conventions

@@ -1334,10 +1334,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<span class="pn-detail-label">Player Since</span>
 				<span class="pn-detail-value"><?= $Player['PlayerSinceDate'] ? htmlspecialchars($Player['PlayerSinceDate']) : 'N/A' ?></span>
 			</div>
+			<?php if (!$isLegend || $canViewAdmin): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Last Sign-In</span>
 				<span class="pn-detail-value"><?= $Player['LastSignInDate'] ? htmlspecialchars($Player['LastSignInDate']) : 'N/A' ?></span>
 			</div>
+			<?php endif; ?>
 		</div>
 
 		<!-- Heraldry -->
@@ -1355,6 +1357,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			</div>
 		</div>
 
+		<?php if (!$isLegend): // Tests and dues no longer apply to a Legend, for any viewer. ?>
 		<!-- Qualifications -->
 		<div class="pn-card">
 			<h4><i class="fas fa-certificate"></i> Qualifications<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn pn-qual-edit-btn" onclick="pnOpenQualModal()" title="Edit qualifications" aria-label="Edit qualifications"><i class="fas fa-pencil-alt" aria-hidden="true"></i></button><?php endif; ?></h4>
@@ -1364,13 +1367,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<?php if ($Player['ReeveQualified'] != 0): ?>
 						<?php
 							$reeveUntil = (!empty($Player['ReeveQualifiedUntil']) && $Player['ReeveQualifiedUntil'] !== '0000-00-00') ? $Player['ReeveQualifiedUntil'] : '';
-							// A date gone by says nothing on a memorial: keep the record, without the Expired flag.
-							$reeveExpired = $reeveUntil && strtotime($reeveUntil) < time() && !$isLegend;
+							$reeveExpired = $reeveUntil && strtotime($reeveUntil) < time();
 						?>
 						<?php if (!$reeveUntil): ?>
 							<span class="pn-badge pn-badge-green">No end date</span>
 						<?php else: ?>
-							<span class="pn-badge <?= $isLegend ? 'pn-badge-gray' : ($reeveExpired ? 'pn-badge-red' : 'pn-badge-green') ?>"><?= $reeveExpired ? 'Expired' : 'Until' ?> <?= $reeveUntil ?></span>
+							<span class="pn-badge <?= $reeveExpired ? 'pn-badge-red' : 'pn-badge-green' ?>"><?= $reeveExpired ? 'Expired' : 'Until' ?> <?= $reeveUntil ?></span>
 						<?php endif; ?>
 					<?php else: ?>
 						<span class="pn-badge pn-badge-gray">No</span>
@@ -1383,12 +1385,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<?php if ($Player['CorporaQualified'] != 0): ?>
 						<?php
 							$corporaUntil = (!empty($Player['CorporaQualifiedUntil']) && $Player['CorporaQualifiedUntil'] !== '0000-00-00') ? $Player['CorporaQualifiedUntil'] : '';
-							$corporaExpired = $corporaUntil && strtotime($corporaUntil) < time() && !$isLegend;
+							$corporaExpired = $corporaUntil && strtotime($corporaUntil) < time();
 						?>
 						<?php if (!$corporaUntil): ?>
 							<span class="pn-badge pn-badge-green">No end date</span>
 						<?php else: ?>
-							<span class="pn-badge <?= $isLegend ? 'pn-badge-gray' : ($corporaExpired ? 'pn-badge-red' : 'pn-badge-green') ?>"><?= $corporaExpired ? 'Expired' : 'Until' ?> <?= $corporaUntil ?></span>
+							<span class="pn-badge <?= $corporaExpired ? 'pn-badge-red' : 'pn-badge-green' ?>"><?= $corporaExpired ? 'Expired' : 'Until' ?> <?= $corporaUntil ?></span>
 						<?php endif; ?>
 					<?php else: ?>
 						<span class="pn-badge pn-badge-gray">No</span>
@@ -1418,7 +1420,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 
 		<!-- Dues -->
 		<div class="pn-card">
-			<h4><i class="fas fa-receipt"></i> Dues<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesModal()" <?= $isLegend ? 'data-tip="Dues history" aria-label="Dues history"' : 'title="Add dues entry"' ?>><i class="fas <?= $isLegend ? 'fa-history' : 'fa-pencil-alt' ?>"></i></button><?php elseif (isset($this->__session->user_id)): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesHistoryModal()" title="View dues history"><i class="fas fa-history"></i></button><?php endif; ?></h4>
+			<h4><i class="fas fa-receipt"></i> Dues<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesModal()" title="Add dues entry"><i class="fas fa-pencil-alt"></i></button><?php elseif (isset($this->__session->user_id)): ?><button class="pn-card-edit-btn" onclick="pnOpenDuesHistoryModal()" title="View dues history"><i class="fas fa-history"></i></button><?php endif; ?></h4>
 			<?php if (is_array($Dues) && count($Dues) > 0): ?>
 				<table class="pn-mini-table">
 					<thead>
@@ -1454,6 +1456,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<div class="pn-empty">No dues records</div>
 			<?php endif; ?>
 		</div>
+		<?php endif; // !$isLegend ?>
 
 		<!-- Event RSVPs — hidden from logged-out viewers so a player's
 		     upcoming plans aren't exposed to search engines / anonymous
@@ -1534,10 +1537,18 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<span class="pn-detail-label">Year of Passing</span>
 					<span class="pn-detail-value"><?= (int)$LegendYear ?></span>
 				</div>
+				<?php if (!empty($LegendMarkedBy) && !empty($LegendMarkedOn)): ?>
+				<p class="pn-legend-note">Marked by <?= htmlspecialchars($LegendMarkedBy, ENT_QUOTES) ?> on <?= date('F j, Y', strtotime($LegendMarkedOn)) ?></p>
+				<?php endif; ?>
 				<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-undo-btn">Remove Legend Status</button>
 			<?php else: ?>
 				<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" id="pn-legend-mark-btn">Mark as Legend</button>
 			<?php endif; ?>
+		</div>
+		<?php elseif ($isLegend && $canViewAdmin): ?>
+		<div class="pn-card">
+			<h4><i class="fas fa-feather-alt"></i> Legend Status</h4>
+			<p class="pn-legend-note">This memorial's record is kept by kingdom officers.</p>
 		</div>
 		<?php endif; ?>
 
@@ -2932,10 +2943,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
      Add Dues Modal
      ============================================= -->
 <?php if ($canEditAdmin): ?>
-<div class="pn-overlay" id="pn-dues-overlay">
+<div class="pn-overlay" id="pn-dues-overlay"<?= $isLegend ? ' inert' : '' ?>>
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-receipt pn-modal-title-icon"></i><?= $isLegend ? 'Dues History' : 'Add Dues Entry' ?></h3>
+			<h3 class="pn-modal-title"><i class="fas fa-receipt pn-modal-title-icon"></i>Add Dues Entry</h3>
 			<button class="pn-modal-close-btn" id="pn-dues-close-btn" aria-label="Close">&times;</button>
 		</div>
 
@@ -2948,7 +2959,6 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<div id="pn-dues-history-body"><div class="pn-dues-modal-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div></div>
 			</div>
 
-			<div<?= $_lgHide ?>>
 			<div class="pn-acct-field">
 				<label for="pn-dues-from">Date Paid <span class="required-indicator">*</span></label>
 				<input type="date" id="pn-dues-from" name="DuesFrom" value="<?= date('Y-m-d') ?>" />
@@ -2967,7 +2977,6 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<label><input type="radio" name="DuesForLife" value="0" checked /> No</label>
 				</div>
 			</div>
-			</div>
 
 			<input type="hidden" name="MundaneId"      value="<?= (int)$Player['MundaneId'] ?>" />
 			<input type="hidden" name="ParkId"         value="<?= (int)$Player['ParkId'] ?>" />
@@ -2977,7 +2986,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-dues-cancel">Cancel</button>
-			<button class="pn-btn pn-btn-primary" id="pn-dues-save"<?= $_lgHide ?>><i class="fas fa-save"></i> Add Dues</button>
+			<button class="pn-btn pn-btn-primary" id="pn-dues-save"><i class="fas fa-save"></i> Add Dues</button>
 		</div>
 	</div>
 </div>
@@ -2986,7 +2995,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 <!-- =============================================
      Dues History Modal (read-only, logged-in users)
      ============================================= -->
-<?php if (isset($this->__session->user_id) && !$canEditAdmin): ?>
+<?php if (isset($this->__session->user_id) && !$canEditAdmin && !$isLegend): ?>
 <div class="pn-overlay" id="pn-dues-history-overlay">
 	<div class="pn-modal-box" style="width:560px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
@@ -3031,7 +3040,7 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 	}
 }
 </style>
-<div class="pn-overlay" id="pn-qual-overlay">
+<div class="pn-overlay" id="pn-qual-overlay"<?= $isLegend ? ' inert' : '' ?>>
 	<div class="pn-modal-box" style="width:480px;max-width:calc(100vw - 40px);">
 		<div class="pn-modal-header">
 			<h3 class="pn-modal-title"><i class="fas fa-certificate pn-modal-title-icon"></i>Edit Qualifications</h3>
@@ -4012,15 +4021,17 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 			<button class="pn-modal-close-btn" id="pn-legend-close-btn" type="button" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
-			<div class="pn-form-error" id="pn-legend-error"></div>
-			<p class="pn-legend-intro" id="pn-legend-intro"></p>
+			<div class="pn-form-error" id="pn-legend-error" role="alert"></div>
+			<p class="pn-legend-intro" id="pn-legend-intro" role="status"></p>
 			<div class="pn-rec-field" id="pn-legend-year-row">
 				<label for="pn-legend-year">Year of Passing <span class="required-indicator">*</span></label>
 				<input type="number" id="pn-legend-year" min="<?= (int)$LegendMinYear ?>" max="<?= (int)date('Y') ?>" step="1" />
+				<div class="pn-legend-warnings pn-legend-year-warn" id="pn-legend-year-warn" aria-live="polite"></div>
 			</div>
 			<div id="pn-legend-detail"></div>
 		</div>
 		<div class="pn-modal-footer">
+			<button class="pn-btn pn-btn-secondary" id="pn-legend-copy" type="button" aria-live="polite" style="display:none">Copy list</button>
 			<button class="pn-btn pn-btn-secondary" id="pn-legend-cancel" type="button">Cancel</button>
 			<button class="pn-btn pn-btn-primary" id="pn-legend-confirm" type="button"></button>
 		</div>

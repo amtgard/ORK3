@@ -2337,6 +2337,7 @@ $_total_awards = count($courtAwards ?? []);
     var courtMeta   = window.courtMeta   = {
         name: <?= json_encode($court['Name'] ?? '') ?>,
         date: <?= json_encode($court['CourtDate'] ?? '') ?>,
+        heldBeforeToday: <?= json_encode(!empty($court['HeldBeforeToday'])) ?>,
         eventId: <?= (int)($court['EventCalendarDetailId'] ?? 0) ?>,
         eventName: <?= json_encode($court['EventName'] ?? '') ?>,
         recorderId: <?= (int)($court['RecorderMundaneId'] ?? 0) ?>,
@@ -3512,7 +3513,7 @@ $_total_awards = count($courtAwards ?? []);
     // user types a custom giver, then defers to the shared scoped autocomplete.
     window.cpGiverSearchInput = function(input) {
         cpMarkActiveGiverPill(-1);
-        cpAcSearch(input, 'cp-grant-giver-ac', 'cp-grant-giver-id');
+        cpAcSearch(input, 'cp-grant-giver-ac', 'cp-grant-giver-id', null, courtMeta.heldBeforeToday);
     };
 
     // Item 5: "is this a ladder award?" is a PER-KINGDOM question — a kingdom that
@@ -4678,7 +4679,7 @@ $_total_awards = count($courtAwards ?? []);
     document.addEventListener('input', function(e) {
         var el = e.target;
         if (!el.classList.contains('cp-maker-ac')) return;
-        cpAcSearch(el, el.dataset.drop, el.dataset.hidden);
+        cpAcSearch(el, el.dataset.drop, el.dataset.hidden, null, true);
     });
 
     // ---- Autocomplete ----

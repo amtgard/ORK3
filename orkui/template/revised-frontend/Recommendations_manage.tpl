@@ -1465,7 +1465,7 @@ rmGid('rm-grant-rank-pills').addEventListener('click', function (e) {
                         rmEsc(pl.Persona || '') +
                         ' <span style="color:var(--rm-muted);font-size:11px">(' + rmEsc(pl.KAbbr || '') + ':' + rmEsc(pl.PAbbr || '') + ')</span>' +
                         (pl.Legend ? ' <span class="legend-pill">Legend</span>' : '') +
-                        (pl.Suspended ? ' <span style="color:var(--rm-danger);font-size:10px;font-weight:600">(Banned)</span>' : '') +
+                        (pl.Suspended && !pl.Legend ? ' <span style="color:var(--rm-danger);font-size:10px;font-weight:600">(Banned)</span>' : '') +
                         '</div>';
                 }).join('');
                 results.classList.add('rm-ac-open');

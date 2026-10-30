@@ -436,7 +436,7 @@ class SearchService extends Ork3
             $opt[] = "length(`persona`) > 0";
         }
         // A Legend (deceased player) only appears when the caller opts in; `IncludeLegend` on the wire.
-        // 'admin' (the ORK admin move picker) is honored only when the token is a global ORK admin.
+        // 'admin' (the admin search) is honored only when the token is a global ORK admin.
         if (!self::LegendOptIn($include_legend, (int)$_caller_uid)) {
             $opt[] = "m.is_legend = 0";
         }

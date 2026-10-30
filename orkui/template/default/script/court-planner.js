@@ -122,7 +122,9 @@
     // to auto-save on pick, because the hidden id is cleared on every keystroke and a
     // save on blur alone would post the stale/empty id before the click lands.
     // `includeLegend` opts in to Legends: true only where a Legend can be picked, the
-    // recipient and artisan fields. Recorder and giver stay off, like every other search.
+    // recipient and artisan fields, the scroll and regalia makers among them, and the
+    // giver on a court dated before today (courtMeta.heldBeforeToday). The recorder
+    // stays off, like every other search.
     function cpAcSearch(input, dropdownId, hiddenId, onPick, includeLegend) {
         var q = input.value.trim();
         var drop = gid(dropdownId);
