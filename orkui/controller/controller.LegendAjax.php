@@ -5,7 +5,8 @@
  * Legend Status modals on the player page, and the year edit.
  *
  * Envelope: {status: 0, ...} ok; {status: 1, error} bad request;
- * {status: 3, error} not authorized; {status: 5, error} not logged in.
+ * {status: 3, error} not authorized, or a write from another site; {status: 5,
+ * error} not logged in.
  * Authority and every rule are in the domain (class.Legend.php); this layer only
  * reads the request and the session.
  */
@@ -96,7 +97,26 @@ class Controller_LegendAjax extends Controller
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             $this->jsonOut(['status' => 1, 'error' => 'This request must be a POST.']);
         }
+        if (!$this->sameOrigin($_SERVER)) {
+            $this->jsonOut(['status' => 3, 'error' => 'This request came from another site.']);
+        }
         return $uid;
+    }
+
+    /**
+     * Refuse only a value that names another site. A browser always sends Origin on
+     * a cross-site POST but a referrer policy can drop Referer on a same-site one,
+     * and a client that sends neither (curl) has no browser session to ride on.
+     */
+    private function sameOrigin(array $server): bool
+    {
+        foreach (array_filter([$server['HTTP_ORIGIN'] ?? '', $server['HTTP_REFERER'] ?? '']) as $url) {
+            $u = parse_url($url) ?: [];
+            if (strcasecmp(($u['host'] ?? '') . (isset($u['port']) ? ':' . $u['port'] : ''), $server['HTTP_HOST'] ?? '') !== 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** The route's player id; anything but digits reads as 0, which the domain refuses. */
