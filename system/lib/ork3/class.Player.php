@@ -655,6 +655,10 @@ class Player extends Ork3
 
     public function AddOneShotFaceImage($request)
     {
+        // Never post a Legend's face to the third-party matcher.
+        if (Legend::isLegend((int)$request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         $mundane = $this->player_info($request['MundaneId']);
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE) || $requester_id == $request['MundaneId']) {
@@ -715,10 +719,12 @@ class Player extends Ork3
             }
         }
 
+        // A Legend never matches: attendance can't be added for them.
+        $found = $this->without_legends($found);
         $playersfound = $this->hydrated_players($found);
 
         foreach ($result->result->hits as $k => $face) {
-            $player = is_null($face) ? array('id' => 0) : $playersfound[$face[0]];
+            $player = (is_null($face) || !isset($playersfound[$face[0]])) ? array('id' => 0) : $playersfound[$face[0]];
             $facedetails[] = [ $player, $result->result->locations[$k] ];
         }
 
@@ -2247,6 +2253,14 @@ class Player extends Ork3
         ]);
     }
 
+
+    /** @return list<int> the ids that are not Legends */
+    public function without_legends($ids)
+    {
+        return array_values(array_filter($ids, function ($id) {
+            return !Legend::isLegend((int)$id);
+        }));
+    }
 
     public function hydrated_players($ids)
     {

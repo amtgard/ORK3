@@ -265,6 +265,11 @@ class Unit extends Ork3
                 $this->members->clear();
                 $this->members->unit_mundane_id = $request['UnitMundaneId'];
                 $this->members->find();
+                // A Legend can't be revived; an already-active member keeps working.
+                if ($request['Active'] === 'Active' && $this->members->active !== 'Active'
+                        && Legend::isLegend((int)$this->members->mundane_id)) {
+                    return NoAuthorization(Legend::REFUSED);
+                }
                 $this->members->active = $request['Active'];
                 $this->members->role = $request['Role'];
                 $this->members->title = $request['Title'];

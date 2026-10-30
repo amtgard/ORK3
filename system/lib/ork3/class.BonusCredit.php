@@ -1243,7 +1243,7 @@ class BonusCredit
         if ($category === null) {
             return $this->fail('This credit\'s category no longer exists; remove the credit and grant another.');
         }
-        if (Legend::blocksEdit($uid, (int) $row['MundaneId'])) {
+        if (Legend::isLegend((int) $row['MundaneId'])) {
             return $this->denied(Legend::REFUSED);
         }
         if ($uid <= 0 || $player === null || !$this->mayChange($uid, $row, $player, $category)) {

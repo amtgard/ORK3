@@ -37,6 +37,8 @@ final class LegendParticipationTest extends TestCase
     protected function tearDown(): void
     {
         if (isset($this->fixture)) {
+            $this->fixture->pdo()->exec('DELETE FROM ' . DB_PREFIX . 'bonus_credit WHERE mundane_id = ' . (int) $this->legend);
+            $this->fixture->pdo()->exec('DELETE FROM ' . DB_PREFIX . "bonus_credit_category WHERE name = 'Legend fixture credit'");
             $this->fixture->pdo()->exec('DELETE FROM ' . DB_PREFIX . 'qual_result WHERE player_id = ' . (int) $this->legend);
             $this->fixture->pdo()->exec('DELETE FROM ' . DB_PREFIX . 'recommendations WHERE mundane_id = ' . (int) $this->legend);
             $this->fixture->cleanup();
@@ -272,6 +274,64 @@ final class LegendParticipationTest extends TestCase
 
         $this->assertRefused($r);
         $this->assertSame(0, $this->fixture->count('authorization', 'mundane_id = ' . $this->legend));
+    }
+
+    public function test_bonus_update_refused_for_everyone(): void
+    {
+        $pdo = $this->fixture->pdo();
+        $classId = $this->classId();
+        $pdo->exec('INSERT INTO ' . DB_PREFIX . "bonus_credit_category (scope_type, scope_id, name, default_credits, created_by, created_at)
+            VALUES ('kingdom', {$this->kingdom}, 'Legend fixture credit', 2, {$this->admin}, NOW())");
+        $category = (int) $pdo->lastInsertId();
+        $pdo->exec('INSERT INTO ' . DB_PREFIX . "bonus_credit (mundane_id, class_id, credits, credit_date, category_id, granted_by, granted_at)
+            VALUES ({$this->legend}, {$classId}, 1, CURDATE(), {$category}, {$this->admin}, NOW())");
+        $credit = (int) $pdo->lastInsertId();
+        $kingdomOfficer = $this->fixture->addKingdomOfficer($this->kingdom, $this->park);
+
+        foreach ([$this->admin, $kingdomOfficer] as $uid) {
+            $r = (new BonusCredit())->update($uid, $credit, ['Credits' => 2]);
+            $this->assertSame(3, $r['Status']);
+            $this->assertSame(Legend::REFUSED, $r['Error']);
+        }
+        $this->assertSame('1.00', $this->fixture->value('bonus_credit', 'credits', 'bonus_credit_id = ' . $credit));
+    }
+
+    // ---- Unit revival, face matching ---------------------------------------
+
+    public function test_unit_set_member_cannot_revive_a_legend(): void
+    {
+        $unit = $this->fixture->addUnit();
+        $pdo = $this->fixture->pdo();
+        $domain = new Unit();
+        $legendRow = $this->fixture->addUnitMember($unit, $this->legend);
+        $plainRow = $this->fixture->addUnitMember($unit, $this->player('plainmember'));
+        $pdo->exec('UPDATE ' . DB_PREFIX . "unit_mundane SET active = 'Retired' WHERE unit_mundane_id IN ($legendRow, $plainRow)");
+        $set = fn (int $row, string $active) => $domain->SetMember([
+            'Token' => $this->token, 'UnitMundaneId' => $row, 'Active' => $active, 'Role' => 'member', 'Title' => 'x',
+        ]);
+
+        $this->assertSame(0, $set($plainRow, 'Active')['Status'], 'control: a plain player is revived');
+        $this->assertRefused($set($legendRow, 'Active'));
+        $this->assertSame('Retired', $this->fixture->value('unit_mundane', 'active', 'unit_mundane_id = ' . $legendRow));
+
+        $pdo->exec('UPDATE ' . DB_PREFIX . "unit_mundane SET active = 'Active' WHERE unit_mundane_id = $legendRow");
+        $this->assertSame(0, $set($legendRow, 'Active')['Status'], 'an already-active Legend member keeps working');
+        $this->assertSame('x', $this->fixture->value('unit_mundane', 'title', 'unit_mundane_id = ' . $legendRow));
+    }
+
+    public function test_face_image_never_posted_for_a_legend(): void
+    {
+        $r = (new Player())->AddOneShotFaceImage(['Token' => $this->token, 'MundaneId' => $this->legend, 'Base64FaceImage' => 'x']);
+
+        $this->assertRefused($r);
+    }
+
+    /** LookupByFaces calls the third-party matcher, so the filter it applies is covered directly. */
+    public function test_face_matches_drop_legends(): void
+    {
+        $plain = $this->player();
+
+        $this->assertSame([$plain], (new Player())->without_legends([$this->legend, $plain]));
     }
 
     // ---- Dues, qual tests and recommendations ------------------------------
