@@ -65,12 +65,14 @@
 						Action: 'Search/Player',
 						type: 'all',
 						search: request.term,
-						park_id: park_id.length>0?park_id:null
+						park_id: park_id.length>0?park_id:null,
+						token: '<?= htmlspecialchars($Token ?? '', ENT_QUOTES) ?>',
+						IncludeLegend: 'admin'
 					},
 					function( data ) {
 						var suggestions = [];
 						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId });
+							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')' + (val.Legend ? ' [Legend]' : ''), value: val.MundaneId });
 						});
 						response(suggestions);
 					}

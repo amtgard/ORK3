@@ -1456,13 +1456,14 @@ rmGid('rm-grant-rank-pills').addEventListener('click', function (e) {
         clearTimeout(timer);
         if (term.length < 2) { results.classList.remove('rm-ac-open'); results.innerHTML = ''; return; }
         timer = setTimeout(function () {
-            var url = RmConfig.uir + 'KingdomAjax/playersearch/' + (RmConfig.kingdomId || 0) + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+            var url = RmConfig.uir + 'KingdomAjax/playersearch/' + (RmConfig.kingdomId || 0) + '&scope=all&include_inactive=1&include_suspended=1&include_legend=1&q=' + encodeURIComponent(term);
             fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (data) {
                 if (!data || !data.length) { results.innerHTML = '<div class="rm-ac-none">No players found</div>'; results.classList.add('rm-ac-open'); return; }
                 results.innerHTML = data.map(function (pl) {
                     return '<div class="rm-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona || '') + '">' +
                         rmEsc(pl.Persona || '') +
                         ' <span style="color:var(--rm-muted);font-size:11px">(' + rmEsc(pl.KAbbr || '') + ':' + rmEsc(pl.PAbbr || '') + ')</span>' +
+                        (pl.Legend ? ' <span class="legend-pill">Legend</span>' : '') +
                         (pl.Suspended ? ' <span style="color:var(--rm-danger);font-size:10px;font-weight:600">(Banned)</span>' : '') +
                         '</div>';
                 }).join('');

@@ -365,7 +365,7 @@ class SearchService extends Ork3
             $overrode_park ? $p_id : $park_id );
     }
 
-    public function Player($type, $search, $limit = 15, $kingdom_id = null, $park_id = null, $waivered = null, $token = null, $persona_required = true)
+    public function Player($type, $search, $limit = 15, $kingdom_id = null, $park_id = null, $waivered = null, $token = null, $include_legend = false, $persona_required = true)
     {
         list($search, $kingdom_id, $park_id) = $this->magic_search($search, $kingdom_id, $park_id);
 
@@ -375,6 +375,7 @@ class SearchService extends Ork3
         // IsAuthorized/HasAuthority also leave bound parameters on the shared DB handle;
         // clear them so the next raw query in this function doesn't try to bind them.
         $is_ork_admin = false;
+        $_caller_uid = 0;
         if (!empty($token)) {
             unset($_SESSION['is_authorized_mundane_id']);
             $_caller_uid = Ork3::$Lib->authorization->IsAuthorized($token);
@@ -434,6 +435,11 @@ class SearchService extends Ork3
         if ($persona_required === true) {
             $opt[] = "length(`persona`) > 0";
         }
+        // A Legend (deceased player) only appears when the caller opts in; `IncludeLegend` on the wire.
+        // 'admin' (the ORK admin move picker) is honored only when the token is a global ORK admin.
+        if (!self::LegendOptIn($include_legend, (int)$_caller_uid)) {
+            $opt[] = "m.is_legend = 0";
+        }
         if (is_numeric($kingdom_id) && $kingdom_id > 0) {
             $opt[] = "m.kingdom_id =" . mysql_real_escape_string($kingdom_id);
         }
@@ -459,7 +465,7 @@ class SearchService extends Ork3
         );
         $sql = "select 
 						`mundane_id`, m.`active`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
-						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr,
+						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, m.`is_legend`, m.`legend_year`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr,
 						(m.email IS NOT NULL AND m.email <> '') as has_email
 					from " . DB_PREFIX . "mundane m
 						left join " . DB_PREFIX . "kingdom k on k.kingdom_id = m.kingdom_id
@@ -487,6 +493,8 @@ class SearchService extends Ork3
                         'Waivered' => $q->waivered,
                         'PenaltyBox' => $q->penalty_box,
                         'Active' => (int)$q->active,
+                        'Legend' => (int)$q->is_legend,
+                        'LegendYear' => (int)$q->legend_year,
                         'KAbbr' => $q->k_abbr,
                         'PAbbr' => $q->p_abbr,
                         'Suspended' => $q->suspended,
@@ -510,6 +518,35 @@ class SearchService extends Ork3
         } else {
             return array();
         }
+    }
+
+    /** A request flag: true, 1 or '1' (not '0', '' or 'false'). */
+    private static function Truthy($v): bool
+    {
+        return $v === true || $v === 1 || $v === '1' || $v === 'true';
+    }
+
+    /**
+     * Resolve the IncludeLegend request value. true/'1' opts in for any caller. 'admin' is what the
+     * ORK admin move pickers send: honored only for a global ORK admin, so it is off for anyone else.
+     */
+    private static function LegendOptIn($raw, int $callerUserId): bool
+    {
+        if ($raw === 'admin') {
+            return $callerUserId > 0 && Legend::isOrkAdmin($callerUserId);
+        }
+
+        return self::Truthy($raw);
+    }
+
+    /** SQL for the active/Legend gate on `m`: Legends only on opt-in, and include_inactive never admits one. */
+    private static function ActiveLegendClause(bool $includeInactive, bool $includeLegend): string
+    {
+        if ($includeInactive) {
+            return $includeLegend ? '1' : 'm.is_legend = 0';
+        }
+
+        return $includeLegend ? '(m.active = 1 OR m.is_legend = 1)' : 'm.active = 1';
     }
 
     /** @return array<string, string> */
@@ -595,7 +632,7 @@ class SearchService extends Ork3
     }
 
     /**
-     * @param array{Query?: string, Kid?: int, Pid?: int, IncludeInactive?: bool, Focus?: string, CallerUserId?: int} $request
+     * @param array{Query?: string, Kid?: int, Pid?: int, IncludeInactive?: bool, IncludeLegend?: bool, Focus?: string, CallerUserId?: int} $request
      * @return array{players: list<array<string, mixed>>, parks: list<array<string, mixed>>, kingdoms: list<array<string, mixed>>, units: list<array<string, mixed>>}
      */
     public function UniversalSearch(array $request): array
@@ -608,6 +645,7 @@ class SearchService extends Ork3
         $kid             = (int)($request['Kid'] ?? 0);
         $pid             = (int)($request['Pid'] ?? 0);
         $includeInactive = !empty($request['IncludeInactive']);
+        $includeLegend   = self::LegendOptIn($request['IncludeLegend'] ?? false, (int)($request['CallerUserId'] ?? 0));
         $focus           = trim($request['Focus'] ?? '');
         $callerUserId    = (int)($request['CallerUserId'] ?? 0);
 
@@ -716,7 +754,7 @@ class SearchService extends Ork3
         }
         $playerBudget += $unitBudget - count($units);
 
-        $activeClause    = $includeInactive ? '1' : 'm.active = 1';
+        $activeClause    = self::ActiveLegendClause($includeInactive, $includeLegend);
         $suspendedClause = $includeInactive ? '1' : 'm.suspended = 0';
         $isOrkAdmin      = $callerUserId > 0 && Ork3::$Lib->authorization->HasAuthority($callerUserId, AUTH_ADMIN, null, null);
         $this->db->clear();
@@ -737,7 +775,7 @@ class SearchService extends Ork3
             : (valid_id($kid) ? "m.active DESC, CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona" : 'm.active DESC, m.persona');
         $this->db->clear();
         $rs = $this->db->query("
-			SELECT m.mundane_id, m.persona, m.active, k.abbreviation AS k_abbr, p.name AS park_name
+			SELECT m.mundane_id, m.persona, m.active, m.is_legend, m.legend_year, k.abbreviation AS k_abbr, p.name AS park_name
 			FROM " . DB_PREFIX . "mundane m
 			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
 			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
@@ -754,6 +792,8 @@ class SearchService extends Ork3
                     'abbr'   => $rs->k_abbr ?? '',
                     'park'   => $rs->park_name ?? '',
                     'active' => (int)$rs->active,
+                    'Legend' => (int)$rs->is_legend,
+                    'LegendYear' => (int)$rs->legend_year,
                 ];
             }
         }
@@ -770,6 +810,8 @@ class SearchService extends Ork3
      *   EventId?: int,
      *   ScopeParkId?: int,
      *   IncludeInactive?: bool,
+     *   IncludeLegend?: bool|string,
+     *   CallerUserId?: int,
      *   IncludeSuspended?: bool,
      *   Prioritize?: bool,
      *   Limit?: int,
@@ -790,6 +832,7 @@ class SearchService extends Ork3
         $eventId          = (int)($request['EventId'] ?? 0);
         $scopeParkId      = (int)($request['ScopeParkId'] ?? 0);
         $includeInactive  = !empty($request['IncludeInactive']);
+        $includeLegend    = self::LegendOptIn($request['IncludeLegend'] ?? false, (int)($request['CallerUserId'] ?? 0));
         $includeSuspended = !empty($request['IncludeSuspended']);
         $prioritize       = !empty($request['Prioritize']);
         $limit            = min(max((int)($request['Limit'] ?? 15), 1), 100);
@@ -863,13 +906,13 @@ class SearchService extends Ork3
         }
 
         $suspendedSql = $includeSuspended ? '' : 'AND m.suspended = 0';
-        $activeSql    = $includeInactive ? '' : 'AND m.active = 1';
+        $activeSql    = 'AND ' . self::ActiveLegendClause($includeInactive, $includeLegend);
 
         $sql = "
 			SELECT m.mundane_id, m.persona, m.park_id, m.kingdom_id,
 			       k.name AS kingdom_name, p.name AS park_name,
 			       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-			       m.suspended, m.active
+			       m.suspended, m.active, m.is_legend, m.legend_year
 			FROM " . DB_PREFIX . "mundane m
 			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
 			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
@@ -920,6 +963,8 @@ class SearchService extends Ork3
                 'Persona'   => $row->persona,
                 'PAbbr'     => $row->p_abbr,
                 'KAbbr'     => $row->k_abbr,
+                'Legend'     => (int)$row->is_legend,
+                'LegendYear' => (int)$row->legend_year,
             ];
         }
         if ($format === 'event') {
@@ -933,6 +978,8 @@ class SearchService extends Ork3
                 'KAbbr'       => $row->k_abbr,
                 'PAbbr'       => $row->p_abbr,
                 'Suspended'   => (int)$row->suspended,
+                'Legend'      => (int)$row->is_legend,
+                'LegendYear'  => (int)$row->legend_year,
             ];
         }
 
@@ -947,6 +994,8 @@ class SearchService extends Ork3
             'PAbbr'       => $row->p_abbr,
             'Suspended'   => (int)$row->suspended,
             'Active'      => (int)$row->active,
+            'Legend'      => (int)$row->is_legend,
+            'LegendYear'  => (int)$row->legend_year,
         ];
     }
 }

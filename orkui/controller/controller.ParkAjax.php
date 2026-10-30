@@ -181,6 +181,7 @@ class Controller_ParkAjax extends Controller
             $prioritize       = !empty($_GET['prioritize']);
             $include_inactive  = !empty($_GET['include_inactive']);
             $include_suspended = !empty($_GET['include_suspended']);
+            $include_legend    = $_GET['include_legend'] ?? ''; // opt-in: '1', or 'admin' (global admins only); Legends are hidden by default
             if (strlen($q) < 2) {
                 echo json_encode([]);
                 exit;
@@ -200,6 +201,8 @@ class Controller_ParkAjax extends Controller
                 'ParkId'           => (int)$park_id,
                 'IncludeInactive'  => $include_inactive,
                 'IncludeSuspended' => $include_suspended,
+                'IncludeLegend'    => $include_legend,
+                'CallerUserId'     => isset($this->session->user_id) ? (int)$this->session->user_id : 0,
                 'Prioritize'       => $prioritize,
                 'Limit'            => 15,
                 'Format'           => 'kingdom',

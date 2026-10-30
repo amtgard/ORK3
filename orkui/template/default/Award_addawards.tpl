@@ -116,12 +116,13 @@
 						// any kingdom, so do NOT scope to the page's kingdom. The (KAbbr:PAbbr)
 						// suffix below disambiguates same-named personas across kingdoms.
 						kingdom_id: 0,
+						IncludeLegend: 1,
 						limit: 12
 					},
 					function( data ) {
 						var suggestions = [];
 						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId });
+							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')' + (val.Legend ? ' [Legend]' : ''), value: val.MundaneId });
 						});
 						response(suggestions);
 					}
@@ -161,6 +162,7 @@
 						type: 'all',
 						search: request.term,
 						kingdom_id: <?=$KingdomId ?>,
+						IncludeLegend: 1,
 						limit: 6
 					},
 					function( data ) {

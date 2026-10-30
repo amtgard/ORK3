@@ -2373,7 +2373,7 @@ if (PnConfig.recError) {
             var term = this.value.trim();
             if (term.length < 2) { gid('pn-award-givenby-results').classList.remove('pn-ac-open'); return; }
             givenByTimer = setTimeout(function() {
-                var url = PnConfig.uir + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+                var url = PnConfig.uir + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&include_legend=1&q=' + encodeURIComponent(term);
                 fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                     var results = gid('pn-award-givenby-results');
                     if (!data || !data.length) {
@@ -2383,7 +2383,8 @@ if (PnConfig.recError) {
                             return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                                 + escHtml(p.Persona)
                                 + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
-                                + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                                + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+                                + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
                                 + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
                                 + '</div>';
                         }).join('');
@@ -3639,14 +3640,15 @@ $(document).ready(function() {
         if (term.length < 2) { gid('kn-award-player-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(playerTimer);
         playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&include_inactive=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&include_inactive=1&include_legend=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('kn-award-player-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
+                            + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+                            + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                 el.classList.add('kn-ac-open');
@@ -3692,14 +3694,15 @@ $(document).ready(function() {
         if (term.length < 2) { gid('kn-award-givenby-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(givenByTimer);
         givenByTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&include_legend=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('kn-award-givenby-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                            + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+                            + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
                             + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
@@ -7761,14 +7764,15 @@ $(document).ready(function() {
         if (term.length < 2) { gid('pk-award-player-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(playerTimer);
         playerTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&scope=all&prioritize=1&include_inactive=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'ParkAjax/park/' + PARK_ID + '/playersearch&scope=all&prioritize=1&include_inactive=1&include_legend=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-player-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
+                            + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+                            + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                 pkFixedAcPosition(gid('pk-award-player-text'), el);
@@ -7816,14 +7820,15 @@ $(document).ready(function() {
         if (term.length < 2) { gid('pk-award-givenby-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(givenByTimer);
         givenByTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=all&prioritize=1&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=all&prioritize=1&include_inactive=1&include_suspended=1&include_legend=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-givenby-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                            + (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+                            + (p.Active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
                             + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
@@ -13144,7 +13149,7 @@ function setupPronounPicker(cfg) {
                     // awards to a now-banned officer during reconciliation.
                     // Award giver is intentionally global (cross-kingdom): a noble from another kingdom
                     // can grant an award, so do not scope the giver search by kingdom.
-                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=15';
+                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=15&IncludeLegend=1';
                     fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                         if (!data || !data.length) {
                             editGbResults.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
@@ -13162,11 +13167,12 @@ function setupPronounPicker(cfg) {
                                 return (a.Persona || '').localeCompare(b.Persona || '');
                             });
                             editGbResults.innerHTML = data.map(function(p) {
-                                var inactive = parseInt(p.Active, 10) === 0;
+                                var inactive = parseInt(p.Active, 10) === 0 && !parseInt(p.Legend, 10);
                                 var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
                                 return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                                     + escHtml(p.Persona)
                                     + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
+                                    + (parseInt(p.Legend, 10) ? ' <span class="legend-pill">Legend</span>' : '')
                                     + (inactive ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
                                     + (banned   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
                                     + '</div>';
@@ -15363,8 +15369,8 @@ window.pnCloseUnitCreateModal = function() {
             if (term.length < 2) { results.classList.remove('kn-ac-open'); return; }
             clearTimeout(timer);
             timer = setTimeout(function() {
-                var scopedReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, kingdom_id: KnConfig.kingdomId });
-                var globalReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 });
+                var scopedReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, kingdom_id: KnConfig.kingdomId, IncludeLegend: 1 });
+                var globalReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, IncludeLegend: 1 });
                 $.when(scopedReq, globalReq).done(function(sr, gr) {
                     var local  = sr[0] || [];
                     var global = gr[0] || [];
@@ -15387,7 +15393,7 @@ window.pnCloseUnitCreateModal = function() {
                                 + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
                                 + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                 + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
-                                + '>' + escHtml(pl.Persona) + sub + '</div>';
+                                + '>' + escHtml(pl.Persona) + (pl.Legend ? ' <span class="legend-pill">Legend</span>' : '') + sub + '</div>';
                         }).join('')
                         : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                     results.classList.add('kn-ac-open');
@@ -15976,7 +15982,7 @@ window.pnCloseUnitCreateModal = function() {
                 // the kingdom and clear the park filter, so out-of-park hits
                 // can sneak through. The client filter guarantees same-park
                 // regardless of how the server interpreted the term.
-                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, park_id: PkConfig.parkId },
+                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, park_id: PkConfig.parkId, IncludeLegend: 1 },
                     function(data) {
                         var local = (data || []).filter(function(pl) {
                             return String(pl.ParkId) === String(PkConfig.parkId);
@@ -15989,7 +15995,7 @@ window.pnCloseUnitCreateModal = function() {
                                     + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
                                     + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                     + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
-                                    + '>' + escHtml(pl.Persona) + '</div>';
+                                    + '>' + escHtml(pl.Persona) + (pl.Legend ? ' <span class="legend-pill">Legend</span>' : '') + '</div>';
                             }).join('')
                             : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players at this park match</div>';
                         results.classList.add('pk-ac-open');

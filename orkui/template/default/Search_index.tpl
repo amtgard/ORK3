@@ -259,7 +259,8 @@ html[data-theme="dark"] .sr-overflow-warning { background: #744210; color: #fbd3
 			var park    = v.ParkName    || '';
 			var persona = v.Persona     || v.UserName || '';
 			var badge   = banned ? '<span class="sr-badge-banned">Banned</span>'
-			            : (active ? '' : '<span class="sr-badge-inactive">Inactive</span>');
+			            : (v.Legend ? '<span class="legend-pill">Legend</span>'
+			            : (active ? '' : '<span class="sr-badge-inactive">Inactive</span>'));
 			var url     = '<?= UIR ?>Player/profile/' + v.MundaneId;
 
 			html += '<tr class="sr-row' + rowCls + '" onclick="window.location.href=\'' + url + '\'">'
@@ -285,6 +286,7 @@ html[data-theme="dark"] .sr-overflow-warning { background: #744210; color: #fbd3
 			Action:  'Search/Player',
 			search:  term.trim(),
 			type:    'all',
+			IncludeLegend: 1,
 			limit:   100,
 			token:   '<?= htmlspecialchars($Token ?? '', ENT_QUOTES) ?>'
 		};

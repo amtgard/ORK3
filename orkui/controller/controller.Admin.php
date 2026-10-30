@@ -1442,6 +1442,8 @@ class Controller_Admin extends Controller
     public function moveplayer($post = null)
     {
         $this->load_model('Player');
+        // The Move Player search sends it so the server can honor include-Legend for a global ORK admin only.
+        $this->data['Token'] = $this->session->token ?? '';
         if (strlen($post) > 0) {
             $this->request->save('Admin_moveplayer', true);
             if (!isset($this->session->user_id)) {

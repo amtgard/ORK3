@@ -625,7 +625,7 @@ document.addEventListener('keydown', function (e) {
 			var $dd = $('#nav-search-dropdown');
 			$dd.html('<div class="nsdd-loading"><i class="fas fa-spinner fa-spin"></i>&ensp;Searching&hellip;</div>').addClass('nsdd-visible');
 			if (nsXhr) nsXhr.abort();
-			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid + '&pid=' + nsPid,
+			nsXhr = $.getJSON(nsUir + 'SearchAjax/universal&q=' + encodeURIComponent(term) + '&kid=' + nsKid + '&pid=' + nsPid + '&include_legend=1',
 				function(res) { nsRender(res || {}); }
 			).fail(function(xhr) {
 				if (xhr.statusText !== 'abort')
@@ -647,6 +647,7 @@ document.addEventListener('keydown', function (e) {
 				$.each(players, function(i, p) {
 					var lbl = p.name ? nsEsc(p.name) : '<em class="nsdd-no-value">No Persona</em>';
 					var sub = nsEsc((p.abbr || '') + ' \u00b7 ' + (p.park || ''));
+					if (p.Legend) lbl += ' <span class="legend-pill">Legend</span>';
 					html += '<a class="nsdd-item" href="?Route=Player/profile/' + p.id + '">' +
 						'<span class="nsdd-item-icon"><i class="fas fa-user fa-fw"></i></span>' +
 						'<span class="nsdd-item-content"><div class="nsdd-item-label">' + lbl + '</div>' +
