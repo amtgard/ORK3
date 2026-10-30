@@ -8,24 +8,17 @@
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-10-30');
+    define('WHATS_NEW_VERSION', '2026-10-09');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
 if (!defined('ORK_VERSION')) {
-    define('ORK_VERSION', '3.5.7 Legend');
+    define('ORK_VERSION', '3.5.6 Crown');
 }
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
-    ['version' => '3.5.7 Legend', 'date' => '2026-10-30', 'items' => [
-        ['icon' => 'fas fa-dove', 'title' => 'Remembering Our Legends', 'body' => 'When a member of our community passes away, a kingdom officer can now mark them as a Legend. Their profile becomes a memorial: a gentle In Memoriam card shows the year they passed, and their photo is softened to sepia. Their awards, titles, attendance and history stay exactly as they earned them.'],
-        ['icon' => 'fas fa-comments', 'title' => 'The Memory Wall', 'body' => 'Every Legend\'s profile opens to a Memory Wall, where friends, family and fellow players can leave a few words in remembrance. Please be kind and respectful. Kingdom officers can remove anything that does not belong.'],
-        ['icon' => 'fas fa-award', 'title' => 'Honors Can Still Be Given', 'body' => 'A Legend can still be recommended for a posthumous award from their profile, and they stay on award and title lists with a Legend marker so their honors are never lost. They no longer appear in attendance searches or current-player lists, and their login is closed.'],
-        ['icon' => 'fas fa-undo', 'title' => 'If It Was a Mistake', 'notes_only' => true, 'body' => 'Kingdom officers and ORK admins can remove Legend status. Sign-in, searches and normal editing return, and the officer sees a list of what was cleared, such as officer seats and future RSVPs, so it can be restored by hand. The Memory Wall is hidden rather than deleted.'],
-        ['icon' => 'fas fa-file-csv', 'title' => 'Also in Legend', 'notes_only' => true, 'body' => 'The Recommendations CSV export gained a Legend column, so officers can tell at a glance which recipients would be receiving a posthumous honor.'],
-    ]],
     ['version' => '3.5.6 Crown', 'date' => '2026-10-09', 'items' => [
         ['icon' => 'fas fa-gavel', 'title' => 'Plan Your Court in the ORK', 'body' => 'Monarchs, Regents, Prime Ministers and kingdom or park editors can now plan a court before it is held. Open Court Planner under Admin Tasks on your kingdom or park page, pull awards from pending recommendations or add them by hand, and drag them into running order.'],
         ['icon' => 'fas fa-bullhorn', 'title' => 'Run It Live, or From Paper', 'body' => 'Publish the court and work it your way. Run at Court lets you mark each award from your phone as it is called. Or print the packet — an order of court for the herald, a record sheet and a prep sheet — and type it in afterwards on the Record Court screen. Nothing reaches a player\'s record until you press Complete Court.'],
@@ -37,7 +30,11 @@ $WHATS_NEW_ITEMS = [
         ['icon' => 'fas fa-paint-brush', 'title' => 'Scrolls, Regalia and Artisans', 'notes_only' => true, 'body' => 'Each award on a court can track whether its scroll and regalia are in progress or done, and name the people who made them. The herald\'s sheet lists who to thank and the Court Report credits them publicly.'],
         ['icon' => 'fas fa-users', 'title' => 'Working a Court Together', 'notes_only' => true, 'body' => 'Several officers can have a published court open at once and see each other\'s changes as they happen. Every court has a recorder — the Prime Minister unless you choose someone else — who is reminded if it is left unrecorded, and the court warns you when the plan has changed since the packet was printed.'],
         ['icon' => 'fas fa-bell', 'title' => 'For Everyone Who Recommends', 'notes_only' => true, 'body' => 'Tick Submit Anonymously to keep your name off a recommendation. And when an award you recommended or seconded is granted, you will find a notice in a new Notifications card on your own profile.'],
-        ['icon' => 'fas fa-plus-circle', 'title' => 'Also in Crown', 'notes_only' => true, 'body' => 'A passed-down recommendation appears on the park\'s Recommendations tab under Delegated by the Kingdom, and the park\'s officers are notified. Dismissed recommendations are kept, and Show dismissed lets you restore one. The manager searches, filters, sorts and exports to CSV. Ladder ranks appear as colored pills. And Court Planner, the manager and the Court Report all work on a phone.'],
+        ['icon' => 'fas fa-dove', 'title' => 'Remembering Our Legends', 'notes_only' => true, 'body' => 'When a member of our community passes away, a kingdom officer can now mark them as a Legend. Their profile becomes a memorial: a gentle In Memoriam card shows the year they passed, and their photo is softened to sepia. Their awards, titles, attendance and history stay exactly as they earned them.'],
+        ['icon' => 'fas fa-comments', 'title' => 'The Memory Wall', 'notes_only' => true, 'body' => 'Every Legend\'s profile opens to a Memory Wall, where friends, family and fellow players can leave a few words in remembrance. Please be kind and respectful. Kingdom officers can remove anything that does not belong.'],
+        ['icon' => 'fas fa-award', 'title' => 'Honors Can Still Be Given', 'notes_only' => true, 'body' => 'A Legend can still be recommended for a posthumous award from their profile, and they stay on award and title lists with a Legend marker so their honors are never lost. They no longer appear in attendance searches or current-player lists, and their login is closed.'],
+        ['icon' => 'fas fa-undo', 'title' => 'If It Was a Mistake', 'notes_only' => true, 'body' => 'Kingdom officers and ORK admins can remove Legend status. Sign-in, searches and normal editing return, and the officer sees a list of what was cleared, such as officer seats and future RSVPs, so it can be restored by hand. The Memory Wall is hidden rather than deleted.'],
+        ['icon' => 'fas fa-plus-circle', 'title' => 'Also in Crown', 'notes_only' => true, 'body' => 'A passed-down recommendation appears on the park\'s Recommendations tab under Delegated by the Kingdom, and the park\'s officers are notified. Dismissed recommendations are kept, and Show dismissed lets you restore one. The manager searches, filters, sorts and exports to CSV. Ladder ranks appear as colored pills. And Court Planner, the manager and the Court Report all work on a phone. The Recommendations CSV gained a Legend column, so officers can tell at a glance which recipients would be receiving a posthumous honor.'],
     ]],
     ['version' => '3.5.5 Hydra', 'date' => '2026-08-22', 'items' => [
         ['icon' => 'fas fa-bug-slash', 'title' => 'Cutting Off Technical Issues One Head at a Time', 'body' => 'Hydra is all about enhancing the engine underneath the ORK to ensure it runs smoothly. You won\'t notice most of what Hydra has accomplished under the hood, but it will make the system easier to maintain and update over time.'],
