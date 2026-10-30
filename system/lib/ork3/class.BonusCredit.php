@@ -378,6 +378,9 @@ class BonusCredit
         if ($player === null) {
             return $this->fail('Player not found.');
         }
+        if (Legend::isLegend($mundaneId)) {
+            return $this->denied(Legend::REFUSED);
+        }
         $categoryId = max(0, $categoryId);
         $category = null;
         if ($categoryId > 0) {
@@ -1056,6 +1059,9 @@ class BonusCredit
         $note      = trim((string) ($r['Note'] ?? ''));
         $date      = trim((string) ($r['Date'] ?? date('Y-m-d')));
 
+        if (Legend::isLegend($mundaneId)) {
+            return $this->denied(Legend::REFUSED);
+        }
         $category = $this->category($categoryId);
         if ($category === null) {
             return $this->fail('Choose what the credit is for.');
@@ -1236,6 +1242,9 @@ class BonusCredit
         $category = $this->category((int) $row['CategoryId']);
         if ($category === null) {
             return $this->fail('This credit\'s category no longer exists; remove the credit and grant another.');
+        }
+        if (Legend::blocksEdit($uid, (int) $row['MundaneId'])) {
+            return $this->denied(Legend::REFUSED);
         }
         if ($uid <= 0 || $player === null || !$this->mayChange($uid, $row, $player, $category)) {
             return $this->denied($this->crossed($player ?? [], $category)

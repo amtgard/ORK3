@@ -107,6 +107,10 @@ class Event extends Ork3
         if (!valid_id($detailId) || !valid_id($mundaneId)) {
             return InvalidParameter('EventCalendarDetailId and MundaneId are required.');
         }
+        // On-behalf RSVPs too: the target, not the caller, is who the guard checks.
+        if (Legend::isLegend($mundaneId)) {
+            return NoAuthorization(Legend::REFUSED);
+        }
 
         $auth = $this->_authorizeRsvpActor($request, $detailId, $mundaneId);
         if ($auth !== null) {

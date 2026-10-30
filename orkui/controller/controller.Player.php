@@ -176,7 +176,8 @@ class Controller_Player extends Controller
                                 'Rank' => $this->request->Player_index->Rank,
                                 'GivenById' => $this->request->Player_index->MundaneId,
                                 'Reason' => $this->request->Player_index->Reason,
-                                'MonarchyOnly' => !empty($this->request->Player_index->MonarchyOnly) ? 1 : 0
+                                'MonarchyOnly' => !empty($this->request->Player_index->MonarchyOnly) ? 1 : 0,
+                                'FromProfile' => 1
                             ));
                         break;
                     case 'deleterecommendation':
@@ -380,6 +381,7 @@ class Controller_Player extends Controller
                             'Reason'         => $this->request->Player_profile->Reason,
                             'Anonymous'      => !empty($this->request->Player_profile->Anonymous) ? 1 : 0,
                             'MonarchyOnly'   => !empty($this->request->Player_profile->MonarchyOnly) ? 1 : 0,
+                            'FromProfile'    => 1,
                         ]);
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 0) {

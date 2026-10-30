@@ -804,6 +804,10 @@ class Common
 
     public function set_officer($kingdom_id, $park_id, $new_officer_id, $role, $system = 0)
     {
+        // Vacating passes 0; only seating a Legend is refused. Callers report the refusal.
+        if ($new_officer_id > 0 && Legend::isLegend((int)$new_officer_id)) {
+            return;
+        }
         $this->officer->clear();
         if (isset($kingdom_id)) {
             $this->officer->kingdom_id = $kingdom_id;

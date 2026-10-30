@@ -389,6 +389,10 @@ class Court
             'RecorderMundaneId'     => 'recorder_mundane_id',
         ];
 
+        if (!empty($fields['RecorderMundaneId']) && Legend::isLegend((int)$fields['RecorderMundaneId'])) {
+            return false;
+        }
+
         $sets = [];
         foreach ($map as $key => $column) {
             if (!array_key_exists($key, $fields)) {
@@ -1402,6 +1406,10 @@ class Court
     public function stageAward($court_award_id, $given_by_mundane_id, $public_comment, $rank, $expectedRowVersion = null)
     {
         if ($this->isHiddenRecCitation((int)$court_award_id, (string)$public_comment)) {
+            return false;
+        }
+        // Recipients and artisans may be Legends; the one giving the award may not.
+        if (Legend::isLegend((int)$given_by_mundane_id)) {
             return false;
         }
         $where = 'court_award_id = ' . (int)$court_award_id . '
@@ -2576,6 +2584,9 @@ class Court
     {
         $court_id = (int)$court_id;
         $giver    = (int)$default_giver_mundane_id;
+        if (Legend::isLegend($giver)) {
+            return 0;
+        }
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'UPDATE ' . DB_PREFIX . 'court_award SET

@@ -834,6 +834,9 @@ class Kingdom extends Ork3
         $mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+            if (Legend::isLegend((int)$request['MundaneId'])) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             if ($mundane['KingdomId'] == $request['KingdomId']) {
                 // Look up prior holder so the audit can show before/after,
                 // and so we can suppress no-op re-saves of the same assignment.

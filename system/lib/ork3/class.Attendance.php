@@ -79,6 +79,11 @@ class Attendance extends Ork3
             return InvalidParameter();
         }
 
+        // Refused for everyone, ORK admins included: undo is the way back for an exception.
+        if (Legend::isLegend((int)$request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
+
         $this->attendance->clear();
         $this->attendance->park_id = 0;
         $this->attendance->kingdom_id = 0;
@@ -180,6 +185,12 @@ class Attendance extends Ork3
         $this->attendance->attendance_id = $request['AttendanceId'];
         if (!valid_id($request['AttendanceId']) || !$this->attendance->find()) {
             return InvalidParameter();
+        }
+
+        // A row may not be reassigned to a Legend; editing a Legend's existing row is not this guard's business.
+        $newOwner = (int)($request['MundaneId'] ?? 0);
+        if ($newOwner !== (int)$this->attendance->mundane_id && Legend::isLegend($newOwner)) {
+            return NoAuthorization(Legend::REFUSED);
         }
 
         $attendance = new stdClass();

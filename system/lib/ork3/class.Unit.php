@@ -501,6 +501,10 @@ class Unit extends Ork3
             if ($this->members->find()) {
                 return InvalidParameter('Player is already an active member of this ' . $this->unit->type . '.');
             }
+            // Existing active rows are untouched above; a new add or a revival is what is refused.
+            if (Legend::isLegend((int)$request['MundaneId'])) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             $this->members->clear();
             $this->members->mundane_id = $request['MundaneId'];
             $this->members->unit_id = $request['UnitId'];
@@ -711,6 +715,9 @@ class Unit extends Ork3
         $target_id = (int)$request['MundaneId'];
         if (!valid_id($target_id)) {
             return InvalidParameter();
+        }
+        if (Legend::isLegend($target_id)) {
+            return NoAuthorization(Legend::REFUSED);
         }
 
         $is_manager = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE);

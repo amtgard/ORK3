@@ -1108,6 +1108,9 @@ class EventPlanning extends Ork3
         if (!valid_id($targetMundane)) {
             return InvalidParameter('A player must be selected.');
         }
+        if (Legend::isLegend($targetMundane)) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         if ($roleName === '') {
             return InvalidParameter('A role is required.');
         }
@@ -1554,6 +1557,14 @@ class EventPlanning extends Ork3
             return InvalidParameter('A title is required.');
         }
 
+        // A Legend can't be newly made a lead; one already on the item stays.
+        foreach ((is_array($request['Leads'] ?? null) ? $request['Leads'] : []) as $lead) {
+            $leadId = (int) ($lead['MundaneId'] ?? 0);
+            if (valid_id($leadId) && Legend::isLegend($leadId) && !$this->isScheduleLead($scheduleId, $leadId)) {
+                return NoAuthorization(Legend::REFUSED);
+            }
+        }
+
         $menu = null;
         $cost = null;
         $dietary = null;
@@ -1686,6 +1697,19 @@ class EventPlanning extends Ork3
                 'Leads' => $leadsOut,
             ],
         ];
+    }
+
+    private function isScheduleLead(int $scheduleId, int $mundaneId): bool
+    {
+        if ($scheduleId <= 0) {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT 1 FROM ' . DB_PREFIX . 'event_schedule_lead
+             WHERE event_schedule_id = ' . $scheduleId . ' AND mundane_id = ' . $mundaneId . ' LIMIT 1'
+        );
+        return (bool) ($rs && $rs->Next());
     }
 
     private function staffHasFlag(int $mundaneId, int $eventId, int $detailId, string $flag): bool

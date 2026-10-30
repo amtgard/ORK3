@@ -4002,6 +4002,9 @@ class Player extends Ork3
         if (!valid_id($request['MundaneId'] ?? 0)) {
             return InvalidParameter('A player must be selected.');
         }
+        if (Legend::isLegend((int)$request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
 
         // Authorize against the target player's OWN park, never the ParkId that
         // came in on the request. That value arrives from a hidden form input,
@@ -4163,6 +4166,10 @@ class Player extends Ork3
         $this->mundane->mundane_id = $request['MundaneId'];
         if (!$this->mundane->find()) {
             return InvalidParameter();
+        }
+        // Only the profile page (FromProfile) may recommend a Legend: it is how friends honor them.
+        if (empty($request['FromProfile']) && Legend::isLegend((int)$request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
         }
         $recipient = array( 'KingdomId' => $this->mundane->kingdom_id, 'ParkId' => $this->mundane->park_id );
 
