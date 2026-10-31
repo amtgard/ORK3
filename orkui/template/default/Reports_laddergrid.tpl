@@ -756,7 +756,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 	}
 ?>
 <?php   if ($info !== null && $info['IsMaster']) : ?>
-				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)($info['Rank'] ?? 0) ?>" data-master="1" data-order="999"><span class="lg-cell-master" title="Master">M</span></td>
+				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)($info['Rank'] ?? 0) ?>" data-master="1" data-order="999"><span class="lg-cell-master">M</span></td>
 <?php   elseif ($info !== null && $info['Rank'] !== null) : ?>
 				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)$info['Rank'] ?>" data-order="<?= (int)$info['Rank'] ?>"><span class="lg-cell-rank"<?= $_awardedTip ?>><?= (int)$info['Rank'] ?></span></td>
 <?php   else : ?>
@@ -824,7 +824,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 					<div id="lg-sc-fields-new">
 						<div class="lg-sc-field">
 							<label for="lg-sc-name">Court Name</label>
-							<input type="text" id="lg-sc-name" maxlength="255" autocomplete="off">
+							<input type="text" id="lg-sc-name" maxlength="100" autocomplete="off">
 						</div>
 						<div class="lg-sc-field">
 							<label for="lg-sc-date">Date</label>
@@ -883,7 +883,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 	var newState = 'idle'; // idle | loading | loaded
 	var isKingdom = <?= $isKingdom ? 'true' : 'false' ?>;
 	var uir = <?= json_encode(UIR, $_jsonFlags) ?>;
-	var newPlayersUrl = <?= json_encode(UIR . 'Reports/ladder_new_players&' . ($isKingdom ? 'KingdomId' : 'ParkId') . '=' . (int)($report_id ?? 0), $_jsonFlags) ?>;
+	var newPlayersUrl = <?= json_encode(UIR . 'Reports/ladder_new_players&KingdomId=' . (int)($grid_kingdom_id ?? 0) . '&ParkId=' . (int)($grid_park_id ?? 0), $_jsonFlags) ?>;
 
 	// The contract lg-smart-court.js builds on.
 	window.LgGrid = {
@@ -1302,6 +1302,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 window.LgSmartConfig = <?= json_encode([
 	'KingdomId'    => (int)$SmartCourt['KingdomId'],
 	'ParkId'       => (int)$SmartCourt['ParkId'],
+	'Uid'          => (int)$SmartCourt['Uid'],
 	'ColumnAwards' => (object)$SmartCourt['ColumnAwards'],
 	'KaToColumn'   => (object)$SmartCourt['KaToColumn'],
 	'Courts'       => array_values($SmartCourt['Courts']),

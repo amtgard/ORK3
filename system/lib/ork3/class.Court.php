@@ -2989,7 +2989,9 @@ class Court
      *
      * Recs: usable open recs, in sortSmartGridRecs order, carrying only the listed
      * fields. Reason and recommender never leave the server.
-     * OtherCourtLines: live lines on the kingdom's other open courts, parks included.
+     * OtherCourtLines: live ladder lines on the kingdom's other open courts that this
+     * caller can manage, and on a park grid only for that park's players, the only rows
+     * the crown paints on. IsFallback in Recs still counts every open court.
      * CourtLines: this court's live lines. Empty when $court_id is 0.
      *
      * Monarchy Only: a line can sit on a court whose managers cannot see its rec, so
@@ -3011,7 +3013,7 @@ class Court
 
         return [
             'Recs'            => $this->smartGridRecs($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token, $fresh),
-            'OtherCourtLines' => $this->smartGridOtherCourtLines($kingdom_id, $court_id, $canSee),
+            'OtherCourtLines' => $this->smartGridOtherCourtLines($kingdom_id, $park_id, $court_id, $caller_uid, $canSee),
             'CourtLines'      => $court_id > 0 ? $this->smartGridCourtLines($court_id, $caller_uid, $canSee) : [],
         ];
     }
@@ -3095,28 +3097,34 @@ class Court
         return $recs;
     }
 
-    private function smartGridOtherCourtLines(int $kingdom_id, int $court_id, callable $canSee): array
+    private function smartGridOtherCourtLines(int $kingdom_id, int $park_id, int $court_id, int $caller_uid, callable $canSee): array
     {
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT ca.mundane_id, ca.kingdomaward_id, ca.recommendations_id,
                     IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only,
-                    c.court_id, c.name AS court_name
+                    c.court_id, c.park_id AS court_park_id, c.name AS court_name
                FROM ' . DB_PREFIX . 'court_award ca
                JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
+               JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ca.kingdomaward_id
+               LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+               JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = ca.mundane_id
                LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
               WHERE c.kingdom_id = ' . $kingdom_id . '
                 AND c.status != \'complete\'
                 AND ca.status != \'cancelled\'
                 AND c.court_id != ' . $court_id . '
+                AND ' . self::sqlEffectiveIsLadder() . ' = 1
+                ' . ($park_id > 0 ? 'AND m.park_id = ' . $park_id : '') . '
               ORDER BY c.court_id, ca.court_award_id'
         );
-        // Read out in full first: $canSee queries through the same connection.
+        // Read out in full first: canManage and $canSee query through the same connection.
         $rows = [];
         if ($rs) {
             while ($rs->Next()) {
                 $rows[] = [
                     'HiddenRecId'    => (int)$rs->rec_monarchy_only !== 0 ? (int)$rs->recommendations_id : 0,
+                    'CourtParkId'    => (int)$rs->court_park_id,
                     'MundaneId'      => (int)$rs->mundane_id,
                     'KingdomAwardId' => (int)$rs->kingdomaward_id,
                     'CourtId'        => (int)$rs->court_id,
@@ -3125,11 +3133,14 @@ class Court
             }
         }
 
-        $lines = [];
+        $manages = [];
+        $lines   = [];
         foreach ($rows as $row) {
             $hiddenRecId = $row['HiddenRecId'];
-            unset($row['HiddenRecId']);
-            if ($hiddenRecId === 0 || $canSee($hiddenRecId)) {
+            $courtParkId = $row['CourtParkId'];
+            unset($row['HiddenRecId'], $row['CourtParkId']);
+            $manages[$row['CourtId']] ??= (bool)$this->canManage($caller_uid, $kingdom_id, $courtParkId);
+            if ($manages[$row['CourtId']] && ($hiddenRecId === 0 || $canSee($hiddenRecId))) {
                 $lines[] = $row;
             }
         }

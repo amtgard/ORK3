@@ -86,6 +86,27 @@ final class CourtSmartGridTest extends TestCase
         return $this->fx->createRecommendation($mundaneId, $this->ka, self::ROSE, ['rank' => $rank] + $overrides);
     }
 
+    /** A second park in this kingdom. */
+    private function otherParkId(): int
+    {
+        $id = (int)$this->fx->pdo()->query(
+            'SELECT park_id FROM ' . DB_PREFIX . 'park WHERE kingdom_id = ' . $this->k
+            . ' AND park_id <> ' . $this->p . ' ORDER BY park_id ASC LIMIT 1'
+        )->fetchColumn();
+        $this->assertGreaterThan(0, $id, 'the test kingdom needs a second park');
+
+        return $id;
+    }
+
+    /** @return list<array<string, mixed>> this player's crowns in $state. */
+    private function crownsFor(array $state, int $mundaneId): array
+    {
+        return array_values(array_filter(
+            $state['OtherCourtLines'],
+            static fn ($l) => $l['MundaneId'] === $mundaneId
+        ));
+    }
+
     /** getSmartGridState for the park grid, as $caller. */
     private function state(int $courtId = 0, ?array $caller = null, int $parkId = -1, bool $fresh = false): array
     {
@@ -388,11 +409,13 @@ final class CourtSmartGridTest extends TestCase
         $kingdomC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => 0, 'name' => 'sg-kingdom']);
         $doneC    = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => 0, 'name' => 'sg-done', 'status' => 'complete']);
         $otherC   = $this->fx->createCourt(['kingdom_id' => $this->fx->otherKingdomId($this->k), 'name' => 'sg-foreign']);
+        $otherParkC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => $this->otherParkId(), 'name' => 'sg-other-park']);
 
         $line = ['kingdomaward_id' => $this->ka, 'rank' => 2];
         $this->fx->createAward($thisCourt, $recip, $line);
         $this->fx->createAward($parkC, $recip, $line);
         $this->fx->createAward($kingdomC, $recip, $line);
+        $this->fx->createAward($otherParkC, $recip, $line);
         $this->fx->createAward($doneC, $recip, $line);
         $this->fx->createAward($otherC, $recip, $line);
         $this->fx->createAward($kingdomC, $recip, ['status' => 'cancelled'] + ['kingdomaward_id' => $this->ka, 'rank' => 3]);
@@ -406,16 +429,124 @@ final class CourtSmartGridTest extends TestCase
         $this->assertSame([
             ['MundaneId' => $recip, 'KingdomAwardId' => $this->ka, 'CourtId' => $parkC, 'CourtName' => 'sg-park'],
             ['MundaneId' => $recip, 'KingdomAwardId' => $this->ka, 'CourtId' => $kingdomC, 'CourtName' => 'sg-kingdom'],
+            ['MundaneId' => $recip, 'KingdomAwardId' => $this->ka, 'CourtId' => $otherParkC, 'CourtName' => 'sg-other-park'],
         ], $lines);
+    }
+
+    public function testNonLadderLineNeverAppearsInOtherCourtLines(): void
+    {
+        $knighthood = (int)$this->fx->pdo()->query(
+            'SELECT award_id FROM ' . DB_PREFIX . "award WHERE is_ladder = 0 AND peerage = 'Knight' ORDER BY award_id ASC LIMIT 1"
+        )->fetchColumn();
+        $this->assertGreaterThan(0, $knighthood);
+        $walkOnKa = $this->fx->createKingdomAward($this->k, $knighthood, 'walk-on');
+
+        $recip = $this->recipient();
+        $kingdomC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => 0, 'name' => 'sg-kingdom']);
+        $this->fx->createAward($kingdomC, $recip, ['kingdomaward_id' => $walkOnKa, 'rank' => 0]);
+        $this->fx->createAward($kingdomC, $recip, ['kingdomaward_id' => $this->ka, 'rank' => 2]);
+
+        $kas = array_column($this->crownsFor($this->state(0, null, 0), $recip), 'KingdomAwardId');
+
+        $this->assertSame([$this->ka], $kas, 'the ladder line alone, even for a kingdom officer');
+    }
+
+    public function testParkScopedReadExcludesAnotherParksPlayer(): void
+    {
+        $outsider = (int)$this->fx->createPlayer('sg-outsider', $this->k, $this->otherParkId())['mundane_id'];
+        $kingdomC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => 0, 'name' => 'sg-kingdom']);
+        $this->fx->createAward($kingdomC, $outsider, ['kingdomaward_id' => $this->ka, 'rank' => 2]);
+
+        $this->assertSame([], $this->crownsFor($this->state(), $outsider), 'a park read covers that park\'s players');
+        $this->assertCount(1, $this->crownsFor($this->state(0, null, 0), $outsider), 'a kingdom read covers the kingdom');
+    }
+
+    public function testParkOfficerGetsNoCrownForKingdomCourt(): void
+    {
+        $recip = $this->recipient();
+        $kingdomC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => 0, 'name' => 'sg-kingdom']);
+        $this->fx->createAward($kingdomC, $recip, ['kingdomaward_id' => $this->ka, 'rank' => 2]);
+
+        $this->assertSame([], $this->crownsFor($this->state(0, $this->parkOfficer()), $recip));
+    }
+
+    public function testParkOfficerGetsNoCrownForAnotherParksCourt(): void
+    {
+        $recip = $this->recipient();
+        $ownC   = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => $this->p, 'name' => 'sg-own']);
+        $otherC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => $this->otherParkId(), 'name' => 'sg-other-park']);
+        $line = ['kingdomaward_id' => $this->ka, 'rank' => 2];
+        $this->fx->createAward($ownC, $recip, $line);
+        $this->fx->createAward($otherC, $recip, $line);
+
+        $this->assertSame(
+            [$ownC],
+            array_column($this->crownsFor($this->state(0, $this->parkOfficer()), $recip), 'CourtId'),
+            'this officer\'s own park court still shows'
+        );
+    }
+
+    public function testKingdomOfficerStillGetsCrownForParkAndKingdomCourts(): void
+    {
+        $recip = $this->recipient();
+        $parkC    = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => $this->p, 'name' => 'sg-park']);
+        $kingdomC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => 0, 'name' => 'sg-kingdom']);
+        $otherC   = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => $this->otherParkId(), 'name' => 'sg-other-park']);
+        $line = ['kingdomaward_id' => $this->ka, 'rank' => 2];
+        $this->fx->createAward($parkC, $recip, $line);
+        $this->fx->createAward($kingdomC, $recip, $line);
+        $this->fx->createAward($otherC, $recip, $line);
+
+        $expected = [$parkC, $kingdomC, $otherC];
+        $this->assertSame($expected, array_column($this->crownsFor($this->state(), $recip), 'CourtId'), 'on the park grid');
+        $this->assertSame($expected, array_column($this->crownsFor($this->state(0, null, 0), $recip), 'CourtId'), 'on the kingdom grid');
+    }
+
+    public function testCourtManagementIsCheckedOncePerCourt(): void
+    {
+        $recip = $this->recipient();
+        $kingdomC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => 0, 'name' => 'sg-kingdom']);
+        $this->fx->createAward($kingdomC, $recip, ['kingdomaward_id' => $this->ka, 'rank' => 2]);
+        $this->fx->createAward($kingdomC, $recip, ['kingdomaward_id' => $this->ka, 'rank' => 3]);
+
+        $court = new class () extends \Court {
+            /** @var array<int, int> */
+            public array $calls = [];
+
+            public function canManage($uid, $kingdom_id, $park_id = 0)
+            {
+                $this->calls[] = (int)$park_id;
+
+                return parent::canManage($uid, $kingdom_id, $park_id);
+            }
+        };
+
+        $state = $court->getSmartGridState($this->k, 0, 0, (int)$this->officer['mundane_id'], (string)$this->officer['token']);
+
+        $this->assertCount(2, $this->crownsFor($state, $recip));
+        $this->assertSame(count(array_unique(array_column($state['OtherCourtLines'], 'CourtId'))), count($court->calls));
+    }
+
+    public function testRecFallbackStillCountsACourtTheOfficerCannotManage(): void
+    {
+        $recip = $this->recipient();
+        $rec = $this->rec($recip, 3);
+        $kingdomC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => 0, 'name' => 'sg-kingdom']);
+        $this->addLine($kingdomC, $recip, 3, $rec);
+
+        $state = $this->state(0, $this->parkOfficer());
+
+        $this->assertSame([], $this->crownsFor($state, $recip), 'no crown');
+        $this->assertTrue(array_column($state['Recs'], 'IsFallback', 'RecommendationsId')[$rec], 'the sort still knows');
     }
 
     public function testOtherCourtLineBackedByHiddenRecIsWithheld(): void
     {
         $recip = $this->recipient();
         $hidden = $this->rec($recip, 2, ['monarchy_only' => 2]);
-        $kingdomC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => 0, 'name' => 'sg-kingdom']);
-        $this->addLine($kingdomC, $recip, 2, $hidden);
-        $this->addLine($kingdomC, $recip, 3);
+        $parkC = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => $this->p, 'name' => 'sg-park']);
+        $this->addLine($parkC, $recip, 2, $hidden);
+        $this->addLine($parkC, $recip, 3);
 
         $linesFor = static fn (array $state) => array_values(array_filter(
             $state['OtherCourtLines'],
@@ -566,7 +697,7 @@ final class CourtSmartGridTest extends TestCase
         $forged = $this->fx->createCourt(['kingdom_id' => $foreign, 'park_id' => $this->p, 'name' => 'sg-forged']);
 
         $foreignCourt = $this->fx->createCourt(['kingdom_id' => $foreign, 'name' => 'sg-foreign']);
-        $realCourt = $this->fx->createCourt(['kingdom_id' => $this->k, 'name' => 'sg-real']);
+        $realCourt = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => $this->p, 'name' => 'sg-real']);
         $line = ['kingdomaward_id' => $this->ka, 'rank' => 2];
         $this->fx->createAward($foreignCourt, $this->recipient('foreign'), $line);
         $this->fx->createAward($realCourt, $this->recipient('real'), $line);
@@ -624,7 +755,8 @@ final class CourtSmartGridTest extends TestCase
         $kingdomCourt = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => 0, 'name' => 'sg-kingdom']);
 
         $config = $this->endpoint('ladder_grid', $parkOfficer, $parkGrid);
-        $this->assertSame(['KingdomId', 'ParkId', 'ColumnAwards', 'KaToColumn', 'Courts', 'Events'], array_keys($config));
+        $this->assertSame(['KingdomId', 'ParkId', 'Uid', 'ColumnAwards', 'KaToColumn', 'Courts', 'Events'], array_keys($config));
+        $this->assertSame((int)$parkOfficer['mundane_id'], $config['Uid']);
         $this->assertSame($this->k, $config['KingdomId']);
         $this->assertSame($this->p, $config['ParkId']);
         $this->assertSame($this->ka, $config['ColumnAwards'][self::ROSE]);

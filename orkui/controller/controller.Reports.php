@@ -1663,6 +1663,9 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_laddergrid.tpl';
         $this->data['report_type'] = $type;
         $this->data['report_id']   = $id;
+        // As the URL gave them: New Players must ask with the grid's own request shape.
+        $this->data['grid_kingdom_id'] = $kingdom_id;
+        $this->data['grid_park_id']    = $park_id;
 
         $assembly = $this->Reports->ladder_award_grid($type, $kingdom_id, $park_id);
         $scopeName = $assembly['ScopeName'] ?? '';
@@ -1717,6 +1720,7 @@ class Controller_Reports extends Controller
         return [
             'KingdomId'    => $kingdom_id,
             'ParkId'       => $park_id,
+            'Uid'          => $uid,
             'ColumnAwards' => $columns['ColumnAwards'],
             'KaToColumn'   => $columns['KaToColumn'],
             'Courts'       => $courts,

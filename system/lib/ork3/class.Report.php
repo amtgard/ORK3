@@ -8926,9 +8926,6 @@ class Report extends Ork3
         }
         $kingdomId = valid_id($request['KingdomId'] ?? 0) ? (int) $request['KingdomId'] : 0;
         $parkId = valid_id($request['ParkId'] ?? 0) ? (int) $request['ParkId'] : 0;
-        if ($parkId <= 0 && $kingdomId <= 0) {
-            return ['Status' => InvalidParameter(), 'Players' => []];
-        }
 
         $onGrid = [];
         foreach ($grid['GridRows'] ?? [] as $row) {

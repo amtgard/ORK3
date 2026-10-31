@@ -80,7 +80,7 @@ Clicks use delegated handlers on the table body, because DataTables re-renders r
 **Crown marker.** In Smart Court, a cell gets a small crown icon when that player has a live line for that ladder on another open court, with the tooltip `Already on Court: {Name}`. This is the requester's wording. The cell stays clickable and next rank is unchanged.
 
 - "Open" means the court is not `complete` and the line is not `cancelled`. **(call)**
-- Check all courts in the kingdom, including its parks' courts, so a park court and a kingdom court cannot unknowingly plan the same player. **(call)**
+- Check the open courts in the kingdom that this officer can manage. A park officer does not see a crown for a kingdom court or another park's court. This is the requester's explicit decision.
 - Several courts are comma-separated in the tooltip. **(call)**
 - Any rank on that ladder counts, since a line for a different rank on another court still affects what this one should give. **(call)**
 - The crown sits top left so it never collides with the (R) at top right. **(call)**

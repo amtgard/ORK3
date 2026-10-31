@@ -14,7 +14,8 @@
     var cfg = window.LgSmartConfig, G = window.LgGrid, C = window.LgSmartCore;
     if (!cfg || !G || !C) return;
 
-    var SCOPE = Number(cfg.ParkId) > 0 ? 'Park:' + Number(cfg.ParkId) : 'Kingdom:' + Number(cfg.KingdomId);
+    // Per viewer: a stored row's recId must not reach an officer who cannot see that rec.
+    var SCOPE = 'User:' + Number(cfg.Uid) + ':' + (Number(cfg.ParkId) > 0 ? 'Park:' + Number(cfg.ParkId) : 'Kingdom:' + Number(cfg.KingdomId));
     var STORE = 'lgSmartCourt:' + SCOPE;
     var CONFIRM_MS = 3000;  // Clear All second-click window
     var MINIMIZE_MS = 200;  // FAB appears as the card finishes shrinking
@@ -35,6 +36,7 @@
 
     var active = false, starting = false, saving = false, cleanSave = false;
     var startToken = 0;     // a begin() answers only while its token is current
+    var refreshToken = 0;   // a refresh answers only while its token is current
     var linkedIn = false;   // the page was reached by a SmartCourt=1 link
     var court = null, limit = 0, rows = [], recs = [], seq = 0, today = '';
     var recsByCell = {}, recById = {}, otherByCell = {}, rowsByCell = {}, trsByPlayer = {}, topByCol = {};
@@ -587,11 +589,29 @@
                     recompute();
                     repaintCell(cur.mundaneId, cur.col);
                     persist();
+                    refreshAfterRemoval();
                 } else {
                     cur.error = errorText(res);
                 }
             }
             if (active) renderCard();
+        });
+    }
+
+    // Lets a removed line's rec be offered again. Fresh, because the cached list can
+    // predate that rec. A save takes the token, since its own read is newer than this.
+    function refreshAfterRemoval() {
+        if (saving) return;
+        var token = ++refreshToken, courtId = court.CourtId;
+        fetchState(courtId, true).then(function (st) {
+            if (token !== refreshToken || !active || court.CourtId !== courtId) return;
+            if (st.status !== 0 || !st.state) return; // the removal stands: the next read catches up
+            var busy = rows.filter(function (x) { return x.busy; }).map(function (x) { return x.courtAwardId; });
+            applyState(st.state);
+            rows.forEach(function (x) { x.busy = busy.indexOf(x.courtAwardId) >= 0; });
+            paintAll();
+            renderCard();
+            persist();
         });
     }
 
@@ -764,26 +784,29 @@
         ready.forEach(function (r) { r.error = ''; });
         renderCard();
 
-        ensureCourt().then(function (ok) {
-            if (!ok) return finishSave(false);
-            return fetchState(court.CourtId, true).then(function (r) {
-                if (r.status !== 0) {
-                    notify(errorText(r), true);
-                    return finishSave(false);
-                }
-                applyState(r.state);
-                var dups = C.findDuplicates(rows, r.state.CourtLines, colOf);
-                dups.forEach(function (id) {
-                    var dup = findRow(id);
-                    dup.recLost = false; // its rec left the list because it is on this court
-                    dup.error = MSG.duplicate;
-                });
-                paintAll();
-                renderCard();
-                var run = { failed: false, refresh: false, stopped: false };
-                var ids = unsavedRows().filter(function (x) {
-                    return !x.recLost && dups.indexOf(x.id) < 0;
-                }).map(function (x) { return x.id; });
+        refreshToken++;
+
+        // Read first: a pass where every rec vanished must not leave an empty court.
+        fetchState(court.CourtId, true).then(function (r) {
+            if (r.status !== 0) {
+                notify(errorText(r), true);
+                return finishSave(false);
+            }
+            applyState(r.state);
+            var dups = C.findDuplicates(rows, r.state.CourtLines, colOf);
+            dups.forEach(function (id) {
+                var dup = findRow(id);
+                dup.recLost = false; // its rec left the list because it is on this court
+                dup.error = MSG.duplicate;
+            });
+            paintAll();
+            renderCard();
+            var run = { failed: false, refresh: false, stopped: false };
+            var ids = unsavedRows().filter(function (x) {
+                return !x.recLost && dups.indexOf(x.id) < 0;
+            }).map(function (x) { return x.id; });
+            return (ids.length ? ensureCourt() : Promise.resolve(true)).then(function (ok) {
+                if (!ok) return finishSave(false);
                 return saveRows(run, ids).then(function () {
                     return run.refresh ? fetchState(court.CourtId, true) : null;
                 }).then(function (fresh) {
