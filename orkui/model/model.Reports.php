@@ -466,6 +466,23 @@ class Model_Reports extends Model
         return $r;
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function ladder_grid_new_players(int $kingdomId, int $parkId): array
+    {
+        $r = $this->_report_domain()->GetLadderGridNewPlayers([
+            'KingdomId' => $kingdomId,
+            'ParkId' => $parkId,
+            'Token' => $this->session->token ?? '',
+        ]);
+        if (isset($r['Status']) && is_array($r['Status']) && ($r['Status']['Status'] ?? 0) !== 0) {
+            return [];
+        }
+
+        return $r['Players'] ?? [];
+    }
+
     public function get_kingdom_parks($kingdom_id)
     {
         $kingdom = new APIModel('Kingdom');

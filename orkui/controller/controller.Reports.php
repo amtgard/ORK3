@@ -27,6 +27,8 @@ class Controller_Reports extends Controller
             // The PAGE (award_explorer) is NOT listed, so it redirects to Login like
             // every other gated report -- which is the whole point of gating it.
             'award_explorer_json',
+            // Same fetch() reason: answers status:5 itself when logged out.
+            'ladder_new_players',
         ];
         if (!isset($this->session->user_id) && !in_array($this->method, $public_reports)) {
             header('Location: ' . UIR . 'Login');
@@ -1675,6 +1677,28 @@ class Controller_Reports extends Controller
 
         $this->data['LadderAwards'] = $assembly['LadderAwards'] ?? [];
         $this->data['GridRows'] = $assembly['GridRows'] ?? [];
+    }
+
+    /**
+     * New Players box data for the Smart Planning Grid: JSON, status 0 + players,
+     * or status 5 when logged out.
+     */
+    public function ladder_new_players()
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id) || !isset($this->session->token)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $kingdom_id = (int)$this->request->KingdomId;
+        $park_id    = (int)$this->request->ParkId;
+        if (!valid_id($kingdom_id) && !valid_id($park_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid parameters']);
+            exit;
+        }
+        $players = $this->Reports->ladder_grid_new_players($kingdom_id, $park_id);
+        echo json_encode(['status' => 0, 'players' => $players]);
+        exit;
     }
 
     public function park_distance_matrix($type = null)
