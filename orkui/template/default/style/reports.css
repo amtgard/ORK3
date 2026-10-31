@@ -1378,9 +1378,9 @@ html[data-theme="dark"] .lg-new-status-error {
 }
 
 /* ── Ladder Award Grid: Smart Court ──
-   Stacking: card and FAB sit above the fixed nav (9999) and the grid's sticky cells,
-   the modal uses the site's modal layer, and the tooltip tops them all. The card, FAB,
-   and modal live on <body>, outside .rp-root, so they cannot use --rp-* variables. */
+   Stacking: card and FAB sit above the fixed nav, its dropdowns, and the grid's sticky
+   cells, the modal uses the site's modal layer, and the tooltip tops them all. The card,
+   FAB, and modal live on <body>, outside .rp-root, so they cannot use --rp-* variables. */
 .lg-sc-bar[hidden],
 .lg-sc-msg[hidden],
 .lg-sc-card[hidden],
@@ -1398,7 +1398,7 @@ html[data-theme="dark"] .lg-new-status-error {
 .lg-sc-tip {
   display: none;
   position: fixed;
-  z-index: 100000; /* above flatpickr's calendar too */
+  z-index: calc(var(--z-help-overlay) + 1);
   max-width: 240px;
   padding: 6px 8px;
   border-radius: 4px;
@@ -1518,7 +1518,7 @@ html[data-theme="dark"] .lg-sc-msg.lg-sc-msg-error {
 }
 .lg-sc-bar-limit select {
   padding: 3px 6px;
-  border: 1px solid #cbd5e0;
+  border: 1px solid var(--ork-border-dark);
   border-radius: 5px;
   background: #fff;
   color: #1e1b4b;
@@ -1542,9 +1542,8 @@ html[data-theme="dark"] .lg-sc-bar {
   color: #e0e7ff;
 }
 html[data-theme="dark"] .lg-sc-bar-limit select {
-  background: var(--ork-input-bg, #1f2733);
-  border-color: var(--ork-border, #4a5568);
-  color: var(--ork-text, #e2e8f0);
+  background: var(--ork-input-bg);
+  color: var(--ork-text);
 }
 html[data-theme="dark"] .lg-sc-q {
   color: #a5b4fc;
@@ -1575,6 +1574,7 @@ html[data-theme="dark"] .lg-sc-legend {
   background: #d1d5db !important;
 }
 .rp-root table.lg-table tbody tr:nth-child(n) td.lg-sc-gray.lg-col-award .lg-cell-rank,
+.rp-root table.lg-table tbody tr:nth-child(n) td.lg-sc-gray.lg-col-award .lg-cell-master,
 .rp-root table.lg-table tbody tr:nth-child(n) td.lg-sc-gray.lg-col-award .lg-cell-empty {
   color: #6b7280;
 }
@@ -1582,6 +1582,7 @@ html[data-theme="dark"] .rp-root table.lg-table tbody tr:nth-child(n) td.lg-sc-g
   background: #374151 !important;
 }
 html[data-theme="dark"] .rp-root table.lg-table tbody tr:nth-child(n) td.lg-sc-gray.lg-col-award .lg-cell-rank,
+html[data-theme="dark"] .rp-root table.lg-table tbody tr:nth-child(n) td.lg-sc-gray.lg-col-award .lg-cell-master,
 html[data-theme="dark"] .rp-root table.lg-table tbody tr:nth-child(n) td.lg-sc-gray.lg-col-award .lg-cell-empty {
   color: #9ca3af;
 }
@@ -1641,13 +1642,13 @@ html[data-theme="dark"] .lg-sc-glass {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  z-index: 10010;
+  z-index: calc(var(--ork-z-nav-overlay) + 1);
   display: flex;
   flex-direction: column;
   width: 350px;
   max-width: calc(100vw - 16px);
   background: var(--ork-card-bg, #fff);
-  border: 1px solid #cbd5e0;
+  border: 1px solid var(--ork-border-dark);
   border-radius: 10px;
   box-shadow: 0 10px 30px rgba(15,23,42,0.25);
   color: var(--ork-text, #2d3748);
@@ -1718,7 +1719,7 @@ html[data-theme="dark"] .lg-sc-glass {
   white-space: nowrap;
 }
 .lg-sc-row-saved .lg-sc-row-text {
-  color: #718096;
+  color: var(--ork-text-muted);
 }
 .lg-sc-row-check {
   color: #16a34a;
@@ -1736,7 +1737,7 @@ html[data-theme="dark"] .lg-sc-glass {
 .lg-sc-row-x {
   border: 0;
   background: none;
-  color: #718096;
+  color: var(--ork-text-muted);
   cursor: pointer;
   font-size: 12px;
   padding: 2px 0;
@@ -1757,7 +1758,7 @@ html[data-theme="dark"] .lg-sc-glass {
 }
 .lg-sc-empty {
   padding: 18px 12px;
-  color: #718096;
+  color: var(--ork-text-muted);
   text-align: center;
 }
 .lg-sc-card-foot,
@@ -1778,7 +1779,7 @@ html[data-theme="dark"] .lg-sc-glass {
 .lg-sc-open {
   display: inline-flex;
   align-items: center;
-  border: 1px solid #cbd5e0;
+  border: 1px solid var(--ork-border-dark);
   border-radius: 6px;
   background: var(--ork-card-bg, #fff);
   color: var(--ork-text, #4a5568);
@@ -1819,13 +1820,7 @@ html[data-theme="dark"] .lg-sc-glass {
   opacity: 1;
 }
 html[data-theme="dark"] .lg-sc-card {
-  border-color: var(--ork-border, #4a5568);
   box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-}
-html[data-theme="dark"] .lg-sc-row-saved .lg-sc-row-text,
-html[data-theme="dark"] .lg-sc-empty,
-html[data-theme="dark"] .lg-sc-row-x {
-  color: #a0aec0;
 }
 html[data-theme="dark"] .lg-sc-row-x:hover:not(:disabled) {
   color: #f87171;
@@ -1837,22 +1832,13 @@ html[data-theme="dark"] .lg-sc-row-limit,
 html[data-theme="dark"] .lg-sc-row-error {
   color: #fca5a5;
 }
-html[data-theme="dark"] .lg-sc-clear,
-html[data-theme="dark"] .lg-sc-open {
-  border-color: var(--ork-border, #4a5568);
-}
-html[data-theme="dark"] .lg-sc-clear.lg-sc-clear-armed {
-  background: #dc2626;
-  border-color: #dc2626;
-  color: #fff;
-}
 
 /* Minimized card */
 .lg-sc-fab {
   position: fixed;
   right: 24px;
   bottom: 24px;
-  z-index: 10011;
+  z-index: calc(var(--ork-z-nav-overlay) + 2);
   width: 54px;
   height: 54px;
   border: 0;
@@ -1884,7 +1870,7 @@ html[data-theme="dark"] .lg-sc-fab {
 .lg-sc-scrim {
   position: fixed;
   inset: 0;
-  z-index: var(--z-modal-backdrop, 10040);
+  z-index: var(--z-modal-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1919,7 +1905,7 @@ html[data-theme="dark"] .lg-sc-fab {
 }
 .lg-sc-choice button {
   flex: 1;
-  border: 2px solid #cbd5e0;
+  border: 2px solid var(--ork-border-dark);
   border-radius: 8px;
   background: var(--ork-card-bg, #fff);
   color: var(--ork-text, #2d3748);
@@ -1943,7 +1929,7 @@ html[data-theme="dark"] .lg-sc-fab {
 .lg-sc-field-label {
   display: block;
   margin-bottom: 3px;
-  color: #718096;
+  color: var(--ork-text-muted);
   font-size: 12px;
 }
 .lg-sc-field input[type="text"],
@@ -1953,7 +1939,7 @@ html[data-theme="dark"] .lg-sc-fab {
   width: 100%;
   box-sizing: border-box;
   padding: 7px 8px;
-  border: 1px solid #cbd5e0;
+  border: 1px solid var(--ork-border-dark);
   border-radius: 6px;
   background: var(--ork-input-bg, #fff);
   color: var(--ork-text, #2d3748);
@@ -1968,7 +1954,7 @@ html[data-theme="dark"] .lg-sc-fab {
   position: relative;
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid #cbd5e0;
+  border: 1px solid var(--ork-border-dark);
   border-radius: 6px;
   cursor: pointer;
 }
@@ -1997,7 +1983,7 @@ html[data-theme="dark"] .lg-sc-fab {
 .lg-sc-mode-desc {
   display: block;
   margin-top: 3px;
-  color: #718096;
+  color: var(--ork-text-muted);
   font-size: 11px;
   line-height: 1.35;
 }
@@ -2008,13 +1994,6 @@ html[data-theme="dark"] .lg-sc-fab {
 html[data-theme="dark"] .lg-sc-modal {
   box-shadow: 0 20px 50px rgba(0,0,0,0.7);
 }
-html[data-theme="dark"] .lg-sc-choice button,
-html[data-theme="dark"] .lg-sc-field input[type="text"],
-html[data-theme="dark"] .lg-sc-field input[type="date"],
-html[data-theme="dark"] .lg-sc-field select,
-html[data-theme="dark"] .lg-sc-field label.lg-sc-mode-opt {
-  border-color: var(--ork-border, #4a5568);
-}
 html[data-theme="dark"] .lg-sc-choice button.lg-sc-choice-sel,
 html[data-theme="dark"] .lg-sc-field label.lg-sc-mode-opt.lg-sc-mode-sel {
   border-color: #818cf8;
@@ -2022,11 +2001,6 @@ html[data-theme="dark"] .lg-sc-field label.lg-sc-mode-opt.lg-sc-mode-sel {
 }
 html[data-theme="dark"] .lg-sc-field label.lg-sc-mode-opt.lg-sc-mode-sel {
   box-shadow: 0 0 0 1px #818cf8;
-}
-html[data-theme="dark"] .lg-sc-field label,
-html[data-theme="dark"] .lg-sc-field-label,
-html[data-theme="dark"] .lg-sc-mode-desc {
-  color: #a0aec0;
 }
 html[data-theme="dark"] .lg-sc-modal-error {
   color: #fca5a5;

@@ -1231,6 +1231,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 		document.addEventListener('mouseover', follow);
 		document.addEventListener('focusin', follow);
 		document.addEventListener('focusout', hide);
+		document.documentElement.addEventListener('mouseleave', hide);
 		window.addEventListener('scroll', hide, true);
 		// A repaint can replace the node under the tooltip, and no mouseout follows.
 		document.addEventListener('click', function () {

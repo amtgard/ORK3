@@ -28,10 +28,14 @@
         expired    : 'Your session has expired. Log in again, then save.',
         duplicate  : 'Already on this court, so it was not saved.',
         recGone    : 'Its recommendation is no longer available, so this row was not saved. Remove it and click the cell again to add it without the recommendation.',
-        recGoneHint: 'Remove this row and click the cell again to add it without the recommendation.'
+        recGoneHint: 'Remove this row and click the cell again to add it without the recommendation.',
+        lineGone   : 'This line is no longer on the court.',
+        lineMoved  : 'This line has moved on from planned. Change it in the Court Planner.'
     };
 
     var active = false, starting = false, saving = false, cleanSave = false;
+    var startToken = 0;     // a begin() answers only while its token is current
+    var linkedIn = false;   // the page was reached by a SmartCourt=1 link
     var court = null, limit = 0, rows = [], recs = [], seq = 0, today = '';
     var recsByCell = {}, recById = {}, otherByCell = {}, rowsByCell = {}, trsByPlayer = {}, topByCol = {};
     var indexedNew = null, clearTimer = null, minimizeTimer = null, fp = null;
@@ -270,20 +274,28 @@
         return '';
     }
 
+    // One entry per rank: several people often recommend the same rank.
     function recTip(list) {
-        var parts = list.slice().sort(function (a, b) { return a.rank - b.rank; }).map(function (r) {
-            return 'Rank ' + r.rank + ' (' + (r.seconds === 1 ? '1 +1' : r.seconds + ' +1s') + ')';
+        var byRank = {};
+        list.forEach(function (r) {
+            var g = byRank[r.rank] = byRank[r.rank] || { rank: r.rank, count: 0, seconds: 0 };
+            g.count++;
+            g.seconds = Math.max(g.seconds, r.seconds);
+        });
+        var parts = Object.keys(byRank).map(function (k) { return byRank[k]; }).sort(function (a, b) {
+            return a.rank - b.rank;
+        }).map(function (g) {
+            var recs = g.count > 1 ? g.count + ' recs, ' : '';
+            return 'Rank ' + g.rank + ' (' + recs + (g.seconds === 1 ? '1 +1' : g.seconds + ' +1s') + ')';
         });
         return parts.length ? 'Recommended: ' + parts.join(', ') : '';
     }
 
-    function usableRecsAbove(td, mundaneId, col, held, mine) {
+    // Against the effective rank: a sibling rec at a rank already on this court is
+    // spent, and a rec this card has claimed sits at or below that rank too.
+    function usableRecsAbove(td, mundaneId, col, effective) {
         if (isMaster(td)) return NONE;
-        var cellRecs = recsByCell[key(mundaneId, col)];
-        if (!cellRecs) return NONE;
-        var claimed = {};
-        mine.forEach(function (r) { if (r.recId !== null) claimed[r.recId] = true; });
-        return C.recsAbove(cellRecs.filter(function (r) { return !claimed[r.id]; }), mundaneId, col, held);
+        return C.recsAbove(recsByCell[key(mundaneId, col)] || NONE, mundaneId, col, effective);
     }
 
     function clearMarks(td) {
@@ -305,11 +317,12 @@
 
         if (active) {
             var k = key(m, col), mine = rowsByCell[k] || NONE, held = heldRank(td);
-            var other = otherByCell[k];
+            var other = otherByCell[k], effective = C.effectiveRank(held, mine, m, col);
             block    = blockReason(td, m, col, held, mine);
-            gray     = !isMaster(td) && C.isAtLimit(C.effectiveRank(held, mine, m, col), limit);
+            // A Master sits at or above any limit, whatever its rank value says.
+            gray     = limit > 0 && (isMaster(td) || C.isAtLimit(effective, limit));
             count    = C.cellCount(mine, m, col);
-            rTip     = recTip(usableRecsAbove(td, m, col, held, mine));
+            rTip     = recTip(usableRecsAbove(td, m, col, effective));
             crownTip = other ? 'Already on Court: ' + other.names.join(', ') : '';
             if (block || gray || count || rTip || crownTip) {
                 sig = [block, gray ? 1 : 0, count, rTip, crownTip].join('\u0001');
@@ -393,13 +406,17 @@
         return null;
     }
 
+    function validStoredRow(x) {
+        if (!x || typeof x !== 'object' || typeof x.persona !== 'string') return false;
+        var col = String(x.col), rank = Number(x.rank);
+        return Number(x.mundaneId) > 0 && Number.isInteger(rank) && rank >= 1 && has(G.awardColumns, col) &&
+            cfg.ColumnAwards[col] !== undefined && rank <= topByCol[col];
+    }
+
     function restoreRows(list) {
         var out = [];
-        list.forEach(function (x) {
-            if (!x || typeof x !== 'object') return;
+        list.filter(validStoredRow).forEach(function (x) {
             var m = Number(x.mundaneId), col = String(x.col), rank = Number(x.rank);
-            if (!(m > 0) || !Number.isInteger(rank) || rank < 1 || typeof x.persona !== 'string') return;
-            if (!has(G.awardColumns, col) || cfg.ColumnAwards[col] === undefined || rank > topByCol[col]) return;
             out.push({
                 id: 'u' + (++seq), mundaneId: m, persona: x.persona, award: colLabel(col), col: col, rank: rank,
                 saved: false, recId: x.recId || null, recLost: !!x.recLost, status: null, courtAwardId: null,
@@ -411,7 +428,7 @@
 
     // Rows that were fine when stored may not be now: duplicated on the court by
     // someone else, a player since suspended, or a rank since given.
-    function revalidate(courtLines) {
+    function revalidate(courtLines, nUnreadable) {
         var dups = C.findDuplicates(rows, courtLines, colOf);
         var nDup = 0, nSuspended = 0, nHeld = 0, missing = false;
         rows = rows.filter(function (r) {
@@ -426,6 +443,7 @@
         });
         recompute();
         var parts = [];
+        if (nUnreadable) parts.push(nUnreadable + ' that could not be read');
         if (nDup) parts.push(nDup + ' already on this court');
         if (nSuspended) parts.push(nSuspended + ' for a suspended player');
         if (nHeld) parts.push(nHeld + ' already held by the player');
@@ -527,25 +545,53 @@
             persist();
             return;
         }
-        if (r.status !== 'planned') return;
+        if (r.status === 'planned') removeSavedLine(r);
+    }
+
+    // Rows are rebuilt by any refresh meanwhile, so a line is found again by its id.
+    function rowForLine(courtAwardId) {
+        return rows.filter(function (x) { return x.courtAwardId === courtAwardId; })[0] || null;
+    }
+
+    // removeAward refuses only 'given', and this row's status may be stale: the card's
+    // own new-tab button invites staging a line in the planner. Read before deleting.
+    function removeSavedLine(r) {
         var courtAwardId = r.courtAwardId;
         r.busy = true;
         r.error = '';
         renderCard();
-        post('CourtAjax/remove_award', { CourtAwardId: courtAwardId }).then(function (res) {
-            // Rows are rebuilt by any refresh meanwhile, so find this line again.
-            var cur = rows.filter(function (x) { return x.courtAwardId === courtAwardId; })[0];
-            if (!cur) return;
-            cur.busy = false;
-            if (res.status === 0) {
-                rows = C.removeRow(rows, cur.id);
-                recompute();
-                repaintCell(cur.mundaneId, cur.col);
-                persist();
-            } else {
-                cur.error = errorText(res);
+        fetchState(court.CourtId, false).then(function (st) {
+            var cur = rowForLine(courtAwardId);
+            if (!cur) return null;
+            if (st.status !== 0 || !st.state) {
+                cur.busy = false;
+                cur.error = errorText(st);
+                return null;
             }
-            renderCard();
+            var live = (st.state.CourtLines || NONE).filter(function (l) {
+                return Number(l.CourtAwardId) === Number(courtAwardId);
+            })[0];
+            if (!live || live.Status !== 'planned') {
+                cur.busy = false;
+                cur.status = live ? live.Status : 'removed';
+                cur.error = live ? MSG.lineMoved : MSG.lineGone;
+                return null;
+            }
+            return post('CourtAjax/remove_award', { CourtAwardId: courtAwardId });
+        }).then(function (res) {
+            var cur = rowForLine(courtAwardId);
+            if (cur && res) {
+                cur.busy = false;
+                if (res.status === 0) {
+                    rows = C.removeRow(rows, cur.id);
+                    recompute();
+                    repaintCell(cur.mundaneId, cur.col);
+                    persist();
+                } else {
+                    cur.error = errorText(res);
+                }
+            }
+            if (active) renderCard();
         });
     }
 
@@ -623,7 +669,7 @@
     function onNewTableDraw() {
         if (!active || !G.newTable || indexedNew === G.newTable) return;
         indexPlayers();
-        revalidate(NONE);
+        revalidate(NONE, 0);
         G.newTable.rows().nodes().each(function (tr) { paintRow(tr); });
         renderCard();
         persist();
@@ -697,6 +743,15 @@
         }, Promise.resolve());
     }
 
+    function reportFailures(run) {
+        var n = unsavedRows().filter(function (r) { return r.error; }).length;
+        if (run.stopped) {
+            notify(MSG.expired, true);
+        } else if (n) {
+            notify(n + (n === 1 ? ' row' : ' rows') + ' not saved.', true);
+        }
+    }
+
     function saveAll() {
         if (saving || !active) return;
         var ready = unsavedRows().filter(function (r) { return !r.recLost; });
@@ -736,7 +791,7 @@
                         applyState(fresh.state);
                         paintAll();
                     }
-                    if (run.stopped) notify(MSG.expired, true);
+                    reportFailures(run);
                     finishSave(!run.failed && unsavedRows().length === 0);
                 });
             });
@@ -754,11 +809,12 @@
         dom.btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
 
-    function activate(state, storedRows) {
+    function activate(state, stored) {
+        var restored = restoreRows(stored);
         active = true;
         cleanSave = false;
         today = localToday();
-        rows = storedRows;
+        rows = restored;
         dom.root.classList.add('lg-sc-on');
         dom.bar.hidden = false;
         dom.card.hidden = false;
@@ -768,11 +824,12 @@
         renderButton();
         renderCourt();
 
+        // Indexed before the redraw, so New Players' draw handler has nothing to do yet.
+        indexPlayers();
         G.hideSuspended = true;
         G.refresh();
-        indexPlayers();
         applyState(state);
-        var missing = revalidate(state.CourtLines || NONE);
+        var missing = revalidate(state.CourtLines || NONE, stored.length - restored.length);
         paintAll();
         renderCard(true);
         persist();
@@ -783,15 +840,19 @@
         }
     }
 
+    function setStarting(on) {
+        starting = on;
+        dom.go.disabled = on;
+        dom.btn.disabled = on;
+    }
+
     function begin(chosen, storedRows, storedLimit, isResume) {
         if (starting) return;
-        starting = true;
-        dom.go.disabled = true;
-        dom.btn.disabled = true;
+        var token = ++startToken;
+        setStarting(true);
         fetchState(chosen.CourtId, false).then(function (r) {
-            starting = false;
-            dom.go.disabled = false;
-            dom.btn.disabled = false;
+            if (token !== startToken) return; // cancelled while loading
+            setStarting(false);
             if (r.status !== 0 || !r.state) {
                 if (!isResume) {
                     showModalError(errorText(r));
@@ -801,13 +862,14 @@
                 } else {
                     unstore();
                     notify(MSG.staleCourt, true);
+                    if (linkedIn) openModal();
                 }
                 return;
             }
             closeModal();
             court = chosen;
             limit = storedLimit;
-            activate(r.state, restoreRows(storedRows));
+            activate(r.state, storedRows);
         });
     }
 
@@ -949,6 +1011,13 @@
         if (fp) fp.close();
     }
 
+    // The officer backing out, which also abandons a start still loading.
+    function dismissModal() {
+        startToken++;
+        setStarting(false);
+        closeModal();
+    }
+
     function onModalSubmit(e) {
         e.preventDefault();
         if (starting) return;
@@ -1002,7 +1071,7 @@
         $('#lg-new-table').on('draw.dt', onNewTableDraw);
 
         byId('lg-sc-form').addEventListener('submit', onModalSubmit);
-        byId('lg-sc-cancel').addEventListener('click', closeModal);
+        byId('lg-sc-cancel').addEventListener('click', dismissModal);
         dom.pickNew.addEventListener('click', function () { pickMode(false); });
         dom.pickExisting.addEventListener('click', function () { pickMode(true); });
         dom.modal.addEventListener('change', function (e) {
@@ -1013,10 +1082,10 @@
             if (start) setDate(start);
         });
         dom.scrim.addEventListener('click', function (e) {
-            if (e.target === dom.scrim) closeModal();
+            if (e.target === dom.scrim) dismissModal();
         });
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && !dom.scrim.hidden) closeModal();
+            if (e.key === 'Escape' && !dom.scrim.hidden) dismissModal();
         });
     }
 
@@ -1033,7 +1102,7 @@
         bind();
         // Admin "Plan Court from Smart Grid" links carry SmartCourt=1. Matched on the whole
         // URL because a route's params can sit in the path rather than the query string.
-        var linkedIn = /[?&]SmartCourt=1(?:[&#]|$)/.test(window.location.href);
+        linkedIn = /[?&]SmartCourt=1(?:[&#]|$)/.test(window.location.href);
         if (!resumeStored() && linkedIn) openModal();
     });
 })();
