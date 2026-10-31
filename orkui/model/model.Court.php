@@ -302,6 +302,20 @@ class Model_Court extends Model
     }
 
     // -----------------------------------------------------------------------
+    // Smart Planning Grid
+    // -----------------------------------------------------------------------
+
+    public function get_smart_grid_columns($kingdom_id, array $ladder_awards)
+    {
+        return $this->_court()->getSmartGridColumns($kingdom_id, $ladder_awards);
+    }
+
+    public function get_smart_grid_state($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token)
+    {
+        return $this->_court()->getSmartGridState($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token);
+    }
+
+    // -----------------------------------------------------------------------
     // Events
     // -----------------------------------------------------------------------
 

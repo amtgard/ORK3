@@ -26,6 +26,10 @@ final class CourtFixture
     private array $authIds = [];
     /** @var list<string> */
     private array $tokens = [];
+    /** @var list<int> */
+    private array $kingdomAwardIds = [];
+    /** @var list<int> */
+    private array $ledgerIds = [];
 
     public function __construct(private readonly PDO $pdo)
     {
@@ -266,6 +270,80 @@ final class CourtFixture
         return $id;
     }
 
+    /** Any active kingdom other than $excludeKingdomId. */
+    public function otherKingdomId(int $excludeKingdomId): int
+    {
+        $st = $this->pdo->prepare(
+            'SELECT kingdom_id FROM ' . DB_PREFIX . "kingdom
+             WHERE active = 'Active' AND kingdom_id <> ? ORDER BY kingdom_id ASC LIMIT 1"
+        );
+        $st->execute([$excludeKingdomId]);
+
+        return (int) $st->fetchColumn();
+    }
+
+    /** The kingdom's lowest kingdomaward row for a catalog award: ladder tests pass 21 (Rose). */
+    public function kingdomAwardFor(int $kingdomId, int $awardId): array
+    {
+        $st = $this->pdo->prepare(
+            'SELECT kingdomaward_id, award_id FROM ' . DB_PREFIX . 'kingdomaward
+             WHERE kingdom_id = ? AND award_id = ? ORDER BY kingdomaward_id ASC LIMIT 1'
+        );
+        $st->execute([$kingdomId, $awardId]);
+
+        return $st->fetch(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function createKingdomAward(int $kingdomId, int $awardId, string $name): int
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'kingdomaward (kingdom_id, award_id, name) VALUES (?, ?, ?)'
+        )->execute([$kingdomId, $awardId, self::MARKER . '-' . $name]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->kingdomAwardIds[] = $id;
+
+        return $id;
+    }
+
+    /** A row on the player's permanent award record. */
+    public function createLedgerAward(int $mundaneId, int $kaId, int $awardId, int $rank): int
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . "awards
+             (kingdomaward_id, mundane_id, rank, date, given_by_id, note, at_park_id, at_kingdom_id, at_event_id,
+              custom_name, award_id, by_whom_id, entered_at)
+             VALUES (?, ?, ?, CURDATE(), 0, '', 0, 0, 0, '', ?, 0, NOW())"
+        )->execute([$kaId, $mundaneId, $rank, $awardId]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->ledgerIds[] = $id;
+
+        return $id;
+    }
+
+    public function addSecond(int $recId, int $supporterId): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . "recommendation_seconds (recommendations_id, supporter_mundane_id, notes)
+             VALUES (?, ?, '')"
+        )->execute([$recId, $supporterId]);
+    }
+
+    /** Snooze a rec against the sitting Monarch and Regent of the recipient's kingdom and park. */
+    public function snoozeRecommendation(int $recId): void
+    {
+        $this->pdo->prepare(
+            'UPDATE ' . DB_PREFIX . "recommendations r
+                JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = r.mundane_id
+                SET r.snoozed_monarch_id = COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o
+                        WHERE o.kingdom_id = m.kingdom_id AND o.park_id = m.park_id AND o.role = 'Monarch'
+                        ORDER BY o.officer_id DESC LIMIT 1), 0),
+                    r.snoozed_regent_id = COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o
+                        WHERE o.kingdom_id = m.kingdom_id AND o.park_id = m.park_id AND o.role = 'Regent'
+                        ORDER BY o.officer_id DESC LIMIT 1), 0)
+              WHERE r.recommendations_id = ?"
+        )->execute([$recId]);
+    }
+
     /** A player with a live ork_session token, so domain calls can IsAuthorized() them. */
     public function createPlayerWithToken(string $tag, int $kingdomId, int $parkId): array
     {
@@ -373,6 +451,8 @@ final class CourtFixture
         $this->deleteIn('court', 'court_id', $this->courtIds);
         $this->deleteIn('recommendation_seconds', 'recommendations_id', $this->recIds);
         $this->deleteIn('recommendations', 'recommendations_id', $this->recIds);
+        $this->deleteIn('awards', 'awards_id', $this->ledgerIds);
+        $this->deleteIn('kingdomaward', 'kingdomaward_id', $this->kingdomAwardIds);
 
         // Put borrowed officer seats back before the stand-in players go away.
         $restore = $this->pdo->prepare(
@@ -391,7 +471,7 @@ final class CourtFixture
                 ->execute($this->tokens);
         }
         $this->deleteIn('mundane', 'mundane_id', $this->mundaneIds);
-        $this->awardIds = $this->courtIds = $this->officerIds = $this->mundaneIds = $this->recIds = $this->authIds = $this->tokens = [];
+        $this->awardIds = $this->courtIds = $this->officerIds = $this->mundaneIds = $this->recIds = $this->authIds = $this->tokens = $this->kingdomAwardIds = $this->ledgerIds = [];
     }
 
     private function deleteIn(string $table, string $pk, array $ids): void

@@ -1677,6 +1677,51 @@ class Controller_Reports extends Controller
 
         $this->data['LadderAwards'] = $assembly['LadderAwards'] ?? [];
         $this->data['GridRows'] = $assembly['GridRows'] ?? [];
+        $this->data['SmartCourt'] = $this->smart_court_config($_uid, $park_id, $assembly);
+    }
+
+    /**
+     * Smart Court config for the page's scope, or null for a viewer without court
+     * authority there. Nothing here holds recommendations: those load through
+     * CourtAjax/smart_grid_state. A park's kingdom comes from the park, because the
+     * URL may carry any KingdomId beside a ParkId.
+     */
+    private function smart_court_config(int $uid, int $park_id, array $assembly): ?array
+    {
+        $kingdom_id = (int)($assembly['KingdomId'] ?? 0);
+        if ($uid <= 0 || $kingdom_id <= 0) {
+            return null;
+        }
+        $this->load_model('Court');
+        if ($park_id > 0) {
+            $kingdom_id = (int)$this->Court->get_park_kingdom_id($park_id);
+        }
+        if (!$this->Court->can_manage($uid, $kingdom_id, $park_id)) {
+            return null;
+        }
+
+        $courts = [];
+        foreach ($this->Court->get_court_list($kingdom_id, $park_id, false) as $court) {
+            if ($court['Status'] !== 'complete') {
+                $courts[] = [
+                    'CourtId'    => $court['CourtId'],
+                    'Name'       => $court['Name'],
+                    'CourtDate'  => $court['CourtDate'],
+                    'Status'     => $court['Status'],
+                    'AwardCount' => $court['AwardCount'],
+                ];
+            }
+        }
+        $columns = $this->Court->get_smart_grid_columns($kingdom_id, $assembly['LadderAwards'] ?? []);
+
+        return [
+            'KingdomId'    => $kingdom_id,
+            'ParkId'       => $park_id,
+            'ColumnAwards' => $columns['ColumnAwards'],
+            'KaToColumn'   => $columns['KaToColumn'],
+            'Courts'       => $courts,
+            'Events'       => $this->Court->get_upcoming_events($kingdom_id),
+        ];
     }
 
     /**
