@@ -56,7 +56,8 @@
    below draws the same bubble position:fixed on <body> instead and, once it is
    live, switches the pseudo-element version off. */
 html.rs-jstip [data-rstip]:hover::after,
-html.rs-jstip [data-rstip]:hover::before{display:none}
+html.rs-jstip [data-rstip]:hover::before,
+html.rs-jstip .pn-rec-planned[data-tip]:hover::after{display:none !important}/* beats the generic [data-tip] rule's specificity */
 .rs-jstip-bubble{
   position:fixed;z-index:10000;pointer-events:none;
   background:#1a202c;color:#fff;padding:5px 9px;border-radius:4px;font-size:11px;font-weight:500;
@@ -164,7 +165,7 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 		return bubble;
 	}
 	function show(el) {
-		var text = el.getAttribute('data-rstip');
+		var text = el.getAttribute('data-rstip') || el.getAttribute('data-tip');
 		if (!text) return;
 		var b = ensure();
 		b.textContent = text;
@@ -184,7 +185,7 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 	}
 	function hide() { if (bubble) bubble.hidden = true; cur = null; }
 	document.addEventListener('mouseover', function(e) {
-		var el = e.target.closest ? e.target.closest('[data-rstip]') : null;
+		var el = e.target.closest ? e.target.closest('[data-rstip],.pn-rec-planned[data-tip]') : null;
 		if (el && el !== cur) show(el);
 	});
 	document.addEventListener('mouseout', function(e) {
@@ -193,7 +194,7 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 		if (e.target === cur || cur.contains(e.target)) hide();
 	});
 	document.addEventListener('focusin', function(e) {
-		var el = e.target.closest ? e.target.closest('[data-rstip]') : null;
+		var el = e.target.closest ? e.target.closest('[data-rstip],.pn-rec-planned[data-tip]') : null;
 		if (el) show(el);
 	});
 	document.addEventListener('focusout', hide);

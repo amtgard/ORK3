@@ -113,6 +113,11 @@ class Model_Court extends Model
         return $this->_court()->getCourtAwards($court_id, $caller_uid);
     }
 
+    public function get_player_planned_court_lines($mundane_id, $caller_uid)
+    {
+        return $this->_court()->getPlayerPlannedCourtLines((int)$mundane_id, (int)$caller_uid);
+    }
+
     public function add_award($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich = true, $caller_uid = 0)
     {
         return $this->_court()->addAward($court_id, $kingdom_id, $mundane_id, $kingdomaward_id, $rank, $rec_id, $pass_to_local, $notes, $public_comment, $enrich, $caller_uid);

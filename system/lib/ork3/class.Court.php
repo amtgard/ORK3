@@ -2769,6 +2769,89 @@ class Court
         return $this->withholdHiddenRecs(array_values($awards), (int)$caller_uid);
     }
 
+    /**
+     * Planned-but-not-yet-awarded court lines for one player, for the Player Profile.
+     *
+     * Only what $caller_uid may manage: canManage() is evaluated once per distinct
+     * court, so a park officer gets neither kingdom courts nor another park's. A line
+     * backed by a Monarchy Only rec the caller cannot see is withheld entirely, by the
+     * same RecommendationVisibility rule getCourtAwards/withholdHiddenRecs use. A
+     * complete court, and a cancelled or given line, never count. A caller viewing
+     * their own profile (or a logged-out one) gets nothing, so a surprise award is not
+     * spoiled. Courts sort by date ascending, undated last.
+     *
+     * @return list<array{CourtId:int,CourtName:string,CourtDate:?string,KingdomId:int,ParkId:int,ParkName:string,CourtAwardId:int,KingdomAwardId:int,AwardName:string,Rank:int,RecommendationsId:int}>
+     */
+    public function getPlayerPlannedCourtLines(int $mundane_id, int $caller_uid): array
+    {
+        if ($mundane_id <= 0 || $caller_uid <= 0 || $caller_uid === $mundane_id) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT c.court_id, c.name AS court_name, c.court_date, c.kingdom_id, c.park_id,
+                    IFNULL(p.name, \'\') AS park_name,
+                    ca.court_award_id, ca.kingdomaward_id, ca.rank, ca.recommendations_id,
+                    IFNULL(ka.name, a.name) AS award_name,
+                    IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only
+               FROM ' . DB_PREFIX . 'court_award ca
+               JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
+               LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = c.park_id
+               LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ca.kingdomaward_id
+               LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+               LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
+              WHERE ca.mundane_id = ' . (int)$mundane_id . '
+                AND c.status != \'complete\'
+                AND ca.status NOT IN (\'cancelled\', \'given\')
+              ORDER BY (c.court_date IS NULL OR c.court_date = \'0000-00-00\'), c.court_date, c.court_id, ca.sort_order, ca.court_award_id'
+        );
+        // Read out in full first: canManage and canSeeRecId query through the same connection.
+        $rows = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $date = (string)($rs->court_date ?? '');
+                $rows[] = [
+                    'CourtId'           => (int)$rs->court_id,
+                    'CourtName'         => (string)$rs->court_name,
+                    'CourtDate'         => ($date === '' || strpos($date, '0000-00-00') === 0) ? null : substr($date, 0, 10),
+                    'KingdomId'         => (int)$rs->kingdom_id,
+                    'ParkId'            => (int)$rs->park_id,
+                    'ParkName'          => (string)$rs->park_name,
+                    'CourtAwardId'      => (int)$rs->court_award_id,
+                    'KingdomAwardId'    => (int)$rs->kingdomaward_id,
+                    'AwardName'         => (string)($rs->award_name ?? ''),
+                    'Rank'              => (int)$rs->rank,
+                    'RecommendationsId' => (int)$rs->recommendations_id,
+                    '_hidden'           => (int)$rs->rec_monarchy_only !== 0,
+                ];
+            }
+        }
+
+        $vis     = Ork3::$Lib->recommendationvisibility;
+        $manages = [];
+        $seen    = [];
+        $lines   = [];
+        foreach ($rows as $row) {
+            $cid = $row['CourtId'];
+            $manages[$cid] ??= (bool)$this->canManage($caller_uid, $row['KingdomId'], $row['ParkId']);
+            if (!$manages[$cid]) {
+                continue;
+            }
+            $hidden = $row['_hidden'];
+            unset($row['_hidden']);
+            if ($hidden) {
+                $rid = $row['RecommendationsId'];
+                $seen[$rid] ??= $vis->canSeeRecId($caller_uid, $rid);
+                if (!$seen[$rid]) {
+                    continue;
+                }
+            }
+            $lines[] = $row;
+        }
+
+        return $lines;
+    }
+
     // -----------------------------------------------------------------------
     // Pending recommendations (for the add-from-rec modal)
     // -----------------------------------------------------------------------

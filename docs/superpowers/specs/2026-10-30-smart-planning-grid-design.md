@@ -233,3 +233,16 @@ All items marked **(call)** above. The ones that most affect behavior:
 10. The crown checks every open court in the kingdom, at any rank on that ladder.
 11. X on saved rows only appears while the line is `planned`.
 12. Save re-checks the court's live lines first, and a duplicate row stays unsaved with a message.
+
+## Player Profile
+
+Planned courts surface on the Player Profile so officers can see what is already lined up for a player.
+
+- A card titled `Awards Planned on Future Courts` sits at the top of both the Awards tab and the Recommendations tab. It is collapsed by default (native `<details>`, `pn-planned-courts`) and absent when there is nothing to show.
+- Each court lists its name (linking to `Court/detail/{id}`), its date as `YYYY-MM-DD` (or "No date set"), its level (`Kingdom`, or `Park: {park name}`), and its awards, like `Rose 3`. A rank-less award shows the name only, and a leading "Order of (the)" is stripped. Courts sort by date ascending, undated last.
+- Only courts the viewer can manage appear: `canManage($uid, court kingdom, court park)`, evaluated once per distinct court. A park officer does not see kingdom courts or another park's courts. Ordinary players see nothing, and the page does not emit this data for them.
+- A line backed by a Monarchy Only recommendation the viewer cannot see is withheld entirely, using the same `RecommendationVisibility` rule as `Court::getCourtAwards` and the Smart Grid's other-court lines.
+- "Planned but not yet awarded" means the court status is not `complete`, and the line status is neither `cancelled` nor `given`.
+- Nothing shows on the viewer's own profile, neither the card nor the icon, so an officer is not spoiled on a surprise award. Logged-out viewers skip the lookup too.
+- In the Recommendations table, a clipboard icon (`fas fa-clipboard`) follows the award name when a planned line matches the rec: the line's `recommendations_id` equals the rec, or it has the same `kingdomaward_id` and rank. The tooltip (`data-tip`) reads `This award is planned for Court: {Name} on {Date}`, with several courts comma-joined and the ` on {Date}` dropped for an undated court. The icon adds no cell text, so the award-name sort, the search, and the CSV export are unchanged. The tooltip is drawn by the page's fixed body-level bubble so the table's scroll box cannot clip it.
+- Data comes from `Court::getPlayerPlannedCourtLines($mundane_id, $caller_uid)`, loaded in `Controller_Player::profile` only for a logged-in viewer who is not on their own profile.

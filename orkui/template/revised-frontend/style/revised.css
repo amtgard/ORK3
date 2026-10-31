@@ -1060,6 +1060,32 @@ html[data-theme="dark"] .pn-form-error.pn-rec-suggest .pn-rec-suggest-link:hover
 }
 .pn-card-edit-btn:hover { color: #4299e1; }
 
+/* Awards Planned on Future Courts: collapsed-by-default card (native <details>) on the
+   Awards and Recommendations tabs, plus the clipboard marker in the Recommendations table. */
+.pn-planned-courts { padding: 0; }
+.pn-planned-summary {
+    cursor: pointer; list-style: none; padding: 12px 18px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--ork-text-secondary);
+}
+.pn-planned-summary::-webkit-details-marker { display: none; }
+.pn-planned-summary::after { content: '\f078'; font-family: 'Font Awesome 7 Free', 'Font Awesome 6 Free', 'Font Awesome 5 Free'; font-weight: 900; float: right; font-size: 10px; transition: transform .15s; }
+.pn-planned-courts[open] > .pn-planned-summary::after { transform: rotate(180deg); }
+.pn-planned-summary i { color: var(--pn-accent, #4299e1); margin-right: 4px; }
+.pn-planned-list { list-style: none; margin: 0; padding: 0 18px 8px; }
+.pn-planned-court {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
+    padding: 8px 0; border-top: 1px solid var(--ork-border);
+}
+.pn-planned-court-name { font-weight: 600; color: var(--pn-accent, #2b6cb0); overflow-wrap: anywhere; }
+.pn-planned-meta { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ork-text-secondary); }
+.pn-planned-awards { flex: 1 1 100%; font-size: 13px; color: var(--ork-text); overflow-wrap: anywhere; }
+html[data-theme="dark"] .pn-planned-courts { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pn-planned-court-name { color: var(--ork-link-bright, #63b3ed); }
+.pn-rec-planned { display: inline-block; margin-left: 2px; color: var(--pn-accent, #4299e1); cursor: help; }
+.pn-rec-planned:focus-visible { outline: 2px solid var(--pn-accent, #4299e1); outline-offset: 2px; border-radius: 2px; }
+html[data-theme="dark"] .pn-rec-planned { color: var(--ork-link-bright, #63b3ed); }
+
 /* ---- Account modal fields ---- */
 .pn-acct-field {
     position: relative;
