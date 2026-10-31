@@ -4431,6 +4431,8 @@ class Report extends Ork3
         $waiver_age_months       = isset($request['WaiverAgeMonths']) ? (int)$request['WaiverAgeMonths'] : 0; // months waiver must be on file — cannot auto-verify, shown as caveat only
         $min_distinct_months     = isset($request['MinDistinctMonths']) ? (int)$request['MinDistinctMonths'] : 0; // the counted sign-ins must fall in at least this many different calendar months
         $dues_home_park_only     = !empty($request['DuesHomeParkOnly']); // dues must be paid at the player's home park, not merely somewhere in the kingdom (Freeholds)
+        $office_counts_as_dues   = !empty($request['OfficeCountsAsDues']); // holding any current Kingdom or park office stands in for dues (Blackspire)
+        $require_kingdom_event   = !empty($request['RequireKingdomEvent']); // at least one counted sign-in must be at a Kingdom-sponsored event (ork_event.park_id = 0) (Blackspire)
 
         // Compute start date.
         // display_start_date: shown in the report header (raw date for DaysWindow, snapped for MonthsWindow).
@@ -4540,6 +4542,11 @@ class Report extends Ork3
         if ($min_distinct_months > 0) {
             $att_extra_cols .= ", COUNT(DISTINCT DATE_FORMAT(a.date, '%Y-%m')) AS month_count";
         }
+        // RequireKingdomEvent: how many of the counted sign-ins were at a
+        // Kingdom-sponsored event (needs the kve join below). Standard path only.
+        if ($require_kingdom_event) {
+            $att_extra_cols .= ", SUM(CASE WHEN kve.event_id IS NOT NULL AND kve.park_id = 0 THEN 1 ELSE 0 END) AS kingdom_evt_count";
+        }
 
         // Pre-build the att LEFT JOIN clause. Two paths:
         // 1. Outside-credit-cap (e.g. Tal Dagore): nested UNION ALL subquery tracks in/out kingdom
@@ -4591,7 +4598,7 @@ class Report extends Ork3
         } else {
             // Standard path — resolve inline PHP expressions into variables first
             // so the att_join_clause string contains only PHP variable interpolations.
-            $_kve_join_sql  = $kingdom_evt_bonus
+            $_kve_join_sql  = ($kingdom_evt_bonus || $require_kingdom_event)
                 ? "LEFT JOIN " . DB_PREFIX . "event kve ON kve.event_id = a.event_id AND a.event_id != 0"
                 : '';
             $_att_where_kw  = $all_kingdoms ? "1=1" : $_in_scope_clause;
@@ -4709,6 +4716,8 @@ class Report extends Ork3
 				COALESCE(att.att_count, 0) AS att_count
 				$att_select_extra
 				" . ($min_distinct_months > 0 && $max_outside_kingdom_creds <= 0 ? ", COALESCE(att.month_count, 0) AS month_count" : "") . "
+				" . ($require_kingdom_event && $max_outside_kingdom_creds <= 0 ? ", COALESCE(att.kingdom_evt_count, 0) AS kingdom_evt_count" : "") . "
+				" . ($office_counts_as_dues ? ", CASE WHEN EXISTS (SELECT 1 FROM " . DB_PREFIX . "officer o WHERE o.mundane_id = m.mundane_id AND o.kingdom_id = $kingdom_id) THEN 1 ELSE 0 END AS in_office" : "") . "
 				$online_count_select
 				$event_count_select
 				" . ($home_park_only && $kingdom_evt_bonus ? ", COALESCE(att.kingdom_evt_credit, 0) AS kingdom_evt_credit" : "") . "
@@ -4767,7 +4776,9 @@ class Report extends Ork3
                      'ExcludeEvents' => $exclude_events,
                      'WaiverAgeMonths' => $waiver_age_months,
                      'MinDistinctMonths' => $min_distinct_months,
-                     'DuesHomeParkOnly' => $dues_home_park_only];
+                     'DuesHomeParkOnly' => $dues_home_park_only,
+                     'OfficeCountsAsDues' => $office_counts_as_dues,
+                     'RequireKingdomEvent' => $require_kingdom_event];
         if ($r !== false && $r->size() > 0) {
             while ($r->next()) {
                 $_member_date    = $membership_mode === 'first_attendance' ? $r->first_att_date : $r->park_member_since;
@@ -4775,10 +4786,14 @@ class Report extends Ork3
                     || strtotime($_member_date) <= strtotime("-{$min_mem_mo} months");
                 $suspended       = (int)$r->suspended === 1;
                 $att_count       = (int)$r->att_count;
-                $base_ok         = !$suspended && $r->waivered == 1 && $r->dues_paid == 1 && $membership_ok;
+                $in_office       = $office_counts_as_dues && (int)($r->in_office ?? 0) === 1;
+                $dues_ok         = $r->dues_paid == 1 || $in_office;
+                $base_ok         = !$suspended && $r->waivered == 1 && $dues_ok && $membership_ok;
                 $month_count     = $min_distinct_months > 0 ? (int)($r->month_count ?? 0) : null;
                 $months_ok       = $min_distinct_months <= 0 || $month_count >= $min_distinct_months;
-                $kingdom_eligible = $base_ok && $att_count >= $att_req && $months_ok;
+                $kingdom_evt_count = $require_kingdom_event ? (int)($r->kingdom_evt_count ?? 0) : null;
+                $kingdom_evt_ok  = !$require_kingdom_event || $kingdom_evt_count >= 1;
+                $kingdom_eligible = $base_ok && $att_count >= $att_req && $months_ok && $kingdom_evt_ok;
 
                 $row = [
                     'MundaneId'       => (int)$r->mundane_id,
@@ -4805,6 +4820,10 @@ class Report extends Ork3
                     'EventCount'         => $show_event_count ? (int)$r->event_att_count : null,
                     'MonthCount'         => $month_count,
                     'MonthsOk'           => $months_ok,
+                    'InOffice'           => $in_office,
+                    'DuesOk'             => $dues_ok,
+                    'KingdomEventCount'  => $kingdom_evt_count,
+                    'KingdomEventOk'     => $kingdom_evt_ok,
                 ];
                 if ($active_knight_threshold > 0) {
                     $raw_att_count        = (int)$r->raw_att_count;
