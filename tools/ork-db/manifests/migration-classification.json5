@@ -114,6 +114,7 @@
     "2026-10-14-bonus-credits.sql": { "class": "S", "render": "full", "notes": "Non-attendance class credits (ork_bonus_credit ledger); CREATE TABLE IF NOT EXISTS, idempotent" },
     "2026-10-15-recommendation-monarchy-only.sql": { "class": "S", "render": "full", "notes": "Monarchy Only visibility level on recommendations; ADD COLUMN/INDEX IF NOT EXISTS, idempotent" },
     "2026-10-26-court-tracking-pending-backfill.sql": { "class": "PB", "render": "skip", "notes": "Custom Design / Needed lines with no maker become Pending" },
-    "2026-10-27-bonus-credit-accept-outside.sql": { "class": "S", "render": "full", "notes": "Per-kingdom yes/no: may other kingdoms' bonus credits reach its players; CREATE TABLE IF NOT EXISTS, idempotent" }
+    "2026-10-27-bonus-credit-accept-outside.sql": { "class": "S", "render": "full", "notes": "Per-kingdom yes/no: may other kingdoms' bonus credits reach its players; CREATE TABLE IF NOT EXISTS, idempotent" },
+    "2026-10-31-court-issued-by.sql": { "class": "S", "render": "full", "notes": "Kingdom Court | Local Court setting on a park-hosted court" },
   }
 }

@@ -205,6 +205,7 @@ if (!function_exists('cp_track_chip')) {
 .cp-award-row-main:has(+ .cp-award-row-expand.open) { background: #ebf4ff; box-shadow: inset 3px 0 0 #4299e1; }
 html[data-theme="dark"] .cp-award-row-main:has(+ .cp-award-row-expand.open) { background: rgba(66,153,225,.12); box-shadow: inset 3px 0 0 #4299e1; }
 .cp-expand-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.cp-expand-ptl { margin-bottom: 12px; }
 .cp-expand-label { font-size: 11px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
 .cp-expand-val { font-size: 13px; color: #2d3748; }
 /* Base font-size for the maker autocompletes; was inline, moved here so the
@@ -217,6 +218,10 @@ html[data-theme="dark"] .cp-award-row-main:has(+ .cp-award-row-expand.open) { ba
    .cp-expand-grid gap, so Scroll Maker and Regalia Maker ran together. */
 .cp-maker-ac { font-size: 13px; box-sizing: border-box; }
 .cp-notes-area { width: 100%; border: 1px solid #cbd5e0; border-radius: 5px; padding: 7px 10px; font-size: 13px; resize: vertical; min-height: 60px; box-sizing: border-box; }
+.cp-pubcomment-wrap .cp-notes-area { border-color: #9ae6b4; box-shadow: 0 0 0 1px rgba(72, 187, 120, .2); }
+.cp-notes-area.cp-notes-internal { border-color: #f6e05e; box-shadow: 0 0 0 1px rgba(236, 201, 75, .2); }
+button.cp-btn-primary.cp-row-save { background: #3182ce; border-color: #3182ce; color: #fff; }
+button.cp-btn-primary.cp-row-save.is-saved { background: #2f855a; border-color: #2f855a; }
 .cp-pc-label-row { display: flex; align-items: center; gap: 8px; }
 .cp-rec-hint-btn { background: none; border: none; padding: 0; cursor: pointer; font-size: 12px; color: #3182ce; line-height: 1; }
 .cp-rec-hint-btn:hover { text-decoration: underline; }
@@ -699,6 +704,8 @@ html[data-theme="dark"] .cp-rec-giver-own { color: #e2e8f0; }
 .cp-density-seg button.active { background: #2c5282; color: #fff; }
 .cp-density-seg button.active:hover { background: #2c5282; }
 .cp-density-seg button i { font-size: 10px; }
+button#cp-expand-all { font-size: 11px; padding: 3px 9px; }
+button#cp-expand-all i { font-size: 10px; }
 
 /* When the toolbar is present, the list should square its top corners */
 .cp-list-toolbar + .cp-award-list { border-radius: 0 0 8px 8px; border-top: none; }
@@ -1187,6 +1194,8 @@ html[data-theme="dark"] .cp-expand-label { color: #a0aec0; }
 html[data-theme="dark"] .cp-expand-val   { color: #e2e8f0; }
 html[data-theme="dark"] .cp-notes-area   { background: #1f2733; border-color: #2d3748; color: #e2e8f0; }
 html[data-theme="dark"] .cp-notes-area::placeholder { color: #4a5568; }
+html[data-theme="dark"] #theme_container .cp-pubcomment-wrap .cp-notes-area { border-color: rgba(72, 187, 120, .6); }
+html[data-theme="dark"] #theme_container .cp-notes-area.cp-notes-internal { border-color: rgba(236, 201, 75, .55); }
 html[data-theme="dark"] .cp-rec-hint { color: #a0aec0; }
 html[data-theme="dark"] .cp-rec-hint-btn { color: #63b3ed; }
 html[data-theme="dark"] .cp-pc-cleared { background: rgba(214,158,46,.12); border-color: rgba(214,158,46,.4); color: #f6e05e; }
@@ -1866,6 +1875,9 @@ html[data-theme="dark"] .cp-rp-nomatch { color: #718096; }
                 <a href="<?= UIR ?>Kingdom/profile/<?= (int)$court['KingdomId'] ?>">
                     <i class="fas fa-crown"></i> <?= htmlspecialchars($court['KingdomName']) ?>
                 </a>
+                <?php if ($court['ParkId'] > 0 && !empty($court['IsKingdomCourt'])): ?>
+                &nbsp;&bull;&nbsp; Kingdom Court
+                <?php endif; ?>
             </div>
             <h1 class="cp-hero-name"><?= htmlspecialchars($court['Name']) ?></h1>
             <div class="cp-hero-meta">
@@ -2178,6 +2190,7 @@ $_stat_html = function ($type) use ($_track_counts) {
             <button type="button" data-density="comfortable" onclick="cpSetDensity('comfortable')" data-tip="Comfortable — balanced spacing"><i class="fas fa-grip-lines"></i> Comfortable</button>
             <button type="button" data-density="compact"     onclick="cpSetDensity('compact')"     data-tip="Compact — dense rows"><i class="fas fa-minus"></i> Compact</button>
         </div>
+        <button type="button" class="cp-btn-sm cp-btn-outline" id="cp-expand-all" onclick="cpToggleAllAwards()"><i class="fas fa-angle-double-down"></i> Expand all</button>
         <span class="cp-list-toolbar-spacer"></span>
         <?php if ($courtSt !== 'complete'):
             // Mirrors window.cpScrolleryCount(): Scrollery Print lines that aren't skipped.
@@ -2336,10 +2349,6 @@ $_stat_html = function ($type) use ($_track_counts) {
             <div class="cp-award-row-expand" id="cp-aw-expand-<?= (int)$aw['CourtAwardId'] ?>">
                 <div class="cp-expand-grid">
                     <div>
-                        <div class="cp-expand-label">Internal Notes</div>
-                        <textarea class="cp-notes-area" id="cp-notes-<?= (int)$aw['CourtAwardId'] ?>"
-                                  aria-label="Internal notes (not public)"
-                                  placeholder="Monarchy notes (not public)…"><?= htmlspecialchars($aw['Notes']) ?></textarea>
                         <?php
                         $pcRecReason = $aw['RecReason'] ?? '';
                         $pcSaved     = $aw['PublicComment'] ?? '';
@@ -2356,7 +2365,7 @@ $_stat_html = function ($type) use ($_track_counts) {
                         $pcMonarchy  = !empty($aw['RecMonarchyOnly']);
                         ?>
                         <?php if ($pcMonarchy): ?>
-                        <div class="cp-pc-label-row" style="margin-top:10px">
+                        <div class="cp-pc-label-row">
                             <span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>
                         </div>
                         <?php /* data-rec-cleared carries the line's PERSISTED flag (the officer's
@@ -2370,7 +2379,7 @@ $_stat_html = function ($type) use ($_track_counts) {
                             <div class="cp-pc-monarchy" id="cp-pc-monarchy-<?= $pcCaid ?>"><i class="fas fa-eye-slash" aria-hidden="true"></i> Monarchy Only recommendation &mdash; its reason is never published. Type a public comment above if you want one.<?php if ($pcRecReason !== ''): ?><div class="cp-pc-monarchy-reason">Officers only: <?= htmlspecialchars($pcRecReason) ?></div><?php else: ?><div class="cp-pc-monarchy-reason">Its reason is visible only to officers at the recommendation&rsquo;s level.</div><?php endif; ?></div>
                         </div>
                         <?php else: ?>
-                        <div class="cp-pc-label-row" style="margin-top:10px">
+                        <div class="cp-pc-label-row">
                             <span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>
                             <?php if ($pcTriggered && !$pcCleared): ?>
                             <button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(<?= $pcCaid ?>,'start')">(Start from Rec)</button>
@@ -2396,7 +2405,15 @@ $_stat_html = function ($type) use ($_track_counts) {
                         <?php endif; ?>
                     </div>
                     <div>
-                        <?php if (($court['ParkId'] ?? 0) == 0): ?>
+                        <div class="cp-expand-label">Internal Notes</div>
+                        <textarea class="cp-notes-area cp-notes-internal" id="cp-notes-<?= (int)$aw['CourtAwardId'] ?>"
+                                  aria-label="Internal notes (not public)"
+                                  placeholder="Monarchy notes (not public)…"><?= htmlspecialchars($aw['Notes']) ?></textarea>
+                    </div>
+                </div>
+                <?php if (empty($court['IsKingdomCourt']) || $aw['RecommendationsId']): ?>
+                <div class="cp-expand-ptl">
+                        <?php if (!empty($court['IsKingdomCourt'])): ?>
                             <?php if ($aw['RecommendationsId']): ?>
                             <div class="cp-expand-label">Pass to Local</div>
                             <?php
@@ -2427,8 +2444,8 @@ $_stat_html = function ($type) use ($_track_counts) {
                                 <span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span>
                             </label>
                         <?php endif; ?>
-                    </div>
                 </div>
+                <?php endif; ?>
 
                 <!-- Scroll / Regalia Makers -->
                 <div class="cp-expand-grid" style="margin-top:8px">
@@ -2476,8 +2493,8 @@ $_stat_html = function ($type) use ($_track_counts) {
                 </div>
 
                 <div class="cp-expand-actions">
-                    <button class="cp-btn-primary cp-btn-sm" onclick="cpSaveAward(<?= (int)$aw['CourtAwardId'] ?>)">
-                        <i class="fas fa-save"></i> Save
+                    <button class="cp-btn-primary cp-btn-sm cp-row-save is-saved" onclick="cpSaveAward(<?= (int)$aw['CourtAwardId'] ?>)">
+                        <i class="fas fa-check"></i> Saved
                     </button>
                     <button class="cp-btn-sm cp-btn-danger-inline"
                             data-cp-guarded="given" <?= $ast === 'given' ? 'disabled' : '' ?>
@@ -2732,6 +2749,15 @@ $_stat_html = function ($type) use ($_track_counts) {
                 <label for="cp-cm-name">Court Name <span style="color:#e53e3e">*</span></label>
                 <input type="text" id="cp-cm-name" placeholder="Summer Coronation Court, Crown Quals Court…" autocomplete="off">
             </div>
+            <?php if (!empty($CanSetIssuedBy)): ?>
+            <div class="cp-field">
+                <label id="cp-cm-issued-label">Court Type <span style="font-weight:400;color:#a0aec0">— who gives these awards</span></label>
+                <div class="cp-script-density" id="cp-cm-issued-by" role="radiogroup" aria-labelledby="cp-cm-issued-label">
+                    <button type="button" role="radio" data-issued="kingdom" onclick="cpSetCourtIssuedBy('kingdom')">Kingdom Court</button>
+                    <button type="button" role="radio" data-issued="local" onclick="cpSetCourtIssuedBy('local')">Local Court</button>
+                </div>
+            </div>
+            <?php endif; ?>
             <div class="cp-field">
                 <label for="cp-cm-date">Date</label>
                 <input type="text" id="cp-cm-date" placeholder="Select a date…" autocomplete="off">
@@ -2955,7 +2981,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
 (function() {
     var uir      = '<?= UIR ?>';
     var courtId     = <?= (int)($court['CourtId'] ?? 0) ?>;
-    var courtIsKingdom = <?= ($court['ParkId'] ?? 0) == 0 ? 'true' : 'false' ?>;
+    var courtIsKingdom = <?= !empty($court['IsKingdomCourt']) ? 'true' : 'false' ?>;
     var kidId       = <?= (int)($court['KingdomId'] ?? 0) ?>;
 
     // Config for the shared scoped player-search autocomplete (court-planner.js).
@@ -2972,7 +2998,8 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         eventId: <?= (int)($court['EventCalendarDetailId'] ?? 0) ?>,
         eventName: <?= json_encode($court['EventName'] ?? '') ?>,
         recorderId: <?= (int)($court['RecorderMundaneId'] ?? 0) ?>,
-        recorderPersona: <?= json_encode($court['RecorderPersona'] ?? '') ?>
+        recorderPersona: <?= json_encode($court['RecorderPersona'] ?? '') ?>,
+        issuedBy: <?= json_encode($court['IssuedBy'] ?? 'local') ?>
     };
     var currentArtisanCourtAwardId = 0;
 
@@ -3139,11 +3166,12 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     // can predate the write and would wind the screen back — a just-added note removed,
     // a just-moved line put back, a line's RowVersion lowered under its next write.
     var cpWritesInFlight = 0, cpWriteSeq = 0;
+    var cpPageLeaving = false;
     function post(url, fd, silent) {
         var isWrite = url !== 'CourtAjax/court_state';
         if (isWrite) { cpWritesInFlight++; cpWriteSeq++; }
         return fetch(uir + url, {
-            method: 'POST', body: fd,
+            method: 'POST', body: fd, keepalive: cpPageLeaving,
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         }).then(function(r) {
             if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -3265,11 +3293,22 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
 
         gid('cp-cm-recorder-text').value = courtMeta.recorderPersona || '';
         gid('cp-cm-recorder-id').value = courtMeta.recorderId || 0;
+        cpSetCourtIssuedBy(courtMeta.issuedBy);
 
         gid('cp-cm-error').style.display = 'none';
         gid('cp-courtmeta-modal').style.display = 'flex';
         cpSyncScrollLock();
         setTimeout(function() { gid('cp-cm-name').focus(); }, 50);
+    };
+
+    var cpCmIssuedBy = courtMeta.issuedBy;
+    window.cpSetCourtIssuedBy = function(issuedBy) {
+        cpCmIssuedBy = issuedBy;
+        document.querySelectorAll('#cp-cm-issued-by button').forEach(function(b) {
+            var on = b.dataset.issued === issuedBy;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
     };
 
     window.cpCloseCourtMetaModal = function() {
@@ -3321,6 +3360,10 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             fd.append('RecorderMundaneId', 0); // box cleared on purpose
         }
         // else: typed-but-unpicked — leave the recorder untouched.
+        // Only a real change: the server drops the stored giver roster when this moves.
+        if (gid('cp-cm-issued-by') && cpCmIssuedBy !== courtMeta.issuedBy) {
+            fd.append('IssuedBy', cpCmIssuedBy);
+        }
 
         var btn = gid('cp-cm-save');
         btn.disabled = true;
@@ -3345,6 +3388,31 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             chevron.classList.toggle('fa-chevron-up');
         }
         cpRpSyncPausedNote();
+        cpSyncExpandAll();
+    };
+
+    function cpAwardPanels() {
+        return Array.prototype.slice.call(document.querySelectorAll('#cp-award-list .cp-award-row-expand'));
+    }
+
+    function cpAllAwardsOpen(panels) {
+        return panels.length > 0 && panels.every(function(p) { return p.classList.contains('open'); });
+    }
+
+    function cpSyncExpandAll() {
+        var btn = gid('cp-expand-all');
+        if (!btn) return;
+        var allOpen = cpAllAwardsOpen(cpAwardPanels());
+        btn.innerHTML = '<i class="fas fa-angle-double-' + (allOpen ? 'up' : 'down') + '"></i> ' + (allOpen ? 'Collapse all' : 'Expand all');
+    }
+
+    // Through cpToggleAward, so each row's chevron and the live-update pause stay right.
+    window.cpToggleAllAwards = function() {
+        var panels = cpAwardPanels();
+        var open = !cpAllAwardsOpen(panels);
+        panels.forEach(function(p) {
+            if (p.classList.contains('open') !== open) cpToggleAward(parseInt(p.id.replace('cp-aw-expand-', ''), 10));
+        });
     };
 
     // ---- Density toggle (Cozy / Comfortable / Compact) ----
@@ -4246,8 +4314,89 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         });
     }
 
+    // ---- Row autosave ----
+    // A row saves CP_AUTOSAVE_MS after the last activity inside it. Each edit bumps
+    // rev; a save records the rev it sent, so an edit made while it is in flight leaves
+    // the row pending and arms another save. One save at a time per row: update_award
+    // is optimistically locked, and a second post would race the first's row_version.
+    var CP_AUTOSAVE_MS = 3000;
+    var cpRowEdits = {};
+
+    function cpRowEdit(caid) {
+        return cpRowEdits[caid] || (cpRowEdits[caid] = { rev: 0, savedRev: 0, timer: 0, saving: false });
+    }
+
+    function cpRowPending(edit) {
+        return edit.rev !== edit.savedRev;
+    }
+
+    function cpSyncRowSave(caid) {
+        var btn = document.querySelector('#cp-aw-expand-' + caid + ' .cp-row-save');
+        if (!btn) return;
+        var pending = cpRowPending(cpRowEdit(caid));
+        btn.classList.toggle('is-saved', !pending);
+        btn.innerHTML = pending ? '<i class="fas fa-save"></i> Save' : '<i class="fas fa-check"></i> Saved';
+    }
+
+    // cpAcSearch blanks the hidden id on every keystroke, so a half-typed maker search
+    // reads as "no maker". Saving then would clear the real one (and its tracking
+    // status), so the row waits for a pick.
+    function cpMakerPickPending(caid) {
+        return ['scroll', 'regalia'].some(function(type) {
+            var text = gid('cp-' + type + '-maker-text-' + caid);
+            var id   = gid('cp-' + type + '-maker-id-' + caid);
+            return !!text && !!id && text.value.trim() !== '' && !(parseInt(id.value, 10) > 0);
+        });
+    }
+
+    function cpRowArm(caid) {
+        var edit = cpRowEdit(caid);
+        clearTimeout(edit.timer);
+        edit.timer = setTimeout(function() {
+            if (gid('cp-notes-' + caid) && cpRowPending(edit) && !edit.saving && !cpMakerPickPending(caid)) {
+                cpSaveAward(caid);
+            }
+        }, CP_AUTOSAVE_MS);
+    }
+
+    window.cpRowMarkDirty = function(caid) {
+        cpRowEdit(caid).rev++;
+        cpSyncRowSave(caid);
+        cpRowArm(caid);
+    };
+
+    function cpRowCaid(el) {
+        var panel = el.closest('.cp-award-row-expand');
+        return panel ? parseInt(panel.id.replace('cp-aw-expand-', ''), 10) : 0;
+    }
+
+    gid('cp-award-list').addEventListener('input', function(e) {
+        var caid = cpRowCaid(e.target);
+        if (caid) cpRowMarkDirty(caid);
+    });
+    ['keydown', 'pointerdown'].forEach(function(type) {
+        gid('cp-award-list').addEventListener(type, function(e) {
+            var caid = cpRowCaid(e.target);
+            if (caid && cpRowPending(cpRowEdit(caid))) cpRowArm(caid);
+        });
+    });
+
+    // Leaving the page inside the three seconds must not lose the edit.
+    window.addEventListener('pagehide', function() {
+        cpPageLeaving = true;
+        Object.keys(cpRowEdits).forEach(function(caid) {
+            var edit = cpRowEdits[caid];
+            if (cpRowPending(edit) && !edit.saving && !cpMakerPickPending(caid)) cpSaveAward(caid);
+        });
+    });
+
     // ---- Save award (notes, pass_to_local, status) ----
     window.cpSaveAward = function(caid) {
+        var edit = cpRowEdit(caid);
+        if (edit.saving) return;
+        clearTimeout(edit.timer);
+        edit.saving = true;
+        var sentEdit = edit.rev;
         var notes          = gid('cp-notes-' + caid).value;
         var pubCommentEl    = gid('cp-pubcomment-' + caid);
         var publicComment   = pubCommentEl ? pubCommentEl.value : '';
@@ -4295,8 +4444,12 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         var smTxVal = smTxEl ? smTxEl.value : '';
         var rmTxVal = rmTxEl ? rmTxEl.value : '';
         post('CourtAjax/update_award', fd).then(function(d) {
+            edit.saving = false;
             if (d && d.status === 9) { cpStale(caid); return; }
             if (d.status === 0) {
+                edit.savedRev = sentEdit;
+                cpSyncRowSave(caid);
+                if (cpRowPending(edit)) cpRowArm(caid);
                 // Guarded write won: the server row is now old+1. update_award returns a
                 // token only when the maker rule moved a status, so bump locally (the heartbeat also reconciles it).
                 cpBumpRowVersion(caid);
@@ -4307,6 +4460,8 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                 // with the same id, typed-but-unpicked text must not rename the maker.
                 var sa = courtAwards.find(function(x) { return String(x.CourtAwardId) === String(caid); });
                 if (sa) {
+                    sa.Notes         = notes;
+                    sa.PublicComment = publicComment;
                     var smWas = parseInt(sa.ScrollMakerId, 10)  || 0;
                     var rmWas = parseInt(sa.RegaliaMakerId, 10) || 0;
                     sa.ScrollMakerPersona  = !smId ? '' : (smId !== smWas && smTxEl ? smTxVal : (sa.ScrollMakerPersona || ''));
@@ -4354,9 +4509,6 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
                         existingNoteBtn.remove();
                     }
                 }
-                // Flash save confirmation
-                var btn = document.querySelector('#cp-aw-expand-' + caid + ' .cp-expand-actions .cp-btn-primary');
-                if (btn) { var orig = btn.innerHTML; btn.innerHTML = '<i class="fas fa-check"></i> Saved'; setTimeout(function() { btn.innerHTML = orig; }, 1500); }
             } else if (!d._postFailed) {
                 cpAlert(d.error || 'Could not save.');
             }
@@ -4378,6 +4530,11 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             '<label class="cp-ptl-label" style="margin-top:4px">' +
             '<input type="checkbox" class="cp-ptl-check" id="cp-ptl-' + caid + '"' + (passToLocal ? ' checked' : '') + '>' +
             '<span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span></label>';
+    }
+
+    function cpPtlBlockHtml(caid, recId, passToLocal) {
+        var control = cpPtlControlHtml(caid, recId, passToLocal);
+        return control ? '<div class="cp-expand-ptl">' + control + '</div>' : '';
     }
 
     // The "No awards planned yet" placeholder shows only while the list has no lines
@@ -4436,7 +4593,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     function cpPubCommentFieldHtml(caid, recReason, publicComment, cleared, recMonarchyOnly) {
         recReason     = recReason || '';
         publicComment = publicComment || '';
-        var label = '<div class="cp-pc-label-row" style="margin-top:10px"><span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>';
+        var label = '<div class="cp-pc-label-row"><span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>';
         if (recMonarchyOnly) {
             // data-rec-cleared is the line's persisted flag, posted back unchanged on save;
             // the hidden reason is withheld by RecMonarchyOnly, not by forcing it to 1.
@@ -4548,6 +4705,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             }
             ta.focus();
         }
+        cpRowMarkDirty(caid);
     };
 
     // ---- Shared row-status renderer (keeps DOM, badge, and model in sync) ----
@@ -5580,10 +5738,10 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             '</div>' +
             '<div class="cp-award-row-expand" id="cp-aw-expand-' + aw.CourtAwardId + '">' +
             '<div class="cp-expand-grid">' +
-            '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea>' + cpPubCommentFieldHtml(aw.CourtAwardId, aw.RecReason, aw.PublicComment, aw.PublicCommentCleared, aw.RecMonarchyOnly) + '</div>' +
-            '<div>' + cpPtlControlHtml(aw.CourtAwardId, aw.RecommendationsId, aw.PassToLocal) +
+            '<div>' + cpPubCommentFieldHtml(aw.CourtAwardId, aw.RecReason, aw.PublicComment, aw.PublicCommentCleared, aw.RecMonarchyOnly) + '</div>' +
+            '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area cp-notes-internal" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea></div>' +
             '</div>' +
-            '</div>' +
+            cpPtlBlockHtml(aw.CourtAwardId, aw.RecommendationsId, aw.PassToLocal) +
             '<div class="cp-expand-grid" style="margin-top:8px">' +
             '<div class="cp-scroll-maker-field" id="cp-scroll-maker-field-' + aw.CourtAwardId + '"' + (cpTrackGroup('scroll', aw.ScrollStatus) === 'print' ? ' hidden' : '') + '><div class="cp-expand-label">Scroll Maker</div><div style="position:relative"><input type="text" id="cp-scroll-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-scroll-drop-' + aw.CourtAwardId + '" data-hidden="cp-scroll-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-scroll-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-scroll-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
             '<div><div class="cp-expand-label">Regalia Maker</div><div style="position:relative"><input type="text" id="cp-regalia-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-regalia-drop-' + aw.CourtAwardId + '" data-hidden="cp-regalia-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-regalia-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-regalia-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
@@ -5591,7 +5749,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
             '<div style="margin-bottom:10px"><div class="cp-expand-label" style="margin-bottom:6px">Contributing Artisans</div><div id="cp-artisans-' + aw.CourtAwardId + '">' + (Array.isArray(aw.Artisans) ? aw.Artisans.map(cpArtisanRowHtml).join('') : '') + '</div>' +
             '<button class="cp-btn-sm cp-btn-outline" style="margin-top:6px" onclick="cpOpenArtisanModal(' + aw.CourtAwardId + ')"><i class="fas fa-plus"></i> Add Artisan</button></div>' +
             '<div class="cp-expand-actions">' +
-            '<button class="cp-btn-primary cp-btn-sm" onclick="cpSaveAward(' + aw.CourtAwardId + ')"><i class="fas fa-save"></i> Save</button>' +
+            '<button class="cp-btn-primary cp-btn-sm cp-row-save is-saved" onclick="cpSaveAward(' + aw.CourtAwardId + ')"><i class="fas fa-check"></i> Saved</button>' +
             '<button class="cp-btn-sm cp-btn-danger-inline" data-cp-guarded="given" data-cp-tip-open="Remove this award line from the court" data-tip="Remove this award line from the court" onclick="cpRemoveAward(' + aw.CourtAwardId + ')"><i class="fas fa-trash"></i> Remove</button>' +
             '</div></div></div>';
         gid('cp-award-list').insertAdjacentHTML('beforeend', html);
@@ -5602,6 +5760,7 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
         if (cnt) cnt.textContent = '(' + document.querySelectorAll('#cp-award-list .cp-award-row').length + ')';
         cpRenumberRows();
         cpRpInvalidate();
+        cpSyncExpandAll();
     }
 
     // ---- Court notes: non-award line items on the running order ----
@@ -5908,7 +6067,8 @@ window.CP_TRACK_DEF = <?= json_encode(cp_track_def(), JSON_HEX_TAG | JSON_HEX_AM
     document.addEventListener('input', function(e) {
         var el = e.target;
         if (!el.classList.contains('cp-maker-ac')) return;
-        cpAcSearch(el, el.dataset.drop, el.dataset.hidden);
+        var caid = cpRowCaid(el);
+        cpAcSearch(el, el.dataset.drop, el.dataset.hidden, function() { if (caid) cpRowMarkDirty(caid); });
     });
 
     // ---- Autocomplete ----

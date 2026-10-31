@@ -204,6 +204,8 @@ class Controller_Court extends Controller
         $this->data['StatusFlow']   = $statusFlow;
         $this->data['TrackingStatuses'] = $this->Court->tracking_status_definitions();
         $this->data['CanManage']    = $canManage;
+        $this->data['CanSetIssuedBy'] = $court['ParkId'] > 0
+            && $this->Court->can_manage($uid, $court['KingdomId'], 0);
         $this->data['Uid']          = $uid;
         $this->data['HeraldryUrl']  = $heraldryUrl;
         $this->data['HasHeraldry']  = $hasHeraldry;

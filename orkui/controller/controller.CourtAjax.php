@@ -143,7 +143,10 @@ class Controller_CourtAjax extends Controller
             // published; a court returned to draft and republished, or one whose
             // recorder was set manually, is left alone by the empty() guard.
             if (empty($court['RecorderMundaneId'])) {
-                $recorder = $this->Court->get_default_recorder($court['KingdomId'], $court['ParkId']);
+                $recorder = $this->Court->get_default_recorder(
+                    $court['KingdomId'],
+                    $court['IsKingdomCourt'] ? 0 : $court['ParkId']
+                );
                 if ($recorder <= 0) {
                     $recorder = $uid;
                 }
@@ -193,11 +196,11 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid court.']);
         }
 
-        [, $court] = $this->requireCourtAuth($court_id);
+        [$uid, $court] = $this->requireCourtAuth($court_id);
 
         // Partial: only the keys the client actually sent are written.
         $fields = [];
-        foreach (['Name', 'CourtDate', 'EventCalendarDetailId', 'RecorderMundaneId'] as $key) {
+        foreach (['Name', 'CourtDate', 'EventCalendarDetailId', 'RecorderMundaneId', 'IssuedBy'] as $key) {
             if (array_key_exists($key, $_POST)) {
                 $fields[$key] = $_POST[$key];
             }
@@ -205,6 +208,17 @@ class Controller_CourtAjax extends Controller
 
         if (!$fields) {
             $this->jsonOut(['status' => 1, 'error' => 'Nothing to update.']);
+        }
+
+        // Only the kingdom may put awards in the kingdom's name, so managing the park
+        // is not enough. A kingdom's own court has no park to issue from.
+        if (array_key_exists('IssuedBy', $fields)) {
+            if (!in_array($fields['IssuedBy'], ['local', 'kingdom'], true) || (int)$court['ParkId'] === 0) {
+                $this->jsonOut(['status' => 1, 'error' => 'That court type cannot be set on this court.']);
+            }
+            if (!$this->Court->can_manage($uid, $court['KingdomId'], 0)) {
+                $this->jsonOut(['status' => 1, 'error' => 'Only kingdom officers can change whether this is a Kingdom Court.']);
+            }
         }
 
         if (array_key_exists('CourtDate', $fields) && !$this->validCourtDate($fields['CourtDate'])) {

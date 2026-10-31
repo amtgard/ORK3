@@ -346,7 +346,9 @@ class Model_Scrollery extends Model
         }
 
         $kingdomId = (int) ($court['KingdomId'] ?? 0);
-        $parkId    = (int) ($court['ParkId'] ?? 0);
+        // A Kingdom Court held at a park issues from the kingdom, so the run is blind
+        // to its park: heading, arms and print log are all the kingdom's.
+        $parkId    = empty($court['IsKingdomCourt']) ? (int) ($court['ParkId'] ?? 0) : 0;
         $scopeType = $parkId > 0 ? 'park' : 'kingdom';
         $scopeId   = $parkId > 0 ? $parkId : $kingdomId;
         // Only the run-level arms choice reads this: a park court's Kingdom arms are its

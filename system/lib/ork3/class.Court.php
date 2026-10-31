@@ -168,7 +168,7 @@ class Court
         if ($park_id > 0) {
             $where .= ' AND c.park_id = ' . (int)$park_id;
         } elseif (!$include_park_courts) {
-            $where .= ' AND c.park_id = 0';
+            $where .= ' AND (c.park_id = 0 OR c.issued_by = \'kingdom\')';
         }
 
         $this->db->Clear();
@@ -216,6 +216,16 @@ class Court
         return $list;
     }
 
+    /**
+     * Whether a court's awards are given from the kingdom: its own court, or one it
+     * holds at a park event. The second keeps its park_id (the place), so anything
+     * that means "who is giving this" reads this instead of testing park_id.
+     */
+    public static function isKingdomCourt($park_id, $issued_by)
+    {
+        return (int)$park_id === 0 || (string)$issued_by === 'kingdom';
+    }
+
     public function getCourtDetail($court_id)
     {
         $this->db->Clear();
@@ -244,6 +254,8 @@ class Court
             'CourtId'               => (int)$rs->court_id,
             'KingdomId'             => (int)$rs->kingdom_id,
             'ParkId'                => (int)$rs->park_id,
+            'IssuedBy'              => (string)$rs->issued_by,
+            'IsKingdomCourt'        => self::isKingdomCourt($rs->park_id, $rs->issued_by),
             'Name'                  => $rs->name,
             'CourtDate'             => $rs->court_date,
             'Status'                => $rs->status,
@@ -408,6 +420,13 @@ class Court
         ];
 
         $sets = [];
+        if (array_key_exists('IssuedBy', $fields)) {
+            $issued_by = $fields['IssuedBy'] === 'kingdom' ? 'kingdom' : 'local';
+            // The stored giver roster belongs to the old issuer. Listed first because
+            // MariaDB evaluates SET left to right, so re-saving the same value keeps it.
+            $sets[] = 'giver_snapshot = IF(issued_by = \'' . $issued_by . '\', giver_snapshot, NULL)';
+            $sets[] = 'issued_by = \'' . $issued_by . '\'';
+        }
         foreach ($map as $key => $column) {
             if (!array_key_exists($key, $fields)) {
                 continue;
@@ -2411,14 +2430,14 @@ class Court
     {
         $this->db->Clear();
         $cr = $this->db->DataSet(
-            'SELECT kingdom_id, park_id, court_date, giver_snapshot FROM ' . DB_PREFIX . 'court
+            'SELECT kingdom_id, park_id, issued_by, court_date, giver_snapshot FROM ' . DB_PREFIX . 'court
               WHERE court_id = ' . (int)$court_id . ' LIMIT 1'
         );
         if (!$cr || !$cr->Next()) {
             return ['default' => null, 'pills' => [], 'snapshot' => false, 'live_default' => null];
         }
         $kingdom_id = (int)$cr->kingdom_id;
-        $park_id    = (int)$cr->park_id;
+        $park_id    = self::isKingdomCourt($cr->park_id, $cr->issued_by) ? 0 : (int)$cr->park_id;
         $court_date = $this->validDate((string)($cr->court_date ?? ''));
         $snapshot   = $this->decodeGiverSnapshot($cr->giver_snapshot ?? '');
 
@@ -2449,7 +2468,7 @@ class Court
 
         $this->db->Clear();
         $cr = $this->db->DataSet(
-            'SELECT kingdom_id, park_id, giver_snapshot FROM ' . DB_PREFIX . 'court
+            'SELECT kingdom_id, park_id, issued_by, giver_snapshot FROM ' . DB_PREFIX . 'court
               WHERE court_id = ' . $court_id . ' LIMIT 1'
         );
         if (!$cr || !$cr->Next()) {
@@ -2459,7 +2478,8 @@ class Court
             return false;
         }
 
-        $live = $this->resolveLiveGiverOptions((int)$cr->kingdom_id, (int)$cr->park_id);
+        $park_id = self::isKingdomCourt($cr->park_id, $cr->issued_by) ? 0 : (int)$cr->park_id;
+        $live    = $this->resolveLiveGiverOptions((int)$cr->kingdom_id, $park_id);
         if (empty($live['default']) && empty($live['pills'])) {
             // Nothing seated to record; leave the column empty so a later publish
             // or print can still capture a real roster.
@@ -3056,7 +3076,7 @@ class Court
         if ($park_id > 0) {
             $scope .= ' AND c.park_id = ' . (int)$park_id;
         } elseif (!$include_park_courts) {
-            $scope .= ' AND c.park_id = 0';
+            $scope .= ' AND (c.park_id = 0 OR c.issued_by = \'kingdom\')';
         }
 
         $this->db->Clear();
