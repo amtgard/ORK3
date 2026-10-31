@@ -108,11 +108,12 @@ class Controller_CourtAjax extends Controller
 
     // -----------------------------------------------------------------------
     // smart_grid_state
-    // POST: KingdomId, ParkId, CourtId
+    // POST: KingdomId, ParkId, CourtId, Fresh (optional, 1 reads past the rec cache)
     // Recommendation and court-line data for Smart Court on the ladder grid. A
-    // court's own scope wins over anything posted. A park's kingdom comes from the
-    // park: canManage passes on park authority alone, so a posted KingdomId would
-    // otherwise open another kingdom's court lines to any park officer.
+    // court's own scope wins over anything posted. A park's kingdom always comes
+    // from the park: canManage passes on either kingdom or park authority alone, and
+    // neither a post nor a stored court pairs the two reliably, so a mismatched pair
+    // would open another kingdom's lines. The resolved scope is what gets authorized.
     // -----------------------------------------------------------------------
     public function smart_grid_state($p = null)
     {
@@ -123,16 +124,18 @@ class Controller_CourtAjax extends Controller
             $park_id    = (int)$court['ParkId'];
         } else {
             $uid        = $this->requireLogin();
+            $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
             $park_id    = (int)($_POST['ParkId'] ?? 0);
-            $kingdom_id = $park_id > 0
-                ? (int)$this->Court->get_park_kingdom_id($park_id)
-                : (int)($_POST['KingdomId'] ?? 0);
-            if (!$this->Court->can_manage($uid, $kingdom_id, $park_id)) {
-                $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
-            }
+        }
+        if ($park_id > 0) {
+            $kingdom_id = (int)$this->Court->get_park_kingdom_id($park_id);
+        }
+        if (!$this->Court->can_manage($uid, $kingdom_id, $park_id)) {
+            $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
 
-        $state = $this->Court->get_smart_grid_state($kingdom_id, $park_id, $court_id, $uid, $this->session->token ?? '');
+        $fresh = (int)($_POST['Fresh'] ?? 0) === 1;
+        $state = $this->Court->get_smart_grid_state($kingdom_id, $park_id, $court_id, $uid, $this->session->token ?? '', $fresh);
         $this->jsonOut(['status' => 0, 'state' => $state]);
     }
 

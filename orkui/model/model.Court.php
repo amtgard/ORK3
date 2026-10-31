@@ -310,9 +310,9 @@ class Model_Court extends Model
         return $this->_court()->getSmartGridColumns($kingdom_id, $ladder_awards);
     }
 
-    public function get_smart_grid_state($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token)
+    public function get_smart_grid_state($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token, $fresh = false)
     {
-        return $this->_court()->getSmartGridState($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token);
+        return $this->_court()->getSmartGridState($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token, $fresh);
     }
 
     // -----------------------------------------------------------------------

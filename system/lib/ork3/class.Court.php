@@ -2895,11 +2895,14 @@ class Court
     /**
      * Uncollapsed open recs in scope that this caller may see. Report drops Monarchy
      * Only rows by the TOKEN, so both values must be passed; a bad or empty token sees
-     * no hidden rec.
+     * no hidden rec. $fresh reads past Report's 300-second cache, and leaves it as it is.
      */
-    private function scopedRecommendations($kingdom_id, $park_id, $caller_uid, $caller_token): array
+    private function scopedRecommendations($kingdom_id, $park_id, $caller_uid, $caller_token, bool $fresh = false): array
     {
         $req = ['RequestedBy' => (int)$caller_uid, 'Token' => (string)$caller_token];
+        if ($fresh) {
+            $req['SkipCache'] = true;
+        }
         if ($park_id > 0) {
             $req['ParkId']    = (int)$park_id;
             $req['KingdomId'] = 0;
@@ -2993,8 +2996,11 @@ class Court
      * neither line list may say a hidden rec is behind it. An OtherCourtLines row is
      * withheld outright, since this caller may have no authority over that court. A
      * CourtLines row stays, the caller runs this court, but loses its rec id.
+     *
+     * $fresh applies to Recs only: lines are never cached. It is for the refresh after
+     * add_award refuses a rec, when a cached read could return that same stale rec.
      */
-    public function getSmartGridState(int $kingdom_id, int $park_id, int $court_id, int $caller_uid, string $caller_token): array
+    public function getSmartGridState(int $kingdom_id, int $park_id, int $court_id, int $caller_uid, string $caller_token, bool $fresh = false): array
     {
         $vis    = Ork3::$Lib->recommendationvisibility;
         $viewer = $vis->viewerFromToken($caller_token);
@@ -3004,7 +3010,7 @@ class Court
         };
 
         return [
-            'Recs'            => $this->smartGridRecs($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token),
+            'Recs'            => $this->smartGridRecs($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token, $fresh),
             'OtherCourtLines' => $this->smartGridOtherCourtLines($kingdom_id, $court_id, $canSee),
             'CourtLines'      => $court_id > 0 ? $this->smartGridCourtLines($court_id, $caller_uid, $canSee) : [],
         ];
@@ -3014,9 +3020,9 @@ class Court
      * Uncollapsed on purpose: getPendingRecommendations folds a cluster into its
      * oldest rec, which would hide the most-seconded one.
      */
-    private function smartGridRecs(int $kingdom_id, int $park_id, int $court_id, int $caller_uid, string $caller_token): array
+    private function smartGridRecs(int $kingdom_id, int $park_id, int $court_id, int $caller_uid, string $caller_token, bool $fresh): array
     {
-        $rawRecs = $this->scopedRecommendations($kingdom_id, $park_id, $caller_uid, $caller_token);
+        $rawRecs = $this->scopedRecommendations($kingdom_id, $park_id, $caller_uid, $caller_token, $fresh);
         if ($rawRecs === []) {
             return [];
         }

@@ -8,6 +8,8 @@ declare(strict_types=1);
  *
  * argv[1] is JSON: {action: 'smart_grid_state'|'ladder_grid', uid, token, post|get}.
  * uid 0 means logged out. ladder_grid prints the SmartCourt template value as JSON.
+ * emptyRecCache serves Report's recommendation read an empty cached response, so a
+ * read that honors the cache sees no recs and one that skips it sees them all.
  */
 
 $in = json_decode($argv[1], true, 512, JSON_THROW_ON_ERROR);
@@ -29,6 +31,17 @@ $Request = new Request();
 if ((int) $in['uid'] > 0) {
     $Session->user_id = (int) $in['uid'];
     $Session->token = (string) $in['token'];
+}
+
+if (!empty($in['emptyRecCache'])) {
+    Ork3::$Lib->ghettocache = new class () extends Ghettocache {
+        public function get($call, $key, $lifetime)
+        {
+            return $call === 'Report.PlayerAwardRecommendations'
+                ? ['AwardRecommendations' => []]
+                : parent::get($call, $key, $lifetime);
+        }
+    };
 }
 
 if ($in['action'] === 'smart_grid_state') {

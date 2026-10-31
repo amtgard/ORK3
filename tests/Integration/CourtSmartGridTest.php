@@ -4,6 +4,25 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 
+/** In-memory ghettocache: the test environment's Memcached stub never returns a hit. */
+final class SmartGridInMemoryGhettocache extends Ghettocache
+{
+    /** @var array<string, mixed> */
+    private array $store = [];
+
+    public function get($call, $key, $lifetime)
+    {
+        return $this->store[$call . '.' . $key] ?? false;
+    }
+
+    public function cache($call, $key, $content)
+    {
+        $this->store[$call . '.' . $key] = $content;
+
+        return $content;
+    }
+}
+
 /**
  * Smart Planning Grid: the court-authorized recommendation and court-line data,
  * and the column-to-award resolver.
@@ -68,7 +87,7 @@ final class CourtSmartGridTest extends TestCase
     }
 
     /** getSmartGridState for the park grid, as $caller. */
-    private function state(int $courtId = 0, ?array $caller = null, int $parkId = -1): array
+    private function state(int $courtId = 0, ?array $caller = null, int $parkId = -1, bool $fresh = false): array
     {
         $caller ??= $this->officer;
         unset($_SESSION['is_authorized_mundane_id']);
@@ -78,7 +97,8 @@ final class CourtSmartGridTest extends TestCase
             $parkId < 0 ? $this->p : $parkId,
             $courtId,
             (int)$caller['mundane_id'],
-            (string)$caller['token']
+            (string)$caller['token'],
+            $fresh
         );
     }
 
@@ -318,6 +338,46 @@ final class CourtSmartGridTest extends TestCase
         );
     }
 
+    public function testFreshReadsPastTheRecCache(): void
+    {
+        $original = \Ork3::$Lib->ghettocache;
+        \Ork3::$Lib->ghettocache = new SmartGridInMemoryGhettocache();
+        try {
+            $recip = $this->recipient();
+            $first = $this->rec($recip, 2);
+            $this->assertContains($first, $this->recIds($this->state()), 'this read fills the cache');
+
+            $later = $this->rec($recip, 3);
+            $this->assertNotContains($later, $this->recIds($this->state()), 'a default read is served from the cache');
+
+            $fresh = $this->recIds($this->state(0, null, -1, true));
+            $this->assertContains($later, $fresh, 'fresh sees the rec the cache does not have yet');
+            $this->assertContains($first, $fresh);
+        } finally {
+            \Ork3::$Lib->ghettocache = $original;
+        }
+    }
+
+    public function testPendingRecommendationsStillReadTheCache(): void
+    {
+        $original = \Ork3::$Lib->ghettocache;
+        \Ork3::$Lib->ghettocache = new SmartGridInMemoryGhettocache();
+        try {
+            $recip = $this->recipient();
+            $this->rec($recip, 2);
+            $court = new \Court();
+            $mine = static fn (array $recs) => array_values(array_filter($recs, static fn ($r) => $r['MundaneId'] === $recip));
+            $uid = (int)$this->officer['mundane_id'];
+            $token = (string)$this->officer['token'];
+
+            $this->assertCount(1, $mine($court->getPendingRecommendations($this->k, $this->p, $uid, 0, $token)));
+            $this->rec($recip, 3);
+            $this->assertCount(1, $mine($court->getPendingRecommendations($this->k, $this->p, $uid, 0, $token)));
+        } finally {
+            \Ork3::$Lib->ghettocache = $original;
+        }
+    }
+
     // ---- Lines --------------------------------------------------------------
 
     public function testOtherCourtLinesCoverKingdomAndParkCourtsOnly(): void
@@ -406,12 +466,13 @@ final class CourtSmartGridTest extends TestCase
     // ---- CourtAjax/smart_grid_state and ladder_grid ---------------------------
 
     /** Runs a controller action in a child process and decodes what it printed. */
-    private function endpoint(string $action, ?array $caller, array $params): mixed
+    private function endpoint(string $action, ?array $caller, array $params, bool $emptyRecCache = false): mixed
     {
         $input = json_encode([
             'action' => $action,
             'uid'    => $caller['mundane_id'] ?? 0,
             'token'  => $caller['token'] ?? '',
+            'emptyRecCache' => $emptyRecCache,
             $action === 'ladder_grid' ? 'get' : 'post' => $params,
         ]);
         $driver = dirname(__DIR__) . '/Support/smart_court_endpoint_driver.php';
@@ -424,9 +485,9 @@ final class CourtSmartGridTest extends TestCase
         return $decoded;
     }
 
-    private function gridState(?array $caller, array $post): array
+    private function gridState(?array $caller, array $post, bool $emptyRecCache = false): array
     {
-        return $this->endpoint('smart_grid_state', $caller, $post);
+        return $this->endpoint('smart_grid_state', $caller, $post, $emptyRecCache);
     }
 
     public function testEndpointRefusesLoggedOutAndNonOfficer(): void
@@ -497,6 +558,55 @@ final class CourtSmartGridTest extends TestCase
         $foreignPark = $this->fx->firstParkId($foreign);
         $this->assertGreaterThan(0, $foreignPark);
         $this->assertSame(3, $this->gridState($this->officer, ['KingdomId' => $this->k, 'ParkId' => $foreignPark])['status']);
+    }
+
+    public function testMismatchedCourtGetsItsParksRealKingdomNotTheForgedOne(): void
+    {
+        $foreign = $this->fx->otherKingdomId($this->k);
+        $forged = $this->fx->createCourt(['kingdom_id' => $foreign, 'park_id' => $this->p, 'name' => 'sg-forged']);
+
+        $foreignCourt = $this->fx->createCourt(['kingdom_id' => $foreign, 'name' => 'sg-foreign']);
+        $realCourt = $this->fx->createCourt(['kingdom_id' => $this->k, 'name' => 'sg-real']);
+        $line = ['kingdomaward_id' => $this->ka, 'rank' => 2];
+        $this->fx->createAward($foreignCourt, $this->recipient('foreign'), $line);
+        $this->fx->createAward($realCourt, $this->recipient('real'), $line);
+
+        $res = $this->gridState($this->parkOfficer(), ['CourtId' => $forged]);
+
+        $this->assertSame(0, $res['status']);
+        $courts = array_column($res['state']['OtherCourtLines'], 'CourtId');
+        $this->assertContains($realCourt, $courts, 'the park\'s real kingdom');
+        $this->assertNotContains($foreignCourt, $courts, 'the kingdom the court claims');
+    }
+
+    public function testMismatchedCourtCannotOpenAnotherKingdomsParkToThisKingdomsOfficer(): void
+    {
+        // The reverse forgery: requireCourtAuth passes on the court's stored kingdom,
+        // so the resolved scope needs its own check.
+        $foreign = $this->fx->otherKingdomId($this->k);
+        $foreignPark = $this->fx->firstParkId($foreign);
+        $this->assertGreaterThan(0, $foreignPark);
+        $forged = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => $foreignPark]);
+
+        $res = $this->gridState($this->officer, ['CourtId' => $forged]);
+
+        $this->assertSame(3, $res['status']);
+        $this->assertArrayNotHasKey('state', $res);
+    }
+
+    public function testEndpointFreshBypassesTheRecCache(): void
+    {
+        $rec = $this->rec($this->recipient(), 2);
+        $scope = ['KingdomId' => $this->k, 'ParkId' => $this->p];
+
+        $cached = $this->gridState($this->officer, $scope, true);
+        $this->assertNotContains($rec, array_column($cached['state']['Recs'], 'RecommendationsId'));
+
+        $off = $this->gridState($this->officer, $scope + ['Fresh' => '0'], true);
+        $this->assertNotContains($rec, array_column($off['state']['Recs'], 'RecommendationsId'), 'Fresh=0 is the default');
+
+        $fresh = $this->gridState($this->officer, $scope + ['Fresh' => '1'], true);
+        $this->assertContains($rec, array_column($fresh['state']['Recs'], 'RecommendationsId'));
     }
 
     public function testSmartCourtConfigOnlyReachesCourtAuthority(): void
