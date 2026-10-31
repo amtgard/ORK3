@@ -462,17 +462,21 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 	max-height: max(320px, calc(100vh - 64px));
 	max-height: max(320px, calc(100dvh - 64px));
 }
-.lg-table thead tr.lg-group-header-row th {
+/* DataTables gives sortable header cells position:relative at (0,2,4); these outrank it
+   so every header cell sticks. Sticky is also a positioned box for the sort arrows. */
+.rp-table-area table.dataTable.lg-table thead > tr > th {
 	position: sticky; top: 0; z-index: 4;
 }
-.lg-table thead tr.lg-header-row th {
-	position: sticky; top: var(--lg-head1-h, 30px); z-index: 4;
+.rp-table-area table.dataTable.lg-table thead > tr.lg-header-row > th {
+	top: var(--lg-head1-h, 30px);
 }
-.lg-table thead tr.lg-group-header-row th.lg-col-player { z-index: 5; }
+.rp-table-area table.dataTable.lg-table thead > tr.lg-group-header-row > th.lg-col-player {
+	left: 0; z-index: 5;
+}
 
 @media print {
 	.lg-scroll { overflow: visible; max-height: none; }
-	.lg-table thead tr th { position: static !important; }
+	.rp-table-area table.dataTable.lg-table thead > tr > th { position: static !important; }
 }
 
 @media print {
@@ -744,10 +748,17 @@ foreach ($awardList as $_aid => $_ainfo) :
 <?php   $_knighted = $_gc && isset($_knightGroups[ucfirst($_gc)]); ?>
 <?php   $_tdClass = 'lg-col-award' . ($_gc ? ' lg-group-' . $_gc : '') . ($_knighted ? ' lg-cell-knight-' . $_gc : ''); ?>
 <?php   $_colAttr = 'data-col="' . htmlspecialchars((string)$aid, ENT_QUOTES) . '"'; ?>
+<?php
+	$_awardedTip = '';
+	if ($info !== null && !$info['IsMaster'] && !empty($info['Date'])) {
+		$_awDays = (int) floor((strtotime(date('Y-m-d')) - strtotime($info['Date'])) / 86400);
+		$_awardedTip = ' data-tip="' . htmlspecialchars('Awarded ' . $info['Date'] . ' (' . ($_awDays <= 0 ? 'today' : $_awDays . 'd ago') . ')', ENT_QUOTES) . '"';
+	}
+?>
 <?php   if ($info !== null && $info['IsMaster']) : ?>
 				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)($info['Rank'] ?? 0) ?>" data-master="1" data-order="999"><span class="lg-cell-master" title="Master">M</span></td>
 <?php   elseif ($info !== null && $info['Rank'] !== null) : ?>
-				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)$info['Rank'] ?>" data-order="<?= (int)$info['Rank'] ?>"><span class="lg-cell-rank"><?= (int)$info['Rank'] ?></span></td>
+				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)$info['Rank'] ?>" data-order="<?= (int)$info['Rank'] ?>"><span class="lg-cell-rank"<?= $_awardedTip ?>><?= (int)$info['Rank'] ?></span></td>
 <?php   else : ?>
 				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="0" data-order="0"><span class="lg-cell-empty">·</span></td>
 <?php   endif; ?>

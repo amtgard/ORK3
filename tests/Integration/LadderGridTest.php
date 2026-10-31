@@ -167,6 +167,31 @@ final class LadderGridTest extends TestCase
         $this->assertSame('2026-06-15', $row['LastSignIn']);
     }
 
+    public function testCellCarriesMostRecentAwardDate(): void
+    {
+        [$kid, $parkId, $ladder, $p] = $this->recencyPlayer('cell-date-a');
+        $mid = $p['mundane_id'];
+        $this->fixture->insertAwardOn($mid, $parkId, $kid, $ladder['kingdomaward_id'], $ladder['award_id'], 1, '2025-01-01');
+        $this->fixture->insertAwardOn($mid, $parkId, $kid, $ladder['kingdomaward_id'], $ladder['award_id'], 2, '2026-04-06');
+
+        $row = $this->rowFor((new Report())->GetLadderAwardGrid($this->kingdomGridRequest($kid)), $mid);
+        $this->assertNotNull($row);
+        $this->assertSame('2026-04-06', $row['Awards'][$ladder['award_id']]['Date']);
+    }
+
+    public function testCellDateIgnoresPlaceholderAndRevokedRows(): void
+    {
+        [$kid, $parkId, $ladder, $p] = $this->recencyPlayer('cell-date-b');
+        $mid = $p['mundane_id'];
+        $this->fixture->insertAwardOn($mid, $parkId, $kid, $ladder['kingdomaward_id'], $ladder['award_id'], 2, '2026-01-02');
+        $this->fixture->insertAwardOn($mid, $parkId, $kid, $ladder['kingdomaward_id'], $ladder['award_id'], 5, '2026-02-02', 1);
+        $this->fixture->insertAwardOn($mid, $parkId, $kid, $ladder['kingdomaward_id'], $ladder['award_id'], 4, '0000-00-00');
+
+        $row = $this->rowFor((new Report())->GetLadderAwardGrid($this->kingdomGridRequest($kid)), $mid);
+        $this->assertNotNull($row);
+        $this->assertSame('2026-01-02', $row['Awards'][$ladder['award_id']]['Date']);
+    }
+
     public function testLastAwardIgnoresRevokedAndPlaceholderDates(): void
     {
         [$kid, $parkId, $ladder, $p] = $this->recencyPlayer('rec-b');

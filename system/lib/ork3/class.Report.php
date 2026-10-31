@@ -8653,7 +8653,7 @@ class Report extends Ork3
         // Cache key must cover both sets or a kingdom gaining a pseudo-ladder
         // would keep serving the old grid.
         $awardIds = $realIdList . '|k' . $pseudoIdList;
-        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds, 'v' => 2]);
+        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds, 'v' => 3]);
         $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
         if ($cachedGrid !== false) {
             return [
@@ -8678,7 +8678,8 @@ class Report extends Ork3
         // column 94 -- which is not even a column here, so they would vanish again.
         $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name,
                            {$pseudoCaseSql} AS col_key,
-                           MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count
+                           MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count,
+                           MAX(IF(ma.date >= '1980-01-01' AND ma.date <= CURDATE(), ma.date, NULL)) AS last_date
                     FROM " . DB_PREFIX . 'mundane m
                     LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
                     JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
@@ -8730,7 +8731,12 @@ class Report extends Ork3
                 $val = (is_string($aid) && $aid !== '' && $aid[0] === 'k')
                     ? ($_max > 0 ? $_max : $_count)
                     : max($_max, $_count);
-                $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
+                $_lastDate = $dataResult->last_date;
+                $playerData[$mid]['Awards'][$aid] = [
+                    'Rank' => $val > 0 ? $val : null,
+                    'IsMaster' => false,
+                    'Date' => ($_lastDate !== null && $_lastDate !== '') ? substr((string) $_lastDate, 0, 10) : null,
+                ];
             }
         }
 
