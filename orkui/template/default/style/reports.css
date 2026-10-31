@@ -1306,6 +1306,77 @@ html[data-theme="dark"] .lg-search-bar label {
   color: var(--ork-text-muted, #a0aec0);
 }
 
+/* ── Ladder Award Grid: Last Award / Last Sign-in columns ── */
+.lg-table th.lg-col-date {
+  cursor: pointer;
+  vertical-align: middle;
+}
+/* Must outrank .rp-table-area table.dataTable tbody td */
+.rp-table-area table.dataTable tbody td.lg-col-date {
+  min-width: 112px;
+  max-width: 210px;
+  padding: 4px 8px;
+  border-right: 1px solid var(--rp-divider);
+  text-align: left;
+  white-space: normal;
+}
+/* --lg-age runs 0 (today) to 1 (365+ days) and is set in the template script.
+   Text color is fixed so it holds against every hue on the scale: lowest
+   contrast 8.2:1 here, 5.7:1 in dark mode. */
+.lg-age {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #1f2937;
+  background: hsl(calc(120 * (1 - var(--lg-age))) 70% 82%);
+}
+.lg-age[data-date=""] {
+  color: var(--rp-text-muted);
+  background: none;
+}
+html[data-theme="dark"] .lg-age {
+  color: #f8fafc;
+  background: hsl(calc(120 * (1 - var(--lg-age))) 55% 26%);
+}
+html[data-theme="dark"] .lg-age[data-date=""] {
+  color: var(--rp-text-muted);
+  background: none;
+}
+
+/* ── Ladder Award Grid: New Players box ── */
+.lg-new-box {
+  margin-top: 14px;
+}
+/* Must outrank the global h1-h6 rules in orkui.css, including their dark variant */
+.rp-root h2.lg-new-title {
+  margin: 0 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--rp-text-body);
+  font-size: 1rem;
+  text-shadow: none;
+}
+.lg-new-sub {
+  margin-bottom: 10px;
+  color: var(--rp-text-muted);
+  font-size: 0.82rem;
+}
+.lg-new-status {
+  padding: 10px 0;
+  color: var(--rp-text-muted);
+  font-size: 0.85rem;
+}
+.lg-new-status-error {
+  color: #b91c1c;
+}
+html[data-theme="dark"] .lg-new-status-error {
+  color: #fca5a5;
+}
+
 /* ── Stat card info tooltip + view toggle (PR #454) ── */
 html[data-theme="dark"] .rp-stat-tip-icon {
     background: var(--ork-bg-tertiary, #374151);
