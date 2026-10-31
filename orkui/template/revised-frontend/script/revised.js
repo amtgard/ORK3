@@ -6,8 +6,17 @@
      held < r <= selected   -> forward (blue  + → watermark; each step
                                forward of the chosen rank)
      r === selected         -> selected (pops up)
-   `prefix` is the class namespace ('pn' | 'kn' | 'pk'). The number is
+   `prefix` is the class namespace ('pn' | 'kn' | 'pk' | 'sc'). The number is
    wrapped in a .<prefix>-rank-num span so the watermark sits behind it.
+
+   Those three states used to be carried by colour alone -- green, blue, a
+   border -- on a control whose only accessible name was "Rank 3" (WCAG 1.4.1
+   and 4.1.2). Each pill now also says which state it is in, and reports its
+   selected-ness as aria-pressed. This is the permanent home for that: the
+   painter is shared by the Add Award, Recommend, Edit Award, Reconcile and
+   Scrollery composer surfaces, so the labelling cannot drift between them.
+   `data-rank-label` lets a surface override the base name; nothing sets it
+   today and everything falls back to "Rank N".
    ============================================================ */
 function tnRankPaint(wrap, prefix, held, selected) {
     if (!wrap) return;
@@ -20,6 +29,10 @@ function tnRankPaint(wrap, prefix, held, selected) {
         if (r <= held)          pill.classList.add(prefix + '-rank-held');
         else if (r <= selected) pill.classList.add(prefix + '-rank-forward');
         if (r === selected)     pill.classList.add(prefix + '-rank-selected');
+        pill.setAttribute('aria-pressed', r === selected ? 'true' : 'false');
+        var base = pill.dataset.rankLabel || ('Rank ' + r);
+        pill.setAttribute('aria-label',
+            base + (r <= held ? ', already earned' : (r <= selected ? ', being awarded' : '')));
     });
 }
 /* Build the inner markup for a single pill (number wrapped for the watermark). */
@@ -1172,7 +1185,14 @@ if (PnConfig.recError) {
         wrap.dataset.rankHeld = held;
         tnTopRankHint(hint, held, maxRank, 'recommend');
         for (var r = 1; r <= maxRank; r++) {
-            var pill = document.createElement('div');
+            // A <button>, not a <div>: tnRankPaint() writes aria-pressed/aria-label,
+            // which a generic element does not expose, and a div pill could not be
+            // reached by keyboard at all. The Edit Award and Reconcile pill builders
+            // below already emit buttons on this same .pn-rank-pill class, so the
+            // styling is unchanged. The click handler is delegated on the wrapper and
+            // keeps working.
+            var pill = document.createElement('button');
+            pill.type      = 'button';
             pill.className = 'pn-rank-pill';
             pill.innerHTML  = tnRankPillInner('pn', r);
             pill.dataset.rank = r;
@@ -2176,7 +2196,10 @@ if (PnConfig.recError) {
     // ---- Add Award / Add Title Modal ----
     (function() {
         if (!PnConfig.canManageAwards) return;
-        var AWARD_URL = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/addaward';
+        // PlayerAjax (not Admin/player) so the JSON response carries back the
+        // new row's AwardsId + whether it has certificate art to print —
+        // Admin/player's addaward re-renders the whole admin page instead.
+        var AWARD_URL = PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/addaward';
         var SEARCH_URL = PnConfig.httpService + 'Search/SearchService.php';
         var KINGDOM_ID = PnConfig.kingdomId;
         // Player's held award ranks: canonical AwardId => max rank
@@ -2330,7 +2353,9 @@ if (PnConfig.recError) {
             if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
             var html = '';
             for (var i = 1; i <= maxRank; i++) {
-                html += '<div class="pn-rank-pill" data-rank="' + i + '">' + tnRankPillInner('pn', i) + '</div>';
+                // <button>, not <div> — see the Recommend pill builder above.
+                html += '<button type="button" class="pn-rank-pill" data-rank="' + i + '">'
+                     + tnRankPillInner('pn', i) + '</button>';
             }
             var pills = gid('pn-rank-pills');
             pills.dataset.rankHeld = held;
@@ -2466,11 +2491,31 @@ if (PnConfig.recError) {
             el.classList.toggle('pn-char-warn', rem < 50);
         });
 
+        // "Given At" defaults to the officer's own scope (PnConfig.awardScope, stamped
+        // by Playernew_index.tpl behind the same $canManageAwards authority check that
+        // draws the Add Award button) and is blank when there is none to offer. One
+        // triple, so the name shown can never disagree with the ids submitted.
+        function pnResetGivenAt() {
+            var scope = PnConfig.awardScope || { parkId: 0, kingdomId: 0, name: '' };
+            gid('pn-award-givenat-text').value = scope.name || '';
+            gid('pn-award-park-id').value      = String(scope.parkId || 0);
+            gid('pn-award-kingdom-id').value   = String(scope.kingdomId || 0);
+        }
+        function pnHasGivenAt() {
+            return (parseInt(gid('pn-award-park-id').value, 10) > 0)
+                || (parseInt(gid('pn-award-kingdom-id').value, 10) > 0);
+        }
+
         // ---- Required field check ----
         function checkRequired() {
-            var ok = !!gid('pn-award-select').value && !!gid('pn-award-givenby-id').value && !!gid('pn-award-date').value;
+            var ok = !!gid('pn-award-select').value && !!gid('pn-award-givenby-id').value
+                && !!gid('pn-award-date').value && pnHasGivenAt();
             gid('pn-award-save-same').disabled = !ok;
         }
+        // Typing in Given At zeroes the ids until a suggestion is picked, so the button
+        // has to re-evaluate on every keystroke or an unmatched location submits 0/0.
+        gid('pn-award-givenat-text').addEventListener('input', checkRequired);
+        gid('pn-award-givenat-results').addEventListener('click', function() { setTimeout(checkRequired, 0); });
         gid('pn-award-select').addEventListener('change', checkRequired);
         gid('pn-award-date').addEventListener('change',   checkRequired);
         gid('pn-award-date').addEventListener('input',    checkRequired);
@@ -2482,6 +2527,10 @@ if (PnConfig.recError) {
             gid('pn-award-error').style.display   = 'none';
             gid('pn-award-error').textContent      = '';
             gid('pn-award-success').style.display  = 'none';
+            if (gid('pn-award-print-link')) {
+                gid('pn-award-print-link').style.display = 'none';
+                gid('pn-award-print-link').removeAttribute('href');
+            }
             gid('pn-award-note').value            = '';
             if (window.orkMonarchyOnlyNoteHint) orkMonarchyOnlyNoteHint(gid('pn-award-note'), false);
             gid('pn-award-char-count').textContent = '400 characters remaining';
@@ -2489,9 +2538,7 @@ if (PnConfig.recError) {
             gid('pn-award-givenby-text').value    = '';
             gid('pn-award-givenby-id').value      = '';
             gid('pn-award-givenby-results').classList.remove('pn-ac-open');
-            gid('pn-award-givenat-text').value = PnConfig.parkName;
-            gid('pn-award-park-id').value = String(PnConfig.parkId);
-            gid('pn-award-kingdom-id').value      = String(PnConfig.kingdomId || 0);
+            pnResetGivenAt();
             gid('pn-award-event-id').value        = '0';
             gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             gid('pn-award-custom-name').value     = '';
@@ -2567,11 +2614,30 @@ if (PnConfig.recError) {
 
         // ---- Save helpers ----
         var pnSuccessTimer = null;
+        // The success banner is transient by design — "Add Award" keeps the modal open
+        // to grant another, and the banner resets each time. The print icon lives in the
+        // footer instead and is NOT on this timer: it stays for as long as the modal is
+        // open, pointing at the last printable award granted in this session.
         function pnShowSuccess() {
             var el = gid('pn-award-success');
             el.style.display = '';
             clearTimeout(pnSuccessTimer);
             pnSuccessTimer = setTimeout(function() { el.style.display = 'none'; }, 3000);
+        }
+        // printUrl null means the award just granted has no certificate art, so the icon
+        // is hidden rather than offering a link that would render nothing. A previously
+        // shown icon is cleared too: it would otherwise point at an earlier award while
+        // appearing to belong to the one just granted.
+        function pnSetPrintLink(printUrl) {
+            var linkEl = gid('pn-award-print-link');
+            if (!linkEl) { return; }
+            if (printUrl) {
+                linkEl.href = printUrl;
+                linkEl.style.display = '';
+            } else {
+                linkEl.removeAttribute('href');
+                linkEl.style.display = 'none';
+            }
         }
         function pnClearAward() {
             gid('pn-award-select').value             = '';
@@ -2587,9 +2653,7 @@ if (PnConfig.recError) {
             gid('pn-award-custom-row').style.display = 'none';
             if (gid('pn-award-alias')) gid('pn-award-alias').value = '0';
             if (gid('pn-award-alias-row')) gid('pn-award-alias-row').style.display = 'none';
-            gid('pn-award-givenat-text').value       = PnConfig.parkName;
-            gid('pn-award-park-id').value            = String(PnConfig.parkId);
-            gid('pn-award-kingdom-id').value         = String(PnConfig.kingdomId || 0);
+            pnResetGivenAt();
             gid('pn-award-event-id').value           = '0';
             gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             checkRequired();
@@ -2606,6 +2670,14 @@ if (PnConfig.recError) {
             if (!awardId) { errEl.textContent = 'Please select an award.';            errEl.style.display = 'block'; return; }
             if (!giverId) { errEl.textContent = 'Please select who gave this award.'; errEl.style.display = 'block'; return; }
             if (!date)    { errEl.textContent = 'Please enter the award date.';       errEl.style.display = 'block'; return; }
+            // "Where given" is required. Blank used to be posted as at_park_id 0 /
+            // at_kingdom_id 0, which is what 30.7% of ork_awards rows carry -- printable
+            // and reportable by nobody but the recipient.
+            if (!pnHasGivenAt()) {
+                errEl.textContent = 'Please choose where this award was given, from the list.';
+                errEl.style.display = 'block';
+                return;
+            }
 
             var fd = new FormData();
             fd.append('KingdomAwardId', awardId);
@@ -2632,8 +2704,14 @@ if (PnConfig.recError) {
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
                     if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
+                    return resp.json();
+                })
+                .then(function(data) {
+                    if (!data || data.status !== 0) {
+                        throw new Error((data && data.error) || 'Save failed.');
+                    }
                     pnActiveRecId = null;
-                    onSuccess();
+                    onSuccess(data);
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
@@ -2646,7 +2724,15 @@ if (PnConfig.recError) {
         }
         // Save: add award and stay in modal for another
         gid('pn-award-save-same').addEventListener('click', function() {
-            pnDoSave(function() { pnAwardsDirty = true; pnShowSuccess(); pnClearAward(); });
+            pnDoSave(function(data) {
+                pnAwardsDirty = true;
+                var printUrl = (data && data.printable && data.awardsId)
+                    ? (PnConfig.uir + 'Scrollery/render&awards=' + data.awardsId + '&print=1')
+                    : null;
+                pnShowSuccess();
+                pnSetPrintLink(printUrl);
+                pnClearAward();
+            });
         });
     })();
 
@@ -3517,11 +3603,22 @@ $(document).ready(function() {
 
     function gid(id) { return document.getElementById(id); }
 
+    // "Where given" is required. Blank used to be posted as at_park_id 0 /
+    // at_kingdom_id 0, which is what 30.7% of ork_awards rows carry -- printable and
+    // reportable by nobody but the recipient. The field defaults to this kingdom
+    // (knOpenAwardModal), which is the scope CanManageKingdom already authorised, but
+    // typing over it clears the ids, so the check has to be live.
+    function knHasGivenAt() {
+        return (parseInt(gid('kn-award-park-id').value, 10) > 0)
+            || (parseInt(gid('kn-award-kingdom-id').value, 10) > 0);
+    }
+
     function checkRequired() {
         var ok = !!gid('kn-award-player-id').value
               && !!gid('kn-award-select').value
               && !!gid('kn-award-givenby-id').value
-              && !!gid('kn-award-date').value;
+              && !!gid('kn-award-date').value
+              && knHasGivenAt();
         gid('kn-award-save-new').disabled  = !ok;
         gid('kn-award-save-same').disabled = !ok;
         gid('kn-award-save-next').disabled = !ok;
@@ -3719,11 +3816,15 @@ $(document).ready(function() {
     // Given At — location search
     gid('kn-award-givenat-text').addEventListener('input', function() {
         var term = this.value.trim();
-        if (term.length < 2) { gid('kn-award-givenat-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(givenAtTimer);
+        // Cleared unconditionally, before the length guard: deleting the text back to
+        // one character or none used to leave the previous location's ids attached to
+        // a box that no longer named it.
         gid('kn-award-park-id').value    = '0';
         gid('kn-award-kingdom-id').value = '0';
         gid('kn-award-event-id').value   = '0';
+        checkRequired();
+        if (term.length < 2) { gid('kn-award-givenat-results').classList.remove('kn-ac-open'); return; }
         givenAtTimer = setTimeout(function() {
             var today = new Date().toISOString().slice(0, 10);
             var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
@@ -3747,6 +3848,7 @@ $(document).ready(function() {
         gid('kn-award-kingdom-id').value      = item.dataset.kid || '0';
         gid('kn-award-event-id').value        = item.dataset.eid || '0';
         this.classList.remove('kn-ac-open');
+        checkRequired();
     });
 
     // Keyboard navigation for givenBy and givenAt autocompletes
@@ -4284,6 +4386,11 @@ $(document).ready(function() {
         if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = 'block'; return; }
         if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = 'block'; return; }
         if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = 'block'; return; }
+        if (!knHasGivenAt()) {
+            errEl.textContent = 'Please choose where this award was given, from the list.';
+            errEl.style.display = 'block';
+            return;
+        }
 
         var fd = new FormData();
         fd.append('KingdomAwardId', awardId);
@@ -4315,6 +4422,12 @@ $(document).ready(function() {
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
                 if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
+                // Admin/player answers with a whole rendered admin page, so there is no
+                // body worth parsing -- a server-side refusal used to be reported here as
+                // a successful grant. Controller_Admin::reject_award_grant() echoes the
+                // message in a header for exactly this.
+                var refused = resp.headers.get('X-Award-Error');
+                if (refused) throw new Error(refused);
                 onSuccess();
             })
             .catch(function(err) {
@@ -7639,11 +7752,20 @@ $(document).ready(function() {
         tnPositionAcFixed(inputEl, dropdownEl);
     }
 
+    // "Where given" is required -- see knHasGivenAt() for why. The field defaults to
+    // this park (pkOpenAwardModal), the scope CanManagePark already authorised, but
+    // typing over it clears the ids, so the check has to be live.
+    function pkHasGivenAt() {
+        return (parseInt(gid('pk-award-park-id').value, 10) > 0)
+            || (parseInt(gid('pk-award-kingdom-id').value, 10) > 0);
+    }
+
     function checkRequired() {
         var ok = !!gid('pk-award-player-id').value
               && !!gid('pk-award-select').value
               && !!gid('pk-award-givenby-id').value
-              && !!gid('pk-award-date').value;
+              && !!gid('pk-award-date').value
+              && pkHasGivenAt();
         gid('pk-award-save-new').disabled  = !ok;
         gid('pk-award-save-same').disabled = !ok;
     }
@@ -7844,11 +7966,12 @@ $(document).ready(function() {
     // Given At — location search
     gid('pk-award-givenat-text').addEventListener('input', function() {
         var term = this.value.trim();
-        if (term.length < 2) { gid('pk-award-givenat-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(givenAtTimer);
         gid('pk-award-park-id').value    = '0';
         gid('pk-award-kingdom-id').value = '0';
         gid('pk-award-event-id').value   = '0';
+        checkRequired();
+        if (term.length < 2) { gid('pk-award-givenat-results').classList.remove('pk-ac-open'); return; }
         givenAtTimer = setTimeout(function() {
             var today = new Date().toISOString().slice(0, 10);
             var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
@@ -7872,6 +7995,7 @@ $(document).ready(function() {
         gid('pk-award-park-id').value         = item.dataset.pid || '0';
         gid('pk-award-kingdom-id').value      = item.dataset.kid || '0';
         gid('pk-award-event-id').value        = item.dataset.eid || '0';
+        checkRequired();
         this.classList.remove('pk-ac-open');
     });
 
@@ -8113,6 +8237,11 @@ $(document).ready(function() {
         if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = 'block'; return; }
         if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = 'block'; return; }
         if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = 'block'; return; }
+        if (!pkHasGivenAt()) {
+            errEl.textContent = 'Please choose where this award was given, from the list.';
+            errEl.style.display = 'block';
+            return;
+        }
 
         var fd = new FormData();
         fd.append('KingdomAwardId', awardId);
@@ -8142,6 +8271,12 @@ $(document).ready(function() {
             .then(function(resp) {
                 if (!resp.ok) throw new Error('Server returned ' + resp.status);
                 if (window.orkMonarchyOnlyCheckWithheld) orkMonarchyOnlyCheckWithheld(resp);
+                // Admin/player answers with a whole rendered admin page, so there is no
+                // body worth parsing -- a server-side refusal used to be reported here as
+                // a successful grant. Controller_Admin::reject_award_grant() echoes the
+                // message in a header for exactly this.
+                var refused = resp.headers.get('X-Award-Error');
+                if (refused) throw new Error(refused);
                 onSuccess();
             })
             .catch(function(err) {

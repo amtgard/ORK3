@@ -389,6 +389,83 @@ class Award extends Ork3
     }
 
     /**
+     * Which section of an award dropdown one catalog row belongs in.
+     *
+     * The buckets themselves are a UI concern, but the RULE is not: it reads
+     * is_ladder / peerage / is_title / title_class off a GetAwardList()-shaped row,
+     * and two surfaces now need the same answer — the grant/recommend pickers (via
+     * GetAwardOptionGroups() below) and the Scrollery composer, whose own printable
+     * list is filtered by Scroll::OrderForAwardRow() long before it gets here.
+     * Restating the ladder in the second caller would be a second opinion that can
+     * drift, so both read this.
+     *
+     * Returns 'Custom' for the two custom entries, which every caller renders
+     * OUTSIDE the groups (they are standalone options, not a section).
+     *
+     * @param array<string, mixed> $award  A GetAwardList() row.
+     * @param list<int>            $pseudoLadderIds  pseudoLadderKingdomAwardIds().
+     */
+    public static function OptionGroupLabelFor(array $award, array $pseudoLadderIds): string
+    {
+        $sysName = $award['AwardName'] ?? $award['KingdomAwardName'] ?? '';
+
+        if (in_array((int) ($award['KingdomAwardId'] ?? 0), $pseudoLadderIds, true)) {
+            return 'Ladder Awards';
+        }
+        if ($sysName === 'Custom Award' || $sysName === 'Custom Title') {
+            return 'Custom';
+        }
+        if (!empty($award['IsLadder'])) {
+            return 'Ladder Awards';
+        }
+        if (in_array($sysName, ['Defender', 'Master'], true)) {
+            return 'Noble Titles';
+        }
+        if ($sysName === 'Weaponmaster') {
+            return 'Other';
+        }
+        if (($award['Peerage'] ?? '') === 'Knight') {
+            return 'Knighthoods';
+        }
+        if (($award['Peerage'] ?? '') === 'Paragon') {
+            return 'Paragons';
+        }
+        if (($award['Peerage'] ?? '') === 'Master'
+            || (!empty($award['IsTitle']) && ($award['TitleClass'] ?? 0) == 10)) {
+            return 'Masterhoods';
+        }
+        if (in_array($award['Peerage'] ?? '', ['Squire', 'Man-At-Arms', 'Page', 'Lords-Page'], true)
+            || $sysName === 'Apprentice') {
+            return 'Associate Titles';
+        }
+        if ((!empty($award['IsTitle']) && ($award['TitleClass'] ?? 0) >= 30)
+            || $sysName === 'Esquire') {
+            return 'Noble Titles';
+        }
+
+        return 'Other';
+    }
+
+    /**
+     * The section order every award dropdown renders in. 'Custom' is deliberately
+     * absent: those entries are standalone options below the groups.
+     *
+     * @return list<string>
+     */
+    public static function OptionGroupOrder(): array
+    {
+        return [
+            'Ladder Awards',
+            'Knighthoods',
+            'Masterhoods',
+            'Paragons',
+            'Noble Titles',
+            'Associate Titles',
+            'Other',
+        ];
+    }
+
+    /**
      * Structured award dropdown groups for UI rendering (T-AWD-01).
      *
      * @return array<string, mixed>
@@ -424,60 +501,26 @@ class Award extends Ork3
         });
 
         $pseudoLadderIds = self::pseudoLadderKingdomAwardIds();
-        $custom = $ladder = $knighthoods = $masterhoods = $paragons = $associates = $nobles = $other = [];
 
+        $buckets = ['Custom' => []];
+        foreach (self::OptionGroupOrder() as $label) {
+            $buckets[$label] = [];
+        }
         foreach ($items as $award) {
-            $sysName = $award['AwardName'] ?? $award['KingdomAwardName'];
-            $isPseudoLadder = in_array((int) ($award['KingdomAwardId'] ?? 0), $pseudoLadderIds, true);
-            if ($isPseudoLadder) {
-                $ladder[] = $award;
-            } elseif ($sysName === 'Custom Award' || $sysName === 'Custom Title') {
-                $custom[] = $award;
-            } elseif (!empty($award['IsLadder'])) {
-                $ladder[] = $award;
-            } elseif (in_array($sysName, ['Defender', 'Master'], true)) {
-                $nobles[] = $award;
-            } elseif ($sysName === 'Weaponmaster') {
-                $other[] = $award;
-            } elseif (($award['Peerage'] ?? '') === 'Knight') {
-                $knighthoods[] = $award;
-            } elseif (($award['Peerage'] ?? '') === 'Paragon') {
-                $paragons[] = $award;
-            } elseif (($award['Peerage'] ?? '') === 'Master'
-                || (!empty($award['IsTitle']) && ($award['TitleClass'] ?? 0) == 10)) {
-                $masterhoods[] = $award;
-            } elseif (in_array($award['Peerage'] ?? '', ['Squire', 'Man-At-Arms', 'Page', 'Lords-Page'], true)
-                || $sysName === 'Apprentice') {
-                $associates[] = $award;
-            } elseif ((!empty($award['IsTitle']) && ($award['TitleClass'] ?? 0) >= 30)
-                || $sysName === 'Esquire') {
-                $nobles[] = $award;
-            } else {
-                $other[] = $award;
-            }
+            $buckets[self::OptionGroupLabelFor($award, $pseudoLadderIds)][] = $award;
         }
 
         $groups = [];
-        if ($ladder !== []) {
-            $groups[] = ['Label' => 'Ladder Awards', 'Items' => $ladder];
-        }
-        foreach ([
-            'Knighthoods' => $knighthoods,
-            'Masterhoods' => $masterhoods,
-            'Paragons' => $paragons,
-            'Noble Titles' => $nobles,
-            'Associate Titles' => $associates,
-            'Other' => $other,
-        ] as $label => $groupItems) {
-            if ($groupItems !== []) {
-                $groups[] = ['Label' => $label, 'Items' => $groupItems];
+        foreach (self::OptionGroupOrder() as $label) {
+            if ($buckets[$label] !== []) {
+                $groups[] = ['Label' => $label, 'Items' => $buckets[$label]];
             }
         }
 
         return [
             'Status' => Success(),
             'Groups' => $groups,
-            'StandaloneOptions' => $custom,
+            'StandaloneOptions' => $buckets['Custom'],
             'PseudoLadderIds' => $pseudoLadderIds,
         ];
     }
@@ -563,6 +606,152 @@ class Award extends Ork3
             6577, 94, 7084, 6171, 6574, 7254,
             7513, // Hunter (The Painted Skies) -- added 2026-10-04
         ];
+    }
+
+    /**
+     * Award names, lower-cased, that a GetAwardList()-shaped row set says are
+     * officer positions — i.e. carry a resolved (non-null, non-'none') OfficerRole.
+     * A row with no OfficerRole key at all is skipped rather than treated as
+     * evidence either way: this is describing what the catalog actually resolved,
+     * not guessing about a malformed row.
+     *
+     * Underscored, like the rest of this dangling-officer group: Award is on the
+     * JSON service whitelist, and none of these take a token.
+     *
+     * @param array<int, array<string, mixed>> $awards
+     * @return array<string, true>
+     */
+    public static function officer_names_from(array $awards): array
+    {
+        $names = [];
+        foreach ($awards as $row) {
+            if (!array_key_exists('OfficerRole', $row)) {
+                continue;
+            }
+
+            $role = strtolower(trim((string) ($row['OfficerRole'] ?? '')));
+            if ($role === '' || $role === 'none') {
+                continue;
+            }
+
+            $name = strtolower(trim((string) ($row['KingdomAwardName'] ?? $row['kingdom_awardname'] ?? '')));
+            if ($name !== '') {
+                $names[$name] = true;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * Whether a DANGLING award/kingdomaward row — its own award_id join missed,
+     * so both AwardId and OfficerRole come back NULL (archery's real grants have
+     * this shape on purpose, under base award_id 0/94/131) — is actually an
+     * officer position wearing archery's cover, rather than a genuine archery
+     * grant or an uncovered ladder/title.
+     *
+     * Two signals, either sufficient:
+     * - A RESOLVED SIBLING of the exact same name in $officerNames (built by
+     *   officer_names_from() from the same catalog) — catches a position
+     *   whose own base award went missing while a working copy of the same name
+     *   still resolves elsewhere in the SAME kingdom. Kingdom 28's second
+     *   "Sheriff": kingdomaward_id 5028 points at award_id 163 (no ork_award row);
+     *   sibling kingdomaward_id 4935 resolves to award_id 70, officer_role='park'.
+     * - Kingdom::awardNameLooksLikeOfficer()'s body-prefix + role-suffix pattern —
+     *   catches a position with NO sibling anywhere in its own kingdom at all.
+     *   Kingdom 21's "Shire Champion" (kingdomaward_id 6437, award_id 0) is the
+     *   ONLY "Shire Champion" row that kingdom has — no in-kingdom sibling exists
+     *   to check — but every OTHER kingdom spelling the same position (award_id
+     *   206, officer_role='principality') resolves fine, and the name matches the
+     *   pattern unambiguously.
+     *
+     * Neither signal alone covers both real cases: the pattern alone was already
+     * rejected for GetAwardList()'s own Awards/Officers bucketing (it misses bare
+     * "Sheriff" and bare "Defender"), and the sibling search alone misses a
+     * position with no surviving in-kingdom spelling at all. Combined, they cover
+     * every dangling officer position found in the real data across kingdoms 21
+     * and 28, while still leaving Warlord, Defender and every archery name open —
+     * none of those match the pattern, and none have an officer sibling.
+     *
+     * @param array<string, true> $officerNames
+     */
+    public static function is_dangling_row_an_officer(string $name, array $officerNames): bool
+    {
+        $key = strtolower(trim($name));
+        if ($key === '') {
+            return false;
+        }
+
+        return isset($officerNames[$key]) || Kingdom::awardNameLooksLikeOfficer($name);
+    }
+
+    /**
+     * Officer-position names known for one kingdom's own catalog — see
+     * is_dangling_row_an_officer() for how a dangling row is actually judged
+     * against this map. Cached per request: a player's award history, a bulk run,
+     * or the create dropdown touches at most a handful of distinct kingdoms.
+     *
+     * @return array<string, true>
+     */
+    public static function officer_names_for_kingdom(int $kingdomId): array
+    {
+        static $cache = [];
+        if ($kingdomId <= 0) {
+            return [];
+        }
+
+        if (!array_key_exists($kingdomId, $cache)) {
+            $response          = Ork3::$Lib->kingdom->GetAwardList([
+                'IsLadder'  => 'Both',
+                'IsTitle'   => 'Both',
+                'KingdomId' => $kingdomId,
+            ]);
+            $cache[$kingdomId] = self::officer_names_from($response['Awards'] ?? []);
+        }
+
+        return $cache[$kingdomId];
+    }
+
+    /**
+     * The catalog a granted award's kingdomaward belongs to, from an
+     * AwardsForPlayer()-shaped row (ParkId/KingdomId/KingdomAwardName). A
+     * park-granted award (ParkId set) uses its park's own kingdom, not
+     * at_kingdom_id — that column is blank for a park grant.
+     */
+    public static function kingdom_for_grant_row(array $row): int
+    {
+        $parkId = (int) ($row['ParkId'] ?? 0);
+        if ($parkId > 0) {
+            static $parkCache = [];
+            if (!array_key_exists($parkId, $parkCache)) {
+                $parkCache[$parkId] = Ork3::$Lib->park->GetParkDetails(['ParkId' => $parkId]);
+            }
+            $park = is_array($parkCache[$parkId]) ? $parkCache[$parkId] : [];
+
+            return (int) ($park['KingdomId'] ?? 0);
+        }
+
+        return (int) ($row['KingdomId'] ?? 0);
+    }
+
+    /**
+     * Corrects one AwardsForPlayer()-shaped row's OfficerRole for the dangling
+     * shape is_dangling_row_an_officer() closes — see that method's docblock. A
+     * resolved AwardId is left untouched: AwardsForPlayer()'s own
+     * COALESCE(alias.officer_role, a.officer_role) already gave it a real answer.
+     */
+    public static function correct_dangling_officer_role(array $row): array
+    {
+        if (($row['AwardId'] ?? null) !== null) {
+            return $row;
+        }
+
+        $name = (string) ($row['KingdomAwardName'] ?? '');
+        if (self::is_dangling_row_an_officer($name, self::officer_names_for_kingdom(self::kingdom_for_grant_row($row)))) {
+            $row['OfficerRole'] = 'other-officer';
+        }
+
+        return $row;
     }
 
     /**

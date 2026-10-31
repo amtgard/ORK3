@@ -120,7 +120,17 @@ class Kingdom extends Ork3
             return $response;
         }
     */
-    private static function awardNameLooksLikeOfficer($name)
+    /**
+     * Public so Model_Award::isDanglingRowAnOfficer() can reuse this exact pattern
+     * for one more purpose: a dangling kingdomaward row (its own award_id join
+     * missed) with no resolved sibling anywhere in its own kingdom's catalog —
+     * e.g. kingdom 21's "Shire Champion" (kingdomaward_id 6437, award_id 0), the
+     * only "Shire Champion" row that kingdom has at all, while every OTHER kingdom
+     * spelling the same position (award_id 206, officer_role='principality')
+     * resolves fine. A same-kingdom sibling search alone cannot catch that case;
+     * this body-prefix + role-suffix pattern can.
+     */
+    public static function awardNameLooksLikeOfficer($name)
     {
         if (!is_string($name) || $name === '') {
             return false;
@@ -132,6 +142,11 @@ class Kingdom extends Ork3
 
     public function GetAwardList($request)
     {
+        // Both are interpolated into $sql below whatever the request says, so both must
+        // exist. $title_clause was never assigned at all, and $ladder_clause only in
+        // some branches — every call warned on at least one of them.
+        $ladder_clause = '';
+        $title_clause  = '';
         if ($request['IsLadder'] == 'Ladder') {
             $ladder_clause = " and ka.is_ladder = 1";
         } elseif ($request['IsLadder'] == 'NonLadder') {

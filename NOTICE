@@ -11,3 +11,206 @@ system/lib/ork3/data/profanity-words.txt
   Modifications: filtered to entries >= 3 characters, restricted to ASCII printable
     characters, lowercased, sorted, deduplicated. See header of vendored file for
     full provenance.
+
+assets/scrolls/**
+orkui/template/revised-frontend/scroll/**
+  Award certificate artwork, layer designs and flavour text originate in the
+  Arcanyst Scroll Generator (https://github.com/ValoryFox/Arcanyst).
+  Original creator of the Arcanyst Scroll Generator and its initial artwork:
+  Valory Fox (aka Ash). Flavour text credited in Arcanyst to Kisa (Shelly Alexandra).
+  Modifications: art re-pathed under assets/scrolls/; three webpack
+  content-hashed files renamed (parchment.jpg, battle/arcane/wash.jpg,
+  battle/arcane/glow.png); Aurelia views transliterated to PHP partials.
+
+orkui/template/revised-frontend/style/fonts/BlackChancery.*
+  BlackChancery display face, as vendored by Arcanyst.
+
+orkui/template/revised-frontend/style/fonts/AveriaSerifLibre-*.woff2
+  Averia Serif Libre by Dan Sayers. License: SIL Open Font License 1.1.
+  https://fonts.google.com/specimen/Averia+Serif+Libre
+
+orkui/template/revised-frontend/style/fonts/MedievalSharp-Regular.woff2
+  MedievalSharp by Wojciech Kalinowski (wmk69). License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/medievalsharp (MedievalSharp.ttf)
+  Modifications: converted from TTF to WOFF2 with fonttools; not subset.
+  Note: the font's embedded name table claims Reserved Font Name "NovaRound" while
+    the family's OFL.txt claims "MedievalSharp". Upstream discrepancy, carried as-is.
+
+orkui/template/revised-frontend/style/fonts/PirataOne-Regular.woff2
+  Pirata One by Rodrigo Fuenzalida and Nicolas Massi. License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/pirataone (PirataOne-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fonttools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Cinzel-Regular.woff2
+  Cinzel by Natanael Gama. License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/cinzel (Cinzel[wght].ttf)
+  Modifications: static instance cut at wght 400 from the variable font with
+    fontTools.varLib.instancer, then converted to WOFF2; not subset.
+
+orkui/template/revised-frontend/style/fonts/Grenze-*.woff2
+  Grenze by Renata Polastri / The Grenze Project Authors.
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/grenze
+    (Grenze[wght].ttf, Grenze-Italic[wght].ttf)
+  Modifications: static instances cut at wght 400 and 600 from the variable fonts
+    with fontTools.varLib.instancer, then converted to WOFF2; not subset.
+
+orkui/template/revised-frontend/style/fonts/GrenzeGotisch-Regular.woff2
+  Grenze Gotisch by The Grenze Gotisch Project Authors (Omnibus-Type).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/grenzegotisch
+    (GrenzeGotisch[wght].ttf)
+  Modifications: static instance cut at wght 400 from the variable font with
+    fontTools.varLib.instancer, then converted to WOFF2; not subset.
+
+orkui/template/revised-frontend/style/fonts/UncialAntiqua-Regular.woff2
+  Uncial Antiqua by Brian J. Bonislawsky DBA Astigmatic (AOETI).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/uncialantiqua
+    (UncialAntiqua-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Fondamento-Regular.woff2
+  Fondamento by Brian J. Bonislawsky DBA Astigmatic (AOETI).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/fondamento
+    (Fondamento-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Metamorphous-Regular.woff2
+  Metamorphous by Sorkin Type Co. License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/metamorphous
+    (Metamorphous-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/EBGaramond-Regular.woff2
+  EB Garamond by the EB Garamond Project Authors (Georg Duffner, Octavio Pardo).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/ebgaramond
+    (EBGaramond[wght].ttf)
+  Modifications: static instance cut at wght 400 from the variable font with
+    fontTools.varLib.instancer, then SUBSET to the ranges below and converted to
+    WOFF2. Subsetting dropped 976 of 3,247 glyphs — full Cyrillic and assorted
+    symbol blocks that no ORK persona uses — taking the file from 154 KB to 101 KB
+    with the certificate's own coverage unchanged (verified: the same 4 personas
+    fail to render before and after, all of them Hangul/runic/enclosed-alphanumeric).
+    All OpenType layout features and all name records are retained.
+    Kept: U+0020-007E, U+00A0-024F, U+0250-02FF, U+0300-036F, U+0370-03FF,
+    U+1E00-1EFF, U+2000-206F, U+20A0-20BF, U+2100-214F, U+2190-21FF, U+2212.
+
+orkui/template/revised-frontend/style/fonts/CormorantUnicase-Regular.woff2
+  Cormorant Unicase by the Cormorant Project Authors (Christian Thalmann,
+  Catharsis Fonts).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/cormorantunicase
+    (CormorantUnicase-Regular.ttf)
+  Modifications: SUBSET to the same ranges as EB Garamond above and converted to
+    WOFF2. Dropped 1,441 of 3,203 glyphs, taking the file from 116 KB to 58 KB with
+    coverage unchanged (the same 6 personas fail before and after). All OpenType
+    layout features and all name records are retained.
+
+orkui/template/revised-frontend/style/fonts/IMFellEnglish-Regular.woff2
+  IM Fell English by Igino Marini.
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/imfellenglish
+    (IMFeENrm28P.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/LuxuriousRoman-Regular.woff2
+  Luxurious Roman by Robert Leuschke (The Luxurious Roman Project Authors).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/luxuriousroman
+    (LuxuriousRoman-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/EagleLake-Regular.woff2
+  Eagle Lake by Brian J. Bonislawsky DBA Astigmatic (AOETI).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/eaglelake
+    (EagleLake-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Kings-Regular.woff2
+  Kings by Robert Leuschke (The Kings Project Authors).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/kings
+    (Kings-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Texturina-Regular.woff2
+  Texturina by Guillermo Torres / The Texturina Project Authors (Omnibus-Type).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/texturina
+    (Texturina[opsz,wght].ttf)
+  Modifications: static instance cut at wght 400, opsz 72 from the variable font
+    with fontTools.varLib.instancer, then converted to WOFF2; not subset.
+
+orkui/template/revised-frontend/style/fonts/NewRocker-Regular.woff2
+  New Rocker by Impallari Type (Pablo Impallari, Brenda Gallo).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/newrocker
+    (NewRocker-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Amarante-Regular.woff2
+  Amarante by Karolina Lach / Sorkin Type Co.
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/amarante
+    (Amarante-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/CinzelDecorative-Regular.woff2
+  Cinzel Decorative by Natanael Gama.
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/cinzeldecorative
+    (CinzelDecorative-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/MarcellusSC-Regular.woff2
+  Marcellus SC by Brian J. Bonislawsky DBA Astigmatic (AOETI).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/marcellussc
+    (MarcellusSC-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/BerkshireSwash-Regular.woff2
+  Berkshire Swash by Brian J. Bonislawsky DBA Astigmatic (AOETI).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/berkshireswash
+    (BerkshireSwash-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Macondo-Regular.woff2
+  Macondo by John Vargas Beltrán.
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/macondo
+    (Macondo-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/EmilysCandy-Regular.woff2
+  Emilys Candy by Neapolitan (Font Diner).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/emilyscandy
+    (EmilysCandy-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/MysteryQuest-Regular.woff2
+  Mystery Quest by Sideshow (Font Diner).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/mysteryquest
+    (MysteryQuest-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Rye-Regular.woff2
+  Rye by Nicole Fally (Sorkin Type Co).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/rye
+    (Rye-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.
+
+orkui/template/revised-frontend/style/fonts/Creepster-Regular.woff2
+  Creepster by Sideshow (Font Diner).
+  License: SIL Open Font License 1.1.
+  Source: https://github.com/google/fonts/tree/main/ofl/creepster
+    (Creepster-Regular.ttf)
+  Modifications: converted from TTF to WOFF2 with fontTools; not subset.

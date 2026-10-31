@@ -30,6 +30,24 @@ class Court
     public const HIDDEN_CITATION_MESSAGE = 'This citation is the text of a Monarchy Only recommendation, which is never published. Edit or clear it to continue.';
 
     /**
+     * Scroll/regalia tracking values (never renumbered). 3 = Scrollery Print
+     * (scroll only: goes in the bulk print). Display order is set by
+     * trackingStatusDefinitions(), not by value.
+     */
+    public const SCROLL_PENDING     = 0;
+    public const SCROLL_ASSIGNED    = 1;
+    public const SCROLL_COMPLETE    = 2;
+    public const SCROLL_SCROLLERY   = 3;
+    public const SCROLL_IN_PROGRESS = 4;
+    public const SCROLL_NOT_NEEDED  = 5;
+    /** Regalia tracking: the same values, minus Scrollery Print (never 3). */
+    public const REGALIA_PENDING     = 0;
+    public const REGALIA_ASSIGNED    = 1;
+    public const REGALIA_COMPLETE    = 2;
+    public const REGALIA_IN_PROGRESS = 4;
+    public const REGALIA_NOT_NEEDED  = 5;
+
+    /**
      * Effective is_ladder, including kingdom-original ladders.
      *
      * Award::pseudoLadderKingdomAwardIds() is the curated list of kingdom
@@ -487,6 +505,33 @@ class Court
     private static function publishable_citation(string $publicComment, string $recReason, bool $recMonarchyOnly): string
     {
         return RecommendationVisibility::publishable_citation($publicComment, $recReason, $recMonarchyOnly);
+    }
+
+    /**
+     * The citation a court line PUBLISHES, the one rule shared by the commit path
+     * (commitStagedAward) and anything that has to show that citation ahead of
+     * commit — Scrollery's court print run, whose scrolls are printed before court.
+     *
+     * Precedence (spec 6.1): the officer's public comment; else the originating
+     * rec's reason, but only when the officer did not explicitly clear the
+     * citation and the rec is not Monarchy Only; else nothing. The result then
+     * passes the publishing gate (publishable_citation()), so a Monarchy Only
+     * reason saved verbatim as the typed comment is withheld too.
+     *
+     * Public static and DB-free on purpose: it is a pure decision over four facts
+     * the caller has already read. Not JSON-reachable — Court is not whitelisted.
+     */
+    public static function effectiveCitation(
+        string $publicComment,
+        bool $publicCommentCleared,
+        string $recReason,
+        bool $recMonarchyOnly
+    ): string {
+        $note = $publicComment !== ''
+            ? $publicComment
+            : ((!$publicCommentCleared && !$recMonarchyOnly) ? $recReason : '');
+
+        return self::publishable_citation($note, $recReason, $recMonarchyOnly);
     }
 
     /**
@@ -1074,6 +1119,65 @@ class Court
         );
 
         return $rs && $rs->Size() == 1;
+    }
+
+    /**
+     * ['ScrollMakerId' => int, 'RegaliaMakerId' => int] for a court_award (0 = no
+     * maker), or null if it does not exist. Read before a maker write so the maker
+     * rule (applyMakerTrackingRule) can tell an assign or a clear from a no-op.
+     */
+    public function getCourtAwardMakers($courtAwardId): ?array
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet('SELECT scroll_maker_id, regalia_maker_id FROM ' . DB_PREFIX . 'court_award
+                            WHERE court_award_id = ' . (int)$courtAwardId . ' LIMIT 1');
+        if (!$r || !$r->Next()) {
+            return null;
+        }
+        return ['ScrollMakerId' => (int)$r->scroll_maker_id, 'RegaliaMakerId' => (int)$r->regalia_maker_id];
+    }
+
+    /**
+     * The maker rule: assigning a maker to a Pending item makes it Assigned;
+     * clearing the maker from an Assigned item makes it Pending. Every other
+     * status is left alone, and a maker swapped for another does nothing.
+     * updateAward() stays fields-only (QW4): this is its own guarded UPDATE, which
+     * moves the status only if it is still the rule's source status and the maker
+     * is still in the state the rule judged. Returns the line's ScrollStatus,
+     * RegaliaStatus and RowVersion after a move, or null when nothing moved.
+     */
+    public function applyMakerTrackingRule(int $courtAwardId, string $type, bool $hadMaker, bool $hasMaker): ?array
+    {
+        if (!valid_id($courtAwardId) || $hadMaker === $hasMaker || !in_array($type, ['scroll', 'regalia'], true)) {
+            return null;
+        }
+        $pending  = $type === 'scroll' ? self::SCROLL_PENDING : self::REGALIA_PENDING;
+        $assigned = $type === 'scroll' ? self::SCROLL_ASSIGNED : self::REGALIA_ASSIGNED;
+        [$from, $to] = $hasMaker ? [$pending, $assigned] : [$assigned, $pending];
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_award
+                SET ' . $type . '_status = ' . $to . ', row_version = row_version + 1
+              WHERE court_award_id = ' . $courtAwardId . '
+                AND ' . $type . '_status = ' . $from . '
+                AND ' . $type . '_maker_id ' . ($hasMaker ? 'IS NOT NULL' : 'IS NULL')
+        );
+        if (!$rs || $rs->Size() != 1) {
+            return null;
+        }
+
+        $this->db->Clear();
+        $r = $this->db->DataSet('SELECT scroll_status, regalia_status, row_version FROM ' . DB_PREFIX . 'court_award
+                            WHERE court_award_id = ' . $courtAwardId . ' LIMIT 1');
+        if (!$r || !$r->Next()) {
+            return null;
+        }
+        return [
+            'ScrollStatus'  => (int)$r->scroll_status,
+            'RegaliaStatus' => (int)$r->regalia_status,
+            'RowVersion'    => (int)$r->row_version,
+        ];
     }
 
     /**
@@ -1863,18 +1967,27 @@ class Court
         // A Monarchy Only rec's reason is never inherited, whatever the line's flag
         // says: the rec may have been hidden after its line was staged (the flag was
         // set only at add time), and RecMonarchyOnly is re-read at commit.
-        $note     = $row['PublicComment'] !== ''
-            ? $row['PublicComment']
-            : ((empty($row['PublicCommentCleared']) && empty($row['RecMonarchyOnly'])) ? $row['RecReason'] : '');
+        //
         // ...and never as a TYPED citation either. A line staged (or saved) while
         // its rec was public can carry the reason verbatim in public_comment — Grant
         // modal pre-fill, Record view "Given", "(Start from Rec)" + Save, then Bulk
         // Record Grants — and the rec can be hidden before finalize. The commit
         // re-reads both, publishes nothing in that case, and setAwardId blanks the
         // stored citation so the public Court Report agrees.
-        $published = self::publishable_citation($note, (string)($row['RecReason'] ?? ''), !empty($row['RecMonarchyOnly']));
-        $withheld  = $published !== $note;
-        $note      = $published;
+        //
+        // Both rules live in effectiveCitation(), which Scrollery's court print run
+        // also uses, so a scroll printed before court carries the citation this
+        // commit will publish.
+        $note = self::effectiveCitation(
+            (string)$row['PublicComment'],
+            !empty($row['PublicCommentCleared']),
+            (string)($row['RecReason'] ?? ''),
+            !empty($row['RecMonarchyOnly'])
+        );
+        // Withheld = the gate blanked a typed citation. Only a non-empty typed
+        // comment can be gated: an inherited reason is inherited only when the rec
+        // is NOT Monarchy Only, and the gate fires only when it is.
+        $withheld = (string)$row['PublicComment'] !== '' && $note !== (string)$row['PublicComment'];
 
         // (3) Throw-safe player-record write. add_player_award returns the FLAT
         // shape: Status (int, 0=success), Error, Detail (+ our new AwardId).
@@ -2486,7 +2599,8 @@ class Court
      * Cheap heartbeat state for the live multi-manager poll (spec 6.4).
      * court_award has no updated_at column, so `version` is an md5 of the row set
      * (court_award_id:status:sort_order:given_by:modified) plus court mode/status,
-     * which changes on any edit, reorder, giver change, add, or remove.
+     * which changes on any edit, reorder, giver change, add, or remove. Notes and the
+     * court's artisan rows are folded in too, so their adds and removes flip it as well.
      */
     public function getCourtState($court_id)
     {
@@ -2545,6 +2659,21 @@ class Court
             while ($ns->Next()) {
                 $stampParts[] = 'n' . (int)$ns->court_note_id . ':' . (int)$ns->sort_order . ':' . (int)$ns->row_version;
             }
+        }
+        // Artisans: addArtisan/removeArtisan touch only court_award_artisan (they must
+        // not bump the line's row_version, or the officer's own next guarded write would
+        // read as stale), so fold that table in as one aggregate. Ids only ever grow, so
+        // COUNT + SUM + MAX moves on an add, a remove, and a remove-then-add.
+        $this->db->Clear();
+        $as = $this->db->DataSet(
+            'SELECT COUNT(*) AS n, COALESCE(SUM(caa.court_award_artisan_id), 0) AS s,
+                    COALESCE(MAX(caa.court_award_artisan_id), 0) AS m
+             FROM ' . DB_PREFIX . 'court_award_artisan caa
+             JOIN ' . DB_PREFIX . 'court_award ca ON ca.court_award_id = caa.court_award_id
+             WHERE ca.court_id = ' . $court_id
+        );
+        if ($as && $as->Next()) {
+            $stampParts[] = 'a' . (int)$as->n . ':' . (int)$as->s . ':' . (int)$as->m;
         }
         $version = md5($court_status . '|' . $mode . '|' . implode(',', $stampParts));
 
@@ -3017,31 +3146,120 @@ class Court
         return $events;
     }
 
-    public function updateAwardTrackingStatus($courtAwardId, $type)
+    /**
+     * The single definition of the tracking statuses, in display order:
+     * ['scroll' => [['value','label','hint','group'], ...], 'regalia' => [...]].
+     * Everything that lists, validates or groups a status derives from this.
+     */
+    public static function trackingStatusDefinitions(): array
     {
-        if (!in_array($type, ['scroll', 'regalia'])) {
-            return ['status' => 1, 'error' => 'Invalid type'];
+        $pending    = ['value' => self::SCROLL_PENDING, 'label' => 'Pending', 'hint' => 'Needed — nobody has it yet', 'group' => 'pending'];
+        $print      = ['value' => self::SCROLL_SCROLLERY, 'label' => 'Scrollery Print', 'hint' => 'Goes in the bulk print', 'group' => 'print'];
+        $assigned   = ['value' => self::SCROLL_ASSIGNED, 'label' => 'Assigned', 'hint' => 'An artisan has agreed to make it', 'group' => 'assigned'];
+        $inProgress = ['value' => self::SCROLL_IN_PROGRESS, 'label' => 'In Progress', 'hint' => 'Being made', 'group' => 'inprogress'];
+        $complete   = ['value' => self::SCROLL_COMPLETE, 'label' => 'Complete', 'hint' => '', 'group' => 'done'];
+        $notNeeded  = ['value' => self::SCROLL_NOT_NEEDED, 'label' => 'Not Needed', 'hint' => "This line doesn't get one", 'group' => 'notneeded'];
+        return [
+            'scroll'  => [$pending, $print, $assigned, $inProgress, $complete, $notNeeded],
+            'regalia' => [$pending, $assigned, $inProgress, $complete, $notNeeded],
+        ];
+    }
+
+    /** Status values a tracking type accepts; [] for an unknown type. */
+    public function allowedTrackingStatuses($type)
+    {
+        $defs = self::trackingStatusDefinitions();
+        if (!is_string($type) || !isset($defs[$type])) {
+            return [];
         }
+        return array_column($defs[$type], 'value');
+    }
 
-        $field = $type . '_status';
+    /**
+     * Explicit, optimistic-locked write of a line's scroll_status/regalia_status.
+     * Scrollery Print (scroll 3) is printed by the system, so any assigned
+     * scroll maker is cleared with it.
+     */
+    public function setAwardTrackingStatus($courtAwardId, $type, $status, $rowVersion)
+    {
+        $status = (int)$status;
+        if (!in_array($status, $this->allowedTrackingStatuses($type), true)) {
+            return ['status' => 1, 'error' => 'Invalid type or status'];
+        }
+        $id = (int)$courtAwardId;
 
+        $sets = $type . '_status = ' . $status . ', row_version = row_version + 1';
+        if ($type === 'scroll' && $status === self::SCROLL_SCROLLERY) {
+            $sets .= ', scroll_maker_id = NULL';
+        }
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT ' . $field . ' FROM ' . DB_PREFIX . 'court_award WHERE court_award_id = ' . (int)$courtAwardId
+            'UPDATE ' . DB_PREFIX . 'court_award SET ' . $sets
+            . ' WHERE court_award_id = ' . $id . ' AND row_version = ' . (int)$rowVersion
         );
-        if (!$rs || !$rs->Next()) {
-            return ['status' => 1, 'error' => 'Award not found'];
+        if ($rs && $rs->Size() == 1) {
+            return ['status' => 0, 'newStatus' => $status, 'RowVersion' => (int)$rowVersion + 1];
         }
 
-        $currentStatus = (int)$rs->{$field};
-        $nextStatus = ($currentStatus + 1) % 3;
-
+        // 0 rows: either the line is gone or someone else moved its row_version.
         $this->db->Clear();
-        $this->db->Execute(
-            'UPDATE ' . DB_PREFIX . 'court_award SET ' . $field . ' = ' . $nextStatus . ' WHERE court_award_id = ' . (int)$courtAwardId
-        );
+        $chk = $this->db->DataSet('SELECT court_award_id FROM ' . DB_PREFIX . 'court_award WHERE court_award_id = ' . $id);
+        if (!$chk || !$chk->Next()) {
+            return ['status' => 1, 'error' => 'Award not found'];
+        }
+        return ['status' => 9, 'stale' => true];
+    }
 
-        return ['status' => 0, 'newStatus' => $nextStatus];
+    /**
+     * Flip printed Scrollery lines (scroll_status 3) to Complete. Each line is
+     * its own guarded UPDATE (this court, still 3, row_version as the client
+     * saw it), so a chip a peer changed mid-print is left alone and reported
+     * in Stale.
+     *
+     * The posted list is a request: elements that are not arrays are ignored, a
+     * repeated id keeps its first entry (so a line is completed, and its
+     * row_version bumped, at most once), and the list is capped at
+     * Scroll::MAX_PRINT_RUN, the most one print run can hold. Ids past the cap
+     * are neither completed nor reported as stale.
+     *
+     * @param array $lines [['CourtAwardId' => int, 'RowVersion' => int], ...]
+     */
+    public function completePrintedScrolls($courtId, array $lines)
+    {
+        $run = [];
+        foreach ($lines as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+            $id = (int)($line['CourtAwardId'] ?? 0);
+            if (isset($run[$id])) {
+                continue;
+            }
+            if (count($run) >= Scroll::MAX_PRINT_RUN) {
+                break;
+            }
+            $run[$id] = (int)($line['RowVersion'] ?? 0);
+        }
+
+        $completed = [];
+        $stale     = [];
+        foreach ($run as $id => $rowVersion) {
+            $this->db->Clear();
+            $rs = $this->db->DataSet(
+                'UPDATE ' . DB_PREFIX . 'court_award
+                    SET scroll_status = ' . self::SCROLL_COMPLETE . ', row_version = row_version + 1
+                  WHERE court_award_id = ' . $id . '
+                    AND court_id = ' . (int)$courtId . '
+                    AND scroll_status = ' . self::SCROLL_SCROLLERY . '
+                    AND row_version = ' . $rowVersion
+            );
+            if ($rs && $rs->Size() == 1) {
+                $completed[] = $id;
+            } else {
+                $stale[] = $id;
+            }
+        }
+        return ['status' => 0, 'Completed' => $completed, 'Stale' => $stale];
     }
     // -----------------------------------------------------------------------
     // Court Report (public, read-only) — see docs/superpowers/specs/2026-05-28-court-report-design.md

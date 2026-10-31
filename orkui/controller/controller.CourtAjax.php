@@ -310,6 +310,11 @@ class Controller_CourtAjax extends Controller
             ]);
         }
 
+        // The planner builds the new row from this payload, so it carries the same
+        // ScrolleryPrintable flag as the page render and the heartbeat.
+        $this->load_model('Scrollery');
+        $award = $this->Scrollery->flag_printable_court_lines([$award], (int)$court['KingdomId'])[0];
+
         $this->jsonOut(['status' => 0, 'award' => $award]);
     }
 
@@ -525,6 +530,11 @@ class Controller_CourtAjax extends Controller
         $expectedRowVersion = (isset($_POST['RowVersion']) && $_POST['RowVersion'] !== '')
             ? (int)$_POST['RowVersion'] : null;
 
+        // The makers before this write, so the maker rule can tell an assign or a
+        // clear from a no-op (read only when a maker is posted).
+        $makersBefore = (array_key_exists('ScrollMakerId', $fields) || array_key_exists('RegaliaMakerId', $fields))
+            ? $this->Court->get_court_award_makers($court_award_id) : null;
+
         $ok = $this->Court->update_award($court_award_id, $fields, $expectedRowVersion);
         if (!$ok && $expectedRowVersion !== null) {
             // status 9 = optimistic-lock conflict: the client's row_version was stale.
@@ -537,7 +547,29 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'This award could not be updated — it may have changed. Reload.']);
         }
 
-        $this->jsonOut(array_merge(['status' => 0], $fields));
+        // Maker rule (domain, its own guarded write): a maker assigned to a Pending
+        // item makes it Assigned; a maker cleared from an Assigned item makes it
+        // Pending. When it moves a status, the answer carries both statuses and the
+        // line's new RowVersion.
+        $tracking = null;
+        if ($makersBefore !== null) {
+            foreach (['scroll' => 'ScrollMakerId', 'regalia' => 'RegaliaMakerId'] as $type => $key) {
+                if (!array_key_exists($key, $fields)) {
+                    continue;
+                }
+                $moved = $this->Court->apply_maker_tracking_rule(
+                    $court_award_id,
+                    $type,
+                    $makersBefore[$key] > 0,
+                    $fields[$key] > 0
+                );
+                if ($moved !== null) {
+                    $tracking = $moved;
+                }
+            }
+        }
+
+        $this->jsonOut(array_merge(['status' => 0], $fields, $tracking ?? []));
     }
 
     // -----------------------------------------------------------------------
@@ -1073,7 +1105,11 @@ class Controller_CourtAjax extends Controller
         // client has confirmed it is already holding this exact version; a client
         // that sends no SinceVersion still gets the complete payload every poll.
         if (!$unchanged) {
-            $state['awards_full'] = $this->Court->get_court_awards($court_id, $uid);
+            $this->load_model('Scrollery');
+            $state['awards_full'] = $this->Scrollery->flag_printable_court_lines(
+                $this->Court->get_court_awards($court_id, $uid),
+                (int)$court['KingdomId']
+            );
             $state['notes_full']  = $this->Court->get_court_notes($court_id);
         }
         $state['unchanged'] = $unchanged;
@@ -1180,10 +1216,10 @@ class Controller_CourtAjax extends Controller
     }
 
     // -----------------------------------------------------------------------
-    // update_award_tracking_status
-    // POST: CourtAwardId, Type
+    // set_award_tracking_status
+    // POST: CourtAwardId, Type, Status, RowVersion
     // -----------------------------------------------------------------------
-    public function update_award_tracking_status($p = null)
+    public function set_award_tracking_status($p = null)
     {
         $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
         if (!valid_id($court_award_id)) {
@@ -1197,10 +1233,86 @@ class Controller_CourtAjax extends Controller
 
         $this->requireCourtAuth($court_id);
 
-        $type = $_POST['Type'] ?? '';
-
-        $result = $this->Court->update_award_tracking_status($court_award_id, $type);
+        $result = $this->Court->set_award_tracking_status(
+            $court_award_id,
+            (string)($_POST['Type'] ?? ''),
+            (int)($_POST['Status'] ?? -1),
+            (int)($_POST['RowVersion'] ?? 0)
+        );
         $this->jsonOut($result);
+    }
+
+    // -----------------------------------------------------------------------
+    // complete_printed_scrolls
+    // POST: CourtId, Lines (JSON: [{CourtAwardId, RowVersion}, ...])
+    // -----------------------------------------------------------------------
+    public function complete_printed_scrolls($p = null)
+    {
+        $court_id = (int)($_POST['CourtId'] ?? 0);
+        if (!valid_id($court_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid court.']);
+        }
+
+        $this->requireCourtAuth($court_id);
+
+        $lines = json_decode((string)($_POST['Lines'] ?? ''), true);
+        if (!is_array($lines)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid lines.']);
+        }
+
+        $this->jsonOut($this->Court->complete_printed_scrolls($court_id, $lines));
+    }
+
+    // -----------------------------------------------------------------------
+    // scrollery_print_plan
+    // POST: CourtId
+    //
+    // The planner's preflight for "Print Scrollery scrolls": which Scrollery Print
+    // lines will print, which will not and why, and how many fall past the run
+    // cap. Resolved by the SAME call the print route makes
+    // (Model_Scrollery::scrolls_for_court_awards), so the two can never disagree
+    // about what is printable. Read-only: nothing is written, and no print is
+    // logged — the route logs when it actually renders.
+    //
+    // RowVersion travels with each printable line so complete_printed_scrolls can
+    // refuse a line a peer changed while the print tab was open.
+    // -----------------------------------------------------------------------
+    public function scrollery_print_plan($p = null)
+    {
+        $court_id = (int)($_POST['CourtId'] ?? 0);
+        if (!valid_id($court_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid court.']);
+        }
+
+        [$uid] = $this->requireCourtAuth($court_id);
+
+        $this->load_model('Scrollery');
+        $run = $this->Scrollery->scrolls_for_court_awards($court_id, [], $uid);
+
+        $printable = [];
+        foreach (array_keys($run['Scrolls']) as $caId) {
+            $printable[] = [
+                'CourtAwardId' => (int)$caId,
+                'RowVersion'   => (int)($run['Lines'][$caId]['RowVersion'] ?? 0),
+            ];
+        }
+
+        $skipped = [];
+        foreach ($run['Skipped'] as $caId => $reason) {
+            $skipped[] = [
+                'CourtAwardId' => (int)$caId,
+                'Persona'      => (string)($run['Lines'][$caId]['Persona'] ?? ''),
+                'AwardName'    => (string)($run['Lines'][$caId]['AwardName'] ?? ''),
+                'Reason'       => $reason,
+            ];
+        }
+
+        $this->jsonOut([
+            'status'    => 0,
+            'Printable' => $printable,
+            'Skipped'   => $skipped,
+            'Dropped'   => (int)$run['Dropped'],
+        ]);
     }
 
 }

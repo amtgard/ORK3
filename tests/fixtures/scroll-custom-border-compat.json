@@ -1,0 +1,308 @@
+{
+  "note": "Shared by tests/Unit/ScrollCustomBorderParityTest.php (Scroll::CustomBorderRule) and tools/scroll-sweep/tests/customborder.spec.ts (scrollery-customborder.js). `orders` mirrors the option data-min/max/variants the page reads; it is checked against Scroll::Orders().",
+  "groundsWithOwnBorder": [
+    "linen",
+    "jovious",
+    "flame",
+    "sunburst",
+    "map"
+  ],
+  "orders": {
+    "crown": {
+      "from": 0,
+      "to": 10,
+      "variants": []
+    },
+    "owl": {
+      "from": 0,
+      "to": 10,
+      "variants": [
+        "parchment",
+        "cyanotype",
+        "transparency"
+      ]
+    },
+    "warrior": {
+      "from": 1,
+      "to": 10,
+      "variants": []
+    },
+    "jovious": {
+      "from": 0,
+      "to": 10,
+      "variants": []
+    },
+    "flame": {
+      "from": 0,
+      "to": 10,
+      "variants": []
+    },
+    "custom": {
+      "from": 0,
+      "to": 10,
+      "variants": []
+    }
+  },
+  "cases": [
+    {
+      "name": "crown rank 5",
+      "order": "crown",
+      "rank": 5,
+      "variant": "",
+      "recipe": {},
+      "compatible": true
+    },
+    {
+      "name": "flame is absent from the data",
+      "order": "flame",
+      "rank": 5,
+      "variant": "",
+      "recipe": {},
+      "compatible": false
+    },
+    {
+      "name": "owl parchment",
+      "order": "owl",
+      "rank": 3,
+      "variant": "parchment",
+      "recipe": {},
+      "compatible": true
+    },
+    {
+      "name": "owl cyanotype",
+      "order": "owl",
+      "rank": 3,
+      "variant": "cyanotype",
+      "recipe": {},
+      "compatible": true
+    },
+    {
+      "name": "warrior rank 1 is mapped false",
+      "order": "warrior",
+      "rank": 1,
+      "variant": "",
+      "recipe": {},
+      "compatible": false
+    },
+    {
+      "name": "warrior rank 9 is mapped false",
+      "order": "warrior",
+      "rank": 9,
+      "variant": "",
+      "recipe": {},
+      "compatible": false
+    },
+    {
+      "name": "warrior rank 10 swaps the ground",
+      "order": "warrior",
+      "rank": 10,
+      "variant": "",
+      "recipe": {},
+      "compatible": true
+    },
+    {
+      "name": "jovious",
+      "order": "jovious",
+      "rank": 4,
+      "variant": "",
+      "recipe": {},
+      "compatible": true
+    },
+    {
+      "name": "custom parchment default set",
+      "order": "custom",
+      "rank": 5,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "common"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom jovious ground has a frameless twin",
+      "order": "custom",
+      "rank": 5,
+      "variant": "",
+      "recipe": {
+        "ground": "jovious"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom linen has no frameless twin",
+      "order": "custom",
+      "rank": 5,
+      "variant": "",
+      "recipe": {
+        "ground": "linen"
+      },
+      "compatible": false
+    },
+    {
+      "name": "custom garber rank 0",
+      "order": "custom",
+      "rank": 0,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom garber rank 1",
+      "order": "custom",
+      "rank": 1,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom garber rank 2",
+      "order": "custom",
+      "rank": 2,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom garber rank 3",
+      "order": "custom",
+      "rank": 3,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom garber rank 4",
+      "order": "custom",
+      "rank": 4,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom garber rank 5",
+      "order": "custom",
+      "rank": 5,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom garber rank 6",
+      "order": "custom",
+      "rank": 6,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom garber rank 7",
+      "order": "custom",
+      "rank": 7,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": false
+    },
+    {
+      "name": "custom garber rank 8",
+      "order": "custom",
+      "rank": 8,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": false
+    },
+    {
+      "name": "custom garber rank 9",
+      "order": "custom",
+      "rank": 9,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": false
+    },
+    {
+      "name": "custom garber rank 10",
+      "order": "custom",
+      "rank": 10,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "garber"
+      },
+      "compatible": false
+    },
+    {
+      "name": "custom flame numerals at rank 10 are fine",
+      "order": "custom",
+      "rank": 10,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "flame"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom zodiac numerals at rank 10 are fine",
+      "order": "custom",
+      "rank": 10,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "zodiac"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom common numerals at rank 10 are fine",
+      "order": "custom",
+      "rank": 10,
+      "variant": "",
+      "recipe": {
+        "ground": "parchment",
+        "rankSet": "common"
+      },
+      "compatible": true
+    },
+    {
+      "name": "custom garber on a linen ground stays incompatible",
+      "order": "custom",
+      "rank": 3,
+      "variant": "",
+      "recipe": {
+        "ground": "linen",
+        "rankSet": "garber"
+      },
+      "compatible": false
+    }
+  ]
+}
