@@ -1423,9 +1423,12 @@
 			</style>
 			<div class="pk-cp-toolbar">
 				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
-				<button class="pk-btn pk-btn-primary" onclick="pkCpOpenNewCourt()">
-					<i class="fas fa-plus"></i> Plan a Court
-				</button>
+				<span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+					<a class="pk-cp-btn-link" href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>&SmartCourt=1"><i class="fas fa-th"></i> Plan Court from Smart Grid</a>
+					<button class="pk-btn pk-btn-primary" onclick="pkCpOpenNewCourt()">
+						<i class="fas fa-plus"></i> Plan a Court
+					</button>
+				</span>
 			</div>
 			<?php
 				$_cpStatusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];

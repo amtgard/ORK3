@@ -8476,16 +8476,20 @@ class Report extends Ork3
         }
 
         $scopeName = '';
+        $resolvedKingdomId = $kingdomId;
         if ($parkId > 0) {
             $this->db->Clear();
             $nr = $this->db->DataSet(
-                'SELECT p.name AS park_name, k.name AS kingdom_name
+                'SELECT p.name AS park_name, p.kingdom_id AS park_kingdom_id, k.name AS kingdom_name
                  FROM ' . DB_PREFIX . 'park p
                  LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = p.kingdom_id
                  WHERE p.park_id = ' . $parkId . ' LIMIT 1'
             );
             if ($nr && $nr->Next()) {
                 $scopeName = $nr->kingdom_name . ' — ' . $nr->park_name;
+                if ($resolvedKingdomId <= 0) {
+                    $resolvedKingdomId = (int) $nr->park_kingdom_id;
+                }
             }
         } elseif ($kingdomId > 0) {
             $this->db->Clear();
@@ -8629,6 +8633,7 @@ class Report extends Ork3
                 'Name' => $group['Name'],
                 'DisplayName' => $group['DisplayName'],
                 'KnightGroup' => $knightGroupMap[$group['Name']] ?? '',
+                'KingdomAwardIds' => array_values(array_map('intval', $group['KaIds'])),
             ];
             $pseudoKaIds = array_merge($pseudoKaIds, $group['KaIds']);
             $pseudoKeyCases[] = 'WHEN ka.kingdomaward_id IN (' . implode(',', $group['KaIds'])
@@ -8636,7 +8641,7 @@ class Report extends Ork3
         }
 
         if ($awardCols === []) {
-            return ['ScopeName' => $scopeName, 'LadderAwards' => [], 'GridRows' => []];
+            return ['ScopeName' => $scopeName, 'KingdomId' => $resolvedKingdomId, 'LadderAwards' => [], 'GridRows' => []];
         }
 
         $realIdList = $realAwardIds !== [] ? implode(',', $realAwardIds) : '0';
@@ -8651,11 +8656,12 @@ class Report extends Ork3
         // Cache key must cover both sets or a kingdom gaining a pseudo-ladder
         // would keep serving the old grid.
         $awardIds = $realIdList . '|k' . $pseudoIdList;
-        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
+        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds, 'v' => 3]);
         $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
         if ($cachedGrid !== false) {
             return [
                 'ScopeName' => $scopeName,
+                'KingdomId' => $resolvedKingdomId,
                 'LadderAwards' => $awardCols,
                 'GridRows' => $cachedGrid,
             ];
@@ -8675,7 +8681,8 @@ class Report extends Ork3
         // column 94 -- which is not even a column here, so they would vanish again.
         $dataSql = "SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name,
                            {$pseudoCaseSql} AS col_key,
-                           MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count
+                           MAX(ma.rank) AS max_rank, COUNT(ma.awards_id) AS grant_count,
+                           MAX(IF(ma.date >= '1980-01-01' AND ma.date <= CURDATE(), ma.date, NULL)) AS last_date
                     FROM " . DB_PREFIX . 'mundane m
                     LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
                     JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
@@ -8727,12 +8734,17 @@ class Report extends Ork3
                 $val = (is_string($aid) && $aid !== '' && $aid[0] === 'k')
                     ? ($_max > 0 ? $_max : $_count)
                     : max($_max, $_count);
-                $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
+                $_lastDate = $dataResult->last_date;
+                $playerData[$mid]['Awards'][$aid] = [
+                    'Rank' => $val > 0 ? $val : null,
+                    'IsMaster' => false,
+                    'Date' => ($_lastDate !== null && $_lastDate !== '') ? substr((string) $_lastDate, 0, 10) : null,
+                ];
             }
         }
 
         if ($playerData === []) {
-            return ['ScopeName' => $scopeName, 'LadderAwards' => $awardCols, 'GridRows' => []];
+            return ['ScopeName' => $scopeName, 'KingdomId' => $resolvedKingdomId, 'LadderAwards' => $awardCols, 'GridRows' => []];
         }
 
         $mundaneIds = implode(',', array_keys($playerData));
@@ -8788,9 +8800,13 @@ class Report extends Ork3
                 }
             }
         }
+        $recency = $this->ladderGridRecency(array_keys($playerData));
         foreach ($playerData as $mid => &$pRow) {
             $pRow['RecentSignIn'] = isset($recentIds[$mid]);
             $pRow['KnightGroups'] = [];
+            $pRow['LastAwardDate'] = $recency[$mid]['LastAwardDate'] ?? null;
+            $pRow['LastAwardLabel'] = $recency[$mid]['LastAwardLabel'] ?? '';
+            $pRow['LastSignIn'] = $recency[$mid]['LastSignIn'] ?? null;
         }
         unset($pRow);
 
@@ -8825,9 +8841,136 @@ class Report extends Ork3
 
         return [
             'ScopeName' => $scopeName,
+            'KingdomId' => $resolvedKingdomId,
             'LadderAwards' => $awardCols,
             'GridRows' => $gridRows,
         ];
+    }
+
+    /**
+     * Last award (any non-revoked, real-dated, non-future) and last sign-in per player.
+     *
+     * @param list<int> $mundaneIds
+     * @return array<int, array{LastAwardDate: ?string, LastAwardLabel: string, LastSignIn: ?string}>
+     */
+    private function ladderGridRecency(array $mundaneIds): array
+    {
+        $mundaneIds = array_values(array_filter(array_map('intval', $mundaneIds)));
+        if ($mundaneIds === []) {
+            return [];
+        }
+        $in = implode(',', $mundaneIds);
+        $out = [];
+        foreach ($mundaneIds as $mid) {
+            $out[$mid] = ['LastAwardDate' => null, 'LastAwardLabel' => '', 'LastSignIn' => null];
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT t.mundane_id, t.date, t.rank, t.label FROM (
+                SELECT ma.mundane_id, ma.date, ma.rank,
+                       COALESCE(NULLIF(ma.custom_name, \'\'), alias.name, NULLIF(ka.name, \'\'), a.name) AS label,
+                       ROW_NUMBER() OVER (PARTITION BY ma.mundane_id ORDER BY ma.date DESC, ma.awards_id DESC) AS rn
+                FROM ' . DB_PREFIX . 'awards ma
+                JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+                LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+                LEFT JOIN ' . DB_PREFIX . 'award alias ON alias.award_id = ma.alias_award_id
+                WHERE ma.mundane_id IN (' . $in . ")
+                  AND (ma.revoked = 0 OR ma.revoked IS NULL)
+                  AND ma.date >= '1980-01-01' AND ma.date <= CURDATE()
+             ) t WHERE t.rn = 1"
+        );
+        if ($rs) {
+            while ($rs->Next()) {
+                $mid = (int) $rs->mundane_id;
+                if (!isset($out[$mid])) {
+                    continue;
+                }
+                $label = trim((string) preg_replace('/^Order of (?:the )?/i', '', (string) $rs->label));
+                $rank = (int) $rs->rank;
+                if ($rank > 0) {
+                    $label .= ' ' . $rank;
+                }
+                $out[$mid]['LastAwardDate'] = (string) $rs->date;
+                $out[$mid]['LastAwardLabel'] = $label;
+            }
+        }
+
+        $this->db->Clear();
+        $ss = $this->db->DataSet(
+            'SELECT mundane_id, MAX(date) AS last_date FROM ' . DB_PREFIX . 'attendance
+             WHERE mundane_id IN (' . $in . ") AND date >= '1980-01-01'
+             GROUP BY mundane_id"
+        );
+        if ($ss) {
+            while ($ss->Next()) {
+                $mid = (int) $ss->mundane_id;
+                if (isset($out[$mid])) {
+                    $out[$mid]['LastSignIn'] = (string) $ss->last_date;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Players on the Smart Planning Grid's "New Players" list: active, in scope,
+     * not on the main grid, and signed in on 2+ distinct dates in the last 90 days.
+     *
+     * @return array{Status: array<string, mixed>, Players: list<array<string, mixed>>}
+     */
+    public function GetLadderGridNewPlayers($request)
+    {
+        $grid = $this->GetLadderAwardGrid($request);
+        $st = $grid['Status'] ?? null;
+        if (is_array($st) && ($st['Status'] ?? 0) !== 0) {
+            return ['Status' => $st, 'Players' => []];
+        }
+        $kingdomId = valid_id($request['KingdomId'] ?? 0) ? (int) $request['KingdomId'] : 0;
+        $parkId = valid_id($request['ParkId'] ?? 0) ? (int) $request['ParkId'] : 0;
+
+        $onGrid = [];
+        foreach ($grid['GridRows'] ?? [] as $row) {
+            $onGrid[(int) $row['MundaneId']] = true;
+        }
+
+        $locationClause = $parkId > 0 ? 'AND m.park_id = ' . $parkId : 'AND m.kingdom_id = ' . $kingdomId;
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT m.mundane_id, m.persona, m.suspended, p.park_id, p.name AS park_name
+             FROM ' . DB_PREFIX . 'mundane m
+             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+             JOIN ' . DB_PREFIX . "attendance a ON a.mundane_id = m.mundane_id
+                  AND a.date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY) AND a.date <= CURDATE()
+             WHERE m.active = 1 {$locationClause}
+             GROUP BY m.mundane_id, m.persona, m.suspended, p.park_id, p.name
+             HAVING COUNT(DISTINCT a.date) >= 2
+             ORDER BY m.persona"
+        );
+        $players = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $mid = (int) $rs->mundane_id;
+                if (!$mid || isset($onGrid[$mid])) {
+                    continue;
+                }
+                $players[$mid] = [
+                    'MundaneId' => $mid,
+                    'Persona' => (string) $rs->persona,
+                    'ParkId' => (int) $rs->park_id,
+                    'ParkName' => (string) ($rs->park_name ?? ''),
+                    'Suspended' => (int) $rs->suspended,
+                ];
+            }
+        }
+        $recency = $this->ladderGridRecency(array_keys($players));
+        foreach ($players as $mid => &$pl) {
+            $pl += $recency[$mid];
+        }
+        unset($pl);
+
+        return ['Status' => Success(), 'Players' => array_values($players)];
     }
 
     /**

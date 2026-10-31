@@ -27,6 +27,8 @@ class Controller_Reports extends Controller
             // The PAGE (award_explorer) is NOT listed, so it redirects to Login like
             // every other gated report -- which is the whole point of gating it.
             'award_explorer_json',
+            // Same fetch() reason: answers status:5 itself when logged out.
+            'ladder_new_players',
         ];
         if (!isset($this->session->user_id) && !in_array($this->method, $public_reports)) {
             header('Location: ' . UIR . 'Login');
@@ -1662,6 +1664,9 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_laddergrid.tpl';
         $this->data['report_type'] = $type;
         $this->data['report_id']   = $id;
+        // As the URL gave them: New Players must ask with the grid's own request shape.
+        $this->data['grid_kingdom_id'] = $kingdom_id;
+        $this->data['grid_park_id']    = $park_id;
 
         $assembly = $this->Reports->ladder_award_grid($type, $kingdom_id, $park_id);
         $scopeName = $assembly['ScopeName'] ?? '';
@@ -1676,6 +1681,74 @@ class Controller_Reports extends Controller
 
         $this->data['LadderAwards'] = $assembly['LadderAwards'] ?? [];
         $this->data['GridRows'] = $assembly['GridRows'] ?? [];
+        $this->data['SmartCourt'] = $this->smart_court_config($_uid, $park_id, $assembly);
+    }
+
+    /**
+     * Smart Court config for the page's scope, or null for a viewer without court
+     * authority there. Nothing here holds recommendations: those load through
+     * CourtAjax/smart_grid_state. A park's kingdom comes from the park, because the
+     * URL may carry any KingdomId beside a ParkId.
+     */
+    private function smart_court_config(int $uid, int $park_id, array $assembly): ?array
+    {
+        $kingdom_id = (int)($assembly['KingdomId'] ?? 0);
+        if ($uid <= 0 || $kingdom_id <= 0) {
+            return null;
+        }
+        $this->load_model('Court');
+        if ($park_id > 0) {
+            $kingdom_id = (int)$this->Court->get_park_kingdom_id($park_id);
+        }
+        if (!$this->Court->can_manage($uid, $kingdom_id, $park_id)) {
+            return null;
+        }
+
+        $courts = [];
+        foreach ($this->Court->get_court_list($kingdom_id, $park_id, false) as $court) {
+            if ($court['Status'] !== 'complete') {
+                $courts[] = [
+                    'CourtId'    => $court['CourtId'],
+                    'Name'       => $court['Name'],
+                    'CourtDate'  => $court['CourtDate'],
+                    'Status'     => $court['Status'],
+                    'AwardCount' => $court['AwardCount'],
+                ];
+            }
+        }
+        $columns = $this->Court->get_smart_grid_columns($kingdom_id, $assembly['LadderAwards'] ?? []);
+
+        return [
+            'KingdomId'    => $kingdom_id,
+            'ParkId'       => $park_id,
+            'Uid'          => $uid,
+            'ColumnAwards' => $columns['ColumnAwards'],
+            'KaToColumn'   => $columns['KaToColumn'],
+            'Courts'       => $courts,
+            'Events'       => $this->Court->get_upcoming_events($kingdom_id),
+        ];
+    }
+
+    /**
+     * New Players box data for the Smart Planning Grid: JSON, status 0 + players,
+     * or status 5 when logged out.
+     */
+    public function ladder_new_players()
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id) || !isset($this->session->token)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $kingdom_id = (int)$this->request->KingdomId;
+        $park_id    = (int)$this->request->ParkId;
+        if (!valid_id($kingdom_id) && !valid_id($park_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid parameters']);
+            exit;
+        }
+        $players = $this->Reports->ladder_grid_new_players($kingdom_id, $park_id);
+        echo json_encode(['status' => 0, 'players' => $players]);
+        exit;
     }
 
     public function park_distance_matrix($type = null)

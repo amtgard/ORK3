@@ -288,6 +288,33 @@ final class ReportsFixture
     }
 
     /**
+     * An awards row with an explicit date / revoked flag / custom name, for the
+     * recency tests. Returns the awards_id; cleaned up.
+     */
+    public function insertAwardOn(int $mundaneId, int $parkId, int $kingdomId, int $kingdomAwardId, int $awardId, int $rank, string $date, int $revoked = 0, string $customName = ''): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'awards
+             (kingdomaward_id, mundane_id, stripped_from, unit_id, park_id, kingdom_id, team_id, rank, date,
+              given_by_id, note, at_park_id, at_kingdom_id, at_event_id, custom_name, alias_award_id,
+              award_id, by_whom_id, entered_at, revoked)
+             VALUES (?, ?, 0, 0, ?, ?, 0, ?, ?, ?, \'\', 0, 0, 0, ?, 0, ?, ?, NOW(), ?)'
+        );
+        $stmt->execute([$kingdomAwardId, $mundaneId, $parkId, $kingdomId, $rank, $date, $mundaneId, $customName, $awardId, $mundaneId, $revoked]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->awardIds[] = $id;
+
+        return $id;
+    }
+
+    /** Force a fixture player's active / suspended flags (the clone inherits a template row's). */
+    public function setPlayerState(int $mundaneId, int $active, int $suspended): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET active = ?, suspended = ? WHERE mundane_id = ?')
+            ->execute([$active, $suspended, $mundaneId]);
+    }
+
+    /**
      * A kingdom-specific order with no ork_award row (ork_kingdomaward.award_id = 0),
      * like the Order of the Raider. Returns the kingdomaward id; cleaned up.
      */
