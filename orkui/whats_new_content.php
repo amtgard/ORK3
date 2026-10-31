@@ -8,17 +8,23 @@
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-10-09');
+    define('WHATS_NEW_VERSION', '2026-10-30');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
 if (!defined('ORK_VERSION')) {
-    define('ORK_VERSION', '3.5.6 Crown');
+    define('ORK_VERSION', '3.5.7 Crown');
 }
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
+    ['version' => '3.5.7 Crown', 'date' => '2026-10-30', 'items' => [
+        ['icon' => 'fas fa-chess-board', 'title' => 'Smart Court on the Ladder Award Grid', 'body' => 'Officers with court authority for a park or kingdom can now turn on Smart Court from the Ladder Award Grid report. Click a player\'s cell to step them up one rank at a time and a floating card gathers the awards you are planning, ready to Save to Court.'],
+        ['icon' => 'fas fa-thumbs-up', 'title' => 'Recommendations at the Exact Rank', 'body' => 'A recommendation is marked (R) and linked to a grid cell only when its rank matches exactly, choosing the one with the most +1s and then the oldest. A crown shows a player who already has a line for that ladder on another open court, and an hourglass shows someone who has signed in within 60 days but has gone over 180 days without an award.'],
+        ['icon' => 'fas fa-sliders-h', 'title' => 'Ladder Limit Assist', 'body' => 'Choose a limit and cells at or above it are grayed out, with a red icon on the card for any award above it. It is a guide only and never blocks you. Suspended players are hidden while Smart Court is on.'],
+        ['icon' => 'fas fa-user-plus', 'title' => 'Last Award, Last Sign-in and New Players', 'body' => 'The grid now has Last Award and Last Sign-in columns, included in the CSV export. A New Players box lists players without ladder awards who have signed in at least twice in the past 90 days.'],
+    ]],
     ['version' => '3.5.6 Crown', 'date' => '2026-10-09', 'items' => [
         ['icon' => 'fas fa-gavel', 'title' => 'Plan Your Court in the ORK', 'body' => 'Monarchs, Regents, Prime Ministers and kingdom or park editors can now plan a court before it is held. Open Court Planner under Admin Tasks on your kingdom or park page, pull awards from pending recommendations or add them by hand, and drag them into running order.'],
         ['icon' => 'fas fa-bullhorn', 'title' => 'Run It Live, or From Paper', 'body' => 'Publish the court and work it your way. Run at Court lets you mark each award from your phone as it is called. Or print the packet — an order of court for the herald, a record sheet and a prep sheet — and type it in afterwards on the Record Court screen. Nothing reaches a player\'s record until you press Complete Court.'],
