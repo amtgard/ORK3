@@ -52,7 +52,7 @@ These would be failures even if everything else worked:
 
 ## Entering Smart Court
 
-A **Smart Court** button sits in the report header beside Export CSV and Print. Clicking it opens a modal asking whether to add to an existing court or start a new one.
+A **Smart Court** button sits in the report header beside Export CSV and Print. Clicking it opens a modal asking whether to add to an existing court or start a new one. The Court Planner section of the kingdom and park Admin tabs links here as "Plan Court from Smart Grid", and `SmartCourt=1` opens the Smart Court modal on arrival.
 
 - **New court:** the same fields as the Court Planner's create modal: name, court date, event (optional), and run/plan mode. The date uses Flatpickr with `altInput`.
 - **Existing court:** a dropdown of courts in the page's scope, using `getCourtList` semantics, excluding `complete` courts. Each option shows name, date, status, and award count. Park grid: that park's courts. Kingdom grid: the kingdom's own courts. **(call)**
