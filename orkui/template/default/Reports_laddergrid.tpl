@@ -751,12 +751,12 @@ foreach ($awardList as $_aid => $_ainfo) :
 <?php
 	$_awardedTip = '';
 	if ($info !== null && !$info['IsMaster'] && !empty($info['Date'])) {
-		$_awDays = (int) floor((strtotime(date('Y-m-d')) - strtotime($info['Date'])) / 86400);
+		$_awDays = (int) (new DateTime(substr((string)$info['Date'], 0, 10)))->diff(new DateTime('today'))->format('%r%a');
 		$_awardedTip = ' data-tip="' . htmlspecialchars('Awarded ' . $info['Date'] . ' (' . ($_awDays <= 0 ? 'today' : $_awDays . 'd ago') . ')', ENT_QUOTES) . '"';
 	}
 ?>
 <?php   if ($info !== null && $info['IsMaster']) : ?>
-				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)($info['Rank'] ?? 0) ?>" data-master="1" data-order="999"><span class="lg-cell-master">M</span></td>
+				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)($info['Rank'] ?? 0) ?>" data-master="1" data-order="999"><span class="lg-cell-master" data-tip="Master">M</span></td>
 <?php   elseif ($info !== null && $info['Rank'] !== null) : ?>
 				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)$info['Rank'] ?>" data-order="<?= (int)$info['Rank'] ?>"><span class="lg-cell-rank"<?= $_awardedTip ?>><?= (int)$info['Rank'] ?></span></td>
 <?php   else : ?>
@@ -1277,8 +1277,15 @@ foreach ($awardList as $_aid => $_ainfo) :
 			tip.style.top  = Math.max(MARGIN, top) + 'px';
 		}
 
+		// A blocked Smart Court cell shows its block reason, which wins over a tip on a child span.
+		function tipTarget(node) {
+			if (!node || !node.closest) return null;
+			var blocked = node.closest('td.lg-sc-block[data-tip]');
+			return blocked || node.closest('[data-tip]');
+		}
+
 		function follow(e) {
-			var target = e.target.closest ? e.target.closest('[data-tip]') : null;
+			var target = tipTarget(e.target);
 			if (target === anchor) return;
 			if (target) show(target); else hide();
 		}

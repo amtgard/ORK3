@@ -35,7 +35,7 @@ These would be failures even if everything else worked:
 - A Monarchy Only recommendation is revealed to someone who cannot see it, including by an (R) badge that hints it exists.
 - Ordinary players see (R) badges. The report is open to every logged-in player.
 - A recommendation is used up by an award of a different level.
-- One honor reaches the same court twice, or one line finalizes twice. The same honor on two different open courts is allowed, as it is in the planner, but the grid must make it visible (see Crown marker).
+- One honor reaches the same court twice, or one line finalizes twice. The same honor on two different open courts is allowed, as it is in the planner, but the grid must make it visible, through the crown, for open courts in the kingdom that this officer can manage (see Crown marker).
 - The report gets noticeably slower for ordinary viewers.
 
 ## Who sees what
@@ -230,7 +230,7 @@ All items marked **(call)** above. The ones that most affect behavior:
 7. A ladder limit grays a cell based on held rank plus pending rows.
 8. New Players means no ladder awards, with sign-ins on two different dates.
 9. A park officer has no Smart Court on the kingdom grid. Kingdom officers plan for a park from that park's grid.
-10. The crown checks every open court in the kingdom, at any rank on that ladder.
+10. The crown checks open courts in the kingdom that this officer can manage, at any rank on that ladder.
 11. X on saved rows only appears while the line is `planned`.
 12. Save re-checks the court's live lines first, and a duplicate row stays unsaved with a message.
 

@@ -129,6 +129,18 @@ final class CourtPlayerPlannedLinesTest extends TestCase
         $this->assertSame($keep, $lines[0]['CourtAwardId']);
     }
 
+    public function testStagedAndAnnouncedLinesStillPlanned(): void
+    {
+        $c = $this->fx->createCourt(['kingdom_id' => $this->k]);
+        $staged    = $this->line($c, ['status' => 'staged']);
+        $announced = $this->line($c, ['status' => 'announced']);
+        $ids = array_map(static fn ($l) => $l['CourtAwardId'], $this->lines($this->officer($this->k, 0)));
+        sort($ids);
+        $want = [$staged, $announced];
+        sort($want);
+        $this->assertSame($want, $ids);
+    }
+
     public function testHiddenRecLineWithheldFromOfficerWhoCannotSeeIt(): void
     {
         $pc  = $this->fx->createCourt(['kingdom_id' => $this->k, 'park_id' => $this->p]);

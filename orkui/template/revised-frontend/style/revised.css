@@ -1080,7 +1080,6 @@ html[data-theme="dark"] .pn-form-error.pn-rec-suggest .pn-rec-suggest-link:hover
 .pn-planned-court-name { font-weight: 600; color: var(--pn-accent, #2b6cb0); overflow-wrap: anywhere; }
 .pn-planned-meta { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ork-text-secondary); }
 .pn-planned-awards { flex: 1 1 100%; font-size: 13px; color: var(--ork-text); overflow-wrap: anywhere; }
-html[data-theme="dark"] .pn-planned-courts { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .pn-planned-court-name { color: var(--ork-link-bright, #63b3ed); }
 .pn-rec-planned { display: inline-block; margin-left: 2px; color: var(--pn-accent, #4299e1); cursor: help; }
 .pn-rec-planned:focus-visible { outline: 2px solid var(--pn-accent, #4299e1); outline-offset: 2px; border-radius: 2px; }

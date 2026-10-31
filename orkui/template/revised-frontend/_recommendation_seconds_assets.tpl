@@ -199,7 +199,10 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 	});
 	document.addEventListener('focusout', hide);
 	document.addEventListener('scroll', hide, true);
-	document.addEventListener('click', hide, true);
+	document.addEventListener('click', function (e) {
+		if (e.target.closest && e.target.closest('.pn-rec-planned')) return;
+		hide();
+	}, true);
 	document.documentElement.classList.add('rs-jstip');
 })();
 
