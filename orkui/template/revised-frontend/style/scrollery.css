@@ -1852,7 +1852,17 @@ section.SignAndDate {
    static and all four offsets are inert.
    -------------------------------------------------------------------------- */
 
+/* Clipped to the top centre, not the page. Chrome rasterises a filtered box whole at
+   print resolution, so a page-sized host for a device this small cost about 1.5s per owl
+   scroll in the print dialog. The box is wider than the device on purpose: it also holds
+   the two-shield layout. */
 .award-template[data-order="owl"] .owl-heraldry {
+    top: 0;
+    bottom: auto;
+    left: 33%;
+    right: 33%;
+    width: 34%;
+    height: 28%;
     overflow: hidden;
 }
 
@@ -1870,10 +1880,16 @@ section.SignAndDate {
    with the page edges is a hairline nobody can see. Shrink this box back to its
    content and the hairline reappears as a rectangle around the heraldry. Verified
    by rendering with the filter forced off: the grid and the crossed box on an owl
-   certificate are painted into owl/border.jpg, not drawn by this. */
+   certificate are painted into owl/border.jpg, not drawn by this.
+
+   The host is smaller than the page now, so the same rule is kept by overhanging it:
+   the box runs 30px past the host on three sides, and its overflow:hidden clips the
+   hairline. The fourth side is the page's top edge, as before. */
 .award-template[data-order="owl"] .owl-heraldry div.centre-top {
     position: absolute;
-    bottom: 0;
+    left: -30px;
+    right: -30px;
+    bottom: -30px;
 }
 
 .award-template[data-order="owl"][data-variant="parchment"] .Award {

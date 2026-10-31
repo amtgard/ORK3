@@ -1180,6 +1180,12 @@
       "print": { "file": "owl/border.webp", "bytes": 254386 },
       "display": { "file": "owl/border_display.webp", "bytes": 51404, "dimensions": "850x1100" }
     },
+    "owl/border_inverted.png": {
+      "sha": "c0f23b1c1acc61e7",
+      "bytes": 1686863,
+      "print": { "file": "owl/border_inverted.webp", "bytes": 995576 },
+      "display": { "file": "owl/border_inverted_display.webp", "bytes": 51636, "dimensions": "850x1100" }
+    },
     "owl/cyanotype.jpg": {
       "sha": "588e2d165282121f",
       "bytes": 1793283,
@@ -1343,10 +1349,10 @@
       "display": { "file": "smith/border_display.webp", "bytes": 130990, "dimensions": "850x1100" }
     },
     "smith/burn.jpg": {
-      "sha": "3433f6936f0ce5b2",
-      "bytes": 3206702,
-      "print": { "file": "smith/burn.webp", "bytes": 1163940 },
-      "display": { "file": "smith/burn_display.webp", "bytes": 94954, "dimensions": "850x1100" }
+      "sha": "f7612c1e572dfd2b",
+      "bytes": 1024077,
+      "print": { "file": "smith/burn.webp", "bytes": 511788 },
+      "display": { "file": "smith/burn_display.webp", "bytes": 34080, "dimensions": "425x550" }
     },
     "smith/symbol.png": {
       "sha": "a4d18a421ca60ae1",

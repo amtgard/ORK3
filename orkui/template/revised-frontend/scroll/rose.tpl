@@ -19,7 +19,10 @@
 
     <?php /* The burn sits BELOW the heraldry — unlike every other order that has
              one. Keep it above parchment and under the device. */ ?>
-    <img <?= scroll_art_attrs('rose/burn.svg') ?> style="mix-blend-mode:multiply;opacity:0.2;filter:hue-rotate(80deg);" alt="">
+    <?php /* burn.green.svg is burn.svg with hue-rotate(80deg) already applied to its two
+             fills. As a CSS filter, Chrome rasterised this page-sized vector once per
+             scroll in the print dialog, which added ~1.8 MB per rose scroll to the PDF. */ ?>
+    <img <?= scroll_art_attrs('rose/burn.green.svg') ?> style="mix-blend-mode:multiply;opacity:0.2;" alt="">
 
 <?php /* The exact-colour knot sits BELOW the heraldry (spec), so arms an officer scales
          or moves into the frame stay on top of it. Nothing else lies between. */ ?>

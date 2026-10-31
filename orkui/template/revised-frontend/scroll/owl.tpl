@@ -44,6 +44,14 @@ $blend = $variant === 'cyanotype'
     ? 'mix-blend-mode: screen;'
     : 'filter:invert();mix-blend-mode:multiply;';
 
+/*
+ * The border's invert is baked into border_inverted.png. As a CSS filter, Chrome
+ * rasterised and embedded this page-sized plate again for every pass of every scroll,
+ * at 1.8 MB each in the print PDF. Cyanotype screens the plate as it is.
+ */
+$border      = $variant === 'cyanotype' ? 'owl/border.jpg' : 'owl/border_inverted.png';
+$borderBlend = $variant === 'cyanotype' ? $blend : 'mix-blend-mode:multiply;';
+
 $heraldry = ['s' => $s, 'width' => 370, 'height' => 460, 'top' => 5];
 ?>
 <div class="award-template" data-order="owl" data-rank="<?= (int) $s['rank'] ?>" data-variant="<?= scroll_e($s['variant']) ?>" style="position:absolute;top:0;left:0;right:0;bottom:0;">
@@ -79,12 +87,12 @@ $heraldry = ['s' => $s, 'width' => 370, 'height' => 460, 'top' => 5];
          certificate without one prints the bytes it always did. */ ?>
 <?php if (!scroll_custom_border_active($s)): ?>
     <?php /* Border pass 1 of 2/1/3 — always drawn. */ ?>
-    <img <?= scroll_art_attrs('owl/border.jpg') ?> style="<?= $blend ?>" alt="">
+    <img <?= scroll_art_attrs($border) ?> style="<?= $borderBlend ?>" alt="">
     <?php if ($variant === 'transparency' || $variant === 'parchment'): ?>
-        <img <?= scroll_art_attrs('owl/border.jpg') ?> style="<?= $blend ?>" alt="">
+        <img <?= scroll_art_attrs($border) ?> style="<?= $borderBlend ?>" alt="">
     <?php endif; ?>
     <?php if ($variant === 'transparency'): ?>
-        <img <?= scroll_art_attrs('owl/border.jpg') ?> style="<?= $blend ?>" alt="">
+        <img <?= scroll_art_attrs($border) ?> style="<?= $borderBlend ?>" alt="">
     <?php endif; ?>
 <?php endif; ?>
 <?php scroll_custom_border_slot($s, 'match'); ?>

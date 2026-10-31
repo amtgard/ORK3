@@ -191,7 +191,7 @@ return [
      *   the file costs nothing there. Custom draws the same file through its owl border, so
      *   custom lists it too.
      */
-    'owl' => ['owl/border.*'],
+    'owl' => ['owl/border.*', 'owl/border_inverted.*'],
 
     /*
      * rose: burn.svg is drawn under the heraldry at multiply, opacity 0.2, hue-rotated
