@@ -268,7 +268,10 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-table tbody tr:hover td.lg-col-park { background: #eef2ff !important; }
 
 /* Data cells */
-.lg-table { border-collapse: collapse; min-width: 100%; white-space: nowrap; }
+/* separate + zero spacing: collapsed borders do not travel with sticky cells */
+.lg-table { border-collapse: separate; border-spacing: 0; min-width: 100%; white-space: nowrap; }
+/* collapse merged the Last Sign-in right rule with the first award's left rule; keep one line */
+.lg-table td.lg-col-date + td.lg-col-award { border-left: 0; }
 
 .lg-table tbody tr:nth-child(even) td           { background: #f9fafb; }
 .lg-table tbody tr:nth-child(even) td.lg-col-player { background: #f4f5f7; }
@@ -446,6 +449,30 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 	border-radius: 3px;
 	padding: 1px 5px;
 	vertical-align: middle;
+}
+
+/* ── Frozen header rows ────────────────────────────────────────
+   The wrapper is the scroller (both axes), capped to the viewport below the 48px
+   fixed navbar so the headers have something to stick to. Short grids stay under the
+   cap and scroll with the page as before. --lg-head1-h is the group row's rendered
+   height, set from the script. Stacking inside the scroller: body cells (auto) <
+   sticky Persona cells (2) < header cells (4) < Persona header corner (5). */
+.lg-scroll {
+	overflow: auto;
+	max-height: max(320px, calc(100vh - 64px));
+	max-height: max(320px, calc(100dvh - 64px));
+}
+.lg-table thead tr.lg-group-header-row th {
+	position: sticky; top: 0; z-index: 4;
+}
+.lg-table thead tr.lg-header-row th {
+	position: sticky; top: var(--lg-head1-h, 30px); z-index: 4;
+}
+.lg-table thead tr.lg-group-header-row th.lg-col-player { z-index: 5; }
+
+@media print {
+	.lg-scroll { overflow: visible; max-height: none; }
+	.lg-table thead tr th { position: static !important; }
 }
 
 @media print {
@@ -667,7 +694,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 			</button>
 		</div>
 
-		<div style="overflow-x:auto;">
+		<div class="lg-scroll">
 			<table class="lg-table" id="lg-grid-table">
 <?php $renderLadderThead('title'); ?>
 				<tbody>
@@ -738,7 +765,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 		<h2 class="lg-new-title">New Players</h2>
 		<div class="lg-new-sub">Players without awards, with at least two sign-ins in the past 90 days.</div>
 		<div class="lg-new-status" id="lg-new-status" role="status"></div>
-		<div id="lg-new-wrap" style="overflow-x:auto; display:none;">
+		<div id="lg-new-wrap" class="lg-scroll" style="display:none;">
 			<table class="lg-table" id="lg-new-table">
 <?php $renderLadderThead('data-tip'); ?>
 				<tbody></tbody>
@@ -1014,6 +1041,7 @@ foreach ($awardList as $_aid => $_ainfo) :
 		players.forEach(function (p) { rows.appendChild(buildNewRow(p)); });
 		document.querySelector('#lg-new-table tbody').appendChild(rows);
 		$('#lg-new-wrap').show();
+		syncHeadOffset();
 		newTable = $('#lg-new-table').DataTable({
 			dom       : 'rt',
 			paging    : false,
@@ -1023,6 +1051,8 @@ foreach ($awardList as $_aid => $_ainfo) :
 			columnDefs: gridColumnDefs()
 		});
 		window.LgGrid.newTable = newTable;
+		$('#lg-new-table').on('draw.dt', syncHeadOffset);
+		syncHeadOffset();
 		paintAges(newTable);
 		// Draw again now newTable is set, so the search filters and hideSuspended apply
 		newTable.search($('#lg-search').val()).draw();
@@ -1048,6 +1078,18 @@ foreach ($awardList as $_aid => $_ainfo) :
 		});
 	}
 
+	// Freeze the award-name row beneath the group row: its top is the group row's height.
+	function syncHeadOffset() {
+		['lg-grid-table', 'lg-new-table'].forEach(function (id) {
+			var tbl = document.getElementById(id);
+			var row = tbl && tbl.querySelector('thead tr.lg-group-header-row');
+			var box = tbl && tbl.closest('.lg-scroll');
+			var h = row ? row.getBoundingClientRect().height : 0;
+			if (box && h > 0) box.style.setProperty('--lg-head1-h', h + 'px');
+		});
+	}
+	window.addEventListener('resize', syncHeadOffset);
+
 	$(function () {
 		table = $('#lg-grid-table').DataTable({
 			dom       : 'rt',
@@ -1057,6 +1099,8 @@ foreach ($awardList as $_aid => $_ainfo) :
 			language  : { emptyTable: 'No ladder award data found for this location.' }
 		});
 		window.LgGrid.table = table;
+		$('#lg-grid-table').on('draw.dt', syncHeadOffset);
+		syncHeadOffset();
 		paintAges(table);
 
 		// Apply sort and inactive filter on load
