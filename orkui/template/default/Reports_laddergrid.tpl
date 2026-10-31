@@ -118,6 +118,9 @@ foreach ($awardList as $_aid => $_ainfo) {
 	];
 }
 $_jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+
+// Smart Court needs court authority and at least one ladder column to click.
+$_smartCourt = !empty($SmartCourt) && !empty($awardList);
 ?>
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -550,10 +553,38 @@ html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }
 <?php endif; ?>
 		</div>
 		<div class="rp-header-actions">
+<?php if ($_smartCourt) : ?>
+			<button class="rp-btn-ghost lg-sc-btn" id="lg-sc-btn" type="button" aria-pressed="false"><i class="fas fa-wand-magic-sparkles"></i> <span id="lg-sc-btn-label">Smart Court</span></button>
+<?php endif; ?>
 			<button class="rp-btn-ghost" id="lg-btn-csv"><i class="fas fa-download"></i> Export CSV</button>
 			<button class="rp-btn-ghost" id="lg-btn-print"><i class="fas fa-print"></i> Print</button>
 		</div>
 	</div>
+
+<?php if ($_smartCourt) : ?>
+	<!-- ── Smart Court bar ────────────────────────────────── -->
+	<div class="lg-sc-msg lg-sc-notice" id="lg-sc-notice" role="status" hidden>
+		<span class="lg-sc-msg-text"></span>
+		<button class="lg-sc-msg-x" type="button" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+	</div>
+	<div class="lg-sc-bar" id="lg-sc-bar" hidden>
+		<span class="lg-sc-bar-court"><i class="fas fa-clipboard-list"></i> <strong id="lg-sc-bar-court"></strong></span>
+		<span class="lg-sc-bar-limit">
+			<label for="lg-sc-limit">Ladder Limit Assist:</label>
+			<select id="lg-sc-limit">
+				<option value="0">Off</option>
+<?php for ($_i = 1; $_i <= 10; $_i++) : ?>
+				<option value="<?= $_i ?>"><?= $_i ?></option>
+<?php endfor; ?>
+			</select>
+			<span class="lg-sc-q" tabindex="0" role="note" data-tip="If your park or region cannot give awards above a certain amount, set that limit here and any cell at or above that limit will gray out."><i class="fas fa-circle-question"></i></span>
+		</span>
+		<span class="lg-sc-legend">
+			<span><span class="lg-sc-r">R</span> recommended higher</span>
+			<span><i class="fas fa-hourglass-half lg-sc-glass"></i> active, overdue</span>
+		</span>
+	</div>
+<?php endif; ?>
 
 	<!-- ── Context ────────────────────────────────────────── -->
 	<div class="rp-context">
@@ -715,6 +746,87 @@ foreach ($awardList as $_aid => $_ainfo) :
 		</div>
 	</div>
 
+<?php endif; ?>
+
+<?php if ($_smartCourt) : ?>
+	<!-- ── Smart Court card, FAB, and modal (moved to body by lg-smart-court.js) ── -->
+	<div class="lg-sc-card" id="lg-sc-card" hidden>
+		<div class="lg-sc-card-head">
+			<div class="lg-sc-card-title">
+				<span><i class="fas fa-clipboard-list"></i> Pending Court</span>
+				<span class="lg-sc-card-court" id="lg-sc-card-court"></span>
+			</div>
+			<button class="lg-sc-card-min-btn" id="lg-sc-minimize" type="button" aria-label="Minimize" data-tip="Minimize"><i class="fas fa-minus"></i></button>
+		</div>
+		<div class="lg-sc-msg" id="lg-sc-card-msg" role="status" hidden>
+			<span class="lg-sc-msg-text"></span>
+			<button class="lg-sc-msg-x" type="button" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+		</div>
+		<div class="lg-sc-list" id="lg-sc-list"></div>
+		<div class="lg-sc-card-foot">
+			<button class="lg-sc-clear" id="lg-sc-clear" type="button">Clear All</button>
+			<a class="lg-sc-open" id="lg-sc-open" target="_blank" rel="noopener" aria-label="Open court in a new tab" data-tip="Open court in a new tab" hidden><i class="fas fa-up-right-from-square"></i></a>
+			<button class="lg-sc-save" id="lg-sc-save" type="button">Save to Court</button>
+		</div>
+	</div>
+	<button class="lg-sc-fab" id="lg-sc-fab" type="button" aria-label="Show pending court" hidden>
+		<i class="fas fa-clipboard"></i>
+		<span class="lg-sc-fab-count" id="lg-sc-fab-count" hidden>0</span>
+	</button>
+
+	<div class="lg-sc-scrim" id="lg-sc-scrim" hidden>
+		<div class="lg-sc-modal" id="lg-sc-modal" role="dialog" aria-modal="true" aria-labelledby="lg-sc-modal-title" data-choice="new">
+			<div class="lg-sc-modal-title" id="lg-sc-modal-title"><i class="fas fa-wand-magic-sparkles"></i> Smart Court</div>
+			<form id="lg-sc-form" novalidate>
+				<div class="lg-sc-modal-body">
+					<div class="lg-sc-choice">
+						<button type="button" id="lg-sc-pick-new">Start a new court</button>
+						<button type="button" id="lg-sc-pick-existing">Add to an existing court</button>
+					</div>
+					<div id="lg-sc-fields-new">
+						<div class="lg-sc-field">
+							<label for="lg-sc-name">Court Name</label>
+							<input type="text" id="lg-sc-name" maxlength="255" autocomplete="off">
+						</div>
+						<div class="lg-sc-field">
+							<label for="lg-sc-date">Date</label>
+							<input type="date" id="lg-sc-date">
+						</div>
+						<div class="lg-sc-field">
+							<label for="lg-sc-event">Link to Event (optional)</label>
+							<select id="lg-sc-event"></select>
+						</div>
+						<div class="lg-sc-field">
+							<span class="lg-sc-field-label">How will this court be handled?</span>
+							<div class="lg-sc-mode-opts">
+								<label class="lg-sc-mode-opt">
+									<input type="radio" name="lg-sc-mode" value="run" checked>
+									<span class="lg-sc-mode-title"><i class="fas fa-bullhorn"></i> Run at Court</span>
+									<span class="lg-sc-mode-desc">I'll grant awards live during the ceremony.</span>
+								</label>
+								<label class="lg-sc-mode-opt">
+									<input type="radio" name="lg-sc-mode" value="plan">
+									<span class="lg-sc-mode-title"><i class="fas fa-clipboard-list"></i> Lock as Plan</span>
+									<span class="lg-sc-mode-desc">I'm preparing the order of court for someone to record later.</span>
+								</label>
+							</div>
+						</div>
+					</div>
+					<div id="lg-sc-fields-existing" hidden>
+						<div class="lg-sc-field">
+							<label for="lg-sc-court">Court</label>
+							<select id="lg-sc-court"></select>
+						</div>
+					</div>
+					<div class="lg-sc-modal-error" id="lg-sc-modal-error" role="alert" hidden></div>
+				</div>
+				<div class="lg-sc-modal-foot">
+					<button class="lg-sc-clear" id="lg-sc-cancel" type="button">Cancel</button>
+					<button class="lg-sc-save" id="lg-sc-go" type="submit">Start</button>
+				</div>
+			</form>
+		</div>
+	</div>
 <?php endif; ?>
 
 </div><!-- /rp-root -->
@@ -1080,5 +1192,66 @@ foreach ($awardList as $_aid => $_ainfo) :
 	function csvCell(v) {
 		return '"' + String(v).replace(/"/g, '""') + '"';
 	}
+
+	// One fixed body-level tooltip for every [data-tip] on the page. A ::after tooltip
+	// would be clipped by the grid's overflow-x wrapper. New Players headers use data-tip
+	// for every viewer, so this lives here rather than in the officer script.
+	(function initTooltip() {
+		var GAP = 6, MARGIN = 8;
+		var tip = el('div', 'lg-sc-tip');
+		tip.setAttribute('role', 'tooltip');
+		document.body.appendChild(tip);
+		var anchor = null;
+
+		function hide() {
+			anchor = null;
+			tip.style.display = 'none';
+		}
+
+		function show(target) {
+			var text = target.getAttribute('data-tip');
+			if (!text) { hide(); return; }
+			anchor = target;
+			tip.textContent = text;
+			tip.style.display = 'block';
+			var r = target.getBoundingClientRect();
+			var w = tip.offsetWidth, h = tip.offsetHeight;
+			var maxLeft = window.innerWidth - w - MARGIN, maxTop = window.innerHeight - h - MARGIN;
+			var top = r.bottom + GAP > maxTop ? r.top - h - GAP : r.bottom + GAP;
+			tip.style.left = Math.max(MARGIN, Math.min(r.left + r.width / 2 - w / 2, maxLeft)) + 'px';
+			tip.style.top  = Math.max(MARGIN, top) + 'px';
+		}
+
+		function follow(e) {
+			var target = e.target.closest ? e.target.closest('[data-tip]') : null;
+			if (target === anchor) return;
+			if (target) show(target); else hide();
+		}
+
+		document.addEventListener('mouseover', follow);
+		document.addEventListener('focusin', follow);
+		document.addEventListener('focusout', hide);
+		window.addEventListener('scroll', hide, true);
+		// A repaint can replace the node under the tooltip, and no mouseout follows.
+		document.addEventListener('click', function () {
+			if (anchor && !document.contains(anchor)) hide();
+		});
+	})();
 })();
 </script>
+<?php if ($_smartCourt) : ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+window.LgSmartConfig = <?= json_encode([
+	'KingdomId'    => (int)$SmartCourt['KingdomId'],
+	'ParkId'       => (int)$SmartCourt['ParkId'],
+	'ColumnAwards' => (object)$SmartCourt['ColumnAwards'],
+	'KaToColumn'   => (object)$SmartCourt['KaToColumn'],
+	'Courts'       => array_values($SmartCourt['Courts']),
+	'Events'       => array_values($SmartCourt['Events']),
+	'Uir'          => UIR,
+], $_jsonFlags | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+</script>
+<script src="<?= HTTP_TEMPLATE ?>default/script/lg-smart-court.js?v=<?=filemtime(__DIR__.'/script/lg-smart-court.js')?>"></script>
+<?php endif; ?>
