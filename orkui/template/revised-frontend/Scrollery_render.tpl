@@ -255,6 +255,7 @@ foreach ($Scrolls as $scrollery_scan) {
              accessible name stays whole, and still contains the visible word. */ ?>
     <button type="button" class="sc-btn" id="sc-configure" aria-haspopup="dialog" aria-controls="sc-sheet"
             aria-expanded="false" aria-label="Configure Scroll Options"><span class="sc-btn-long">Configure Scroll </span>Options</button>
+    <button type="button" class="sc-btn" id="sc-signature-open" aria-controls="sc-sheet">Upload Signature</button>
     <button type="button" class="sc-btn sc-btn-primary" onclick="window.print();">Print</button>
 </div>
 <?php /*
@@ -323,6 +324,16 @@ foreach ($Scrolls as $scrollery_scan) {
                     <option value="<?= scroll_e($scrollery_skey) ?>"<?= $scrollery_sdef['family'] !== '' ? ' data-face-family="' . scroll_e($scrollery_sdef['family']) . '"' : '' ?><?= $scrollery_skey === $scrollery_sig ? ' selected' : '' ?>><?= scroll_e($scrollery_sdef['label']) ?></option>
                     <?php endforeach; ?>
                 </select>
+            </div>
+            <?php /* An uploaded signature stands in for the signature hand on this print. The
+                     file stays in the browser: see script/scrollery-sig-upload.js. */ ?>
+            <div class="sc-opt" id="sc-sigfile-opt">
+                <span class="sc-opt-label">Signature image</span>
+                <input type="file" id="sc-sigfile" accept="image/png" hidden>
+                <button type="button" class="sc-btn" id="sc-sigfile-pick">Upload Signature</button>
+                <button type="button" class="sc-btn" id="sc-sigfile-remove" hidden>Remove</button>
+                <p class="sc-opt-help">Use a PNG with a transparent background. It replaces the name on the signature line of <?= count($Scrolls) === 1 ? 'this scroll' : 'all ' . (int) count($Scrolls) . ' scrolls' ?> and is sized to fit. It is not uploaded or permanently stored: it stays on this page and is discarded after this print, or if the page reloads.</p>
+                <p class="sc-opt-help" id="sc-sigfile-status" role="status" hidden></p>
             </div>
             <?php /*
                 The heading picker, beside the hand because it is the same kind of choice: how
@@ -532,6 +543,7 @@ foreach ($Scrolls as $scrollery_scan) {
 */ ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-autofit.js?v=<?= filemtime($scrollery_fit) ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-hand.js?v=<?= filemtime($scrollery_hand) ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/scrollery-sig-upload.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/scrollery-sig-upload.js') ?>"></script>
 <script>
 /*
  * The hand picker's behaviour, on the surface that OWNS the choice.

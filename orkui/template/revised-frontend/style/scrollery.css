@@ -2112,6 +2112,30 @@ section.SignAndDate {
     position: relative;
 }
 
+/* An uploaded signature, placed on the writing line by scrollery-sig-upload.js. The typed
+   signer keeps its space, because the fit measures it, and comes back on Remove. Positioned
+   past the stamp rule above, which would otherwise put the image back in the flow. */
+.Award .AwardSignatory[data-sc-signed] {
+    position: relative;
+}
+
+.Award .AwardSignatory[data-sc-signed] [data-scroll-text="givenBy"] {
+    visibility: hidden;
+}
+
+.Award .AwardSignatory > .ScUploadedSig,
+.Award[data-sc-stamp] .AwardSignatory > .ScUploadedSig {
+    position: absolute;
+    max-width: none;
+    object-fit: contain;
+    object-position: center bottom;
+}
+
+/* A file with a solid background: multiply drops a white sheet into the parchment. */
+.Award .AwardSignatory[data-sc-signed="opaque"] > .ScUploadedSig {
+    mix-blend-mode: multiply;
+}
+
 .Award .ScArms--stamp {
     width: 440px;
     height: 440px;
@@ -2452,6 +2476,14 @@ section.SignAndDate {
     color: var(--sc-ink-dim);
     font-size: 12.5px;
     line-height: 1.45;
+}
+
+#sc-sigfile-remove {
+    margin-left: 6px;
+}
+
+#sc-sigfile-remove[hidden] {
+    display: none; /* .sc-btn's inline-block would otherwise beat [hidden] */
 }
 
 .sc-opt-note {
