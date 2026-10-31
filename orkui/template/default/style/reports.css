@@ -1402,7 +1402,7 @@ html[data-theme="dark"] .lg-new-status-error {
   max-width: 240px;
   padding: 6px 8px;
   border-radius: 4px;
-  background: #2d3748;
+  background: var(--ork-bg-dark);
   color: #fff;
   font-size: 11px;
   font-weight: 400;
@@ -1410,12 +1410,11 @@ html[data-theme="dark"] .lg-new-status-error {
   text-align: left;
   white-space: normal;
   overflow-wrap: anywhere;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  box-shadow: var(--ork-shadow-dropdown);
   pointer-events: none;
 }
 html[data-theme="dark"] .lg-sc-tip {
   background: #000;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.6);
 }
 
 /* Header button */
@@ -1463,10 +1462,11 @@ html[data-theme="dark"] .rp-btn-ghost.lg-sc-btn.lg-sc-btn-on:hover {
   line-height: 1.4;
   border-bottom: 1px solid #c7d2fe;
 }
-.lg-sc-msg.lg-sc-msg-error {
-  background: #fef2f2;
-  color: #991b1b;
-  border-bottom-color: #fecaca;
+.lg-sc-msg.lg-sc-msg-error,
+html[data-theme="dark"] .lg-sc-msg.lg-sc-msg-error {
+  background: var(--ork-alert-danger-bg);
+  color: var(--ork-alert-danger-text);
+  border-bottom-color: var(--ork-alert-danger-border);
 }
 .lg-sc-msg-text {
   flex: 1;
@@ -1486,11 +1486,6 @@ html[data-theme="dark"] .lg-sc-msg {
   background: #1e1b4b;
   color: #c7d2fe;
   border-bottom-color: #312e81;
-}
-html[data-theme="dark"] .lg-sc-msg.lg-sc-msg-error {
-  background: #3d1a1a;
-  color: #fca5a5;
-  border-bottom-color: #7f1d1d;
 }
 
 /* Bar under the header */
@@ -1518,7 +1513,7 @@ html[data-theme="dark"] .lg-sc-msg.lg-sc-msg-error {
 }
 .lg-sc-bar-limit select {
   padding: 3px 6px;
-  border: 1px solid var(--ork-border-dark);
+  border: 1px solid var(--ork-input-border);
   border-radius: 5px;
   background: #fff;
   color: #1e1b4b;
@@ -1533,7 +1528,7 @@ html[data-theme="dark"] .lg-sc-msg.lg-sc-msg-error {
   flex-wrap: wrap;
   gap: 4px 14px;
   margin-left: auto;
-  color: #4a5568;
+  color: var(--ork-text-body);
   font-size: 12px;
 }
 html[data-theme="dark"] .lg-sc-bar {
@@ -1567,6 +1562,9 @@ html[data-theme="dark"] .lg-sc-legend {
 }
 .lg-sc-on .lg-table tbody td.lg-col-award.lg-sc-block:hover {
   outline: 0;
+}
+html[data-theme="dark"] .lg-sc-on .lg-table tbody td.lg-col-award:hover {
+  outline-color: #818cf8;
 }
 /* Must outrank the group, knight, and hover tints, which are !important and sit in
    the template's own later style block. */
@@ -1646,11 +1644,10 @@ html[data-theme="dark"] .lg-sc-glass {
   display: flex;
   flex-direction: column;
   width: 350px;
-  max-width: calc(100vw - 16px);
   background: var(--ork-card-bg, #fff);
-  border: 1px solid var(--ork-border-dark);
+  border: 1px solid var(--ork-border);
   border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(15,23,42,0.25);
+  box-shadow: var(--ork-shadow-dropdown);
   color: var(--ork-text, #2d3748);
   font-size: 13px;
   overflow: hidden;
@@ -1769,7 +1766,7 @@ html[data-theme="dark"] .lg-sc-glass {
   padding: 9px 12px;
 }
 .lg-sc-card-foot {
-  border-top: 1px solid var(--ork-border, #e2e8f0);
+  border-top: 1px solid var(--ork-divider);
 }
 .lg-sc-modal-foot {
   justify-content: flex-end;
@@ -1779,7 +1776,7 @@ html[data-theme="dark"] .lg-sc-glass {
 .lg-sc-open {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--ork-border-dark);
+  border: 1px solid var(--ork-input-border);
   border-radius: 6px;
   background: var(--ork-card-bg, #fff);
   color: var(--ork-text, #4a5568);
@@ -1819,8 +1816,8 @@ html[data-theme="dark"] .lg-sc-glass {
   background: #16a34a;
   opacity: 1;
 }
-html[data-theme="dark"] .lg-sc-card {
-  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+html[data-theme="dark"] .lg-sc-row:nth-child(even) {
+  background: var(--ork-bg-tertiary);
 }
 html[data-theme="dark"] .lg-sc-row-x:hover:not(:disabled) {
   color: #f87171;
@@ -1844,7 +1841,7 @@ html[data-theme="dark"] .lg-sc-row-error {
   border: 0;
   border-radius: 50%;
   background: #4338ca;
-  box-shadow: 0 8px 20px rgba(15,23,42,0.35);
+  box-shadow: var(--ork-shadow-dropdown);
   color: #fff;
   cursor: pointer;
   font-size: 20px;
@@ -1861,9 +1858,6 @@ html[data-theme="dark"] .lg-sc-row-error {
   font-size: 11px;
   font-weight: 700;
   line-height: 18px;
-}
-html[data-theme="dark"] .lg-sc-fab {
-  box-shadow: 0 8px 20px rgba(0,0,0,0.6);
 }
 
 /* Modal */
@@ -1905,7 +1899,7 @@ html[data-theme="dark"] .lg-sc-fab {
 }
 .lg-sc-choice button {
   flex: 1;
-  border: 2px solid var(--ork-border-dark);
+  border: 2px solid var(--ork-input-border);
   border-radius: 8px;
   background: var(--ork-card-bg, #fff);
   color: var(--ork-text, #2d3748);
@@ -1939,7 +1933,7 @@ html[data-theme="dark"] .lg-sc-fab {
   width: 100%;
   box-sizing: border-box;
   padding: 7px 8px;
-  border: 1px solid var(--ork-border-dark);
+  border: 1px solid var(--ork-input-border);
   border-radius: 6px;
   background: var(--ork-input-bg, #fff);
   color: var(--ork-text, #2d3748);
@@ -1954,7 +1948,7 @@ html[data-theme="dark"] .lg-sc-fab {
   position: relative;
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid var(--ork-border-dark);
+  border: 1px solid var(--ork-input-border);
   border-radius: 6px;
   cursor: pointer;
 }
@@ -2001,6 +1995,9 @@ html[data-theme="dark"] .lg-sc-field label.lg-sc-mode-opt.lg-sc-mode-sel {
 }
 html[data-theme="dark"] .lg-sc-field label.lg-sc-mode-opt.lg-sc-mode-sel {
   box-shadow: 0 0 0 1px #818cf8;
+}
+html[data-theme="dark"] .lg-sc-mode-opt:focus-within {
+  outline-color: #818cf8;
 }
 html[data-theme="dark"] .lg-sc-modal-error {
   color: #fca5a5;
@@ -2062,7 +2059,7 @@ html[data-theme="dark"] .lg-sc-fp .flatpickr-day.selected {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 600px) {
   .lg-sc-bar {
     padding: 10px 14px;
   }
@@ -2074,7 +2071,6 @@ html[data-theme="dark"] .lg-sc-fp .flatpickr-day.selected {
     bottom: 8px;
     left: 8px;
     width: auto;
-    max-width: none;
     max-height: calc(100vh - 64px); /* clears the fixed nav */
     max-height: calc(100dvh - 64px);
   }
