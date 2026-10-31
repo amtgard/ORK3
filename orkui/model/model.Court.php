@@ -13,6 +13,11 @@ class Model_Court extends Model
     // Auth
     // -----------------------------------------------------------------------
 
+    public function plan_page_title($name)
+    {
+        return Court::planPageTitle($name);
+    }
+
     public function can_manage($uid, $kingdom_id, $park_id = 0)
     {
         return $this->_court()->canManage($uid, $kingdom_id, $park_id);

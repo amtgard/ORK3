@@ -118,6 +118,9 @@ class Controller_Court extends Controller
             return;
         }
 
+        // default.theme prints this into <title> unescaped.
+        $this->data['page_title'] = htmlspecialchars($this->Court->plan_page_title($court['Name']), ENT_QUOTES);
+
         $courtAwards  = $this->Court->get_court_awards($court_id, $uid);
         // Per-line ScrolleryPrintable: the scroll dropdown disables Scrollery Print
         // for an award Scrollery cannot print.

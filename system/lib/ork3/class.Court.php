@@ -226,6 +226,13 @@ class Court
         return (int)$park_id === 0 || (string)$issued_by === 'kingdom';
     }
 
+    /** The planner's browser-tab title: "{name} Court Plan", without a doubled "Court". */
+    public static function planPageTitle($name)
+    {
+        $name = trim((string)$name);
+        return preg_match('/\bcourt$/i', $name) ? $name . ' Plan' : $name . ' Court Plan';
+    }
+
     public function getCourtDetail($court_id)
     {
         $this->db->Clear();

@@ -100,6 +100,16 @@ final class CourtIssuedByTest extends TestCase
         $this->assertContains($id, array_column($this->court->getCourtList($this->k, $this->p), 'CourtId'));
     }
 
+    public function test_the_plan_title_never_says_court_twice(): void
+    {
+        $this->assertSame('Spring Coronation Court Plan', Court::planPageTitle('Spring Coronation'));
+        $this->assertSame('Nameless Night Carnival Court Plan', Court::planPageTitle('Nameless Night Carnival Court'));
+        $this->assertSame('Spring COURT Plan', Court::planPageTitle(' Spring COURT '));
+        $this->assertSame('Food Court Plan', Court::planPageTitle('Food Court'));
+        $this->assertSame('Courtyard Games Court Plan', Court::planPageTitle('Courtyard Games'));
+        $this->assertSame('Midcourt Court Plan', Court::planPageTitle('Midcourt'));
+    }
+
     private function storedRoster(int $courtId): ?string
     {
         $st = $this->fx->pdo()->prepare('SELECT giver_snapshot FROM ' . DB_PREFIX . 'court WHERE court_id = ?');
