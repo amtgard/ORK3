@@ -373,6 +373,7 @@ class Controller_Kingdom extends Controller
 
         $uid = $kn_uid;
         $this->data['IsLoggedIn']       = $uid > 0;
+        $this->data['CurrentUserId']    = $uid;
 
         // Pin the logged-in user's home park to the first slot in the parks list
         $this->data['UserParkId'] = $uid > 0 ? $this->KingdomProfile->user_home_park_id($uid) : 0;

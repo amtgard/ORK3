@@ -1897,6 +1897,7 @@ var PkConfig = {
 	canManage:      <?= !empty($CanManagePark) ? 'true' : 'false' ?>,
 	canAdmin:       <?= !empty($CanAdminPark)  ? 'true' : 'false' ?>,
 	loggedIn:       <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
+	viewerId:       <?= (int)($CurrentUserId ?? 0) ?>,
 	calEvents:      <?= json_encode(array_values($pkCalEvents ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	calParkDays:    <?= json_encode(array_values($pkCalParkDays ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	preloadOfficers:<?= json_encode($PreloadOfficers ?? []) ?>,
@@ -2890,7 +2891,7 @@ tr:hover .pk-copy-link { opacity: 1; }
 		</div>
 		<div class="pk-modal-body">
 			<div id="pk-editoff-feedback" class="pk-editoff-feedback" style="display:none"></div>
-			<p class="pk-editoff-hint">Search for a player to assign to each role, or click Vacate to remove the current officer.</p>
+			<p class="pk-editoff-hint">Search for a player to assign to each role; picking someone for an occupied role replaces the current officer when you save, so there is no need to vacate first. <strong>Vacate</strong> empties the role immediately and ends that officer's access, including your own if it is your role.</p>
 			<div id="pk-editoff-rows"></div>
 		</div>
 		<div class="pk-modal-footer">

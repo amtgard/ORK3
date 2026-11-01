@@ -1350,6 +1350,7 @@ var KnConfig = {
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
 	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
+	viewerId:         <?= (int)($CurrentUserId ?? 0) ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1896,7 +1897,7 @@ var KnBannerConfig = {
 		</div>
 		<div class="kn-modal-body">
 			<div id="kn-editoff-feedback" style="display:none"></div>
-			<p class="kn-editoff-hint">Search and select a player for each role. Leave a field empty to skip that role. Use <strong>Vacate</strong> to remove the current holder.</p>
+			<p class="kn-editoff-hint">Search and select a player for each role; picking someone for an occupied role replaces the current holder when you save, so there is no need to vacate first. Leave a field empty to skip that role. <strong>Vacate</strong> empties the role immediately and ends that officer's access, including your own if it is your role.</p>
 			<div id="kn-editoff-rows">
 				<!-- Built by JS from KnConfig.officerList -->
 			</div>
