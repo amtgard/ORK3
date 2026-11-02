@@ -25335,3 +25335,17 @@ function _typeof(e) {
         e.stopPropagation();
     }, true);
 })(window, document);
+
+// Player search from a page goes through orkui so that the session identifies the
+// searcher: the session cookie is scoped to /orkui/ and never reaches /orkservice/,
+// where a call without a token is anonymous and may only match personas.
+function orkPlayerSearchUrl(url) {
+    return url.replace(/orkservice\/Search\/SearchService\.php\??/, 'orkui/index.php?Route=SearchAjax/player&');
+}
+
+jQuery.ajaxPrefilter(function(options) {
+    if (/orkservice\/Search\/SearchService\.php/.test(options.url)
+        && /(^|[?&])Action=Search(\/|%2F)Player(&|$)/i.test(options.url.split('?')[1] + '&' + (options.data || ''))) {
+        options.url = orkPlayerSearchUrl(options.url);
+    }
+});

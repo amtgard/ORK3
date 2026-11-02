@@ -273,7 +273,8 @@ class Controller_Park extends Controller
         $this->data['event_summary']        = $eventBundle['event_summary'];
         $this->data['pkEventMapLocations']  = $eventBundle['pkEventMapLocations'];
         $this->data['pkEventMapNoLocCount'] = $eventBundle['pkEventMapNoLocCount'];
-        $this->data['park_players']         = $this->ParkProfile->players_roster($pid);
+        $canSeeRealNames = $pk_uid > 0 && $this->Authorization->has_authority($pk_uid, AUTH_PARK, $pid, AUTH_EDIT);
+        $this->data['park_players']         = $this->ParkProfile->players_roster($pid, $canSeeRealNames);
 
         $averages = $this->ParkProfile->attendance_averages($pid);
         $this->data['MonthlyAvg'] = $averages['MonthlyAvg'];
