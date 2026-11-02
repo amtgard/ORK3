@@ -8,7 +8,7 @@
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-10-09');
+    define('WHATS_NEW_VERSION', '2026-11-20');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
@@ -18,7 +18,27 @@ if (!defined('ORK_VERSION')) {
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
+//
+// Optional release keys: 'pinned' => true sorts the release above every other one on the
+// Release Notes page, whatever its date; 'label' replaces the "v{version}" heading;
+// 'display_date' replaces the formatted date; 'orkple' => true draws the What's New modal
+// as the ORKPLE II CRT. Optional item key: 'action' => 'orkple' adds an "insert the disk"
+// button under the item that starts ORKPLE II, with or without the floppy on the page.
 $WHATS_NEW_ITEMS = [
+    // ORK 0.1 is the ORKPLE II holiday event. It is pinned: it stays at the top of the
+    // Release Notes after newer releases ship, so its disk link is always easy to find.
+    // Its date is the day the event ships (and drives the modal); its footer version does not change.
+    ['version' => '0.1', 'label' => 'ORK 0.1', 'date' => '2026-11-20', 'display_date' => 'Fall 1983', 'pinned' => true, 'orkple' => true, 'items' => [
+        ['icon' => 'fas fa-desktop', 'title' => 'Introducing ORKPLE II', 'body' => 'The personal Online Record Keeper. A 1 MHz 6502 processor, 48K of memory and a 5 1/4" disk drive put every kingdom, park and player in the ORK on a screen on your own desk.'],
+        ['icon' => 'fas fa-gamepad', 'title' => 'ORKEK Software Included', 'body' => 'Eight educational programs from the Online Record Keeper Educational Konsortium, from ORKEGON TRAIL to SPACE INVADORKS. Learning has never been this much fun.'],
+        ['icon' => 'fas fa-save', 'title' => 'Ready When You Are', 'body' => 'Insert the floppy disk below. When the screen says ORK, press RETURN.'],
+
+        // ----- Release Notes page only -----
+        ['icon' => 'fas fa-microchip', 'title' => 'The Most Advanced Record Keeper Ever Offered for the Home', 'notes_only' => true, 'body' => 'ORKPLE II is the absolute cutting edge of ORK technology. At its heart is the MOS 6502 microprocessor, running at a blistering 1.0 MHz. It comes with 48K of RAM, enough to hold an entire park\'s sign-in sheet in memory at once, and 12K of ROM with ORKSOFT BASIC built in, so it is ready to work the moment you switch it on. The display gives you 40 columns by 24 rows of crisp phosphor text, all in upper case, plus one lowercase z. Hi-res mode draws 280 by 192 points, enough to render your kingdom\'s heraldry in glorious green. The ORKdisk II drive stores 140K on a single 5 1/4" floppy, and a built-in speaker tells you when you have made a mistake. Eight expansion slots mean ORKPLE II will grow right along with your kingdom.'],
+        ['icon' => 'fas fa-book', 'title' => 'The Whole ORK, in 40 Columns', 'notes_only' => true, 'body' => 'Browse the kingdoms with their arms in 1-bit pixel art, look up any player and see their class levels drawn as ladder bars, read your own profile, find parks and the days they play, check upcoming events and companies, search the whole ORK, and see THE ORK TODAY: who is playing, the weather, and the latest milestones. It is all the real ORK, live, and none of it can change a record, so explore all you like.'],
+        ['icon' => 'fas fa-graduation-cap', 'title' => 'The ORKEK Software Library', 'notes_only' => true, 'body' => 'Every ORKPLE II ships with eight titles from the Online Record Keeper Educational Konsortium. ORKEGON TRAIL: four friends, 720 miles, one wet road to the event, and one boffer fight in a rest area. zORK: the online record dungeon. NUMBER MUNCHORKS: work the sign-in sheet before the reeves catch you. PAC-MORK: recover your spellballs before a dagger finds you. ASTERORKS: an archer, a wrapping field, and a horde that breaks apart when hit. CRYSTAL CASTLORKS: take every gem in the castle and keep the looters off it. FROGGORK: you are late, and sign-in is on the far side of a live battlegame. SPACE INVADORKS: hold the castle wall against a marching formation of fighters.'],
+        ['icon' => 'fas fa-save', 'title' => 'Load the Disk', 'notes_only' => true, 'action' => 'orkple', 'body' => 'Lost your floppy? Keep a spare here. ORKPLE II needs a keyboard, so bring a computer rather than a phone. Press ESC at any time to return to the ORK.'],
+    ]],
     ['version' => '3.5.6 Crown', 'date' => '2026-10-09', 'items' => [
         ['icon' => 'fas fa-gavel', 'title' => 'Plan Your Court in the ORK', 'body' => 'Monarchs, Regents, Prime Ministers and kingdom or park editors can now plan a court before it is held. Open Court Planner under Admin Tasks on your kingdom or park page, pull awards from pending recommendations or add them by hand, and drag them into running order.'],
         ['icon' => 'fas fa-bullhorn', 'title' => 'Run It Live, or From Paper', 'body' => 'Publish the court and work it your way. Run at Court lets you mark each award from your phone as it is called. Or print the packet — an order of court for the herald, a record sheet and a prep sheet — and type it in afterwards on the Record Court screen. Nothing reaches a player\'s record until you press Complete Court.'],

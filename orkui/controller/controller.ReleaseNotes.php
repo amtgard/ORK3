@@ -25,8 +25,10 @@ class Controller_ReleaseNotes extends Controller
         $this->data['page_title'] = 'ORK Release Notes';
         $this->data['ork_version'] = ORK_VERSION;
         $releases = $WHATS_NEW_ITEMS;
+        // Pinned releases (ORK 0.1, the ORKPLE II event) stay on top; the rest run newest first.
         usort($releases, function ($a, $b) {
-            return strcmp($b['date'], $a['date']);
+            $pin = (int) !empty($b['pinned']) - (int) !empty($a['pinned']);
+            return $pin !== 0 ? $pin : strcmp($b['date'], $a['date']);
         });
         $this->data['releases'] = $releases;
     }

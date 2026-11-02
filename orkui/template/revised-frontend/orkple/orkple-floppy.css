@@ -1,0 +1,95 @@
+/* ORKPLE II easter egg: floppy launcher + page-level CRT power-off/on.
+   Loaded on every page; keep it tiny. The overlay styles live in orkple.css. */
+
+#orkple-floppy {
+    position: fixed;
+    left: calc(14px + env(safe-area-inset-left, 0px));
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    z-index: 9000;
+    width: 44px;
+    height: 44px;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    box-shadow: none;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    line-height: 0;
+    -webkit-tap-highlight-color: transparent;
+    animation: orkple-bob 3.6s ease-in-out infinite;
+}
+#orkple-floppy svg {
+    display: block;
+    width: 44px;
+    height: 44px;
+    filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .35));
+    transition: transform .18s ease;
+    transform-origin: 50% 60%;
+}
+#orkple-floppy:hover svg,
+#orkple-floppy:focus-visible svg {
+    transform: translateY(-5px) rotate(-9deg) scale(1.1);
+}
+#orkple-floppy:focus-visible {
+    outline: 2px solid #4f46e5;
+    outline-offset: 3px;
+}
+#orkple-floppy[aria-disabled="true"] {
+    pointer-events: none;
+}
+#orkple-floppy .of-jacket { stroke: #000; stroke-width: 1.5; }
+html[data-theme="dark"] #orkple-floppy .of-jacket { stroke: #e4e4ea; stroke-width: 2; }
+html[data-theme="dark"] #orkple-floppy svg {
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, .28));
+}
+
+@keyframes orkple-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+@media print {
+    #orkple-floppy { display: none !important; }
+}
+
+/* ---- Page-level CRT power-off / power-on -------------------------------
+   Driven by orkple-floppy.js (and orkple.js on the way back). Inline custom
+   properties on <body>: --ok-ly / --ok-lx = scale that leaves ~2px of the
+   body's own height / width. transform-origin is set inline to the viewport
+   center, so a scrolled page collapses around what the user is looking at. */
+html.orkple-crt-off,
+html.orkple-crt-on {
+    background: #000 !important;
+    overflow: hidden !important;
+    min-height: var(--ok-doc-h, 0);
+}
+html.orkple-crt-off body {
+    animation: orkple-off .9s cubic-bezier(.55, 0, .75, .4) forwards;
+}
+html.orkple-crt-on body {
+    animation: orkple-on .7s cubic-bezier(.2, .6, .3, 1) both;
+}
+@keyframes orkple-off {
+    0%   { transform: scale(1, 1); filter: brightness(1); opacity: 1; }
+    50%  { transform: scale(1, var(--ok-ly, .003)); filter: brightness(7); opacity: 1; }
+    82%  { transform: scale(var(--ok-lx, .01), var(--ok-ly, .003)); filter: brightness(14); opacity: 1; }
+    100% { transform: scale(0, 0); filter: brightness(14); opacity: 0; }
+}
+@keyframes orkple-on {
+    0%   { transform: scale(var(--ok-lx, .01), var(--ok-ly, .003)); filter: brightness(14); opacity: 1; }
+    45%  { transform: scale(1, var(--ok-ly, .003)); filter: brightness(7); opacity: 1; }
+    100% { transform: scale(1, 1); filter: brightness(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #orkple-floppy { animation: none; }
+    #orkple-floppy svg { transition: none; }
+    html.orkple-crt-off body { animation: orkple-fade-out .15s linear forwards; }
+    html.orkple-crt-on body { animation: orkple-fade-in .15s linear both; }
+    @keyframes orkple-fade-out { from { opacity: 1; } to { opacity: 0; } }
+    @keyframes orkple-fade-in { from { opacity: 0; } to { opacity: 1; } }
+}

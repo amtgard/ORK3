@@ -1,0 +1,269 @@
+/* ORKPLE II: full-viewport Apple II monitor. Loaded lazily on first floppy click.
+   Everything is scoped under #orkple; orkui.css has aggressive global control and
+   heading rules, so every element used here is reset explicitly. */
+
+html.orkple-on { background: #000 !important; overflow: hidden !important; }
+html.orkple-on body { background: #000 !important; }
+html.orkple-on body > *:not(#orkple) { visibility: hidden !important; }
+
+#orkple,
+#orkple *,
+#orkple *::before,
+#orkple *::after { box-sizing: border-box; }
+
+#orkple {
+    position: fixed;
+    top: var(--ok-top, 0px);
+    left: var(--ok-left, 0px);
+    width: 100%;
+    height: var(--ok-h, 100dvh);
+    z-index: 2147483000;
+    margin: 0;
+    padding: clamp(10px, 3vw, 44px) clamp(10px, 3.4vw, 52px) 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: #5c5238;
+    font: 600 11px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    letter-spacing: .18em;
+    text-transform: none;
+    text-align: left;
+    /* Warm cream ABS plastic with a faint moulded grain. */
+    background:
+        radial-gradient(ellipse at 50% 0%, rgba(255, 252, 238, .75), rgba(255, 252, 238, 0) 55%),
+        linear-gradient(180deg, #ebe0c3 0%, #e3d6b3 55%, #d5c7a2 100%);
+    transform-origin: 50% 50%;
+}
+#orkple::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(90deg, rgba(120, 100, 55, .035) 0 1px, rgba(255, 255, 255, 0) 1px 3px);
+    mix-blend-mode: multiply;
+}
+
+/* Recessed inner bevel around the glass */
+#orkple .ok-bevel {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: clamp(8px, 1.6vw, 22px);
+    border-radius: clamp(14px, 2.4vw, 30px);
+    background: linear-gradient(135deg, #b9aa84 0%, #cdbf9b 45%, #d9cca9 100%);
+    box-shadow:
+        inset 6px 7px 14px rgba(70, 55, 25, .55),
+        inset 1px 1px 0 rgba(60, 45, 20, .55),
+        inset -4px -4px 10px rgba(255, 252, 235, .7),
+        0 1px 0 rgba(255, 255, 255, .7),
+        0 -1px 0 rgba(120, 100, 55, .25);
+}
+
+/* The tube */
+#orkple .ok-glass {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: clamp(22px, 7%, 70px) / clamp(22px, 8%, 70px);
+    background: radial-gradient(ellipse at 50% 42%, #18241e 0%, #0d1511 62%, #070b09 100%);
+    box-shadow:
+        inset 0 0 70px rgba(0, 0, 0, .85),
+        inset 0 0 0 2px rgba(0, 0, 0, .8),
+        0 0 0 2px #23231d,
+        0 0 0 3px rgba(255, 255, 255, .25);
+    cursor: text;
+    transform-origin: 50% 50%;
+}
+#orkple.ok-warm .ok-glass { animation: ok-warm 1s cubic-bezier(.3, .1, .2, 1) both; }
+#orkple .ok-screen {
+    position: absolute;
+    inset: 5%;
+    container-type: size;
+}
+#orkple .ok-canvas {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(100cqw, calc(100cqh * 280 / 192));
+    aspect-ratio: 280 / 192;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 0 3px rgba(124, 245, 196, .55)) drop-shadow(0 0 9px rgba(124, 245, 196, .22));
+}
+
+/* Glass effects: all pointer-events none, over the canvas */
+#orkple .ok-fx { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; }
+#orkple .ok-scan {
+    background: repeating-linear-gradient(180deg, rgba(0, 0, 0, 0) 0 2px, rgba(0, 0, 0, .26) 2px 3px);
+}
+#orkple .ok-vig {
+    background: radial-gradient(ellipse at 50% 48%, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, .55) 88%, rgba(0, 0, 0, .8) 100%);
+}
+#orkple .ok-refl {
+    background:
+        radial-gradient(ellipse 60% 14% at 28% -2%, rgba(255, 255, 255, .17), rgba(255, 255, 255, 0) 70%),
+        radial-gradient(ellipse 22% 9% at 82% 4%, rgba(255, 255, 255, .09), rgba(255, 255, 255, 0) 70%),
+        linear-gradient(158deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 22%);
+}
+#orkple .ok-flick {
+    background: rgba(124, 245, 196, .035);
+    animation: ok-flick 4.7s steps(1, end) infinite;
+}
+#orkple .ok-flash {
+    background: #d8fff0;
+    opacity: 0;
+}
+#orkple.ok-warm .ok-flash { animation: ok-flash 1s linear both; }
+
+/* Hidden command line + live region */
+#orkple .ok-input {
+    position: absolute;
+    left: 8%;
+    top: 50%;
+    width: 60%;
+    height: 24px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    box-shadow: none;
+    background: transparent;
+    color: transparent;
+    caret-color: transparent;
+    opacity: 0;
+    font: 16px/24px monospace;
+    text-transform: none;
+    pointer-events: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+#orkple .ok-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: pre-wrap;
+    border: 0;
+}
+
+/* Bottom of the bezel: badge, vents, POWER */
+#orkple .ok-foot {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    height: clamp(54px, 7.5vh, 74px);
+    padding: 0 4px;
+}
+#orkple .ok-badge {
+    margin: 0;
+    font: 700 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    letter-spacing: .32em;
+    color: #8a7c58;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, .75), 0 -1px 0 rgba(90, 70, 30, .25);
+    white-space: nowrap;
+}
+#orkple .ok-vents {
+    flex: 1 1 auto;
+    height: 16px;
+    max-width: 260px;
+    margin: 0 auto;
+    background: repeating-linear-gradient(90deg, rgba(80, 62, 28, .5) 0 2px, rgba(255, 255, 255, .55) 2px 3px, rgba(0, 0, 0, 0) 3px 8px);
+    border-radius: 3px;
+    opacity: .75;
+}
+#orkple .ok-power {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0;
+    padding: 0 14px;
+    border: 1px solid #a3956f;
+    border-radius: 9px;
+    background: linear-gradient(180deg, #efe5c9 0%, #d9ccaa 100%);
+    box-shadow: 0 2px 0 #9d8f69, 0 3px 5px rgba(60, 45, 20, .35), inset 0 1px 0 rgba(255, 255, 255, .8);
+    color: #5c5238;
+    font: 700 11px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    -webkit-tap-highlight-color: transparent;
+}
+#orkple .ok-power:hover { background: linear-gradient(180deg, #f5edd4 0%, #e0d4b3 100%); }
+#orkple .ok-power:active { transform: translateY(2px); box-shadow: 0 0 0 #9d8f69, inset 0 1px 3px rgba(60, 45, 20, .35); }
+#orkple .ok-power:focus-visible { outline: 3px solid #1d6fd8; outline-offset: 2px; }
+#orkple .ok-led {
+    display: block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #54ff9f;
+    box-shadow: 0 0 6px 1px rgba(60, 255, 150, .85), inset 0 -1px 1px rgba(0, 90, 40, .5);
+}
+#orkple.ok-off .ok-led { background: #2d5a40; box-shadow: none; }
+
+/* CRT power-off for the whole monitor */
+#orkple.ok-off { animation: ok-off .9s cubic-bezier(.55, 0, .75, .4) forwards; pointer-events: none; }
+
+@keyframes ok-warm {
+    0%   { transform: scale(.004, .004); filter: brightness(9); }
+    30%  { transform: scale(1, .006); filter: brightness(7); }
+    100% { transform: scale(1, 1); filter: brightness(1); }
+}
+@keyframes ok-flash {
+    0%, 34% { opacity: 1; }
+    100% { opacity: 0; }
+}
+@keyframes ok-off {
+    0%   { transform: scale(1, 1); filter: brightness(1); opacity: 1; }
+    50%  { transform: scale(1, .004); filter: brightness(7); opacity: 1; }
+    82%  { transform: scale(.006, .004); filter: brightness(14); opacity: 1; }
+    100% { transform: scale(0, 0); filter: brightness(14); opacity: 0; }
+}
+@keyframes ok-flick {
+    0%   { opacity: 1; }
+    6%   { opacity: .35; }
+    7%   { opacity: 1; }
+    41%  { opacity: .6; }
+    42%  { opacity: 1; }
+    83%  { opacity: .2; }
+    84%  { opacity: 1; }
+}
+
+@media (max-width: 600px) {
+    #orkple { padding: 8px 8px 0; }
+    #orkple .ok-bevel { padding: 7px; border-radius: 14px; }
+    #orkple .ok-glass { border-radius: 22px / 26px; }
+    #orkple .ok-screen { inset: 3%; }
+    #orkple .ok-foot { height: 56px; }
+    #orkple .ok-badge { font-size: 10px; letter-spacing: .24em; }
+    #orkple .ok-vents { display: none; }
+    #orkple .ok-power { padding: 0 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #orkple.ok-warm .ok-glass,
+    #orkple.ok-warm .ok-flash { animation: none; }
+    #orkple .ok-flick { animation: none; }
+    #orkple.ok-off { animation: ok-fade .15s linear forwards; }
+    @keyframes ok-fade { from { opacity: 1; } to { opacity: 0; } }
+}
+
+@media print {
+    #orkple { display: none !important; }
+}
