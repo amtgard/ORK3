@@ -5389,10 +5389,16 @@ $(document).ready(function() {
             vacateBtn.style.display     = occupied ? '' : 'none';
             (function(r, btn, ni, hi) {
                 btn.addEventListener('click', function() {
+                    var holder  = buildOfficerMap()[r] || {};
+                    var isSelf  = holder.MundaneId > 0 && holder.MundaneId === KnConfig.viewerId;
+                    var who     = holder.Persona ? holder.Persona : 'the current ' + r;
+                    var msg = isSelf
+                        ? 'You are the current ' + r + '. Vacating takes effect the moment you confirm: the office becomes empty and you lose the access it gives you right away, including this screen.\n\nTo hand the office to someone else, close this instead and search for their name. You do not need to vacate first.'
+                        : 'This removes ' + who + ' as ' + r + ' immediately and leaves the office empty. Any access they have through this office ends right away.\n\nTo hand the office to someone else, just pick the new person and save. You do not need to vacate first.';
                     pnConfirm({
-                        title: 'Vacate Position?',
-                        message: 'Remove the current ' + r + '?',
-                        confirmText: 'Vacate',
+                        title: isSelf ? 'Vacate Your Own Position?' : 'Vacate Position?',
+                        message: msg,
+                        confirmText: isSelf ? 'Vacate my position' : 'Vacate',
                         danger: true
                     }, function() {
                         btn.disabled    = true;
@@ -5407,6 +5413,11 @@ $(document).ready(function() {
                                 (KnConfig.officerList || []).forEach(function(off) {
                                     if (off.OfficerRole === r) { off.MundaneId = 0; off.Persona = ''; }
                                 });
+                                if (isSelf) {
+                                    showFeedback('You have vacated ' + r + '. Your access has ended; reloading\u2026', true);
+                                    setTimeout(function() { location.reload(); }, 1800);
+                                    return;
+                                }
                                 showFeedback(r + ' vacated.', true);
                             } else {
                                 btn.disabled    = false;
@@ -13623,10 +13634,16 @@ function setupPronounPicker(cfg) {
             vacateBtn.style.display = occupied ? '' : 'none';
             (function(r, btn, ni, hi) {
                 btn.addEventListener('click', function() {
+                    var holder  = buildOfficerMap()[r] || {};
+                    var isSelf  = holder.MundaneId > 0 && holder.MundaneId === PkConfig.viewerId;
+                    var who     = holder.Persona ? holder.Persona : 'the current ' + r;
+                    var msg = isSelf
+                        ? 'You are the current ' + r + '. Vacating takes effect the moment you confirm: the office becomes empty and you lose the access it gives you right away, including this screen.\n\nTo hand the office to someone else, close this instead and search for their name. You do not need to vacate first.'
+                        : 'This removes ' + who + ' as ' + r + ' immediately and leaves the office empty. Any access they have through this office ends right away.\n\nTo hand the office to someone else, just pick the new person and save. You do not need to vacate first.';
                     pnConfirm({
-                        title: 'Vacate Position?',
-                        message: 'Remove the current ' + r + '?',
-                        confirmText: 'Vacate',
+                        title: isSelf ? 'Vacate Your Own Position?' : 'Vacate Position?',
+                        message: msg,
+                        confirmText: isSelf ? 'Vacate my position' : 'Vacate',
                         danger: true
                     }, function() {
                         btn.disabled    = true;
@@ -13640,6 +13657,11 @@ function setupPronounPicker(cfg) {
                                 (PkConfig.officerList || []).forEach(function(off) {
                                     if (off.OfficerRole === r) { off.MundaneId = 0; off.Persona = ''; }
                                 });
+                                if (isSelf) {
+                                    showFeedback('You have vacated ' + r + '. Your access has ended; reloading\u2026', true);
+                                    setTimeout(function() { location.reload(); }, 1800);
+                                    return;
+                                }
                                 showFeedback(r + ' vacated.', true);
                             } else {
                                 btn.disabled    = false;

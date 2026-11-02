@@ -979,7 +979,7 @@ html[data-theme="dark"] .pn-rec-field label { color: var(--ork-text); }
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
 }
-.pn-confirm-message { margin: 0; font-size: 14px; color: var(--ork-text-secondary); }
+.pn-confirm-message { margin: 0; font-size: 14px; color: var(--ork-text-secondary); white-space: pre-line; }
 .pn-modal-footer {
     padding: 14px 20px;
     border-top: 1px solid var(--ork-divider);
