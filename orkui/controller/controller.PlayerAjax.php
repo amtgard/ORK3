@@ -728,6 +728,10 @@ class Controller_PlayerAjax extends Controller
             exit;
         }
         $this->load_model('Player');
+        if (!$this->Player->can_view_private($this->session->user_id, $mundane_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not authorized']);
+            exit;
+        }
         $dues = $this->Player->get_dues($mundane_id, 0, false);
         echo json_encode(['status' => 0, 'dues' => is_array($dues) ? $dues : []]);
         exit;
@@ -736,12 +740,20 @@ class Controller_PlayerAjax extends Controller
     public function notes($p = null)
     {
         header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
         $mundane_id = (int)($p ?? 0);
         if (!valid_id($mundane_id)) {
             echo json_encode(['status' => 1, 'error' => 'Invalid player ID']);
             exit;
         }
         $this->load_model('Player');
+        if (!$this->Player->can_view_private($this->session->user_id, $mundane_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not authorized']);
+            exit;
+        }
         $notes = $this->Player->get_notes($mundane_id);
         echo json_encode(['status' => 0, 'notes' => is_array($notes) ? $notes : []]);
         exit;

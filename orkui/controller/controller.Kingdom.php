@@ -169,7 +169,9 @@ class Controller_Kingdom extends Controller
         session_write_close(); // release session lock so navigation is not blocked
         $kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
         $this->load_model('KingdomProfile');
-        $payload = $this->KingdomProfile->players_roster((int)$kingdom_id);
+        $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $canSeeRealNames = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_EDIT);
+        $payload = $this->KingdomProfile->players_roster((int)$kingdom_id, $canSeeRealNames);
         header('Content-Type: application/json');
         echo json_encode($payload);
         exit();

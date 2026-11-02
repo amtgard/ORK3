@@ -614,8 +614,13 @@ class JsonServer
             return $this->error(JsonServer::BAD_ARGUMENTS, 'Missing arguments or arguments are mis-typed.');
         } else {
             list($c, $m) = $this->map_callback($class, $method);
-            $instance = new $c();
-            $result = call_user_func_array(array($instance, $m), $args);
+            $denied = Ork3::$Lib->apiguard->prepare_call_h($class, $method, $args);
+            if ($denied !== null) {
+                $result = $denied;
+            } else {
+                $instance = new $c();
+                $result = Ork3::$Lib->apiguard->filter_result_h($class, $method, $args, call_user_func_array(array($instance, $m), $args));
+            }
             if (is_array($result)) {
                 if (isset($result['Status']) && isset($result['Code'])) {
                     return $result;

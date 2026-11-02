@@ -610,6 +610,7 @@ class SearchService extends Ork3
         $includeInactive = !empty($request['IncludeInactive']);
         $focus           = trim($request['Focus'] ?? '');
         $callerUserId    = (int)($request['CallerUserId'] ?? 0);
+        $personaOnly     = !empty($request['PersonaOnly']);
 
         $filterKid = 0;
         $filterPid = 0;
@@ -723,10 +724,10 @@ class SearchService extends Ork3
         $mundaneClause = $isOrkAdmin
             ? 'OR ' . $fold('m.given_name') . " LIKE '%{$term}%' OR " . $fold('m.surname') . " LIKE '%{$term}%'"
             : 'OR (m.restricted = 0 AND (' . $fold('m.given_name') . " LIKE '%{$term}%' OR " . $fold('m.surname') . " LIKE '%{$term}%'))";
+        $privateMatch = $personaOnly ? '' : "OR m.username LIKE '%{$term}%' {$mundaneClause}";
         $playerWhere = "{$suspendedClause} AND {$activeClause} AND LENGTH(m.persona) > 0
 			  AND (" . $fold('m.persona') . " LIKE '%{$term}%'
-			    OR m.username LIKE '%{$term}%'
-			    {$mundaneClause})";
+			    {$privateMatch})";
         if ($filterPid > 0) {
             $playerWhere .= " AND m.park_id = {$filterPid}";
         } elseif ($filterKid > 0) {
@@ -794,6 +795,7 @@ class SearchService extends Ork3
         $prioritize       = !empty($request['Prioritize']);
         $limit            = min(max((int)($request['Limit'] ?? 15), 1), 100);
         $format           = trim($request['Format'] ?? 'kingdom');
+        $personaOnly      = !empty($request['PersonaOnly']);
 
         $filterKid = 0;
         $filterPid = 0;
@@ -865,6 +867,10 @@ class SearchService extends Ork3
         $suspendedSql = $includeSuspended ? '' : 'AND m.suspended = 0';
         $activeSql    = $includeInactive ? '' : 'AND m.active = 1';
 
+        $privateMatch = $personaOnly ? '' : "OR m.given_name LIKE '%{$term}%'
+			    OR m.surname LIKE '%{$term}%'
+			    OR m.username LIKE '%{$term}%'";
+
         $sql = "
 			SELECT m.mundane_id, m.persona, m.park_id, m.kingdom_id,
 			       k.name AS kingdom_name, p.name AS park_name,
@@ -879,9 +885,7 @@ class SearchService extends Ork3
 			  {$kingdomClause}
 			  {$parkClause}
 			  AND (m.persona LIKE '%{$term}%'
-			    OR m.given_name LIKE '%{$term}%'
-			    OR m.surname LIKE '%{$term}%'
-			    OR m.username LIKE '%{$term}%')
+			    {$privateMatch})
 			ORDER BY {$orderClause}
 			LIMIT {$limit}";
 
