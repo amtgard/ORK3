@@ -134,6 +134,35 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 	html[data-theme="dark"] .wn-all-versions:hover { background: #2f855a; border-color: #2f855a; }
 	html[data-theme="dark"] .wn-all-versions { animation:wnGlowPulseDark 2.2s ease-in-out infinite; }
 	@keyframes wnGlowPulseDark { 0%, 100% { box-shadow:0 0 0 0 rgba(72,187,120,0.45); } 50% { box-shadow:0 0 16px 4px rgba(72,187,120,0.65); } }
+
+	/* What's New, ORK 0.1: the release is an ORKPLE II, so the modal is its monitor */
+	.wn-crt { --orkple-phosphor:#7cf5c4; --orkple-screen:#0b0f0d; width:92%; max-width:520px; background:linear-gradient(#e6dcc0, #cfc3a2); border-radius:18px; padding:22px 22px 14px; box-shadow:0 10px 44px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.6), inset 0 -3px 0 rgba(0,0,0,0.12); }
+	.wn-crt-screen { position:relative; background:var(--orkple-screen); border-radius:22px / 26px; padding:4px; box-shadow:inset 0 0 0 6px #2a2721, inset 0 0 40px rgba(0,0,0,0.9); overflow:hidden; }
+	.wn-crt-screen::after { content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit; background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,0.28) 3px); box-shadow:inset 0 0 60px rgba(124,245,196,0.08); }
+	.wn-crt-text { max-height:62vh; max-height:62dvh; overflow-y:auto; padding:18px 20px 16px; color:var(--orkple-phosphor); font:15px/1.45 "Courier New", Courier, monospace; text-transform:uppercase; letter-spacing:0.5px; text-shadow:0 0 5px rgba(124,245,196,0.55); scrollbar-color:var(--orkple-phosphor) var(--orkple-screen); -webkit-overflow-scrolling:touch; }
+	.wn-crt-text :where(button) { font:inherit; text-transform:inherit; letter-spacing:inherit; cursor:pointer; }
+	.wn-crt-bar { background:var(--orkple-phosphor); color:var(--orkple-screen); text-shadow:none; text-align:center; font-weight:700; margin:0 0 4px; padding:0 4px; }
+	.wn-crt-sub { text-align:center; margin:0; }
+	.wn-crt-rule { border:0; border-top:3px double var(--orkple-phosphor); opacity:0.75; margin:10px 0 12px; }
+	.wn-crt-items { list-style:none; margin:0; padding:0; }
+	.wn-crt-item { margin:0 0 12px; }
+	.wn-crt-item-title { font-weight:700; }
+	.wn-crt-item-title::before { content:']'; margin-right:6px; }
+	.wn-crt-item-body { margin:2px 0 0 18px; opacity:0.9; font-size:13px; }
+	.wn-crt-insert { display:block; width:100%; margin:16px 0 10px; padding:10px 8px; background:var(--orkple-phosphor); color:var(--orkple-screen); border:0; border-radius:0; font-weight:700; text-shadow:none; box-shadow:0 0 14px rgba(124,245,196,0.45); }
+	.wn-crt-insert:hover, .wn-crt-insert:focus-visible { outline:2px dashed var(--orkple-phosphor); outline-offset:3px; }
+	.wn-crt-links { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:13px; }
+	.wn-crt-links a, .wn-crt-links button { color:var(--orkple-phosphor); background:none; border:0; padding:2px 0; text-decoration:underline; text-underline-offset:3px; }
+	.wn-crt-links a:hover, html[data-theme="dark"] .wn-crt-links a, html[data-theme="dark"] .wn-crt-links a:hover { color:var(--orkple-phosphor); }
+	.wn-crt-cursor { display:inline-block; width:0.6em; height:1em; background:var(--orkple-phosphor); vertical-align:-2px; margin-left:4px; animation:wnCrtBlink 0.8s steps(1) infinite; }
+	@keyframes wnCrtBlink { 50% { opacity:0; } }
+	.wn-crt-chin { display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding:0 6px; }
+	.wn-crt-badge { font:700 12px/1 Helvetica, Arial, sans-serif; letter-spacing:2px; color:#6b5f45; }
+	.wn-crt-led { width:10px; height:10px; border-radius:50%; background:#e3402e; box-shadow:0 0 6px #e3402e; }
+	@media (prefers-reduced-motion: reduce) { .wn-crt-cursor { animation:none; } }
+	@media (max-width: 600px) { .wn-crt { padding:14px 12px 10px; border-radius:12px; } .wn-crt-text { padding:14px 12px; font-size:13px; } .wn-crt-item-body { font-size:12px; margin-left:12px; } }
+	html[data-theme="dark"] .wn-crt { background:linear-gradient(#b9b098, #a49a80); }
+	html[data-theme="dark"] .wn-crt-badge { color:#463d2b; }
 	
 	/* Dark mode toggle button */
 	.nav-theme-toggle {
@@ -804,7 +833,38 @@ document.addEventListener('keydown', function (e) {
 $__wnShow = !empty($this->__data['ShowWhatsNew']);
 $__currentRelease = $this->__data['WhatsNewRelease'] ?? null;
 ?>
-<?php if ($__wnShow && $__currentRelease): ?>
+<?php if ($__wnShow && $__currentRelease && !empty($__currentRelease['orkple'])): ?>
+<div class="wn-overlay wn-open" id="wn-overlay">
+  <div class="wn-crt" role="dialog" aria-modal="true" aria-labelledby="wn-crt-title">
+    <div class="wn-crt-screen">
+      <div class="wn-crt-text">
+        <div class="wn-crt-bar" id="wn-crt-title">What&rsquo;s New on the ORK?</div>
+        <p class="wn-crt-sub"><?=htmlspecialchars($__currentRelease['label'] ?? $__currentRelease['version'])?> &middot; ORKPLE II</p>
+        <hr class="wn-crt-rule">
+        <ul class="wn-crt-items">
+        <?php foreach ($__currentRelease['items'] as $__item): ?>
+          <?php if (!empty($__item['notes_only'])) continue; ?>
+          <li class="wn-crt-item">
+            <div class="wn-crt-item-title"><?=htmlspecialchars($__item['title'])?></div>
+            <div class="wn-crt-item-body"><?=htmlspecialchars($__item['body'])?></div>
+          </li>
+        <?php endforeach; ?>
+        </ul>
+        <?php $__wnAnchor = 'release-' . preg_replace('/[^a-z0-9]+/', '-', strtolower($__currentRelease['version'])); ?>
+        <button type="button" class="wn-crt-insert" onclick="wnInsertDisk()">Insert Floppy Disk</button>
+        <div class="wn-crt-links">
+          <a href="<?=UIR?>ReleaseNotes#<?=$__wnAnchor?>" onclick="wnDismiss()">Release Notes</a>
+          <button type="button" onclick="wnDismiss()">Later<span class="wn-crt-cursor" aria-hidden="true"></span></button>
+        </div>
+      </div>
+    </div>
+    <div class="wn-crt-chin" aria-hidden="true">
+      <span class="wn-crt-badge">ORKPLE II</span>
+      <span class="wn-crt-led"></span>
+    </div>
+  </div>
+</div>
+<?php elseif ($__wnShow && $__currentRelease): ?>
 <div class="wn-overlay wn-open" id="wn-overlay">
   <div class="wn-modal">
     <div class="wn-header">
@@ -833,12 +893,21 @@ $__currentRelease = $this->__data['WhatsNewRelease'] ?? null;
     </div>
   </div>
 </div>
+<?php endif; ?>
+<?php if ($__wnShow && $__currentRelease): ?>
 <script>
 var wnVersion = <?=json_encode(WHATS_NEW_VERSION)?>;
 var wnUir = '<?=UIR?>';
 function wnDismiss() {
   document.getElementById('wn-overlay').classList.remove('wn-open');
   $.post(wnUir + 'WnAjax/dismiss', { version: wnVersion });
+}
+// ORK 0.1: start ORKPLE II. If it cannot start here (still loading, blocked, framed),
+// keep the release unseen and go to its Release Notes card, which has the same button.
+function wnInsertDisk() {
+  if (window.Orkple && typeof window.Orkple.insert === 'function') { wnDismiss(); window.Orkple.insert(); return; }
+  var a = document.querySelector('.wn-crt-links a');
+  if (a) { window.location.href = a.href; }
 }
 document.getElementById('wn-overlay').addEventListener('click', function(e) {
   if (e.target === this) wnDismiss();
@@ -1265,5 +1334,9 @@ if (typeof Highcharts !== 'undefined') {
 </script>
 
 
+<?php $orkpleDir = 'revised-frontend/orkple/'; ?>
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE.$orkpleDir?>orkple-floppy.css?v=<?=filemtime(DIR_TEMPLATE.$orkpleDir.'orkple-floppy.css')?>">
+<?php $orkpleGames = array_map('filemtime', glob(DIR_TEMPLATE.$orkpleDir.'games/*.js') ?: []); ?>
+<script defer src="<?=HTTP_TEMPLATE.$orkpleDir?>orkple-floppy.js?v=<?=filemtime(DIR_TEMPLATE.$orkpleDir.'orkple-floppy.js')?>" data-v="<?=max(filemtime(DIR_TEMPLATE.$orkpleDir.'orkple.css'), filemtime(DIR_TEMPLATE.$orkpleDir.'orkple.js'), filemtime(DIR_TEMPLATE.$orkpleDir.'orkple-terminal.js'), ...$orkpleGames)?>" data-service="<?=htmlspecialchars(HTTP_SERVICE, ENT_QUOTES)?>" data-ui="<?=htmlspecialchars(UIR, ENT_QUOTES)?>" data-user="<?=(int)$this->__session->user_id?>"></script>
 </body>
 </html>
