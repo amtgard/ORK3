@@ -874,6 +874,33 @@ body:has(#svb-toc) { overflow-x: clip; }
 
 .svb-icon-btn:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 1px; }
 .svb-icon-btn[disabled] { opacity: 0.35; cursor: not-allowed; }
+.svb-icon-btn[hidden] { display: none; }
+
+/* Inline delete: the trash button's second step. Held for a second (spinner,
+   aria-disabled) so a double-click cannot delete. */
+.svb-delconfirm {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    height: 24px;
+    margin: 0;
+    padding: 0 10px;
+    border: 1px solid var(--sv-danger);
+    border-radius: var(--ork-radius-sm);
+    background: var(--sv-danger);
+    color: #fff;
+    font: inherit;
+    font-size: 12px;
+    font-weight: var(--ork-font-weight-semibold);
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: none;
+    cursor: pointer;
+}
+.svb-delconfirm:hover:not([aria-disabled="true"]) { filter: brightness(0.92); }
+.svb-delconfirm:focus-visible { outline: 2px solid var(--sv-danger); outline-offset: 2px; }
+.svb-delconfirm[aria-disabled="true"] { opacity: 0.7; cursor: wait; }
 .svb-icon-btn.svb-icon-on { background: var(--sv-accent-soft); color: var(--sv-accent); border-color: var(--sv-accent); }
 .svb-icon-danger:hover:not([disabled]) { color: var(--sv-danger); border-color: var(--sv-danger); }
 
@@ -1680,6 +1707,97 @@ body:has(#svb-toc) { overflow-x: clip; }
 .svb-modal-body th, .svb-modal-body td { border: 1px solid var(--ork-border); padding: 6px 8px; text-align: left; }
 .svb-modal-body pre { overflow-x: auto; background: var(--ork-bg-secondary); padding: 10px; border-radius: var(--ork-radius-md); }
 
+/* Quick Questions (the lightning button beside a card's prompt): one tile per
+   ready-made question. Theme-aware through the --sv-* tokens, so dark mode
+   needs no overrides of its own. */
+.svb-top-quick { margin-top: 2px; }
+.svb-top-quick:hover:not([disabled]) { color: var(--sv-accent); }
+.svb-qq-lede {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--sv-accent);
+    border-radius: var(--ork-radius-md);
+    background: var(--sv-accent-soft);
+    color: var(--ork-text);
+}
+.svb-qq-lede > .fas { margin-top: 3px; color: var(--sv-accent); }
+.svb-qq-section + .svb-qq-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--ork-border); }
+.svb-modal-body .svb-qq-sechead {
+    margin: 0 0 8px;
+    font-size: 11px;
+    font-weight: var(--ork-font-weight-bold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ork-text-secondary);
+}
+.svb-qq-secnote { margin: -2px 0 10px; font-size: var(--ork-font-size-sm); color: var(--ork-text-secondary); }
+.svb-qq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.svb-qq-tile {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+    margin: 0;
+    padding: 14px;
+    text-align: left;
+    font: inherit;
+    line-height: 1.45;
+    color: var(--ork-text);
+    background: var(--sv-l3);
+    border: 1px solid var(--ork-border);
+    border-radius: var(--ork-radius-md);
+    box-shadow: none;
+    cursor: pointer;
+}
+.svb-qq-tile:hover { border-color: var(--sv-accent); background: var(--sv-accent-soft); }
+.svb-qq-tile:focus-visible { outline: 2px solid var(--sv-accent); outline-offset: 2px; }
+.svb-qq-icon { flex: 0 0 auto; width: 20px; margin-top: 2px; font-size: 16px; text-align: center; color: var(--sv-accent); }
+.svb-qq-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.svb-qq-title { font-weight: var(--ork-font-weight-bold); font-size: 14px; color: var(--ork-text); }
+.svb-qq-blurb { font-size: var(--ork-font-size-sm); color: var(--ork-text-secondary); }
+
+/* Paste List: one textarea, one label per line. */
+.svb-paste-label { display: block; margin: 0 0 8px; color: var(--ork-text); }
+.svb-paste-text {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 180px;
+    resize: vertical;
+    font: inherit;
+    line-height: 1.5;
+}
+.svb-paste-hint { min-height: 1.4em; margin: 6px 0 0; font-size: var(--ork-font-size-sm); color: var(--ork-text-muted); }
+.svb-paste-hint.svb-paste-hint-error { color: var(--sv-danger); }
+.svb-paste-existing {
+    margin-top: 12px;
+    border: 1px solid var(--ork-border);
+    border-radius: var(--ork-radius-md);
+    background: var(--sv-l3);
+}
+.svb-paste-existing-head {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--ork-border);
+    font-size: var(--ork-font-size-sm);
+    font-weight: var(--ork-font-weight-semibold);
+    color: var(--ork-text-secondary);
+}
+.svb-paste-existing-list {
+    max-height: 140px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 6px 10px 6px 34px;
+    color: var(--ork-text);
+}
+.svb-paste-mode { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 0; padding: 0; border: 0; min-width: 0; }
+.svb-paste-mode-opt { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-weight: 400; color: var(--ork-text); cursor: pointer; }
+.svb-paste-mode-opt input { margin: 4px 0 0; flex: 0 0 auto; accent-color: var(--sv-accent); }
+.svb-paste-mode-opt strong { font-weight: var(--ork-font-weight-semibold); }
+.svb-paste-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
 /* ── Outline: only when the canvas can still have its full width ──────── */
 
 /* The rail may never cost the canvas a pixel — it exists to use space the
@@ -1703,6 +1821,7 @@ body:has(#svb-toc) { overflow-x: clip; }
    back to a 44px tap target here — this block is the accessibility contract,
    so anything sized under 44px above must appear in it. */
 @media (pointer: coarse), (max-width: 900px) {
+    .svb-delconfirm { height: 44px; padding: 0 14px; font-size: 14px; }
     .svb-icon-btn,
     .svb-card-foot .svb-icon-btn,
     .svb-opt > .svb-icon-btn,
@@ -1914,7 +2033,7 @@ body:has(#svb-toc) { overflow-x: clip; }
     .svb-page-num { flex: 1 1 100%; }
     .svb-page-title { flex: 1 1 100%; }
     .svb-card-top { flex-wrap: wrap; }
-    .svb-typepick { flex: 1 1 100%; width: 100%; }
+    .svb-typepick { flex: 1 1 calc(100% - 52px); width: auto; }
     .svb-settingline .svb-field { flex: 1 1 100%; }
     /* Four 44px controls (grip, up, down, ×) leave a ~275px row about 60px of
        label, and nothing at all beside an "Other" tag. The label keeps the

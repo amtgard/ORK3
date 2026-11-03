@@ -1002,7 +1002,7 @@ class SurveyResponse
         if ($questions) {
             $this->db->Clear();
             $orr = $this->db->DataSet(
-                'SELECT o.option_id, o.question_id, o.role, o.sort_order, o.label, o.value_num, o.is_other
+                'SELECT o.option_id, o.question_id, o.role, o.sort_order, o.label, o.value_num, o.is_other, o.is_exclusive
                  FROM ' . DB_PREFIX . 'survey_option o
                  INNER JOIN ' . DB_PREFIX . 'survey_question q ON q.question_id = o.question_id
                  WHERE q.survey_id = ' . $surveyId . '
@@ -1019,7 +1019,8 @@ class SurveyResponse
                         'role'      => (string) $orr->role,
                         'label'     => (string) $orr->label,
                         'value_num' => null === $orr->value_num ? null : (float) $orr->value_num,
-                        'is_other'  => (int) $orr->is_other,
+                        'is_other'     => (int) $orr->is_other,
+                        'is_exclusive' => (int) $orr->is_exclusive,
                     ];
                 }
             }

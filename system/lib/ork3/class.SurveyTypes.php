@@ -540,6 +540,16 @@ final class SurveyTypes
             $rows[] = $row['row'];
         }
 
+        // An exclusive choice ("Prefer not to answer") stands alone.
+        if (count($rows) > 1) {
+            foreach ($options as $opt) {
+                if (!empty($opt['is_exclusive']) && isset($seen[(int) ($opt['option_id'] ?? 0)])) {
+                    return self::answerError('“' . (string) ($opt['label'] ?? 'That option')
+                        . '” cannot be combined with other answers.');
+                }
+            }
+        }
+
         $count = count($rows);
         $min = (int) ($settings['min_select'] ?? 0);
         $max = (int) ($settings['max_select'] ?? 0);

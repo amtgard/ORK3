@@ -2334,7 +2334,11 @@ class Survey
      * inserted; missing ones are deleted. Relabelling is allowed on a locked
      * survey, adding/removing/reordering is not.
      *
-     * @param list<array{option_id?: int, label: string, value_num?: float|string|null, is_other?: mixed}> $options
+     * `is_exclusive` marks a checkbox choice that cannot be combined with any
+     * other ("Prefer not to answer"); it is stored for every type but only a
+     * multi question acts on it.
+     *
+     * @param list<array{option_id?: int, label: string, value_num?: float|string|null, is_other?: mixed, is_exclusive?: mixed}> $options
      */
     public function optionSet(int $questionId, string $role, array $options): array
     {
@@ -2384,7 +2388,8 @@ class Survey
                 'label'     => mb_substr($label, 0, 255),
                 'value_num' => (array_key_exists('value_num', $o) && $o['value_num'] !== '' && $o['value_num'] !== null)
                     ? (float) $o['value_num'] : null,
-                'is_other'  => $this->truthy($o['is_other'] ?? 0) ? 1 : 0,
+                'is_other'     => $this->truthy($o['is_other'] ?? 0) ? 1 : 0,
+                'is_exclusive' => $this->truthy($o['is_exclusive'] ?? 0) ? 1 : 0,
             ];
         }
 
@@ -2425,17 +2430,20 @@ class Survey
             // is_other mid-collection starts rejecting that choice unless the
             // respondent fills the "other" box, and a matrix column's value_num
             // is applied at REPORT time, so rewriting it retroactively changes
-            // the weighted mean of responses already collected.
+            // the weighted mean of responses already collected. `is_exclusive`
+            // likewise changes which combinations of answers are accepted.
             $before = [];
             foreach ($existing as $o) {
                 $before[] = (int) $o['option_id']
                     . ':' . ((int) $o['is_other'])
+                    . ':' . ((int) ($o['is_exclusive'] ?? 0))
                     . ':' . ($o['value_num'] === null ? '' : (string) (float) $o['value_num']);
             }
             $after = [];
             foreach ($clean as $c) {
                 $after[] = (int) $c['option_id']
                     . ':' . ((int) $c['is_other'])
+                    . ':' . ((int) $c['is_exclusive'])
                     . ':' . ($c['value_num'] === null ? '' : (string) (float) $c['value_num']);
             }
             if ($before !== $after) {
@@ -2484,12 +2492,14 @@ class Survey
             if ($c['option_id'] > 0) {
                 $statements[] = 'UPDATE ' . DB_PREFIX . 'survey_option
                                  SET sort_order = ' . (int) $order . ', label = \'' . $this->esc($c['label']) . '\',
-                                     value_num = ' . $valueNum . ', is_other = ' . (int) $c['is_other'] . '
+                                     value_num = ' . $valueNum . ', is_other = ' . (int) $c['is_other'] . ',
+                                     is_exclusive = ' . (int) $c['is_exclusive'] . '
                                  WHERE option_id = ' . (int) $c['option_id'];
             } else {
-                $statements[] = 'INSERT INTO ' . DB_PREFIX . 'survey_option (question_id, role, sort_order, label, value_num, is_other)
+                $statements[] = 'INSERT INTO ' . DB_PREFIX . 'survey_option (question_id, role, sort_order, label, value_num, is_other, is_exclusive)
                                  VALUES (' . $questionId . ', \'' . $this->esc($role) . '\', ' . (int) $order . ',
-                                         \'' . $this->esc($c['label']) . '\', ' . $valueNum . ', ' . (int) $c['is_other'] . ')';
+                                         \'' . $this->esc($c['label']) . '\', ' . $valueNum . ', ' . (int) $c['is_other'] . ',
+                                         ' . (int) $c['is_exclusive'] . ')';
             }
         }
         $statements[] = 'COMMIT';
@@ -3523,11 +3533,11 @@ class Survey
         foreach ($this->fetchAll('SELECT * FROM ' . DB_PREFIX . 'survey_option
                                   WHERE question_id = ' . (int) $fromQuestionId . ' ORDER BY role, sort_order, option_id') as $o) {
             $ok = $this->exec(
-                'INSERT INTO ' . DB_PREFIX . 'survey_option (question_id, role, sort_order, label, value_num, is_other)
+                'INSERT INTO ' . DB_PREFIX . 'survey_option (question_id, role, sort_order, label, value_num, is_other, is_exclusive)
                  VALUES (' . (int) $toQuestionId . ', \'' . $this->esc((string) $o['role']) . '\', ' . (int) $o['sort_order'] . ',
                          \'' . $this->esc((string) $o['label']) . '\',
                          ' . ($o['value_num'] === null ? 'NULL' : (float) $o['value_num']) . ',
-                         ' . ((int) $o['is_other'] ? 1 : 0) . ')'
+                         ' . ((int) $o['is_other'] ? 1 : 0) . ', ' . ((int) ($o['is_exclusive'] ?? 0) ? 1 : 0) . ')'
             );
             $newId = $ok ? $this->lastInsertId() : 0;
             if ($newId <= 0) {

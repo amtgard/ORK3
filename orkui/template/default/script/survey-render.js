@@ -365,6 +365,7 @@
         return null;
     }
 
+    function isExclusive(opt) { return !!(opt && (opt.is_exclusive === 1 || opt.is_exclusive === true || opt.is_exclusive === '1')); }
     function isOther(opt) { return !!(opt && (opt.is_other === 1 || opt.is_other === true || opt.is_other === '1')); }
 
     /* Builder-authored HTML (help, section bodies, welcome/thanks copy) arrives
@@ -624,7 +625,8 @@
             html += '<div class="sv-choice-wrap' + (oid ? ' sv-choice-wrap-other' : '') + '">';
             html += '<label class="sv-choice">';
             html += '<input type="' + (multi ? 'checkbox' : 'radio') + '" class="sv-choice-input" name="' +
-                    ctx.name + '" value="' + id + '"' + (checked ? ' checked' : '') + ctx.tab + '>';
+                    ctx.name + '" value="' + id + '"' + (checked ? ' checked' : '') +
+                    (multi && isExclusive(o) ? ' data-exclusive="1"' : '') + ctx.tab + '>';
             html += '<span class="sv-choice-label">' + escapeHtml(o.label) + '</span>';
             html += '</label>';
             if (oid) {
@@ -1568,6 +1570,29 @@
         pairwisePick(pw, side);
     }
 
+    /* An exclusive checkbox ("Prefer not to answer") stands alone: ticking it
+       clears the rest of its group, and ticking anything else clears it. The
+       capture phase runs before the runner's own change handler, so the answer
+       it reads already has the other boxes cleared. The validator refuses the
+       combination too, so this is convenience, not the only guard. */
+    function onDocChange(e) {
+        var t = e.target, group, boxes, i, box;
+        if (!t || !t.checked || t.type !== 'checkbox' || !t.classList || !t.classList.contains('sv-choice-input')) { return; }
+        group = t.closest ? t.closest('.sv-choices') : null;
+        if (!group || group.closest('.sv-q-preview')) { return; }
+        boxes = group.querySelectorAll('.sv-choice-input');
+        for (i = 0; i < boxes.length; i++) {
+            box = boxes[i];
+            if (box === t || !box.checked) { continue; }
+            if (t.hasAttribute('data-exclusive') || box.hasAttribute('data-exclusive')) {
+                box.checked = false;
+                var other = group.querySelector('.sv-other-input[data-other-for="' + box.value + '"]');
+                if (other) { other.value = ''; }
+            }
+        }
+    }
+
+    document.addEventListener('change', onDocChange, true);
     document.addEventListener('click', onDocClick, false);
     document.addEventListener('keydown', onDocKeydown, false);
 

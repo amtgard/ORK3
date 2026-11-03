@@ -160,6 +160,126 @@
     /** The type "+ Add Element" starts from. */
     var STARTER_TYPE = 'single';
 
+    /**
+     * Quick Questions: ready-made questions that the lightning button beside a
+     * card's prompt writes over that card. The result is an ordinary question,
+     * fully editable afterwards.
+     *
+     * A preset's question: { prompt, type, required, options }. Leave
+     * `type` out to keep the card's own choice type (single/multi/dropdown),
+     * else 'single'. `required` (0/1) is sent only when set. An option is a
+     * label, or { label, other: write-in box, exclusive: stands alone }.
+     *
+     * Amtgard: the classes are ork_class (alphabetical); the orders are the
+     * nine Award Standardization ladders, the knighthoods and the masterhoods,
+     * each in the standard's own order.
+     */
+    var PNA = { label: 'Prefer not to answer', exclusive: true };
+    var QUICK_SECTIONS = [
+        {
+            title: 'Amtgard',
+            presets: [
+                {
+                    key: 'classes', icon: 'fa-shield-halved', title: 'Amtgard Classes',
+                    blurb: 'Insert a multiple-choice list of the Amtgard classes (can be changed to checkbox, etc.)',
+                    question: {
+                        prompt: 'Which class?',
+                        options: ['Anti-Paladin', 'Archer', 'Assassin', 'Barbarian', 'Bard', 'Color', 'Druid',
+                                  'Healer', 'Monk', 'Monster', 'Paladin', 'Peasant', 'Reeve', 'Scout', 'Warrior',
+                                  'Wizard']
+                    }
+                },
+                {
+                    key: 'orders', icon: 'fa-medal', title: 'Amtgard Orders',
+                    blurb: 'Insert a multiple-choice list of the Award Standardization ladder awards.',
+                    question: {
+                        prompt: 'Which order?',
+                        options: ['Order of the Rose', 'Order of the Smith', 'Order of the Lion', 'Order of the Crown',
+                                  'Order of the Owl', 'Order of the Dragon', 'Order of the Garber',
+                                  'Order of the Warrior', 'Order of Battle']
+                    }
+                },
+                {
+                    key: 'knighthoods', icon: 'fa-chess-knight', title: 'Amtgard Knighthoods',
+                    blurb: 'Insert a multiple-choice list of the five Amtgard knighthoods.',
+                    question: {
+                        prompt: 'Which knighthood?',
+                        options: ['Knight of the Flame', 'Knight of the Crown', 'Knight of the Serpent',
+                                  'Knight of the Sword', 'Knight of Battle']
+                    }
+                },
+                {
+                    key: 'masterhoods', icon: 'fa-graduation-cap', title: 'Amtgard Masterhoods',
+                    blurb: 'Insert a multiple-choice list of the Award Standardization masterhoods.',
+                    question: {
+                        prompt: 'Which masterhood?',
+                        options: ['Master Rose', 'Master Smith', 'Master Lion', 'Master Crown', 'Master Owl',
+                                  'Master Dragon', 'Master Garber', 'Warlord', 'Battlemaster']
+                    }
+                }
+            ]
+        },
+        {
+            title: 'Demographics',
+            lede: 'These options are taken from widely respected sources such as the American Community Survey, ' +
+                  'the National Academies, Pew Research, and GLSEN. We strongly recommend making these questions ' +
+                  'optional at all times.',
+            presets: [
+                {
+                    key: 'race', icon: 'fa-earth-americas', title: 'Race / Ethnicity',
+                    blurb: 'Checkboxes for the OMB 2024 combined race and ethnicity categories, with a box for details.',
+                    question: {
+                        prompt: 'What is your race and/or ethnicity? Select all that apply.',
+                        type: 'multi', required: 0,
+                        options: ['American Indian or Alaska Native', 'Asian', 'Black or African American',
+                                  'Hispanic or Latino', 'Middle Eastern or North African',
+                                  'Native Hawaiian or Pacific Islander', 'White', PNA,
+                                  { label: 'Enter additional details (e.g., Mexican, Lebanese, Navajo Nation, Korean, ' +
+                                           'Jamaican, Irish)', other: true }]
+                    }
+                },
+                {
+                    key: 'gender', icon: 'fa-venus-mars', title: 'Gender Identity',
+                    blurb: 'A multiple-choice list of current gender, with a write-in for a different term.',
+                    question: {
+                        prompt: 'What is your gender identity?',
+                        type: 'single', required: 0,
+                        options: ['Female', 'Male', 'Transgender', 'Nonbinary',
+                                  { label: 'I use a different term', other: true }, 'Prefer not to answer']
+                    }
+                },
+                {
+                    key: 'orientation', icon: 'fa-heart', title: 'Orientation',
+                    blurb: 'Checkboxes for sexual orientation, with a write-in for a different term.',
+                    question: {
+                        prompt: 'Which of the following best describes your sexual orientation? Select all that apply.',
+                        type: 'multi', required: 0,
+                        options: ['Straight / heterosexual', 'Gay', 'Lesbian', 'Bisexual', 'Pansexual', 'Asexual',
+                                  'Queer', 'Questioning or unsure', { label: 'I use a different term', other: true },
+                                  PNA]
+                    }
+                },
+                {
+                    key: 'age', icon: 'fa-cake-candles', title: 'Age Bracket',
+                    blurb: 'A multiple-choice list of age ranges, from under 18 to 75 or older.',
+                    question: {
+                        prompt: 'What is your age?',
+                        type: 'single', required: 0,
+                        options: ['Under 18', '18–24', '25–34', '35–44', '45–54', '55–64', '65–74', '75 or older',
+                                  'Prefer not to answer']
+                    }
+                }
+            ]
+        }
+    ];
+
+    /** Choice types a Quick Question without its own type keeps; others become 'single'. */
+    var QUICK_KEEP_TYPES = ['single', 'multi', 'dropdown'];
+
+    /** The card a Quick Question / Paste List modal will write into. */
+    var modalTargetQid = 0;
+    var modalTargetRole = '';
+
     /** Types a show_if condition may depend on. */
     var SHOW_IF_SOURCES = [];
 
@@ -1488,6 +1608,10 @@
                     '<i class="fas fa-image" aria-hidden="true"></i></button>';
         }
         html += typePickerHtml(q);
+        if (q.type !== 'section' && q.type !== 'image') {
+            html += iconBtn('quick-open', 'fa-bolt', 'Select from Quick Questions', 'svb-top-quick', S.locked,
+                            ' data-qid="' + qid + '"');
+        }
         html += '</div>';
 
         html += helpSlotHtml(q);
@@ -1571,7 +1695,8 @@
         /* .svb-opt is the density class (spec §7: 32px rows); .svb-optrow stays
            the behaviour hook every handler and SortableJS already binds to. */
         var html    = '<div class="svb-optrow svb-opt' + (spec.weight ? ' svb-optrow-col' : '') +
-                      '" data-oid="' + (parseInt(o.option_id, 10) || 0) + '" data-other="' + (isOther ? 1 : 0) + '">';
+                      '" data-oid="' + (parseInt(o.option_id, 10) || 0) + '" data-other="' + (isOther ? 1 : 0) +
+                      '" data-exclusive="' + (truthy(o.is_exclusive) ? 1 : 0) + '">';
 
         /* Order matters to the eye, not to the handlers (everything is found
            by data-act): the glyph and the label sit hard left like a real
@@ -1583,6 +1708,9 @@
                 '" placeholder="' + noun + '" aria-label="' + noun + ' ' + (index + 1) + '">';
         if (isOther) {
             html += '<span class="svb-other-tag" data-tip="Respondents type their own answer here">Other</span>';
+        }
+        if (q.type === 'multi' && truthy(o.is_exclusive)) {
+            html += EXCL_TAG;
         }
         if (spec.weight) {
             html += '<input type="number" class="sv-input svb-optweight" step="any" inputmode="decimal" placeholder="wt" ' +
@@ -1634,6 +1762,9 @@
                 html += '<button type="button" class="svb-optadd-link" data-act="opt-add-other"' + lockAttr() +
                         ' data-tip="A write-in row respondents fill in themselves">add “Other”</button>';
             }
+            html += '<span class="svb-optadd-or"> or </span>';
+            html += '<button type="button" class="svb-optadd-link" data-act="opt-paste"' + lockAttr() +
+                    ' data-tip="Paste many ' + esc(noun) + 's at once, one per line">paste list</button>';
             html += '</span>';
             html += '</div>';
         }
@@ -1987,6 +2118,48 @@
 
     /* ------------------------------------------------------- ⋯ menu + footer */
 
+    /** The chip on a checkbox option that stands alone. */
+    var EXCL_TAG = '<span class="svb-other-tag svb-excl-tag" data-tip="Picking this clears the other answers. ' +
+                   'Change it in the ⋯ menu.">Only answer</span>';
+
+    /**
+     * Checkbox questions: which saved option (if any) stands alone, like
+     * "Prefer not to answer". It is an option flag, so it follows the option
+     * through relabels and reorders.
+     */
+    function exclusivePickerHtml(q) {
+        var cur  = 0;
+        var list = [['0', 'None']];
+        optionsOf(q, 'choice').forEach(function (o) {
+            var oid = parseInt(o.option_id, 10);
+            if (!(oid > 0)) { return; }
+            if (truthy(o.is_exclusive) && !cur) { cur = oid; }
+            list.push([String(oid), o.label]);
+        });
+        return selectRow('Answer that stands alone', list, String(cur), 'data-excl="1"', S.locked,
+                         'Picking it clears the other answers, and picking any other answer clears it.');
+    }
+
+    /** The ⋯ menu's stand-alone picker changed: flag that row, commit the list. */
+    function setExclusive(q, node) {
+        var qid  = parseInt(q.question_id, 10);
+        var card = cardEl(qid);
+        var wrap = card ? el('.svb-opts[data-role="choice"]', card) : null;
+        var pick = parseInt(node.value, 10) || 0;
+        if (!wrap) { return; }
+        els('.svb-optrow', wrap).forEach(function (row) {
+            var on  = pick > 0 && parseInt(row.getAttribute('data-oid'), 10) === pick;
+            var tag = el('.svb-excl-tag', row);
+            row.setAttribute('data-exclusive', on ? '1' : '0');
+            if (on && !tag) {
+                el('.svb-optlabel', row).insertAdjacentHTML('afterend', EXCL_TAG);
+            } else if (!on && tag) {
+                tag.parentNode.removeChild(tag);
+            }
+        });
+        commitOptions(qid, 'choice');
+    }
+
     function moreMenuHtml(q) {
         var defs = (FIELD_DEFS[q.type] || []).filter(function (d) { return d.where === 'more'; });
         var html = '<div class="svb-more" id="svb-more-' + parseInt(q.question_id, 10) + '" hidden>';
@@ -1995,6 +2168,7 @@
             html += '<h4 class="svb-sub">Behaviour</h4>';
             defs.forEach(function (def) { html += settingField(q, def); });
         }
+        if (q.type === 'multi') { html += exclusivePickerHtml(q); }
 
         html += '<h4 class="svb-sub">Skip logic</h4>';
         html += showIfEditor(q, questionIndex(q.question_id), 'q');
@@ -3075,6 +3249,68 @@
         }
     }
 
+    /* ------------------------------------------------------- inline delete */
+
+    /*
+     * Delete is two clicks in place: the trash button gives way to a red
+     * "Confirm delete" button that stays disabled, with a spinner, for one
+     * second, so a double-click cannot delete by accident. Clicking anywhere
+     * else, pressing Escape or a repaint puts the trash button back.
+     */
+    var DELETE_ARM_MS = 1000;
+    var armed = null; // { trash, confirm, run, timer, ready }
+
+    function armDelete(trash, label, run) {
+        var confirmBtn;
+        disarmDelete(false);
+        trash.insertAdjacentHTML('afterend',
+            '<button type="button" class="svb-delconfirm" data-act="delete-confirm" aria-disabled="true" aria-busy="true">' +
+            '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i><span>' + esc(label) + '</span></button>');
+        confirmBtn = trash.nextElementSibling;
+        trash.hidden = true;
+        // aria-disabled, not disabled: a disabled button can swallow the
+        // click or pass it to its parent, which would cancel the arming. A
+        // click before the second is up just lands here and does nothing.
+        armed = { trash: trash, confirm: confirmBtn, run: run, timer: 0, ready: false };
+        armed.timer = window.setTimeout(function () {
+            if (!armed || armed.confirm !== confirmBtn) { return; }
+            armed.ready = true;
+            confirmBtn.removeAttribute('aria-disabled');
+            confirmBtn.removeAttribute('aria-busy');
+            el('i', confirmBtn).className = 'fas fa-trash';
+            if (document.contains(confirmBtn)) { confirmBtn.focus({ preventScroll: true }); }
+        }, DELETE_ARM_MS);
+        confirmBtn.focus({ preventScroll: true });
+    }
+
+    /** Put the trash button back. refocus: hand the keyboard back to it. */
+    function disarmDelete(refocus) {
+        var a = armed;
+        if (!a) { return; }
+        armed = null;
+        window.clearTimeout(a.timer);
+        if (a.confirm.parentNode) { a.confirm.parentNode.removeChild(a.confirm); }
+        a.trash.hidden = false;
+        if (refocus && document.contains(a.trash)) { a.trash.focus({ preventScroll: true }); }
+    }
+
+    function fireArmedDelete(btn) {
+        var run;
+        if (!armed || armed.confirm !== btn || !armed.ready) { return; }
+        run = armed.run;
+        disarmDelete(false);
+        run();
+    }
+
+    /** Any click that is not on the armed button lets go of it. */
+    function onDocClickDisarm(e) {
+        if (!armed) { return; }
+        if (!document.contains(armed.confirm)) { armed = null; return; }
+        if (e.target === armed.confirm || armed.confirm.contains(e.target) ||
+            e.target === armed.trash || armed.trash.contains(e.target)) { return; }
+        disarmDelete(false);
+    }
+
     /* --------------------------------------------------------------- modal */
 
     function openModal(title, html) {
@@ -3090,7 +3326,306 @@
     function closeModal() {
         var m = $('svb-modal');
         if (m) { m.hidden = true; }
+        modalTargetQid  = 0;
+        modalTargetRole = '';
         restoreFocus('modal');
+    }
+
+    /* ------------------------------------------------------ quick questions */
+
+    /** A starter label the builder made, not one the author typed. */
+    var PLACEHOLDER_LABEL = /^(Option|Row) \d+$/;
+
+    function quickPreset(key) {
+        var hit = null;
+        QUICK_SECTIONS.forEach(function (sec) {
+            sec.presets.forEach(function (p) { if (p.key === key) { hit = p; } });
+        });
+        return hit;
+    }
+
+    /** The lightning button: a section of tiles per kind of ready-made question. */
+    function openQuickQuestions(qid) {
+        var html = '<p class="svb-qq-lede"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> ' +
+                   '<span>Picking one <strong>replaces this question</strong>: its wording and all of its choices ' +
+                   'are overwritten. You can change its type, wording and choices afterwards.</span></p>';
+        QUICK_SECTIONS.forEach(function (sec) {
+            html += '<section class="svb-qq-section"><h3 class="svb-qq-sechead">' + esc(sec.title) + '</h3>';
+            if (sec.lede) { html += '<p class="svb-qq-secnote">' + esc(sec.lede) + '</p>'; }
+            html += '<div class="svb-qq-grid">';
+            sec.presets.forEach(function (p) {
+                html += '<button type="button" class="svb-qq-tile" data-qq="' + esc(p.key) + '">' +
+                        '<i class="fas ' + esc(p.icon) + ' svb-qq-icon" aria-hidden="true"></i>' +
+                        '<span class="svb-qq-text"><span class="svb-qq-title">' + esc(p.title) + '</span>' +
+                        '<span class="svb-qq-blurb">' + esc(p.blurb) + '</span></span></button>';
+            });
+            html += '</div></section>';
+        });
+        openModal('Quick Questions', html);
+        modalTargetQid = qid;
+        var first = el('#svb-modal .svb-qq-tile');
+        if (first) { first.focus(); }
+    }
+
+    /**
+     * A tile overwrites the question the lightning button was clicked on. The
+     * modal says so up front, so there is no second confirmation.
+     */
+    function chooseQuickQuestion(key) {
+        var qid    = modalTargetQid;
+        var preset = quickPreset(key);
+        closeModal();
+        if (!preset || !questionById(qid) || S.locked) { return; }
+        applyQuickQuestion(qid, preset);
+    }
+
+    /** A preset option -> the option_set row shape. */
+    function quickOption(o) {
+        var spec = typeof o === 'string' ? { label: o } : o;
+        return { option_id: 0, label: spec.label, value_num: null,
+                 is_other: spec.other ? 1 : 0, is_exclusive: spec.exclusive ? 1 : 0 };
+    }
+
+    /** One question_update for a preset question: prompt, type, required, fresh settings. */
+    function quickFields(qid, curType, pq) {
+        var fields = { QuestionId: qid, Prompt: pq.prompt };
+        var type   = pq.type || (QUICK_KEEP_TYPES.indexOf(String(curType)) === -1 ? 'single' : String(curType));
+        if (type !== String(curType)) { fields.Type = type; }
+        if (pq.required !== undefined) { fields.Required = pq.required ? 1 : 0; }
+        // The type's default settings: nothing from the overwritten card carries over.
+        fields.Settings = '{}';
+        return fields;
+    }
+
+    /**
+     * Write a preset over the card: one question_update (prompt, type,
+     * required, default settings), then one option_set. Pending edits to the
+     * card are dropped: they would land on top of the preset.
+     */
+    function applyQuickQuestion(qid, preset) {
+        var pq = preset.question;
+        if (!questionById(qid)) { return; }
+        dropEditsFor(qid);
+        whenIdle(function () {
+            var cur = questionById(qid);
+            if (!cur) { return; }
+            post('question_update', quickFields(qid, cur.type, pq), function (data) {
+                if (!data.question) { reload(); return; }
+                replaceQuestion(data.question);
+                post('option_set', {
+                    QuestionId: qid,
+                    Role:       'choice',
+                    Options:    JSON.stringify(pq.options.map(quickOption))
+                }, function (res) {
+                    var now = questionById(qid);
+                    if (!now) { reload(); return; }
+                    now.options = res.options || [];
+                    if (SHOW_IF_SOURCES.indexOf(String(now.type)) === -1) {
+                        pruneShowIf(qid, function () { return false; });
+                    } else {
+                        pruneShowIf(qid, (function (ids) { return function (oid) { return !!ids[oid]; }; }(optionIdSet(now))));
+                    }
+                    dropPairwiseHold(qid);
+                    Object.keys(held).forEach(function (k) { if (k.indexOf('opts:' + qid + ':') === 0) { delete held[k]; } });
+                    if (sel && sel !== qid) { settleCard(sel); }
+                    sel = qid;
+                    // renderCanvas() puts the focused field's typed text back;
+                    // here that text is the wording the preset just replaced.
+                    if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
+                    renderCanvas();
+                    wireOptionSortables();
+                    focusPrompt(qid);
+                    scrollToSelection();
+                });
+            });
+        });
+    }
+
+    /* ----------------------------------------------------------- paste list */
+
+    /** One label per line; blank lines, bullets and repeats dropped. */
+    function parsePasteList(text) {
+        var seen = {}, out = [];
+        String(text || '').split(/\r\n|\r|\n/).forEach(function (line) {
+            var v = line.replace(/^\s*[-*•‣◦]\s+/, '').trim().slice(0, 255);
+            var k = v.toLowerCase();
+            if (v === '' || seen[k]) { return; }
+            seen[k] = true;
+            out.push(v);
+        });
+        return out;
+    }
+
+    /**
+     * The labels the author has actually entered for one role on the open card:
+     * not blank, not a starter "Option 1", not the "Other" write-in row.
+     */
+    function enteredLabels(qid, role) {
+        var card = cardEl(qid);
+        var wrap = card ? el('.svb-opts[data-role="' + role + '"]', card) : null;
+        var out  = [];
+        if (!wrap) { return out; }
+        els('.svb-optrow', wrap).forEach(function (row) {
+            var input = el('.svb-optlabel', row);
+            var v     = input ? String(input.value || '').trim() : '';
+            if (row.getAttribute('data-other') === '1' || v === '' || PLACEHOLDER_LABEL.test(v)) { return; }
+            out.push(v);
+        });
+        return out;
+    }
+
+    /**
+     * Paste List. When the role already holds options the author entered, the
+     * modal lists them and asks whether the paste goes below them or replaces
+     * them; with only starter rows there is nothing to choose.
+     */
+    function openPasteList(q, role) {
+        var qid    = parseInt(q.question_id, 10);
+        var noun   = role === 'choice' ? 'option' : role;
+        var have   = enteredLabels(qid, role);
+        var html   = '<label class="svb-paste-label" for="svb-paste-text">Paste your ' + esc(noun) +
+                     's below, one per line. Each line becomes its own ' + esc(noun) + '.</label>' +
+                     '<textarea id="svb-paste-text" class="sv-input svb-paste-text" rows="8" ' +
+                     'placeholder="First ' + esc(noun) + '&#10;Second ' + esc(noun) + '&#10;Third ' + esc(noun) + '"></textarea>';
+
+        if (have.length) {
+            html += '<div class="svb-paste-existing">' +
+                    '<div class="svb-paste-existing-head">Already on this question (' + have.length + ')</div>' +
+                    '<ol class="svb-paste-existing-list">' +
+                    have.map(function (v) { return '<li>' + esc(v) + '</li>'; }).join('') +
+                    '</ol></div>' +
+                    '<fieldset class="svb-paste-mode"><legend class="sv-visually-hidden">What to do with these ' +
+                    esc(noun) + 's</legend>' +
+                    '<label class="svb-paste-mode-opt"><input type="radio" name="svb-paste-mode" value="append" checked> ' +
+                    '<span><strong>Add to the bottom</strong>: keep these and put the pasted ' + esc(noun) +
+                    's after them</span></label>' +
+                    '<label class="svb-paste-mode-opt"><input type="radio" name="svb-paste-mode" value="replace"> ' +
+                    '<span><strong>Replace them</strong>: remove these and use only the pasted ' + esc(noun) +
+                    's</span></label>' +
+                    '</fieldset>';
+        }
+
+        html += '<p class="svb-paste-hint" id="svb-paste-hint" aria-live="polite"></p>' +
+                '<div class="svb-paste-actions">' +
+                '<button type="button" class="sv-btn" data-paste="cancel">Cancel</button>' +
+                '<button type="button" class="sv-btn sv-btn-primary" data-paste="apply">Add ' + esc(noun) + 's</button>' +
+                '</div>';
+
+        openModal('Paste a list', html);
+        modalTargetQid  = qid;
+        modalTargetRole = role;
+        var area = $('svb-paste-text');
+        if (area) { area.focus(); }
+    }
+
+    /** 'append' or 'replace' (append when the modal offered no choice). */
+    function pasteMode() {
+        var pick = el('#svb-modal input[name="svb-paste-mode"]:checked');
+        return pick && pick.value === 'replace' ? 'replace' : 'append';
+    }
+
+    /** The pasted lines that will actually be added in the chosen mode. */
+    function pasteAdds(lines, mode) {
+        var have = {};
+        if (mode === 'replace') { return lines; }
+        enteredLabels(modalTargetQid, modalTargetRole).forEach(function (v) { have[v.toLowerCase()] = true; });
+        return lines.filter(function (v) { return !have[v.toLowerCase()]; });
+    }
+
+    function refreshPasteHint() {
+        var area  = $('svb-paste-text');
+        var hint  = $('svb-paste-hint');
+        var apply = el('#svb-modal [data-paste="apply"]');
+        var noun  = modalTargetRole === 'choice' ? 'option' : modalTargetRole;
+        var mode  = pasteMode();
+        var lines, adds, msg = '';
+        if (!area || !hint) { return; }
+        lines = parsePasteList(area.value);
+        adds  = pasteAdds(lines, mode);
+        if (lines.length) {
+            msg = (adds.length === 1 ? '1 ' + noun : adds.length + ' ' + noun + 's') +
+                  (mode === 'replace' ? ' will replace the ones above.' : ' will be added.');
+            if (adds.length < lines.length) {
+                msg += ' ' + (lines.length - adds.length) + ' already on the question will be skipped.';
+            }
+        }
+        hint.textContent = msg;
+        hint.classList.remove('svb-paste-hint-error');
+        if (apply) { apply.textContent = (mode === 'replace' ? 'Replace ' : 'Add ') + noun + 's'; }
+    }
+
+    function pasteError(text) {
+        var hint = $('svb-paste-hint');
+        var area = $('svb-paste-text');
+        if (hint) {
+            hint.textContent = text;
+            hint.classList.add('svb-paste-hint-error');
+        }
+        if (area) { area.focus(); }
+    }
+
+    /**
+     * Write the pasted lines into the card, above any closing write-in or
+     * stand-alone rows, then
+     * commit the role as one replace-all like any other option edit.
+     *   append:  entered options stay; repeats of them are skipped; untouched
+     *            starter rows give way while the list keeps its minimum.
+     *   replace: every row but "Other" goes; the paste is the whole list.
+     */
+    function applyPasteList() {
+        var qid   = modalTargetQid;
+        var role  = modalTargetRole;
+        var noun  = role === 'choice' ? 'option' : role;
+        var area  = $('svb-paste-text');
+        var mode  = pasteMode();
+        var lines = parsePasteList(area ? area.value : '');
+        var q     = questionById(qid);
+        var card  = cardEl(qid);
+        var wrap  = card ? el('.svb-opts[data-role="' + role + '"]', card) : null;
+        var host  = wrap ? el('.svb-optlist', wrap) : null;
+        var min   = wrap ? (parseInt(wrap.getAttribute('data-min'), 10) || 0) : 0;
+        var adds, spare = [], total, rows, tail = [], i;
+
+        if (!lines.length) { pasteError('Paste at least one line first.'); return; }
+        if (mode === 'replace' && lines.length < min) {
+            pasteError('This question needs at least ' + min + ' ' + noun + 's. Paste ' + min + ' or more to replace them.');
+            return;
+        }
+        adds = pasteAdds(lines, mode);
+        closeModal();
+        if (!q || !host || S.locked) { return; }
+
+        els('.svb-optrow', host).forEach(function (row) {
+            var input = el('.svb-optlabel', row);
+            var v     = input ? String(input.value || '').trim() : '';
+            if (row.getAttribute('data-other') === '1') { return; }
+            if (mode === 'replace' || v === '' || PLACEHOLDER_LABEL.test(v)) { spare.push(row); }
+        });
+
+        // Replace clears every row; append lets starter rows go only while
+        // the list stays at its minimum.
+        total = els('.svb-optrow', host).length + adds.length;
+        spare.forEach(function (row) {
+            if (mode !== 'replace' && total - 1 < min) { return; }
+            row.parentNode.removeChild(row);
+            total--;
+        });
+        // Rows that close the list (a write-in, a stand-alone "Prefer not to
+        // answer") stay last: the paste goes in above them.
+        rows = els('.svb-optrow', host);
+        for (i = rows.length - 1; i >= 0; i--) {
+            if (rows[i].getAttribute('data-other') !== '1' && rows[i].getAttribute('data-exclusive') !== '1') { break; }
+            tail.unshift(rows[i]);
+        }
+        adds.forEach(function (label) { addOptionRow(q, wrap, false, { label: label, focus: false }); });
+        tail.forEach(function (row) { host.appendChild(row); });
+        refreshOptionRowStates(wrap);
+        commitOptions(qid, role);
+
+        if (adds.length < lines.length) {
+            notice('Added ' + adds.length + ' of ' + lines.length + ' pasted ' + noun +
+                   's. The rest were already on the question.');
+        }
     }
 
     /* ------------------------------------------------- dialog focus handling */
@@ -3743,7 +4278,8 @@
                 option_id: oid,
                 label:     label,
                 value_num: weightEl && String(weightEl.value).trim() !== '' ? Number(weightEl.value) : null,
-                is_other:  row.getAttribute('data-other') === '1' ? 1 : 0
+                is_other:  row.getAttribute('data-other') === '1' ? 1 : 0,
+                is_exclusive: row.getAttribute('data-exclusive') === '1' ? 1 : 0
             });
         });
 
@@ -3760,7 +4296,7 @@
         q.options = other.concat(list.map(function (o, i) {
             return {
                 option_id: o.option_id, question_id: q.question_id, role: role, sort_order: i,
-                label: o.label, value_num: o.value_num, is_other: o.is_other
+                label: o.label, value_num: o.value_num, is_other: o.is_other, is_exclusive: o.is_exclusive
             };
         }));
 
@@ -3988,6 +4524,18 @@
                 if (act === 'opt-add-other') { commitOptions(q.question_id, wrap.getAttribute('data-role')); }
                 break;
 
+            case 'opt-paste':
+                if (!q) { return; }
+                wrap = btn.closest('.svb-opts');
+                if (!wrap) { return; }
+                openPasteList(q, wrap.getAttribute('data-role'));
+                break;
+
+            case 'quick-open':
+                qid = parseInt(btn.getAttribute('data-qid'), 10);
+                if (questionById(qid)) { openQuickQuestions(qid); }
+                break;
+
             case 'opt-remove':
                 if (!q) { return; }
                 row  = btn.closest('.svb-optrow');
@@ -4017,10 +4565,11 @@
 
             case 'q-delete':
                 qid = parseInt(btn.getAttribute('data-qid'), 10);
-                askConfirm('Delete “' + (tocTitle(questionById(qid)) || 'this element') +
-                           '” and everything on it?', 'Delete', true, function () {
-                    deleteQuestion(qid);
-                });
+                armDelete(btn, 'Confirm delete', function () { deleteQuestion(qid); });
+                break;
+
+            case 'delete-confirm':
+                fireArmedDelete(btn);
                 break;
 
             case 'page-more':
@@ -4035,7 +4584,7 @@
 
             case 'page-delete':
                 pid = parseInt(btn.getAttribute('data-page'), 10);
-                askConfirm('Delete this page? Any questions on it move to the page before.', 'Delete page', true, function () {
+                armDelete(btn, 'Confirm delete page', function () {
                     var at = -1, i, land;
                     for (i = 0; i < S.pages.length; i++) {
                         if (parseInt(S.pages[i].page_id, 10) === pid) { at = i; }
@@ -4182,6 +4731,10 @@
             } else {
                 fieldError(t, '');
             }
+            return;
+        }
+        if (t.hasAttribute('data-excl') && q) {
+            setExclusive(q, t);
             return;
         }
         if (t.hasAttribute('data-q-setting') && q) {
@@ -4733,6 +5286,30 @@
             n.addEventListener('click', function (e) { e.preventDefault(); closeModal(); });
         });
 
+        document.addEventListener('click', onDocClickDisarm, true);
+
+        // Quick Questions tiles and the Paste List buttons live in the modal body.
+        on($('svb-modal'), 'click', function (e) {
+            var t = e.target.closest ? e.target.closest('[data-qq], [data-paste]') : null;
+            if (!t) { return; }
+            e.preventDefault();
+            if (t.hasAttribute('data-qq')) { chooseQuickQuestion(t.getAttribute('data-qq')); return; }
+            if (t.getAttribute('data-paste') === 'apply') { applyPasteList(); } else { closeModal(); }
+        });
+        on($('svb-modal'), 'input', function (e) {
+            if (e.target && e.target.id === 'svb-paste-text') { refreshPasteHint(); }
+        });
+        on($('svb-modal'), 'change', function (e) {
+            if (e.target && e.target.name === 'svb-paste-mode') { refreshPasteHint(); }
+        });
+        on($('svb-modal'), 'keydown', function (e) {
+            // Ctrl/Cmd+Enter adds the list; a plain Enter is a new line.
+            if (e.target && e.target.id === 'svb-paste-text' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                applyPasteList();
+            }
+        });
+
         document.addEventListener('keydown', function (e) {
             var panel;
             if (e.key === 'Tab') {
@@ -4741,6 +5318,7 @@
                 return;
             }
             if (e.key !== 'Escape') { return; }
+            if (armed) { e.preventDefault(); disarmDelete(true); return; }
             var m = $('svb-modal');
             if (m && !m.hidden) { closeModal(); return; }
             if (confirmOpen()) { e.preventDefault(); hideConfirm(true); return; }

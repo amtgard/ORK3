@@ -266,6 +266,29 @@ final class SurveyTypesTest extends TestCase
         $this->assertSame('Bardic', $r['rows'][1]['value_text']);
     }
 
+    public function testMultiExclusiveOptionStandsAlone(): void
+    {
+        $opts = [
+            ['option_id' => 10, 'role' => 'choice', 'is_other' => 0, 'is_exclusive' => 0, 'label' => 'Gay'],
+            ['option_id' => 11, 'role' => 'choice', 'is_other' => 0, 'is_exclusive' => 0, 'label' => 'Queer'],
+            ['option_id' => 12, 'role' => 'choice', 'is_other' => 0, 'is_exclusive' => 1, 'label' => 'Prefer not to answer'],
+        ];
+        $q = ['type' => 'multi', 'required' => 0, 'settings' => []];
+
+        $this->assertTrue(SurveyTypes::validateAnswer($q, $opts, [10, 11])['ok']);
+        $this->assertTrue(SurveyTypes::validateAnswer($q, $opts, [12])['ok']);
+        // A repeated id is still one answer.
+        $this->assertTrue(SurveyTypes::validateAnswer($q, $opts, [12, 12])['ok']);
+
+        $mixed = SurveyTypes::validateAnswer($q, $opts, [10, 12]);
+        $this->assertFalse($mixed['ok']);
+        $this->assertStringContainsString('Prefer not to answer', (string) $mixed['error']);
+
+        // Only a checkbox question acts on the flag.
+        $single = ['type' => 'single', 'required' => 0, 'settings' => []];
+        $this->assertTrue(SurveyTypes::validateAnswer($single, $opts, 12)['ok']);
+    }
+
     // ------------------------------------------------------- answer: required
 
     public function testRequiredAnswerIsMandatoryButOptionalOneIsNot(): void
