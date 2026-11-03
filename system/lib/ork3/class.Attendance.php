@@ -167,6 +167,81 @@ class Attendance extends Ork3
         return InvalidParameter();
     }
 
+    /**
+     * Insert one attendance credit on the SYSTEM's behalf (survey credits,
+     * docs/superpowers/specs/2026-09-10-survey-sharing-and-credits-design.md §3.3).
+     *
+     * NO TOKEN AND NO AUTHORITY CHECK: the caller has already decided the credit
+     * is authorized (SurveyCredit checks the officer who switched the config
+     * on, whose id arrives as ByWhomId). Only the entry methods listed below
+     * may be written here. Every NOT NULL column is named because production
+     * runs sql_mode='' (an omitted column would silently become '' or 0).
+     * Does not open a transaction: the caller's transaction covers it. For the
+     * same reason it busts no cache: the caller calls
+     * bust_player_attendance_caches() after its COMMIT (a bust before the commit
+     * lets a concurrent read re-cache the pre-credit state).
+     *
+     * The snake_case name is load-bearing: orkservice/Json/index.php exposes
+     * every public method of this class, and JsonServer refuses only names
+     * that contain '_' (PHP method names are case-insensitive, so a camelCase
+     * name of any capitalization would be callable there with no login).
+     */
+    public function add_system_credit(array $r): array
+    {
+        $mundaneId = (int) ($r['MundaneId'] ?? 0);
+        $classId   = (int) ($r['ClassId'] ?? 0);
+        $ts        = strtotime((string) ($r['Date'] ?? ''));
+        $entry     = (string) ($r['EntryMethod'] ?? '');
+        $credits   = (float) ($r['Credits'] ?? 0);
+        if ($mundaneId <= 0 || $classId <= 0 || !$ts || $credits <= 0 || !in_array($entry, ['survey'], true)) {
+            return ['Status' => 1, 'Error' => 'Invalid system credit request.'];
+        }
+
+        $day   = date('Y-m-d', $ts);
+        $parts = $this->_computeDatePartitions($day);
+        $esc   = static function ($v): string {
+            return str_replace(["'", '\\'], ["''", '\\\\'], (string) $v);
+        };
+
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'attendance
+             (mundane_id, class_id, date, date_year, date_month, date_week3, date_week6,
+              park_id, kingdom_id, event_id, event_calendardetail_id, credits,
+              persona, flavor, note, by_whom_id, entry_method, entered_at)
+             VALUES (' . $mundaneId . ', ' . $classId . ", '" . $day . "', "
+            . (int) $parts['date_year'] . ', ' . (int) $parts['date_month'] . ', '
+            . (int) $parts['date_week3'] . ', ' . (int) $parts['date_week6'] . ', '
+            . (int) ($r['ParkId'] ?? 0) . ', ' . (int) ($r['KingdomId'] ?? 0) . ', '
+            . (int) ($r['EventId'] ?? 0) . ', ' . (int) ($r['EventCalendarDetailId'] ?? 0) . ', '
+            . sprintf('%.2f', $credits) . ", '', '', '"
+            . $esc(mb_substr((string) ($r['Note'] ?? ''), 0, 20)) . "', "
+            . (int) ($r['ByWhomId'] ?? 0) . ", '" . $entry . "', '" . date('Y-m-d H:i:s') . "')"
+        );
+        if (!$ok) {
+            return ['Status' => 1, 'Error' => 'The credit could not be saved.'];
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT LAST_INSERT_ID() AS new_id');
+        $id = ($rs && $rs->Next()) ? (int) $rs->new_id : 0;
+        if ($id <= 0) {
+            return ['Status' => 1, 'Error' => 'The credit could not be saved.'];
+        }
+
+        return ['Status' => 0, 'Error' => '', 'AttendanceId' => $id];
+    }
+
+    /**
+     * Bust one player's attendance caches, for a caller that wrote attendance
+     * inside its own transaction (add_system_credit()) and has now committed.
+     * The '_' keeps it off the token-free JSON surface (see add_system_credit()).
+     */
+    public function bust_player_attendance_caches(int $mundaneId): void
+    {
+        $this->bustPlayerAttendanceCaches($mundaneId);
+    }
+
     public function SetAttendance($request)
     {
 
