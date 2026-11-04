@@ -845,9 +845,14 @@
         e.preventDefault();
         e.stopPropagation();
         open.forEach(function (i) {
-            i._flatpickr.close();
-            var alt = i._flatpickr.altInput;
-            if (alt && root.contains(alt) && !root.contains(document.activeElement)) { alt.focus(); }
+            var fp = i._flatpickr;
+            var alt = fp.altInput;
+            // Focus back on the visible field FIRST: Flatpickr opens on focus, so closing
+            // before refocusing (focus inside the calendar) would leave it open again.
+            if (alt && root.contains(alt) && document.activeElement !== alt) { alt.focus(); }
+            fp.close();
+            // Belt and braces for an open queued by that focus.
+            setTimeout(function () { if (fp.isOpen) { fp.close(); } }, 0);
         });
     }, true);
 

@@ -222,6 +222,8 @@ final class OfficerRollsPageTest extends TestCase
     {
         $js = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/script/officer-rolls.js');
         self::assertMatchesRegularExpression("/document\\.addEventListener\\('keydown',[\\s\\S]*?_flatpickr\\.isOpen[\\s\\S]*?stopPropagation\\(\\)[\\s\\S]*?\\.close\\(\\)[\\s\\S]*?\\}, true\\);/", $js);
+        // Refocus before closing (Flatpickr opens on focus), then close again next tick.
+        self::assertMatchesRegularExpression('/alt\\.focus\\(\\);[^\\n]*\\n\\s*fp\\.close\\(\\);[\\s\\S]*?setTimeout\\(function \\(\\) \\{ if \\(fp\\.isOpen\\) \\{ fp\\.close\\(\\); \\} \\}, 0\\);/', $js);
         $css = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/style/officer-rolls.css');
         self::assertMatchesRegularExpression('/\\.or-mode-btn i \\{\\s*font-size\\s*:\\s*14px;/', $css);
         self::assertMatchesRegularExpression('/\\.or-mode-btn \\{[^}]*width\\s*:\\s*28px;[^}]*height\\s*:\\s*28px;/', $css);
