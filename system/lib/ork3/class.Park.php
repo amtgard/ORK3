@@ -1462,140 +1462,44 @@ class Park extends Ork3
         return $response;
     }
 
+    /**
+     * Officer-history writes for the park roll (KingdomId derived from ParkId by OfficerPosition). One set of write rules:
+     * these delegate to OfficerPosition::AddHistoryTerm / EditHistoryTerm /
+     * DeleteHistoryTerm, which own the token check, the
+     * PermissionKeyFor('history', ...) gate (on the ROW's own scope for
+     * Edit/Delete), kingdom derivation, holder/period validation and the
+     * danger audit. Kept public for the JSON service.
+     *
+     * Legacy request keys still accepted: Notes (as Note) and Role (resolved
+     * to PositionId when PositionId is absent).
+     */
     public function AddOfficerHistory($request)
     {
-        $response = [ ];
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
-        ) {
-            $pid       = (int)$request[ 'ParkId' ];
-            $kid       = (int)$this->GetParkKingdomId($pid);
-            $mid       = (int)$request[ 'MundaneId' ];
-            $role      = trim($request[ 'Role' ] ?? '');
-            $start     = trim($request[ 'StartDate' ] ?? '');
-            $end       = trim($request[ 'EndDate' ] ?? '');
-            $notes_raw = isset($request[ 'Notes' ]) ? trim($request[ 'Notes' ]) : '';
-
-            if ($mid <= 0 || strlen($role) === 0 || strlen($start) === 0) {
-                return InvalidParameter(null, 'MundaneId, Role, and StartDate are required.');
-            }
-
-            // Bound, not concatenated -- mysql_real_escape_string() is a no-op shim in this
-            // codebase (startup.php: `return $str;`), so the previous form was an injection.
-            global $DB;
-            // Resolve the office this term belongs to, and SNAPSHOT what it was called.
-            // Without this the row lands with position_id = 0 and display_label = '', which the
-            // history UI reads as "office unknown" and files it under a catch-all panel instead
-            // of under the office the user just picked. The three other writers
-            // (Common::record_officer_history and both OfficerPosition backfills) already do
-            // this; only this manual "Add Historical Record" path did not.
-            // display_title_sql gives the EFFECTIVE title, so a kingdom that renamed a shared
-            // office snapshots ITS name -- which is the whole point of storing a snapshot.
-            $DB->Clear();
-            $DB->op_kid = $kid;
-            $DB->op_key = $role;
-            $_ohPos = $DB->DataSet(
-                "SELECT p.position_id, " . OfficerPosition::display_title_sql('p', 'a') . " AS display_title
-				   FROM " . DB_PREFIX . "officer_position p
-				   LEFT JOIN " . DB_PREFIX . "officer_position_alias a
-				     ON a.kingdom_id = :op_kid AND a.canonical_key = p.canonical_key
-				  WHERE p.canonical_key = :op_key AND (p.kingdom_id = 0 OR p.kingdom_id = :op_kid)
-				  ORDER BY p.kingdom_id DESC LIMIT 1"
-            );
-            $_ohPosId = 0;
-            $_ohLabel = '';
-            if ($_ohPos !== false && $_ohPos->Size() > 0 && $_ohPos->Next()) {
-                $_ohPosId = (int) $_ohPos->position_id;
-                $_ohLabel = (string) $_ohPos->display_title;
-            }
-            $DB->Clear();
-            $DB->oh_kid   = $kid;
-            $DB->oh_pid   = $pid;
-            $DB->oh_mid   = $mid;
-            $DB->oh_role  = $role;
-            $DB->oh_start = $start;
-            $DB->oh_end   = strlen($end) > 0 ? $end : null;
-            $DB->oh_cb    = (int)$mundane_id;
-            $DB->oh_notes = strlen($notes_raw) > 0 ? $notes_raw : null;
-            $DB->oh_pos   = $_ohPosId;
-            $DB->oh_label = $_ohLabel;
-            $DB->Execute(
-                "INSERT INTO " . DB_PREFIX . "officer_history
-				 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, notes, created_at)
-				 VALUES (:oh_kid, :oh_pid, :oh_mid, :oh_role, :oh_pos, :oh_label, :oh_start, :oh_end, :oh_cb, :oh_notes, NOW())"
-            );
-            $response = Success();
-        } else {
-            $response = NoAuthorization();
+        $request = $this->officerHistoryRequest($request);
+        if (empty($request['PositionId']) && isset($request['Role']) && trim((string) $request['Role']) !== '') {
+            $request['PositionId'] = (int) Ork3::$Lib->officerposition->ResolvePositionId((int) $this->GetParkKingdomId((int) ($request['ParkId'] ?? 0)), $request['Role']);
         }
-        return $response;
+        return Ork3::$Lib->officerposition->AddHistoryTerm($request);
     }
 
     public function EditOfficerHistory($request)
     {
-        $response = [ ];
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
-        ) {
-            $ohid      = (int)$request[ 'OfficerHistoryId' ];
-            $pid       = (int)$request[ 'ParkId' ];
-            $role      = trim($request[ 'Role' ] ?? '');
-            $start     = trim($request[ 'StartDate' ] ?? '');
-            $end       = trim($request[ 'EndDate' ] ?? '');
-            $notes_raw = isset($request[ 'Notes' ]) ? trim($request[ 'Notes' ]) : '';
-
-            if ($ohid <= 0 || strlen($role) === 0 || strlen($start) === 0) {
-                return InvalidParameter(null, 'OfficerHistoryId, Role, and StartDate are required.');
-            }
-
-            // Bound, not concatenated -- see AddOfficerHistory.
-            global $DB;
-            $DB->Clear();
-            $DB->oh_role  = $role;
-            $DB->oh_start = $start;
-            $DB->oh_end   = strlen($end) > 0 ? $end : null;
-            $DB->oh_notes = strlen($notes_raw) > 0 ? $notes_raw : null;
-            $DB->oh_id    = $ohid;
-            $DB->oh_pid   = $pid;
-            $DB->Execute(
-                "UPDATE " . DB_PREFIX . "officer_history
-				 SET role = :oh_role, start_date = :oh_start, end_date = :oh_end, notes = :oh_notes"
-                . (strlen($end) > 0 ? ', is_current = 0' : '') . "
-				 WHERE officer_history_id = :oh_id
-				   AND park_id = :oh_pid"
-            );
-            $response = Success();
-        } else {
-            $response = NoAuthorization();
-        }
-        return $response;
+        return Ork3::$Lib->officerposition->EditHistoryTerm($this->officerHistoryRequest($request));
     }
 
     public function DeleteOfficerHistory($request)
     {
-        $response = [ ];
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
-            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT)
-        ) {
-            $ohid = (int)$request[ 'OfficerHistoryId' ];
-            $pid  = (int)$request[ 'ParkId' ];
+        return Ork3::$Lib->officerposition->DeleteHistoryTerm($request);
+    }
 
-            if ($ohid <= 0) {
-                return InvalidParameter(null, 'OfficerHistoryId is required.');
-            }
-
-            global $DB;
-            $DB->Clear();
-            $DB->Execute(
-                "DELETE FROM " . DB_PREFIX . "officer_history
-				 WHERE officer_history_id = " . $ohid . "
-				   AND park_id = " . $pid
-            );
-            $response = Success();
-        } else {
-            $response = NoAuthorization();
+    /** Map the legacy Notes key onto OfficerPosition's Note. */
+    private function officerHistoryRequest($request)
+    {
+        if (!array_key_exists('Note', $request) && array_key_exists('Notes', $request)) {
+            $request['Note'] = $request['Notes'];
         }
-        return $response;
+        unset($request['Notes']);
+        return $request;
     }
 
     /**

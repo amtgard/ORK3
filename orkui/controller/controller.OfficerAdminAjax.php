@@ -654,6 +654,8 @@ class Controller_OfficerAdminAjax extends Controller
             'ParkId'     => $park_id,
             'PositionId' => (int)($_POST['PositionId'] ?? 0),
             'MundaneId'  => (int)($_POST['MundaneId'] ?? 0),
+            'HolderName' => trim((string)($_POST['HolderName'] ?? '')),
+            'Period'     => trim((string)($_POST['Period'] ?? '')),
             'StartDate'  => trim((string)($_POST['StartDate'] ?? '')),
             'EndDate'    => trim((string)($_POST['EndDate'] ?? '')),
             'Note'       => trim((string)($_POST['Note'] ?? '')),
@@ -666,9 +668,10 @@ class Controller_OfficerAdminAjax extends Controller
      * park and gates on those; passing a caller-supplied scope here would be an
      * invitation to trust it.
      *
-     * StartDate/EndDate use array_key_exists semantics in the domain: key present
-     * (even empty) clears the date, key absent leaves it alone. Only forward keys
-     * the client actually sent.
+     * Every field uses array_key_exists semantics in the domain: key present
+     * (even empty) sets or clears it, key absent leaves it alone. Only forward
+     * keys the client actually sent. MundaneId passes through so a plain-text
+     * holder can be linked to a player.
      */
     private function actionEditHistory()
     {
@@ -676,7 +679,10 @@ class Controller_OfficerAdminAjax extends Controller
             'Token'            => $this->session->token,
             'OfficerHistoryId' => (int)($_POST['OfficerHistoryId'] ?? 0),
         ];
-        foreach (['StartDate', 'EndDate', 'Note'] as $field) {
+        if (array_key_exists('MundaneId', $_POST)) {
+            $request['MundaneId'] = (int)$_POST['MundaneId'];
+        }
+        foreach (['HolderName', 'Period', 'StartDate', 'EndDate', 'Note'] as $field) {
             if (array_key_exists($field, $_POST)) {
                 $request[$field] = trim((string)$_POST[$field]);
             }

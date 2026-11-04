@@ -53,7 +53,8 @@ final class OfficerOccupancyTest extends TestCase
         // marker column; entity_id is the closest scoped key SetOccupant's
         // audit() call writes).
         $this->pdo->exec(
-            "DELETE FROM ork_danger_audit WHERE method_call = 'OfficerPosition::SetOccupant'"
+            "DELETE FROM ork_danger_audit WHERE method_call IN ('OfficerPosition::SetOccupant',"
+            . " 'OfficerPosition::AddHistoryTerm', 'OfficerPosition::EditHistoryTerm', 'OfficerPosition::DeleteHistoryTerm')"
             . ' AND entity_id IN (' . self::KINGDOM_ID . ', ' . self::PARK_A . ', ' . self::PARK_B . ')'
         );
         $this->pdo->exec("DELETE FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%'");
@@ -362,6 +363,290 @@ final class OfficerOccupancyTest extends TestCase
 
         self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $seatedRow)['is_current']);
         self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $otherRow)['is_current']);
+    }
+
+    // ---------------------------------------------------------------
+    // One set of write rules for officer history (Task 3)
+    // ---------------------------------------------------------------
+
+    private const CURRENT_MANAGED = 'The current term is managed from Manage Officers.';
+
+    /** @return array<string,mixed> */
+    private function historyBase(string $positionKey = 'crown_a'): array
+    {
+        return [
+            'Token' => $this->fixture->createAuthorizedOfficer(),
+            'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $this->seededPositions[$positionKey],
+        ];
+    }
+
+    /** Seat the seeded holder and return the office's current history row. */
+    private function seatAndGetCurrentRow(string $positionKey = 'crown_a'): array
+    {
+        $r = $this->positions->SetOccupant($this->historyBase($positionKey) + ['MundaneId' => $this->seededMundanes[0]]);
+        self::assertSame(0, (int) $r['Status'], 'seating should succeed: ' . ($r['Error'] ?? ''));
+        return $this->historyRow('position_id = ' . $this->seededPositions[$positionKey] . ' AND is_current = 1');
+    }
+
+    public function testAddAcceptsAPlainTextHolderAndSeasonPeriod(): void
+    {
+        $r = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Sir Bram the Elder', 'Period' => 'Spring–Fall 95',
+        ]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+
+        $row = $this->historyRow('officer_history_id = ' . (int) $r['Detail']);
+        self::assertSame(0, (int) $row['mundane_id']);
+        self::assertSame('Sir Bram the Elder', $row['holder_name']);
+        self::assertSame('spring', $row['start_season']);
+        self::assertSame(1995, (int) $row['start_year']);
+        self::assertSame('fall', $row['end_season']);
+        self::assertSame(1995, (int) $row['end_year']);
+        self::assertSame(0, (int) $row['is_current']);
+        self::assertNull($row['start_date'], 'a season-only period stores no exact date');
+        self::assertNull($row['end_date']);
+    }
+
+    public function testAddWithBlankEndIsUnknownNotCurrent(): void
+    {
+        $current = $this->seatAndGetCurrentRow();
+        $add = $this->historyBase() + ['HolderName' => 'Dame Unknown End', 'Period' => 'Spring 95 –'];
+
+        $a = $this->positions->AddHistoryTerm($add);
+        self::assertSame(0, (int) $a['Status'], (string) ($a['Error'] ?? ''));
+        $rowA = $this->historyRow('officer_history_id = ' . (int) $a['Detail']);
+        self::assertSame(0, (int) $rowA['is_current'], 'a blank end means end unknown, not current');
+        self::assertSame('spring', $rowA['start_season']);
+        self::assertNull($rowA['end_season']);
+        self::assertNull($rowA['end_year']);
+
+        $b = $this->positions->AddHistoryTerm($add);
+        self::assertSame(0, (int) $b['Status'], 'a second blank-end Add must succeed: ' . ($b['Error'] ?? ''));
+
+        $after = $this->historyRow('position_id = ' . $this->seededPositions['crown_a'] . ' AND is_current = 1');
+        self::assertSame($current['officer_history_id'], $after['officer_history_id'], 'the current row is unchanged');
+        self::assertSame($current['mundane_id'], $after['mundane_id']);
+        $count = $this->pdo->query(
+            'SELECT COUNT(*) FROM ork_officer_history WHERE is_current = 1 AND position_id = ' . $this->seededPositions['crown_a']
+        )->fetchColumn();
+        self::assertSame(1, (int) $count, 'exactly one row is current');
+    }
+
+    public function testAddRejectsAFutureSeasonalEnd(): void
+    {
+        $r = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Lord Tomorrow', 'Period' => 'Spring 26 – Fall 30',
+        ]);
+        // Two-digit years pivot at next year, so "30" reads as 1930 and the
+        // parser refuses this as end-before-start; either way it is refused.
+        self::assertNotSame(0, (int) $r['Status']);
+
+        $fourDigit = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Lord Tomorrow', 'Period' => 'Spring 2026 – Fall 2030',
+        ]);
+        self::assertSame('A term cannot end in the future.', $fourDigit['Error']);
+
+        $nextSeason = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Lord Tomorrow', 'Period' => 'Spring 2026 – Fall 2027',
+        ]);
+        self::assertSame('A term cannot end in the future.', $nextSeason['Error'], 'a 2-digit-safe future year');
+    }
+
+    public function testAddRejectsAnEndBeforeTheStart(): void
+    {
+        $r = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Lord Backwards', 'Period' => 'Spring 95', 'EndDate' => '1990-06-01',
+        ]);
+        self::assertNotSame(0, (int) $r['Status']);
+    }
+
+    public function testAddRequiresAHolder(): void
+    {
+        $r = $this->positions->AddHistoryTerm($this->historyBase() + ['Period' => 'Spring–Fall 95']);
+        self::assertNotSame(0, (int) $r['Status']);
+
+        $blank = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'MundaneId' => 0, 'HolderName' => '   ', 'Period' => 'Spring–Fall 95',
+        ]);
+        self::assertNotSame(0, (int) $blank['Status'], 'a whitespace-only name is not a holder');
+
+        $long = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => str_repeat('a', 121), 'Period' => 'Spring–Fall 95',
+        ]);
+        self::assertNotSame(0, (int) $long['Status'], 'a holder name is at most 120 characters');
+    }
+
+    public function testAddRequiresAStart(): void
+    {
+        $r = $this->positions->AddHistoryTerm($this->historyBase() + ['HolderName' => 'Sir No Start']);
+        self::assertNotSame(0, (int) $r['Status']);
+    }
+
+    public function testAddWithAMemberStoresNoHolderName(): void
+    {
+        $r = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'MundaneId' => $this->seededMundanes[0], 'HolderName' => 'ignored', 'Period' => 'Fall 99',
+            'StartDate' => '1999-09-15',
+        ]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        $row = $this->historyRow('officer_history_id = ' . (int) $r['Detail']);
+        self::assertSame($this->seededMundanes[0], (int) $row['mundane_id']);
+        self::assertSame('', $row['holder_name']);
+        self::assertSame('fall', $row['start_season']);
+        self::assertSame('1999-09-15', $row['start_date'], 'an exact date given alongside a period is stored too');
+    }
+
+    public function testEditCannotChangeTheCurrentHolderOrEnd(): void
+    {
+        $current = $this->seatAndGetCurrentRow();
+        $id = (int) $current['officer_history_id'];
+        $token = $this->fixture->createAuthorizedOfficer();
+        $other = $this->seedMundane('edit_other');
+        $this->seededMundanes[] = $other;
+
+        foreach ([
+            'EndDate' => ['EndDate' => '2026-01-01'],
+            'MundaneId' => ['MundaneId' => $other],
+            'HolderName' => ['MundaneId' => 0, 'HolderName' => 'Someone Else'],
+            'Period end' => ['Period' => 'Spring 20 – Fall 21'],
+        ] as $label => $fields) {
+            $r = $this->positions->EditHistoryTerm(['Token' => $token, 'OfficerHistoryId' => $id] + $fields);
+            self::assertNotSame(0, (int) $r['Status'], $label . ' must be refused on the current row');
+            self::assertSame(self::CURRENT_MANAGED, $r['Error'], $label);
+        }
+
+        $ok = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'OfficerHistoryId' => $id, 'Period' => 'Spring 24', 'Note' => 'started earlier',
+        ]);
+        self::assertSame(0, (int) $ok['Status'], 'start and note may change: ' . ($ok['Error'] ?? ''));
+        $row = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame('spring', $row['start_season']);
+        self::assertSame(2024, (int) $row['start_year']);
+        self::assertNull($row['end_season']);
+        self::assertNull($row['end_date']);
+        self::assertSame(1, (int) $row['is_current'], 'the row stays current');
+        self::assertSame($current['mundane_id'], $row['mundane_id']);
+        self::assertSame('started earlier', $row['notes']);
+
+        $date = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'OfficerHistoryId' => $id, 'StartDate' => '2024-04-02', 'EndDate' => '',
+        ]);
+        self::assertSame(0, (int) $date['Status'], 'an unchanged blank end is not an end change: ' . ($date['Error'] ?? ''));
+        self::assertSame('2024-04-02', $this->historyRow('officer_history_id = ' . $id)['start_date']);
+    }
+
+    public function testDeleteRefusesTheCurrentRow(): void
+    {
+        $current = $this->seatAndGetCurrentRow();
+        $r = $this->positions->DeleteHistoryTerm([
+            'Token' => $this->fixture->createAuthorizedOfficer(),
+            'OfficerHistoryId' => (int) $current['officer_history_id'],
+        ]);
+        self::assertNotSame(0, (int) $r['Status']);
+        self::assertSame(self::CURRENT_MANAGED, $r['Error']);
+        $this->historyRow('officer_history_id = ' . (int) $current['officer_history_id']);
+    }
+
+    public function testEditLinksAPlainTextHolderAndAudits(): void
+    {
+        $add = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Sir Bram the Elder', 'Period' => 'Spring–Fall 95',
+        ]);
+        self::assertSame(0, (int) $add['Status'], (string) ($add['Error'] ?? ''));
+        $id = (int) $add['Detail'];
+        $member = $this->seededMundanes[0];
+
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $this->fixture->createAuthorizedOfficer(),
+            'OfficerHistoryId' => $id, 'MundaneId' => $member,
+        ]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+
+        $row = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame($member, (int) $row['mundane_id']);
+        self::assertSame('', $row['holder_name'], 'a linked holder stores no plain-text name');
+        self::assertSame('spring', $row['start_season'], 'an absent Period leaves the span alone');
+        self::assertSame('fall', $row['end_season']);
+
+        $audit = $this->pdo->query(
+            "SELECT prior_state, post_state FROM ork_danger_audit
+              WHERE method_call = 'OfficerPosition::EditHistoryTerm' AND entity_id = " . self::KINGDOM_ID . '
+              ORDER BY danger_audit_id DESC LIMIT 1'
+        )->fetch(PDO::FETCH_ASSOC);
+        self::assertIsArray($audit, 'the edit must be audited');
+        $prior = json_decode((string) $audit['prior_state'], true);
+        $post = json_decode((string) $audit['post_state'], true);
+        self::assertSame(0, (int) $prior['MundaneId']);
+        self::assertSame('Sir Bram the Elder', $prior['HolderName']);
+        self::assertSame($member, (int) $post['MundaneId']);
+        self::assertSame('', $post['HolderName']);
+    }
+
+    public function testEditOfAPastRowMayChangeItsPeriodAndKeepsItPast(): void
+    {
+        $add = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Dame Edit', 'Period' => 'Spring 95', 'StartDate' => '1995-04-01',
+        ]);
+        self::assertSame(0, (int) $add['Status'], (string) ($add['Error'] ?? ''));
+        $id = (int) $add['Detail'];
+
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $this->fixture->createAuthorizedOfficer(),
+            'OfficerHistoryId' => $id, 'Period' => 'Summer 96 –',
+        ]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        $row = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame('summer', $row['start_season']);
+        self::assertSame(1996, (int) $row['start_year']);
+        self::assertNull($row['end_season']);
+        self::assertNull($row['start_date'], 'a new period replaces an exact date that was not resent');
+        self::assertSame(0, (int) $row['is_current']);
+
+        $future = $this->positions->EditHistoryTerm([
+            'Token' => $this->fixture->createAuthorizedOfficer(),
+            'OfficerHistoryId' => $id, 'Period' => 'Spring 2026 – Fall 2030',
+        ]);
+        self::assertSame('A term cannot end in the future.', $future['Error']);
+    }
+
+    public function testKingdomAndParkHistoryEntryPointsUseTheSameRules(): void
+    {
+        $k = Ork3::$Lib->kingdom->AddOfficerHistory($this->historyBase() + [
+            'HolderName' => 'Kingdom Path', 'Period' => 'Spring–Fall 95',
+        ]);
+        self::assertSame(0, (int) $k['Status'], (string) ($k['Error'] ?? ''));
+        $row = $this->historyRow('officer_history_id = ' . (int) $k['Detail']);
+        self::assertSame('Kingdom Path', $row['holder_name']);
+        self::assertSame(0, (int) $row['park_id']);
+
+        $future = Ork3::$Lib->park->AddOfficerHistory([
+            'Token' => $this->fixture->createAuthorizedOfficer(), 'ParkId' => self::PARK_A,
+            'PositionId' => $this->seededPositions['support_a'],
+            'HolderName' => 'Park Path', 'Period' => 'Spring 2026 – Fall 2030',
+        ]);
+        self::assertSame('A term cannot end in the future.', $future['Error']);
+
+        $p = Ork3::$Lib->park->AddOfficerHistory([
+            'Token' => $this->fixture->createAuthorizedOfficer(), 'ParkId' => self::PARK_A,
+            'PositionId' => $this->seededPositions['support_a'],
+            'HolderName' => 'Park Path', 'Period' => 'Spring–Fall 95',
+        ]);
+        self::assertSame(0, (int) $p['Status'], (string) ($p['Error'] ?? ''));
+        $prow = $this->historyRow('officer_history_id = ' . (int) $p['Detail']);
+        self::assertSame(self::PARK_A, (int) $prow['park_id']);
+        self::assertSame(self::KINGDOM_ID, (int) $prow['kingdom_id'], 'kingdom derived from the park');
+
+        $e = Ork3::$Lib->park->EditOfficerHistory([
+            'Token' => $this->fixture->createAuthorizedOfficer(), 'ParkId' => self::PARK_A,
+            'OfficerHistoryId' => (int) $p['Detail'], 'Note' => 'edited',
+        ]);
+        self::assertSame(0, (int) $e['Status'], (string) ($e['Error'] ?? ''));
+        $d = Ork3::$Lib->kingdom->DeleteOfficerHistory([
+            'Token' => $this->fixture->createAuthorizedOfficer(), 'KingdomId' => self::KINGDOM_ID,
+            'OfficerHistoryId' => (int) $k['Detail'],
+        ]);
+        self::assertSame(0, (int) $d['Status'], (string) ($d['Error'] ?? ''));
     }
 
     private function seedPastUnknownEndRow(int $positionId, string $suffix, int $mundaneId): int

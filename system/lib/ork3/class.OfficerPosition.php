@@ -74,11 +74,14 @@ class OfficerPosition extends Ork3
      */
     public static function PermissionKeyFor($action, $park_id)
     {
+        // [kingdom key, park key], spelled out in full rather than composed from a
+        // scope prefix: RbacRegistryParityTest finds a key's enforcing call site by
+        // its literal text, and this is the only gate for the history family.
         $map = [
-            'set'      => '.officer.set',
-            'vacate'   => '.officer.vacate',
-            'position' => '.officer.position.manage',
-            'history'  => '.officer_history.manage',
+            'set'      => ['kingdom.officer.set', 'park.officer.set'],
+            'vacate'   => ['kingdom.officer.vacate', 'park.officer.vacate'],
+            'position' => ['kingdom.officer.position.manage', 'kingdom.officer.position.manage'],
+            'history'  => ['kingdom.officer_history.manage', 'park.officer_history.manage'],
         ];
         if (!isset($map[$action])) {
             throw new InvalidArgumentException('Unknown officer action: ' . $action);
@@ -96,11 +99,10 @@ class OfficerPosition extends Ork3
         // Occupancy (set / vacate / history) is genuinely per-scope and still resolves
         // to the park key when a ParkId is present.
         if ($action === 'position') {
-            return 'kingdom' . $map[$action];
+            return $map[$action][0];
         }
 
-        $prefix = ((int) $park_id > 0) ? 'park' : 'kingdom';
-        return $prefix . $map[$action];
+        return $map[$action][((int) $park_id > 0) ? 1 : 0];
     }
 
     /**
@@ -2394,8 +2396,9 @@ class OfficerPosition extends Ork3
         $DB->Clear();
         $DB->gh_id = $history_id;
         $r = $DB->DataSet(
-            'SELECT officer_history_id, kingdom_id, park_id, mundane_id, role, position_id,
-    				display_label, start_date, end_date, changed_by, notes, created_at
+            'SELECT officer_history_id, kingdom_id, park_id, mundane_id, holder_name, role, position_id,
+    				display_label, start_date, end_date, start_season, start_year, end_season, end_year,
+    				is_current, changed_by, notes, created_at
     			 FROM ' . DB_PREFIX . 'officer_history
     			 WHERE officer_history_id = :gh_id LIMIT 1'
         );
@@ -2407,44 +2410,194 @@ class OfficerPosition extends Ork3
             'kingdom_id'    => (int) $r->kingdom_id,
             'park_id'       => (int) $r->park_id,
             'mundane_id'    => (int) $r->mundane_id,
+            'holder_name'   => (string) ($r->holder_name ?? ''),
             'role'          => $r->role,
             'position_id'   => (int) $r->position_id,
             'display_label' => $r->display_label,
             'start_date'    => $r->start_date,
             'end_date'      => $r->end_date,
+            'start_season'  => self::nullIfBlank($r->start_season),
+            'start_year'    => self::nullIfBlank($r->start_year) === null ? null : (int) $r->start_year,
+            'end_season'    => self::nullIfBlank($r->end_season),
+            'end_year'      => self::nullIfBlank($r->end_year) === null ? null : (int) $r->end_year,
+            'is_current'    => (int) $r->is_current,
             'changed_by'    => $r->changed_by,
             'notes'         => $r->notes,
             'created_at'    => $r->created_at,
         ];
     }
 
+    /** Refusal for any history write that would touch a current term's holder or end. */
+    private const ERR_CURRENT_MANAGED = 'The current term is managed from Manage Officers.';
+
+    private static function nullIfBlank($v)
+    {
+        return ($v === null || $v === '') ? null : $v;
+    }
+
+    /** A stored date, or null for blank and the legacy zero date. */
+    private static function dateOrNull($v)
+    {
+        return ($v === null || $v === '' || $v === '0000-00-00') ? null : (string) $v;
+    }
+
     /**
-     * True when this office+scope already has a current term other than $except_id.
-     *
-     * `is_current = 1` is what defines "current officer" everywhere in this
-     * codebase (a null end_date alone may be a past term whose end is unknown),
-     * so a second current row makes one office read as held by two people --
-     * the state the 2026-08-29 backfill was written to repair. Matches the legacy
-     * position_id = 0 fallback the rest of the class uses.
+     * Bind $value as :$param, or return the SQL literal NULL. Yapo drops a
+     * bound PHP null from INSERT/UPDATE (see openTerm()'s docblock), so a
+     * null column value must be written as a literal, never bound.
      */
-    private function hasOtherOpenTerm($kingdom_id, $park_id, $position_id, $canonical_key, $except_id = 0)
+    private static function bindOrNull($DB, $param, $value)
+    {
+        if ($value === null) {
+            return 'NULL';
+        }
+        $DB->{$param} = $value;
+        return ':' . $param;
+    }
+
+    /**
+     * Resolve the holder and span of an Add ($row === null) or Edit into
+     * column values, applying the history write rules:
+     *
+     *  - Holder: MundaneId > 0, or a trimmed HolderName of 1-120 characters.
+     *    A linked holder stores holder_name = ''.
+     *  - Period (OfficerTermPeriod::parse) fills the season columns. An exact
+     *    StartDate/EndDate sent alongside is stored too; exact wins for
+     *    ordering. On Edit, a Period that is sent redefines the span, so a
+     *    date key not sent with it is cleared; with no Period, each date key
+     *    keeps array_key_exists semantics (absent = untouched, '' = cleared).
+     *  - On a current row ($row['is_current']) a single-season Period ("Spring
+     *    24") sets the start only; the end is never touched from here.
+     *  - An end may not resolve past currentOrdinal() or an exact date past
+     *    today, and may not precede the start.
+     *
+     * @return array column values, or ['__error' => response]
+     */
+    private function historyTermColumns(array $request, $row)
+    {
+        $isEdit = is_array($row);
+        $base = $isEdit ? $row : [
+            'mundane_id' => 0, 'holder_name' => '',
+            'start_season' => null, 'start_year' => null, 'start_date' => null,
+            'end_season' => null, 'end_year' => null, 'end_date' => null,
+            'is_current' => 0,
+        ];
+        $has = function ($k) use ($request) {
+            return array_key_exists($k, $request);
+        };
+
+        // Holder.
+        $mundane_id = $has('MundaneId') ? (int) $request['MundaneId'] : (int) $base['mundane_id'];
+        $holder_name = $has('HolderName') ? trim((string) $request['HolderName']) : (string) $base['holder_name'];
+        if ($mundane_id < 0) {
+            return ['__error' => InvalidParameter(null, 'A valid member is required.')];
+        }
+        if ($mundane_id > 0) {
+            $holder_name = '';
+            if ($mundane_id !== (int) $base['mundane_id'] && !$this->mundaneExists($mundane_id)) {
+                return ['__error' => InvalidParameter(null, 'A valid member is required.')];
+            }
+        } elseif ($holder_name === '') {
+            return ['__error' => InvalidParameter(null, 'A holder is required: choose a member or enter a name.')];
+        } elseif (mb_strlen($holder_name) > 120) {
+            return ['__error' => InvalidParameter(null, 'Holder names are at most 120 characters.')];
+        }
+
+        // Span.
+        $cols = [
+            'start_season' => $base['start_season'], 'start_year' => $base['start_year'],
+            'end_season' => $base['end_season'], 'end_year' => $base['end_year'],
+            'start_date' => self::dateOrNull($base['start_date']),
+            'end_date' => self::dateOrNull($base['end_date']),
+        ];
+        $periodSent = $has('Period');
+        if ($periodSent) {
+            $text = trim((string) $request['Period']);
+            $cols['start_season'] = $cols['start_year'] = null;
+            $cols['start_date'] = null;
+            $startOnly = $isEdit && (int) $base['is_current'] === 1
+                && !preg_match('/[-\x{2013}\x{2014}]|\sto\s/iu', $text);
+            if (!$startOnly) {
+                $cols['end_season'] = $cols['end_year'] = null;
+                $cols['end_date'] = null;
+            }
+            if ($text !== '') {
+                $p = OfficerTermPeriod::parse($text);
+                if (is_string($p)) {
+                    return ['__error' => InvalidParameter(null, $p)];
+                }
+                $cols['start_season'] = $p['start']['season'];
+                $cols['start_year'] = (int) $p['start']['year'];
+                if (!$startOnly && $p['end'] !== null) {
+                    $cols['end_season'] = $p['end']['season'];
+                    $cols['end_year'] = (int) $p['end']['year'];
+                }
+            }
+        }
+        foreach (['start' => 'StartDate', 'end' => 'EndDate'] as $side => $key) {
+            if ($has($key)) {
+                $d = $this->normalizeDate($request[$key], '');
+                if ($d === false) {
+                    return ['__error' => InvalidParameter(null, 'Dates must be in YYYY-MM-DD form.')];
+                }
+                $cols[$side . '_date'] = ($d === '') ? null : $d;
+            }
+        }
+
+        // A current term's holder and end belong to Manage Officers.
+        if ($isEdit && (int) $base['is_current'] === 1) {
+            if ($mundane_id !== (int) $base['mundane_id']
+                || $holder_name !== (string) $base['holder_name']
+                || $cols['end_season'] !== $base['end_season']
+                || $cols['end_year'] !== $base['end_year']
+                || $cols['end_date'] !== self::dateOrNull($base['end_date'])) {
+                return ['__error' => InvalidParameter(null, self::ERR_CURRENT_MANAGED)];
+            }
+        }
+
+        $ord = OfficerTermPeriod::resolve([
+            'StartSeason' => $cols['start_season'], 'StartYear' => $cols['start_year'], 'StartDate' => $cols['start_date'],
+            'EndSeason' => $cols['end_season'], 'EndYear' => $cols['end_year'], 'EndDate' => $cols['end_date'],
+        ]);
+        if (!$isEdit && $ord['start'] === null) {
+            return ['__error' => InvalidParameter(null, 'A term needs a start: enter a period or a start date.')];
+        }
+        if (($cols['end_date'] !== null && $cols['end_date'] > date('Y-m-d'))
+            || ($ord['end'] !== null && $ord['end'] > OfficerTermPeriod::currentOrdinal())) {
+            return ['__error' => InvalidParameter(null, 'A term cannot end in the future.')];
+        }
+        $endsBefore = ($cols['start_date'] !== null && $cols['end_date'] !== null)
+            ? $cols['end_date'] < $cols['start_date']
+            : ($ord['start'] !== null && $ord['end'] !== null && $ord['end'] < $ord['start']);
+        if ($endsBefore) {
+            return ['__error' => InvalidParameter(null, 'A term cannot end before it began.')];
+        }
+
+        return ['mundane_id' => $mundane_id, 'holder_name' => $holder_name] + $cols;
+    }
+
+    private function mundaneExists($mundane_id)
     {
         global $DB;
         $DB->Clear();
-        $DB->ho_kid = (int) $kingdom_id;
-        $DB->ho_pid = (int) $park_id;
-        $DB->ho_pos = (int) $position_id;
-        $DB->ho_role = (string) $canonical_key;
-        $DB->ho_except = (int) $except_id;
-        $r = $DB->DataSet(
-            'SELECT officer_history_id FROM ' . DB_PREFIX . 'officer_history
-              WHERE kingdom_id = :ho_kid AND park_id = :ho_pid
-                AND ( position_id = :ho_pos OR ( position_id = 0 AND role = :ho_role ) )
-                AND is_current = 1
-                AND officer_history_id <> :ho_except
-              LIMIT 1'
-        );
+        $DB->me_id = (int) $mundane_id;
+        $r = $DB->DataSet('SELECT mundane_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = :me_id LIMIT 1');
         return ($r !== false && $r->size() > 0);
+    }
+
+    /** The holder/span fields of a row, in the audit vocabulary. */
+    private static function historyAuditState($history_id, array $cols, $notes)
+    {
+        return [
+            'OfficerHistoryId' => (int) $history_id,
+            'MundaneId' => (int) $cols['mundane_id'],
+            'HolderName' => (string) $cols['holder_name'],
+            'StartSeason' => $cols['start_season'], 'StartYear' => $cols['start_year'],
+            'StartDate' => self::dateOrNull($cols['start_date']),
+            'EndSeason' => $cols['end_season'], 'EndYear' => $cols['end_year'],
+            'EndDate' => self::dateOrNull($cols['end_date']),
+            'Notes' => $notes,
+        ];
     }
 
     /**
@@ -2456,8 +2609,9 @@ class OfficerPosition extends Ork3
      * park-scoped actor cannot smuggle a foreign kingdom into the column
      * written to ork_officer_history.
      *
-     * @param array $request Token, KingdomId, ParkId, PositionId, MundaneId,
-     *                        StartDate?, EndDate?, Note?
+     * @param array $request Token, KingdomId, ParkId, PositionId, MundaneId? (0 allowed),
+     *                        HolderName?, Period?, StartDate?, EndDate?, Note?
+     *                        -- see historyTermColumns() for the rules.
      * @return array
      */
     public function AddHistoryTerm($request)
@@ -2471,7 +2625,6 @@ class OfficerPosition extends Ork3
         $kingdom_id  = (int) ($request['KingdomId'] ?? 0);
         $park_id     = (int) ($request['ParkId'] ?? 0);
         $position_id = (int) ($request['PositionId'] ?? 0);
-        $mundane_id  = (int) ($request['MundaneId'] ?? 0);
 
         $scope    = ($park_id > 0) ? 'park' : 'kingdom';
         $scope_id = ($park_id > 0) ? $park_id : $kingdom_id;
@@ -2495,10 +2648,6 @@ class OfficerPosition extends Ork3
         if (!valid_id($position_id)) {
             return InvalidParameter(null, 'A valid position is required.');
         }
-        if (!valid_id($mundane_id)) {
-            return InvalidParameter(null, 'A valid member is required.');
-        }
-
         $position = $this->GetPosition($position_id, $kingdom_id);
         if ($position === false) {
             return InvalidParameter(null, 'Position not found.');
@@ -2508,57 +2657,40 @@ class OfficerPosition extends Ork3
             return NoAuthorization(null, 'Position does not belong to this kingdom.');
         }
 
-        // Same date rules as a transition: start may be NULL (unknown), end
-        // may not be in the future, end may not precede start.
-        $start = $this->normalizeDate($request['StartDate'] ?? '', '');
-        $end   = $this->normalizeDate($request['EndDate'] ?? '', '');
-        if ($start === false || $end === false) {
-            return InvalidParameter(null, 'Dates must be in YYYY-MM-DD form.');
+        // Holder, period and date rules: historyTermColumns(). Add never
+        // creates a current row -- a blank end means "end unknown", and
+        // current terms are opened only by Manage Officers' seat changes.
+        $cols = $this->historyTermColumns($request, null);
+        if (isset($cols['__error'])) {
+            return $cols['__error'];
         }
-        $today = date('Y-m-d');
-        if ($end !== '' && $end > $today) {
-            return InvalidParameter(null, 'A term cannot end in the future.');
-        }
-        if ($start !== '' && $end !== '' && $end < $start) {
-            return InvalidParameter(null, 'A term cannot end before it began.');
-        }
-        if ($end === '' && $this->hasOtherOpenTerm($kingdom_id, $park_id, $position_id, $position['CanonicalKey'])) {
-            return InvalidParameter(null, 'That office already has an open term. Close it first.');
-        }
+        $mundane_id = $cols['mundane_id'];
         // mb_substr, not substr: Note is free text and a byte-based cut can slice
         // a multi-byte character in half, leaving invalid UTF-8 in the column.
         $note = mb_substr(trim((string) ($request['Note'] ?? '')), 0, 500);
 
         $DB->Clear();
-        $DB->ah_kid   = $kingdom_id;
-        $DB->ah_pid   = $park_id;
-        $DB->ah_mid   = $mundane_id;
-        $DB->ah_role  = $position['CanonicalKey'];
-        $DB->ah_pos   = $position_id;
-        $DB->ah_label = ($position['DisplayTitle'] !== '') ? $position['DisplayTitle'] : $position['CanonicalKey'];
-        $DB->ah_cb    = $actor_id;
-        $DB->ah_notes = $note;
-        // start_date/end_date are NULL-or-string; yapo drops a bound PHP null
-        // from INSERT/UPDATE (see openTerm()'s docblock), so an empty value is
-        // emitted as the SQL literal NULL instead of bound.
-        $start_sql = ':ah_start';
-        if ($start === '') {
-            $start_sql = 'NULL';
-        } else {
-            $DB->ah_start = $start;
-        }
-        $end_sql = ':ah_end';
-        if ($end === '') {
-            $end_sql = 'NULL';
-        } else {
-            $DB->ah_end = $end;
+        $DB->ah_kid    = $kingdom_id;
+        $DB->ah_pid    = $park_id;
+        $DB->ah_mid    = $mundane_id;
+        $DB->ah_holder = $cols['holder_name'];
+        $DB->ah_role   = $position['CanonicalKey'];
+        $DB->ah_pos    = $position_id;
+        $DB->ah_label  = ($position['DisplayTitle'] !== '') ? $position['DisplayTitle'] : $position['CanonicalKey'];
+        $DB->ah_cb     = $actor_id;
+        $DB->ah_notes  = $note;
+        $vals = [];
+        foreach (['start_date', 'end_date', 'start_season', 'start_year', 'end_season', 'end_year'] as $c) {
+            $vals[$c] = self::bindOrNull($DB, 'ah_' . $c, $cols[$c]);
         }
         $ok = $DB->ExecuteChecked(
             'INSERT INTO ' . DB_PREFIX . 'officer_history
-    			 (kingdom_id, park_id, mundane_id, role, position_id, display_label,
-    			  start_date, end_date, changed_by, notes, created_at)
-    			 VALUES (:ah_kid, :ah_pid, :ah_mid, :ah_role, :ah_pos, :ah_label,
-    			         ' . $start_sql . ', ' . $end_sql . ', :ah_cb, :ah_notes, NOW())'
+    			 (kingdom_id, park_id, mundane_id, holder_name, role, position_id, display_label,
+    			  start_date, end_date, start_season, start_year, end_season, end_year, is_current,
+    			  changed_by, notes, created_at)
+    			 VALUES (:ah_kid, :ah_pid, :ah_mid, :ah_holder, :ah_role, :ah_pos, :ah_label,
+    			         ' . implode(', ', $vals) . ', 0,
+    			         :ah_cb, :ah_notes, NOW())'
         );
         if (!$ok) {
             return ProcessingError('The history term could not be recorded.');
@@ -2573,7 +2705,7 @@ class OfficerPosition extends Ork3
             ($park_id > 0) ? 'Park' : 'Kingdom',
             $scope_id,
             null,
-            ['OfficerHistoryId' => $history_id, 'MundaneId' => $mundane_id, 'PositionId' => $position_id]
+            ['PositionId' => $position_id] + self::historyAuditState($history_id, $cols, $note)
         );
 
         return Success($history_id);
@@ -2590,10 +2722,13 @@ class OfficerPosition extends Ork3
      * their own kingdom in the request while pointing OfficerHistoryId at a
      * row that belongs to someone else.
      *
-     * Same date rules as a transition: start may be NULL (unknown), end may
-     * not be in the future, end may not precede start.
+     * Every field uses array_key_exists semantics: absent = untouched. See
+     * historyTermColumns() for the holder/period/date rules. A current row
+     * (is_current = 1) may change only its start and note; its holder and
+     * end are owned by Manage Officers.
      *
-     * @param array $request Token, KingdomId, ParkId, OfficerHistoryId, StartDate?, EndDate?, Note?
+     * @param array $request Token, OfficerHistoryId, MundaneId?, HolderName?, Period?,
+     *                        StartDate?, EndDate?, Note?
      * @return array
      */
     public function EditHistoryTerm($request)
@@ -2629,56 +2764,29 @@ class OfficerPosition extends Ork3
             return NoAuthorization();
         }
 
-        $start = array_key_exists('StartDate', $request)
-            ? $this->normalizeDate($request['StartDate'], '')
-            : (string) ($row['start_date'] ?? '');
-        $end = array_key_exists('EndDate', $request)
-            ? $this->normalizeDate($request['EndDate'], '')
-            : (string) ($row['end_date'] ?? '');
-        if ($start === false || $end === false) {
-            return InvalidParameter(null, 'Dates must be in YYYY-MM-DD form.');
-        }
-        $today = date('Y-m-d');
-        if ($end !== '' && $end > $today) {
-            return InvalidParameter(null, 'A term cannot end in the future.');
-        }
-        if ($start !== '' && $end !== '' && $end < $start) {
-            return InvalidParameter(null, 'A term cannot end before it began.');
-        }
-        if ($end === '' && $this->hasOtherOpenTerm(
-            $row['kingdom_id'],
-            $row['park_id'],
-            $row['position_id'],
-            $row['role'],
-            $history_id
-        )) {
-            return InvalidParameter(null, 'That office already has an open term. Close it first.');
+        // No edit can make a row current: a current row may change only its
+        // start and note (historyTermColumns refuses holder/end changes), and
+        // a past row keeps is_current = 0 whatever its end becomes.
+        $cols = $this->historyTermColumns($request, $row);
+        if (isset($cols['__error'])) {
+            return $cols['__error'];
         }
         $note = array_key_exists('Note', $request)
             ? mb_substr(trim((string) $request['Note']), 0, 500)
             : (string) $row['notes'];
 
         $DB->Clear();
-        $DB->eh_id    = $history_id;
-        $DB->eh_notes = $note;
-        $start_sql = ':eh_start';
-        if ($start === '') {
-            $start_sql = 'NULL';
-        } else {
-            $DB->eh_start = $start;
-        }
-        $end_sql = ':eh_end';
-        // Giving a term an end closes it: an ended row is never current.
-        $current_sql = '';
-        if ($end === '') {
-            $end_sql = 'NULL';
-        } else {
-            $DB->eh_end = $end;
-            $current_sql = ', is_current = 0';
+        $DB->eh_id     = $history_id;
+        $DB->eh_notes  = $note;
+        $DB->eh_mid    = $cols['mundane_id'];
+        $DB->eh_holder = $cols['holder_name'];
+        $set = [];
+        foreach (['start_date', 'end_date', 'start_season', 'start_year', 'end_season', 'end_year'] as $c) {
+            $set[] = $c . ' = ' . self::bindOrNull($DB, 'eh_' . $c, $cols[$c]);
         }
         $ok = $DB->ExecuteChecked(
             'UPDATE ' . DB_PREFIX . 'officer_history
-    			 SET start_date = ' . $start_sql . ', end_date = ' . $end_sql . $current_sql . ', notes = :eh_notes
+    			 SET mundane_id = :eh_mid, holder_name = :eh_holder, ' . implode(', ', $set) . ', notes = :eh_notes
     			 WHERE officer_history_id = :eh_id'
         );
         if (!$ok) {
@@ -2692,18 +2800,8 @@ class OfficerPosition extends Ork3
             $safe,
             ($park_id > 0) ? 'Park' : 'Kingdom',
             $scope_id,
-            [
-                'OfficerHistoryId' => $history_id,
-                'StartDate' => $row['start_date'],
-                'EndDate' => $row['end_date'],
-                'Notes' => $row['notes'],
-            ],
-            [
-                'OfficerHistoryId' => $history_id,
-                'StartDate' => ($start === '') ? null : $start,
-                'EndDate' => ($end === '') ? null : $end,
-                'Notes' => $note,
-            ]
+            self::historyAuditState($history_id, $row, $row['notes']),
+            self::historyAuditState($history_id, $cols, $note)
         );
 
         return Success();
@@ -2712,7 +2810,8 @@ class OfficerPosition extends Ork3
     /**
      * Delete an officer_history row outright.
      *
-     * Same row-scoped gate as EditHistoryTerm -- see its docblock. Audits the
+     * Same row-scoped gate as EditHistoryTerm -- see its docblock. A current
+     * row is refused: Manage Officers owns it. Audits the
      * FULL deleted row as $prior_state; a delete has no other way to recover
      * what was removed.
      *
@@ -2750,6 +2849,10 @@ class OfficerPosition extends Ork3
             AUTH_EDIT
         )) {
             return NoAuthorization();
+        }
+        // After the gate, so the refusal is no oracle for unauthorized callers.
+        if ((int) $row['is_current'] === 1) {
+            return InvalidParameter(null, self::ERR_CURRENT_MANAGED);
         }
 
         $DB->Clear();

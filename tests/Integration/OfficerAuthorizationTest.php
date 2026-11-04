@@ -349,7 +349,11 @@ final class OfficerAuthorizationTest extends TestCase
         self::assertStringContainsString((string) $mundaneId, (string) $priorState);
     }
 
-    public function testAddHistoryTermRefusesASecondOpenTerm(): void
+    /**
+     * Current terms belong to Manage Officers. A blank-end Add beside a seated
+     * holder is a past term whose end is unknown, never a second current one.
+     */
+    public function testAddNeverOpensACurrentTerm(): void
     {
         $token      = $this->fixture->createAuthorizedOfficer();
         $positionId = $this->seededPositions['crown_a'];
@@ -360,20 +364,28 @@ final class OfficerAuthorizationTest extends TestCase
         $base = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
                  'PositionId' => $positionId];
 
-        // The current term is the seated holder's (is_current = 1); a blank-end
-        // Add would read as a second current holder while that guard stands.
         $a = $this->positions->SetOccupant($base + ['MundaneId' => $first]);
         self::assertSame(0, (int)$a['Status'], $a['Error'] ?? '');
 
         $b = $this->positions->AddHistoryTerm($base + ['MundaneId' => $second, 'StartDate' => '2026-02-01']);
-        self::assertSame(
-            4,
-            (int)$b['Status'],
-            'two current terms on one office means it reads as held by two people'
-        );
+        self::assertSame(0, (int)$b['Status'], 'a blank-end Add is an unknown end, not refused: ' . ($b['Error'] ?? ''));
+
+        $added = (int)$this->pdo->query(
+            'SELECT is_current FROM ork_officer_history WHERE officer_history_id = ' . (int)$b['Detail']
+        )->fetchColumn();
+        self::assertSame(0, $added, 'Add never creates a current row');
+
+        $current = $this->pdo->query(
+            "SELECT mundane_id FROM ork_officer_history WHERE position_id = {$positionId} AND is_current = 1"
+        )->fetchAll(PDO::FETCH_COLUMN);
+        self::assertSame([(string)$first], array_map('strval', $current), 'the seated holder stays the only current term');
     }
 
-    public function testEditHistoryTermRefusesReopeningIntoASecondOpenTerm(): void
+    /**
+     * No edit can make a row current any more, so clearing the end of a past
+     * row beside a seated holder just makes its end unknown.
+     */
+    public function testEditHistoryTermOfAnUnknownEndPastRowSucceedsAndStaysPast(): void
     {
         $token      = $this->fixture->createAuthorizedOfficer();
         $positionId = $this->seededPositions['crown_b'];
@@ -384,28 +396,34 @@ final class OfficerAuthorizationTest extends TestCase
         $base = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
                  'PositionId' => $positionId];
 
-        // A closed term, then a current one (the seated holder) on the same office.
         $closed = $this->positions->AddHistoryTerm(
             $base + ['MundaneId' => $former, 'StartDate' => '2025-01-01', 'EndDate' => '2025-12-31']
         );
         self::assertSame(0, (int)$closed['Status'], $closed['Error'] ?? '');
         $seat = $this->positions->SetOccupant($base + ['MundaneId' => $current]);
         self::assertSame(0, (int)$seat['Status'], $seat['Error'] ?? '');
-
-        $closedId = (int)$this->pdo->query(
-            "SELECT officer_history_id FROM ork_officer_history
-              WHERE position_id = {$positionId} AND end_date IS NOT NULL
-              ORDER BY officer_history_id DESC LIMIT 1"
-        )->fetchColumn();
+        $closedId = (int)$closed['Detail'];
 
         $r = $this->positions->EditHistoryTerm([
             'Token' => $token, 'OfficerHistoryId' => $closedId, 'EndDate' => '',
         ]);
-        self::assertSame(
-            4,
-            (int)$r['Status'],
-            'clearing EndDate must not create a second open term'
-        );
+        self::assertSame(0, (int)$r['Status'], 'clearing the end of a past row must succeed: ' . ($r['Error'] ?? ''));
+
+        $again = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'OfficerHistoryId' => $closedId, 'Note' => 'unknown end, still past',
+        ]);
+        self::assertSame(0, (int)$again['Status'], 'editing an unknown-end past row must succeed: ' . ($again['Error'] ?? ''));
+
+        $row = $this->pdo->query(
+            'SELECT end_date, is_current FROM ork_officer_history WHERE officer_history_id = ' . $closedId
+        )->fetch(PDO::FETCH_ASSOC);
+        self::assertNull($row['end_date']);
+        self::assertSame(0, (int)$row['is_current'], 'an edit never makes a row current');
+
+        $count = (int)$this->pdo->query(
+            "SELECT COUNT(*) FROM ork_officer_history WHERE position_id = {$positionId} AND is_current = 1"
+        )->fetchColumn();
+        self::assertSame(1, $count, 'the seated holder stays the only current term');
     }
 
     public function testEditHistoryTermStillAllowsClearingWhenNoOtherOpenTermExists(): void
