@@ -432,6 +432,11 @@ html[data-theme="dark"] .or-ac-results .or-ac-inactive {
     color          : var(--rp-text-muted);
     border         : 1px solid var(--rp-border-mid);
 }
+/* 14px glyphs in the same 28px buttons: at 12px fa-sun reads as a cog. */
+.or-mode-btn i {
+    font-size  : 14px;
+    line-height: 1;
+}
 .or-mode-btn:first-child {
     border-radius: 5px 0 0 5px;
 }

@@ -217,6 +217,16 @@ final class OfficerRollsPageTest extends TestCase
         self::assertStringNotContainsString('data-or-mode', self::render(true, false));
     }
 
+    /** Escape closes an open date picker before it can cancel a row edit; toggle glyphs are 14px. */
+    public function testDatePickerEscapeAndToggleGlyphSize(): void
+    {
+        $js = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/script/officer-rolls.js');
+        self::assertMatchesRegularExpression("/document\\.addEventListener\\('keydown',[\\s\\S]*?_flatpickr\\.isOpen[\\s\\S]*?stopPropagation\\(\\)[\\s\\S]*?\\.close\\(\\)[\\s\\S]*?\\}, true\\);/", $js);
+        $css = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/style/officer-rolls.css');
+        self::assertMatchesRegularExpression('/\\.or-mode-btn i \\{\\s*font-size\\s*:\\s*14px;/', $css);
+        self::assertMatchesRegularExpression('/\\.or-mode-btn \\{[^}]*width\\s*:\\s*28px;[^}]*height\\s*:\\s*28px;/', $css);
+    }
+
     /** An unknown kingdom or park (null or empty name) is not found, so the page redirects. */
     public function testUnknownScopeIsNotFound(): void
     {

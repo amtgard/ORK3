@@ -833,5 +833,23 @@
         if (!e.target.closest || !e.target.closest('.or-ac-wrap')) { acCloseAll(null); }
     });
 
+    // Escape closes an open date picker first (focus is on Flatpickr's alt input, or
+    // inside the calendar, which lives on <body>). Capture phase, so the row editor's
+    // Esc-cancels handler on #or-root never sees this press; a second Esc cancels.
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') { return; }
+        var open = Array.prototype.filter.call(root.querySelectorAll('.or-date-input'), function (i) {
+            return i._flatpickr && i._flatpickr.isOpen;
+        });
+        if (!open.length) { return; }
+        e.preventDefault();
+        e.stopPropagation();
+        open.forEach(function (i) {
+            i._flatpickr.close();
+            var alt = i._flatpickr.altInput;
+            if (alt && root.contains(alt) && !root.contains(document.activeElement)) { alt.focus(); }
+        });
+    }, true);
+
     applyEntryMode(root);
 })();
