@@ -127,7 +127,7 @@ final class OfficerTransitionTest extends TestCase
         );
 
         $stmt = $this->pdo->prepare(
-            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND end_date IS NULL'
+            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND is_current = 1'
         );
         $stmt->execute([':pid' => $positionId]);
         self::assertSame(
@@ -503,7 +503,7 @@ final class OfficerTransitionTest extends TestCase
         );
 
         $stmt = $this->pdo->prepare(
-            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND end_date IS NULL'
+            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND is_current = 1'
         );
         $stmt->execute([':pid' => $positionId]);
         self::assertSame(
@@ -584,8 +584,8 @@ final class OfficerTransitionTest extends TestCase
         $this->pdo->prepare(
             'INSERT INTO ork_officer_history (kingdom_id, park_id, mundane_id, role,
                                               position_id, display_label, start_date,
-                                              end_date, changed_by, created_at)
-             VALUES (:kid, :parkid, :mid, :role, :pid, :label, :start, NULL, NULL, NOW())'
+                                              end_date, is_current, changed_by, created_at)
+             VALUES (:kid, :parkid, :mid, :role, :pid, :label, :start, NULL, 1, NULL, NOW())'
         )->execute([
             ':kid' => $kingdomId, ':parkid' => $parkId, ':mid' => $mundaneId,
             ':role' => self::MARKER . '_crown_a', ':pid' => $positionId,

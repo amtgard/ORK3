@@ -1408,7 +1408,7 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 			var idx = indices[i];
 			var h   = rows[idx];
 			var tr  = document.createElement('tr');
-			var isCurrent = !h.EndDate || String(h.EndDate).indexOf('0000') === 0;
+			var isCurrent = h.IsCurrent === true;
 
 			if (parseInt(h.MundaneId, 10) > 0) {
 				var a = document.createElement('a');

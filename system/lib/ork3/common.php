@@ -986,7 +986,8 @@ class Common
             }
         }
 
-        // Close any open history record for this role (where end_date IS NULL)
+        // Close the current history record for this role (is_current = 1; a null
+        // end_date alone may be a past term whose end is unknown, so it is not used)
         if ((int)$old_mundane_id > 0) {
             $DB->Clear();
             $DB->h_today = $today;
@@ -996,12 +997,12 @@ class Common
             $DB->h_posid = $posid;
             $DB->Execute(
                 "UPDATE " . DB_PREFIX . "officer_history
-				 SET end_date = :h_today
+				 SET end_date = :h_today, is_current = 0
 				 WHERE kingdom_id = :h_kid
 				   AND park_id = :h_pid
 				   AND role = :h_role
 				   AND ( :h_posid = 0 OR position_id = :h_posid )
-				   AND end_date IS NULL"
+				   AND is_current = 1"
             );
         }
 
@@ -1019,8 +1020,8 @@ class Common
             $DB->i_cb = ($cb > 0 ? $cb : null);
             $DB->Execute(
                 "INSERT INTO " . DB_PREFIX . "officer_history
-				 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
-				 VALUES (:i_kid, :i_pid, :i_mid, :i_role, :i_posid, :i_label, :i_today, NULL, :i_cb, NOW())"
+				 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, is_current, changed_by, created_at)
+				 VALUES (:i_kid, :i_pid, :i_mid, :i_role, :i_posid, :i_label, :i_today, NULL, 1, :i_cb, NOW())"
             );
         }
     }

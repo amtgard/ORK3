@@ -201,7 +201,9 @@ html[data-theme="dark"] .cr-row-note { color:var(--ork-text-muted); }
 			'August', 'September', 'October', 'November', 'December'];
 		return months[parseInt(m[2], 10) - 1] + ' ' + parseInt(m[3], 10) + ', ' + m[1];
 	}
-	function crIsOpenTerm(row) { return crIsoOrEmpty(row.EndDate) === ''; }
+	// Current is the explicit IsCurrent marker: a blank EndDate alone may be a
+	// past term whose end is unknown.
+	function crIsOpenTerm(row) { return row.IsCurrent === true; }
 
 	// The SNAPSHOT of what the office was called at the time wins over the
 	// registry's current name -- same rule the public History tab uses.

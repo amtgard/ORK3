@@ -1463,7 +1463,7 @@ class Kingdom extends Ork3
 
         $sql = "SELECT oh.officer_history_id, oh.kingdom_id, oh.park_id, oh.mundane_id, oh.role,
 		                oh.position_id, oh.display_label,
-		                oh.start_date, oh.end_date, oh.changed_by, oh.notes, oh.created_at,
+		                oh.start_date, oh.end_date, oh.is_current, oh.changed_by, oh.notes, oh.created_at,
 		                m.persona, m.username,
 		                cb.persona AS changed_by_persona,
 		                op.classification AS classification
@@ -1519,6 +1519,9 @@ class Kingdom extends Ork3
                     'Classification'   => $r->classification,
                     'StartDate'        => $r->start_date,
                     'EndDate'          => $r->end_date,
+                    // IsCurrent: the explicit current-term marker. A null EndDate alone
+                    // may be a past term whose end is unknown, so readers use this.
+                    'IsCurrent'        => ((int)$r->is_current === 1),
                     'ChangedBy'        => (int)$r->changed_by,
                     'ChangedByPersona' => $r->changed_by_persona ?? '',
                     'Notes'            => $r->notes ?? '',
@@ -1648,7 +1651,8 @@ class Kingdom extends Ork3
             $DB->oh_kid   = $kid;
             if (!$DB->ExecuteChecked(
                 "UPDATE " . DB_PREFIX . "officer_history
-				 SET role = :oh_role, start_date = :oh_start, end_date = :oh_end, notes = :oh_notes
+				 SET role = :oh_role, start_date = :oh_start, end_date = :oh_end, notes = :oh_notes"
+                . (strlen($end) > 0 ? ', is_current = 0' : '') . "
 				 WHERE officer_history_id = :oh_id
 				   AND kingdom_id = :oh_kid
 				   AND park_id = 0"

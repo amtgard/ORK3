@@ -282,6 +282,143 @@ final class OfficerOccupancyTest extends TestCase
         );
     }
 
+    /**
+     * A backfilled past term may have a blank end ("end unknown"), so a null
+     * end_date no longer means "current". Seating must close only the row
+     * marked is_current = 1, never a past unknown-end row.
+     */
+    public function testSeatingClosesOnlyTheCurrentRow(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $holderA = $this->seededMundanes[0];
+        $holderB = $this->seedMundane('holder_b');
+        $this->seededMundanes[] = $holderB;
+        $pastHolder = $this->seedMundane('past');
+        $this->seededMundanes[] = $pastHolder;
+        $pastId = $this->seedPastUnknownEndRow($positionId, 'crown_a', $pastHolder);
+
+        $token = $this->fixture->createAuthorizedOfficer();
+        $base = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0, 'PositionId' => $positionId];
+        $a = $this->positions->SetOccupant($base + ['MundaneId' => $holderA]);
+        self::assertSame(0, (int) $a['Status'], 'seating A should succeed: ' . ($a['Error'] ?? ''));
+        $b = $this->positions->SetOccupant($base + ['MundaneId' => $holderB]);
+        self::assertSame(0, (int) $b['Status'], 'seating B should succeed: ' . ($b['Error'] ?? ''));
+
+        $past = $this->historyRow('officer_history_id = ' . $pastId);
+        self::assertNull($past['end_date'], 'the past unknown-end row must not be closed');
+        self::assertNull($past['end_season'], 'the past unknown-end row must not gain an end season');
+        self::assertSame(0, (int) $past['is_current']);
+
+        $rowA = $this->historyRow('position_id = ' . $positionId . ' AND mundane_id = ' . $holderA);
+        self::assertSame(date('Y-m-d'), $rowA['end_date'], "A's term closes today");
+        self::assertSame(0, (int) $rowA['is_current'], "A's closed term is no longer current");
+
+        $rowB = $this->historyRow('position_id = ' . $positionId . ' AND mundane_id = ' . $holderB);
+        self::assertNull($rowB['end_date']);
+        self::assertSame(1, (int) $rowB['is_current'], "B's new term is current");
+    }
+
+    public function testOpenTermGuardIgnoresUnknownEnds(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $pastHolder = $this->seedMundane('past');
+        $this->seededMundanes[] = $pastHolder;
+        $this->seedPastUnknownEndRow($positionId, 'crown_a', $pastHolder);
+
+        $token = $this->fixture->createAuthorizedOfficer();
+        $r = $this->positions->SetOccupant([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $this->seededMundanes[0],
+        ]);
+        self::assertSame(0, (int) $r['Status'], 'seating beside a past unknown-end row should succeed: ' . ($r['Error'] ?? ''));
+
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND is_current = 1'
+        );
+        $stmt->execute([':pid' => $positionId]);
+        self::assertSame(1, (int) $stmt->fetchColumn(), 'exactly one row for the office is current');
+    }
+
+    /**
+     * The migration's backfill marks a null-end row current only when its
+     * holder actually sits in the seat today.
+     */
+    public function testMigrationMarksOnlySeatedRowsCurrent(): void
+    {
+        $positionId = $this->seededPositions['crown_b'];
+        $role = self::MARKER . '_crown_b';
+        $seated = $this->seededMundanes[0];
+        $other = $this->seedMundane('other');
+        $this->seededMundanes[] = $other;
+
+        $this->pdo->prepare(
+            'INSERT INTO ork_officer (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
+             VALUES (:kid, 0, :mid, :role, 0, 0, :pos, NOW())'
+        )->execute([':kid' => self::KINGDOM_ID, ':mid' => $seated, ':role' => $role, ':pos' => $positionId]);
+        $seatedRow = $this->insertHistoryRow($positionId, $role, $seated, '2020-01-01', 0);
+        $otherRow = $this->insertHistoryRow($positionId, $role, $other, '2010-01-01', 0);
+
+        $this->pdo->exec($this->migrationBackfillSql());
+
+        self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $seatedRow)['is_current']);
+        self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $otherRow)['is_current']);
+    }
+
+    private function seedPastUnknownEndRow(int $positionId, string $suffix, int $mundaneId): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ork_officer_history
+                (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date,
+                 start_season, start_year, end_season, end_year, is_current, changed_by, created_at)
+             VALUES (:kid, 0, :mid, :role, :pos, :label, NULL, NULL, "spring", 1995, NULL, NULL, 0, 0, NOW())'
+        );
+        $stmt->execute([
+            ':kid' => self::KINGDOM_ID,
+            ':mid' => $mundaneId,
+            ':role' => self::MARKER . '_' . $suffix,
+            ':pos' => $positionId,
+            ':label' => 'Test ' . $suffix,
+        ]);
+        return (int) $this->pdo->lastInsertId();
+    }
+
+    private function insertHistoryRow(int $positionId, string $role, int $mundaneId, string $start, int $isCurrent): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ork_officer_history
+                (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date,
+                 is_current, changed_by, created_at)
+             VALUES (:kid, 0, :mid, :role, :pos, :role, :start, NULL, :cur, 0, NOW())'
+        );
+        $stmt->execute([
+            ':kid' => self::KINGDOM_ID, ':mid' => $mundaneId, ':role' => $role,
+            ':pos' => $positionId, ':start' => $start, ':cur' => $isCurrent,
+        ]);
+        return (int) $this->pdo->lastInsertId();
+    }
+
+    /** @return array<string,mixed> */
+    private function historyRow(string $where): array
+    {
+        $row = $this->pdo->query(
+            "SELECT * FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%' AND " . $where
+            . ' ORDER BY officer_history_id DESC LIMIT 1'
+        )->fetch(PDO::FETCH_ASSOC);
+        self::assertIsArray($row, 'expected a history row for ' . $where);
+        return $row;
+    }
+
+    /** The statements after the migration's `-- is_current backfill` marker. */
+    private function migrationBackfillSql(): string
+    {
+        $path = dirname(__DIR__, 2) . '/db-migrations/2026-11-04-officer-history-rolls.sql';
+        self::assertFileExists($path);
+        $sql = (string) file_get_contents($path);
+        $pos = strpos($sql, '-- is_current backfill');
+        self::assertNotFalse($pos, 'the migration must mark its is_current backfill section');
+        return substr($sql, $pos);
+    }
+
     private function seedPosition(string $suffix, string $classification, int $hasAuthRole = 0): int
     {
         $key = self::MARKER . '_' . $suffix;

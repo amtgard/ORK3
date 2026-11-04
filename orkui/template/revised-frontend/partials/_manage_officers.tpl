@@ -1921,13 +1921,6 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 			? (UIR + 'ParkAjax/park/' + MoConfig.parkId + '/officerhistory')
 			: (UIR + 'KingdomAjax/kingdom/' + MoConfig.kingdomId + '/officerhistory');
 	}
-	// Guards the zero date ('0000-00-00') and anything non-ISO, same rule crIsoOrEmpty
-	// applies in _correct_the_rolls.tpl: an OPEN term is one whose EndDate reduces to ''.
-	function historyIsoOrEmpty(v) {
-		var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
-		if (!m || m[1] === '0000') return '';
-		return m[1] + '-' + m[2] + '-' + m[3];
-	}
 
 	function initStartFp() {
 		if (typeof flatpickr === 'undefined') return;
@@ -1941,7 +1934,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	// pid -> the office's current occupant's OPEN ork_officer_history row is not
 	// carried by the occupant DTO, so it is resolved here from the same read the
 	// Correct the Rolls tab uses: this office's PositionId + this occupant's
-	// MundaneId + an empty EndDate. Save is disabled until that lookup returns.
+	// MundaneId + IsCurrent. Save is disabled until that lookup returns.
 	window.moSetStart = function(pid) {
 		var pos = findPos(pid);
 		if (!pos) return;
@@ -1980,7 +1973,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 				var row = rows[i];
 				if (parseInt(row.PositionId, 10) === parseInt(pid, 10) &&
 					parseInt(row.MundaneId, 10) === mid &&
-					historyIsoOrEmpty(row.EndDate) === '') {
+					row.IsCurrent === true) {
 					match = row;
 					break;
 				}

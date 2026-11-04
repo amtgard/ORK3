@@ -190,6 +190,7 @@ final class OfficerHistoryRowShapeTest extends TestCase
         $this->assertSame(0, $row['ParkId']);
         $this->assertSame('2001-01-01', $row['StartDate']);
         $this->assertSame('2001-12-31', $row['EndDate']);
+        $this->assertFalse($row['IsCurrent'], 'IsCurrent is a bool read from is_current, false for a past term');
     }
 
     // ============================================================
@@ -269,6 +270,7 @@ final class OfficerHistoryRowShapeTest extends TestCase
         $this->assertSame(self::MARKER . '_p_supp', $row['Role']);
         $this->assertSame(self::PARK_ID, $row['ParkId']);
         $this->assertSame(self::KINGDOM_ID, $row['KingdomId']);
+        $this->assertFalse($row['IsCurrent'], 'IsCurrent is a bool read from is_current, false for a past term');
     }
 
     // ============================================================

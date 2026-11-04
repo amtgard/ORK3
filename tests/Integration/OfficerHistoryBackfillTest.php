@@ -111,7 +111,7 @@ final class OfficerHistoryBackfillTest extends TestCase
         $this->runBackfill();
 
         $stmt = $this->pdo->prepare(
-            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND end_date IS NULL'
+            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND is_current = 1'
         );
         $stmt->execute([':pid' => $positionId]);
         self::assertSame(1, (int) $stmt->fetchColumn(), 'the migration must be idempotent');
@@ -143,7 +143,7 @@ final class OfficerHistoryBackfillTest extends TestCase
         $this->runBackfill();
 
         $stmt = $this->pdo->prepare(
-            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND mundane_id = :mid AND end_date IS NULL'
+            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = :pid AND mundane_id = :mid AND is_current = 1'
         );
         $stmt->execute([':pid' => $positionId, ':mid' => $mundaneId]);
         self::assertSame(
@@ -183,9 +183,22 @@ final class OfficerHistoryBackfillTest extends TestCase
         );
     }
 
+    /**
+     * The 2026-08-29 backfill predates the explicit is_current marker, so it
+     * opens terms by end_date alone. Production then ran 2026-11-04's
+     * is_current backfill, which is what makes those open terms current; run
+     * both, in deploy order, so the assertions can read is_current.
+     */
     private function runBackfill(): void
     {
-        $sql = file_get_contents(dirname(__DIR__, 2) . '/db-migrations/2026-08-29-officer-history-backfill.sql');
+        $root = dirname(__DIR__, 2) . '/db-migrations/';
+        $this->runStatements((string) file_get_contents($root . '2026-08-29-officer-history-backfill.sql'));
+        $rolls = (string) file_get_contents($root . '2026-11-04-officer-history-rolls.sql');
+        $this->runStatements(substr($rolls, (int) strpos($rolls, '-- is_current backfill')));
+    }
+
+    private function runStatements(string $sql): void
+    {
         foreach (explode(';', $sql) as $statement) {
             // Each chunk between semicolons carries its leading `--` doc
             // comment along with the real statement, so a whole-chunk
@@ -208,7 +221,7 @@ final class OfficerHistoryBackfillTest extends TestCase
     {
         $stmt = $this->pdo->prepare(
             'SELECT start_date, end_date FROM ork_officer_history
-             WHERE position_id = :pid AND mundane_id = :mid AND end_date IS NULL LIMIT 1'
+             WHERE position_id = :pid AND mundane_id = :mid AND is_current = 1 LIMIT 1'
         );
         $stmt->execute([':pid' => $positionId, ':mid' => $mundaneId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);

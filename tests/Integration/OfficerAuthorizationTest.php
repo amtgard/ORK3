@@ -360,14 +360,16 @@ final class OfficerAuthorizationTest extends TestCase
         $base = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
                  'PositionId' => $positionId];
 
-        $a = $this->positions->AddHistoryTerm($base + ['MundaneId' => $first, 'StartDate' => '2026-01-01']);
+        // The current term is the seated holder's (is_current = 1); a blank-end
+        // Add would read as a second current holder while that guard stands.
+        $a = $this->positions->SetOccupant($base + ['MundaneId' => $first]);
         self::assertSame(0, (int)$a['Status'], $a['Error'] ?? '');
 
         $b = $this->positions->AddHistoryTerm($base + ['MundaneId' => $second, 'StartDate' => '2026-02-01']);
         self::assertSame(
             4,
             (int)$b['Status'],
-            'two open terms on one office means it reads as held by two people'
+            'two current terms on one office means it reads as held by two people'
         );
     }
 
@@ -382,12 +384,13 @@ final class OfficerAuthorizationTest extends TestCase
         $base = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
                  'PositionId' => $positionId];
 
-        // A closed term, then an open one on the same office.
+        // A closed term, then a current one (the seated holder) on the same office.
         $closed = $this->positions->AddHistoryTerm(
             $base + ['MundaneId' => $former, 'StartDate' => '2025-01-01', 'EndDate' => '2025-12-31']
         );
         self::assertSame(0, (int)$closed['Status'], $closed['Error'] ?? '');
-        $this->positions->AddHistoryTerm($base + ['MundaneId' => $current, 'StartDate' => '2026-01-01']);
+        $seat = $this->positions->SetOccupant($base + ['MundaneId' => $current]);
+        self::assertSame(0, (int)$seat['Status'], $seat['Error'] ?? '');
 
         $closedId = (int)$this->pdo->query(
             "SELECT officer_history_id FROM ork_officer_history

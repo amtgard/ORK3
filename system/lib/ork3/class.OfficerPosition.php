@@ -1850,7 +1850,7 @@ class OfficerPosition extends Ork3
      * 'officer_assign_<kingdom>_<park>_<position>' GET_LOCK SetOfficerByPosition
      * takes, and for the same reason: two admins transitioning one office
      * concurrently must not both read the same outgoing holder and both open a
-     * term, which would leave two open (end_date IS NULL) rows on one seat. MySQL
+     * term, which would leave two current (is_current = 1) rows on one seat. MySQL
      * GET_LOCK is re-entrant per session and Common::set_officer does not take
      * this lock itself, so holding it across the whole span is safe.
      *
@@ -2100,7 +2100,7 @@ class OfficerPosition extends Ork3
             'SELECT start_date FROM ' . DB_PREFIX . 'officer_history
              WHERE kingdom_id = :os_kid AND park_id = :os_pid
                AND ( position_id = :os_pos OR ( position_id = 0 AND role = :os_role ) )
-               AND mundane_id = :os_mid AND end_date IS NULL
+               AND mundane_id = :os_mid AND is_current = 1
              ORDER BY officer_history_id DESC LIMIT 1'
         );
         return ($r !== false && $r->size() > 0 && $r->Next()) ? $r->start_date : null;
@@ -2130,11 +2130,11 @@ class OfficerPosition extends Ork3
         }
         return $DB->ExecuteChecked(
             'UPDATE ' . DB_PREFIX . 'officer_history
-             SET end_date = :ct_end' . $start_sql . '
+             SET end_date = :ct_end, is_current = 0' . $start_sql . '
              WHERE kingdom_id = :ct_kid AND park_id = :ct_pid
                AND ( position_id = :ct_pos OR ( position_id = 0 AND role = :ct_role ) )
                AND mundane_id = :ct_mid
-               AND end_date IS NULL'
+               AND is_current = 1'
         );
     }
 
@@ -2160,9 +2160,9 @@ class OfficerPosition extends Ork3
         return $DB->ExecuteChecked(
             'INSERT INTO ' . DB_PREFIX . 'officer_history
              (kingdom_id, park_id, mundane_id, role, position_id, display_label,
-              start_date, end_date, changed_by, notes, created_at)
+              start_date, end_date, is_current, changed_by, notes, created_at)
              VALUES (:ot_kid, :ot_pid, :ot_mid, :ot_role, :ot_pos, :ot_label,
-                     :ot_start, NULL, :ot_cb, :ot_notes, NOW())'
+                     :ot_start, NULL, 1, :ot_cb, :ot_notes, NOW())'
         );
     }
 
@@ -2419,10 +2419,11 @@ class OfficerPosition extends Ork3
     }
 
     /**
-     * True when this office+scope already has an open term other than $except_id.
+     * True when this office+scope already has a current term other than $except_id.
      *
-     * `end_date IS NULL` is what defines "current officer" everywhere in this
-     * codebase, so a second open row makes one office read as held by two people --
+     * `is_current = 1` is what defines "current officer" everywhere in this
+     * codebase (a null end_date alone may be a past term whose end is unknown),
+     * so a second current row makes one office read as held by two people --
      * the state the 2026-08-29 backfill was written to repair. Matches the legacy
      * position_id = 0 fallback the rest of the class uses.
      */
@@ -2439,7 +2440,7 @@ class OfficerPosition extends Ork3
             'SELECT officer_history_id FROM ' . DB_PREFIX . 'officer_history
               WHERE kingdom_id = :ho_kid AND park_id = :ho_pid
                 AND ( position_id = :ho_pos OR ( position_id = 0 AND role = :ho_role ) )
-                AND end_date IS NULL
+                AND is_current = 1
                 AND officer_history_id <> :ho_except
               LIMIT 1'
         );
@@ -2667,14 +2668,17 @@ class OfficerPosition extends Ork3
             $DB->eh_start = $start;
         }
         $end_sql = ':eh_end';
+        // Giving a term an end closes it: an ended row is never current.
+        $current_sql = '';
         if ($end === '') {
             $end_sql = 'NULL';
         } else {
             $DB->eh_end = $end;
+            $current_sql = ', is_current = 0';
         }
         $ok = $DB->ExecuteChecked(
             'UPDATE ' . DB_PREFIX . 'officer_history
-    			 SET start_date = ' . $start_sql . ', end_date = ' . $end_sql . ', notes = :eh_notes
+    			 SET start_date = ' . $start_sql . ', end_date = ' . $end_sql . $current_sql . ', notes = :eh_notes
     			 WHERE officer_history_id = :eh_id'
         );
         if (!$ok) {
@@ -3131,7 +3135,7 @@ class OfficerPosition extends Ork3
         // identify the office by canonical key alone; match those too.
         $match = "kingdom_id = :ch_kid AND park_id = :ch_pid AND mundane_id = :ch_mid
     		   AND ( position_id = :ch_pos OR ( position_id = 0 AND role = :ch_role ) )
-    		   AND end_date IS NULL";
+    		   AND is_current = 1";
 
         $DB->Clear();
         $DB->ch_kid = $kingdom_id;
@@ -3156,7 +3160,7 @@ class OfficerPosition extends Ork3
             $DB->ch_role = $canonical_key;
             $DB->Execute(
                 "UPDATE " . DB_PREFIX . "officer_history
-    			 SET end_date = :ch_end
+    			 SET end_date = :ch_end, is_current = 0
     			 WHERE " . $match
             );
             return;
@@ -3255,8 +3259,8 @@ class OfficerPosition extends Ork3
         }
         $DB->Execute(
             "INSERT INTO " . DB_PREFIX . "officer_history
-    		 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
-    		 VALUES (:ih_kid, :ih_pid, :ih_mid, :ih_role, :ih_pos, :ih_label, :ih_start, " . $end_sql . ", :ih_cb, NOW())"
+    		 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, is_current, changed_by, created_at)
+    		 VALUES (:ih_kid, :ih_pid, :ih_mid, :ih_role, :ih_pos, :ih_label, :ih_start, " . $end_sql . ", " . ($has_end ? '0' : '1') . ", :ih_cb, NOW())"
         );
 
         // RBAC grant via the shared service.

@@ -536,9 +536,9 @@ class Controller_OfficerAdminAjax extends Controller
      * and no SQL in the controller.
      *
      * ork_officer_history stores one row per term, so a person who has held the
-     * same office more than once has several. The current term is the open one
-     * (no end date) with the latest start; if every term is closed, the latest
-     * start wins. History rows are keyed by canonical role key, so an occupant
+     * same office more than once has several. The current term is the one marked
+     * IsCurrent (a blank end alone may be a past term whose end is unknown); if
+     * none is current, the latest start wins. History rows are keyed by canonical role key, so an occupant
      * whose history predates the position registry simply has no term and renders
      * exactly as it does today rather than borrowing another office's dates.
      */
@@ -567,24 +567,24 @@ class Controller_OfficerAdminAjax extends Controller
             $key   = $mundane_id . '|' . $role;
             $start = $this->isoDate($row['StartDate'] ?? '');
             $end   = $this->isoDate($row['EndDate'] ?? '');
+            $new_open = !empty($row['IsCurrent']);
 
             if (!isset($out[$key])) {
-                $out[$key] = ['StartDate' => $start, 'EndDate' => $end];
+                $out[$key] = ['StartDate' => $start, 'EndDate' => $end, 'IsCurrent' => $new_open];
                 continue;
             }
 
             $cur = $out[$key];
-            $cur_open = ($cur['EndDate'] === '');
-            $new_open = ($end === '');
+            $cur_open = $cur['IsCurrent'];
             if ($new_open !== $cur_open) {
-                // An open term always beats a closed one, whatever the start dates.
+                // The current term always beats a past one, whatever the start dates.
                 if ($new_open) {
-                    $out[$key] = ['StartDate' => $start, 'EndDate' => $end];
+                    $out[$key] = ['StartDate' => $start, 'EndDate' => $end, 'IsCurrent' => $new_open];
                 }
                 continue;
             }
             if (strcmp($start, $cur['StartDate']) > 0) {
-                $out[$key] = ['StartDate' => $start, 'EndDate' => $end];
+                $out[$key] = ['StartDate' => $start, 'EndDate' => $end, 'IsCurrent' => $new_open];
             }
         }
         return $out;
