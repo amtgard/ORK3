@@ -101,16 +101,9 @@ class Controller_CalendarItemAjax extends Controller
             exit;
         }
 
-        // Determine edit permission for the caller (same check the class uses).
-        $canEdit = false;
-        if ($uid > 0) {
-            $this->load_model('Authorization');
-            if ((int)$r['ParkId'] > 0) {
-                $canEdit = $this->Authorization->has_authority($uid, AUTH_PARK, (int)$r['ParkId'], AUTH_CREATE);
-            } elseif ((int)$r['KingdomId'] > 0) {
-                $canEdit = $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$r['KingdomId'], AUTH_CREATE);
-            }
-        }
+        // Edit permission for the caller: the model asks the lib's own write gate, so
+        // the Edit control and Update/DeleteCalendarItem can never disagree.
+        $canEdit = $this->CalendarItem->can_manage($uid, (int)$r['KingdomId'], (int)$r['ParkId']);
 
         echo json_encode([
             'status'         => 0,

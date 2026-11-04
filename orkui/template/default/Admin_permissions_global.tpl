@@ -2,6 +2,9 @@
 	$adminAuths = is_array($AdminAuths) ? $AdminAuths : [];
 	$kingdoms   = is_array($Kingdoms)   ? $Kingdoms   : [];
 	$ajaxBase   = UIR . 'AdminAjax/global/';
+	// Only a true all-zero admin may grant or revoke: AuthorizationGate refuses anyone
+	// else, so a global.admin.grant holder gets the read-only list and nothing to press.
+	$canGrant   = !empty($PermCanGrantAdmin);
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
@@ -110,6 +113,7 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 		</div>
 	</div>
 
+	<?php if ($canGrant): ?>
 	<!-- Add System Admin -->
 	<div class="ap-card" style="margin-top:18px">
 		<div class="ap-card-header">
@@ -137,6 +141,7 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 			<div class="ap-feedback" id="ap-feedback"></div>
 		</div>
 	</div>
+	<?php endif; ?>
 
 	<!-- System Admins table -->
 	<div class="ap-section">
@@ -155,7 +160,7 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 					<th>Last Login</th>
 					<th>Last Credit</th>
 					<th>Last Modified</th>
-					<th data-sorter="false"></th>
+					<?php if ($canGrant): ?><th data-sorter="false"></th><?php endif; ?>
 				</tr>
 			</thead>
 			<tbody id="ap-admin-tbody">
@@ -182,9 +187,11 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 					<td style="color:var(--rp-text-muted);font-size:12px;white-space:nowrap" data-sort="<?= !empty($a['Modified'])   ? date('Y-m-d', strtotime($a['Modified']))   : '0000-00-00' ?>">
 						<?= !empty($a['Modified']) ? date('M j, Y', strtotime($a['Modified'])) : '—' ?>
 					</td>
+					<?php if ($canGrant): ?>
 					<td style="text-align:right">
 						<button class="ap-del" data-id="<?= (int)$a['AuthorizationId'] ?>">Revoke</button>
 					</td>
+					<?php endif; ?>
 				</tr>
 				<?php endforeach; ?>
 			</tbody>
@@ -197,7 +204,9 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 		<?php endif; ?>
 	</div>
 
-	<!-- Kingdom permissions links -->
+	<?php if ($canGrant): ?>
+	<!-- Kingdom permissions links: each opens Admin/permissions/Kingdom/{id}, which wants
+	     kingdom.auth.manage there -- a view-only holder would only be bounced back. -->
 	<div class="ap-section" style="margin-top:32px">
 		<i class="fas fa-chess-rook"></i>
 		Kingdom Permissions
@@ -212,6 +221,7 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 		</a>
 		<?php endforeach; ?>
 	</div>
+	<?php endif; ?>
 
 </div><!-- /.rp-root -->
 
@@ -221,9 +231,16 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 
 	function apEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+	// ── Feedback ─────────────────────────────────────────────────
+	function showFb(msg, ok) {
+		$('#ap-feedback').text(msg).removeClass('ok err').addClass(ok ? 'ok' : 'err').show();
+	}
+
 	// ── Autocomplete ─────────────────────────────────────────────
+	// The grant card renders only for a true admin; without it there is nothing to wire.
 	var apResults = document.getElementById('ap-player-results');
 	var apTimer   = null;
+	if (apResults) {
 
 	function apClose() { apResults.classList.remove('kn-ac-open'); apResults.innerHTML = ''; }
 
@@ -265,10 +282,6 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 	});
 
 	// ── Add ──────────────────────────────────────────────────────
-	function showFb(msg, ok) {
-		$('#ap-feedback').text(msg).removeClass('ok err').addClass(ok ? 'ok' : 'err').show();
-	}
-
 	$('#ap-add-btn').on('click', function () {
 		var btn = this;
 		var mid = $('#ap-player-id').val();
@@ -313,6 +326,7 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 			showFb('Request failed. Try again.', false);
 		});
 	});
+	}
 
 	// ── Delete ────────────────────────────────────────────────────
 	function bindDelete(btn) {
@@ -330,11 +344,11 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 					$('#ap-row-' + $btn.data('id')).remove();
 				} else {
 					$btn.prop('disabled', false).removeClass('ap-del-confirm').text('Revoke');
-					alert((r && r.error) ? r.error : 'Failed to revoke access.');
+					showFb((r && r.error) ? r.error : 'Failed to revoke access.', false);
 				}
 			}, 'json').fail(function () {
 				$btn.prop('disabled', false).removeClass('ap-del-confirm').text('Revoke');
-				alert('Request failed. Try again.');
+				showFb('Request failed. Try again.', false);
 			});
 		});
 	}

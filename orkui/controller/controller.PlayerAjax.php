@@ -712,9 +712,11 @@ class Controller_PlayerAjax extends Controller
                 array_filter($attendance, fn ($a) => (int)($a['EventId'] ?? 0) === 0),
                 'ParkId'
             )));
+            // Per-row edit affordance: the same key, scope and legacy role the
+            // Attendance lib checks before editing or removing a park credit.
             foreach ($uniqueParkIds as $pid) {
                 if (valid_id($pid)) {
-                    $parkEditAuth[(int)$pid] = (bool)$this->Authorization->has_authority($uid, AUTH_PARK, (int)$pid, AUTH_EDIT);
+                    $parkEditAuth[(int)$pid] = (bool)$this->Authorization->has_permission_or_authority($uid, 'park.attendance.manage', 'park', (int)$pid, AUTH_EDIT);
                 }
             }
         }

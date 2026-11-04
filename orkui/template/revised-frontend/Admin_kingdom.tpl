@@ -35,6 +35,12 @@ $activeParkCount = (int)($ActiveParkCount ?? 0);
 // Manage Officers host modal + card gate (partial: revised-frontend/partials/_manage_officers.tpl)
 $mo_kingdom_id = (int)($kingdom_id ?? $kid ?? 0);
 $mo_can_manage = !empty($can_manage_officer_positions);
+$mo_viewer_id  = (int)($CurrentUserId ?? 0);
+// The front door admits Court Planner and Bonus Credits holders who are not officers,
+// so tiles built on the officer modals need their own gate (Admin::load_kingdom_admin_data()).
+$_kaOfficer    = !empty($HasOfficerStanding);
+$_kaCourt      = !empty($CanManageCourt);
+$_kaBonus      = !empty($CanBonusCredits);
 $activePlayers   = $ActivePlayers ?? 0;
 $totalAttendance = $TotalAttendance ?? 0;
 ?>
@@ -160,9 +166,11 @@ _ka_queue(
 		<div class="ka-sections-grid">
 
 			<!-- Players & Awards -->
+			<?php if ($_kaOfficer || $_kaCourt || $_kaBonus): ?>
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-user"></i> Players &amp; Awards</div>
 				<div class="ka-action-tiles">
+					<?php if ($_kaOfficer): ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-createplayer-overlay')">
 						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-user-plus"></i></div>
 						<div class="ka-action-label">Create Player</div>
@@ -173,6 +181,35 @@ _ka_queue(
 						<div class="ka-action-label">Manage Awards</div>
 						<div class="ka-action-desc">Award aliases and <?= strtolower($entityLabel) ?>-specific awards</div>
 					</button>
+					<?php endif; ?>
+					<?php /* Court Planner and the Recommendations Manager. Both live off the
+					   console -- the Planner on the profile's Admin Tasks tab (?tab=admin
+					   opens it), the Manager on its own page -- and both gate on
+					   Court::can_manage(), which is what $CanManageCourt is. */ ?>
+					<?php if ($_kaCourt): ?>
+					<a class="ka-action-card" href="<?= $uir ?>Recommendations/manage/kingdom/<?= $kid ?>">
+						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-tasks"></i></div>
+						<div class="ka-action-label">Recommendations</div>
+						<div class="ka-action-desc">Review, grant, snooze or pass on award recommendations</div>
+					</a>
+					<a class="ka-action-card" href="<?= $uir ?>Kingdom/profile/<?= $kid ?>&amp;tab=admin">
+						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-gavel"></i></div>
+						<div class="ka-action-label">Court Planner</div>
+						<div class="ka-action-desc">Plan courts and the awards given at them</div>
+					</a>
+					<?php endif; ?>
+					<?php /* The same Bonus Credits modal the profile hosts
+					   (_bonus_credit_assets.tpl, included at the foot of this page at
+					   kingdom scope). Its Categories, Granters and Settings tabs show
+					   themselves per capability once it loads. */ ?>
+					<?php if ($_kaBonus): ?>
+					<button class="ka-action-card" onclick="bcOpen()">
+						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-star"></i></div>
+						<div class="ka-action-label">Bonus Credits</div>
+						<div class="ka-action-desc">Class credits that are not attendance</div>
+					</button>
+					<?php endif; ?>
+					<?php if ($_kaOfficer): ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-moveplayer-overlay')">
 						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-exchange-alt"></i></div>
 						<div class="ka-action-label">Move Player</div>
@@ -183,10 +220,13 @@ _ka_queue(
 						<div class="ka-action-label">Merge Players</div>
 						<div class="ka-action-desc">Combine two duplicate records &mdash; permanent</div>
 					</button>
+					<?php endif; ?>
 				</div>
 			</div>
+			<?php endif; ?>
 
 			<!-- Officers & Access -->
+			<?php if ($mo_can_manage || !empty($CanManageKingdomAuth) || !empty($CanViewKingdomAuth)): ?>
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-user-shield"></i> Officers &amp; Access</div>
 				<div class="ka-action-tiles">
@@ -197,6 +237,7 @@ _ka_queue(
 						<div class="ka-action-desc">Who holds each office, terms and aliases</div>
 					</button>
 <?php endif; ?>
+					<?php if (!empty($CanManageKingdomAuth)): ?>
 					<a class="ka-action-card" href="<?= $uir ?>Admin/roles/Kingdom/<?= $kid ?>">
 						<div class="ka-action-icon ka-action-icon-blue"><i class="fas fa-key"></i></div>
 						<div class="ka-action-label">Roles &amp; Assignments</div>
@@ -207,15 +248,20 @@ _ka_queue(
 						<div class="ka-action-label">Officer Permissions</div>
 						<div class="ka-action-desc">Per-officer access for this <?= strtolower($entityLabel) ?></div>
 					</a>
+					<?php endif; ?>
+					<?php if (!empty($CanViewKingdomAuth)): ?>
 					<a class="ka-action-card" href="<?= $uir ?>Admin/permissionsgrid/Kingdom/<?= $kid ?>">
 						<div class="ka-action-icon ka-action-icon-blue"><i class="fas fa-th"></i></div>
 						<div class="ka-action-label">Permission Reference</div>
 						<div class="ka-action-desc">What each role is able to do</div>
 					</a>
+					<?php endif; ?>
 				</div>
 			</div>
+			<?php endif; ?>
 
 			<!-- Parks & Titles -->
+			<?php if ($_kaOfficer): ?>
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-map-marker-alt"></i> Parks &amp; Titles</div>
 				<div class="ka-action-tiles">
@@ -271,6 +317,7 @@ _ka_queue(
 					<?php endif; ?>
 				</div>
 			</div>
+			<?php endif; ?>
 
 			<!-- Qualification Tests -->
 			<?php if (!empty($CanManageTests)): ?>
@@ -315,6 +362,7 @@ _ka_queue(
 			<?php endif; ?>
 
 			<!-- Kingdom Settings -->
+			<?php if ($_kaOfficer): ?>
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-crown"></i> <?= $entityLabel ?> Settings</div>
 				<div class="ka-action-tiles">
@@ -335,10 +383,13 @@ _ka_queue(
 					</button>
 				</div>
 			</div>
+			<?php endif; ?>
 
 			<!-- Operations. Same tile set and same order as the Park console's
 			     Operations section, so an officer who administers both surfaces
 			     finds the same things in the same place. -->
+			<?php $_kaPrinzTile = !empty($IsOrkAdmin) && !empty($AdminInfo['IsPrincipality']); ?>
+			<?php if ($_kaOfficer || !empty($CanCreateEvent) || !empty($CanResetWaivers) || $_kaPrinzTile): ?>
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-tools"></i> Operations</div>
 				<div class="ka-action-tiles">
@@ -365,12 +416,14 @@ _ka_queue(
 					   silences. A <div>, not a disabled <button>: there is no action, so it
 					   should not be focusable or announce itself as an operable control.
 					   Replace this whole block with a real tile when the new creator lands. */ ?>
+					<?php if ($_kaOfficer): ?>
 					<div class="ka-action-card ka-action-card-deprecated" aria-disabled="true"
 						data-tip="The legacy tournament builder has been retired. A new tournament creator is in development.">
 						<div class="ka-action-icon ka-action-icon-purple"><i class="fas fa-trophy"></i></div>
 						<div class="ka-action-label">Create Tournament<span class="ka-dep-chip">In development</span></div>
 						<div class="ka-action-desc">The legacy builder has been retired &mdash; a new one is on the way</div>
 					</div>
+					<?php endif; ?>
 					<?php /* The legacy console gated its Reset Waivers link on this same flag
 					   (default/Admin_kingdom.tpl); the rebuild dropped the gate and the tile
 					   rendered for everyone the front door admits -- including a
@@ -385,7 +438,7 @@ _ka_queue(
 						<div class="ka-action-desc">Clear waivers or active flags <?= strtolower($entityLabel) ?>-wide</div>
 					</button>
 					<?php endif; ?>
-					<?php if (!empty($IsOrkAdmin) && !empty($AdminInfo['IsPrincipality'])): ?>
+					<?php if ($_kaPrinzTile): ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-prinz-overlay')">
 						<div class="ka-action-icon ka-action-icon-red"><i class="fas fa-crown"></i></div>
 						<div class="ka-action-label">Principality Status</div>
@@ -394,6 +447,7 @@ _ka_queue(
 					<?php endif; ?>
 				</div>
 			</div>
+			<?php endif; ?>
 
 		</div>
 	</div><!-- /.ka-main -->
@@ -517,3 +571,17 @@ _ka_queue(
 </script>
 
 <?php include __DIR__ . '/partials/_kingdom_admin_modals.tpl'; ?>
+<?php if ($_kaBonus): ?>
+<?php /* Bonus Credits, hosted at kingdom scope exactly as Kingdomnew_index.tpl hosts it.
+         After the modal partial so its confirms can use the console's kaConfirm. */ ?>
+<script>
+window.OrkBcCfg = {
+	uir:       '<?= UIR ?>',
+	scopeType: 'kingdom',
+	scopeId:   <?= $kid ?>,
+	scopeName: <?= json_encode($KingdomInfo['KingdomName'] ?? $kingdom_name ?? '', JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	kingdomId: <?= $kid ?>
+};
+</script>
+<?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
+<?php endif; ?>

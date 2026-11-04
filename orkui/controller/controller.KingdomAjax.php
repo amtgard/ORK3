@@ -20,7 +20,8 @@ class Controller_KingdomAjax extends Controller
         }
 
         if ($action === 'setstatus') {
-            if (!$this->Authorization->has_authority((int)$this->session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            // Same key as Kingdom::RetireKingdom/RestoreKingdom, which this calls.
+            if (!$this->Authorization->has_permission_or_authority((int)$this->session->user_id, 'global.kingdom.manage', 'global', 0, AUTH_ADMIN)) {
                 echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
                 exit;
             }
@@ -787,8 +788,9 @@ class Controller_KingdomAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'resolverecommendationcluster') {
+            // Same key as the per-rec dismiss the lib runs for each line of the cluster.
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'kingdom', $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -1011,7 +1013,8 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'setparent') {
             $uid = (int)($this->session->user_id ?? 0);
-            if (!$uid || !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            // Same key as Kingdom::SetKingdomParent, which this calls.
+            if (!$uid || !$this->Authorization->has_permission_or_authority($uid, 'global.kingdom.manage', 'global', 0, AUTH_ADMIN)) {
                 echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
                 exit;
             }

@@ -35,6 +35,10 @@
 			<strong id="ot-outgoing-name"></strong> has served as
 			<span id="ot-outgoing-office"></span><span id="ot-outgoing-since"></span>.
 		</p>
+		<div class="ot-hint ot-self-warn" id="ot-self-out" style="display:none">
+			<i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+			<span>This is your own office. When the transition is confirmed your term ends and the access this office gives you ends with it, which may include this console.</span>
+		</div>
 		<div class="ot-hint" id="ot-unknown-start" style="display:none">
 			<i class="fas fa-info-circle" aria-hidden="true"></i>
 			<span>The ORK has no start date on file for this term. You can supply one now, or leave it blank.</span>
@@ -116,6 +120,13 @@
 	border: 1px solid var(--ork-alert-info-border);
 }
 .ot-hint i { margin-top: 2px; flex-shrink: 0; }
+/* Handing over your own office. The warning tokens are theme-aware (orkui.css
+   redefines them under html[data-theme="dark"]), so no separate dark rule. */
+.ot-hint.ot-self-warn {
+	background: var(--ork-alert-warning-bg); color: var(--ork-alert-warning-text);
+	border-color: var(--ork-alert-warning-border);
+}
+.ot-review li.ot-self-warn { color: var(--ork-alert-warning-text); font-weight: 600; }
 
 .ot-review { margin: 0; padding-left: 20px; font-size: 14px; color: var(--ork-text); line-height: 1.6; }
 .ot-review li { margin: 4px 0; }
@@ -180,6 +191,16 @@
 		if (!otInStartFp)  otInStartFp  = flatpickr('#ot-in-start', opts);
 	}
 
+	// Is the outgoing holder the signed-in player? Guarded: moIsViewer comes from the
+	// host partial and an older host may not export it.
+	function otOutgoingIsViewer() {
+		if (!otState || otState.mode !== 'transition' || typeof window.moIsViewer !== 'function') return false;
+		var occ = (window.moOccupancyOf(otState.pos) || [])[0] || null;
+		if (!window.moIsViewer(occ)) return false;
+		// Re-appointing yourself keeps the office, so nothing is lost.
+		return !window.moIsViewer({ MundaneId: document.getElementById('ot-in-id').value });
+	}
+
 	// ---------- Open / close ----------
 	window.otOpen = function (positionId, mode) {
 		var pos = otFindPosition(positionId);
@@ -226,6 +247,7 @@
 		document.getElementById('ot-outgoing-office').textContent = otState.pos.DisplayTitle || otState.pos.Title || 'this office';
 		var hasStart = !!(occ && occ.TermStartRaw);
 		document.getElementById('ot-outgoing-since').textContent = hasStart ? (' since ' + occ.TermStart) : '';
+		document.getElementById('ot-self-out').style.display = otOutgoingIsViewer() ? '' : 'none';
 		document.getElementById('ot-unknown-start').style.display = hasStart ? 'none' : '';
 		var outStartEl = document.getElementById('ot-out-start');
 		if (otOutStartFp) {
@@ -321,6 +343,9 @@
 			window.moEsc(officeName) + '</strong>, effective ' + inStart + '.</li>');
 		var note = document.getElementById('ot-in-note').value.trim();
 		if (note) lines.push('<li>Note: ' + window.moEsc(note) + '</li>');
+		if (otOutgoingIsViewer()) {
+			lines.push('<li class="ot-self-warn">You are handing over your own office. Your access through it ends as soon as you confirm, and this page will reload.</li>');
+		}
 
 		document.getElementById('ot-review').innerHTML = lines.join('');
 	}
@@ -379,7 +404,16 @@
 		// strand the button on "Saving..." forever with no POST ever issued -- indistin-
 		// guishable from a hung network request. Restore the button on that path too.
 		try {
+			var selfOut = otOutgoingIsViewer();
+			var officeName = s.pos.DisplayTitle || s.pos.Title || 'this office';
 			window.moPost('transition', d, function () {
+				// The viewer just handed their own office on: the console may no longer
+				// be theirs to see, so reload instead of re-rendering the list.
+				if (selfOut && typeof window.moSelfEnded === 'function') {
+					document.getElementById('ot-root').style.display = 'none';
+					window.moSelfEnded(officeName);
+					return;
+				}
 				otClose();
 			}, function () {
 				btn.disabled = false;

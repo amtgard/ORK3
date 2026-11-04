@@ -78,7 +78,6 @@
 	$pnCanManageBanner = !empty($pnCanManageBanner);
 	$canManageAwards = !empty($canManageAwards);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
-	$callerIsOrkAdmin = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_EDIT);
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
 
@@ -98,9 +97,7 @@
 	// check, and HasAuthority returns false for AUTH_PARK with id 0, so an ORK
 	// admin viewing a player who has no park would be locked out of their own
 	// admin surface. The unscoped-admin check covers that case.
-	$canSeeAccount = $canSeePrivate
-		|| (isset($this->__session->user_id)
-			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN));
+	$canSeeAccount = $canSeePrivate || !empty($ViewerCanSeeAccountAsAdmin);
 
 	// Historical ladder flags from domain (Controller_Player::profile via get_reconcile_suggestions)
 	$hasHistorical = !empty($HasHistorical);

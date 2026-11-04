@@ -455,6 +455,107 @@ final class KingdomAdminConsoleTest extends TestCase
         );
     }
 
+    /* ──────────── Officer tools from the profiles, now in the console ─────────── */
+
+    /**
+     * Bonus Credits and the Court Planner / Recommendations Manager tiles gate on the
+     * SAME model methods their destinations use (BonusCreditAjax::options() at kingdom
+     * scope; the profile Admin tab and Recommendations::manage()). A re-derived
+     * permission check here would be a split gate.
+     */
+    public function testCourtAndBonusFlagsComeFromTheirModelMethods(): void
+    {
+        $src = self::code(self::CONTROLLER);
+        self::assertMatchesRegularExpression(
+            "/\\\$this->data\\['CanManageCourt'\\]\\s*=\\s*\\\$uid > 0 && \\\$this->Court->can_manage\\(\\\$uid, \\(int\\)\\\$id, 0\\)/",
+            $src,
+            'the kingdom Court tiles must gate on Court::can_manage() at kingdom scope'
+        );
+        self::assertStringContainsString(
+            "\$this->data['CanBonusCredits'] = \$uid > 0 && \$this->admin_can_kingdom_bonus_credits(",
+            $src
+        );
+        $base = self::code('system/lib/system/class.Controller.php');
+        self::assertMatchesRegularExpression(
+            '/BonusCredit->can_define\(\$uid, \'kingdom\', \$kingdomId\)\s*\|\|\s*\$this->BonusCredit->can_grant_in_kingdom\(\$uid, \$kingdomId\)/',
+            $base,
+            'kingdom Bonus Credits must open for a definer or a granter, as options() does'
+        );
+    }
+
+    /** The front door admits court and bonus-credit holders, through the shared helper. */
+    public function testKingdomStandingAdmitsCourtAndBonusHolders(): void
+    {
+        $base = self::code('system/lib/system/class.Controller.php');
+        $at   = strpos($base, 'function has_kingdom_admin_standing(');
+        self::assertNotFalse($at);
+        $body = substr($base, $at, (int)strpos($base, 'function has_kingdom_officer_standing(') - $at);
+        self::assertStringContainsString('$this->Court->can_manage($uid, $kingdomId, 0)', $body);
+        self::assertStringContainsString('can_open_kingdom_bonus_credits($uid, $kingdomId)', $body);
+
+        self::assertStringContainsString(
+            'return $this->has_kingdom_admin_standing($uid, $kingdomId);',
+            self::code(self::CONTROLLER),
+            'Admin must delegate to the base helper so the nav and the console agree'
+        );
+    }
+
+    public function testCourtAndBonusTilesAreGatedAndWired(): void
+    {
+        $page = self::code(self::PAGE);
+        self::assertMatchesRegularExpression(
+            '/if \(\$_kaCourt\): \?>\s*<a class="ka-action-card" href="<\?= \$uir \?>Recommendations\/manage\/kingdom\//',
+            $page
+        );
+        self::assertStringContainsString('Kingdom/profile/<?= $kid ?>&amp;tab=admin', $page);
+        self::assertMatchesRegularExpression(
+            '/if \(\$_kaBonus\): \?>\s*<button class="ka-action-card" onclick="bcOpen\(\)">/',
+            $page
+        );
+        self::assertMatchesRegularExpression(
+            "/if \(\\\$_kaBonus\): \?>.*scopeType: 'kingdom'.*_bonus_credit_assets\.tpl/s",
+            $page,
+            'the Bonus Credits modal must be hosted at kingdom scope, only when the tile is'
+        );
+    }
+
+    /** Officer-only tiles must not render for someone admitted only for court/bonus. */
+    public function testOfficerTilesAreGatedOnOfficerStanding(): void
+    {
+        $page = self::code(self::PAGE);
+        self::assertMatchesRegularExpression(
+            '/if \(\$_kaOfficer\): \?>\s*<button class="ka-action-card" onclick="kaOpenModal\(\'ka-createplayer-overlay\'\)">/',
+            $page
+        );
+        self::assertMatchesRegularExpression(
+            '/if \(!empty\(\$CanManageKingdomAuth\)\): \?>\s*<a class="ka-action-card" href="<\?= \$uir \?>Admin\/roles\/Kingdom\//',
+            $page
+        );
+    }
+
+    /**
+     * The officer wizard says Vacate is immediate, points at Transition for handing an
+     * office on, and treats the viewer's own office specially (master 334f5812f's
+     * meaning, carried into the wizard), reloading afterwards because the viewer may
+     * have lost the console itself.
+     */
+    public function testOfficerWizardIsSelfAwareAboutEndingAnOffice(): void
+    {
+        $mo = self::code('orkui/template/revised-frontend/partials/_manage_officers.tpl');
+        self::assertStringContainsString('viewerId: <?= (int)$mo_viewer_id ?>', $mo);
+        self::assertStringContainsString("'Vacate Your Own Position?'", $mo);
+        self::assertStringContainsString("'Vacate my position'", $mo);
+        self::assertStringContainsString('Vacating takes effect immediately', $mo);
+        self::assertStringContainsString('use <strong>Transition</strong> instead', $mo);
+        self::assertMatchesRegularExpression('/function moSelfEnded\(.*?location\.reload\(\)/s', $mo);
+        self::assertStringContainsString("'Retire Your Own Position?'", $mo);
+
+        $ot = self::code('orkui/template/revised-frontend/partials/_officer_transition.tpl');
+        self::assertStringContainsString('window.moSelfEnded(officeName)', $ot);
+
+        self::assertStringContainsString('$mo_viewer_id  = (int)($CurrentUserId ?? 0);', self::code(self::PAGE));
+    }
+
     /* ───────────────────────── house rules ─────────────────────────────────── */
 
     /** @return array<string, array{0: string}> */

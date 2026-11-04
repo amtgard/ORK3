@@ -397,17 +397,13 @@
 				   Url/Address/City/Province/PostalCode/MapUrl/Description/Directions set),
 				   and Reset Waivers -> the Operations tile.
 
-				   GATED ON $CanManagePark, NOT $CanAdminPark. They are different
-				   permissions: CanAdminPark is park.officer.set @AUTH_CREATE, while
-				   Admin::park()'s front door is park.details.edit @AUTH_EDIT (or kingdom
-				   standing). CanManagePark IS that first disjunct -- same key, scope and
-				   level -- so anyone who sees this link can definitely open the page, and
-				   kingdom officers are covered too because HasAuthority(AUTH_PARK) walks
-				   up to the park's kingdom. Gating on CanAdminPark would have shown the
-				   link to a park officer holding officer.set but not details.edit, who
-				   would then be bounced silently to the home page.
+				   GATED ON $CanOpenParkConsole: the controller asks the console's own
+				   front door (Controller::can_open_park_console -- park.details.edit,
+				   park court, park bonus credits, or kingdom officer standing), so the
+				   link appears exactly when the page will open. Not $CanAdminPark
+				   (park.officer.set), which would bounce some holders to the home page.
 				*/ ?>
-				<?php if (!empty($CanManagePark)): ?>
+				<?php if (!empty($CanOpenParkConsole)): ?>
 					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Admin/park/<?= (int)($park_id ?? 0) ?>">
 						<i class="fas fa-cog"></i> Admin
 					</a>

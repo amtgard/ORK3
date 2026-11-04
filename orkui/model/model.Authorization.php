@@ -36,6 +36,26 @@ class Model_Authorization extends Model
     }
 
     /**
+     * Officer authority over a unit, measured by the unit's ROSTER scopes -- the same
+     * rule Unit's server-side add/remove-manager gates use. A UI flag must ask this,
+     * not the viewer's own home kingdom/park, or the two disagree.
+     */
+    public function has_unit_officer_authority(int $uid, int $unit_id): bool
+    {
+        return $uid > 0 && $unit_id > 0
+            && (bool) Ork3::$Lib->authorization->HasUnitOfficerAuthority($uid, $unit_id);
+    }
+
+    /**
+     * Could $uid hold any administrative standing at all? Exact when false, so the
+     * nav skips its standing checks for ordinary players; see the gate method.
+     */
+    public function has_administrative_footprint(int $uid): bool
+    {
+        return $this->_authorization_gate()->hasAdministrativeFootprint($uid);
+    }
+
+    /**
      * RBAC: permission-key check only (no legacy authority fallback).
      */
     public function has_permission(int $uid, string $permission_key, string $scope_type, $scope_id): bool

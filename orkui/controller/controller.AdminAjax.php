@@ -17,6 +17,10 @@ class Controller_AdminAjax extends Controller
         }
 
         $uid = (int)$this->session->user_id;
+        // Deliberately true-admin only for every action, not global.admin.grant: that key
+        // is view-only. addauth/removeauth mint and delete all-zero admin rows, which
+        // AuthorizationGate refuses to anyone but a true admin, and playersearch exists
+        // only to feed the Grant System Administrator card, which only they see.
         if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
             exit;

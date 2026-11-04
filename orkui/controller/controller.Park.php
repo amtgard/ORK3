@@ -296,6 +296,12 @@ class Controller_Park extends Controller
         // Bonus Credits button + modal: park EDIT, or a manager of the park's kingdom.
         $this->load_model('BonusCredit');
         $this->data['CanBonusCredits'] = $uid > 0 && $this->BonusCredit->can_grant($uid, (int)$park_id);
+        // The Admin link opens Admin/park, so it asks that page's own front door.
+        $this->data['CanOpenParkConsole'] = $uid > 0 && $this->can_open_park_console(
+            $uid,
+            (int)$park_id,
+            (int)($this->data['park_info']['ParkInfo']['KingdomId'] ?? 0)
+        );
         $this->data['CanAdminPark']  = $uid > 0
             && $this->Authorization->has_permission_or_authority($uid, 'park.officer.set', 'park', (int)$park_id, AUTH_CREATE);
         // Park admins can merge two players who both belong to THIS park.

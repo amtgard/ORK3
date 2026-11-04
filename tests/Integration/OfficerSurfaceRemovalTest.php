@@ -313,25 +313,48 @@ final class OfficerSurfaceRemovalTest extends TestCase
     }
 
     /**
+     * The kingdom nameplate's Admin link follows the kingdom console's front door
+     * (Controller::has_kingdom_admin_standing) rather than officer appointment
+     * (kingdom.officer.set), so a test manager or Court Planner holder -- whom the
+     * console admits -- sees it, and nobody sees a link that bounces them.
+     */
+    public function testKingdomNameplateAdminFollowsTheConsoleFrontDoor(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $tpl = file_get_contents($root . '/orkui/template/revised-frontend/Kingdomnew_index.tpl');
+        self::assertMatchesRegularExpression(
+            '/if\s*\(\$CanOpenKingdomConsole \?\? false\)\s*:\s*\?>\s*<a\b[^>]*href="[^"]*Admin\/kingdom\//s',
+            $tpl,
+            'the kingdom nameplate Admin link must be gated on $CanOpenKingdomConsole'
+        );
+        $ctl = file_get_contents($root . '/orkui/controller/controller.Kingdom.php');
+        self::assertStringContainsString(
+            "\$this->data['CanOpenKingdomConsole'] = \$uid > 0 && \$this->has_kingdom_admin_standing(",
+            $ctl
+        );
+    }
+
+    /**
      * The park nameplate's Admin control must open the standalone Park admin
      * console (Admin/park/{id}) -- the same move the kingdom nameplate already
      * made -- not the pk-admin-overlay edit pad it used to open. That modal is
      * the park's version of the edit pad this work replaced.
      *
      * The visibility gate matters as much as the destination: it must be
-     * $CanManagePark (park.details.edit @AUTH_EDIT), which is exactly the first
-     * disjunct of Admin::park()'s front door, NOT $CanAdminPark
-     * (park.officer.set @AUTH_CREATE). Gating on the latter would show the link
-     * to an officer the destination bounces silently to the home page.
+     * $CanOpenParkConsole, which the controller computes from
+     * Controller::can_open_park_console() -- the very check Admin::park()'s front
+     * door makes -- NOT $CanAdminPark (park.officer.set @AUTH_CREATE). Gating on
+     * the latter would show the link to an officer the destination bounces
+     * silently to the home page.
      */
     public function testParkNameplateAdminOpensTheStandaloneConsole(): void
     {
         $tpl = file_get_contents(dirname(__DIR__, 2) . '/orkui/template/revised-frontend/Parknew_index.tpl');
 
         self::assertMatchesRegularExpression(
-            '/if\s*\(!empty\(\$CanManagePark\)\)\s*:\s*\?>\s*<a\b[^>]*href="[^"]*Admin\/park\//s',
+            '/if\s*\(!empty\(\$CanOpenParkConsole\)\)\s*:\s*\?>\s*<a\b[^>]*href="[^"]*Admin\/park\//s',
             $tpl,
-            'the park nameplate Admin control must be a link to Admin/park/{id}, gated on $CanManagePark'
+            'the park nameplate Admin control must be a link to Admin/park/{id}, gated on $CanOpenParkConsole'
         );
 
         self::assertStringNotContainsString(
@@ -343,8 +366,8 @@ final class OfficerSurfaceRemovalTest extends TestCase
     }
 
     /**
-     * Guards the gate choice specifically. $CanManagePark and $CanAdminPark are
-     * DIFFERENT permissions in controller.Park.php, and swapping them here is a
+     * Guards the gate choice specifically. $CanOpenParkConsole and $CanAdminPark are
+     * DIFFERENT checks in controller.Park.php, and swapping them here is a
      * silent dead-control regression rather than a visible failure.
      */
     public function testParkAdminLinkIsNotGatedOnTheOfficerSetPermission(): void
@@ -354,8 +377,8 @@ final class OfficerSurfaceRemovalTest extends TestCase
         self::assertDoesNotMatchRegularExpression(
             '/if\s*\(!empty\(\$CanAdminPark\)\)\s*:\s*\?>\s*<a\b[^>]*href="[^"]*Admin\/park\//s',
             $tpl,
-            '$CanAdminPark is park.officer.set, but Admin::park() gates on park.details.edit -- '
-            . 'gate the console link on $CanManagePark or it becomes a dead control'
+            '$CanAdminPark is park.officer.set, but Admin::park() gates on can_open_park_console() -- '
+            . 'gate the console link on $CanOpenParkConsole or it becomes a dead control'
         );
     }
 

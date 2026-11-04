@@ -203,7 +203,7 @@
 			<a class="kn-btn kn-btn-outline" href="#" onclick="knActivateTab('map');return false;">
 				<i class="fas fa-map"></i> Map
 			</a>
-			<?php if ($CanManageKingdom ?? false): ?>
+			<?php if ($CanOpenKingdomConsole ?? false): ?>
 			<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Admin/kingdom/<?= (int)($kingdom_id ?? 0) ?>">
 				<i class="fas fa-cog"></i> Admin
 			</a>
@@ -1414,7 +1414,7 @@ var KnConfig = {
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	isOrkAdmin:      <?= !empty($IsOrkAdmin) ? 'true' : 'false' ?>,
+	isOrkAdmin:      <?= !empty($CanManageKingdomLifecycle) ? 'true' : 'false' ?>,
 	adminInfo:       <?= json_encode($AdminInfo       ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminConfig:     <?= json_encode($AdminConfig     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminParkTitles: <?= json_encode($AdminParkTitles ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1989,7 +1989,7 @@ var KnBannerConfig = {
 			</div>
 
 			<!-- ── Panel: Principality (ORK Admins only, shown only when this entity is a principality) ── -->
-		<?php if (!empty($IsOrkAdmin) && !empty($AdminInfo['IsPrincipality'])): ?>
+		<?php if (!empty($CanManageKingdomLifecycle) && !empty($AdminInfo['IsPrincipality'])): ?>
 		<div class="kn-admin-panel" id="kn-admin-panel-prinz">
 			<button class="kn-admin-panel-hdr" id="kn-admin-hdr-prinz" aria-expanded="false">
 				<span><i class="fas fa-crown" style="margin-right:6px;color:#a0aec0"></i>Principality Status</span>
@@ -2270,7 +2270,7 @@ var KnBannerConfig = {
 							<i class="fas fa-eraser"></i> Reset Waivers
 						</button>
 					</div>
-					<?php if (!empty($IsOrkAdmin)):
+					<?php if (!empty($CanManageKingdomLifecycle)):
 						$isActive = ($AdminInfo['Active'] ?? 'Active') === 'Active'; ?>
 					<div class="kn-admin-ops-row">
 						<div class="kn-admin-ops-info">

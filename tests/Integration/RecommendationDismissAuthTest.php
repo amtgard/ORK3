@@ -9,6 +9,8 @@ use PDO;
 use Player;
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../Support/RbacRoleFixture.php';
+
 /**
  * Dismissing a recommendation is authorized by WHO THE TOKEN BELONGS TO, never by a
  * caller-supplied RequestedBy. Player::DeleteAwardRecommendation is reachable through
@@ -26,6 +28,7 @@ final class RecommendationDismissAuthTest extends TestCase
     private array $people = [];
     /** @var array{kingdomaward_id: int, award_id: int}|array{} */
     private array $ka = [];
+    private ?\RbacRoleFixture $rbac = null;
 
     protected function setUp(): void
     {
@@ -47,6 +50,9 @@ final class RecommendationDismissAuthTest extends TestCase
     protected function tearDown(): void
     {
         unset($_SESSION['is_authorized_mundane_id']);
+        if ($this->rbac !== null) {
+            $this->rbac->cleanup();
+        }
         if (!isset($this->fixture)) {
             return;
         }
@@ -289,5 +295,73 @@ final class RecommendationDismissAuthTest extends TestCase
 
         $this->assertSame(1, (int) ($r['Resolved'] ?? -1));
         $this->assertSame($officer['id'], $this->deletedBy($rec));
+    }
+
+    // ---- RBAC: a role holder with no ork_authorization row is an officer too ------
+
+    /** @return array{id: int, token: string} holds player.recommendation.manage through a role only */
+    private function rbacRecManager(string $scope): array
+    {
+        $p = $this->person('rbac' . $scope);
+        $this->rbac ??= new \RbacRoleFixture($this->fixture->pdo(), 'zzrecauth', $this->kingdomId);
+        $role = $this->rbac->seedRoleWith('player.recommendation.manage', $scope);
+        $this->rbac->assignRole($p['id'], $role, $scope === 'park'
+            ? ['park_id' => $this->parkId]
+            : ['kingdom_id' => $this->kingdomId]);
+
+        return $p;
+    }
+
+    public function testARoleOnlyRecommendationManagerCanUnsnooze(): void
+    {
+        $recipient   = $this->person('recipient');
+        $recommender = $this->person('recommender');
+        $stranger    = $this->person('stranger');
+        $manager     = $this->rbacRecManager('park');
+        $rec         = $this->recommendation($recipient['id'], $recommender['id']);
+        $this->fixture->pdo()->exec(
+            'UPDATE ' . DB_PREFIX . 'recommendations SET snoozed_by_id = ' . (int) $recommender['id']
+            . ', snoozed_monarch_id = 0, snoozed_regent_id = 0 WHERE recommendations_id = ' . $rec
+        );
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $refused = $this->player->UnsnoozeAwardRecommendation(['Token' => $stranger['token'], 'RecommendationsId' => $rec]);
+        $this->assertNotSame(0, (int) $refused['Status'], 'a stranger cannot unsnooze');
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->player->UnsnoozeAwardRecommendation(['Token' => $manager['token'], 'RecommendationsId' => $rec]);
+        $this->assertSame(0, (int) $r['Status'], 'player.recommendation.manage at the park unsnoozes');
+        $this->assertNull($this->fixture->fetchRecommendation($rec)['snoozed_by_id']);
+    }
+
+    public function testARoleOnlyKingdomRecommendationManagerCanPassDownToLocal(): void
+    {
+        $recipient   = $this->person('recipient');
+        $recommender = $this->person('recommender');
+        $parkOnly    = $this->rbacRecManager('park');
+        $manager     = $this->rbacRecManager('kingdom');
+        $rec         = $this->recommendation($recipient['id'], $recommender['id']);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $refused = $this->player->SetRecommendationPassedToLocal(['Token' => $parkOnly['token'], 'RecommendationsId' => $rec, 'Passed' => 1]);
+        $this->assertNotSame(0, (int) $refused['Status'], 'pass-down is a kingdom call; a park-scoped grant is not enough');
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->player->SetRecommendationPassedToLocal(['Token' => $manager['token'], 'RecommendationsId' => $rec, 'Passed' => 1]);
+        $this->assertSame(0, (int) $r['Status']);
+        $this->assertSame(1, (int) $this->fixture->fetchRecommendation($rec)['passed_to_local']);
+    }
+
+    public function testARoleOnlyRecommendationManagerCanResolveACluster(): void
+    {
+        $recipient   = $this->person('recipient');
+        $recommender = $this->person('recommender');
+        $manager     = $this->rbacRecManager('park');
+        $rec         = $this->recommendation($recipient['id'], $recommender['id']);
+
+        $r = $this->resolve($manager['token'], $recipient['id'], $manager['id']);
+
+        $this->assertSame(1, (int) ($r['Resolved'] ?? -1));
+        $this->assertSame($manager['id'], $this->deletedBy($rec));
     }
 }

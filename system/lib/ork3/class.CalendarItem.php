@@ -16,8 +16,12 @@ class CalendarItem extends Ork3
      *
      * Park before kingdom: an item carrying a ParkId belongs to that park, and a
      * kingdom-scope grant still satisfies the park check through the RBAC cascade.
+     *
+     * Public and static so the UI's CanEdit flag (CalendarItemAjax) asks this exact
+     * gate instead of re-spelling it. The underscore keeps
+     * this token-free check off the JSON service should the class ever be whitelisted.
      */
-    private function canManage($mundane_id, $kingdom_id, $park_id)
+    public static function can_manage($mundane_id, $kingdom_id, $park_id): bool
     {
         if (!valid_id($mundane_id)) {
             return false;
@@ -40,7 +44,7 @@ class CalendarItem extends Ork3
         if (!valid_id($kingdom_id) && !valid_id($park_id)) {
             return InvalidParameter(null, 'A kingdom or park is required.');
         }
-        if (!$this->canManage($mundane_id, $kingdom_id, $park_id)) {
+        if (!self::can_manage($mundane_id, $kingdom_id, $park_id)) {
             return NoAuthorization();
         }
 
@@ -97,7 +101,7 @@ class CalendarItem extends Ork3
             return InvalidParameter(null, 'Calendar item not found.');
         }
 
-        if (!$this->canManage($mundane_id, (int)$this->item->kingdom_id, (int)$this->item->park_id)) {
+        if (!self::can_manage($mundane_id, (int)$this->item->kingdom_id, (int)$this->item->park_id)) {
             return NoAuthorization();
         }
 
@@ -139,7 +143,7 @@ class CalendarItem extends Ork3
             return InvalidParameter(null, 'Calendar item not found.');
         }
 
-        if (!$this->canManage($mundane_id, (int)$this->item->kingdom_id, (int)$this->item->park_id)) {
+        if (!self::can_manage($mundane_id, (int)$this->item->kingdom_id, (int)$this->item->park_id)) {
             return NoAuthorization();
         }
 

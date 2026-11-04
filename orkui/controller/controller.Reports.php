@@ -221,8 +221,11 @@ class Controller_Reports extends Controller
             ? (bool)(int)$_knConfigs['AwardRecsPublic']['Value']
             : true;
         $_isOrkAdmin    = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        // Seeing a private-recs kingdom's recommendations is the recommendation
+        // manager's power -- the same key/role as the Kingdom recs panel and the
+        // dismiss/resolve actions behind it (KingdomAjax).
         $_isKingdomUser = $_uid > 0 && $_scopeKingdomId > 0
-            && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $_scopeKingdomId, AUTH_CREATE);
+            && $this->Authorization->has_permission_or_authority($_uid, 'player.recommendation.manage', 'kingdom', $_scopeKingdomId, AUTH_CREATE);
         $_canAccess = $_isOrkAdmin || $_isKingdomUser || ($_recsPublic && $_uid > 0);
         if (!$_canAccess) {
             header('Location: ' . UIR);
@@ -234,7 +237,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_playerawardrecommendations.tpl';
         $this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('KingdomId' => 'Kingdom' == $type ? $id : 0, 'ParkId' => 'Park' == $type ? $id : 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder, 'Token' => $this->session->token));
         $this->data['ScopeType'] = ($type === 'Park') ? 'park' : (($type === 'Kingdom') ? 'kingdom' : '');
-        $this->data['CanDeleteRecommendation'] = $this->award_rec_can_delete($_uid);
+        $this->data['CanDeleteRecommendation'] = $this->award_rec_can_delete($_uid, $this->data['ScopeType'], (int)($id ?? 0));
         $this->data[ 'page_title' ] = "Award Recommendations";
     }
 
@@ -573,9 +576,11 @@ class Controller_Reports extends Controller
         $this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 1);
         $this->data['page_title'] = "Player Roster";
         $_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_authType = $type === 'Kingdom' ? AUTH_KINGDOM : AUTH_PARK;
+        // Same gate as Report::GetPlayerRoster's restricted (mundane-name) view:
+        // park.report.view at the roster's scope, legacy EDIT.
+        $_scope = $type === 'Kingdom' ? 'kingdom' : 'park';
         $this->data['CanViewMundane'] = $_uid > 0 && valid_id($this->request->id)
-            && $this->Authorization->has_authority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
+            && $this->Authorization->has_permission_or_authority($_uid, 'park.report.view', $_scope, (int)$this->request->id, AUTH_EDIT);
     }
 
     public function reeve($type = null)
@@ -963,14 +968,15 @@ class Controller_Reports extends Controller
 
         // Honour an explicit scope (the kingdom admin console links here with the
         // kingdom being administered, which is not always the viewer's own), but
-        // only for a viewer who actually holds authority over that kingdom.
+        // only for a viewer who actually holds authority over that kingdom: the
+        // report key at kingdom scope, keeping the legacy CREATE role it asked.
         $kingdom_id = $this->session->kingdom_id;
         if (valid_id($this->request->KingdomId)) {
             $_requested = (int)$this->request->KingdomId;
             $_uid       = (int)$this->session->user_id;
             if ($_requested === (int)$kingdom_id
                 || $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)
-                || $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $_requested, AUTH_CREATE)) {
+                || $this->Authorization->has_permission_or_authority($_uid, 'park.report.view', 'kingdom', $_requested, AUTH_CREATE)) {
                 $kingdom_id = $_requested;
             }
         }
@@ -1797,22 +1803,22 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_release_utilization.tpl';
     }
 
-    private function award_rec_can_delete(int $uid): bool
+    /**
+     * The page-level Dismiss flag must ask what Player::DeleteAwardRecommendation asks:
+     * player.recommendation.manage at CREATE. The server checks each recipient's home
+     * park; this asks the report's own scope, which every row sits inside (a kingdom
+     * grant cascades to its parks), so a shown button is never refused.
+     */
+    private function award_rec_can_delete(int $uid, string $scopeType, int $scopeId): bool
     {
         if ($uid <= 0) {
             return false;
         }
-        if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
-            return true;
+        // An unscoped report spans every park; only a true admin passes the server for all of them.
+        if (!in_array($scopeType, ['park', 'kingdom'], true) || $scopeId <= 0) {
+            return $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         }
-        if (isset($this->session->park_id) && $this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'park', (int)$this->session->park_id, AUTH_EDIT)) {
-            return true;
-        }
-        if (isset($this->session->kingdom_id) && $this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'kingdom', (int)$this->session->kingdom_id, AUTH_EDIT)) {
-            return true;
-        }
-
-        return false;
+        return $this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', $scopeType, $scopeId, AUTH_CREATE);
     }
 
     private function roster_suspension_remove_auth(array $roster, ?string $scopeType, $scopeId): array

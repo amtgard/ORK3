@@ -887,4 +887,56 @@ final class ParkAdminConsoleTest extends TestCase
             'the shared modal calls Ork3::$Lib-> directly; templates read controller data'
         );
     }
+
+    /* ──────────── Officer tools from the profiles, now in the console ─────────── */
+
+    /** Court / Bonus Credits tiles gate on the destinations' own model methods, and the
+     *  front door admits their holders through the base Controller's shared helper. */
+    public function testCourtAndBonusTilesMatchTheirModelMethods(): void
+    {
+        $src = self::code('orkui/controller/controller.Admin.php');
+        $this->assertStringContainsString('$this->Court->can_manage($_uid, $_standingKingdomId, (int)$id)', $src);
+        $this->assertStringContainsString('$this->BonusCredit->can_grant($_uid, (int)$id)', $src);
+        $this->assertStringContainsString('!$this->can_open_park_console($_uid, (int)$id, $_standingKingdomId)', $src);
+        // The front door the park profile's Admin link also asks: park standing, or
+        // kingdom officer standing over the park's kingdom.
+        $door = self::code('system/lib/system/class.Controller.php');
+        $this->assertMatchesRegularExpression(
+            '/function can_open_park_console\(.*?has_park_admin_standing\(.*?has_kingdom_officer_standing\(/s',
+            $door
+        );
+
+        $base = self::code('system/lib/system/class.Controller.php');
+        $at   = strpos($base, 'function has_park_admin_standing(');
+        $this->assertNotFalse($at);
+        $body = substr($base, $at, (int)strpos($base, 'public function load_model(') - $at);
+        $this->assertStringContainsString('$this->BonusCredit->can_grant($uid, $parkId)', $body);
+        $this->assertStringContainsString('$this->Court->can_manage($uid, $kingdomId, $parkId)', $body);
+
+        $page = self::code(self::PAGE);
+        $this->assertMatchesRegularExpression(
+            '/if \(\$_kaCourt\): \?>\s*<a class="ka-action-card" href="<\?= \$uir \?>Recommendations\/manage\/park\//',
+            $page
+        );
+        $this->assertStringContainsString('Park/profile/<?= $parkId ?>&amp;tab=admin', $page);
+        $this->assertMatchesRegularExpression(
+            '/if \(\$_kaBonus\) : \?>.*scopeType: \'park\'.*_bonus_credit_assets\.tpl/s',
+            $page,
+            'the Bonus Credits modal must be hosted at park scope, only when the tile is'
+        );
+    }
+
+    /** Manage Officers is no longer implied by the front door: it is the wizard's own
+     *  first call, the 'set' family at park scope. */
+    public function testManageOfficersIsGatedOnTheWizardsOwnCheck(): void
+    {
+        $this->assertStringContainsString(
+            '$mo_can_manage = !empty($CanManageParkOfficers);',
+            self::code(self::PAGE)
+        );
+        $this->assertMatchesRegularExpression(
+            '/permission_key_for\(\'set\', \(int\)\$id\),\s*\'park\',\s*\(int\)\$id,\s*AUTH_EDIT/',
+            self::code('orkui/controller/controller.Admin.php')
+        );
+    }
 }

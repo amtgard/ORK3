@@ -122,8 +122,10 @@ class Controller_Kingdom extends Controller
 
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $isOrkAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        // CanManageKingdom here unlocks private recs plus the dismiss / withdraw-second
+        // controls, so it asks the key those KingdomAjax actions check.
         $canManageKingdom = $isOrkAdmin
-            || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE));
+            || ($uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'kingdom', $kingdom_id, AUTH_CREATE));
 
         $knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic'])
@@ -381,12 +383,17 @@ class Controller_Kingdom extends Controller
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
             && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.set', 'kingdom', (int)$kingdom_id, AUTH_CREATE);
+        // The Admin button asks the console's own front door, so a test manager, Court
+        // Planner holder or Bonus Credits holder sees it and nobody is shown a door
+        // that refuses them.
+        $this->data['CanOpenKingdomConsole'] = $uid > 0 && $this->has_kingdom_admin_standing($uid, (int)$kingdom_id);
         $this->data['can_manage_officer_positions'] = $uid > 0
             && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$kingdom_id, AUTH_EDIT);
         // Bonus Credits button + modal: kingdom EDIT hands credits out, CREATE
         // also defines them, and a named manager does both with no kingdom row.
         $this->load_model('BonusCredit');
-        $this->data['CanBonusCredits'] = $uid > 0 && $this->BonusCredit->can_grant_in_kingdom($uid, (int)$kingdom_id);
+        // Definers open it too (BonusCreditAjax::options accepts either), as on the console.
+        $this->data['CanBonusCredits'] = $this->can_open_kingdom_bonus_credits($uid, (int)$kingdom_id);
         // Park creation is GLOBAL ADMIN ONLY, by design -- see Park::CreatePark,
         // which checks HasAuthority(AUTH_ADMIN, 0, AUTH_CREATE). This affordance
         // must mirror that check exactly; gating it on kingdom authority showed
@@ -395,6 +402,10 @@ class Controller_Kingdom extends Controller
             && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
         $this->data['IsOrkAdmin'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        // Principality parentage and Active status: KingdomAjax setparent/setstatus
+        // gate on global.kingdom.manage, so the controls must too.
+        $this->data['CanManageKingdomLifecycle'] = $uid > 0
+            && $this->Authorization->has_permission_or_authority($uid, 'global.kingdom.manage', 'global', 0, AUTH_ADMIN);
 
         // Park-level officers (within this kingdom) need the calendar-item edit
         // modal rendered too so they can edit park-level calendar items via the
@@ -437,7 +448,12 @@ class Controller_Kingdom extends Controller
         // browser's DOMContentLoaded for 1+ second on busy kingdoms.
         $this->data['AwardRecommendations'] = [];
         $this->data['AwardRecommendationsCount'] = 0;
-        $canManageKingdom = $this->data['CanManageKingdom'] ?? false;
+        // Same gate recommendations_panel() uses to return every rec, so the tab's
+        // count and the rows it then loads agree.
+        $canManageKingdom = $uid > 0 && (
+            $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+            || $this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'kingdom', (int)$kingdom_id, AUTH_CREATE)
+        );
         if ($recsPublic || $canManageKingdom) {
             $this->data['ShowRecsTab'] = true;
             $this->data['AwardRecommendationsCount'] = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);

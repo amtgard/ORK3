@@ -59,12 +59,20 @@ $_vacantCount = (int)($_q['VacantOffices'] ?? 0);
 
 /* Manage Officers host modal + card gate (partial: partials/_manage_officers.tpl,
    hosted from partials/_park_admin_modals.tpl exactly as the kingdom console
-   hosts it). $mo_can_manage is true because Admin::park()'s own front-door check
-   -- park.details.edit @AUTH_EDIT, or kingdom standing -- has already gated the
-   whole page; nobody without standing over this park reaches this template. */
+   hosts it). It used to be a flat true, because only officers got past the
+   front door. Court Planner and Bonus Credits holders now get in as well, so the
+   gate is the wizard's own first call: the 'set' family at park scope
+   ($CanManageParkOfficers, Admin::park()). */
 $mo_kingdom_id = $kingdomId;
 $mo_park_id    = $parkId;
-$mo_can_manage = true;
+$mo_can_manage = !empty($CanManageParkOfficers);
+$mo_viewer_id  = (int)($CurrentUserId ?? 0);
+/* Officer standing (park.details.edit, or kingdom officer standing) is what the
+   console's park-detail modals and operations were built for; Court and Bonus
+   Credits are the two capabilities that admit someone without it. */
+$_kaOfficer = !empty($HasOfficerStanding);
+$_kaCourt   = !empty($CanManageCourt);
+$_kaBonus   = !empty($CanBonusCredits);
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/admin-console.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/admin-console.css') ?>">
@@ -172,7 +180,7 @@ _ka_queue(
 	implode(', ', $_vacantNames),
 	'No park offices need filling',
 	'#',
-	'kaOpenManageOfficers()'
+	$mo_can_manage ? 'kaOpenManageOfficers()' : ''
 );
 ?>
 </div>
@@ -188,10 +196,13 @@ _ka_queue(
 		     varying tile to tile; red is reserved for what cannot be walked back. -->
 		<div class="ka-sections-grid">
 
-			<!-- Players -->
+			<!-- Players & Awards. Same name, same hue and the same court / bonus tiles
+			     as the kingdom console's section. -->
+			<?php if ($_kaOfficer || $_kaCourt || $_kaBonus): ?>
 			<div class="ka-section">
-				<div class="ka-section-title"><i class="fas fa-user"></i> Players</div>
+				<div class="ka-section-title"><i class="fas fa-user"></i> Players &amp; Awards</div>
 				<div class="ka-action-tiles">
+					<?php if ($_kaOfficer): ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-createplayer-overlay')">
 						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-user-plus"></i></div>
 						<div class="ka-action-label">Create Player</div>
@@ -202,37 +213,76 @@ _ka_queue(
 						<div class="ka-action-label">Move Player</div>
 						<div class="ka-action-desc">Bring a player to this park as their home</div>
 					</button>
+					<?php endif; ?>
+					<?php /* Recommendations Manager and Court Planner at park scope. Both
+					   gate on Court::can_manage() with this park's id -- $CanManageCourt
+					   is that call. The Planner lives on the park profile's Admin tab,
+					   which ?tab=admin opens. */ ?>
+					<?php if ($_kaCourt): ?>
+					<a class="ka-action-card" href="<?= $uir ?>Recommendations/manage/park/<?= $parkId ?>">
+						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-tasks"></i></div>
+						<div class="ka-action-label">Recommendations</div>
+						<div class="ka-action-desc">Review, grant, snooze or pass on award recommendations</div>
+					</a>
+					<a class="ka-action-card" href="<?= $uir ?>Park/profile/<?= $parkId ?>&amp;tab=admin">
+						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-gavel"></i></div>
+						<div class="ka-action-label">Court Planner</div>
+						<div class="ka-action-desc">Plan courts and the awards given at them</div>
+					</a>
+					<?php endif; ?>
+					<?php /* The park profile's Bonus Credits modal, hosted at park scope at the
+					   foot of this page: the park hands out what its kingdom defines. */ ?>
+					<?php if ($_kaBonus): ?>
+					<button class="ka-action-card" onclick="bcOpen()">
+						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-star"></i></div>
+						<div class="ka-action-label">Bonus Credits</div>
+						<div class="ka-action-desc">Hand out the credits your kingdom defines</div>
+					</button>
+					<?php endif; ?>
+					<?php if ($_kaOfficer): ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-mergeplayer-overlay')">
 						<div class="ka-action-icon ka-action-icon-red"><i class="fas fa-compress-arrows-alt"></i></div>
 						<div class="ka-action-label">Merge Players</div>
 						<div class="ka-action-desc">Combine two duplicate records &mdash; permanent</div>
 					</button>
+					<?php endif; ?>
 				</div>
 			</div>
+			<?php endif; ?>
 
-			<!-- Officers & Access -->
+			<!-- Officers & Access. Each link lands on a page with its own gate
+			     (Admin::permissions() / permissionsgrid()), so each asks the same. -->
+			<?php if ($mo_can_manage || !empty($CanManageParkAuth) || !empty($CanViewParkAuth)): ?>
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-user-shield"></i> Officers &amp; Access</div>
 				<div class="ka-action-tiles">
+					<?php if ($mo_can_manage): ?>
 					<button class="ka-action-card" onclick="kaOpenManageOfficers()">
 						<div class="ka-action-icon ka-action-icon-blue"><i class="fas fa-users-cog"></i></div>
 						<div class="ka-action-label">Officers</div>
 						<div class="ka-action-desc">Who holds each office, terms and aliases</div>
 					</button>
+					<?php endif; ?>
+					<?php if (!empty($CanManageParkAuth)): ?>
 					<a class="ka-action-card" href="<?= $uir ?>Admin/permissions/Park/<?= $parkId ?>">
 						<div class="ka-action-icon ka-action-icon-blue"><i class="fas fa-shield-alt"></i></div>
 						<div class="ka-action-label">Officer Permissions</div>
 						<div class="ka-action-desc">Per-officer access for this park</div>
 					</a>
+					<?php endif; ?>
+					<?php if (!empty($CanViewParkAuth)): ?>
 					<a class="ka-action-card" href="<?= $uir ?>Admin/permissionsgrid/Park/<?= $parkId ?>">
 						<div class="ka-action-icon ka-action-icon-blue"><i class="fas fa-th"></i></div>
 						<div class="ka-action-label">Permission Reference</div>
 						<div class="ka-action-desc">What each park office is able to do</div>
 					</a>
+					<?php endif; ?>
 				</div>
 			</div>
+			<?php endif; ?>
 
 			<!-- Park Settings -->
+			<?php if ($_kaOfficer): ?>
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-map-marker-alt"></i> Park Settings</div>
 				<div class="ka-action-tiles">
@@ -253,11 +303,14 @@ _ka_queue(
 					</button>
 				</div>
 			</div>
+			<?php endif; ?>
 
 			<!-- Operations -->
+			<?php if ($_kaOfficer || !empty($CanResetWaivers)) : ?>
 			<div class="ka-section">
 				<div class="ka-section-title"><i class="fas fa-tools"></i> Operations</div>
 				<div class="ka-action-tiles">
+<?php if ($_kaOfficer) : ?>
 					<a class="ka-action-card" href="<?= $uir ?>Attendance/park/<?= $parkId ?>">
 						<div class="ka-action-icon ka-action-icon-green"><i class="fas fa-clipboard-list"></i></div>
 						<div class="ka-action-label">Enter Attendance</div>
@@ -289,6 +342,7 @@ _ka_queue(
 						<div class="ka-action-label">Create Tournament<span class="ka-dep-chip">In development</span></div>
 						<div class="ka-action-desc">The legacy builder has been retired &mdash; a new one is on the way</div>
 					</div>
+<?php endif; ?>
 <?php if (!empty($CanResetWaivers)) : ?>
 					<button class="ka-action-card" onclick="kaOpenModal('ka-ops-overlay')">
 						<div class="ka-action-icon ka-action-icon-red"><i class="fas fa-undo"></i></div>
@@ -298,6 +352,7 @@ _ka_queue(
 <?php endif; ?>
 				</div>
 			</div>
+			<?php endif; ?>
 
 		</div>
 	</div><!-- /.ka-main -->
@@ -399,3 +454,17 @@ _ka_queue(
 </script>
 
 <?php include __DIR__ . '/partials/_park_admin_modals.tpl'; ?>
+<?php if ($_kaBonus) : ?>
+<?php /* Bonus Credits at park scope, configured exactly as Parknew_index.tpl configures
+         it. After the modal partial so its confirms can use the console's kaConfirm. */ ?>
+<script>
+window.OrkBcCfg = {
+	uir:       '<?= UIR ?>',
+	scopeType: 'park',
+	scopeId:   <?= $parkId ?>,
+	scopeName: <?= json_encode($ParkInfo['ParkName'] ?? '', JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	kingdomId: <?= $kingdomId ?>
+};
+</script>
+<?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
+<?php endif; ?>

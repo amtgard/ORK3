@@ -1,6 +1,7 @@
 <?php
 /**
- * Bonus Credits modal: shared by the park and kingdom pages.
+ * Bonus Credits modal: shared by the park and kingdom pages, their Admin consoles
+ * (Admin_kingdom.tpl / Admin_park.tpl) and the Amtgard-wide Admin page.
  *
  * Bonus credits are class credits that are NOT attendance (class.BonusCredit.php):
  * they count toward levels and nowhere else. The identity of a credit is its CATEGORY, the thing
@@ -269,6 +270,24 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
        version (different signature: an options object) after that. */
     function confirmThen(title, message, okLabel, cb) {
         if (typeof window.knConfirm === 'function' && gid('kn-confirm-overlay')) { window.knConfirm(message, cb, title); return; }
+        // The Admin consoles: kaConfirm's overlay sits at --z-modal-top, above us. This
+        // modal's own orkDialogTrap would still own Tab and Escape (it is the topmost
+        // trap), so lend the confirm a trap of its own until it closes.
+        var kov = gid('ka-confirm-overlay');
+        if (typeof window.kaConfirm === 'function' && kov) {
+            window.kaConfirm(message, cb, title, { danger: true, okLabel: okLabel });
+            if (window.orkDialogTrap && window.MutationObserver) {
+                var rel = window.orkDialogTrap(kov, {
+                    onEscape: function () { if (window.kaCloseConfirm) window.kaCloseConfirm(); },
+                    initialFocus: gid('ka-confirm-cancel')
+                });
+                var watch = new MutationObserver(function () {
+                    if (!kov.classList.contains('ka-open')) { watch.disconnect(); rel(); }
+                });
+                watch.observe(kov, { attributes: true, attributeFilter: ['class'] });
+            }
+            return;
+        }
         if (typeof window.pnConfirm === 'function') { window.pnConfirm({ title: title, message: message, confirmText: okLabel, danger: true }, cb); return; }
         var oc = window.orkConfirm;
         if (typeof oc === 'function' && oc.length >= 2) { oc(message, cb, { title: title, okLabel: okLabel, danger: true }); return; }

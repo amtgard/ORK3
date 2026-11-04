@@ -300,6 +300,43 @@ class AuthorizationGate extends Ork3
         ];
     }
 
+    /** @var array<int, bool> per-request memo for hasAdministrativeFootprint() */
+    private static $footprintMemo = [];
+
+    /**
+     * Cheap pre-check for the nav: could $mundaneId hold ANY administrative standing
+     * anywhere? One query over every table a standing check can be satisfied from --
+     * legacy grants (ork_authorization), RBAC assignments (ork_user_role), officer
+     * seats (ork_officer: Court Planner and qualification tests read crown seats
+     * directly), qualification-test managers and bonus-credit granters.
+     *
+     * A deliberate superset: true only means "run the real checks", which still
+     * decide. False is exact -- with no row in any of these tables every gate in the
+     * standing helpers answers no -- so the ordinary player skips them all.
+     */
+    public function hasAdministrativeFootprint(int $mundaneId): bool
+    {
+        if ($mundaneId <= 0) {
+            return false;
+        }
+        if (isset(self::$footprintMemo[$mundaneId])) {
+            return self::$footprintMemo[$mundaneId];
+        }
+        $id = (int) $mundaneId;
+        $sql = 'SELECT ('
+            . 'EXISTS(SELECT 1 FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ' . $id . ')'
+            . ' OR EXISTS(SELECT 1 FROM ' . DB_PREFIX . 'user_role WHERE mundane_id = ' . $id . ')'
+            . ' OR EXISTS(SELECT 1 FROM ' . DB_PREFIX . 'officer WHERE mundane_id = ' . $id . ')'
+            . ' OR EXISTS(SELECT 1 FROM ' . DB_PREFIX . 'qual_manager WHERE mundane_id = ' . $id . ')'
+            . ' OR EXISTS(SELECT 1 FROM ' . DB_PREFIX . 'bonus_credit_granter WHERE mundane_id = ' . $id . ')'
+            . ') AS has_footprint';
+        $this->db->Clear();
+        $r = $this->db->DataSet($sql);
+        // Fail open: an unreadable answer must never hide a real officer's Admin link.
+        $has = !($r && $r->Next()) || (int) $r->has_footprint === 1;
+        return self::$footprintMemo[$mundaneId] = $has;
+    }
+
     /**
      * HasAuthority / auth ORM share the global DB connection. Clear after nav
      * auth checks so subclass controller actions start with a clean DB state.

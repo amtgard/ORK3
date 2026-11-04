@@ -47,7 +47,8 @@ class Player extends Ork3
     }
 
     /**
-     * Token required; self, park/kingdom EDIT on subject scope, or global admin.
+     * Token required; self, player.edit on the subject's park/kingdom (legacy
+     * park/kingdom EDIT), or global admin.
      *
      * @return array|null error response, or null when authorized
      */
@@ -69,10 +70,11 @@ class Player extends Ork3
         }
         $parkId = (int) ($subject['ParkId'] ?? 0);
         $kingdomId = (int) ($subject['KingdomId'] ?? 0);
-        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_PARK, $parkId, AUTH_EDIT)) {
+        $gate = Ork3::$Lib->authorizationgate;
+        if ($gate->checkPermissionOrAuthority($actorId, 'player.edit', 'park', $parkId, AUTH_EDIT)) {
             return null;
         }
-        if ($kingdomId > 0 && Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)) {
+        if ($kingdomId > 0 && $gate->checkPermissionOrAuthority($actorId, 'player.edit', 'kingdom', $kingdomId, AUTH_EDIT)) {
             return null;
         }
         if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_ADMIN)) {
@@ -2343,7 +2345,8 @@ class Player extends Ork3
                 list($_audit_req, , $_audit_post) =
                     $this->audit_redact_profile($_audit_req, [], $post_player['Player'] ?? []);
                 $_audit_req['AdminEdit']   = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT) ? 1 : 0;
-                $_audit_req['OfficerEdit'] = (!$_audit_req['AdminEdit'] && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) ? 1 : 0;
+                // Same key as the create gate above, so a role-only creator is recorded truthfully.
+                $_audit_req['OfficerEdit'] = (!$_audit_req['AdminEdit'] && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.create', 'park', $request['ParkId'], AUTH_CREATE)) ? 1 : 0;
                 Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $_audit_req, 'Player', $new_mundane_id, null, $_audit_post);
 
                 return Success($new_mundane_id);
@@ -3405,7 +3408,7 @@ class Player extends Ork3
 
                 // reeve or corpora qual changes
                 // TODO: add error messaging
-                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.qualification.edit', 'park', $this->mundane->park_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.qualification.edit', 'park', $this->mundane->park_id, AUTH_EDIT) || Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.qualification.edit', 'kingdom', $this->mundane->kingdom_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
                     $this->mundane->reeve_qualified = is_null($request['ReeveQualified']) ? $this->mundane->reeve_qualified : $request['ReeveQualified'];
                     $this->mundane->reeve_qualified_until = is_null($request['ReeveQualifiedUntil']) ? $this->mundane->reeve_qualified_until : ($request['ReeveQualifiedUntil'] === '0000-00-00' ? null : $request['ReeveQualifiedUntil']);
                     $this->mundane->corpora_qualified = is_null($request['CorporaQualified']) ? $this->mundane->corpora_qualified : $request['CorporaQualified'];
@@ -3475,7 +3478,8 @@ class Player extends Ork3
                         $this->audit_redact_profile($_audit_req, $player['Player'], $post_player['Player']);
                     $_audit_req['SelfEdit']    = ($requester_id == $request['MundaneId']) ? 1 : 0;
                     $_audit_req['AdminEdit']   = (!$_audit_req['SelfEdit'] && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) ? 1 : 0;
-                    $_audit_req['OfficerEdit'] = (!$_audit_req['SelfEdit'] && !$_audit_req['AdminEdit'] && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) ? 1 : 0;
+                    // Same key as the edit gate, so a role-only editor is recorded truthfully.
+                    $_audit_req['OfficerEdit'] = (!$_audit_req['SelfEdit'] && !$_audit_req['AdminEdit'] && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_EDIT)) ? 1 : 0;
                     Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $_audit_req, 'Player', $request['MundaneId'], $_audit_prior, $_audit_post);
                 }
                 return Success($notices);
@@ -3797,9 +3801,17 @@ class Player extends Ork3
             $kind        => ['uploaded' => true, 'bytes' => $bytes, 'mime' => $request[$kind.'MimeType'] ?? null],
             'SelfEdit'   => ($requester_id == $request['MundaneId']) ? 1 : 0,
             'AdminEdit'  => ($requester_id != $request['MundaneId'] && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) ? 1 : 0,
-            'OfficerEdit' => ($requester_id != $request['MundaneId'] && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) ? 1 : 0,
+            'OfficerEdit' => ($requester_id != $request['MundaneId'] && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) && $this->media_officer_edit($kind, $requester_id, $mundane)) ? 1 : 0,
         ];
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $payload, 'Player', $request['MundaneId'], null, null);
+    }
+
+    // The OfficerEdit audit flag for a media change, on the same key the entry
+    // point gated it with, so a role-only officer is recorded truthfully.
+    private function media_officer_edit($kind, $requester_id, $mundane)
+    {
+        $key = ($kind === 'Waiver') ? 'player.waiver.manage' : 'player.heraldry.manage';
+        return (bool) Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, $key, 'park', $mundane['ParkId'], AUTH_EDIT);
     }
 
     // Photo focus values (x/y/size) are pixel-percentages of the player's photo,
@@ -3835,7 +3847,8 @@ class Player extends Ork3
                 $payload['AdminAction'] = 1;
             } else {
                 $info = $this->player_info((int)$entity_id);
-                if (!empty($info['ParkId']) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, (int)$info['ParkId'], AUTH_CREATE)) {
+                // Same key as WithdrawSecond's officer arm.
+                if (!empty($info['ParkId']) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.recommendation.manage', 'park', (int)$info['ParkId'], AUTH_CREATE)) {
                     $payload['OfficerAction'] = 1;
                 }
             }
@@ -3851,7 +3864,7 @@ class Player extends Ork3
             $kind        => ['removed' => true],
             'SelfEdit'   => ($requester_id == $request['MundaneId']) ? 1 : 0,
             'AdminEdit'  => ($requester_id != $request['MundaneId'] && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) ? 1 : 0,
-            'OfficerEdit' => ($requester_id != $request['MundaneId'] && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) ? 1 : 0,
+            'OfficerEdit' => ($requester_id != $request['MundaneId'] && !Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) && $this->media_officer_edit($kind, $requester_id, $mundane)) ? 1 : 0,
         ];
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $payload, 'Player', $request['MundaneId'], null, null);
     }
@@ -5098,9 +5111,9 @@ class Player extends Ork3
             return InvalidParameter('Recommendation not found.');
         }
 
-        // Auth: must be park admin for recipient's park
+        // Auth: may manage recommendations for the recipient's park
         $recipientInfo = $this->player_info($awardRec->mundane_id);
-        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT)) {
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.recommendation.manage', 'park', $recipientInfo['ParkId'], AUTH_EDIT)) {
             return NoAuthorization();
         }
 
@@ -5165,8 +5178,8 @@ class Player extends Ork3
         // and MAX(mundane_id) picked an arbitrary one.
         $this->db->Clear();
         $sql = "SELECT
-			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = {$scopeKingdomId} AND o.park_id = {$scopeParkId} AND o.role = 'Monarch' ORDER BY o.officer_id DESC LIMIT 1), 0) AS monarch_id,
-			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = {$scopeKingdomId} AND o.park_id = {$scopeParkId} AND o.role = 'Regent'  ORDER BY o.officer_id DESC LIMIT 1), 0) AS regent_id";
+			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = {$scopeKingdomId} AND o.park_id = {$scopeParkId} AND o.role IN (" . self::officerRoleInSql('Monarch') . ") ORDER BY o.officer_id DESC LIMIT 1), 0) AS monarch_id,
+			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = {$scopeKingdomId} AND o.park_id = {$scopeParkId} AND o.role IN (" . self::officerRoleInSql('Regent') . ") ORDER BY o.officer_id DESC LIMIT 1), 0) AS regent_id";
         $r = $this->db->query($sql);
         $monarch_id = 0;
         $regent_id = 0;
@@ -5214,8 +5227,9 @@ class Player extends Ork3
             return InvalidParameter('Recommendation not found.');
         }
 
+        // Same gate as SnoozeAwardRecommendation.
         $recipientInfo = $this->player_info($awardRec->mundane_id);
-        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT)) {
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.recommendation.manage', 'park', $recipientInfo['ParkId'], AUTH_EDIT)) {
             return NoAuthorization();
         }
 
@@ -5233,9 +5247,9 @@ class Player extends Ork3
     }
 
     // Pass-to-local toggle: a kingdom/principality officer delegates this recommendation to
-    // the recipient's home park to award (intent signal). Authority: AUTH_KINGDOM over the
-    // recipient's kingdom (the principality-auth traversal also lets a parent-kingdom officer
-    // through). Raw UPDATE (not yapo) so we can null the by/at columns on un-pass.
+    // the recipient's home park to award (intent signal). Authority: player.recommendation.manage
+    // over the recipient's kingdom, legacy kingdom CREATE (the principality-auth traversal also
+    // lets a parent-kingdom officer through). Raw UPDATE (not yapo) so we can null the by/at columns on un-pass.
     public function SetRecommendationPassedToLocal($request)
     {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
@@ -5260,7 +5274,7 @@ class Player extends Ork3
 
         $recipientInfo = $this->player_info($awardRec->mundane_id);
         $kingdom_id = (int)($recipientInfo['KingdomId'] ?? 0);
-        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.recommendation.manage', 'kingdom', $kingdom_id, AUTH_CREATE)) {
             return NoAuthorization();
         }
 
@@ -5352,6 +5366,17 @@ class Player extends Ork3
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Player', $rec['MundaneId'], ['monarchy_only' => !empty($request['Hidden']) ? 1 : 0]);
         }
         return Success('Recommendation visibility updated.');
+    }
+
+    /**
+     * SQL IN() body matching both stored forms of an officer role ('Monarch' and
+     * 'monarch'): the officer position migration canonicalized ork_officer.role.
+     */
+    private static function officerRoleInSql($role)
+    {
+        return implode(',', array_map(function ($v) {
+            return "'" . str_replace("'", "''", (string)$v) . "'";
+        }, PermissionRegistry::OfficerRoleVariants([$role])));
     }
 
     /**

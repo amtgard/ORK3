@@ -316,8 +316,9 @@ class Controller_ParkAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'resolverecommendationcluster') {
+            // Same key as the per-rec dismiss the lib runs for each line of the cluster.
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'park', $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }

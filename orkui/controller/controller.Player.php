@@ -240,7 +240,7 @@ class Controller_Player extends Controller
         $this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1 ));
         $this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
         $canEdit    = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'player.edit', 'park', (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
-        $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, AUTH_EDIT);
+        $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, (int)($this->data['Player']['ParkId'] ?? 0));
         if ($canEdit) {
             $this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
         }
@@ -467,11 +467,19 @@ class Controller_Player extends Controller
         $playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
         $playerKingdomId = (int)($this->data['Player']['KingdomId'] ?? 0);
         $this->data['canEditAdmin'] = $canEdit;
-        $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, AUTH_CREATE);
+        $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, $playerParkId);
+        // Mirrors Banner::canEditBanner('Player'): someone else's banner is the same
+        // act as their heraldry, so the hero affordance asks player.heraldry.manage,
+        // not player.edit -- otherwise a role holder could see a control the save refuses.
         $this->data['pnCanManageBanner'] = ($uid === (int)$id)
-            || $canEdit
-            || ($playerKingdomId > 0 && $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_EDIT))
+            || ($playerParkId > 0 && $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'player.heraldry.manage', 'park', $playerParkId, AUTH_EDIT))
+            || ($playerKingdomId > 0 && $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'player.heraldry.manage', 'kingdom', $playerKingdomId, AUTH_EDIT))
             || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN));
+        // Moving a player is a park CREATE power, not EDIT. Same key, scope and legacy
+        // role as Player::MovePlayer's source-park arm, so the Move Player button only
+        // shows for someone the move will admit.
+        $this->data['canMovePlayer'] = $uid > 0 && $playerParkId > 0
+            && $this->Authorization->has_permission_or_authority($uid, 'player.move', 'park', $playerParkId, AUTH_CREATE);
         $this->data['canManageAwards'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'player.award.manage', 'park', $playerParkId, AUTH_CREATE);
         $this->data['CanMonarchyOnlyRec'] = $uid > 0 && $this->Player->monarchy_only_level($uid, $playerKingdomId, $playerParkId) > 0;
         $knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
@@ -495,6 +503,10 @@ class Controller_Player extends Controller
         $displayGrants = $this->Player->get_display_grants($id);
         $this->data['IsOrkAdmin']       = $displayGrants['IsOrkAdmin'];
         $this->data['ViewerIsOrkAdmin'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, null, null);
+        // Account-security details (username, password expiry): the template's
+        // canEditAdmin is park-scoped and fails for a player with no park, so the
+        // installation admin needs its own flag. Computed here, not in the template.
+        $this->data['ViewerCanSeeAccountAsAdmin'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $this->data['AdminGrants'] = $displayGrants['AdminGrants'];
 
         // Attendance loaded async — counts start at 0 and are updated via AJAX
@@ -688,12 +700,6 @@ class Controller_Player extends Controller
             exit;
         }
         $this->data['canEditAdmin'] = $canEditAdmin;
-        // Moving a player is a park CREATE power, not EDIT -- see the park
-        // permission help (Admin_permissions.tpl) and Player::MovePlayer, which
-        // checks AUTH_CREATE over either end. canEditAdmin is AUTH_EDIT and is
-        // too loose to gate the Move Player modal with.
-        $this->data['canMovePlayer'] = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
 
         $this->load_model('Kingdom');
         $preloadOfficers = [];
@@ -732,19 +738,15 @@ class Controller_Player extends Controller
         $this->data['HasHistoricalLadder'] = !empty($reconcilePage['HasHistoricalLadder']);
     }
 
-    private function award_rec_can_delete(int $uid, string $role): bool
+    /**
+     * The Dismiss flag asks exactly what Player::DeleteAwardRecommendation asks for an
+     * officer: player.recommendation.manage at CREATE on the recipient's home park --
+     * and every rec on a profile is about that profile's player.
+     */
+    private function award_rec_can_delete(int $uid, int $recipientParkId): bool
     {
-        if ($uid <= 0) {
-            return false;
-        }
-        if (isset($this->session->park_id) && $this->Authorization->has_permission_or_authority($uid, 'player.edit', 'park', (int)$this->session->park_id, $role)) {
-            return true;
-        }
-        if (isset($this->session->kingdom_id) && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', (int)$this->session->kingdom_id, $role)) {
-            return true;
-        }
-
-        return false;
+        return $uid > 0 && $recipientParkId > 0
+            && $this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'park', $recipientParkId, AUTH_CREATE);
     }
 
 }

@@ -278,9 +278,10 @@ class Controller_Unit extends Controller
             if ($_home_kingdom > 0) {
                 $_scope_kingdom_id = $_home_kingdom;
                 $_scope_park_id    = $_home_park > 0 ? $_home_park : null;
-                $_can_officer = $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $_home_kingdom, AUTH_EDIT)
-                    || ($_home_park > 0 && $this->Authorization->has_authority($_uid, AUTH_PARK, $_home_park, AUTH_EDIT));
             }
+            // Same rule as Unit's add-manager gate (roster scopes), so the modal is
+            // offered exactly when the server would accept it.
+            $_can_officer = $this->Authorization->has_unit_officer_authority($_uid, (int)$unit_id);
         }
         $this->data['ScopeKingdomId']   = $_scope_kingdom_id;
         $this->data['ScopeParkId']      = $_scope_park_id;

@@ -6,6 +6,9 @@
      $mo_kingdom_id (int)  — the kingdom whose officer positions to manage
      $mo_park_id    (int)  — 0 for the kingdom console, or the park's id
      $mo_can_manage (bool) — must be truthy or this partial renders nothing
+     $mo_viewer_id  (int)  — the signed-in player's mundane id, so Vacate,
+                             Retire and Transition can tell when the holder
+                             is the viewer (0 = unknown; no self warnings)
    The partial is self-contained: it emits its own CSS, its own JS module,
    its own window.MoConfig, and exposes window.moRefresh() to (re)load and
    render the officer cards into the #mo-cards container. Designed to be
@@ -14,6 +17,7 @@
 if (empty($mo_can_manage)) return;
 $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 $mo_park_id = (int)($mo_park_id ?? 0);
+$mo_viewer_id = (int)($mo_viewer_id ?? 0);
 ?>
 
 <!-- ============ Manage Officers — UI ============ -->
@@ -513,6 +517,12 @@ html[data-theme="dark"] .mo-perm-hint { color:var(--ork-text-muted); }
 /* Warning box (confirm modal) */
 .mo-warn-box { font-size:14px; color:#2d3748; line-height:1.5; }
 html[data-theme="dark"] .mo-warn-box { color:var(--ork-text); }
+.mo-warn-box p { margin:0 0 10px; }
+.mo-warn-box p:last-child { margin-bottom:0; }
+/* The "this is your own office" line: the one sentence in the dialog that must not
+   be skimmed past, so it carries the warning hue rather than body text. */
+.mo-warn-box .mo-self-warn { color:#9c4221; font-weight:600; }
+html[data-theme="dark"] .mo-warn-box .mo-self-warn { color:#fbd38d; }
 
 /* ---- Sub-modal chrome ----------------------------------------------------
    The three sub-modals above carry NO private chrome. They use the shared
@@ -570,7 +580,7 @@ html[data-theme="dark"] .mo-tab.mo-tab-active { color:#63b3ed; border-bottom-col
 
 <!-- ============ Manage Officers — JS module ============ -->
 <script>
-window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_park_id ?>, canManage: true, uir: '<?= UIR ?>' };
+window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_park_id ?>, viewerId: <?= (int)$mo_viewer_id ?>, canManage: true, uir: '<?= UIR ?>' };
 	/* The z-index an autocomplete dropdown must carry to clear the modal scale.
 	   Derived from the token scale (--z-modal-top + 1) rather than hardcoded: this
 	   value is an INLINE style, so a literal 10001 beats -- and defeats -- the
@@ -680,6 +690,22 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	function occupantsOf(pos) {
 		return (pos && pos.Occupant && pos.Occupant.MundaneId) ? [pos.Occupant] : [];
 	}
+	// Is this occupant the signed-in player? Vacate, Retire and Transition all end the
+	// holder's office -- and with it whatever access the office gives -- the moment they
+	// succeed, so each one says so differently when the holder is the viewer.
+	function isViewer(occ) {
+		var me = parseInt(MoConfig.viewerId, 10) || 0;
+		return me > 0 && !!occ && (parseInt(occ.MundaneId, 10) || 0) === me;
+	}
+	// After the viewer ends their own office, this console may no longer be theirs to
+	// see (the front door re-checks on load), so reload rather than re-render a list
+	// whose controls may now all refuse.
+	function moSelfEnded(officeName) {
+		moShowConfirm('Your Office Has Ended',
+			'<p>You are no longer <strong>' + esc(officeName) + '</strong>. The access it gave you has ended; reloading&hellip;</p>',
+			'OK', function() { location.reload(); });
+		setTimeout(function() { location.reload(); }, 1800);
+	}
 	// .ka-feedback is display:none in the stylesheet, so showing it needs an explicit
 	// 'block' — style.display = '' would fall back to the stylesheet's none.
 	function moFormError(id, message) {
@@ -775,6 +801,8 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	window.moEscAttr       = escAttr;
 	window.moBase          = base;
 	window.moSearchUrl     = searchUrl;
+	window.moIsViewer      = isViewer;
+	window.moSelfEnded     = moSelfEnded;
 	// Correct the Rolls' Add-a-Term office picker is the only place outside
 	// this module that needs the position list; wrapped the same way
 	// moFindPosition/moOccupancyOf wrap moData rather than exposing it raw.
@@ -859,7 +887,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		// second step, since a vacant office has no outgoing term to close.
 		if (filled) {
 			acts += '<button class="mo-act-btn" onclick="otOpen(' + pid + ',\'transition\')"><i class="fas fa-people-arrows"></i> Transition &rarr;</button>';
-			acts += '<button class="mo-act-btn" data-tip="End the current term and remove this office\'s permissions" onclick="moVacate(' + pid + ')"><i class="fas fa-user-minus"></i> Vacate</button>';
+			acts += '<button class="mo-act-btn" data-tip="Ends the current term immediately and removes this office\'s permissions. To hand the office on, use Transition." onclick="moVacate(' + pid + ')"><i class="fas fa-user-minus"></i> Vacate</button>';
 		} else {
 			acts += '<button class="mo-act-btn" onclick="otOpen(' + pid + ',\'appoint\')"><i class="fas fa-user-plus"></i> Appoint &rarr;</button>';
 		}
@@ -1117,7 +1145,9 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	};
 
 	// Vacate the office's one holder. Ends their term and removes their officer
-	// permissions for this office.
+	// permissions for this office -- immediately. Officers were vacating before handing
+	// an office on, not knowing Transition already closes the outgoing term, and some
+	// vacated themselves out of the console that way; the copy says both things.
 	window.moVacate = function(pid) {
 		var pos  = findPos(pid);
 		var dt   = pos ? (pos.DisplayTitle || pos.Title) : 'this position';
@@ -1128,27 +1158,44 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 			return;
 		}
 
-		var who = occs[0].Persona || 'Unknown';
-		var msg = 'Vacating <strong>' + esc(dt) + '</strong> will end the current term for <strong>' + esc(who) + '</strong> ' +
-			'and remove their officer permissions for this office. Continue?';
+		var self = isViewer(occs[0]);
+		var who  = occs[0].Persona || 'the current holder';
+		var handOn = '<p>To hand the office to someone else, use <strong>Transition</strong> instead: it ends this term and starts the next in one step, so there is no need to vacate first.</p>';
+		var msg = self
+			? '<p class="mo-self-warn">You are the current ' + esc(dt) + '.</p>' +
+			  '<p>Vacating takes effect the moment you confirm: the office becomes empty and you lose the access it gives you right away, which may include this console.</p>' + handOn
+			: '<p>Vacating takes effect immediately: <strong>' + esc(who) + '</strong> stops being <strong>' + esc(dt) + '</strong> and the office is left empty. Any access they have through it ends right away.</p>' + handOn;
 
-		moShowConfirm('Vacate Position', msg, 'Vacate', function() {
-			moPost('vacateall', { PositionId: pid }, function() { moCloseConfirm(); moRefresh(); });
+		moShowConfirm(self ? 'Vacate Your Own Position?' : 'Vacate Position?', msg, self ? 'Vacate my position' : 'Vacate', function() {
+			moPost('vacateall', { PositionId: pid }, function() {
+				moCloseConfirm();
+				if (self) { moSelfEnded(dt); return; }
+				moRefresh();
+			});
 		});
 	};
 
+	// Retiring an office vacates its holders at once (RetirePosition), so a viewer who
+	// holds it gets the same self-aware warning and reload as Vacate.
 	window.moRetire = function(pid) {
 		var pos = findPos(pid);
-		var who = '';
-		if (pos) {
-			if (pos.Occupant && pos.Occupant.MundaneId) who = pos.Occupant.Persona;
-		}
+		var occ = occupantsOf(pos)[0] || null;
+		var who = occ ? (occ.Persona || 'the current holder') : '';
+		var self = isViewer(occ);
 		var dt = pos ? (pos.DisplayTitle || pos.Title) : 'this position';
-		var msg = who
-			? 'Retiring <strong>' + esc(dt) + '</strong> will end the current term for <strong>' + esc(who) + '</strong> and remove their officer permissions. Continue?'
-			: 'Retiring <strong>' + esc(dt) + '</strong> will hide it from pickers, the sidebar, the About panel, and reports. Continue?';
-		moShowConfirm('Retire Position', msg, 'Retire', function() {
-			moPost('retire', { PositionId: pid }, function() { moCloseConfirm(); moRefresh(); });
+		var hide = 'It will be hidden from pickers, the sidebar, the About panel, and reports.';
+		var msg = self
+			? '<p class="mo-self-warn">You are the current ' + esc(dt) + '.</p>' +
+			  '<p>Retiring it ends your term immediately and you lose the access it gives you right away, which may include this console. ' + hide + '</p>'
+			: (who
+				? '<p>Retiring <strong>' + esc(dt) + '</strong> ends the current term for <strong>' + esc(who) + '</strong> immediately and removes their officer permissions. ' + hide + '</p>'
+				: '<p>Retiring <strong>' + esc(dt) + '</strong>: ' + hide + '</p>');
+		moShowConfirm(self ? 'Retire Your Own Position?' : 'Retire Position?', msg, self ? 'Retire my position' : 'Retire', function() {
+			moPost('retire', { PositionId: pid }, function() {
+				moCloseConfirm();
+				if (self) { moSelfEnded(dt); return; }
+				moRefresh();
+			});
 		});
 	};
 

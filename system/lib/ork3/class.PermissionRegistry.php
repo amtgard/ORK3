@@ -77,6 +77,15 @@ class PermissionRegistry extends Ork3
             'Set or clear an installation-wide ban on a player account',
             'global', 'player'
         ],
+        // Amtgard-wide bonus credits (BonusCredit scope 'ork') are an installation
+        // concern -- they reach every kingdom that adopts them -- so they were gated on the
+        // all-zero admin row. This key lets the ORK team hand that one job to whoever runs
+        // an Amtgard-wide survey without handing them the installation.
+        'global.bonus_credit.manage' => [
+            'Manage Amtgard-wide Bonus Credits',
+            'Define, archive, and restore Amtgard-wide bonus credits, and adopt them on a kingdom\'s behalf',
+            'global', 'event'
+        ],
 
         // ========================================
         // Kingdom-Scoped
@@ -191,6 +200,32 @@ class PermissionRegistry extends Ork3
             'kingdom', 'event'
         ],
 
+        // Bonus credits are split the way the credit itself is: deciding what a credit is
+        // and who may give it out is the kingdom's call (it was kingdom CREATE), while
+        // handing one to a player is ordinary sign-in work (it was kingdom EDIT). The
+        // per-credit granter list (ork_bonus_credit_granter) still sits beside both: it is
+        // a data-level delegation for one survey's runner, not a role.
+        'kingdom.bonus_credit.define' => [
+            'Define Kingdom Bonus Credits',
+            'Create, archive, and restore the kingdom\'s bonus credits, adopt Amtgard-wide ones, appoint granters, and choose whether other kingdoms\' credits are accepted',
+            'kingdom', 'event'
+        ],
+        'kingdom.bonus_credit.grant' => [
+            'Grant Bonus Credits in Kingdom',
+            'Give and remove bonus credits for players anywhere in the kingdom',
+            'kingdom', 'event'
+        ],
+
+        // The Court Planner and the Recommendations Manager are how a kingdom turns
+        // recommendations into a court. Both were kingdom EDIT, and the legacy side of
+        // this key still is. Finalizing a court has no extra gate of its own: each award
+        // it writes goes through the ordinary award-entry permission check.
+        'kingdom.court.manage' => [
+            'Manage Kingdom Courts',
+            'Plan kingdom courts and work the kingdom\'s award recommendations',
+            'kingdom', 'award'
+        ],
+
         // Qualification tests (Walker). Split three ways because the workflow has
         // three distinct audiences: an officer sets the rules, a subject-matter expert
         // writes the questions, and only an officer decides when a draft goes live.
@@ -301,6 +336,16 @@ class PermissionRegistry extends Ork3
             'Manage Treasury Accounts',
             'Open accounts and record or remove treasury transactions',
             'park', 'financial'
+        ],
+        'park.bonus_credit.grant' => [
+            'Grant Bonus Credits in Park',
+            'Give and remove bonus credits for the park\'s players',
+            'park', 'event'
+        ],
+        'park.court.manage' => [
+            'Manage Park Courts',
+            'Plan park courts and work the park\'s award recommendations',
+            'park', 'award'
         ],
 
         // ========================================

@@ -776,6 +776,10 @@ class Report extends Ork3
             if ($moLevel === 0) {
                 $g['_moAll'] = false;
             }
+            // Stored (pre-pass-down) level: what unhiding needs (RecommendationVisibility::canManageHidden).
+            if ($moLevel > 0) {
+                $g['_moReq'] = max($g['_moReq'] ?? 0, RecommendationVisibility::storedLevel((int)($rec['MonarchyOnly'] ?? 0)));
+            }
             unset($g);
         }
         foreach ($groups as $k => $g) {
@@ -786,13 +790,15 @@ class Report extends Ork3
             $groups[$k]['PassedToLocal'] = $g['_allPassed'];
             $groups[$k]['MonarchyOnlyLevel'] = $g['_moMax'];
             $groups[$k]['MonarchyOnlyAll']   = $g['_moMax'] > 0 && $g['_moAll'];
+            $groups[$k]['MonarchyOnlyUnhideLevel'] = (int)($g['_moReq'] ?? 0);
             unset(
                 $groups[$k]['_advocates'],
                 $groups[$k]['_hasNamedRec'],
                 $groups[$k]['_allSnoozed'],
                 $groups[$k]['_allPassed'],
                 $groups[$k]['_moMax'],
-                $groups[$k]['_moAll']
+                $groups[$k]['_moAll'],
+                $groups[$k]['_moReq']
             );
         }
         return array_values($groups);
@@ -880,8 +886,8 @@ class Report extends Ork3
 			recs.passed_to_local_by,
 			recs.passed_to_local_at,
 			recs.monarchy_only,
-			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id) AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id) AND o.role = 'Monarch' ORDER BY o.officer_id DESC LIMIT 1), 0) AS current_monarch_id,
-			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id) AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id) AND o.role = 'Regent'  ORDER BY o.officer_id DESC LIMIT 1), 0) AS current_regent_id,
+			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id) AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id) AND o.role IN (" . self::officerRoleInSql('Monarch') . ") ORDER BY o.officer_id DESC LIMIT 1), 0) AS current_monarch_id,
+			COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id) AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id) AND o.role IN (" . self::officerRoleInSql('Regent') . ") ORDER BY o.officer_id DESC LIMIT 1), 0) AS current_regent_id,
 			(SELECT COUNT(*) FROM " . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.status != 'cancelled') AS on_court_count,
 			ka.award_id as ka_award_id,
 			ka.is_title as ka_is_title,
@@ -1231,7 +1237,7 @@ class Report extends Ork3
             return "COALESCE((SELECT o.mundane_id FROM " . DB_PREFIX . "officer o"
                 . " WHERE o.kingdom_id = COALESCE(recs.snoozed_kingdom_id, m.kingdom_id)"
                 . " AND o.park_id = COALESCE(recs.snoozed_park_id, m.park_id)"
-                . " AND o.role = '" . $role . "' ORDER BY o.officer_id DESC LIMIT 1), 0)";
+                . " AND o.role IN (" . self::officerRoleInSql($role) . ") ORDER BY o.officer_id DESC LIMIT 1), 0)";
         };
         $snoozedExpr = "(recs.snoozed_monarch_id IS NOT NULL"
             . " AND recs.snoozed_monarch_id = " . $seatSub('Monarch')
@@ -1430,6 +1436,17 @@ class Report extends Ork3
     // Compute viewer-specific flags on top of a cached (viewer-agnostic) recommendations
     // response. IsMine and ViewerCanEditReason need no DB queries. ViewerCanSecond needs
     // two lightweight IN-list lookups.
+    /**
+     * SQL IN() body matching both stored forms of an officer role ('Monarch' and
+     * 'monarch'): the officer position migration canonicalized ork_officer.role.
+     */
+    private static function officerRoleInSql($role)
+    {
+        return implode(',', array_map(function ($v) {
+            return "'" . str_replace("'", "''", (string)$v) . "'";
+        }, PermissionRegistry::OfficerRoleVariants([$role])));
+    }
+
     /**
      * Hide an anonymous recommender's identity from everyone but an admin.
      *
