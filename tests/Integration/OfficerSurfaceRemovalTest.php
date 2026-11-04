@@ -313,6 +313,47 @@ final class OfficerSurfaceRemovalTest extends TestCase
     }
 
     /**
+     * The Court Planner lives on the Events tab, as its Courts sub-tab, on both
+     * profiles: the Admin Tasks tab that used to host it is gone, both sub-tab
+     * controls are gated on $CanManageCourt, and ?tab=courts (plus the old
+     * ?tab=admin address) opens it.
+     *
+     * @dataProvider profileProvider
+     */
+    public function testCourtPlannerIsTheEventsCourtsSubtab(string $file, string $p, string $flag): void
+    {
+        $root = dirname(__DIR__, 2);
+        $tpl = file_get_contents($root . '/orkui/template/revised-frontend/' . $file);
+
+        self::assertStringNotContainsString('data-' . $p . 'tab="admin"', $tpl, 'the Admin Tasks tab must be gone');
+        self::assertStringNotContainsString('id="' . $p . '-tab-admin"', $tpl);
+        self::assertStringContainsString('id="' . $p . '-tab-events" style="display:none" data-subtab-group="' . $p . '-events"', $tpl);
+
+        $events = substr($tpl, strpos($tpl, 'id="' . $p . '-tab-events"'));
+        $courts = strpos($events, 'id="' . $p . '-ev-pane-courts"');
+        self::assertNotFalse($courts, 'the Courts pane must sit inside the Events panel');
+        self::assertLessThan(strpos($events, '<!-- Map Tab -->') ?: strpos($events, '<!-- Players Tab -->'), $courts);
+        self::assertStringContainsString($p . 'CpOpenNewCourt()', substr($events, 0, 6000), 'Plan a Court lives in the Events header');
+        self::assertMatchesRegularExpression(
+            '/<\?php if \(' . preg_quote($flag, '/') . '\): \?>\s*<div class="ork-subtabs"/',
+            $tpl,
+            'the sub-tab switch is offered to court managers only'
+        );
+
+        $js = file_get_contents($root . '/orkui/template/revised-frontend/script/revised.js');
+        self::assertStringContainsString("document.getElementById('" . $p . "-tab-events');", $js);
+        self::assertStringContainsString("if (urlTab === 'courts' || urlTab === 'admin')", $js);
+    }
+
+    public static function profileProvider(): array
+    {
+        return [
+            'kingdom' => ['Kingdomnew_index.tpl', 'kn', '$CanManageCourt ?? false'],
+            'park'    => ['Parknew_index.tpl', 'pk', '!empty($CanManageCourt)'],
+        ];
+    }
+
+    /**
      * The kingdom nameplate's Admin link follows the kingdom console's front door
      * (Controller::has_kingdom_admin_standing) rather than officer appointment
      * (kingdom.officer.set), so a test manager or Court Planner holder -- whom the

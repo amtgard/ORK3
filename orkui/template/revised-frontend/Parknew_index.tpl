@@ -680,11 +680,6 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 					<?php endif; ?>
 				</li>
 				<?php endif; ?>
-				<?php if (!empty($CanManagePark) || !empty($CanManageCourt)): ?>
-				<li data-pktab="admin">
-					<i class="fas fa-cog"></i><span class="pk-tab-label"> Admin Tasks</span>
-				</li>
-				<?php endif; ?>
 			</ul>
 			<div class="pk-active-tab-label" id="pk-active-tab-label">About</div>
 
@@ -891,10 +886,21 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 			</div><!-- /pk-tab-about -->
 
 			<!-- Events Tab -->
-			<div class="pk-tab-panel" id="pk-tab-events" style="display:none">
+			<div class="pk-tab-panel" id="pk-tab-events" style="display:none" data-subtab-group="pk-events">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+					<?php if (!empty($CanManageCourt)): ?>
+					<div class="ork-subtabs" role="tablist" aria-label="Events and courts">
+						<button type="button" class="ork-subtab ork-subtab-active" role="tab" data-subtab="calendar" aria-selected="true" aria-controls="pk-ev-pane-calendar" id="pk-ev-subtab-calendar"><i class="fas fa-calendar-alt"></i> Calendar</button>
+						<button type="button" class="ork-subtab" role="tab" data-subtab="courts" aria-selected="false" aria-controls="pk-ev-pane-courts" id="pk-ev-subtab-courts" tabindex="-1"><i class="fas fa-gavel"></i> Courts<?php if (count($CourtList ?? []) > 0): ?> <span class="ork-subtab-count"><?= count($CourtList ?? []) ?></span><?php endif; ?></button>
+					</div>
+					<div class="ork-subtab-tools ork-subtab-hidden" data-subtab-pane="courts">
+						<span class="ork-subtab-note"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
+						<button class="pk-btn pk-btn-primary" onclick="pkCpOpenNewCourt()"><i class="fas fa-plus"></i> Plan a Court</button>
+					</div>
+					<?php else: ?>
 					<h4 class="kn-bare-heading" style="margin:0;font-size:14px;font-weight:700;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
-					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+					<?php endif; ?>
+					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;" data-subtab-pane="calendar">
 						<button class="pk-view-btn pk-view-active" id="pk-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-map" title="Map view"><i class="fas fa-map-marked-alt"></i></button>
@@ -914,6 +920,7 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 					</div>
 				</div>
 
+				<div id="pk-ev-pane-calendar" class="ork-subtab-pane" data-subtab-pane="calendar" role="tabpanel" aria-labelledby="pk-ev-subtab-calendar">
 				<!-- Calendar view (lazy-loaded FullCalendar) -->
 				<div id="pk-events-cal" style="display:none"></div>
 
@@ -1040,6 +1047,330 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 				</div><!-- /pk-events-list-view -->
 
 				<?php /* [TOURNAMENTS HIDDEN] */ ?>
+				</div><!-- /pk-ev-pane-calendar -->
+
+				<?php if (!empty($CanManageCourt)): ?>
+				<!-- Courts sub-tab: the Court Planner. Its count and "Plan a Court" live in the header above. -->
+				<div id="pk-ev-pane-courts" class="ork-subtab-pane ork-subtab-hidden" data-subtab-pane="courts" role="tabpanel" aria-labelledby="pk-ev-subtab-courts">
+			<style>
+			.pk-cp-court-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; margin-bottom:10px; display:flex; align-items:center; gap:14px; transition:box-shadow .15s; }
+			.pk-cp-court-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.1); }
+			.pk-cp-court-date { font-size:13px; color:#718096; white-space:nowrap; min-width:88px; }
+			.pk-cp-court-info { flex:1; }
+			.pk-cp-court-name { font-weight:700; font-size:15px; color:#2d3748; }
+			.pk-cp-court-meta { font-size:12px; color:#718096; margin-top:2px; }
+			.pk-cp-court-badges { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+			.pk-cp-badge { display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; }
+			.pk-cp-badge-count { background:#edf2f7; color:#4a5568; padding:3px 9px; border-radius:12px; font-size:11px; }
+			.pk-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
+			.pk-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
+			.pk-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
+			/* .kn-rec-age-* and .pk-rec-passlocal live in revised.css: this block only renders for court managers. */
+			/* Delegated-by-the-Kingdom pinned section (officer-only, to-schedule list) */
+			.pk-delegated { border:1px solid rgba(44,95,139,.4); background:rgba(44,95,139,.07); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
+			.pk-delegated-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+			.pk-delegated-title { margin:0; font-size:14px; font-weight:700; color:#2c5f8b !important; display:flex; align-items:center; gap:8px; }
+			.pk-delegated-title i { color:#2c5f8b; }
+			.pk-delegated-count { font-weight:600; color:#718096; }
+			.pk-delegated-help { font-size:12px; color:#718096; margin:6px 0 10px; }
+			.pk-delegated-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+			.pk-delegated-item { font-size:13px; color:#2d3748; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+			.pk-delegated-item a { font-weight:600; }
+			.pk-delegated-sep { color:#cbd5e0; }
+			.pk-delegated-award { color:#4a5568; }
+			.pk-delegated-rank { color:#4a5568; }
+			.pk-delegated-approved { margin-left:auto; color:#718096; font-size:12px; }
+			html[data-theme="dark"] .pk-delegated { border-color:rgba(111,176,230,.4); background:rgba(111,176,230,.08); }
+			html[data-theme="dark"] .pk-delegated-title { color:#6fb0e6 !important; }
+			html[data-theme="dark"] .pk-delegated-title i { color:#6fb0e6; }
+			html[data-theme="dark"] .pk-delegated-count { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-help { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-item { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-delegated-award { color:#cbd5e0; }
+			html[data-theme="dark"] .pk-delegated-rank { color:#cbd5e0; }
+			html[data-theme="dark"] .pk-delegated-approved { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-sep { color:#4a5568; }
+			.pk-delegated-toggle { display:flex; align-items:center; gap:10px; background:none; border:none; cursor:pointer; padding:0; text-align:left; flex:1; min-width:0; }
+			.pk-delegated-chevron { color:#a0aec0; flex-shrink:0; }
+			.pk-delegated-body { padding-top:2px; }
+			html[data-theme="dark"] .pk-cp-court-card { background:#1a202c; border-color:#2d3748; }
+			html[data-theme="dark"] .pk-cp-court-name { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-cp-court-date { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-court-meta { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-badge-count { background:#2d3748; color:#cbd5e0; }
+			html[data-theme="dark"] .pk-cp-btn-link { border-color:#4a5568; color:#cbd5e0; }
+			html[data-theme="dark"] .pk-cp-btn-link:hover { background:#2d3748; color:#fff; }
+			html[data-theme="dark"] .pk-cp-empty { border-color:#2d3748; color:#a0aec0; }
+			/* Mode + staged badges */
+			.pk-cp-badge-mode { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#ebf8ff; color:#2b6cb0; }
+			.pk-cp-badge-mode-plan { background:#faf089; color:#744210; }
+			.pk-cp-badge-staged { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#fefcbf; color:#975a16; box-shadow:inset 0 0 0 1px rgba(151,90,22,.25); }
+			.pk-cp-badge-mode[data-tip]::after, .pk-cp-badge-staged[data-tip]::after { white-space:normal; width:max-content; max-width:240px; }
+			html[data-theme="dark"] .pk-cp-badge-mode { background:#1a2f45; color:#90cdf4; }
+			html[data-theme="dark"] .pk-cp-badge-mode-plan { background:#3d3512; color:#f6e05e; }
+			html[data-theme="dark"] .pk-cp-badge-staged { background:#3d3512; color:#f6e05e; box-shadow:inset 0 0 0 1px rgba(246,224,94,.3); }
+			/* Mode selector (create-court modal) */
+			.pk-cp-mode-opts { display:flex; gap:10px; }
+			.pk-cp-mode-opt { flex:1; border:1px solid #cbd5e0; border-radius:6px; padding:10px 12px; cursor:pointer; display:block; transition:border-color .12s,background .12s,box-shadow .12s; }
+			.pk-cp-mode-opt input { position:absolute; opacity:0; pointer-events:none; }
+			.pk-cp-mode-title { font-size:13px; font-weight:700; color:#2d3748; display:flex; align-items:center; gap:6px; }
+			.pk-cp-mode-desc { font-size:11px; color:#718096; margin-top:3px; line-height:1.35; font-weight:400; }
+			.pk-cp-mode-opt.pk-cp-mode-sel { border-color:#2c5282; background:#ebf2fb; box-shadow:0 0 0 1px #2c5282; }
+			html[data-theme="dark"] .pk-cp-mode-opt { border-color:#2d3748; }
+			html[data-theme="dark"] .pk-cp-mode-title { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-cp-mode-desc { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-mode-opt.pk-cp-mode-sel { border-color:#4299e1; background:#1a2f45; box-shadow:0 0 0 1px #4299e1; }
+			/* Status badge (class-driven so dark mode can re-tone it) */
+			.pk-cp-badge-draft     { background:#edf2f7; color:#718096; }
+			.pk-cp-badge-published { background:#ebf8ff; color:#2b6cb0; }
+			.pk-cp-badge-complete  { background:#f0fff4; color:#276749; }
+			html[data-theme="dark"] .pk-cp-badge-draft     { background:#2d3748; color:#cbd5e0; }
+			html[data-theme="dark"] .pk-cp-badge-published { background:#1a2f45; color:#90cdf4; }
+			html[data-theme="dark"] .pk-cp-badge-complete  { background:#1c3a2a; color:#9ae6b4; }
+			/* Mobile: court card stacks, Open becomes a full-width row action */
+			@media (max-width:600px) {
+				.pk-cp-court-card { flex-wrap:wrap; align-items:flex-start; }
+				.pk-cp-court-badges { flex-wrap:wrap; flex-shrink:1; }
+				.pk-cp-btn-link { flex:1 1 100%; width:100%; text-align:center; min-height:44px; line-height:44px; padding:0 12px; margin-top:8px; }
+				.pk-cp-mode-opts { flex-direction:column; }
+				.pk-cp-mode-opt { width:100%; }
+				.pk-cp-court-info { min-width:0; }
+				.pk-cp-court-name, .pk-cp-court-meta { overflow-wrap:anywhere; }
+			}
+			@media (pointer:coarse) {
+				#pk-cp-new-court-modal .pk-modal-close-btn { min-width:44px; min-height:44px; }
+				#pk-cp-new-court-modal .pk-modal-footer button { min-height:44px; }
+			}
+			</style>
+			<?php
+				$_cpStatusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];
+				$_cpStatusClass = ['draft' => 'pk-cp-badge-draft', 'published' => 'pk-cp-badge-published', 'complete' => 'pk-cp-badge-complete'];
+			?>
+			<?php if (empty($CourtList)): ?>
+			<div class="pk-cp-empty">
+				<i class="fas fa-gavel" style="font-size:32px;margin:0 auto 12px;display:block;opacity:.3"></i>
+				No courts planned yet. Click <strong>Plan a Court</strong> to get started.
+			</div>
+			<?php else: ?>
+			<?php foreach ($CourtList as $_court): ?>
+			<?php
+				$_st     = $_court['Status'];
+				$_lbl    = $_cpStatusLabel[$_st] ?? $_st;
+				$_stCls  = $_cpStatusClass[$_st] ?? 'pk-cp-badge-draft';
+				$_mode   = $_court['Mode'] ?? 'run';
+				$_staged = (int)($_court['StagedCount'] ?? 0);
+			?>
+			<div class="pk-cp-court-card">
+				<div class="pk-cp-court-date">
+					<?= $_court['CourtDate'] ? date('M j, Y', strtotime($_court['CourtDate'])) : '<em style="color:#a0aec0">No date</em>' ?>
+				</div>
+				<div class="pk-cp-court-info">
+					<div class="pk-cp-court-name"><?= htmlspecialchars($_court['Name']) ?></div>
+					<?php if ($_court['EventName']): ?>
+					<div class="pk-cp-court-meta"><i class="fas fa-calendar-alt" style="margin-right:3px"></i><?= htmlspecialchars($_court['EventName']) ?></div>
+					<?php endif; ?>
+				</div>
+				<div class="pk-cp-court-badges">
+					<span class="pk-cp-badge <?= $_stCls ?>"><?= $_lbl ?></span>
+					<?php if ($_mode === 'plan'): ?>
+					<span class="pk-cp-badge-mode pk-cp-badge-mode-plan" data-tip="Locked as a plan — prepared for someone to record later."><i class="fas fa-clipboard-list"></i> Plan</span>
+					<?php else: ?>
+					<span class="pk-cp-badge-mode" data-tip="Run at court — awards granted live during the ceremony."><i class="fas fa-bullhorn"></i> Run</span>
+					<?php endif; ?>
+					<?php if ($_staged > 0 && $_st !== 'complete'): ?>
+					<span class="pk-cp-badge-staged" data-tip="Grants captured but not yet finalized — open to finalize."><i class="fas fa-hourglass-half"></i> <?= $_staged ?> staged</span>
+					<?php endif; ?>
+					<span class="pk-cp-badge-count"><i class="fas fa-award" style="margin-right:3px"></i><?= (int)$_court['AwardCount'] ?></span>
+					<a href="<?= UIR ?>Court/detail/<?= (int)$_court['CourtId'] ?>" class="pk-cp-btn-link">
+						Open <i class="fas fa-arrow-right"></i>
+					</a>
+				</div>
+			</div>
+			<?php endforeach; ?>
+			<?php endif; ?>
+
+			<?php if (empty($CanAdminPark)): ?>
+			<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+			<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+			<?php endif; ?>
+
+			<!-- New Court Modal (park-scoped) -->
+			<div class="pk-overlay" id="pk-cp-new-court-modal" style="display:none">
+				<div class="pk-modal-box" style="max-width:480px">
+					<div class="pk-modal-header">
+						<h3 class="pk-modal-title"><i class="fas fa-gavel" style="margin-right:8px;color:#4a5568"></i>Plan a New Court</h3>
+						<button class="pk-modal-close-btn" onclick="pkCpCloseNewCourt()" aria-label="Close">&times;</button>
+					</div>
+					<div class="pk-modal-body">
+						<div class="pk-acct-field">
+							<label>Court Name <span style="color:#e53e3e">*</span></label>
+							<input type="text" id="pk-cp-new-name" placeholder="Summer Coronation Court&#x2026;" autocomplete="off">
+						</div>
+						<?php if (!empty($CourtUpcomingEvents)): ?>
+						<div class="pk-acct-field">
+							<label>Link to Event (optional)</label>
+							<select id="pk-cp-new-event" onchange="pkCpOnEventChange(this,'pk-cp-new-date')">
+								<option value="0" data-start="">— None —</option>
+								<?php foreach ($CourtUpcomingEvents as $_ev): ?>
+								<option value="<?= (int)$_ev['EventCalendarDetailId'] ?>" data-start="<?= $_ev['EventStart'] ? date('Y-m-d', strtotime($_ev['EventStart'])) : '' ?>">
+									<?= htmlspecialchars($_ev['Name']) ?><?= $_ev['EventStart'] ? ' (' . date('M j', strtotime($_ev['EventStart'])) . ')' : '' ?>
+								</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+						<?php endif; ?>
+						<div class="pk-acct-field">
+							<label>Date</label>
+							<input type="date" id="pk-cp-new-date" >
+						</div>
+						<div class="pk-acct-field">
+							<label>How will this court be handled?</label>
+							<div class="pk-cp-mode-opts">
+								<label class="pk-cp-mode-opt pk-cp-mode-sel" id="pk-cp-mode-run-opt">
+									<input type="radio" name="pk-cp-mode" value="run" checked onchange="pkCpSyncMode()">
+									<span class="pk-cp-mode-title"><i class="fas fa-bullhorn"></i> Run at Court</span>
+									<span class="pk-cp-mode-desc">I'll grant awards live during the ceremony.</span>
+								</label>
+								<label class="pk-cp-mode-opt" id="pk-cp-mode-plan-opt">
+									<input type="radio" name="pk-cp-mode" value="plan" onchange="pkCpSyncMode()">
+									<span class="pk-cp-mode-title"><i class="fas fa-clipboard-list"></i> Lock as Plan</span>
+									<span class="pk-cp-mode-desc">I'm preparing the order of court for someone to record later.</span>
+								</label>
+							</div>
+						</div>
+						<div id="pk-cp-new-error" class="pk-form-error" style="display:none"></div>
+					</div>
+					<div class="pk-modal-footer">
+						<button class="pk-btn-ghost" onclick="pkCpCloseNewCourt()">Cancel</button>
+						<button class="pk-btn pk-btn-primary" onclick="pkCpSubmitNewCourt()">
+							<i class="fas fa-plus"></i> Create Court
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<script>
+			(function() {
+				if (!<?= !empty($CanManageCourt) ? 'true' : 'false' ?>) return;
+				var uir       = '<?= UIR ?>';
+				var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
+				var parkId    = <?= (int)($park_id ?? 0) ?>;
+
+
+				window.pkDelegatedToggle = function() {
+					var sec = document.getElementById('pk-delegated');
+					var body = document.getElementById('pk-delegated-body');
+					if (!sec || !body) return;
+					var open = sec.classList.toggle('pk-delegated-open');
+					body.style.display = open ? '' : 'none';
+					var hdr = sec.querySelector('.pk-delegated-toggle');
+					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
+					var ico = sec.querySelector('.pk-delegated-chevron');
+					if (ico) { ico.classList.toggle('fa-chevron-up', open); ico.classList.toggle('fa-chevron-down', !open); }
+				};
+
+				// House date pattern: Flatpickr with a human-readable altInput; the
+				// underlying native date input keeps the Y-m-d value the controller expects.
+				var pkCpDateFp = null;
+				function pkCpInitDatePicker() {
+					var el = document.getElementById('pk-cp-new-date');
+					if (!el || pkCpDateFp || typeof flatpickr === 'undefined') return;
+					pkCpDateFp = flatpickr(el, { dateFormat: 'Y-m-d', altInput: true, altFormat: 'F j, Y', disableMobile: true });
+				}
+				if (document.readyState === 'loading') {
+					document.addEventListener('DOMContentLoaded', pkCpInitDatePicker);
+				} else {
+					pkCpInitDatePicker();
+				}
+
+				function pkCpSetDate(dateId, val) {
+					var el = document.getElementById(dateId);
+					if (!el) return;
+					if (pkCpDateFp && el === pkCpDateFp.input) {
+						if (val) { pkCpDateFp.setDate(val, false); } else { pkCpDateFp.clear(false); }
+						return;
+					}
+					el.value = val || '';
+				}
+
+				window.pkCpOnEventChange = function(sel, dateId) {
+					var opt = sel.options[sel.selectedIndex];
+					var start = opt ? opt.getAttribute('data-start') : '';
+					if (start) pkCpSetDate(dateId, start);
+				};
+
+				window.pkCpSyncMode = function() {
+					var runOpt  = document.getElementById('pk-cp-mode-run-opt');
+					var planOpt = document.getElementById('pk-cp-mode-plan-opt');
+					var planEl  = planOpt ? planOpt.querySelector('input') : null;
+					var isPlan  = planEl && planEl.checked;
+					if (runOpt)  runOpt.classList.toggle('pk-cp-mode-sel', !isPlan);
+					if (planOpt) planOpt.classList.toggle('pk-cp-mode-sel', !!isPlan);
+				};
+
+				window.pkCpOpenNewCourt = function() {
+					document.getElementById('pk-cp-new-name').value = '';
+					pkCpInitDatePicker();
+					pkCpSetDate('pk-cp-new-date', '');
+					var evEl = document.getElementById('pk-cp-new-event');
+					if (evEl) evEl.value = '0';
+					var runEl = document.querySelector('input[name="pk-cp-mode"][value="run"]');
+					if (runEl) runEl.checked = true;
+					pkCpSyncMode();
+					document.getElementById('pk-cp-new-error').style.display = 'none';
+					var modal = document.getElementById('pk-cp-new-court-modal');
+					modal.style.display = 'flex';
+					setTimeout(function() { document.getElementById('pk-cp-new-name').focus(); }, 50);
+				};
+
+				window.pkCpCloseNewCourt = function() {
+					document.getElementById('pk-cp-new-court-modal').style.display = 'none';
+				};
+
+				window.pkCpSubmitNewCourt = function() {
+					var name    = document.getElementById('pk-cp-new-name').value.trim();
+					var date    = document.getElementById('pk-cp-new-date').value;
+					var evEl    = document.getElementById('pk-cp-new-event');
+					var eventId = evEl ? evEl.value : '0';
+					var errEl   = document.getElementById('pk-cp-new-error');
+					if (!name) { errEl.textContent = 'Please enter a court name.'; errEl.style.display = 'block'; return; }
+					errEl.style.display = 'none';
+					var modeEl = document.querySelector('input[name="pk-cp-mode"]:checked');
+					var mode   = modeEl ? modeEl.value : 'run';
+					var fd = new FormData();
+					fd.append('KingdomId', kingdomId);
+					fd.append('ParkId', parkId);
+					fd.append('Name', name);
+					fd.append('CourtDate', date);
+					fd.append('EventCalendarDetailId', eventId);
+					fd.append('Mode', mode);
+					fetch(uir + 'CourtAjax/create_court', {
+						method: 'POST', body: fd,
+						headers: { 'X-Requested-With': 'XMLHttpRequest' }
+					})
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						if (data.status === 0 && data.court_id) {
+							window.location.href = uir + 'Court/detail/' + data.court_id;
+						} else {
+							errEl.textContent = data.error || 'An error occurred.';
+							errEl.style.display = 'block';
+						}
+					})
+					.catch(function(e) { errEl.textContent = 'Request failed: ' + e.message; errEl.style.display = 'block'; });
+				};
+
+				var modal = document.getElementById('pk-cp-new-court-modal');
+				modal.addEventListener('click', function(e) { if (e.target === this) pkCpCloseNewCourt(); });
+				document.addEventListener('keydown', function(e) {
+					if (e.key !== 'Escape') return;
+					if (pkCpDateFp && pkCpDateFp.isOpen) { pkCpDateFp.close(); return; }
+					pkCpCloseNewCourt();
+				}, true);
+			})();
+			</script>
+				</div><!-- /pk-ev-pane-courts -->
+				<?php endif; ?>
 			</div>
 
 
@@ -1351,390 +1682,6 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 			     The Add/Edit history modals below stay put; the partial calls
 			     through to them. -->
 
-			<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
-			<?php if (!empty($CanAdminPark) || !empty($CanManageCourt)): ?>
-			<div class="pk-tab-panel" id="pk-tab-admin" style="display:none">
-				<?php if (!empty($CanAdminPark)): ?>
-				<div class="kn-report-cols">
-					<div class="kn-report-group">
-						<h5><i class="fas fa-users-cog"></i> Players</h5>
-						<ul>
-							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Create Player</a></li>
-							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
-							<?php if (!empty($CanMergePlayers)): ?><li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li><?php endif; ?>
-							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
-						</ul>
-					</div>
-					<div class="kn-report-group">
-						<h5><i class="fas fa-cog"></i> Park</h5>
-						<ul>
-							<li><a href="<?= UIR ?>Admin/permissions/Park/<?= $park_id ?>">Roles &amp; Permissions</a></li>
-						</ul>
-					</div>
-				</div>
-				<?php endif; ?>
-
-				<!-- Court Planner subsection (relocated from former top-level tab) -->
-				<?php if (!empty($CanManageCourt)): ?>
-				<?php $_cpOpen = !empty($CourtList); ?>
-				<div class="pk-cp-section<?= $_cpOpen ? ' pk-cp-open' : '' ?>" id="pk-cp-section">
-					<button type="button" class="pk-cp-header" onclick="pkCpToggleSection()" aria-expanded="<?= $_cpOpen ? 'true' : 'false' ?>">
-						<span class="pk-cp-header-title"><i class="fas fa-gavel"></i> Court Planner<?php if (!empty($CourtList)): ?> <span class="pk-cp-header-count">(<?= count($CourtList) ?>)</span><?php endif; ?></span>
-						<i class="fas fa-chevron-down pk-cp-chevron"></i>
-					</button>
-					<div class="pk-cp-body" id="pk-cp-body"<?= $_cpOpen ? '' : ' style="display:none"' ?>>
-			<style>
-			.pk-cp-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-			.pk-cp-court-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; margin-bottom:10px; display:flex; align-items:center; gap:14px; transition:box-shadow .15s; }
-			.pk-cp-court-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.1); }
-			.pk-cp-court-date { font-size:13px; color:#718096; white-space:nowrap; min-width:88px; }
-			.pk-cp-court-info { flex:1; }
-			.pk-cp-court-name { font-weight:700; font-size:15px; color:#2d3748; }
-			.pk-cp-court-meta { font-size:12px; color:#718096; margin-top:2px; }
-			.pk-cp-court-badges { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-			.pk-cp-badge { display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; }
-			.pk-cp-badge-count { background:#edf2f7; color:#4a5568; padding:3px 9px; border-radius:12px; font-size:11px; }
-			.pk-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
-			.pk-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
-			.pk-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
-			/* .kn-rec-age-* and .pk-rec-passlocal live in revised.css: this block only renders for court managers. */
-			/* Delegated-by-the-Kingdom pinned section (officer-only, to-schedule list) */
-			.pk-delegated { border:1px solid rgba(44,95,139,.4); background:rgba(44,95,139,.07); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
-			.pk-delegated-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-			.pk-delegated-title { margin:0; font-size:14px; font-weight:700; color:#2c5f8b !important; display:flex; align-items:center; gap:8px; }
-			.pk-delegated-title i { color:#2c5f8b; }
-			.pk-delegated-count { font-weight:600; color:#718096; }
-			.pk-delegated-help { font-size:12px; color:#718096; margin:6px 0 10px; }
-			.pk-delegated-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
-			.pk-delegated-item { font-size:13px; color:#2d3748; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-			.pk-delegated-item a { font-weight:600; }
-			.pk-delegated-sep { color:#cbd5e0; }
-			.pk-delegated-award { color:#4a5568; }
-			.pk-delegated-rank { color:#4a5568; }
-			.pk-delegated-approved { margin-left:auto; color:#718096; font-size:12px; }
-			html[data-theme="dark"] .pk-delegated { border-color:rgba(111,176,230,.4); background:rgba(111,176,230,.08); }
-			html[data-theme="dark"] .pk-delegated-title { color:#6fb0e6 !important; }
-			html[data-theme="dark"] .pk-delegated-title i { color:#6fb0e6; }
-			html[data-theme="dark"] .pk-delegated-count { color:#a0aec0; }
-			html[data-theme="dark"] .pk-delegated-help { color:#a0aec0; }
-			html[data-theme="dark"] .pk-delegated-item { color:#e2e8f0; }
-			html[data-theme="dark"] .pk-delegated-award { color:#cbd5e0; }
-			html[data-theme="dark"] .pk-delegated-rank { color:#cbd5e0; }
-			html[data-theme="dark"] .pk-delegated-approved { color:#a0aec0; }
-			html[data-theme="dark"] .pk-delegated-sep { color:#4a5568; }
-			.pk-delegated-toggle { display:flex; align-items:center; gap:10px; background:none; border:none; cursor:pointer; padding:0; text-align:left; flex:1; min-width:0; }
-			.pk-delegated-chevron { color:#a0aec0; flex-shrink:0; }
-			.pk-delegated-body { padding-top:2px; }
-			/* Collapsible subsection chrome (relocated court) */
-			.pk-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
-			.pk-cp-header { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; cursor:pointer; padding:10px 4px; font-size:15px; font-weight:700; color:#2d3748; text-align:left; }
-			.pk-cp-header:hover { color:#1a202c; }
-			.pk-cp-header-title i.fa-gavel { margin-right:8px; color:#4a5568; }
-			.pk-cp-header-count { font-weight:600; color:#718096; font-size:13px; }
-			.pk-cp-chevron { transition:transform .15s; color:#a0aec0; }
-			.pk-cp-section.pk-cp-open .pk-cp-chevron { transform:rotate(180deg); }
-			.pk-cp-body { padding-top:8px; }
-			html[data-theme="dark"] .pk-cp-section { border-top-color:#2d3748; }
-			html[data-theme="dark"] .pk-cp-header { color:#e2e8f0; }
-			html[data-theme="dark"] .pk-cp-header:hover { color:#fff; }
-			html[data-theme="dark"] .pk-cp-header-title i.fa-gavel { color:#a0aec0; }
-			html[data-theme="dark"] .pk-cp-court-card { background:#1a202c; border-color:#2d3748; }
-			html[data-theme="dark"] .pk-cp-court-name { color:#e2e8f0; }
-			html[data-theme="dark"] .pk-cp-court-date { color:#a0aec0; }
-			html[data-theme="dark"] .pk-cp-court-meta { color:#a0aec0; }
-			html[data-theme="dark"] .pk-cp-badge-count { background:#2d3748; color:#cbd5e0; }
-			html[data-theme="dark"] .pk-cp-btn-link { border-color:#4a5568; color:#cbd5e0; }
-			html[data-theme="dark"] .pk-cp-btn-link:hover { background:#2d3748; color:#fff; }
-			html[data-theme="dark"] .pk-cp-empty { border-color:#2d3748; color:#a0aec0; }
-			/* Mode + staged badges */
-			.pk-cp-badge-mode { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#ebf8ff; color:#2b6cb0; }
-			.pk-cp-badge-mode-plan { background:#faf089; color:#744210; }
-			.pk-cp-badge-staged { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#fefcbf; color:#975a16; box-shadow:inset 0 0 0 1px rgba(151,90,22,.25); }
-			.pk-cp-badge-mode[data-tip]::after, .pk-cp-badge-staged[data-tip]::after { white-space:normal; width:max-content; max-width:240px; }
-			html[data-theme="dark"] .pk-cp-badge-mode { background:#1a2f45; color:#90cdf4; }
-			html[data-theme="dark"] .pk-cp-badge-mode-plan { background:#3d3512; color:#f6e05e; }
-			html[data-theme="dark"] .pk-cp-badge-staged { background:#3d3512; color:#f6e05e; box-shadow:inset 0 0 0 1px rgba(246,224,94,.3); }
-			/* Mode selector (create-court modal) */
-			.pk-cp-mode-opts { display:flex; gap:10px; }
-			.pk-cp-mode-opt { flex:1; border:1px solid #cbd5e0; border-radius:6px; padding:10px 12px; cursor:pointer; display:block; transition:border-color .12s,background .12s,box-shadow .12s; }
-			.pk-cp-mode-opt input { position:absolute; opacity:0; pointer-events:none; }
-			.pk-cp-mode-title { font-size:13px; font-weight:700; color:#2d3748; display:flex; align-items:center; gap:6px; }
-			.pk-cp-mode-desc { font-size:11px; color:#718096; margin-top:3px; line-height:1.35; font-weight:400; }
-			.pk-cp-mode-opt.pk-cp-mode-sel { border-color:#2c5282; background:#ebf2fb; box-shadow:0 0 0 1px #2c5282; }
-			html[data-theme="dark"] .pk-cp-mode-opt { border-color:#2d3748; }
-			html[data-theme="dark"] .pk-cp-mode-title { color:#e2e8f0; }
-			html[data-theme="dark"] .pk-cp-mode-desc { color:#a0aec0; }
-			html[data-theme="dark"] .pk-cp-mode-opt.pk-cp-mode-sel { border-color:#4299e1; background:#1a2f45; box-shadow:0 0 0 1px #4299e1; }
-			/* Status badge (class-driven so dark mode can re-tone it) */
-			.pk-cp-badge-draft     { background:#edf2f7; color:#718096; }
-			.pk-cp-badge-published { background:#ebf8ff; color:#2b6cb0; }
-			.pk-cp-badge-complete  { background:#f0fff4; color:#276749; }
-			html[data-theme="dark"] .pk-cp-badge-draft     { background:#2d3748; color:#cbd5e0; }
-			html[data-theme="dark"] .pk-cp-badge-published { background:#1a2f45; color:#90cdf4; }
-			html[data-theme="dark"] .pk-cp-badge-complete  { background:#1c3a2a; color:#9ae6b4; }
-			/* Mobile: court card stacks, Open becomes a full-width row action */
-			@media (max-width:600px) {
-				.pk-cp-court-card { flex-wrap:wrap; align-items:flex-start; }
-				.pk-cp-court-badges { flex-wrap:wrap; flex-shrink:1; }
-				.pk-cp-btn-link { flex:1 1 100%; width:100%; text-align:center; min-height:44px; line-height:44px; padding:0 12px; margin-top:8px; }
-				.pk-cp-mode-opts { flex-direction:column; }
-				.pk-cp-mode-opt { width:100%; }
-				.pk-cp-court-info { min-width:0; }
-				.pk-cp-court-name, .pk-cp-court-meta { overflow-wrap:anywhere; }
-			}
-			@media (pointer:coarse) {
-				#pk-cp-new-court-modal .pk-modal-close-btn { min-width:44px; min-height:44px; }
-				#pk-cp-new-court-modal .pk-modal-footer button { min-height:44px; }
-			}
-			</style>
-			<div class="pk-cp-toolbar">
-				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
-				<button class="pk-btn pk-btn-primary" onclick="pkCpOpenNewCourt()">
-					<i class="fas fa-plus"></i> Plan a Court
-				</button>
-			</div>
-			<?php
-				$_cpStatusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];
-				$_cpStatusClass = ['draft' => 'pk-cp-badge-draft', 'published' => 'pk-cp-badge-published', 'complete' => 'pk-cp-badge-complete'];
-			?>
-			<?php if (empty($CourtList)): ?>
-			<div class="pk-cp-empty">
-				<i class="fas fa-gavel" style="font-size:32px;margin-bottom:12px;display:block;opacity:.3"></i>
-				No courts planned yet. Click <strong>Plan a Court</strong> to get started.
-			</div>
-			<?php else: ?>
-			<?php foreach ($CourtList as $_court): ?>
-			<?php
-				$_st     = $_court['Status'];
-				$_lbl    = $_cpStatusLabel[$_st] ?? $_st;
-				$_stCls  = $_cpStatusClass[$_st] ?? 'pk-cp-badge-draft';
-				$_mode   = $_court['Mode'] ?? 'run';
-				$_staged = (int)($_court['StagedCount'] ?? 0);
-			?>
-			<div class="pk-cp-court-card">
-				<div class="pk-cp-court-date">
-					<?= $_court['CourtDate'] ? date('M j, Y', strtotime($_court['CourtDate'])) : '<em style="color:#a0aec0">No date</em>' ?>
-				</div>
-				<div class="pk-cp-court-info">
-					<div class="pk-cp-court-name"><?= htmlspecialchars($_court['Name']) ?></div>
-					<?php if ($_court['EventName']): ?>
-					<div class="pk-cp-court-meta"><i class="fas fa-calendar-alt" style="margin-right:3px"></i><?= htmlspecialchars($_court['EventName']) ?></div>
-					<?php endif; ?>
-				</div>
-				<div class="pk-cp-court-badges">
-					<span class="pk-cp-badge <?= $_stCls ?>"><?= $_lbl ?></span>
-					<?php if ($_mode === 'plan'): ?>
-					<span class="pk-cp-badge-mode pk-cp-badge-mode-plan" data-tip="Locked as a plan — prepared for someone to record later."><i class="fas fa-clipboard-list"></i> Plan</span>
-					<?php else: ?>
-					<span class="pk-cp-badge-mode" data-tip="Run at court — awards granted live during the ceremony."><i class="fas fa-bullhorn"></i> Run</span>
-					<?php endif; ?>
-					<?php if ($_staged > 0 && $_st !== 'complete'): ?>
-					<span class="pk-cp-badge-staged" data-tip="Grants captured but not yet finalized — open to finalize."><i class="fas fa-hourglass-half"></i> <?= $_staged ?> staged</span>
-					<?php endif; ?>
-					<span class="pk-cp-badge-count"><i class="fas fa-award" style="margin-right:3px"></i><?= (int)$_court['AwardCount'] ?></span>
-					<a href="<?= UIR ?>Court/detail/<?= (int)$_court['CourtId'] ?>" class="pk-cp-btn-link">
-						Open <i class="fas fa-arrow-right"></i>
-					</a>
-				</div>
-			</div>
-			<?php endforeach; ?>
-			<?php endif; ?>
-
-			<?php if (empty($CanAdminPark)): ?>
-			<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-			<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-			<?php endif; ?>
-
-			<!-- New Court Modal (park-scoped) -->
-			<div class="pk-overlay" id="pk-cp-new-court-modal" style="display:none">
-				<div class="pk-modal-box" style="max-width:480px">
-					<div class="pk-modal-header">
-						<h3 class="pk-modal-title"><i class="fas fa-gavel" style="margin-right:8px;color:#4a5568"></i>Plan a New Court</h3>
-						<button class="pk-modal-close-btn" onclick="pkCpCloseNewCourt()" aria-label="Close">&times;</button>
-					</div>
-					<div class="pk-modal-body">
-						<div class="pk-acct-field">
-							<label>Court Name <span style="color:#e53e3e">*</span></label>
-							<input type="text" id="pk-cp-new-name" placeholder="Summer Coronation Court&#x2026;" autocomplete="off">
-						</div>
-						<?php if (!empty($CourtUpcomingEvents)): ?>
-						<div class="pk-acct-field">
-							<label>Link to Event (optional)</label>
-							<select id="pk-cp-new-event" onchange="pkCpOnEventChange(this,'pk-cp-new-date')">
-								<option value="0" data-start="">— None —</option>
-								<?php foreach ($CourtUpcomingEvents as $_ev): ?>
-								<option value="<?= (int)$_ev['EventCalendarDetailId'] ?>" data-start="<?= $_ev['EventStart'] ? date('Y-m-d', strtotime($_ev['EventStart'])) : '' ?>">
-									<?= htmlspecialchars($_ev['Name']) ?><?= $_ev['EventStart'] ? ' (' . date('M j', strtotime($_ev['EventStart'])) . ')' : '' ?>
-								</option>
-								<?php endforeach; ?>
-							</select>
-						</div>
-						<?php endif; ?>
-						<div class="pk-acct-field">
-							<label>Date</label>
-							<input type="date" id="pk-cp-new-date" >
-						</div>
-						<div class="pk-acct-field">
-							<label>How will this court be handled?</label>
-							<div class="pk-cp-mode-opts">
-								<label class="pk-cp-mode-opt pk-cp-mode-sel" id="pk-cp-mode-run-opt">
-									<input type="radio" name="pk-cp-mode" value="run" checked onchange="pkCpSyncMode()">
-									<span class="pk-cp-mode-title"><i class="fas fa-bullhorn"></i> Run at Court</span>
-									<span class="pk-cp-mode-desc">I'll grant awards live during the ceremony.</span>
-								</label>
-								<label class="pk-cp-mode-opt" id="pk-cp-mode-plan-opt">
-									<input type="radio" name="pk-cp-mode" value="plan" onchange="pkCpSyncMode()">
-									<span class="pk-cp-mode-title"><i class="fas fa-clipboard-list"></i> Lock as Plan</span>
-									<span class="pk-cp-mode-desc">I'm preparing the order of court for someone to record later.</span>
-								</label>
-							</div>
-						</div>
-						<div id="pk-cp-new-error" class="pk-form-error" style="display:none"></div>
-					</div>
-					<div class="pk-modal-footer">
-						<button class="pk-btn-ghost" onclick="pkCpCloseNewCourt()">Cancel</button>
-						<button class="pk-btn pk-btn-primary" onclick="pkCpSubmitNewCourt()">
-							<i class="fas fa-plus"></i> Create Court
-						</button>
-					</div>
-				</div>
-			</div>
-
-			<script>
-			(function() {
-				if (!<?= !empty($CanManageCourt) ? 'true' : 'false' ?>) return;
-				var uir       = '<?= UIR ?>';
-				var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
-				var parkId    = <?= (int)($park_id ?? 0) ?>;
-
-				window.pkCpToggleSection = function() {
-					var sec = document.getElementById('pk-cp-section');
-					var body = document.getElementById('pk-cp-body');
-					if (!sec || !body) return;
-					var open = sec.classList.toggle('pk-cp-open');
-					body.style.display = open ? '' : 'none';
-					var hdr = sec.querySelector('.pk-cp-header');
-					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
-				};
-
-				window.pkDelegatedToggle = function() {
-					var sec = document.getElementById('pk-delegated');
-					var body = document.getElementById('pk-delegated-body');
-					if (!sec || !body) return;
-					var open = sec.classList.toggle('pk-delegated-open');
-					body.style.display = open ? '' : 'none';
-					var hdr = sec.querySelector('.pk-delegated-toggle');
-					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
-					var ico = sec.querySelector('.pk-delegated-chevron');
-					if (ico) { ico.classList.toggle('fa-chevron-up', open); ico.classList.toggle('fa-chevron-down', !open); }
-				};
-
-				// House date pattern: Flatpickr with a human-readable altInput; the
-				// underlying native date input keeps the Y-m-d value the controller expects.
-				var pkCpDateFp = null;
-				function pkCpInitDatePicker() {
-					var el = document.getElementById('pk-cp-new-date');
-					if (!el || pkCpDateFp || typeof flatpickr === 'undefined') return;
-					pkCpDateFp = flatpickr(el, { dateFormat: 'Y-m-d', altInput: true, altFormat: 'F j, Y', disableMobile: true });
-				}
-				if (document.readyState === 'loading') {
-					document.addEventListener('DOMContentLoaded', pkCpInitDatePicker);
-				} else {
-					pkCpInitDatePicker();
-				}
-
-				function pkCpSetDate(dateId, val) {
-					var el = document.getElementById(dateId);
-					if (!el) return;
-					if (pkCpDateFp && el === pkCpDateFp.input) {
-						if (val) { pkCpDateFp.setDate(val, false); } else { pkCpDateFp.clear(false); }
-						return;
-					}
-					el.value = val || '';
-				}
-
-				window.pkCpOnEventChange = function(sel, dateId) {
-					var opt = sel.options[sel.selectedIndex];
-					var start = opt ? opt.getAttribute('data-start') : '';
-					if (start) pkCpSetDate(dateId, start);
-				};
-
-				window.pkCpSyncMode = function() {
-					var runOpt  = document.getElementById('pk-cp-mode-run-opt');
-					var planOpt = document.getElementById('pk-cp-mode-plan-opt');
-					var planEl  = planOpt ? planOpt.querySelector('input') : null;
-					var isPlan  = planEl && planEl.checked;
-					if (runOpt)  runOpt.classList.toggle('pk-cp-mode-sel', !isPlan);
-					if (planOpt) planOpt.classList.toggle('pk-cp-mode-sel', !!isPlan);
-				};
-
-				window.pkCpOpenNewCourt = function() {
-					document.getElementById('pk-cp-new-name').value = '';
-					pkCpInitDatePicker();
-					pkCpSetDate('pk-cp-new-date', '');
-					var evEl = document.getElementById('pk-cp-new-event');
-					if (evEl) evEl.value = '0';
-					var runEl = document.querySelector('input[name="pk-cp-mode"][value="run"]');
-					if (runEl) runEl.checked = true;
-					pkCpSyncMode();
-					document.getElementById('pk-cp-new-error').style.display = 'none';
-					var modal = document.getElementById('pk-cp-new-court-modal');
-					modal.style.display = 'flex';
-					setTimeout(function() { document.getElementById('pk-cp-new-name').focus(); }, 50);
-				};
-
-				window.pkCpCloseNewCourt = function() {
-					document.getElementById('pk-cp-new-court-modal').style.display = 'none';
-				};
-
-				window.pkCpSubmitNewCourt = function() {
-					var name    = document.getElementById('pk-cp-new-name').value.trim();
-					var date    = document.getElementById('pk-cp-new-date').value;
-					var evEl    = document.getElementById('pk-cp-new-event');
-					var eventId = evEl ? evEl.value : '0';
-					var errEl   = document.getElementById('pk-cp-new-error');
-					if (!name) { errEl.textContent = 'Please enter a court name.'; errEl.style.display = 'block'; return; }
-					errEl.style.display = 'none';
-					var modeEl = document.querySelector('input[name="pk-cp-mode"]:checked');
-					var mode   = modeEl ? modeEl.value : 'run';
-					var fd = new FormData();
-					fd.append('KingdomId', kingdomId);
-					fd.append('ParkId', parkId);
-					fd.append('Name', name);
-					fd.append('CourtDate', date);
-					fd.append('EventCalendarDetailId', eventId);
-					fd.append('Mode', mode);
-					fetch(uir + 'CourtAjax/create_court', {
-						method: 'POST', body: fd,
-						headers: { 'X-Requested-With': 'XMLHttpRequest' }
-					})
-					.then(function(r) { return r.json(); })
-					.then(function(data) {
-						if (data.status === 0 && data.court_id) {
-							window.location.href = uir + 'Court/detail/' + data.court_id;
-						} else {
-							errEl.textContent = data.error || 'An error occurred.';
-							errEl.style.display = 'block';
-						}
-					})
-					.catch(function(e) { errEl.textContent = 'Request failed: ' + e.message; errEl.style.display = 'block'; });
-				};
-
-				var modal = document.getElementById('pk-cp-new-court-modal');
-				modal.addEventListener('click', function(e) { if (e.target === this) pkCpCloseNewCourt(); });
-				document.addEventListener('keydown', function(e) {
-					if (e.key !== 'Escape') return;
-					if (pkCpDateFp && pkCpDateFp.isOpen) { pkCpDateFp.close(); return; }
-					pkCpCloseNewCourt();
-				}, true);
-			})();
-			</script>
-
-					</div>
-				</div>
-				<?php endif; ?>
-			</div>
-			<?php endif; ?>
 
 			<!-- Recommendations Tab -->
 			<?php if (!empty($ShowRecsTab)): ?>

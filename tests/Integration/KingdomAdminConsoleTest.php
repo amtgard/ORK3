@@ -507,7 +507,7 @@ final class KingdomAdminConsoleTest extends TestCase
             '/if \(\$_kaCourt\): \?>\s*<a class="ka-action-card" href="<\?= \$uir \?>Recommendations\/manage\/kingdom\//',
             $page
         );
-        self::assertStringContainsString('Kingdom/profile/<?= $kid ?>&amp;tab=admin', $page);
+        self::assertStringContainsString('Kingdom/profile/<?= $kid ?>&amp;tab=courts', $page);
         self::assertMatchesRegularExpression(
             '/if \(\$_kaBonus\): \?>\s*<button class="ka-action-card" onclick="bcOpen\(\)">/',
             $page

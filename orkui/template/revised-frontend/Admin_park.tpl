@@ -216,15 +216,15 @@ _ka_queue(
 					<?php endif; ?>
 					<?php /* Recommendations Manager and Court Planner at park scope. Both
 					   gate on Court::can_manage() with this park's id -- $CanManageCourt
-					   is that call. The Planner lives on the park profile's Admin tab,
-					   which ?tab=admin opens. */ ?>
+					   is that call. The Planner lives on the park profile's Events tab,
+					   Courts sub-tab, which ?tab=courts opens. */ ?>
 					<?php if ($_kaCourt): ?>
 					<a class="ka-action-card" href="<?= $uir ?>Recommendations/manage/park/<?= $parkId ?>">
 						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-tasks"></i></div>
 						<div class="ka-action-label">Recommendations</div>
 						<div class="ka-action-desc">Review, grant, snooze or pass on award recommendations</div>
 					</a>
-					<a class="ka-action-card" href="<?= $uir ?>Park/profile/<?= $parkId ?>&amp;tab=admin">
+					<a class="ka-action-card" href="<?= $uir ?>Park/profile/<?= $parkId ?>&amp;tab=courts">
 						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-gavel"></i></div>
 						<div class="ka-action-label">Court Planner</div>
 						<div class="ka-action-desc">Plan courts and the awards given at them</div>

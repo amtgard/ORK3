@@ -918,7 +918,7 @@ final class ParkAdminConsoleTest extends TestCase
             '/if \(\$_kaCourt\): \?>\s*<a class="ka-action-card" href="<\?= \$uir \?>Recommendations\/manage\/park\//',
             $page
         );
-        $this->assertStringContainsString('Park/profile/<?= $parkId ?>&amp;tab=admin', $page);
+        $this->assertStringContainsString('Park/profile/<?= $parkId ?>&amp;tab=courts', $page);
         $this->assertMatchesRegularExpression(
             '/if \(\$_kaBonus\) : \?>.*scopeType: \'park\'.*_bonus_credit_assets\.tpl/s',
             $page,

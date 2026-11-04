@@ -3371,6 +3371,54 @@ function knAvatarFallback(img, initial) {
 }
 
 // ---- Activate a tab by name (used by buttons + links) ----
+// ---- Sub-tabs (.ork-subtabs) ----
+// A [data-subtab-group] root holds .ork-subtab[data-subtab] buttons and any number
+// of [data-subtab-pane="<name>"] elements -- the panes and the header tools that
+// belong to them. Activating a name shows exactly its elements; the root then
+// fires 'ork:subtab' so a pane can re-measure (FullCalendar, DataTables) once it
+// is visible. Shared by the Kingdom and Park Events tabs (Calendar | Courts).
+function orkActivateSubtab(root, name) {
+    if (!root || !name) return false;
+    var btns = root.querySelectorAll('.ork-subtab[data-subtab]');
+    var known = false;
+    btns.forEach(function(b) { if (b.getAttribute('data-subtab') === name) known = true; });
+    if (!known) return false;
+    btns.forEach(function(b) {
+        var on = b.getAttribute('data-subtab') === name;
+        b.classList.toggle('ork-subtab-active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        b.tabIndex = on ? 0 : -1;
+    });
+    root.querySelectorAll('[data-subtab-pane]').forEach(function(p) {
+        p.classList.toggle('ork-subtab-hidden', p.getAttribute('data-subtab-pane') !== name);
+    });
+    root.dispatchEvent(new CustomEvent('ork:subtab', { bubbles: true, detail: { name: name } }));
+    return true;
+}
+document.addEventListener('click', function(e) {
+    var b = e.target.closest && e.target.closest('.ork-subtab[data-subtab]');
+    if (!b) return;
+    orkActivateSubtab(b.closest('[data-subtab-group]'), b.getAttribute('data-subtab'));
+});
+// Arrow keys move between sub-tabs, as in any tablist.
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    var b = e.target.closest && e.target.closest('.ork-subtab[data-subtab]');
+    if (!b) return;
+    var all = Array.prototype.slice.call(b.parentNode.querySelectorAll('.ork-subtab[data-subtab]'));
+    var next = all[(all.indexOf(b) + (e.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length];
+    if (!next) return;
+    e.preventDefault();
+    orkActivateSubtab(next.closest('[data-subtab-group]'), next.getAttribute('data-subtab'));
+    next.focus();
+});
+// The Events calendar is laid out while hidden; size it when Calendar comes back.
+document.addEventListener('ork:subtab', function(e) {
+    if (e.detail.name !== 'calendar') return;
+    if (e.target.id === 'kn-tab-events' && typeof knCalendar !== 'undefined' && knCalendar) knCalendar.updateSize();
+    if (e.target.id === 'pk-tab-events' && typeof pkCalendar !== 'undefined' && pkCalendar) pkCalendar.updateSize();
+});
+
 function knActivateTab(tab) {
     $('.kn-tab-nav li').removeClass('kn-tab-active');
     var $activeTab = $('.kn-tab-nav li[data-kntab="' + tab + '"]');
@@ -3685,7 +3733,15 @@ $(document).ready(function() {
     // ---- Auto-activate tab from URL ?tab= param ----
     (function() {
         var urlTab = new URLSearchParams(window.location.search).get('tab');
-        if (urlTab && $('.kn-tab-nav li[data-kntab="' + urlTab + '"]').length) {
+        // ?tab=courts opens Events on its Courts sub-tab. ?tab=admin is the old
+        // address of the Court Planner (the retired Admin Tasks tab); keep it working.
+        if (urlTab === 'courts' || urlTab === 'admin') {
+            var evRoot = document.getElementById('kn-tab-events');
+            if (evRoot && evRoot.querySelector('.ork-subtab[data-subtab="courts"]')) {
+                knActivateTab('events');
+                orkActivateSubtab(evRoot, 'courts');
+            }
+        } else if (urlTab && $('.kn-tab-nav li[data-kntab="' + urlTab + '"]').length) {
             knActivateTab(urlTab);
         }
     })();
@@ -7662,7 +7718,15 @@ $(document).ready(function() {
     // ---- Auto-activate tab from URL ?tab= param ----
     (function() {
         var urlTab = new URLSearchParams(window.location.search).get('tab');
-        if (urlTab && $('.pk-tab-nav li[data-pktab="' + urlTab + '"]').length) {
+        // ?tab=courts opens Events on its Courts sub-tab. ?tab=admin is the old
+        // address of the Court Planner (the retired Admin Tasks tab); keep it working.
+        if (urlTab === 'courts' || urlTab === 'admin') {
+            var evRoot = document.getElementById('pk-tab-events');
+            if (evRoot && evRoot.querySelector('.ork-subtab[data-subtab="courts"]')) {
+                pkActivateTab('events');
+                orkActivateSubtab(evRoot, 'courts');
+            }
+        } else if (urlTab && $('.pk-tab-nav li[data-pktab="' + urlTab + '"]').length) {
             pkActivateTab(urlTab);
         }
     })();

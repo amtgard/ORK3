@@ -183,8 +183,8 @@ _ka_queue(
 					</button>
 					<?php endif; ?>
 					<?php /* Court Planner and the Recommendations Manager. Both live off the
-					   console -- the Planner on the profile's Admin Tasks tab (?tab=admin
-					   opens it), the Manager on its own page -- and both gate on
+					   console -- the Planner on the profile's Events tab, Courts sub-tab
+					   (?tab=courts opens it), the Manager on its own page -- and both gate on
 					   Court::can_manage(), which is what $CanManageCourt is. */ ?>
 					<?php if ($_kaCourt): ?>
 					<a class="ka-action-card" href="<?= $uir ?>Recommendations/manage/kingdom/<?= $kid ?>">
@@ -192,7 +192,7 @@ _ka_queue(
 						<div class="ka-action-label">Recommendations</div>
 						<div class="ka-action-desc">Review, grant, snooze or pass on award recommendations</div>
 					</a>
-					<a class="ka-action-card" href="<?= $uir ?>Kingdom/profile/<?= $kid ?>&amp;tab=admin">
+					<a class="ka-action-card" href="<?= $uir ?>Kingdom/profile/<?= $kid ?>&amp;tab=courts">
 						<div class="ka-action-icon ka-action-icon-gold"><i class="fas fa-gavel"></i></div>
 						<div class="ka-action-label">Court Planner</div>
 						<div class="ka-action-desc">Plan courts and the awards given at them</div>
