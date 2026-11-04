@@ -1279,6 +1279,17 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 		return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
 	}
 
+	// One end of a term: the exact date when there is one, else the season the
+	// officer entered ("Spring 1995"), else '' (unknown).
+	function termSide(date, season, year) {
+		var d = fmtDate(date);
+		if (d) { return d; }
+		if (season && year) {
+			return String(season).charAt(0).toUpperCase() + String(season).slice(1) + ' ' + parseInt(year, 10);
+		}
+		return '';
+	}
+
 	function td(child) {
 		var cell = document.createElement('td');
 		if (child !== null && child !== undefined) {
@@ -1321,6 +1332,9 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 	// Newest term first: start date descending, then id descending so two terms
 	// that start on the same day still have a stable order.
 	function cmpTerm(a, b) {
+		// The running term first, whatever its recorded start.
+		var ca = !!(a && a.IsCurrent === true), cb = !!(b && b.IsCurrent === true);
+		if (ca !== cb) { return ca ? -1 : 1; }
 		var sa = String((a && a.StartDate) || '');
 		var sb = String((b && b.StartDate) || '');
 		if (sa !== sb) { return sa < sb ? 1 : -1; }
@@ -1413,20 +1427,27 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 			if (parseInt(h.MundaneId, 10) > 0) {
 				var a = document.createElement('a');
 				a.href = OF.playerUrl + parseInt(h.MundaneId, 10);
-				a.textContent = h.Persona || 'Unknown';
+				a.textContent = h.Persona || h.HolderName || 'Unknown';
 				tr.appendChild(td(a));
+			} else if (h.HolderName) {
+				// A plain-text holder (backfilled, no ORK account): shown unlinked.
+				tr.appendChild(td(h.HolderName));
 			} else {
 				tr.appendChild(td(el('span', 'of-vacant', 'Vacant')));
 			}
 
-			var startCell = td(fmtDate(h.StartDate));
+			var startCell = td(termSide(h.StartDate, h.StartSeason, h.StartYear) || el('span', 'of-vacant', 'unknown start'));
 			startCell.className = 'of-oh-nowrap';
 			tr.appendChild(startCell);
 
 			// "Present" is the only remaining marker that a term is the running
 			// one, now that the role badge that used to carry "(current)" is
 			// gone with the Role column.
-			var endCell = isCurrent ? td(el('span', 'of-oh-present', 'Present')) : td(fmtDate(h.EndDate));
+			// A blank end on a past term means "end unknown", not "present",
+			// matching Correct the Rolls and the rolls page.
+			var endText = termSide(h.EndDate, h.EndSeason, h.EndYear);
+			var endCell = isCurrent ? td(el('span', 'of-oh-present', 'Present'))
+				: td(endText || el('span', 'of-vacant', 'unknown end'));
 			endCell.className = 'of-oh-nowrap';
 			tr.appendChild(endCell);
 

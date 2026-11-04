@@ -1464,6 +1464,7 @@ class Kingdom extends Ork3
         $sql = "SELECT oh.officer_history_id, oh.kingdom_id, oh.park_id, oh.mundane_id, oh.role,
 		                oh.position_id, oh.display_label,
 		                oh.start_date, oh.end_date, oh.is_current, oh.changed_by, oh.notes, oh.created_at,
+		                oh.holder_name, oh.start_season, oh.start_year, oh.end_season, oh.end_year,
 		                m.persona, m.username,
 		                cb.persona AS changed_by_persona,
 		                op.classification AS classification
@@ -1527,7 +1528,13 @@ class Kingdom extends Ork3
                     'Notes'            => $r->notes ?? '',
                     'Persona'          => $r->persona ?? '',
                     'UserName'         => $r->username ?? '',
-                ];
+                // + HolderName, StartSeason/Year, EndSeason/Year, PeriodLabel: one shared
+                // builder, so both scopes (and the rolls reader) label a term alike.
+                ] + OfficerPosition::history_term_fields([
+                    'holder_name' => $r->holder_name, 'is_current' => $r->is_current,
+                    'start_season' => $r->start_season, 'start_year' => $r->start_year, 'start_date' => $r->start_date,
+                    'end_season' => $r->end_season, 'end_year' => $r->end_year, 'end_date' => $r->end_date,
+                ]);
             }
         }
         return $response;

@@ -79,4 +79,15 @@ class Model_OfficerPosition extends Model
         return $options;
     }
 
+    /**
+     * The officer rolls of a kingdom ($park_id 0) or a park: one section per
+     * office, terms newest first, gaps and overlaps flagged. Public data; feeds
+     * both the rolls report and the edit ledgers.
+     *
+     * @return array ['Offices' => [...]] -- see OfficerPosition::rolls_for_org()
+     */
+    public function rolls(int $kingdom_id, int $park_id): array
+    {
+        return $this->OfficerPosition->rolls_for_org($kingdom_id, $park_id);
+    }
 }

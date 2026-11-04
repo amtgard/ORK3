@@ -1804,6 +1804,319 @@ class OfficerPosition extends Ork3
         return $out;
     }
 
+    // ================================================================
+    // OFFICER ROLLS (history reader)
+    // ================================================================
+
+    /**
+     * The holder and season-span keys of one ork_officer_history row, shared by
+     * Kingdom::GetOfficerHistory() and Park::GetOfficerHistory() so both scopes
+     * emit them identically. PeriodLabel comes from OfficerTermPeriod, the one
+     * implementation of the season rules.
+     *
+     * Underscore name: no token, and the JSON service must not reach it.
+     *
+     * @param array $row raw columns: holder_name, is_current, start_season, start_year,
+     *                   start_date, end_season, end_year, end_date
+     * @return array HolderName, StartSeason, StartYear, EndSeason, EndYear, PeriodLabel
+     */
+    public static function history_term_fields(array $row)
+    {
+        $season = function ($v) {
+            return ($v === null || $v === '') ? null : (string) $v;
+        };
+        $year = function ($v) {
+            return ($v === null || $v === '') ? null : (int) $v;
+        };
+        $span = [
+            'StartSeason' => $season($row['start_season'] ?? null),
+            'StartYear'   => $year($row['start_year'] ?? null),
+            'StartDate'   => $row['start_date'] ?? null,
+            'EndSeason'   => $season($row['end_season'] ?? null),
+            'EndYear'     => $year($row['end_year'] ?? null),
+            'EndDate'     => $row['end_date'] ?? null,
+        ];
+        return [
+            'HolderName'  => (string) ($row['holder_name'] ?? ''),
+            'StartSeason' => $span['StartSeason'],
+            'StartYear'   => $span['StartYear'],
+            'EndSeason'   => $span['EndSeason'],
+            'EndYear'     => $span['EndYear'],
+            'PeriodLabel' => OfficerTermPeriod::label($span, (int) ($row['is_current'] ?? 0) === 1),
+        ];
+    }
+
+    /**
+     * The officer rolls of one org: one section per office, terms newest first,
+     * with gaps and overlaps flagged between neighbouring terms. The one reader
+     * behind the public rolls report and the edit ledgers.
+     *
+     * Sections: every active registry office in Manage Officers order
+     * (GetPositions: classification, then sort_order_sql), then any office seen
+     * only in history -- a retired position, a position no longer in the
+     * registry, or position_id = 0 rows grouped by role -- titled by its newest
+     * row's display_label.
+     *
+     * A seated officer (ork_officer.mundane_id > 0) whose office has no
+     * is_current row still shows as the current holder: a Synthetic term with
+     * OfficerHistoryId 0 and no period.
+     *
+     * Public data, no token; the underscore name keeps it off the JSON service.
+     * For a park, the kingdom is derived from the park, never taken from the caller.
+     *
+     * @return array ['Offices' => [ [Key, PositionId, Title, Classification, Retired,
+     *               TermCount, GapCount, OverlapCount, Terms] ]]
+     */
+    public function rolls_for_org(int $kingdom_id, int $park_id): array
+    {
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return ['Offices' => []];
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+            $history = Ork3::$Lib->park->GetOfficerHistory(['ParkId' => $park_id]);
+        } else {
+            $park_id = 0;
+            if (!valid_id($kingdom_id)) {
+                return ['Offices' => []];
+            }
+            $history = Ork3::$Lib->kingdom->GetOfficerHistory(['KingdomId' => $kingdom_id]);
+        }
+        $positions = $this->GetPositions($kingdom_id, true);
+        $seats = $this->get_officers_for_display($kingdom_id, $park_id, true);
+
+        // Registry sections first, in order; retired positions are held back and
+        // only get a section if they have terms.
+        $sections = [];
+        $retired = [];
+        foreach ($positions as $pos) {
+            $pid = (int) $pos['PositionId'];
+            $key = 'position:' . $pid;
+            $meta = [
+                'PositionId'     => $pid,
+                'Title'          => (string) $pos['DisplayTitle'],
+                'Classification' => $pos['Classification'],
+            ];
+            if ($pos['RetiredAt'] !== null && $pos['RetiredAt'] !== '') {
+                $retired[$key] = $meta;
+                continue;
+            }
+            $sections[$key] = $meta + ['Retired' => false, 'Terms' => [], 'Labels' => []];
+        }
+
+        $extra = [];
+        foreach (($history['History'] ?? []) as $row) {
+            $pid = (int) $row['PositionId'];
+            $key = $pid > 0 ? 'position:' . $pid : 'role:' . $row['Role'];
+            if (!isset($sections[$key]) && !isset($extra[$key])) {
+                $extra[$key] = [
+                    'PositionId'     => $pid,
+                    'Title'          => $retired[$key]['Title'] ?? '',
+                    'Classification' => $retired[$key]['Classification'] ?? $row['Classification'],
+                    'Retired'        => true,
+                    'Terms'          => [],
+                    'Labels'         => [],
+                ];
+            }
+            $term = $this->rollsTerm($row);
+            if (isset($sections[$key])) {
+                $sections[$key]['Terms'][] = $term;
+                $sections[$key]['Labels'][$term['OfficerHistoryId']] = $row['DisplayLabel'] !== '' ? $row['DisplayLabel'] : $row['Role'];
+            } else {
+                $extra[$key]['Terms'][] = $term;
+                $extra[$key]['Labels'][$term['OfficerHistoryId']] = $row['DisplayLabel'] !== '' ? $row['DisplayLabel'] : $row['Role'];
+            }
+        }
+
+        // Seated officers whose office has no current history row.
+        foreach (array_merge($seats['crown'] ?? [], $seats['supporting'] ?? []) as $seat) {
+            if ((int) $seat['MundaneId'] <= 0) {
+                continue;
+            }
+            $key = 'position:' . (int) $seat['PositionId'];
+            if (isset($sections[$key])) {
+                $target = &$sections[$key];
+            } else {
+                if (!isset($extra[$key])) {
+                    $extra[$key] = [
+                        'PositionId'     => (int) $seat['PositionId'],
+                        'Title'          => (string) $seat['DisplayTitle'],
+                        'Classification' => $retired[$key]['Classification'] ?? null,
+                        'Retired'        => true,
+                        'Terms'          => [],
+                        'Labels'         => [],
+                    ];
+                }
+                $target = &$extra[$key];
+            }
+            $hasCurrent = false;
+            foreach ($target['Terms'] as $t) {
+                if ($t['IsCurrent']) {
+                    $hasCurrent = true;
+                    break;
+                }
+            }
+            if (!$hasCurrent) {
+                $target['Terms'][] = $this->rollsTerm([
+                    'OfficerHistoryId' => 0,
+                    'MundaneId'        => (int) $seat['MundaneId'],
+                    'Persona'          => (string) ($seat['Persona'] ?? ''),
+                    'HolderName'       => '',
+                    'IsCurrent'        => true,
+                    'StartSeason'      => null, 'StartYear' => null, 'StartDate' => null,
+                    'EndSeason'        => null, 'EndYear' => null, 'EndDate' => null,
+                    'PeriodLabel'      => OfficerTermPeriod::label([], true),
+                    'Notes'            => '',
+                ], true);
+            }
+            unset($target);
+        }
+
+        // History-only sections: retired registry offices in registry order, then
+        // the rest by title.
+        $tail = [];
+        foreach ($retired as $key => $meta) {
+            if (isset($extra[$key])) {
+                $tail[$key] = $extra[$key];
+                unset($extra[$key]);
+            }
+        }
+        $offices = [];
+        $finish = function (array $section, $key, $titleFromNewest) {
+            usort($section['Terms'], [self::class, 'compareRollsTerms']);
+            if ($titleFromNewest) {
+                foreach ($section['Terms'] as $t) {
+                    if (!$t['Synthetic'] && isset($section['Labels'][$t['OfficerHistoryId']])) {
+                        $section['Title'] = (string) $section['Labels'][$t['OfficerHistoryId']];
+                        break;
+                    }
+                }
+            }
+            $gaps = 0;
+            $overlaps = 0;
+            $n = count($section['Terms']);
+            for ($i = 0; $i + 1 < $n; $i++) {
+                $flag = self::rollsFlag($section['Terms'][$i], $section['Terms'][$i + 1]);
+                $section['Terms'][$i]['FlagAfter'] = $flag;
+                if ($flag !== null) {
+                    $flag['Type'] === 'gap' ? $gaps++ : $overlaps++;
+                }
+            }
+            return [
+                'Key'            => (string) $key,
+                'PositionId'     => (int) $section['PositionId'],
+                'Title'          => (string) $section['Title'],
+                'Classification' => $section['Classification'],
+                'Retired'        => (bool) $section['Retired'],
+                'TermCount'      => $n,
+                'GapCount'       => $gaps,
+                'OverlapCount'   => $overlaps,
+                'Terms'          => $section['Terms'],
+            ];
+        };
+        foreach ($sections as $key => $section) {
+            $offices[] = $finish($section, $key, false);
+        }
+        foreach ($tail as $key => $section) {
+            $offices[] = $finish($section, $key, true);
+        }
+        $restOut = [];
+        foreach ($extra as $key => $section) {
+            $restOut[] = $finish($section, $key, true);
+        }
+        usort($restOut, function ($a, $b) {
+            return strcasecmp($a['Title'], $b['Title']) ?: strcmp($a['Key'], $b['Key']);
+        });
+
+        return ['Offices' => array_merge($offices, $restOut)];
+    }
+
+    /** One rolls Term from a GetOfficerHistory row (or a synthetic seat row). */
+    private function rollsTerm(array $row, bool $synthetic = false): array
+    {
+        $ord = OfficerTermPeriod::resolve([
+            'StartSeason' => $row['StartSeason'], 'StartYear' => $row['StartYear'], 'StartDate' => $row['StartDate'],
+            'EndSeason'   => $row['EndSeason'], 'EndYear' => $row['EndYear'], 'EndDate' => $row['EndDate'],
+        ]);
+        $mundane_id = (int) $row['MundaneId'];
+        return [
+            'OfficerHistoryId' => (int) $row['OfficerHistoryId'],
+            'MundaneId'        => $mundane_id,
+            'Persona'          => $mundane_id > 0 ? (string) ($row['Persona'] ?? '') : '',
+            'HolderName'       => (string) ($row['HolderName'] ?? ''),
+            'IsCurrent'        => (bool) $row['IsCurrent'],
+            'StartSeason'      => $row['StartSeason'],
+            'StartYear'        => $row['StartYear'],
+            'EndSeason'        => $row['EndSeason'],
+            'EndYear'          => $row['EndYear'],
+            'StartDate'        => $row['StartDate'],
+            'EndDate'          => $row['EndDate'],
+            'PeriodLabel'      => (string) $row['PeriodLabel'],
+            'Note'             => (string) ($row['Notes'] ?? ''),
+            'StartOrdinal'     => $ord['start'],
+            'EndOrdinal'       => $ord['end'],
+            'FlagAfter'        => null,
+            'Synthetic'        => $synthetic,
+        ];
+    }
+
+    /** Newest first: current terms on top, then later starts, unknown starts last. */
+    private static function compareRollsTerms(array $a, array $b): int
+    {
+        if ($a['IsCurrent'] !== $b['IsCurrent']) {
+            return $a['IsCurrent'] ? -1 : 1;
+        }
+        $as = $a['StartOrdinal'];
+        $bs = $b['StartOrdinal'];
+        if (($as === null) !== ($bs === null)) {
+            return $as === null ? 1 : -1;
+        }
+        if ($as !== $bs) {
+            return $bs <=> $as;
+        }
+        // Same season: a later exact start date is newer.
+        $ad = (string) ($a['StartDate'] ?? '');
+        $bd = (string) ($b['StartDate'] ?? '');
+        if ($ad !== '' && $bd !== '' && $ad !== $bd) {
+            return strcmp($bd, $ad);
+        }
+        $ae = $a['EndOrdinal'];
+        $be = $b['EndOrdinal'];
+        if (($ae === null) !== ($be === null)) {
+            return $ae === null ? 1 : -1;
+        }
+        if ($ae !== $be) {
+            return $be <=> $ae;
+        }
+        return $b['OfficerHistoryId'] <=> $a['OfficerHistoryId'];
+    }
+
+    /**
+     * The flag for the space between a term and the next-older one: a gap when at
+     * least one whole season is missing, an overlap when the newer term starts
+     * before the older one ends. No flag when either facing end is unknown.
+     */
+    private static function rollsFlag(array $newer, array $older)
+    {
+        $start = $newer['StartOrdinal'];
+        $end = $older['EndOrdinal'];
+        if ($start === null || $end === null) {
+            return null;
+        }
+        if ($start - $end >= 2) {
+            return [
+                'Type'  => 'gap',
+                'Label' => 'Gap: ' . OfficerTermPeriod::ordinalLabel($end + 1) . ' – ' . OfficerTermPeriod::ordinalLabel($start - 1),
+            ];
+        }
+        if ($start < $end) {
+            $holder = $older['MundaneId'] > 0 && $older['Persona'] !== '' ? $older['Persona'] : $older['HolderName'];
+            return ['Type' => 'overlap', 'Label' => 'Overlap with ' . ($holder !== '' ? $holder : 'an unknown holder')];
+        }
+        return null;
+    }
+
     /**
      * Resolve the kingdom a scoped officer write actually acts in.
      *
