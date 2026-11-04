@@ -124,6 +124,8 @@ class Controller_OfficerAdminAjax extends Controller
             'addhistory'       => 'history',
             'edithistory'      => 'history',
             'deletehistory'    => 'history',
+            'rolls'            => 'history',
+            'parseperiod'      => 'history',
         ];
 
         if (!isset($action_kind[$action])) {
@@ -208,6 +210,10 @@ class Controller_OfficerAdminAjax extends Controller
             case 'edithistory':   $this->actionEditHistory();
                 break;
             case 'deletehistory': $this->actionDeleteHistory();
+                break;
+            case 'rolls':         $this->actionRolls($kingdom_id, $park_id);
+                break;
+            case 'parseperiod':   $this->actionParsePeriod();
                 break;
             case 'vacate':       $this->actionVacate($kingdom_id, $park_id, $uid);
                 break;
@@ -697,6 +703,33 @@ class Controller_OfficerAdminAjax extends Controller
             'OfficerHistoryId' => (int)($_POST['OfficerHistoryId'] ?? 0),
         ]);
         $this->emitServiceResult($r);
+    }
+
+    /**
+     * The officer rolls of this kingdom or park, for the Officer History ledgers to
+     * re-render a section after a write. Public data (the report shows it to
+     * anyone); gated with the history family only because the ledger is its caller.
+     */
+    private function actionRolls($kingdom_id, $park_id)
+    {
+        echo json_encode(['status' => 0] + $this->OfficerPosition->rolls((int)$kingdom_id, (int)$park_id));
+    }
+
+    /**
+     * Read a typed period back before it is saved (POST Period; Current=1 for a
+     * current term's start-only edit). Pure parsing: nothing is written.
+     */
+    private function actionParsePeriod()
+    {
+        $r = $this->OfficerPosition->read_back_period(
+            trim((string)($_POST['Period'] ?? '')),
+            !empty($_POST['Current'])
+        );
+        if (is_string($r)) {
+            echo json_encode(['status' => 1, 'error' => $r]);
+            return;
+        }
+        echo json_encode(['status' => 0] + $r);
     }
 
     /**

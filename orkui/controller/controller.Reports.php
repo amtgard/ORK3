@@ -18,6 +18,9 @@ class Controller_Reports extends Controller
             'attendance',
             'event_attendance',
             'suspended',
+            // Officer rolls are public, as the officer Details modal's history tab
+            // is; the edit mode checks the history permission itself.
+            'officer_history',
             // Checks login itself and answers JSON status:5 (a redirect would break fetch()).
             'population_explorer_json',
             // Download: answers plain-text 401/403 itself (a redirect would be a poor download).
@@ -264,6 +267,46 @@ class Controller_Reports extends Controller
         } elseif (($type ?? null) === 'Kingdom') {
             $this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . (int)$id . '&tab=reports';
         }
+    }
+
+    /**
+     * Officer History: the officer rolls of a kingdom (KingdomId) or park (ParkId),
+     * one section per office. Public; with &edit=1 an officer holding the history
+     * permission gets the office ledgers instead.
+     *
+     * CanEditRolls is the server gate for history writes, verbatim: the same key
+     * (PermissionKeyFor('history')), scope and legacy role (AUTH_EDIT) that
+     * OfficerPosition::AddHistoryTerm checks and OfficerAdminAjax pre-filters on.
+     */
+    public function officer_history($params = null)
+    {
+        $kingdom_id = isset($this->request->KingdomId) ? (int)$this->request->KingdomId : 0;
+        $park_id    = isset($this->request->ParkId) ? (int)$this->request->ParkId : 0;
+        if ($park_id > 0) {
+            // The park decides the kingdom; a KingdomId on the URL is only a hint.
+            $kingdom_id = (int)$this->Reports->get_park_kingdom_id($park_id);
+        }
+        $scope       = $park_id > 0 ? 'park' : 'kingdom';
+        $scope_id    = $park_id > 0 ? $park_id : $kingdom_id;
+        $scope_name  = $this->_resolve_scope_name($park_id > 0 ? 'Park' : 'Kingdom', $scope_id);
+        if (!valid_id($kingdom_id) || $scope_name === '') {
+            header('Location: ' . UIR);
+            exit;
+        }
+
+        $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $this->load_model('OfficerPosition');
+        $this->data['CanEditRolls'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, $this->OfficerPosition->permission_key_for('history', $park_id), $scope, $scope_id, AUTH_EDIT);
+        $this->data['EditMode']     = $this->data['CanEditRolls'] && !empty($this->request->edit);
+
+        $this->template = '../revised-frontend/Reports_officer_history.tpl';
+        $this->data['Rolls']      = $this->OfficerPosition->rolls($kingdom_id, $park_id);
+        $this->data['ScopeType']  = $scope;
+        $this->data['ScopeId']    = $scope_id;
+        $this->data['ScopeName']  = $scope_name;
+        $this->data['KingdomId']  = $kingdom_id;
+        $this->data['page_title'] = 'Officer History';
+        $this->data['menu']['reports']['url'] = UIR . ($park_id > 0 ? 'Park' : 'Kingdom') . '/profile/' . $scope_id . '&tab=reports';
     }
 
     public function courts($params = null)

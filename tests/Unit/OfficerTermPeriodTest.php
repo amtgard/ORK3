@@ -75,4 +75,35 @@ final class OfficerTermPeriodTest extends TestCase
         self::assertSame('Fall 2022 – Spring 2023', OfficerTermPeriod::previousSpan(2023 * 4 + 1, 2023 * 4 + 3));
         self::assertSame('Fall 2022 – Spring 2023', OfficerTermPeriod::previousSpan(2023 * 4 + 1, null));
     }
+
+    /** The ledger's period field reads its input back before Enter (parseperiod). */
+    public function testReadBack(): void
+    {
+        self::assertSame([
+            'Label' => 'Summer 2023 – Winter 2024',
+            'StartOrdinal' => 2023 * 4 + 2,
+            'EndOrdinal' => 2024 * 4,
+            'PreviousSpan' => 'Winter 2023 – Summer 2023',
+        ], OfficerTermPeriod::readBack('Su23-W24', false, 2026 * 4 + 3));
+        $unknown = OfficerTermPeriod::readBack('Spring 95 -', false, 2026 * 4 + 3);
+        self::assertSame('Spring 1995 – ?', $unknown['Label']);
+        self::assertNull($unknown['EndOrdinal']);
+        self::assertSame('Fall 1994 – Spring 1995', $unknown['PreviousSpan']);
+    }
+
+    public function testReadBackRejections(): void
+    {
+        self::assertSame('Current terms are set from Manage Officers.', OfficerTermPeriod::readBack('Fall 26 - present', false, 2026 * 4 + 3));
+        self::assertSame('A term cannot end in the future.', OfficerTermPeriod::readBack('Spring 26 - Fall 27', false, 2026 * 4 + 3));
+        self::assertIsString(OfficerTermPeriod::readBack('Blorp 23', false, 2026 * 4 + 3));
+    }
+
+    /** A current term takes its start only; its end belongs to Manage Officers. */
+    public function testReadBackForACurrentTerm(): void
+    {
+        $r = OfficerTermPeriod::readBack('Spring 24', true, 2026 * 4 + 3);
+        self::assertSame('Spring 2024 – present', $r['Label']);
+        self::assertNull($r['EndOrdinal']);
+        self::assertIsString(OfficerTermPeriod::readBack('Spring 24 - Fall 24', true, 2026 * 4 + 3));
+    }
 }

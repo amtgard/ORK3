@@ -1,0 +1,544 @@
+/* ============================================================
+   Officer History (Reports_officer_history.tpl)  (.or-*)
+
+   Sits inside the .rp-* shell (default/style/reports.css) and uses its
+   --rp-* tokens, which .rp-root re-points for dark mode; the few literal
+   colours below have html[data-theme="dark"] counterparts at the end.
+   Nothing here sets overflow:hidden on an ancestor of a ledger row: the
+   holder search dropdown (.kn-ac-results) would be clipped.
+   ============================================================ */
+
+.or-root {
+    --or-gap-bg      : #fffbeb;
+    --or-gap-text    : #92400e;
+    --or-overlap-bg  : #fef2f2;
+    --or-overlap-text: #9b2c2c;
+    --or-present-bg  : #c6f6d5;
+    --or-present-text: #22543d;
+    --or-current-bg  : #f0fff4;
+    --or-input-bg    : var(--ork-card-bg, #fff);
+    --or-focus       : var(--rp-accent);
+}
+
+.or-offices {
+    background   : var(--ork-card-bg);
+    border       : 1px solid var(--rp-border);
+    border-top   : none;
+    border-radius: 0 0 8px 8px;
+    padding      : 8px 12px 12px;
+}
+
+.or-empty {
+    padding   : 18px 6px;
+    color     : var(--rp-text-muted);
+    font-size : 14px;
+    text-align: center;
+}
+
+/* ── Office sections ─────────────────────────────────────── */
+
+.or-office {
+    border-bottom: 1px solid var(--rp-divider);
+}
+.or-office:last-child {
+    border-bottom: none;
+}
+
+.or-office-summary,
+.or-folded-summary {
+    display    : flex;
+    align-items: center;
+    flex-wrap  : wrap;
+    gap        : 8px;
+    padding    : 10px 4px;
+    cursor     : pointer;
+    list-style : none;
+    color      : var(--rp-text);
+    user-select: none;
+}
+.or-office-summary::-webkit-details-marker,
+.or-folded-summary::-webkit-details-marker {
+    display: none;
+}
+.or-office-summary:focus-visible,
+.or-folded-summary:focus-visible {
+    outline       : 2px solid var(--or-focus);
+    outline-offset: 2px;
+    border-radius : 4px;
+}
+
+.or-chevron {
+    width     : 12px;
+    font-size : 11px;
+    color     : var(--rp-text-muted);
+    transition: transform 0.15s;
+}
+details[open] > summary > .or-chevron {
+    transform: rotate(90deg);
+}
+
+.or-office-title {
+    font-size  : 15px;
+    font-weight: 700;
+}
+
+.or-office-meta {
+    display    : inline-flex;
+    flex-wrap  : wrap;
+    align-items: center;
+    gap        : 6px;
+    margin-left: auto;
+    font-size  : 12px;
+    color      : var(--rp-text-muted);
+}
+
+.or-tag {
+    display      : inline-block;
+    padding      : 1px 8px;
+    border-radius: 10px;
+    font-size    : 11px;
+    font-weight  : 600;
+    line-height  : 1.6;
+    background   : var(--rp-bg-tertiary);
+    color        : var(--rp-text-body);
+    white-space  : nowrap;
+}
+.or-tag-gap      { background: var(--or-gap-bg);     color: var(--or-gap-text); }
+.or-tag-overlap  { background: var(--or-overlap-bg); color: var(--or-overlap-text); }
+.or-tag-retired  { font-weight: 500; font-style: italic; }
+.or-tag-quiet    { font-weight: 500; background: transparent; border: 1px solid var(--rp-border-mid); color: var(--rp-text-muted); }
+
+.or-office-body {
+    padding: 0 0 10px 20px;
+}
+
+/* "Other offices (n)": every office with no terms, collapsed at the bottom. */
+.or-folded {
+    border-top: 1px dashed var(--rp-border-mid);
+    margin-top: 4px;
+}
+.or-folded-summary {
+    font-size  : 13px;
+    font-weight: 600;
+    color      : var(--rp-text-body);
+}
+.or-folded-hint {
+    font-weight: 400;
+    color      : var(--rp-text-hint);
+    font-size  : 12px;
+}
+.or-folded-body {
+    padding-left: 16px;
+}
+.or-folded-body .or-office-title {
+    font-size  : 14px;
+    font-weight: 600;
+}
+
+/* ── View mode: compact list ─────────────────────────────── */
+
+.or-list {
+    list-style: none;
+    margin    : 0;
+    padding   : 0;
+}
+.or-item {
+    display              : grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap                  : 4px 16px;
+    padding              : 5px 6px;
+    border-bottom        : 1px solid var(--rp-divider);
+    font-size            : 14px;
+    color                : var(--rp-text);
+}
+.or-item:last-child {
+    border-bottom: none;
+}
+.or-item-current .or-holder {
+    font-weight: 600;
+}
+.or-item-gap {
+    font-size : 12px;
+    font-style: italic;
+    color     : var(--rp-text-hint);
+    padding   : 2px 6px;
+}
+.or-period {
+    color: var(--rp-text-body);
+}
+.or-exact {
+    display   : block;
+    font-size : 11px;
+    color     : var(--rp-text-muted);
+    margin-top: 1px;
+}
+.or-holder-link {
+    color          : var(--rp-accent);
+    text-decoration: none;
+}
+.or-holder-link:hover {
+    text-decoration: underline;
+}
+.or-holder-unknown {
+    color     : var(--rp-text-hint);
+    font-style: italic;
+}
+
+.or-present {
+    display       : inline-block;
+    padding       : 0 7px;
+    border-radius : 10px;
+    background    : var(--or-present-bg);
+    color         : var(--or-present-text);
+    font-size     : 11px;
+    font-weight   : 700;
+    line-height   : 1.6;
+    text-transform: lowercase;
+    vertical-align: 1px;
+}
+
+/* ── Edit mode: the office ledger ────────────────────────── */
+
+.or-ledger {
+    width          : 100%;
+    border-collapse: collapse;
+    font-size      : 13px;
+    color          : var(--rp-text);
+    table-layout   : fixed;
+}
+.or-ledger thead th {
+    text-align    : left;
+    font-size     : 11px;
+    font-weight   : 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color         : var(--rp-text-muted);
+    padding       : 4px 6px;
+    border-bottom : 1px solid var(--rp-border);
+    background    : transparent;
+}
+.or-ledger td {
+    padding       : 4px 6px;
+    border-bottom : 1px solid var(--rp-divider);
+    vertical-align: top;
+    overflow-wrap : anywhere;
+}
+.or-ledger .or-col-holder  { width: 30%; }
+.or-ledger .or-col-period  { width: 30%; }
+.or-ledger .or-col-note    { width: auto; color: var(--rp-text-body); }
+.or-ledger .or-col-actions { width: 96px; text-align: right; white-space: nowrap; }
+
+.or-row td.or-col-holder,
+.or-row td.or-col-period,
+.or-row td.or-col-note {
+    cursor: text;
+}
+.or-row-synthetic td {
+    cursor: default !important;
+}
+.or-row:hover td {
+    background: var(--rp-bg-light);
+}
+.or-row-current td {
+    background: var(--or-current-bg);
+}
+.or-lock {
+    color    : var(--rp-text-hint);
+    font-size: 11px;
+}
+
+.or-flag-row td {
+    font-size  : 12px;
+    font-style : italic;
+    padding    : 2px 6px 2px 14px;
+    border-bottom: 1px solid var(--rp-divider);
+}
+.or-flag-gap td     { color: var(--or-gap-text);     background: var(--or-gap-bg); }
+.or-flag-overlap td { color: var(--or-overlap-text); background: var(--or-overlap-bg); }
+
+.or-entry td {
+    border-bottom: none;
+    padding-top  : 8px;
+}
+.or-entry-none td {
+    font-size : 12px;
+    font-style: italic;
+    color     : var(--rp-text-hint);
+    padding   : 8px 6px;
+}
+
+/* Inputs: explicit colours so orkui.css's global control rules don't win in dark mode. */
+.or-input {
+    width        : 100%;
+    box-sizing   : border-box;
+    padding      : 5px 8px;
+    font-size    : 13px;
+    font-family  : inherit;
+    line-height  : 1.4;
+    color        : var(--rp-text);
+    background   : var(--or-input-bg);
+    border       : 1px solid var(--rp-border-mid);
+    border-radius: 5px;
+    margin       : 0;
+    height       : auto;
+    box-shadow   : none;
+}
+.or-input:focus {
+    outline     : none;
+    border-color: var(--or-focus);
+    box-shadow  : 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+.or-input::placeholder {
+    color: var(--rp-text-hint);
+}
+.or-input[readonly] {
+    background: var(--rp-bg-light);
+    color     : var(--rp-text-muted);
+}
+.or-date-pair {
+    display  : flex;
+    gap      : 6px;
+    margin-top: 4px;
+}
+.or-date-pair .or-input {
+    font-size: 12px;
+    padding  : 3px 6px;
+}
+
+.or-ac-wrap {
+    position: relative;
+}
+.or-ac-results .or-ac-meta {
+    font-size: 11px;
+    color    : var(--rp-text-hint);
+}
+.or-ac-results .or-ac-inactive {
+    font-size  : 10px;
+    font-weight: 600;
+    color      : #c53030;
+}
+html[data-theme="dark"] .or-ac-results .or-ac-inactive {
+    color: #feb2b2;
+}
+
+.or-hint,
+.or-readback {
+    font-size : 11px;
+    margin-top: 2px;
+    min-height: 0;
+    color     : var(--rp-text-muted);
+}
+.or-hint {
+    font-style: italic;
+}
+.or-readback:empty {
+    display: none;
+}
+.or-readback.or-ok  { color: var(--rp-accent); }
+.or-readback.or-err { color: #c53030; }
+
+.or-icon-btn {
+    display        : inline-flex;
+    align-items    : center;
+    justify-content: center;
+    width          : 26px;
+    height         : 26px;
+    padding        : 0;
+    margin-left    : 2px;
+    border         : 1px solid transparent;
+    border-radius  : 5px;
+    background     : transparent;
+    color          : var(--rp-text-muted);
+    font-size      : 12px;
+    cursor         : pointer;
+}
+.or-icon-btn:hover,
+.or-icon-btn:focus-visible {
+    border-color: var(--rp-border-mid);
+    color       : var(--rp-accent);
+    background  : var(--ork-card-bg);
+    outline     : none;
+}
+.or-icon-danger:hover,
+.or-icon-danger:focus-visible {
+    color: #c53030;
+}
+
+.or-btn-add,
+.or-btn-save,
+.or-btn-cancel {
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 5px;
+    padding      : 5px 10px;
+    border-radius: 5px;
+    font-size    : 12px;
+    font-weight  : 600;
+    font-family  : inherit;
+    cursor       : pointer;
+    border       : 1px solid var(--rp-accent);
+    background   : var(--rp-accent);
+    color        : #fff;
+}
+.or-btn-add:hover,
+.or-btn-save:hover {
+    filter: brightness(1.1);
+}
+.or-btn-cancel {
+    background  : transparent;
+    color       : var(--rp-text-body);
+    border-color: var(--rp-border-mid);
+    margin-top  : 4px;
+}
+.or-btn-add[disabled],
+.or-btn-save[disabled] {
+    opacity: 0.6;
+    cursor : progress;
+}
+.or-row-editing td {
+    background: var(--rp-bg-light);
+}
+
+/* Screen-reader-only text. */
+.or-sr {
+    position: absolute;
+    width   : 1px;
+    height  : 1px;
+    padding : 0;
+    margin  : -1px;
+    overflow: hidden;
+    clip    : rect(0, 0, 0, 0);
+    border  : 0;
+    white-space: nowrap;
+}
+
+/* Data-tip tooltips in the Actions column: anchor right so they stay on screen. */
+.or-col-actions [data-tip]:hover::after {
+    left       : auto !important;
+    right      : 0 !important;
+    transform  : none !important;
+    min-width  : 0 !important;
+    width      : max-content;
+    max-width  : 240px !important;
+    white-space: normal !important;
+    text-align : left;
+}
+
+/* ── Phone width ─────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+    .or-offices {
+        padding: 4px 8px 8px;
+    }
+    .or-office-body {
+        padding-left: 0;
+    }
+    .or-office-meta {
+        margin-left: 0;
+        width      : 100%;
+        padding-left: 20px;
+    }
+    .or-item {
+        grid-template-columns: 1fr;
+        gap                  : 0;
+    }
+    .or-ledger,
+    .or-ledger tbody,
+    .or-ledger tr,
+    .or-ledger td {
+        display: block;
+        width  : 100% !important;
+        box-sizing: border-box;
+    }
+    .or-ledger thead {
+        display: none;
+    }
+    .or-ledger tr.or-row,
+    .or-ledger tr.or-entry {
+        position     : relative;
+        padding      : 6px 0;
+        border-bottom: 1px solid var(--rp-divider);
+    }
+    .or-ledger tr.or-row td {
+        border-bottom: none;
+        padding      : 1px 6px;
+    }
+    .or-ledger tr.or-row td.or-col-holder {
+        font-weight  : 600;
+        padding-right: 96px;
+    }
+    .or-ledger tr.or-row td.or-col-note:empty {
+        display: none;
+    }
+    .or-ledger tr.or-row td.or-col-actions {
+        position: absolute;
+        top     : 4px;
+        right   : 0;
+        width   : auto !important;
+    }
+    .or-ledger tr.or-row-editing td.or-col-actions {
+        position  : static;
+        text-align: left;
+    }
+    .or-ledger tr.or-entry td {
+        padding: 3px 0;
+    }
+    .or-ledger tr.or-entry td.or-col-actions {
+        text-align: left;
+    }
+    .or-input {
+        font-size : 16px;   /* no iOS zoom-on-focus */
+        min-height: 40px;
+    }
+    .or-btn-add,
+    .or-btn-save,
+    .or-btn-cancel {
+        min-height     : 40px;
+        width          : 100%;
+        justify-content: center;
+        margin-top     : 4px;
+    }
+    .or-icon-btn {
+        width : 36px;
+        height: 36px;
+    }
+}
+
+/* ── Dark mode ───────────────────────────────────────────── */
+
+html[data-theme="dark"] .or-root {
+    --or-gap-bg      : #2e2810;
+    --or-gap-text    : #fbd38d;
+    --or-overlap-bg  : #3b1515;
+    --or-overlap-text: #feb2b2;
+    --or-present-bg  : #1c4532;
+    --or-present-text: #9ae6b4;
+    --or-current-bg  : #1a2e23;
+    --or-input-bg    : #1a202c;
+}
+html[data-theme="dark"] .or-offices {
+    background: var(--ork-card-bg, #2d3748);
+}
+html[data-theme="dark"] .or-ledger thead th {
+    background: transparent !important;
+    color     : var(--rp-text-muted) !important;
+}
+html[data-theme="dark"] .or-input {
+    background  : var(--or-input-bg) !important;
+    color       : var(--rp-text) !important;
+    border-color: var(--rp-border-mid) !important;
+}
+html[data-theme="dark"] .or-input[readonly] {
+    background: #2d3748 !important;
+    color     : var(--rp-text-muted) !important;
+}
+html[data-theme="dark"] .or-readback.or-err {
+    color: #feb2b2;
+}
+html[data-theme="dark"] .or-icon-danger:hover,
+html[data-theme="dark"] .or-icon-danger:focus-visible {
+    color: #feb2b2;
+}
+html[data-theme="dark"] .or-btn-cancel {
+    color: var(--rp-text-body);
+}

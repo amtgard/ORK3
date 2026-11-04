@@ -1206,6 +1206,7 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
+							<li><a href="<?= UIR ?>Reports/officer_history&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-scroll"></i> Officer History</a></li>
 						</ul>
 					</div>
 

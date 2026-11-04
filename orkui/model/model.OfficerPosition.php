@@ -90,4 +90,14 @@ class Model_OfficerPosition extends Model
     {
         return $this->OfficerPosition->rolls_for_org($kingdom_id, $park_id);
     }
+
+    /**
+     * Read a typed period back for the ledger's period field (OfficerTermPeriod::readBack).
+     *
+     * @return array|string error message, or [Label, StartOrdinal, EndOrdinal, PreviousSpan]
+     */
+    public function read_back_period(string $text, bool $is_current = false): array|string
+    {
+        return OfficerTermPeriod::readBack($text, $is_current);
+    }
 }

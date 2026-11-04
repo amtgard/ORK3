@@ -222,6 +222,47 @@ class OfficerTermPeriod
         return self::ordinalLabel($start - $len) . ' – ' . self::ordinalLabel($start);
     }
 
+    /**
+     * Read a typed period back for the ledger before it is saved: the label the
+     * report will show, its ordinals and the span to pre-fill for the term before.
+     * Applies the save rules the reader can know about (no "present", no future
+     * end); the server still validates on save.
+     *
+     * $isCurrent: the period is a current term's start, so it must be a single
+     * season ("Spring 24"); the end belongs to Manage Officers.
+     *
+     * @return array|string error message, or [Label, StartOrdinal, EndOrdinal, PreviousSpan]
+     */
+    public static function readBack(string $text, bool $isCurrent = false, ?int $nowOrdinal = null): array|string
+    {
+        if ($isCurrent && preg_match('/[-\x{2013}\x{2014}]|\sto\s/iu', $text)) {
+            return 'Enter only the start of a current term, e.g. "Spring 24". Its end is set from Manage Officers.';
+        }
+        $p = self::parse($text);
+        if (is_string($p)) {
+            return $p;
+        }
+        $term = [
+            'StartSeason' => $p['start']['season'], 'StartYear' => $p['start']['year'], 'StartDate' => null,
+            'EndSeason' => null, 'EndYear' => null, 'EndDate' => null,
+        ];
+        if (!$isCurrent && $p['end'] !== null) {
+            $term['EndSeason'] = $p['end']['season'];
+            $term['EndYear'] = $p['end']['year'];
+        }
+        $ord = self::resolve($term);
+        $nowOrdinal ??= self::currentOrdinal();
+        if ($ord['end'] !== null && $ord['end'] > $nowOrdinal) {
+            return 'A term cannot end in the future.';
+        }
+        return [
+            'Label' => self::label($term, $isCurrent),
+            'StartOrdinal' => $ord['start'],
+            'EndOrdinal' => $ord['end'],
+            'PreviousSpan' => self::previousSpan((int) $ord['start'], $ord['end']),
+        ];
+    }
+
     public static function currentOrdinal(?string $today = null): int
     {
         $ts = strtotime($today ?? 'today');
