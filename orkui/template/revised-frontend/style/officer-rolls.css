@@ -223,8 +223,8 @@ details[open] > summary > .or-chevron {
     vertical-align: top;
     overflow-wrap : anywhere;
 }
-.or-ledger .or-col-holder  { width: 30%; }
-.or-ledger .or-col-period  { width: 30%; }
+.or-ledger .or-col-holder  { width: 28%; }
+.or-ledger .or-col-period  { width: 36%; }
 .or-ledger .or-col-note    { width: auto; color: var(--rp-text-body); }
 .or-ledger .or-col-actions { width: 96px; text-align: right; white-space: nowrap; }
 
@@ -399,6 +399,71 @@ html[data-theme="dark"] .or-ac-results .or-ac-inactive {
     background: var(--rp-bg-light);
 }
 
+/* Season | Calendar toggle: sits left of the period input / date inputs. */
+.or-period-field {
+    display    : flex;
+    align-items: flex-start;
+    gap        : 6px;
+}
+.or-period-inputs {
+    flex     : 1 1 auto;
+    min-width: 0;
+}
+.or-period-field .or-date-pair {
+    flex-direction: column;
+    margin-top    : 0;
+}
+.or-mode {
+    display    : inline-flex;
+    flex-shrink: 0;
+}
+.or-mode-btn {
+    display        : inline-flex;
+    align-items    : center;
+    justify-content: center;
+    width          : 28px;
+    height         : 28px;
+    padding        : 0;
+    margin         : 0;
+    font-size      : 12px;
+    font-family    : inherit;
+    cursor         : pointer;
+    background     : var(--or-input-bg);
+    color          : var(--rp-text-muted);
+    border         : 1px solid var(--rp-border-mid);
+}
+.or-mode-btn:first-child {
+    border-radius: 5px 0 0 5px;
+}
+.or-mode-btn:last-child {
+    border-radius: 0 5px 5px 0;
+    border-left  : none;
+}
+.or-mode-btn:hover {
+    color: var(--rp-accent);
+}
+.or-mode-btn[aria-pressed="true"] {
+    background  : var(--rp-accent);
+    border-color: var(--rp-accent);
+    color       : #fff;
+}
+.or-mode-btn:focus-visible {
+    outline       : 2px solid var(--or-focus);
+    outline-offset: 1px;
+    position      : relative;
+    z-index       : 1;
+}
+/* Its tips are long: anchor left so they stay on screen, and wrap. */
+.or-mode [data-tip]:hover::after {
+    left       : 0 !important;
+    transform  : none !important;
+    min-width  : 0 !important;
+    width      : max-content;
+    max-width  : 240px !important;
+    white-space: normal !important;
+    text-align : left;
+}
+
 /* Screen-reader-only text. */
 .or-sr {
     position: absolute;
@@ -502,6 +567,10 @@ html[data-theme="dark"] .or-ac-results .or-ac-inactive {
         width : 36px;
         height: 36px;
     }
+    .or-mode-btn {
+        width : 40px;
+        height: 40px;
+    }
 }
 
 /* ── Dark mode ───────────────────────────────────────────── */
@@ -538,6 +607,16 @@ html[data-theme="dark"] .or-readback.or-err {
 html[data-theme="dark"] .or-icon-danger:hover,
 html[data-theme="dark"] .or-icon-danger:focus-visible {
     color: #feb2b2;
+}
+html[data-theme="dark"] .or-mode-btn {
+    background  : var(--or-input-bg) !important;
+    color       : var(--rp-text-muted) !important;
+    border-color: var(--rp-border-mid) !important;
+}
+html[data-theme="dark"] .or-mode-btn[aria-pressed="true"] {
+    background  : #4c51bf !important;
+    border-color: #4c51bf !important;
+    color       : #fff !important;
 }
 html[data-theme="dark"] .or-btn-cancel {
     color: var(--rp-text-body);

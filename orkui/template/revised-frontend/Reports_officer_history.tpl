@@ -73,6 +73,12 @@ $orExact = function (array $t) use ($orDate) {
     if ($s === '' && $e === '') {
         return '';
     }
+    // Only when the label is seasonal: a label that already shows an exact date
+    // (OfficerTermPeriod::label prefers the date per side) would just be repeated.
+    $label = (string) ($t['PeriodLabel'] ?? '');
+    if (($s !== '' && strpos($label, $s) !== false) || ($e !== '' && strpos($label, $e) !== false)) {
+        return '';
+    }
     return 'Exact: ' . ($s !== '' ? $s : '?') . ' – ' . ($e !== '' ? $e : (!empty($t['IsCurrent']) ? 'present' : '?'));
 };
 // The period as the ledger's period field shows it for editing ("Spring 2023 – Fall 2023").
@@ -140,7 +146,33 @@ $orHolderField = function () {
         . '</div>';
 };
 
-$orEditBody = function (array $o) use ($orH, $orHolder, $orHolderName, $orPeriod, $orExact, $orPeriodText, $orHolderField) {
+// The entry row's period field: a Season | Calendar toggle left of the inputs.
+// Season (the default) is the period text with read-back; Calendar is exact
+// Start/End dates. script/officer-rolls.js periodField() builds the same markup.
+$orModeTips = [
+    'season'   => 'Season Entry - use to indicate the general term if you do not know the specific dates.',
+    'calendar' => 'Calendar Entry - use to enter in specific start and end dates when known.',
+];
+$orPeriodField = function () use ($orH, $orModeTips) {
+    return '<div class="or-period-field" data-mode="season">'
+        . '<div class="or-mode" role="group" aria-label="Entry mode">'
+        . '<button type="button" class="or-mode-btn" data-or-mode="season" aria-pressed="true" tabindex="0" aria-label="Season entry"'
+        . ' data-tip="' . $orH($orModeTips['season']) . '"><i class="fas fa-sun" aria-hidden="true"></i></button>'
+        . '<button type="button" class="or-mode-btn" data-or-mode="calendar" aria-pressed="false" tabindex="-1" aria-label="Calendar entry"'
+        . ' data-tip="' . $orH($orModeTips['calendar']) . '"><i class="fas fa-calendar-alt" aria-hidden="true"></i></button>'
+        . '</div>'
+        . '<div class="or-period-inputs">'
+        . '<div class="or-pane-season"><input type="text" class="or-input or-period-input" autocomplete="off" spellcheck="false"'
+        . ' placeholder="Period, e.g. Spring–Fall 23" aria-label="Period"></div>'
+        . '<div class="or-pane-calendar" hidden><div class="or-date-pair">'
+        . '<input type="text" class="or-input or-date-input" data-side="start" autocomplete="off" placeholder="Start date" aria-label="Start date">'
+        . '<input type="text" class="or-input or-date-input" data-side="end" autocomplete="off" placeholder="End date (blank: unknown)" aria-label="End date, blank if unknown">'
+        . '</div></div>'
+        . '<div class="or-readback" aria-live="polite"></div>'
+        . '</div></div>';
+};
+
+$orEditBody = function (array $o) use ($orH, $orHolder, $orHolderName, $orPeriod, $orExact, $orPeriodText, $orHolderField, $orPeriodField) {
     $out = '<div class="or-ledger-wrap"><table class="or-ledger">'
         . '<thead><tr><th class="or-col-holder">Holder</th><th class="or-col-period">Period</th>'
         . '<th class="or-col-note">Note</th><th class="or-col-actions"><span class="or-sr">Actions</span></th></tr></thead><tbody>';
@@ -194,9 +226,7 @@ $orEditBody = function (array $o) use ($orH, $orHolder, $orHolderName, $orPeriod
     if ((int) ($o['PositionId'] ?? 0) > 0) {
         $out .= '<tr class="or-entry" data-or-entry data-position-id="' . (int) $o['PositionId'] . '">'
             . '<td class="or-col-holder" data-label="Holder">' . $orHolderField() . '</td>'
-            . '<td class="or-col-period" data-label="Period"><input type="text" class="or-input or-period-input" autocomplete="off" spellcheck="false"'
-            . ' placeholder="Period, e.g. Spring–Fall 23" aria-label="Period">'
-            . '<div class="or-readback" aria-live="polite"></div></td>'
+            . '<td class="or-col-period" data-label="Period">' . $orPeriodField() . '</td>'
             . '<td class="or-col-note" data-label="Note"><input type="text" class="or-input or-note-input" maxlength="500" placeholder="Note" aria-label="Note"></td>'
             . '<td class="or-col-actions"><button type="button" class="or-btn-add" data-or-act="add" data-tip="Add this term (Enter)">'
             . '<i class="fas fa-plus" aria-hidden="true"></i> Add</button></td></tr>';
@@ -264,7 +294,7 @@ $orSection = function (array $o, bool $open) use ($orH, $orSummary, $orViewBody,
     if ($orEdit && $orFolded) {
         echo '<details class="or-folded"' . ($orFirst ? ' open' : '') . '>'
             . '<summary class="or-folded-summary"><i class="fas fa-chevron-right or-chevron" aria-hidden="true"></i>'
-            . 'Other offices (' . count($orFolded) . ')<span class="or-folded-hint">no terms recorded yet</span></summary>'
+            . 'Other offices <span class="or-folded-count">(' . count($orFolded) . ')</span><span class="or-folded-hint">no terms recorded yet</span></summary>'
             . '<div class="or-folded-body">';
         foreach ($orFolded as $o) {
             echo $orSection($o, false);

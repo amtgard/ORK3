@@ -289,7 +289,7 @@ class Controller_Reports extends Controller
         $scope       = $park_id > 0 ? 'park' : 'kingdom';
         $scope_id    = $park_id > 0 ? $park_id : $kingdom_id;
         $scope_name  = $this->_resolve_scope_name($park_id > 0 ? 'Park' : 'Kingdom', $scope_id);
-        if (!valid_id($kingdom_id) || $scope_name === '') {
+        if (!self::officer_history_scope_found($kingdom_id, $scope_name)) {
             header('Location: ' . UIR);
             exit;
         }
@@ -303,10 +303,19 @@ class Controller_Reports extends Controller
         $this->data['Rolls']      = $this->OfficerPosition->rolls($kingdom_id, $park_id);
         $this->data['ScopeType']  = $scope;
         $this->data['ScopeId']    = $scope_id;
-        $this->data['ScopeName']  = $scope_name;
+        $this->data['ScopeName']  = (string)$scope_name;
         $this->data['KingdomId']  = $kingdom_id;
         $this->data['page_title'] = 'Officer History';
         $this->data['menu']['reports']['url'] = UIR . ($park_id > 0 ? 'Park' : 'Kingdom') . '/profile/' . $scope_id . '&tab=reports';
+    }
+
+    /**
+     * Whether an officer_history scope exists. get_kingdom_name()/get_park_name()
+     * answer null (not '') for an unknown id, so both count as not found.
+     */
+    public static function officer_history_scope_found($kingdom_id, $scope_name): bool
+    {
+        return valid_id($kingdom_id) && trim((string)$scope_name) !== '';
     }
 
     public function courts($params = null)

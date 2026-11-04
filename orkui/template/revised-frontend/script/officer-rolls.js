@@ -24,6 +24,13 @@
 
     var DEBOUNCE = (typeof AUTOCOMPLETE_DEBOUNCE_MS === 'number') ? AUTOCOMPLETE_DEBOUNCE_MS : 250;
     var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var MODE_TIPS = {
+        season: 'Season Entry - use to indicate the general term if you do not know the specific dates.',
+        calendar: 'Calendar Entry - use to enter in specific start and end dates when known.'
+    };
+    // Season | Calendar for entry rows: the last mode chosen, kept for this page session.
+    var entryMode = 'season';
+    try { if (window.sessionStorage.getItem('orEntryMode') === 'calendar') { entryMode = 'calendar'; } } catch (e) { /* storage blocked */ }
     var readCache = {};   // (current ? 'c|' : 'p|') + period text -> parseperiod response
     var editingRow = null;
 
@@ -96,6 +103,9 @@
     function exactText(t) {
         var s = fmtDate(t.StartDate), e = fmtDate(t.EndDate);
         if (!s && !e) { return ''; }
+        // Only under a seasonal label: a label that already shows the date would repeat it.
+        var label = String(t.PeriodLabel || '');
+        if ((s && label.indexOf(s) !== -1) || (e && label.indexOf(e) !== -1)) { return ''; }
         return 'Exact: ' + (s || '?') + ' – ' + (e || (t.IsCurrent ? 'present' : '?'));
     }
 
@@ -167,14 +177,99 @@
         }, [holderTd, periodTd, h('td', { 'class': 'or-col-note', 'data-label': 'Note', text: t.Note || '' }), actions]);
     }
 
+    function dateInput(value, placeholder, side) {
+        var input = h('input', { type: 'text', 'class': 'or-input or-date-input', 'data-side': side, placeholder: placeholder, autocomplete: 'off', 'aria-label': placeholder });
+        input.value = value || '';
+        return input;
+    }
+
+    // The period field: a Season | Calendar toggle left of the inputs (the template's
+    // $orPeriodField builds the same markup for server-rendered entry rows).
+    // opts: {period, startDate, endDate, current}
+    function periodField(opts) {
+        var current = !!opts.current;
+        var toggle = h('div', { 'class': 'or-mode', role: 'group', 'aria-label': 'Entry mode' }, [
+            h('button', { type: 'button', 'class': 'or-mode-btn', 'data-or-mode': 'season', 'aria-pressed': 'true', tabindex: '0',
+                'aria-label': 'Season entry', 'data-tip': MODE_TIPS.season }, [icon('sun')]),
+            h('button', { type: 'button', 'class': 'or-mode-btn', 'data-or-mode': 'calendar', 'aria-pressed': 'false', tabindex: '-1',
+                'aria-label': 'Calendar entry', 'data-tip': MODE_TIPS.calendar }, [icon('calendar-alt')])
+        ]);
+        var period = h('input', { type: 'text', 'class': 'or-input or-period-input', autocomplete: 'off', spellcheck: 'false',
+            placeholder: current ? 'Start, e.g. Spring 24' : 'Period, e.g. Spring–Fall 23', 'aria-label': current ? 'Start' : 'Period' });
+        period.value = opts.period || '';
+        var pair = h('div', { 'class': 'or-date-pair' }, [dateInput(opts.startDate, 'Start date', 'start')]);
+        if (!current) { pair.appendChild(dateInput(opts.endDate, 'End date (blank: unknown)', 'end')); }
+        var calendar = h('div', { 'class': 'or-pane-calendar' }, [pair]);
+        calendar.hidden = true;
+        return h('div', { 'class': 'or-period-field', 'data-mode': 'season' }, [
+            toggle,
+            h('div', { 'class': 'or-period-inputs' }, [
+                h('div', { 'class': 'or-pane-season' }, [period]),
+                calendar,
+                h('div', { 'class': 'or-readback', 'aria-live': 'polite' })
+            ])
+        ]);
+    }
+
+    function initDate(input) {
+        if (input._flatpickr || input.type === 'date') { return; }
+        if (typeof window.flatpickr === 'function') {
+            window.flatpickr(input, {
+                altInput: true, altFormat: 'F j, Y', dateFormat: 'Y-m-d', allowInput: true,
+                altInputClass: 'or-input or-date-input-alt', maxDate: 'today'
+            });
+            var alt = input._flatpickr && input._flatpickr.altInput;
+            if (alt) { alt.setAttribute('aria-label', input.getAttribute('aria-label') || ''); }
+        } else {
+            input.type = 'date';
+        }
+    }
+
+    function fieldMode(field) { return field && field.getAttribute('data-mode') === 'calendar' ? 'calendar' : 'season'; }
+
+    // The first input of the field's active pane (Flatpickr's visible alt input in Calendar).
+    function activeInput(field) {
+        if (fieldMode(field) === 'season') { return field.querySelector('.or-period-input'); }
+        var start = field.querySelector('.or-date-input');
+        return (start && start._flatpickr && start._flatpickr.altInput) || start;
+    }
+
+    function setMode(field, mode) {
+        field.setAttribute('data-mode', mode);
+        field.querySelectorAll('.or-mode-btn').forEach(function (b) {
+            var on = b.getAttribute('data-or-mode') === mode;
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            b.setAttribute('tabindex', on ? '0' : '-1');
+        });
+        field.querySelector('.or-pane-season').hidden = mode !== 'season';
+        field.querySelector('.or-pane-calendar').hidden = mode !== 'calendar';
+        var box = field.querySelector('.or-readback');
+        box.textContent = '';
+        box.className = 'or-readback';
+        if (mode === 'calendar') {
+            field.querySelectorAll('.or-date-input').forEach(initDate);
+        } else {
+            var period = field.querySelector('.or-period-input');
+            if (period.value.trim()) { readBack(period); }
+        }
+    }
+
+    function chooseMode(btn, focusField) {
+        var field = btn.closest('.or-period-field');
+        var mode = btn.getAttribute('data-or-mode');
+        setMode(field, mode);
+        var tr = field.closest('tr');
+        if (tr && tr.classList.contains('or-entry')) {
+            entryMode = mode;
+            try { window.sessionStorage.setItem('orEntryMode', mode); } catch (e) { /* storage blocked */ }
+        }
+        if (focusField) { var t = activeInput(field); if (t) { t.focus(); } }
+    }
+
     function entryRow(positionId) {
         return h('tr', { 'class': 'or-entry', 'data-or-entry': true, 'data-position-id': positionId }, [
             h('td', { 'class': 'or-col-holder', 'data-label': 'Holder' }, [holderField('', '', 'Holder')]),
-            h('td', { 'class': 'or-col-period', 'data-label': 'Period' }, [
-                h('input', { type: 'text', 'class': 'or-input or-period-input', autocomplete: 'off', spellcheck: 'false',
-                    placeholder: 'Period, e.g. Spring–Fall 23', 'aria-label': 'Period' }),
-                h('div', { 'class': 'or-readback', 'aria-live': 'polite' })
-            ]),
+            h('td', { 'class': 'or-col-period', 'data-label': 'Period' }, [periodField({})]),
             h('td', { 'class': 'or-col-note', 'data-label': 'Note' }, [
                 h('input', { type: 'text', 'class': 'or-input or-note-input', maxlength: '500', placeholder: 'Note', 'aria-label': 'Note' })
             ]),
@@ -233,11 +328,13 @@
             if (editingRow && old.contains(editingRow)) { editingRow = null; }
             var fresh = renderSection(office, true);
             old.parentNode.replaceChild(fresh, old);
+            unfold(fresh, office, d.Offices || []);
+            applyEntryMode(fresh);
             if (after.focusEntry) {
                 var entry = fresh.querySelector('tr.or-entry');
                 if (entry) {
                     var period = entry.querySelector('.or-period-input');
-                    if (after.prefill && period) {
+                    if (after.prefill && period && entryMode === 'season') {
                         period.value = after.prefill;
                         readBack(period);
                     }
@@ -246,6 +343,34 @@
                 }
             }
         });
+    }
+
+    // Put every entry row in the sticky entry mode.
+    function applyEntryMode(scope) {
+        scope.querySelectorAll('tr.or-entry .or-period-field').forEach(function (f) {
+            if (fieldMode(f) !== entryMode) { setMode(f, entryMode); }
+        });
+    }
+
+    // An office in "Other offices (n)" that now has terms moves to its registry
+    // position among the main sections; the fold's count follows, and the fold
+    // goes away once it is empty.
+    function unfold(section, office, offices) {
+        var fold = section.closest('details.or-folded');
+        if (!fold || !(office.TermCount > 0)) { return; }
+        var order = offices.map(function (o) { return o.Key; });
+        var mine = order.indexOf(office.Key);
+        var list = document.getElementById('or-offices');
+        var before = fold;
+        Array.prototype.some.call(list.querySelectorAll(':scope > details.or-office'), function (s) {
+            if (order.indexOf(s.getAttribute('data-key')) > mine) { before = s; return true; }
+            return false;
+        });
+        list.insertBefore(section, before);
+        var left = fold.querySelectorAll('details.or-office').length;
+        if (!left) { fold.parentNode.removeChild(fold); return; }
+        var count = fold.querySelector('.or-folded-count');
+        if (count) { count.textContent = '(' + left + ')'; }
     }
 
     // ── Messages ─────────────────────────────────────────────
@@ -342,7 +467,8 @@
         if (q.length < 2) { acClose(wrap); return; }
         input._orTimer = setTimeout(function () {
             var seq = ++searchSeq;
-            fetch(C.uir + 'SearchAjax/universal&focus=player&inactive=1&q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+            fetch(C.uir + 'SearchAjax/universal&focus=player&inactive=1&kid=' + (C.kingdomId | 0)
+                + (C.parkId ? '&pid=' + (C.parkId | 0) : '') + '&q=' + encodeURIComponent(q), { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
                     if (seq !== searchSeq || document.activeElement !== input || input.value.trim() !== q) { return; }
@@ -389,7 +515,8 @@
         var tr = wrap.closest('tr');
         if (tr && tr._orMode === 'link') { saveLink(tr); return; }
         // Move on to the period, as Tab would.
-        var next = tr ? tr.querySelector('.or-period-input:not([readonly])') : null;
+        var field = tr ? tr.querySelector('.or-period-field') : null;
+        var next = field ? activeInput(field) : null;
         if (next) { next.focus(); } else { input.focus(); }
     }
 
@@ -400,27 +527,35 @@
         var section = sectionOf(tr);
         var wrap = tr.querySelector('.or-ac-wrap');
         var holder = wrap.querySelector('.or-holder-input'), hid = wrap.querySelector('.or-holder-id');
-        var period = tr.querySelector('.or-period-input'), note = tr.querySelector('.or-note-input');
+        var field = tr.querySelector('.or-period-field'), note = tr.querySelector('.or-note-input');
+        var calendar = fieldMode(field) === 'calendar';
+        var period = field.querySelector('.or-period-input');
         var name = holder.value.trim(), text = period.value.trim();
+        var dates = field.querySelectorAll('.or-date-input');
+        var startDate = dates[0].value.trim(), endDate = dates[1] ? dates[1].value.trim() : '';
         if (!name) { rowMessage(tr, 'Enter a holder: pick a player or type a name.'); holder.focus(); return; }
-        if (!text) { rowMessage(tr, 'Enter a period, e.g. "Spring–Fall 23".'); period.focus(); return; }
+        if (!calendar && !text) { rowMessage(tr, 'Enter a period, e.g. "Spring–Fall 23".'); period.focus(); return; }
+        if (calendar && !startDate) { rowMessage(tr, 'Enter a start date. Leave the end blank if it is unknown.'); activeInput(field).focus(); return; }
         var id = parseInt(hid.value, 10) || 0;
         var btn = tr.querySelector('[data-or-act="add"]');
-        tr._orBusy = true;
-        if (btn) { btn.disabled = true; }
-        post('addhistory', {
+        var fields = {
             PositionId: tr.getAttribute('data-position-id'),
             MundaneId: id,
             HolderName: id ? '' : name,
-            Period: text,
             Note: note.value.trim()
-        }).then(function (d) {
+        };
+        // Calendar sends exact dates and no Period; a blank end means end unknown.
+        if (calendar) { fields.StartDate = startDate; fields.EndDate = endDate; } else { fields.Period = text; }
+        tr._orBusy = true;
+        if (btn) { btn.disabled = true; }
+        post('addhistory', fields).then(function (d) {
             if (Number(d.status) !== 0) {
                 rowMessage(tr, d.error || 'The term could not be added.');
-                period.focus();
+                var back = activeInput(field);
+                if (back) { back.focus(); }
                 return null;
             }
-            return previousSpan(text).then(function (span) {
+            return (calendar ? Promise.resolve('') : previousSpan(text)).then(function (span) {
                 return refreshSection(section.getAttribute('data-key'), { focusEntry: true, prefill: span });
             });
         }).catch(failed).then(function () {
@@ -430,23 +565,6 @@
     }
 
     // ── Edit in place ────────────────────────────────────────
-
-    function dateInput(value, placeholder) {
-        var input = h('input', { type: 'text', 'class': 'or-input or-date-input', placeholder: placeholder, autocomplete: 'off', 'aria-label': placeholder });
-        input.value = value || '';
-        return input;
-    }
-
-    function initDate(input) {
-        if (typeof window.flatpickr === 'function') {
-            window.flatpickr(input, {
-                altInput: true, altFormat: 'M j, Y', dateFormat: 'Y-m-d', allowInput: true,
-                altInputClass: 'or-input or-date-input-alt', maxDate: 'today'
-            });
-        } else {
-            input.type = 'date';
-        }
-    }
 
     function cancelEdit(tr) {
         if (!tr || !tr._orOrig) { return; }
@@ -490,16 +608,12 @@
         }
 
         periodTd.textContent = '';
-        var period = h('input', { type: 'text', 'class': 'or-input or-period-input', autocomplete: 'off', spellcheck: 'false',
-            placeholder: current ? 'Start, e.g. Spring 24' : 'Period, e.g. Spring–Fall 23', 'aria-label': current ? 'Start' : 'Period' });
-        period.value = d.period || '';
-        var start = dateInput(d.startDate, current ? 'Exact start (optional)' : 'Exact start');
-        var pair = h('div', { 'class': 'or-date-pair' }, [start]);
-        if (!current) { pair.appendChild(dateInput(d.endDate, 'Exact end')); }
-        periodTd.appendChild(period);
-        periodTd.appendChild(h('div', { 'class': 'or-readback', 'aria-live': 'polite' }));
-        periodTd.appendChild(pair);
-        pair.querySelectorAll('.or-date-input').forEach(initDate);
+        var field = periodField({ period: d.period, startDate: d.startDate, endDate: current ? '' : d.endDate, current: current });
+        periodTd.appendChild(field);
+        // Calendar when the term has an exact date, otherwise Season.
+        var hasExact = !!(d.startDate || (!current && d.endDate));
+        if (hasExact) { setMode(field, 'calendar'); }
+        var period = field.querySelector('.or-period-input');
 
         noteTd.textContent = '';
         var note = h('input', { type: 'text', 'class': 'or-input or-note-input', maxlength: '500', placeholder: 'Note', 'aria-label': 'Note' });
@@ -507,11 +621,11 @@
         noteTd.appendChild(note);
 
         editActions(tr, true);
-        if (period.value) { readBack(period); }
+        if (!hasExact && period.value) { readBack(period); }
 
         var target = (focusCell === 'note') ? note
-            : (focusCell === 'period' || current) ? period
-            : (tr.querySelector('.or-holder-input') || period);
+            : (focusCell === 'period' || current) ? activeInput(field)
+            : (tr.querySelector('.or-holder-input') || activeInput(field));
         target.focus();
         if (typeof target.select === 'function') { target.select(); }
     }
@@ -527,10 +641,12 @@
             var name = wrap.querySelector('.or-holder-input').value.trim();
             var id = parseInt(wrap.querySelector('.or-holder-id').value, 10) || 0;
             var origId = parseInt(d.mundaneId, 10) || 0;
+            // The same name retyped on a linked row, without re-picking it, keeps the link.
+            var sameLinked = id === 0 && origId > 0 && name === (d.holder || '').trim();
             if (id > 0 && id !== origId) {
                 fields.MundaneId = id;
                 changed = true;
-            } else if (id === 0 && (origId > 0 || name !== (d.holder || ''))) {
+            } else if (id === 0 && !sameLinked && (origId > 0 || name !== (d.holder || ''))) {
                 if (!name) { rowMessage(tr, 'Enter a holder: pick a player or type a name.'); return; }
                 // MundaneId=0 is what unlinks; HolderName alone is ignored on a linked row.
                 fields.MundaneId = 0;
@@ -539,19 +655,28 @@
             }
         }
 
-        var periodInput = tr.querySelector('.or-period-input');
+        var field = tr.querySelector('.or-period-field');
+        var periodInput = field.querySelector('.or-period-input');
         var text = periodInput.value.trim();
-        var dates = tr.querySelectorAll('.or-date-input');
+        var dates = field.querySelectorAll('.or-date-input');
         var startDate = dates[0] ? dates[0].value.trim() : '';
         var endDate = dates[1] ? dates[1].value.trim() : '';
-        if (text !== (d.period || '').trim()) {
-            if (!text && !startDate) { rowMessage(tr, 'A term needs a start: enter a period or an exact start date.'); periodInput.focus(); return; }
-            fields.Period = text;
-            // A sent Period clears any exact date not sent with it: resend the ones shown.
-            fields.StartDate = startDate;
-            if (!current) { fields.EndDate = endDate; }
-            changed = true;
+        var hadExact = !!(d.startDate || (!current && d.endDate));
+        if (fieldMode(field) === 'season') {
+            // Season: send the period when it changed, or when the row had exact dates
+            // and the user switched to Season -- a sent Period clears the unsent dates.
+            if (text !== (d.period || '').trim() || hadExact) {
+                if (!text) { rowMessage(tr, 'Enter a period, e.g. "Spring–Fall 23".'); periodInput.focus(); return; }
+                fields.Period = text;
+                changed = true;
+            }
         } else {
+            // Calendar: exact dates only, never Period (the season stays as a fallback).
+            if (!startDate && !(d.period || '').trim()) {
+                rowMessage(tr, 'A term needs a start: enter a start date.');
+                activeInput(field).focus();
+                return;
+            }
             if (startDate !== (d.startDate || '')) { fields.StartDate = startDate; changed = true; }
             if (!current && endDate !== (d.endDate || '')) { fields.EndDate = endDate; changed = true; }
         }
@@ -636,6 +761,9 @@
         var item = e.target.closest('.kn-ac-item');
         if (item) { acPick(item.closest('.or-ac-wrap'), item); return; }
 
+        var modeBtn = e.target.closest('[data-or-mode]');
+        if (modeBtn) { chooseMode(modeBtn, e.detail > 0); return; }
+
         var btn = e.target.closest('[data-or-act]');
         var tr = e.target.closest('tr');
         if (btn && tr) {
@@ -662,6 +790,15 @@
         var t = e.target;
         var tr = t.closest ? t.closest('tr') : null;
         var wrap = t.classList && t.classList.contains('or-holder-input') ? t.closest('.or-ac-wrap') : null;
+
+        // Season | Calendar is one tab stop; the arrow keys move between the two.
+        if (t.hasAttribute && t.hasAttribute('data-or-mode') && /^Arrow(Left|Right|Up|Down)$/.test(e.key)) {
+            e.preventDefault();
+            var other = t.closest('.or-mode').querySelector('[data-or-mode="' + (t.getAttribute('data-or-mode') === 'season' ? 'calendar' : 'season') + '"]');
+            chooseMode(other, false);
+            other.focus();
+            return;
+        }
 
         if (wrap && acOpen(wrap)) {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -695,4 +832,6 @@
     document.addEventListener('click', function (e) {
         if (!e.target.closest || !e.target.closest('.or-ac-wrap')) { acCloseAll(null); }
     });
+
+    applyEntryMode(root);
 })();

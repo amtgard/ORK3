@@ -63,6 +63,12 @@ final class OfficerRollsPageTest extends TestCase
                     'FlagAfter' => ['Type' => 'gap', 'Label' => 'Gap: Spring 2022 – Winter 2023']]),
                 self::term(['OfficerHistoryId' => 503, 'MundaneId' => 10, 'Persona' => 'Sir Bors', 'StartSeason' => 'fall',
                     'StartYear' => 2021, 'EndSeason' => 'winter', 'EndYear' => 2022, 'PeriodLabel' => 'Fall 2021 – Winter 2022']),
+                // The label already renders the exact date (OfficerTermPeriod::label prefers it).
+                self::term(['OfficerHistoryId' => 505, 'HolderName' => 'A. Steele', 'StartDate' => '2020-08-09',
+                    'PeriodLabel' => 'Aug 9, 2020 – ?']),
+                // A seasonal label with exact dates also recorded.
+                self::term(['OfficerHistoryId' => 506, 'HolderName' => 'B. Seasonal', 'StartSeason' => 'spring', 'StartYear' => 2019,
+                    'EndSeason' => 'fall', 'EndYear' => 2019, 'StartDate' => '2019-03-30', 'PeriodLabel' => 'Spring 2019 – Fall 2019']),
             ]),
             self::office('position:12', 12, 'Regent', [
                 self::term(['MundaneId' => 12, 'Persona' => 'Lady Seated', 'IsCurrent' => true, 'Synthetic' => true,
@@ -147,7 +153,7 @@ final class OfficerRollsPageTest extends TestCase
         self::assertSame(3, substr_count($html, 'data-or-entry'));
         self::assertMatchesRegularExpression('/data-or-entry[^>]*data-position-id="13"|data-position-id="13"[^>]*data-or-entry/', $html);
         // The empty office is folded into "Other offices (1)".
-        self::assertStringContainsString('Other offices (1)', $html);
+        self::assertStringContainsString('Other offices <span class="or-folded-count">(1)</span>', $html);
         // Global player search, kn-ac dropdown.
         self::assertStringContainsString('kn-ac-results', $html);
         self::assertStringContainsString('officer-rolls.js', $html);
@@ -178,6 +184,47 @@ final class OfficerRollsPageTest extends TestCase
         $synthetic = self::row($html, 0);
         self::assertStringContainsString('Lady Seated', $synthetic);
         self::assertStringNotContainsString('data-or-act=', $synthetic);
+    }
+
+    /** The exact-dates sub-line shows only under a seasonal label, never repeating a dated one. */
+    public function testExactDatesLineOnlyUnderASeasonalLabel(): void
+    {
+        foreach ([false, true] as $edit) {
+            $html = self::render(true, $edit);
+            self::assertStringContainsString('Aug 9, 2020 – ?', $html);
+            self::assertStringNotContainsString('Exact: Aug 9, 2020', $html);
+            self::assertStringContainsString('Exact: Mar 30, 2019 – ?', $html);
+        }
+    }
+
+    /** Season | Calendar toggle in every entry row, left of the inputs, with the house tooltips. */
+    public function testEntryRowsHaveTheSeasonCalendarToggle(): void
+    {
+        $html = self::render(true, true);
+        self::assertSame(3, substr_count($html, '<div class="or-period-field" data-mode="season">'));
+        $season = 'data-tip="Season Entry - use to indicate the general term if you do not know the specific dates."';
+        $calendar = 'data-tip="Calendar Entry - use to enter in specific start and end dates when known."';
+        self::assertSame(3, substr_count($html, $season));
+        self::assertSame(3, substr_count($html, $calendar));
+        self::assertMatchesRegularExpression('/data-or-mode="season" aria-pressed="true" tabindex="0"[^>]*><i class="fas fa-sun"/', $html);
+        self::assertMatchesRegularExpression('/data-or-mode="calendar" aria-pressed="false" tabindex="-1"[^>]*><i class="fas fa-calendar-alt"/', $html);
+        // Toggle first, then the inputs: Tab reaches it before the field.
+        $field = substr($html, (int) strpos($html, '<div class="or-period-field"'), 2000);
+        self::assertLessThan(strpos($field, 'or-period-input'), strpos($field, 'data-or-mode="season"'));
+        self::assertMatchesRegularExpression('/<div class="or-pane-calendar" hidden>.*data-side="start".*data-side="end"/s', $field);
+        self::assertStringNotContainsString(' title=', $field);
+        // Not in the public report.
+        self::assertStringNotContainsString('data-or-mode', self::render(true, false));
+    }
+
+    /** An unknown kingdom or park (null or empty name) is not found, so the page redirects. */
+    public function testUnknownScopeIsNotFound(): void
+    {
+        require_once ORK3_ROOT . '/orkui/controller/controller.Reports.php';
+        self::assertFalse(Controller_Reports::officer_history_scope_found(99999, null));
+        self::assertFalse(Controller_Reports::officer_history_scope_found(99999, ''));
+        self::assertFalse(Controller_Reports::officer_history_scope_found(0, 'Crystal Groves'));
+        self::assertTrue(Controller_Reports::officer_history_scope_found(17, 'Crystal Groves'));
     }
 
     public function testReportsTabsLinkTheNewPage(): void
