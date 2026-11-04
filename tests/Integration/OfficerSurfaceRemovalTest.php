@@ -436,4 +436,15 @@ final class OfficerSurfaceRemovalTest extends TestCase
         self::assertSame([], $mapOnly, '$action_kind entries with NO dispatch case: ' . implode(', ', $mapOnly));
         self::assertSame([], $caseOnly, "dispatch case(s) with NO \$action_kind entry: " . implode(', ', $caseOnly));
     }
+
+    public function testCorrectTheRollsTabLinksToTheRollsPage(): void
+    {
+        $tpl = file_get_contents(dirname(__DIR__, 2) . '/orkui/template/revised-frontend/partials/_correct_the_rolls.tpl');
+
+        self::assertStringContainsString('Reports/officer_history', $tpl);
+        self::assertStringContainsString('edit=1', $tpl);
+        self::assertStringNotContainsString('addhistory', $tpl);
+        self::assertStringNotContainsString('crAdd(', $tpl);
+        self::assertStringNotContainsString('<form', $tpl);
+    }
 }

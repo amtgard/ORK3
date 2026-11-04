@@ -1086,11 +1086,6 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 			document.getElementById('mo-retired-panel').style.display = 'none';
 			toggle.classList.remove('mo-open');
 		}
-		// The Correct the Rolls tab's Add-a-Term office picker is sourced from
-		// this same position list, so it stays in sync with every mutation.
-		// crPopulateOfficeSelect() now lives in _correct_the_rolls.tpl's own
-		// <script>, a separate closure -- window. is required here.
-		window.crPopulateOfficeSelect();
 	}
 
 	window.moToggleRetired = function() {
@@ -1913,9 +1908,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	};
 
 	// ---------- Set Term Start modal (the unknown-start-date nudge) ----------
-	// Same officerhistory READ endpoint Correct the Rolls uses (_correct_the_rolls.tpl's
-	// crUrl()) -- duplicated here in shape rather than reached across the file boundary,
-	// since it is private to that partial's own closure. No new endpoint.
+	// Reads the officerhistory endpoint. No new endpoint.
 	function historyUrl() {
 		return (window.MoConfig && MoConfig.parkId)
 			? (UIR + 'ParkAjax/park/' + MoConfig.parkId + '/officerhistory')
@@ -2012,9 +2005,6 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 			moPost('edithistory', { OfficerHistoryId: hid, StartDate: raw }, function() {
 				moCloseStart();
 				moRefresh();
-				// Correct the Rolls lists this same row; without this it would show a
-				// stale "Unknown start" until the user manually switches tabs and back.
-				if (typeof window.crRefresh === 'function') { try { window.crRefresh(); } catch (e) {} }
 			}, function() {
 				btn.disabled = false;
 				btn.innerHTML = original;
