@@ -1,0 +1,194 @@
+<?php
+
+/**
+ * Thin pass-through to the BonusCredit domain class
+ * (system/lib/ork3/class.BonusCredit.php): bonus credits, the class credits
+ * that are not attendance, and the categories they are granted for.
+ *
+ * No SQL and no business logic here; every method forwards unchanged. The
+ * domain takes the acting user's id, which the controller reads from the
+ * session.
+ */
+class Model_BonusCredit extends Model
+{
+    public function categories(string $scopeType, int $scopeId, bool $includeArchived = false): array
+    {
+        return $this->_bonus()->categories($scopeType, $scopeId, $includeArchived);
+    }
+
+    public function category(int $categoryId): ?array
+    {
+        return $this->_bonus()->category($categoryId);
+    }
+
+    public function create_category(int $uid, array $fields): array
+    {
+        return $this->_bonus()->createCategory($uid, $fields);
+    }
+
+    public function archive_category(int $uid, int $categoryId): array
+    {
+        return $this->_bonus()->archiveCategory($uid, $categoryId);
+    }
+
+    public function restore_category(int $uid, int $categoryId): array
+    {
+        return $this->_bonus()->restoreCategory($uid, $categoryId);
+    }
+
+    public function grant(int $uid, array $fields): array
+    {
+        return $this->_bonus()->grant($uid, $fields);
+    }
+
+    /** Change a live credit's amount or class. */
+    public function update(int $uid, int $bonusCreditId, array $fields): array
+    {
+        return $this->_bonus()->update($uid, $bonusCreditId, $fields);
+    }
+
+    public function revoke(int $uid, int $bonusCreditId, string $note = ''): array
+    {
+        return $this->_bonus()->revoke($uid, $bonusCreditId, $note);
+    }
+
+    public function allowance(int $categoryId, int $mundaneId): array
+    {
+        return $this->_bonus()->allowance($categoryId, $mundaneId);
+    }
+
+    public function for_player(int $mundaneId, bool $includeRevoked = false): array
+    {
+        return $this->_bonus()->forPlayer($mundaneId, $includeRevoked);
+    }
+
+    public function for_category(int $categoryId, int $parkId = 0, int $limit = 200, int $kingdomId = 0, int $viewerId = 0): array
+    {
+        return $this->_bonus()->forCategory($categoryId, $parkId, $limit, $kingdomId, $viewerId);
+    }
+
+    public function is_ork_admin(int $uid): bool
+    {
+        return $this->_bonus()->isOrkAdmin($uid);
+    }
+
+    public function categories_for_kingdom(int $kingdomId, bool $includeArchived = false): array
+    {
+        return $this->_bonus()->categoriesForKingdom($kingdomId, $includeArchived);
+    }
+
+    public function ork_credits_for(int $kingdomId): array
+    {
+        return $this->_bonus()->orkCreditsFor($kingdomId);
+    }
+
+    public function adoptions(int $categoryId): array
+    {
+        return $this->_bonus()->adoptions($categoryId);
+    }
+
+    public function adopt(int $uid, int $categoryId, int $kingdomId): array
+    {
+        return $this->_bonus()->adopt($uid, $categoryId, $kingdomId);
+    }
+
+    public function withdraw(int $uid, int $categoryId, int $kingdomId): array
+    {
+        return $this->_bonus()->withdraw($uid, $categoryId, $kingdomId);
+    }
+
+    public function outside_credit_setting(int $kingdomId): array
+    {
+        return $this->_bonus()->outsideCreditSetting($kingdomId);
+    }
+
+    public function set_accepts_outside(int $uid, int $kingdomId, bool $accept): array
+    {
+        return $this->_bonus()->setAcceptsOutside($uid, $kingdomId, $accept);
+    }
+
+    public function can_grant_for_defining_kingdom(int $uid, array $category): bool
+    {
+        return $this->_bonus()->canGrantForDefiningKingdom($uid, $category);
+    }
+
+    public function categories_for_park(int $parkId): array
+    {
+        return $this->_bonus()->categoriesForPark($parkId);
+    }
+
+    public function kingdom_ancestry(int $kingdomId): array
+    {
+        return $this->_bonus()->kingdomAncestry($kingdomId);
+    }
+
+    /** May $uid define credits for a kingdom? */
+    public function can_define(int $uid, string $scopeType, int $scopeId): bool
+    {
+        return $this->_bonus()->canDefine($uid, $scopeType, $scopeId);
+    }
+
+    /** May $uid hand out credits anywhere in a kingdom? */
+    public function can_grant_in_kingdom(int $uid, int $kingdomId): bool
+    {
+        return $this->_bonus()->canGrantInKingdom($uid, $kingdomId);
+    }
+
+    /** May $uid hand out credits to a park's players? */
+    public function can_grant(int $uid, int $parkId): bool
+    {
+        return $this->_bonus()->canGrant($uid, $parkId);
+    }
+
+    /** May $uid hand out this credit from this park or kingdom page? */
+    public function can_grant_from(int $uid, string $hostType, int $hostId, array $category): bool
+    {
+        return $this->_bonus()->canGrantFrom($uid, $hostType, $hostId, $category);
+    }
+
+    /** Is this credit on offer in a kingdom (and so on its parks' pages)? */
+    public function offered_at(int $kingdomId, array $category): bool
+    {
+        return $this->_bonus()->offeredAt($kingdomId, $category);
+    }
+
+    public function park_kingdom(int $parkId): int
+    {
+        return $this->_bonus()->parkKingdom($parkId);
+    }
+
+    public function can_appoint(int $uid, int $kingdomId): bool
+    {
+        return $this->_bonus()->canAppoint($uid, $kingdomId);
+    }
+
+    public function granters(int $kingdomId): array
+    {
+        return $this->_bonus()->granters($kingdomId);
+    }
+
+    public function add_granter(int $uid, int $kingdomId, int $mundaneId, int $categoryId = 0): array
+    {
+        return $this->_bonus()->addGranter($uid, $kingdomId, $mundaneId, $categoryId);
+    }
+
+    public function remove_granter(int $uid, int $kingdomId, int $granterId): array
+    {
+        return $this->_bonus()->removeGranter($uid, $kingdomId, $granterId);
+    }
+
+    public function grantable_categories_for_park(int $uid, int $parkId): array
+    {
+        return $this->_bonus()->grantableCategoriesForPark($uid, $parkId);
+    }
+
+    public function grantable_categories_in_kingdom(int $uid, int $kingdomId, bool $includeArchived = false): array
+    {
+        return $this->_bonus()->grantableCategoriesInKingdom($uid, $kingdomId, $includeArchived);
+    }
+
+    private function _bonus(): BonusCredit
+    {
+        return new BonusCredit();
+    }
+}

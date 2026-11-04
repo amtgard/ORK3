@@ -522,8 +522,8 @@ $(function() {
 		</div>
 
 		<div style="margin-bottom:14px">
-			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Comment</label>
-			<textarea id="es-comment" maxlength="100" rows="3" placeholder="Reason for suspension (max 100 characters)"
+			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Public comment</label>
+			<textarea id="es-comment" maxlength="100" rows="3" placeholder="Public comment (visible to everyone, max 100 characters)"
 				style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em;resize:vertical"></textarea>
 			<div id="es-char-count" style="text-align:right;font-size:.8em;color:#a0aec0;margin-top:2px">0 / 100</div>
 		</div>
@@ -773,8 +773,8 @@ $(function() {
 		</div>
 
 		<div style="margin-bottom:14px">
-			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Comment</label>
-			<textarea id="sp-comment" maxlength="100" rows="3" placeholder="Reason for suspension (max 100 characters)"
+			<label style="display:block;font-size:.88em;font-weight:600;color:var(--ork-text-secondary);margin-bottom:4px">Public comment</label>
+			<textarea id="sp-comment" maxlength="100" rows="3" placeholder="Public comment (visible to everyone, max 100 characters)"
 				style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--ork-input-border);background:var(--ork-input-bg);border-radius:6px;font-size:.95em;resize:vertical"></textarea>
 			<div id="sp-char-count" style="text-align:right;font-size:.8em;color:#a0aec0;margin-top:2px">0 / 100</div>
 		</div>

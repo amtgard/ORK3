@@ -1864,23 +1864,35 @@ class QualTest
     // Reports
     // -----------------------------------------------------------------------
 
+    /** Longest report comment kept; matches qual_report.comment. */
+    public const REPORT_COMMENT_MAX = 500;
+
     /**
      * Record a player's report against a question.
      * $reason: 'wording' | 'correct' | 'outdated' | 'other'
+     * $comment: the reporter's own words. Required for 'other', which says
+     * nothing by itself; cut to REPORT_COMMENT_MAX characters.
      */
-    public function reportQuestion($question_id, $player_id, $reason)
+    public function reportQuestion($question_id, $player_id, $reason, $comment = '')
     {
         $valid = ['wording', 'correct', 'outdated', 'other'];
         if (!in_array($reason, $valid, true)) {
             return false;
         }
+        // A browser posts each line break as CRLF but counts it as one character
+        // against the textarea's maxlength, so fold them before measuring.
+        $comment = str_replace(["\r\n", "\r"], "\n", trim((string)$comment));
+        $comment = mb_substr($comment, 0, self::REPORT_COMMENT_MAX);
+        if ($reason === 'other' && $comment === '') {
+            return false;
+        }
         $this->db->Clear();
-        $this->db->Execute(
+        // Execute() reports nothing, so a refused insert would still read as filed.
+        return (bool)$this->db->ExecuteChecked(
             'INSERT INTO ' . DB_PREFIX . 'qual_report
-             (qual_question_id, player_id, reason)
-             VALUES (' . (int)$question_id . ', ' . (int)$player_id . ', \'' . $reason . '\')'
+             (qual_question_id, player_id, reason, comment)
+             VALUES (' . (int)$question_id . ', ' . (int)$player_id . ', \'' . $reason . '\', \'' . $this->esc($comment) . '\')'
         );
-        return true;
     }
 
     /**
@@ -1913,13 +1925,13 @@ class QualTest
      * Who reported a question, most recent first — so a test writer can see the
      * individual reporters (and reach out) rather than just the per-reason totals.
      * player_id is already captured on every report; this just surfaces it with the
-     * reporter's persona. Returns [ ['ReportId','PlayerId','Persona','Reason','CreatedAt'], ... ].
+     * reporter's persona. Returns [ ['ReportId','PlayerId','Persona','Reason','Comment','CreatedAt'], ... ].
      */
     public function getReportDetails($question_id)
     {
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT r.qual_report_id, r.player_id, r.reason, r.created_at, m.persona
+            'SELECT r.qual_report_id, r.player_id, r.reason, r.comment, r.created_at, m.persona
              FROM ' . DB_PREFIX . 'qual_report r
              LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.player_id
              WHERE r.qual_question_id = ' . (int)$question_id . '
@@ -1933,6 +1945,7 @@ class QualTest
                     'PlayerId'  => (int)$rs->player_id,
                     'Persona'   => $rs->persona,
                     'Reason'    => $rs->reason,
+                    'Comment'   => (string)$rs->comment,
                     'CreatedAt' => $rs->created_at,
                 ];
             }

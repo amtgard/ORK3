@@ -215,6 +215,22 @@ final class EventPlanningFixture
         )->execute([$detailId, $mundaneId, $status]);
     }
 
+    /** Feast preferences row for a player; cleaned up with the player. */
+    public function insertDietary(int $mundaneId, array $columns): void
+    {
+        $columns = ['mundane_id' => $mundaneId] + $columns;
+        $names = array_keys($columns);
+        foreach ($names as $n) {
+            if (!preg_match('/^[a-z_]+$/', $n)) {
+                throw new \InvalidArgumentException('Bad dietary column: ' . $n);
+            }
+        }
+        $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'mundane_dietary (`' . implode('`, `', $names) . '`)
+             VALUES (' . implode(', ', array_fill(0, count($names), '?')) . ')'
+        )->execute(array_values($columns));
+    }
+
     public function insertFee(int $detailId, string $admissionType, float $cost, int $sortOrder = 0): int
     {
         $stmt = $this->pdo->prepare(
@@ -385,6 +401,13 @@ final class EventPlanningFixture
         }
     }
 
+    public function fetchDetailAtParkId(int $detailId): int
+    {
+        return (int) $this->pdo->query(
+            'SELECT at_park_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int) $detailId
+        )->fetchColumn();
+    }
+
     public function createDetailOnEvent(int $eventId, string $start, string $end): int
     {
         return $this->insertDetail($eventId, $start, $end);
@@ -439,6 +462,7 @@ final class EventPlanningFixture
         foreach ($this->mundaneIds as $id) {
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'session WHERE mundane_id = ' . (int) $id);
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'mundane_dietary WHERE mundane_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $id);
         }
     }

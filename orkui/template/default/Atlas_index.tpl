@@ -404,6 +404,7 @@ window.atInitMap = async function() {
 	atMapObj = new google.maps.Map(document.getElementById('at-map'), {
 		center: { lat: 39, lng: -98 },
 		zoom: 3,
+		gestureHandling: (window.matchMedia && matchMedia('(pointer: coarse)').matches) ? 'greedy' : 'auto', // one-finger pan on touch
 		mapId: 'ORK3_MAP_ID'
 	});
 

@@ -574,7 +574,7 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 		}
 ?>
 	<section class="recap-section">
-		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> ORK Data <span class="recap-tip" tabindex="0"><i class="fas fa-info-circle"></i><span class="recap-tip-text">The ORK is a PHP/Database application hosted on Amazon Web Services behind Cloudflare's CDN. Cloudflare caches static assets (images, CSS, JavaScript) at edge locations near visitors — those requests never reach AWS, saving server load, bandwidth, and response time. Cloudflare also absorbs bot traffic and bad actors before they touch the origin. These numbers show how that split played out for US and Canadian traffic to the ORK specifically this week; the worldwide figure below covers every site sharing our Cloudflare zone (ORK, wiki, and the rest), everywhere, for scale. Visitor counts come from Google Analytics, which only counts real browsers — bots are excluded.</span></span></h2>
+		<h2><span class="recap-section-icon"><i class="fas fa-globe-americas"></i></span> ORK Data <span class="recap-tip" tabindex="0"><i class="fas fa-info-circle"></i><span class="recap-tip-text">The ORK is a PHP/Database application hosted on Amazon Web Services behind Cloudflare's CDN. Cloudflare caches static assets (images, CSS, JavaScript) at edge locations near visitors — those requests never reach AWS, saving server load, bandwidth, and response time. Cloudflare also absorbs bot traffic and bad actors before they touch the origin. Each request lands in one of three buckets: handled by our servers (Cloudflare forwarded it to the ORK, including quick "is this still current?" checks the ORK answered), answered from Cloudflare's cache, or stopped at the edge. The stopped bucket is itself split three ways: blocked or challenged as malicious; requests for the challenge and block pages themselves (a blocked client still fetches that page's script, images and a beacon, and each one counts); and everything else Cloudflare answered without asking us, such as redirects. The last of those is a remainder, so the parts always add up to the total. These numbers cover US and Canadian traffic to the ORK specifically; the worldwide paragraph covers every site sharing our Cloudflare zone (ORK, wiki, and the rest), everywhere, for scale. Visitor counts come from Google Analytics, which only counts real browsers — bots are excluded.</span></span></h2>
 <?php   if ($hu !== null) : ?>
 		<p class="recap-digest">
 			<strong><?=$format_count($hu)?></strong> people visited the ORK this week.
@@ -583,7 +583,29 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 		<p class="recap-trend"><em>Visitors <?=$hu_delta_line?></em></p>
 <?php     endif; ?>
 <?php   endif; ?>
-<?php   if (is_array($ps)) : ?>
+<?php   if (is_array($ps)) :
+			// v2 stats (OriginRequests present) get the three-bucket sentence:
+			// handled by our servers / answered from cache / stopped at the edge.
+			// Weeks computed before v2 and past Cloudflare's retention keep the
+			// original wording, which only knows total and cache hits.
+			$bk = Report::RecapPlatformBreakdown($ps, 'ork');
+			// Phrase one stopped-at-the-edge breakdown; shared by both scopes.
+			$stopped_phrase = function ($b) use ($format_count) {
+				return sprintf('<strong>%s</strong> (%d%%) were stopped at the edge: <strong>%s</strong> blocked or challenged as malicious, <strong>%s</strong> requests for the challenge and block pages themselves, and <strong>%s</strong> redirects and other edge responses.',
+					$format_count($b['stopped']), $b['stoppedPct'],
+					$format_count($b['malicious']), $format_count($b['cfPages']), $format_count($b['other']));
+			};
+?>
+<?php     if (is_array($bk)) : ?>
+		<p class="recap-digest">
+			Cloudflare received <strong><?=$req_str?></strong> requests
+			(<strong><?=$total_gb_str?></strong>) for the ORK,
+			from the US (<?=$us_str?>) and Canada (<?=$ca_str?>).
+			<strong><?=$format_count($bk['servers'])?></strong> of them (<?=$bk['serversPct']?>%) were handled by the ORK's own servers,
+			<strong><?=$cache_hits_str?></strong> (<?=$bk['cachePct']?>%, <?=$cached_gb_str?>) were answered from Cloudflare's cache,
+			and <?=$stopped_phrase($bk)?>
+		</p>
+<?php     else : ?>
 		<p class="recap-digest">
 			Cloudflare delivered <strong><?=$req_str?></strong> requests
 			(<strong><?=$total_gb_str?></strong>)
@@ -596,12 +618,15 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 			Cloudflare also blocked or challenged <strong><?=$format_count($ps['BlockedOrChallenged'])?></strong> malicious requests this week.
 <?php   endif; ?>
 		</p>
+<?php     endif; ?>
 <?php   if ($delta_line) : ?>
 		<p class="recap-trend"><em>Total requests <?=$delta_line?></em></p>
 <?php   endif; ?>
 <?php   if (!empty($ps['RequestsGlobal'])) :
 			$req_global_str   = $format_count($ps['RequestsGlobal']);
 			$bytes_global_str = $format_bytes($ps['BytesGlobal'] ?? 0);
+			$bk_global        = Report::RecapPlatformBreakdown($ps, 'global');
+			$top_other        = is_array($ps['TopOtherHost'] ?? null) && !empty($ps['TopOtherHost']['Host']) ? $ps['TopOtherHost'] : null;
 			$global_delta_line = '';
 			$prev_ps_global = $prev_recap['PlatformStats'] ?? null;
 			if (is_array($prev_ps_global) && !empty($prev_ps_global['RequestsGlobal'])) {
@@ -614,12 +639,27 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 					$format_count($prev_g), $format_count($cur_g));
 			}
 		?>
+<?php     if (is_array($bk_global)) : ?>
+		<p class="recap-digest recap-muted">
+			Worldwide, across every site sharing our Cloudflare zone (not just the ORK),
+			Cloudflare received <strong><?=$req_global_str?></strong> requests
+			(<strong><?=$bytes_global_str?></strong>).
+			<strong><?=$format_count($bk_global['servers'])?></strong> of them (<?=$bk_global['serversPct']?>%) were handled by our servers,
+			<strong><?=$format_count($bk_global['cache'])?></strong> (<?=$bk_global['cachePct']?>%, <?=$format_bytes($ps['CachedBytesGlobal'] ?? 0)?>) were answered from Cloudflare's cache,
+			and <?=$stopped_phrase($bk_global)?>
+<?php       if ($top_other !== null) : ?>
+			<?=htmlspecialchars($top_other['Host'])?> accounted for
+			<?=$format_count((int)$top_other['Stopped'])?> of the <?=$format_count($bk_global['stopped'])?> requests stopped at the edge.
+<?php       endif; ?>
+		</p>
+<?php     else : ?>
 		<p class="recap-digest recap-muted">
 			Worldwide, across every site sharing our Cloudflare zone (not just the ORK),
 			Cloudflare delivered <strong><?=$req_global_str?></strong> requests
 			(<strong><?=$bytes_global_str?></strong>)<?php if (!empty($ps['BlockedGlobal'])) : ?>
 			and blocked or challenged <strong><?=$format_count($ps['BlockedGlobal'])?></strong> malicious requests<?php endif; ?> this week.
 		</p>
+<?php     endif; ?>
 <?php     if ($global_delta_line) : ?>
 		<p class="recap-trend"><em>Worldwide requests <?=$global_delta_line?></em></p>
 <?php     endif; ?>

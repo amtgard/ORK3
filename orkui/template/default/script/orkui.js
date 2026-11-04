@@ -25306,3 +25306,32 @@ function _typeof(e) {
     w.orkConfirm = function (opts) { return build(opts, true); };
     w.orkAlert = function (opts) { return build(opts, false).then(function () {}); };
 })(window, document);
+
+/* Backdrop-click guard, site-wide.
+   Every dialog here closes on a click that lands on its backdrop (`e.target === overlay`).
+   But a click fires on the nearest common ancestor of where the pointer went down and where
+   it came up, so dragging a text selection out of a dialog and releasing over the backdrop
+   fires a click ON the backdrop, and the dialog closed mid-selection. Rather than patch the
+   thirty-odd handlers one by one, swallow that click here in the capture phase, before any
+   of them (inline onclick= included) can see it. The test: the click's target is a
+   full-viewport fixed element, which is what a backdrop is and what nav bars, toasts and
+   dropdowns are not, and the press started on something inside it. A real backdrop click
+   (press and release both on it) passes through untouched. */
+(function (w, d) {
+    var downTarget = null;
+    d.addEventListener('pointerdown', function (e) { downTarget = e.target; }, true);
+    function isBackdrop(el) {
+        if (!el || el === d.documentElement || el === d.body || !el.getBoundingClientRect) return false;
+        if (w.getComputedStyle(el).position !== 'fixed') return false;
+        var r = el.getBoundingClientRect();
+        return r.width >= w.innerWidth * 0.9 && r.height >= w.innerHeight * 0.9;
+    }
+    d.addEventListener('click', function (e) {
+        var down = downTarget;
+        downTarget = null;
+        if (!down || down === e.target) return;
+        if (!e.target.contains || !e.target.contains(down)) return;
+        if (!isBackdrop(e.target)) return;
+        e.stopPropagation();
+    }, true);
+})(window, document);

@@ -922,7 +922,7 @@ class EventPlanning extends Ork3
                     d.allergen_milk, d.allergen_eggs, d.allergen_fish, d.allergen_shellfish, d.allergen_treenuts,
                     d.allergen_peanuts, d.allergen_wheat, d.allergen_soy, d.allergen_sesame, d.allergen_garlic,
                     d.allergen_gluten, d.allergen_onion, d.allergen_mushroom, d.allergen_corn, d.allergen_coconut,
-                    d.allergen_cocoa
+                    d.allergen_cocoa, d.allergen_nightshades
              FROM (
                  SELECT mundane_id FROM ' . DB_PREFIX . "event_rsvp
                  WHERE event_calendardetail_id = {$detailId} AND status = 'going'
@@ -975,6 +975,7 @@ class EventPlanning extends Ork3
                 'AllergenCorn' => (int) ($dsRows->allergen_corn ?? 0),
                 'AllergenCoconut' => (int) ($dsRows->allergen_coconut ?? 0),
                 'AllergenCocoa' => (int) ($dsRows->allergen_cocoa ?? 0),
+                'AllergenNightshades' => (int) ($dsRows->allergen_nightshades ?? 0),
             ];
         }
 

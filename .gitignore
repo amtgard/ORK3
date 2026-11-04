@@ -6,6 +6,8 @@ build/
 .env
 .env.*
 !.env.example
+.dev.env
+!.dev.env.example
 !assets/.gitkeep
 assets/heraldry/*
 !assets/heraldry/.gitkeep

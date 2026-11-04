@@ -195,6 +195,11 @@
 					<i class="fas fa-medal"></i> Enter Awards
 				</button>
 			<?php endif; ?>
+			<?php if (!empty($CanBonusCredits)): ?>
+				<button class="kn-btn kn-btn-outline" onclick="bcOpen()">
+					<i class="fas fa-star"></i> Bonus Credits
+				</button>
+			<?php endif; ?>
 			<a class="kn-btn kn-btn-outline" href="#" onclick="knActivateTab('map');return false;">
 				<i class="fas fa-map"></i> Map
 			</a>
@@ -913,6 +918,7 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 							<li><a href="<?= UIR ?>Reports/corpora/Kingdom&id=<?= $kingdom_id ?>">Corpora Qualified</a></li>
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
+							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
 						</ul>
@@ -925,8 +931,8 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 							<li><a href="<?= UIR ?>Reports/player_award_recommendations&KingdomId=<?= $kingdom_id ?>">Recommendations</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/knights_and_masters&KingdomId=<?= $kingdom_id ?>">Knights &amp; Masters</a></li>
-							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
 							<?php if ($IsLoggedIn): ?>
+							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
 							<li><a href="<?= UIR ?>Reports/knights_list&KingdomId=<?= $kingdom_id ?>">Knights</a></li>
 							<li><a href="<?= UIR ?>Reports/masters_list&KingdomId=<?= $kingdom_id ?>">Masters</a></li>
 							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?>-level Awards</a></li>
@@ -934,6 +940,7 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>">Ladder Award Grid</a></li>
 											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>">Custom Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/beltline_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-sitemap"></i> Beltline Explorer</a></li>
+							<li><a href="<?= UIR ?>Reports/award_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-award"></i> Award Explorer</a></li>
 							<?php endif; ?>
 						</ul>
 					</div>
@@ -1015,11 +1022,7 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 			.kn-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
 			.kn-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
 			.kn-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
-			.kn-rec-age-badge { font-size:11px; padding:1px 6px; border-radius:10px; font-weight:600; margin-left:4px; }
-			.kn-rec-age-green  { background:#c6f6d5; color:#22543d; }
-			.kn-rec-age-yellow { background:#fefcbf; color:#744210; }
-			.kn-rec-age-orange { background:#fed7aa; color:#7b341e; }
-			.kn-rec-age-red    { background:#fed7d7; color:#742a2a; }
+			/* .kn-rec-age-* live in revised.css: this block only renders for court managers. */
 			/* Collapsible subsection chrome (relocated court) */
 			.kn-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
 			.kn-cp-header { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; cursor:pointer; padding:10px 4px; font-size:15px; font-weight:700; color:#2d3748; text-align:left; }
@@ -1393,6 +1396,7 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
      JavaScript
      ============================================= -->
 <script>
+window.tnPseudoLadderInfo = <?= json_encode(is_array($PseudoLadderSiblings ?? null) ? $PseudoLadderSiblings : (object)[]) ?>;
 var KnConfig = {
 	uir:              '<?= UIR ?>',
 	httpService:      '<?= HTTP_SERVICE ?>',
@@ -1402,6 +1406,7 @@ var KnConfig = {
 	canManageOfficers: <?= !empty($can_manage_officer_positions) ? 'true' : 'false' ?>,
 	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
+	viewerId:         <?= (int)($CurrentUserId ?? 0) ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1621,6 +1626,15 @@ var KnBannerConfig = {
 				</label>
 				<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
 			</div>
+			<?php if (!empty($CanMonarchyOnlyRec)): ?>
+			<div class="pk-acct-field" style="margin-top:12px">
+				<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+					<input type="checkbox" id="kn-rec-monarchy" value="1" style="width:16px;height:16px;cursor:pointer">
+					<span>Monarchy Only</span>
+				</label>
+				<div class="mo-check-hint">Only officers will see this recommendation; the player will not.</div>
+			</div>
+			<?php endif; ?>
 		</div>
 		<div class="kn-modal-footer">
 			<button class="pk-btn-ghost" id="kn-rec-cancel">Cancel</button>
@@ -2049,7 +2063,7 @@ var KnBannerConfig = {
 						<thead>
 							<tr>
 								<th>Title</th>
-								<th><span class="kn-admin-th-tip" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke).">Class <i class="fas fa-question-circle" style="font-size:9px;color:#a0aec0;cursor:help"></i></span></th>
+								<th><span class="kn-admin-th-tip" data-tip="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke).">Class <i class="fas fa-question-circle" style="font-size:9px;color:#a0aec0;cursor:help"></i></span></th>
 								<th>Min Att.</th>
 								<th>Cutoff</th>
 								<th>Period</th>
@@ -2150,7 +2164,7 @@ var KnBannerConfig = {
 								<input type="checkbox" id="kn-admin-new-istitle">
 							</div>
 							<div class="kn-admin-field">
-								<label>Title Class <i class="fas fa-question-circle" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
+								<label>Title Class <i class="fas fa-question-circle" data-tip="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
 								<input type="number" id="kn-admin-new-tclass" min="0" value="0" style="width:64px" disabled>
 							</div>
 						</div>
@@ -2182,7 +2196,7 @@ var KnBannerConfig = {
 								<input type="checkbox" id="kn-admin-custom-istitle">
 							</div>
 							<div class="kn-admin-field">
-								<label>Title Class <i class="fas fa-question-circle" title="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
+								<label>Title Class <i class="fas fa-question-circle" data-tip="Title Class determines rank precedence. Higher values = higher rank (e.g. 20=Knight, 30=Lord, 50=Baron, 90=Duke)." style="font-size:10px;color:#a0aec0;cursor:help"></i></label>
 								<input type="number" id="kn-admin-custom-tclass" min="0" value="0" style="width:64px" disabled>
 							</div>
 						</div>
@@ -3510,6 +3524,8 @@ $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 window.knInitRecsTab = function() {
 	var $tbl = $('#kn-rec-table');
 	if (!$tbl.length) return;
+	// No pill bar rendered for this viewer: don't silently hide 'already' recs behind an invisible filter.
+	if (!document.querySelector('#kn-tab-recommendations .kn-rec-filter-bar')) window.knRecActiveFilter = 'all';
 	window.knRecCircleAwardIds = (function() { try { return JSON.parse($tbl.attr('data-circle-ids') || '[]'); } catch (e) { return []; } })();
 	if ($.fn.dataTable.isDataTable('#kn-rec-table')) {
 		$tbl.DataTable().destroy();
@@ -3591,4 +3607,17 @@ window.OrkRsCfg = {
 };
 </script>
 <?php include __DIR__ . '/_recommendation_seconds_assets.tpl'; ?>
+<?php include __DIR__ . '/_monarchy_only_assets.tpl'; ?>
+<?php endif; ?>
+<?php if (!empty($CanBonusCredits)): ?>
+<script>
+window.OrkBcCfg = {
+	uir:       '<?= UIR ?>',
+	scopeType: 'kingdom',
+	scopeId:   <?= (int)($kingdom_id ?? 0) ?>,
+	scopeName: <?= json_encode($kingdom_name ?? '') ?>,
+	kingdomId: <?= (int)($kingdom_id ?? 0) ?>
+};
+</script>
+<?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
 <?php endif; ?>

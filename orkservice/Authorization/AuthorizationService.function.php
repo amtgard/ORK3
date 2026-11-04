@@ -12,6 +12,15 @@ function XSiteAuthorize($request)
     return $A->XSiteAuthorize($request);
 }
 
+// Read-only token check for third-party verification: never rotates the token.
+// The JSON gateway does not come through here (JsonServer calls the lib method
+// directly); this wrapper is the SOAP path.
+function WhoAmI($request)
+{
+    $A = new Authorization();
+    return $A->WhoAmI($request);
+}
+
 function AddAuthorization($request)
 {
     $A = new Authorization();

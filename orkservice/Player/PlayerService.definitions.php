@@ -280,10 +280,10 @@ $server->wsdl->addComplexType(
                 'ClassName' => array('name' => 'ClassName','type' => 'xsd:string'),
                 'Weeks' => array('name' => 'Weeks','type' => 'xsd:int'),
                 'Attendances' => array('name' => 'Attendances','type' => 'xsd:int'),
-                'Credits' => array('name' => 'Credits','type' => 'xsd:int')
+                'Credits' => array('name' => 'Credits','type' => 'xsd:int'),
+                'BonusCredits' => array('name' => 'BonusCredits','type' => 'xsd:float')
             )
 );
-
 $server->wsdl->addComplexType(
     'PlayerClassList',
     'complexType',

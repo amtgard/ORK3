@@ -519,6 +519,8 @@ window.EvCreateConfig = {
         row.className = pkCiClassName(officerOnly, localsOnly);
         row.innerHTML = pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color);
         if (typeof pkFilters !== 'undefined' && pkFilters['calendar-item'] === false) row.style.display = 'none';
+        // Replacing className dropped the paging class, so put the current page back.
+        if (window.jQuery && typeof pkPaginate === 'function') pkPaginate(jQuery('#pk-events-table'), jQuery('#pk-events-table').data('pk-page') || 1);
         return true;
     }
 

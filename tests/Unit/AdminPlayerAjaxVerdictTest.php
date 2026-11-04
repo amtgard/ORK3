@@ -175,12 +175,14 @@ final class AdminPlayerAjaxVerdictTest extends TestCase
             'the bodyless Revoke Dues POST must still carry the Ajax=1 marker'
         );
 
-        // The reader is used bare by the four award callers and with a
-        // caller-specific fallback message by the five later ones.
+        // The reader is used bare by the award callers, wrapped by the three Add
+        // Award saves that first check the Monarchy Only X-Ork-Note-Withheld
+        // header, and with a caller-specific fallback message by the five later
+        // ones. The `(resp` prefix counts both the wrapped and fallback forms.
         $this->assertSame(
             9,
             substr_count($js, '.then(tnReadAwardSaveResponse)')
-                + substr_count($js, 'return tnReadAwardSaveResponse(resp,'),
+                + substr_count($js, 'return tnReadAwardSaveResponse(resp'),
             'every one must branch on the server verdict, not on resp.ok'
         );
 
