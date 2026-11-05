@@ -159,6 +159,39 @@ final class OfficerRollsReaderTest extends TestCase
         self::assertSame(1, $office2['GapCount']);
     }
 
+    public function testAOneSeasonGapNamesThatSeason(): void
+    {
+        $pos = $this->seedPosition('gap1', 'crown', 10);
+        $this->term($pos, 'gap1', ['holder_name' => 'Older', 'start_season' => 'spring', 'start_year' => 2022, 'end_season' => 'summer', 'end_year' => 2022]);
+        $this->term($pos, 'gap1', ['holder_name' => 'Newer', 'start_season' => 'winter', 'start_year' => 2023, 'end_season' => 'spring', 'end_year' => 2023]);
+
+        $office = $this->office($this->rolls(0), $pos);
+        self::assertSame(['Type' => 'gap', 'Label' => 'Gap: Fall 2022'], $office['Terms'][0]['FlagAfter']);
+    }
+
+    /**
+     * Current is per seat: in a supporting office with two holders, a holder
+     * with a current row does not hide the other holder's synthetic term.
+     */
+    public function testEverySeatedHolderOfASupportingOfficeShowsAsCurrent(): void
+    {
+        $pos = $this->seedPosition('multi', 'supporting', 10);
+        $withRow = $this->seedMundane('withrow');
+        $without = $this->seedMundane('without');
+        $this->seatOfficer($pos, 'multi', $withRow, 0);
+        $this->seatOfficer($pos, 'multi', $without, 0);
+        $row = $this->term($pos, 'multi', ['mundane_id' => $withRow, 'start_date' => '2024-04-01', 'is_current' => 1]);
+
+        $office = $this->office($this->rolls(0), $pos);
+        $current = array_values(array_filter($office['Terms'], fn ($t) => $t['IsCurrent']));
+        self::assertCount(2, $current);
+        $byHolder = array_column($current, null, 'MundaneId');
+        self::assertSame($row, $byHolder[$withRow]['OfficerHistoryId']);
+        self::assertFalse($byHolder[$withRow]['Synthetic']);
+        self::assertTrue($byHolder[$without]['Synthetic']);
+        self::assertSame(2, $office['TermCount']);
+    }
+
     public function testOverlapFlagged(): void
     {
         $pos = $this->seedPosition('overlap', 'crown', 10);
@@ -292,6 +325,8 @@ final class OfficerRollsReaderTest extends TestCase
         self::assertSame(2020, $k[0]['EndYear']);
         self::assertFalse($k[0]['IsCurrent']);
         self::assertSame('Spring 2019 – Fall 2020', $k[0]['PeriodLabel']);
+        self::assertSame(2019 * 4 + 1, $k[0]['StartOrdinal'], 'the Details modal sorts on the rolls key');
+        self::assertSame(2020 * 4 + 3, $k[0]['EndOrdinal']);
 
         $p = (new Park())->GetOfficerHistory(['ParkId' => self::PARK_A])['History'];
         $p = array_values(array_filter($p, fn ($r) => $r['Role'] === self::MARKER . '_shape'));
@@ -302,6 +337,8 @@ final class OfficerRollsReaderTest extends TestCase
         self::assertNull($p[0]['EndSeason']);
         self::assertNull($p[0]['EndYear']);
         self::assertSame('Winter 2019 – ?', $p[0]['PeriodLabel']);
+        self::assertSame(2019 * 4, $p[0]['StartOrdinal']);
+        self::assertNull($p[0]['EndOrdinal']);
     }
 
     // ============================================================

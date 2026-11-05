@@ -359,10 +359,138 @@ final class OfficerOccupancyTest extends TestCase
         $seatedRow = $this->insertHistoryRow($positionId, $role, $seated, '2020-01-01', 0);
         $otherRow = $this->insertHistoryRow($positionId, $role, $other, '2010-01-01', 0);
 
-        $this->pdo->exec($this->migrationBackfillSql());
+        $this->runMigrationBackfill();
 
         self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $seatedRow)['is_current']);
         self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $otherRow)['is_current']);
+    }
+
+    /**
+     * A supporting office may have several holders at once, and current is per
+     * seat (office + holder): both stay current, including one whose mark an
+     * earlier office-only dedupe had cleared, and vacating one closes only
+     * that holder's row.
+     */
+    public function testMigrationKeepsEveryHolderOfASupportingOfficeCurrent(): void
+    {
+        $positionId = $this->seededPositions['support_a'];
+        $role = self::MARKER . '_support_a';
+        $first = $this->seededMundanes[0];
+        $second = $this->seedMundane('second');
+        $this->seededMundanes[] = $second;
+        $this->seatRaw($positionId, $role, $first);
+        $this->seatRaw($positionId, $role, $second);
+        $firstRow = $this->insertHistoryRow($positionId, $role, $first, '2021-01-01', 1);
+        // The old dedupe left only the highest id marked: repair it.
+        $secondRow = $this->insertHistoryRow($positionId, $role, $second, '2022-01-01', 0);
+        $this->pdo->exec('UPDATE ork_officer_history SET is_current = 0 WHERE officer_history_id = ' . $firstRow);
+        $this->pdo->exec('UPDATE ork_officer_history SET is_current = 1 WHERE officer_history_id = ' . $secondRow);
+
+        $this->runMigrationBackfill();
+
+        self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $firstRow)['is_current']);
+        self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $secondRow)['is_current']);
+        $current = array_filter(
+            $this->positions->rolls_for_org(self::KINGDOM_ID, 0)['Offices'],
+            fn ($o) => $o['PositionId'] === $positionId
+        );
+        $terms = array_values($current)[0]['Terms'];
+        self::assertEqualsCanonicalizing([$firstRow, $secondRow], array_column(array_filter($terms, fn ($t) => $t['IsCurrent']), 'OfficerHistoryId'));
+
+        $v = $this->positions->VacateOfficer([
+            'Token' => $this->fixture->createAuthorizedOfficer(), 'KingdomId' => self::KINGDOM_ID, 'ParkId' => 0,
+            'PositionId' => $positionId, 'MundaneId' => $first,
+        ]);
+        self::assertSame(0, (int) $v['Status'], (string) ($v['Error'] ?? ''));
+        self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $firstRow)['is_current']);
+        self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $secondRow)['is_current'], 'the other holder stays current');
+    }
+
+    /** Two marked rows for one seat: the latest start keeps the mark, not the highest id. */
+    public function testMigrationKeepsTheLatestStartForASeat(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $role = self::MARKER . '_crown_a';
+        $holder = $this->seededMundanes[0];
+        $this->seatRaw($positionId, $role, $holder);
+        $later = $this->insertHistoryRow($positionId, $role, $holder, '2022-03-01', 1);
+        $earlier = $this->insertHistoryRow($positionId, $role, $holder, '2015-03-01', 1);
+
+        $this->runMigrationBackfill();
+
+        self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $later)['is_current']);
+        self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $earlier)['is_current']);
+    }
+
+    /**
+     * Re-running touches legacy rows only, and never marks a second row for a
+     * seat that already has a current one.
+     */
+    public function testMigrationRerunLeavesLedgerRowsAlone(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $role = self::MARKER . '_crown_a';
+        $holder = $this->seededMundanes[0];
+        $this->seatRaw($positionId, $role, $holder);
+        $current = $this->insertHistoryRow($positionId, $role, $holder, '2010-01-01', 1);
+        $legacyOpen = $this->insertHistoryRow($positionId, $role, $holder, '2024-01-01', 0);
+        $ledger = $this->insertHistoryRow($positionId, $role, $holder, '2001-01-01', 0);
+        $this->pdo->exec("UPDATE ork_officer_history SET start_season = 'spring', start_year = 2001 WHERE officer_history_id = " . $ledger);
+
+        $this->runMigrationBackfill();
+
+        self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $current)['is_current']);
+        self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $legacyOpen)['is_current'], 'the seat already had a current row');
+        self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $ledger)['is_current'], 'a ledger row is never re-marked');
+
+        $this->pdo->exec('UPDATE ork_officer_history SET is_current = 0 WHERE officer_history_id = ' . $current);
+        $this->pdo->exec('DELETE FROM ork_officer_history WHERE officer_history_id = ' . $legacyOpen);
+        $this->runMigrationBackfill();
+        self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $ledger)['is_current'], 'still not a legacy row');
+    }
+
+    /**
+     * A seated officer with no current history row gets one, written as
+     * record_officer_history writes it, and only once.
+     */
+    public function testMigrationOpensACurrentRowForASeatWithNone(): void
+    {
+        $positionId = $this->seededPositions['support_a'];
+        $role = self::MARKER . '_support_a';
+        $holder = $this->seededMundanes[0];
+        $this->seatRaw($positionId, $role, $holder);
+
+        $this->runMigrationBackfill();
+        $this->runMigrationBackfill();
+
+        $rows = $this->pdo->query(
+            'SELECT * FROM ork_officer_history WHERE position_id = ' . $positionId . ' AND mundane_id = ' . $holder
+        )->fetchAll(PDO::FETCH_ASSOC);
+        self::assertCount(1, $rows, 'idempotent: one row however often it runs');
+        $row = $rows[0];
+        self::assertSame(1, (int) $row['is_current']);
+        self::assertSame(self::KINGDOM_ID, (int) $row['kingdom_id']);
+        self::assertSame(0, (int) $row['park_id']);
+        self::assertSame($role, $row['role']);
+        self::assertSame('Test support_a', $row['display_label']);
+        self::assertSame('', $row['holder_name']);
+        self::assertNull($row['start_date']);
+        self::assertNull($row['end_date']);
+        self::assertNull($row['start_season']);
+        self::assertNull($row['end_season']);
+    }
+
+    public function testAddRejectsAFutureStart(): void
+    {
+        $season = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Lord Soon', 'Period' => 'Spring ' . ((int) date('Y') + 1),
+        ]);
+        self::assertSame('A term cannot start in the future.', $season['Error'] ?? null);
+
+        $exact = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Lord Soon', 'StartDate' => date('Y-m-d', strtotime('+1 day')),
+        ]);
+        self::assertSame('A term cannot start in the future.', $exact['Error'] ?? null);
     }
 
     // ---------------------------------------------------------------
@@ -693,15 +821,37 @@ final class OfficerOccupancyTest extends TestCase
         return $row;
     }
 
-    /** The statements after the migration's `-- is_current backfill` marker. */
-    private function migrationBackfillSql(): string
+    /**
+     * Run the statements after the migration's `-- is_current backfill` marker
+     * one at a time, so a failing later statement fails the test (a single
+     * multi-statement exec reports only the first).
+     */
+    private function runMigrationBackfill(): void
     {
         $path = dirname(__DIR__, 2) . '/db-migrations/2026-11-04-officer-history-rolls.sql';
         self::assertFileExists($path);
         $sql = (string) file_get_contents($path);
         $pos = strpos($sql, '-- is_current backfill');
         self::assertNotFalse($pos, 'the migration must mark its is_current backfill section');
-        return substr($sql, $pos);
+        $statements = [];
+        foreach (preg_split('/;\s*$/m', substr($sql, $pos)) as $chunk) {
+            $body = trim(preg_replace('/^\s*--.*$/m', '', $chunk));
+            if ($body !== '') {
+                $statements[] = $body;
+            }
+        }
+        self::assertCount(3, $statements, 'backfill: mark seats, dedupe per seat, open missing seats');
+        foreach ($statements as $statement) {
+            $this->pdo->exec($statement);
+        }
+    }
+
+    private function seatRaw(int $positionId, string $role, int $mundaneId): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ork_officer (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
+             VALUES (:kid, 0, :mid, :role, 0, 0, :pos, NOW())'
+        )->execute([':kid' => self::KINGDOM_ID, ':mid' => $mundaneId, ':role' => $role, ':pos' => $positionId]);
     }
 
     private function seedPosition(string $suffix, string $classification, int $hasAuthRole = 0): int

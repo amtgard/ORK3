@@ -9,7 +9,7 @@ final class OfficerTermPeriodTest extends TestCase
     public function testSpanWithSharedYear(): void
     {
         self::assertSame(
-            ['start' => ['season' => 'spring', 'year' => 2023], 'end' => ['season' => 'fall', 'year' => 2023], 'endUnknown' => false],
+            ['start' => ['season' => 'spring', 'year' => 2023], 'end' => ['season' => 'fall', 'year' => 2023], 'endUnknown' => false, 'single' => false],
             OfficerTermPeriod::parse('Spring–Fall 23', 2026)
         );
     }
@@ -29,6 +29,92 @@ final class OfficerTermPeriodTest extends TestCase
     {
         $p = OfficerTermPeriod::parse('Fall 22', 2026);
         self::assertSame($p['start'], $p['end']);
+        self::assertTrue($p['single']);
+    }
+
+    /** A single Winter is one season: its end is its start, not the next winter. */
+    public function testSingleWinterIsOneSeason(): void
+    {
+        $p = OfficerTermPeriod::parse('Winter 24', 2026);
+        self::assertTrue($p['single']);
+        $r = OfficerTermPeriod::readBack('Winter 24', false, 2026 * 4 + 3);
+        self::assertSame(2024 * 4, $r['StartOrdinal']);
+        self::assertSame(2024 * 4, $r['EndOrdinal']);
+        self::assertSame('Winter 2024', $r['Label']);
+        self::assertSame('Fall 2023', $r['PreviousSpan']);
+        // This year's winter is past by fall, so it is no future end.
+        self::assertIsArray(OfficerTermPeriod::readBack('Winter 26', false, 2026 * 4 + 3));
+        // Read back from storage (both ends the same winter) it is still one season.
+        self::assertSame(
+            ['start' => 2024 * 4, 'end' => 2024 * 4],
+            OfficerTermPeriod::resolve(['StartSeason' => 'winter', 'StartYear' => 2024, 'EndSeason' => 'winter', 'EndYear' => 2024, 'StartDate' => null, 'EndDate' => null])
+        );
+    }
+
+    public function testSingleSpringPrefillsTheSeasonBefore(): void
+    {
+        $r = OfficerTermPeriod::readBack('Spring 23', false, 2026 * 4 + 3);
+        self::assertSame('Spring 2023', $r['Label']);
+        self::assertSame(2023 * 4 + 1, $r['EndOrdinal']);
+        self::assertSame('Winter 2023', $r['PreviousSpan']);
+    }
+
+    public function testEqualEndsLabelAsOneSeason(): void
+    {
+        self::assertSame('Spring 2023', OfficerTermPeriod::label(['StartSeason' => 'spring', 'StartYear' => 2023, 'EndSeason' => 'spring', 'EndYear' => 2023, 'StartDate' => null, 'EndDate' => null], false));
+        self::assertSame('Jul 4, 2023 – Aug 1, 2023', OfficerTermPeriod::label(['StartSeason' => null, 'StartYear' => null, 'EndSeason' => null, 'EndYear' => null, 'StartDate' => '2023-07-04', 'EndDate' => '2023-08-01'], false), 'exact dates in one season keep both ends');
+    }
+
+    public function testSpanLabelCollapsesOneSeason(): void
+    {
+        self::assertSame('Winter 2023', OfficerTermPeriod::spanLabel(2023 * 4, 2023 * 4));
+        self::assertSame('Winter 2022 – Winter 2023', OfficerTermPeriod::spanLabel(2021 * 4 + 3 + 1, 2023 * 4));
+    }
+
+    public function testReversedWinterSpanIsRefused(): void
+    {
+        self::assertSame('The end comes before the start.', OfficerTermPeriod::parse('Winter 24 – Winter 23', 2026));
+        self::assertIsArray(OfficerTermPeriod::parse('Winter 23 – Winter 24', 2026));
+    }
+
+    public function testPreviousSpanFromAWinterOrdinal(): void
+    {
+        self::assertSame('Fall 2023', OfficerTermPeriod::previousSpan(2024 * 4, 2024 * 4));
+        self::assertSame('Summer 2023 – Winter 2024', OfficerTermPeriod::previousSpan(2024 * 4, 2024 * 4 + 2));
+        self::assertSame('Winter 2024', OfficerTermPeriod::previousSpan(2024 * 4 + 1, 2024 * 4 + 1));
+    }
+
+    /** Amtwiki-style input: apostrophe years, dotted abbreviations, months. */
+    public function testAmtwikiStyleInput(): void
+    {
+        self::assertSame(['season' => 'fall', 'year' => 1995], OfficerTermPeriod::parse("Fall '95", 2026)['start']);
+        self::assertSame(['season' => 'fall', 'year' => 1995], OfficerTermPeriod::parse('Fall ’95', 2026)['start']);
+        self::assertSame(['season' => 'spring', 'year' => 2023], OfficerTermPeriod::parse('Spr. 23', 2026)['start']);
+        $m = OfficerTermPeriod::parse('March 2003 – Sept 2003', 2026);
+        self::assertSame(['season' => 'spring', 'year' => 2003], $m['start']);
+        self::assertSame(['season' => 'fall', 'year' => 2003], $m['end']);
+        self::assertSame(['season' => 'spring', 'year' => 2003], OfficerTermPeriod::parse('Mar 03', 2026)['start']);
+        self::assertSame(['season' => 'summer', 'year' => 2003], OfficerTermPeriod::parse('Jul. 2003', 2026)['start']);
+        // December is the early winter of the next January-February.
+        self::assertSame(['season' => 'winter', 'year' => 2004], OfficerTermPeriod::parse('Dec 2003', 2026)['start']);
+        self::assertSame(['season' => 'winter', 'year' => 2004], OfficerTermPeriod::parse('Feb 04', 2026)['start']);
+        $d = OfficerTermPeriod::readBack('Sep 2003 – Dec 2003', false, 2026 * 4 + 3);
+        self::assertSame([2003 * 4 + 3, 2004 * 4], [$d['StartOrdinal'], $d['EndOrdinal']]);
+        $s = OfficerTermPeriod::parse('March – May 2003', 2026);
+        self::assertSame([['season' => 'spring', 'year' => 2003], ['season' => 'spring', 'year' => 2003]], [$s['start'], $s['end']]);
+    }
+
+    public function testErrorsEchoTheTextAsTyped(): void
+    {
+        self::assertStringContainsString('"Sprng"', OfficerTermPeriod::parse('Sprng 23', 2026));
+        self::assertStringContainsString('"Spring 23 Fall"', OfficerTermPeriod::parse('Spring 23 Fall', 2026));
+    }
+
+    public function testAStartInTheFutureIsRefused(): void
+    {
+        self::assertSame('A term cannot start in the future.', OfficerTermPeriod::readBack('Spring 27', false, 2026 * 4 + 3));
+        self::assertSame('A term cannot start in the future.', OfficerTermPeriod::readBack('Winter 27', true, 2026 * 4 + 3));
+        self::assertIsArray(OfficerTermPeriod::readBack('Fall 26', true, 2026 * 4 + 3));
     }
 
     public function testEndUnknown(): void

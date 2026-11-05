@@ -19,23 +19,42 @@ class OfficerTermPeriod
         'winter' => 'winter', 'win' => 'winter', 'wi' => 'winter', 'w' => 'winter',
     ];
 
+    /** Month words, mapped to seasons as ordinal() maps an exact date's month. */
+    private const MONTHS = [
+        'january' => 1, 'jan' => 1, 'february' => 2, 'feb' => 2, 'march' => 3, 'mar' => 3,
+        'april' => 4, 'apr' => 4, 'may' => 5, 'june' => 6, 'jun' => 6, 'july' => 7, 'jul' => 7,
+        'august' => 8, 'aug' => 8, 'september' => 9, 'sept' => 9, 'sep' => 9,
+        'october' => 10, 'oct' => 10, 'november' => 11, 'nov' => 11, 'december' => 12, 'dec' => 12,
+    ];
+
     private const ERR_CURRENT = 'Current terms are set from Manage Officers.';
 
     /**
-     * @return array|string error message, or ['start' => ?array, 'end' => ?array, 'endUnknown' => bool]
+     * Read a typed period. Accepts season words and abbreviations ("Spr. 23"),
+     * apostrophe years ("Fall '95") and month names with a year ("Mar 03"),
+     * which become the season their month falls in (December is the winter of
+     * the January-February after it).
+     *
+     * 'single' marks a single-season entry ("Spring 23"): a one-season term,
+     * so its end is its start.
+     *
+     * @return array|string error message, or ['start' => ?array, 'end' => ?array, 'endUnknown' => bool, 'single' => bool]
      */
     public static function parse(string $text, ?int $todayYear = null): array|string
     {
         $todayYear ??= (int)date('Y');
-        $t = mb_strtolower(trim($text));
+        $t = trim($text);
         if ($t === '') {
             return 'Enter a period such as "Spring–Fall 23".';
         }
-        if (preg_match('/\b(present|now|current)\b/', $t)) {
+        if (preg_match('/\b(present|now|current)\b/i', $t)) {
             return self::ERR_CURRENT;
         }
         $t = str_replace(['–', '—'], '-', $t);
-        $t = preg_replace('/\s+to\s+/', '-', $t);
+        $t = preg_replace('/\s+to\s+/i', '-', $t);
+        // Amtwiki style: an apostrophe before a year, a period after an abbreviation.
+        $t = preg_replace("/['\x{2018}\x{2019}](?=\d)/u", '', $t);
+        $t = preg_replace('/(?<=[a-z])\.(?=\s|\d|-|$)/i', '', $t);
         $parts = array_map('trim', explode('-', $t));
         if (count($parts) > 2) {
             return 'Use one dash between the start and end, e.g. "Spring 22 – Fall 23".';
@@ -69,16 +88,22 @@ class OfficerTermPeriod
             $second['year'] = $first['year'];
         }
 
-        $start = ['season' => $first['season'], 'year' => self::fullYear($first['year'], $todayYear)];
+        $single = !$endUnknown && $second === null;
+        $start = self::season($first, $todayYear);
         if ($endUnknown) {
             $end = null;
-        } elseif ($second === null) {
+        } elseif ($single) {
             $end = $start;
         } else {
-            $end = ['season' => $second['season'], 'year' => self::fullYear($second['year'], $todayYear)];
+            $end = self::season($second, $todayYear);
         }
 
         if ($end !== null) {
+            // Two winters resolve forward from the start, so a reversed pair would
+            // otherwise read as the winter after it.
+            if ($start['season'] === 'winter' && $end['season'] === 'winter' && $end['year'] < $start['year']) {
+                return 'The end comes before the start.';
+            }
             $r = self::resolve([
                 'StartSeason' => $start['season'], 'StartYear' => $start['year'],
                 'EndSeason' => $end['season'], 'EndYear' => $end['year'],
@@ -89,23 +114,42 @@ class OfficerTermPeriod
             }
         }
 
-        return ['start' => $start, 'end' => $end, 'endUnknown' => $endUnknown];
+        return ['start' => $start, 'end' => $end, 'endUnknown' => $endUnknown, 'single' => $single];
     }
 
-    /** @return array|string ['season' => string, 'year' => ?string] or an error */
+    /**
+     * One side of a period, as typed. Errors quote the text the user typed.
+     *
+     * @return array|string ['season' => ?string, 'month' => ?int, 'year' => ?string] or an error
+     */
     private static function parsePart(string $p): array|string
     {
-        if (!preg_match('/^([a-z]+)\s*(\d+)?$/', $p, $m)) {
+        if (!preg_match('/^([a-z]+)\s*(\d+)?$/i', $p, $m)) {
             return 'Could not read "' . $p . '". Use a season and year, e.g. "Spring 23".';
         }
-        if (!isset(self::SEASON_WORDS[$m[1]])) {
-            return 'Unknown season "' . $m[1] . '". Use Spring, Summer, Fall or Winter.';
-        }
+        $word = strtolower($m[1]);
         $year = $m[2] ?? null;
         if ($year !== null && strlen($year) !== 2 && strlen($year) !== 4) {
             return 'Years must be 2 or 4 digits.';
         }
-        return ['season' => self::SEASON_WORDS[$m[1]], 'year' => $year];
+        if (isset(self::SEASON_WORDS[$word])) {
+            return ['season' => self::SEASON_WORDS[$word], 'month' => null, 'year' => $year];
+        }
+        if (isset(self::MONTHS[$word])) {
+            return ['season' => null, 'month' => self::MONTHS[$word], 'year' => $year];
+        }
+        return 'Unknown season "' . $m[1] . '". Use Spring, Summer, Fall or Winter.';
+    }
+
+    /** A parsed side with its year resolved: a month becomes its season. */
+    private static function season(array $part, int $todayYear): array
+    {
+        $year = self::fullYear($part['year'], $todayYear);
+        if ($part['month'] === null) {
+            return ['season' => $part['season'], 'year' => $year];
+        }
+        $ord = self::ordinal(null, null, sprintf('%04d-%02d-01', $year, $part['month']), 'start', null);
+        return ['season' => self::SEASONS[$ord % 4], 'year' => intdiv($ord, 4)];
     }
 
     private static function fullYear(string $y, int $todayYear): int
@@ -176,6 +220,10 @@ class OfficerTermPeriod
         }
         if ($startIsWinter && $endIsWinter) {
             $start = self::ordinal($ss, $sy, $sd, 'start', null);
+            // The same winter on both ends is a single season ("Winter 24").
+            if ($sy !== null && $sy === $ey) {
+                return ['start' => $start, 'end' => $start];
+            }
             $end = self::ordinal($es, $ey, $ed, 'end', $start === null ? null : $start + 1);
             return ['start' => $start, 'end' => $end];
         }
@@ -206,6 +254,10 @@ class OfficerTermPeriod
         };
         $start = $enteredSide('Start', $r['start']) ?? '?';
         $end = $enteredSide('End', $r['end']) ?? ($isCurrent ? 'present' : '?');
+        // One season ("Spring 2023 – Spring 2023") reads as that season.
+        if ($start === $end && $start !== '?') {
+            return $start;
+        }
         return $start . ' – ' . $end;
     }
 
@@ -215,18 +267,32 @@ class OfficerTermPeriod
         return ucfirst(self::SEASONS[$i]) . ' ' . intdiv($ordinal - $i, 4);
     }
 
-    /** Period text to pre-fill for the term before: same length, ending at $start. */
+    /** "Winter 2023", or "Fall 2022 – Spring 2023" for a span of seasons. */
+    public static function spanLabel(int $from, int $to): string
+    {
+        return $from === $to
+            ? self::ordinalLabel($from)
+            : self::ordinalLabel($from) . ' – ' . self::ordinalLabel($to);
+    }
+
+    /**
+     * Period text to pre-fill for the term before: same length, ending at
+     * $start. The term before a single season is the single season before it.
+     */
     public static function previousSpan(int $start, ?int $end): string
     {
-        $len = $end === null ? 2 : max(0, $end - $start);
-        return self::ordinalLabel($start - $len) . ' – ' . self::ordinalLabel($start);
+        if ($end !== null && $end <= $start) {
+            return self::ordinalLabel($start - 1);
+        }
+        $len = $end === null ? 2 : $end - $start;
+        return self::spanLabel($start - $len, $start);
     }
 
     /**
      * Read a typed period back for the ledger before it is saved: the label the
      * report will show, its ordinals and the span to pre-fill for the term before.
      * Applies the save rules the reader can know about (no "present", no future
-     * end); the server still validates on save.
+     * start or end); the server still validates on save.
      *
      * $isCurrent: the period is a current term's start, so it must be a single
      * season ("Spring 24"); the end belongs to Manage Officers.
@@ -252,6 +318,9 @@ class OfficerTermPeriod
         }
         $ord = self::resolve($term);
         $nowOrdinal ??= self::currentOrdinal();
+        if ($ord['start'] !== null && $ord['start'] > $nowOrdinal) {
+            return 'A term cannot start in the future.';
+        }
         if ($ord['end'] !== null && $ord['end'] > $nowOrdinal) {
             return 'A term cannot end in the future.';
         }

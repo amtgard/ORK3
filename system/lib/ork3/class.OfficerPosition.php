@@ -1818,7 +1818,8 @@ class OfficerPosition extends Ork3
      *
      * @param array $row raw columns: holder_name, is_current, start_season, start_year,
      *                   start_date, end_season, end_year, end_date
-     * @return array HolderName, StartSeason, StartYear, EndSeason, EndYear, PeriodLabel
+     * @return array HolderName, StartSeason, StartYear, EndSeason, EndYear, PeriodLabel,
+     *               StartOrdinal, EndOrdinal (the rolls sort key; null when unknown)
      */
     public static function history_term_fields(array $row)
     {
@@ -1836,13 +1837,16 @@ class OfficerPosition extends Ork3
             'EndYear'     => $year($row['end_year'] ?? null),
             'EndDate'     => $row['end_date'] ?? null,
         ];
+        $ord = OfficerTermPeriod::resolve($span);
         return [
-            'HolderName'  => (string) ($row['holder_name'] ?? ''),
-            'StartSeason' => $span['StartSeason'],
-            'StartYear'   => $span['StartYear'],
-            'EndSeason'   => $span['EndSeason'],
-            'EndYear'     => $span['EndYear'],
-            'PeriodLabel' => OfficerTermPeriod::label($span, (int) ($row['is_current'] ?? 0) === 1),
+            'HolderName'   => (string) ($row['holder_name'] ?? ''),
+            'StartSeason'  => $span['StartSeason'],
+            'StartYear'    => $span['StartYear'],
+            'EndSeason'    => $span['EndSeason'],
+            'EndYear'      => $span['EndYear'],
+            'PeriodLabel'  => OfficerTermPeriod::label($span, (int) ($row['is_current'] ?? 0) === 1),
+            'StartOrdinal' => $ord['start'],
+            'EndOrdinal'   => $ord['end'],
         ];
     }
 
@@ -1857,9 +1861,10 @@ class OfficerPosition extends Ork3
      * registry, or position_id = 0 rows grouped by role -- titled by its newest
      * row's display_label.
      *
-     * A seated officer (ork_officer.mundane_id > 0) whose office has no
-     * is_current row still shows as the current holder: a Synthetic term with
-     * OfficerHistoryId 0 and no period.
+     * A seated officer (ork_officer.mundane_id > 0) with no is_current row for
+     * that seat (office + holder) still shows as a current holder: a Synthetic
+     * term with OfficerHistoryId 0 and no period. The officer-history-rolls
+     * migration opens a row for every such seat, so this is a fallback only.
      *
      * Public data, no token; the underscore name keeps it off the JSON service.
      * For a park, the kingdom is derived from the park, never taken from the caller.
@@ -1950,9 +1955,10 @@ class OfficerPosition extends Ork3
                 }
                 $target = &$extra[$key];
             }
+            // Current is per seat: a supporting office may have several holders.
             $hasCurrent = false;
             foreach ($target['Terms'] as $t) {
-                if ($t['IsCurrent']) {
+                if ($t['IsCurrent'] && $t['MundaneId'] === (int) $seat['MundaneId']) {
                     $hasCurrent = true;
                     break;
                 }
@@ -2107,7 +2113,7 @@ class OfficerPosition extends Ork3
         if ($start - $end >= 2) {
             return [
                 'Type'  => 'gap',
-                'Label' => 'Gap: ' . OfficerTermPeriod::ordinalLabel($end + 1) . ' – ' . OfficerTermPeriod::ordinalLabel($start - 1),
+                'Label' => 'Gap: ' . OfficerTermPeriod::spanLabel($end + 1, $start - 1),
             ];
         }
         if ($start < $end) {
@@ -2781,8 +2787,8 @@ class OfficerPosition extends Ork3
      *    keeps array_key_exists semantics (absent = untouched, '' = cleared).
      *  - On a current row ($row['is_current']) a single-season Period ("Spring
      *    24") sets the start only; the end is never touched from here.
-     *  - An end may not resolve past currentOrdinal() or an exact date past
-     *    today, and may not precede the start.
+     *  - Neither end may resolve past currentOrdinal() or an exact date past
+     *    today, and the end may not precede the start.
      *
      * @return array column values, or ['__error' => response]
      */
@@ -2874,6 +2880,10 @@ class OfficerPosition extends Ork3
         ]);
         if (!$isEdit && $ord['start'] === null) {
             return ['__error' => InvalidParameter(null, 'A term needs a start: enter a period or a start date.')];
+        }
+        if (($cols['start_date'] !== null && $cols['start_date'] > date('Y-m-d'))
+            || ($ord['start'] !== null && $ord['start'] > OfficerTermPeriod::currentOrdinal())) {
+            return ['__error' => InvalidParameter(null, 'A term cannot start in the future.')];
         }
         if (($cols['end_date'] !== null && $cols['end_date'] > date('Y-m-d'))
             || ($ord['end'] !== null && $ord['end'] > OfficerTermPeriod::currentOrdinal())) {
