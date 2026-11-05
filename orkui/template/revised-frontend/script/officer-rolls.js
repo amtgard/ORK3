@@ -225,6 +225,33 @@
         }
     }
 
+    // Calendar mode uses allowInput: Flatpickr commits typed alt text only on blur
+    // or in its own Enter handler, and that may run after this file's Enter handler,
+    // so a date typed and then Entered could be read before it is committed. Commit
+    // it here, parsed as Flatpickr itself would (the alt format), before any read.
+    // Returns an error message when typed text is not a date Flatpickr accepts (it
+    // would otherwise be dropped silently and a blank end read as "unknown").
+    function commitTypedDates(field) {
+        var error = '';
+        field.querySelectorAll('.or-date-input').forEach(function (i) {
+            var fp = i._flatpickr;
+            if (!fp || !fp.altInput) { return; }
+            var typed = fp.altInput.value.trim();
+            if (!typed) {
+                if (i.value) { fp.clear(); }
+                return;
+            }
+            var shown = fp.selectedDates.length ? fp.formatDate(fp.selectedDates[0], fp.config.altFormat) : '';
+            if (typed !== shown) {
+                fp.setDate(typed, true, fp.config.altFormat);
+                if (!fp.selectedDates.length && !error) {
+                    error = 'Could not read the date "' + typed + '". Pick it from the calendar; dates cannot be in the future.';
+                }
+            }
+        });
+        return error;
+    }
+
     function fieldMode(field) { return field && field.getAttribute('data-mode') === 'calendar' ? 'calendar' : 'season'; }
 
     // The first input of the field's active pane (Flatpickr's visible alt input in Calendar).
@@ -531,6 +558,8 @@
         var calendar = fieldMode(field) === 'calendar';
         var period = field.querySelector('.or-period-input');
         var name = holder.value.trim(), text = period.value.trim();
+        var dateError = calendar ? commitTypedDates(field) : '';
+        if (dateError) { rowMessage(tr, dateError); activeInput(field).focus(); return; }
         var dates = field.querySelectorAll('.or-date-input');
         var startDate = dates[0].value.trim(), endDate = dates[1] ? dates[1].value.trim() : '';
         if (!name) { rowMessage(tr, 'Enter a holder: pick a player or type a name.'); holder.focus(); return; }
@@ -658,6 +687,8 @@
         var field = tr.querySelector('.or-period-field');
         var periodInput = field.querySelector('.or-period-input');
         var text = periodInput.value.trim();
+        var dateError = fieldMode(field) === 'calendar' ? commitTypedDates(field) : '';
+        if (dateError) { rowMessage(tr, dateError); activeInput(field).focus(); return; }
         var dates = field.querySelectorAll('.or-date-input');
         var startDate = dates[0] ? dates[0].value.trim() : '';
         var endDate = dates[1] ? dates[1].value.trim() : '';

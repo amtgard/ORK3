@@ -229,6 +229,51 @@ final class OfficerRollsPageTest extends TestCase
         self::assertMatchesRegularExpression('/\\.or-mode-btn \\{[^}]*width\\s*:\\s*28px;[^}]*height\\s*:\\s*28px;/', $css);
     }
 
+    /**
+     * Calendar mode with allowInput: Flatpickr commits typed alt text on blur or in
+     * its own Enter handler, which may run after the row's Enter handler, so add and
+     * save commit the typed text themselves before reading the date values.
+     */
+    public function testTypedDatesAreCommittedBeforeSaving(): void
+    {
+        $js = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/script/officer-rolls.js');
+        $c = strpos($js, 'function commitTypedDates(field) {');
+        self::assertNotFalse($c, 'commitTypedDates exists');
+        $commit = substr($js, $c, strpos($js, "\n    }\n", $c) - $c);
+        self::assertStringContainsString('fp.altInput.value', $commit);
+        self::assertStringContainsString('fp.setDate(typed, true, fp.config.altFormat)', $commit, 'typed text differs: commit it as Flatpickr would');
+        self::assertStringContainsString('fp.clear()', $commit, 'typed text emptied: clear the committed value');
+        foreach (['addTerm', 'saveEdit'] as $fn) {
+            $start = strpos($js, 'function ' . $fn . '(tr)');
+            self::assertNotFalse($start, $fn . ' exists');
+            $body = substr($js, $start, strpos($js, "\n    }\n", $start) - $start);
+            $commit = strpos($body, 'commitTypedDates(field)');
+            self::assertNotFalse($commit, $fn . ' commits typed dates');
+            self::assertLessThan(strpos($body, "querySelectorAll('.or-date-input')"), $commit, $fn . ' commits before reading the dates');
+        }
+    }
+
+    /** The public Details modal orders terms as the rolls reader does, not by the StartDate string. */
+    public function testDetailsModalSortsOnTheRollsKey(): void
+    {
+        $tpl = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/partials/_officer_details_modal.tpl');
+        $start = strpos($tpl, 'function cmpTerm(a, b)');
+        self::assertNotFalse($start);
+        $body = substr($tpl, $start, strpos($tpl, "\n\t}\n", $start) - $start);
+        self::assertMatchesRegularExpression('/IsCurrent[\s\S]*StartOrdinal[\s\S]*StartDate[\s\S]*EndOrdinal[\s\S]*OfficerHistoryId/', $body);
+    }
+
+    /** Manage Officers drops the dead bridges and points a missing open term at the Officer History page. */
+    public function testManageOfficersPointsAtTheOfficerHistoryPage(): void
+    {
+        $tpl = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/partials/_manage_officers.tpl');
+        self::assertStringNotContainsString('moGetOfficeList', $tpl);
+        self::assertStringNotContainsString('moEscAttr', $tpl);
+        self::assertStringContainsString('window.moSearchUrl', $tpl, 'still used by the transition wizard');
+        self::assertStringNotContainsString('Use Correct the Rolls to fix it directly', $tpl);
+        self::assertStringContainsString('Officer History page', $tpl);
+    }
+
     /** An unknown kingdom or park (null or empty name) is not found, so the page redirects. */
     public function testUnknownScopeIsNotFound(): void
     {

@@ -798,17 +798,10 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	window.moFindPosition  = findPos;
 	window.moOccupancyOf   = occupantsOf;
 	window.moEsc           = esc;
-	window.moEscAttr       = escAttr;
 	window.moBase          = base;
 	window.moSearchUrl     = searchUrl;
 	window.moIsViewer      = isViewer;
 	window.moSelfEnded     = moSelfEnded;
-	// Correct the Rolls' Add-a-Term office picker is the only place outside
-	// this module that needs the position list; wrapped the same way
-	// moFindPosition/moOccupancyOf wrap moData rather than exposing it raw.
-	window.moGetOfficeList = function () {
-		return (moData.crown || []).concat(moData.supporting || []).concat(moData.retired || []);
-	};
 
 	// One office, one occupant. The card-level Vacate button (see rowHtml) already
 	// removes them, so there is no separate per-holder control here.
@@ -1973,7 +1966,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 			}
 			btn.innerHTML = readyLabel;
 			if (!match) {
-				moFormError('mo-start-error', 'Could not find this officer’s open term on the rolls. Use Correct the Rolls to fix it directly.');
+				moFormError('mo-start-error', 'Could not find this officer’s open term on the rolls. Set its start on the Officer History page (the Correct the Rolls tab opens it).');
 				return;
 			}
 			document.getElementById('mo-start-history-id').value = match.OfficerHistoryId;

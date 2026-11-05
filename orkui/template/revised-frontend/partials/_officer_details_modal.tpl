@@ -1329,15 +1329,22 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 		return role.replace(/_/g, ' ').replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
 	}
 
-	// Newest term first: start date descending, then id descending so two terms
-	// that start on the same day still have a stable order.
+	// Newest term first, with the rolls reader's key (OfficerPosition::
+	// compareRollsTerms): the running term on top, then the resolved start season
+	// (StartOrdinal, so season-only backfill sorts too) descending with unknown
+	// starts last, then the exact start date, the end season, and the id.
+	function ordOf(v) { return (v === null || v === undefined || v === '') ? null : Number(v); }
 	function cmpTerm(a, b) {
-		// The running term first, whatever its recorded start.
 		var ca = !!(a && a.IsCurrent === true), cb = !!(b && b.IsCurrent === true);
 		if (ca !== cb) { return ca ? -1 : 1; }
-		var sa = String((a && a.StartDate) || '');
-		var sb = String((b && b.StartDate) || '');
-		if (sa !== sb) { return sa < sb ? 1 : -1; }
+		var as = ordOf(a && a.StartOrdinal), bs = ordOf(b && b.StartOrdinal);
+		if ((as === null) !== (bs === null)) { return as === null ? 1 : -1; }
+		if (as !== bs) { return bs - as; }
+		var ad = String((a && a.StartDate) || ''), bd = String((b && b.StartDate) || '');
+		if (ad !== '' && bd !== '' && ad !== bd) { return ad < bd ? 1 : -1; }
+		var ae = ordOf(a && a.EndOrdinal), be = ordOf(b && b.EndOrdinal);
+		if ((ae === null) !== (be === null)) { return ae === null ? 1 : -1; }
+		if (ae !== be) { return be - ae; }
 		return (parseInt(b && b.OfficerHistoryId, 10) || 0) - (parseInt(a && a.OfficerHistoryId, 10) || 0);
 	}
 
