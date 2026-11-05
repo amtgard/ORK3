@@ -12,6 +12,8 @@ final class OfficerAuthorizationTest extends TestCase
     private const KINGDOM_ID = 100031;
     /** A real park inside KINGDOM_ID: authorizePositionFamily() resolves its kingdom. */
     private const PARK_ID = 100063;
+    /** A second park in KINGDOM_ID that the park-scoped actor holds nothing at. */
+    private const OTHER_PARK_ID = 100067;
 
     private PDO $pdo;
     private OfficerPosition $positions;
@@ -65,7 +67,7 @@ final class OfficerAuthorizationTest extends TestCase
         $this->rbac?->cleanup();
         $this->rbac = null;
         if ($this->parkSeeded) {
-            $this->pdo->exec('DELETE FROM ork_park WHERE park_id = ' . self::PARK_ID);
+            $this->pdo->exec('DELETE FROM ork_park WHERE park_id IN (' . self::PARK_ID . ', ' . self::OTHER_PARK_ID . ')');
             $this->parkSeeded = false;
         }
     }
@@ -560,18 +562,85 @@ final class OfficerAuthorizationTest extends TestCase
         if ($this->parkSeeded) {
             return;
         }
-        $this->pdo->prepare(
+        $stmt = $this->pdo->prepare(
             'INSERT INTO ork_park
                 (park_id, kingdom_id, name, abbreviation, url, address, city, province,
                  postal_code, google_geocode, latitude, longitude, location,
                  map_url, description, directions)
              VALUES (:pid, :kid, :name, "ZZO", "", "", "", "", "", "", 0, 0, "", "", "", "")'
-        )->execute([
-            ':pid' => self::PARK_ID,
-            ':kid' => self::KINGDOM_ID,
-            ':name' => self::MARKER . '_park',
-        ]);
+        );
+        foreach ([self::PARK_ID => '_park', self::OTHER_PARK_ID => '_otherpark'] as $parkId => $suffix) {
+            $stmt->execute([
+                ':pid' => $parkId,
+                ':kid' => self::KINGDOM_ID,
+                ':name' => self::MARKER . $suffix,
+            ]);
+        }
         $this->parkSeeded = true;
+    }
+
+    /**
+     * A park-scoped historian: park.officer_history.manage at PARK_ID and nothing else.
+     *
+     * @return array{0: string, 1: int} token, mundane id
+     */
+    private function seedParkHistorian(): array
+    {
+        $this->seedParkRow();
+        $rbac = $this->rbacFixture();
+        [$id, $token] = $rbac->seedPlayer('parkhistorian', true, self::PARK_ID, self::KINGDOM_ID);
+        $roleId = $rbac->seedRoleWith(['park.officer_history.manage'], 'park', self::KINGDOM_ID);
+        $rbac->assignRole($id, $roleId, ['park_id' => self::PARK_ID]);
+
+        return [$token, $id];
+    }
+
+    /**
+     * Park-scoped history authority stays in its park: through the Kingdom and
+     * Park wrappers it cannot add or edit a kingdom-level term, nor edit another
+     * park's term. The positive control proves the actor really holds the key.
+     */
+    public function testAParkHistorianCannotReachKingdomOrOtherParkHistory(): void
+    {
+        [$token, $id] = $this->seedParkHistorian();
+        self::assertTrue(
+            Ork3::$Lib->authorizationgate->checkPermission($id, 'park.officer_history.manage', 'park', self::PARK_ID),
+            'Fixture check: the actor holds park.officer_history.manage at their park.'
+        );
+        $positionId = $this->seededPositions['crown_a'];
+        $holder = $this->seededMundanes[0];
+        $ownRow = $this->seedHistoryRow(self::KINGDOM_ID, self::PARK_ID, $holder, $positionId);
+        $kingdomRow = $this->seedHistoryRow(self::KINGDOM_ID, 0, $holder, $positionId);
+        $otherParkRow = $this->seedHistoryRow(self::KINGDOM_ID, self::OTHER_PARK_ID, $holder, $positionId);
+
+        $own = Ork3::$Lib->park->EditOfficerHistory([
+            'Token' => $token, 'ParkId' => self::PARK_ID, 'OfficerHistoryId' => $ownRow, 'Note' => 'own park',
+        ]);
+        self::assertSame(0, (int) $own['Status'], 'positive control: own park row: ' . ($own['Error'] ?? ''));
+
+        $add = Ork3::$Lib->kingdom->AddOfficerHistory([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => self::PARK_ID,
+            'PositionId' => $positionId, 'HolderName' => self::MARKER . ' Smuggled', 'Period' => 'Spring–Fall 95',
+        ]);
+        self::assertSame(5, (int) $add['Status'], 'Kingdom::AddOfficerHistory writes a kingdom-level term');
+        self::assertSame(0, (int) $this->pdo->query(
+            "SELECT COUNT(*) FROM ork_officer_history WHERE holder_name = '" . self::MARKER . " Smuggled'"
+        )->fetchColumn(), 'a refused add writes nothing');
+
+        $kEdit = Ork3::$Lib->kingdom->EditOfficerHistory([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => self::PARK_ID,
+            'OfficerHistoryId' => $kingdomRow, 'Note' => 'smuggled',
+        ]);
+        self::assertSame(5, (int) $kEdit['Status'], 'Kingdom::EditOfficerHistory on a kingdom-level row');
+
+        $pEdit = Ork3::$Lib->park->EditOfficerHistory([
+            'Token' => $token, 'ParkId' => self::PARK_ID, 'OfficerHistoryId' => $otherParkRow, 'Note' => 'smuggled',
+        ]);
+        self::assertSame(5, (int) $pEdit['Status'], 'Park::EditOfficerHistory on another park\'s row');
+
+        self::assertSame(0, (int) $this->pdo->query(
+            "SELECT COUNT(*) FROM ork_officer_history WHERE notes = 'smuggled'"
+        )->fetchColumn(), 'refused edits change nothing');
     }
 
     public function testTheParkOfficerFixtureReallyHoldsParkOccupancyAuthority(): void
