@@ -153,8 +153,15 @@ whichever lies nearer the other end of the term in the right direction. As the u
 - **Both ends Winter**: resolve the start first, as the earlier winter in its labelled
   year (January–February YY), then resolve the end as the winter in its labelled year
   that falls after the start, nearest first. So `Winter 23 – Winter 24` runs
-  January–February 2023 → January–February 2024 (one year), and `Winter 23 – Winter 23`
-  runs January 2023 → December 2023. *(My call.)*
+  January–February 2023 → January–February 2024 (one year). `Winter 23 – Winter 23` is the
+  same single winter as typing `Winter 23` alone: a single season and an explicit
+  same-season pair are stored identically, so they resolve identically. A calendar year
+  from one winter to the next is `Winter 23 – Winter 24`, or exact dates. *(My call,
+  revised during the final review: the earlier reading, Jan → Dec 2023, made a lone
+  "Winter 24" resolve as a year-long term.)*
+- **A single season** (`Fall 22`) is a one-season term: both ends are that season, its
+  label is the season alone ("Fall 2022"), and the term before it is the single season
+  before it.
 - **Canonical label for pre-fill and display**: a winter is labelled by the year of its
   January–February half, except a December-only end that the user typed with the December
   year. Pre-fill, which generates labels itself, always uses the January–February year:
