@@ -77,8 +77,9 @@ class Court
 
     /**
      * Returns true if $uid may manage courts for this kingdom/park.
-     * Grants access to: kingdom editors, park editors (for park courts),
-     * and officers with role Monarch/Regent/Prime Minister.
+     * Grants access to: kingdom.court.manage (legacy kingdom editors),
+     * park.court.manage for park courts (legacy park editors), and officers
+     * with role Monarch/Regent/Prime Minister.
      */
     public function canManage($uid, $kingdom_id, $park_id = 0)
     {
@@ -86,13 +87,16 @@ class Court
             return false;
         }
 
-        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+        $gate = Ork3::$Lib->authorizationgate;
+        if ($gate->checkPermissionOrAuthority($uid, 'kingdom.court.manage', 'kingdom', (int)$kingdom_id, AUTH_EDIT)) {
             return true;
         }
 
-        if ($park_id > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_EDIT)) {
+        if ($park_id > 0 && $gate->checkPermissionOrAuthority($uid, 'park.court.manage', 'park', (int)$park_id, AUTH_EDIT)) {
             return true;
         }
+
+        $roleIn = $this->officerRoleInList(['Monarch', 'Regent', 'Prime Minister']);
 
         // Check officer role (kingdom-level)
         $this->db->Clear();
@@ -101,7 +105,7 @@ class Court
              WHERE mundane_id = ' . (int)$uid . '
                AND kingdom_id = ' . (int)$kingdom_id . '
                AND park_id = 0
-               AND role IN (\'Monarch\',\'Regent\',\'Prime Minister\')
+               AND role IN (' . $roleIn . ')
              LIMIT 1'
         );
         if ($r && $r->Next()) {
@@ -116,7 +120,7 @@ class Court
                  WHERE mundane_id = ' . (int)$uid . '
                    AND kingdom_id = ' . (int)$kingdom_id . '
                    AND park_id = ' . (int)$park_id . '
-                   AND role IN (\'Monarch\',\'Regent\',\'Prime Minister\')
+                   AND role IN (' . $roleIn . ')
                  LIMIT 1'
             );
             if ($r2 && $r2->Next()) {
@@ -251,6 +255,18 @@ class Court
     private function esc($v)
     {
         return str_replace(["'", '\\'], ["''", '\\\\'], $v);
+    }
+
+    /**
+     * SQL IN() body matching BOTH stored forms of each crown role. The officer
+     * position migration rewrote 'Prime Minister' to 'prime_minister', which a
+     * literal no longer matches (single words survive only via the ci collation).
+     */
+    private function officerRoleInList(array $roles)
+    {
+        return implode(',', array_map(function ($role) {
+            return "'" . $this->esc((string)$role) . "'";
+        }, PermissionRegistry::OfficerRoleVariants($roles)));
     }
 
     /**
@@ -2228,7 +2244,7 @@ class Court
              LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = o.mundane_id
              WHERE o.kingdom_id = ' . (int)$kingdom_id . '
                AND o.park_id = ' . (int)$park_id . '
-               AND o.role = \'' . $this->esc($role) . '\'
+               AND o.role IN (' . $this->officerRoleInList([$role]) . ')
              ORDER BY o.officer_id DESC
              LIMIT 1'
         );
@@ -3457,7 +3473,7 @@ class Court
                FROM ' . DB_PREFIX . 'officer o
               WHERE o.kingdom_id = ' . $kingdom_id . '
                 AND ' . $scope . '
-                AND o.role IN (\'Monarch\', \'Regent\', \'Prime Minister\')
+                AND o.role IN (' . $this->officerRoleInList(['Monarch', 'Regent', 'Prime Minister']) . ')
                 AND o.mundane_id > 0'
         );
 

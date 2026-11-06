@@ -127,27 +127,211 @@ class Controller
         $this->data[ 'menu' ] = [ ];
         $this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
         $this->load_model('Authorization');
-        $this->data['NavIsOrkAdmin'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
-        if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, null, null)) {
+        // The standing checks below cost dozens of queries, so they run only where a
+        // nav is rendered (not for the JSON-only *Ajax controllers) and only for a
+        // viewer with some administrative footprint -- one query that answers "no"
+        // exactly for the ordinary player.
+        $_navStanding = $_uid > 0
+            && substr(get_class($this), -4) !== 'Ajax'
+            && $this->Authorization->has_administrative_footprint($_uid);
+        // The ORK Administration entry follows Admin::index()'s own front door, so a
+        // holder of one delegated global.* capability can reach the tile for it.
+        $this->data['NavIsOrkAdmin'] = $_navStanding && $this->has_ork_admin_standing($_uid);
+        if ($this->data['NavIsOrkAdmin']) {
             $this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel', 'no-crumb' => 'no-crumb' ];
         }
 
         if (isset($this->session->kingdom_id)) {
             $this->data[ 'menu' ][ 'kingdom' ] = [ 'url' => UIR . 'Kingdom/profile/' . $this->session->kingdom_id, 'display' => $this->session->kingdom_name ];
-            if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_EDIT)) {
+            // The nav entry must agree with the console's own front door, so an
+            // officer holding only an RBAC role still sees it.
+            if ($_navStanding && $this->has_kingdom_admin_standing($_uid, (int)$this->session->kingdom_id)) {
                 $this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/kingdom/' . $this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
             }
         }
 
         if (isset($this->session->park_id)) {
             $this->data[ 'menu' ][ 'park' ] = [ 'url' => UIR . 'Park/profile/' . $this->session->park_id, 'display' => $this->session->park_name ];
-            if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+            if ($_navStanding && $this->has_park_admin_standing($_uid, (int)$this->session->park_id)) {
                 $this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
             }
         }
         // HasAuthority uses the auth ORM which shares the global DB connection.
         // Clear after all auth checks so subclass methods start with a clean DB state.
         $this->Authorization->clear_db_after_auth_checks();
+    }
+
+    /**
+     * The installation-scope capabilities the ORK Administration dashboard can open:
+     * each one has a tile there. Together with ORK_ADMIN_KEYS_WITHOUT_TILE this is the
+     * whole 'global' block of PermissionRegistry (OrkAdminDashboardAccessTest pins the
+     * two together); the legacy all-zero admin row satisfies every one.
+     */
+    protected const ORK_ADMIN_CAPABILITY_KEYS = [
+        'global.admin.grant',
+        'global.health.view',
+        'global.kingdom.manage',
+        'global.player.merge',
+        'global.bonus_credit.manage',
+    ];
+
+    /**
+     * Global keys the domain honours that have no dashboard tile yet: log purge and
+     * table optimise, the award catalog, attendance classes and the ban switch. They
+     * stay out of the front door so a holder is not shown an Admin Panel with nothing
+     * on it; a key moves to the list above when its tile ships.
+     */
+    protected const ORK_ADMIN_KEYS_WITHOUT_TILE = [
+        'global.maintenance.run',
+        'global.award_catalog.manage',
+        'global.attendance_class.manage',
+        'global.player.ban',
+    ];
+
+    /**
+     * Which global.* capabilities does $uid hold? key => bool, each answered by the same
+     * gate the lib method behind it uses (RBAC global grant OR the all-zero admin row).
+     *
+     * A true admin holds them all without a query. Everyone else costs ONE query -- the
+     * permissions their global-scope role rows carry -- and only keys found there are
+     * confirmed through the full gate (ban and expiry rules included). This runs from
+     * the constructor on every page for the nav entry, so asking the gate nine times
+     * per request for users who hold nothing would be pure overhead.
+     *
+     * @return array<string, bool>
+     */
+    protected function global_capabilities(int $uid): array
+    {
+        $caps = array_fill_keys(self::ORK_ADMIN_CAPABILITY_KEYS, false);
+        if ($uid <= 0) {
+            return $caps;
+        }
+        $this->load_model('Authorization');
+        if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return array_fill_keys(self::ORK_ADMIN_CAPABILITY_KEYS, true);
+        }
+        $this->load_model('RBACService');
+        $held = $this->RBACService->GetEffectivePermissions($uid, 'global', 0);
+        foreach (is_array($held) ? $held : [] as $key) {
+            if (array_key_exists($key, $caps)) {
+                $caps[$key] = $this->Authorization->has_permission_or_authority($uid, $key, 'global', 0, AUTH_ADMIN);
+            }
+        }
+        return $caps;
+    }
+
+    /**
+     * Front door of the ORK Administration dashboard (Admin::index) and its nav entry:
+     * a true all-zero admin, or a holder of any one global.* capability.
+     */
+    protected function has_ork_admin_standing(int $uid): bool
+    {
+        return in_array(true, $this->global_capabilities($uid), true);
+    }
+
+    /**
+     * Does $uid have ANY administrative standing in this kingdom -- i.e. would the
+     * kingdom Admin console (Admin/kingdom) let them in?
+     *
+     * One definition for both the nav entry and the console's front door, so the two
+     * cannot drift: the console exposes kingdom details, the park summary and the
+     * Reports links, each card separately capability-gated. Besides officer standing,
+     * every capability that has a console tile of its own counts: the qualification
+     * tests (a non-officer test manager reaches the console for that section), the
+     * Court Planner / Recommendations Manager (Court::can_manage) and Bonus Credits
+     * (define or grant). Each is the model method the tile's destination checks.
+     */
+    protected function has_kingdom_admin_standing(int $uid, int $kingdomId): bool
+    {
+        if ($uid <= 0 || !valid_id($kingdomId)) {
+            return false;
+        }
+        if ($this->has_kingdom_officer_standing($uid, $kingdomId)) {
+            return true;
+        }
+        $this->load_model('QualTest');
+        if (in_array(true, $this->QualTest->capabilities($uid, $kingdomId), true)) {
+            return true;
+        }
+        $this->load_model('Court');
+        if ($this->Court->can_manage($uid, $kingdomId, 0)) {
+            return true;
+        }
+        return $this->can_open_kingdom_bonus_credits($uid, $kingdomId);
+    }
+
+    /**
+     * The officer half of has_kingdom_admin_standing(): ORK admin, or one of the kingdom
+     * officer capabilities the console's own modals are built on. The park console's
+     * front door accepts this (not the whole kingdom door, whose other arms have no
+     * tile on a park console), and the kingdom console gates its officer tiles on it.
+     */
+    protected function has_kingdom_officer_standing(int $uid, int $kingdomId): bool
+    {
+        if ($uid <= 0 || !valid_id($kingdomId)) {
+            return false;
+        }
+        $this->load_model('Authorization');
+        if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return true;
+        }
+        return $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', $kingdomId, AUTH_EDIT)
+            || $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.set', 'kingdom', $kingdomId, AUTH_CREATE)
+            || $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', $kingdomId, AUTH_EDIT);
+    }
+
+    /**
+     * May $uid open the Bonus Credits modal at kingdom scope? BonusCreditAjax::options()
+     * accepts a definer or a granter, so this asks the same two model questions.
+     */
+    protected function can_open_kingdom_bonus_credits(int $uid, int $kingdomId): bool
+    {
+        if ($uid <= 0 || !valid_id($kingdomId)) {
+            return false;
+        }
+        $this->load_model('BonusCredit');
+        return $this->BonusCredit->can_define($uid, 'kingdom', $kingdomId)
+            || $this->BonusCredit->can_grant_in_kingdom($uid, $kingdomId);
+    }
+
+    /**
+     * Park-specific standing for the park Admin console (Admin/park): park.details.edit
+     * at the park (RBAC cascades it from kingdom-scope assignments), or one of the two
+     * capabilities with a park-console tile of their own -- the park's Court Planner /
+     * Recommendations Manager (Court::can_manage) and Bonus Credits (BonusCredit::can_grant).
+     * The console also admits kingdom officer standing over the park's kingdom; the nav
+     * sends those officers to the kingdom console instead, so that arm is not repeated.
+     */
+    protected function has_park_admin_standing(int $uid, int $parkId): bool
+    {
+        if ($uid <= 0 || !valid_id($parkId)) {
+            return false;
+        }
+        $this->load_model('Authorization');
+        if ($this->Authorization->has_permission_or_authority($uid, 'park.details.edit', 'park', $parkId, AUTH_EDIT)) {
+            return true;
+        }
+        $this->load_model('BonusCredit');
+        if ($this->BonusCredit->can_grant($uid, $parkId)) {
+            return true;
+        }
+        $kingdomId = (int)$this->BonusCredit->park_kingdom($parkId);
+        if (!valid_id($kingdomId)) {
+            return false;
+        }
+        $this->load_model('Court');
+        return $this->Court->can_manage($uid, $kingdomId, $parkId);
+    }
+
+    /**
+     * The whole park-console front door (Admin/park): park standing above, or kingdom
+     * OFFICER standing over the park's kingdom. The park profile's Admin link asks this
+     * too, so the link appears exactly when the console will open.
+     */
+    protected function can_open_park_console(int $uid, int $parkId, int $kingdomId): bool
+    {
+        return $this->has_park_admin_standing($uid, $parkId)
+            || (valid_id($kingdomId) && $this->has_kingdom_officer_standing($uid, $kingdomId));
     }
 
     public function load_model($name)

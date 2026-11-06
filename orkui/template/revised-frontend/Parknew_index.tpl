@@ -34,9 +34,35 @@
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
 	foreach ($officerList as $o) {
-		if ($o['OfficerRole'] === 'Monarch') $monarch = $o;
-		if ($o['OfficerRole'] === 'Regent')  $regent  = $o;
+		$_ck = $o['CanonicalKey'] ?? $o['OfficerRole'] ?? '';
+		if ($_ck === 'monarch') $monarch = $o;
+		if ($_ck === 'regent')  $regent  = $o;
 	}
+
+	// ---- Sidebar shows CROWN offices only ----------------------------------
+	// $officerList keeps the FULL set (crown + supporting) for the Officer
+	// Details modal; the sidebar renders this filtered copy.
+	//
+	// Classification is a NEW key on the buildOfficerRows() row and is null for
+	// an officer with no registry position (ork_officer.position_id = 0). So the
+	// test is deliberately NEGATIVE: hide only what is positively identified as
+	// 'supporting', and show everything else. Writing `=== 'crown'` here would
+	// empty the entire sidebar on any data set where the key is absent or
+	// unmapped -- a far worse failure than one extra row.
+	$crownOfficerList = [];
+	foreach ($officerList as $_o) {
+		if (!is_array($_o)) {
+			continue;
+		}
+		if (strtolower(trim((string)($_o['Classification'] ?? ''))) === 'supporting') {
+			continue;
+		}
+		$crownOfficerList[] = $_o;
+	}
+
+	// Officer-history role options (canonical key => display title) are shaped by the
+	// controller from the position registry -- see Model_OfficerPosition::history_role_options().
+	$ohRoleOptions = is_array($OfficerHistoryRoleOptions ?? null) ? $OfficerHistoryRoleOptions : [];
 
 	// Parse park main location for map links
 	$parkLat = null; $parkLng = null;
@@ -361,9 +387,26 @@
 					<button class="pk-btn pk-btn-outline" onclick="pkOpenAwardModal()">
 						<i class="fas fa-medal"></i> Enter Awards
 					</button>
-					<button class="pk-btn pk-btn-outline" onclick="pkOpenAdminModal()">
+				<?php endif; ?>
+				<?php /*
+				   Admin goes to the standalone Park admin console (Admin/park/{id}),
+				   mirroring the kingdom nameplate's Admin link -- it used to open the
+				   pk-admin-overlay edit pad, which is the park's version of the kingdom
+				   edit pad this work replaced. Everything that modal offered lives on the
+				   console: Park Details -> "Configure Park" (Admin/editpark saves the same
+				   Url/Address/City/Province/PostalCode/MapUrl/Description/Directions set),
+				   and Reset Waivers -> the Operations tile.
+
+				   GATED ON $CanOpenParkConsole: the controller asks the console's own
+				   front door (Controller::can_open_park_console -- park.details.edit,
+				   park court, park bonus credits, or kingdom officer standing), so the
+				   link appears exactly when the page will open. Not $CanAdminPark
+				   (park.officer.set), which would bounce some holders to the home page.
+				*/ ?>
+				<?php if (!empty($CanOpenParkConsole)): ?>
+					<a class="pk-btn pk-btn-outline" href="<?= UIR ?>Admin/park/<?= (int)($park_id ?? 0) ?>">
 						<i class="fas fa-cog"></i> Admin
-					</button>
+					</a>
 				<?php endif; ?>
 
 			</div>
@@ -508,29 +551,47 @@
 		<!-- Officers -->
 		<?php if (!empty($officerList) || !empty($CanManagePark)): ?>
 		<div class="pk-card">
-			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
+			<?php
+/* The modal collapses officer rows sharing a PositionId into ONE office (an office with
+   three holders is three rows), so counting rows here would advertise a bigger number
+   than the modal lists. Count distinct offices, and fall back to "Details" rather than
+   printing "All 0" when a manager views a group with no officers on record. */
+$_ofOfficeCount = 0;
+if (!empty($officerList) && is_array($officerList)) {
+    $_ofSeen = [];
+    foreach ($officerList as $_ofRow) {
+        if (!is_array($_ofRow)) { continue; }
+        $_ofPid = (int)($_ofRow['PositionId'] ?? 0);
+        $_ofKey = $_ofPid > 0 ? 'p' . $_ofPid : 'r' . count($_ofSeen);
+        $_ofSeen[$_ofKey] = true;
+    }
+    $_ofOfficeCount = count($_ofSeen);
+}
+$_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
+?>
+<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
 				<span><i class="fas fa-crown"></i> Officers</span>
-				<?php if (!empty($CanAdminPark)): ?>
-				<button onclick="pkOpenEditOfficersModal()" class="pk-edit-officers-btn" data-tip="Edit officers">
-					<i class="fas fa-pencil-alt"></i>
-				</button>
-				<?php endif; ?>
+				<span class="pk-officers-bar-actions">
+					<!-- Available to EVERY viewer, not just park admins. -->
+					<a href="#" class="pk-officers-more" data-tip="All officers"
+					   onclick="if (window.ofOpenOfficerModal) { ofOpenOfficerModal(); } return false;"><?= $_ofMoreLabel ?> &rarr;</a>
+				</span>
 			</h4>
 			<ul class="pk-officer-list">
-				<?php foreach ($officerList as $o): ?>
+				<?php foreach ($crownOfficerList as $o): ?>
 				<li>
-					<span class="pk-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
+					<span class="pk-officer-role"><?= htmlspecialchars($o['DisplayTitle'] ?? $o['OfficerRole']) ?></span>
 					<span class="pk-officer-name">
 						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
-							<a href="<?= UIR ?>Player/profile/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
+							<a href="<?= UIR ?>Player/profile/<?= (int)$o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona'] ?? '') ?></a>
 						<?php else: ?>
 							<em style="color:#a0aec0">Vacant</em>
 						<?php endif; ?>
 					</span>
 				</li>
 				<?php endforeach; ?>
-				<?php if (empty($officerList)): ?>
-				<li><em style="color:#a0aec0;font-size:12px">No officers on record</em></li>
+				<?php if (empty($crownOfficerList)): ?>
+				<li><em style="color:#a0aec0;font-size:12px"><?= !empty($officerList) ? 'No crown officers on record' : 'No officers on record' ?></em></li>
 				<?php endif; ?>
 			</ul>
 		</div>
@@ -617,11 +678,6 @@
 					<?php if (!empty($AwardRecommendations)): ?>
 					<span class="pk-tab-count">(<?= count($AwardRecommendations) ?>)</span>
 					<?php endif; ?>
-				</li>
-				<?php endif; ?>
-				<?php if (!empty($CanManagePark) || !empty($CanManageCourt)): ?>
-				<li data-pktab="admin">
-					<i class="fas fa-cog"></i><span class="pk-tab-label"> Admin Tasks</span>
 				</li>
 				<?php endif; ?>
 			</ul>
@@ -830,10 +886,21 @@
 			</div><!-- /pk-tab-about -->
 
 			<!-- Events Tab -->
-			<div class="pk-tab-panel" id="pk-tab-events" style="display:none">
+			<div class="pk-tab-panel" id="pk-tab-events" style="display:none" data-subtab-group="pk-events">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+					<?php if (!empty($CanManageCourt)): ?>
+					<div class="ork-subtabs" role="tablist" aria-label="Events and courts">
+						<button type="button" class="ork-subtab ork-subtab-active" role="tab" data-subtab="calendar" aria-selected="true" aria-controls="pk-ev-pane-calendar" id="pk-ev-subtab-calendar"><i class="fas fa-calendar-alt"></i> Calendar</button>
+						<button type="button" class="ork-subtab" role="tab" data-subtab="courts" aria-selected="false" aria-controls="pk-ev-pane-courts" id="pk-ev-subtab-courts" tabindex="-1"><i class="fas fa-gavel"></i> Courts<?php if (count($CourtList ?? []) > 0): ?> <span class="ork-subtab-count"><?= count($CourtList ?? []) ?></span><?php endif; ?></button>
+					</div>
+					<div class="ork-subtab-tools ork-subtab-hidden" data-subtab-pane="courts">
+						<span class="ork-subtab-note"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
+						<button class="pk-btn pk-btn-primary" onclick="pkCpOpenNewCourt()"><i class="fas fa-plus"></i> Plan a Court</button>
+					</div>
+					<?php else: ?>
 					<h4 class="kn-bare-heading" style="margin:0;font-size:14px;font-weight:700;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
-					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+					<?php endif; ?>
+					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;" data-subtab-pane="calendar">
 						<button class="pk-view-btn pk-view-active" id="pk-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
 						<button class="pk-view-btn" id="pk-ev-view-map" title="Map view"><i class="fas fa-map-marked-alt"></i></button>
@@ -853,6 +920,7 @@
 					</div>
 				</div>
 
+				<div id="pk-ev-pane-calendar" class="ork-subtab-pane" data-subtab-pane="calendar" role="tabpanel" aria-labelledby="pk-ev-subtab-calendar">
 				<!-- Calendar view (lazy-loaded FullCalendar) -->
 				<div id="pk-events-cal" style="display:none"></div>
 
@@ -979,6 +1047,330 @@
 				</div><!-- /pk-events-list-view -->
 
 				<?php /* [TOURNAMENTS HIDDEN] */ ?>
+				</div><!-- /pk-ev-pane-calendar -->
+
+				<?php if (!empty($CanManageCourt)): ?>
+				<!-- Courts sub-tab: the Court Planner. Its count and "Plan a Court" live in the header above. -->
+				<div id="pk-ev-pane-courts" class="ork-subtab-pane ork-subtab-hidden" data-subtab-pane="courts" role="tabpanel" aria-labelledby="pk-ev-subtab-courts">
+			<style>
+			.pk-cp-court-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; margin-bottom:10px; display:flex; align-items:center; gap:14px; transition:box-shadow .15s; }
+			.pk-cp-court-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.1); }
+			.pk-cp-court-date { font-size:13px; color:#718096; white-space:nowrap; min-width:88px; }
+			.pk-cp-court-info { flex:1; }
+			.pk-cp-court-name { font-weight:700; font-size:15px; color:#2d3748; }
+			.pk-cp-court-meta { font-size:12px; color:#718096; margin-top:2px; }
+			.pk-cp-court-badges { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+			.pk-cp-badge { display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; }
+			.pk-cp-badge-count { background:#edf2f7; color:#4a5568; padding:3px 9px; border-radius:12px; font-size:11px; }
+			.pk-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
+			.pk-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
+			.pk-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
+			/* .kn-rec-age-* and .pk-rec-passlocal live in revised.css: this block only renders for court managers. */
+			/* Delegated-by-the-Kingdom pinned section (officer-only, to-schedule list) */
+			.pk-delegated { border:1px solid rgba(44,95,139,.4); background:rgba(44,95,139,.07); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
+			.pk-delegated-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+			.pk-delegated-title { margin:0; font-size:14px; font-weight:700; color:#2c5f8b !important; display:flex; align-items:center; gap:8px; }
+			.pk-delegated-title i { color:#2c5f8b; }
+			.pk-delegated-count { font-weight:600; color:#718096; }
+			.pk-delegated-help { font-size:12px; color:#718096; margin:6px 0 10px; }
+			.pk-delegated-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+			.pk-delegated-item { font-size:13px; color:#2d3748; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+			.pk-delegated-item a { font-weight:600; }
+			.pk-delegated-sep { color:#cbd5e0; }
+			.pk-delegated-award { color:#4a5568; }
+			.pk-delegated-rank { color:#4a5568; }
+			.pk-delegated-approved { margin-left:auto; color:#718096; font-size:12px; }
+			html[data-theme="dark"] .pk-delegated { border-color:rgba(111,176,230,.4); background:rgba(111,176,230,.08); }
+			html[data-theme="dark"] .pk-delegated-title { color:#6fb0e6 !important; }
+			html[data-theme="dark"] .pk-delegated-title i { color:#6fb0e6; }
+			html[data-theme="dark"] .pk-delegated-count { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-help { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-item { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-delegated-award { color:#cbd5e0; }
+			html[data-theme="dark"] .pk-delegated-rank { color:#cbd5e0; }
+			html[data-theme="dark"] .pk-delegated-approved { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-sep { color:#4a5568; }
+			.pk-delegated-toggle { display:flex; align-items:center; gap:10px; background:none; border:none; cursor:pointer; padding:0; text-align:left; flex:1; min-width:0; }
+			.pk-delegated-chevron { color:#a0aec0; flex-shrink:0; }
+			.pk-delegated-body { padding-top:2px; }
+			html[data-theme="dark"] .pk-cp-court-card { background:#1a202c; border-color:#2d3748; }
+			html[data-theme="dark"] .pk-cp-court-name { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-cp-court-date { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-court-meta { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-badge-count { background:#2d3748; color:#cbd5e0; }
+			html[data-theme="dark"] .pk-cp-btn-link { border-color:#4a5568; color:#cbd5e0; }
+			html[data-theme="dark"] .pk-cp-btn-link:hover { background:#2d3748; color:#fff; }
+			html[data-theme="dark"] .pk-cp-empty { border-color:#2d3748; color:#a0aec0; }
+			/* Mode + staged badges */
+			.pk-cp-badge-mode { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#ebf8ff; color:#2b6cb0; }
+			.pk-cp-badge-mode-plan { background:#faf089; color:#744210; }
+			.pk-cp-badge-staged { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#fefcbf; color:#975a16; box-shadow:inset 0 0 0 1px rgba(151,90,22,.25); }
+			.pk-cp-badge-mode[data-tip]::after, .pk-cp-badge-staged[data-tip]::after { white-space:normal; width:max-content; max-width:240px; }
+			html[data-theme="dark"] .pk-cp-badge-mode { background:#1a2f45; color:#90cdf4; }
+			html[data-theme="dark"] .pk-cp-badge-mode-plan { background:#3d3512; color:#f6e05e; }
+			html[data-theme="dark"] .pk-cp-badge-staged { background:#3d3512; color:#f6e05e; box-shadow:inset 0 0 0 1px rgba(246,224,94,.3); }
+			/* Mode selector (create-court modal) */
+			.pk-cp-mode-opts { display:flex; gap:10px; }
+			.pk-cp-mode-opt { flex:1; border:1px solid #cbd5e0; border-radius:6px; padding:10px 12px; cursor:pointer; display:block; transition:border-color .12s,background .12s,box-shadow .12s; }
+			.pk-cp-mode-opt input { position:absolute; opacity:0; pointer-events:none; }
+			.pk-cp-mode-title { font-size:13px; font-weight:700; color:#2d3748; display:flex; align-items:center; gap:6px; }
+			.pk-cp-mode-desc { font-size:11px; color:#718096; margin-top:3px; line-height:1.35; font-weight:400; }
+			.pk-cp-mode-opt.pk-cp-mode-sel { border-color:#2c5282; background:#ebf2fb; box-shadow:0 0 0 1px #2c5282; }
+			html[data-theme="dark"] .pk-cp-mode-opt { border-color:#2d3748; }
+			html[data-theme="dark"] .pk-cp-mode-title { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-cp-mode-desc { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-mode-opt.pk-cp-mode-sel { border-color:#4299e1; background:#1a2f45; box-shadow:0 0 0 1px #4299e1; }
+			/* Status badge (class-driven so dark mode can re-tone it) */
+			.pk-cp-badge-draft     { background:#edf2f7; color:#718096; }
+			.pk-cp-badge-published { background:#ebf8ff; color:#2b6cb0; }
+			.pk-cp-badge-complete  { background:#f0fff4; color:#276749; }
+			html[data-theme="dark"] .pk-cp-badge-draft     { background:#2d3748; color:#cbd5e0; }
+			html[data-theme="dark"] .pk-cp-badge-published { background:#1a2f45; color:#90cdf4; }
+			html[data-theme="dark"] .pk-cp-badge-complete  { background:#1c3a2a; color:#9ae6b4; }
+			/* Mobile: court card stacks, Open becomes a full-width row action */
+			@media (max-width:600px) {
+				.pk-cp-court-card { flex-wrap:wrap; align-items:flex-start; }
+				.pk-cp-court-badges { flex-wrap:wrap; flex-shrink:1; }
+				.pk-cp-btn-link { flex:1 1 100%; width:100%; text-align:center; min-height:44px; line-height:44px; padding:0 12px; margin-top:8px; }
+				.pk-cp-mode-opts { flex-direction:column; }
+				.pk-cp-mode-opt { width:100%; }
+				.pk-cp-court-info { min-width:0; }
+				.pk-cp-court-name, .pk-cp-court-meta { overflow-wrap:anywhere; }
+			}
+			@media (pointer:coarse) {
+				#pk-cp-new-court-modal .pk-modal-close-btn { min-width:44px; min-height:44px; }
+				#pk-cp-new-court-modal .pk-modal-footer button { min-height:44px; }
+			}
+			</style>
+			<?php
+				$_cpStatusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];
+				$_cpStatusClass = ['draft' => 'pk-cp-badge-draft', 'published' => 'pk-cp-badge-published', 'complete' => 'pk-cp-badge-complete'];
+			?>
+			<?php if (empty($CourtList)): ?>
+			<div class="pk-cp-empty">
+				<i class="fas fa-gavel" style="font-size:32px;margin:0 auto 12px;display:block;opacity:.3"></i>
+				No courts planned yet. Click <strong>Plan a Court</strong> to get started.
+			</div>
+			<?php else: ?>
+			<?php foreach ($CourtList as $_court): ?>
+			<?php
+				$_st     = $_court['Status'];
+				$_lbl    = $_cpStatusLabel[$_st] ?? $_st;
+				$_stCls  = $_cpStatusClass[$_st] ?? 'pk-cp-badge-draft';
+				$_mode   = $_court['Mode'] ?? 'run';
+				$_staged = (int)($_court['StagedCount'] ?? 0);
+			?>
+			<div class="pk-cp-court-card">
+				<div class="pk-cp-court-date">
+					<?= $_court['CourtDate'] ? date('M j, Y', strtotime($_court['CourtDate'])) : '<em style="color:#a0aec0">No date</em>' ?>
+				</div>
+				<div class="pk-cp-court-info">
+					<div class="pk-cp-court-name"><?= htmlspecialchars($_court['Name']) ?></div>
+					<?php if ($_court['EventName']): ?>
+					<div class="pk-cp-court-meta"><i class="fas fa-calendar-alt" style="margin-right:3px"></i><?= htmlspecialchars($_court['EventName']) ?></div>
+					<?php endif; ?>
+				</div>
+				<div class="pk-cp-court-badges">
+					<span class="pk-cp-badge <?= $_stCls ?>"><?= $_lbl ?></span>
+					<?php if ($_mode === 'plan'): ?>
+					<span class="pk-cp-badge-mode pk-cp-badge-mode-plan" data-tip="Locked as a plan — prepared for someone to record later."><i class="fas fa-clipboard-list"></i> Plan</span>
+					<?php else: ?>
+					<span class="pk-cp-badge-mode" data-tip="Run at court — awards granted live during the ceremony."><i class="fas fa-bullhorn"></i> Run</span>
+					<?php endif; ?>
+					<?php if ($_staged > 0 && $_st !== 'complete'): ?>
+					<span class="pk-cp-badge-staged" data-tip="Grants captured but not yet finalized — open to finalize."><i class="fas fa-hourglass-half"></i> <?= $_staged ?> staged</span>
+					<?php endif; ?>
+					<span class="pk-cp-badge-count"><i class="fas fa-award" style="margin-right:3px"></i><?= (int)$_court['AwardCount'] ?></span>
+					<a href="<?= UIR ?>Court/detail/<?= (int)$_court['CourtId'] ?>" class="pk-cp-btn-link">
+						Open <i class="fas fa-arrow-right"></i>
+					</a>
+				</div>
+			</div>
+			<?php endforeach; ?>
+			<?php endif; ?>
+
+			<?php if (empty($CanAdminPark)): ?>
+			<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+			<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+			<?php endif; ?>
+
+			<!-- New Court Modal (park-scoped) -->
+			<div class="pk-overlay" id="pk-cp-new-court-modal" style="display:none">
+				<div class="pk-modal-box" style="max-width:480px">
+					<div class="pk-modal-header">
+						<h3 class="pk-modal-title"><i class="fas fa-gavel" style="margin-right:8px;color:#4a5568"></i>Plan a New Court</h3>
+						<button class="pk-modal-close-btn" onclick="pkCpCloseNewCourt()" aria-label="Close">&times;</button>
+					</div>
+					<div class="pk-modal-body">
+						<div class="pk-acct-field">
+							<label>Court Name <span style="color:#e53e3e">*</span></label>
+							<input type="text" id="pk-cp-new-name" placeholder="Summer Coronation Court&#x2026;" autocomplete="off">
+						</div>
+						<?php if (!empty($CourtUpcomingEvents)): ?>
+						<div class="pk-acct-field">
+							<label>Link to Event (optional)</label>
+							<select id="pk-cp-new-event" onchange="pkCpOnEventChange(this,'pk-cp-new-date')">
+								<option value="0" data-start="">— None —</option>
+								<?php foreach ($CourtUpcomingEvents as $_ev): ?>
+								<option value="<?= (int)$_ev['EventCalendarDetailId'] ?>" data-start="<?= $_ev['EventStart'] ? date('Y-m-d', strtotime($_ev['EventStart'])) : '' ?>">
+									<?= htmlspecialchars($_ev['Name']) ?><?= $_ev['EventStart'] ? ' (' . date('M j', strtotime($_ev['EventStart'])) . ')' : '' ?>
+								</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+						<?php endif; ?>
+						<div class="pk-acct-field">
+							<label>Date</label>
+							<input type="date" id="pk-cp-new-date" >
+						</div>
+						<div class="pk-acct-field">
+							<label>How will this court be handled?</label>
+							<div class="pk-cp-mode-opts">
+								<label class="pk-cp-mode-opt pk-cp-mode-sel" id="pk-cp-mode-run-opt">
+									<input type="radio" name="pk-cp-mode" value="run" checked onchange="pkCpSyncMode()">
+									<span class="pk-cp-mode-title"><i class="fas fa-bullhorn"></i> Run at Court</span>
+									<span class="pk-cp-mode-desc">I'll grant awards live during the ceremony.</span>
+								</label>
+								<label class="pk-cp-mode-opt" id="pk-cp-mode-plan-opt">
+									<input type="radio" name="pk-cp-mode" value="plan" onchange="pkCpSyncMode()">
+									<span class="pk-cp-mode-title"><i class="fas fa-clipboard-list"></i> Lock as Plan</span>
+									<span class="pk-cp-mode-desc">I'm preparing the order of court for someone to record later.</span>
+								</label>
+							</div>
+						</div>
+						<div id="pk-cp-new-error" class="pk-form-error" style="display:none"></div>
+					</div>
+					<div class="pk-modal-footer">
+						<button class="pk-btn-ghost" onclick="pkCpCloseNewCourt()">Cancel</button>
+						<button class="pk-btn pk-btn-primary" onclick="pkCpSubmitNewCourt()">
+							<i class="fas fa-plus"></i> Create Court
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<script>
+			(function() {
+				if (!<?= !empty($CanManageCourt) ? 'true' : 'false' ?>) return;
+				var uir       = '<?= UIR ?>';
+				var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
+				var parkId    = <?= (int)($park_id ?? 0) ?>;
+
+
+				window.pkDelegatedToggle = function() {
+					var sec = document.getElementById('pk-delegated');
+					var body = document.getElementById('pk-delegated-body');
+					if (!sec || !body) return;
+					var open = sec.classList.toggle('pk-delegated-open');
+					body.style.display = open ? '' : 'none';
+					var hdr = sec.querySelector('.pk-delegated-toggle');
+					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
+					var ico = sec.querySelector('.pk-delegated-chevron');
+					if (ico) { ico.classList.toggle('fa-chevron-up', open); ico.classList.toggle('fa-chevron-down', !open); }
+				};
+
+				// House date pattern: Flatpickr with a human-readable altInput; the
+				// underlying native date input keeps the Y-m-d value the controller expects.
+				var pkCpDateFp = null;
+				function pkCpInitDatePicker() {
+					var el = document.getElementById('pk-cp-new-date');
+					if (!el || pkCpDateFp || typeof flatpickr === 'undefined') return;
+					pkCpDateFp = flatpickr(el, { dateFormat: 'Y-m-d', altInput: true, altFormat: 'F j, Y', disableMobile: true });
+				}
+				if (document.readyState === 'loading') {
+					document.addEventListener('DOMContentLoaded', pkCpInitDatePicker);
+				} else {
+					pkCpInitDatePicker();
+				}
+
+				function pkCpSetDate(dateId, val) {
+					var el = document.getElementById(dateId);
+					if (!el) return;
+					if (pkCpDateFp && el === pkCpDateFp.input) {
+						if (val) { pkCpDateFp.setDate(val, false); } else { pkCpDateFp.clear(false); }
+						return;
+					}
+					el.value = val || '';
+				}
+
+				window.pkCpOnEventChange = function(sel, dateId) {
+					var opt = sel.options[sel.selectedIndex];
+					var start = opt ? opt.getAttribute('data-start') : '';
+					if (start) pkCpSetDate(dateId, start);
+				};
+
+				window.pkCpSyncMode = function() {
+					var runOpt  = document.getElementById('pk-cp-mode-run-opt');
+					var planOpt = document.getElementById('pk-cp-mode-plan-opt');
+					var planEl  = planOpt ? planOpt.querySelector('input') : null;
+					var isPlan  = planEl && planEl.checked;
+					if (runOpt)  runOpt.classList.toggle('pk-cp-mode-sel', !isPlan);
+					if (planOpt) planOpt.classList.toggle('pk-cp-mode-sel', !!isPlan);
+				};
+
+				window.pkCpOpenNewCourt = function() {
+					document.getElementById('pk-cp-new-name').value = '';
+					pkCpInitDatePicker();
+					pkCpSetDate('pk-cp-new-date', '');
+					var evEl = document.getElementById('pk-cp-new-event');
+					if (evEl) evEl.value = '0';
+					var runEl = document.querySelector('input[name="pk-cp-mode"][value="run"]');
+					if (runEl) runEl.checked = true;
+					pkCpSyncMode();
+					document.getElementById('pk-cp-new-error').style.display = 'none';
+					var modal = document.getElementById('pk-cp-new-court-modal');
+					modal.style.display = 'flex';
+					setTimeout(function() { document.getElementById('pk-cp-new-name').focus(); }, 50);
+				};
+
+				window.pkCpCloseNewCourt = function() {
+					document.getElementById('pk-cp-new-court-modal').style.display = 'none';
+				};
+
+				window.pkCpSubmitNewCourt = function() {
+					var name    = document.getElementById('pk-cp-new-name').value.trim();
+					var date    = document.getElementById('pk-cp-new-date').value;
+					var evEl    = document.getElementById('pk-cp-new-event');
+					var eventId = evEl ? evEl.value : '0';
+					var errEl   = document.getElementById('pk-cp-new-error');
+					if (!name) { errEl.textContent = 'Please enter a court name.'; errEl.style.display = 'block'; return; }
+					errEl.style.display = 'none';
+					var modeEl = document.querySelector('input[name="pk-cp-mode"]:checked');
+					var mode   = modeEl ? modeEl.value : 'run';
+					var fd = new FormData();
+					fd.append('KingdomId', kingdomId);
+					fd.append('ParkId', parkId);
+					fd.append('Name', name);
+					fd.append('CourtDate', date);
+					fd.append('EventCalendarDetailId', eventId);
+					fd.append('Mode', mode);
+					fetch(uir + 'CourtAjax/create_court', {
+						method: 'POST', body: fd,
+						headers: { 'X-Requested-With': 'XMLHttpRequest' }
+					})
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						if (data.status === 0 && data.court_id) {
+							window.location.href = uir + 'Court/detail/' + data.court_id;
+						} else {
+							errEl.textContent = data.error || 'An error occurred.';
+							errEl.style.display = 'block';
+						}
+					})
+					.catch(function(e) { errEl.textContent = 'Request failed: ' + e.message; errEl.style.display = 'block'; });
+				};
+
+				var modal = document.getElementById('pk-cp-new-court-modal');
+				modal.addEventListener('click', function(e) { if (e.target === this) pkCpCloseNewCourt(); });
+				document.addEventListener('keydown', function(e) {
+					if (e.key !== 'Escape') return;
+					if (pkCpDateFp && pkCpDateFp.isOpen) { pkCpDateFp.close(); return; }
+					pkCpCloseNewCourt();
+				}, true);
+			})();
+			</script>
+				</div><!-- /pk-ev-pane-courts -->
+				<?php endif; ?>
 			</div>
 
 
@@ -1247,6 +1639,7 @@
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/population_explorer&ParkId=<?= $park_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
 							<?php endif; ?>
+							<li><a href="<?= UIR ?>Reports/officer_history&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>"><i class="fas fa-scroll"></i> Officer History</a></li>
 						</ul>
 					</div>
 					<div class="kn-report-group">
@@ -1285,390 +1678,11 @@
 				</div>
 			</div>
 
-			<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
-			<?php if (!empty($CanAdminPark) || !empty($CanManageCourt)): ?>
-			<div class="pk-tab-panel" id="pk-tab-admin" style="display:none">
-				<?php if (!empty($CanAdminPark)): ?>
-				<div class="kn-report-cols">
-					<div class="kn-report-group">
-						<h5><i class="fas fa-users-cog"></i> Players</h5>
-						<ul>
-							<li><a href="#" onclick="pkOpenAddPlayerModal();return false;">Create Player</a></li>
-							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
-							<?php if (!empty($CanMergePlayers)): ?><li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li><?php endif; ?>
-							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
-						</ul>
-					</div>
-					<div class="kn-report-group">
-						<h5><i class="fas fa-cog"></i> Park</h5>
-						<ul>
-							<li><a href="<?= UIR ?>Admin/permissions/Park/<?= $park_id ?>">Roles &amp; Permissions</a></li>
-						</ul>
-					</div>
-				</div>
-				<?php endif; ?>
+			<!-- Officer History moved into the shared Officer Details modal
+			     (partials/_officer_details_modal.tpl, "Officer History" tab).
+			     The Add/Edit history modals below stay put; the partial calls
+			     through to them. -->
 
-				<!-- Court Planner subsection (relocated from former top-level tab) -->
-				<?php if (!empty($CanManageCourt)): ?>
-				<?php $_cpOpen = !empty($CourtList); ?>
-				<div class="pk-cp-section<?= $_cpOpen ? ' pk-cp-open' : '' ?>" id="pk-cp-section">
-					<button type="button" class="pk-cp-header" onclick="pkCpToggleSection()" aria-expanded="<?= $_cpOpen ? 'true' : 'false' ?>">
-						<span class="pk-cp-header-title"><i class="fas fa-gavel"></i> Court Planner<?php if (!empty($CourtList)): ?> <span class="pk-cp-header-count">(<?= count($CourtList) ?>)</span><?php endif; ?></span>
-						<i class="fas fa-chevron-down pk-cp-chevron"></i>
-					</button>
-					<div class="pk-cp-body" id="pk-cp-body"<?= $_cpOpen ? '' : ' style="display:none"' ?>>
-			<style>
-			.pk-cp-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-			.pk-cp-court-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; margin-bottom:10px; display:flex; align-items:center; gap:14px; transition:box-shadow .15s; }
-			.pk-cp-court-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.1); }
-			.pk-cp-court-date { font-size:13px; color:#718096; white-space:nowrap; min-width:88px; }
-			.pk-cp-court-info { flex:1; }
-			.pk-cp-court-name { font-weight:700; font-size:15px; color:#2d3748; }
-			.pk-cp-court-meta { font-size:12px; color:#718096; margin-top:2px; }
-			.pk-cp-court-badges { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-			.pk-cp-badge { display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; }
-			.pk-cp-badge-count { background:#edf2f7; color:#4a5568; padding:3px 9px; border-radius:12px; font-size:11px; }
-			.pk-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
-			.pk-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
-			.pk-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
-			/* .kn-rec-age-* and .pk-rec-passlocal live in revised.css: this block only renders for court managers. */
-			/* Delegated-by-the-Kingdom pinned section (officer-only, to-schedule list) */
-			.pk-delegated { border:1px solid rgba(44,95,139,.4); background:rgba(44,95,139,.07); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
-			.pk-delegated-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-			.pk-delegated-title { margin:0; font-size:14px; font-weight:700; color:#2c5f8b !important; display:flex; align-items:center; gap:8px; }
-			.pk-delegated-title i { color:#2c5f8b; }
-			.pk-delegated-count { font-weight:600; color:#718096; }
-			.pk-delegated-help { font-size:12px; color:#718096; margin:6px 0 10px; }
-			.pk-delegated-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
-			.pk-delegated-item { font-size:13px; color:#2d3748; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-			.pk-delegated-item a { font-weight:600; }
-			.pk-delegated-sep { color:#cbd5e0; }
-			.pk-delegated-award { color:#4a5568; }
-			.pk-delegated-rank { color:#4a5568; }
-			.pk-delegated-approved { margin-left:auto; color:#718096; font-size:12px; }
-			html[data-theme="dark"] .pk-delegated { border-color:rgba(111,176,230,.4); background:rgba(111,176,230,.08); }
-			html[data-theme="dark"] .pk-delegated-title { color:#6fb0e6 !important; }
-			html[data-theme="dark"] .pk-delegated-title i { color:#6fb0e6; }
-			html[data-theme="dark"] .pk-delegated-count { color:#a0aec0; }
-			html[data-theme="dark"] .pk-delegated-help { color:#a0aec0; }
-			html[data-theme="dark"] .pk-delegated-item { color:#e2e8f0; }
-			html[data-theme="dark"] .pk-delegated-award { color:#cbd5e0; }
-			html[data-theme="dark"] .pk-delegated-rank { color:#cbd5e0; }
-			html[data-theme="dark"] .pk-delegated-approved { color:#a0aec0; }
-			html[data-theme="dark"] .pk-delegated-sep { color:#4a5568; }
-			.pk-delegated-toggle { display:flex; align-items:center; gap:10px; background:none; border:none; cursor:pointer; padding:0; text-align:left; flex:1; min-width:0; }
-			.pk-delegated-chevron { color:#a0aec0; flex-shrink:0; }
-			.pk-delegated-body { padding-top:2px; }
-			/* Collapsible subsection chrome (relocated court) */
-			.pk-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
-			.pk-cp-header { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; cursor:pointer; padding:10px 4px; font-size:15px; font-weight:700; color:#2d3748; text-align:left; }
-			.pk-cp-header:hover { color:#1a202c; }
-			.pk-cp-header-title i.fa-gavel { margin-right:8px; color:#4a5568; }
-			.pk-cp-header-count { font-weight:600; color:#718096; font-size:13px; }
-			.pk-cp-chevron { transition:transform .15s; color:#a0aec0; }
-			.pk-cp-section.pk-cp-open .pk-cp-chevron { transform:rotate(180deg); }
-			.pk-cp-body { padding-top:8px; }
-			html[data-theme="dark"] .pk-cp-section { border-top-color:#2d3748; }
-			html[data-theme="dark"] .pk-cp-header { color:#e2e8f0; }
-			html[data-theme="dark"] .pk-cp-header:hover { color:#fff; }
-			html[data-theme="dark"] .pk-cp-header-title i.fa-gavel { color:#a0aec0; }
-			html[data-theme="dark"] .pk-cp-court-card { background:#1a202c; border-color:#2d3748; }
-			html[data-theme="dark"] .pk-cp-court-name { color:#e2e8f0; }
-			html[data-theme="dark"] .pk-cp-court-date { color:#a0aec0; }
-			html[data-theme="dark"] .pk-cp-court-meta { color:#a0aec0; }
-			html[data-theme="dark"] .pk-cp-badge-count { background:#2d3748; color:#cbd5e0; }
-			html[data-theme="dark"] .pk-cp-btn-link { border-color:#4a5568; color:#cbd5e0; }
-			html[data-theme="dark"] .pk-cp-btn-link:hover { background:#2d3748; color:#fff; }
-			html[data-theme="dark"] .pk-cp-empty { border-color:#2d3748; color:#a0aec0; }
-			/* Mode + staged badges */
-			.pk-cp-badge-mode { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#ebf8ff; color:#2b6cb0; }
-			.pk-cp-badge-mode-plan { background:#faf089; color:#744210; }
-			.pk-cp-badge-staged { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#fefcbf; color:#975a16; box-shadow:inset 0 0 0 1px rgba(151,90,22,.25); }
-			.pk-cp-badge-mode[data-tip]::after, .pk-cp-badge-staged[data-tip]::after { white-space:normal; width:max-content; max-width:240px; }
-			html[data-theme="dark"] .pk-cp-badge-mode { background:#1a2f45; color:#90cdf4; }
-			html[data-theme="dark"] .pk-cp-badge-mode-plan { background:#3d3512; color:#f6e05e; }
-			html[data-theme="dark"] .pk-cp-badge-staged { background:#3d3512; color:#f6e05e; box-shadow:inset 0 0 0 1px rgba(246,224,94,.3); }
-			/* Mode selector (create-court modal) */
-			.pk-cp-mode-opts { display:flex; gap:10px; }
-			.pk-cp-mode-opt { flex:1; border:1px solid #cbd5e0; border-radius:6px; padding:10px 12px; cursor:pointer; display:block; transition:border-color .12s,background .12s,box-shadow .12s; }
-			.pk-cp-mode-opt input { position:absolute; opacity:0; pointer-events:none; }
-			.pk-cp-mode-title { font-size:13px; font-weight:700; color:#2d3748; display:flex; align-items:center; gap:6px; }
-			.pk-cp-mode-desc { font-size:11px; color:#718096; margin-top:3px; line-height:1.35; font-weight:400; }
-			.pk-cp-mode-opt.pk-cp-mode-sel { border-color:#2c5282; background:#ebf2fb; box-shadow:0 0 0 1px #2c5282; }
-			html[data-theme="dark"] .pk-cp-mode-opt { border-color:#2d3748; }
-			html[data-theme="dark"] .pk-cp-mode-title { color:#e2e8f0; }
-			html[data-theme="dark"] .pk-cp-mode-desc { color:#a0aec0; }
-			html[data-theme="dark"] .pk-cp-mode-opt.pk-cp-mode-sel { border-color:#4299e1; background:#1a2f45; box-shadow:0 0 0 1px #4299e1; }
-			/* Status badge (class-driven so dark mode can re-tone it) */
-			.pk-cp-badge-draft     { background:#edf2f7; color:#718096; }
-			.pk-cp-badge-published { background:#ebf8ff; color:#2b6cb0; }
-			.pk-cp-badge-complete  { background:#f0fff4; color:#276749; }
-			html[data-theme="dark"] .pk-cp-badge-draft     { background:#2d3748; color:#cbd5e0; }
-			html[data-theme="dark"] .pk-cp-badge-published { background:#1a2f45; color:#90cdf4; }
-			html[data-theme="dark"] .pk-cp-badge-complete  { background:#1c3a2a; color:#9ae6b4; }
-			/* Mobile: court card stacks, Open becomes a full-width row action */
-			@media (max-width:600px) {
-				.pk-cp-court-card { flex-wrap:wrap; align-items:flex-start; }
-				.pk-cp-court-badges { flex-wrap:wrap; flex-shrink:1; }
-				.pk-cp-btn-link { flex:1 1 100%; width:100%; text-align:center; min-height:44px; line-height:44px; padding:0 12px; margin-top:8px; }
-				.pk-cp-mode-opts { flex-direction:column; }
-				.pk-cp-mode-opt { width:100%; }
-				.pk-cp-court-info { min-width:0; }
-				.pk-cp-court-name, .pk-cp-court-meta { overflow-wrap:anywhere; }
-			}
-			@media (pointer:coarse) {
-				#pk-cp-new-court-modal .pk-modal-close-btn { min-width:44px; min-height:44px; }
-				#pk-cp-new-court-modal .pk-modal-footer button { min-height:44px; }
-			}
-			</style>
-			<div class="pk-cp-toolbar">
-				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
-				<button class="pk-btn pk-btn-primary" onclick="pkCpOpenNewCourt()">
-					<i class="fas fa-plus"></i> Plan a Court
-				</button>
-			</div>
-			<?php
-				$_cpStatusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];
-				$_cpStatusClass = ['draft' => 'pk-cp-badge-draft', 'published' => 'pk-cp-badge-published', 'complete' => 'pk-cp-badge-complete'];
-			?>
-			<?php if (empty($CourtList)): ?>
-			<div class="pk-cp-empty">
-				<i class="fas fa-gavel" style="font-size:32px;margin-bottom:12px;display:block;opacity:.3"></i>
-				No courts planned yet. Click <strong>Plan a Court</strong> to get started.
-			</div>
-			<?php else: ?>
-			<?php foreach ($CourtList as $_court): ?>
-			<?php
-				$_st     = $_court['Status'];
-				$_lbl    = $_cpStatusLabel[$_st] ?? $_st;
-				$_stCls  = $_cpStatusClass[$_st] ?? 'pk-cp-badge-draft';
-				$_mode   = $_court['Mode'] ?? 'run';
-				$_staged = (int)($_court['StagedCount'] ?? 0);
-			?>
-			<div class="pk-cp-court-card">
-				<div class="pk-cp-court-date">
-					<?= $_court['CourtDate'] ? date('M j, Y', strtotime($_court['CourtDate'])) : '<em style="color:#a0aec0">No date</em>' ?>
-				</div>
-				<div class="pk-cp-court-info">
-					<div class="pk-cp-court-name"><?= htmlspecialchars($_court['Name']) ?></div>
-					<?php if ($_court['EventName']): ?>
-					<div class="pk-cp-court-meta"><i class="fas fa-calendar-alt" style="margin-right:3px"></i><?= htmlspecialchars($_court['EventName']) ?></div>
-					<?php endif; ?>
-				</div>
-				<div class="pk-cp-court-badges">
-					<span class="pk-cp-badge <?= $_stCls ?>"><?= $_lbl ?></span>
-					<?php if ($_mode === 'plan'): ?>
-					<span class="pk-cp-badge-mode pk-cp-badge-mode-plan" data-tip="Locked as a plan — prepared for someone to record later."><i class="fas fa-clipboard-list"></i> Plan</span>
-					<?php else: ?>
-					<span class="pk-cp-badge-mode" data-tip="Run at court — awards granted live during the ceremony."><i class="fas fa-bullhorn"></i> Run</span>
-					<?php endif; ?>
-					<?php if ($_staged > 0 && $_st !== 'complete'): ?>
-					<span class="pk-cp-badge-staged" data-tip="Grants captured but not yet finalized — open to finalize."><i class="fas fa-hourglass-half"></i> <?= $_staged ?> staged</span>
-					<?php endif; ?>
-					<span class="pk-cp-badge-count"><i class="fas fa-award" style="margin-right:3px"></i><?= (int)$_court['AwardCount'] ?></span>
-					<a href="<?= UIR ?>Court/detail/<?= (int)$_court['CourtId'] ?>" class="pk-cp-btn-link">
-						Open <i class="fas fa-arrow-right"></i>
-					</a>
-				</div>
-			</div>
-			<?php endforeach; ?>
-			<?php endif; ?>
-
-			<?php if (empty($CanAdminPark)): ?>
-			<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-			<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-			<?php endif; ?>
-
-			<!-- New Court Modal (park-scoped) -->
-			<div class="pk-overlay" id="pk-cp-new-court-modal" style="display:none">
-				<div class="pk-modal-box" style="max-width:480px">
-					<div class="pk-modal-header">
-						<h3 class="pk-modal-title"><i class="fas fa-gavel" style="margin-right:8px;color:#4a5568"></i>Plan a New Court</h3>
-						<button class="pk-modal-close-btn" onclick="pkCpCloseNewCourt()" aria-label="Close">&times;</button>
-					</div>
-					<div class="pk-modal-body">
-						<div class="pk-acct-field">
-							<label>Court Name <span style="color:#e53e3e">*</span></label>
-							<input type="text" id="pk-cp-new-name" placeholder="Summer Coronation Court&#x2026;" autocomplete="off">
-						</div>
-						<?php if (!empty($CourtUpcomingEvents)): ?>
-						<div class="pk-acct-field">
-							<label>Link to Event (optional)</label>
-							<select id="pk-cp-new-event" onchange="pkCpOnEventChange(this,'pk-cp-new-date')">
-								<option value="0" data-start="">— None —</option>
-								<?php foreach ($CourtUpcomingEvents as $_ev): ?>
-								<option value="<?= (int)$_ev['EventCalendarDetailId'] ?>" data-start="<?= $_ev['EventStart'] ? date('Y-m-d', strtotime($_ev['EventStart'])) : '' ?>">
-									<?= htmlspecialchars($_ev['Name']) ?><?= $_ev['EventStart'] ? ' (' . date('M j', strtotime($_ev['EventStart'])) . ')' : '' ?>
-								</option>
-								<?php endforeach; ?>
-							</select>
-						</div>
-						<?php endif; ?>
-						<div class="pk-acct-field">
-							<label>Date</label>
-							<input type="date" id="pk-cp-new-date" >
-						</div>
-						<div class="pk-acct-field">
-							<label>How will this court be handled?</label>
-							<div class="pk-cp-mode-opts">
-								<label class="pk-cp-mode-opt pk-cp-mode-sel" id="pk-cp-mode-run-opt">
-									<input type="radio" name="pk-cp-mode" value="run" checked onchange="pkCpSyncMode()">
-									<span class="pk-cp-mode-title"><i class="fas fa-bullhorn"></i> Run at Court</span>
-									<span class="pk-cp-mode-desc">I'll grant awards live during the ceremony.</span>
-								</label>
-								<label class="pk-cp-mode-opt" id="pk-cp-mode-plan-opt">
-									<input type="radio" name="pk-cp-mode" value="plan" onchange="pkCpSyncMode()">
-									<span class="pk-cp-mode-title"><i class="fas fa-clipboard-list"></i> Lock as Plan</span>
-									<span class="pk-cp-mode-desc">I'm preparing the order of court for someone to record later.</span>
-								</label>
-							</div>
-						</div>
-						<div id="pk-cp-new-error" class="pk-form-error" style="display:none"></div>
-					</div>
-					<div class="pk-modal-footer">
-						<button class="pk-btn-ghost" onclick="pkCpCloseNewCourt()">Cancel</button>
-						<button class="pk-btn pk-btn-primary" onclick="pkCpSubmitNewCourt()">
-							<i class="fas fa-plus"></i> Create Court
-						</button>
-					</div>
-				</div>
-			</div>
-
-			<script>
-			(function() {
-				if (!<?= !empty($CanManageCourt) ? 'true' : 'false' ?>) return;
-				var uir       = '<?= UIR ?>';
-				var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
-				var parkId    = <?= (int)($park_id ?? 0) ?>;
-
-				window.pkCpToggleSection = function() {
-					var sec = document.getElementById('pk-cp-section');
-					var body = document.getElementById('pk-cp-body');
-					if (!sec || !body) return;
-					var open = sec.classList.toggle('pk-cp-open');
-					body.style.display = open ? '' : 'none';
-					var hdr = sec.querySelector('.pk-cp-header');
-					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
-				};
-
-				window.pkDelegatedToggle = function() {
-					var sec = document.getElementById('pk-delegated');
-					var body = document.getElementById('pk-delegated-body');
-					if (!sec || !body) return;
-					var open = sec.classList.toggle('pk-delegated-open');
-					body.style.display = open ? '' : 'none';
-					var hdr = sec.querySelector('.pk-delegated-toggle');
-					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
-					var ico = sec.querySelector('.pk-delegated-chevron');
-					if (ico) { ico.classList.toggle('fa-chevron-up', open); ico.classList.toggle('fa-chevron-down', !open); }
-				};
-
-				// House date pattern: Flatpickr with a human-readable altInput; the
-				// underlying native date input keeps the Y-m-d value the controller expects.
-				var pkCpDateFp = null;
-				function pkCpInitDatePicker() {
-					var el = document.getElementById('pk-cp-new-date');
-					if (!el || pkCpDateFp || typeof flatpickr === 'undefined') return;
-					pkCpDateFp = flatpickr(el, { dateFormat: 'Y-m-d', altInput: true, altFormat: 'F j, Y', disableMobile: true });
-				}
-				if (document.readyState === 'loading') {
-					document.addEventListener('DOMContentLoaded', pkCpInitDatePicker);
-				} else {
-					pkCpInitDatePicker();
-				}
-
-				function pkCpSetDate(dateId, val) {
-					var el = document.getElementById(dateId);
-					if (!el) return;
-					if (pkCpDateFp && el === pkCpDateFp.input) {
-						if (val) { pkCpDateFp.setDate(val, false); } else { pkCpDateFp.clear(false); }
-						return;
-					}
-					el.value = val || '';
-				}
-
-				window.pkCpOnEventChange = function(sel, dateId) {
-					var opt = sel.options[sel.selectedIndex];
-					var start = opt ? opt.getAttribute('data-start') : '';
-					if (start) pkCpSetDate(dateId, start);
-				};
-
-				window.pkCpSyncMode = function() {
-					var runOpt  = document.getElementById('pk-cp-mode-run-opt');
-					var planOpt = document.getElementById('pk-cp-mode-plan-opt');
-					var planEl  = planOpt ? planOpt.querySelector('input') : null;
-					var isPlan  = planEl && planEl.checked;
-					if (runOpt)  runOpt.classList.toggle('pk-cp-mode-sel', !isPlan);
-					if (planOpt) planOpt.classList.toggle('pk-cp-mode-sel', !!isPlan);
-				};
-
-				window.pkCpOpenNewCourt = function() {
-					document.getElementById('pk-cp-new-name').value = '';
-					pkCpInitDatePicker();
-					pkCpSetDate('pk-cp-new-date', '');
-					var evEl = document.getElementById('pk-cp-new-event');
-					if (evEl) evEl.value = '0';
-					var runEl = document.querySelector('input[name="pk-cp-mode"][value="run"]');
-					if (runEl) runEl.checked = true;
-					pkCpSyncMode();
-					document.getElementById('pk-cp-new-error').style.display = 'none';
-					var modal = document.getElementById('pk-cp-new-court-modal');
-					modal.style.display = 'flex';
-					setTimeout(function() { document.getElementById('pk-cp-new-name').focus(); }, 50);
-				};
-
-				window.pkCpCloseNewCourt = function() {
-					document.getElementById('pk-cp-new-court-modal').style.display = 'none';
-				};
-
-				window.pkCpSubmitNewCourt = function() {
-					var name    = document.getElementById('pk-cp-new-name').value.trim();
-					var date    = document.getElementById('pk-cp-new-date').value;
-					var evEl    = document.getElementById('pk-cp-new-event');
-					var eventId = evEl ? evEl.value : '0';
-					var errEl   = document.getElementById('pk-cp-new-error');
-					if (!name) { errEl.textContent = 'Please enter a court name.'; errEl.style.display = 'block'; return; }
-					errEl.style.display = 'none';
-					var modeEl = document.querySelector('input[name="pk-cp-mode"]:checked');
-					var mode   = modeEl ? modeEl.value : 'run';
-					var fd = new FormData();
-					fd.append('KingdomId', kingdomId);
-					fd.append('ParkId', parkId);
-					fd.append('Name', name);
-					fd.append('CourtDate', date);
-					fd.append('EventCalendarDetailId', eventId);
-					fd.append('Mode', mode);
-					fetch(uir + 'CourtAjax/create_court', {
-						method: 'POST', body: fd,
-						headers: { 'X-Requested-With': 'XMLHttpRequest' }
-					})
-					.then(function(r) { return r.json(); })
-					.then(function(data) {
-						if (data.status === 0 && data.court_id) {
-							window.location.href = uir + 'Court/detail/' + data.court_id;
-						} else {
-							errEl.textContent = data.error || 'An error occurred.';
-							errEl.style.display = 'block';
-						}
-					})
-					.catch(function(e) { errEl.textContent = 'Request failed: ' + e.message; errEl.style.display = 'block'; });
-				};
-
-				var modal = document.getElementById('pk-cp-new-court-modal');
-				modal.addEventListener('click', function(e) { if (e.target === this) pkCpCloseNewCourt(); });
-				document.addEventListener('keydown', function(e) {
-					if (e.key !== 'Escape') return;
-					if (pkCpDateFp && pkCpDateFp.isOpen) { pkCpDateFp.close(); return; }
-					pkCpCloseNewCourt();
-				}, true);
-			})();
-			</script>
-
-					</div>
-				</div>
-				<?php endif; ?>
-			</div>
-			<?php endif; ?>
 
 			<!-- Recommendations Tab -->
 			<?php if (!empty($ShowRecsTab)): ?>
@@ -1884,6 +1898,44 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 </div><!-- /pk-layout -->
 
 <!-- =============================================
+     Officer Details Modal (shared with Kingdom)
+     Current Officers tree + the re-homed Officer History tab.
+     Inputs per the partial's docblock; $officerList is the FULL set here
+     (crown + supporting) -- the sidebar above renders $crownOfficerList.
+     ============================================= -->
+<?php
+	$ofScope   = 'park';
+	$ofOrgId   = (int)$park_id;
+	$ofOrgName = (string)($park_name ?? '');
+	$ofKingdomId = (int)($kingdom_id ?? 0);
+	$ofCanEditRolls = !empty($CanEditOfficerHistory);
+?>
+<?php include __DIR__ . '/partials/_officer_details_modal.tpl'; ?>
+
+<!-- Officer History Backfill/Edit Modals removed: writes now go through the
+     officer transition console; the public modal is read-only. -->
+
+<style>
+/* ---- Officers sidebar bar: "see more" affordance ----
+   Copies the established .pna-card-more house affordance (Playernew_index.tpl
+   :260-261) rather than inventing a chevron. Sits beside the edit pencil when
+   the viewer can manage; shown to EVERY viewer. */
+.pk-officers-bar-actions {
+	display:inline-flex; align-items:center; gap:8px; flex-shrink:0;
+}
+.pk-officers-bar-actions a.pk-officers-more {
+	font-weight:600; font-size:11px; color:#4299e1; text-decoration:none;
+	text-transform:none; letter-spacing:0; white-space:nowrap;
+}
+.pk-officers-bar-actions a.pk-officers-more:hover { text-decoration:underline; }
+.pk-officers-bar-actions a.pk-officers-more:focus-visible {
+	outline:2px solid var(--ork-blue-link); outline-offset:2px; border-radius:3px;
+}
+html[data-theme="dark"] .pk-officers-bar-actions a.pk-officers-more { color:#63b3ed; }
+
+</style>
+
+<!-- =============================================
      JavaScript
      ============================================= -->
 <script>
@@ -1905,9 +1957,6 @@ var PkConfig = {
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? '')) ?>,
 	classes:         <?= json_encode(array_values($Classes         ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	recentAttendees: <?= json_encode(array_values($RecentAttendees ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	officerList:     <?= json_encode(!empty($CanAdminPark) ? array_map(function($o) {
-		return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']];
-	}, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkDetails: {
 		url:         <?= json_encode($parkInfo['Url']         ?? '') ?>,
 		address:     <?= json_encode($parkInfo['Address']     ?? '') ?>,
@@ -2351,169 +2400,31 @@ var PkBannerConfig = {
 	</div>
 </div>
 
-<?php if ($CanAdminPark ?? false): ?>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-
-<div class="pk-emod-overlay" id="pk-event-modal">
-	<div class="pk-emod-box">
-		<div class="pk-emod-header">
-			<h3 id="pk-emod-title" class="kn-bare-heading"><i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event</h3>
-			<button class="pk-emod-close" onclick="pkCloseEventModal()">&times;</button>
-		</div>
-		<div class="pk-emod-body">
-
-			<div class="pk-emod-typesel">
-				<label class="pk-emod-typeopt">
-					<input type="radio" name="pk-emod-type" value="event" checked>
-					<span><i class="fas fa-flag"></i> Amtgard Event</span>
-				</label>
-				<label class="pk-emod-typeopt">
-					<input type="radio" name="pk-emod-type" value="calendar-item">
-					<span><i class="fas fa-calendar-day"></i> Calendar Item</span>
-				</label>
-			</div>
-
-			<div class="pk-emod-field">
-				<label class="pk-emod-label">Name <span style="color:#e53e3e">*</span></label>
-				<input type="text" class="pk-emod-input" id="pk-event-name" autocomplete="off" placeholder="e.g. Summer Dragonmaster">
-			</div>
-			<div id="pk-emod-date-row" style="display:none;font-size:12px;color:var(--ork-alert-info-text,#2b6cb0);margin-top:8px;padding:5px 8px;background:var(--ork-alert-info-bg,#ebf8ff);border-radius:5px;border-left:3px solid var(--ork-alert-info-border,#90cdf4)">
-				<i class="fas fa-calendar-alt" style="margin-right:5px"></i><span id="pk-emod-date-text"></span>
-			</div>
-			<!-- Copy from past event (collapsible, event-mode only) -->
-			<div class="pk-cfe-wrap pk-emod-event-only" id="pk-cfe-wrap" style="margin-top:14px">
-				<button type="button" class="pk-cfe-toggle" id="pk-cfe-toggle" onclick="pkCfeToggleExpander()" aria-expanded="false">
-					<i class="fas fa-clone" style="margin-right:6px;color:#2b6cb0"></i>
-					Copy from past event <span style="color:#a0aec0;font-weight:400">(optional)</span>
-					<i class="fas fa-chevron-down pk-cfe-chev" id="pk-cfe-chev" style="margin-left:auto"></i>
-				</button>
-				<div class="pk-cfe-body" id="pk-cfe-body" style="display:none">
-					<div class="pk-cfe-field" id="pk-cfe-picker-wrap">
-						<label class="pk-emod-label">Source event <span style="color:#a0aec0;font-weight:400;text-transform:none;letter-spacing:0">(park-level)</span></label>
-						<div class="kn-ac-wrap">
-							<input type="text" class="pk-emod-input" id="pk-cfe-search" autocomplete="off" placeholder="Search past events…">
-							<div class="kn-ac-results" id="pk-cfe-results"></div>
-						</div>
-						<input type="hidden" id="pk-cfe-source-id" value="">
-						<input type="hidden" id="pk-cfe-source-start" value="">
-						<input type="hidden" id="pk-cfe-source-end" value="">
-					</div>
-					<div class="pk-cfe-chip" id="pk-cfe-chip" style="display:none">
-						<i class="fas fa-bookmark" style="margin-right:6px;color:#2b6cb0"></i>
-						<span id="pk-cfe-chip-label"></span>
-						<button type="button" class="pk-cfe-chip-clear" onclick="pkCfeClear()" aria-label="Clear source">&times;</button>
-					</div>
-					<div class="pk-cfe-detail" id="pk-cfe-detail" style="display:none">
-						<div class="pk-emod-row" style="display:flex;gap:10px;margin-top:12px">
-							<div class="pk-emod-field" style="flex:1">
-								<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
-								<input type="text" class="pk-emod-input" id="pk-cfe-start" autocomplete="off" placeholder="Select start…">
-							</div>
-							<div class="pk-emod-field" style="flex:1">
-								<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
-								<input type="text" class="pk-emod-input" id="pk-cfe-end" autocomplete="off" placeholder="Select end…">
-							</div>
-						</div>
-						<div class="pk-cfe-modules" style="margin-top:12px">
-							<div class="pk-cfe-mod-title">What to copy</div>
-							<label class="pk-cfe-mod-row pk-cfe-mod-all">
-								<input type="checkbox" id="pk-cfe-mod-all" checked onchange="pkCfeToggleAll(this)">
-								<span><strong>Select all</strong></span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-details" checked onchange="pkCfeSyncAll()">
-								<span>Event Details <span class="pk-cfe-mod-hint">description, address, fees, links</span></span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-schedule" checked onchange="pkCfeSyncAll()">
-								<span>Schedule</span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-staff" checked onchange="pkCfeSyncAll()">
-								<span>Staff <span class="pk-cfe-mod-hint">banned/deactivated people are skipped</span></span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-feast" checked onchange="pkCfeSyncAll()">
-								<span>Feast</span>
-							</label>
-							<label class="pk-cfe-mod-row">
-								<input type="checkbox" class="pk-cfe-mod" id="pk-cfe-mod-banner" onchange="pkCfeSyncAll()">
-								<span>Banner <span class="pk-cfe-mod-hint">image + framing config</span></span>
-							</label>
-						</div>
-					</div>
-				</div>
-			</div>
-
-						<p class="pk-emod-hint pk-emod-event-only" style="margin-top:8px">This event will be assigned to <strong><?= htmlspecialchars($park_name ?? '') ?></strong>. You'll set dates and details on the next page.</p>
-
-			<!-- Calendar-item-only fields -->
-			<div class="pk-emod-ci-only" style="display:none">
-				<div class="pk-emod-field" style="margin-top:12px">
-					<label class="pk-emod-check-label">
-						<input type="checkbox" id="pk-ci-allday"> All day
-					</label>
-				</div>
-				<div class="pk-emod-field" style="margin-top:6px">
-					<label class="pk-emod-check-label" data-tip="Officer-only items are visible only to ORK admins and people serving as Monarch / Regent / PM / Champion of this kingdom or park.">
-						<input type="checkbox" id="pk-ci-officer-only"> <i class="fas fa-shield-alt" style="margin:0 4px 0 2px;color:#805ad5"></i>Only Display to Officers
-					</label>
-				</div>
-				<div class="pk-emod-field" style="margin-top:6px">
-					<label class="pk-emod-check-label" data-tip="Locals-only items are visible only to ORK admins and to logged-in players whose home park (or kingdom, for kingdom-level items) matches.">
-						<input type="checkbox" id="pk-ci-locals-only"> <i class="fas fa-map-marker-alt" style="margin:0 4px 0 2px;color:#0d9488"></i>Only Display to Local Park/Kingdom Players
-					</label>
-				</div>
-				<div style="display:flex;gap:10px;margin-top:8px">
-					<div class="pk-emod-field" style="flex:1">
-						<label class="pk-emod-label">Start <span style="color:#e53e3e">*</span></label>
-						<input type="text" class="pk-emod-input" id="pk-ci-start" autocomplete="off" placeholder="Select start…">
-					</div>
-					<div class="pk-emod-field" style="flex:1">
-						<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
-						<input type="text" class="pk-emod-input" id="pk-ci-end" autocomplete="off" placeholder="Select end…">
-					</div>
-				</div>
-				<div class="pk-emod-field" style="margin-top:10px">
-					<label class="pk-emod-label">Color</label>
-					<div class="ci-swatches" id="pk-ci-swatches">
-						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" title="Slate"></button>
-						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
-						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Purple"></button>
-						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></button>
-						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" title="Green"></button>
-						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" title="Amber"></button>
-						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></button>
-						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" title="Rose"></button>
-					</div>
-					<input type="hidden" id="pk-ci-color" value="#64748b">
-				</div>
-				<div class="pk-emod-field" style="margin-top:10px">
-					<label class="pk-emod-label">Description</label>
-					<textarea class="pk-emod-input" id="pk-ci-description" rows="3" placeholder="Optional details…"></textarea>
-				</div>
-				<div class="pk-emod-ci-note">
-					<i class="fas fa-info-circle" style="margin-right:6px"></i>
-					Calendar Items are lightweight. They do <strong>not</strong> support RSVPs, sign-ins, schedules, attendance, heraldry, pricing, or event authorization lists. Use an Amtgard Event for those.
-				</div>
-			</div>
-
-			<div class="pk-emod-feedback" id="pk-emod-feedback" style="display:none"></div>
-		</div>
-		<div class="pk-emod-footer">
-			<button class="pk-emod-btn-cancel" onclick="pkCloseEventModal()">Cancel</button>
-			<button class="pk-emod-btn-cancel pk-emod-draft-btn" id="pk-emod-draft-btn" onclick="pkCreateEvent('draft')" disabled style="display:none;font-size:12px;">
-				<i class="fas fa-eye-slash"></i> Save as Draft
-			</button>
-			<button class="pk-emod-btn-go" id="pk-emod-go-btn" onclick="pkCreateEvent()" disabled>
-				<span id="pk-emod-go-label">Create Event</span> <i class="fas fa-arrow-right"></i>
-			</button>
-		</div>
-	</div>
-</div>
-
-<?php endif; ?>
+<?php
+/* Create-event modal -- shared with the Park admin console.
+   The MARKUP is admin-only exactly as it was ($evCanCreate below stands in for
+   the `if ($CanAdminPark)` that used to wrap it). The partial's SCRIPT is not:
+   it also owns the calendar-item view overlay, the events-list rows and the
+   calendar-grid sync, which every viewer uses -- and which used to run for
+   every viewer from revised.js, off PkConfig. */
+$evParkId    = (int)($park_id ?? 0);
+// The PARK's kingdom, not $kingdom_id. controller.Park.php:26 sets $kingdom_id from
+// $this->session->kingdom_id -- the VIEWER's kingdom -- so on a park belonging to any
+// other kingdom this passed the wrong id, and EventPlanning::CreateEvent writes
+// kingdom_id straight from the request. An officer viewing another kingdom's park and
+// creating an event there stamped it with their OWN kingdom.
+// $parkInfo is set at the top of this file from $park_info['ParkInfo'], which
+// controller.Park.php already treats as the authoritative source for the park's
+// kingdom (see its OfficerHistoryRoleOptions call).
+// NOTE: $kingdom_id is viewer-scoped everywhere else on this page too -- the kingdom
+// breadcrumb and ~10 Reports links carry it -- which misfilters those views for a
+// cross-kingdom viewer. That is a separate, display-only, pre-existing bug; only the
+// WRITE path is corrected here.
+$evKingdomId = (int)($parkInfo['KingdomId'] ?? 0);
+$evParkName  = (string)($park_name ?? '');
+$evCanCreate = !empty($CanAdminPark);
+include __DIR__ . '/partials/_event_create_modal.tpl';
+?>
 
 <!-- Event Preview Overlay (calendar quick-look) -->
 <div class="evpv-overlay" id="evpv-overlay">
@@ -2880,30 +2791,9 @@ tr:hover .pk-copy-link { opacity: 1; }
 <?php endif; ?>
 
 <!-- =============================================
-     Parknew: Edit Officers Modal
-     ============================================= -->
-<?php if (!empty($CanAdminPark)): ?>
-<div id="pk-editoff-overlay">
-	<div class="pk-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
-		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-crown" style="margin-right:8px;color:#2c5282"></i>Edit Officers</h3>
-			<button class="pk-modal-close-btn" id="pk-editoff-close-btn" aria-label="Close">&times;</button>
-		</div>
-		<div class="pk-modal-body">
-			<div id="pk-editoff-feedback" class="pk-editoff-feedback" style="display:none"></div>
-			<p class="pk-editoff-hint">Search for a player to assign to each role; picking someone for an occupied role replaces the current officer when you save, so there is no need to vacate first. <strong>Vacate</strong> empties the role immediately and ends that officer's access, including your own if it is your role.</p>
-			<div id="pk-editoff-rows"></div>
-		</div>
-		<div class="pk-modal-footer">
-			<button class="pk-btn pk-btn-ghost" id="pk-editoff-cancel">Cancel</button>
-			<button class="pk-btn pk-btn-primary" id="pk-editoff-submit"><i class="fas fa-save"></i> Save Officers</button>
-		</div>
-	</div>
-</div>
-
-<!-- =============================================
      Parknew: Add Park Day Modal
      ============================================= -->
+<?php if (!empty($CanAdminPark)): ?>
 <div id="pk-addday-overlay">
 	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px);">
 		<div class="pk-modal-header">
@@ -3240,47 +3130,13 @@ html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; co
 
 /* ============================================================
 
-/* ---- Copy from past event (pk-cfe-*) ---- */
-.pk-cfe-wrap { border: 1px solid var(--ork-border); border-radius: 6px; background: var(--ork-bg-inset); overflow: hidden; }
-.pk-cfe-toggle { display: flex; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 0; cursor: pointer; font-size: 13px; color: #2d3748; text-align: left; }
-.pk-cfe-toggle:hover { background: var(--ork-card-bg); }
-.pk-cfe-chev { transition: transform 0.15s ease; color: #a0aec0; }
-.pk-cfe-toggle[aria-expanded="true"] .pk-cfe-chev { transform: rotate(180deg); }
-.pk-cfe-body { padding: 12px; border-top: 1px solid var(--ork-divider); background: var(--ork-card-bg); }
-.pk-cfe-field { position: relative; }
-.pk-cfe-chip { display: inline-flex; align-items: center; padding: 6px 10px; background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 999px; font-size: 13px; color: #2c5282; margin-top: 4px; max-width: 100%; }
-.pk-cfe-chip-clear { background: transparent; border: 0; margin-left: 8px; font-size: 18px; line-height: 1; color: #2c5282; cursor: pointer; padding: 0 4px; }
-.pk-cfe-chip-clear:hover { color: #1a365d; }
-.pk-cfe-modules .pk-cfe-mod-title { font-size: 12px; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-.pk-cfe-mod-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 13px; color: #2d3748; }
-.pk-cfe-mod-row input[type="checkbox"] { margin-top: 2px; }
-.pk-cfe-mod-all { border-bottom: 1px solid var(--ork-divider); padding-bottom: 8px; margin-bottom: 4px; }
-.pk-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
-
-#pk-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
-#pk-cfe-results .kn-ac-row:hover, #pk-cfe-results .kn-ac-row.kn-ac-active { background: #ebf8ff; }
-#pk-cfe-results .kn-ac-row:last-child { border-bottom: 0; }
-#pk-cfe-results .kn-ac-row-title { font-size: 13px; color: #2d3748; font-weight: 500; }
-#pk-cfe-results .kn-ac-row-meta { font-size: 11px; color: #718096; margin-top: 1px; }
-#pk-cfe-results .kn-ac-empty { padding: 10px; color: #a0aec0; font-style: italic; font-size: 12px; }
-
-html[data-theme="dark"] .pk-cfe-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
-html[data-theme="dark"] .pk-cfe-toggle { color: var(--ork-text); }
-html[data-theme="dark"] .pk-cfe-toggle:hover { background: var(--ork-bg-tertiary); }
-html[data-theme="dark"] .pk-cfe-chev { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pk-cfe-body { background: var(--ork-card-bg); border-top-color: var(--ork-border); }
-html[data-theme="dark"] .pk-cfe-chip { background: #1a365d; border-color: #2c5282; color: #90cdf4; }
-html[data-theme="dark"] .pk-cfe-chip-clear { color: #90cdf4; }
-html[data-theme="dark"] .pk-cfe-chip-clear:hover { color: #ebf8ff; }
-html[data-theme="dark"] .pk-cfe-mod-title { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pk-cfe-mod-row { color: var(--ork-text); }
-html[data-theme="dark"] .pk-cfe-mod-hint { color: var(--ork-text-muted); }
-html[data-theme="dark"] .pk-cfe-mod-all { border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row { border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row:hover, html[data-theme="dark"] #pk-cfe-results .kn-ac-row.kn-ac-active { background: var(--ork-bg-tertiary); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row-title { color: var(--ork-text); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-row-meta { color: var(--ork-text-muted); }
-html[data-theme="dark"] #pk-cfe-results .kn-ac-empty { color: var(--ork-text-muted); }
+/* The pk-cfe-* (Copy from past event) rules that used to live here now live in
+   revised.css. They styled markup that has since moved into the shared partial
+   partials/_event_create_modal.tpl, so keeping them in THIS page's inline <style>
+   meant the park admin console -- which includes the partial but not this template
+   -- rendered the toggle with no styling at all: a white bar in dark mode. The
+   #pk-cfe-results row rules are gone entirely, superseded by the id-agnostic
+   .kn-ac-results rules in revised.css. */
 
 
 /* ---- Park Day modal: "Every X Weeks" interval + start-date fields ---- */
@@ -3756,6 +3612,9 @@ $(function() {
 window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
 	initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
 });
+
+// The officer-history main-content tab is gone; the Officer Details modal
+// lazy-loads history on its own tab activation, so no hook is needed here.
 window.pkUsernameCheck = initUsernameAvailabilityCheck({
 	inputId:     'pk-addplayer-username',
 	statusId:    'pk-addplayer-username-status',

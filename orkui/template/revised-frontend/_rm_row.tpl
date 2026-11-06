@@ -68,6 +68,24 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl';
         // on exactly the rows with the most distinctive names.
         $rowParts    = array_filter([trim((string)($group['Persona'] ?? '')), trim((string)($group['AwardName'] ?? ''))], 'strlen');
         $rowLabelEsc = htmlspecialchars(implode(' — ', $rowParts), ENT_QUOTES);
+        // Per-viewer action flags from Controller_Recommendations::rmCapabilities(),
+        // each matching its server gate. Missing = not allowed: never offer a button
+        // the server would refuse.
+        $rmCan = isset($RmCan) && is_array($RmCan) ? $RmCan : [];
+        $canGrant  = !empty($rmCan['Grant']);
+        $canCourt  = !empty($rmCan['Court']);
+        $canSnooze = !empty($rmCan['Snooze']);
+        $canPass   = !empty($rmCan['PassLocal']) && ($Context ?? '') === 'kingdom';
+        $moAll     = !empty($group['MonarchyOnlyAll']);
+        // Unhide is refused below the rec's STORED level (a kingdom-hidden rec passed
+        // down to a park still needs a kingdom officer), so offer the toggle only when
+        // hiding, or when the viewer's level reaches it.
+        $canMo     = !empty($rmCan['MonarchyOnly']) && (!$moAll
+            || (int)($rmCan['MonarchyOnlyViewerLevel'] ?? 0) >= max(1, (int)($group['MonarchyOnlyUnhideLevel'] ?? 0)));
+        $canDis    = !empty($rmCan['Dismiss']);
+        $canRest   = !empty($rmCan['Restore']);
+        // The mobile overflow ("More") only folds Snooze / Pass down / Dismiss.
+        $hasMore   = $canSnooze || $canPass || $canDis;
     ?>
       <tr class="rm-row" data-rec-cluster="<?= (int)$group['MundaneId'] ?>:<?= (int)$group['KingdomAwardId'] ?>:<?= (int)$group['Rank'] ?>" data-snoozed="<?= $snoozed ?>" data-dismissed="<?= $dismissed ?>"
           data-passlocal="<?= !empty($group['PassedToLocal']) ? 1 : 0 ?>"
@@ -136,22 +154,25 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl';
         </td>
         <td class="rm-col-act">
           <?php if ($dismissed) { ?>
-          <button type="button" class="rm-act rm-act-undelete" data-tip="Restore &mdash; return this recommendation to the pending list" aria-label="Restore recommendation"><i class="fas fa-undo"></i></button>
+          <?php if ($canRest) { ?><button type="button" class="rm-act rm-act-undelete" data-tip="Restore &mdash; return this recommendation to the pending list" aria-label="Restore recommendation"><i class="fas fa-undo"></i></button><?php } else { ?><span class="rm-empty">&mdash;</span><?php } ?>
+          <?php } elseif (!($canGrant || $canCourt || $canSnooze || $canPass || $canMo || $canDis)) { ?>
+          <span class="rm-empty">&mdash;</span>
           <?php } else { ?>
-          <button type="button" class="rm-act rm-act-grant"  data-tip="Grant now" aria-label="Grant this award now">&#9889;</button>
-          <button type="button" class="rm-act rm-act-court"  data-tip="Add to court" aria-label="Add to a court plan">&#65291;</button>
-          <button type="button" class="rm-act rm-act-snooze" aria-label="<?= $snoozed ? 'Unsnooze this recommendation' : 'Snooze until the next monarchy' ?>"><span class="rm-snooze-ico" aria-hidden="true"><?= $snoozed ? '&#128276;' : '&#128164;' ?></span><span class="rm-snooze-tip" aria-hidden="true"><?php if ($snoozed) { ?><strong>Unsnooze</strong>Restore this recommendation to the active list.<?php } else { ?><strong>Snooze to Next Monarchy</strong>Temporarily dismiss this recommendation until either the Monarch or Regent officer at this level changes.<?php } ?></span></button>
-          <?php if (($Context ?? '') === 'kingdom') { ?><button type="button" class="rm-act rm-act-passlocal<?= !empty($group['PassedToLocal']) ? ' rm-act-active' : '' ?>" aria-label="<?= !empty($group['PassedToLocal']) ? 'Remove the pass to the local park' : 'Pass to the local park' ?>"><i class="fas fa-arrow-down" aria-hidden="true"></i><span class="rm-passlocal-tip" aria-hidden="true"><strong>Send to Local Park</strong>For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level.</span></button><?php } ?>
-          <?php $moAll = !empty($group['MonarchyOnlyAll']); ?>
+          <?php if ($canGrant) { ?><button type="button" class="rm-act rm-act-grant"  data-tip="Grant now" aria-label="Grant this award now">&#9889;</button><?php } ?>
+          <?php if ($canCourt) { ?><button type="button" class="rm-act rm-act-court"  data-tip="Add to court" aria-label="Add to a court plan">&#65291;</button><?php } ?>
+          <?php if ($canSnooze) { ?><button type="button" class="rm-act rm-act-snooze" aria-label="<?= $snoozed ? 'Unsnooze this recommendation' : 'Snooze until the next monarchy' ?>"><span class="rm-snooze-ico" aria-hidden="true"><?= $snoozed ? '&#128276;' : '&#128164;' ?></span><span class="rm-snooze-tip" aria-hidden="true"><?php if ($snoozed) { ?><strong>Unsnooze</strong>Restore this recommendation to the active list.<?php } else { ?><strong>Snooze to Next Monarchy</strong>Temporarily dismiss this recommendation until either the Monarch or Regent officer at this level changes.<?php } ?></span></button><?php } ?>
+          <?php if ($canPass) { ?><button type="button" class="rm-act rm-act-passlocal<?= !empty($group['PassedToLocal']) ? ' rm-act-active' : '' ?>" aria-label="<?= !empty($group['PassedToLocal']) ? 'Remove the pass to the local park' : 'Pass to the local park' ?>"><i class="fas fa-arrow-down" aria-hidden="true"></i><span class="rm-passlocal-tip" aria-hidden="true"><strong>Send to Local Park</strong>For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level.</span></button><?php } ?>
+          <?php if ($canMo) { ?>
           <button type="button" class="rm-act rm-act-monarchy<?= $moAll ? ' rm-act-active' : '' ?>" data-tip="<?= $moAll ? 'Make visible &mdash; remove Monarchy Only' : 'Monarchy Only &mdash; hide from everyone but officers' ?>" aria-label="<?= $moAll ? 'Remove Monarchy Only' : 'Mark Monarchy Only' ?>"><i class="fas <?= $moAll ? 'fa-eye' : 'fa-eye-slash' ?>" aria-hidden="true"></i></button>
-          <button type="button" class="rm-act rm-act-dismiss" aria-label="Dismiss recommendation" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">&#10005;</button>
-          <button type="button" class="rm-act rm-act-more" data-tip="More actions" aria-label="More actions" aria-expanded="false">&hellip;</button>
           <?php } ?>
+          <?php if ($canDis) { ?><button type="button" class="rm-act rm-act-dismiss" aria-label="Dismiss recommendation" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">&#10005;</button><?php } ?>
+          <?php if ($hasMore) { ?><button type="button" class="rm-act rm-act-more" data-tip="More actions" aria-label="More actions" aria-expanded="false">&hellip;</button>
           <div class="rm-act-help" hidden>
-            <strong>Snooze</strong> sets this aside until the Monarch or Regent changes.
-            <?php if (($Context ?? '') === 'kingdom') { ?><strong>Pass down</strong> grants the local park authority to award at this level. <?php } ?>
-            <strong>Monarchy Only</strong> hides it from everyone but officers.
-            <strong>Dismiss</strong> removes it from the pending list.
-          </div>
+            <?php if ($canSnooze) { ?><strong>Snooze</strong> sets this aside until the Monarch or Regent changes. <?php } ?>
+            <?php if ($canPass) { ?><strong>Pass down</strong> grants the local park authority to award at this level. <?php } ?>
+            <?php if ($canMo) { ?><strong>Monarchy Only</strong> hides it from everyone but officers. <?php } ?>
+            <?php if ($canDis) { ?><strong>Dismiss</strong> removes it from the pending list.<?php } ?>
+          </div><?php } ?>
+          <?php } ?>
         </td>
       </tr>
