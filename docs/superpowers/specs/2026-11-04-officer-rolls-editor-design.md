@@ -67,6 +67,12 @@ source doesn't give.
   and delete twins. The page's Edit control is shown on exactly that check (same key,
   scope and legacy role as the server gate). *(My call: reuse the existing keys rather
   than add new ones.)*
+- **Every edit entry point reads that one gate** (`OfficerPosition::can_edit_history_for`,
+  through the model; decided). Manage Officers' Correct the Rolls tab shows "Edit the
+  rolls" only to someone who has it; anyone else gets "View the rolls" and a line naming
+  the kingdom or park Officer History permission. The Details modal's history tab links
+  "Full officer history" for everyone and "Edit the rolls" for editors. A refused
+  `&edit=1` still shows the report, with a one-line notice naming the permission.
 
 ## Where it lives
 
@@ -81,6 +87,20 @@ source doesn't give.
   a short explanation and a link to the new page in edit mode. *(My call.)* The officer
   Details modal's read-only "Officer History" tab may keep its panels, or link to the
   page; builder's call, but it must read the same data.
+- **Manage Officers shows the season start** (decided). Each occupant carries the
+  domain's StartLabel/StartOrdinal (and the end twins) from `latest_term_by_holder`, so
+  the term line reads "Spring 2024 – present" and the "Start date unknown" nudge shows
+  only when StartOrdinal is null. For a history editor, the nudge's Set it dialog takes
+  season text ("Spring 24", "Mar 2024"), reads it back through `parseperiod` as a current
+  term's start, and saves it as a Period on the seat's open row through `edithistory`
+  (which on a current row sets the start only). The save sends `ExpectCurrent`, so if the
+  seat changed hands after the list loaded, `EditHistoryTerm` refuses it and the dialog
+  shows the error inline. It never rewrites the now-closed term. There is no date-only
+  picker; for an exact day the dialog links the ledger's Calendar mode at
+  `#office-<PositionId>`, which opens and scrolls to that office. A seat with no open
+  history row gets a muted "(no history row for this seat yet)" note and no action: the
+  ledger's synthetic seat row defers to Manage Officers, so a link would point back here.
+  Without the history permission the nudge names it instead of offering Set it.
 
 ## The edit mode: office ledgers
 
@@ -92,12 +112,25 @@ source doesn't give.
   (gaps, overlaps). Sections are collapsed by default except the first one, or the last
   one the user had open; builder's call.
 - Inside, a compact table, newest term first: **Holder · Period · Note · actions**.
-  One line per term. Exact dates, when present, show under the period in smaller text.
+  One line per term. An end with an exact date shows that date in the period itself
+  ("Mar 30, 2019 – Fall 2019"), so there is no separate exact-dates line.
 - Every row edits in place (click or Edit). Delete uses the house confirm dialog,
   never a native `confirm()`.
 - A **blank entry row** sits at the bottom of each table, ready to type:
   holder field (player search, or plain text), period field, note. Tab moves through the
   fields; Enter saves the row and opens a fresh entry row with the focus in its holder field.
+- **Enter in the holder field never drops a listed match.** The search results highlight
+  an exact name match, else the first name that starts with the typed text, and Enter
+  picks the highlighted player. With players listed and none highlighted, the first Enter
+  only closes the list and a second Enter saves the typed name as plain text. With no
+  players found, Enter saves it as plain text. An Enter pressed during the search (the
+  debounce or the fetch) waits for the results and is then handled on them. Arrow keys
+  move the highlight, Esc closes the list, and a hint under the results says what Enter
+  will do.
+- **Saving redraws one office.** Add, edit, link and delete send the section's Key and
+  answer with that one office (and, for an add, PreviousSpan, the next pre-fill), so a
+  save is one round trip. The rolls action takes a Key to read one office; nothing
+  refetches the whole org after a save.
 - **Pre-fill for backlog work:** users enter newest-to-oldest. After saving a term, the
   next entry row's period defaults to the span immediately before the term just
   entered, of the same length. For example, after `Spring–Fall 23` it offers
@@ -106,6 +139,18 @@ source doesn't give.
   occur ("Gap: Fall 22 – Spring 23"). They are warnings, never save blockers: real
   history has interregna and co-holders. A gap is only flagged when at least one whole
   season is missing, so a Fall→Fall handoff is not a gap.
+  Both are found against **coverage**, not between neighbouring rows: walking the terms
+  oldest to newest, coverage is the furthest end reached so far. A gap is flagged when a
+  term starts 2 or more seasons beyond it, on that term (so it is drawn below it in the
+  newest-first list). On a single-holder (crown) office a term that starts inside
+  coverage and runs past it, or is current, is an overlap, named by the holder whose term
+  reached furthest. A term wholly inside coverage is an acting or nested term and is not
+  flagged. Supporting offices have co-holders by design, so they never flag overlaps;
+  their gaps are found against the union of their terms. A term with an unknown start is
+  not flagged but its end counts as coverage; an unknown end on a past term leaves
+  coverage unknown, so the next start raises no gap. Terms are walked in start order, so
+  a current term is placed by its start, and covers through the present. A current term
+  with an unknown start covers nothing. (`OfficerPosition::flag_rolls_terms`.)
 - **Current terms belong to Manage Officers** (decided). Every seated officer already has
   a current history row, written by seating (`record_officer_history`) or the 2026-08-29
   backfill. In the ledger that row is shown as "… – present" and only its start (season or
@@ -128,7 +173,7 @@ The period field accepts season shorthand as its primary form:
 - A single season (`Spring 23`) is a valid entry; the builder decides whether that means
   start-only or a one-season term.
 
-The parsed result is shown back immediately (e.g. "Summer 2023 → Winter 2024"), so a
+The parsed result is shown back immediately (e.g. "Summer 2023 – Winter 2023–24"), so a
 misread is caught before Enter. Unparseable input blocks the save with a message.
 
 **Exact dates** are optional per end. When an exact date is present it is authoritative
@@ -162,10 +207,31 @@ whichever lies nearer the other end of the term in the right direction. As the u
 - **A single season** (`Fall 22`) is a one-season term: both ends are that season, its
   label is the season alone ("Fall 2022"), and the term before it is the single season
   before it.
-- **Canonical label for pre-fill and display**: a winter is labelled by the year of its
-  January–February half, except a December-only end that the user typed with the December
-  year. Pre-fill, which generates labels itself, always uses the January–February year:
-  the winter between Fall 22 and Spring 23 is "Winter 23". *(My call.)*
+- **Months and two-year winters are exact.** A month name (`Jan 23`, `Dec 2003`) is the
+  season its month falls in, exactly, wherever it sits in the span: `Jan 23 – Fall 24`
+  starts in January 2023. A winter may also be typed by both its years, `Winter 2022–23`
+  (or `W 22/23`), which names one winter outright; its years must be consecutive. The
+  dash inside it is not the span's dash, so a current term's start may be written that way.
+- **A stored term's meaning is fixed.** The resolved position of each end (a season
+  ordinal, year·4 + season, a winter counted in the year of its January–February) is
+  stored with the row (`start_ordinal` / `end_ordinal`) when that end is saved, and every
+  reader uses the stored value; nothing re-resolves the season columns later. So closing a
+  current "Winter 24" (January–February 2024, as a lone winter reads) from Manage Officers
+  writes the end's ordinal and leaves the start where it was: it does not become December
+  2024 because an end now follows it. An edit that sets an end (a Period, or an exact date)
+  stamps that end; an end it leaves alone keeps its stored ordinal. The season columns stay
+  the text as entered, used to offer the same short form again for editing.
+- **Every label comes from the stored ordinal**, and a winter is named by both its years:
+  "Winter 2022–23" (across a century, "Winter 1999–2000"). `Summer 22 – Winter 22` and
+  `Summer 22 – Winter 23` are the same span and read back identically, as
+  "Summer 2022 – Winter 2022–23". An exact date still shows as the date. *(Revised in the
+  distributed review: the earlier rule labelled a winter by whichever year was typed, so
+  the read-back could not confirm which winter was meant.)*
+- **Text meant to be typed back in round-trips.** The ledger's edit text and the pre-fill
+  for the term before use the short typed form (`Winter 23 – Summer 23`), choosing for each
+  winter whichever of its two years the other end makes mean that winter, and checking that
+  the text parses back to exactly the stored ordinals (falling back to the two-year name,
+  which always does). Gap labels use the display form, which also parses back to the gap.
 
 The resolved position is used for ordering, gap/overlap checks and pre-fill only. It is
 never presented as a date.
@@ -181,14 +247,35 @@ Additions (one idempotent migration in `db-migrations/`, classified in
 
 - **Holder name** for unlinked holders, e.g. `holder_name varchar(120) NOT NULL DEFAULT ''`.
   A row is linked when `mundane_id > 0`, otherwise it is plain text and `holder_name`
-  is required. Linking later sets `mundane_id` (the name may be kept as provenance).
+  is required. Linking later sets `mundane_id` and **keeps `holder_name` as the name of
+  record** (decided): the term shows that name linked to the profile, with a muted "now
+  known as <persona>" when today's persona differs (ignoring case), and a blank persona
+  falls back to it, never "Player #id". Relinking to another player keeps it too; unlinking
+  (MundaneId 0 plus a name) replaces it. A ledger add of a picked player records the persona at
+  the pick as its name. A linked row with no recorded name (a row Manage Officers wrote)
+  is named by the persona. The rolls
+  page, the ledger and the Details modal all render it this way. The migration's legacy
+  test (`start_season IS NULL AND holder_name = ''`) is unchanged: a linked row that kept
+  its recorded name is a ledger row and is never re-marked current.
 - **Season precision** for each end, e.g. `start_season` / `end_season`
   (`enum('spring','summer','fall','winter') NULL`) plus `start_year` / `end_year`
   (`smallint NULL`). An end is "exact" when its date column is set, "seasonal" when
   season+year are set, and "unknown" when neither is (today's rows with null dates).
-- A sortable resolved key per end (e.g. `start_sort` / `end_sort` as a date or
-  year·month integer) may be stored or computed; builder's call. The Winter rule above
-  needs both ends to resolve, so if stored it must be recomputed whenever either end changes.
+- **A stored season ordinal per end**, `start_ordinal` / `end_ordinal` (`INT NULL`,
+  year·4 + season, a winter counted in its January–February year; null when that end is
+  unknown). It is the term's meaning (see "A stored term's meaning is fixed" above):
+  written once by the write that sets that end (the ledger's Add/Edit, and every seat
+  change that opens or closes a term: `record_officer_history`, the transition and vacate
+  paths, the supporting-seat insert), never recomputed when the other end changes. The
+  migration stamps existing rows from their dates (by month) and seasons (each winter
+  resolved against the end entered with it; a single typed winter is the lone winter even
+  beside an exact end date). `GetOfficerHistory` orders in SQL on the rolls key; per-org
+  lists are small, so it needs no dedicated index. A side with no stored ordinal but an
+  exact date reads that date (one date is one ordinal), so a row written in the deploy
+  window still reads correctly. **Deploy:** apply the migration before the code deploy
+  (the new code writes these columns, and its checked history writes fail and record
+  nothing against the old schema), then re-run it once right after the deploy to stamp,
+  mark and clear anything the old code wrote in between; it is idempotent.
 
 - **An explicit current-term marker**, e.g. `is_current tinyint(1) NOT NULL DEFAULT 0`.
   *(My call, forced by the "unknown end" decision.)* Today the code reads
@@ -201,6 +288,24 @@ Additions (one idempotent migration in `db-migrations/`, classified in
   transition/vacate/seat paths, and the history readers. The builder must audit these
   with a search for `end_date IS NULL` in `system/lib/ork3/`. Seating closes only the
   `is_current` row, so it can never stamp today's date onto a backfilled 1995 term.
+  Current is per seat (office + holder). A crown seat change closes the outgoing holder's
+  row (today) and unmarks any other current row on that office, leaving its end unknown.
+  Multi-holder supporting offices close per holder. Merging a park away closes its
+  officers' current rows today, as their seats are deleted.
+  **A retired park or kingdom has no current officers.** The migration neither marks nor
+  opens current rows for retired orgs and clears any it finds (end left unknown);
+  `RetirePark` / `RetireKingdom` clear the org's marks the same way, and the rolls
+  synthesize no current holder for a retired org. `RestorePark` / `RestoreKingdom`
+  re-mark them: for each seat whose holder still sits in it and that has no current row,
+  the newest row with no end becomes current again (a park or kingdom still retired is
+  skipped).
+  **Every re-run repairs current marks:** it clears `is_current` on any row with an end
+  set, or whose holder no longer sits in that seat, before re-marking seated holders.
+  **A park's history follows the park.** `TransferPark` moves the park's
+  `ork_officer_history.kingdom_id` with its officers (inside the same audit), the
+  migration realigns park rows filed under a former kingdom, and the Park reader and the
+  close paths match a park's rows by `park_id` alone (`park_id` is globally unique;
+  kingdom rows, `park_id = 0`, still match on the kingdom).
 
 Existing rows keep their exact dates untouched. *(My call.)* The automatic history
 written when officers are seated (`record_officer_history`) keeps writing exact dates
@@ -227,8 +332,11 @@ holder (linked or plain text) on past terms.
 
 The same page without edit controls, in the `.rp-*` shell: a header with the org scope
 chip, a short context line, then the office sections (collapsible, newest first), each
-showing Holder · Period. Plain-text holders are shown as plain text. Gaps can be shown as
-quiet "unrecorded" rows. A DataTables table is not required here: these are short
+showing Holder · Period. Plain-text holders are shown as plain text; linked holders as
+their recorded name, linked, with "now known as" when the persona differs. Gaps can be shown as
+quiet "unrecorded" rows. The report words an unknown end for readers: a current term with
+no recorded start reads "Start unknown – present", and a past term with no end ends in a
+muted "end unrecorded". The edit ledger keeps "?", which editors read as "fill this in". A DataTables table is not required here: these are short
 per-office lists, not one big table. *(My call.)*
 
 ## Constraints and house rules

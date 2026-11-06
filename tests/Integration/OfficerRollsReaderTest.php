@@ -129,7 +129,7 @@ final class OfficerRollsReaderTest extends TestCase
         self::assertNull($office['Terms'][3]['StartOrdinal'], 'unknown start sorts last');
         self::assertSame('? – Fall 2005', $office['Terms'][3]['PeriodLabel']);
         self::assertSame(
-            ['Type' => 'gap', 'Label' => 'Gap: Winter 2006 – Winter 2010'],
+            ['Type' => 'gap', 'Label' => 'Gap: Winter 2005–06 – Winter 2009–10', 'Span' => 'Winter 2005–06 – Winter 2009–10'],
             $office['Terms'][2]['FlagAfter'],
             'an unknown START on the older term does not face the newer one'
         );
@@ -152,7 +152,7 @@ final class OfficerRollsReaderTest extends TestCase
 
         $office2 = $this->office($this->rolls(0), $pos2);
         self::assertSame(
-            ['Type' => 'gap', 'Label' => 'Gap: Winter 2022 – Winter 2023'],
+            ['Type' => 'gap', 'Label' => 'Gap: Winter 2021–22 – Winter 2022–23', 'Span' => 'Winter 2021–22 – Winter 2022–23'],
             $office2['Terms'][0]['FlagAfter']
         );
         self::assertNull($office2['Terms'][1]['FlagAfter'], 'the oldest term has nothing after it');
@@ -166,7 +166,7 @@ final class OfficerRollsReaderTest extends TestCase
         $this->term($pos, 'gap1', ['holder_name' => 'Newer', 'start_season' => 'winter', 'start_year' => 2023, 'end_season' => 'spring', 'end_year' => 2023]);
 
         $office = $this->office($this->rolls(0), $pos);
-        self::assertSame(['Type' => 'gap', 'Label' => 'Gap: Fall 2022'], $office['Terms'][0]['FlagAfter']);
+        self::assertSame(['Type' => 'gap', 'Label' => 'Gap: Fall 2022', 'Span' => 'Fall 2022'], $office['Terms'][0]['FlagAfter']);
     }
 
     /**
@@ -336,14 +336,186 @@ final class OfficerRollsReaderTest extends TestCase
         self::assertSame(2019, $p[0]['StartYear']);
         self::assertNull($p[0]['EndSeason']);
         self::assertNull($p[0]['EndYear']);
-        self::assertSame('Winter 2019 – ?', $p[0]['PeriodLabel']);
+        self::assertSame('Winter 2018–19 – ?', $p[0]['PeriodLabel']);
         self::assertSame(2019 * 4, $p[0]['StartOrdinal']);
         self::assertNull($p[0]['EndOrdinal']);
+    }
+
+    /**
+     * Both GetOfficerHistory scopes return the whole list in the rolls sort key
+     * (the Details modal keeps that order within each office, no re-sort): the
+     * current term first, then a season-only backfilled term (null StartDate)
+     * above an older dated term, regardless of the role's case.
+     */
+    public function testGetOfficerHistoryOrdersOnTheRollsKey(): void
+    {
+        $pos = $this->seedPosition('order', 'crown', 10);
+        $member = $this->seedMundane('ordercur');
+        foreach ([0, self::PARK_A] as $parkId) {
+            $dated = $this->term($pos, 'order', ['park_id' => $parkId, 'holder_name' => 'Dated', 'start_date' => '2015-04-10', 'end_date' => '2015-10-01']);
+            // Mixed-case legacy role on the same office: still one newest-first run.
+            $season = $this->term($pos, 'order', ['park_id' => $parkId, 'role' => strtoupper(self::MARKER) . '_order', 'holder_name' => 'Season',
+                'start_season' => 'spring', 'start_year' => 2018, 'end_season' => 'fall', 'end_year' => 2018]);
+            $current = $this->term($pos, 'order', ['park_id' => $parkId, 'mundane_id' => $member, 'start_date' => '2012-04-01', 'is_current' => 1]);
+
+            $rows = $parkId > 0
+                ? (new Park())->GetOfficerHistory(['ParkId' => $parkId])['History']
+                : (new Kingdom())->GetOfficerHistory(['KingdomId' => self::KINGDOM_ID])['History'];
+            $mine = array_values(array_filter($rows, fn ($r) => (int) $r['PositionId'] === $pos));
+            $scope = $parkId > 0 ? 'Park' : 'Kingdom';
+            self::assertSame([$current, $season, $dated], array_column($mine, 'OfficerHistoryId'), $scope . ': current first, then the rolls key');
+            self::assertNull($mine[1]['StartDate'], 'the season-only term has no exact start');
+            for ($i = 0; $i + 1 < count($rows); $i++) {
+                self::assertLessThanOrEqual(0, OfficerPosition::compare_rolls_terms($rows[$i], $rows[$i + 1]), $scope . ': the whole list is in the rolls key');
+            }
+        }
+    }
+
+    /**
+     * Item 1: the migration stamps unstamped rows with the ordinals the app
+     * would have saved -- every season pair as parse() reads it, dates by month
+     * -- and a current winter start that was closed later keeps its lone-winter
+     * start. A re-run changes nothing.
+     */
+    public function testMigrationStampsOrdinalsAsTheAppReadsThem(): void
+    {
+        $pos = $this->seedPosition('stamp', 'crown', 10);
+        $seasons = ['winter', 'spring', 'summer', 'fall'];
+        $want = [];
+        foreach ([2021, 2022] as $sy) {
+            foreach ($seasons as $ss) {
+                foreach ([null, 2021, 2022, 2023] as $ey) {
+                    foreach ($ey === null ? [null] : $seasons as $es) {
+                        $text = ucfirst($ss) . ' ' . $sy . ($ey === null ? ' –' : ' – ' . ucfirst($es) . ' ' . $ey);
+                        $p = OfficerTermPeriod::parse($text, 2026);
+                        if (is_string($p)) {
+                            continue;
+                        }
+                        $id = $this->term($pos, 'stamp', ['holder_name' => $text, 'start_ordinal' => null, 'end_ordinal' => null,
+                            'start_season' => $ss, 'start_year' => $sy, 'end_season' => $es, 'end_year' => $ey]);
+                        $want[$id] = [$p['start']['ordinal'], $p['end']['ordinal'] ?? null];
+                    }
+                }
+            }
+        }
+        $closed = $this->term($pos, 'stamp', ['holder_name' => 'closed current', 'start_ordinal' => null, 'end_ordinal' => null,
+            'start_season' => 'winter', 'start_year' => 2024, 'end_date' => '2025-01-10']);
+        $want[$closed] = [2024 * 4, 2025 * 4];
+        // A single typed "Winter 24" saved with an exact end date: the lone reading, as parse() gives.
+        $single = $this->term($pos, 'stamp', ['holder_name' => 'single winter + end date', 'start_ordinal' => null, 'end_ordinal' => null,
+            'start_season' => 'winter', 'start_year' => 2024, 'end_season' => 'winter', 'end_year' => 2024, 'end_date' => '2025-01-10']);
+        $want[$single] = [OfficerTermPeriod::parse('Winter 24', 2026)['start']['ordinal'], 2025 * 4];
+        $dated = $this->term($pos, 'stamp', ['holder_name' => 'dated', 'start_ordinal' => null, 'end_ordinal' => null,
+            'start_date' => '2020-12-05', 'end_date' => '2021-03-01']);
+        $want[$dated] = [2021 * 4, 2021 * 4 + 1];
+        self::assertGreaterThan(80, count($want));
+
+        $read = function (): array {
+            $out = [];
+            foreach ($this->pdo->query("SELECT officer_history_id, start_ordinal, end_ordinal FROM ork_officer_history WHERE role = '"
+                . self::MARKER . "_stamp'") as $r) {
+                $out[(int) $r['officer_history_id']] = [
+                    $r['start_ordinal'] === null ? null : (int) $r['start_ordinal'],
+                    $r['end_ordinal'] === null ? null : (int) $r['end_ordinal'],
+                ];
+            }
+            ksort($out);
+            return $out;
+        };
+        $this->runOrdinalBackfill();
+        ksort($want);
+        self::assertSame($want, $read());
+        $this->runOrdinalBackfill();
+        self::assertSame($want, $read(), 'a re-run changes nothing');
+    }
+
+    /**
+     * Gaps and overlaps against coverage: a nested acting term on a crown office
+     * raises neither, co-holders of a supporting office raise no overlaps, and a
+     * Fall-to-Fall handoff is clean.
+     */
+    public function testFlagsFollowCoverageNotAdjacency(): void
+    {
+        $crown = $this->seedPosition('cover', 'crown', 10);
+        $this->term($crown, 'cover', ['holder_name' => 'Reign', 'start_season' => 'spring', 'start_year' => 2023, 'end_season' => 'spring', 'end_year' => 2024]);
+        $this->term($crown, 'cover', ['holder_name' => 'Acting', 'start_season' => 'summer', 'start_year' => 2023, 'end_season' => 'summer', 'end_year' => 2023]);
+        $this->term($crown, 'cover', ['holder_name' => 'Next', 'start_season' => 'summer', 'start_year' => 2024, 'end_season' => 'fall', 'end_year' => 2024]);
+        $this->term($crown, 'cover', ['holder_name' => 'Handoff', 'start_season' => 'fall', 'start_year' => 2024, 'end_season' => 'fall', 'end_year' => 2025]);
+
+        $office = $this->office($this->rolls(0), $crown);
+        self::assertSame(['Handoff', 'Next', 'Acting', 'Reign'], array_column($office['Terms'], 'HolderName'));
+        self::assertSame([null, null, null, null], array_column($office['Terms'], 'FlagAfter'));
+        self::assertSame(0, $office['GapCount'], 'the reign covered the seat around the acting term');
+        self::assertSame(0, $office['OverlapCount'], 'a nested acting term is not an overlap; Fall to Fall is a handoff');
+
+        $support = $this->seedPosition('cohold', 'supporting', 11);
+        $this->term($support, 'cohold', ['holder_name' => 'X', 'start_season' => 'spring', 'start_year' => 2021, 'end_season' => 'fall', 'end_year' => 2022]);
+        $this->term($support, 'cohold', ['holder_name' => 'Y', 'start_season' => 'summer', 'start_year' => 2021, 'end_season' => 'spring', 'end_year' => 2023]);
+        $this->term($support, 'cohold', ['holder_name' => 'Z', 'start_season' => 'summer', 'start_year' => 2024, 'end_season' => 'fall', 'end_year' => 2024]);
+
+        $co = $this->office($this->rolls(0), $support);
+        self::assertSame(['Z', 'Y', 'X'], array_column($co['Terms'], 'HolderName'));
+        self::assertSame(0, $co['OverlapCount'], 'co-holders overlap by design');
+        self::assertSame(1, $co['GapCount']);
+        self::assertSame('gap', $co['Terms'][0]['FlagAfter']['Type'] ?? null, 'the gap sits under Z, newest first');
+        self::assertSame('Summer 2023 – Spring 2024', $co['Terms'][0]['FlagAfter']['Span']);
+    }
+
+    /** A linked term keeps the name it was recorded under beside the live persona. */
+    public function testALinkedTermCarriesItsRecordedName(): void
+    {
+        $pos = $this->seedPosition('recorded', 'crown', 10);
+        $member = $this->seedMundane('recorded');
+        $this->term($pos, 'recorded', ['mundane_id' => $member, 'holder_name' => 'Squire Bob', 'start_season' => 'spring', 'start_year' => 1997, 'end_season' => 'fall', 'end_year' => 1997]);
+
+        $t = $this->office($this->rolls(0), $pos)['Terms'][0];
+        self::assertSame($member, $t['MundaneId']);
+        self::assertSame('Squire Bob', $t['HolderName']);
+        self::assertSame(self::MARKER . ' recorded', $t['Persona']);
+    }
+
+    /** The ledger refreshes one office: a Key scopes the reader to that section alone. */
+    public function testTheReaderCanBeScopedToOneOffice(): void
+    {
+        $a = $this->seedPosition('scope_a', 'crown', 10);
+        $b = $this->seedPosition('scope_b', 'crown', 11);
+        $this->term($a, 'scope_a', ['holder_name' => 'A1', 'start_season' => 'spring', 'start_year' => 2020, 'end_season' => 'fall', 'end_year' => 2020]);
+        $this->term($b, 'scope_b', ['holder_name' => 'B1', 'start_season' => 'spring', 'start_year' => 2010, 'end_season' => 'fall', 'end_year' => 2010]);
+        $this->term($b, 'scope_b', ['holder_name' => 'B2', 'start_season' => 'spring', 'start_year' => 2015, 'end_season' => 'fall', 'end_year' => 2015]);
+        $this->term(0, 'scope_legacy', ['holder_name' => 'L1', 'display_label' => 'Old Office', 'start_season' => 'spring', 'start_year' => 1999]);
+
+        $full = $this->office($this->rolls(0), $b);
+        $one = $this->positions->rolls_for_org(self::KINGDOM_ID, 0, 'position:' . $b)['Offices'];
+        self::assertCount(1, $one);
+        self::assertSame($full, $one[0], 'the scoped section is the same section the full read builds');
+
+        $legacy = $this->positions->rolls_for_org(self::KINGDOM_ID, 0, 'role:' . self::MARKER . '_scope_legacy')['Offices'];
+        self::assertCount(1, $legacy);
+        self::assertSame('Old Office', $legacy[0]['Title']);
+        self::assertSame(['L1'], array_column($legacy[0]['Terms'], 'HolderName'));
+
+        self::assertSame([], $this->positions->rolls_for_org(self::KINGDOM_ID, 0, 'position:99999999')['Offices'], 'an unknown key has no section');
     }
 
     // ============================================================
     // HELPERS
     // ============================================================
+
+    /** The migration's ordinal section: from its marker to the is_current backfill. */
+    private function runOrdinalBackfill(): void
+    {
+        $sql = (string) file_get_contents(dirname(__DIR__, 2) . '/db-migrations/2026-11-04-officer-history-rolls.sql');
+        $from = strpos($sql, '-- Stored season ordinals');
+        $to = strpos($sql, '-- is_current backfill');
+        self::assertNotFalse($from);
+        self::assertNotFalse($to);
+        foreach (preg_split('/;\s*$/m', substr($sql, $from, $to - $from)) as $chunk) {
+            $body = trim(preg_replace('/^\s*--.*$/m', '', $chunk));
+            if ($body !== '') {
+                $this->pdo->exec($body);
+            }
+        }
+    }
 
     /** @return list<array<string,mixed>> */
     private function rolls(int $parkId): array
@@ -364,9 +536,24 @@ final class OfficerRollsReaderTest extends TestCase
         self::fail('no section for position ' . $positionId);
     }
 
-    /** @param array<string,mixed> $cols */
+    /**
+     * A raw history row. Unless the fixture gives them, start_ordinal /
+     * end_ordinal are stamped as a write path would stamp them (the stored
+     * ordinals are what the readers use).
+     *
+     * @param array<string,mixed> $cols
+     */
     private function term(int $positionId, string $suffix, array $cols): int
     {
+        if (!array_key_exists('start_ordinal', $cols) && !array_key_exists('end_ordinal', $cols)) {
+            $ord = OfficerTermPeriod::resolve([
+                'StartSeason' => $cols['start_season'] ?? null, 'StartYear' => $cols['start_year'] ?? null,
+                'StartDate' => $cols['start_date'] ?? null,
+                'EndSeason' => $cols['end_season'] ?? null, 'EndYear' => $cols['end_year'] ?? null,
+                'EndDate' => $cols['end_date'] ?? null,
+            ]);
+            $cols += ['start_ordinal' => $ord['start'], 'end_ordinal' => $ord['end']];
+        }
         $row = $cols + [
             'kingdom_id' => self::KINGDOM_ID, 'park_id' => 0, 'mundane_id' => 0, 'holder_name' => '',
             'role' => self::MARKER . '_' . $suffix, 'position_id' => $positionId,

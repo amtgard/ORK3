@@ -9,6 +9,11 @@
      $mo_viewer_id  (int)  — the signed-in player's mundane id, so Vacate,
                              Retire and Transition can tell when the holder
                              is the viewer (0 = unknown; no self warnings)
+     $mo_can_edit_history (bool) — OfficerPosition::can_edit_history_for() for
+                             this kingdom/park (via the model): the gate the
+                             history writes enforce. Decides Edit vs View on the
+                             Correct the Rolls tab and whether the "Start date
+                             unknown" nudge offers Set it.
    The partial is self-contained: it emits its own CSS, its own JS module,
    its own window.MoConfig, and exposes window.moRefresh() to (re)load and
    render the officer cards into the #mo-cards container. Designed to be
@@ -18,6 +23,9 @@ if (empty($mo_can_manage)) return;
 $mo_kingdom_id = (int)($mo_kingdom_id ?? 0);
 $mo_park_id = (int)($mo_park_id ?? 0);
 $mo_viewer_id = (int)($mo_viewer_id ?? 0);
+$mo_can_edit_history = !empty($mo_can_edit_history);
+// The Officer History page (the ledger with &edit=1); #office-N opens one office.
+$mo_rolls_url = UIR . 'Reports/officer_history&KingdomId=' . $mo_kingdom_id . ($mo_park_id > 0 ? '&ParkId=' . $mo_park_id : '');
 ?>
 
 <!-- ============ Manage Officers — UI ============ -->
@@ -201,9 +209,11 @@ $mo_viewer_id = (int)($mo_viewer_id ?? 0);
 </div>
 
 <!-- Set Term Start Modal — the one-field editor the "Start date unknown" nudge
-     opens. It edits the existing OPEN ork_officer_history row for this office's
-     current occupant via the same edithistory action Correct the Rolls uses;
-     no new endpoint. -->
+     opens (history editors only). It takes season text ("Spring 24", "Mar 2024"),
+     reads it back through parseperiod, and saves it as a Period on the seat's OPEN
+     ork_officer_history row via edithistory -- on a current row that sets the start
+     only. No date-only picker: forcing an exact day is a spec anti-goal; the exact
+     day, when known, goes in on the ledger's Calendar mode (linked below). -->
 <div id="mo-start-overlay" class="ka-overlay ka-overlay-top" role="dialog" aria-modal="true" aria-labelledby="mo-start-title">
 	<div class="ka-modal-box ka-modal-box-sm">
 		<div class="ka-modal-header">
@@ -217,9 +227,12 @@ $mo_viewer_id = (int)($mo_viewer_id ?? 0);
 				<input type="hidden" id="mo-start-history-id" value="" />
 				<p class="mo-start-lede" id="mo-start-lede"></p>
 				<div class="ka-field">
-					<label for="mo-start-date">Term Start <span class="ka-req" aria-hidden="true">*</span></label>
-					<input type="text" id="mo-start-date" autocomplete="off" aria-required="true" />
+					<label for="mo-start-period">Term Start <span class="ka-req" aria-hidden="true">*</span></label>
+					<input type="text" id="mo-start-period" autocomplete="off" spellcheck="false" aria-required="true"
+						placeholder="e.g. Spring 24 or Mar 2024" aria-describedby="mo-start-readback" />
+					<div class="mo-start-readback" id="mo-start-readback" aria-live="polite"></div>
 				</div>
+				<p class="mo-start-hint">Know the exact day? <a id="mo-start-ledger" class="mo-start-ledger-link" href="<?= htmlspecialchars($mo_rolls_url . '&edit=1', ENT_QUOTES) ?>">Enter it on the rolls</a> (Calendar mode).</p>
 			</form>
 		</div>
 		<div class="ka-modal-footer">
@@ -309,6 +322,13 @@ html[data-theme="dark"] .mo-linkbtn { color:hsl(210,80%,65%); }
 html[data-theme="dark"] .mo-linkbtn:hover, html[data-theme="dark"] .mo-linkbtn:focus-visible { color:#fff; }
 
 .mo-start-lede { font-size:13px; color:var(--ork-text-secondary); line-height:1.5; margin:0 0 12px 0; }
+.mo-start-readback { min-height:18px; margin-top:4px; font-size:12px; color:var(--ork-text-secondary); }
+.mo-start-readback.mo-start-readback-err { color:#9b2c2c; }
+html[data-theme="dark"] .mo-start-readback.mo-start-readback-err { color:var(--ork-alert-error-text); }
+.mo-start-hint { font-size:12px; color:var(--ork-text-secondary); margin:8px 0 0 0; }
+.mo-start-ledger-link { color:var(--ork-blue-link); font-weight:600; }
+.mo-nudge-note { color:#744210; font-style:italic; }
+html[data-theme="dark"] .mo-nudge-note { color:#faf089; }
 
 /* Actions sit at the END of the row, right-aligned. They wrap under the row body
    before they ever push it sideways — nothing here may make the modal scroll
@@ -580,7 +600,8 @@ html[data-theme="dark"] .mo-tab.mo-tab-active { color:#63b3ed; border-bottom-col
 
 <!-- ============ Manage Officers — JS module ============ -->
 <script>
-window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_park_id ?>, viewerId: <?= (int)$mo_viewer_id ?>, canManage: true, uir: '<?= UIR ?>' };
+window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_park_id ?>, viewerId: <?= (int)$mo_viewer_id ?>, canManage: true, uir: '<?= UIR ?>',
+		canEditHistory: <?= $mo_can_edit_history ? 'true' : 'false' ?>, rollsUrl: <?= json_encode($mo_rolls_url, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> };
 	/* The z-index an autocomplete dropdown must carry to clear the modal scale.
 	   Derived from the token scale (--z-modal-top + 1) rather than hardcoded: this
 	   value is an INLINE style, so a literal 10001 beats -- and defeats -- the
@@ -658,7 +679,7 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	var moPinnedClass = false;
 	var moClass = 'crown';
 	var moRbacMode = 'existing';
-	var moNudgeFp = null;   // flatpickr for the Set Term Start modal (the unknown-start-date nudge)
+	var moStartRead = { seq: 0, text: '', ok: false }; // the Set Term Start dialog's latest read-back
 	var moConfirmFn = null;
 	var moRetiredOpen = false;
 	var moPosKeys = [];         // permission keys the position being edited already has
@@ -674,12 +695,13 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	function escAttr(s) {
 		return esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 	}
-	// Term dates arrive from the controller ALREADY human-formatted ("Aug 26, 2026"),
-	// so there is nothing to reformat here. A genuinely absent date yields '' and the
-	// caller omits the whole line rather than printing a placeholder.
+	// Each end arrives as the domain's label (TermStartLabel: "Spring 2024",
+	// "Winter 2022–23", or the exact date as "Aug 26, 2026"), the same words the
+	// Officer History page uses; the date-only TermStart is only a fallback. A
+	// genuinely unknown end yields '' and the caller omits the whole line.
 	function termLine(o) {
-		var start = o.TermStart ? esc(o.TermStart) : '';
-		var end   = o.TermEnd   ? esc(o.TermEnd)   : '';
+		var start = esc(o.TermStartLabel || o.TermStart || '');
+		var end   = esc(o.TermEndLabel || o.TermEnd || '');
 		if (!start && !end) return '';
 		if (start && end)   return 'Term: ' + start + ' \u2013 ' + end;
 		if (start)          return 'Term: ' + start + ' \u2013 present';
@@ -815,11 +837,24 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 		var term = termLine(o);
 		if (term) html += '<div class="mo-term">' + term + '</div>';
 		// The only consumer of the 2026-08-29 backfill's honest NULLs: this office's
-		// occupant has no recorded start date, so offer to record one now.
-		if (!o.TermStartRaw) {
+		// occupant has no recorded start at all -- no date AND no season (a season
+		// start entered on the rolls is a known start). History editors can record
+		// it here on the seat's open row; with no open row there is nothing to edit
+		// yet. Anyone else is told whose permission it takes.
+		if (o.TermStartOrdinal == null) {
+			var pid = parseInt(pos.PositionId, 10) || 0;
+			var act;
+			if (!MoConfig.canEditHistory) {
+				act = '<span class="mo-nudge-note">(setting it needs the Officer History permission)</span>';
+			} else if (parseInt(o.TermHistoryId, 10) > 0) {
+				act = '<button type="button" class="mo-linkbtn" onclick="moSetStart(' + pid + ')">Set it</button>';
+			} else {
+				// No open row to edit, and the ledger's synthetic seat row only points
+				// back here, so there is nothing to link: say so.
+				act = '<span class="mo-nudge-note">(no history row for this seat yet)</span>';
+			}
 			html += '<div class="mo-nudge">'
-			     +  '<i class="fas fa-circle-question" aria-hidden="true"></i> Start date unknown '
-			     +  '<button type="button" class="mo-linkbtn" onclick="moSetStart(' + parseInt(pos.PositionId, 10) + ')">Set it</button>'
+			     +  '<i class="fas fa-circle-question" aria-hidden="true"></i> Start date unknown ' + act
 			     +  '</div>';
 		}
 		return html;
@@ -1901,113 +1936,118 @@ window.MoConfig = { kingdomId: <?= (int)$mo_kingdom_id ?>, parkId: <?= (int)$mo_
 	};
 
 	// ---------- Set Term Start modal (the unknown-start-date nudge) ----------
-	// Reads the officerhistory endpoint. No new endpoint.
-	function historyUrl() {
-		return (window.MoConfig && MoConfig.parkId)
-			? (UIR + 'ParkAjax/park/' + MoConfig.parkId + '/officerhistory')
-			: (UIR + 'KingdomAjax/kingdom/' + MoConfig.kingdomId + '/officerhistory');
+	// Season text in, read back through parseperiod (as a current term's start),
+	// saved as a Period on the seat's open history row (TermHistoryId, from the
+	// list) through edithistory. Both actions sit in the history family, which is
+	// why the nudge offers this only when MoConfig.canEditHistory.
+	function moStartReadback(text, isErr) {
+		var box = document.getElementById('mo-start-readback');
+		box.textContent = text;
+		box.classList.toggle('mo-start-readback-err', !!isErr);
 	}
 
-	function initStartFp() {
-		if (typeof flatpickr === 'undefined') return;
-		if (!moNudgeFp) {
-			// PAST or today only -- a future start on a term already running is
-			// nonsense, and the server may not reject it, so never offer it.
-			moNudgeFp = flatpickr('#mo-start-date', { dateFormat: 'Y-m-d', altInput: true, altFormat: 'F j, Y', maxDate: 'today' });
-		}
+	// Read the typed start back. Answers out of order are dropped (seq); onDone
+	// gets true when the text that is in the field now reads as a valid start.
+	function moReadStart(onDone) {
+		var text = document.getElementById('mo-start-period').value.trim();
+		var seq = ++moStartRead.seq;
+		moStartRead.text = text;
+		moStartRead.ok = false;
+		if (!text) { moStartReadback('', false); if (onDone) onDone(false); return; }
+		var data = { Period: text, Current: 1 };
+		if (MoConfig.parkId) data.ParkId = MoConfig.parkId;
+		$.post(base() + 'parseperiod', data, function(resp) {
+			if (seq !== moStartRead.seq) return;
+			var ok = !!resp && resp.status === 0;
+			moStartRead.ok = ok;
+			moStartReadback(ok ? ('Saves as: ' + resp.Label) : ((resp && resp.error) || 'Could not read that start.'), !ok);
+			if (onDone) onDone(ok);
+		}, 'json').fail(function() {
+			if (seq !== moStartRead.seq) return;
+			moStartReadback('Could not check that start. Please try again.', true);
+			if (onDone) onDone(false);
+		});
 	}
 
-	// pid -> the office's current occupant's OPEN ork_officer_history row is not
-	// carried by the occupant DTO, so it is resolved here from the same read the
-	// Correct the Rolls tab uses: this office's PositionId + this occupant's
-	// MundaneId + IsCurrent. Save is disabled until that lookup returns.
+	var moStartTimer = null;
 	window.moSetStart = function(pid) {
 		var pos = findPos(pid);
 		if (!pos) return;
 		var occs = occupantsOf(pos);
 		if (!occs.length) return; // vacated since the card was rendered -- nothing to set
 		var occ = occs[0];
-		var mid = parseInt(occ.MundaneId, 10) || 0;
-		var readyLabel = '<i class="fas fa-save" style="margin-right:4px"></i> Save';
+		var hid = parseInt(occ.TermHistoryId, 10) || 0;
+		if (!hid) return; // no open row: the nudge links the rolls instead
 
 		moClearFormError('mo-start-error');
 		document.getElementById('mo-start-pos-id').value = pid;
-		document.getElementById('mo-start-history-id').value = '';
+		document.getElementById('mo-start-history-id').value = hid;
 		document.getElementById('mo-start-lede').textContent =
 			(occ.Persona || 'This officer') + '’s term as ' +
-			(pos.DisplayTitle || pos.Title || 'this office') + ' has no recorded start date on file.';
-		initStartFp();
-		if (moNudgeFp) moNudgeFp.clear(); else document.getElementById('mo-start-date').value = '';
-
+			(pos.DisplayTitle || pos.Title || 'this office') + ' has no recorded start. A season is enough.';
+		document.getElementById('mo-start-period').value = '';
+		document.getElementById('mo-start-ledger').href = MoConfig.rollsUrl + '&edit=1#office-' + (parseInt(pid, 10) || 0);
+		moStartRead.seq++;
+		moStartReadback('', false);
 		var btn = document.getElementById('mo-start-save-btn');
-		btn.disabled = true; // held off until the history row id resolves below
-		btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Looking up term...';
-
-		// Open AFTER flatpickr has run: altInput replaces the visible field, and
-		// moFocusables() must see the final controls.
-		moOpenOverlay('mo-start-overlay', 'mo-start-date');
-
-		$.getJSON(historyUrl(), function(resp) {
-			if (!resp || resp.status !== 0) {
-				btn.innerHTML = readyLabel;
-				moFormError('mo-start-error', 'Could not look up this term. Please try again.');
-				return;
-			}
-			var rows = resp.history || [];
-			var match = null;
-			for (var i = 0; i < rows.length; i++) {
-				var row = rows[i];
-				if (parseInt(row.PositionId, 10) === parseInt(pid, 10) &&
-					parseInt(row.MundaneId, 10) === mid &&
-					row.IsCurrent === true) {
-					match = row;
-					break;
-				}
-			}
-			btn.innerHTML = readyLabel;
-			if (!match) {
-				moFormError('mo-start-error', 'Could not find this officer’s open term on the rolls. Set its start on the Officer History page (the Correct the Rolls tab opens it).');
-				return;
-			}
-			document.getElementById('mo-start-history-id').value = match.OfficerHistoryId;
-			btn.disabled = false;
-		}).fail(function() {
-			btn.innerHTML = readyLabel;
-			moFormError('mo-start-error', 'Network error looking up this term.');
-		});
+		btn.disabled = false;
+		btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save';
+		moOpenOverlay('mo-start-overlay', 'mo-start-period');
 	};
 
 	window.moCloseStart = function() { moCloseOverlay('mo-start-overlay'); };
 
 	window.moSaveStart = function() {
 		var hid = parseInt(document.getElementById('mo-start-history-id').value || 0, 10);
-		var raw = document.getElementById('mo-start-date').value; // real ISO value; altInput only shows the human format
-		if (!hid) { moFormError('mo-start-error', 'Still looking up this term — please wait a moment and try again.'); return; }
-		if (!raw) { moFormError('mo-start-error', 'Term start is required.'); return; }
+		var text = document.getElementById('mo-start-period').value.trim();
+		if (!hid) { moFormError('mo-start-error', 'Could not find this officer’s open term. Set its start on the Officer History page.'); return; }
+		if (!text) { moFormError('mo-start-error', 'Enter the term start, e.g. "Spring 24".'); return; }
 		moClearFormError('mo-start-error');
 
 		var btn = document.getElementById('mo-start-save-btn');
 		if (btn.disabled) return;
 		var original = btn.innerHTML;
-		// Busy is set BEFORE the network call only inside this try/catch, and onErr
-		// always restores it -- a synchronous throw here would otherwise strand the
+		function release() { btn.disabled = false; btn.innerHTML = original; }
+		// Busy is set BEFORE the network calls only inside this try/catch, and every
+		// failure path restores it -- a synchronous throw would otherwise strand the
 		// button on "Saving..." with no POST ever issued.
 		try {
 			btn.disabled = true;
 			btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-			moPost('edithistory', { OfficerHistoryId: hid, StartDate: raw }, function() {
-				moCloseStart();
-				moRefresh();
-			}, function() {
-				btn.disabled = false;
-				btn.innerHTML = original;
-			});
+			// Never save text the read-back has not confirmed: re-read it unless the
+			// last answer was for exactly this text and valid.
+			var save = function() {
+				// ExpectCurrent: refuse if the seat changed hands since the list loaded,
+				// rather than rewrite that closed term's span. Errors show inline.
+				$.post(base() + 'edithistory', $.extend(MoConfig.parkId ? { ParkId: MoConfig.parkId } : {},
+					{ OfficerHistoryId: hid, Period: text, ExpectCurrent: 1 }), function(resp) {
+					if (resp && resp.status === 0) { moCloseStart(); moRefresh(); return; }
+					moFormError('mo-start-error', (resp && resp.error) ? resp.error : 'Could not save this start.');
+					release();
+				}, 'json').fail(function() {
+					moFormError('mo-start-error', 'Network error saving this start. Please try again.');
+					release();
+				});
+			};
+			if (moStartRead.ok && moStartRead.text === text) { save(); return; }
+			moReadStart(function(ok) { if (ok) save(); else release(); });
 		} catch (e) {
-			btn.disabled = false;
-			btn.innerHTML = original;
-			moShowNotice('Error', 'Could not save this start date. Please try again.');
+			release();
+			moShowNotice('Error', 'Could not save this start. Please try again.');
 		}
 	};
+
+	(function() {
+		var input = document.getElementById('mo-start-period');
+		if (!input) return;
+		input.addEventListener('input', function() {
+			clearTimeout(moStartTimer);
+			moStartRead.seq++;
+			moStartRead.ok = false;
+			moStartReadback('', false);
+			moStartTimer = setTimeout(function() { moReadStart(); }, 300);
+		});
+	})();
 
 	// ---------- Form submit (Enter) + custom-permission dirty tracking ----------
 	(function() {

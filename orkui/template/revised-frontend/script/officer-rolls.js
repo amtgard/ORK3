@@ -4,14 +4,17 @@
  * dropdown styles, AUTOCOMPLETE_DEBOUNCE_MS). Everything is event-delegated on
  * #or-root, so a section re-rendered from the rolls ajax needs no re-wiring.
  *
- * Writes go to OfficerAdminAjax (addhistory / edithistory / deletehistory), which
- * answers {status:0} or {status:N, error}. After every write the section is
- * re-fetched (rolls) and re-rendered by renderSection(), which mirrors the
- * template's markup: change one, change the other.
+ * Writes go to OfficerAdminAjax (addhistory / edithistory / deletehistory) with
+ * the section's Key, and answer {status:0, Office} (add also PreviousSpan) or
+ * {status:N, error}. The one office in the answer is re-rendered in place by
+ * renderSection(), which mirrors the template's markup: change one, change the
+ * other. Only if a write's answer carries no Office is the section re-fetched
+ * (rolls, scoped to its Key). Nothing refetches the whole org.
  *
  * Server quirks this file works around:
  *  - unlinking a holder, or naming a plain-text holder on a linked row, needs
- *    MundaneId=0 alongside HolderName (HolderName alone is a no-op on a linked row);
+ *    MundaneId=0 alongside HolderName (HolderName alone on a linked row would
+ *    only rename the name of record, which linking keeps);
  *  - an Edit that sends Period clears any exact date not sent with it, so a period
  *    edit always resends the exact dates shown in the row editor.
  */
@@ -23,7 +26,6 @@
     if (!C || !root) { return; }
 
     var DEBOUNCE = (typeof AUTOCOMPLETE_DEBOUNCE_MS === 'number') ? AUTOCOMPLETE_DEBOUNCE_MS : 250;
-    var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     var MODE_TIPS = {
         season: 'Season Entry - use to indicate the general term if you do not know the specific dates.',
         calendar: 'Calendar Entry - use to enter in specific start and end dates when known.'
@@ -78,47 +80,33 @@
 
     function plural(n, one, many) { return (n | 0) + ' ' + ((n | 0) === 1 ? one : many); }
 
-    function fmtDate(d) {
-        var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || '');
-        if (!m || m[1] === '0000') { return ''; }
-        return MONTHS[parseInt(m[2], 10) - 1] + ' ' + parseInt(m[3], 10) + ', ' + m[1];
+    // HolderName is the name the term was recorded under (kept when it is linked);
+    // a linked holder with none is named by the persona. The template's
+    // $orHolderName / $orHolder build the same.
+    function holderName(t) {
+        var recorded = String(t.HolderName || '').trim();
+        return (recorded || !(t.MundaneId > 0)) ? recorded : String(t.Persona || '').trim();
     }
 
-    function holderName(t) { return t.MundaneId > 0 ? (t.Persona || '') : String(t.HolderName || '').trim(); }
-
     function holderNode(t) {
+        var name = holderName(t);
         if (t.MundaneId > 0) {
-            return h('a', { 'class': 'or-holder-link', href: C.uir + 'Player/profile/' + t.MundaneId, text: t.Persona || ('Player #' + t.MundaneId) });
+            var persona = String(t.Persona || '').trim();
+            var link = h('a', { 'class': 'or-holder-link', href: C.uir + 'Player/profile/' + t.MundaneId },
+                [name || h('span', { 'class': 'or-holder-unknown', text: 'Unknown' })]);
+            if (!persona || persona.toLowerCase() === name.toLowerCase()) { return link; }
+            var frag = document.createDocumentFragment();
+            frag.appendChild(link);
+            frag.appendChild(document.createTextNode(' '));
+            frag.appendChild(h('span', { 'class': 'or-holder-aka', text: 'now known as ' + persona }));
+            return frag;
         }
-        var name = String(t.HolderName || '').trim();
         return name ? h('span', { 'class': 'or-holder-text', text: name }) : h('span', { 'class': 'or-holder-unknown', text: 'Unknown' });
     }
 
     function periodNodes(t) {
-        var label = String(t.PeriodLabel || '');
-        if (!t.IsCurrent) { return [label]; }
-        return [label.replace(/\s*–\s*present$/, ''), ' ', h('span', { 'class': 'or-dash', text: '–' }), ' ', h('span', { 'class': 'or-present', text: 'present' })];
-    }
-
-    function exactText(t) {
-        var s = fmtDate(t.StartDate), e = fmtDate(t.EndDate);
-        if (!s && !e) { return ''; }
-        // Only under a seasonal label: a label that already shows the date would repeat it.
-        var label = String(t.PeriodLabel || '');
-        if ((s && label.indexOf(s) !== -1) || (e && label.indexOf(e) !== -1)) { return ''; }
-        return 'Exact: ' + (s || '?') + ' – ' + (e || (t.IsCurrent ? 'present' : '?'));
-    }
-
-    function seasonText(s, y) {
-        return (s && y !== null && y !== undefined && y !== '') ? s.charAt(0).toUpperCase() + s.slice(1) + ' ' + parseInt(y, 10) : '';
-    }
-
-    // The period as the row editor shows it, e.g. "Spring 2023 – Fall 2023".
-    function periodText(t) {
-        var start = seasonText(t.StartSeason, t.StartYear), end = seasonText(t.EndSeason, t.EndYear);
-        if (t.IsCurrent || !start) { return start; }
-        if (!end) { return start + ' –'; }
-        return end === start ? start : start + ' – ' + end;
+        if (!t.IsCurrent) { return [String(t.PeriodLabel || '')]; }
+        return [String(t.PeriodLabelBase || ''), ' ', h('span', { 'class': 'or-dash', text: '–' }), ' ', h('span', { 'class': 'or-present', text: 'present' })];
     }
 
     function holderField(value, id, placeholder) {
@@ -148,14 +136,12 @@
 
     function termRow(t) {
         var hid = t.OfficerHistoryId | 0, current = !!t.IsCurrent, synthetic = !!t.Synthetic || hid === 0;
-        var exact = exactText(t);
         var holderTd = h('td', { 'class': 'or-col-holder', 'data-label': 'Holder' }, [holderNode(t)]);
         if (current) {
             holderTd.appendChild(document.createTextNode(' '));
             holderTd.appendChild(h('span', { 'class': 'or-lock', 'data-tip': 'Set from Manage Officers' }, [icon('lock'), h('span', { 'class': 'or-sr', text: 'Set from Manage Officers' })]));
         }
         var periodTd = h('td', { 'class': 'or-col-period', 'data-label': 'Period' }, periodNodes(t));
-        if (exact) { periodTd.appendChild(h('span', { 'class': 'or-exact', text: exact })); }
         var actions = h('td', { 'class': 'or-col-actions' });
         if (synthetic) {
             actions.appendChild(h('span', { 'class': 'or-tag or-tag-quiet', 'data-tip': 'Seated in Manage Officers, with no history row yet. Set from Manage Officers.', text: 'seated' }));
@@ -172,7 +158,8 @@
         return h('tr', {
             'class': 'or-row' + (current ? ' or-row-current' : '') + (synthetic ? ' or-row-synthetic' : ''),
             'data-history-id': hid, 'data-holder': holderName(t), 'data-mundane-id': t.MundaneId | 0,
-            'data-period': periodText(t), 'data-note': t.Note || '', 'data-start-date': t.StartDate || '',
+            'data-period': t.PeriodText || '', 'data-note': t.Note || '', 'data-start-date': t.StartDate || '',
+            'data-start-season': (t.StartSeason && t.StartYear !== null && t.StartYear !== undefined) ? '1' : '0',
             'data-end-date': t.EndDate || '', 'data-current': current ? '1' : '0'
         }, [holderTd, periodTd, h('td', { 'class': 'or-col-note', 'data-label': 'Note', text: t.Note || '' }), actions]);
     }
@@ -306,7 +293,7 @@
         ]);
     }
 
-    function renderSection(o, open) {
+    function renderSection(o, open, order) {
         var tbody = h('tbody');
         (o.Terms || []).forEach(function (t) {
             tbody.appendChild(termRow(t));
@@ -327,7 +314,7 @@
             h('th', { 'class': 'or-col-holder', text: 'Holder' }), h('th', { 'class': 'or-col-period', text: 'Period' }),
             h('th', { 'class': 'or-col-note', text: 'Note' }), h('th', { 'class': 'or-col-actions' }, [h('span', { 'class': 'or-sr', text: 'Actions' })])
         ])]);
-        return h('details', { 'class': 'or-office', 'data-key': o.Key, 'data-position-id': o.PositionId | 0, open: !!open }, [
+        return h('details', { 'class': 'or-office', 'data-key': o.Key, 'data-position-id': o.PositionId | 0, 'data-order': order | 0, open: !!open }, [
             summaryNode(o),
             h('div', { 'class': 'or-office-body' }, [h('div', { 'class': 'or-ledger-wrap' }, [h('table', { 'class': 'or-ledger' }, [thead, tbody])])])
         ]);
@@ -343,33 +330,38 @@
         return null;
     }
 
-    // Re-fetch the rolls and re-render one section in place. after: {focusEntry, prefill}
-    function refreshSection(key, after) {
-        after = after || {};
-        return post('rolls', {}).then(function (d) {
-            if (Number(d.status) !== 0) { throw new Error(d.error || 'The rolls could not be reloaded. Reload the page.'); }
-            var office = null;
-            (d.Offices || []).forEach(function (o) { if (o.Key === key) { office = o; } });
-            var old = findSection(key);
-            if (!office || !old) { return; }
-            if (editingRow && old.contains(editingRow)) { editingRow = null; }
-            var fresh = renderSection(office, true);
-            old.parentNode.replaceChild(fresh, old);
-            unfold(fresh, office, d.Offices || []);
-            applyEntryMode(fresh);
-            if (after.focusEntry) {
-                var entry = fresh.querySelector('tr.or-entry');
-                if (entry) {
-                    var period = entry.querySelector('.or-period-input');
-                    if (after.prefill && period && entryMode === 'season') {
-                        period.value = after.prefill;
-                        readBack(period);
-                    }
-                    var holder = entry.querySelector('.or-holder-input');
-                    if (holder) { holder.focus(); }
-                }
-            }
+    // Re-render one section in place from a write's answer (d.Office). When the
+    // answer carries no Office, fetch just that section (rolls, scoped by Key).
+    // after: {focusEntry, prefill}
+    function refreshSection(key, d, after) {
+        if (d && d.Office !== undefined) { return Promise.resolve(showOffice(key, d.Office, after)); }
+        return post('rolls', { Key: key }).then(function (r) {
+            if (Number(r.status) !== 0) { throw new Error(r.error || 'The rolls could not be reloaded. Reload the page.'); }
+            showOffice(key, (r.Offices || [])[0] || null, after);
         });
+    }
+
+    function showOffice(key, office, after) {
+        after = after || {};
+        var old = findSection(key);
+        if (!office || !old || office.Key !== key) { return; }
+        if (editingRow && old.contains(editingRow)) { editingRow = null; }
+        var fresh = renderSection(office, true, parseInt(old.getAttribute('data-order'), 10) || 0);
+        old.parentNode.replaceChild(fresh, old);
+        unfold(fresh, office);
+        applyEntryMode(fresh);
+        if (after.focusEntry) {
+            var entry = fresh.querySelector('tr.or-entry');
+            if (entry) {
+                var period = entry.querySelector('.or-period-input');
+                if (after.prefill && period && entryMode === 'season') {
+                    period.value = after.prefill;
+                    readBack(period);
+                }
+                var holder = entry.querySelector('.or-holder-input');
+                if (holder) { holder.focus(); }
+            }
+        }
     }
 
     // Put every entry row in the sticky entry mode.
@@ -380,17 +372,16 @@
     }
 
     // An office in "Other offices (n)" that now has terms moves to its registry
-    // position among the main sections; the fold's count follows, and the fold
-    // goes away once it is empty.
-    function unfold(section, office, offices) {
+    // position among the main sections (data-order, the rolls order the page was
+    // drawn in); the fold's count follows, and the fold goes away once it is empty.
+    function unfold(section, office) {
         var fold = section.closest('details.or-folded');
         if (!fold || !(office.TermCount > 0)) { return; }
-        var order = offices.map(function (o) { return o.Key; });
-        var mine = order.indexOf(office.Key);
+        var mine = parseInt(section.getAttribute('data-order'), 10) || 0;
         var list = document.getElementById('or-offices');
         var before = fold;
         Array.prototype.some.call(list.querySelectorAll(':scope > details.or-office'), function (s) {
-            if (order.indexOf(s.getAttribute('data-key')) > mine) { before = s; return true; }
+            if ((parseInt(s.getAttribute('data-order'), 10) || 0) > mine) { before = s; return true; }
             return false;
         });
         list.insertBefore(section, before);
@@ -441,16 +432,6 @@
         }, DEBOUNCE);
     }
 
-    // The span to pre-fill after saving `text`: the term before, of the same length.
-    function previousSpan(text) {
-        var key = 'p|' + text;
-        if (readCache[key]) { return Promise.resolve(readCache[key].PreviousSpan || ''); }
-        return post('parseperiod', { Period: text }).then(function (d) {
-            readCache[key] = d;
-            return Number(d.status) === 0 ? (d.PreviousSpan || '') : '';
-        }).catch(function () { return ''; });
-    }
-
     // ── Holder search (global: officers often served elsewhere first) ──
 
     var searchSeq = 0;
@@ -485,27 +466,56 @@
         hint.hidden = !(input.value.trim() && !id.value);
     }
 
+    // A search is "pending" from the keystroke (through the debounce and the fetch)
+    // until its results are shown or dropped; an Enter pressed meanwhile is queued
+    // (_orEnterQueued) and replayed on the results, never saved past them.
+    function searchDone(input) {
+        clearTimeout(input._orTimer);
+        input._orPending = false;
+        input._orEnterQueued = false;
+    }
+
     function holderInput(input) {
         var wrap = input.closest('.or-ac-wrap');
         wrap.querySelector('.or-holder-id').value = '';
         holderHint(wrap);
         clearTimeout(input._orTimer);
+        input._orEnterQueued = false;   // a new keystroke cancels an Enter queued before it
         var q = input.value.trim();
-        if (q.length < 2) { acClose(wrap); return; }
+        if (q.length < 2) { searchDone(input); acClose(wrap); return; }
+        input._orPending = true;
         input._orTimer = setTimeout(function () {
             var seq = ++searchSeq;
             fetch(C.uir + 'SearchAjax/universal&focus=player&inactive=1&kid=' + (C.kingdomId | 0)
                 + (C.parkId ? '&pid=' + (C.parkId | 0) : '') + '&q=' + encodeURIComponent(q), { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
-                    if (seq !== searchSeq || document.activeElement !== input || input.value.trim() !== q) { return; }
-                    acRender(wrap, (d && d.players) || []);
+                    if (seq !== searchSeq || input.value.trim() !== q) { return; }   // a newer search owns the state
+                    var queued = !!input._orEnterQueued;
+                    searchDone(input);
+                    if (document.activeElement !== input) { return; }
+                    acRender(wrap, (d && d.players) || [], q);
+                    if (queued) { replayEnter(wrap, input); }
                 })
-                .catch(function () { acClose(wrap); });
+                .catch(function () {
+                    if (seq === searchSeq) { searchDone(input); }
+                    acClose(wrap);
+                });
         }, DEBOUNCE);
     }
 
-    function acRender(wrap, players) {
+    // The result Enter should pick for typed text q: an exact name match, else the
+    // first name that starts with q (case-insensitive). null when neither.
+    function acBestMatch(items, q) {
+        var want = String(q || '').trim().toLowerCase();
+        if (!want) { return null; }
+        var name = function (it) { return String(it.getAttribute('data-name') || '').trim().toLowerCase(); };
+        return items.filter(function (it) { return name(it) === want; })[0]
+            || items.filter(function (it) { return name(it).indexOf(want) === 0; })[0]
+            || null;
+    }
+
+    function acRender(wrap, players, q) {
         var r = acResults(wrap);
         r.textContent = '';
         if (!players.length) {
@@ -519,8 +529,24 @@
                 Number(p.active) === 0 ? h('span', { 'class': 'or-ac-inactive', text: ' inactive' }) : null
             ]));
         });
+        var best = acBestMatch(Array.prototype.slice.call(r.querySelectorAll('.kn-ac-item')), q);
+        if (best) { best.classList.add('kn-ac-focused'); }
+        if (players.length) { r.appendChild(h('div', { 'class': 'or-ac-foot', 'aria-hidden': 'true' })); }
+        acFoot(wrap);
         acCloseAll(wrap);
         r.classList.add('kn-ac-open');
+    }
+
+    // The key hint under the results, for what Enter will do now.
+    function acFoot(wrap) {
+        var foot = wrap.querySelector('.or-ac-foot');
+        if (!foot) { return; }
+        var tr = wrap.closest('tr');
+        var link = !!(tr && tr._orMode === 'link');
+        var focused = !!wrap.querySelector('.kn-ac-item.kn-ac-focused');
+        foot.textContent = focused
+            ? (link ? 'Enter links the highlighted player.' : 'Enter picks the highlighted player. Esc keeps the typed name as plain text.')
+            : (link ? 'Use the arrow keys to pick a player.' : 'Arrow keys pick a player. Enter closes the list, then Enter saves the name as plain text.');
     }
 
     function acMove(wrap, dir) {
@@ -531,10 +557,37 @@
         i = i < 0 ? (dir > 0 ? 0 : items.length - 1) : (i + dir + items.length) % items.length;
         items[i].classList.add('kn-ac-focused');
         items[i].scrollIntoView({ block: 'nearest' });
+        acFoot(wrap);
+    }
+
+    // Enter in a holder input. Returns true when the press is used up here:
+    //  - a search is pending: queue it, to be replayed on the results;
+    //  - a highlighted player: pick it;
+    //  - players listed, none highlighted: this Enter only closes the list (the
+    //    next Enter saves the typed name as plain text).
+    // false (the row's own Enter runs: save) when the list is closed, or open
+    // with no players at all ("It will be saved as plain text").
+    function holderEnter(wrap, input) {
+        if (input._orPending) { input._orEnterQueued = true; return true; }
+        if (!acOpen(wrap)) { return false; }
+        var focused = wrap.querySelector('.kn-ac-item.kn-ac-focused');
+        if (focused) { acPick(wrap, focused); return true; }
+        var listed = !!wrap.querySelector('.kn-ac-item');
+        acClose(wrap);
+        return listed;
+    }
+
+    // An Enter that waited for a search: handled as if pressed on its results.
+    function replayEnter(wrap, input) {
+        if (holderEnter(wrap, input)) { return; }
+        var tr = input.closest('tr');
+        if (tr) { rowEnter(tr); }
     }
 
     function acPick(wrap, item) {
         var input = wrap.querySelector('.or-holder-input');
+        searchDone(input);
+        searchSeq++;   // drop any fetch still in flight for the text picked over
         input.value = item.getAttribute('data-name') || '';
         wrap.querySelector('.or-holder-id').value = item.getAttribute('data-id') || '';
         acClose(wrap);
@@ -570,13 +623,17 @@
         var fields = {
             PositionId: tr.getAttribute('data-position-id'),
             MundaneId: id,
-            HolderName: id ? '' : name,
+            // The name of record: for a picked player, the persona at the pick
+            // (acPick fills it; typing afterwards clears the id).
+            HolderName: name,
             Note: note.value.trim()
         };
         // Calendar sends exact dates and no Period; a blank end means end unknown.
         if (calendar) { fields.StartDate = startDate; fields.EndDate = endDate; } else { fields.Period = text; }
         tr._orBusy = true;
         if (btn) { btn.disabled = true; }
+        var key = section.getAttribute('data-key');
+        fields.Key = key;
         post('addhistory', fields).then(function (d) {
             if (Number(d.status) !== 0) {
                 rowMessage(tr, d.error || 'The term could not be added.');
@@ -584,9 +641,8 @@
                 if (back) { back.focus(); }
                 return null;
             }
-            return (calendar ? Promise.resolve('') : previousSpan(text)).then(function (span) {
-                return refreshSection(section.getAttribute('data-key'), { focusEntry: true, prefill: span });
-            });
+            // One round trip: the answer carries the redrawn office and the next pre-fill.
+            return refreshSection(key, d, { focusEntry: true, prefill: calendar ? '' : (d.PreviousSpan || '') });
         }).catch(failed).then(function () {
             tr._orBusy = false;
             if (btn) { btn.disabled = false; }
@@ -703,7 +759,9 @@
             }
         } else {
             // Calendar: exact dates only, never Period (the season stays as a fallback).
-            if (!startDate && !(d.period || '').trim()) {
+            // Clearing the only start (a start date with no stored start season) is
+            // refused, as the server refuses it; a row stored with no start may stay so.
+            if (!startDate && d.startDate && d.startSeason !== '1') {
                 rowMessage(tr, 'A term needs a start: enter a start date.');
                 activeInput(field).focus();
                 return;
@@ -719,14 +777,15 @@
         }
 
         if (!changed) { cancelEdit(tr); return; }
-        var section = sectionOf(tr);
+        var key = sectionOf(tr).getAttribute('data-key');
+        fields.Key = key;
         tr._orBusy = true;
         post('edithistory', fields).then(function (r) {
             if (Number(r.status) !== 0) {
                 rowMessage(tr, r.error || 'The term could not be saved.');
                 return null;
             }
-            return refreshSection(section.getAttribute('data-key'));
+            return refreshSection(key, r);
         }).catch(failed).then(function () { tr._orBusy = false; });
     }
 
@@ -749,11 +808,12 @@
         if (tr._orBusy) { return; }
         var id = parseInt(tr.querySelector('.or-holder-id').value, 10) || 0;
         if (!id) { rowMessage(tr, 'Pick a player from the list to link this name.'); return; }
-        var section = sectionOf(tr);
+        var key = sectionOf(tr).getAttribute('data-key');
         tr._orBusy = true;
-        post('edithistory', { OfficerHistoryId: tr.dataset.historyId, MundaneId: id }).then(function (r) {
+        // MundaneId alone: the server keeps the typed name as the name of record.
+        post('edithistory', { OfficerHistoryId: tr.dataset.historyId, MundaneId: id, Key: key }).then(function (r) {
             if (Number(r.status) !== 0) { rowMessage(tr, r.error || 'The holder could not be linked.'); return null; }
-            return refreshSection(section.getAttribute('data-key'));
+            return refreshSection(key, r);
         }).catch(failed).then(function () { tr._orBusy = false; });
     }
 
@@ -764,15 +824,23 @@
         var period = (tr.dataset.period || '').trim();
         var msg = 'Delete the term of ' + who + (period ? ' (' + period + ')' : '') + '? This cannot be undone.';
         var run = function () {
-            var section = sectionOf(tr);
-            post('deletehistory', { OfficerHistoryId: tr.dataset.historyId }).then(function (r) {
+            var key = sectionOf(tr).getAttribute('data-key');
+            post('deletehistory', { OfficerHistoryId: tr.dataset.historyId, Key: key }).then(function (r) {
                 if (Number(r.status) !== 0) { alertUser(r.error || 'The term could not be deleted.'); return null; }
-                return refreshSection(section.getAttribute('data-key'));
+                return refreshSection(key, r);
             }).catch(failed);
         };
         if (typeof window.orkConfirm === 'function') {
             window.orkConfirm(msg, run, { title: 'Delete term', okLabel: 'Delete' });
         }
+    }
+
+    // The row's Enter: add from the entry row, save a link or an edit. true if handled.
+    function rowEnter(tr) {
+        if (tr.classList.contains('or-entry')) { addTerm(tr); return true; }
+        if (tr._orMode === 'link') { saveLink(tr); return true; }
+        if (tr._orMode === 'edit') { saveEdit(tr); return true; }
+        return false;
     }
 
     // ── Event delegation ─────────────────────────────────────
@@ -785,7 +853,7 @@
 
     root.addEventListener('mousedown', function (e) {
         // Keep focus in the holder input while a dropdown item is chosen.
-        if (e.target.closest('.kn-ac-item')) { e.preventDefault(); }
+        if (e.target.closest('.kn-ac-results')) { e.preventDefault(); }
     });
 
     root.addEventListener('click', function (e) {
@@ -831,24 +899,19 @@
             return;
         }
 
+        // Enter in the holder never saves typed text past a listed match (holderEnter).
+        if (wrap && e.key === 'Enter' && holderEnter(wrap, t)) { e.preventDefault(); return; }
         if (wrap && acOpen(wrap)) {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                 e.preventDefault();
                 acMove(wrap, e.key === 'ArrowDown' ? 1 : -1);
                 return;
             }
-            if (e.key === 'Enter') {
-                var focused = wrap.querySelector('.kn-ac-item.kn-ac-focused');
-                if (focused) { e.preventDefault(); acPick(wrap, focused); return; }
-                acClose(wrap);
-            }
             if (e.key === 'Escape') { e.preventDefault(); acClose(wrap); return; }
         }
         if (!tr) { return; }
         if (e.key === 'Enter' && t.tagName === 'INPUT') {
-            if (tr.classList.contains('or-entry')) { e.preventDefault(); addTerm(tr); }
-            else if (tr._orMode === 'link') { e.preventDefault(); saveLink(tr); }
-            else if (tr._orMode === 'edit') { e.preventDefault(); saveEdit(tr); }
+            if (rowEnter(tr)) { e.preventDefault(); }
         } else if (e.key === 'Escape' && tr._orOrig) {
             e.preventDefault();
             cancelEdit(tr);
@@ -857,7 +920,16 @@
 
     root.addEventListener('focusout', function (e) {
         var wrap = e.target.classList && e.target.classList.contains('or-holder-input') ? e.target.closest('.or-ac-wrap') : null;
-        if (wrap) { setTimeout(function () { if (!wrap.contains(document.activeElement)) { acClose(wrap); } }, 120); }
+        if (wrap) {
+            // Leaving the holder (Tab) drops its search: the hint shows the name as plain text.
+            var input = e.target;
+            setTimeout(function () {
+                if (!wrap.contains(document.activeElement)) {
+                    if (input._orPending) { searchDone(input); searchSeq++; }
+                    acClose(wrap);
+                }
+            }, 120);
+        }
     });
 
     document.addEventListener('click', function (e) {

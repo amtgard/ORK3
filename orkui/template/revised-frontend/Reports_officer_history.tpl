@@ -14,7 +14,7 @@
  * left out of the public report.
  */
 $Rolls     = (isset($Rolls) && is_array($Rolls)) ? $Rolls : ['Offices' => []];
-$orOffices = is_array($Rolls['Offices'] ?? null) ? $Rolls['Offices'] : [];
+$orOffices = is_array($Rolls['Offices'] ?? null) ? array_values($Rolls['Offices']) : [];
 $orIsPark  = ($ScopeType ?? '') === 'park';
 $orScopeId = (int) ($ScopeId ?? 0);
 $orKid     = (int) ($KingdomId ?? 0);
@@ -29,7 +29,8 @@ $orPageUrl    = UIR . 'Reports/officer_history&KingdomId=' . $orKid . ($orIsPark
 
 $orMain   = [];
 $orFolded = [];
-foreach ($orOffices as $o) {
+foreach ($orOffices as $orI => $o) {
+    $o['__order'] = (int) $orI;
     if ((int) ($o['TermCount'] ?? 0) > 0) {
         $orMain[] = $o;
     } else {
@@ -37,64 +38,59 @@ foreach ($orOffices as $o) {
     }
 }
 
-$orDate = function ($d) {
-    if ($d === null || $d === '' || $d === '0000-00-00' || ($ts = strtotime((string) $d)) === false) {
-        return '';
+// The holder as shown. HolderName is the name the term was recorded under; a
+// linked holder shows it linked to the profile, with a muted "now known as"
+// when today's persona differs (a blank persona falls back to it). Plain-text
+// names are plain text. script/officer-rolls.js holderNode() mirrors this.
+$orHolderName = function (array $t) {
+    $recorded = trim((string) ($t['HolderName'] ?? ''));
+    if ($recorded !== '' || (int) ($t['MundaneId'] ?? 0) <= 0) {
+        return $recorded;
     }
-    return date('M j, Y', $ts);
+    return trim((string) ($t['Persona'] ?? ''));
 };
-// The holder as shown: linked players link to their profile, plain-text names are plain text.
-$orHolder = function (array $t) use ($orH) {
+$orHolder = function (array $t) use ($orH, $orHolderName) {
     $mid = (int) ($t['MundaneId'] ?? 0);
+    $name = $orHolderName($t);
     if ($mid > 0) {
-        $name = (string) ($t['Persona'] ?? '') !== '' ? $t['Persona'] : 'Player #' . $mid;
-        return '<a class="or-holder-link" href="' . $orH(UIR . 'Player/profile/' . $mid) . '">' . $orH($name) . '</a>';
+        $persona = trim((string) ($t['Persona'] ?? ''));
+        $out = '<a class="or-holder-link" href="' . $orH(UIR . 'Player/profile/' . $mid) . '">'
+            . ($name !== '' ? $orH($name) : '<span class="or-holder-unknown">Unknown</span>') . '</a>';
+        if ($persona !== '' && mb_strtolower($persona) !== mb_strtolower($name)) {
+            $out .= ' <span class="or-holder-aka">now known as ' . $orH($persona) . '</span>';
+        }
+        return $out;
     }
-    $name = trim((string) ($t['HolderName'] ?? ''));
     return $name !== ''
         ? '<span class="or-holder-text">' . $orH($name) . '</span>'
         : '<span class="or-holder-unknown">Unknown</span>';
 };
-$orHolderName = function (array $t) {
-    return (int) ($t['MundaneId'] ?? 0) > 0 ? (string) ($t['Persona'] ?? '') : trim((string) ($t['HolderName'] ?? ''));
-};
 // The period label, with a pill in place of the word "present" on a current term.
 $orPeriod = function (array $t) use ($orH) {
-    $label = (string) ($t['PeriodLabel'] ?? '');
     if (!empty($t['IsCurrent'])) {
-        $label = preg_replace('/\s*–\s*present$/u', '', $label);
-        return $orH($label) . ' <span class="or-dash">–</span> <span class="or-present">present</span>';
+        return $orH($t['PeriodLabelBase'] ?? '') . ' <span class="or-dash">–</span> <span class="or-present">present</span>';
     }
-    return $orH($label);
+    return $orH($t['PeriodLabel'] ?? '');
 };
-$orExact = function (array $t) use ($orDate) {
-    $s = $orDate($t['StartDate'] ?? null);
-    $e = $orDate($t['EndDate'] ?? null);
-    if ($s === '' && $e === '') {
-        return '';
+// The public report's period. An unknown start reads "Start unknown" and an
+// unknown end a muted "end unrecorded"; the ledger keeps "?", which editors
+// read as "fill this in". Labels come from the term's stored ordinals.
+$orViewPeriod = function (array $t) use ($orH, $orPeriod) {
+    $start = $t['StartLabel'] ?? null;
+    $end   = $t['EndLabel'] ?? null;
+    $current = !empty($t['IsCurrent']);
+    if ($current && $end !== null) {
+        return $orPeriod($t);
     }
-    // Only when the label is seasonal: a label that already shows an exact date
-    // (OfficerTermPeriod::label prefers the date per side) would just be repeated.
-    $label = (string) ($t['PeriodLabel'] ?? '');
-    if (($s !== '' && strpos($label, $s) !== false) || ($e !== '' && strpos($label, $e) !== false)) {
-        return '';
+    $startHtml = $start !== null ? $orH($start) : '<span class="or-period-unknown">Start unknown</span>';
+    if ($current) {
+        return $startHtml . ' <span class="or-dash">–</span> <span class="or-present">present</span>';
     }
-    return 'Exact: ' . ($s !== '' ? $s : '?') . ' – ' . ($e !== '' ? $e : (!empty($t['IsCurrent']) ? 'present' : '?'));
-};
-// The period as the ledger's period field shows it for editing ("Spring 2023 – Fall 2023").
-$orPeriodText = function (array $t) {
-    $side = function ($s, $y) {
-        return ($s !== null && $s !== '' && $y !== null && $y !== '') ? ucfirst((string) $s) . ' ' . (int) $y : '';
-    };
-    $start = $side($t['StartSeason'] ?? null, $t['StartYear'] ?? null);
-    $end   = $side($t['EndSeason'] ?? null, $t['EndYear'] ?? null);
-    if (!empty($t['IsCurrent']) || $start === '') {
-        return $start;
+    if ($start !== null && $start === $end) {
+        return $startHtml;
     }
-    if ($end === '') {
-        return $start . ' –';
-    }
-    return $end === $start ? $start : $start . ' – ' . $end;
+    return $startHtml . ' <span class="or-dash">–</span> '
+        . ($end !== null ? $orH($end) : '<span class="or-period-unknown">end unrecorded</span>');
 };
 $orPlural = function ($n, $one, $many) {
     return (int) $n . ' ' . ((int) $n === 1 ? $one : $many);
@@ -118,19 +114,15 @@ $orSummary = function (array $o) use ($orH, $orPlural, $orEdit) {
     return $out . '</span></summary>';
 };
 
-$orViewBody = function (array $o) use ($orH, $orHolder, $orPeriod, $orExact) {
+$orViewBody = function (array $o) use ($orH, $orHolder, $orViewPeriod) {
     $out = '<ol class="or-list">';
     foreach ($o['Terms'] as $t) {
-        $exact = $orExact($t);
         $out .= '<li class="or-item' . (!empty($t['IsCurrent']) ? ' or-item-current' : '') . '">'
             . '<span class="or-holder">' . $orHolder($t) . '</span>'
-            . '<span class="or-period">' . $orPeriod($t)
-            . ($exact !== '' ? '<span class="or-exact">' . $orH($exact) . '</span>' : '')
-            . '</span></li>';
+            . '<span class="or-period">' . $orViewPeriod($t) . '</span></li>';
         if (($t['FlagAfter']['Type'] ?? '') === 'gap') {
-            $span = preg_replace('/^Gap:\s*/', '', (string) $t['FlagAfter']['Label']);
             $out .= '<li class="or-item or-item-gap"><span class="or-holder">Unrecorded</span>'
-                . '<span class="or-period">' . $orH($span) . '</span></li>';
+                . '<span class="or-period">' . $orH($t['FlagAfter']['Span'] ?? '') . '</span></li>';
         }
     }
     return $out . '</ol>';
@@ -172,7 +164,7 @@ $orPeriodField = function () use ($orH, $orModeTips) {
         . '</div></div>';
 };
 
-$orEditBody = function (array $o) use ($orH, $orHolder, $orHolderName, $orPeriod, $orExact, $orPeriodText, $orHolderField, $orPeriodField) {
+$orEditBody = function (array $o) use ($orH, $orHolder, $orHolderName, $orPeriod, $orHolderField, $orPeriodField) {
     $out = '<div class="or-ledger-wrap"><table class="or-ledger">'
         . '<thead><tr><th class="or-col-holder">Holder</th><th class="or-col-period">Period</th>'
         . '<th class="or-col-note">Note</th><th class="or-col-actions"><span class="or-sr">Actions</span></th></tr></thead><tbody>';
@@ -181,14 +173,14 @@ $orEditBody = function (array $o) use ($orH, $orHolder, $orHolderName, $orPeriod
         $current   = !empty($t['IsCurrent']);
         $synthetic = !empty($t['Synthetic']) || $hid === 0;
         $plain     = (int) ($t['MundaneId'] ?? 0) <= 0;
-        $exact     = $orExact($t);
         $out .= '<tr class="or-row' . ($current ? ' or-row-current' : '') . ($synthetic ? ' or-row-synthetic' : '') . '"'
             . ' data-history-id="' . $hid . '"'
             . ' data-holder="' . $orH($orHolderName($t)) . '"'
             . ' data-mundane-id="' . (int) ($t['MundaneId'] ?? 0) . '"'
-            . ' data-period="' . $orH($orPeriodText($t)) . '"'
+            . ' data-period="' . $orH($t['PeriodText'] ?? '') . '"'
             . ' data-note="' . $orH($t['Note'] ?? '') . '"'
             . ' data-start-date="' . $orH($t['StartDate'] ?? '') . '"'
+            . ' data-start-season="' . ((($t['StartSeason'] ?? '') !== '' && ($t['StartYear'] ?? null) !== null) ? '1' : '0') . '"'
             . ' data-end-date="' . $orH($t['EndDate'] ?? '') . '"'
             . ' data-current="' . ($current ? '1' : '0') . '">';
         $out .= '<td class="or-col-holder" data-label="Holder">' . $orHolder($t);
@@ -196,8 +188,7 @@ $orEditBody = function (array $o) use ($orH, $orHolder, $orHolderName, $orPeriod
             $out .= ' <span class="or-lock" data-tip="Set from Manage Officers"><i class="fas fa-lock" aria-hidden="true"></i><span class="or-sr">Set from Manage Officers</span></span>';
         }
         $out .= '</td>';
-        $out .= '<td class="or-col-period" data-label="Period">' . $orPeriod($t)
-            . ($exact !== '' ? '<span class="or-exact">' . $orH($exact) . '</span>' : '') . '</td>';
+        $out .= '<td class="or-col-period" data-label="Period">' . $orPeriod($t) . '</td>';
         $out .= '<td class="or-col-note" data-label="Note">' . $orH($t['Note'] ?? '') . '</td>';
         $out .= '<td class="or-col-actions">';
         if ($synthetic) {
@@ -236,8 +227,11 @@ $orEditBody = function (array $o) use ($orH, $orHolder, $orHolderName, $orPeriod
     return $out . '</tbody></table></div>';
 };
 
+// data-order: the office's place in the rolls (Offices order), so the ledger can
+// move a section out of "Other offices" without refetching every office.
 $orSection = function (array $o, bool $open) use ($orH, $orSummary, $orViewBody, $orEditBody, $orEdit) {
     return '<details class="or-office" data-key="' . $orH($o['Key'] ?? '') . '" data-position-id="' . (int) ($o['PositionId'] ?? 0) . '"'
+        . ' data-order="' . (int) ($o['__order'] ?? 0) . '"'
         . ($open ? ' open' : '') . '>'
         . $orSummary($o)
         . '<div class="or-office-body">' . ($orEdit ? $orEditBody($o) : $orViewBody($o)) . '</div>'
@@ -275,6 +269,12 @@ $orSection = function (array $o, bool $open) use ($orH, $orSummary, $orViewBody,
     </div>
     <?php } ?>
   </div>
+  <?php if (!empty($EditRefused) && !$orEdit) { ?>
+  <div class="rp-context or-edit-refused" role="status">
+    <i class="fas fa-lock rp-context-icon" aria-hidden="true"></i>
+    <span>Editing the rolls needs the <?= $orIsPark ? 'park' : 'kingdom' ?> Officer History permission, so this is the read-only report.</span>
+  </div>
+  <?php } ?>
   <div class="rp-context">
     <i class="fas fa-info-circle rp-context-icon"></i>
     <?php if ($orEdit) { ?>
@@ -308,6 +308,20 @@ $orSection = function (array $o, bool $open) use ($orH, $orSummary, $orViewBody,
   </div>
 </div>
 
+<script>
+/* #office-N (Manage Officers' "Set it on the rolls") opens that office's
+   section and scrolls to it; sections are keyed by data-position-id. */
+(function () {
+    var m = /^#office-(\d+)$/.exec(location.hash || '');
+    if (!m) { return; }
+    var sec = document.querySelector('details.or-office[data-position-id="' + m[1] + '"]');
+    if (!sec) { return; }
+    var folded = sec.closest('details.or-folded');
+    if (folded) { folded.open = true; }
+    sec.open = true;
+    sec.scrollIntoView({ block: 'start' });
+})();
+</script>
 <?php if ($orEdit) { ?>
 <script>
 window.OrConfig = <?= json_encode([

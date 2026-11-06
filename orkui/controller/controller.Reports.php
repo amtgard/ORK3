@@ -19,7 +19,8 @@ class Controller_Reports extends Controller
             'event_attendance',
             'suspended',
             // Officer rolls are public, as the officer Details modal's history tab
-            // is; the edit mode checks the history permission itself.
+            // is; the edit mode reads the history-write gate itself
+            // (OfficerPosition::can_edit_history_for).
             'officer_history',
             // Checks login itself and answers JSON status:5 (a redirect would break fetch()).
             'population_explorer_json',
@@ -274,9 +275,10 @@ class Controller_Reports extends Controller
      * one section per office. Public; with &edit=1 an officer holding the history
      * permission gets the office ledgers instead.
      *
-     * CanEditRolls is the server gate for history writes, verbatim: the same key
-     * (PermissionKeyFor('history')), scope and legacy role (AUTH_EDIT) that
-     * OfficerPosition::AddHistoryTerm checks and OfficerAdminAjax pre-filters on.
+     * CanEditRolls is the domain's history-write gate,
+     * OfficerPosition::can_edit_history_for() -- the one AddHistoryTerm,
+     * EditHistoryTerm and DeleteHistoryTerm authorize through -- so the Edit
+     * control cannot drift from the server check.
      */
     public function officer_history($params = null)
     {
@@ -296,8 +298,10 @@ class Controller_Reports extends Controller
 
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $this->load_model('OfficerPosition');
-        $this->data['CanEditRolls'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, $this->OfficerPosition->permission_key_for('history', $park_id), $scope, $scope_id, AUTH_EDIT);
+        $this->data['CanEditRolls'] = $this->OfficerPosition->can_edit_history_for($uid, $kingdom_id, $park_id);
         $this->data['EditMode']     = $this->data['CanEditRolls'] && !empty($this->request->edit);
+        // &edit=1 without the permission still shows the report, and says why.
+        $this->data['EditRefused']  = !empty($this->request->edit) && !$this->data['CanEditRolls'];
 
         $this->template = '../revised-frontend/Reports_officer_history.tpl';
         $this->data['Rolls']      = $this->OfficerPosition->rolls($kingdom_id, $park_id);

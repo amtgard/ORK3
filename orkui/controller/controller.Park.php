@@ -275,6 +275,13 @@ class Controller_Park extends Controller
         $pid = (int)$park_id;
         $pk_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $pk_isAdmin = ($pk_uid > 0) ? $this->Authorization->has_authority($pk_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
+        // The Details modal's "Edit the rolls" link: the history-write gate itself
+        // (OfficerPosition::can_edit_history_for, the one the writes enforce).
+        $this->data['CanEditOfficerHistory'] = $this->OfficerPosition->can_edit_history_for(
+            $pk_uid,
+            (int)($this->data['park_info']['ParkInfo']['KingdomId'] ?? 0),
+            $pid
+        );
 
         $this->load_model('ParkProfile');
         $eventBundle = $this->ParkProfile->profile_event_bundle($pid, (int)$this->session->kingdom_id, $pk_uid, $pk_isAdmin);

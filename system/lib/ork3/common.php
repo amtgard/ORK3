@@ -986,24 +986,62 @@ class Common
             }
         }
 
-        // Close the current history record for this role (is_current = 1; a null
-        // end_date alone may be a past term whose end is unknown, so it is not used)
+        // Close the outgoing holder's current term for this office today
+        // (is_current = 1; a null end_date alone may be a past term whose end is
+        // unknown, so it is not used). Then unmark any other current row on the
+        // office, leaving its end unknown: this path serves single-occupant seats
+        // only (multi-holder supporting offices close per holder through
+        // OfficerPosition::CloseOfficerHistoryTerm), so another current row here
+        // is a stale mark -- e.g. a player merge moves ork_officer.mundane_id but
+        // not the history -- and must not get today's date. A park's rows are
+        // found by park alone (OfficerPosition::history_org_sql), so a row filed
+        // under the park's previous kingdom still closes.
         if ((int)$old_mundane_id > 0) {
             $DB->Clear();
             $DB->h_today = $today;
+            $DB->h_eord = OfficerTermPeriod::ordinal(null, null, $today, 'end', null);
             $DB->h_kid = $kid;
             $DB->h_pid = $pid;
             $DB->h_role = $role;
             $DB->h_posid = $posid;
-            $DB->Execute(
+            $DB->h_old_mid = (int)$old_mundane_id;
+            $ok = $DB->ExecuteChecked(
                 "UPDATE " . DB_PREFIX . "officer_history
-				 SET end_date = :h_today, is_current = 0
-				 WHERE kingdom_id = :h_kid
-				   AND park_id = :h_pid
+				 SET end_date = :h_today, end_ordinal = :h_eord, is_current = 0
+				 WHERE " . OfficerPosition::history_org_sql('h_kid', 'h_pid') . "
 				   AND role = :h_role
 				   AND ( :h_posid = 0 OR position_id = :h_posid )
+				   AND mundane_id = :h_old_mid
 				   AND is_current = 1"
             );
+            if (!$ok) {
+                logtrace('record_officer_history: close failed', [
+                    'kingdom_id' => $kid, 'park_id' => $pid, 'role' => $role,
+                    'position_id' => $posid, 'old_mundane' => (int)$old_mundane_id,
+                ]);
+            }
+        }
+
+        $DB->Clear();
+        $DB->h_kid = $kid;
+        $DB->h_pid = $pid;
+        $DB->h_role = $role;
+        $DB->h_posid = $posid;
+        $DB->h_old_mid = (int)$old_mundane_id;
+        $ok = $DB->ExecuteChecked(
+            "UPDATE " . DB_PREFIX . "officer_history
+			 SET is_current = 0
+			 WHERE " . OfficerPosition::history_org_sql('h_kid', 'h_pid') . "
+			   AND role = :h_role
+			   AND ( :h_posid = 0 OR position_id = :h_posid )
+			   AND mundane_id <> :h_old_mid
+			   AND is_current = 1"
+        );
+        if (!$ok) {
+            logtrace('record_officer_history: stale unmark failed', [
+                'kingdom_id' => $kid, 'park_id' => $pid, 'role' => $role,
+                'position_id' => $posid, 'old_mundane' => (int)$old_mundane_id,
+            ]);
         }
 
         // Open a new history record for the incoming officer (skip if vacating)
@@ -1017,12 +1055,23 @@ class Common
             $DB->i_posid = $posid;
             $DB->i_label = $display_label;
             $DB->i_today = $today;
+            // The stored ordinals are a term's meaning (OfficerTermPeriod), written
+            // with each side and never re-resolved.
+            $DB->i_sord = OfficerTermPeriod::ordinal(null, null, $today, 'start', null);
             $DB->i_cb = ($cb > 0 ? $cb : null);
-            $DB->Execute(
+            $ok = $DB->ExecuteChecked(
                 "INSERT INTO " . DB_PREFIX . "officer_history
-				 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, is_current, changed_by, created_at)
-				 VALUES (:i_kid, :i_pid, :i_mid, :i_role, :i_posid, :i_label, :i_today, NULL, 1, :i_cb, NOW())"
+				 (kingdom_id, park_id, mundane_id, role, position_id, display_label,
+				  start_date, start_ordinal, end_date, end_ordinal, is_current, changed_by, created_at)
+				 VALUES (:i_kid, :i_pid, :i_mid, :i_role, :i_posid, :i_label,
+				         :i_today, :i_sord, NULL, NULL, 1, :i_cb, NOW())"
             );
+            if (!$ok) {
+                logtrace('record_officer_history: open failed', [
+                    'kingdom_id' => $kid, 'park_id' => $pid, 'role' => $role,
+                    'position_id' => $posid, 'new_mundane' => $mid,
+                ]);
+            }
         }
     }
 

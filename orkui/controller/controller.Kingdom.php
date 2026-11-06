@@ -426,6 +426,9 @@ class Controller_Kingdom extends Controller
         // currently-empty seat must still be selectable.
         $this->load_model('OfficerPosition');
         $this->data['OfficerHistoryRoleOptions'] = $this->OfficerPosition->history_role_options((int)$kingdom_id);
+        // The Details modal's "Edit the rolls" link: the history-write gate itself
+        // (OfficerPosition::can_edit_history_for, the one the writes enforce).
+        $this->data['CanEditOfficerHistory'] = $this->OfficerPosition->can_edit_history_for($uid, (int)$kingdom_id, 0);
 
         $knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
 

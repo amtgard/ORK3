@@ -617,6 +617,15 @@ final class OfficerAuthorizationTest extends TestCase
             'Token' => $token, 'ParkId' => self::PARK_ID, 'OfficerHistoryId' => $ownRow, 'Note' => 'own park',
         ]);
         self::assertSame(0, (int) $own['Status'], 'positive control: own park row: ' . ($own['Error'] ?? ''));
+        // A park row's edit is audited against the park, not the kingdom.
+        $audit = $this->pdo->query(
+            "SELECT entity, entity_id FROM ork_danger_audit
+              WHERE method_call = 'OfficerPosition::EditHistoryTerm'
+              ORDER BY danger_audit_id DESC LIMIT 1"
+        )->fetch(PDO::FETCH_ASSOC);
+        self::assertIsArray($audit, 'the park edit must be audited');
+        self::assertSame('Park', $audit['entity']);
+        self::assertSame(self::PARK_ID, (int) $audit['entity_id']);
 
         $add = Ork3::$Lib->kingdom->AddOfficerHistory([
             'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => self::PARK_ID,

@@ -10,8 +10,8 @@ use PHPUnit\Framework\TestCase;
  *
  * Pinned here:
  *   - the read-only report carries no edit controls and no editor script;
- *   - the Edit control is computed with the same key, scope and legacy role as
- *     the server gate (OfficerPosition::PermissionKeyFor('history'), AUTH_EDIT);
+ *   - the Edit control reads the domain's history-write gate
+ *     (OfficerPosition::can_edit_history_for), the one the writes enforce;
  *   - edit mode gives every office that can take a term an entry row, including
  *     offices with no terms yet (folded into "Other offices");
  *   - a current term (and a seated officer with no history row) can't be deleted;
@@ -22,15 +22,37 @@ final class OfficerRollsPageTest extends TestCase
 {
     private const TEMPLATE = '/orkui/template/revised-frontend/Reports_officer_history.tpl';
 
+    /**
+     * A rolls Term as OfficerPosition::rollsTerm() emits it: the span fields are
+     * given, and the labels, edit text and ordinals come from the domain.
+     */
     private static function term(array $over): array
     {
-        return $over + [
+        $t = $over + [
             'OfficerHistoryId' => 0, 'MundaneId' => 0, 'Persona' => '', 'HolderName' => '',
             'IsCurrent' => false, 'Synthetic' => false,
             'StartSeason' => null, 'StartYear' => null, 'EndSeason' => null, 'EndYear' => null,
-            'StartDate' => null, 'EndDate' => null, 'PeriodLabel' => '? – ?', 'Note' => '',
-            'StartOrdinal' => null, 'EndOrdinal' => null, 'FlagAfter' => null,
+            'StartDate' => null, 'EndDate' => null, 'Note' => '', 'FlagAfter' => null,
         ];
+        $span = array_intersect_key($t, array_flip(['StartSeason', 'StartYear', 'StartDate', 'EndSeason', 'EndYear', 'EndDate']));
+        $ord = OfficerTermPeriod::resolve($span);
+        $span += ['StartOrdinal' => $ord['start'], 'EndOrdinal' => $ord['end']];
+        return $t + [
+            'PeriodLabel'     => OfficerTermPeriod::label($span, $t['IsCurrent']),
+            'PeriodLabelBase' => OfficerTermPeriod::labelBase($span, $t['IsCurrent']),
+            'PeriodText'      => OfficerTermPeriod::editText($span, $t['IsCurrent']),
+            'StartLabel'      => OfficerTermPeriod::sideLabel($span, 'Start'),
+            'EndLabel'        => OfficerTermPeriod::sideLabel($span, 'End'),
+            'StartOrdinal'    => $ord['start'],
+            'EndOrdinal'      => $ord['end'],
+        ];
+    }
+
+    /** A gap flag as OfficerPosition::flag_rolls_terms() emits it. */
+    private static function gap(int $from, int $to): array
+    {
+        $span = OfficerTermPeriod::spanLabel($from, $to);
+        return ['Type' => 'gap', 'Label' => 'Gap: ' . $span, 'Span' => $span];
     }
 
     private static function office(string $key, int $positionId, string $title, array $terms, bool $retired = false): array
@@ -57,26 +79,31 @@ final class OfficerRollsPageTest extends TestCase
         return ['Offices' => [
             self::office('position:11', 11, 'Monarch', [
                 self::term(['OfficerHistoryId' => 501, 'MundaneId' => 9, 'Persona' => 'Queen Ada', 'IsCurrent' => true,
-                    'StartSeason' => 'spring', 'StartYear' => 2026, 'PeriodLabel' => 'Spring 2026 – present']),
+                    'StartSeason' => 'spring', 'StartYear' => 2026]),
                 self::term(['OfficerHistoryId' => 502, 'HolderName' => 'Old <King>', 'StartSeason' => 'spring', 'StartYear' => 2023,
-                    'EndSeason' => 'fall', 'EndYear' => 2023, 'PeriodLabel' => 'Spring 2023 – Fall 2023',
-                    'FlagAfter' => ['Type' => 'gap', 'Label' => 'Gap: Spring 2022 – Winter 2023']]),
+                    'EndSeason' => 'fall', 'EndYear' => 2023,
+                    'FlagAfter' => self::gap(2022 * 4 + 1, 2023 * 4)]),
                 self::term(['OfficerHistoryId' => 503, 'MundaneId' => 10, 'Persona' => 'Sir Bors', 'StartSeason' => 'fall',
-                    'StartYear' => 2021, 'EndSeason' => 'winter', 'EndYear' => 2022, 'PeriodLabel' => 'Fall 2021 – Winter 2022']),
-                // The label already renders the exact date (OfficerTermPeriod::label prefers it).
-                self::term(['OfficerHistoryId' => 505, 'HolderName' => 'A. Steele', 'StartDate' => '2020-08-09',
-                    'PeriodLabel' => 'Aug 9, 2020 – ?']),
-                // A seasonal label with exact dates also recorded.
+                    'StartYear' => 2021, 'EndSeason' => 'winter', 'EndYear' => 2022]),
+                // A date-only term: the label renders the exact date.
+                self::term(['OfficerHistoryId' => 505, 'HolderName' => 'A. Steele', 'StartDate' => '2020-08-09']),
+                // Seasons with an exact start date also recorded: the date side shows the date.
                 self::term(['OfficerHistoryId' => 506, 'HolderName' => 'B. Seasonal', 'StartSeason' => 'spring', 'StartYear' => 2019,
-                    'EndSeason' => 'fall', 'EndYear' => 2019, 'StartDate' => '2019-03-30', 'PeriodLabel' => 'Spring 2019 – Fall 2019']),
+                    'EndSeason' => 'fall', 'EndYear' => 2019, 'StartDate' => '2019-03-30']),
+                // Linked terms keep the name they were recorded under.
+                self::term(['OfficerHistoryId' => 507, 'MundaneId' => 21, 'Persona' => 'Sir Robert', 'HolderName' => 'Squire Bob',
+                    'StartSeason' => 'spring', 'StartYear' => 1997, 'EndSeason' => 'fall', 'EndYear' => 1997]),
+                self::term(['OfficerHistoryId' => 508, 'MundaneId' => 22, 'Persona' => '', 'HolderName' => 'Dame Departed',
+                    'StartSeason' => 'spring', 'StartYear' => 1996, 'EndSeason' => 'fall', 'EndYear' => 1996]),
+                self::term(['OfficerHistoryId' => 509, 'MundaneId' => 23, 'Persona' => 'Same Name', 'HolderName' => 'same name',
+                    'StartSeason' => 'spring', 'StartYear' => 1995, 'EndSeason' => 'fall', 'EndYear' => 1995]),
             ]),
             self::office('position:12', 12, 'Regent', [
-                self::term(['MundaneId' => 12, 'Persona' => 'Lady Seated', 'IsCurrent' => true, 'Synthetic' => true,
-                    'PeriodLabel' => '? – present']),
+                self::term(['MundaneId' => 12, 'Persona' => 'Lady Seated', 'IsCurrent' => true, 'Synthetic' => true]),
             ]),
             self::office('position:13', 13, 'Herald', []),
             self::office('role:castellan', 0, 'Castellan', [
-                self::term(['OfficerHistoryId' => 504, 'HolderName' => 'Ancient', 'PeriodLabel' => 'Spring 1995 – ?']),
+                self::term(['OfficerHistoryId' => 504, 'HolderName' => 'Ancient', 'StartSeason' => 'spring', 'StartYear' => 1995]),
             ], true),
         ]];
     }
@@ -137,10 +164,19 @@ final class OfficerRollsPageTest extends TestCase
         $body = substr($src, $start, $end - $start);
 
         self::assertMatchesRegularExpression(
-            "/'CanEditRolls'\\]\\s*=.*has_permission_or_authority\\(\\s*\\\$uid,\\s*\\\$this->OfficerPosition->permission_key_for\\('history',\\s*\\\$park_id\\),\\s*\\\$scope,\\s*\\\$scope_id,\\s*AUTH_EDIT\\s*\\)/s",
+            "/'CanEditRolls'\\]\\s*=\\s*\\\$this->OfficerPosition->can_edit_history_for\\(\\s*\\\$uid,\\s*\\\$kingdom_id,\\s*\\\$park_id\\s*\\);/",
             $body,
-            'CanEditRolls must use the server gate: history key, row scope, AUTH_EDIT'
+            'CanEditRolls must read the domain gate the history writes enforce'
         );
+        self::assertStringNotContainsString('has_permission_or_authority', $body, 'no second, inline copy of the gate');
+        // The writes authorize through the same gate.
+        $lib = (string) file_get_contents(ORK3_ROOT . '/system/lib/ork3/class.OfficerPosition.php');
+        foreach (['AddHistoryTerm', 'EditHistoryTerm', 'DeleteHistoryTerm'] as $fn) {
+            $at = strpos($lib, 'public function ' . $fn . '(');
+            self::assertNotFalse($at, $fn . ' exists');
+            $fnBody = substr($lib, $at, strpos($lib, "\n    }\n", $at) - $at);
+            self::assertStringContainsString('$this->can_edit_history_for(', $fnBody, $fn . ' authorizes through can_edit_history_for');
+        }
         self::assertStringContainsString("'EditMode'", $body);
         self::assertMatchesRegularExpression('/EditMode.*CanEditRolls|canEdit.*edit/s', $body);
         self::assertStringContainsString("'officer_history'", substr($src, 0, (int) strpos($src, 'public function index(')), 'the report is public');
@@ -186,15 +222,44 @@ final class OfficerRollsPageTest extends TestCase
         self::assertStringNotContainsString('data-or-act=', $synthetic);
     }
 
-    /** The exact-dates sub-line shows only under a seasonal label, never repeating a dated one. */
-    public function testExactDatesLineOnlyUnderASeasonalLabel(): void
+    /** A dated side renders its date in the label itself; there is no separate exact-dates line. */
+    public function testDatedLabelsRenderTheDate(): void
     {
         foreach ([false, true] as $edit) {
             $html = self::render(true, $edit);
-            self::assertStringContainsString('Aug 9, 2020 – ?', $html);
-            self::assertStringNotContainsString('Exact: Aug 9, 2020', $html);
-            self::assertStringContainsString('Exact: Mar 30, 2019 – ?', $html);
+            self::assertStringContainsString($edit ? 'Aug 9, 2020 – ?' : 'Aug 9, 2020 <span class="or-dash">–</span>', $html);
+            self::assertStringContainsString($edit ? 'Mar 30, 2019 – Fall 2019' : 'Mar 30, 2019 <span class="or-dash">–</span> Fall 2019', $html, 'the dated start shows its date, the seasonal end its season');
+            self::assertStringNotContainsString('Exact:', $html);
+            self::assertStringNotContainsString('or-exact', $html);
         }
+        $js = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/script/officer-rolls.js');
+        self::assertStringNotContainsString('or-exact', $js);
+        self::assertStringNotContainsString('ExactLabel', $js);
+    }
+
+    /**
+     * The public report words unknown ends: a current term with no recorded start
+     * is "Start unknown – present", a past term with no end ends in a muted "end
+     * unrecorded", a winter names both its years. The edit ledger keeps "?".
+     */
+    public function testViewModeWordsUnknownEnds(): void
+    {
+        $view = self::render(false, false);
+        self::assertStringContainsString('<span class="or-period-unknown">Start unknown</span> <span class="or-dash">–</span> <span class="or-present">present</span>', $view, 'the seated officer with no history row');
+        self::assertStringContainsString('Aug 9, 2020 <span class="or-dash">–</span> <span class="or-period-unknown">end unrecorded</span>', $view);
+        self::assertStringContainsString('Spring 1995 <span class="or-dash">–</span> <span class="or-period-unknown">end unrecorded</span>', $view);
+        self::assertStringContainsString('Fall 2021 <span class="or-dash">–</span> Winter 2021–22', $view, 'a winter is named by both its years');
+        self::assertStringContainsString('Spring 2026 <span class="or-dash">–</span> <span class="or-present">present</span>', $view);
+        self::assertStringNotContainsString('? –', $view);
+        self::assertStringNotContainsString('– ?', $view);
+
+        $ledger = self::render(true, true);
+        self::assertStringContainsString('Aug 9, 2020 – ?', $ledger, 'the ledger keeps "?" for editors to fill in');
+        self::assertStringContainsString('? <span class="or-dash">–</span> <span class="or-present">present</span>', $ledger);
+        self::assertStringNotContainsString('end unrecorded', $ledger);
+
+        $css = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/style/officer-rolls.css');
+        self::assertMatchesRegularExpression('/\.or-period-unknown\s*\{[^}]*var\(--rp-text-hint\)/', $css, 'muted with the shell token, which follows dark mode');
     }
 
     /** Season | Calendar toggle in every entry row, left of the inputs, with the house tooltips. */
@@ -253,14 +318,22 @@ final class OfficerRollsPageTest extends TestCase
         }
     }
 
-    /** The public Details modal orders terms as the rolls reader does, not by the StartDate string. */
+    /**
+     * The public Details modal keeps the server's order (GetOfficerHistory sorts on
+     * the rolls key -- see OfficerRollsReaderTest::testGetOfficerHistoryOrdersOnTheRollsKey)
+     * and shows the domain's side labels rather than rebuilding them.
+     */
     public function testDetailsModalSortsOnTheRollsKey(): void
     {
         $tpl = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/partials/_officer_details_modal.tpl');
-        $start = strpos($tpl, 'function cmpTerm(a, b)');
+        $start = strpos($tpl, 'function fillPanel(panel, indices, rows)');
         self::assertNotFalse($start);
         $body = substr($tpl, $start, strpos($tpl, "\n\t}\n", $start) - $start);
-        self::assertMatchesRegularExpression('/IsCurrent[\s\S]*StartOrdinal[\s\S]*StartDate[\s\S]*EndOrdinal[\s\S]*OfficerHistoryId/', $body);
+        self::assertStringNotContainsString('.sort(', $body, 'fillPanel keeps the server order');
+        self::assertStringNotContainsString('function cmpTerm', $tpl);
+        self::assertStringNotContainsString('function termSide', $tpl);
+        self::assertStringContainsString('h.StartLabel', $tpl);
+        self::assertStringContainsString('h.EndLabel', $tpl);
     }
 
     /** Manage Officers drops the dead bridges and points a missing open term at the Officer History page. */
@@ -291,6 +364,85 @@ final class OfficerRollsPageTest extends TestCase
         self::assertStringContainsString('Reports/officer_history&KingdomId=', $kingdom);
         self::assertStringContainsString('Reports/officer_history&KingdomId=', $park);
         self::assertMatchesRegularExpression('/Reports\/officer_history&KingdomId=<\?= \$kingdom_id \?>&ParkId=<\?= \$park_id \?>/', $park);
+    }
+
+    /**
+     * A linked holder shows the name the term was recorded under, linked to the
+     * profile, with a muted "now known as" when the persona differs. A blank
+     * persona falls back to the recorded name, never "Player #id".
+     */
+    public function testLinkedHoldersShowTheirRecordedName(): void
+    {
+        foreach ([false, true] as $edit) {
+            $html = self::render(true, $edit);
+            self::assertStringContainsString(
+                '<a class="or-holder-link" href="' . UIR . 'Player/profile/21">Squire Bob</a> <span class="or-holder-aka">now known as Sir Robert</span>',
+                $html
+            );
+            self::assertStringContainsString('<a class="or-holder-link" href="' . UIR . 'Player/profile/22">Dame Departed</a>', $html);
+            self::assertStringContainsString('<a class="or-holder-link" href="' . UIR . 'Player/profile/23">same name</a>', $html);
+            self::assertStringNotContainsString('now known as Same Name', $html, 'a case-only difference is the same name');
+            self::assertStringNotContainsString('Player #', $html);
+            // A linked holder with no recorded name still shows the persona.
+            self::assertStringContainsString('>Sir Bors</a>', $html);
+        }
+        $ledger = self::render(true, true);
+        self::assertStringContainsString('data-holder="Squire Bob"', self::row($ledger, 507), 'the editor starts from the recorded name');
+        self::assertStringContainsString('data-holder="Sir Bors"', self::row($ledger, 503));
+
+        $js = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/script/officer-rolls.js');
+        self::assertStringNotContainsString("'Player #'", $js);
+        self::assertStringContainsString('now known as ', $js);
+        $modal = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/partials/_officer_details_modal.tpl');
+        self::assertStringContainsString('now known as ', $modal);
+        self::assertStringNotContainsString('h.Persona || h.HolderName', $modal, 'the modal leads with the recorded name');
+        $css = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/style/officer-rolls.css');
+        self::assertMatchesRegularExpression('/\.or-holder-aka\s*\{[^}]*var\(--rp-text-hint\)/', $css);
+    }
+
+    /**
+     * Enter in the holder field never saves typed text as plain text while a
+     * matching player is listed: a match is highlighted, an open list with no
+     * highlight is closed by the first Enter, and a search in flight is waited for.
+     */
+    public function testEnterInTheHolderDropdownDoesNotDropAMatch(): void
+    {
+        $js = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/script/officer-rolls.js');
+        self::assertStringContainsString('function acBestMatch(', $js);
+        self::assertStringContainsString('_orPending', $js, 'a pending search is tracked');
+        self::assertStringContainsString('_orEnterQueued', $js, 'an Enter during a search waits for it');
+        $k = strpos($js, "root.addEventListener('keydown'");
+        $keydown = substr($js, $k, strpos($js, "
+    });
+", $k) - $k);
+        self::assertDoesNotMatchRegularExpression('/acPick\(wrap, focused\); return; \}\s*acClose\(wrap\);\s*\}/', $keydown, 'Enter must not close the list and fall through to a save');
+        $hi = strpos($js, 'function holderInput(input) {');
+        $holderInput = substr($js, $hi, strpos($js, "\n    }\n", $hi) - $hi);
+        self::assertMatchesRegularExpression('/clearTimeout\(input\._orTimer\);\s*input\._orEnterQueued = false;/', $holderInput, 'a new keystroke cancels an Enter queued before it');
+    }
+
+    /** The ledger sends the picked persona as the name of record on add. */
+    public function testAddSendsTheHolderNameItWasRecordedUnder(): void
+    {
+        $js = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/script/officer-rolls.js');
+        $a = strpos($js, 'function addTerm(tr) {');
+        $add = substr($js, $a, strpos($js, "\n    }\n", $a) - $a);
+        self::assertStringContainsString('HolderName: name,', $add);
+        self::assertStringNotContainsString("HolderName: id ? '' : name", $add);
+    }
+
+    /** A save re-renders one office from the write's own response: no full-org rolls refetch. */
+    public function testASaveRefreshesOneOffice(): void
+    {
+        $html = self::render(true, true);
+        self::assertMatchesRegularExpression('/<details class="or-office"[^>]*data-key="position:11"[^>]*data-order="0"/', $html);
+        self::assertMatchesRegularExpression('/<details class="or-office"[^>]*data-key="position:13"[^>]*data-order="2"/', $html);
+        $js = (string) file_get_contents(ORK3_ROOT . '/orkui/template/revised-frontend/script/officer-rolls.js');
+        self::assertStringNotContainsString("post('rolls', {})", $js, 'never the whole org');
+        self::assertStringNotContainsString('previousSpan(text)', $js, 'the add answers with PreviousSpan');
+        $src = (string) file_get_contents(ORK3_ROOT . '/orkui/controller/controller.OfficerAdminAjax.php');
+        self::assertStringContainsString("'PreviousSpan'", $src);
+        self::assertStringContainsString("'Office'", $src);
     }
 
     public function testOfficerAdminAjaxRoutesTheNewActionsUnderHistory(): void

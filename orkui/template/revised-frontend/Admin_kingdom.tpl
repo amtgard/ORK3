@@ -35,6 +35,7 @@ $activeParkCount = (int)($ActiveParkCount ?? 0);
 // Manage Officers host modal + card gate (partial: revised-frontend/partials/_manage_officers.tpl)
 $mo_kingdom_id = (int)($kingdom_id ?? $kid ?? 0);
 $mo_can_manage = !empty($can_manage_officer_positions);
+$mo_can_edit_history = !empty($CanEditOfficerHistory);
 $mo_viewer_id  = (int)($CurrentUserId ?? 0);
 // The front door admits Court Planner and Bonus Credits holders who are not officers,
 // so tiles built on the officer modals need their own gate (Admin::load_kingdom_admin_data()).

@@ -2060,6 +2060,11 @@ class Controller_Admin extends Controller
         $this->data['CanClaimPark']     = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
         $this->data['IsOrkAdmin']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $this->data['can_manage_officer_positions'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$id, AUTH_EDIT);
+        // Manage Officers' Correct the Rolls tab and its "Start date unknown" nudge:
+        // the history-write gate itself (key, scope and legacy role), via the model,
+        // so the console never offers an edit the ledger refuses.
+        $this->load_model('OfficerPosition');
+        $this->data['CanEditOfficerHistory'] = $this->OfficerPosition->can_edit_history_for($uid, (int)$id, 0);
         // Schedule an Event. The console's tile opens the shared create-event modal,
         // which posts EventAjax/create with ParkId 0 -- and Event::CreateEvent()
         // authorizes that kingdom-scoped branch on 'park.event.create' at KINGDOM scope
@@ -2314,6 +2319,9 @@ class Controller_Admin extends Controller
             (int)$id,
             AUTH_EDIT
         );
+        // The history-write gate itself, for Manage Officers' Correct the Rolls tab
+        // and its "Start date unknown" nudge (see load_kingdom_admin_data()).
+        $this->data['CanEditOfficerHistory'] = $this->OfficerPosition->can_edit_history_for($_uid, $_standingKingdomId, (int)$id);
         // Admin::permissions() demands park.auth.manage @AUTH_CREATE; permissionsgrid()
         // accepts @AUTH_EDIT or an ORK admin.
         $this->data['CanManageParkAuth'] = $_uid > 0 && $this->Authorization->has_permission_or_authority($_uid, 'park.auth.manage', 'park', (int)$id, AUTH_CREATE);

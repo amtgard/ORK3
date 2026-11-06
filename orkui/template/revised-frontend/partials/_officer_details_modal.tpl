@@ -36,6 +36,12 @@
  *   $ofOrgName    string  display name for the modal title
  *
  * OPTIONAL, picked up from the host page if present:
+ *   $ofKingdomId     int   the kingdom (for a park, its kingdom) -- the
+ *                          Officer History page's KingdomId
+ *   $ofCanEditRolls  bool OfficerPosition::can_edit_history_for() for this
+ *                          org, set by the profile controller through the
+ *                          model: the gate the history writes enforce. Shows
+ *                          "Edit the rolls" beside "Full officer history".
  *   $OfficerHistoryRoleOptions / $ohRoleOptions   array  key => label, role filter
  *
  * -----------------------------------------------------------------------------
@@ -70,6 +76,10 @@ $ofIsPark  = ($ofScope === 'park');
 $ofOrgId   = (int)($ofOrgId ?? 0);
 $ofOrgName = (string)($ofOrgName ?? '');
 $ofRows    = is_array($officerList ?? null) ? $officerList : [];
+$ofKingdomId      = (int)($ofKingdomId ?? ($ofIsPark ? 0 : $ofOrgId));
+$ofCanEditRolls = !empty($ofCanEditRolls);
+// The full Officer History page for this org; edit=1 is its ledger.
+$ofRollsUrl = UIR . 'Reports/officer_history&KingdomId=' . $ofKingdomId . ($ofIsPark ? '&ParkId=' . $ofOrgId : '');
 
 // The host page's own prefix. Used only to (a) address its Add/Edit history
 // modals, which stay where they are, and (b) detect whether the old
@@ -708,6 +718,7 @@ $ofJsConfig = json_encode([
 	border-radius: 3px;
 }
 #of-officers-overlay .of-holder-sep { color: var(--ork-text-muted); }
+#of-officers-overlay .of-oh-aka { color: var(--ork-text-muted); font-size: 12px; }
 /* Replaces the hardcoded <em style="color:#a0aec0">Vacant</em> the sidebars
    use — a class, with a dark counterpart, instead of an inline literal. */
 #of-officers-overlay .of-vacant {
@@ -748,6 +759,22 @@ $ofJsConfig = json_encode([
 	margin-bottom: 14px;
 	flex-wrap: wrap;
 }
+#of-officers-overlay .of-oh-links {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 6px 14px;
+	margin-left: auto;
+	font-size: 13px;
+}
+#of-officers-overlay .of-oh-link {
+	color: var(--ork-blue-link);
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+}
+#of-officers-overlay .of-oh-link:hover,
+#of-officers-overlay .of-oh-link:focus-visible { text-decoration: underline; }
+#of-officers-overlay .of-oh-link i { margin-right: 4px; }
 #of-officers-overlay .of-oh-filter-select {
 	padding: 6px 10px;
 	border: 1px solid var(--ork-input-border);
@@ -987,6 +1014,12 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 						<option value="<?= htmlspecialchars((string)$_ofRoleKey) ?>"><?= htmlspecialchars((string)$_ofRoleLabel) ?></option>
 						<?php endforeach; ?>
 					</select>
+					<span class="of-oh-links">
+						<a class="of-oh-link" href="<?= htmlspecialchars($ofRollsUrl, ENT_QUOTES) ?>"><i class="fas fa-scroll" aria-hidden="true"></i> Full officer history</a>
+						<?php if ($ofCanEditRolls): ?>
+						<a class="of-oh-link" href="<?= htmlspecialchars($ofRollsUrl . '&edit=1', ENT_QUOTES) ?>"><i class="fas fa-pen" aria-hidden="true"></i> Edit the rolls</a>
+						<?php endif; ?>
+					</span>
 				</div>
 
 				<div class="of-loading" id="of-oh-loading" style="display:none" role="status">
@@ -1267,29 +1300,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 			});
 	}
 
-	function fmtDate(s) {
-		if (!s) { return ''; }
-		// Guard the zero date and anything non-ISO rather than printing
-		// "Dec 31, 1969".
-		var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s));
-		if (!m || m[1] === '0000') { return ''; }
-		var d = new Date(m[1] + '-' + m[2] + '-' + m[3] + 'T00:00:00');
-		if (isNaN(d.getTime())) { return ''; }
-		var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-		return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
-	}
-
-	// One end of a term: the exact date when there is one, else the season the
-	// officer entered ("Spring 1995"), else '' (unknown).
-	function termSide(date, season, year) {
-		var d = fmtDate(date);
-		if (d) { return d; }
-		if (season && year) {
-			return String(season).charAt(0).toUpperCase() + String(season).slice(1) + ' ' + parseInt(year, 10);
-		}
-		return '';
-	}
-
 	function td(child) {
 		var cell = document.createElement('td');
 		if (child !== null && child !== undefined) {
@@ -1327,25 +1337,6 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 		// Last resort only. "royal_scribe" is a database identifier, not an
 		// office name, and must never reach a member's screen as-is.
 		return role.replace(/_/g, ' ').replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
-	}
-
-	// Newest term first, with the rolls reader's key (OfficerPosition::
-	// compareRollsTerms): the running term on top, then the resolved start season
-	// (StartOrdinal, so season-only backfill sorts too) descending with unknown
-	// starts last, then the exact start date, the end season, and the id.
-	function ordOf(v) { return (v === null || v === undefined || v === '') ? null : Number(v); }
-	function cmpTerm(a, b) {
-		var ca = !!(a && a.IsCurrent === true), cb = !!(b && b.IsCurrent === true);
-		if (ca !== cb) { return ca ? -1 : 1; }
-		var as = ordOf(a && a.StartOrdinal), bs = ordOf(b && b.StartOrdinal);
-		if ((as === null) !== (bs === null)) { return as === null ? 1 : -1; }
-		if (as !== bs) { return bs - as; }
-		var ad = String((a && a.StartDate) || ''), bd = String((b && b.StartDate) || '');
-		if (ad !== '' && bd !== '' && ad !== bd) { return ad < bd ? 1 : -1; }
-		var ae = ordOf(a && a.EndOrdinal), be = ordOf(b && b.EndOrdinal);
-		if ((ae === null) !== (be === null)) { return ae === null ? 1 : -1; }
-		if (ae !== be) { return be - ae; }
-		return (parseInt(b && b.OfficerHistoryId, 10) || 0) - (parseInt(a && a.OfficerHistoryId, 10) || 0);
 	}
 
 	// The role filter is server-rendered from the position REGISTRY, so an office
@@ -1432,10 +1423,20 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 			var isCurrent = h.IsCurrent === true;
 
 			if (parseInt(h.MundaneId, 10) > 0) {
+				// HolderName is the name the term was recorded under (kept when a
+				// plain-text holder is linked); today's persona follows it, muted,
+				// when it differs. A blank persona falls back to the recorded name.
+				var recorded = String(h.HolderName || '').trim();
+				var persona = String(h.Persona || '').trim();
 				var a = document.createElement('a');
 				a.href = OF.playerUrl + parseInt(h.MundaneId, 10);
-				a.textContent = h.Persona || h.HolderName || 'Unknown';
-				tr.appendChild(td(a));
+				a.textContent = recorded || persona || 'Unknown';
+				var cell = td(a);
+				if (recorded && persona && persona.toLowerCase() !== recorded.toLowerCase()) {
+					cell.appendChild(document.createTextNode(' '));
+					cell.appendChild(el('span', 'of-oh-aka', 'now known as ' + persona));
+				}
+				tr.appendChild(cell);
 			} else if (h.HolderName) {
 				// A plain-text holder (backfilled, no ORK account): shown unlinked.
 				tr.appendChild(td(h.HolderName));
@@ -1443,7 +1444,7 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 				tr.appendChild(td(el('span', 'of-vacant', 'Vacant')));
 			}
 
-			var startCell = td(termSide(h.StartDate, h.StartSeason, h.StartYear) || el('span', 'of-vacant', 'unknown start'));
+			var startCell = td(h.StartLabel || el('span', 'of-vacant', 'unknown start'));
 			startCell.className = 'of-oh-nowrap';
 			tr.appendChild(startCell);
 
@@ -1452,7 +1453,7 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 			// gone with the Role column.
 			// A blank end on a past term means "end unknown", not "present",
 			// matching Correct the Rolls and the rolls page.
-			var endText = termSide(h.EndDate, h.EndSeason, h.EndYear);
+			var endText = h.EndLabel;
 			var endCell = isCurrent ? td(el('span', 'of-oh-present', 'Present'))
 				: td(endText || el('span', 'of-vacant', 'unknown end'));
 			endCell.className = 'of-oh-nowrap';
@@ -1481,7 +1482,7 @@ html[data-theme="dark"] #of-officers-overlay .of-oh-present { color: #9ae6b4; }
 			body.appendChild(el('div', 'of-oh-none', 'No terms have been recorded for this office yet.'));
 			return;
 		}
-		indices.sort(function (a, b) { return cmpTerm(rows[a], rows[b]); });
+		// Rows arrive newest first per office (the server's rolls sort key).
 		body.appendChild(buildTermTable(indices, rows));
 	}
 

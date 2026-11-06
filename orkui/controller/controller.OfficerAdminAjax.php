@@ -207,9 +207,9 @@ class Controller_OfficerAdminAjax extends Controller
                 break;
             case 'addhistory':    $this->actionAddHistory($kingdom_id, $park_id);
                 break;
-            case 'edithistory':   $this->actionEditHistory();
+            case 'edithistory':   $this->actionEditHistory($kingdom_id, $park_id);
                 break;
-            case 'deletehistory': $this->actionDeleteHistory();
+            case 'deletehistory': $this->actionDeleteHistory($kingdom_id, $park_id);
                 break;
             case 'rolls':         $this->actionRolls($kingdom_id, $park_id);
                 break;
@@ -521,7 +521,10 @@ class Controller_OfficerAdminAjax extends Controller
     {
         $mundane_id = (int)$row['MundaneId'];
         $key = $mundane_id . '|' . (string)($row['CanonicalKey'] ?? '');
-        $term = $terms[$key] ?? ['StartDate' => '', 'EndDate' => ''];
+        $term = ($terms[$key] ?? []) + [
+            'StartDate' => '', 'EndDate' => '', 'StartLabel' => null, 'EndLabel' => null,
+            'StartOrdinal' => null, 'EndOrdinal' => null, 'OfficerHistoryId' => 0, 'IsCurrent' => false,
+        ];
 
         return [
             'MundaneId'    => $mundane_id,
@@ -530,68 +533,47 @@ class Controller_OfficerAdminAjax extends Controller
             'TermEnd'      => $this->humanDate($term['EndDate']),
             'TermStartRaw' => $this->isoDate($term['StartDate']),
             'TermEndRaw'   => $this->isoDate($term['EndDate']),
+            // The domain's own words for each end ("Spring 2024", "Winter 2022–23",
+            // or the exact date) and its ordinal: a season start is a known start,
+            // so the "Start date unknown" nudge keys on TermStartOrdinal, not the date.
+            'TermStartLabel'   => $term['StartLabel'],
+            'TermEndLabel'     => $term['EndLabel'],
+            'TermStartOrdinal' => $term['StartOrdinal'],
+            'TermEndOrdinal'   => $term['EndOrdinal'],
+            // The seat's OPEN history row, which the nudge's Set-it dialog edits;
+            // 0 when the latest term is closed or there is none.
+            'TermHistoryId'    => $term['IsCurrent'] ? (int)$term['OfficerHistoryId'] : 0,
         ];
     }
 
     /**
-     * mundane_id|canonical_key => ['StartDate'=>..,'EndDate'=>..] for the scope.
+     * mundane_id|canonical_key => the holder's latest term for the scope: dates,
+     * StartLabel/EndLabel, StartOrdinal/EndOrdinal, OfficerHistoryId, IsCurrent.
      *
      * get_officers_for_display returns occupancy only; the term itself lives in
-     * ork_officer_history, so it is read through the existing Kingdom/Park officer
-     * history model call — ONE query for the whole list rather than one per card,
-     * and no SQL in the controller.
-     *
-     * ork_officer_history stores one row per term, so a person who has held the
-     * same office more than once has several. The current term is the one marked
-     * IsCurrent (a blank end alone may be a past term whose end is unknown); if
-     * none is current, the latest start wins. History rows are keyed by canonical role key, so an occupant
-     * whose history predates the position registry simply has no term and renders
-     * exactly as it does today rather than borrowing another office's dates.
+     * ork_officer_history. Which term is a holder's latest is a domain rule, picked
+     * by OfficerPosition::latest_term_by_holder() under the rolls sort key -- ONE
+     * history read for the whole list, and the same answer the rolls page gives.
+     * History rows are keyed by canonical role key, so an occupant whose history
+     * predates the position registry simply has no term.
      */
     private function termIndex($kingdom_id, $park_id)
     {
-        $kingdom_id = (int)$kingdom_id;
-        $park_id    = (int)$park_id;
-
-        if ($park_id > 0) {
-            $this->load_model('Park');
-            $res = $this->Park->get_officer_history($park_id);
-        } else {
-            $this->load_model('Kingdom');
-            $res = $this->Kingdom->get_officer_history($kingdom_id);
-        }
-
-        $rows = (is_array($res) && isset($res['History']) && is_array($res['History'])) ? $res['History'] : [];
+        $rows = $this->OfficerPosition->latest_term_by_holder((int)$kingdom_id, (int)$park_id);
 
         $out = [];
-        foreach ($rows as $row) {
-            $mundane_id = (int)($row['MundaneId'] ?? 0);
-            $role       = trim((string)($row['Role'] ?? ''));
-            if ($mundane_id <= 0 || $role === '') {
-                continue;
-            }
-            $key   = $mundane_id . '|' . $role;
-            $start = $this->isoDate($row['StartDate'] ?? '');
-            $end   = $this->isoDate($row['EndDate'] ?? '');
-            $new_open = !empty($row['IsCurrent']);
-
-            if (!isset($out[$key])) {
-                $out[$key] = ['StartDate' => $start, 'EndDate' => $end, 'IsCurrent' => $new_open];
-                continue;
-            }
-
-            $cur = $out[$key];
-            $cur_open = $cur['IsCurrent'];
-            if ($new_open !== $cur_open) {
-                // The current term always beats a past one, whatever the start dates.
-                if ($new_open) {
-                    $out[$key] = ['StartDate' => $start, 'EndDate' => $end, 'IsCurrent' => $new_open];
-                }
-                continue;
-            }
-            if (strcmp($start, $cur['StartDate']) > 0) {
-                $out[$key] = ['StartDate' => $start, 'EndDate' => $end, 'IsCurrent' => $new_open];
-            }
+        foreach ((is_array($rows) ? $rows : []) as $key => $row) {
+            $out[$key] = [
+                'StartDate'        => $this->isoDate($row['StartDate'] ?? ''),
+                'EndDate'          => $this->isoDate($row['EndDate'] ?? ''),
+                // history_term_fields' labels and stored ordinals, passed through as-is.
+                'StartLabel'       => $row['StartLabel'] ?? null,
+                'EndLabel'         => $row['EndLabel'] ?? null,
+                'StartOrdinal'     => isset($row['StartOrdinal']) ? (int)$row['StartOrdinal'] : null,
+                'EndOrdinal'       => isset($row['EndOrdinal']) ? (int)$row['EndOrdinal'] : null,
+                'OfficerHistoryId' => (int)($row['OfficerHistoryId'] ?? 0),
+                'IsCurrent'        => !empty($row['IsCurrent']),
+            ];
         }
         return $out;
     }
@@ -652,8 +634,14 @@ class Controller_OfficerAdminAjax extends Controller
         $this->emitServiceResult($r);
     }
 
+    /**
+     * Answers with the refreshed office (see officeAfterWrite) and, for a Period
+     * add, PreviousSpan (the entry row's next pre-fill), so a ledger save is one
+     * round trip.
+     */
     private function actionAddHistory($kingdom_id, $park_id)
     {
+        $period = trim((string)($_POST['Period'] ?? ''));
         $r = $this->OfficerPosition->AddHistoryTerm([
             'Token'      => $this->session->token,
             'KingdomId'  => $kingdom_id,
@@ -661,12 +649,45 @@ class Controller_OfficerAdminAjax extends Controller
             'PositionId' => (int)($_POST['PositionId'] ?? 0),
             'MundaneId'  => (int)($_POST['MundaneId'] ?? 0),
             'HolderName' => trim((string)($_POST['HolderName'] ?? '')),
-            'Period'     => trim((string)($_POST['Period'] ?? '')),
+            'Period'     => $period,
             'StartDate'  => trim((string)($_POST['StartDate'] ?? '')),
             'EndDate'    => trim((string)($_POST['EndDate'] ?? '')),
             'Note'       => trim((string)($_POST['Note'] ?? '')),
         ]);
-        $this->emitServiceResult($r);
+        $extra = [];
+        if (is_array($r) && (int)($r['Status'] ?? 1) === 0) {
+            $read = $period !== '' ? $this->OfficerPosition->read_back_period($period) : '';
+            $extra = ['PreviousSpan' => is_array($read) ? (string)($read['PreviousSpan'] ?? '') : '']
+                + $this->officeAfterWrite($kingdom_id, $park_id);
+        }
+        $this->emitServiceResult($r, $extra);
+    }
+
+    /**
+     * After a successful ledger write: the one office the client names (POST Key,
+     * 'position:N' or 'role:X'), as the rolls action would return it, so the
+     * ledger redraws that section without refetching the org. Public data, read
+     * for the org this request was gated on; it authorizes nothing. Absent or
+     * malformed Key: nothing added, and the client falls back to 'rolls'.
+     */
+    private function officeAfterWrite($kingdom_id, $park_id)
+    {
+        $key = $this->postedOfficeKey();
+        if ($key === null) {
+            return [];
+        }
+        $offices = $this->OfficerPosition->rolls((int)$kingdom_id, (int)$park_id, $key)['Offices'] ?? [];
+        return ['Office' => $offices[0] ?? null];
+    }
+
+    /** POST Key when it is a rolls section key ('position:N' or 'role:X'), else null. */
+    private function postedOfficeKey()
+    {
+        $key = trim((string)($_POST['Key'] ?? ''));
+        if ($key === '' || strlen($key) > 120 || !preg_match('/^(position:[1-9][0-9]*|role:.+)$/', $key)) {
+            return null;
+        }
+        return $key;
     }
 
     /**
@@ -678,8 +699,11 @@ class Controller_OfficerAdminAjax extends Controller
      * (even empty) sets or clears it, key absent leaves it alone. Only forward
      * keys the client actually sent. MundaneId passes through so a plain-text
      * holder can be linked to a player.
+     *
+     * $kingdom_id / $park_id are the page's org, used only to redraw the office
+     * after a successful edit (officeAfterWrite); they play no part in the write.
      */
-    private function actionEditHistory()
+    private function actionEditHistory($kingdom_id, $park_id)
     {
         $request = [
             'Token'            => $this->session->token,
@@ -688,31 +712,41 @@ class Controller_OfficerAdminAjax extends Controller
         if (array_key_exists('MundaneId', $_POST)) {
             $request['MundaneId'] = (int)$_POST['MundaneId'];
         }
+        // The Set-it dialog edits a row it read as current; the domain refuses if
+        // it has closed since (see EditHistoryTerm).
+        if (!empty($_POST['ExpectCurrent'])) {
+            $request['ExpectCurrent'] = 1;
+        }
         foreach (['HolderName', 'Period', 'StartDate', 'EndDate', 'Note'] as $field) {
             if (array_key_exists($field, $_POST)) {
                 $request[$field] = trim((string)$_POST[$field]);
             }
         }
-        $this->emitServiceResult($this->OfficerPosition->EditHistoryTerm($request));
+        $r = $this->OfficerPosition->EditHistoryTerm($request);
+        $ok = is_array($r) && (int)($r['Status'] ?? 1) === 0;
+        $this->emitServiceResult($r, $ok ? $this->officeAfterWrite($kingdom_id, $park_id) : []);
     }
 
-    private function actionDeleteHistory()
+    /** Scope as for actionEditHistory: the row's own org gates the delete. */
+    private function actionDeleteHistory($kingdom_id, $park_id)
     {
         $r = $this->OfficerPosition->DeleteHistoryTerm([
             'Token'            => $this->session->token,
             'OfficerHistoryId' => (int)($_POST['OfficerHistoryId'] ?? 0),
         ]);
-        $this->emitServiceResult($r);
+        $ok = is_array($r) && (int)($r['Status'] ?? 1) === 0;
+        $this->emitServiceResult($r, $ok ? $this->officeAfterWrite($kingdom_id, $park_id) : []);
     }
 
     /**
      * The officer rolls of this kingdom or park, for the Officer History ledgers to
-     * re-render a section after a write. Public data (the report shows it to
-     * anyone); gated with the history family only because the ledger is its caller.
+     * re-render a section. POST Key ('position:N' / 'role:X') limits the answer to
+     * that one office. Public data (the report shows it to anyone); gated with the
+     * history family only because the ledger is its caller.
      */
     private function actionRolls($kingdom_id, $park_id)
     {
-        echo json_encode(['status' => 0] + $this->OfficerPosition->rolls((int)$kingdom_id, (int)$park_id));
+        echo json_encode(['status' => 0] + $this->OfficerPosition->rolls((int)$kingdom_id, (int)$park_id, $this->postedOfficeKey()));
     }
 
     /**

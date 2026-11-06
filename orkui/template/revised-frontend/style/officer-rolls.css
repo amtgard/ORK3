@@ -166,12 +166,6 @@ details[open] > summary > .or-chevron {
 .or-period {
     color: var(--rp-text-body);
 }
-.or-exact {
-    display   : block;
-    font-size : 11px;
-    color     : var(--rp-text-muted);
-    margin-top: 1px;
-}
 .or-holder-link {
     color          : var(--rp-accent);
     text-decoration: none;
@@ -179,7 +173,14 @@ details[open] > summary > .or-chevron {
 .or-holder-link:hover {
     text-decoration: underline;
 }
-.or-holder-unknown {
+/* A linked holder recorded under another name: "now known as <persona>". */
+.or-holder-aka {
+    font-size: 12px;
+    color    : var(--rp-text-hint);
+}
+/* An unknown holder, and the report's "Start unknown" / "end unrecorded". */
+.or-holder-unknown,
+.or-period-unknown {
     color     : var(--rp-text-hint);
     font-style: italic;
 }
@@ -320,6 +321,13 @@ details[open] > summary > .or-chevron {
 html[data-theme="dark"] .or-ac-results .or-ac-inactive {
     color: #feb2b2;
 }
+/* The holder dropdown's key hint, under the results. */
+.or-ac-results .or-ac-foot {
+    padding    : 5px 10px;
+    font-size  : 11px;
+    color      : var(--rp-text-hint);
+    border-top : 1px solid var(--rp-divider);
+}
 
 .or-hint,
 .or-readback {
@@ -389,6 +397,11 @@ html[data-theme="dark"] .or-ac-results .or-ac-inactive {
     color       : var(--rp-text-body);
     border-color: var(--rp-border-mid);
     margin-top  : 4px;
+}
+.or-btn-cancel:hover {
+    background  : var(--ork-card-bg);
+    border-color: var(--rp-border-strong);
+    color       : var(--rp-text);
 }
 .or-btn-add[disabled],
 .or-btn-save[disabled] {
@@ -535,7 +548,7 @@ html[data-theme="dark"] .or-ac-results .or-ac-inactive {
     }
     .or-ledger tr.or-row td.or-col-holder {
         font-weight  : 600;
-        padding-right: 96px;
+        padding-right: 128px;
     }
     .or-ledger tr.or-row td.or-col-note:empty {
         display: none;
@@ -549,6 +562,9 @@ html[data-theme="dark"] .or-ac-results .or-ac-inactive {
     .or-ledger tr.or-row-editing td.or-col-actions {
         position  : static;
         text-align: left;
+    }
+    .or-ledger tr.or-row-editing td.or-col-holder {
+        padding-right: 6px;
     }
     .or-ledger tr.or-entry td {
         padding: 3px 0;
@@ -625,4 +641,24 @@ html[data-theme="dark"] .or-mode-btn[aria-pressed="true"] {
 }
 html[data-theme="dark"] .or-btn-cancel {
     color: var(--rp-text-body);
+}
+html[data-theme="dark"] .or-btn-cancel:hover {
+    background: rgba(255,255,255,0.06);
+    color     : var(--rp-text);
+}
+html[data-theme="dark"] .or-btn-add,
+html[data-theme="dark"] .or-btn-save {
+    background  : #4c51bf;
+    border-color: #4c51bf;
+    color       : #fff;
+}
+html[data-theme="dark"] .or-input:focus {
+    border-color: var(--or-focus) !important;
+}
+html[data-theme="dark"] .or-mode-btn:not([aria-pressed="true"]):hover {
+    color: var(--rp-accent) !important;
+}
+html[data-theme="dark"] .or-row:hover td,
+html[data-theme="dark"] .or-row-editing td {
+    background: var(--rp-bg-tertiary);
 }

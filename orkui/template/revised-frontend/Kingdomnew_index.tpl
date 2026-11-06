@@ -1349,6 +1349,8 @@ $_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
 	$ofScope   = 'kingdom';
 	$ofOrgId   = (int)$kingdom_id;
 	$ofOrgName = (string)($kingdom_name ?? '');
+	$ofKingdomId = (int)($kingdom_id ?? 0);
+	$ofCanEditRolls = !empty($CanEditOfficerHistory);
 	include __DIR__ . '/partials/_officer_details_modal.tpl';
 ?>
 

@@ -1817,9 +1817,11 @@ class OfficerPosition extends Ork3
      * Underscore name: no token, and the JSON service must not reach it.
      *
      * @param array $row raw columns: holder_name, is_current, start_season, start_year,
-     *                   start_date, end_season, end_year, end_date
+     *                   start_date, end_season, end_year, end_date, start_ordinal, end_ordinal
      * @return array HolderName, StartSeason, StartYear, EndSeason, EndYear, PeriodLabel,
-     *               StartOrdinal, EndOrdinal (the rolls sort key; null when unknown)
+     *               StartLabel, EndLabel (each end alone; null when unknown),
+     *               StartOrdinal, EndOrdinal (the stored ordinals: the term's meaning
+     *               and the rolls sort key; null when unknown)
      */
     public static function history_term_fields(array $row)
     {
@@ -1836,8 +1838,12 @@ class OfficerPosition extends Ork3
             'EndSeason'   => $season($row['end_season'] ?? null),
             'EndYear'     => $year($row['end_year'] ?? null),
             'EndDate'     => $row['end_date'] ?? null,
+            // Stored once when each side was saved, never re-resolved from the
+            // columns: closing a term must not move its start.
+            'StartOrdinal' => $year($row['start_ordinal'] ?? null),
+            'EndOrdinal'   => $year($row['end_ordinal'] ?? null),
         ];
-        $ord = OfficerTermPeriod::resolve($span);
+        $ord = OfficerTermPeriod::ordinals($span);
         return [
             'HolderName'   => (string) ($row['holder_name'] ?? ''),
             'StartSeason'  => $span['StartSeason'],
@@ -1845,14 +1851,34 @@ class OfficerPosition extends Ork3
             'EndSeason'    => $span['EndSeason'],
             'EndYear'      => $span['EndYear'],
             'PeriodLabel'  => OfficerTermPeriod::label($span, (int) ($row['is_current'] ?? 0) === 1),
+            'StartLabel'   => OfficerTermPeriod::sideLabel($span, 'Start'),
+            'EndLabel'     => OfficerTermPeriod::sideLabel($span, 'End'),
             'StartOrdinal' => $ord['start'],
             'EndOrdinal'   => $ord['end'],
         ];
     }
 
+    /** Whether the park (or, for a kingdom's rolls, the kingdom) or its kingdom is Retired. */
+    private function org_is_retired(int $kingdom_id, int $park_id): bool
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->or_kid = $kingdom_id;
+        $DB->or_pid = $park_id;
+        $r = $DB->DataSet(
+            "SELECT 1 AS retired FROM " . DB_PREFIX . "kingdom k
+              WHERE k.kingdom_id = :or_kid AND k.active = 'Retired'
+             UNION ALL
+             SELECT 1 FROM " . DB_PREFIX . "park p
+              WHERE p.park_id = :or_pid AND p.park_id > 0 AND p.active = 'Retired'
+             LIMIT 1"
+        );
+        return $r !== false && $r->size() > 0;
+    }
+
     /**
      * The officer rolls of one org: one section per office, terms newest first,
-     * with gaps and overlaps flagged between neighbouring terms. The one reader
+     * with gaps and overlaps flagged against coverage (flag_rolls_terms). The one reader
      * behind the public rolls report and the edit ledgers.
      *
      * Sections: every active registry office in Manage Officers order
@@ -1869,10 +1895,15 @@ class OfficerPosition extends Ork3
      * Public data, no token; the underscore name keeps it off the JSON service.
      * For a park, the kingdom is derived from the park, never taken from the caller.
      *
+     * $only_key ('position:N' or 'role:X') limits the answer to that one office,
+     * for the ledger to redraw a section after a write without the whole org;
+     * the section is built exactly as in the full read. An unknown key gives no
+     * Offices.
+     *
      * @return array ['Offices' => [ [Key, PositionId, Title, Classification, Retired,
      *               TermCount, GapCount, OverlapCount, Terms] ]]
      */
-    public function rolls_for_org(int $kingdom_id, int $park_id): array
+    public function rolls_for_org(int $kingdom_id, int $park_id, ?string $only_key = null): array
     {
         if ($park_id > 0) {
             $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
@@ -1914,6 +1945,9 @@ class OfficerPosition extends Ork3
         foreach (($history['History'] ?? []) as $row) {
             $pid = (int) $row['PositionId'];
             $key = $pid > 0 ? 'position:' . $pid : 'role:' . $row['Role'];
+            if ($only_key !== null && $key !== $only_key) {
+                continue;
+            }
             if (!isset($sections[$key]) && !isset($extra[$key])) {
                 $extra[$key] = [
                     'PositionId'     => $pid,
@@ -1934,12 +1968,20 @@ class OfficerPosition extends Ork3
             }
         }
 
-        // Seated officers whose office has no current history row.
-        foreach (array_merge($seats['crown'] ?? [], $seats['supporting'] ?? []) as $seat) {
+        // Seated officers whose office has no current history row. A retired org
+        // has no current officers (its marks are cleared on retire and by the
+        // officer-history-rolls migration), so nothing is synthesized there.
+        $seated = $this->org_is_retired($kingdom_id, $park_id)
+            ? []
+            : array_merge($seats['crown'] ?? [], $seats['supporting'] ?? []);
+        foreach ($seated as $seat) {
             if ((int) $seat['MundaneId'] <= 0) {
                 continue;
             }
             $key = 'position:' . (int) $seat['PositionId'];
+            if ($only_key !== null && $key !== $only_key) {
+                continue;
+            }
             if (isset($sections[$key])) {
                 $target = &$sections[$key];
             } else {
@@ -1972,6 +2014,7 @@ class OfficerPosition extends Ork3
                     'IsCurrent'        => true,
                     'StartSeason'      => null, 'StartYear' => null, 'StartDate' => null,
                     'EndSeason'        => null, 'EndYear' => null, 'EndDate' => null,
+                    'StartOrdinal'     => null, 'EndOrdinal' => null,
                     'PeriodLabel'      => OfficerTermPeriod::label([], true),
                     'Notes'            => '',
                 ], true);
@@ -1988,9 +2031,14 @@ class OfficerPosition extends Ork3
                 unset($extra[$key]);
             }
         }
+        if ($only_key !== null) {
+            $sections = array_intersect_key($sections, [$only_key => true]);
+            $tail = array_intersect_key($tail, [$only_key => true]);
+            $extra = array_intersect_key($extra, [$only_key => true]);
+        }
         $offices = [];
         $finish = function (array $section, $key, $titleFromNewest) {
-            usort($section['Terms'], [self::class, 'compareRollsTerms']);
+            usort($section['Terms'], [self::class, 'compare_rolls_terms']);
             if ($titleFromNewest) {
                 foreach ($section['Terms'] as $t) {
                     if (!$t['Synthetic'] && isset($section['Labels'][$t['OfficerHistoryId']])) {
@@ -1999,26 +2047,17 @@ class OfficerPosition extends Ork3
                     }
                 }
             }
-            $gaps = 0;
-            $overlaps = 0;
-            $n = count($section['Terms']);
-            for ($i = 0; $i + 1 < $n; $i++) {
-                $flag = self::rollsFlag($section['Terms'][$i], $section['Terms'][$i + 1]);
-                $section['Terms'][$i]['FlagAfter'] = $flag;
-                if ($flag !== null) {
-                    $flag['Type'] === 'gap' ? $gaps++ : $overlaps++;
-                }
-            }
+            $flags = self::flag_rolls_terms($section['Terms'], $section['Classification'] === 'supporting');
             return [
                 'Key'            => (string) $key,
                 'PositionId'     => (int) $section['PositionId'],
                 'Title'          => (string) $section['Title'],
                 'Classification' => $section['Classification'],
                 'Retired'        => (bool) $section['Retired'],
-                'TermCount'      => $n,
-                'GapCount'       => $gaps,
-                'OverlapCount'   => $overlaps,
-                'Terms'          => $section['Terms'],
+                'TermCount'      => count($flags['Terms']),
+                'GapCount'       => $flags['GapCount'],
+                'OverlapCount'   => $flags['OverlapCount'],
+                'Terms'          => $flags['Terms'],
             ];
         };
         foreach ($sections as $key => $section) {
@@ -2038,20 +2077,58 @@ class OfficerPosition extends Ork3
         return ['Offices' => array_merge($offices, $restOut)];
     }
 
+    /**
+     * Each holder's latest term per office in one org: "mundane_id|role" => the
+     * GetOfficerHistory row that sorts first under compare_rolls_terms (current
+     * beats past, then the rolls key), so Manage Officers and the rolls agree on
+     * which term is a holder's latest. One history read for the whole org.
+     *
+     * Public data, no token; the underscore name keeps it off the JSON service.
+     *
+     * @return array "mundane_id|role" => GetOfficerHistory row
+     */
+    public function latest_term_by_holder(int $kingdom_id, int $park_id): array
+    {
+        if ($park_id > 0) {
+            $history = Ork3::$Lib->park->GetOfficerHistory(['ParkId' => $park_id]);
+        } else {
+            if (!valid_id($kingdom_id)) {
+                return [];
+            }
+            $history = Ork3::$Lib->kingdom->GetOfficerHistory(['KingdomId' => $kingdom_id]);
+        }
+        $out = [];
+        foreach (($history['History'] ?? []) as $row) {
+            $mundane_id = (int) ($row['MundaneId'] ?? 0);
+            $role = trim((string) ($row['Role'] ?? ''));
+            if ($mundane_id <= 0 || $role === '') {
+                continue;
+            }
+            $key = $mundane_id . '|' . $role;
+            if (!isset($out[$key]) || self::compare_rolls_terms($row, $out[$key]) < 0) {
+                $out[$key] = $row;
+            }
+        }
+        return $out;
+    }
+
     /** One rolls Term from a GetOfficerHistory row (or a synthetic seat row). */
     private function rollsTerm(array $row, bool $synthetic = false): array
     {
-        $ord = OfficerTermPeriod::resolve([
+        $span = [
             'StartSeason' => $row['StartSeason'], 'StartYear' => $row['StartYear'], 'StartDate' => $row['StartDate'],
             'EndSeason'   => $row['EndSeason'], 'EndYear' => $row['EndYear'], 'EndDate' => $row['EndDate'],
-        ]);
+            'StartOrdinal' => $row['StartOrdinal'], 'EndOrdinal' => $row['EndOrdinal'],
+        ];
+        $ord = OfficerTermPeriod::ordinals($span);
+        $current = (bool) $row['IsCurrent'];
         $mundane_id = (int) $row['MundaneId'];
         return [
             'OfficerHistoryId' => (int) $row['OfficerHistoryId'],
             'MundaneId'        => $mundane_id,
             'Persona'          => $mundane_id > 0 ? (string) ($row['Persona'] ?? '') : '',
             'HolderName'       => (string) ($row['HolderName'] ?? ''),
-            'IsCurrent'        => (bool) $row['IsCurrent'],
+            'IsCurrent'        => $current,
             'StartSeason'      => $row['StartSeason'],
             'StartYear'        => $row['StartYear'],
             'EndSeason'        => $row['EndSeason'],
@@ -2059,6 +2136,13 @@ class OfficerPosition extends Ork3
             'StartDate'        => $row['StartDate'],
             'EndDate'          => $row['EndDate'],
             'PeriodLabel'      => (string) $row['PeriodLabel'],
+            // PeriodLabel without a current term's "– present" (the pages draw a pill),
+            // and the period as the ledger's Season field shows it for editing.
+            'PeriodLabelBase'  => OfficerTermPeriod::labelBase($span, $current),
+            'PeriodText'       => OfficerTermPeriod::editText($span, $current),
+            // Each end alone (null when unknown), for the public report's wording.
+            'StartLabel'       => OfficerTermPeriod::sideLabel($span, 'Start'),
+            'EndLabel'         => OfficerTermPeriod::sideLabel($span, 'End'),
             'Note'             => (string) ($row['Notes'] ?? ''),
             'StartOrdinal'     => $ord['start'],
             'EndOrdinal'       => $ord['end'],
@@ -2067,8 +2151,13 @@ class OfficerPosition extends Ork3
         ];
     }
 
-    /** Newest first: current terms on top, then later starts, unknown starts last. */
-    private static function compareRollsTerms(array $a, array $b): int
+    /**
+     * The rolls sort key, newest first: current terms on top, then later starts,
+     * unknown starts last. Shared by the rolls reader and latest_term_by_holder;
+     * GetOfficerHistory sorts the same key in SQL (ROLLS_ORDER_SQL), so every
+     * officer-history surface orders terms alike.
+     */
+    public static function compare_rolls_terms(array $a, array $b): int
     {
         if ($a['IsCurrent'] !== $b['IsCurrent']) {
             return $a['IsCurrent'] ? -1 : 1;
@@ -2081,10 +2170,14 @@ class OfficerPosition extends Ork3
         if ($as !== $bs) {
             return $bs <=> $as;
         }
-        // Same season: a later exact start date is newer.
+        // Same season: a later exact start date is newer, and a dated start sorts
+        // above a season-only one (SQL's start_date DESC, NULLs last).
         $ad = (string) ($a['StartDate'] ?? '');
         $bd = (string) ($b['StartDate'] ?? '');
-        if ($ad !== '' && $bd !== '' && $ad !== $bd) {
+        if ($ad !== $bd) {
+            if ($ad === '' || $bd === '') {
+                return $ad === '' ? 1 : -1;
+            }
             return strcmp($bd, $ad);
         }
         $ae = $a['EndOrdinal'];
@@ -2099,28 +2192,117 @@ class OfficerPosition extends Ork3
     }
 
     /**
-     * The flag for the space between a term and the next-older one: a gap when at
-     * least one whole season is missing, an overlap when the newer term starts
-     * before the older one ends. No flag when either facing end is unknown.
+     * Gap and overlap flags for one office's terms, found against COVERAGE, not
+     * between neighbours: walking the terms oldest to newest, coverage is the
+     * furthest EndOrdinal reached so far.
+     *
+     *  - Gap: a term starts 2 or more seasons beyond coverage (one whole season
+     *    missing). The flag sits on that term, so in the newest-first ledger it
+     *    is drawn between that term and the older ones.
+     *  - Overlap (single-holder offices only): a term starts before coverage
+     *    ends and runs past it (a current term runs through the present, so
+     *    it overlaps when it starts inside coverage). A term wholly inside
+     *    coverage is an acting / nested term and is not flagged; a shared
+     *    handoff season (Fall to Fall) is not an overlap. The label names the
+     *    holder whose term reached furthest, by their recorded name.
+     *  - Multi-holder (supporting) offices: co-holders overlap by design, so no
+     *    overlaps; gaps are found against the union of their terms.
+     *  - Terms are walked in start order (unknown starts first), so a current
+     *    term, which the rolls order puts on top, is placed by its start. A
+     *    current term with a known start covers through the present.
+     *  - An unknown start cannot be placed: the term is not flagged, but its
+     *    known end still counts as coverage (a current one with an unknown
+     *    start covers nothing). An unknown end on a past term leaves coverage
+     *    unknown, so the next start raises no gap; coverage then resumes from
+     *    that term's start.
+     *
+     * Public data, no token; the underscore name keeps it off the JSON service.
+     *
+     * @param array $terms rolls Terms in the rolls order (newest first)
+     * @return array ['Terms' => the same terms with FlagAfter set, 'GapCount', 'OverlapCount']
      */
-    private static function rollsFlag(array $newer, array $older)
+    public static function flag_rolls_terms(array $terms, bool $multi_holder): array
     {
-        $start = $newer['StartOrdinal'];
-        $end = $older['EndOrdinal'];
-        if ($start === null || $end === null) {
-            return null;
+        $gaps = 0;
+        $overlaps = 0;
+        $reach = null;        // furthest known end so far
+        $reachTerm = null;    // the term that reached it
+        $open = false;        // the last placed term's end is unknown
+        // Walk in start order, not the rolls order (which puts current terms
+        // first): unknown starts first, then start ascending; equal starts in
+        // reverse rolls order (index descending).
+        $order = array_keys($terms);
+        usort($order, function ($a, $b) use ($terms) {
+            $sa = $terms[$a]['StartOrdinal'];
+            $sb = $terms[$b]['StartOrdinal'];
+            if (($sa === null) !== ($sb === null)) {
+                return $sa === null ? -1 : 1;
+            }
+            if ($sa !== $sb) {
+                return $sa <=> $sb;
+            }
+            return $b <=> $a;
+        });
+        foreach ($order as $i) {
+            $t = $terms[$i];
+            $terms[$i]['FlagAfter'] = null;
+            $start = $t['StartOrdinal'];
+            $end = $t['EndOrdinal'];
+            if ($start === null) {
+                // Raw end only: a current row with an unknown start (the
+                // migration's seat row) must not cover the whole office.
+                if ($end !== null && ($reach === null || $end > $reach)) {
+                    $reach = $end;
+                    $reachTerm = $t;
+                }
+                continue;
+            }
+            // A current term covers through the present.
+            if (!empty($t['IsCurrent'])) {
+                $end = PHP_INT_MAX;
+            }
+            $flag = null;
+            if (!$open && $reach !== null && $start - $reach >= 2) {
+                $span = OfficerTermPeriod::spanLabel($reach + 1, $start - 1);
+                $flag = ['Type' => 'gap', 'Label' => 'Gap: ' . $span, 'Span' => $span];
+                $gaps++;
+            } elseif (!$multi_holder && $reach !== null && $start < $reach && ($end === null || $end > $reach)) {
+                $holder = self::rolls_holder_name($reachTerm);
+                $flag = ['Type' => 'overlap', 'Label' => 'Overlap with ' . ($holder !== '' ? $holder : 'an unknown holder')];
+                $overlaps++;
+            }
+            $terms[$i]['FlagAfter'] = $flag;
+            if ($end === null) {
+                $open = true;
+                if ($reach === null || $start > $reach) {
+                    $reach = $start;
+                    $reachTerm = $t;
+                }
+            } else {
+                $open = false;
+                if ($reach === null || $end > $reach) {
+                    $reach = $end;
+                    $reachTerm = $t;
+                }
+            }
         }
-        if ($start - $end >= 2) {
-            return [
-                'Type'  => 'gap',
-                'Label' => 'Gap: ' . OfficerTermPeriod::spanLabel($end + 1, $start - 1),
-            ];
+        return ['Terms' => $terms, 'GapCount' => $gaps, 'OverlapCount' => $overlaps];
+    }
+
+    /**
+     * A rolls term's holder as named on the page: the recorded name (holder_name)
+     * when there is one, else the linked persona. '' when neither is known.
+     */
+    public static function rolls_holder_name(?array $term): string
+    {
+        if ($term === null) {
+            return '';
         }
-        if ($start < $end) {
-            $holder = $older['MundaneId'] > 0 && $older['Persona'] !== '' ? $older['Persona'] : $older['HolderName'];
-            return ['Type' => 'overlap', 'Label' => 'Overlap with ' . ($holder !== '' ? $holder : 'an unknown holder')];
+        $recorded = trim((string) ($term['HolderName'] ?? ''));
+        if ($recorded !== '') {
+            return $recorded;
         }
-        return null;
+        return (int) ($term['MundaneId'] ?? 0) > 0 ? trim((string) ($term['Persona'] ?? '')) : '';
     }
 
     /**
@@ -2149,6 +2331,31 @@ class OfficerPosition extends Ork3
             return InvalidParameter(null, 'Park not found.');
         }
         return (int) $park_kingdom_id;
+    }
+
+    /**
+     * Whether $uid may write officer history for a kingdom ($park_id 0) or a park.
+     * The one history-write gate: AddHistoryTerm, EditHistoryTerm and
+     * DeleteHistoryTerm authorize through it, and UI edit affordances read it,
+     * so the key (PermissionKeyFor('history')), scope and legacy role (AUTH_EDIT)
+     * cannot drift between them.
+     *
+     * No token; the underscore name keeps it off the JSON service.
+     */
+    public function can_edit_history_for(int $uid, int $kingdom_id, int $park_id): bool
+    {
+        if ($uid <= 0) {
+            return false;
+        }
+        $scope    = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id = ($park_id > 0) ? $park_id : $kingdom_id;
+        return (bool) Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $uid,
+            self::PermissionKeyFor('history', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        );
     }
 
     /**
@@ -2419,7 +2626,7 @@ class OfficerPosition extends Ork3
         $DB->os_mid = (int) $mundane_id;
         $r = $DB->DataSet(
             'SELECT start_date FROM ' . DB_PREFIX . 'officer_history
-             WHERE kingdom_id = :os_kid AND park_id = :os_pid
+             WHERE ' . self::history_org_sql('os_kid', 'os_pid') . '
                AND ( position_id = :os_pos OR ( position_id = 0 AND role = :os_role ) )
                AND mundane_id = :os_mid AND is_current = 1
              ORDER BY officer_history_id DESC LIMIT 1'
@@ -2444,15 +2651,21 @@ class OfficerPosition extends Ork3
         $DB->ct_pos = (int) $position_id;
         $DB->ct_role = $canonical_key;
         $DB->ct_mid = (int) $mundane_id;
+        $DB->ct_eord = OfficerTermPeriod::ordinal(null, null, $end, 'end', null);
         $start_sql = '';
         if ($backfill_start !== '') {
+            // start_ordinal before start_date: MariaDB assigns left to right, so
+            // both IFs test the row's start_date as it was. The stored start is
+            // otherwise never touched by a close.
             $DB->ct_start = $backfill_start;
-            $start_sql = ', start_date = IF(start_date IS NULL, :ct_start, start_date)';
+            $DB->ct_sord = OfficerTermPeriod::ordinal(null, null, $backfill_start, 'start', null);
+            $start_sql = ', start_ordinal = IF(start_date IS NULL, :ct_sord, start_ordinal)'
+                . ', start_date = IF(start_date IS NULL, :ct_start, start_date)';
         }
         return $DB->ExecuteChecked(
             'UPDATE ' . DB_PREFIX . 'officer_history
-             SET end_date = :ct_end, is_current = 0' . $start_sql . '
-             WHERE kingdom_id = :ct_kid AND park_id = :ct_pid
+             SET end_date = :ct_end, end_ordinal = :ct_eord, is_current = 0' . $start_sql . '
+             WHERE ' . self::history_org_sql('ct_kid', 'ct_pid') . '
                AND ( position_id = :ct_pos OR ( position_id = 0 AND role = :ct_role ) )
                AND mundane_id = :ct_mid
                AND is_current = 1'
@@ -2471,6 +2684,7 @@ class OfficerPosition extends Ork3
         $DB->ot_pos = (int) $position_id;
         $DB->ot_label = ($display_label !== '') ? $display_label : $canonical_key;
         $DB->ot_start = $start;
+        $DB->ot_sord = OfficerTermPeriod::ordinal(null, null, $start, 'start', null);
         $DB->ot_cb = ($actor_id > 0 ? $actor_id : null);
         $DB->ot_notes = $note;
         // end_date is a SQL literal NULL, not a bound param -- kept intentionally
@@ -2481,9 +2695,9 @@ class OfficerPosition extends Ork3
         return $DB->ExecuteChecked(
             'INSERT INTO ' . DB_PREFIX . 'officer_history
              (kingdom_id, park_id, mundane_id, role, position_id, display_label,
-              start_date, end_date, is_current, changed_by, notes, created_at)
+              start_date, start_ordinal, end_date, end_ordinal, is_current, changed_by, notes, created_at)
              VALUES (:ot_kid, :ot_pid, :ot_mid, :ot_role, :ot_pos, :ot_label,
-                     :ot_start, NULL, 1, :ot_cb, :ot_notes, NOW())'
+                     :ot_start, :ot_sord, NULL, NULL, 1, :ot_cb, :ot_notes, NOW())'
         );
     }
 
@@ -2717,7 +2931,7 @@ class OfficerPosition extends Ork3
         $r = $DB->DataSet(
             'SELECT officer_history_id, kingdom_id, park_id, mundane_id, holder_name, role, position_id,
     				display_label, start_date, end_date, start_season, start_year, end_season, end_year,
-    				is_current, changed_by, notes, created_at
+    				start_ordinal, end_ordinal, is_current, changed_by, notes, created_at
     			 FROM ' . DB_PREFIX . 'officer_history
     			 WHERE officer_history_id = :gh_id LIMIT 1'
         );
@@ -2739,11 +2953,98 @@ class OfficerPosition extends Ork3
             'start_year'    => self::nullIfBlank($r->start_year) === null ? null : (int) $r->start_year,
             'end_season'    => self::nullIfBlank($r->end_season),
             'end_year'      => self::nullIfBlank($r->end_year) === null ? null : (int) $r->end_year,
+            'start_ordinal' => self::nullIfBlank($r->start_ordinal) === null ? null : (int) $r->start_ordinal,
+            'end_ordinal'   => self::nullIfBlank($r->end_ordinal) === null ? null : (int) $r->end_ordinal,
             'is_current'    => (int) $r->is_current,
             'changed_by'    => $r->changed_by,
             'notes'         => $r->notes,
             'created_at'    => $r->created_at,
         ];
+    }
+
+    /** The span columns historyTermColumns() resolves, written by Add and Edit alike. */
+    private const HISTORY_SPAN_COLUMNS = [
+        'start_date', 'end_date', 'start_season', 'start_year', 'end_season', 'end_year',
+        'start_ordinal', 'end_ordinal',
+    ];
+
+    /**
+     * GetOfficerHistory's ORDER BY: the rolls sort key (compare_rolls_terms) on
+     * the stored ordinals. Alias "oh".
+     */
+    public const ROLLS_ORDER_SQL = 'oh.is_current DESC, oh.start_ordinal DESC, oh.start_date DESC,
+		                oh.end_ordinal DESC, oh.officer_history_id DESC';
+
+    /**
+     * The WHERE fragment that finds one org's ork_officer_history rows, for the
+     * close paths. park_id is globally unique, so a park's rows are matched by
+     * park alone: a row still filed under the park's previous kingdom (a
+     * transfer before TransferPark moved history) closes all the same. A
+     * kingdom's own rows (park_id = 0) still need the kingdom.
+     *
+     * Token-free and public for Common::record_officer_history; the underscore
+     * keeps it off the JSON service.
+     *
+     * @param string $kingdomParam bound parameter name for the kingdom, no colon
+     * @param string $parkParam    bound parameter name for the park, no colon
+     */
+    public static function history_org_sql($kingdomParam, $parkParam)
+    {
+        return 'park_id = :' . $parkParam . ' AND (park_id > 0 OR kingdom_id = :' . $kingdomParam . ')';
+    }
+
+    /**
+     * The UPDATE that re-marks current rows when a retired park or kingdom is
+     * restored (RetirePark/RetireKingdom cleared them, ends left unknown). Row h
+     * becomes current when: it is not current and all four end columns are
+     * NULL; its holder still sits in the matching ork_officer seat (the
+     * migration's step-1 seat predicate, without its ledger-row filters); that
+     * seat has no current row; and no newer all-null-end row exists for the
+     * same seat and holder (the newest wins, as in the migration's step 2:
+     * latest start_date, an unknown start earliest, then highest id). A park or
+     * kingdom still Retired is skipped (a retired park inside a restored kingdom,
+     * or a park restored inside a retired kingdom).
+     *
+     * Token-free and public for Park/Kingdom; the underscore keeps it off the
+     * JSON service. $scopeWhere is a trusted SQL fragment on alias h whose
+     * parameters the caller binds.
+     */
+    public static function remark_current_history_sql($scopeWhere)
+    {
+        $seat = function ($t) {
+            return "((o.position_id > 0 AND $t.position_id = o.position_id)
+                     OR ($t.position_id = 0 AND $t.role = o.role))";
+        };
+        $sameSeat = function ($t) use ($seat) {
+            return "$t.kingdom_id = h.kingdom_id AND $t.park_id = h.park_id
+                AND $t.mundane_id = h.mundane_id AND $t.officer_history_id <> h.officer_history_id
+                AND " . $seat($t);
+        };
+        $noEnd = function ($t) {
+            return "$t.end_date IS NULL AND $t.end_season IS NULL AND $t.end_year IS NULL AND $t.end_ordinal IS NULL";
+        };
+        return 'UPDATE ' . DB_PREFIX . 'officer_history h
+            JOIN ' . DB_PREFIX . 'officer o
+              ON o.kingdom_id = h.kingdom_id AND o.park_id = h.park_id
+             AND o.mundane_id = h.mundane_id AND o.mundane_id > 0
+             AND ((h.position_id > 0 AND o.position_id = h.position_id)
+                  OR (h.position_id = 0 AND o.role = h.role))
+            LEFT JOIN ' . DB_PREFIX . 'officer_history c
+              ON ' . $sameSeat('c') . ' AND c.is_current = 1
+            LEFT JOIN ' . DB_PREFIX . 'officer_history n
+              ON ' . $sameSeat('n') . ' AND n.is_current = 0 AND ' . $noEnd('n') . "
+             AND (COALESCE(n.start_date, '1000-01-01') > COALESCE(h.start_date, '1000-01-01')
+                  OR (COALESCE(n.start_date, '1000-01-01') = COALESCE(h.start_date, '1000-01-01')
+                      AND n.officer_history_id > h.officer_history_id))
+             SET h.is_current = 1
+           WHERE (" . $scopeWhere . ')
+             AND h.is_current = 0 AND ' . $noEnd('h') . '
+             AND c.officer_history_id IS NULL
+             AND n.officer_history_id IS NULL
+             AND NOT EXISTS (SELECT 1 FROM ' . DB_PREFIX . "park rp
+                              WHERE rp.park_id = h.park_id AND h.park_id > 0 AND rp.active = 'Retired')
+             AND NOT EXISTS (SELECT 1 FROM " . DB_PREFIX . "kingdom rk
+                              WHERE rk.kingdom_id = h.kingdom_id AND rk.active = 'Retired')";
     }
 
     /** Refusal for any history write that would touch a current term's holder or end. */
@@ -2779,12 +3080,19 @@ class OfficerPosition extends Ork3
      * column values, applying the history write rules:
      *
      *  - Holder: MundaneId > 0, or a trimmed HolderName of 1-120 characters.
-     *    A linked holder stores holder_name = ''.
+     *    holder_name is the name of record: linking a plain-text holder (or
+     *    relinking it) keeps it, and a linked Add may carry one (the ledger
+     *    sends the picked persona). Readers show it, linked, beside the live
+     *    persona.
      *  - Period (OfficerTermPeriod::parse) fills the season columns. An exact
      *    StartDate/EndDate sent alongside is stored too; exact wins for
      *    ordering. On Edit, a Period that is sent redefines the span, so a
      *    date key not sent with it is cleared; with no Period, each date key
      *    keeps array_key_exists semantics (absent = untouched, '' = cleared).
+     *  - start_ordinal / end_ordinal are the term's meaning, fixed here: a side
+     *    set by this write takes its ordinal from the exact date, else from the
+     *    parsed Period; a side left alone keeps its stored ordinal. Nothing
+     *    re-resolves a stored season later (closing a term never moves its start).
      *  - On a current row ($row['is_current']) a single-season Period ("Spring
      *    24") sets the start only; the end is never touched from here.
      *  - Neither end may resolve past currentOrdinal() or an exact date past
@@ -2799,6 +3107,7 @@ class OfficerPosition extends Ork3
             'mundane_id' => 0, 'holder_name' => '',
             'start_season' => null, 'start_year' => null, 'start_date' => null,
             'end_season' => null, 'end_year' => null, 'end_date' => null,
+            'start_ordinal' => null, 'end_ordinal' => null,
             'is_current' => 0,
         ];
         $has = function ($k) use ($request) {
@@ -2812,13 +3121,15 @@ class OfficerPosition extends Ork3
             return ['__error' => InvalidParameter(null, 'A valid member is required.')];
         }
         if ($mundane_id > 0) {
-            $holder_name = '';
+            // Linking keeps holder_name: it is the name the term was recorded
+            // under, shown beside the live persona ("now known as").
             if ($mundane_id !== (int) $base['mundane_id'] && !$this->mundaneExists($mundane_id)) {
                 return ['__error' => InvalidParameter(null, 'A valid member is required.')];
             }
         } elseif ($holder_name === '') {
             return ['__error' => InvalidParameter(null, 'A holder is required: choose a member or enter a name.')];
-        } elseif (mb_strlen($holder_name) > 120) {
+        }
+        if (mb_strlen($holder_name) > 120) {
             return ['__error' => InvalidParameter(null, 'Holder names are at most 120 characters.')];
         }
 
@@ -2829,16 +3140,30 @@ class OfficerPosition extends Ork3
             'start_date' => self::dateOrNull($base['start_date']),
             'end_date' => self::dateOrNull($base['end_date']),
         ];
+        // Each side's season meaning, before exact dates: a side with no date keeps
+        // its stored ordinal; a dated side's season (the date wins while it is
+        // there) is read from its columns, for when the date is cleared.
+        $baseOrd = OfficerTermPeriod::ordinals(self::storedSpan($base));
+        $baseSeasons = OfficerTermPeriod::resolve([
+            'StartSeason' => $base['start_season'], 'StartYear' => $base['start_year'], 'StartDate' => null,
+            'EndSeason' => $base['end_season'], 'EndYear' => $base['end_year'], 'EndDate' => null,
+        ]);
+        $seasonOrd = [
+            'start' => $cols['start_date'] === null ? $baseOrd['start'] : $baseSeasons['start'],
+            'end'   => $cols['end_date'] === null ? $baseOrd['end'] : $baseSeasons['end'],
+        ];
         $periodSent = $has('Period');
         if ($periodSent) {
             $text = trim((string) $request['Period']);
             $cols['start_season'] = $cols['start_year'] = null;
             $cols['start_date'] = null;
-            $startOnly = $isEdit && (int) $base['is_current'] === 1
-                && !preg_match('/[-\x{2013}\x{2014}]|\sto\s/iu', $text);
+            $seasonOrd['start'] = null;
+            // The dash inside a two-year winter ("Winter 2022–23") is not a span.
+            $startOnly = $isEdit && (int) $base['is_current'] === 1 && !OfficerTermPeriod::isSpan($text);
             if (!$startOnly) {
                 $cols['end_season'] = $cols['end_year'] = null;
                 $cols['end_date'] = null;
+                $seasonOrd['end'] = null;
             }
             if ($text !== '') {
                 $p = OfficerTermPeriod::parse($text);
@@ -2847,9 +3172,11 @@ class OfficerPosition extends Ork3
                 }
                 $cols['start_season'] = $p['start']['season'];
                 $cols['start_year'] = (int) $p['start']['year'];
+                $seasonOrd['start'] = $p['start']['ordinal'];
                 if (!$startOnly && $p['end'] !== null) {
                     $cols['end_season'] = $p['end']['season'];
                     $cols['end_year'] = (int) $p['end']['year'];
+                    $seasonOrd['end'] = $p['end']['ordinal'];
                 }
             }
         }
@@ -2874,12 +3201,20 @@ class OfficerPosition extends Ork3
             }
         }
 
-        $ord = OfficerTermPeriod::resolve([
-            'StartSeason' => $cols['start_season'], 'StartYear' => $cols['start_year'], 'StartDate' => $cols['start_date'],
-            'EndSeason' => $cols['end_season'], 'EndYear' => $cols['end_year'], 'EndDate' => $cols['end_date'],
-        ]);
+        // An exact date wins for its side; otherwise the season meaning above.
+        $ord = [];
+        foreach (['start', 'end'] as $side) {
+            $ord[$side] = $cols[$side . '_date'] !== null
+                ? OfficerTermPeriod::ordinal(null, null, $cols[$side . '_date'], $side, null)
+                : $seasonOrd[$side];
+        }
         if (!$isEdit && $ord['start'] === null) {
             return ['__error' => InvalidParameter(null, 'A term needs a start: enter a period or a start date.')];
+        }
+        // An edit may not take away a start the row had (clearing its only start
+        // date, say); a row recorded with no start (end only) may still be edited.
+        if ($isEdit && $ord['start'] === null && $baseOrd['start'] !== null) {
+            return ['__error' => InvalidParameter(null, 'A term needs a start.')];
         }
         if (($cols['start_date'] !== null && $cols['start_date'] > date('Y-m-d'))
             || ($ord['start'] !== null && $ord['start'] > OfficerTermPeriod::currentOrdinal())) {
@@ -2896,7 +3231,30 @@ class OfficerPosition extends Ork3
             return ['__error' => InvalidParameter(null, 'A term cannot end before it began.')];
         }
 
-        return ['mundane_id' => $mundane_id, 'holder_name' => $holder_name] + $cols;
+        return ['mundane_id' => $mundane_id, 'holder_name' => $holder_name] + $cols
+            + ['start_ordinal' => $ord['start'], 'end_ordinal' => $ord['end']];
+    }
+
+    /**
+     * A history row's span for OfficerTermPeriod::ordinals(): its columns plus
+     * each stored ordinal. A side with no stored ordinal (a row written outside
+     * the app's write paths) is left to resolve from its columns, so the next
+     * save stamps it.
+     */
+    private static function storedSpan(array $row)
+    {
+        $span = [
+            'StartSeason' => $row['start_season'], 'StartYear' => $row['start_year'],
+            'StartDate' => self::dateOrNull($row['start_date']),
+            'EndSeason' => $row['end_season'], 'EndYear' => $row['end_year'],
+            'EndDate' => self::dateOrNull($row['end_date']),
+        ];
+        foreach (['start' => 'StartOrdinal', 'end' => 'EndOrdinal'] as $side => $key) {
+            if (($row[$side . '_ordinal'] ?? null) !== null) {
+                $span[$key] = (int) $row[$side . '_ordinal'];
+            }
+        }
+        return $span;
     }
 
     private function mundaneExists($mundane_id)
@@ -2949,15 +3307,7 @@ class OfficerPosition extends Ork3
         $park_id     = (int) ($request['ParkId'] ?? 0);
         $position_id = (int) ($request['PositionId'] ?? 0);
 
-        $scope    = ($park_id > 0) ? 'park' : 'kingdom';
-        $scope_id = ($park_id > 0) ? $park_id : $kingdom_id;
-        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
-            $actor_id,
-            self::PermissionKeyFor('history', $park_id),
-            $scope,
-            $scope_id,
-            AUTH_EDIT
-        )) {
+        if (!$this->can_edit_history_for((int) $actor_id, $kingdom_id, $park_id)) {
             return NoAuthorization();
         }
 
@@ -3003,13 +3353,13 @@ class OfficerPosition extends Ork3
         $DB->ah_cb     = $actor_id;
         $DB->ah_notes  = $note;
         $vals = [];
-        foreach (['start_date', 'end_date', 'start_season', 'start_year', 'end_season', 'end_year'] as $c) {
+        foreach (self::HISTORY_SPAN_COLUMNS as $c) {
             $vals[$c] = self::bindOrNull($DB, 'ah_' . $c, $cols[$c]);
         }
         $ok = $DB->ExecuteChecked(
             'INSERT INTO ' . DB_PREFIX . 'officer_history
     			 (kingdom_id, park_id, mundane_id, holder_name, role, position_id, display_label,
-    			  start_date, end_date, start_season, start_year, end_season, end_year, is_current,
+    			  ' . implode(', ', self::HISTORY_SPAN_COLUMNS) . ', is_current,
     			  changed_by, notes, created_at)
     			 VALUES (:ah_kid, :ah_pid, :ah_mid, :ah_holder, :ah_role, :ah_pos, :ah_label,
     			         ' . implode(', ', $vals) . ', 0,
@@ -3026,7 +3376,7 @@ class OfficerPosition extends Ork3
             __CLASS__ . '::' . __FUNCTION__,
             $safe,
             ($park_id > 0) ? 'Park' : 'Kingdom',
-            $scope_id,
+            ($park_id > 0) ? (int) $park_id : (int) $kingdom_id,
             null,
             ['PositionId' => $position_id] + self::historyAuditState($history_id, $cols, $note)
         );
@@ -3050,8 +3400,13 @@ class OfficerPosition extends Ork3
      * (is_current = 1) may change only its start and note; its holder and
      * end are owned by Manage Officers.
      *
+     * ExpectCurrent (truthy): the caller read this row as the seat's open term
+     * (Manage Officers' Set-it dialog, from the list snapshot). If it has been
+     * closed since -- the seat was reseated or vacated -- the edit is refused,
+     * because a Period on a past row replaces both of its ends.
+     *
      * @param array $request Token, OfficerHistoryId, MundaneId?, HolderName?, Period?,
-     *                        StartDate?, EndDate?, Note?
+     *                        StartDate?, EndDate?, Note?, ExpectCurrent?
      * @return array
      */
     public function EditHistoryTerm($request)
@@ -3075,16 +3430,11 @@ class OfficerPosition extends Ork3
 
         $kingdom_id = $row['kingdom_id'];
         $park_id    = $row['park_id'];
-        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
-        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
-        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
-            $actor_id,
-            self::PermissionKeyFor('history', $park_id),
-            $scope,
-            $scope_id,
-            AUTH_EDIT
-        )) {
+        if (!$this->can_edit_history_for((int) $actor_id, (int) $kingdom_id, (int) $park_id)) {
             return NoAuthorization();
+        }
+        if (!empty($request['ExpectCurrent']) && (int) $row['is_current'] !== 1) {
+            return InvalidParameter(null, 'This term has ended since the list loaded. Refresh Manage Officers and try again.');
         }
 
         // No edit can make a row current: a current row may change only its
@@ -3104,7 +3454,7 @@ class OfficerPosition extends Ork3
         $DB->eh_mid    = $cols['mundane_id'];
         $DB->eh_holder = $cols['holder_name'];
         $set = [];
-        foreach (['start_date', 'end_date', 'start_season', 'start_year', 'end_season', 'end_year'] as $c) {
+        foreach (self::HISTORY_SPAN_COLUMNS as $c) {
             $set[] = $c . ' = ' . self::bindOrNull($DB, 'eh_' . $c, $cols[$c]);
         }
         $ok = $DB->ExecuteChecked(
@@ -3122,7 +3472,7 @@ class OfficerPosition extends Ork3
             __CLASS__ . '::' . __FUNCTION__,
             $safe,
             ($park_id > 0) ? 'Park' : 'Kingdom',
-            $scope_id,
+            ($park_id > 0) ? (int) $park_id : (int) $kingdom_id,
             self::historyAuditState($history_id, $row, $row['notes']),
             self::historyAuditState($history_id, $cols, $note)
         );
@@ -3162,15 +3512,7 @@ class OfficerPosition extends Ork3
 
         $kingdom_id = $row['kingdom_id'];
         $park_id    = $row['park_id'];
-        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
-        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
-        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
-            $actor_id,
-            self::PermissionKeyFor('history', $park_id),
-            $scope,
-            $scope_id,
-            AUTH_EDIT
-        )) {
+        if (!$this->can_edit_history_for((int) $actor_id, (int) $kingdom_id, (int) $park_id)) {
             return NoAuthorization();
         }
         // After the gate, so the refusal is no oracle for unauthorized callers.
@@ -3193,7 +3535,7 @@ class OfficerPosition extends Ork3
             __CLASS__ . '::' . __FUNCTION__,
             $safe,
             ($park_id > 0) ? 'Park' : 'Kingdom',
-            $scope_id,
+            ($park_id > 0) ? (int) $park_id : (int) $kingdom_id,
             $row,
             null
         );
@@ -3524,9 +3866,9 @@ class OfficerPosition extends Ork3
     /**
      * End one holder's ork_officer_history term for a position+scope.
      *
-     * Common::record_officer_history() closes EVERY open term for the role/position
-     * regardless of who holds it, which is wrong for a multi-occupant supporting
-     * position, so the close is done here with a mundane_id filter.
+     * The vacate path for a multi-occupant supporting position: it closes this
+     * holder's term only (a mundane_id filter, as Common::record_officer_history
+     * now also uses), and backfills a completed term when there is none.
      *
      * When the holder has no open term -- appointed before officer history existed,
      * or by a legacy path that never opened one -- a completed record is written
@@ -3559,7 +3901,7 @@ class OfficerPosition extends Ork3
 
         // Legacy rows written before position_id existed carry position_id = 0 and
         // identify the office by canonical key alone; match those too.
-        $match = "kingdom_id = :ch_kid AND park_id = :ch_pid AND mundane_id = :ch_mid
+        $match = self::history_org_sql('ch_kid', 'ch_pid') . " AND mundane_id = :ch_mid
     		   AND ( position_id = :ch_pos OR ( position_id = 0 AND role = :ch_role ) )
     		   AND is_current = 1";
 
@@ -3579,6 +3921,7 @@ class OfficerPosition extends Ork3
             // open term exists; close it with today's date.
             $DB->Clear();
             $DB->ch_end = $today;
+            $DB->ch_eord = OfficerTermPeriod::ordinal(null, null, $today, 'end', null);
             $DB->ch_kid = $kingdom_id;
             $DB->ch_pid = $park_id;
             $DB->ch_mid = $mundane_id;
@@ -3586,7 +3929,7 @@ class OfficerPosition extends Ork3
             $DB->ch_role = $canonical_key;
             $DB->Execute(
                 "UPDATE " . DB_PREFIX . "officer_history
-    			 SET end_date = :ch_end, is_current = 0
+    			 SET end_date = :ch_end, end_ordinal = :ch_eord, is_current = 0
     			 WHERE " . $match
             );
             return;
@@ -3606,12 +3949,16 @@ class OfficerPosition extends Ork3
         $DB->cb_pos = $position_id;
         $DB->cb_label = $label;
         $DB->cb_start = $start;
+        $DB->cb_sord = OfficerTermPeriod::ordinal(null, null, $start, 'start', null);
         $DB->cb_end = $today;
+        $DB->cb_eord = OfficerTermPeriod::ordinal(null, null, $today, 'end', null);
         $DB->cb_cb = ($changed_by > 0 ? $changed_by : null);
         $DB->Execute(
             "INSERT INTO " . DB_PREFIX . "officer_history
-    		 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, changed_by, created_at)
-    		 VALUES (:cb_kid, :cb_pid, :cb_mid, :cb_role, :cb_pos, :cb_label, :cb_start, :cb_end, :cb_cb, NOW())"
+    		 (kingdom_id, park_id, mundane_id, role, position_id, display_label,
+    		  start_date, start_ordinal, end_date, end_ordinal, changed_by, created_at)
+    		 VALUES (:cb_kid, :cb_pid, :cb_mid, :cb_role, :cb_pos, :cb_label,
+    		         :cb_start, :cb_sord, :cb_end, :cb_eord, :cb_cb, NOW())"
         );
     }
 
@@ -3673,20 +4020,24 @@ class OfficerPosition extends Ork3
         $DB->ih_pos = $position_id;
         $DB->ih_label = $label;
         $DB->ih_start = $start;
+        $DB->ih_sord = OfficerTermPeriod::ordinal(null, null, $start, 'start', null);
         $DB->ih_cb = ($changed_by > 0 ? $changed_by : null);
         // C2: end_date is written as a SQL literal so an open term truly stores NULL.
         // Binding a PHP null can be skipped by the DB layer (yapo/null-skip rule),
         // leaving a stale value; mirror the parent_position_id = NULL literal pattern.
         if ($has_end) {
             $DB->ih_end = (string) $term_end;
-            $end_sql = ':ih_end';
+            $DB->ih_eord = OfficerTermPeriod::ordinal(null, null, (string) $term_end, 'end', null);
+            $end_sql = ':ih_end, :ih_eord';
         } else {
-            $end_sql = 'NULL';
+            $end_sql = 'NULL, NULL';
         }
         $DB->Execute(
             "INSERT INTO " . DB_PREFIX . "officer_history
-    		 (kingdom_id, park_id, mundane_id, role, position_id, display_label, start_date, end_date, is_current, changed_by, created_at)
-    		 VALUES (:ih_kid, :ih_pid, :ih_mid, :ih_role, :ih_pos, :ih_label, :ih_start, " . $end_sql . ", " . ($has_end ? '0' : '1') . ", :ih_cb, NOW())"
+    		 (kingdom_id, park_id, mundane_id, role, position_id, display_label,
+    		  start_date, start_ordinal, end_date, end_ordinal, is_current, changed_by, created_at)
+    		 VALUES (:ih_kid, :ih_pid, :ih_mid, :ih_role, :ih_pos, :ih_label,
+    		         :ih_start, :ih_sord, " . $end_sql . ", " . ($has_end ? '0' : '1') . ", :ih_cb, NOW())"
         );
 
         // RBAC grant via the shared service.

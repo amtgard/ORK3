@@ -10,6 +10,8 @@ final class OfficerOccupancyTest extends TestCase
     private const KINGDOM_ID = 100011;
     private const PARK_A = 100012;
     private const PARK_B = 100013;
+    private const RETIRED_KINGDOM = 100014;
+    private const OTHER_KINGDOM = 100015;
 
     private PDO $pdo;
     private OfficerPosition $positions;
@@ -54,13 +56,15 @@ final class OfficerOccupancyTest extends TestCase
         // audit() call writes).
         $this->pdo->exec(
             "DELETE FROM ork_danger_audit WHERE method_call IN ('OfficerPosition::SetOccupant',"
-            . " 'OfficerPosition::AddHistoryTerm', 'OfficerPosition::EditHistoryTerm', 'OfficerPosition::DeleteHistoryTerm')"
+            . " 'OfficerPosition::AddHistoryTerm', 'OfficerPosition::EditHistoryTerm', 'OfficerPosition::DeleteHistoryTerm',"
+            . " 'Park::TransferPark', 'Park::RetirePark', 'Park::RestorePark', 'Park::MergeParks')"
             . ' AND entity_id IN (' . self::KINGDOM_ID . ', ' . self::PARK_A . ', ' . self::PARK_B . ')'
         );
         $this->pdo->exec("DELETE FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%'");
         $this->pdo->exec("DELETE FROM ork_officer WHERE role LIKE '" . self::MARKER . "%'");
         $this->pdo->exec("DELETE FROM ork_officer_position WHERE canonical_key LIKE '" . self::MARKER . "%'");
         $this->pdo->exec('DELETE FROM ork_park WHERE park_id IN (' . self::PARK_A . ', ' . self::PARK_B . ')');
+        $this->pdo->exec('DELETE FROM ork_kingdom WHERE kingdom_id = ' . self::RETIRED_KINGDOM);
         if ($this->seededMundanes) {
             $this->pdo->exec('DELETE FROM ork_mundane WHERE mundane_id IN (' . implode(',', $this->seededMundanes) . ')');
         }
@@ -450,6 +454,42 @@ final class OfficerOccupancyTest extends TestCase
     }
 
     /**
+     * A dated ledger term that was typed as plain text and then linked keeps its
+     * recorded name, so it never reads as a legacy open row: the migration does
+     * not make a 1995 term the holder's current one, and opens a fresh current
+     * row for the seat instead.
+     */
+    public function testMigrationLeavesALinkedLedgerRowWithARecordedNameAlone(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $role = self::MARKER . '_crown_a';
+        $holder = $this->seededMundanes[0];
+        $this->seatRaw($positionId, $role, $holder);
+        $add = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Squire Dated', 'StartDate' => '1995-04-01',
+        ]);
+        self::assertSame(0, (int) $add['Status'], (string) ($add['Error'] ?? ''));
+        $id = (int) $add['Detail'];
+        $link = $this->positions->EditHistoryTerm([
+            'Token' => $this->fixture->createAuthorizedOfficer(), 'OfficerHistoryId' => $id, 'MundaneId' => $holder,
+        ]);
+        self::assertSame(0, (int) $link['Status'], (string) ($link['Error'] ?? ''));
+        $this->pdo->exec('UPDATE ork_officer_history SET is_current = 0 WHERE officer_history_id <> ' . $id
+            . ' AND position_id = ' . $positionId);
+
+        $this->runMigrationBackfill();
+
+        $row = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame('Squire Dated', $row['holder_name']);
+        self::assertSame(0, (int) $row['is_current'], 'a linked ledger term is not a legacy open row');
+        $current = (int) $this->pdo->query(
+            'SELECT COUNT(*) FROM ork_officer_history WHERE position_id = ' . $positionId . ' AND mundane_id = ' . $holder
+            . ' AND is_current = 1 AND officer_history_id <> ' . $id
+        )->fetchColumn();
+        self::assertSame(1, $current, 'the seat gets its own current row');
+    }
+
+    /**
      * A seated officer with no current history row gets one, written as
      * record_officer_history writes it, and only once.
      */
@@ -478,6 +518,357 @@ final class OfficerOccupancyTest extends TestCase
         self::assertNull($row['end_date']);
         self::assertNull($row['start_season']);
         self::assertNull($row['end_season']);
+    }
+
+    // ---------------------------------------------------------------
+    // Current marks: retired orgs, stale marks, park transfers
+    // ---------------------------------------------------------------
+
+    /**
+     * A retired park or kingdom has no current officers on its rolls: the
+     * migration neither marks nor opens a current row there, and clears one
+     * already marked, leaving its end unknown. An active park still gets one.
+     */
+    public function testMigrationGivesRetiredOrgsNoCurrentRows(): void
+    {
+        $crownA = $this->seededPositions['crown_a'];
+        $crownB = $this->seededPositions['crown_b'];
+        $support = $this->seededPositions['support_a'];
+        $holder = $this->seededMundanes[0];
+        $this->pdo->exec("UPDATE ork_park SET active = 'Retired' WHERE park_id = " . self::PARK_A);
+        $this->seedKingdom(self::RETIRED_KINGDOM, 'Retired');
+
+        // Retired park: a seat with no row, a seat already marked, a legacy open row.
+        $this->seatRawAt(self::KINGDOM_ID, self::PARK_A, $crownA, self::MARKER . '_crown_a', $holder);
+        $this->seatRawAt(self::KINGDOM_ID, self::PARK_A, $crownB, self::MARKER . '_crown_b', $holder);
+        $marked = $this->insertHistoryRowAt(self::KINGDOM_ID, self::PARK_A, $crownB, self::MARKER . '_crown_b', $holder, '2019-01-01', 1);
+        $this->seatRawAt(self::KINGDOM_ID, self::PARK_A, $support, self::MARKER . '_support_a', $holder);
+        $legacy = $this->insertHistoryRowAt(self::KINGDOM_ID, self::PARK_A, $support, self::MARKER . '_support_a', $holder, '2018-01-01', 0);
+        // Retired kingdom: one seat marked, one with no row.
+        $this->seatRawAt(self::RETIRED_KINGDOM, 0, $crownA, self::MARKER . '_crown_a', $holder);
+        $kMarked = $this->insertHistoryRowAt(self::RETIRED_KINGDOM, 0, $crownA, self::MARKER . '_crown_a', $holder, '2017-01-01', 1);
+        $this->seatRawAt(self::RETIRED_KINGDOM, 0, $crownB, self::MARKER . '_crown_b', $holder);
+        // Active park control.
+        $this->seatRawAt(self::KINGDOM_ID, self::PARK_B, $crownA, self::MARKER . '_crown_a', $holder);
+
+        $this->runMigrationBackfill();
+        $this->runMigrationBackfill();
+
+        $current = fn (int $kid, int $pid) => (int) $this->pdo->query(
+            "SELECT COUNT(*) FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%'"
+            . ' AND is_current = 1 AND kingdom_id = ' . $kid . ' AND park_id = ' . $pid
+        )->fetchColumn();
+        self::assertSame(0, $current(self::KINGDOM_ID, self::PARK_A), 'a retired park has no current rows');
+        self::assertSame(0, $current(self::RETIRED_KINGDOM, 0), 'a retired kingdom has no current rows');
+        self::assertSame(1, $current(self::KINGDOM_ID, self::PARK_B), 'an active park seat still gets one');
+
+        foreach ([$marked, $kMarked] as $id) {
+            $row = $this->historyRow('officer_history_id = ' . $id);
+            self::assertNull($row['end_date'], 'the cleared mark leaves the end unknown');
+            self::assertNull($row['end_season']);
+        }
+        self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $legacy)['is_current']);
+        $rows = (int) $this->pdo->query(
+            "SELECT COUNT(*) FROM ork_officer_history WHERE role LIKE '" . self::MARKER . "%'"
+            . ' AND (park_id = ' . self::PARK_A . ' OR kingdom_id = ' . self::RETIRED_KINGDOM . ')'
+        )->fetchColumn();
+        self::assertSame(3, $rows, 'no row is opened for a retired org');
+
+        // The rolls show no synthetic "present" holder for the retired park either.
+        foreach ($this->positions->rolls_for_org(0, self::PARK_A)['Offices'] as $office) {
+            foreach ($office['Terms'] as $t) {
+                self::assertFalse($t['IsCurrent'], 'no current term on a retired park\'s rolls');
+            }
+        }
+    }
+
+    /** Retiring a park clears its current marks, end unknown, as the migration does. */
+    public function testRetiringAParkClearsItsCurrentMarks(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $token = $this->fixture->createAuthorizedOfficer();
+        $r = $this->positions->SetOccupant([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => self::PARK_A,
+            'PositionId' => $positionId, 'MundaneId' => $this->seededMundanes[0],
+        ]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        $row = $this->historyRow('park_id = ' . self::PARK_A . ' AND is_current = 1');
+
+        $retire = Ork3::$Lib->park->RetirePark(['Token' => $token, 'ParkId' => self::PARK_A]);
+        self::assertSame(0, (int) $retire['Status'], (string) ($retire['Error'] ?? ''));
+
+        $after = $this->historyRow('officer_history_id = ' . $row['officer_history_id']);
+        self::assertSame(0, (int) $after['is_current']);
+        self::assertNull($after['end_date'], 'retiring does not invent an end date');
+    }
+
+    /** Retiring a kingdom clears its current marks, its parks' included, ends unknown. */
+    public function testRetiringAKingdomClearsItsCurrentMarks(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $role = self::MARKER . '_crown_a';
+        $holder = $this->seededMundanes[0];
+        $this->seedKingdom(self::RETIRED_KINGDOM, 'Active');
+        $kRow = $this->insertHistoryRowAt(self::RETIRED_KINGDOM, 0, $positionId, $role, $holder, '2020-01-01', 1);
+        $pRow = $this->insertHistoryRowAt(self::RETIRED_KINGDOM, self::PARK_B, $positionId, $role, $holder, '2020-01-01', 1);
+        $other = $this->insertHistoryRowAt(self::KINGDOM_ID, 0, $positionId, $role, $holder, '2020-01-01', 1);
+        $token = $this->fixture->createAuthorizedOfficer();
+        $this->grantGlobalAdmin($token);
+
+        $r = Ork3::$Lib->kingdom->RetireKingdom(['Token' => $token, 'KingdomId' => self::RETIRED_KINGDOM]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+
+        foreach ([$kRow, $pRow] as $id) {
+            $row = $this->historyRow('officer_history_id = ' . $id);
+            self::assertSame(0, (int) $row['is_current']);
+            self::assertNull($row['end_date']);
+        }
+        self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $other)['is_current'], 'another kingdom is untouched');
+    }
+
+    /**
+     * Re-running clears marks that can no longer be current: a row with an end,
+     * and a row whose holder no longer sits in that seat. Their ends are kept
+     * as they are; a seated holder's mark is untouched.
+     */
+    public function testMigrationClearsStaleCurrentMarks(): void
+    {
+        $crownA = $this->seededPositions['crown_a'];
+        $crownB = $this->seededPositions['crown_b'];
+        $support = $this->seededPositions['support_a'];
+        $holder = $this->seededMundanes[0];
+        $gone = $this->seedMundane('gone');
+        $this->seededMundanes[] = $gone;
+
+        $this->seatRaw($crownA, self::MARKER . '_crown_a', $holder);
+        $ended = $this->insertHistoryRow($crownA, self::MARKER . '_crown_a', $holder, '2015-01-01', 1);
+        $this->pdo->exec("UPDATE ork_officer_history SET end_date = '2016-05-01', end_ordinal = 8065 WHERE officer_history_id = " . $ended);
+        $unseated = $this->insertHistoryRow($crownB, self::MARKER . '_crown_b', $gone, '2014-01-01', 1);
+        $this->seatRaw($support, self::MARKER . '_support_a', $holder);
+        $seated = $this->insertHistoryRow($support, self::MARKER . '_support_a', $holder, '2020-01-01', 1);
+
+        $this->runMigrationBackfill();
+
+        $e = $this->historyRow('officer_history_id = ' . $ended);
+        self::assertSame(0, (int) $e['is_current'], 'a row with an end is not current');
+        self::assertSame('2016-05-01', $e['end_date'], 'its real end is kept');
+        $u = $this->historyRow('officer_history_id = ' . $unseated);
+        self::assertSame(0, (int) $u['is_current'], 'a holder no longer in the seat is not current');
+        self::assertNull($u['end_date'], 'its end stays unknown');
+        self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $seated)['is_current']);
+    }
+
+    /**
+     * A crown seat change closes the outgoing holder's row (today) and unmarks
+     * any other current row on that office -- a stale mark, e.g. left by a
+     * player merge -- leaving its end unknown. A vacant seat (no outgoing
+     * holder) unmarks stale rows too.
+     */
+    public function testACrownSeatChangeUnmarksAStaleHolderWithoutStampingIt(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $role = self::MARKER . '_crown_a';
+        $holderA = $this->seededMundanes[0];
+        $holderB = $this->seedMundane('holder_b');
+        $stale = $this->seedMundane('stale');
+        $this->seededMundanes[] = $holderB;
+        $this->seededMundanes[] = $stale;
+
+        $base = $this->historyBase();
+        $a = $this->positions->SetOccupant($base + ['MundaneId' => $holderA]);
+        self::assertSame(0, (int) $a['Status'], (string) ($a['Error'] ?? ''));
+        $co = $this->insertHistoryRow($positionId, $role, $stale, '2012-01-01', 1);
+
+        $b = $this->positions->SetOccupant($base + ['MundaneId' => $holderB]);
+        self::assertSame(0, (int) $b['Status'], (string) ($b['Error'] ?? ''));
+
+        $rowA = $this->historyRow('position_id = ' . $positionId . ' AND mundane_id = ' . $holderA);
+        self::assertSame(date('Y-m-d'), $rowA['end_date']);
+        self::assertSame(0, (int) $rowA['is_current']);
+        $rowCo = $this->historyRow('officer_history_id = ' . $co);
+        self::assertSame(0, (int) $rowCo['is_current'], 'the stale mark is cleared');
+        self::assertNull($rowCo['end_date'], 'the stale row is not stamped with today');
+        $current = $this->pdo->query(
+            'SELECT mundane_id FROM ork_officer_history WHERE is_current = 1 AND position_id = ' . $positionId
+        )->fetchAll(PDO::FETCH_COLUMN);
+        self::assertSame([$holderB], array_map('intval', $current), "only the incoming holder's row is current");
+
+        // A vacant seat: no outgoing holder, a stale mark still goes.
+        $crownB = $this->seededPositions['crown_b'];
+        $this->seatRaw($crownB, self::MARKER . '_crown_b', 0);
+        $staleB = $this->insertHistoryRow($crownB, self::MARKER . '_crown_b', $stale, '2013-01-01', 1);
+        $c = $this->positions->SetOccupant($this->historyBase('crown_b') + ['MundaneId' => $holderB]);
+        self::assertSame(0, (int) $c['Status'], (string) ($c['Error'] ?? ''));
+        $rowStaleB = $this->historyRow('officer_history_id = ' . $staleB);
+        self::assertSame(0, (int) $rowStaleB['is_current']);
+        self::assertNull($rowStaleB['end_date']);
+        $currentB = $this->pdo->query(
+            'SELECT mundane_id FROM ork_officer_history WHERE is_current = 1 AND position_id = ' . $crownB
+        )->fetchAll(PDO::FETCH_COLUMN);
+        self::assertSame([$holderB], array_map('intval', $currentB));
+    }
+
+    /** Merging a park away closes its officers' current terms today, as their seats go. */
+    public function testMergingAParkClosesItsCurrentRows(): void
+    {
+        $holder = $this->seededMundanes[0];
+        $token = $this->fixture->createAuthorizedOfficer();
+        $this->grantGlobalAdmin($token);
+        foreach (['crown_a', 'crown_b'] as $key) {
+            $r = $this->positions->SetOccupant([
+                'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => self::PARK_A,
+                'PositionId' => $this->seededPositions[$key], 'MundaneId' => $holder,
+            ]);
+            self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        }
+
+        $m = Ork3::$Lib->park->MergeParks(['Token' => $token, 'FromParkId' => self::PARK_A, 'ToParkId' => self::PARK_B]);
+        self::assertSame(0, (int) $m['Status'], (string) ($m['Error'] ?? ''));
+
+        $rows = $this->pdo->query(
+            'SELECT is_current, end_date FROM ork_officer_history WHERE park_id = ' . self::PARK_A
+        )->fetchAll(PDO::FETCH_ASSOC);
+        self::assertCount(2, $rows);
+        foreach ($rows as $row) {
+            self::assertSame(0, (int) $row['is_current'], 'the merged park has no current rows');
+            self::assertSame(date('Y-m-d'), $row['end_date'], 'each closes today');
+        }
+    }
+
+    /**
+     * Restoring a retired park or kingdom re-marks the seated holders' pre-retire
+     * rows: one current row per seated holder, and no synthetic twin on the rolls.
+     */
+    public function testRestoringAnOrgReMarksItsSeatedHolders(): void
+    {
+        $holder = $this->seededMundanes[0];
+        $token = $this->fixture->createAuthorizedOfficer();
+        $this->grantGlobalAdmin($token);
+        $positionId = $this->seededPositions['crown_a'];
+        $r = $this->positions->SetOccupant([
+            'Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => self::PARK_A,
+            'PositionId' => $positionId, 'MundaneId' => $holder,
+        ]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        $before = $this->historyRow('park_id = ' . self::PARK_A . ' AND is_current = 1');
+        // An older open row for the same seat and holder: the newest wins.
+        $older = $this->insertHistoryRowAt(self::KINGDOM_ID, self::PARK_A, $positionId, self::MARKER . '_crown_a', $holder, '2001-01-01', 0);
+
+        self::assertSame(0, (int) Ork3::$Lib->park->RetirePark(['Token' => $token, 'ParkId' => self::PARK_A])['Status']);
+        self::assertSame(0, (int) Ork3::$Lib->park->RestorePark(['Token' => $token, 'ParkId' => self::PARK_A])['Status']);
+
+        $current = $this->pdo->query(
+            'SELECT officer_history_id FROM ork_officer_history WHERE is_current = 1 AND park_id = ' . self::PARK_A
+        )->fetchAll(PDO::FETCH_COLUMN);
+        self::assertSame([(int) $before['officer_history_id']], array_map('intval', $current), 'the pre-retire row is current again');
+        self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $older)['is_current']);
+        $ids = [];
+        foreach ($this->positions->rolls_for_org(0, self::PARK_A)['Offices'] as $office) {
+            foreach ($office['Terms'] as $t) {
+                if ($t['IsCurrent']) {
+                    $ids[] = $t['OfficerHistoryId'];
+                }
+            }
+        }
+        self::assertSame([(int) $before['officer_history_id']], $ids, 'no synthetic row for the holder');
+
+        // A kingdom the same way.
+        $this->seedKingdom(self::RETIRED_KINGDOM, 'Active');
+        $this->seatRawAt(self::RETIRED_KINGDOM, 0, $positionId, self::MARKER . '_crown_a', $holder);
+        $kRow = $this->insertHistoryRowAt(self::RETIRED_KINGDOM, 0, $positionId, self::MARKER . '_crown_a', $holder, '2020-01-01', 1);
+        self::assertSame(0, (int) Ork3::$Lib->kingdom->RetireKingdom(['Token' => $token, 'KingdomId' => self::RETIRED_KINGDOM])['Status']);
+        self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $kRow)['is_current']);
+        self::assertSame(0, (int) Ork3::$Lib->kingdom->RestoreKingdom(['Token' => $token, 'KingdomId' => self::RETIRED_KINGDOM])['Status']);
+        self::assertSame(1, (int) $this->historyRow('officer_history_id = ' . $kRow)['is_current']);
+    }
+
+    /**
+     * A transferred park takes its history with it: the rolls still list the
+     * pre-transfer terms, and the next seat change closes the current row
+     * rather than leaving it open beside a new one.
+     */
+    public function testATransferredParksHistoryFollowsIt(): void
+    {
+        $positionId = $this->seedPosition('global_crown', 'crown', 0, 0);
+        $this->seededPositions['global_crown'] = $positionId;
+        $holderA = $this->seededMundanes[0];
+        $holderB = $this->seedMundane('holder_b');
+        $this->seededMundanes[] = $holderB;
+        $token = $this->fixture->createAuthorizedOfficer();
+        $this->grantGlobalAdmin($token);
+        $base = ['Token' => $token, 'KingdomId' => self::KINGDOM_ID, 'ParkId' => self::PARK_A, 'PositionId' => $positionId];
+
+        $a = $this->positions->SetOccupant($base + ['MundaneId' => $holderA]);
+        self::assertSame(0, (int) $a['Status'], (string) ($a['Error'] ?? ''));
+        $rowA = $this->historyRow('position_id = ' . $positionId . ' AND mundane_id = ' . $holderA);
+
+        $t = Ork3::$Lib->park->TransferPark(['Token' => $token, 'ParkId' => self::PARK_A, 'KingdomId' => self::OTHER_KINGDOM]);
+        self::assertSame(0, (int) $t['Status'], (string) ($t['Error'] ?? ''));
+        self::assertSame(self::OTHER_KINGDOM, (int) $this->historyRow('officer_history_id = ' . $rowA['officer_history_id'])['kingdom_id']);
+
+        $ids = [];
+        foreach ($this->positions->rolls_for_org(0, self::PARK_A)['Offices'] as $office) {
+            foreach ($office['Terms'] as $term) {
+                $ids[] = $term['OfficerHistoryId'];
+            }
+        }
+        self::assertSame([(int) $rowA['officer_history_id']], $ids, 'the pre-transfer term is on the rolls, with no synthetic twin');
+
+        $b = $this->positions->SetOccupant(['KingdomId' => self::OTHER_KINGDOM] + $base + ['MundaneId' => $holderB]);
+        self::assertSame(0, (int) $b['Status'], (string) ($b['Error'] ?? ''));
+        $closed = $this->historyRow('officer_history_id = ' . $rowA['officer_history_id']);
+        self::assertSame(0, (int) $closed['is_current'], 'the transferred current row closes');
+        self::assertSame(date('Y-m-d'), $closed['end_date']);
+        $open = (int) $this->pdo->query(
+            'SELECT COUNT(*) FROM ork_officer_history WHERE is_current = 1 AND position_id = ' . $positionId
+        )->fetchColumn();
+        self::assertSame(1, $open, 'one current row for the office');
+    }
+
+    /**
+     * Park rows filed under a kingdom the park no longer belongs to (a transfer
+     * before TransferPark moved history) are realigned; kingdom rows are not.
+     */
+    public function testMigrationAlignsParkRowsWithTheirParksKingdom(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $role = self::MARKER . '_crown_a';
+        $holder = $this->seededMundanes[0];
+        $parkRow = $this->insertHistoryRowAt(self::OTHER_KINGDOM, self::PARK_A, $positionId, $role, $holder, '2011-01-01', 0);
+        $kingdomRow = $this->insertHistoryRowAt(self::OTHER_KINGDOM, 0, $positionId, $role, $holder, '2011-01-01', 0);
+
+        $this->runMigrationBackfill();
+
+        self::assertSame(self::KINGDOM_ID, (int) $this->historyRow('officer_history_id = ' . $parkRow)['kingdom_id']);
+        self::assertSame(self::OTHER_KINGDOM, (int) $this->historyRow('officer_history_id = ' . $kingdomRow)['kingdom_id']);
+    }
+
+    /**
+     * The close paths find a park's current row by park alone (park_id is
+     * unique), so a row still filed under an old kingdom closes all the same.
+     */
+    public function testASeatChangeClosesAParkRowFiledUnderAnOldKingdom(): void
+    {
+        $positionId = $this->seededPositions['crown_a'];
+        $holderA = $this->seededMundanes[0];
+        $holderB = $this->seedMundane('holder_b');
+        $this->seededMundanes[] = $holderB;
+        $base = ['Token' => $this->fixture->createAuthorizedOfficer(), 'KingdomId' => self::KINGDOM_ID,
+            'ParkId' => self::PARK_A, 'PositionId' => $positionId];
+        $a = $this->positions->SetOccupant($base + ['MundaneId' => $holderA]);
+        self::assertSame(0, (int) $a['Status'], (string) ($a['Error'] ?? ''));
+        $rowA = $this->historyRow('park_id = ' . self::PARK_A . ' AND mundane_id = ' . $holderA);
+        $this->pdo->exec('UPDATE ork_officer_history SET kingdom_id = ' . self::OTHER_KINGDOM
+            . ' WHERE officer_history_id = ' . $rowA['officer_history_id']);
+
+        $b = $this->positions->SetOccupant($base + ['MundaneId' => $holderB]);
+        self::assertSame(0, (int) $b['Status'], (string) ($b['Error'] ?? ''));
+        self::assertSame(0, (int) $this->historyRow('officer_history_id = ' . $rowA['officer_history_id'])['is_current']);
+        $vacate = $this->positions->VacateOfficer($base + ['MundaneId' => $holderB]);
+        self::assertSame(0, (int) $vacate['Status'], (string) ($vacate['Error'] ?? ''));
+        self::assertSame(0, (int) $this->pdo->query(
+            'SELECT COUNT(*) FROM ork_officer_history WHERE is_current = 1 AND park_id = ' . self::PARK_A
+        )->fetchColumn());
     }
 
     public function testAddRejectsAFutureStart(): void
@@ -611,16 +1002,28 @@ final class OfficerOccupancyTest extends TestCase
         self::assertNotSame(0, (int) $r['Status']);
     }
 
-    public function testAddWithAMemberStoresNoHolderName(): void
+    /**
+     * A linked holder carries the name the term was recorded under: the ledger
+     * sends the picked persona, and any name sent is kept beside the link.
+     */
+    public function testAddWithAMemberKeepsAnyRecordedName(): void
     {
+        $persona = (string) $this->pdo->query('SELECT persona FROM ork_mundane WHERE mundane_id = ' . (int) $this->seededMundanes[0])->fetchColumn();
+        self::assertNotSame('', $persona);
         $r = $this->positions->AddHistoryTerm($this->historyBase() + [
-            'MundaneId' => $this->seededMundanes[0], 'HolderName' => 'ignored', 'Period' => 'Fall 99',
+            'MundaneId' => $this->seededMundanes[0], 'HolderName' => $persona, 'Period' => 'Fall 98',
+        ]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        self::assertSame($persona, $this->historyRow('officer_history_id = ' . (int) $r['Detail'])['holder_name'], 'the persona at the pick is the name of record');
+
+        $r = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'MundaneId' => $this->seededMundanes[0], 'HolderName' => 'Squire Recorded', 'Period' => 'Fall 99',
             'StartDate' => '1999-09-15',
         ]);
         self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
         $row = $this->historyRow('officer_history_id = ' . (int) $r['Detail']);
         self::assertSame($this->seededMundanes[0], (int) $row['mundane_id']);
-        self::assertSame('', $row['holder_name']);
+        self::assertSame('Squire Recorded', $row['holder_name'], 'the name of record is kept beside the link');
         self::assertSame('fall', $row['start_season']);
         self::assertSame('1999-09-15', $row['start_date'], 'an exact date given alongside a period is stored too');
     }
@@ -664,6 +1067,129 @@ final class OfficerOccupancyTest extends TestCase
         self::assertSame('2024-04-02', $this->historyRow('officer_history_id = ' . $id)['start_date']);
     }
 
+    /**
+     * Item 1: a stored start is fixed. A current "Winter 24" (Jan-Feb 2024) is
+     * stamped start_ordinal 2024*4; closing it -- by seating the next holder
+     * (record_officer_history / closeTermAt) or by vacating
+     * (CloseOfficerHistoryTerm) -- writes the end's ordinal and leaves the
+     * start where it was, where re-resolving the columns read Dec 2024.
+     */
+    public function testClosingACurrentWinterStartKeepsItsStartOrdinal(): void
+    {
+        $token = $this->fixture->createAuthorizedOfficer();
+        $today = OfficerTermPeriod::currentOrdinal();
+        foreach (['seat next' => 'crown_a', 'vacate' => 'crown_b'] as $how => $key) {
+            $current = $this->seatAndGetCurrentRow($key);
+            $id = (int) $current['officer_history_id'];
+            self::assertSame($today, (int) $current['start_ordinal'], $how . ': an opened term stamps its start');
+            self::assertNull($current['end_ordinal']);
+
+            // The two-year name of a winter is a single season, so a current row takes it.
+            $e = $this->positions->EditHistoryTerm(['Token' => $token, 'OfficerHistoryId' => $id, 'Period' => 'Winter 2023–24']);
+            self::assertSame(0, (int) $e['Status'], $how . ': ' . ($e['Error'] ?? ''));
+            $e = $this->positions->EditHistoryTerm(['Token' => $token, 'OfficerHistoryId' => $id, 'Period' => 'Winter 24']);
+            self::assertSame(0, (int) $e['Status'], $how . ': ' . ($e['Error'] ?? ''));
+            $row = $this->historyRow('officer_history_id = ' . $id);
+            self::assertSame(['winter', 2024, 2024 * 4], [$row['start_season'], (int) $row['start_year'], (int) $row['start_ordinal']], $how);
+
+            if ($how === 'seat next') {
+                $next = $this->seedMundane('winter_next');
+                $this->seededMundanes[] = $next;
+                $r = $this->positions->SetOccupant($this->historyBase($key) + ['MundaneId' => $next]);
+            } else {
+                $r = $this->positions->VacateOfficer($this->historyBase($key) + ['MundaneId' => $this->seededMundanes[0]]);
+            }
+            self::assertSame(0, (int) $r['Status'], $how . ': ' . ($r['Error'] ?? ''));
+
+            $closed = $this->historyRow('officer_history_id = ' . $id);
+            self::assertSame(0, (int) $closed['is_current'], $how);
+            self::assertSame(date('Y-m-d'), $closed['end_date'], $how);
+            self::assertSame(2024 * 4, (int) $closed['start_ordinal'], $how . ': closing leaves the start where it was');
+            self::assertSame($today, (int) $closed['end_ordinal'], $how . ': the close stamps its end');
+
+            $rows = array_values(array_filter(
+                (new Kingdom())->GetOfficerHistory(['KingdomId' => self::KINGDOM_ID])['History'],
+                fn ($h) => $h['OfficerHistoryId'] === $id
+            ));
+            self::assertSame(2024 * 4, $rows[0]['StartOrdinal'], $how);
+            self::assertStringStartsWith('Winter 2023–24 – ', $rows[0]['PeriodLabel'], $how);
+        }
+    }
+
+    /**
+     * Manage Officers' Set-it dialog edits the seat's open row by an id read when
+     * the list loaded. ExpectCurrent makes a reseat in between refuse the save,
+     * rather than rewriting the now-closed term's span (a Period on a past row
+     * replaces both ends).
+     */
+    public function testExpectCurrentRefusesARowClosedSinceTheListLoaded(): void
+    {
+        $token = $this->fixture->createAuthorizedOfficer();
+        $current = $this->seatAndGetCurrentRow();
+        $id = (int) $current['officer_history_id'];
+
+        $next = $this->seedMundane('expect_next');
+        $this->seededMundanes[] = $next;
+        $r = $this->positions->SetOccupant($this->historyBase() + ['MundaneId' => $next]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        $closed = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame(0, (int) $closed['is_current']);
+
+        $e = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'OfficerHistoryId' => $id, 'Period' => 'Spring 24', 'ExpectCurrent' => 1,
+        ]);
+        self::assertNotSame(0, (int) $e['Status'], 'a closed row is refused when the caller expected it current');
+        self::assertStringContainsString('ended since the list loaded', (string) ($e['Error'] ?? ''));
+        $after = $this->historyRow('officer_history_id = ' . $id);
+        foreach (['start_season', 'start_year', 'start_date', 'start_ordinal', 'end_season', 'end_year', 'end_date', 'end_ordinal', 'is_current'] as $c) {
+            self::assertSame($closed[$c], $after[$c], $c . ' is unchanged');
+        }
+
+        // On the open row ExpectCurrent changes nothing.
+        $open = $this->historyRow('mundane_id = ' . $next . ' AND is_current = 1');
+        $ok = $this->positions->EditHistoryTerm([
+            'Token' => $token, 'OfficerHistoryId' => (int) $open['officer_history_id'], 'Period' => 'Spring 24', 'ExpectCurrent' => 1,
+        ]);
+        self::assertSame(0, (int) $ok['Status'], (string) ($ok['Error'] ?? ''));
+    }
+
+    /** Add and Edit stamp the ordinals they set; a side an edit leaves alone keeps its own. */
+    public function testAddAndEditStampTheOrdinalsTheySet(): void
+    {
+        $token = $this->fixture->createAuthorizedOfficer();
+        $add = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Lady January', 'Period' => 'Jan 23 – Fall 24',
+        ]);
+        self::assertSame(0, (int) $add['Status'], (string) ($add['Error'] ?? ''));
+        $id = (int) $add['Detail'];
+        $row = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame([2023 * 4, 2024 * 4 + 3], [(int) $row['start_ordinal'], (int) $row['end_ordinal']], 'a month start is that month (item 2)');
+        // The columns are the entered text, chosen so they read back the same way.
+        self::assertSame(['winter', 2022], [$row['start_season'], (int) $row['start_year']]);
+
+        $note = $this->positions->EditHistoryTerm(['Token' => $token, 'OfficerHistoryId' => $id, 'Note' => 'from the wiki']);
+        self::assertSame(0, (int) $note['Status'], (string) ($note['Error'] ?? ''));
+        $row = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame([2023 * 4, 2024 * 4 + 3], [(int) $row['start_ordinal'], (int) $row['end_ordinal']], 'a note edit keeps both');
+
+        $end = $this->positions->EditHistoryTerm(['Token' => $token, 'OfficerHistoryId' => $id, 'EndDate' => '2025-01-10']);
+        self::assertSame(0, (int) $end['Status'], (string) ($end['Error'] ?? ''));
+        $row = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame([2023 * 4, 2025 * 4], [(int) $row['start_ordinal'], (int) $row['end_ordinal']], 'an end date stamps the end only');
+
+        $cleared = $this->positions->EditHistoryTerm(['Token' => $token, 'OfficerHistoryId' => $id, 'EndDate' => '']);
+        self::assertSame(0, (int) $cleared['Status'], (string) ($cleared['Error'] ?? ''));
+        $row = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame([2023 * 4, 2024 * 4 + 3], [(int) $row['start_ordinal'], (int) $row['end_ordinal']], 'clearing the date falls back to the entered end season');
+
+        // The edit text shown for it reads back to the stored ordinals.
+        $term = array_values(array_filter(
+            (new Kingdom())->GetOfficerHistory(['KingdomId' => self::KINGDOM_ID])['History'],
+            fn ($h) => $h['OfficerHistoryId'] === $id
+        ))[0];
+        self::assertSame('Winter 2022–23 – Fall 2024', $term['PeriodLabel']);
+    }
+
     public function testDeleteRefusesTheCurrentRow(): void
     {
         $current = $this->seatAndGetCurrentRow();
@@ -693,7 +1219,7 @@ final class OfficerOccupancyTest extends TestCase
 
         $row = $this->historyRow('officer_history_id = ' . $id);
         self::assertSame($member, (int) $row['mundane_id']);
-        self::assertSame('', $row['holder_name'], 'a linked holder stores no plain-text name');
+        self::assertSame('Sir Bram the Elder', $row['holder_name'], 'linking keeps the name the term was recorded under');
         self::assertSame('spring', $row['start_season'], 'an absent Period leaves the span alone');
         self::assertSame('fall', $row['end_season']);
 
@@ -708,7 +1234,75 @@ final class OfficerOccupancyTest extends TestCase
         self::assertSame(0, (int) $prior['MundaneId']);
         self::assertSame('Sir Bram the Elder', $prior['HolderName']);
         self::assertSame($member, (int) $post['MundaneId']);
-        self::assertSame('', $post['HolderName']);
+        self::assertSame('Sir Bram the Elder', $post['HolderName']);
+
+        // Relinking to another player keeps the recorded name; unlinking replaces it.
+        $other = $this->seedMundane('relink');
+        $this->seededMundanes[] = $other;
+        $token = $this->fixture->createAuthorizedOfficer();
+        $r = $this->positions->EditHistoryTerm(['Token' => $token, 'OfficerHistoryId' => $id, 'MundaneId' => $other]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        self::assertSame('Sir Bram the Elder', $this->historyRow('officer_history_id = ' . $id)['holder_name']);
+        $r = $this->positions->EditHistoryTerm(['Token' => $token, 'OfficerHistoryId' => $id, 'MundaneId' => 0, 'HolderName' => 'Bram']);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        $row = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame(0, (int) $row['mundane_id']);
+        self::assertSame('Bram', $row['holder_name']);
+    }
+
+    /** An edit may not take away a row's only start; a season start survives a cleared date. */
+    public function testEditRefusesToClearTheOnlyStart(): void
+    {
+        $add = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Dame Dated', 'StartDate' => '2019-04-02', 'EndDate' => '2019-10-20',
+        ]);
+        self::assertSame(0, (int) $add['Status'], (string) ($add['Error'] ?? ''));
+        $id = (int) $add['Detail'];
+
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $this->fixture->createAuthorizedOfficer(),
+            'OfficerHistoryId' => $id, 'StartDate' => '',
+        ]);
+        self::assertNotSame(0, (int) $r['Status'], 'clearing the only start is refused');
+        self::assertSame('A term needs a start.', $r['Error'] ?? null);
+        self::assertSame('2019-04-02', $this->historyRow('officer_history_id = ' . $id)['start_date']);
+
+        // With a season start stored, the cleared date falls back to the season.
+        $add = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Dame Both', 'Period' => 'Spring 19 – Fall 19', 'StartDate' => '2019-04-02',
+        ]);
+        self::assertSame(0, (int) $add['Status'], (string) ($add['Error'] ?? ''));
+        $both = (int) $add['Detail'];
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $this->fixture->createAuthorizedOfficer(),
+            'OfficerHistoryId' => $both, 'StartDate' => '',
+        ]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        $row = $this->historyRow('officer_history_id = ' . $both);
+        self::assertNull($row['start_date']);
+        self::assertSame('spring', $row['start_season']);
+    }
+
+    /** A row recorded with no start (end only) may still be edited, e.g. its note. */
+    public function testEditOfAnEndOnlyRowIsAllowed(): void
+    {
+        $add = $this->positions->AddHistoryTerm($this->historyBase() + [
+            'HolderName' => 'Ancient', 'Period' => 'Spring 05 – Fall 05',
+        ]);
+        self::assertSame(0, (int) $add['Status'], (string) ($add['Error'] ?? ''));
+        $id = (int) $add['Detail'];
+        // Legacy shape: only the end is known.
+        $this->pdo->exec('UPDATE ork_officer_history SET start_season = NULL, start_year = NULL, start_date = NULL WHERE officer_history_id = ' . $id);
+
+        $r = $this->positions->EditHistoryTerm([
+            'Token' => $this->fixture->createAuthorizedOfficer(),
+            'OfficerHistoryId' => $id, 'Note' => 'end only', 'StartDate' => '',
+        ]);
+        self::assertSame(0, (int) $r['Status'], (string) ($r['Error'] ?? ''));
+        $row = $this->historyRow('officer_history_id = ' . $id);
+        self::assertSame('end only', $row['notes']);
+        self::assertNull($row['start_season']);
+        self::assertSame('fall', $row['end_season']);
     }
 
     public function testEditOfAPastRowMayChangeItsPeriodAndKeepsItPast(): void
@@ -840,10 +1434,43 @@ final class OfficerOccupancyTest extends TestCase
                 $statements[] = $body;
             }
         }
-        self::assertCount(3, $statements, 'backfill: mark seats, dedupe per seat, open missing seats');
+        self::assertCount(6, $statements, 'backfill: align park rows, clear stale marks, clear retired orgs, mark seats, dedupe per seat, open missing seats');
         foreach ($statements as $statement) {
             $this->pdo->exec($statement);
         }
+    }
+
+    private function seatRawAt(int $kingdomId, int $parkId, int $positionId, string $role, int $mundaneId): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ork_officer (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
+             VALUES (:kid, :pid, :mid, :role, 0, 0, :pos, NOW())'
+        )->execute([':kid' => $kingdomId, ':pid' => $parkId, ':mid' => $mundaneId, ':role' => $role, ':pos' => $positionId]);
+    }
+
+    private function insertHistoryRowAt(int $kingdomId, int $parkId, int $positionId, string $role, int $mundaneId, string $start, int $isCurrent): int
+    {
+        $id = $this->insertHistoryRow($positionId, $role, $mundaneId, $start, $isCurrent);
+        $this->pdo->exec('UPDATE ork_officer_history SET kingdom_id = ' . $kingdomId . ', park_id = ' . $parkId
+            . ' WHERE officer_history_id = ' . $id);
+        return $id;
+    }
+
+    private function seedKingdom(int $kingdomId, string $active): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO ork_kingdom (kingdom_id, name, abbreviation, parent_kingdom_id, active)
+             VALUES (:kid, :name, "ZZK", 0, :active)'
+        )->execute([':kid' => $kingdomId, ':name' => self::MARKER . '_kingdom_' . $kingdomId, ':active' => $active]);
+    }
+
+    /** A global (all-zero scope) admin grant for the fixture officer, for TransferPark. */
+    private function grantGlobalAdmin(string $token): void
+    {
+        $this->pdo->prepare(
+            "INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role)
+             SELECT mundane_id, 0, 0, 0, 0, 'admin' FROM ork_session WHERE token = :t LIMIT 1"
+        )->execute([':t' => $token]);
     }
 
     private function seatRaw(int $positionId, string $role, int $mundaneId): void
@@ -854,7 +1481,7 @@ final class OfficerOccupancyTest extends TestCase
         )->execute([':kid' => self::KINGDOM_ID, ':mid' => $mundaneId, ':role' => $role, ':pos' => $positionId]);
     }
 
-    private function seedPosition(string $suffix, string $classification, int $hasAuthRole = 0): int
+    private function seedPosition(string $suffix, string $classification, int $hasAuthRole = 0, int $kingdomId = self::KINGDOM_ID): int
     {
         $key = self::MARKER . '_' . $suffix;
         $stmt = $this->pdo->prepare(
@@ -865,7 +1492,7 @@ final class OfficerOccupancyTest extends TestCase
              VALUES (:kid, :key, :title, "", :cls, 0, 0, 0, :har, 100, NULL, 0, NULL, 0, NOW())'
         );
         $stmt->execute([
-            ':kid' => self::KINGDOM_ID,
+            ':kid' => $kingdomId,
             ':key' => $key,
             ':title' => 'Test ' . $suffix,
             ':cls' => $classification,

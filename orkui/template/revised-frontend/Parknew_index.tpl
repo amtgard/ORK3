@@ -1907,6 +1907,8 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 	$ofScope   = 'park';
 	$ofOrgId   = (int)$park_id;
 	$ofOrgName = (string)($park_name ?? '');
+	$ofKingdomId = (int)($kingdom_id ?? 0);
+	$ofCanEditRolls = !empty($CanEditOfficerHistory);
 ?>
 <?php include __DIR__ . '/partials/_officer_details_modal.tpl'; ?>
 

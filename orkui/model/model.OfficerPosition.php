@@ -84,11 +84,32 @@ class Model_OfficerPosition extends Model
      * office, terms newest first, gaps and overlaps flagged. Public data; feeds
      * both the rolls report and the edit ledgers.
      *
+     * $only_key ('position:N' / 'role:X') limits it to that one office.
+     *
      * @return array ['Offices' => [...]] -- see OfficerPosition::rolls_for_org()
      */
-    public function rolls(int $kingdom_id, int $park_id): array
+    public function rolls(int $kingdom_id, int $park_id, ?string $only_key = null): array
     {
-        return $this->OfficerPosition->rolls_for_org($kingdom_id, $park_id);
+        return $this->OfficerPosition->rolls_for_org($kingdom_id, $park_id, $only_key);
+    }
+
+    /**
+     * Whether $uid may write officer history in this kingdom/park -- the same gate
+     * Add/Edit/DeleteHistoryTerm enforce (OfficerPosition::can_edit_history_for).
+     */
+    public function can_edit_history_for(int $uid, int $kingdom_id, int $park_id): bool
+    {
+        return $this->OfficerPosition->can_edit_history_for($uid, $kingdom_id, $park_id);
+    }
+
+    /**
+     * Each holder's latest term per office: "mundane_id|role" => history row.
+     *
+     * @return array see OfficerPosition::latest_term_by_holder()
+     */
+    public function latest_term_by_holder(int $kingdom_id, int $park_id): array
+    {
+        return $this->OfficerPosition->latest_term_by_holder($kingdom_id, $park_id);
     }
 
     /**

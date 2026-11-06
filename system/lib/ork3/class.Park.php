@@ -276,6 +276,9 @@ class Park extends Ork3
             'officers'        => $this->snapshot_rows(
                 "SELECT * FROM " . DB_PREFIX . "officer WHERE park_id = " . $from_park_id
             ),
+            'history_current' => $this->snapshot_rows(
+                "SELECT officer_history_id FROM " . DB_PREFIX . "officer_history WHERE park_id = " . $from_park_id . " AND is_current = 1"
+            ),
             'authorizations'  => $this->snapshot_rows(
                 "SELECT * FROM `" . DB_PREFIX . "authorization` WHERE park_id = " . $from_park_id
                 . " OR authorization_id IN (SELECT authorization_id FROM `" . DB_PREFIX . "officer` WHERE park_id = " . $from_park_id . ")"
@@ -295,6 +298,21 @@ class Park extends Ork3
             if (!$this->db->ExecuteChecked($sql)) {
                 throw new Exception('statement failed: ' . $sql);
             }
+
+            // The merged park's seats are gone, so its officers' current terms
+            // end today (the history rows stay, filed under the merged park).
+            $today = date('Y-m-d');
+            $sql = "UPDATE " . DB_PREFIX . "officer_history
+                       SET end_date = :mp_today, end_ordinal = :mp_eord, is_current = 0
+                     WHERE park_id = :mp_from AND park_id > 0 AND is_current = 1";
+            $this->db->Clear();
+            $this->db->mp_today = $today;
+            $this->db->mp_eord = OfficerTermPeriod::ordinal(null, null, $today, 'end', null);
+            $this->db->mp_from = $from_park_id;
+            if (!$this->db->ExecuteChecked($sql)) {
+                throw new Exception('statement failed: close merged park officer history');
+            }
+            $history_closed = count($prior_state['history_current']);
 
             $sql = "delete from `" . DB_PREFIX . "authorization` where park_id = " . $from_park_id;
             $this->db->Clear();
@@ -344,6 +362,7 @@ class Park extends Ork3
                 'members_moved'     => count($prior_state['members']),
                 'officers_removed'  => count($prior_state['officers']),
                 'grants_removed'    => count($prior_state['authorizations']),
+                'history_closed'    => $history_closed,
             ]
         );
         return Success();
@@ -363,6 +382,38 @@ class Park extends Ork3
         }
         $this->db->Clear();
         return $rows;
+    }
+
+    /**
+     * A retired park has no current officers: clear its is_current marks,
+     * leaving each end unknown, as the officer-history-rolls migration does.
+     * Restoring re-marks them (remark_current_officer_history).
+     */
+    private function clear_current_officer_history($park_id)
+    {
+        $this->db->Clear();
+        $this->db->cc_pid = (int)$park_id;
+        if (!$this->db->ExecuteChecked(
+            "UPDATE " . DB_PREFIX . "officer_history SET is_current = 0 WHERE park_id = :cc_pid AND park_id > 0 AND is_current = 1"
+        )) {
+            logtrace('RetirePark: current officer history NOT cleared', [ 'park_id' => (int)$park_id ]);
+        }
+    }
+
+    /**
+     * Restoring a park re-marks its seated holders' current rows: the newest
+     * row with no end for each seat (office + holder) whose holder still sits
+     * in it and that has no current row (OfficerPosition::remark_current_history_sql).
+     */
+    private function remark_current_officer_history($park_id)
+    {
+        $this->db->Clear();
+        $this->db->rm_pid = (int)$park_id;
+        if (!$this->db->ExecuteChecked(
+            OfficerPosition::remark_current_history_sql('h.park_id = :rm_pid AND h.park_id > 0')
+        )) {
+            logtrace('RestorePark: current officer history NOT re-marked', [ 'park_id' => (int)$park_id ]);
+        }
     }
 
     public function TransferPark($request)
@@ -386,6 +437,18 @@ class Park extends Ork3
                 // Move all officers in the park to the new kingdom
                 $sql = "update " . DB_PREFIX . "officer set kingdom_id = '" . mysql_real_escape_string($request[ 'KingdomId' ]) . "' where park_id = '" . mysql_real_escape_string($request[ 'ParkId' ]) . "'";
                 $this->db->query($sql);
+                // The park's officer history goes with it, so its rolls and the
+                // close paths (which file a park's rows under its kingdom) still
+                // find its terms, current ones included.
+                $this->db->Clear();
+                $this->db->tp_kid = $new_kingdom_id;
+                $this->db->tp_pid = (int)$request[ 'ParkId' ];
+                $history_moved = $this->db->ExecuteChecked(
+                    "UPDATE " . DB_PREFIX . "officer_history SET kingdom_id = :tp_kid WHERE park_id = :tp_pid AND park_id > 0"
+                );
+                if (!$history_moved) {
+                    logtrace('TransferPark: officer history NOT moved', [ 'park_id' => (int)$request[ 'ParkId' ], 'kingdom_id' => $new_kingdom_id ]);
+                }
                 // Bust park averages cache for both old and new kingdoms
                 $report = Ork3::$Lib->report;
                 foreach ([ $old_kingdom_id, $new_kingdom_id ] as $_kid) {
@@ -395,6 +458,8 @@ class Park extends Ork3
                     'park_id'        => (int)$request['ParkId'],
                     'old_kingdom_id' => $old_kingdom_id,
                     'new_kingdom_id' => $new_kingdom_id,
+                ], [
+                    'officer_history_moved' => $history_moved ? 1 : 0,
                 ]);
                 return Success();
             } else {
@@ -1395,13 +1460,13 @@ class Park extends Ork3
         $park_id = (int)$request[ 'ParkId' ];
         $role_filter = isset($request[ 'Role' ]) && strlen(trim($request[ 'Role' ])) > 0 ? trim($request[ 'Role' ]) : null;
 
-        // Look up the kingdom_id for this park
-        $kingdom_id = (int)$this->GetParkKingdomId($park_id);
-
+        // By park alone: park_id is globally unique, and a park keeps its rolls
+        // through a transfer (TransferPark moves its history's kingdom_id too).
         $sql = "SELECT oh.officer_history_id, oh.kingdom_id, oh.park_id, oh.mundane_id, oh.role,
 		                oh.position_id, oh.display_label,
 		                oh.start_date, oh.end_date, oh.is_current, oh.changed_by, oh.notes, oh.created_at,
 		                oh.holder_name, oh.start_season, oh.start_year, oh.end_season, oh.end_year,
+		                oh.start_ordinal, oh.end_ordinal,
 		                m.persona, m.username,
 		                cb.persona AS changed_by_persona,
 		                op.classification AS classification
@@ -1409,20 +1474,22 @@ class Park extends Ork3
 		         LEFT JOIN " . DB_PREFIX . "officer_position op ON op.position_id = oh.position_id
 		         LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = oh.mundane_id
 		         LEFT JOIN " . DB_PREFIX . "mundane cb ON cb.mundane_id = oh.changed_by
-		         WHERE oh.park_id = " . $park_id . " AND oh.kingdom_id = " . $kingdom_id;
+		         WHERE oh.park_id = " . $park_id . " AND oh.park_id > 0";
 
         if ($role_filter !== null) {
             // Bound, never interpolated -- mysql_real_escape_string() is a no-op shim here.
             $sql .= " AND oh.role = :oh_role";
         }
 
-        $sql .= " ORDER BY oh.role, oh.start_date DESC, oh.officer_history_id DESC";
-
         global $DB;
         $DB->Clear();
         if ($role_filter !== null) {
             $DB->oh_role = $role_filter;
         }
+        // The whole list in the rolls sort key (compare_rolls_terms), on the
+        // stored ordinals: readers group rows by office themselves and keep this
+        // order within each group rather than re-sorting.
+        $sql .= ' ORDER BY ' . OfficerPosition::ROLLS_ORDER_SQL;
         $r = $DB->DataSet($sql);
         $response = [ 'Status' => Success(), 'History' => [ ] ];
         if ($r !== false && $r->size() > 0) {
@@ -1463,6 +1530,7 @@ class Park extends Ork3
                     'holder_name' => $r->holder_name, 'is_current' => $r->is_current,
                     'start_season' => $r->start_season, 'start_year' => $r->start_year, 'start_date' => $r->start_date,
                     'end_season' => $r->end_season, 'end_year' => $r->end_year, 'end_date' => $r->end_date,
+                    'start_ordinal' => $r->start_ordinal, 'end_ordinal' => $r->end_ordinal,
                 ]);
             }
         }
@@ -1611,6 +1679,11 @@ class Park extends Ork3
         $this->log->Write('Park', $mundane_id, self::ACTIVE_ACTIVE === $waffle ? LOG_RESTORE : LOG_RETIRE, $request);
         $this->park->active = $waffle;
         $this->park->save();
+        if (self::ACTIVE_RETIRED === $waffle) {
+            $this->clear_current_officer_history($park_id);
+        } else {
+            $this->remark_current_officer_history($park_id);
+        }
 
         $_audit_req = $request;
         unset($_audit_req[ 'Token' ]);

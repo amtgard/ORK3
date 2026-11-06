@@ -66,6 +66,7 @@ $_vacantCount = (int)($_q['VacantOffices'] ?? 0);
 $mo_kingdom_id = $kingdomId;
 $mo_park_id    = $parkId;
 $mo_can_manage = !empty($CanManageParkOfficers);
+$mo_can_edit_history = !empty($CanEditOfficerHistory);
 $mo_viewer_id  = (int)($CurrentUserId ?? 0);
 /* Officer standing (park.details.edit, or kingdom officer standing) is what the
    console's park-detail modals and operations were built for; Court and Bonus

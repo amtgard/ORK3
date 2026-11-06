@@ -49,6 +49,11 @@ if (!class_exists('Memcached', false)) {
             return true;
         }
 
+        public function flush(int $delay = 0): bool
+        {
+            return true;
+        }
+
         /** @return array<string, array<string, int>> */
         public function getStats(): array
         {

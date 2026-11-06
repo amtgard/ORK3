@@ -1465,6 +1465,7 @@ class Kingdom extends Ork3
 		                oh.position_id, oh.display_label,
 		                oh.start_date, oh.end_date, oh.is_current, oh.changed_by, oh.notes, oh.created_at,
 		                oh.holder_name, oh.start_season, oh.start_year, oh.end_season, oh.end_year,
+		                oh.start_ordinal, oh.end_ordinal,
 		                m.persona, m.username,
 		                cb.persona AS changed_by_persona,
 		                op.classification AS classification
@@ -1481,13 +1482,15 @@ class Kingdom extends Ork3
             $sql .= " AND oh.role = :oh_role";
         }
 
-        $sql .= " ORDER BY oh.role, oh.start_date DESC, oh.officer_history_id DESC";
-
         global $DB;
         $DB->Clear();
         if ($role_filter !== null) {
             $DB->oh_role = $role_filter;
         }
+        // The whole list in the rolls sort key (compare_rolls_terms), on the
+        // stored ordinals: readers group rows by office themselves and keep this
+        // order within each group rather than re-sorting.
+        $sql .= ' ORDER BY ' . OfficerPosition::ROLLS_ORDER_SQL;
         $r = $DB->DataSet($sql);
         $response = ['Status' => Success(), 'History' => []];
         if ($r !== false && $r->size() > 0) {
@@ -1534,6 +1537,7 @@ class Kingdom extends Ork3
                     'holder_name' => $r->holder_name, 'is_current' => $r->is_current,
                     'start_season' => $r->start_season, 'start_year' => $r->start_year, 'start_date' => $r->start_date,
                     'end_season' => $r->end_season, 'end_year' => $r->end_year, 'end_date' => $r->end_date,
+                    'start_ordinal' => $r->start_ordinal, 'end_ordinal' => $r->end_ordinal,
                 ]);
             }
         }
@@ -1591,6 +1595,19 @@ class Kingdom extends Ork3
         return $this->WaffleKingdom($request, 'Active');
     }
 
+    /**
+     * Restoring a kingdom re-marks its seated holders' current rows, its parks'
+     * included (OfficerPosition::remark_current_history_sql).
+     */
+    private function remark_current_officer_history($kingdom_id)
+    {
+        $this->db->Clear();
+        $this->db->rm_kid = (int)$kingdom_id;
+        if (!$this->db->ExecuteChecked(OfficerPosition::remark_current_history_sql('h.kingdom_id = :rm_kid'))) {
+            logtrace('RestoreKingdom: current officer history NOT re-marked', ['kingdom_id' => (int)$kingdom_id]);
+        }
+    }
+
     public function WaffleKingdom($request, $waffle)
     {
         $response = array();
@@ -1603,6 +1620,20 @@ class Kingdom extends Ork3
             if ($this->kingdom->find()) {
                 $this->kingdom->active = $waffle;
                 $this->kingdom->save();
+                if ('Retired' == $waffle) {
+                    // A retired kingdom has no current officers, its parks'
+                    // included: clear the marks, ends left unknown, as the
+                    // officer-history-rolls migration does.
+                    $this->db->Clear();
+                    $this->db->rk_kid = (int)$request['KingdomId'];
+                    if (!$this->db->ExecuteChecked(
+                        "UPDATE " . DB_PREFIX . "officer_history SET is_current = 0 WHERE kingdom_id = :rk_kid AND is_current = 1"
+                    )) {
+                        logtrace('RetireKingdom: current officer history NOT cleared', ['kingdom_id' => (int)$request['KingdomId']]);
+                    }
+                } else {
+                    $this->remark_current_officer_history((int)$request['KingdomId']);
+                }
                 $this->_flushPrincipalityCaches();
                 $response = Success();
             } else {

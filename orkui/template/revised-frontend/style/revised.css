@@ -11236,7 +11236,7 @@ html[data-theme="dark"] .kn-tabs .ork-subtabs { --ork-subtab-accent: hsl(var(--k
 html[data-theme="dark"] .pk-tabs .ork-subtabs { --ork-subtab-accent: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%)); }
 html[data-theme="dark"] .ork-subtabs { background: rgba(0, 0, 0, 0.28); border-color: rgba(255, 255, 255, 0.08); }
 html[data-theme="dark"] .ork-subtab { color: var(--ork-text-secondary, #cbd5e0); }
-html[data-theme="dark"] .ork-subtab:hover { background: rgba(255, 255, 255, 0.05); }
+html[data-theme="dark"] .ork-subtab:hover { background: rgba(255, 255, 255, 0.05); color: var(--ork-subtab-accent); }
 html[data-theme="dark"] .ork-subtab.ork-subtab-active {
     background: color-mix(in srgb, var(--ork-subtab-accent) 24%, #1a202c);
     color: #fff;
