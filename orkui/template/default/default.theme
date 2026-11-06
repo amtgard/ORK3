@@ -74,6 +74,28 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 		</style>
 		<?php endif; ?>
 		<script type="text/javascript" src="<?=HTTP_TEMPLATE;?>default/script/orkui.js"></script>
+		<!-- OrkTour: driver.js tours/hints/checklists; the library itself loads on first use -->
+<?php
+	// Page state for ork-tour.js. TourProgress is set on Controller::$data (logged-in only).
+	$__tourUid = isset($this->__session->user_id) ? (int)$this->__session->user_id : 0;
+	// Auth-flow and check-in pages never offer or auto-start a tour, even with a live session.
+	$__tourRoute = strtolower(strtok((string)($_REQUEST['Route'] ?? ''), '/'));
+	$__tourState = [
+		'loggedIn'   => $__tourUid > 0,
+		'quiet'      => in_array($__tourRoute, ['login', 'selfreg', 'signin'], true),
+		'userId'     => $__tourUid,
+		'profileUrl' => $__tourUid > 0 ? UIR . 'Player/profile/' . $__tourUid : '',
+		'saveUrl'    => UIR . 'TourAjax/save',
+		'progress'   => (object)($__tourUid > 0 ? ($this->__data['TourProgress'] ?? []) : []),
+	];
+?>
+		<script>window.OrkTourState = <?=json_encode($__tourState, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>;</script>
+		<script defer src="<?=HTTP_TEMPLATE;?>revised-frontend/script/ork-tour.js?v=<?=filemtime(DIR_TEMPLATE.'revised-frontend/script/ork-tour.js')?>"></script>
+		<script defer src="<?=HTTP_TEMPLATE;?>revised-frontend/script/tours/new-player.js?v=<?=filemtime(DIR_TEMPLATE.'revised-frontend/script/tours/new-player.js')?>"></script>
+		<script defer src="<?=HTTP_TEMPLATE;?>revised-frontend/script/tours/recommendations-manager.js?v=<?=filemtime(DIR_TEMPLATE.'revised-frontend/script/tours/recommendations-manager.js')?>"></script>
+		<script defer src="<?=HTTP_TEMPLATE;?>revised-frontend/script/tours/court-planner.js?v=<?=filemtime(DIR_TEMPLATE.'revised-frontend/script/tours/court-planner.js')?>"></script>
+		<script defer src="<?=HTTP_TEMPLATE;?>revised-frontend/script/tours/qualtest-builder.js?v=<?=filemtime(DIR_TEMPLATE.'revised-frontend/script/tours/qualtest-builder.js')?>"></script>
+		<script defer src="<?=HTTP_TEMPLATE;?>revised-frontend/script/tours/design-profile.js?v=<?=filemtime(DIR_TEMPLATE.'revised-frontend/script/tours/design-profile.js')?>"></script>
 		<!-- Google tag (gtag.js) -->
 		<script async src="https://www.googletagmanager.com/gtag/js?id=G-PVQCKENY0M"></script>
 		<script>
@@ -520,6 +542,8 @@ document.addEventListener('keydown', function (e) {
 					<a href='https://play.amtgard.com/' target='_blank'><i class='fas fa-map-marker-alt'></i> Find a Chapter</a>
 					<div class='nav-dropdown-divider'></div>
 					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!', '<?= UIR ?>ReleaseNotes', 'In the meantime, see the release notes');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
+					<!-- Filled by OrkTour with the tours that match this page -->
+					<div id='nav-tour-links' hidden></div>
 				</div>
 			</div>
 
