@@ -1710,7 +1710,9 @@
 					<button class="pk-btn pk-btn-secondary kn-rec-header-action" onclick="pkOpenRecModal()">
 						<i class="fas fa-star"></i> Recommend an Award
 					</button>
-					<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
+					<?php /* Gated on the Manager's own check. $ViewerHasCircle only grants the read-only
+					   "My Circles" view, and showed circle holders a button that always 403'd. */ ?>
+					<?php if (!empty($CanManageRecs)): ?>
 					<a class="pk-btn pk-btn-primary pk-manage-recs kn-rec-header-action" href="<?= UIR ?>Recommendations/manage/park/<?= (int)$park_id ?>"><i class="fas fa-tasks"></i> Manage Recs</a>
 					<?php endif; ?>
 				</div>
@@ -3800,3 +3802,6 @@ window.OrkBcCfg = {
 </script>
 <?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
 <?php endif; ?>
+
+<?php /* "Learn About Park Profiles": deferred so it runs after the head's deferred ork-tour.js. */ ?>
+<script defer src="<?= HTTP_TEMPLATE ?>revised-frontend/script/tours/park-profile.js?v=<?= filemtime(__DIR__ . '/script/tours/park-profile.js') ?>"></script>
