@@ -83,10 +83,13 @@
 				return false;
 			},
 			change: function (e, ui) {
+				// Given At, not Given By -- this handler used to clear #GivenBy/#MundaneId,
+				// so free text typed here left the previous location ids in place (or, on
+				// a first load, left them empty and submitted at_park_id/at_kingdom_id 0).
 				if (ui.item == null) {
-					showLabel('#GivenBy',null);
-					$('#MundaneId').val(null);
+					clearGivenAt();
 				}
+				checkRequiredFields();
 				return false;
 			}
 		}).focus(function() {
@@ -200,12 +203,21 @@
 		$( '#KingdomId' ).val(details['KingdomId']);
 		$( '#ParkId' ).val(details['ParkId']);
 		$( '#EventId' ).val(details['EventId']);
+		checkRequiredFields();
+	}
+	function clearGivenAt() {
+		$( '#KingdomId' ).val('');
+		$( '#ParkId' ).val('');
+		$( '#EventId' ).val('');
 	}
 	function checkRequiredFields() {
 		var hasAward = $('#AwardId').val() !== '' && $('#AwardId').val() !== null;
 		var hasRecipient = $('#MundaneId').val() !== '' && $('#MundaneId').val() !== null && $('#MundaneId').val() > 0;
 		var hasGivenBy = $('#GivenById').val() !== '' && $('#GivenById').val() !== null && $('#GivenById').val() > 0;
-		$('#Add').prop('disabled', !(hasAward && hasRecipient && hasGivenBy));
+		// "Where given" is required. Every Search/Location result carries a KingdomId,
+		// so a park OR a kingdom means a real location was picked from the list.
+		var hasGivenAt = ($('#ParkId').val() > 0) || ($('#KingdomId').val() > 0);
+		$('#Add').prop('disabled', !(hasAward && hasRecipient && hasGivenBy && hasGivenAt));
 	}
 </script>
 
@@ -253,7 +265,7 @@
 		</div>
 		<div>
 			<span>Given At:</span>
-			<span><input type='text' value='<?=$Award_addawards['GivenAt'] ?>' name='GivenAt' id='GivenAt' /></span>
+			<span><input type='text' value='<?=htmlspecialchars($GivenAtScope['Name'], ENT_QUOTES) ?>' name='GivenAt' id='GivenAt' /></span>
 		</div>
 		<div>
 			<span>Given For:</span>
@@ -265,8 +277,12 @@
 		</div>
 		<input type='hidden' id='GivenById' name='GivenById' value='<?=$Award_addawards['GivenById'] ?>' />
 		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=$Award_addawards['MundaneId'] ?>' />
-		<input type='hidden' id='ParkId' name='ParkId' value='<?=$Award_addawards['ParkId'] ?>' />
-		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=$Award_addawards['KingdomId'] ?>' />
+		<?php /* "Where given" defaults to the granting officer's own park (or kingdom, or
+		         blank when they hold neither) -- Controller_Award::default_given_at_scope().
+		         checkRequiredFields() above refuses the submit while it is still blank, and
+		         Controller_Award::is_request_valid() refuses it again server-side. */ ?>
+		<input type='hidden' id='ParkId' name='ParkId' value='<?=$GivenAtScope['ParkId'] ?>' />
+		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=$GivenAtScope['KingdomId'] ?>' />
 		<input type='hidden' id='EventId' name='EventId' value='<?=$Award_addawards['EventId'] ?>' />
 	</form>
 </div>
