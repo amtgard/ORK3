@@ -51,9 +51,9 @@ final class ScrollBuildTest extends TestCase
     }
 
     /**
-     * Park beats kingdom, matching Model_Award::kingdom_for_grant_row(): a park
-     * grant leaves at_kingdom_id blank, so when both are set the park is the
-     * narrower truth.
+     * Park beats kingdom for PROVENANCE, matching Award::kingdom_for_grant_row(): the
+     * place a grant was given is the scope whose officers may print it. Most park
+     * grants carry at_kingdom_id too, so "both set" is the ordinary park grant.
      */
     public function testAParkGrantScopesToTheParkAndAKingdomGrantToTheKingdom(): void
     {
@@ -64,6 +64,94 @@ final class ScrollBuildTest extends TestCase
         $kingdom = Scroll::BuildScroll($this->row(['ParkId' => 0, 'KingdomId' => 4]), $this->context());
         $this->assertSame('kingdom', $kingdom['scopeType']);
         $this->assertSame(4, $kingdom['scopeId']);
+    }
+
+    /**
+     * WHO THE CERTIFICATE NAMES. at_park_id is where an award was given, not who gave
+     * it: a Crown honour handed out at a park court carries the park AND the kingdom.
+     * A ladder above the park ceiling names the kingdom; a low rank, a rank 0 and a
+     * non-ladder keep the park; a row naming one body only is that body.
+     */
+    public function testIssuerScopeForRow(): void
+    {
+        $ceiling = Scroll::PARK_LADDER_RANK_CEILING;
+        $ladder  = ['AwardId' => 33, 'OfficerRole' => 'none', 'ParkId' => 435, 'KingdomId' => 4];
+
+        $this->assertSame('kingdom', Scroll::IssuerScopeForRow($ladder + ['Rank' => $ceiling + 1]));
+        $this->assertSame('kingdom', Scroll::IssuerScopeForRow($ladder + ['Rank' => 10]));
+        $this->assertSame('park', Scroll::IssuerScopeForRow($ladder + ['Rank' => $ceiling]));
+        $this->assertSame('park', Scroll::IssuerScopeForRow($ladder + ['Rank' => 1]));
+        $this->assertSame('park', Scroll::IssuerScopeForRow($ladder + ['Rank' => 0]), 'rank 0 says nothing');
+
+        // A kingdom's own ladder with no artwork of its own reads IsLadder.
+        $pseudo = ['AwardId' => 94, 'OfficerRole' => 'none', 'IsLadder' => '1', 'ParkId' => 435, 'KingdomId' => 4];
+        $this->assertSame('kingdom', Scroll::IssuerScopeForRow($pseudo + ['Rank' => 9]));
+
+        // A Custom Award at a park is the park's own honour, whatever its rank.
+        $custom = ['AwardId' => 94, 'OfficerRole' => 'none', 'IsLadder' => '0', 'ParkId' => 435, 'KingdomId' => 4];
+        $this->assertSame('park', Scroll::IssuerScopeForRow($custom + ['Rank' => 9]));
+
+        $this->assertSame('park', Scroll::IssuerScopeForRow(['ParkId' => 435, 'KingdomId' => 0, 'Rank' => 10]));
+        $this->assertSame('kingdom', Scroll::IssuerScopeForRow(['ParkId' => 0, 'KingdomId' => 4, 'Rank' => 1]));
+        $this->assertSame('', Scroll::IssuerScopeForRow(['ParkId' => 0, 'KingdomId' => 0]));
+    }
+
+    /**
+     * The issuer line follows IssuerScopeForRow(): a Griffon 9 given at a park names
+     * the kingdom — no park rank word, no "the ... of" — while provenance still
+     * records the park it was given at.
+     */
+    public function testAHighLadderGivenAtAParkNamesTheKingdom(): void
+    {
+        $s = Scroll::BuildScroll(
+            $this->row(['ParkId' => 435, 'KingdomId' => 4, 'Rank' => 9]),
+            $this->context()
+        );
+        $this->assertSame('The Kingdom of Crystal Groves', $s['issuerName']);
+        $this->assertFalse($s['useThe']);
+        $this->assertFalse($s['useOf']);
+        $this->assertSame('park', $s['scopeType'], 'provenance is where it was given');
+
+        $low = Scroll::BuildScroll($this->row(['ParkId' => 435, 'KingdomId' => 4, 'Rank' => 3]), $this->context());
+        $this->assertSame('Rising Sun Station', $low['issuerName']);
+        $this->assertTrue($low['useThe']);
+
+        // A court run or the composer names one body by name; that body stands even
+        // though the row carries both ids and a high rank.
+        $court = Scroll::BuildScroll(
+            $this->row(['ParkId' => 435, 'KingdomId' => 4, 'Rank' => 9, 'KingdomName' => '']),
+            $this->context()
+        );
+        $this->assertSame('Rising Sun Station', $court['issuerName']);
+    }
+
+    /**
+     * A Custom Award prints "with their first" only when something says it is a
+     * sequence: a ladder, a rank of 2+, or a rank the officer chose in the composer.
+     * A stored rank of 1 is the grant form's default for a one-off honour.
+     */
+    public function testACustomAwardAtRankOneIsNotRankedUnlessChosen(): void
+    {
+        $custom = ['AwardId' => 94, 'Name' => 'Custom Award', 'KingdomAwardName' => 'Custom Award', 'CustomAwardName' => 'Shire Hero'];
+
+        $this->assertFalse(Scroll::BuildScroll($this->row($custom + ['Rank' => 1]), $this->context())['ranked']);
+        $this->assertFalse(Scroll::BuildScroll($this->row($custom + ['Rank' => 0]), $this->context())['ranked']);
+        $this->assertTrue(Scroll::BuildScroll($this->row($custom + ['Rank' => 2]), $this->context())['ranked']);
+        $this->assertTrue(
+            Scroll::BuildScroll($this->row($custom + ['Rank' => 1]), $this->context(['rankExplicit' => true]))['ranked'],
+            'a rank picked in the composer is printed'
+        );
+        $this->assertTrue(
+            Scroll::BuildScroll($this->row($custom + ['Rank' => 1, 'IsLadder' => '1']), $this->context())['ranked'],
+            'a kingdom ladder on Custom Award is ranked'
+        );
+        $this->assertTrue(
+            Scroll::BuildScroll($this->row($custom + ['Rank' => 0, 'IsLadder' => '1']), $this->context())['ranked'],
+            'a rank-0 ladder keeps its hand-write blank'
+        );
+
+        // Bespoke orders are untouched: a Griffon 1 is ranked.
+        $this->assertTrue(Scroll::BuildScroll($this->row(['Rank' => 1]), $this->context())['ranked']);
     }
 
     /**

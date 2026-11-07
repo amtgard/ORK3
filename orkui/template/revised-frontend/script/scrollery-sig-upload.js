@@ -3,8 +3,9 @@
  * certificate on this print page.
  *
  * The file never leaves the browser. It is read here, cropped on a canvas and shown
- * through an object URL, so nothing reaches the server and nothing outlives the page:
- * a reload, including the reload an arms change makes, starts without it.
+ * through an object URL, so nothing reaches the server. A reload starts without it,
+ * with one exception: the reload a Heraldry change makes carries the crop across in
+ * sessionStorage for that one load (keepForReload, below).
  *
  * The typed signer stays in the page, hidden, because the fit measures it and because
  * Remove has to bring it back. The image's box is stored in percentages of its
@@ -27,6 +28,30 @@
     var status = document.getElementById('sc-sigfile-status');
     var url    = null;
     var observer = null;
+    var kept   = null;  // { canvas, transparent } — the crop, for carrying across a reload.
+
+    /* One-reload carry. A Heraldry change reloads the page (Scrollery_render.tpl), and
+       the object URL dies with it, so the crop rides in sessionStorage as a data URL
+       for exactly that one load, keyed to the run: the path plus the query string
+       without the three parameters the reload itself changes. A different run in the
+       same tab never picks it up, and it is removed the moment it is read. */
+    var KEEP_KEY = 'sc-sig-keep';
+
+    function runKey() {
+        var s = window.location.search.replace(/^\?/, '').split('&').filter(function (part) {
+            var name = part.split('=')[0];
+            return part !== '' && name !== 'heraldry' && name !== 'print' && name !== 'configure';
+        });
+        return window.location.pathname + '?' + s.join('&');
+    }
+
+    function dataUrlToBlob(dataUrl) {
+        var comma = dataUrl.indexOf(',');
+        var bytes = window.atob(dataUrl.slice(comma + 1));
+        var out = new Uint8Array(bytes.length);
+        for (var i = 0; i < bytes.length; i++) { out[i] = bytes.charCodeAt(i); }
+        return new Blob([out], { type: 'image/png' });
+    }
 
     function signatories() {
         return Array.prototype.slice.call(document.querySelectorAll('.AwardSignatory'));
@@ -73,29 +98,56 @@
         return { canvas: cut, transparent: transparent };
     }
 
-    /* The box above the writing line, up to the text over it. object-fit does the rest. */
-    function fit(signatory) {
+    /* The box above the writing line, up to the text over it. object-fit does the rest.
+       Read only: measure every signatory first, then write every one, so a bulk page
+       of N certificates costs one layout rather than N (a write between two reads
+       forces the browser to lay the page out again before the next read). */
+    function measure(signatory) {
         var image = signatory.querySelector('.ScUploadedSig');
         var line  = signatory.querySelector('.Underline');
-        if (!image || !line) { return; }
+        if (!image || !line) { return null; }
 
         var box  = signatory.getBoundingClientRect();
         var rule = line.getBoundingClientRect();
-        if (!box.width || !box.height || !rule.width) { return; }
+        if (!box.width || !box.height || !rule.width) { return null; }
 
         var section = signatory.closest('section');
         var above   = section ? section.previousElementSibling : null;
         var room    = above ? rule.top - above.getBoundingClientRect().bottom : 0;
         var height  = Math.min(Math.max(room, rule.top - box.top), rule.width * MAX_HEIGHT);
 
-        image.style.left   = ((rule.left - box.left) / box.width * 100) + '%';
-        image.style.width  = (rule.width / box.width * 100) + '%';
-        image.style.height = (height / box.height * 100) + '%';
-        image.style.bottom = ((box.bottom - rule.top - height * INK_DROP) / box.height * 100) + '%';
+        return {
+            image:  image,
+            left:   ((rule.left - box.left) / box.width * 100) + '%',
+            width:  (rule.width / box.width * 100) + '%',
+            height: (height / box.height * 100) + '%',
+            bottom: ((box.bottom - rule.top - height * INK_DROP) / box.height * 100) + '%'
+        };
+    }
+
+    function place(m) {
+        if (!m) { return; }
+        m.image.style.left   = m.left;
+        m.image.style.width  = m.width;
+        m.image.style.height = m.height;
+        m.image.style.bottom = m.bottom;
+    }
+
+    function fitSome(list) {
+        list.map(measure).forEach(place);
     }
 
     function fitAll() {
-        signatories().forEach(fit);
+        fitSome(signatories());
+    }
+
+    /* A ResizeObserver hands over only the boxes that changed; refit those alone. */
+    function refitObserved(entries) {
+        var seen = [];
+        for (var i = 0; i < entries.length; i++) {
+            if (seen.indexOf(entries[i].target) < 0) { seen.push(entries[i].target); }
+        }
+        fitSome(seen);
     }
 
     function clear() {
@@ -106,13 +158,15 @@
             signatory.removeAttribute('data-sc-signed');
         });
         if (url) { URL.revokeObjectURL(url); url = null; }
+        kept = null;
         input.value = '';
         remove.hidden = true;
         button.textContent = 'Upload Signature';
     }
 
-    function apply(blob, transparent) {
+    function apply(blob, transparent, canvas) {
         clear();
+        kept = canvas ? { canvas: canvas, transparent: transparent } : null;
         url = URL.createObjectURL(blob);
         var signed = signatories();
         signed.forEach(function (signatory) {
@@ -126,7 +180,7 @@
         fitAll();
         // A later refit of the page (a hand or heading change) moves the line.
         if (window.ResizeObserver) {
-            observer = new ResizeObserver(fitAll);
+            observer = new ResizeObserver(refitObserved);
             signed.forEach(function (signatory) { observer.observe(signatory); });
         }
         remove.hidden = false;
@@ -164,7 +218,7 @@
                 input.value = '';
                 return;
             }
-            result.canvas.toBlob(function (blob) { apply(blob, result.transparent); }, 'image/png');
+            result.canvas.toBlob(function (blob) { apply(blob, result.transparent, result.canvas); }, 'image/png');
         };
         image.onerror = function () {
             URL.revokeObjectURL(source);
@@ -184,6 +238,56 @@
     });
     window.addEventListener('beforeprint', fitAll);
     window.addEventListener('pagehide', clear);
+
+    /* For the Heraldry reload in Scrollery_render.tpl. has(): is a signature on the
+       page. keepForReload(): stash it for the next load of this run; false when it
+       could not be stored (quota, private mode), so the caller can ask first. */
+    window.ScrolleryUploadedSig = {
+        has: function () { return !!kept; },
+        keepForReload: function () {
+            if (!kept) { return true; }
+            try {
+                window.sessionStorage.setItem(KEEP_KEY, JSON.stringify({
+                    run: runKey(),
+                    data: kept.canvas.toDataURL('image/png'),
+                    transparent: kept.transparent
+                }));
+                return true;
+            } catch (e) {
+                try { window.sessionStorage.removeItem(KEEP_KEY); } catch (e2) { /* nothing to undo */ }
+                return false;
+            }
+        }
+    };
+
+    /* Bring a carried signature back, after the autofit pass so the first fit
+       measures the finished layout. */
+    var carried = null;
+    try {
+        carried = window.sessionStorage.getItem(KEEP_KEY);
+        if (carried !== null) { window.sessionStorage.removeItem(KEEP_KEY); }
+    } catch (e) { carried = null; }
+    if (carried) {
+        var restore = function () {
+            try {
+                var saved = JSON.parse(carried);
+                if (!saved || saved.run !== runKey() || typeof saved.data !== 'string' ||
+                    saved.data.indexOf('data:image/png;base64,') !== 0) { return; }
+                var blob = dataUrlToBlob(saved.data);
+                var image = new Image();
+                image.onload = function () {
+                    var canvas = document.createElement('canvas');
+                    canvas.width = image.naturalWidth;
+                    canvas.height = image.naturalHeight;
+                    canvas.getContext('2d').drawImage(image, 0, 0);
+                    apply(blob, !!saved.transparent, canvas);
+                };
+                image.src = saved.data;
+            } catch (e) { /* a mangled entry is simply not restored */ }
+        };
+        var fitted = window.ScrolleryAutofit && window.ScrolleryAutofit.ready;
+        if (fitted && typeof fitted.then === 'function') { fitted.then(restore, restore); } else { restore(); }
+    }
 
     var toolbar = document.getElementById('sc-signature-open');
     if (toolbar) {

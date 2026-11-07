@@ -71,7 +71,7 @@ final class ScrolleryCourtPrintTest extends TestCase
             // Every catalog choice that prints a name is in the map; one that would
             // print a blank title is not (it could only ever be skipped).
             $this->assertSame(
-                Model_Scrollery::courtChoicePrintsANameForTest($choice),
+                Scroll::CourtChoicePrintsAName($choice),
                 $map[$choice['KingdomAwardId']] ?? false,
                 $choice['Name']
             );

@@ -140,7 +140,7 @@ final class PlayerAwardsForPlayerWhereTest extends TestCase
     /**
      * Item 38. The render route looped one AwardsForPlayer() per id — 200 round
      * trips through a 9-table SELECT DISTINCT before a byte of certificate exists.
-     * AwardsForIds() is the batch, and it must FAIL CLOSED: `awards_id in ()` is a
+     * awards_for_ids() is the batch, and it must FAIL CLOSED: `awards_id in ()` is a
      * syntax error and `1=1` would hand back all 391k rows, so an empty or entirely
      * invalid list becomes the unsatisfiable `awards_id = 0` (awards_id is an
      * auto-increment primary key, so no row carries 0).
@@ -175,6 +175,43 @@ final class PlayerAwardsForPlayerWhereTest extends TestCase
     public function testTheBatchWhereDeduplicatesAndPreservesFirstSeenOrder(): void
     {
         $this->assertSame('awards.awards_id in (5,9)', Player::awardsForIdsWhereForTest([5, 9, 5, 9, 5]));
+    }
+
+    /**
+     * No caller asks for more than one print run, so the IN () is capped at
+     * Scroll::MAX_PRINT_RUN distinct ids — first seen wins.
+     */
+    public function testTheBatchWhereIsCappedAtOnePrintRun(): void
+    {
+        $sql = Player::awardsForIdsWhereForTest(range(1, Scroll::MAX_PRINT_RUN + 50));
+
+        $this->assertSame(
+            'awards.awards_id in (' . implode(',', range(1, Scroll::MAX_PRINT_RUN)) . ')',
+            $sql
+        );
+    }
+
+    /**
+     * Player is whitelisted on the JSON service (orkservice/Json/index.php), which
+     * dispatches any public method whose name starts uppercase and holds no `_`
+     * (JsonServer::validate_method()). The Scrollery batch readers return award
+     * notes, pronouns and authority scopes with no token, so none of them may be
+     * a public PascalCase method on Player.
+     */
+    public function testTheScrollReadersAreOffTheJsonSurface(): void
+    {
+        foreach (['AwardsForIds', 'GetScrollRecipients', 'GetIssuableScopes'] as $name) {
+            $this->assertFalse(method_exists(Player::class, $name), "Player::{$name} is reachable over JSON");
+        }
+
+        $batch = new ReflectionMethod(Player::class, 'awards_for_ids');
+        $this->assertTrue($batch->isPublic());
+        $this->assertStringContainsString('_', $batch->getName());
+
+        $this->assertTrue(method_exists(ScrollQuery::class, 'ScrollRecipients'));
+        $this->assertTrue(method_exists(ScrollQuery::class, 'IssuableScopes'));
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/orkservice/Json/index.php');
+        $this->assertStringNotContainsString("'ScrollQuery'", $src, 'ScrollQuery must stay off the JSON whitelist');
     }
 
     /**

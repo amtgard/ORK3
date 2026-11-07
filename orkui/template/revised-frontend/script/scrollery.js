@@ -200,16 +200,29 @@
      * watermark, not the ability to pick a rank, so a dead fetch must not put an
      * error banner on a page whose preview is fine.
      */
+    /*
+     * One request at a time, like reload(): picking B while A's ranks are still in
+     * flight aborts A's, and the playerId check is the belt to that brace — an
+     * answer for anyone but the recipient now in the field is dropped, so A's held
+     * rank can never move B's.
+     */
+    var ranksInFlight = null;
+
     function loadHeldRanks(pid) {
+        if (ranksInFlight) { ranksInFlight.abort(); ranksInFlight = null; }
         heldRanks = {};
         paintRankPills();
         if (rankLegend) { rankLegend.hidden = true; }
         if (!pid) { return; }
 
-        fetch(cfg.uir + 'PlayerAjax/player/' + encodeURIComponent(pid) + '/awardranks')
+        var ctl = new AbortController();
+        ranksInFlight = ctl;
+        fetch(cfg.uir + 'PlayerAjax/player/' + encodeURIComponent(pid) + '/awardranks',
+              { signal: ctl.signal, credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (ranks) {
-                if (!ranks) { return; }
+                if (ranksInFlight === ctl) { ranksInFlight = null; }
+                if (!ranks || String(playerId.value) !== String(pid)) { return; }
                 heldRanks = ranks;
                 if (rankLegend) { rankLegend.hidden = false; }
                 // The officer has not chosen yet, so open on the rank they hold —
@@ -1247,6 +1260,9 @@
         body.set('scopeId',     cfg.scopeId);
         body.set('awardId',     opt.value);
         body.set('rank',        rankEl.value || '0');
+        // Only a rank the officer picked by hand makes a Custom Award read as ranked;
+        // the held-rank prefill must not (Scroll::CustomIsRanked).
+        body.set('rankChosen',  rankTouched ? '1' : '0');
         body.set('variant',     variantEl.value || '');
         body.set('title',       opt.dataset.name || '');
         body.set('player',      playerEl.value.trim());
@@ -1281,14 +1297,15 @@
             signal: ctl.signal,
             credentials: 'same-origin'
         })
-            .then(function (r) { return r.json(); })
+            .then(readJson)
             .then(function (d) {
                 setBusy(false);
                 if (!d || !d.Status || d.Status.Status !== 0) {
-                    errEl.textContent = (d && d.Status && d.Status.Error) || 'Preview failed.';
+                    markStale((d && d.Status && d.Status.Error) || 'The preview could not be drawn.');
                     return;
                 }
                 errEl.textContent = '';
+                markStale(null);
                 mount.innerHTML = d.Html;
                 if (window.ScrolleryArms) { window.ScrolleryArms.knockout(mount); }
                 applyText();
@@ -1309,11 +1326,58 @@
                 syncSummary();
             })
             .catch(function (e) {
-                if (e.name === 'AbortError') { return; }
+                if (e && e.name === 'AbortError') { return; }
                 setBusy(false);
-                errEl.textContent = 'Preview failed.';
+                markStale(e && e.scMessage ? e.scMessage
+                    : 'The preview could not be reached. Check your connection and retry.');
             });
     }
+
+    /*
+     * A response is only JSON when the server says so. An expired session does not
+     * fail the request — the app answers 200 with its sign-in page — so r.json()
+     * would throw a SyntaxError and the officer would read "Preview failed." for
+     * what is really "sign in again". Anything that is not JSON is mapped to a
+     * sentence that says what happened; the thrown object carries it as scMessage.
+     */
+    var SESSION_MSG = 'Your session has expired — sign in again, then retry.';
+
+    function readJson(r) {
+        var type = (r.headers && r.headers.get('Content-Type')) || '';
+        if (type.indexOf('application/json') < 0) {
+            var e = new Error('not json');
+            e.scMessage = (r.ok || r.status === 401 || r.status === 403)
+                ? SESSION_MSG
+                : 'The server could not draw the preview (error ' + r.status + '). Retry in a moment.';
+            throw e;
+        }
+        if (!r.ok) {
+            var e2 = new Error('http ' + r.status);
+            e2.scMessage = 'The server could not draw the preview (error ' + r.status + '). Retry in a moment.';
+            throw e2;
+        }
+        return r.json();
+    }
+
+    /*
+     * A failed round trip leaves the LAST certificate on the stage, which is no
+     * longer the one the form describes. Say so on the stage itself rather than in a
+     * line far down the sidebar: dim it, cover it with why, and offer Retry.
+     * markStale(null) lifts it.
+     */
+    var staleEl = $('sc-stale'), staleWhy = $('sc-stale-why'), staleRetry = $('sc-stale-retry');
+
+    function markStale(message) {
+        if (stage) { stage.classList.toggle('is-stale', message !== null); }
+        if (!staleEl) {
+            if (message !== null) { errEl.textContent = message; }
+            return;
+        }
+        staleEl.hidden = message === null;
+        if (staleWhy) { staleWhy.textContent = message || ''; }
+    }
+
+    if (staleRetry) { staleRetry.addEventListener('click', function () { reload(); }); }
 
     /* ---- in-place updates: no round trip ------------------------------- */
 
@@ -1462,7 +1526,10 @@
 
     /* ---- recipient autocomplete ---------------------------------------- */
 
-    var acTimer = null, OPEN = 'kn-ac-open';
+    /* acSeq numbers each search; an answer that is not the latest is dropped, and the
+       previous request is aborted outright. Typing "Ro" then "Rob" must never end
+       with Ro's list on screen because it happened to arrive second. */
+    var acTimer = null, OPEN = 'kn-ac-open', acSeq = 0, acCtl = null;
 
     if (playerEl && acEl) {
         acEl.style.position = 'fixed';
@@ -1474,22 +1541,54 @@
             if (hadPlayer) { recipientCleared(); }
             applyText();
             var term = this.value.trim();
-            if (term.length < 2) { acEl.classList.remove(OPEN); return; }
-
             clearTimeout(acTimer);
+            if (term.length < 2) {
+                acSeq++;
+                if (acCtl) { acCtl.abort(); acCtl = null; }
+                acEl.classList.remove(OPEN);
+                return;
+            }
+
             acTimer = setTimeout(function () {
+                var seq = ++acSeq;
+                if (acCtl) { acCtl.abort(); }
+                var ctl = new AbortController();
+                acCtl = ctl;
                 // Scoped to the issuing kingdom first, as every other player search
                 // in the ORK is; "&q=", not "?q=", because the route already carries
                 // its own query string.
                 fetch(cfg.uir + 'KingdomAjax/playersearch/' + cfg.kingdomId
-                      + '&q=' + encodeURIComponent(term) + '&scope=own', { credentials: 'same-origin' })
-                    .then(function (r) { return r.json(); })
-                    .then(function (rows) { render(rows || []); });
+                      + '&q=' + encodeURIComponent(term) + '&scope=own',
+                      { credentials: 'same-origin', signal: ctl.signal })
+                    .then(function (r) {
+                        var type = (r.headers && r.headers.get('Content-Type')) || '';
+                        if (!r.ok || type.indexOf('application/json') < 0) { throw new Error('search'); }
+                        return r.json();
+                    })
+                    .then(function (rows) {
+                        if (seq !== acSeq) { return; }
+                        render(Array.isArray(rows) ? rows : []);
+                    })
+                    .catch(function (e) {
+                        if ((e && e.name === 'AbortError') || seq !== acSeq) { return; }
+                        // A search that failed is not a recipient that is wrong: the
+                        // name still prints as typed, so close the list and say nothing
+                        // louder than the empty state would.
+                        renderEmpty('Player search is unavailable — the name will print as typed.');
+                    });
             }, 220);
         });
 
+        /* Not a .kn-ac-item, so neither the click handler nor acKeyNav treats it as a
+           choice. */
+        function renderEmpty(message) {
+            acEl.innerHTML = '<div class="sc-ac-empty" role="status">' + esc(message) + '</div>';
+            if (typeof tnPositionAcFixed === 'function') { tnPositionAcFixed(playerEl, acEl); }
+            acEl.classList.add(OPEN);
+        }
+
         function render(rows) {
-            if (!rows.length) { acEl.classList.remove(OPEN); return; }
+            if (!rows.length) { renderEmpty('No players found — the name will print as typed.'); return; }
             // Row template mirrors the canonical kn-ac renderer in revised.js so the
             // Playersearch-v2 tier markers read the same everywhere.
             acEl.innerHTML = rows.slice(0, 10).map(function (p) {
@@ -1684,6 +1783,9 @@
         qs.set('scopeId',     cfg.scopeId);
         qs.set('awardId',     opt.value);
         qs.set('rank',        rankEl.value || '0');
+        // Only a rank the officer picked by hand makes a Custom Award read as ranked;
+        // the held-rank prefill must not (Scroll::CustomIsRanked).
+        qs.set('rankChosen',  rankTouched ? '1' : '0');
         qs.set('variant',     variantEl.value || '');
         qs.set('title',       opt.dataset.name || '');
         qs.set('player',      playerEl.value.trim());

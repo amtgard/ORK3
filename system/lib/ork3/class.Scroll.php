@@ -83,6 +83,9 @@ class Scroll extends Ork3
      */
     public const CUSTOM_TITLE_AWARD_ID = 246;
 
+    /** Custom Award, specifically — the half of CUSTOM_AWARD_IDS that is an award. */
+    public const CUSTOM_AWARD_AWARD_ID = 94;
+
     /**
      * The interstitial line between the recipient's name and the title, for the two
      * custom entries only. A ranked award already has one — "with her third" — built
@@ -112,9 +115,53 @@ class Scroll extends Ork3
      * internal word for "this kingdom made something up" — never the honour's name,
      * so ResolveTitle() must not print them on a certificate.
      *
+     * "Nonnoble Title" and "Noble Title" are the same kind of slot under another
+     * name: one kingdom's Custom Award kingdomaward is literally called "Nonnoble
+     * Title" (1,168 grants), and 88 grants carry "Nonnoble Title" / "Non-Noble Title"
+     * as their custom_name. Matched after CustomNameKey() folds case, hyphens and
+     * spacing, so every spelling of the slot reads as the slot.
+     *
      * @var list<string>
      */
-    private const CUSTOM_PLACEHOLDER_NAMES = ['custom award', 'custom title'];
+    private const CUSTOM_PLACEHOLDER_NAMES = ['custom award', 'custom title', 'nonnoble title', 'noble title'];
+
+    /**
+     * Custom Award (94) names that are not an honour Scrollery prints, by pattern —
+     * see RefusedCustomAwardName(). Matched against CustomNameKey()'s folded form
+     * (lower case, apostrophes dropped, every other non-letter/digit a single space).
+     *
+     * The award catalogue's own classes are the model: the grant picker's
+     * Award::OptionGroupLabelFor() sorts catalogue rows into Knighthoods,
+     * Masterhoods, Paragons, Noble Titles and Associate Titles from their peerage and
+     * is_title columns, and every one of those groups is refused by policy
+     * (DENIED_EXCLUDED). A Custom Award has no such columns — its name is free text —
+     * so the same classes are recognised by the names those catalogue rows carry
+     * (Knight of the Flame, Master Rose, Dragonmaster, Weaponmaster, Paragon Bard,
+     * Esquire, Squire, Page, Man-at-Arms, Apprentice, Defender, Warlord, Lord, Baron,
+     * Duchess ...) plus the shapes the real data writes them in.
+     *
+     * @var array<string, string> reason => regex over the folded name
+     */
+    private const REFUSED_CUSTOM_AWARD_PATTERNS = [
+        // "Title: Shadow Boxer", "Non-Noble: Bane of Bears", "Master Title".
+        'title'      => '/\b(title|titled|non ?noble|nonnoble|noble)\b/',
+        // Knighthoods, Paragons, Associate Titles, and the two title_class-10
+        // catalogue titles that carry no "Master" in their name.
+        'peerage'    => '/\b(knight|knighthood|paragon|squire|esquire|page|man at arms|woman at arms|men at arms|apprentice|defender|warlord)\b/',
+        // Masterhoods, and every "<thing>master": Dragonmaster, Weaponmaster,
+        // Warmaster, Battlemaster — and Guildmaster, which is an office besides.
+        'master'     => '/(master|mistress)\b/',
+        // Noble titles, as the leading word: "Baronet", "Duke, Northern Holdfast",
+        // "Grand Duke of Midgard". Anchored at the start so "Order of the Lady's
+        // Grace" style honours are left alone.
+        'noble'      => '/^(lord|lady|baronet|baronetess|baron|baroness|viscount|viscountess|count|countess|marquis|marquess|marchioness|duke|duchess|archduke|archduchess|grand duke|grand duchess|prince|princess)\b/',
+        // Offices — a job somebody held (IsOfficerPosition()'s rule, for free text).
+        // Champion only as an office ("Shire Champion", bare "Champion"), so a
+        // tournament "Champion of the Gods" is not caught.
+        'office'     => '/\b(monarch|regent|prime minister|gmr|heir apparent)\b|^((kingdom|principality|baronial|barony|ducal|duchy|shire|provincial|imperial|park) )?champion$/',
+        // Book-keeping recorded as an award: dues, credits, qualifications, renames.
+        'non-honour' => '/\b(dues|name change|qualified|qualification|bonus credits?|credit transfer|credits added)\b/',
+    ];
 
     /**
      * The longest custom title Scrollery will print.
@@ -1342,18 +1389,26 @@ class Scroll extends Ork3
     public static function ResolveTitle(array $awardRow, string $customName = ''): string
     {
         if (self::IsCustomAward($awardRow)) {
+            // A typed name is honoured only when it could print. On Custom Award (94)
+            // a typed title, masterhood or office is IGNORED rather than printed —
+            // the officer gets the stored name (or the blank line, which the composer
+            // refuses as COMPOSE_BLANK_TITLE), never "Esquire" on a certificate the
+            // allowlist would refuse for a stored grant of the same name.
             $typed = self::SanitiseCustomName($customName);
-            if ($typed !== '') {
+            if ($typed !== '' && !self::IsPlaceholderName($typed)
+                && !(self::IsCustomAwardOnly($awardRow) && self::RefusedCustomAwardName($typed) !== '')) {
                 return $typed;
             }
 
+            // A custom_name that is itself the slot's name ("Nonnoble Title",
+            // "Custom Award") names nothing, exactly like the catalogue placeholder.
             $granted = trim((string) ($awardRow['CustomAwardName'] ?? ''));
-            if ($granted !== '') {
+            if ($granted !== '' && !self::IsPlaceholderName($granted)) {
                 return $granted;
             }
 
             $kingdom = trim((string) ($awardRow['KingdomAwardName'] ?? ''));
-            if ($kingdom !== '' && !in_array(strtolower($kingdom), self::CUSTOM_PLACEHOLDER_NAMES, true)) {
+            if ($kingdom !== '' && !self::IsPlaceholderName($kingdom)) {
                 return $kingdom;
             }
 
@@ -1416,6 +1471,68 @@ class Scroll extends Ork3
     public static function IsCustomAwardId(int $awardId): bool
     {
         return in_array($awardId, self::CUSTOM_AWARD_IDS, true);
+    }
+
+    /**
+     * A free-text name folded for matching: lower case, apostrophes dropped (so
+     * "Lord's" stays one word), every other run of non-letters/digits one space.
+     * "Non-Noble  Title" and "nonnoble title" fold to "non noble title" and
+     * "nonnoble title".
+     */
+    public static function CustomNameKey(string $name): string
+    {
+        $key = mb_strtolower($name, 'UTF-8');
+        $key = (string) preg_replace("/['\u{2019}`]/u", '', $key);
+        $key = (string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', $key);
+
+        return trim($key);
+    }
+
+    /** Whether a name is one of CUSTOM_PLACEHOLDER_NAMES, however it is spelt. */
+    public static function IsPlaceholderName(string $name): bool
+    {
+        $joined = str_replace(' ', '', self::CustomNameKey($name));
+        if ($joined === '') {
+            return false;
+        }
+        foreach (self::CUSTOM_PLACEHOLDER_NAMES as $placeholder) {
+            if ($joined === str_replace(' ', '', $placeholder)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Why a Custom Award (94) name is not an honour Scrollery prints — 'title',
+     * 'peerage', 'master', 'noble', 'office', 'non-honour' — or '' when it may print.
+     * See REFUSED_CUSTOM_AWARD_PATTERNS for each class and where it comes from.
+     *
+     * Custom Award ONLY. Custom Title (246) is kept on the allowlist precisely to
+     * print a typed title, so this is never asked of it.
+     */
+    public static function RefusedCustomAwardName(string $name): string
+    {
+        $key = self::CustomNameKey($name);
+        if ($key === '') {
+            return '';
+        }
+        foreach (self::REFUSED_CUSTOM_AWARD_PATTERNS as $reason => $pattern) {
+            if (preg_match($pattern, $key) === 1) {
+                return $reason;
+            }
+        }
+
+        return '';
+    }
+
+    /** Whether a row is a grant of Custom Award (94) specifically, not Custom Title. */
+    private static function IsCustomAwardOnly(array $awardRow): bool
+    {
+        return self::IsCustomAward($awardRow)
+            && (int) ($awardRow['AwardId'] ?? 0) !== self::CUSTOM_TITLE_AWARD_ID
+            && (int) ($awardRow['AliasAwardId'] ?? 0) !== self::CUSTOM_TITLE_AWARD_ID;
     }
 
     /**
@@ -1743,8 +1860,14 @@ class Scroll extends Ork3
         // the allowlist — a knighthood a kingdom happened to call "Order of the
         // Hunter" would print. No such row exists today; the gate is what keeps that
         // true.
+        //
+        // A Custom Award grant names its honour in custom_name, not the catalogue —
+        // 300+ archery grants are recorded as Custom Award + "Order of the Marksman"
+        // / "Order of the Hunter" — so on 94 that name is asked too, after the
+        // catalogue's own names (a kingdomaward the kingdom named for archery wins).
         if ($awardId === 0 || self::IsCustomAwardId($awardId)) {
-            foreach (['KingdomAwardName', 'Name'] as $key) {
+            $keys = $awardId === self::CUSTOM_AWARD_AWARD_ID ? ['KingdomAwardName', 'Name', 'CustomAwardName'] : ['KingdomAwardName', 'Name'];
+            foreach ($keys as $key) {
                 $archery = self::ArcheryOrderForName((string) ($awardRow[$key] ?? ''));
                 if ($archery !== null) {
                     return $archery;
@@ -1755,9 +1878,21 @@ class Scroll extends Ork3
         // The custom scroll is no longer the catch-all it was: only the two custom
         // catalogue entries reach it. A dangling kingdomaward, an orphan noble id, a
         // title, a masterhood — all of which used to land here — now return null.
-        return self::IsCustomAwardId($awardId) && self::IsCustomEligible($awardRow)
-            ? (self::Orders()['custom'] ?? null)
-            : null;
+        if (!self::IsCustomAwardId($awardId) || !self::IsCustomEligible($awardRow)) {
+            return null;
+        }
+
+        // ...and a Custom Award is a free-text door to the same classes. Its stored
+        // name is classified the way the catalogue's would be (RefusedCustomAwardName()):
+        // "Esquire", "Dragonmaster", "Baronial Monarch", "Dues Paid For Life" are not
+        // ladder honours and are refused, DENIED_EXCLUDED, like their catalogue twins.
+        // A blank name still prints its blank line. Custom Title (246) is exempt — a
+        // typed title is what it is on the allowlist for.
+        if ($awardId === self::CUSTOM_AWARD_AWARD_ID && self::RefusedCustomAwardName(self::ResolveTitle($awardRow)) !== '') {
+            return null;
+        }
+
+        return self::Orders()['custom'] ?? null;
     }
 
     public static function HasArt(array $awardRow): bool
@@ -1776,6 +1911,29 @@ class Scroll extends Ork3
     {
         return (int) ($awardRow['Revoked'] ?? 0) !== 1
             && self::HasArt(Award::correct_dangling_officer_role($awardRow));
+    }
+
+    /**
+     * The DESIGN a printable row carries, for the reprint list: which order's art it
+     * resolves to, the plate variants that order offers (Owl ships parchment /
+     * cyanotype / transparency, Battle arcane / martial), and whether it is the
+     * order's own artwork or the generic composed scroll ('custom' — a ground, a
+     * border and a numeral rather than real plates). Pass the row AFTER
+     * Award::correct_dangling_officer_role(), as IsPrintableRow() resolves it.
+     *
+     * @return array{OrderId: string, Variants: list<string>, HasOrderArt: bool}
+     */
+    public static function ReprintDesign(array $awardRow): array
+    {
+        $order    = self::OrderForAwardRow($awardRow);
+        $orderId  = (string) ($order['id'] ?? '');
+        $variants = is_array($order['variants'] ?? null) ? $order['variants'] : [];
+
+        return [
+            'OrderId'     => $orderId,
+            'Variants'    => array_values(array_filter(array_map('strval', $variants))),
+            'HasOrderArt' => $orderId !== '' && $orderId !== 'custom',
+        ];
     }
 
     /**
@@ -1853,14 +2011,17 @@ class Scroll extends Ork3
 
     /**
      * WHO MAY PRINT an award row's certificate — the module's whole authorization
-     * ladder, in order: revoked refuses; a global admin may; the recipient may; an
+     * ladder, in order: a global admin is entitled; the recipient is entitled; an
      * unattributed row (no at_park_id and no at_kingdom_id) refuses; park AUTH_EDIT
-     * at the park it was given at may; kingdom AUTH_EDIT at the kingdom it was given
-     * at may; everyone else is refused.
+     * at the park it was given at is entitled; kingdom AUTH_EDIT at the kingdom it
+     * was given at is entitled; everyone else is refused (DENIED_AUTH). Only THEN,
+     * for an entitled viewer, does a revoked row refuse (DENIED_REVOKED).
      *
-     * Fail-closed order: revocation is checked before identity, so neither a
-     * recipient nor an admin can reprint a stripped award (2,856 rows are revoked,
-     * 59 still carry a live mundane_id). ~120k rows (30.74%) carry neither
+     * Revocation still refuses everyone, so neither a recipient nor an admin can
+     * reprint a stripped award (2,856 rows are revoked, 59 still carry a live
+     * mundane_id) — but it is checked AFTER identity, so a viewer with no claim on
+     * the row is told only "not authorised" and cannot use the reason as an oracle
+     * for which award ids were revoked. ~120k rows (30.74%) carry neither
      * at_park_id nor at_kingdom_id, so there is no issuing body to name and no scope
      * for an officer's authority to attach to; the admin branch is checked before
      * that attribution gate so an admin can still reach them. DELIBERATELY NOT WIDENED to the awards.park_id /
@@ -1882,8 +2043,32 @@ class Scroll extends Ork3
      */
     public static function PrintPermission(array $awardRow, int $viewerId, ?bool $isAdmin = null): array
     {
+        // WHO first, WHAT second. Revocation still refuses everyone — recipient and
+        // admin included — but only a viewer already entitled to the row learns that
+        // it was revoked. Checking it before identity told any logged-in stranger
+        // which award ids had been stripped (an oracle over ork_awards.revoked).
+        $authorised = self::viewerEntitledToRow($awardRow, $viewerId, $isAdmin);
+        if ($authorised !== true) {
+            return $authorised;
+        }
+
         if ((int) ($awardRow['Revoked'] ?? 0) === 1) {
             return self::PrintDenial(self::DENIED_REVOKED);
+        }
+
+        return self::PrintAllowed();
+    }
+
+    /**
+     * The identity half of PrintPermission(): true when the viewer is entitled to the
+     * row at all, else the denial to show them. Says nothing about revocation or art.
+     *
+     * @return true|array{Allowed: bool, Reason: string, Message: string}
+     */
+    private static function viewerEntitledToRow(array $awardRow, int $viewerId, ?bool $isAdmin)
+    {
+        if ($viewerId <= 0) {
+            return self::PrintDenial(self::DENIED_AUTH);
         }
 
         $parkId    = (int) ($awardRow['ParkId'] ?? 0);
@@ -1891,25 +2076,60 @@ class Scroll extends Ork3
         $auth      = Ork3::$Lib->authorization;
 
         if ($isAdmin ?? self::IsPrintAdmin($viewerId)) {
-            return self::PrintAllowed();
+            return true;
         }
 
-        if ((int) ($awardRow['MundaneId'] ?? 0) === $viewerId && $viewerId > 0) {
-            return self::PrintAllowed();
+        if ((int) ($awardRow['MundaneId'] ?? 0) === $viewerId) {
+            return true;
         }
 
+        // No body to hold office over, so no officer can be entitled. Report it as
+        // not-authorised: this viewer is neither admin nor recipient, and naming the
+        // row "unattributed" would confirm the award id exists (an existence oracle).
         if ($parkId <= 0 && $kingdomId <= 0) {
-            return self::PrintDenial(self::DENIED_UNATTRIBUTED);
+            return self::PrintDenial(self::DENIED_AUTH);
         }
 
         if ($parkId > 0 && (bool) $auth->HasAuthority($viewerId, AUTH_PARK, $parkId, AUTH_EDIT)) {
-            return self::PrintAllowed();
+            return true;
         }
         if ($kingdomId > 0 && (bool) $auth->HasAuthority($viewerId, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)) {
-            return self::PrintAllowed();
+            return true;
         }
 
         return self::PrintDenial(self::DENIED_AUTH);
+    }
+
+    /**
+     * WHICH rung of viewerEntitledToRow()'s ladder entitles this viewer to the row —
+     * 'admin', 'recipient', 'park-officer' or 'kingdom-officer' — or '' when none
+     * does. Same order as the ladder, so the first rung that would have let the print
+     * through is the one named. For the print log's auth_basis only; it decides
+     * nothing, and PrintPermission() stays the gate.
+     */
+    public static function PrintAuthBasis(array $awardRow, int $viewerId, ?bool $isAdmin = null): string
+    {
+        if ($viewerId <= 0) {
+            return '';
+        }
+        if ($isAdmin ?? self::IsPrintAdmin($viewerId)) {
+            return 'admin';
+        }
+        if ((int) ($awardRow['MundaneId'] ?? 0) === $viewerId) {
+            return 'recipient';
+        }
+
+        $parkId    = (int) ($awardRow['ParkId'] ?? 0);
+        $kingdomId = (int) ($awardRow['KingdomId'] ?? 0);
+        $auth      = Ork3::$Lib->authorization;
+        if ($parkId > 0 && (bool) $auth->HasAuthority($viewerId, AUTH_PARK, $parkId, AUTH_EDIT)) {
+            return 'park-officer';
+        }
+        if ($kingdomId > 0 && (bool) $auth->HasAuthority($viewerId, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)) {
+            return 'kingdom-officer';
+        }
+
+        return '';
     }
 
     /**
@@ -2475,6 +2695,89 @@ class Scroll extends Ork3
     }
 
     /**
+     * The highest ladder rank Scrollery attributes to a PARK when a grant names both a
+     * park and a kingdom. Above it, the kingdom is named as issuer. See
+     * IssuerScopeForRow().
+     *
+     * A Scrollery heuristic, NOT an ORK or Amtgard rule: nothing in the ORK records
+     * which body granted an award, and no park ceiling exists anywhere in the
+     * codebase (kingdom corpora set their own). 5 is the conservative line — beyond
+     * it a grant is most likely the Crown's — and errs toward naming the kingdom,
+     * which is never false about who stands behind an award, rather than toward a
+     * park that may only have been the venue.
+     */
+    public const PARK_LADDER_RANK_CEILING = 5;
+
+    /**
+     * Which body a REPRINTED grant names as its issuer: 'park', 'kingdom', or '' when
+     * the row names neither. The single rule behind the issuer name, the issuer title
+     * and the issuer's arms, so those three cannot disagree.
+     *
+     * WHY IT IS NEEDED. at_park_id is where an award was GIVEN, not who gave it. The
+     * grant forms record a park pick with its kingdom as well (Player::UpdateAward()
+     * derives at_kingdom_id from the park), so
+     * 215,548 grants carry both ids — including Crown honours handed out at a park
+     * court: 4,358 ladder grants at rank 8-10 name a park. Naming the park first
+     * printed "the Barony of <venue> presents" on a kingdom's Dragon 9.
+     *
+     * THE RULE, from what the row reliably carries (ParkId, KingdomId, Rank,
+     * IsLadder / the resolved order — the ORK has no grantor column, and officer
+     * history carries no dates, so "did the giver hold that park's office then"
+     * cannot be answered):
+     *
+     *   - only a park  -> 'park';  only a kingdom -> 'kingdom';  neither -> ''.
+     *   - both, on a LADDER above PARK_LADDER_RANK_CEILING -> 'kingdom'.
+     *   - both, otherwise -> 'park'. A low ladder rank is the common park grant
+     *     (88% of rank-1 ladder grants name a park), rank 0 says nothing, and a
+     *     Custom Award at a park is overwhelmingly the park's own honour ("Shire
+     *     Champion", "Order of the Facade") — so the venue is kept where the row
+     *     gives no reason to doubt it.
+     *
+     * Reads ids, not names. A row that names only one body by NAME — a court run's
+     * or the composer's — is BuildScroll()'s to resolve by that name.
+     */
+    public static function IssuerScopeForRow(array $awardRow): string
+    {
+        $parkId    = (int) ($awardRow['ParkId'] ?? 0);
+        $kingdomId = (int) ($awardRow['KingdomId'] ?? 0);
+
+        if ($parkId <= 0) {
+            return $kingdomId > 0 ? 'kingdom' : '';
+        }
+        if ($kingdomId <= 0) {
+            return 'park';
+        }
+
+        $isLadder = (int) ($awardRow['IsLadder'] ?? 0) === 1;
+        if (!$isLadder) {
+            // Every bespoke order is a ladder; AwardsForPlayer()'s IsLadder misses the
+            // ones whose base award carries no is_ladder flag of its own.
+            $order    = self::OrderForAwardRow($awardRow);
+            $isLadder = $order !== null && $order['id'] !== 'custom';
+        }
+
+        return $isLadder && (int) ($awardRow['Rank'] ?? 0) > self::PARK_LADDER_RANK_CEILING ? 'kingdom' : 'park';
+    }
+
+    /**
+     * Whether a CUSTOM-scroll certificate prints an ordinal ("with their second").
+     *
+     * True when the kingdom made the award a ladder (IsLadder — a rank-0 ladder keeps
+     * its hand-write blank), when it was given at rank 2 or above (a second grant is
+     * a sequence whatever the catalogue says), or when the officer explicitly chose a
+     * rank in the composer ($explicitRank). A bare stored rank of 1 is NOT enough:
+     * it is the grant form's default for a one-off honour.
+     *
+     * @param int $rank the clamped art rank BuildScroll() resolved
+     */
+    public static function CustomIsRanked(array $awardRow, int $rank, bool $explicitRank = false): bool
+    {
+        return (int) ($awardRow['IsLadder'] ?? 0) === 1
+            || $rank > 1
+            || ($explicitRank && $rank > 0);
+    }
+
+    /**
      * @param array $context Recognised keys include:
      *   - customName (string) the title an officer typed at print time. Honoured ONLY
      *     when the award resolves to a custom entry (Custom Award 94 / Custom Title
@@ -2534,8 +2837,14 @@ class Scroll extends Ork3
         // certificate sets in separate sizes — "and the Kingdom of" / "the" / "Wetlands"
         // — is split out of them by ScrollText::IssuerLines() into issuerLead,
         // issuerArticle and issuerPlace, below.
-        $isPark     = $parkName !== '';
-        $issuerName = $isPark ? $parkName : ScrollText::RepairMojibake((string) ($awardRow['KingdomName'] ?? ''));
+        //
+        // WHICH body is IssuerScopeForRow()'s call when the row names both — a reprint,
+        // whose park is where the award was given and not necessarily who gave it. A
+        // row naming only one body by name (a court run, the composer) is that body.
+        $kingdomName = ScrollText::RepairMojibake((string) ($awardRow['KingdomName'] ?? ''));
+        $isPark      = $parkName !== ''
+            && (trim($kingdomName) === '' || self::IssuerScopeForRow($awardRow) !== 'kingdom');
+        $issuerName  = $isPark ? $parkName : $kingdomName;
 
         // The title is the officer's or the park's own, corrected before the model runs:
         // "Inactive" (a park status that leaked into ork_parktitle.title on 5 parks) reads
@@ -2564,8 +2873,13 @@ class Scroll extends Ork3
         // Scrollery/compose builds its row out of $_GET and carries none of the
         // three, so its controller passes them in context.
         //
-        // Park beats kingdom, matching Award::kingdom_for_grant_row(): a park
-        // grant leaves at_kingdom_id blank, and the park is the narrower truth.
+        // Park beats kingdom, matching Award::kingdom_for_grant_row(): this is the
+        // body whose officers may print the grant (PrintPermission()) and whose bulk
+        // list it appears on — the place it was GIVEN, the narrower of the two ids.
+        // Most park-given grants carry at_kingdom_id as well (the grant forms record
+        // the park's kingdom alongside it), so "both set" is the ordinary park grant,
+        // not a kingdom one. The body the certificate NAMES is a different question —
+        // see IssuerScopeForRow() — and can be the kingdom on a park-given grant.
         $rowParkId    = (int) ($awardRow['ParkId'] ?? 0);
         $rowKingdomId = (int) ($awardRow['KingdomId'] ?? 0);
         $scopeType    = $rowParkId > 0 ? 'park' : ($rowKingdomId > 0 ? 'kingdom' : '');
@@ -2644,10 +2958,11 @@ class Scroll extends Ork3
             array_map(static fn (string $u): bool => $u !== '', $arms),
             $design['drawIn'] !== ''
         );
-        // The stamp is the issuing body's own arms under the signature. Seals already
-        // puts the park's there, so the two never draw together.
+        // The stamp is the issuing body's own arms under the signature — the body the
+        // certificate names, which on a reprint can be the kingdom of a park-given
+        // grant. Seals already puts the park's there, so the two never draw together.
         $stamp = $design['heraldryStamp'] && $design['heraldryLayout'] !== 'seals' && $scopeType !== ''
-            ? $arms[$scopeType]
+            ? $arms[$parkName === '' && trim($kingdomName) === '' ? $scopeType : ($isPark ? 'park' : 'kingdom')]
             : '';
         $design['heraldryStamp'] = $stamp !== '';
 
@@ -2682,9 +2997,16 @@ class Scroll extends Ork3
             // exactly the hand-writing case. The (int) cast is load-bearing — IsLadder
             // arrives from Yapo as the raw column value ('1'/'0'/null), so a strict === 1
             // would be false for every ladder and invert the rule.
+            //
+            // A CUSTOM award is ranked only when something says it is a sequence: the
+            // kingdom made it a ladder (IsLadder), it was given at rank 2+, or the
+            // officer chose a rank in the composer (context rankExplicit). A stored
+            // rank of 1 alone is not enough — 4,726 Custom Award grants sit at rank 1,
+            // most of them one-off honours the grant form defaulted, and "with their
+            // first / Shire Champion" reads as if a second were coming. See
+            // CustomIsRanked().
             'ranked'      => $order['id'] !== 'custom'
-                || $rank > 0
-                || (int) ($awardRow['IsLadder'] ?? 0) === 1,
+                || self::CustomIsRanked($awardRow, $rank, !empty($context['rankExplicit'])),
             'variant'     => $variant,
             'title'       => ScrollText::RepairMojibake(self::ResolveTitle($awardRow, (string) ($context['customName'] ?? ''))),
             // Introduces the title on the two custom entries, where 'ranked' is false and
@@ -2845,7 +3167,7 @@ class Scroll extends Ork3
      *
      * ⚠️ NO VIEWER IS IN THIS KEY, AND NONE MAY BE. That is safe only because `$s`
      * carries no authority decision: by the time Render() sees it, the (viewer,
-     * award) gate in Model_Scrollery::print_permission() has already said yes, and
+     * award) gate in Scroll::PrintPermission() has already said yes, and
      * that gate is deliberately never cached on anything less than the pair. This
      * caches the ARTEFACT, not the permission to have it.
      */
@@ -3155,7 +3477,8 @@ class Scroll extends Ork3
      */
     public static function MintPrintToken(array $awardsIds, int $viewerId, int $ttl = self::PRINT_TOKEN_TTL): string
     {
-        if ($viewerId <= 0) {
+        // No configured secret, no tokens — see printTokenSecret().
+        if ($viewerId <= 0 || self::printTokenSecret() === '') {
             return '';
         }
 
@@ -3192,6 +3515,12 @@ class Scroll extends Ork3
     public static function VerifyPrintToken(string $token, array $awardsIds): array
     {
         $bad = static fn (string $why): array => ['Valid' => false, 'ViewerId' => 0, 'Reason' => $why];
+
+        // Fail closed: with no configured secret every token is refused, rather than
+        // checked against a key someone else could compute.
+        if (self::printTokenSecret() === '') {
+            return $bad('no-secret');
+        }
 
         $parts = explode('.', trim($token));
         if (count($parts) !== 4 || $parts[0] !== self::PRINT_TOKEN_VERSION) {
@@ -3276,34 +3605,41 @@ class Scroll extends Ork3
     }
 
     /**
-     * The signing key.
+     * The signing key, or '' when there is none — and '' DISABLES TOKENS.
      *
-     * `SCROLL_PRINT_SECRET` in config is the intended source and a deployment
-     * SHOULD define one (any long random string; it never leaves the server and
-     * rotating it only invalidates tokens minted in the last five minutes).
+     * `SCROLL_PRINT_SECRET` in config is the ONLY source. A deployment that wants
+     * print tokens must define one (any long random string; it never leaves the
+     * server and rotating it only invalidates tokens minted in the last five
+     * minutes). It must be stable across processes — never generated per request —
+     * or PHP-FPM answering the render with a different worker than minted the token
+     * breaks every token.
      *
-     * Without it the key is DERIVED from server-side configuration that is already
-     * secret and already stable across a request — never generated per process,
-     * which would break the moment PHP-FPM answered the render with a different
-     * worker than minted the token. The derivation is a floor so the feature works
-     * on an installation that has not been told about the constant, not a
-     * substitute for setting one: on an install still carrying config.dist.php's
-     * placeholder DB_PASSWORD the derived key is guessable, which is why the
-     * constant exists.
+     * FAILS CLOSED. There used to be a fallback key derived from DB_PASSWORD /
+     * DB_USERNAME / DB_DATABASE; on any install still carrying config.dist.php's
+     * placeholder credentials that key is public, and a token is an IDENTITY (see
+     * Controller_Scrollery::print_viewer()), so a guessable key let anyone print as
+     * anyone. With no constant, MintPrintToken() mints nothing and
+     * VerifyPrintToken() refuses everything; the render route then falls back to
+     * the session exactly as it did before tokens existed.
      */
     private static function printTokenSecret(): string
     {
-        if (defined('SCROLL_PRINT_SECRET') && trim((string) SCROLL_PRINT_SECRET) !== '') {
-            return (string) SCROLL_PRINT_SECRET;
+        return self::printTokenSecretFromForTest(
+            defined('SCROLL_PRINT_SECRET') ? (string) constant('SCROLL_PRINT_SECRET') : null
+        );
+    }
+
+    /**
+     * The secret-resolution rule on its own, so a test can pin "absent or blank
+     * means no key" without a process that lacks the constant. Never derives one.
+     */
+    public static function printTokenSecretFromForTest(?string $configured): string
+    {
+        if ($configured === null || trim($configured) === '') {
+            return '';
         }
 
-        return hash(
-            'sha256',
-            'scrollery-print-token|'
-            . (defined('DB_PASSWORD') ? DB_PASSWORD : '')
-            . '|' . (defined('DB_USERNAME') ? DB_USERNAME : '')
-            . '|' . (defined('DB_DATABASE') ? DB_DATABASE : '')
-        );
+        return $configured;
     }
 
     /**
@@ -3362,6 +3698,370 @@ class Scroll extends Ork3
         }
 
         return mb_strtolower($normalised);
+    }
+
+    /**
+     * The POSSESSIVE pronoun a recipient's certificate prints — the text layer
+     * reads "with <her> third".
+     *
+     * Never blank: an empty value makes the sentence read "with third".
+     *
+     * This is an outright improvement on Arcanyst, where the pronoun was typed in
+     * per recipient and defaulted to "their".
+     *
+     * Precedence: pronoun_id, then the custom-pronoun JSON "p" set, then
+     * pronoun_freetext through ResolvePossessive(), then "their".
+     *
+     * @param array<string, mixed> $player a Player::GetScrollRecipient() row
+     * @param array<int, array{Subject:string, Possessive:string}> $pronounRows
+     *        the WHOLE ork_pronoun list, keyed by pronoun_id
+     */
+    public static function PossessiveForRecipient(array $player, array $pronounRows): string
+    {
+        $pronounId = (int) ($player['PronounId'] ?? 0);
+        if ($pronounId > 0) {
+            $possessive = self::possessiveForIds([$pronounId], $pronounRows);
+            if ($possessive !== '') {
+                return $possessive;
+            }
+        }
+
+        // Custom pronouns are stored as {"s":[ids],"o":[ids],"p":[ids],...} — "p"
+        // being the possessive set. Rare (66 players), but cheap to honour.
+        $custom = (string) ($player['PronounCustom'] ?? '');
+        if ($custom !== '') {
+            $decoded = json_decode($custom, true);
+            if (is_array($decoded) && !empty($decoded['p']) && is_array($decoded['p'])) {
+                $ids = array_values(array_filter(array_map('intval', $decoded['p'])));
+                if ($ids !== []) {
+                    $possessive = self::possessiveForIds($ids, $pronounRows);
+                    if ($possessive !== '') {
+                        return $possessive;
+                    }
+                }
+            }
+        }
+
+        // pronoun_freetext is populated by another branch; read it only if the key is
+        // actually present, so this works either side of that merge.
+        //
+        // ResolvePossessive(), NOT a bare PossessiveFromFreetext() with a fall to
+        // "their". This branch used to give up the moment the subject table
+        // missed, while the officer's override box — the same free text, typed by
+        // someone else — got a post-slash fallback. So a recipient whose profile
+        // said "ze/zir" printed "their", and an officer retyping it verbatim printed
+        // "zir". One resolver now serves both doors; the cap is this door's own
+        // column width rather than the override input's maxlength.
+        $freetext = trim((string) ($player['PronounFreetext'] ?? ''));
+        if ($freetext !== '') {
+            $possessive = self::ResolvePossessive(
+                $freetext,
+                $pronounRows,
+                self::PRONOUN_FREETEXT_MAX_LENGTH
+            );
+            if ($possessive !== '') {
+                return $possessive;
+            }
+        }
+
+        return 'their';
+    }
+
+    /**
+     * The possessive forms the composer's "pronoun" datalist offers, de-duplicated
+     * and in table order (ork_pronoun.pronoun_id asc): rows 4 and 12 both give
+     * "her", 2 and 11 both give "his".
+     *
+     * @param array<int, array{Subject:string, Possessive:string}> $pronounRows
+     * @return list<string>
+     */
+    public static function PossessiveSuggestions(array $pronounRows): array
+    {
+        $seen = [];
+        foreach ($pronounRows as $row) {
+            $possessive = trim((string) ($row['Possessive'] ?? ''));
+            if ($possessive !== '') {
+                $seen[mb_strtolower($possessive)] = true;
+            }
+        }
+
+        return array_keys($seen);
+    }
+
+    /**
+     * @param int[] $ids
+     * @param array<int, array{Subject:string, Possessive:string}> $pronounRows
+     */
+    private static function possessiveForIds(array $ids, array $pronounRows): string
+    {
+        foreach ($ids as $id) {
+            $possessive = trim((string) ($pronounRows[$id]['Possessive'] ?? ''));
+            if ($possessive !== '') {
+                return $possessive;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Why a Court Planner line did not make it into a Scrollery print run. The
+     * planner shows these verbatim, so they are written for the officer.
+     */
+    public const COURT_SKIP_UNPRINTABLE = "Scrollery can't print this award.";
+    public const COURT_SKIP_NO_NAME     = 'This award has no name to print.';
+    public const COURT_SKIP_NO_PLAYER   = 'The recipient could not be found.';
+
+    /**
+     * Which of a court's lines take part in a Scrollery print run, keyed by
+     * CourtAwardId and in the order given (getCourtAwards()'s running order).
+     *
+     * Silently left out — these are not errors, they are simply not this run:
+     *   - lines whose id is not in $wantedIds (when $wantedIds is non-empty);
+     *   - lines whose ScrollStatus is no longer Court::SCROLL_SCROLLERY, because a
+     *     peer moved the chip after the planner opened the print tab;
+     *   - cancelled lines.
+     * $wantedIds === [] means every line.
+     *
+     * @param array<int|string, array<string, mixed>> $courtLines getCourtAwards() lines
+     * @param array<int, mixed> $wantedIds
+     * @return array<int, array<string, mixed>>
+     */
+    public static function CourtRunLines(array $courtLines, array $wantedIds): array
+    {
+        $wanted = [];
+        foreach ($wantedIds as $id) {
+            $id = (int) $id;
+            if ($id > 0) {
+                $wanted[$id] = true;
+            }
+        }
+
+        $lines = [];
+        foreach ($courtLines as $line) {
+            $caId = (int) ($line['CourtAwardId'] ?? 0);
+            if ($caId <= 0 || ($wanted !== [] && !isset($wanted[$caId]))) {
+                continue;
+            }
+            if ((int) ($line['ScrollStatus'] ?? 0) !== Court::SCROLL_SCROLLERY
+                || (string) ($line['Status'] ?? '') === 'cancelled'
+            ) {
+                continue;
+            }
+            $lines[$caId] = $line;
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Why a court line cannot print, checked in this order, or '' when it can:
+     *   - its kingdomaward is not in the kingdom's printable catalog ($choice null)
+     *     — COURT_SKIP_UNPRINTABLE;
+     *   - it resolves to a blank title (CourtChoicePrintsAName() false) —
+     *     COURT_SKIP_NO_NAME;
+     *   - its recipient's player record is gone ($recipient null) —
+     *     COURT_SKIP_NO_PLAYER.
+     *
+     * @param array<string, mixed>|null $choice    a CatalogChoices() entry
+     * @param array<string, mixed>|null $recipient a ScrollQuery::ScrollRecipients() row
+     */
+    public static function CourtLineSkipReason(?array $choice, ?array $recipient): string
+    {
+        if ($choice === null) {
+            return self::COURT_SKIP_UNPRINTABLE;
+        }
+        if (!self::CourtChoicePrintsAName($choice)) {
+            return self::COURT_SKIP_NO_NAME;
+        }
+        if ($recipient === null) {
+            return self::COURT_SKIP_NO_PLAYER;
+        }
+
+        return '';
+    }
+
+    /**
+     * One court line -> the row BuildScroll() draws from. Pure, so the mapping is
+     * pinned without a database (ScrolleryCourtLineTest).
+     *
+     * The award comes from the kingdom's catalog CHOICE, never from the line's own
+     * text: AwardId and Name are the allowlist's, and OfficerRole is 'none' because
+     * CatalogChoices() only ever returns non-officer rows — the same construction
+     * compose() uses. The date is the court's (a line has none of its own). The
+     * citation is Court::effectiveCitation() — the exact rule the commit path
+     * publishes by: the typed public comment; else the rec's reason unless the
+     * officer cleared the citation or the rec is Monarchy Only; then the publishing
+     * gate, so a Monarchy Only reason saved as the typed comment never prints
+     * either. Scrolls print BEFORE court, so without the inheritance most of them
+     * would carry no citation at all.
+     *
+     * The issuer follows compose(): a park court names the park, a kingdom court
+     * names the kingdom, and only that one name is set. MundaneId and IsLadder ride
+     * along because BuildScroll() reads them for provenance and for whether a
+     * Custom Award at rank 0 still draws a blank to write its level into.
+     *
+     * @param array<string, mixed> $line    a getCourtAwards() line
+     * @param array<string, mixed> $choice  a CatalogChoices() entry
+     * @param array<string, mixed> $court   Date, ParkId, KingdomId, ParkName, KingdomName
+     * @return array<string, mixed>
+     */
+    public static function CourtLineRow(array $line, array $choice, array $court, string $givenBy): array
+    {
+        $parkId = (int) ($court['ParkId'] ?? 0);
+
+        return [
+            'AwardId'          => (int) ($choice['AwardId'] ?? 0),
+            'OfficerRole'      => 'none',
+            'KingdomAwardName' => (string) ($choice['Name'] ?? ''),
+            'MundaneId'        => (int) ($line['MundaneId'] ?? 0),
+            'Rank'             => (int) ($line['Rank'] ?? 0),
+            'IsLadder'         => !empty($line['IsLadder']) ? 1 : 0,
+            'Date'             => (string) ($court['Date'] ?? ''),
+            'Note'             => Court::effectiveCitation(
+                (string) ($line['PublicComment'] ?? ''),
+                (bool) ($line['PublicCommentCleared'] ?? false),
+                (string) ($line['RecReason'] ?? ''),
+                (bool) ($line['RecMonarchyOnly'] ?? false)
+            ),
+            'GivenBy'          => $givenBy,
+            'ParkId'           => $parkId,
+            'KingdomId'        => (int) ($court['KingdomId'] ?? 0),
+            'ParkName'         => $parkId > 0 ? (string) ($court['ParkName'] ?? '') : '',
+            'KingdomName'      => $parkId > 0 ? '' : (string) ($court['KingdomName'] ?? ''),
+        ];
+    }
+
+    /**
+     * Whether a catalog choice, printed from a court line, would carry an award
+     * name. THE one predicate behind both what the Court Planner offers as
+     * Scrollery Print and the run's COURT_SKIP_NO_NAME, so the two cannot drift.
+     *
+     * Resolved the way BuildScroll() resolves the title it draws — the same row
+     * CourtLineRow() builds, through ResolveTitle() and the mojibake repair — and
+     * nothing on a court line changes that answer: the title depends only on the
+     * choice's AwardId and Name. A Custom Award whose kingdomaward is blank or
+     * still the ORK's "Custom Award" placeholder resolves to '' and so prints no
+     * name.
+     *
+     * @param array<string, mixed> $choice a CatalogChoices() entry
+     */
+    public static function CourtChoicePrintsAName(array $choice): bool
+    {
+        $title = self::ResolveTitle(self::CourtLineRow([], $choice, [], ''));
+
+        return trim(ScrollText::RepairMojibake($title)) !== '';
+    }
+
+    /**
+     * Which of a kingdom's awards Scrollery can print, in picker group and order —
+     * the per-row body behind Model_Scrollery::printable_award_choices(), DB-free so
+     * a hand-built GetAwardList()-shaped fixture can exercise it directly (see
+     * ScrolleryChoicesForAwardListTest).
+     *
+     * GetAwardList()'s LEFT JOIN from ork_kingdomaward to ork_award misses whenever
+     * a kingdomaward's award_id points at nothing (archery's real grants live here,
+     * under base award_id 0/94/131 — no ork_award row exists for those ids at all),
+     * leaving BOTH AwardId and OfficerRole NULL on the row. OrderForAwardRow()
+     * correctly stays open for that shape, or archery could never print — but that
+     * also means it cannot tell an actual archery row apart from an unrelated
+     * officer position whose base award has simply gone missing (kingdom 28 holds
+     * two "Sheriff" kingdomaward rows: kingdomaward_id 4935 resolves to a real
+     * award_id 70 with officer_role='park' and is correctly excluded; kingdomaward_id
+     * 5028 points at award_id 163, for which no ork_award row exists, so it dangles
+     * exactly like archery and — before this fix — was offered as a printable
+     * custom scroll).
+     *
+     * The two rows sharing the SAME NAME is what tells them apart: any dangling row
+     * whose name exactly matches a resolved sibling's is that same position, wearing
+     * its cover. Checked against kingdom 28's real data, this rule catches all 23
+     * officer positions there (including bare "Sheriff", which
+     * Kingdom::awardNameLooksLikeOfficer()'s prefix-anchored regex misses), keeps
+     * Warlord and Defender (whose resolved siblings carry officer_role='none' and
+     * are real awards), and touches no archery row anywhere — no archery name has a
+     * resolved officer sibling.
+     *
+     * @param array<int, array<string, mixed>> $awardListRows GetAwardList()'s response rows.
+     * @return array<int, array{KingdomAwardId:int, AwardId:int, Name:string, Order:string, MaxRank:int, Variants:array}>
+     */
+    public static function CatalogChoices(array $awardListRows): array
+    {
+        $officerNames    = Award::officer_names_from($awardListRows);
+        $pseudoLadderIds = Award::pseudoLadderKingdomAwardIds();
+
+        $choices = [];
+        foreach ($awardListRows as $row) {
+            $name     = (string) ($row['KingdomAwardName'] ?? $row['kingdom_awardname'] ?? '');
+            $dangling = ($row['AwardId'] ?? $row['award_id'] ?? null) === null;
+            if ($dangling && Award::is_dangling_row_an_officer($name, $officerNames)) {
+                continue;
+            }
+
+            // OrderForAwardRow(), not OrderForAwardId(): GetAwardList() already returns
+            // OfficerRole and KingdomAwardName on every row, so this list can apply the
+            // same officer-exclusion / archery-by-name / custom-eligibility precedence
+            // as every other surface. OrderForAwardId() alone would drop every
+            // custom-eligible catalog award (e.g. Master Rose) from the create dropdown,
+            // since custom's own award_id is the 0 sentinel that function always misses.
+            $order = self::OrderForAwardRow($row);
+            if ($order === null) {
+                continue;
+            }
+
+            $choices[] = [
+                'KingdomAwardId' => (int) ($row['KingdomAwardId'] ?? $row['kingdomaward_id'] ?? 0),
+                'AwardId'        => (int) ($row['AwardId'] ?? $row['award_id'] ?? 0),
+                'Name'           => (string) ($row['KingdomAwardName'] ?? $row['kingdom_awardname'] ?? ''),
+                'Order'          => (string) $order['id'],
+                'MinRank'        => (int) $order['ranks']['from'],
+                'MaxRank'        => (int) $order['ranks']['to'],
+                'Variants'       => array_values($order['variants']),
+                // Which section of the composer's picker this belongs in. Award's own
+                // rule, not a second opinion — the grant and recommend dropdowns bucket
+                // the identical row shape through the identical call, so a catalog entry
+                // that reads as a Masterhood there cannot read as Other here.
+                'Group'          => Award::OptionGroupLabelFor($row, $pseudoLadderIds),
+                // '' | 'award' | 'title': whether this row needs a typed name to print.
+                'CustomKind'     => self::CustomNameKind([
+                    'AwardId'          => (int) ($row['AwardId'] ?? $row['award_id'] ?? 0),
+                    'KingdomAwardName' => $name,
+                ]),
+            ];
+        }
+
+        // Section order first, then alphabetical inside each section, so the template
+        // can emit optgroups by walking the list once. 'Custom' sorts last and is
+        // rendered as bare options rather than a section, exactly as the grant picker
+        // does — awInitPicker() reads standalone <option>s as .aw-pick-standalone.
+        $rank = array_flip([...Award::OptionGroupOrder(), 'Custom']);
+        usort($choices, static function (array $a, array $b) use ($rank): int {
+            return ($rank[$a['Group']] <=> $rank[$b['Group']])
+                ?: strcasecmp($a['Name'], $b['Name']);
+        });
+
+        return $choices;
+    }
+
+    /**
+     * The catalog choice a hand-composed scroll for one award id + title pair
+     * prints from, or null when the catalog holds no such entry. Matches on the
+     * id AND the title (case- and whitespace-insensitive): archery's real grants
+     * share award_id 0 (also 94, 131) and are told apart only by name. See
+     * Model_Scrollery::award_order_for_compose() for why the match is recomputed
+     * against the catalog rather than trusting the client's pair.
+     *
+     * @param array<int, array{AwardId:int, Name:string, Order:string}> $choices CatalogChoices() output
+     */
+    public static function MatchCatalogChoice(array $choices, int $awardId, string $title): ?array
+    {
+        $title = trim($title);
+        foreach ($choices as $choice) {
+            if ($choice['AwardId'] === $awardId && strcasecmp(trim($choice['Name']), $title) === 0) {
+                return $choice;
+            }
+        }
+
+        return null;
     }
 }
 

@@ -12,12 +12,25 @@
 -- because Scrollery/compose prints a hand-composed certificate that has no
 -- award row at all.
 --
--- Idempotent: CREATE TABLE IF NOT EXISTS, safe to re-run.
+-- A row is written when the certificate is actually sent to the printer (the
+-- render page's beforeprint beacon -> ScrolleryAjax/log_print), never on a page
+-- load: previews, View links, batch tabs and heraldry reloads are not prints.
+--
+-- Idempotent: CREATE TABLE IF NOT EXISTS, then ADD COLUMN / ADD INDEX IF NOT
+-- EXISTS for an environment that already ran the first version of this file.
+-- Safe to re-run.
 
 CREATE TABLE IF NOT EXISTS `ork_scroll_print` (
   `scroll_print_id` int(11) NOT NULL AUTO_INCREMENT,
-  -- NULL for a composed (award-less) certificate.
+  -- NULL for a composed (award-less) certificate, and for a court line that has
+  -- not been finalized yet (a finalized line's court_award.award_id is used).
   `awards_id` int(11) DEFAULT NULL,
+  -- The Court Planner line this print came from (Scrollery/court); NULL otherwise.
+  `court_id` int(11) DEFAULT NULL,
+  `court_award_id` int(11) DEFAULT NULL,
+  -- Which gate let the print through: 'recipient' | 'park-officer' |
+  -- 'kingdom-officer' | 'admin' | 'court-manager' | 'compose'. '' if unknown.
+  `auth_basis` varchar(24) NOT NULL DEFAULT '',
   -- The recipient. 0 for a composed scroll printed for someone with no ORK row.
   `mundane_id` int(11) NOT NULL DEFAULT 0,
   -- The officer (or recipient) who pressed print.
@@ -36,5 +49,13 @@ CREATE TABLE IF NOT EXISTS `ork_scroll_print` (
   PRIMARY KEY (`scroll_print_id`),
   KEY `awards_id` (`awards_id`),
   KEY `printed_at` (`printed_at`),
-  KEY `mundane_id_printed_at` (`mundane_id`, `printed_at`)
+  KEY `mundane_id_printed_at` (`mundane_id`, `printed_at`),
+  KEY `court_award_id` (`court_award_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- For a table created by the first version of this file.
+ALTER TABLE `ork_scroll_print`
+  ADD COLUMN IF NOT EXISTS `court_id` int(11) DEFAULT NULL AFTER `awards_id`,
+  ADD COLUMN IF NOT EXISTS `court_award_id` int(11) DEFAULT NULL AFTER `court_id`,
+  ADD COLUMN IF NOT EXISTS `auth_basis` varchar(24) NOT NULL DEFAULT '' AFTER `court_award_id`,
+  ADD INDEX IF NOT EXISTS `court_award_id` (`court_award_id`);

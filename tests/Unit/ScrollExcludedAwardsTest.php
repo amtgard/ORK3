@@ -171,6 +171,113 @@ final class ScrollExcludedAwardsTest extends TestCase
     }
 
     /**
+     * Custom Award (94) is a free-text door: its honour is whatever custom_name (or a
+     * kingdom's rename of the slot) says. Every one of these is a real stored value,
+     * and each is a class the allowlist refuses from the catalogue — so it is refused
+     * here too, DENIED_EXCLUDED, whichever column carries the name.
+     */
+    public function testACustomAwardNamedAsATitleMasterhoodOfficeOrNonHonourIsRefused(): void
+    {
+        $refused = [
+            'Esquire'                       => 'peerage',
+            'Knight of the Flame'           => 'peerage',
+            'Paragon Bard'                  => 'peerage',
+            'Woman-at-Arms'                 => 'peerage',
+            'Defender of the North'         => 'peerage',
+            'Master'                        => 'master',
+            'Dragonmaster'                  => 'master',
+            'Dragon Master'                 => 'master',
+            'Weaponmaster'                  => 'master',
+            'Ducal Guildmaster of Reeves'   => 'master',
+            'Mistress'                      => 'master',
+            'Title: Shadow Boxer'           => 'title',
+            'Non-Noble: Bane of Bears'      => 'title',
+            '(non noble) "The Enduring"'    => 'title',
+            'Baroness'                      => 'noble',
+            'Duke, Northern Holdfast'       => 'noble',
+            'Grand Duke of Midgard'         => 'noble',
+            'Baronial Monarch'              => 'office',
+            'Kingdom GMR'                   => 'office',
+            'Shire Champion'                => 'office',
+            'Champion'                      => 'office',
+            'Ducal Heir Apparent'           => 'office',
+            'DUES PAID FOR LIFE'            => 'non-honour',
+            'Reeve Qualified'               => 'non-honour',
+            'name change'                   => 'non-honour',
+            'Look the Part bonus credit'    => 'non-honour',
+        ];
+
+        foreach ($refused as $name => $reason) {
+            $this->assertSame($reason, Scroll::RefusedCustomAwardName($name), "{$name} should be refused as {$reason}");
+            foreach (['CustomAwardName', 'KingdomAwardName'] as $key) {
+                $row = $this->row(['AwardId' => 94, 'KingdomAwardName' => 'Custom Award', $key => $name]);
+                $this->assertTrue(Scroll::IsExcludedFromScrollery($row), "Custom Award {$key} '{$name}' must not print");
+            }
+        }
+    }
+
+    /** The real honours a Custom Award carries keep printing on the custom scroll. */
+    public function testACustomAwardNamingARealHonourStillPrints(): void
+    {
+        foreach ([
+            'Order of the Raider', 'Crimson', 'Cyclone', 'Order of the Facade', 'Armorer',
+            'Champion of the Gods', 'Order of the Lady of the Lake', 'Early Bird', 'Phoenix',
+        ] as $name) {
+            $this->assertSame('', Scroll::RefusedCustomAwardName($name), "{$name} is an honour");
+            $row = $this->row(['AwardId' => 94, 'KingdomAwardName' => 'Custom Award', 'CustomAwardName' => $name]);
+            $this->assertSame('custom', Scroll::OrderForAwardRow($row)['id'], "{$name} must still print");
+            $this->assertSame($name, Scroll::ResolveTitle($row));
+        }
+    }
+
+    /**
+     * "Nonnoble Title" / "Noble Title" are the slot's name, not an honour — one
+     * kingdom's Custom Award kingdomaward is literally called "Nonnoble Title". Like
+     * "Custom Award" they resolve to the blank line rather than print as the honour,
+     * whichever column carries them and however they are spelt.
+     */
+    public function testNonnobleTitleIsAPlaceholderNotAnHonour(): void
+    {
+        foreach (['Nonnoble Title', 'Non-Noble Title', 'Non Noble title ', 'Noble Title', 'Custom Award'] as $slot) {
+            $this->assertSame('', Scroll::ResolveTitle($this->row(['AwardId' => 94, 'KingdomAwardName' => $slot])), $slot);
+            $this->assertSame('', Scroll::ResolveTitle($this->row([
+                'AwardId' => 94, 'KingdomAwardName' => 'Custom Award', 'CustomAwardName' => $slot,
+            ])), "custom_name {$slot}");
+        }
+
+        // A stored custom_name under a "Nonnoble Title" kingdomaward is the honour.
+        $named = $this->row(['AwardId' => 94, 'KingdomAwardName' => 'Nonnoble Title', 'CustomAwardName' => 'Crimson']);
+        $this->assertSame('Crimson', Scroll::ResolveTitle($named));
+        $this->assertSame('award', Scroll::CustomNameKind(['AwardId' => 94, 'KingdomAwardName' => 'Nonnoble Title']));
+    }
+
+    /**
+     * A name TYPED at print time gets the same treatment on Custom Award: a refused
+     * one is ignored, so the stored name (or the blank the composer refuses) stands.
+     * Custom Title (246) exists to print a typed title and is exempt.
+     */
+    public function testATypedCustomAwardNameIsClassifiedButCustomTitleIsExempt(): void
+    {
+        $award = $this->row(['AwardId' => 94, 'KingdomAwardName' => 'Custom Award']);
+        $this->assertSame('', Scroll::ResolveTitle($award, 'Esquire'));
+        $this->assertSame('', Scroll::ResolveTitle($award, 'Nonnoble Title'));
+        $this->assertSame('Order of the Tortoise', Scroll::ResolveTitle($award, 'Order of the Tortoise'));
+        $this->assertSame(
+            'Crimson',
+            Scroll::ResolveTitle($award + ['CustomAwardName' => 'Crimson'], 'Dragonmaster'),
+            'a refused typed name falls back to the stored one'
+        );
+
+        $title = $this->row(['AwardId' => 246, 'KingdomAwardName' => 'Custom Title']);
+        $this->assertSame('Esquire', Scroll::ResolveTitle($title, 'Esquire'));
+        $this->assertSame(
+            'custom',
+            Scroll::OrderForAwardRow($title + ['CustomAwardName' => 'Title: Shadow Boxer'])['id'],
+            'Custom Title is not run through the Custom Award classifier'
+        );
+    }
+
+    /**
      * Award::GetLadderMasterMap() keys ladder ids to SEPARATE Master ids. Only the
      * Master ids are refused, so "Master Rose" does not print while "Order of the
      * Rose" ranks 1-10 print exactly as before. If a ladder id ever fell out of

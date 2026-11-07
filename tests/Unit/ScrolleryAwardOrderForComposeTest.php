@@ -20,7 +20,7 @@ use PHPUnit\Framework\TestCase;
  * case/whitespace-insensitive) and guaranteeing that row always carries a real
  * OfficerRole.
  *
- * matchingChoiceForTest() is the pure search behind that method, split out the
+ * Scroll::MatchCatalogChoice() is the pure search behind that method, split out the
  * same way bulkSqlForTest() keeps the bulk query testable without a database.
  */
 final class ScrolleryAwardOrderForComposeTest extends TestCase
@@ -42,7 +42,7 @@ final class ScrolleryAwardOrderForComposeTest extends TestCase
     {
         $choices = [$this->choice(['AwardId' => 33, 'Name' => 'Order of the Griffon', 'Order' => 'griffon'])];
 
-        $choice = Model_Scrollery::matchingChoiceForTest($choices, 33, 'Order of the Griffon');
+        $choice = Scroll::MatchCatalogChoice($choices, 33, 'Order of the Griffon');
 
         $this->assertSame('griffon', $choice['Order']);
         $this->assertSame(33, $choice['AwardId']);
@@ -57,7 +57,7 @@ final class ScrolleryAwardOrderForComposeTest extends TestCase
         // itself is unchanged — this fixture just stops describing an impossible list.
         $choices = [$this->choice(['AwardId' => 52, 'Name' => 'Lord', 'Order' => 'custom'])];
 
-        $choice = Model_Scrollery::matchingChoiceForTest($choices, 52, 'Lord');
+        $choice = Scroll::MatchCatalogChoice($choices, 52, 'Lord');
 
         $this->assertSame('custom', $choice['Order']);
     }
@@ -77,11 +77,11 @@ final class ScrolleryAwardOrderForComposeTest extends TestCase
 
         $this->assertSame(
             'hunter',
-            Model_Scrollery::matchingChoiceForTest($choices, 0, 'Order of the Hunter')['Order']
+            Scroll::MatchCatalogChoice($choices, 0, 'Order of the Hunter')['Order']
         );
         $this->assertSame(
             'custom',
-            Model_Scrollery::matchingChoiceForTest($choices, 0, 'Some Other Title')['Order']
+            Scroll::MatchCatalogChoice($choices, 0, 'Some Other Title')['Order']
         );
     }
 
@@ -89,7 +89,7 @@ final class ScrolleryAwardOrderForComposeTest extends TestCase
     {
         $choices = [$this->choice(['AwardId' => 0, 'Name' => 'Order of the Hunter', 'Order' => 'hunter'])];
 
-        $choice = Model_Scrollery::matchingChoiceForTest($choices, 0, '  ORDER of THE hunter  ');
+        $choice = Scroll::MatchCatalogChoice($choices, 0, '  ORDER of THE hunter  ');
 
         // The catalog's own casing survives the match, not the submitted one.
         $this->assertSame('Order of the Hunter', $choice['Name']);
@@ -105,9 +105,9 @@ final class ScrolleryAwardOrderForComposeTest extends TestCase
     {
         $choices = [$this->choice(['AwardId' => 52, 'Name' => 'Lord', 'Order' => 'custom'])];
 
-        $this->assertNull(Model_Scrollery::matchingChoiceForTest($choices, 70, 'Sheriff'));
-        $this->assertNull(Model_Scrollery::matchingChoiceForTest($choices, 52, 'Sheriff'));
-        $this->assertNull(Model_Scrollery::matchingChoiceForTest([], 52, 'Lord'));
+        $this->assertNull(Scroll::MatchCatalogChoice($choices, 70, 'Sheriff'));
+        $this->assertNull(Scroll::MatchCatalogChoice($choices, 52, 'Sheriff'));
+        $this->assertNull(Scroll::MatchCatalogChoice([], 52, 'Lord'));
     }
 
     /** The kingdomId guard short-circuits before the model would need a database. */

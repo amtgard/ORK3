@@ -41,6 +41,30 @@ final class ScrollCustomEligibilityTest extends TestCase
         }
     }
 
+    /**
+     * 300+ real archery grants are recorded as Custom Award with the order in
+     * custom_name ("Order of the Marksman", "Order of the Hunter"). On 94 that name is
+     * asked too, so they get the hunter plates rather than the generic custom scroll —
+     * and the officer-position check still runs first.
+     */
+    public function testACustomAwardNamedForArcheryGetsTheHunterPlates(): void
+    {
+        foreach (['Order of the Marksman', 'Order of the Hunter', ' order of the ARCHER '] as $name) {
+            $row = $this->row(['AwardId' => 94, 'KingdomAwardName' => 'Custom Award', 'CustomAwardName' => $name]);
+            $this->assertSame('hunter', Scroll::OrderForAwardRow($row)['id'], "{$name} on Custom Award");
+        }
+
+        // Only Custom Award reads custom_name for archery; a non-archery name stays custom.
+        $plain = $this->row(['AwardId' => 94, 'KingdomAwardName' => 'Custom Award', 'CustomAwardName' => 'Order of the Raider']);
+        $this->assertSame('custom', Scroll::OrderForAwardRow($plain)['id']);
+
+        $officer = $this->row([
+            'AwardId' => 94, 'KingdomAwardName' => 'Custom Award', 'CustomAwardName' => 'Order of the Hunter',
+            'OfficerRole' => 'other-officer',
+        ]);
+        $this->assertNull(Scroll::OrderForAwardRow($officer), 'the officer-position check comes first');
+    }
+
     public function testArcheryMatchingIgnoresCaseAndSurroundingSpace(): void
     {
         $order = Scroll::OrderForAwardRow($this->row([
@@ -55,9 +79,10 @@ final class ScrollCustomEligibilityTest extends TestCase
      *
      * They used to fall through to the custom scroll. Under the allowlist that
      * depends on what they are hung from: base 131 is not an admitted id and no
-     * ork_award row carries it, so it prints nothing at all; a kingdom that built one
-     * on Custom Award still gets the CUSTOM scroll — never the hunter art, which is
-     * the assertion that actually matters here.
+     * ork_award row carries it, so it prints nothing at all; and one a kingdom built
+     * on Custom Award is a masterhood by name, which Scroll::RefusedCustomAwardName()
+     * refuses like the catalogue's own Masters. Either way never the hunter art, which
+     * is the assertion that actually matters here.
      */
     public function testArcheryMastersNeverGetTheHunterArtwork(): void
     {
@@ -67,8 +92,12 @@ final class ScrollCustomEligibilityTest extends TestCase
                 "{$name} on an unadmitted base id should not print"
             );
 
-            $order = Scroll::OrderForAwardRow($this->row(['AwardId' => 94, 'KingdomAwardName' => $name]));
-            $this->assertSame('custom', $order['id'], "{$name} should get the custom scroll, not hunter art");
+            foreach (['KingdomAwardName', 'CustomAwardName'] as $key) {
+                $this->assertNull(
+                    Scroll::OrderForAwardRow($this->row(['AwardId' => 94, $key => $name])),
+                    "{$name} on Custom Award ({$key}) is a masterhood and must not print, least of all as hunter art"
+                );
+            }
         }
     }
 

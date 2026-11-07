@@ -716,7 +716,8 @@ class Award extends Ork3
      * The catalog a granted award's kingdomaward belongs to, from an
      * AwardsForPlayer()-shaped row (ParkId/KingdomId/KingdomAwardName). A
      * park-granted award (ParkId set) uses its park's own kingdom, not
-     * at_kingdom_id — that column is blank for a park grant.
+     * at_kingdom_id — most park grants do carry it, but ~1,600 leave it blank, and
+     * the park's own kingdom is the authoritative catalogue either way.
      */
     public static function kingdom_for_grant_row(array $row): int
     {

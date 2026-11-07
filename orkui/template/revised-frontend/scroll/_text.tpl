@@ -237,9 +237,11 @@ $inkAttr   = static function (string $resource): string {
                  would shift the block spacing on every unranked certificate.
 
                  $s['ranked'] is false only for an award with no ordinal at all — a
-                 Knighthood, a Master, a title. A LADDER at rank 0 stays ranked and keeps
-                 its blank, which is the whole point of the blank: somebody writes the
-                 level in by hand. See Scroll::BuildScroll(). */ ?>
+                 Knighthood, a Master, a title — or a one-off Custom Award, which is not
+                 ranked by its stored rank of 1 alone (Scroll::CustomIsRanked()). A LADDER
+                 at rank 0 stays ranked and keeps its blank, which is the whole point of
+                 the blank: somebody writes the level in by hand. See
+                 Scroll::BuildScroll(). */ ?>
         <div class="Body AwardDetails">
             <?php if (!empty($s['ranked'])): ?>
             <span style="display:inline;" data-scroll-text="rankPhrase">

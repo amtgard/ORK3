@@ -2744,6 +2744,17 @@ section.SignAndDate {
     font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* A court run's batch links (Scrollery/court). Screen-only with the notice it is. */
+.sc-batch-notice .sc-btn {
+    margin: 6px 6px 0 0;
+}
+
+.sc-batch-notice .sc-btn[aria-current] {
+    border-color: var(--sc-accent);
+    font-weight: 600;
+    cursor: default;
+}
+
 @media print {
     @page {
         size: letter;

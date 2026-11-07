@@ -272,6 +272,81 @@ class ScrollQuery extends Ork3
     }
 
     /**
+     * One raw BulkAwardRows() row -> the shaped row the bulk list carries.
+     *
+     * Shaped to the keys Scroll::HasArt() / OrderForAwardRow() and ResolveTitle()
+     * expect. OfficerRole matters here: without it every officer-position row in a
+     * bulk selection would look custom-eligible (IsCustomEligible() defaults an
+     * absent key to 'none').
+     *
+     * IsLadder is the same shape of dependency for BuildScroll()'s `ranked`:
+     * without it a bulk run prints all 292 of Walker in the Middle's rank-0 grants
+     * with no blank to write the level into. Both read the BASE award (a.*) rather
+     * than the alias-coalesced value AwardsForPlayer() uses — the alias join added
+     * for the exclusion predicate is deliberately not folded into these, which is
+     * the same inconsistency officer_role already lives with.
+     *
+     * @param array<string, mixed> $row a raw BulkAwardRows() row
+     * @return array<string, mixed>
+     */
+    public static function ShapeBulkRow(array $row): array
+    {
+        return [
+            'AwardsId'         => (int) $row['awards_id'],
+            'AwardId'          => (int) $row['award_id'],
+            'AliasAwardId'     => (int) ($row['alias_award_id'] ?? 0),
+            'MundaneId'        => (int) $row['mundane_id'],
+            'Rank'             => (int) $row['rank'],
+            'Date'             => (string) $row['date'],
+            'Recipient'        => (string) $row['recipient'],
+            // The recipient's standing, for the bulk list to MARK — not to
+            // filter on. A suspended or inactive member's past award is still
+            // theirs, so these rows stay selected by default; the officer is
+            // simply told before they commit 200 sheets to paper. Coalesced
+            // because the mundane join is a LEFT one: a row whose recipient
+            // record is gone reads as neither suspended nor inactive rather
+            // than as a null the template has to guess about.
+            'Suspended'        => (int) ($row['recipient_suspended'] ?? 0),
+            'Active'           => (int) ($row['recipient_active'] ?? 1),
+            'GivenBy'          => (string) $row['given_by'],
+            'Name'             => (string) $row['name'],
+            'KingdomAwardName' => (string) $row['kingdom_awardname'],
+            'CustomAwardName'  => (string) $row['custom_name'],
+            'AliasAwardName'   => '',
+            'OfficerRole'      => (string) ($row['officer_role'] ?? ''),
+            'IsLadder'         => (int) ($row['is_ladder'] ?? 0),
+            'ParkName'         => (string) $row['park_name'],
+            'KingdomName'      => (string) $row['kingdom_name'],
+            // Not revoked by construction — the WHERE says so — but carried on the
+            // row anyway so a template never has to guess, and so the key means the
+            // same thing here as on an AwardsForPlayer() row.
+            'Revoked'          => 0,
+            // The second ORDER BY term (BULK_SORT's COALESCE(name, kingdom_awardname)),
+            // so bulkCursorForTest() can build a keyset from a shaped row.
+            'SortName'         => (string) ($row['name'] ?? '') !== ''
+                ? (string) $row['name']
+                : (string) ($row['kingdom_awardname'] ?? ''),
+            // Whether the LEFT JOIN to `award` missed — the dangling shape the
+            // caller's officer-name correction keys on.
+            'Dangling'         => ($row['award_id'] ?? null) === null,
+        ];
+    }
+
+    /**
+     * The cursor for the page after the one ending at $lastRawRow — the LAST ROW
+     * OF THE PAGE, not the last printable one: an art-less row still consumed a
+     * slot in the sort, so skipping it would make the next page start before it
+     * and repeat rows. Built through ShapeBulkRow(), so the keyset's sort name is
+     * the one expression that mirrors the query's ORDER BY.
+     *
+     * @param array<string, mixed> $lastRawRow a raw BulkAwardRows() row
+     */
+    public static function NextBulkCursor(array $lastRawRow): string
+    {
+        return self::bulkCursorForTest(self::ShapeBulkRow($lastRawRow));
+    }
+
+    /**
      * @return array{Persona: string, Name: string, Rank: int, AwardsId: int}|null
      */
     public static function decodeBulkCursorForTest(string $cursor): ?array
@@ -417,6 +492,190 @@ class ScrollQuery extends Ork3
     }
 
     /**
+     * The park and kingdom scopes a player holds an office over, from their
+     * AUTHORIZATION rows rather than their home record.
+     *
+     * Lives here, not on Player, because Player is whitelisted on the JSON service
+     * (orkservice/Json/index.php) and every public PascalCase method of a
+     * whitelisted class is callable anonymously there. ScrollQuery is not.
+     *
+     * The distinction is the whole point. Resolving an officer's scopes from
+     * ork_mundane.park_id / kingdom_id cannot see an office held outside the
+     * viewer's own home: mundane 54527 holds kingdom-4 authority while their home
+     * park 32 sits in kingdom 3, so a home-derived lookup finds no candidate scope
+     * and offers them nothing at all.
+     *
+     * CANDIDATES ONLY — this does not decide authority. It answers "which scopes are
+     * worth asking HasAuthority() about", and the caller still runs that check per
+     * scope (see Model_Scrollery::issuable_scopes_for()). A scopeless row is skipped:
+     * role='create' with every scope id at 0 confers nothing, and a TRUE global admin
+     * (role='admin', all scopes 0) has no particular body to act as, so it is not a
+     * door either — an admin reaches an individual award through the admin branch in
+     * Model_Scrollery::print_decision(), not through a scope chooser.
+     *
+     * Kingdoms first, then parks, each ascending, so a chooser renders in a stable
+     * order.
+     *
+     * @return list<array{Type: string, Id: int, Name: string}>
+     */
+    public function IssuableScopes(int $mundaneId): array
+    {
+        if (!valid_id($mundaneId)) {
+            return [];
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT DISTINCT a.park_id, a.kingdom_id,
+                    p.name AS park_name, k.name AS kingdom_name
+               FROM ' . DB_PREFIX . 'authorization a
+               LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = a.park_id
+               LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = a.kingdom_id
+              WHERE a.mundane_id = ' . (int) $mundaneId . '
+                AND a.unit_id = 0
+                AND a.event_id = 0
+                AND (a.park_id > 0 OR a.kingdom_id > 0)'
+        );
+        if (!is_object($rs) || $rs->Size() < 1) {
+            return [];
+        }
+
+        $kingdoms = [];
+        $parks = [];
+        while ($rs->Next()) {
+            $kingdomId = (int) $rs->kingdom_id;
+            $parkId = (int) $rs->park_id;
+            // A row carrying both is a park grant inside a kingdom; the park is the
+            // narrower, truthful scope.
+            if ($parkId > 0) {
+                $parks[$parkId] = (string) ($rs->park_name ?? '');
+            } elseif ($kingdomId > 0) {
+                $kingdoms[$kingdomId] = (string) ($rs->kingdom_name ?? '');
+            }
+        }
+
+        ksort($kingdoms);
+        ksort($parks);
+
+        $scopes = [];
+        foreach ($kingdoms as $id => $name) {
+            $scopes[] = ['Type' => 'kingdom', 'Id' => $id, 'Name' => $name];
+        }
+        foreach ($parks as $id => $name) {
+            $scopes[] = ['Type' => 'park', 'Id' => $id, 'Name' => $name];
+        }
+
+        return $scopes;
+    }
+
+    /**
+     * Player::GetScrollRecipient() for a whole print run, in ONE statement.
+     *
+     * Lives here, not on Player, for the same reason IssuableScopes() does: Player
+     * is on the anonymous JSON surface and this is not a public lookup.
+     *
+     * A bulk render resolved its recipients one yapo find() at a time — 200
+     * round trips for a full run. This is the same five fields for every id at
+     * once, keyed by mundane_id, and returns the same
+     * shape GetScrollRecipient() returns per row, minus its ParkId (which the bulk
+     * callers do not need) and plus Suspended/Active.
+     *
+     * HasHeraldry rides along so the print page's run-level heraldry choice can tell
+     * which recipients have arms of their own from this one statement, rather than
+     * one find() per certificate. NOT NULL in ork_mundane.
+     *
+     * Two columns beyond the certificate's own needs come back as well:
+     * `suspended` and `active`. A suspended member's past award is still theirs
+     * and is still printable — nothing here filters on them — but an officer
+     * running a court list is entitled to see which recipients are flagged before
+     * they print 200 sheets. Both are NOT NULL in ork_mundane.
+     *
+     * `pronoun_freetext` ships on another branch and is genuinely absent from
+     * some rendered schemas (the test database has no such column), so the column
+     * list is PROBED rather than assumed — naming a missing column would fail the
+     * whole statement and take the personas down with it. The probe is memoised
+     * per process.
+     *
+     * An id missing from the result (deleted mundane row) is simply absent from
+     * the returned map; the caller decides what a missing recipient means. Not
+     * capped here: a court run looks up every selected line's recipient before it
+     * trims to MAX_PRINT_RUN, so a cap would mislabel lines past the 200th as
+     * "recipient not found". Every caller is already bounded (an award run by
+     * MAX_PRINT_RUN ids, a court run by its own lines), and this class is off the
+     * JSON surface.
+     *
+     * @param array<int, mixed> $mundaneIds
+     * @return array<int, array{MundaneId:int, Persona:string, PronounId:int, PronounCustom:string,
+     *                          PronounFreetext:string, HasHeraldry:int, Suspended:int, Active:int}>
+     */
+    public function ScrollRecipients(array $mundaneIds): array
+    {
+        $ids = [];
+        foreach ($mundaneIds as $id) {
+            if (valid_id($id)) {
+                $ids[(int) $id] = true;
+            }
+        }
+        if ($ids === []) {
+            return [];
+        }
+
+        $hasFreetext = $this->mundaneHasPronounFreetext();
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT mundane_id, persona, pronoun_id, pronoun_custom, has_heraldry, suspended, active'
+            . ($hasFreetext ? ', pronoun_freetext' : '')
+            . ' FROM ' . DB_PREFIX . 'mundane
+              WHERE mundane_id IN (' . implode(',', array_keys($ids)) . ')'
+        );
+        if (!is_object($rs) || $rs->Size() < 1) {
+            return [];
+        }
+
+        $out = [];
+        while ($rs->Next()) {
+            $mundaneId = (int) $rs->mundane_id;
+            $out[$mundaneId] = [
+                'MundaneId' => $mundaneId,
+                'Persona' => (string) $rs->persona,
+                'PronounId' => (int) $rs->pronoun_id,
+                'PronounCustom' => (string) $rs->pronoun_custom,
+                'PronounFreetext' => $hasFreetext ? trim((string) $rs->pronoun_freetext) : '',
+                'HasHeraldry' => (int) $rs->has_heraldry,
+                'Suspended' => (int) $rs->suspended,
+                'Active' => (int) $rs->active,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Whether ork_mundane carries pronoun_freetext on THIS installation.
+     *
+     * Memoised for the life of the process: it is a schema fact, it cannot change
+     * mid-request, and ScrollRecipients() would otherwise ask once per batch.
+     */
+    private function mundaneHasPronounFreetext(): bool
+    {
+        static $has = null;
+        if ($has !== null) {
+            return $has;
+        }
+
+        try {
+            $this->db->Clear();
+            $rs = $this->db->DataSet("SHOW COLUMNS FROM " . DB_PREFIX . "mundane LIKE 'pronoun_freetext'");
+            $has = is_object($rs) && $rs->Size() > 0;
+        } catch (Throwable $e) {
+            $has = false;
+        }
+
+        return $has;
+    }
+
+    /**
      * A single scalar `total` from a count query, or 0.
      *
      * A sibling to db_query()/event_rows() for the same reason those are siblings of
@@ -466,8 +725,8 @@ class ScrollQuery extends Ork3
                 // Never widen to "everything" for an unrecognised scope type or an
                 // empty/zero scope id — mirrors bulkSqlForTest()'s default: case.
                 // at_kingdom_id and at_park_id each sit at 0 on a huge share of real
-                // award rows (a park grant never sets at_kingdom_id; a kingdom grant
-                // never sets at_park_id), so a bare "column = 0" built from an
+                // award rows (~120k carry neither, ~61k a kingdom only; most park
+                // grants carry both), so a bare "column = 0" built from an
                 // untrusted or absent scope id would hand back one whole class of
                 // body's awards rather than none. -1 can never match a real row.
                 : 'awards.at_park_id = -1');

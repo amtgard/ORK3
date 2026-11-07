@@ -13,6 +13,19 @@
  */
 $scope     = is_array($Scope ?? null) ? $Scope : [];
 $events    = is_array($Events ?? null) ? $Events : [];
+
+/*
+ * The raw event-id field is a fallback for an event the picker does not list (it holds
+ * at most 200). It is prefilled ONLY in that case: refilled with a listed event every
+ * run, clearing the picker would still filter to the old event, because the controller
+ * falls back to event_id whenever the select is empty.
+ */
+$eventId       = (int) ($EventId ?? 0);
+$eventInPicker = false;
+foreach ($events as $e) {
+    if ((int) ($e['EventId'] ?? 0) === $eventId) { $eventInPicker = true; break; }
+}
+$eventFallback = ($eventId > 0 && !$eventInPicker) ? $eventId : 0;
 $printable = is_array($Printable ?? null) ? $Printable : [];
 $excluded  = is_array($Excluded ?? null) ? $Excluded : [];
 $hasRun    = !empty($HasRun);
@@ -85,10 +98,14 @@ $pageQuery = static function (string $cursor) use ($base, $EventId, $From, $To):
 
 html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
 
-@media (max-width: 1000px) {
-    .rp-body { flex-direction: column; }
-    .rp-sidebar, .rp-sidebar-wide { width: 100%; }
-}
+/* "Can't find the event?" — the raw event-id fallback, folded away. */
+.sc-event-more > summary { cursor: pointer; font-size: 12px; color: var(--rp-text-muted); margin-bottom: 6px; }
+.sc-event-more > summary:hover,
+.sc-event-more > summary:focus-visible { color: #2b6cb0; }
+.sc-event-more[open] > summary { margin-bottom: 8px; }
+html[data-theme="dark"] .sc-event-more > summary:hover,
+html[data-theme="dark"] .sc-event-more > summary:focus-visible { color: #90cdf4; }
+
 </style>
 
 <div class="rp-root sc-wrap">
@@ -127,7 +144,7 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
             <div class="rp-filter-card">
                 <div class="rp-filter-card-header"><i class="fa-solid fa-filter"></i> Find awards</div>
                 <div class="rp-filter-card-body">
-                    <form method="get" action="<?= HTTP_UI ?>index.php">
+                    <form method="get" action="<?= HTTP_UI ?>index.php" id="sc-find">
                         <input type="hidden" name="Route" value="Scrollery/bulk/<?= ($ScopeType ?? 'park') ?>/<?= (int) ($ScopeId ?? 0) ?>">
 
                         <div class="sc-f">
@@ -178,16 +195,21 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
                         <?php /* Carried onto every tab the run opens. Any award, not only
                                  a composed one. */ ?>
                         <div class="sc-f">
-                            <label class="sc-check" for="sc-lines">
+                            <label class="sc-opt-check" for="sc-lines">
                                 <input type="checkbox" id="sc-lines" checked> Reason lines
                             </label>
                         </div>
 
-                        <div class="sc-f">
-                            <label for="sc-event">Event id (fallback)</label>
+                        <?php /* Behind a disclosure: it is a rescue for an event the picker does
+                                 not list, not a second way to pick one. Open on load only when
+                                 it is the field doing the filtering. */ ?>
+                        <details class="sc-f sc-event-more"<?= $eventFallback > 0 ? ' open' : '' ?>>
+                            <summary>Can&rsquo;t find the event?</summary>
+                            <label for="sc-event">Event id</label>
                             <input type="number" id="sc-event" name="event_id" min="0" class="adm-input"
-                                   value="<?= (int) ($EventId ?? 0) ?: '' ?>" placeholder="Only if the event isn't listed above">
-                        </div>
+                                   value="<?= $eventFallback ?: '' ?>" placeholder="The event's id number">
+                            <p class="sc-hint">Used only when no event is chosen in the list above.</p>
+                        </details>
 
                         <div class="sc-submit">
                             <button type="submit" class="adm-btn adm-btn-primary">
@@ -337,9 +359,10 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
                     </table>
 
                     <?php /* The button says the real number, so "print" is never a leap in
-                             the dark; the count is role="alert" because with more than
-                             MAX_RUN selected it is the ONLY feedback the button gives — it
-                             otherwise appears to do nothing at all. */ ?>
+                             the dark. The count is role="status" — it changes on every
+                             tick, and an alert would interrupt a screen reader each time.
+                             The one thing that IS an alert, the refusal past MAX_RUN (the
+                             only feedback the button gives then), has its own node. */ ?>
                     <div class="sc-bar">
                         <button type="button" class="adm-btn adm-btn-primary" id="sc-print-bulk">
                             <i class="fa-solid fa-print"></i> <span id="sc-print-label">Print selected</span>
@@ -353,11 +376,14 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
                         <button type="button" class="adm-btn adm-btn-ghost" id="sc-select-none">
                             Select none
                         </button>
-                        <span class="sc-count" id="sc-selected-count" role="alert"></span>
+                        <span class="sc-count" id="sc-selected-count" role="status"></span>
+                        <span class="sc-count sc-warn" id="sc-run-refusal" role="alert"></span>
                     </div>
-                    <?php /* Filled by the print button when a run needs more than one
-                             batch. role="status" because it appears after the officer's
-                             own click and tells them where the rest of the run went. */ ?>
+                    <?php /* Filled by the print button on every run: a link per batch,
+                             the first included, because a blocked popup is otherwise
+                             invisible (window.open with noopener returns null whether it
+                             opened or not). role="status" because it appears after the
+                             officer's own click and tells them where the run went. */ ?>
                     <div class="sc-bar sc-batches" id="sc-batches" role="status"></div>
                     <p class="sc-hint">
                         Tick a row, then shift-click another to select everything between them.
@@ -405,6 +431,22 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
     ['#sc-from', '#sc-to'].forEach(function (sel) {
         if (document.querySelector(sel)) { flatpickr(sel, opts); }
     });
+}());
+</script>
+<script>
+/* The picker wins: an event chosen in the list empties the raw-id fallback on submit,
+   so a stale id can never ride along (and the URL stays clean). */
+(function () {
+    var form = document.getElementById('sc-find'),
+        pick = document.getElementById('sc-event-pick'),
+        raw  = document.getElementById('sc-event');
+    if (!form || !pick || !raw) { return; }
+    form.addEventListener('submit', function () {
+        if (pick.value !== '') { raw.value = ''; }
+        if (raw.value === '') { raw.disabled = true; }
+    });
+    /* Back/forward cache: a restored page must not keep the field disabled. */
+    window.addEventListener('pageshow', function () { raw.disabled = false; });
 }());
 </script>
 <?php /* The ten display faces, so each <option> in the hand picker draws in the face
@@ -456,7 +498,8 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
         selAll  = document.getElementById('sc-select-all'),
         selNone = document.getElementById('sc-select-none'),
         batchBar = document.getElementById('sc-batches'),
-        count   = document.getElementById('sc-selected-count');
+        count   = document.getElementById('sc-selected-count'),
+        refusal = document.getElementById('sc-run-refusal');
     if (!btn) { return; }
 
     var boxes = Array.prototype.slice.call(document.querySelectorAll('.sc-pick'));
@@ -480,6 +523,8 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
             ? n + ' selected — ' + MAX_RUN + ' max per print run'
             : (n === 0 ? '' : n + ' of ' + scope + ' selected');
         count.classList.toggle('sc-warn', n > MAX_RUN);
+        // The refusal answered one click; any change of selection retires it.
+        if (refusal) { refusal.textContent = ''; }
         btn.disabled = n === 0;
         if (all) {
             all.checked       = n > 0 && n === boxes.length;
@@ -553,21 +598,28 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
     function renderBatches(batches) {
         if (!batchBar) { return; }
         batchBar.innerHTML = '';
-        if (batches.length < 2) { return; }
+        if (!batches.length) { return; }
 
+        /* Every batch gets a link, the first included and even for a single batch:
+           window.open() with noopener returns null whether or not the popup opened,
+           so there is no telling a blocked first tab from an opened one, and the link
+           is the way back to it. */
         var intro = document.createElement('span');
         intro.className = 'sc-count';
-        intro.textContent = 'Opened batch 1 of ' + batches.length + ' (' + batches[0].length +
-            ' ' + plural(batches[0].length) + '). Open the rest one at a time:';
+        intro.textContent = batches.length === 1
+            ? 'The preview opened in a new tab. If your browser blocked it:'
+            : 'Batch 1 of ' + batches.length + ' opened in a new tab (if your browser blocked it, use its link). Open the rest one at a time:';
         batchBar.appendChild(intro);
 
-        batches.slice(1).forEach(function (b, i) {
+        batches.forEach(function (b, i) {
             var a = document.createElement('a');
             a.className = 'adm-btn adm-btn-ghost';
             a.target = '_blank';
             a.rel = 'noopener';
             a.href = batchUrl(b);
-            a.textContent = 'Batch ' + (i + 2) + ' — ' + b.length + ' ' + plural(b.length);
+            a.textContent = batches.length === 1
+                ? 'Open the preview — ' + b.length + ' ' + plural(b.length)
+                : 'Batch ' + (i + 1) + ' — ' + b.length + ' ' + plural(b.length);
             batchBar.appendChild(a);
         });
     }
@@ -578,12 +630,11 @@ html[data-theme="dark"] .sc-chip-inactive { color: #fc8181; }
         // One print run is capped server-side; say so here rather than let the
         // render route silently drop the tail.
         if (ids.length > MAX_RUN) {
-            count.textContent = ids.length + ' selected — only ' + MAX_RUN +
-                ' can be printed at once. Uncheck ' + (ids.length - MAX_RUN) + '.';
-            count.classList.add('sc-warn');
+            var why = 'Only ' + MAX_RUN + ' can be printed at once. Uncheck ' + (ids.length - MAX_RUN) + '.';
+            if (refusal) { refusal.textContent = why; } else { count.textContent = why; }
             return;
         }
-        count.classList.remove('sc-warn');
+        if (refusal) { refusal.textContent = ''; }
 
         if (ids.length > CONFIRM_OVER && typeof window.orkConfirm === 'function') {
             var n = Math.ceil(ids.length / CHUNK);

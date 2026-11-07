@@ -47,9 +47,7 @@ class Controller_Scrollery extends Controller
         // in the browser over the whole list, so nothing here pages the query: the
         // set is bounded and small, and a server page would put the sort behind a
         // round trip for no gain.
-        $this->data['Awards']     = $this->decorate_for_reprint(
-            $this->Scrollery->printable_awards_for_player($viewerId)
-        );
+        $this->data['Awards']     = $this->Scrollery->printable_awards_for_player($viewerId);
         $this->data['MundaneId']  = $viewerId;
         // The same two caps bulk carries: the server refuses more than MAX_PRINT_RUN
         // ids in one render URL, and a browser's print rasteriser gives up well
@@ -58,47 +56,6 @@ class Controller_Scrollery extends Controller
         $this->data['PrintChunk'] = Scroll::PRINT_CHUNK;
         $this->data['page_title'] = 'My Scrolls';
         $this->template           = '../revised-frontend/Scrollery_mine.tpl';
-    }
-
-    /**
-     * Name the ORDER behind each printable row, and the variants it offers.
-     *
-     * Two things the reprint list could not say before. The DESIGN — whether the
-     * certificate carries that order's own artwork or the generic composed scroll —
-     * is the difference between the two things this module prints, and the page
-     * listed them identically. And the VARIANT: Owl ships three plates
-     * (parchment / cyanotype / transparency) and Battle two (arcane / martial), but
-     * Scrollery_mine.tpl never set &variant=, so a reprint could only ever reach
-     * variants[0] even though render() has always read the parameter.
-     *
-     * Scroll::OrderForAwardRow() is the module's single allowlist and the model has
-     * already run it (inside Scroll::HasArt()) to decide the row belongs on this
-     * list at all, so this is a second resolution of an answer that was already
-     * computed. It belongs on the model row — reported to the model's owner rather
-     * than written there, since Model_Scrollery is another workstream's this round.
-     * Until then this keeps the read here, where at least it is one call per row on
-     * a list already capped by the player's own award history.
-     *
-     * @param  array<int, array<string, mixed>> $awards
-     * @return array<int, array<string, mixed>>
-     */
-    private function decorate_for_reprint(array $awards): array
-    {
-        $decorated = [];
-        foreach ($awards as $row) {
-            $order    = Scroll::OrderForAwardRow($row);
-            $orderId  = (string) ($order['id'] ?? '');
-            $variants = is_array($order['variants'] ?? null) ? $order['variants'] : [];
-
-            $row['OrderId']  = $orderId;
-            $row['Variants'] = array_values(array_filter(array_map('strval', $variants)));
-            // 'custom' is the composed scroll — a ground, a border and a numeral
-            // rather than the order's own plates. Everything else is real artwork.
-            $row['HasOrderArt'] = $orderId !== '' && $orderId !== 'custom';
-            $decorated[] = $row;
-        }
-
-        return $decorated;
     }
 
     /**
@@ -415,11 +372,10 @@ class Controller_Scrollery extends Controller
         // page's options sheet. Absent or unknown is 'auto': what reprints always drew.
         $heraldry = $this->Scrollery->normalise_run_heraldry(isset($_GET['heraldry']) ? (string) $_GET['heraldry'] : null);
         $run      = $this->Scrollery->scrolls_for_awards_ids($awardsIds, $viewerId, $variant, $heraldry);
-        $scrolls  = [];
-        foreach ($run['Scrolls'] as $awardsId => $scroll) {
-            $scrolls[] = $scroll;
-            $this->record_print((int) $awardsId, $scroll, $viewerId);
-        }
+        // Nothing is logged here: this is a page load (a preview, the View link, an
+        // arms reload), not a print. The page's print beacon logs the run when it is
+        // actually sent to the printer — see print_log_config().
+        $scrolls  = array_values($run['Scrolls']);
 
         // A redirect with an empty body is the most confusing thing this module could
         // do — the officer assumes they clicked wrong. Refused is keyed by awards id
@@ -446,19 +402,44 @@ class Controller_Scrollery extends Controller
             return;
         }
 
+        // Some printed and some did not: name the ones left out in the page's
+        // screen-only Skipped notice rather than dropping them silently. The reasons
+        // are the gate's own, already oracle-safe (an id the viewer has no claim on
+        // is DENIED_AUTH whatever the row says).
+        $skipped = [];
+        foreach ($run['Refused'] as $refusedId => $reason) {
+            $skipped[(int) $refusedId] = [
+                'Label'  => 'Award record ' . (int) $refusedId,
+                'Reason' => Scroll::PrintDenial((string) $reason)['Message'],
+            ];
+        }
+
         $this->render_bare('Scrollery_render.tpl', [
             'Scrolls'    => $scrolls,
+            'Skipped'    => $skipped,
+            'PrintLog'   => $this->print_log_config('awards', [
+                // The id set AS REQUESTED, uncapped: a print token signs exactly that
+                // set, and the endpoint re-runs the cap and the gate itself, so what is
+                // logged is still only what this page printed.
+                'awards'   => implode(',', $this->requested_awards_ids()),
+                'variant'  => $variant,
+                'heraldry' => $heraldry,
+                // A token-identified viewer may have no session; the token is then what
+                // identifies them to the log endpoint, verified there for this id set.
+                'token'    => trim((string) ($_GET['token'] ?? '')),
+            ]),
             'AutoPrint'  => isset($_GET['print']),
             // The options sheet offers the run-level arms choice here and on court(),
             // never on compose(), whose arms were already chosen in the composer.
             'HeraldryChoice' => true,
             'Heraldry'       => $heraldry,
+            'ArmsNote'       => $this->Scrollery->heraldry_run_note($scrolls, $heraldry),
             'Dropped'    => $dropped,
             'MaxRun'     => Scroll::MAX_PRINT_RUN,
             'PageTitle'  => count($scrolls) === 1
                 ? $scrolls[0]['title'] . ' — ' . $scrolls[0]['player']
                 : count($scrolls) . ' scrolls',
-        ]);
+        ] + $this->Scrollery->print_options($_GET));
     }
 
     /**
@@ -486,6 +467,9 @@ class Controller_Scrollery extends Controller
      * unprintable lines before this tab opened, so a Skipped line here is one that
      * became unprintable in between. It is reported in a screen-only notice rather
      * than a page of its own, so it never costs a sheet of paper.
+     *
+     * &batch=N (1-based) selects one Scroll::PRINT_CHUNK-sized batch of the run; the
+     * page links every other batch, each carrying the rest of this query.
      */
     public function court($action = null)
     {
@@ -529,11 +513,35 @@ class Controller_Scrollery extends Controller
             return;
         }
 
-        $scrolls = [];
-        foreach ($run['Scrolls'] as $scroll) {
-            $scrolls[] = $scroll;
-            // AwardsId null: like a composed scroll, a court line has no award row yet.
-            $this->record_print(null, $scroll, $viewerId);
+        /*
+         * One BATCH of the run per tab, as bulk and `mine` do. A 2550x3300 plate decodes
+         * to ~33.7 MB of RGBA, so a tab holding more than Scroll::PRINT_CHUNK
+         * certificates exhausts the print rasteriser's bitmap memory; the whole court
+         * (up to MAX_PRINT_RUN, still the hard cap above) used to open in one.
+         *
+         * Sliced AFTER resolution, so batch boundaries fall on printable lines and a
+         * skipped line never leaves a batch short. &batch= is 1-based; out of range
+         * clamps to the nearest batch. Nothing is logged here — see print_log_config().
+         */
+        $chunks     = array_chunk($run['Scrolls'], Scroll::PRINT_CHUNK, true);
+        $batchCount = count($chunks);
+        $batch      = min(max(1, (int) ($_GET['batch'] ?? 1)), $batchCount);
+        $batchLines = $chunks[$batch - 1];
+        $scrolls    = array_values($batchLines);
+
+        $batches = [];
+        if ($batchCount > 1) {
+            $query = $_GET;
+            unset($query['Route'], $query['print'], $query['configure']);
+            foreach ($chunks as $i => $chunk) {
+                $query['batch'] = $i + 1;
+                $batches[]      = [
+                    'Number'  => $i + 1,
+                    'Count'   => count($chunk),
+                    'Current' => $i + 1 === $batch,
+                    'Url'     => UIR . 'Scrollery/court/' . $courtId . '&' . http_build_query($query),
+                ];
+            }
         }
 
         // Keyed by court-award id, not by the label: two lines for the same person and
@@ -554,16 +562,26 @@ class Controller_Scrollery extends Controller
         $this->render_bare('Scrollery_render.tpl', [
             'Scrolls'   => $scrolls,
             'Skipped'   => $skipped,
+            'Batches'   => $batches,
+            'Batch'     => $batch,
+            'PrintLog'  => $this->print_log_config('court', [
+                'court'      => $courtId,
+                // Exactly this batch's lines, so a print of batch 2 logs batch 2.
+                'courtLines' => implode(',', array_map('intval', array_keys($batchLines))),
+                'heraldry'   => $heraldry,
+            ]),
             'Dropped'   => (int) $run['Dropped'],
             'MaxRun'    => Scroll::MAX_PRINT_RUN,
             'AutoPrint' => isset($_GET['print']),
             'HeraldryChoice' => true,
             'Heraldry'       => $heraldry,
+            'ArmsNote'       => $this->Scrollery->heraldry_run_note($scrolls, $heraldry),
             // The print tab is opened blank and then pointed here, so it rarely has a
             // referrer; Back should still lead to the planner it came from.
             'BackUrl'   => UIR . $planner,
-            'PageTitle' => count($scrolls) . (count($scrolls) === 1 ? ' scroll' : ' scrolls'),
-        ]);
+            'PageTitle' => count($scrolls) . (count($scrolls) === 1 ? ' scroll' : ' scrolls')
+                . ($batchCount > 1 ? ' — batch ' . $batch . ' of ' . $batchCount : ''),
+        ] + $this->Scrollery->print_options($_GET));
     }
 
     /**
@@ -664,6 +682,10 @@ class Controller_Scrollery extends Controller
      * officer cannot explain. VerifyPrintToken()'s Reason is deliberately not
      * surfaced — it is for a log, not for the requester.
      *
+     * DORMANT UNLESS CONFIGURED. Tokens verify only when config defines
+     * SCROLL_PRINT_SECRET; without it Scroll::VerifyPrintToken() refuses every
+     * token and this is a plain session read (see Scroll::printTokenSecret()).
+     *
      * @param array<int, int> $awardsIds the ids the request actually carries
      */
     private function print_viewer(array $awardsIds): int
@@ -707,8 +729,8 @@ class Controller_Scrollery extends Controller
 
         // The composition rules (catalogue re-resolve, pronoun, heraldry source,
         // BuildScroll(), and the refusal of a nameless custom title) are the model's,
-        // shared with the preview endpoint. Both refusals come back before
-        // record_print(), because a print that was refused did not happen.
+        // shared with the preview endpoint and with the print log endpoint, which
+        // re-runs it, so a refused composition is never logged either.
         $composed = $this->Scrollery->compose_scroll($scopeType, $scopeId, $_GET, true);
         if ($composed['Error'] === Model_Scrollery::COMPOSE_NO_AWARD) {
             // Reached by a stale or hand-edited URL, and by an officer position or an
@@ -738,15 +760,23 @@ class Controller_Scrollery extends Controller
         }
         $scroll = $composed['Scroll'];
 
-        // AwardsId null: a composed certificate has no award row behind it, so the log
-        // records the print without pretending it does.
-        $this->record_print(null, $scroll, $viewerId);
+        // The composition's own parameters, minus the route and the page-only
+        // switches, so the log endpoint can re-run exactly this composition. A
+        // composed certificate has no award row, so the log records it without one.
+        $composeParams = [];
+        foreach ($_GET as $key => $value) {
+            if (is_string($key) && is_scalar($value)
+                && !in_array($key, ['Route', 'print', 'configure', 'token'], true)) {
+                $composeParams[$key] = (string) $value;
+            }
+        }
 
         $this->render_bare('Scrollery_render.tpl', [
             'Scrolls'   => [$scroll],
+            'PrintLog'  => $this->print_log_config('compose', $composeParams),
             'AutoPrint' => isset($_GET['print']),
             'PageTitle' => $scroll['title'] . ' — ' . ($scroll['player'] !== '' ? $scroll['player'] : 'blank'),
-        ]);
+        ] + $this->Scrollery->print_options($_GET));
     }
 
     /**
@@ -780,18 +810,39 @@ class Controller_Scrollery extends Controller
     }
 
     /**
-     * Record that a certificate reached the print surface.
+     * What the render page's print beacon sends, and where.
      *
-     * Never guarded by a try/catch here on purpose: RecordPrint() is documented to
-     * never throw and to return 0 on every failure path, so a second layer of
-     * swallowing would only hide a real bug. It also dedupes internally, so a refresh
-     * or a cancelled print dialog does not log twice.
+     * THE PRINT LOG RECORDS PRINTS, NOT PAGE LOADS. render(), court() and compose()
+     * are GETs reached by previews, the View link, batch tabs, &configure=1 and arms
+     * reloads; logging there made every one of those a "print". The page instead
+     * POSTs this once per load, from beforeprint and from its gated Print / auto-print
+     * path, to ScrolleryAjax/log_print — which RE-RUNS the same gate against these
+     * parameters before writing anything. Params are the run's identity, never a grant.
      *
-     * $awardsId is null for compose(), which prints without an award row.
+     * Csrf is a per-session synchronizer token (minted once, kept in the session);
+     * the endpoint compares it with hash_equals(). It is '' for a viewer with no
+     * session (a print-token viewer), whose token then rides in Params instead.
+     *
+     * @param array<string, scalar> $params
+     * @return array{Url: string, Kind: string, Csrf: string, Params: array<string, string>}
      */
-    private function record_print(?int $awardsId, array $scroll, int $viewerId): void
+    private function print_log_config(string $kind, array $params): array
     {
-        $this->Scrollery->record_print($awardsId, $scroll, $viewerId);
+        $csrf = '';
+        if (isset($this->session->user_id) && (int) $this->session->user_id > 0) {
+            $csrf = (string) ($this->session->scrollery_print_csrf ?? '');
+            if (strlen($csrf) !== 64) {
+                $csrf = bin2hex(random_bytes(32));
+                $this->session->scrollery_print_csrf = $csrf;
+            }
+        }
+
+        return [
+            'Url'    => UIR . 'ScrolleryAjax/log_print',
+            'Kind'   => $kind,
+            'Csrf'   => $csrf,
+            'Params' => array_map('strval', $params),
+        ];
     }
 
     /**

@@ -45,7 +45,7 @@ $fontBase      = HTTP_TEMPLATE . 'revised-frontend/style/fonts/';
  * falls back to the default hand rather than reaching either.
  */
 $scrollery_hands = Scroll::Hands();
-$scrollery_face  = Scroll::NormaliseHand((string) ($_GET['face'] ?? ''));
+$scrollery_face  = isset($Face) ? (string) $Face : Scroll::NormaliseHand('');
 
 /*
  * The signature hand — &sig=.
@@ -57,9 +57,11 @@ $scrollery_face  = Scroll::NormaliseHand((string) ($_GET['face'] ?? ''));
  * before the first fit measures the signature.
  */
 $scrollery_sigs = Scroll::SignatureHands();
-$scrollery_sig  = Scroll::NormaliseSignatureHand(isset($_GET['sig']) ? (string) $_GET['sig'] : null);
+$scrollery_sig  = isset($Sig) ? (string) $Sig : Scroll::NormaliseSignatureHand(null);
 
-$scrollery_preload_fonts = array_merge(Scroll::HandFonts($scrollery_face), Scroll::SignatureHandFonts($scrollery_sig));
+$scrollery_preload_fonts = isset($PreloadFonts)
+    ? (array) $PreloadFonts
+    : array_merge(Scroll::HandFonts($scrollery_face), Scroll::SignatureHandFonts($scrollery_sig));
 
 /*
  * The citation's ruled lines — &lines=0.
@@ -69,7 +71,7 @@ $scrollery_preload_fonts = array_merge(Scroll::HandFonts($scrollery_face), Scrol
  * six rules are in the shared text layer that all seventeen orders render, so this
  * works on any award and not only on a composed one.
  */
-$scrollery_lines = Scroll::NormaliseShowLines($_GET['lines'] ?? null);
+$scrollery_lines = isset($Lines) ? (bool) $Lines : Scroll::NormaliseShowLines(null);
 
 /*
  * How the top of the certificate is composed — &heading=.
@@ -80,7 +82,7 @@ $scrollery_lines = Scroll::NormaliseShowLines($_GET['lines'] ?? null);
  * from any ancestor of a certificate. NormaliseHeading() is the allowlist, so a value
  * that is not one of the three prints `auto` rather than reaching the attribute.
  */
-$scrollery_heading = Scroll::NormaliseHeading(isset($_GET['heading']) ? (string) $_GET['heading'] : null);
+$scrollery_heading = isset($Heading) ? (string) $Heading : Scroll::NormaliseHeading(null);
 
 /*
  * The run's arms — &heraldry=, and whether the options sheet offers it.
@@ -100,16 +102,9 @@ $scrollery_heraldry        = Scroll::NormaliseRunHeraldry(isset($Heraldry) ? (st
 $scrollery_arms_note       = '';
 if ($scrollery_heraldry_choice && $scrollery_heraldry !== Scroll::HERALDRY_AUTO) {
     $scrollery_arms_label = ['kingdom' => 'kingdom arms', 'park' => 'park arms', 'persona' => 'persona arms'][$scrollery_heraldry];
-    $scrollery_arms_fell  = 0;
-    $scrollery_arms_none  = 0;
-    foreach ($Scrolls as $scrollery_scan) {
-        if ((string) ($scrollery_scan['heraldry'] ?? '') === '') {
-            $scrollery_arms_none++;
-        } elseif ((string) ($scrollery_scan['design']['heraldrySource'] ?? '') !== $scrollery_heraldry) {
-            $scrollery_arms_fell++;
-        }
-    }
-    $scrollery_arms_total = count($Scrolls);
+    $scrollery_arms_fell  = (int) ($ArmsNote['Fell'] ?? 0);
+    $scrollery_arms_none  = (int) ($ArmsNote['None'] ?? 0);
+    $scrollery_arms_total = (int) ($ArmsNote['Total'] ?? count($Scrolls));
     $scrollery_arms_parts = [];
     if ($scrollery_arms_fell > 0) {
         $scrollery_arms_parts[] = $scrollery_arms_total === 1
@@ -243,10 +238,12 @@ foreach ($Scrolls as $scrollery_scan) {
     Four selects and a checkbox in one sticky row wrapped into three rows on a phone
     and pushed Print off the edge on a narrow window; one button does not.
 
-    The Print button calls window.print() directly. It is the same call the
-    ?print=1 gate makes, minus the gate — by the time somebody has looked at the
-    preview and clicked, the fonts have long since resolved and the autofit pass
-    has run.
+    The Print button goes through scPrintWhenReady() (the script block before the
+    options sheet's), the same gate the sheet's own Print uses: fonts, the autofit
+    pass and any hand or signature-face refit still in flight. A click that lands
+    before those settle — a fast click on a fresh tab, or straight after a hand
+    change — would otherwise print the fallback serif. While it waits the button
+    reads "Preparing…" and carries aria-busy.
 */ ?>
 <div class="sc-toolbar" role="toolbar" aria-label="Certificate actions">
     <span class="sc-toolbar-title"><?= scroll_e($PageTitle ?? 'Scroll') ?></span>
@@ -256,7 +253,7 @@ foreach ($Scrolls as $scrollery_scan) {
     <button type="button" class="sc-btn" id="sc-configure" aria-haspopup="dialog" aria-controls="sc-sheet"
             aria-expanded="false" aria-label="Configure Scroll Options"><span class="sc-btn-long">Configure Scroll </span>Options</button>
     <button type="button" class="sc-btn" id="sc-signature-open" aria-controls="sc-sheet">Upload Signature</button>
-    <button type="button" class="sc-btn sc-btn-primary" onclick="window.print();">Print</button>
+    <button type="button" class="sc-btn sc-btn-primary" id="sc-print">Print</button>
 </div>
 <?php /*
     The options sheet — a modal on a desktop, a bottom sheet on a phone (scrollery.css
@@ -332,7 +329,7 @@ foreach ($Scrolls as $scrollery_scan) {
                 <input type="file" id="sc-sigfile" accept="image/png" hidden>
                 <button type="button" class="sc-btn" id="sc-sigfile-pick">Upload Signature</button>
                 <button type="button" class="sc-btn" id="sc-sigfile-remove" hidden>Remove</button>
-                <p class="sc-opt-help">Use a PNG with a transparent background. It replaces the name on the signature line of <?= count($Scrolls) === 1 ? 'this scroll' : 'all ' . (int) count($Scrolls) . ' scrolls' ?> and is sized to fit. It is not uploaded or permanently stored: it stays on this page and is discarded after this print, or if the page reloads.</p>
+                <p class="sc-opt-help">Use a PNG with a transparent background. It replaces the name on the signature line of <?= count($Scrolls) === 1 ? 'this scroll' : 'all ' . (int) count($Scrolls) . ' scrolls' ?> and is sized to fit. It is not uploaded or permanently stored: it stays in this browser tab, is kept if you change the heraldry, and is discarded when you leave or reload the page.</p>
                 <p class="sc-opt-help" id="sc-sigfile-status" role="status" hidden></p>
             </div>
             <?php /*
@@ -449,11 +446,49 @@ foreach ($Scrolls as $scrollery_scan) {
 </p>
 <?php endif; ?>
 <?php /*
-    Court lines that could not be printed (Scrollery/court only): court-award id
-    => ['Label' => "Persona — Award", 'Reason' => why], one item per line. The planner's preflight already removed unprintable lines before
-    this tab opened, so these became unprintable in between. Same class as the
-    overflow notice, so scrollery.css hides it at print time with the rest of the
-    chrome — it never costs a sheet of paper.
+    The court run's batches (Scrollery/court only, when it holds more than
+    Scroll::PRINT_CHUNK certificates): a browser tab survives about that many plates,
+    so the run opens one batch per tab, as bulk and `mine` do. The current batch is
+    named, not linked. Same class as the overflow notice, so it is screen-only.
+    Each link carries the page's query; the script below re-reads the live URL on
+    click, so a hand, heading or lines choice made on this page rides along too.
+*/ ?>
+<?php if (!empty($Batches) && is_array($Batches)): ?>
+<nav class="sc-overflow-notice sc-batch-notice" id="sc-batches" aria-label="Print batches">
+    Batch <?= (int) ($Batch ?? 1) ?> of <?= (int) count($Batches) ?>. A tab prints at most <?= (int) Scroll::PRINT_CHUNK ?> scrolls; open the rest one at a time:
+    <?php foreach ($Batches as $scrollery_b): ?>
+        <?php $scrollery_blabel = 'Batch ' . (int) $scrollery_b['Number'] . ' — ' . (int) $scrollery_b['Count'] . ((int) $scrollery_b['Count'] === 1 ? ' scroll' : ' scrolls'); ?>
+        <?php if (!empty($scrollery_b['Current'])): ?>
+        <span class="sc-btn" aria-current="page"><?= scroll_e($scrollery_blabel) ?></span>
+        <?php else: ?>
+        <a class="sc-btn" target="_blank" rel="noopener" data-sc-batch="<?= (int) $scrollery_b['Number'] ?>" href="<?= scroll_e($scrollery_b['Url']) ?>"><?= scroll_e($scrollery_blabel) ?></a>
+        <?php endif; ?>
+    <?php endforeach; ?>
+</nav>
+<script>
+(function () {
+    var nav = document.getElementById('sc-batches');
+    if (!nav) { return; }
+    nav.addEventListener('click', function (e) {
+        var a = e.target.closest ? e.target.closest('a[data-sc-batch]') : null;
+        if (!a) { return; }
+        /* The live query, so choices rewritten into the URL by replaceState travel;
+           &print and &configure are this tab's, not the next one's. */
+        var s = window.location.search || '?';
+        ['batch', 'print', 'configure'].forEach(function (name) {
+            s = s.replace(new RegExp('([?&])' + name + '(?:=[^&]*)?(&|$)'), function (m, lead, tail) { return tail ? lead : ''; });
+        });
+        a.href = window.location.pathname + (s === '' || s === '?' ? '?' : s + '&') + 'batch=' + a.getAttribute('data-sc-batch');
+    });
+}());
+</script>
+<?php endif; ?>
+<?php /*
+    Certificates left out of this run, one item each: ['Label' => …, 'Reason' => why].
+    Scrollery/court: a court line ("Persona — Award") that became unprintable after the
+    planner's preflight. Scrollery/render: an award record the gate refused while the
+    rest of the run printed. Same class as the overflow notice, so scrollery.css hides
+    it at print time with the rest of the chrome — it never costs a sheet of paper.
 */ ?>
 <?php if (!empty($Skipped) && is_array($Skipped)): ?>
 <div class="sc-overflow-notice sc-skipped-notice" role="status">
@@ -757,6 +792,117 @@ foreach ($Scrolls as $scrollery_scan) {
     });
 }());
 </script>
+<?php if (!empty($PrintLog) && is_array($PrintLog)): ?>
+<script>
+/*
+ * The print log's beacon — scLogPrint().
+ *
+ * The log records PRINTS, not page loads: this page is also every preview, the View
+ * link, each batch tab and every arms reload, and the server writes nothing for those.
+ * This tells ScrolleryAjax/log_print that the run was sent to the printer, at most
+ * once per page load, from three places: the gated Print (scPrintWhenReady, below),
+ * auto-print, and `beforeprint` — which also catches Ctrl+P and the browser menu.
+ *
+ * It carries the run's identity, never a verdict: the endpoint re-runs the same gate
+ * this page ran and writes only what passes. sendBeacon so a print that unloads or
+ * closes the tab still lands; a keepalive fetch where sendBeacon is missing or
+ * refuses. Never blocks the print, and a failure is silent.
+ */
+(function () {
+    var cfg = <?= json_encode($PrintLog, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var sent = false;
+
+    window.scLogPrint = function () {
+        if (sent || !cfg || !cfg.Url) { return; }
+        sent = true;
+        try {
+            var body = new URLSearchParams();
+            body.append('kind', cfg.Kind || '');
+            body.append('csrf', cfg.Csrf || '');
+            var p = cfg.Params || {};
+            Object.keys(p).forEach(function (k) { body.append('p[' + k + ']', p[k]); });
+
+            if (navigator.sendBeacon && navigator.sendBeacon(cfg.Url, body)) { return; }
+            if (window.fetch) {
+                window.fetch(cfg.Url, {
+                    method: 'POST',
+                    body: body,
+                    credentials: 'same-origin',
+                    keepalive: true,
+                    headers: { 'X-CSRF-Token': cfg.Csrf || '' }
+                }).catch(function () {});
+            }
+        } catch (e) { /* logging never stands between an officer and the print */ }
+    };
+
+    window.addEventListener('beforeprint', function () { window.scLogPrint(); });
+}());
+</script>
+<?php endif; ?>
+<script>
+/*
+ * scPrintWhenReady — the one gated print, for the toolbar's Print and the options
+ * sheet's. It waits on what ?print=1 waits on (minus `load`, which a person who can
+ * see the preview has already had): the fonts and autofit pass, and any hand or
+ * signature-face refit still in flight. A failsafe ends at the dialog regardless,
+ * so a hanging font can never leave Print doing nothing.
+ *
+ * While it waits the toolbar's Print reads "Preparing…", is aria-disabled and carries
+ * aria-busy, so a second click cannot queue a second dialog and a screen reader
+ * hears that something is happening.
+ */
+(function () {
+    var FAILSAFE_MS = 10000;
+    var btn = document.getElementById('sc-print');
+    var pending = false;
+
+    function settled(p) {
+        return (p && typeof p.then === 'function')
+            ? p.then(function () {}, function () {})
+            : Promise.resolve();
+    }
+
+    function busy(on) {
+        if (!btn) { return; }
+        if (on) {
+            btn.setAttribute('data-sc-label', btn.textContent);
+            btn.textContent = 'Preparing…';
+            btn.setAttribute('aria-busy', 'true');
+            btn.setAttribute('aria-disabled', 'true'); // not `disabled`: that would drop focus
+            btn.style.cursor = 'progress';
+        } else {
+            btn.textContent = btn.getAttribute('data-sc-label') || 'Print';
+            btn.removeAttribute('aria-busy');
+            btn.removeAttribute('aria-disabled');
+            btn.style.cursor = '';
+        }
+    }
+
+    window.scPrintWhenReady = function () {
+        if (pending) { return; }
+        pending = true;
+        busy(true);
+        var fired = false;
+        function go() {
+            if (fired) { return; }
+            fired = true;
+            busy(false);
+            pending = false;
+            if (window.scLogPrint) { window.scLogPrint(); }
+            window.print();
+        }
+        var A = window.ScrolleryAutofit, Hand = window.ScrolleryHand, Sig = Hand && Hand.sig;
+        Promise.all([
+            settled(A ? A.ready : (document.fonts && document.fonts.ready)),
+            settled(Hand && Hand.ready ? Hand.ready() : null),
+            settled(Sig && Sig.ready ? Sig.ready() : null)
+        ]).then(go, go);
+        window.setTimeout(go, FAILSAFE_MS);
+    };
+
+    if (btn) { btn.addEventListener('click', function () { window.scPrintWhenReady(); }); }
+}());
+</script>
 <script>
 /*
  * The options sheet — open, close, focus, and the run's arms.
@@ -885,26 +1031,14 @@ foreach ($Scrolls as $scrollery_scan) {
         }
     });
 
-    /* The sheet's own Print. Gated like ?print=1 is, on the fonts, the fit and any
-       re-lettering still in flight: the court planner's tab lands here straight from
-       a load, so "by the time somebody clicks the fonts have resolved" — the toolbar
-       button's assumption — does not hold. The failsafe ends at the dialog regardless. */
+    /* The sheet's own Print: close the sheet, then the same gate as the toolbar's
+       (scPrintWhenReady, the block above). The court planner's tab lands here
+       straight from a load, so the fonts may well still be in flight. */
     var printBtn = document.getElementById('sc-sheet-print');
     if (printBtn) {
         printBtn.addEventListener('click', function () {
             close();
-            var fired = false;
-            function go() { if (!fired) { fired = true; window.print(); } }
-            function settled(p) {
-                return (p && typeof p.then === 'function') ? p.then(function () {}, function () {}) : Promise.resolve();
-            }
-            var A = window.ScrolleryAutofit, Hand = window.ScrolleryHand, Sig = Hand && Hand.sig;
-            Promise.all([
-                settled(A ? A.ready : (document.fonts && document.fonts.ready)),
-                settled(Hand && Hand.ready ? Hand.ready() : null),
-                settled(Sig && Sig.ready ? Sig.ready() : null)
-            ]).then(go, go);
-            window.setTimeout(go, 10000);
+            if (window.scPrintWhenReady) { window.scPrintWhenReady(); } else { window.print(); }
         });
     }
 
@@ -934,19 +1068,71 @@ foreach ($Scrolls as $scrollery_scan) {
             if (!btn || btn.getAttribute('aria-pressed') === 'true' || arms.getAttribute('aria-busy') === 'true') { return; }
             var key = btn.getAttribute('data-heraldry');
 
-            var pressed = arms.querySelectorAll('[data-heraldry]');
-            for (var i = 0; i < pressed.length; i++) {
-                pressed[i].setAttribute('aria-pressed', pressed[i] === btn ? 'true' : 'false');
+            /* An uploaded signature lives only in this page. It is carried across the
+               reload in sessionStorage (scrollery-sig-upload.js); when that cannot be
+               stored — quota, private mode — ask before throwing it away. */
+            var Up = window.ScrolleryUploadedSig;
+            if (Up && Up.has() && !Up.keepForReload()) {
+                var msg = 'Changing the heraldry reloads the page, and your uploaded signature could not be kept. You will need to upload it again.';
+                if (typeof window.orkConfirm === 'function') {
+                    window.orkConfirm(msg, function () { reloadWith(btn, key); }, { title: 'Discard the signature?', okLabel: 'Change heraldry' });
+                } else {
+                    askInline(msg, function () { reloadWith(btn, key); });
+                }
+                return;
             }
-            arms.setAttribute('aria-busy', 'true');
-
-            try { if (back) { window.sessionStorage.setItem(BACK_KEY, back.href); } } catch (err) { /* see above */ }
-
-            var next = withParam(window.location.search, 'print', null);
-            next = withParam(next, 'heraldry', key === 'auto' ? null : key);
-            next = withParam(next, 'configure', '1');
-            window.location.replace(window.location.pathname + next + window.location.hash);
+            reloadWith(btn, key);
         });
+    }
+
+    /* This page loads no revised.js, so window.orkConfirm is normally absent; the
+       fallback is a note in the Heraldry group with the two choices, never a native
+       dialog. */
+    function askInline(message, onYes) {
+        var group = arms.parentNode;
+        var old = group.querySelector('.sc-arms-ask');
+        if (old) { old.remove(); }
+        var box = document.createElement('div');
+        box.className = 'sc-opt-note sc-arms-ask';
+        box.setAttribute('role', 'alert');
+        var text = document.createElement('p');
+        text.style.margin = '0 0 8px';
+        text.textContent = message;
+        var yes = document.createElement('button');
+        yes.type = 'button';
+        yes.className = 'sc-btn sc-btn-primary';
+        yes.textContent = 'Change heraldry';
+        var no = document.createElement('button');
+        no.type = 'button';
+        no.className = 'sc-btn';
+        no.style.marginLeft = '6px';
+        no.textContent = 'Keep signature';
+        yes.addEventListener('click', function () { box.remove(); onYes(); });
+        no.addEventListener('click', function () {
+            box.remove();
+            var current = arms.querySelector('[aria-pressed="true"]');
+            if (current) { current.focus(); }
+        });
+        box.appendChild(text);
+        box.appendChild(yes);
+        box.appendChild(no);
+        group.appendChild(box);
+        no.focus();
+    }
+
+    function reloadWith(btn, key) {
+        var pressed = arms.querySelectorAll('[data-heraldry]');
+        for (var i = 0; i < pressed.length; i++) {
+            pressed[i].setAttribute('aria-pressed', pressed[i] === btn ? 'true' : 'false');
+        }
+        arms.setAttribute('aria-busy', 'true');
+
+        try { if (back) { window.sessionStorage.setItem(BACK_KEY, back.href); } } catch (err) { /* see above */ }
+
+        var next = withParam(window.location.search, 'print', null);
+        next = withParam(next, 'heraldry', key === 'auto' ? null : key);
+        next = withParam(next, 'configure', '1');
+        window.location.replace(window.location.pathname + next + window.location.hash);
     }
 
     if (document.body.getAttribute('data-sc-configure') === '1') { open(); }
@@ -976,6 +1162,7 @@ foreach ($Scrolls as $scrollery_scan) {
     function go() {
         if (fired) { return; }
         fired = true;
+        if (window.scLogPrint) { window.scLogPrint(); }
         window.print();
     }
 

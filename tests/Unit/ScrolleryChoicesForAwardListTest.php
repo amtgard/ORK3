@@ -22,9 +22,9 @@ use PHPUnit\Framework\TestCase;
  * sibling rule's remaining job is exactly the archery names — which is what the
  * cases below exercise.
  *
- * choicesForAwardListForTest() is the per-row body of printable_award_choices(),
+ * Scroll::CatalogChoices() is the per-row body of printable_award_choices(),
  * split out DB-free so this fixture can exercise it directly — the same
- * convention as bulkSqlForTest() and matchingChoiceForTest().
+ * convention as bulkSqlForTest() and Scroll::MatchCatalogChoice().
  */
 final class ScrolleryChoicesForAwardListTest extends TestCase
 {
@@ -58,7 +58,7 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
             $this->row(['KingdomAwardId' => 5028, 'AwardId' => null, 'KingdomAwardName' => 'Sheriff', 'OfficerRole' => null]),
         ];
 
-        $choices = Model_Scrollery::choicesForAwardListForTest($awards);
+        $choices = Scroll::CatalogChoices($awards);
 
         $this->assertCount(0, array_filter($choices, fn ($c) => $c['KingdomAwardId'] === 5028));
     }
@@ -77,7 +77,7 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
             $this->row(['KingdomAwardId' => 31, 'AwardId' => null, 'KingdomAwardName' => 'Hunter', 'OfficerRole' => null]),
         ];
 
-        $choices = Model_Scrollery::choicesForAwardListForTest($awards);
+        $choices = Scroll::CatalogChoices($awards);
 
         $this->assertSame([], array_column($choices, 'KingdomAwardId'));
     }
@@ -98,7 +98,7 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
             $this->row(['KingdomAwardId' => 11, 'AwardId' => null, 'KingdomAwardName' => 'Order of the Archer', 'OfficerRole' => null]),
         ];
 
-        $choices = Model_Scrollery::choicesForAwardListForTest($awards);
+        $choices = Scroll::CatalogChoices($awards);
 
         $kept = array_filter($choices, fn ($c) => $c['KingdomAwardId'] === 11);
         $this->assertCount(1, $kept);
@@ -112,7 +112,7 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
             $this->row(['KingdomAwardId' => 20, 'AwardId' => null, 'KingdomAwardName' => 'Order of the Hunter', 'OfficerRole' => null]),
         ];
 
-        $choices = Model_Scrollery::choicesForAwardListForTest($awards);
+        $choices = Scroll::CatalogChoices($awards);
 
         $this->assertCount(1, $choices);
         $this->assertSame('hunter', $choices[0]['Order']);
@@ -126,7 +126,7 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
             $this->row(['KingdomAwardId' => 2, 'AwardId' => 200, 'AwardName' => 'Champion', 'KingdomAwardName' => 'Order of the Emerald', 'OfficerRole' => 'kingdom']),
         ];
 
-        $choices = Model_Scrollery::choicesForAwardListForTest($awards);
+        $choices = Scroll::CatalogChoices($awards);
 
         // The resolved Custom Award row at KingdomAwardId 1 survives even though a
         // same-named row elsewhere is a real officer position: it is not dangling,
@@ -149,7 +149,7 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
             $this->row(['KingdomAwardId' => 6437, 'AwardId' => null, 'KingdomAwardName' => 'Shire Champion', 'OfficerRole' => null]),
         ];
 
-        $choices = Model_Scrollery::choicesForAwardListForTest($awards);
+        $choices = Scroll::CatalogChoices($awards);
 
         $this->assertCount(0, $choices);
     }
@@ -184,7 +184,7 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
             $this->row(['KingdomAwardId' => 15, 'AwardId' => 35, 'AwardName' => 'Defender', 'KingdomAwardName' => 'Defender', 'IsTitle' => 1, 'TitleClass' => 10]),
         ];
 
-        $choices = Model_Scrollery::choicesForAwardListForTest($catalogue);
+        $choices = Scroll::CatalogChoices($catalogue);
 
         $this->assertSame([1, 2, 3, 4], array_column($choices, 'KingdomAwardId'));
         $this->assertSame(['Ladder Awards', 'Ladder Awards', 'Custom', 'Custom'], array_column($choices, 'Group'));
@@ -201,7 +201,7 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
      */
     public function testCrystalGrovesMasterReeveIsGone(): void
     {
-        $choices = Model_Scrollery::choicesForAwardListForTest([
+        $choices = Scroll::CatalogChoices([
             $this->row(['KingdomAwardId' => 2902, 'AwardId' => 94, 'AwardName' => 'Custom Award', 'KingdomAwardName' => 'Custom Award']),
             $this->row(['KingdomAwardId' => 2854, 'AwardId' => 31, 'AwardName' => 'Order of the Walker in the Middle', 'KingdomAwardName' => 'Master Reeve', 'IsLadder' => 1]),
         ]);
@@ -221,7 +221,7 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
      */
     public function testEachChoiceCarriesItsAwardSection(): void
     {
-        $choices = Model_Scrollery::choicesForAwardListForTest([
+        $choices = Scroll::CatalogChoices([
             $this->row(['KingdomAwardId' => 10, 'KingdomAwardName' => 'Order of the Rose', 'AwardId' => 21, 'AwardName' => 'Order of the Rose', 'IsLadder' => 1]),
             $this->row(['KingdomAwardId' => 11, 'KingdomAwardName' => 'Custom Title', 'AwardId' => 246, 'AwardName' => 'Custom Title', 'IsTitle' => 1]),
         ]);
@@ -239,7 +239,7 @@ final class ScrolleryChoicesForAwardListTest extends TestCase
      */
     public function testChoicesSortBySectionThenName(): void
     {
-        $choices = Model_Scrollery::choicesForAwardListForTest([
+        $choices = Scroll::CatalogChoices([
             // Deliberately reverse-alphabetical to the intended section order, so a
             // surviving name-only sort would put Zeta's ladder after the custom entry.
             $this->row(['KingdomAwardId' => 20, 'KingdomAwardName' => 'Zeta Ladder', 'AwardId' => 27, 'AwardName' => 'Order of the Warrior', 'IsLadder' => 1]),

@@ -85,10 +85,12 @@ final class ScrolleryPrintDecisionTest extends TestCase
     }
 
     /**
-     * Revocation is checked FIRST, before identity and before the admin branch — a
-     * recipient must not be able to reprint an award that was stripped from them,
-     * and neither may an ORK administrator. 2,856 rows are revoked; 59 still carry a
-     * live mundane_id, which is exactly that hole.
+     * Revocation refuses EVERY granting branch — a recipient must not be able to
+     * reprint an award that was stripped from them, and neither may an ORK
+     * administrator. 2,856 rows are revoked; 59 still carry a live mundane_id, which
+     * is exactly that hole. Only a viewer entitled to the row is TOLD it was
+     * revoked; everyone else gets the plain refusal (see
+     * testAnUnrelatedViewerLearnsNothingAboutTheRow()).
      */
     public function testRevocationOutranksEveryGrantingBranch(): void
     {
@@ -98,12 +100,17 @@ final class ScrolleryPrintDecisionTest extends TestCase
         }
 
         try {
-            foreach ([100000057, 1, 2] as $viewerId) {
+            // 100000057 is the recipient; 1 is the seed's global admin.
+            foreach ([100000057, 1] as $viewerId) {
                 $d = $this->model->print_decision($awardsId, $viewerId);
                 $this->assertDecisionShape($d);
                 $this->assertFalse($d['Allowed'], "viewer {$viewerId} must not print a revoked award");
                 $this->assertSame(Model_Scrollery::DENIED_REVOKED, $d['Reason']);
             }
+
+            $d = $this->model->print_decision($awardsId, 2);
+            $this->assertFalse($d['Allowed']);
+            $this->assertSame(Model_Scrollery::DENIED_AUTH, $d['Reason']);
 
             $this->assertNull(
                 $this->model->scroll_for_awards_id($awardsId, 100000057),
@@ -138,11 +145,11 @@ final class ScrolleryPrintDecisionTest extends TestCase
     /**
      * 120,284 rows (30.74% of 391,296) carry neither at_park_id nor at_kingdom_id,
      * so there is no issuing body for the certificate to name and no scope for an
-     * officer's authority to attach to. A viewer who is neither the recipient nor an
-     * ORK admin gets told that, rather than a generic "not authorised" that sends an
-     * officer hunting for a permission they can never be granted.
+     * officer's authority to attach to. The recipient still prints their own. Anyone
+     * else who is not an ORK admin gets the generic "not authorised": naming the row
+     * "unattributed" to a stranger would confirm that the award id exists.
      */
-    public function testAnUnattributedAwardSaysWhyRatherThanJustNo(): void
+    public function testAnUnattributedAwardRefusesStrangersWithoutRevealingIt(): void
     {
         $awardsId = $this->insertGrant(21, 100000057, 0);
         if ($awardsId <= 0) {
@@ -156,8 +163,7 @@ final class ScrolleryPrintDecisionTest extends TestCase
             $d = $this->model->print_decision($awardsId, 100000058);
             $this->assertDecisionShape($d);
             $this->assertFalse($d['Allowed']);
-            $this->assertSame(Model_Scrollery::DENIED_UNATTRIBUTED, $d['Reason']);
-            $this->assertStringContainsString('where given', $d['Message']);
+            $this->assertSame(Model_Scrollery::DENIED_AUTH, $d['Reason']);
         } finally {
             $this->deleteAward($awardsId);
         }
@@ -183,6 +189,64 @@ final class ScrolleryPrintDecisionTest extends TestCase
             $this->assertSame(Model_Scrollery::DENIED_AUTH, $d['Reason']);
         } finally {
             $this->deleteAward($awardsId);
+        }
+    }
+
+    /**
+     * The refusal reason must not be an oracle. A viewer with no claim on a row —
+     * not the recipient, not an officer where it was given, not an admin — is told
+     * only "not authorised" for a revoked id, an id with no certificate artwork and
+     * an id that does not exist, on every surface: print_decision(), the render
+     * run's Refused map, and print_manifest(), which returns that map verbatim.
+     * Otherwise any logged-in member could enumerate which award ids were revoked,
+     * which exist, and which carry art.
+     */
+    public function testAnUnrelatedViewerLearnsNothingAboutTheRow(): void
+    {
+        $revoked = $this->insertGrant(21, 100000057, 100001, revoked: true);
+        $noArt   = $this->insertGrant(245, 100000057, 100001);
+        if ($revoked <= 0 || $noArt <= 0) {
+            $this->deleteAward($revoked);
+            $this->deleteAward($noArt);
+            $this->markTestSkipped('Seed data lacks a kingdomaward row for award_id 21 or 245.');
+        }
+        $missing  = 999999999;
+        $stranger = 100000058;
+
+        try {
+            foreach ([$revoked, $noArt, $missing] as $awardsId) {
+                $d = $this->model->print_decision($awardsId, $stranger);
+                $this->assertDecisionShape($d);
+                $this->assertFalse($d['Allowed']);
+                $this->assertSame(Model_Scrollery::DENIED_AUTH, $d['Reason'], "print_decision leaks for {$awardsId}");
+            }
+
+            $run = $this->model->scrolls_for_awards_ids([$revoked, $noArt, $missing], $stranger);
+            $this->assertSame([], $run['Scrolls']);
+            $this->assertSame(
+                [
+                    $revoked => Model_Scrollery::DENIED_AUTH,
+                    $noArt   => Model_Scrollery::DENIED_AUTH,
+                    $missing => Model_Scrollery::DENIED_AUTH,
+                ],
+                $run['Refused']
+            );
+
+            $manifest = $this->model->print_manifest([$revoked, $noArt, $missing], $stranger);
+            foreach ($manifest['Refused'] as $refusal) {
+                $this->assertSame(Model_Scrollery::DENIED_AUTH, $refusal['Reason']);
+            }
+
+            // The entitled still get the true reason.
+            $own = $this->model->scrolls_for_awards_ids([$revoked, $noArt, $missing], 100000057)['Refused'];
+            $this->assertSame(Model_Scrollery::DENIED_REVOKED, $own[$revoked]);
+            $this->assertSame(Model_Scrollery::DENIED_EXCLUDED, $own[$noArt]);
+            $this->assertSame(Model_Scrollery::DENIED_AUTH, $own[$missing]);
+            $admin = $this->model->scrolls_for_awards_ids([$missing], 1)['Refused'];
+            $this->assertSame(Model_Scrollery::DENIED_MISSING, $admin[$missing]);
+        } finally {
+            $this->deleteAward($revoked);
+            $this->deleteAward($noArt);
         }
     }
 

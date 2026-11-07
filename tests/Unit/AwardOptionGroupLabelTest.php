@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
  * Award::OptionGroupLabelFor() is the single bucketing rule behind every sectioned
  * award dropdown: the grant/recommend pickers reach it through
  * GetAwardOptionGroups(), and the Scrollery composer reaches it directly from
- * Model_Scrollery::choicesForAwardListForTest().
+ * Scroll::CatalogChoices().
  *
  * It was extracted from GetAwardOptionGroups()'s inline if/elseif ladder. These
  * cases pin the PRECEDENCE that ladder encoded, because most of it is order-
@@ -133,7 +133,7 @@ final class AwardOptionGroupLabelTest extends TestCase
     }
 
     /**
-     * The section order the dropdowns render in. Pinned because Model_Scrollery
+     * The section order the dropdowns render in. Pinned because Scroll::CatalogChoices()
      * sorts its choices by this array's index, so a reordering silently reshuffles
      * the composer's picker.
      */
@@ -153,7 +153,7 @@ final class AwardOptionGroupLabelTest extends TestCase
     /**
      * Every label the rule can return must have a home in the render order (or be
      * the standalone 'Custom' bucket) — otherwise GetAwardOptionGroups() would
-     * build a bucket it never emits, and Model_Scrollery's sort would read a null
+     * build a bucket it never emits, and Scroll::CatalogChoices()' sort would read a null
      * index for it.
      */
     public function testEveryLabelTheRuleReturnsHasARenderSlot(): void

@@ -194,8 +194,23 @@ $awardOption = static function (array $c) use ($awardLumAttr): string {
 .sc-preview     { background: #4a4a4a; padding: 14px; border-radius: 6px; position: sticky; top: 12px; }
 .sc-stage       { background: #fff; aspect-ratio: 8.5/11; overflow: hidden; }
 .sc-stage.is-busy { opacity: .45; transition: opacity .12s; }
-.sc-err         { color: #e53e3e; font-size: 12px; margin-top: 8px; }
+.sc-err         { color: var(--ork-red-danger); font-size: 12px; margin-top: 8px; }
 .sc-err:empty   { display: none; }
+/* A failed preview: the stage dims and a card over it says why, with Retry. */
+.sc-stage.is-stale { opacity: .35; filter: grayscale(.6); }
+.sc-stale       { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%);
+                  width: min(320px, calc(100% - 40px)); box-sizing: border-box; padding: 14px 16px;
+                  background: #fff; color: #2d3748; border: 1px solid #c53030; border-radius: 6px;
+                  box-shadow: 0 8px 24px rgba(0, 0, 0, .28); text-align: center; }
+.sc-stale[hidden] { display: none; }
+.sc-stale-title { margin: 0 0 4px; font-weight: 700; font-size: 14px; color: #c53030; }
+.sc-stale-why   { margin: 0 0 10px; font-size: 12.5px; line-height: 1.45; }
+.sc-stale-why:empty { display: none; }
+.sc-stale-retry { padding: 6px 16px; border: 1px solid #2b6cb0; border-radius: 4px; background: #2b6cb0;
+                  color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.sc-stale-retry:hover, .sc-stale-retry:focus-visible { background: #2c5282; }
+/* The autocomplete's empty / unavailable row: not a choice, so not a .kn-ac-item. */
+.sc-ac-empty    { padding: 8px 12px; font-size: 12.5px; color: #718096; cursor: default; }
 
 /* Rank pills. The pill itself is the shared .sc-rank-pill scheme in revised.css —
    identical to the grant and recommend surfaces. Only the legend is local. */
@@ -292,7 +307,7 @@ $awardOption = static function (array $c) use ($awardLumAttr): string {
                   white-space: normal !important; text-align: left;
                   font: 400 11px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
                   padding: 6px 10px; border-radius: 4px; background: #1a202c; color: #fff;
-                  pointer-events: none; z-index: 500; box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+                  pointer-events: none; z-index: var(--z-tooltip); box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
 html[data-theme="dark"] #sc-design .sc-opt-info[data-tip]:hover::after,
 html[data-theme="dark"] #sc-design .sc-opt-info[data-tip]:focus-visible::after { background: #f7fafc; color: #1a202c; }
 #sc-design .sc-opt-info:focus-visible { outline: 2px solid var(--rp-accent); outline-offset: 2px; border-radius: 50%; }
@@ -331,11 +346,18 @@ html[data-theme="dark"] #sc-design .sc-opt-info[data-tip]:focus-visible::after {
                   background: var(--ork-input-bg); cursor: pointer; }
 .sc-color-pair .sc-hex { flex: 1 1 auto; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
                   text-transform: uppercase; }
-.sc-hex[aria-invalid="true"] { border-color: #e53e3e; }
+.sc-hex[aria-invalid="true"] { border-color: var(--ork-red-danger); }
 .sc-hex-err     { color: #c53030; }
 html[data-theme="dark"] .sc-seg-btn[aria-pressed="true"] { background: #4c51bf; border-color: #818cf8; color: #fff; }
 html[data-theme="dark"] .sc-hex-err { color: #feb2b2; }
 html[data-theme="dark"] .sc-hex[aria-invalid="true"] { border-color: #fc8181; }
+html[data-theme="dark"] .sc-err { color: #fc8181; }
+html[data-theme="dark"] .sc-stale { background: #1a202c; color: #e2e8f0; border-color: #fc8181; box-shadow: 0 8px 24px rgba(0, 0, 0, .6); }
+html[data-theme="dark"] .sc-stale-title { color: #fc8181; }
+html[data-theme="dark"] .sc-stale-retry { background: #4c51bf; border-color: #818cf8; }
+html[data-theme="dark"] .sc-stale-retry:hover,
+html[data-theme="dark"] .sc-stale-retry:focus-visible { background: #434190; }
+html[data-theme="dark"] .sc-ac-empty { color: #a0aec0; }
 
 html[data-theme="dark"] .sc-key-held  { background: linear-gradient(135deg, #2f6b4f, #1d4733); color: #c6f6d5; }
 html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345083, #23375a); color: #bee3f8; }
@@ -343,11 +365,8 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
 /* Below the two-column break the sidebar is full width, so the preview stops
    being sticky (it would pin a full-height page) and the paired rows unstack
    only where there is genuinely room for two controls. */
-@media (max-width: 1000px) {
-    .rp-body      { flex-direction: column; }
-    .rp-sidebar,
-    .rp-sidebar-wide { width: 100%; }
-    .sc-preview   { position: static; }
+@media (max-width: 900px) {
+    .sc-preview   { position: relative; } /* not sticky, but still the stale card's anchor */
 }
 @media (max-width: 420px) {
     .sc-row { grid-template-columns: 1fr; }
@@ -890,6 +909,14 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                             <div id="sc-mount"></div>
                         </foreignObject>
                     </svg>
+                </div>
+                <?php /* Raised by scrollery.js markStale() when a preview round trip fails:
+                         the certificate behind it is the LAST one drawn, not the one the
+                         form now describes. Outside the role="img" stage so it is read. */ ?>
+                <div class="sc-stale" id="sc-stale" role="alert" hidden>
+                    <p class="sc-stale-title">This preview is out of date</p>
+                    <p class="sc-stale-why" id="sc-stale-why"></p>
+                    <button type="button" class="sc-stale-retry" id="sc-stale-retry">Retry</button>
                 </div>
             </div>
         </div>

@@ -6,8 +6,10 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Item 38. A bulk render resolved its recipients one yapo find() at a time — 200
- * round trips for a full run. GetScrollRecipients() is the same five fields for
- * every id in ONE statement.
+ * round trips for a full run. ScrollQuery::ScrollRecipients() is the same five
+ * fields for every id in ONE statement. (It moved off Player, which is on the
+ * anonymous JSON surface — see PlayerAwardsForPlayerWhereTest::
+ * testTheScrollReadersAreOffTheJsonSurface().)
  *
  * The awkward part, and the reason this test touches a real database:
  * `pronoun_freetext` ships on another branch and is genuinely absent from the
@@ -24,6 +26,8 @@ final class PlayerScrollRecipientsTest extends TestCase
 
     private Player $player;
 
+    private ScrollQuery $query;
+
     protected function setUp(): void
     {
         if (!ork3_test_db_available()) {
@@ -31,6 +35,7 @@ final class PlayerScrollRecipientsTest extends TestCase
         }
 
         $this->player = new Player();
+        $this->query  = new ScrollQuery();
         $this->wipe();
     }
 
@@ -69,7 +74,7 @@ final class PlayerScrollRecipientsTest extends TestCase
         $this->seed(self::A, 'Haliax Duskstrider', 5, 0, 1);
         $this->seed(self::B, 'Acaben HighShield', 2, 1, 1);
 
-        $rows = $this->player->GetScrollRecipients([self::A, self::B, self::C]);
+        $rows = $this->query->ScrollRecipients([self::A, self::B, self::C]);
 
         $this->assertCount(2, $rows, 'an id with no mundane row is simply absent');
         $this->assertArrayHasKey(self::A, $rows);
@@ -83,7 +88,7 @@ final class PlayerScrollRecipientsTest extends TestCase
 
     /**
      * The batch has to hand back exactly what GetScrollRecipient() does per row, or
-     * a caller has two shapes to reason about — and possessive_pronoun() reads them
+     * a caller has two shapes to reason about — and Scroll::PossessiveForRecipient() reads them
      * both.
      */
     public function testTheBatchRowMatchesTheSingleRowLookup(): void
@@ -91,7 +96,7 @@ final class PlayerScrollRecipientsTest extends TestCase
         $this->seed(self::A, 'Haliax Duskstrider', 4, 0, 1);
 
         $single = $this->player->GetScrollRecipient(self::A);
-        $batch  = $this->player->GetScrollRecipients([self::A])[self::A];
+        $batch  = $this->query->ScrollRecipients([self::A])[self::A];
 
         // HasHeraldry too: the print page's run-level heraldry choice reads it off the
         // batch where the composer reads it off the single row.
@@ -111,7 +116,7 @@ final class PlayerScrollRecipientsTest extends TestCase
         $this->seed(self::A, 'Suspended Person', 5, 1, 1);
         $this->seed(self::B, 'Inactive Person', 5, 0, 0);
 
-        $rows = $this->player->GetScrollRecipients([self::A, self::B]);
+        $rows = $this->query->ScrollRecipients([self::A, self::B]);
 
         $this->assertCount(2, $rows, 'neither flag may remove a recipient from the result');
         $this->assertSame(1, $rows[self::A]['Suspended']);
@@ -132,7 +137,7 @@ final class PlayerScrollRecipientsTest extends TestCase
         $DB->Clear();
         $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET has_heraldry = 1 WHERE mundane_id = ' . self::A);
 
-        $rows = $this->player->GetScrollRecipients([self::A, self::B]);
+        $rows = $this->query->ScrollRecipients([self::A, self::B]);
 
         $this->assertSame(1, $rows[self::A]['HasHeraldry']);
         $this->assertSame(0, $rows[self::B]['HasHeraldry']);
@@ -147,7 +152,7 @@ final class PlayerScrollRecipientsTest extends TestCase
     {
         $this->seed(self::A, 'Haliax Duskstrider', 5, 0, 1);
 
-        $rows = $this->player->GetScrollRecipients([self::A]);
+        $rows = $this->query->ScrollRecipients([self::A]);
 
         $this->assertArrayHasKey('PronounFreetext', $rows[self::A]);
         $this->assertIsString($rows[self::A]['PronounFreetext']);
@@ -155,8 +160,8 @@ final class PlayerScrollRecipientsTest extends TestCase
 
     public function testNothingUsableInMeansNoQueryAndAnEmptyResult(): void
     {
-        $this->assertSame([], $this->player->GetScrollRecipients([]));
-        $this->assertSame([], $this->player->GetScrollRecipients([0, -1, 'nope']));
+        $this->assertSame([], $this->query->ScrollRecipients([]));
+        $this->assertSame([], $this->query->ScrollRecipients([0, -1, 'nope']));
     }
 
     /**
@@ -167,7 +172,7 @@ final class PlayerScrollRecipientsTest extends TestCase
     {
         $this->seed(self::A, 'Haliax Duskstrider', 5, 0, 1);
 
-        $rows = $this->player->GetScrollRecipients([self::A, '1 OR 1=1', '); DROP TABLE ork_mundane; --']);
+        $rows = $this->query->ScrollRecipients([self::A, '1 OR 1=1', '); DROP TABLE ork_mundane; --']);
 
         $this->assertSame([self::A], array_keys($rows));
     }

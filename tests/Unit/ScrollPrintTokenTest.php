@@ -18,6 +18,64 @@ final class ScrollPrintTokenTest extends TestCase
 {
     private const VIEWER = 46193;
 
+    /**
+     * Tokens are dormant without a configured secret (fail closed), so the
+     * behaviour tests need one. Defined only if config has not already set it.
+     */
+    public static function setUpBeforeClass(): void
+    {
+        if (!defined('SCROLL_PRINT_SECRET')) {
+            define('SCROLL_PRINT_SECRET', 'scroll-print-token-test-secret-' . str_repeat('x', 32));
+        }
+    }
+
+    /**
+     * No configured secret means NO key — never one derived from the DB
+     * credentials, which on a placeholder config is public.
+     */
+    public function testAnAbsentOrBlankSecretYieldsNoKey(): void
+    {
+        $this->assertSame('', Scroll::printTokenSecretFromForTest(null));
+        $this->assertSame('', Scroll::printTokenSecretFromForTest(''));
+        $this->assertSame('', Scroll::printTokenSecretFromForTest("  \t "));
+        $this->assertSame('k3y', Scroll::printTokenSecretFromForTest('k3y'));
+
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/system/lib/ork3/class.Scroll.php');
+        $body = substr($src, (int) strpos($src, 'private static function printTokenSecret()'));
+        $body = substr($body, 0, (int) strpos($body, 'public static function printTokenSecretFromForTest'));
+        $this->assertStringNotContainsString('DB_PASSWORD', $body);
+    }
+
+    /**
+     * Mint and Verify both refuse up front when there is no key. A constant cannot
+     * be undefined inside one PHP process (and a separate-process test drags in the
+     * whole app boot), so the guard is pinned at the source: each method's first
+     * act is the `printTokenSecret() === ''` check.
+     */
+    public function testWithoutASecretNothingMintsAndNothingVerifies(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/system/lib/ork3/class.Scroll.php');
+
+        foreach (['MintPrintToken', 'VerifyPrintToken'] as $method) {
+            $start = (int) strpos($src, "public static function {$method}(");
+            $this->assertGreaterThan(0, $start);
+            $head = substr($src, $start, 700);
+            $this->assertStringContainsString("self::printTokenSecret() === ''", $head, "{$method} must fail closed");
+        }
+    }
+
+    /** With a key configured, a token signed with NO key is still a forgery. */
+    public function testATokenSignedWithAnEmptyKeyIsRefused(): void
+    {
+        $expires = time() + 300;
+        $forged  = 'v1.' . self::VIEWER . '.' . $expires . '.'
+            . hash_hmac('sha256', 'v1|101|' . self::VIEWER . '|' . $expires, '');
+
+        $result = Scroll::VerifyPrintToken($forged, [101]);
+        $this->assertFalse($result['Valid']);
+        $this->assertSame(0, $result['ViewerId']);
+    }
+
     public function testAValidTokenVerifiesAndNamesItsViewer(): void
     {
         $token  = Scroll::MintPrintToken([101, 102, 103], self::VIEWER);

@@ -6,7 +6,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * A Court Planner line becomes a Scrollery certificate through one pure mapping:
- * Model_Scrollery::courtLineScrollRowForTest() turns (line, catalog choice, court,
+ * Scroll::CourtLineRow() turns (line, catalog choice, court,
  * giver) into the row Scroll::BuildScroll() draws from.
  *
  * Pinned here because the planner line carries text that must not reach paper —
@@ -56,7 +56,7 @@ final class ScrolleryCourtLineTest extends TestCase
 
     public function testRowCarriesCourtDateRankAndCatalogName(): void
     {
-        $row = Model_Scrollery::courtLineScrollRowForTest(
+        $row = Scroll::CourtLineRow(
             $this->line(['Rank' => 4]),
             ['AwardId' => 27, 'Name' => 'Order of the Rose'],
             $this->court(['Date' => '2026-11-07']),
@@ -73,7 +73,7 @@ final class ScrolleryCourtLineTest extends TestCase
     /** Review focus 2: a hidden rec's reason saved as the citation never prints. */
     public function testCitationWithheldWhenItIsAHiddenRecReason(): void
     {
-        $row = Model_Scrollery::courtLineScrollRowForTest(
+        $row = Scroll::CourtLineRow(
             $this->line(['PublicComment' => 'secret', 'RecReason' => 'secret', 'RecMonarchyOnly' => true]),
             $this->choice(),
             $this->court(),
@@ -85,7 +85,7 @@ final class ScrolleryCourtLineTest extends TestCase
 
     public function testOfficerWrittenCitationSurvives(): void
     {
-        $row = Model_Scrollery::courtLineScrollRowForTest(
+        $row = Scroll::CourtLineRow(
             $this->line(['PublicComment' => 'For valor', 'RecReason' => 'secret', 'RecMonarchyOnly' => true]),
             $this->choice(),
             $this->court(),
@@ -101,7 +101,7 @@ final class ScrolleryCourtLineTest extends TestCase
      */
     public function testEmptyCitationInheritsAPublicRecReason(): void
     {
-        $row = Model_Scrollery::courtLineScrollRowForTest(
+        $row = Scroll::CourtLineRow(
             $this->line(['PublicComment' => '', 'RecReason' => 'For holding the bridge', 'RecMonarchyOnly' => false]),
             $this->choice(),
             $this->court(),
@@ -114,7 +114,7 @@ final class ScrolleryCourtLineTest extends TestCase
     /** The officer's explicit "(Clear)" promises nothing of the rec is published. */
     public function testClearedCitationDoesNotInheritTheRecReason(): void
     {
-        $row = Model_Scrollery::courtLineScrollRowForTest(
+        $row = Scroll::CourtLineRow(
             $this->line([
                 'PublicComment'        => '',
                 'PublicCommentCleared' => true,
@@ -132,7 +132,7 @@ final class ScrolleryCourtLineTest extends TestCase
     /** An empty citation never inherits a Monarchy Only rec's reason. */
     public function testEmptyCitationDoesNotInheritAHiddenRecReason(): void
     {
-        $row = Model_Scrollery::courtLineScrollRowForTest(
+        $row = Scroll::CourtLineRow(
             $this->line(['PublicComment' => '', 'RecReason' => 'secret', 'RecMonarchyOnly' => true]),
             $this->choice(),
             $this->court(),
@@ -164,23 +164,23 @@ final class ScrolleryCourtLineTest extends TestCase
 
     public function testUnnamedCustomChoicePrintsNoName(): void
     {
-        $this->assertFalse(Model_Scrollery::courtChoicePrintsANameForTest(['AwardId' => 94, 'Name' => 'Custom Award']));
-        $this->assertFalse(Model_Scrollery::courtChoicePrintsANameForTest(['AwardId' => 94, 'Name' => '']));
-        $this->assertFalse(Model_Scrollery::courtChoicePrintsANameForTest(['AwardId' => 246, 'Name' => 'Custom Title']));
-        $this->assertTrue(Model_Scrollery::courtChoicePrintsANameForTest(['AwardId' => 94, 'Name' => 'Order of the Hellrider']));
-        $this->assertTrue(Model_Scrollery::courtChoicePrintsANameForTest(['AwardId' => 21, 'Name' => 'Order of the Rose']));
+        $this->assertFalse(Scroll::CourtChoicePrintsAName(['AwardId' => 94, 'Name' => 'Custom Award']));
+        $this->assertFalse(Scroll::CourtChoicePrintsAName(['AwardId' => 94, 'Name' => '']));
+        $this->assertFalse(Scroll::CourtChoicePrintsAName(['AwardId' => 246, 'Name' => 'Custom Title']));
+        $this->assertTrue(Scroll::CourtChoicePrintsAName(['AwardId' => 94, 'Name' => 'Order of the Hellrider']));
+        $this->assertTrue(Scroll::CourtChoicePrintsAName(['AwardId' => 21, 'Name' => 'Order of the Rose']));
     }
 
     public function testGiverPassesThrough(): void
     {
-        $row = Model_Scrollery::courtLineScrollRowForTest($this->line(), $this->choice(), $this->court(), 'Queen Alys');
+        $row = Scroll::CourtLineRow($this->line(), $this->choice(), $this->court(), 'Queen Alys');
 
         $this->assertSame('Queen Alys', $row['GivenBy']);
     }
 
     public function testUndatedCourtLeavesDateBlank(): void
     {
-        $row = Model_Scrollery::courtLineScrollRowForTest(
+        $row = Scroll::CourtLineRow(
             $this->line(),
             $this->choice(),
             $this->court(['Date' => null]),
@@ -196,7 +196,7 @@ final class ScrolleryCourtLineTest extends TestCase
      */
     public function testIssuerFollowsTheCourtsLevel(): void
     {
-        $park = Model_Scrollery::courtLineScrollRowForTest(
+        $park = Scroll::CourtLineRow(
             $this->line(),
             $this->choice(),
             $this->court(['ParkId' => 9, 'ParkName' => 'Mordengaard']),
@@ -206,7 +206,7 @@ final class ScrolleryCourtLineTest extends TestCase
         $this->assertSame('Mordengaard', $park['ParkName']);
         $this->assertSame('', $park['KingdomName']);
 
-        $kingdom = Model_Scrollery::courtLineScrollRowForTest($this->line(), $this->choice(), $this->court(), '');
+        $kingdom = Scroll::CourtLineRow($this->line(), $this->choice(), $this->court(), '');
         $this->assertSame(0, $kingdom['ParkId']);
         $this->assertSame(100001, $kingdom['KingdomId']);
         $this->assertSame('', $kingdom['ParkName']);
@@ -216,7 +216,7 @@ final class ScrolleryCourtLineTest extends TestCase
     /** The row is one BuildScroll() accepts as-is. */
     public function testRowBuildsACertificate(): void
     {
-        $row    = Model_Scrollery::courtLineScrollRowForTest(
+        $row    = Scroll::CourtLineRow(
             $this->line(['Rank' => 3]),
             $this->choice(),
             $this->court(),

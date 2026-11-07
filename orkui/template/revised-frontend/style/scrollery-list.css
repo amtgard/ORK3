@@ -16,6 +16,12 @@
 .sc-table td { padding: 8px 10px; border-bottom: 1px solid var(--rp-border); vertical-align: top; }
 .sc-table tr:last-child td { border-bottom: 0; }
 .sc-check    { width: 34px; text-align: center; }
+/* A checkbox option label (Reason lines). Not .sc-check — that is the 34px table
+   column above, and reusing it squeezed the label into that column. The doubled
+   selector out-ranks bulk's `.sc-f label { display:block }`. */
+label.sc-opt-check,
+.sc-f label.sc-opt-check { display: inline-flex; align-items: center; gap: 6px; width: auto;
+                           text-align: left; cursor: pointer; }
 
 .sc-bar      { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px;
                padding-top: 12px; border-top: 1px solid var(--rp-border); }

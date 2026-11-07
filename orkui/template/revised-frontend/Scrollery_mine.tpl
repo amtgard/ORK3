@@ -183,7 +183,7 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
                          Print link below. Works for any award on this list — the rules
                          are in the layer all seventeen orders share. */ ?>
                 <div class="sc-tool">
-                    <label class="sc-check" for="sc-lines">Reason lines</label>
+                    <label class="sc-opt-check" for="sc-lines">Reason lines</label>
                     <input type="checkbox" id="sc-lines" checked>
                 </div>
             </div>
@@ -318,9 +318,12 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
                 </button>
                 <button type="button" class="adm-btn adm-btn-ghost" id="sc-select-all">Select all matching</button>
                 <button type="button" class="adm-btn adm-btn-ghost" id="sc-select-none">Select none</button>
-                <?php /* role="alert" because past the print cap it is the ONLY feedback the
-                         button gives — it otherwise appears to do nothing at all. */ ?>
-                <span class="sc-count" id="sc-selected-count" role="alert"></span>
+                <?php /* The count is role="status": it changes on every tick, and an alert
+                         would interrupt a screen reader each time. The refusal past the
+                         print cap — the ONLY feedback the button gives then — is the one
+                         alert, in its own node. */ ?>
+                <span class="sc-count" id="sc-selected-count" role="status"></span>
+                <span class="sc-count sc-warn" id="sc-run-refusal" role="alert"></span>
             </div>
             <div class="sc-bar sc-batches" id="sc-batches" role="status"></div>
 
@@ -380,7 +383,8 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
         selAll  = document.getElementById('sc-select-all'),
         selNone = document.getElementById('sc-select-none'),
         batchBar = document.getElementById('sc-batches'),
-        count   = document.getElementById('sc-selected-count');
+        count   = document.getElementById('sc-selected-count'),
+        refusal = document.getElementById('sc-run-refusal');
 
     if (!tbody || !btn) { return; }
 
@@ -529,6 +533,8 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
             ? n + ' selected — ' + MAX_RUN + ' max per print run'
             : (n === 0 ? '' : n + ' of ' + boxes.length + ' matching selected');
         count.classList.toggle('sc-warn', n > MAX_RUN);
+        // The refusal answered one click; any change of selection retires it.
+        if (refusal) { refusal.textContent = ''; }
         btn.disabled = n === 0;
         if (all) {
             all.checked       = n > 0 && n === boxes.length;
@@ -602,21 +608,28 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
     function renderBatches(batches, variant) {
         if (!batchBar) { return; }
         batchBar.innerHTML = '';
-        if (batches.length < 2) { return; }
+        if (!batches.length) { return; }
 
+        /* Every batch gets a link, the first included and even for a single batch:
+           window.open() with noopener returns null whether or not the popup opened,
+           so there is no telling a blocked first tab from an opened one, and the link
+           is the way back to it. */
         var intro = document.createElement('span');
         intro.className = 'sc-count';
-        intro.textContent = 'Opened batch 1 of ' + batches.length + ' (' + batches[0].length +
-            ' ' + plural(batches[0].length) + '). Open the rest one at a time:';
+        intro.textContent = batches.length === 1
+            ? 'The preview opened in a new tab. If your browser blocked it:'
+            : 'Batch 1 of ' + batches.length + ' opened in a new tab (if your browser blocked it, use its link). Open the rest one at a time:';
         batchBar.appendChild(intro);
 
-        batches.slice(1).forEach(function (b, i) {
+        batches.forEach(function (b, i) {
             var a = document.createElement('a');
             a.className = 'adm-btn adm-btn-ghost';
             a.target = '_blank';
             a.rel = 'noopener';
             a.href = batchUrl(b, variant);
-            a.textContent = 'Batch ' + (i + 2) + ' — ' + b.length + ' ' + plural(b.length);
+            a.textContent = batches.length === 1
+                ? 'Open the preview — ' + b.length + ' ' + plural(b.length)
+                : 'Batch ' + (i + 1) + ' — ' + b.length + ' ' + plural(b.length);
             batchBar.appendChild(a);
         });
     }
@@ -639,12 +652,11 @@ html[data-theme="dark"] .sc-order.sc-unnamed { color: var(--rp-text-muted); }
         if (!ids.length) { return; }
 
         if (ids.length > MAX_RUN) {
-            count.textContent = ids.length + ' selected — only ' + MAX_RUN +
-                ' can be printed at once. Uncheck ' + (ids.length - MAX_RUN) + '.';
-            count.classList.add('sc-warn');
+            var why = 'Only ' + MAX_RUN + ' can be printed at once. Uncheck ' + (ids.length - MAX_RUN) + '.';
+            if (refusal) { refusal.textContent = why; } else { count.textContent = why; }
             return;
         }
-        count.classList.remove('sc-warn');
+        if (refusal) { refusal.textContent = ''; }
 
         var state   = variantState(chosen),
             variant = state.variant,
