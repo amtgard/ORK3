@@ -586,8 +586,9 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                         </span>
                         <div class="sc-design-sub" id="sc-custom-border-colors" hidden>
                             <?php /* Style: a key of Scroll::KNOT_STYLES. 1 the Jovious knot,
-                                     2 interlock, 3 single strand with its holes filled
-                                     (Color 2), 4 single strand with clear holes (no Color 2). */
+                                     2 interlock (cut gaps), 3 single strand drawn solid with
+                                     its holes filled (Color 2), 4 single strand with clear
+                                     holes and cut gaps (no Color 2). */
                                   $knotStyleNow = (int) ($designDefaults['knotStyle'] ?? 1); ?>
                             <div class="sc-field">
                                 <span class="sc-field-label" id="sc-knot-style-label">Style</span>
