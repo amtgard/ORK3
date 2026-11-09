@@ -461,6 +461,14 @@ html[data-theme="dark"] .lg-award-pill-sword   { border-color: #4a5568; color: #
 html[data-theme="dark"] .lg-award-pill-crown   { border-color: #975a16; color: #fbd38d; }
 html[data-theme="dark"] .lg-award-pill-flame   { border-color: #9b2c2c; color: #fca5a5; }
 html[data-theme="dark"] .lg-award-pill-serpent { border-color: #276749; color: #9ae6b4; }
+/* Active state must out-rank the dark inactive tints above (same specificity, later wins) */
+html[data-theme="dark"] .lg-award-pill.lg-award-pill-active { color: #fff; border-color: transparent; }
+html[data-theme="dark"] .lg-award-pill-battle.lg-award-pill-active  { background: #3b82f6; }
+html[data-theme="dark"] .lg-award-pill-sword.lg-award-pill-active   { background: #64748b; }
+html[data-theme="dark"] .lg-award-pill-crown.lg-award-pill-active   { background: #d97706; }
+html[data-theme="dark"] .lg-award-pill-flame.lg-award-pill-active   { background: #ef4444; }
+html[data-theme="dark"] .lg-award-pill-serpent.lg-award-pill-active { background: #22c55e; }
+html[data-theme="dark"] .lg-award-pill.lg-award-pill-active:not([class*="lg-award-pill-battle"]):not([class*="lg-award-pill-sword"]):not([class*="lg-award-pill-crown"]):not([class*="lg-award-pill-flame"]):not([class*="lg-award-pill-serpent"]) { background: var(--rp-accent); }
 html[data-theme="dark"] .lg-dual-range-track { background: var(--ork-border); }
 html[data-theme="dark"] .lg-showing-inactive tr[data-recent="0"] td.lg-col-player::after { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted); }
 html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }

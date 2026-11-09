@@ -100,6 +100,33 @@ final class EventOccurrenceTest extends TestCase
         $this->assertFalse($this->detailBelongsToEvent($ctxB['detail_id'], $ctxA['event_id']));
     }
 
+    public function testCreateEventDetailsDefaultsAtParkToEventPark(): void
+    {
+        $ctx = $this->fixture->createPublishedEvent('br054');
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_EVENT, $ctx['event_id'], AUTH_CREATE, 'br054-auth');
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $base = [
+            'Token' => $grantor['token'],
+            'EventId' => $ctx['event_id'],
+            'Current' => 0,
+            'Price' => 0,
+            'EventStart' => date('Y-m-d H:i:s', strtotime('+30 days')),
+            'EventEnd' => date('Y-m-d H:i:s', strtotime('+30 days +4 hours')),
+            'Description' => 'BR-054',
+            'Url' => '', 'UrlName' => '', 'Address' => '', 'Province' => '', 'PostalCode' => '',
+            'City' => '', 'Country' => '', 'MapUrl' => '', 'MapUrlName' => '', 'AtParkId' => null,
+        ];
+        $event = new Event();
+        $res = $event->CreateEventDetails($base);
+        $this->assertSame(0, $res['Status'] ?? -1, json_encode($res));
+        $id = (int) $res['Detail'];
+        $this->fixture->trackDetail($id);
+
+        $atPark = $this->fixture->fetchDetailAtParkId($id);
+        $this->assertSame($ctx['park_id'], $atPark);
+    }
+
     public function testSetCalendarDetailFeesLinks(): void
     {
         $ctx = $this->fixture->createPublishedEvent('fees-links');
@@ -258,6 +285,12 @@ final class EventOccurrenceTest extends TestCase
         $ctx = $this->fixture->createPublishedEvent('dietary');
         $player = $this->fixture->createPlayer('diet-player');
         $this->fixture->insertRsvp($ctx['detail_id'], $player, 'going');
+        // Nightshades was added after the other allergens and once fell out of the summary query.
+        $this->fixture->insertDietary($player, [
+            'is_anonymous' => 0,
+            'allergen_shellfish' => 1,
+            'allergen_nightshades' => 2,
+        ]);
         $feast = $this->fixture->createGrantorWithoutAuth('c11-feast');
         $this->fixture->insertStaff(
             $ctx['detail_id'],
@@ -299,6 +332,9 @@ final class EventOccurrenceTest extends TestCase
         $this->assertSame(0, $summary['Status']['Status']);
         $this->assertNotEmpty($summary['Items']);
         $this->assertSame($player, $summary['Items'][0]['MundaneId']);
+        $this->assertTrue($summary['Items'][0]['HasPrefs']);
+        $this->assertSame(1, $summary['Items'][0]['AllergenShellfish']);
+        $this->assertSame(2, $summary['Items'][0]['AllergenNightshades']);
     }
 
     public function testDraftOccurrenceHiddenFromAnonymous(): void

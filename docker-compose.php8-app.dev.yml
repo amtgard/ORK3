@@ -13,6 +13,7 @@ services:
     environment:
       - ENVIRONMENT=DEV
     container_name: ork3-php8-app
+    hostname: ork3-php8-app
     networks:
       - ork3-php8-net
   ork3db:

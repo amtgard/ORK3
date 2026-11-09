@@ -135,9 +135,9 @@ class Model_QualTest extends Model
         return $this->_qual_test()->resetQuestionStats($questionId);
     }
 
-    public function report_question(int $questionId, int $playerId, string $reason)
+    public function report_question(int $questionId, int $playerId, string $reason, string $comment = '')
     {
-        return $this->_qual_test()->reportQuestion($questionId, $playerId, $reason);
+        return $this->_qual_test()->reportQuestion($questionId, $playerId, $reason, $comment);
     }
 
     public function report_counts(int $questionId): array

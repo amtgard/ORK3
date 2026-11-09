@@ -1,0 +1,1128 @@
+/* ============================================================
+   Population Explorer — builder pieces (.pe-*)
+   The page frame is the shared .rp-* shell in reports.css; this
+   sheet only styles the explorer's own parts and the few .rp-*
+   pieces reports.css does not define, scoped under .pe-root.
+   Dark mode: html[data-theme="dark"] (never .dark-mode).
+   ============================================================ */
+
+/* The help dialog is moved to <body> by its script, so it carries the tokens too. */
+.pe-root,
+.pe-help-overlay {
+    --pe-accent        : #4338ca;
+    --pe-accent-hover  : #3730a3;
+    --pe-accent-soft   : #eef2ff;
+    --pe-accent-text   : #3730a3;
+    --pe-or            : #b45309;
+    --pe-or-soft       : #fffbeb;
+    --pe-or-text       : #92400e;
+    --pe-danger        : #c53030;
+    --pe-danger-soft   : #fff5f5;
+    --pe-ctl-h         : 36px;
+}
+.pe-root [hidden] { display: none !important; }
+
+/* ── Shell pieces reports.css leaves to the page ─────────── */
+.pe-root .rp-main {
+    display       : flex;
+    flex-direction: column;
+    gap           : 16px;
+    min-width     : 0;
+    width         : 100%;
+}
+.pe-root .rp-empty-state {
+    text-align: center;
+    padding   : 40px 16px;
+    color     : var(--rp-text-muted);
+    font-size : 14px;
+}
+.pe-root .rp-empty-state > i {
+    display      : block;
+    font-size    : 34px;
+    margin-bottom: 12px;
+    color        : var(--rp-text-hint);
+}
+.pe-root .rp-empty-state p { margin: 0 auto; max-width: 520px; line-height: 1.5; }
+.pe-empty-page {
+    background   : var(--ork-card-bg);
+    border       : 1px solid var(--ork-border);
+    border-top   : none;
+    border-radius: 0 0 8px 8px;
+}
+/* orkui.css paints a pill box on every bare heading — reset it here and in dark mode. */
+.pe-root h3.pe-empty-title,
+html[data-theme="dark"] .pe-root h3.pe-empty-title {
+    background   : transparent;
+    border       : none;
+    padding      : 0;
+    border-radius: 0;
+    box-shadow   : none;
+    text-shadow  : none;
+    font-size    : 18px;
+    margin       : 0 0 8px;
+    color        : var(--ork-text);
+}
+
+/* Cards: rp-filter-card clips overflow, which would cut off the chip dropdowns. */
+.pe-root .pe-card { overflow: visible; margin-bottom: 0; }
+.pe-root .pe-card > .rp-filter-card-header { border-radius: 8px 8px 0 0; }
+.pe-card-header-link { margin-left: auto; }
+
+/* ── Collapsible card headers (Filters, Columns) ─────────── */
+/* The toggle button fills the header and carries its padding, so the whole title row is clickable. */
+.pe-root .pe-card-head { padding: 0; gap: 0; }
+.pe-card-toggle {
+    flex           : 1 1 auto;
+    min-width      : 0;
+    display        : flex;
+    align-items    : center;
+    gap            : 6px;
+    margin         : 0;
+    padding        : 9px 14px;
+    background     : none;
+    border         : 0;
+    border-radius  : 8px 8px 0 0;
+    font           : inherit;
+    color          : inherit;
+    letter-spacing : inherit;
+    text-transform : inherit;
+    text-align     : left;
+    cursor         : pointer;
+}
+.pe-card-toggle:hover .pe-card-title { color: var(--pe-accent); }
+.pe-card-toggle:focus-visible { outline: 2px solid var(--pe-accent); outline-offset: -2px; }
+.pe-card-title { flex-shrink: 0; }
+/* One-line live summary, shown only while folded. */
+.pe-card-summary {
+    display       : none;
+    min-width     : 0;
+    overflow      : hidden;
+    text-overflow : ellipsis;
+    white-space   : nowrap;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size     : 12px;
+    font-weight   : 600;
+    color         : var(--rp-text-body);
+}
+.pe-card.is-collapsed .pe-card-summary { display: block; }
+.pe-card-chevron { margin-left: auto; flex-shrink: 0; transition: transform 0.15s ease; }
+.pe-card.is-collapsed .pe-card-chevron { transform: rotate(-90deg); }
+.pe-root .pe-card-head .pe-card-header-link { margin: 0 14px 0 0; }
+.pe-card.is-collapsed .pe-card-header-link { display: none; }
+.pe-root .pe-card.is-collapsed > .rp-filter-card-header { border-bottom-color: transparent; border-radius: 8px; }
+.pe-card.is-collapsed .pe-card-toggle { border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) {
+    .pe-card-chevron { transition: none; }
+}
+
+/* ── Banners & toast ─────────────────────────────────────── */
+.pe-banner {
+    display      : flex;
+    align-items  : flex-start;
+    gap          : 8px;
+    padding      : 10px 14px;
+    border-radius: 6px;
+    border       : 1px solid;
+    font-size    : 13px;
+    line-height  : 1.45;
+    margin       : 0 0 12px;
+}
+.pe-banner > i { margin-top: 2px; flex-shrink: 0; }
+.pe-root > .pe-banner { margin: 12px 0 0; }
+.pe-banner-warn  { background: #fffbeb; border-color: #f6ad55; color: #7b341e; }
+.pe-banner-error { background: var(--pe-danger-soft); border-color: #fc8181; color: #9b2c2c; }
+.pe-banner-info  { background: var(--pe-accent-soft); border-color: #c3dafe; color: var(--pe-accent-text); }
+.pe-banner-busy > span { flex: 1 1 auto; min-width: 0; }
+.pe-banner-dismiss {
+    flex-shrink    : 0;
+    display        : inline-flex;
+    align-items    : center;
+    justify-content: center;
+    width          : 28px;
+    height         : 28px;
+    margin         : -4px -6px -4px 0;
+    padding        : 0;
+    border         : 0;
+    border-radius  : 4px;
+    background     : transparent;
+    color          : inherit;
+    cursor         : pointer;
+}
+.pe-banner-dismiss:hover { background: rgba(0,0,0,0.06); }
+.pe-banner-dismiss:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+
+.pe-toast {
+    position     : fixed;
+    left         : 50%;
+    bottom       : 24px;
+    transform    : translate(-50%, 12px);
+    z-index      : 10002;
+    max-width    : min(440px, calc(100vw - 32px));
+    box-sizing   : border-box;
+    padding      : 11px 16px;
+    border-radius: 8px;
+    background   : #1a202c;
+    color        : #fff;
+    font-size    : 13px;
+    line-height  : 1.4;
+    box-shadow   : var(--ork-shadow-dropdown);
+    opacity      : 0;
+    transition   : opacity 0.18s, transform 0.18s;
+    pointer-events: none;
+}
+.pe-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+.pe-toast-ok    { border-left: 4px solid #48bb78; }
+.pe-toast-error { border-left: 4px solid #fc8181; }
+
+/* ── Controls ────────────────────────────────────────────── */
+.pe-input {
+    box-sizing   : border-box;
+    height       : var(--pe-ctl-h);
+    padding      : 0 10px;
+    border       : 1px solid var(--ork-input-border);
+    border-radius: 6px;
+    background   : var(--ork-input-bg);
+    color        : var(--ork-text);
+    font-size    : 13px;
+    min-width    : 0;
+    max-width    : 100%;
+}
+.pe-input:focus {
+    outline     : none;
+    border-color: var(--pe-accent);
+    box-shadow  : 0 0 0 3px rgba(67,56,202,0.15);
+}
+.pe-select { padding-right: 6px; cursor: pointer; }
+
+.pe-btn-run {
+    display      : inline-flex;
+    align-items  : center;
+    justify-content: center;
+    gap          : 8px;
+    min-height   : 38px;
+    padding      : 0 22px;
+    background   : var(--pe-accent);
+    color        : #fff;
+    border       : none;
+    border-radius: 6px;
+    font-size    : 14px;
+    font-weight  : 700;
+    cursor       : pointer;
+    transition   : background 0.15s;
+}
+.pe-btn-run:hover { background: var(--pe-accent-hover); }
+.pe-btn-run[aria-disabled="true"] { opacity: 0.75; cursor: progress; }
+.pe-btn-run:focus-visible { outline: 2px solid var(--pe-accent); outline-offset: 2px; }
+
+.pe-btn-link {
+    background : none;
+    border     : none;
+    padding    : 4px 2px;
+    color      : var(--pe-accent);
+    font-size  : 12px;
+    font-weight: 600;
+    cursor     : pointer;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.pe-btn-link:hover { text-decoration: underline; }
+
+.pe-btn-add {
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 5px;
+    height       : 30px;
+    padding      : 0 10px;
+    border       : 1px dashed var(--ork-input-border);
+    border-radius: 6px;
+    background   : transparent;
+    color        : var(--pe-accent);
+    font-size    : 12px;
+    font-weight  : 600;
+    cursor       : pointer;
+    white-space  : nowrap;
+}
+.pe-btn-add:hover:not(.is-disabled) { border-style: solid; border-color: var(--pe-accent); background: var(--pe-accent-soft); }
+.pe-btn-add.is-disabled { opacity: 0.45; cursor: not-allowed; }
+
+.pe-btn-remove {
+    display        : inline-flex;
+    align-items    : center;
+    justify-content: center;
+    width          : 32px;
+    height         : 32px;
+    padding        : 0;
+    border         : 1px solid transparent;
+    border-radius  : 6px;
+    background     : transparent;
+    color          : var(--rp-text-muted);
+    cursor         : pointer;
+    flex-shrink    : 0;
+}
+.pe-btn-remove:hover { color: var(--pe-danger); border-color: #feb2b2; background: var(--pe-danger-soft); }
+
+
+/* Visually hidden, still read by screen readers (the #pe-live region). */
+.pe-sr-only {
+    position   : absolute;
+    width      : 1px;
+    height     : 1px;
+    margin     : -1px;
+    padding    : 0;
+    overflow   : hidden;
+    clip       : rect(0 0 0 0);
+    white-space: nowrap;
+    border     : 0;
+}
+
+/* ── Segmented toggle (AND/OR, Yes/No) ───────────────────── */
+.pe-seg {
+    display      : inline-flex;
+    border       : 1px solid var(--ork-input-border);
+    border-radius: 6px;
+    overflow     : visible;
+    background   : var(--ork-input-bg);
+    flex-shrink  : 0;
+}
+.pe-seg-btn {
+    position   : relative;
+    min-width  : 46px;
+    height     : 30px;
+    padding    : 0 12px;
+    border     : none;
+    background : transparent;
+    color      : var(--rp-text-body);
+    font-size  : 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor     : pointer;
+}
+.pe-seg-btn:first-child { border-radius: 5px 0 0 5px; }
+.pe-seg-btn:last-child  { border-radius: 0 5px 5px 0; }
+.pe-seg-btn + .pe-seg-btn { border-left: 1px solid var(--ork-input-border); }
+.pe-seg-btn.is-active { background: var(--pe-accent); color: #fff; }
+.pe-seg-btn:focus-visible { outline: 2px solid var(--pe-accent); outline-offset: 1px; z-index: 1; }
+.pe-seg-yn .pe-seg-btn { height: var(--pe-ctl-h); min-width: 56px; }
+
+/* ── Group block ─────────────────────────────────────────── */
+.pe-group {
+    border       : 1px solid var(--ork-border);
+    border-left  : 3px solid var(--pe-accent);
+    border-radius: 6px;
+    background   : var(--ork-card-bg);
+    padding      : 10px 12px 12px;
+    min-width    : 0;
+}
+.pe-group-root {
+    border     : none;
+    padding    : 0;
+    background : transparent;
+}
+.pe-depth-2 { background: var(--ork-bg-secondary); }
+.pe-depth-3 { background: var(--ork-card-bg); border-left-color: var(--pe-or); }
+.pe-group.pe-invalid { border-color: var(--pe-danger); }
+
+.pe-group-head {
+    display    : flex;
+    align-items: center;
+    flex-wrap  : wrap;
+    gap        : 8px 10px;
+    margin-bottom: 10px;
+}
+.pe-group-hint {
+    font-size: 12px;
+    color    : var(--rp-text-muted);
+}
+.pe-group-actions {
+    display    : flex;
+    align-items: center;
+    gap        : 6px;
+    margin-left: auto;
+}
+.pe-group-body { display: flex; flex-direction: column; min-width: 0; }
+.pe-group-empty {
+    font-size  : 13px;
+    color      : var(--rp-text-muted);
+    font-style : italic;
+    padding    : 8px 2px;
+}
+
+/* Connector between siblings */
+.pe-connector {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+    margin     : 4px 0;
+    padding-left: 10px;
+}
+.pe-connector::after {
+    content   : '';
+    flex      : 1;
+    border-top: 1px dashed var(--ork-divider);
+}
+.pe-connector-label {
+    display      : inline-block;
+    padding      : 1px 8px;
+    border-radius: 10px;
+    font-size    : 10px;
+    font-weight  : 700;
+    letter-spacing: 0.08em;
+}
+.pe-connector-and { background: var(--pe-accent-soft); color: var(--pe-accent-text); }
+.pe-connector-or  { background: var(--pe-or-soft); color: #92400e; }
+
+/* ── Rule row ────────────────────────────────────────────── */
+.pe-rule {
+    display              : grid;
+    grid-template-columns: minmax(150px, 1.15fr) minmax(104px, 0.6fr) minmax(0, 2fr) 32px;
+    grid-template-areas  : "crit op val rm" "err err err err";
+    align-items          : start;
+    gap                  : 6px 8px;
+    padding              : 6px;
+    border               : 1px solid transparent;
+    border-radius        : 6px;
+    min-width            : 0;
+}
+.pe-rule:hover { background: rgba(67,56,202,0.035); }
+.pe-rule.pe-invalid { border-color: var(--pe-danger); background: var(--pe-danger-soft); }
+.pe-rule-crit { grid-area: crit; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pe-rule-op   { grid-area: op; min-width: 0; }
+.pe-rule-val  { grid-area: val; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.pe-rule-remove { grid-area: rm; margin-top: 2px; }
+.pe-rule-crit .pe-select,
+.pe-rule-op .pe-select { width: 100%; }
+.pe-rule-error {
+    grid-area  : err;
+    font-size  : 12px;
+    font-weight: 600;
+    color      : var(--pe-danger);
+    padding    : 0 2px;
+}
+.pe-group-root > .pe-rule-error { margin-top: 8px; }
+
+.pe-param {
+    display    : flex;
+    align-items: center;
+    gap        : 6px;
+    font-size  : 12px;
+    color      : var(--rp-text-muted);
+}
+.pe-param-input { width: 64px; }
+.pe-and { font-size: 12px; color: var(--rp-text-muted); }
+.pe-date { display: inline-flex; flex: 1 1 140px; min-width: 0; max-width: 220px; }
+.pe-date .pe-input { width: 100%; }
+.pe-num-input { flex: 1 1 90px; width: 120px; max-width: 160px; }
+
+/* ── Chip multi-select ───────────────────────────────────── */
+.pe-chips {
+    position     : relative;
+    display      : flex;
+    flex-wrap    : wrap;
+    align-items  : center;
+    gap          : 4px;
+    width        : 100%;
+    min-height   : var(--pe-ctl-h);
+    box-sizing   : border-box;
+    padding      : 3px 6px;
+    border       : 1px solid var(--ork-input-border);
+    border-radius: 6px;
+    background   : var(--ork-input-bg);
+    cursor       : text;
+}
+.pe-chips.is-open,
+.pe-chips:focus-within { border-color: var(--pe-accent); box-shadow: 0 0 0 3px rgba(67,56,202,0.15); }
+.pe-chip-wrap { display: contents; }
+.pe-chip {
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 2px;
+    max-width    : 100%;
+    padding      : 2px 2px 2px 9px;
+    border-radius: 12px;
+    background   : var(--pe-accent-soft);
+    border       : 1px solid #c7d2fe;
+    color        : var(--pe-accent-text);
+    font-size    : 12px;
+    font-weight  : 600;
+    line-height  : 1.4;
+}
+.pe-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pe-chip-x {
+    display        : inline-flex;
+    align-items    : center;
+    justify-content: center;
+    width          : 20px;
+    height         : 20px;
+    padding        : 0;
+    border         : none;
+    border-radius  : 50%;
+    background     : transparent;
+    color          : inherit;
+    font-size      : 11px;
+    cursor         : pointer;
+    flex-shrink    : 0;
+}
+.pe-chip-x:hover { background: rgba(67,56,202,0.15); }
+.pe-chips input.pe-chip-input {
+    flex       : 1 1 80px;
+    min-width  : 60px;
+    height     : 26px;
+    border     : none;
+    outline    : none;
+    background : transparent;
+    box-shadow : none;
+    padding    : 0 2px;
+    font-size  : 13px;
+    color      : var(--ork-text);
+}
+.pe-chips-single.has-value input.pe-chip-input { flex-basis: 20px; min-width: 20px; }
+.pe-chip-list {
+    position     : absolute;
+    left         : -1px;
+    right        : -1px;
+    top          : calc(100% + 4px);
+    z-index      : 60;
+    max-height   : 240px;
+    overflow-y   : auto;
+    margin       : 0;
+    padding      : 4px;
+    list-style   : none;
+    background   : var(--ork-card-bg);
+    border       : 1px solid var(--ork-border);
+    border-radius: 6px;
+    box-shadow   : var(--ork-shadow-dropdown);
+}
+.pe-chip-opt {
+    padding      : 7px 10px;
+    border-radius: 4px;
+    font-size    : 13px;
+    color        : var(--ork-text);
+    cursor       : pointer;
+}
+.pe-chip-opt:hover,
+.pe-chip-opt.is-active { background: var(--pe-accent-soft); color: var(--pe-accent-text); }
+.pe-chip-empty { padding: 7px 10px; font-size: 12px; font-style: italic; color: var(--rp-text-muted); }
+
+/* ── Builder foot (Clear all rules) ──────────────────────── */
+.pe-builder-foot {
+    display    : flex;
+    align-items: center;
+    margin-top : 14px;
+    padding-top: 12px;
+    border-top : 1px solid var(--ork-divider);
+}
+
+/* ── Action bar: Run, dirty hint, Copy link, Export ────────
+   Outside the folding cards (spec §5), so it is always visible. */
+.pe-action-bar {
+    display      : flex;
+    flex-wrap    : wrap;
+    align-items  : center;
+    gap          : 10px 14px;
+    min-width    : 0;
+    padding      : 10px 14px;
+    background   : var(--rp-card-bg, var(--ork-card-bg));
+    border       : 1px solid var(--rp-border);
+    border-radius: 8px;
+    box-shadow   : var(--ork-shadow-card);
+}
+.pe-action-bar-end {
+    display    : flex;
+    flex-wrap  : wrap;
+    gap        : 8px;
+    margin-left: auto;
+}
+.pe-btn-action {
+    display      : inline-flex;
+    align-items  : center;
+    justify-content: center;
+    gap          : 6px;
+    min-height   : 38px;
+    padding      : 0 14px;
+    border       : 1px solid var(--rp-border-mid, var(--ork-input-border));
+    border-radius: 6px;
+    background   : var(--ork-input-bg);
+    color        : var(--rp-text-body);
+    font-size    : 13px;
+    font-weight  : 600;
+    cursor       : pointer;
+    transition   : background 0.15s, border-color 0.15s, color 0.15s;
+}
+.pe-btn-action:hover:not(.is-disabled) { border-color: var(--pe-accent); color: var(--pe-accent-text); background: var(--pe-accent-soft); }
+.pe-btn-action:focus-visible { outline: 2px solid var(--pe-accent); outline-offset: 2px; }
+.pe-btn-action.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.pe-btn-action.is-busy { opacity: 0.75; cursor: progress; }
+
+/* "Filters changed since last run" */
+.pe-dirty-hint {
+    display    : inline-flex;
+    align-items: center;
+    gap        : 6px;
+    font-size  : 12px;
+    font-weight: 600;
+    color      : var(--pe-or-text);
+}
+
+/* ── Columns card ────────────────────────────────────────── */
+.pe-columns {
+    display              : grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap                  : 12px 18px;
+}
+.pe-col-group { border: none; margin: 0; padding: 0; min-width: 0; }
+.pe-col-group-title {
+    padding       : 0;
+    margin-bottom : 6px;
+    font-size     : 11px;
+    font-weight   : 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color         : var(--rp-text-muted);
+}
+.pe-col-check {
+    position   : relative;
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+    padding    : 3px 0;
+    font-size  : 13px;
+    color      : var(--rp-text-body);
+    cursor     : pointer;
+}
+.pe-col-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--pe-accent); cursor: pointer; }
+.pe-col-check.is-locked { cursor: default; }
+.pe-col-lock { font-size: 10px; color: var(--rp-text-hint); }
+
+/* ── Results ─────────────────────────────────────────────── */
+.pe-results-body { min-width: 0; }
+/* The results card is the surface: keep the table area flat (no card in a card). */
+.pe-root .pe-table-area {
+    border       : none;
+    background   : transparent;
+    box-shadow   : none;
+    padding      : 0;
+    border-radius: 0;
+}
+#pe-results-card.is-loading .pe-table-area { opacity: 0.5; pointer-events: none; transition: opacity 0.15s; }
+/* A failed run leaves the last successful run's table dimmed under a note. */
+.pe-root .pe-table-area.is-stale { opacity: 0.5; }
+.pe-stale-note {
+    display    : flex;
+    align-items: center;
+    gap        : 6px;
+    margin     : 0 0 8px;
+    font-size  : 12px;
+    font-weight: 600;
+    color      : var(--rp-text-muted);
+}
+.pe-stale-note[hidden] { display: none; }
+.pe-root .pe-results-empty { padding: 28px 12px; }
+.pe-dt-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 4px; }
+.pe-dt-top .dataTables_filter { margin-left: auto; }
+.pe-dt-top .dt-buttons { order: 1; }
+.pe-root .pe-dt-top .dataTables_length,
+.pe-root .pe-dt-top .dataTables_filter { float: none; margin-bottom: 6px; }
+.pe-root .pe-dt-top .dt-buttons { float: none; margin-bottom: 6px; }
+.pe-root .dt-buttons .dt-button.pe-dt-btn {
+    margin       : 0;
+    padding      : 5px 12px;
+    font-size    : 12px;
+    font-weight  : 600;
+    border       : 1px solid var(--ork-input-border);
+    border-radius: 5px;
+    background   : var(--ork-input-bg);
+    color        : var(--rp-text-body);
+}
+.pe-root .dt-buttons .dt-button.pe-dt-btn:hover:not(.disabled) { background: var(--ork-bg-secondary); border-color: var(--pe-accent); }
+.pe-dt-bottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.pe-root .pe-dt-bottom .dataTables_info,
+.pe-root .pe-dt-bottom .dataTables_paginate { float: none; padding-top: 0; }
+.pe-persona { font-weight: 600; }
+.pe-null { color: var(--rp-text-hint); }
+.pe-yes  { color: #2f855a; font-weight: 600; }
+.pe-no   { color: var(--rp-text-muted); }
+
+/* ── data-tip tooltips (instant; never title) ────────────── */
+.pe-root [data-tip] { position: relative; }
+.pe-root [data-tip]:hover::after,
+.pe-root [data-tip]:focus-visible::after,
+.pe-root .pe-rule-op[data-tip]:focus-within::after {
+    content      : attr(data-tip);
+    position     : absolute;
+    top          : calc(100% + 6px);
+    left         : 0;
+    z-index      : 70;
+    width        : max-content;
+    max-width    : 240px;
+    white-space  : normal;
+    line-height  : 1.3;
+    text-align   : left;
+    padding      : 6px 9px;
+    border-radius: 5px;
+    background   : #1a202c;
+    color        : #fff;
+    font-size    : 11px;
+    font-weight  : 500;
+    letter-spacing: 0;
+    text-transform: none;
+    box-shadow   : 0 4px 12px rgba(0,0,0,0.2);
+    pointer-events: none;
+}
+/* Right-edge controls: anchor the tip to the right so it grows leftward and stays on screen. */
+.pe-root .rp-header-actions [data-tip]:hover::after,
+.pe-root .rp-header-actions [data-tip]:focus-visible::after,
+.pe-root .pe-action-bar-end [data-tip]:hover::after,
+.pe-root .pe-action-bar-end [data-tip]:focus-visible::after,
+.pe-root .pe-group-actions [data-tip]:hover::after,
+.pe-root .pe-group-actions [data-tip]:focus-visible::after,
+.pe-root .pe-rule-remove[data-tip]:hover::after,
+.pe-root .pe-rule-remove[data-tip]:focus-visible::after,
+.pe-root .pe-banner-dismiss[data-tip]:hover::after,
+.pe-root .pe-banner-dismiss[data-tip]:focus-visible::after {
+    left : auto;
+    right: 0;
+}
+
+/* ── Flatpickr calendar tagged by the builder ────────────── */
+.flatpickr-calendar.pe-fp { font-size: 13px; }
+
+/* ── Phone ───────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .pe-root { --pe-ctl-h: 44px; }
+    .pe-rule {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 44px;
+        grid-template-areas  : "crit crit rm" "op val val" "err err err";
+        padding              : 8px 4px;
+        border-bottom        : 1px solid var(--ork-divider);
+        border-radius        : 0;
+    }
+    .pe-rule.pe-invalid { border-radius: 6px; }
+    .pe-rule-val { flex-direction: column; align-items: stretch; }
+    .pe-date, .pe-num-input { max-width: none; width: 100%; flex: 1 1 auto; }
+    .pe-and { align-self: center; }
+    .pe-input { font-size: 16px; }   /* stop iOS zooming on focus */
+    .pe-chips input.pe-chip-input { font-size: 16px; height: 36px; }
+    .pe-btn-remove { width: 44px; height: 44px; }
+    .pe-banner-dismiss { width: 44px; height: 44px; margin: -12px -12px -12px 0; }
+    .pe-rule-remove { margin-top: 0; }
+    .pe-btn-add { height: 44px; padding: 0 12px; }
+    .pe-seg-btn { height: 44px; min-width: 56px; }
+    .pe-chip { min-height: 44px; padding: 0 2px 0 12px; }
+    .pe-chip-x { width: 44px; height: 44px; margin: -1px 0; font-size: 13px; }
+    .pe-chip-opt { padding: 12px 10px; }
+    .pe-group { padding: 8px 8px 10px; }
+    .pe-group-root { padding: 0; }
+    .pe-group-actions { margin-left: 0; width: 100%; }
+    .pe-group-actions .pe-btn-add { flex: 1 1 0; justify-content: center; }
+    .pe-connector { padding-left: 4px; }
+    .pe-action-bar { flex-direction: column; align-items: stretch; padding: 10px 12px; }
+    .pe-btn-run { min-height: 44px; }
+    .pe-root .dt-buttons .dt-button.pe-dt-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; }
+    .pe-btn-link { min-height: 44px; }
+    .pe-dirty-hint { justify-content: center; }
+    .pe-action-bar-end { margin-left: 0; }
+    .pe-btn-action { flex: 1 1 0; min-width: 0; min-height: 44px; }
+    /* Side by side at full width: the left button's tip grows rightward to stay on screen. */
+    .pe-root .pe-action-bar-end [data-tip]:first-child:hover::after,
+    .pe-root .pe-action-bar-end [data-tip]:first-child:focus-visible::after { left: 0; right: auto; }
+    .pe-col-check { min-height: 44px; padding: 0; }
+    .pe-col-check input { width: 20px; height: 20px; }
+    .pe-columns { grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+    .pe-card-toggle { min-height: 44px; }
+    /* Wrap the folded summary rather than cut off "changed since last run". */
+    .pe-card-summary { white-space: normal; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.35; }
+    .pe-root [data-tip]:hover::after,
+    .pe-root .pe-rule-op[data-tip]:focus-within::after { max-width: min(240px, 70vw); }
+}
+
+/* =====================================================
+   DARK MODE — html[data-theme="dark"]
+   ===================================================== */
+html[data-theme="dark"] .pe-root,
+html[data-theme="dark"] .pe-help-overlay {
+    --pe-accent        : #6366f1;
+    --pe-accent-hover  : #818cf8;
+    --pe-accent-soft   : rgba(99,102,241,0.18);
+    --pe-accent-text   : #c7d2fe;
+    --pe-or            : #f6ad55;
+    --pe-or-soft       : rgba(246,173,85,0.16);
+    --pe-or-text       : #fbd38d;
+    --pe-danger        : #fc8181;
+    --pe-danger-soft   : rgba(252,129,129,0.10);
+}
+html[data-theme="dark"] .pe-empty-page { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .pe-group { background: var(--ork-card-bg); border-color: #4a5568; border-left-color: var(--pe-accent); }
+html[data-theme="dark"] .pe-group-root { background: transparent; }
+html[data-theme="dark"] .pe-depth-2 { background: #262f3f; }
+html[data-theme="dark"] .pe-depth-3 { background: var(--ork-card-bg); border-left-color: var(--pe-or); }
+html[data-theme="dark"] .pe-group.pe-invalid { border-color: var(--pe-danger); }
+html[data-theme="dark"] .pe-seg { background: var(--ork-input-bg); border-color: var(--ork-input-border); }
+html[data-theme="dark"] .pe-seg-btn { color: #cbd5e0; }
+html[data-theme="dark"] .pe-seg-btn.is-active { background: #4f46e5; color: #fff; }
+html[data-theme="dark"] .pe-connector-or { color: #fbd38d; }
+html[data-theme="dark"] .pe-rule:hover { background: rgba(255,255,255,0.03); }
+html[data-theme="dark"] .pe-rule.pe-invalid { border-color: var(--pe-danger); background: var(--pe-danger-soft); }
+html[data-theme="dark"] .pe-rule-error { color: #feb2b2; } /* #fc8181 on the invalid tint is 4.2:1 */
+html[data-theme="dark"] .pe-chip { background: #312e81; border-color: #4338ca; color: #e0e7ff; }
+html[data-theme="dark"] .pe-chip-x:hover { background: rgba(255,255,255,0.15); }
+html[data-theme="dark"] .pe-chip-list { background: #2d3748; border-color: #4a5568; }
+html[data-theme="dark"] .pe-chip-opt { color: #e2e8f0; }
+html[data-theme="dark"] .pe-chip-opt:hover,
+html[data-theme="dark"] .pe-chip-opt.is-active { background: #3c366b; color: #fff; }
+/* Outrank orkui.css `html[data-theme=dark] #theme_container input[type=text]` (1,2,2). */
+html[data-theme="dark"] #theme_container .pe-chips input.pe-chip-input,
+html[data-theme="dark"] .pe-chips input.pe-chip-input {
+    background  : transparent;
+    border      : none;
+    box-shadow  : none;
+    color       : #e2e8f0;
+}
+html[data-theme="dark"] #theme_container .pe-root .pe-input,
+html[data-theme="dark"] .pe-root .pe-input {
+    background  : var(--ork-input-bg);
+    border-color: var(--ork-input-border);
+    color       : #e2e8f0;
+}
+/* Browser-default #757575 is 2.2:1 on the input bg; --ork-text-muted (#a0aec0) is 4.57:1 on #374151. */
+html[data-theme="dark"] .pe-root .pe-input::placeholder,
+html[data-theme="dark"] .pe-root input.flatpickr-input::placeholder,
+html[data-theme="dark"] .pe-chips input.pe-chip-input::placeholder { color: var(--ork-text-muted, #a0aec0); opacity: 1; }
+html[data-theme="dark"] #theme_container .pe-root .pe-input:focus,
+html[data-theme="dark"] .pe-root .pe-input:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.25); }
+html[data-theme="dark"] .pe-chips.is-open,
+html[data-theme="dark"] .pe-chips:focus-within { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.25); }
+html[data-theme="dark"] .pe-btn-add { color: #a5b4fc; border-color: #4a5568; }
+html[data-theme="dark"] .pe-btn-add:hover:not(.is-disabled) { border-color: #818cf8; background: rgba(99,102,241,0.15); }
+html[data-theme="dark"] .pe-btn-link { color: #a5b4fc; }
+html[data-theme="dark"] .pe-btn-run { background: #4f46e5; }
+html[data-theme="dark"] .pe-btn-run:hover { background: #6366f1; }
+html[data-theme="dark"] .pe-action-bar { background: #2d3748; border-color: #4a5568; }
+html[data-theme="dark"] .pe-btn-action { background: #374151; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .pe-btn-action:hover:not(.is-disabled) { background: rgba(99,102,241,0.15); border-color: #818cf8; color: #c7d2fe; }
+html[data-theme="dark"] .pe-btn-action:focus-visible { outline-color: #818cf8; }
+html[data-theme="dark"] .pe-btn-remove:hover { border-color: #9b2c2c; }
+html[data-theme="dark"] .pe-banner-warn  { background: #2e2810; border-color: #975a16; color: #fbd38d; }
+html[data-theme="dark"] .pe-banner-error { background: #3b1515; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .pe-banner-info  { background: #1e2245; border-color: #4338ca; color: #c7d2fe; }
+html[data-theme="dark"] .pe-banner-dismiss:hover { background: rgba(255,255,255,0.08); }
+html[data-theme="dark"] .pe-toast { background: #4a5568; color: #f7fafc; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .pe-root [data-tip]:hover::after,
+html[data-theme="dark"] .pe-root [data-tip]:focus-visible::after,
+html[data-theme="dark"] .pe-root .pe-rule-op[data-tip]:focus-within::after { background: #e2e8f0; color: #1a202c; }
+html[data-theme="dark"] .pe-col-check { color: #cbd5e0; }
+html[data-theme="dark"] .pe-card-summary { color: #e2e8f0; }
+html[data-theme="dark"] .pe-card-toggle:hover .pe-card-title { color: #a5b4fc; }
+html[data-theme="dark"] .pe-stale-note { color: #a0aec0; }
+html[data-theme="dark"] .pe-yes { color: #68d391; }
+html[data-theme="dark"] .pe-root .dt-buttons .dt-button.pe-dt-btn { background: #374151; border-color: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .pe-root .dataTables_wrapper .dataTables_info,
+html[data-theme="dark"] .pe-root .dataTables_wrapper .dataTables_paginate { color: #cbd5e0; }
+
+/* Flatpickr calendar (only the builder's instances carry .pe-fp) */
+html[data-theme="dark"] .flatpickr-calendar.pe-fp { background: #2d3748; border-color: #4a5568; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .flatpickr-calendar.pe-fp::before,
+html[data-theme="dark"] .flatpickr-calendar.pe-fp::after { border-bottom-color: #2d3748; }
+html[data-theme="dark"] .pe-fp .flatpickr-months .flatpickr-month,
+html[data-theme="dark"] .pe-fp .flatpickr-current-month .flatpickr-monthDropdown-months,
+html[data-theme="dark"] .pe-fp .flatpickr-current-month input.cur-year { background: #2d3748; color: #e2e8f0; fill: #e2e8f0; }
+html[data-theme="dark"] .pe-fp .flatpickr-months .flatpickr-prev-month,
+html[data-theme="dark"] .pe-fp .flatpickr-months .flatpickr-next-month { color: #cbd5e0; fill: #cbd5e0; }
+html[data-theme="dark"] .pe-fp .flatpickr-months .flatpickr-prev-month svg,
+html[data-theme="dark"] .pe-fp .flatpickr-months .flatpickr-next-month svg { fill: #cbd5e0; }
+html[data-theme="dark"] .pe-fp span.flatpickr-weekday { color: #a0aec0; background: transparent; }
+html[data-theme="dark"] .pe-fp .flatpickr-day { color: #e2e8f0; }
+html[data-theme="dark"] .pe-fp .flatpickr-day:hover { background: #4a5568; border-color: #4a5568; }
+html[data-theme="dark"] .pe-fp .flatpickr-day.prevMonthDay,
+html[data-theme="dark"] .pe-fp .flatpickr-day.nextMonthDay,
+html[data-theme="dark"] .pe-fp .flatpickr-day.flatpickr-disabled { color: #718096; }
+html[data-theme="dark"] .pe-fp .flatpickr-day.today { border-color: #818cf8; }
+html[data-theme="dark"] .pe-fp .flatpickr-day.selected { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+
+/* =====================================================
+   HELP GUIDE DIALOG (.pe-help-*)
+   Mirrors the app's .pn-overlay / .pn-modal-* look: revised.css
+   is not loaded on default-theme pages, so it is scoped here.
+   The script moves the overlay to <body>, so these rules must not
+   rely on .pe-root or .rp-root (only --ork-* and the --pe-* tokens
+   declared on .pe-help-overlay above).
+   ===================================================== */
+/* <html> only: it is the one page scroller. --pe-help-gutter is the width of a classic
+   (space-taking) scrollbar, measured by the script; padding it back keeps the page behind
+   from shifting sideways. Padding rather than scrollbar-gutter, so the viewport stays full
+   width and the fixed backdrop dims all of it (a stable gutter is left undimmed). */
+html.pe-help-lock { overflow: hidden; padding-right: var(--pe-help-gutter, 0px); }
+/* The fixed top nav spans the viewport: a transparent border (its background still paints
+   under it) keeps its items where they were. */
+html.pe-help-lock #newmenu { border-right: var(--pe-help-gutter, 0px) solid transparent; }
+
+.pe-help-overlay {
+    position       : fixed;
+    inset          : 0;
+    z-index        : var(--z-modal, 10100);
+    display        : flex;
+    align-items    : center;
+    justify-content: center;
+    padding        : 16px;
+    box-sizing     : border-box;
+    background     : rgba(0,0,0,0.5);
+    opacity        : 0;
+    transition     : opacity 0.2s ease;
+    overscroll-behavior: contain;
+}
+.pe-help-overlay[hidden] { display: none; }
+.pe-help-overlay.is-open { opacity: 1; }
+.pe-help-box {
+    display       : flex;
+    flex-direction: column;
+    width         : 760px;
+    max-width     : 100%;
+    max-height    : calc(100vh - 32px);
+    max-height    : calc(100dvh - 32px);
+    box-sizing    : border-box;
+    background    : var(--ork-card-bg);
+    color         : var(--ork-text);
+    border-radius : 12px;
+    box-shadow    : 0 25px 60px rgba(0,0,0,0.25);
+    font-size     : 14px;
+    line-height   : 1.55;
+    text-align    : left;
+    transform     : translateY(-16px) scale(0.98);
+    transition    : transform 0.2s ease;
+}
+.pe-help-overlay.is-open .pe-help-box { transform: none; }
+.pe-help-header {
+    display        : flex;
+    align-items    : center;
+    justify-content: space-between;
+    gap            : 12px;
+    padding        : 16px 20px;
+    border-bottom  : 1px solid var(--ork-divider);
+    flex-shrink    : 0;
+}
+.pe-help-close {
+    display        : flex;
+    align-items    : center;
+    justify-content: center;
+    width          : 36px;
+    height         : 36px;
+    flex-shrink    : 0;
+    padding        : 0;
+    border         : none;
+    border-radius  : 50%;
+    background     : none;
+    color          : var(--ork-text-muted);
+    font-size      : 20px;
+    line-height    : 1;
+    cursor         : pointer;
+    transition     : background 0.15s, color 0.15s;
+}
+.pe-help-close:hover { background: var(--ork-bg-secondary); color: var(--ork-text); }
+.pe-help-close:focus-visible { outline: 2px solid var(--pe-accent); outline-offset: 2px; }
+.pe-help-body {
+    flex          : 1 1 auto;
+    min-height    : 0;
+    overflow-y    : auto;
+    padding       : 4px 20px 24px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+.pe-help-body:focus { outline: none; }
+.pe-help-body:focus-visible { outline: 2px solid var(--pe-accent); outline-offset: -2px; }
+.pe-help-body p { margin: 0 0 10px; text-align: left; }
+.pe-help-body ul,
+.pe-help-body ol { margin: 0 0 10px; padding-left: 22px; }
+.pe-help-body li { margin: 0 0 6px; }
+.pe-help-body em { font-style: normal; font-weight: 600; color: var(--pe-accent-text); }
+
+/* orkui.css paints a pill box on every bare heading, and its dark rule outranks a
+   plain class: reset in both themes (verified on computed styles). */
+.pe-help-overlay h2.pe-help-title,
+.pe-help-overlay h3.pe-help-h,
+.pe-help-overlay h4.pe-help-h4,
+html[data-theme="dark"] .pe-help-overlay h2.pe-help-title,
+html[data-theme="dark"] .pe-help-overlay h3.pe-help-h,
+html[data-theme="dark"] .pe-help-overlay h4.pe-help-h4 {
+    background   : transparent;
+    border       : none;
+    border-radius: 0;
+    box-shadow   : none;
+    text-shadow  : none;
+    padding      : 0;
+    font-family  : inherit;
+    color        : var(--ork-text);
+    outline      : none; /* focus targets (tabindex -1), not controls */
+}
+.pe-help-overlay h2.pe-help-title,
+html[data-theme="dark"] .pe-help-overlay h2.pe-help-title {
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+    margin     : 0;
+    font-size  : 17px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+.pe-help-title i { color: var(--pe-accent); }
+.pe-help-overlay h3.pe-help-h,
+html[data-theme="dark"] .pe-help-overlay h3.pe-help-h {
+    margin     : 0 0 8px;
+    font-size  : 16px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+.pe-help-overlay h4.pe-help-h4,
+html[data-theme="dark"] .pe-help-overlay h4.pe-help-h4 {
+    margin        : 14px 0 6px;
+    font-size     : 12px;
+    font-weight   : 700;
+    line-height   : 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color         : var(--ork-text-muted);
+}
+.pe-help-section { padding-top: 16px; scroll-margin-top: 12px; }
+.pe-help-section + .pe-help-section { margin-top: 10px; border-top: 1px solid var(--ork-divider); }
+
+/* Table of contents */
+.pe-help-toc {
+    margin       : 14px 0 2px;
+    padding      : 12px 16px;
+    border-radius: 8px;
+    background   : var(--ork-bg-secondary);
+}
+.pe-help-body .pe-help-toc ol { columns: 2; column-gap: 28px; margin: 0; padding-left: 22px; }
+.pe-help-body .pe-help-toc li { margin: 0 0 4px; break-inside: avoid; }
+.pe-help-toc a { color: var(--pe-accent-text); font-weight: 600; text-decoration: none; }
+.pe-help-toc a:hover { text-decoration: underline; }
+.pe-help-toc a:focus-visible { outline: 2px solid var(--pe-accent); outline-offset: 2px; border-radius: 2px; }
+
+/* Definition lists */
+.pe-help-dl { margin: 0 0 10px; }
+.pe-help-dl dt { margin: 10px 0 2px; font-weight: 700; }
+.pe-help-dl dt:first-child { margin-top: 0; }
+.pe-help-dl dd { margin: 0 0 0 14px; color: var(--ork-text-secondary); }
+
+/* Read-only rules in the builder's look */
+.pe-help-rule {
+    display      : inline-flex;
+    flex-wrap    : wrap;
+    align-items  : center;
+    gap          : 4px;
+    max-width    : 100%;
+    padding      : 2px 4px;
+    border       : 1px solid var(--ork-input-border);
+    border-radius: 6px;
+    background   : var(--ork-input-bg);
+    font-size    : 12.5px;
+    line-height  : 1.4;
+    vertical-align: middle;
+}
+.pe-help-rule-crit { padding: 1px 6px; font-weight: 700; color: var(--ork-text); }
+.pe-help-rule-op   { padding: 1px 6px; border-radius: 4px; background: var(--pe-accent-soft); color: var(--pe-accent-text); font-weight: 700; }
+.pe-help-rule-val  { padding: 1px 6px; color: var(--ork-text); }
+.pe-help-chip {
+    display      : inline-block;
+    padding      : 1px 8px;
+    border-radius: 12px;
+    border       : 1px solid #c7d2fe;
+    background   : var(--pe-accent-soft);
+    color        : var(--pe-accent-text);
+    font-size    : 12px;
+    font-weight  : 600;
+    line-height  : 1.45;
+}
+.pe-help-btn {
+    display      : inline-flex;
+    align-items  : center;
+    gap          : 4px;
+    padding      : 0 8px;
+    border       : 1px dashed var(--ork-input-border);
+    border-radius: 6px;
+    color        : var(--pe-accent-text);
+    font-size    : 12px;
+    font-weight  : 600;
+    white-space  : nowrap;
+}
+.pe-help-body .pe-connector-label { vertical-align: middle; }
+.pe-help-tree { margin: 0 0 12px; }
+.pe-help-group {
+    display       : flex;
+    flex-direction: column;
+    align-items   : flex-start;
+    gap           : 6px;
+    padding       : 10px 12px;
+    border        : 1px solid var(--ork-border);
+    border-left   : 3px solid var(--pe-accent);
+    border-radius : 6px;
+}
+.pe-help-group-or { align-self: stretch; border-left-color: var(--pe-or); background: var(--ork-bg-secondary); }
+
+/* Generated criteria reference */
+.pe-help-ref-list { list-style: none; margin: 0; padding: 0; }
+.pe-help-body .pe-help-ref-list { padding-left: 0; }
+.pe-help-ref-item { padding: 8px 0; border-bottom: 1px solid var(--ork-divider); }
+.pe-help-body .pe-help-ref-item { margin: 0; }
+.pe-help-ref-item:last-child { border-bottom: none; }
+.pe-help-ref-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.pe-help-ref-name { font-weight: 700; }
+.pe-help-tag {
+    padding      : 0 7px;
+    border-radius: 10px;
+    background   : var(--ork-bg-secondary);
+    color        : var(--ork-text-secondary);
+    font-size    : 11px;
+    font-weight  : 600;
+    line-height  : 1.6;
+}
+.pe-help-tag-officer { background: var(--pe-or-soft); color: var(--pe-or-text); }
+.pe-help-ref-names { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; }
+.pe-help-ops { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; }
+.pe-help-op {
+    padding      : 1px 7px;
+    border       : 1px solid var(--ork-border);
+    border-radius: 4px;
+    font-size    : 12px;
+    color        : var(--ork-text-secondary);
+    white-space  : nowrap;
+}
+.pe-help-op b { color: var(--pe-accent-text); }
+.pe-help-body .pe-help-ref-note { margin: 4px 0 0; font-size: 12.5px; color: var(--ork-text-muted); }
+
+@media (max-width: 600px) {
+    /* Full screen on a phone. */
+    .pe-help-overlay { padding: 0; align-items: stretch; }
+    .pe-help-box {
+        width        : 100%;
+        max-width    : none;
+        height       : 100vh;
+        height       : 100dvh;
+        max-height   : none;
+        border-radius: 0;
+    }
+    .pe-help-header { padding: 10px 12px 10px 16px; }
+    .pe-help-close { width: 44px; height: 44px; }
+    .pe-help-body { padding: 4px 16px 24px; }
+    .pe-help-body .pe-help-toc ol { columns: 1; }
+    .pe-help-toc a { display: inline-flex; align-items: center; min-height: 44px; padding: 0; }
+    .pe-help-op { white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .pe-help-overlay,
+    .pe-help-box { transition: none; }
+}
+
+html[data-theme="dark"] .pe-help-box { background: #2d3748; box-shadow: 0 25px 60px rgba(0,0,0,0.6); color-scheme: dark; } /* dark scrollbar */
+html[data-theme="dark"] .pe-help-close:hover { background: #4a5568; color: #f7fafc; }
+html[data-theme="dark"] .pe-help-toc { background: #1f2937; }
+html[data-theme="dark"] .pe-help-toc a { color: #a5b4fc; }
+html[data-theme="dark"] .pe-help-body em { color: #c7d2fe; }
+html[data-theme="dark"] .pe-help-rule { background: #374151; border-color: #4a5568; }
+html[data-theme="dark"] .pe-help-chip { background: #312e81; border-color: #4338ca; color: #e0e7ff; }
+html[data-theme="dark"] .pe-help-btn { border-color: #4a5568; color: #a5b4fc; }
+html[data-theme="dark"] .pe-help-group { border-color: #4a5568; border-left-color: var(--pe-accent); }
+html[data-theme="dark"] .pe-help-group-or { background: #262f3f; border-left-color: var(--pe-or); }
+html[data-theme="dark"] .pe-help-tag { background: #1f2937; color: #cbd5e0; }
+html[data-theme="dark"] .pe-help-tag-officer { background: rgba(246,173,85,0.16); color: #fbd38d; }
+html[data-theme="dark"] .pe-help-op { border-color: #4a5568; color: #cbd5e0; }
+html[data-theme="dark"] .pe-help-op b { color: #c7d2fe; }

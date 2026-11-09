@@ -37,20 +37,44 @@ final class KingdomAjaxTest extends TestCase
         }
     }
 
-    public function testMovePlayerAuthSourceOrDest(): void
+    /**
+     * Moving a player needs AUTH_CREATE, not AUTH_EDIT.
+     *
+     * This asserted AUTH_EDIT was sufficient, which is what the code did for years
+     * while the permission help said otherwise. 135bc7e1 (2026-10-04) corrected the
+     * code to match the published contract -- Player::MovePlayer is the real gate
+     * and checks AUTH_CREATE, and KingdomProfile::AuthorizeMovePlayer is only a
+     * friendlier pre-check, so it must never be looser. The test was left behind
+     * and has failed ever since.
+     *
+     * The EDIT case below is the point of the change, so it is asserted rather than
+     * merely no longer assumed: an editor must NOT be able to move a player.
+     */
+    public function testMovePlayerRequiresCreateNotEdit(): void
     {
         $kid = $this->fixture->firstKingdomId();
         $player = $this->fixture->createPlayer('move-src', $kid);
-        $editor = $this->fixture->createPlayer('move-editor', $kid);
-        $this->fixture->insertAuthorization($editor['mundane_id'], $kid, AUTH_EDIT);
 
         unset($_SESSION['is_authorized_mundane_id']);
-        $allowed = $this->profileDomain->AuthorizeMovePlayer($editor['mundane_id'], $player['kingdom_id'], $kid);
-        $this->assertTrue($allowed);
+
+        $creator = $this->fixture->createPlayer('move-creator', $kid);
+        $this->fixture->insertAuthorization($creator['mundane_id'], $kid, AUTH_CREATE);
+        $this->assertTrue(
+            $this->profileDomain->AuthorizeMovePlayer($creator['mundane_id'], $player['kingdom_id'], $kid),
+            'kingdom CREATE should be allowed to move a player'
+        );
+
+        $editor = $this->fixture->createPlayer('move-editor', $kid);
+        $this->fixture->insertAuthorization($editor['mundane_id'], $kid, AUTH_EDIT);
+        $this->assertFalse(
+            $this->profileDomain->AuthorizeMovePlayer($editor['mundane_id'], $player['kingdom_id'], $kid),
+            'kingdom EDIT alone must NOT be allowed to move a player (135bc7e1)'
+        );
 
         $stranger = $this->fixture->createPlayer('move-stranger', $kid);
-        $denied = $this->profileDomain->AuthorizeMovePlayer($stranger['mundane_id'], $player['kingdom_id'], $kid);
-        $this->assertFalse($denied);
+        $this->assertFalse(
+            $this->profileDomain->AuthorizeMovePlayer($stranger['mundane_id'], $player['kingdom_id'], $kid)
+        );
     }
 
     public function testSetAwardRecsPublicConfig(): void

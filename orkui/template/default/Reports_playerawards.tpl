@@ -207,7 +207,8 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 
 <script>
 $(function() {
-	var dateCol = <?= 2
+	// Persona · Award · Rank · Date, after the optional Kingdom/Park columns
+	var dateCol = <?= 3
 		+ (!isset($this->__session->kingdom_id) ? 1 : 0)
 		+ (!isset($this->__session->park_id)    ? 1 : 0) ?>;
 

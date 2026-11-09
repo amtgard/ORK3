@@ -23,6 +23,12 @@ if (!empty($NotSupported)) {
 	$HomeParkOnly            = $HomeParkOnly            ?? false;
 	$DaysWindow              = $DaysWindow              ?? 0;
 	$MinAge                  = $MinAge                  ?? 0;
+	$MinDistinctMonths       = $MinDistinctMonths       ?? 0;
+	$DuesHomeParkOnly        = $DuesHomeParkOnly        ?? false;
+	$OfficeCountsAsDues      = $OfficeCountsAsDues      ?? false;
+	$RequireKingdomEvent     = $RequireKingdomEvent     ?? false;
+	$DuesPhrase              = $DuesHomeParkOnly ? 'current dues paid at home park' : 'current dues';
+	if ($OfficeCountsAsDues) $DuesPhrase .= ' (or currently holding a Kingdom or park office)';
 	$AllKingdoms             = $AllKingdoms             ?? false;
 	$MaxCreditsPerEvent      = $MaxCreditsPerEvent      ?? 0;
 	$MaxOutsideKingdomCredits= $MaxOutsideKingdomCredits?? 0;
@@ -155,14 +161,14 @@ if (!empty($Players)) {
 				<strong>Kingdom:</strong> <?=$AttendanceRequired?>+ sign-ins anywhere in the Kingdom in the last <?=$WindowPhrase?><?=$KingdomEventBonus ? ' (attending a Kingdom-sponsored event counts as +1, once)' : ''?>.
 				<strong>Provincial:</strong> <?=$AttendanceRequired?>+ sign-ins at home park in the last <?=$WindowPhrase?>. Provincial eligibility implies Kingdom eligibility.
 			<?php elseif ($HomeParkOnly): ?>
-			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ sign-ins at home park in the last <?=$WindowPhrase?><?=$KingdomEventBonus ? ' (attending a Kingdom-sponsored event counts as +1, once)' : ''?><?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.
+			Eligibility requires: signed waiver &bull; <?=$DuesPhrase?> &bull; <?=$AttendanceRequired?>+ sign-ins at home park in the last <?=$WindowPhrase?><?=$KingdomEventBonus ? ' (attending a Kingdom-sponsored event counts as +1, once)' : ''?><?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.<?php if ($MinAge > 0): ?> <em style="color:#c05621;">Players must also be <?=$MinAge?> or older &mdash; the ORK holds no birth dates, so this cannot be checked here; confirm it by hand.</em><?php endif; ?>
 			<?php else: ?>
 			<?php if ($ActiveMemberThreshold > 0): ?>
 			Requires signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ <?=$AttendanceMode === 'days' ? 'calendar days' : ($AttendanceMode === 'count' ? 'sign-ins' : $WeekPeriodLabel . ' attendance weeks')?> in the last <?=$WindowPhrase?> <?=$AllKingdoms ? 'at any Amtgard event' : 'anywhere in the Kingdom'?> = <strong>Contributing Member</strong>. <?=$ActiveMemberThreshold?>+ = <strong>Active Member</strong>.
 			<?php elseif ($MaxOutsideKingdomCredits > 0): ?>
 			Eligibility requires: signed waiver &bull; current dues &bull; <?=$AttendanceRequired?>+ attendance credits in the last <?=$WindowPhrase?> (at most <?=$MaxOutsideKingdomCredits?> credits from outside the Kingdom<?=$MaxCreditsPerEvent > 0 ? '; multi-credit events capped at ' . $MaxCreditsPerEvent . ' credits per event' : ''?>)<?=$MinMembershipMonths > 0 ? ' &bull; province membership for at least ' . $MinMembershipMonths . ' months' : ''?>.
 			<?php else: ?>
-			Eligibility requires: signed waiver<?php if ($WaiverAgeMonths > 0): ?> <em style="color:#c05621;">(must be on file for <?=$WaiverAgeMonths?>+ months — age cannot be verified automatically)</em><?php endif; ?> &bull; current dues &bull; <?=$AttendanceRequired?>+ distinct <?=$ExcludeEvents ? 'chapter (non-event) sign-ins' : ($AttendanceMode === 'days' ? 'calendar days' : ($AttendanceMode === 'count' ? 'sign-ins' : $WeekPeriodLabel . ' attendance weeks'))?> in the last <?=$WindowPhrase?> (anywhere in the Kingdom)<?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.<?php if ($ExcludeOnline): ?> Events that include "Online" in the event name are not included in attendance.<?php endif; ?><?php if ($ExcludeEvents): ?> Regular event sign-ins are not counted — only park-day sign-ins count toward the requirement.<?php endif; ?><?php if ($ShowEventCount): ?> The <strong>Event Sign-ins</strong> column shows how many of a player&rsquo;s sign-ins were at events (rather than regular park days) &mdash; for reference only, as physical vs. online attendance cannot currently be distinguished automatically.<?php endif; ?><?php if ($ActiveKnightThreshold > 0): ?> <strong>Active Knight</strong> additionally requires being a Knight with <?=$ActiveKnightThreshold?>+ total sign-ins in the same period.<?php endif; ?>			<?php endif; ?>
+			Eligibility requires: signed waiver<?php if ($WaiverAgeMonths > 0): ?> <em style="color:#c05621;">(must be on file for <?=$WaiverAgeMonths?>+ months — age cannot be verified automatically)</em><?php endif; ?> &bull; <?=$DuesPhrase?> &bull; <?=$AttendanceRequired?>+ distinct <?=$ExcludeEvents ? 'chapter (non-event) sign-ins' : ($AttendanceMode === 'days' ? 'calendar days' : ($AttendanceMode === 'count' ? 'sign-ins' : $WeekPeriodLabel . ' attendance weeks'))?> in the last <?=$WindowPhrase?> (anywhere in the Kingdom)<?=$MinDistinctMonths > 1 ? ', spread across at least ' . $MinDistinctMonths . ' different months' : ''?><?=$RequireKingdomEvent ? ' &bull; at least one of those sign-ins at a Kingdom-sponsored event' : ''?><?=$MinMembershipMonths > 0 ? ' &bull; chapter membership for at least ' . $MinMembershipMonths . ' months' . ($MembershipMode === 'first_attendance' ? ' (using first attendance in Kingdom)' : '') : ''?>.<?php if ($MinAge > 0): ?> <em style="color:#c05621;">Players must also be <?=$MinAge?> or older &mdash; the ORK holds no birth dates, so this cannot be checked here; confirm it by hand.</em><?php endif; ?><?php if ($ExcludeOnline): ?> Events that include "Online" in the event name are not included in attendance.<?php endif; ?><?php if ($ExcludeEvents): ?> Regular event sign-ins are not counted — only park-day sign-ins count toward the requirement.<?php endif; ?><?php if ($ShowEventCount): ?> The <strong>Event Sign-ins</strong> column shows how many of a player&rsquo;s sign-ins were at events (rather than regular park days) &mdash; for reference only, as physical vs. online attendance cannot currently be distinguished automatically.<?php endif; ?><?php if ($ActiveKnightThreshold > 0): ?> <strong>Active Knight</strong> additionally requires being a Knight with <?=$ActiveKnightThreshold?>+ total sign-ins in the same period.<?php endif; ?>			<?php endif; ?>
 			<?php endif; ?>
 		</span>
 	</div>
@@ -277,7 +283,7 @@ if (!empty($Players)) {
 					</div>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Dues</span>
-						<span class="rp-col-guide-desc">Current dues status and expiry date.</span>
+						<span class="rp-col-guide-desc">Current dues status and expiry date<?=$DuesHomeParkOnly ? '. Only dues paid at the player&rsquo;s home park count; dues paid at another park do not' : ''?><?=$OfficeCountsAsDues ? '. A player currently holding any Kingdom or park office passes this test without dues and shows as &ldquo;In office&rdquo;' : ''?>.</span>
 					</div>
 <?php if ($ProvinceMode) : ?>
 					<div class="rp-col-guide-item">
@@ -298,6 +304,18 @@ if (!empty($Players)) {
 						<span class="rp-col-guide-name"><?=$AttendanceLabel?> (<?=$WindowLabel?>)</span>
 						<span class="rp-col-guide-desc"><?php if ($ExcludeEvents): ?>Park-day sign-ins only (event attendance excluded)<?php else: ?><?=$AttendanceMode === 'count' ? 'Total sign-ins' : ($AttendanceMode === 'days' ? 'Distinct calendar days attended' : 'Distinct ' . $WeekPeriodLabel . ' weeks attended')?> <?=$AllKingdoms ? 'at any Amtgard event' : 'anywhere in the Kingdom'?><?php endif; ?> in the last <?=$WindowPhrase?>. Needs <?=$AttendanceRequired?>+.</span>
 					</div>
+<?php if ($MinDistinctMonths > 0) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Months</span>
+						<span class="rp-col-guide-desc">How many different calendar months the counted sign-ins fall in. Needs <?=$MinDistinctMonths?>+.</span>
+					</div>
+<?php endif; ?>
+<?php if ($RequireKingdomEvent) : ?>
+					<div class="rp-col-guide-item">
+						<span class="rp-col-guide-name">Kingdom Event</span>
+						<span class="rp-col-guide-desc">How many of the counted sign-ins were at a Kingdom-sponsored event (an event filed under the Kingdom rather than a park, such as a Kingdom campout). Needs 1+. Those sign-ins also count toward the <?=$AttendanceRequired?>.</span>
+					</div>
+<?php endif; ?>
 <?php if ($ExcludeOnline) : ?>
 					<div class="rp-col-guide-item">
 						<span class="rp-col-guide-name">Online Excluded</span>
@@ -363,6 +381,12 @@ if (!empty($Players)) {
 						<th>Home Park Sign-ins (<?=$WindowLabel?>)</th>
 <?php else : ?>
 						<th><?=$AttendanceLabel?> (<?=$WindowLabel?>)</th>
+<?php if ($MinDistinctMonths > 0) : ?>
+						<th>Months</th>
+<?php endif; ?>
+<?php if ($RequireKingdomEvent) : ?>
+						<th>Kingdom Event</th>
+<?php endif; ?>
 <?php if ($ExcludeOnline) : ?>
 						<th>Online Excluded</th>
 <?php endif; ?>
@@ -392,6 +416,8 @@ if (!empty($Players)) {
 		$duesDisplay = $p['DuesUntil'] === '9999-12-31'
 			? '<span class="rp-check"><i class="fas fa-check"></i> For Life</span>'
 			: '<span class="rp-check"><i class="fas fa-check"></i> Until ' . htmlspecialchars($p['DuesUntil']) . '</span>';
+	} elseif (!empty($p['InOffice'])) {
+		$duesDisplay = '<span class="rp-check"><i class="fas fa-check"></i> In office</span>';
 	} else {
 		$duesDisplay = '<span class="rp-cross"><i class="fas fa-times"></i> No</span>';
 	}
@@ -404,6 +430,20 @@ if (!empty($Players)) {
 		$attHtml = '<span class="rp-warn">' . $attNum . '</span>';
 	} else {
 		$attHtml = '<span class="rp-cross">' . $attNum . '</span>';
+	}
+
+	// Sign-ins at Kingdom-sponsored events (RequireKingdomEvent kingdoms).
+	$kingdomEvtHtml = '';
+	if ($RequireKingdomEvent) {
+		$kingdomEvtNum  = (int)($p['KingdomEventCount'] ?? 0);
+		$kingdomEvtHtml = '<span class="' . ($kingdomEvtNum >= 1 ? 'rp-check' : 'rp-cross') . '">' . $kingdomEvtNum . '</span>';
+	}
+
+	// Distinct calendar months among the counted sign-ins (MinDistinctMonths kingdoms).
+	$monthHtml = '';
+	if ($MinDistinctMonths > 0) {
+		$monthNum  = (int)($p['MonthCount'] ?? 0);
+		$monthHtml = '<span class="' . ($monthNum >= $MinDistinctMonths ? 'rp-check' : 'rp-cross') . '">' . $monthNum . '</span>';
 	}
 
 	if ($ProvinceMode) {
@@ -466,8 +506,9 @@ if (!empty($Players)) {
 				<tr class="<?=$rowClass?>"
 				data-eligible="<?=!empty($p['VotingEligible'])?'1':'0'?>"
 				data-waivered="<?=$p['Waivered']?'1':'0'?>"
-				data-dues="<?=$p['DuesPaid']?'1':'0'?>"
+				data-dues="<?=!empty($p['DuesOk']) || !empty($p['DuesPaid'])?'1':'0'?>"
 				data-att="<?=(int)$p['AttCount']?>"
+				data-months="<?=(int)($p['MonthCount'] ?? 0)?>"
 				data-suspended="<?=!empty($p['Suspended'])?'1':'0'?>"
 				data-active-knight="<?=!empty($p['ActiveKnight'])?'1':'0'?>">
 <?php if (!isset($this->__session->park_id)) : ?>
@@ -498,6 +539,12 @@ if (!empty($Players)) {
 					<td><?=$parkAttHtml?></td>
 <?php else : ?>
 					<td><?=$attHtml?></td>
+<?php if ($MinDistinctMonths > 0) : ?>
+					<td><?=$monthHtml?></td>
+<?php endif; ?>
+<?php if ($RequireKingdomEvent) : ?>
+					<td><?=$kingdomEvtHtml?></td>
+<?php endif; ?>
 <?php if ($ExcludeOnline) : ?>
 					<?php $_onEx = (int)($p['OnlineExcluded'] ?? 0); ?>
 					<td><?= $_onEx > 0 ? '<span class="rp-warn">' . $_onEx . '</span>' : '<span style="opacity:0.4">—</span>' ?></td>

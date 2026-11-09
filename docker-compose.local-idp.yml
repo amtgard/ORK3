@@ -1,0 +1,16 @@
+# Optional overlay: join amtgard-idp-shared so ORK can call the local IDP container
+# (Flow A dev). Not used in production or default dev compose.
+#
+#   docker network create amtgard-idp-shared 2>/dev/null || true
+#   docker compose -f docker-compose.php8-app.dev.yml -f docker-compose.local-idp.yml up -d --build
+#
+version: '2'
+services:
+  ork3app:
+    networks:
+      - amtgard-idp-shared
+
+networks:
+  amtgard-idp-shared:
+    name: amtgard-idp-shared
+    external: true

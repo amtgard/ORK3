@@ -8,6 +8,13 @@ $server->register(
 );
 
 $server->register(
+    'Authorization.WhoAmI',
+    array('WhoAmIRequest' => 'tns:WhoAmIRequest'),
+    array('return' => 'tns:WhoAmIResponse'),
+    $namespace
+);
+
+$server->register(
     'Authorization.XSiteAuthorize',
     array('XSiteAuthorizeRequest' => 'tns:XSiteAuthorizeRequest'),
     array('return' => 'tns:XSiteAuthorizeResponse'),

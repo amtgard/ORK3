@@ -26,18 +26,18 @@
    ============================================================ */
 
 .ladder-rank {
-	display        : inline-flex;
-	align-items    : center;
-	justify-content: center;
-	padding        : 1px 8px;
-	border-radius  : 10px;
-	font-size      : 11px;
-	font-weight    : 700;
-	line-height    : 1.6;
-	letter-spacing : .2px;
-	white-space    : nowrap;
-	border         : 1px solid rgba(0, 0, 0, 0.10);
-	vertical-align : middle;
+    display        : inline-flex;
+    align-items    : center;
+    justify-content: center;
+    padding        : 1px 8px;
+    border-radius  : 10px;
+    font-size      : 11px;
+    font-weight    : 700;
+    line-height    : 1.6;
+    letter-spacing : .2px;
+    white-space    : nowrap;
+    border         : 1px solid rgba(0, 0, 0, 0.10);
+    vertical-align : middle;
 }
 
 /* ── Rank ramp (ONE ramp for both themes) ─────────────────────
@@ -61,3 +61,23 @@
 
 /* ── Dark mode: same fills, just brighten the hairline border ── */
 html[data-theme="dark"] .ladder-rank { border-color: rgba(255, 255, 255, 0.18); }
+
+/* ── Rank not chosen yet (.ladder-rank-unset) ─────────────────
+   A LADDER award on a court line that carries no rank. Rendering
+   nothing here made such a line look identical to a one-off award,
+   which is precisely the confusion this modifier exists to end.
+
+   It is not an error state: the rank for a court line is chosen in
+   the Grant step. A staged line's rank cannot be edited beforehand --
+   CourtAjax::update_award is partial by design and accepts Notes and
+   PublicComment only, no Rank. So this says "not decided yet", in a
+   dashed outline that reads as a placeholder rather than a value, and
+   deliberately carries no data-lvl so it stays off the colour ramp. */
+.ladder-rank-unset {
+    background   : transparent;
+    color        : #64748b;
+    border-style : dashed;
+    border-color : rgba(0, 0, 0, 0.22);
+    font-weight  : 600;
+}
+html[data-theme="dark"] .ladder-rank-unset { color: #94a3b8; border-color: rgba(255, 255, 255, 0.28); }

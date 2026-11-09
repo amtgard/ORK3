@@ -243,6 +243,76 @@ final class EventRsvpTest extends TestCase
         $this->assertNotContains($past['detail_id'], $detailIds);
     }
 
+    public function testDatedRsvpRejectsEndedEvent(): void
+    {
+        $ctx = $this->fixture->createPastOccurrence('dated-ended');
+
+        $r = $this->datedRsvp($ctx);
+
+        $this->assertSame(ServiceErrorIds::InvalidParameter, $r['Status']);
+        $this->assertSame('Event has ended.', $r['Detail']);
+    }
+
+    public function testDatedRsvpAllowsFutureEventWithZeroEnd(): void
+    {
+        $ctx = $this->fixture->createZeroEndOccurrence(
+            date('Y-m-d H:i:s', strtotime('+30 days')),
+            'dated-zeroend-future'
+        );
+
+        $r = $this->datedRsvp($ctx);
+
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']['Status'] ?? $r['Status']);
+        $this->assertSame('going', $this->model->get_rsvp($ctx['detail_id'], $ctx['mundane_id']));
+    }
+
+    public function testDatedRsvpAllowsFutureEventWithEndBeforeStart(): void
+    {
+        // A mistyped end year: the occurrence starts next month, but its end
+        // reads two years ago.
+        $ctx = $this->fixture->createOccurrenceAt(
+            'dated-endbeforestart',
+            date('Y-m-d H:i:s', strtotime('+30 days')),
+            date('Y-m-d H:i:s', strtotime('-2 years'))
+        );
+
+        $r = $this->datedRsvp($ctx);
+
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']['Status'] ?? $r['Status']);
+    }
+
+    public function testDatedRsvpAllowsZeroEndEventStartedEarlierToday(): void
+    {
+        $ctx = $this->fixture->createZeroEndOccurrence(date('Y-m-d') . ' 00:00:01', 'dated-zeroend-today');
+
+        $r = $this->datedRsvp($ctx);
+
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']['Status'] ?? $r['Status']);
+    }
+
+    public function testDatedRsvpRejectsPastEventWithZeroEnd(): void
+    {
+        $ctx = $this->fixture->createZeroEndOccurrence(
+            date('Y-m-d H:i:s', strtotime('-30 days')),
+            'dated-zeroend-past'
+        );
+
+        $r = $this->datedRsvp($ctx);
+
+        $this->assertSame(ServiceErrorIds::InvalidParameter, $r['Status']);
+        $this->assertSame('Event has ended.', $r['Detail']);
+    }
+
+    /**
+     * @param array{mundane_id: int, detail_id: int, token: string} $ctx
+     */
+    private function datedRsvp(array $ctx): array
+    {
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        return $this->model->set_rsvp_dated($ctx['detail_id'], $ctx['mundane_id'], 'going', $ctx['token']);
+    }
+
     public function testGetKingdomUpcomingEventsExcludesExistingRsvp(): void
     {
         $ctx = $this->fixture->createFutureOccurrence('kingdom-exclude');

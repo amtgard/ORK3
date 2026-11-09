@@ -52,6 +52,33 @@ $server->wsdl->addComplexType(
 
 /// XSiteAuthorize()
 
+/// WhoAmI() -- read-only token check; never rotates the token.
+
+$server->wsdl->addComplexType(
+    'WhoAmIRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'WhoAmIResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'UserId' => array('name' => 'UserId','type' => 'xsd:int'),
+                'Timeout' => array('name' => 'Timeout','type' => 'xsd:dateTime'),
+                'Client' => array('name' => 'Client','type' => 'xsd:string')
+            )
+);
+
 $server->wsdl->addComplexType(
     'XSiteAuthorizeRequest',
     'complexType',
