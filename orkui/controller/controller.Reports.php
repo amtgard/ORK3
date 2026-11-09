@@ -954,9 +954,10 @@ class Controller_Reports extends Controller
 
     /**
      * Player Recruitment Report: Reports/player_recruitment&KingdomId=N | &ParkId=N
-     * (defaults to the session park, then kingdom). Officers of the scope and ORK
-     * admins only; the domain enforces that, this renders the no-access state.
-     * Filters arrive on GET so a run is a shareable URL.
+     * (defaults to the session park, then kingdom; &Pick=1 skips that default and
+     * shows the kingdom picker, for the ORK Admin entry point). Officers of the
+     * scope and ORK admins only; the domain enforces that, this renders the
+     * no-access state. Filters arrive on GET so a run is a shareable URL.
      */
     public function player_recruitment($params = null)
     {
@@ -971,6 +972,8 @@ class Controller_Reports extends Controller
         } elseif (isset($this->request->KingdomId) && valid_id($this->request->KingdomId)) {
             $type = 'Kingdom';
             $id = (int)$this->request->KingdomId;
+        } elseif (!empty($this->request->Pick)) {
+            // ORK Admin entry: always offer the kingdom picker.
         } elseif (isset($this->session->park_id) && valid_id($this->session->park_id)) {
             $type = 'Park';
             $id = (int)$this->session->park_id;
@@ -1011,6 +1014,7 @@ class Controller_Reports extends Controller
             'FilterParkId' => (int)($this->request->FilterParkId ?? 0),
             'Source'       => is_string($this->request->Source ?? null) ? $this->request->Source : '',
             'AwardWindow'  => (int)($this->request->AwardWindow ?? 0),
+            'Answers'      => ($this->request->Answers ?? '') === 'registration' ? 'registration' : 'all',
         ];
         $token = isset($this->session->token) ? (string)$this->session->token : '';
         $r = $this->Reports->player_recruitment($token, $req);

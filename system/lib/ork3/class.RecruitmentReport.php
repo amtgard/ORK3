@@ -19,19 +19,34 @@ class RecruitmentReport extends Ork3
 {
     /** Retention milestones, in days after the first sign-in. */
     public const MILESTONES = [30, 60, 90, 180, 365];
-    /** Sankey stages after "Came back". */
-    public const FLOW_MILESTONES = [30, 60, 90, 180];
-    /** Return funnel: reached the Nth distinct sign-in date. */
-    public const FUNNEL = [2, 3, 5, 10, 25];
     /**
-     * Days a single-sign-in player gets before counting as "never came back".
-     * Younger one-timers are "not back yet" and sit out of the came-back % denominator.
+     * "Still playing at day N" = at least one sign-in dated in [first+N, first+N+PLAY_WINDOW).
+     * A player is eligible for day N once that whole window is over.
+     */
+    public const PLAY_WINDOW = 30;
+    /** Sankey stages after "Came back"; each stage only follows players still playing at the one before. */
+    public const FLOW_MILESTONES = [30, 60, 90, 180];
+    /** Return funnel: reached the Nth distinct sign-in date within FUNNEL_DAYS of the first. */
+    public const FUNNEL = [2, 3, 5, 10, 25];
+    public const FUNNEL_DAYS = 180;
+    /**
+     * Came back = a second distinct sign-in date within this many days of the first.
+     * Players younger than this are "not back yet" and sit out of the came-back % denominator.
      */
     public const COME_BACK_DAYS = 30;
+    /** Dues paid = a payment dated within this many days of the first sign-in. */
+    public const DUES_DAYS = 90;
     public const AWARD_WINDOWS = [14, 30, 60, 90];
     public const DEFAULT_AWARD_WINDOW = 30;
+    /** Below this many eligible players a percentage is shown muted as "too few". */
+    public const MIN_N = 10;
+    /** Longest date range one run may cover. */
+    public const MAX_RANGE_YEARS = 5;
     /** Source filter value meaning "not answered" (recruitment_source = ''). */
     public const SOURCE_NONE = 'none';
+    /** Answers filter: every answer, or only answers given at registration. */
+    public const ANSWERS_ALL = 'all';
+    public const ANSWERS_REGISTRATION = 'registration';
     public const CACHE_SECONDS = 300;
 
     public function __construct()
@@ -42,7 +57,8 @@ class RecruitmentReport extends Ork3
     /**
      * @param array $request Token, ScopeType ('Kingdom'|'Park'), ScopeId,
      *   StartDate, EndDate (Y-m-d), FilterParkId (kingdom scope only, 0 = all),
-     *   Source ('' = all, a RecruitmentSource code, or 'none'), AwardWindow.
+     *   Source ('' = all, a RecruitmentSource code, or 'none'), AwardWindow,
+     *   Answers ('all' | 'registration').
      */
     public function Run($request)
     {
@@ -64,6 +80,9 @@ class RecruitmentReport extends Ork3
         if (!self::_validDate($start) || !self::_validDate($end) || $start > $end) {
             return ['Status' => InvalidParameter('Pick a valid date range.')];
         }
+        if ($start < self::_rangeFloor($end)) {
+            return ['Status' => InvalidParameter('The date range can cover at most ' . self::MAX_RANGE_YEARS . ' years. Pick a later start date and run it again.')];
+        }
         $window = (int)($request['AwardWindow'] ?? self::DEFAULT_AWARD_WINDOW);
         if (!in_array($window, self::AWARD_WINDOWS, true)) {
             $window = self::DEFAULT_AWARD_WINDOW;
@@ -72,6 +91,7 @@ class RecruitmentReport extends Ork3
         if ($source !== self::SOURCE_NONE && RecruitmentSource::normalize($source) !== $source) {
             $source = ''; // unknown code reads as "all"
         }
+        $answers = ($request['Answers'] ?? '') === self::ANSWERS_REGISTRATION ? self::ANSWERS_REGISTRATION : self::ANSWERS_ALL;
 
         $kingdomIds = $scopeType === 'Kingdom'
             ? array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($scopeId))
@@ -87,14 +107,28 @@ class RecruitmentReport extends Ork3
         if ($rows === null) {
             return ['Status' => ProcessingError('The report could not be read. Please try again.')];
         }
+        if ($filterPark > 0) {
+            $rows = array_values(array_filter($rows, function ($p) use ($filterPark) {
+                return $p['ParkId'] === $filterPark;
+            }));
+        }
+        // Answers and personas are read fresh every run (never cached), so a backfill
+        // made in the Account modal shows up on the very next run.
+        $fresh = $this->_freshAnswers(array_column($rows, 'MundaneId'));
+        if ($fresh === null) {
+            return ['Status' => ProcessingError('The report could not be read. Please try again.')];
+        }
 
         $players = [];
         foreach ($rows as $p) {
-            if ($filterPark > 0 && $p['ParkId'] !== $filterPark) {
-                continue;
-            }
-            $key = $p['Source'] === '' ? self::SOURCE_NONE : $p['Source'];
-            if ($source !== '' && $key !== $source) {
+            $f = $fresh[$p['MundaneId']] ?? ['Persona' => '', 'Source' => '', 'Via' => ''];
+            $p['Persona'] = $f['Persona'];
+            $p['Source'] = $f['Source'];
+            $p['Via'] = $f['Via'];
+            // The key the source breakdowns use. "At registration only" sets later answers aside as not answered.
+            $p['Key'] = ($p['Source'] === '' || ($answers === self::ANSWERS_REGISTRATION && $p['Via'] !== RecruitmentSource::VIA_REGISTRATION))
+                ? self::SOURCE_NONE : $p['Source'];
+            if ($source !== '' && $p['Key'] !== $source) {
                 continue;
             }
             $players[] = $p;
@@ -110,10 +144,17 @@ class RecruitmentReport extends Ork3
             'FilterParkId' => $filterPark,
             'Source'       => $source,
             'AwardWindow'  => $window,
+            'Answers'      => $answers,
         ];
         $response['AsOf'] = $today;
         $response['ElapsedMs'] = (int)round((microtime(true) - $t0) * 1000);
         return $response;
+    }
+
+    /** Earliest start date allowed for a given end date (MAX_RANGE_YEARS back). */
+    private static function _rangeFloor($end)
+    {
+        return date('Y-m-d', strtotime($end . ' -' . self::MAX_RANGE_YEARS . ' years'));
     }
 
     /**
@@ -165,14 +206,16 @@ class RecruitmentReport extends Ork3
     }
 
     /**
-     * One row per new player with everything the aggregates need. Cached per
-     * scope + range (filters and the award window are applied in PHP), so
-     * changing them re-renders without re-querying. null on a DB failure.
+     * One row per new player with the numeric facts the aggregates need. Cached
+     * per scope + range (filters and the award window are applied in PHP), so
+     * changing them re-renders without re-querying. Answers and personas are NOT
+     * here: they change through the Account modal and are read fresh by
+     * _freshAnswers. null on a DB failure.
      */
     private function _cohort($scopeType, $scopeId, array $kingdomIds, $start, $end)
     {
         $cacheKey = Ork3::$Lib->ghettocache->key([$scopeType, (int)$scopeId, implode('-', $kingdomIds), $start, $end]);
-        $cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.Cohort', $cacheKey, self::CACHE_SECONDS);
+        $cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.Cohort2', $cacheKey, self::CACHE_SECONDS);
         if (is_array($cached)) {
             return $cached;
         }
@@ -192,15 +235,18 @@ class RecruitmentReport extends Ork3
         // The candidate IN() narrows the range scan to players who signed in somewhere in
         // scope during the range: anyone credited to an in-scope park must have done so.
         // Credit = MIN(park_id) over the in-range sign-ins, exactly as New Player Attendance.
+        // "No sign-in before the range" is a correlated MIN(date) per candidate: a NOT EXISTS
+        // here gets materialized as an anti-join over the whole attendance index.
+        // Each player's attendance is read once, as the sorted distinct dates; counts,
+        // last sign-in and every windowed milestone are derived from that in PHP.
         $sql = "SELECT np.mundane_id, np.first_date, p.park_id, p.name AS park_name,
-                m.persona, m.recruitment_source,
-                (SELECT COUNT(DISTINCT a.date) FROM $A a WHERE a.mundane_id = np.mundane_id) AS signins,
-                (SELECT MAX(a.date) FROM $A a WHERE a.mundane_id = np.mundane_id) AS last_date,
+                (SELECT GROUP_CONCAT(DISTINCT a.date ORDER BY a.date SEPARATOR ',')
+                    FROM $A a WHERE a.mundane_id = np.mundane_id) AS dates,
                 (SELECT MIN(aw.date) FROM " . DB_PREFIX . "awards aw
                     WHERE aw.mundane_id = np.mundane_id AND aw.revoked = 0 AND aw.date >= np.first_date) AS first_award,
-                EXISTS (SELECT 1 FROM " . DB_PREFIX . "dues d
+                (SELECT MIN(COALESCE(d.created_on, d.dues_from)) FROM " . DB_PREFIX . "dues d
                     WHERE d.mundane_id = np.mundane_id AND d.revoked = 0
-                      AND COALESCE(d.created_on, d.dues_from) >= np.first_date) AS dues_paid
+                      AND COALESCE(d.created_on, d.dues_from) >= np.first_date) AS first_dues
             FROM (
                 SELECT a_in.mundane_id, MIN(a_in.park_id) AS first_park_id, MIN(a_in.date) AS first_date
                 FROM $A a_in
@@ -212,16 +258,11 @@ class RecruitmentReport extends Ork3
                       SELECT a_k.mundane_id FROM $A a_k
                       WHERE $candScope AND a_k.date >= '$start' AND a_k.date <= '$end' AND a_k.mundane_id > 0
                   )
-                  AND NOT EXISTS (
-                      SELECT 1 FROM $A a_pre
-                      WHERE a_pre.mundane_id = a_in.mundane_id AND a_pre.date < '$start'
-                      LIMIT 1
-                  )
+                  AND (SELECT MIN(a_pre.date) FROM $A a_pre WHERE a_pre.mundane_id = a_in.mundane_id) >= '$start'
                 GROUP BY a_in.mundane_id
             ) np
             INNER JOIN $P p ON p.park_id = np.first_park_id
-                AND p.active = 'Active' AND p.name IS NOT NULL AND p.name != '' AND $parkScope
-            LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = np.mundane_id";
+                AND p.active = 'Active' AND p.name IS NOT NULL AND p.name != '' AND $parkScope";
 
         $r = $this->db->query($sql);
         if (!empty($r->__ERROR[0][1]) && $r->__ERROR[0][1] !== '00000') {
@@ -231,20 +272,56 @@ class RecruitmentReport extends Ork3
         $rows = [];
         // $DB is YapoMysql: the cursor starts before the first row, so next() first.
         while ($r && $r->size() > 0 && $r->next()) {
+            $first = (string)$r->first_date;
+            $dates = array_values(array_filter(explode(',', (string)$r->dates)));
+            if (!$dates) {
+                $dates = [$first];
+            }
+            // Day offsets from the first sign-in, ascending, first = 0. Stored as a
+            // string to keep the cache entry small on multi-year kingdom runs.
+            $offsets = [];
+            foreach ($dates as $d) {
+                $offsets[] = self::_days($first, $d);
+            }
             $rows[] = [
                 'MundaneId'  => (int)$r->mundane_id,
-                'Persona'    => stripslashes((string)$r->persona),
                 'ParkId'     => (int)$r->park_id,
                 'ParkName'   => stripslashes((string)$r->park_name),
-                'FirstDate'  => (string)$r->first_date,
-                'Source'     => RecruitmentSource::normalize((string)$r->recruitment_source),
-                'SignIns'    => (int)$r->signins,
-                'LastDate'   => (string)$r->last_date,
+                'FirstDate'  => $first,
+                'Offsets'    => implode(',', $offsets),
+                'LastDate'   => (string)end($dates),
                 'FirstAward' => $r->first_award ? (string)$r->first_award : null,
-                'DuesPaid'   => (int)$r->dues_paid === 1,
+                'FirstDues'  => $r->first_dues ? (string)$r->first_dues : null,
             ];
         }
-        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.Cohort', $cacheKey, $rows);
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.Cohort2', $cacheKey, $rows);
+    }
+
+    /**
+     * mundane_id => [Persona, Source, Via], read fresh (uncached) in chunks of
+     * int-cast ids. null on a DB failure.
+     */
+    private function _freshAnswers(array $ids)
+    {
+        $out = [];
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), 'valid_id')));
+        foreach (array_chunk($ids, 1000) as $chunk) {
+            $in = implode(',', $chunk);
+            $r = $this->db->query("SELECT mundane_id, persona, recruitment_source, recruitment_source_via
+                FROM " . DB_PREFIX . "mundane WHERE mundane_id IN ($in)");
+            if (!empty($r->__ERROR[0][1]) && $r->__ERROR[0][1] !== '00000') {
+                logtrace('RecruitmentReport answers query failed', $r->__ERROR);
+                return null;
+            }
+            while ($r && $r->size() > 0 && $r->next()) {
+                $out[(int)$r->mundane_id] = [
+                    'Persona' => stripslashes((string)$r->persona),
+                    'Source'  => RecruitmentSource::normalize((string)$r->recruitment_source),
+                    'Via'     => (string)$r->recruitment_source_via,
+                ];
+            }
+        }
+        return $out;
     }
 
     private static function _days($from, $to)
@@ -257,11 +334,97 @@ class RecruitmentReport extends Ork3
         return $den > 0 ? round($num * 100 / $den, 1) : null;
     }
 
+    /** Any sign-in offset in [$lo, $hi). Offsets are ascending. */
+    private static function _hasIn(array $offsets, $lo, $hi)
+    {
+        foreach ($offsets as $o) {
+            if ($o >= $hi) {
+                return false;
+            }
+            if ($o >= $lo) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Per-player facts every bucket tallies, computed once. Each fact is
+     * null when the player is too recent to tell, else true/false.
+     */
+    private static function _facts(array $p, $today)
+    {
+        $offsets = array_map('intval', explode(',', $p['Offsets']));
+        $age = self::_days($p['FirstDate'], $today);
+        $f = [
+            'Age'     => $age,
+            'Offsets' => $offsets,
+            'SignIns' => count($offsets),
+            'Back'    => $age >= self::COME_BACK_DAYS ? self::_hasIn($offsets, 1, self::COME_BACK_DAYS + 1) : null,
+            'Dues'    => null,
+            'Funnel'  => null,
+            'Play'    => [],
+        ];
+        if ($age >= self::DUES_DAYS) {
+            $f['Dues'] = $p['FirstDues'] !== null && self::_days($p['FirstDate'], $p['FirstDues']) <= self::DUES_DAYS;
+        }
+        if ($age >= self::FUNNEL_DAYS) {
+            $within = 0;
+            foreach ($offsets as $o) {
+                if ($o <= self::FUNNEL_DAYS) {
+                    $within++;
+                }
+            }
+            $f['Funnel'] = $within;
+        }
+        foreach (self::MILESTONES as $m) {
+            $f['Play'][$m] = $age >= $m + self::PLAY_WINDOW ? self::_hasIn($offsets, $m, $m + self::PLAY_WINDOW) : null;
+        }
+        return $f;
+    }
+
+    private static function _blank()
+    {
+        $b = ['N' => 0, 'Back' => 0, 'BackElig' => 0, 'Dues' => 0, 'DuesElig' => 0,
+            'FunnelElig' => 0, 'Funnel' => array_fill_keys(self::FUNNEL, 0), 'Elig' => [], 'Play' => []];
+        foreach (self::MILESTONES as $m) {
+            $b['Elig'][$m] = 0;
+            $b['Play'][$m] = 0;
+        }
+        return $b;
+    }
+
+    private static function _tally(array &$b, array $f)
+    {
+        $b['N']++;
+        if ($f['Back'] !== null) {
+            $b['BackElig']++;
+            $b['Back'] += $f['Back'] ? 1 : 0;
+        }
+        if ($f['Dues'] !== null) {
+            $b['DuesElig']++;
+            $b['Dues'] += $f['Dues'] ? 1 : 0;
+        }
+        if ($f['Funnel'] !== null) {
+            $b['FunnelElig']++;
+            foreach (self::FUNNEL as $k) {
+                $b['Funnel'][$k] += $f['Funnel'] >= $k ? 1 : 0;
+            }
+        }
+        foreach (self::MILESTONES as $m) {
+            if ($f['Play'][$m] !== null) {
+                $b['Elig'][$m]++;
+                $b['Play'][$m] += $f['Play'][$m] ? 1 : 0;
+            }
+        }
+    }
+
     /** Every aggregate the page renders, from the (already filtered) player rows. */
     private function _aggregate(array $players, $start, $end, $window, $today)
     {
         $sourceKeys = array_merge(array_keys(RecruitmentSource::CODES), [self::SOURCE_NONE]);
         $labels = RecruitmentSource::CODES + [self::SOURCE_NONE => RecruitmentSource::NOT_ANSWERED_LABEL];
+        $shorts = RecruitmentSource::SHORT + [self::SOURCE_NONE => RecruitmentSource::NOT_ANSWERED_LABEL];
 
         // Month buckets for the whole range, so empty months still show.
         $months = [];
@@ -277,35 +440,26 @@ class RecruitmentReport extends Ork3
             $monthly[$k] = array_fill(0, count($months), 0);
         }
 
-        $blank = function () {
-            $b = ['N' => 0, 'Back' => 0, 'BackElig' => 0, 'BackOfElig' => 0, 'Dues' => 0, 'Funnel' => array_fill_keys(self::FUNNEL, 0), 'Elig' => [], 'Play' => []];
-            foreach (self::MILESTONES as $m) {
-                $b['Elig'][$m] = 0;
-                $b['Play'][$m] = 0;
-            }
-            return $b;
-        };
         $bySource = [];
-        foreach ($sourceKeys as $k) {
-            $bySource[$k] = $blank();
-        }
-        $all = $blank();
         $flows = ['all' => []];
         foreach ($sourceKeys as $k) {
+            $bySource[$k] = self::_blank();
             $flows[$k] = [];
         }
-        $award = ['with' => $blank(), 'without' => $blank()];
+        $all = self::_blank();
+        $award = ['with' => self::_blank(), 'without' => self::_blank()];
         $awardTooRecent = 0;
+        $awardInactive = 0;
         $detail = [];
         $answered = 0;
+        $answeredReg = 0;
 
         foreach ($players as $p) {
-            $key = $p['Source'] === '' ? self::SOURCE_NONE : $p['Source'];
-            $age = self::_days($p['FirstDate'], $today);
-            $span = $p['LastDate'] !== '' ? self::_days($p['FirstDate'], $p['LastDate']) : 0;
-            $back = $p['SignIns'] >= 2;
-            if ($key !== self::SOURCE_NONE) {
+            $key = $p['Key'];
+            $f = self::_facts($p, $today);
+            if ($p['Source'] !== '') {
                 $answered++;
+                $answeredReg += $p['Via'] === RecruitmentSource::VIA_REGISTRATION ? 1 : 0;
             }
 
             $mi = $monthIdx[substr($p['FirstDate'], 0, 7)] ?? null;
@@ -313,31 +467,11 @@ class RecruitmentReport extends Ork3
                 $monthly[$key][$mi]++;
             }
 
-            $tally = function (&$b) use ($p, $age, $span, $back) {
-                $b['N']++;
-                $b['Back'] += $back ? 1 : 0;
-                if ($age >= self::COME_BACK_DAYS) {
-                    $b['BackElig']++;
-                    $b['BackOfElig'] += $back ? 1 : 0;
-                }
-                $b['Dues'] += $p['DuesPaid'] ? 1 : 0;
-                foreach (self::FUNNEL as $f) {
-                    if ($p['SignIns'] >= $f) {
-                        $b['Funnel'][$f]++;
-                    }
-                }
-                foreach (self::MILESTONES as $m) {
-                    if ($age >= $m) {
-                        $b['Elig'][$m]++;
-                        $b['Play'][$m] += $span >= $m ? 1 : 0;
-                    }
-                }
-            };
-            $tally($all);
-            $tally($bySource[$key]);
+            self::_tally($all, $f);
+            self::_tally($bySource[$key], $f);
 
             // Retention flow: the path this player takes through the Sankey.
-            $path = $this->_flowPath($back, $age, $span);
+            $path = self::_flowPath($f);
             foreach (['all', $key] as $fk) {
                 $prev = 'New players';
                 foreach ($path as $node) {
@@ -346,11 +480,16 @@ class RecruitmentReport extends Ork3
                 }
             }
 
+            // Early award, landmark style: only players whose window is over AND who
+            // still signed in on/after its last day are compared, so an award can't
+            // stand in for "was still around". Milestones inside the window are not compared.
             $daysToAward = $p['FirstAward'] !== null ? self::_days($p['FirstDate'], $p['FirstAward']) : null;
-            if ($age >= $window) {
-                $tally($award[$daysToAward !== null && $daysToAward <= $window ? 'with' : 'without']);
-            } else {
+            if ($f['Age'] < $window) {
                 $awardTooRecent++;
+            } elseif (!self::_hasIn($f['Offsets'], $window, PHP_INT_MAX)) {
+                $awardInactive++;
+            } else {
+                self::_tally($award[$daysToAward !== null && $daysToAward <= $window ? 'with' : 'without'], $f);
             }
 
             $detail[] = [
@@ -359,12 +498,13 @@ class RecruitmentReport extends Ork3
                 'ParkId'     => $p['ParkId'],
                 'ParkName'   => $p['ParkName'],
                 'FirstDate'  => $p['FirstDate'],
-                'Source'     => $labels[$key],
-                'SourceKey'  => $key,
-                'SignIns'    => $p['SignIns'],
+                'Source'     => $labels[$p['Source'] === '' ? self::SOURCE_NONE : $p['Source']],
+                'SourceKey'  => $p['Source'] === '' ? self::SOURCE_NONE : $p['Source'],
+                'Later'      => $p['Source'] !== '' && $p['Via'] !== RecruitmentSource::VIA_REGISTRATION,
+                'SignIns'    => $f['SignIns'],
                 'LastDate'   => $p['LastDate'],
                 'FirstAward' => $p['FirstAward'],
-                'DuesPaid'   => $p['DuesPaid'],
+                'DuesPaid'   => $p['FirstDues'] !== null,
             ];
         }
 
@@ -375,20 +515,15 @@ class RecruitmentReport extends Ork3
             $sources[] = [
                 'Key'        => $k,
                 'Label'      => $labels[$k],
+                'Short'      => $shorts[$k],
                 'N'          => $b['N'],
                 'PctOfTotal' => self::_pct($b['N'], $n),
-                'Back'       => $b['BackOfElig'],
-                'BackElig'   => $b['BackElig'],
-                'BackPct'    => self::_pct($b['BackOfElig'], $b['BackElig']),
-                'Retention'  => self::_retention($b),
-                'Dues'       => $b['Dues'],
-                'DuesPct'    => self::_pct($b['Dues'], $b['N']),
-            ];
+            ] + self::_rates($b);
         }
 
         $funnel = [];
-        foreach (self::FUNNEL as $f) {
-            $funnel[] = ['Reached' => $f, 'N' => $all['Funnel'][$f], 'Pct' => self::_pct($all['Funnel'][$f], $n)];
+        foreach (self::FUNNEL as $k) {
+            $funnel[] = ['Reached' => $k, 'N' => $all['Funnel'][$k], 'Pct' => self::_pct($all['Funnel'][$k], $all['FunnelElig'])];
         }
 
         $sankey = [];
@@ -402,33 +537,60 @@ class RecruitmentReport extends Ork3
             $sankey[$fk] = $links;
         }
 
-        $retAll = self::_retention($all);
+        $overall = ['N' => $n] + self::_rates($all);
+        $comparable = [];
+        foreach (self::MILESTONES as $m) {
+            $comparable[$m] = $m > $window;
+        }
         return [
             'Stats' => [
                 'NewPlayers'    => $n,
                 'Answered'      => $answered,
+                'AnsweredReg'   => $answeredReg,
+                'AnsweredLater' => $answered - $answeredReg,
                 'AnsweredPct'   => self::_pct($answered, $n),
-                'Back'          => $all['BackOfElig'],
+                'Back'          => $all['Back'],
                 'BackElig'      => $all['BackElig'],
-                'BackPct'       => self::_pct($all['BackOfElig'], $all['BackElig']),
-                'Day90'         => $retAll[90],
+                'BackPct'       => $overall['BackPct'],
+                'Day90'         => $overall['Retention'][90],
             ],
             'Sources'  => $sources,
-            'Overall'  => [
-                'N' => $n, 'BackElig' => $all['BackElig'], 'BackPct' => self::_pct($all['BackOfElig'], $all['BackElig']), 'Retention' => $retAll,
-                'Dues' => $all['Dues'], 'DuesPct' => self::_pct($all['Dues'], $n),
-            ],
+            'Overall'  => $overall,
             'Monthly'  => ['Months' => $months, 'Series' => $monthly],
             'Sankey'   => $sankey,
-            'Funnel'   => $funnel,
+            'Funnel'   => ['Days' => self::FUNNEL_DAYS, 'Eligible' => $all['FunnelElig'], 'TooRecent' => $n - $all['FunnelElig'], 'Steps' => $funnel],
             'EarlyAward' => [
-                'Window'    => $window,
-                'TooRecent' => $awardTooRecent,
-                'With'      => ['N' => $award['with']['N'], 'Retention' => self::_retention($award['with'])],
-                'Without'   => ['N' => $award['without']['N'], 'Retention' => self::_retention($award['without'])],
+                'Window'     => $window,
+                'TooRecent'  => $awardTooRecent,
+                'Inactive'   => $awardInactive,
+                'Comparable' => $comparable,
+                'With'       => ['N' => $award['with']['N'], 'Retention' => self::_retention($award['with'])],
+                'Without'    => ['N' => $award['without']['N'], 'Retention' => self::_retention($award['without'])],
             ],
             'Players'  => $detail,
             'Milestones' => self::MILESTONES,
+            'Rules' => [
+                'MinN'         => self::MIN_N,
+                'PlayWindow'   => self::PLAY_WINDOW,
+                'ComeBackDays' => self::COME_BACK_DAYS,
+                'DuesDays'     => self::DUES_DAYS,
+                'FunnelDays'   => self::FUNNEL_DAYS,
+                'MaxYears'     => self::MAX_RANGE_YEARS,
+            ],
+        ];
+    }
+
+    /** Came back, retention and dues rates for one bucket, each with its eligible n. */
+    private static function _rates(array $b)
+    {
+        return [
+            'Back'      => $b['Back'],
+            'BackElig'  => $b['BackElig'],
+            'BackPct'   => self::_pct($b['Back'], $b['BackElig']),
+            'Retention' => self::_retention($b),
+            'Dues'      => $b['Dues'],
+            'DuesElig'  => $b['DuesElig'],
+            'DuesPct'   => self::_pct($b['Dues'], $b['DuesElig']),
         ];
     }
 
@@ -448,22 +610,26 @@ class RecruitmentReport extends Ork3
     }
 
     /**
-     * Sankey nodes after "New players". Lapsed and too-recent are sinks: still
-     * playing at day N is monotonic (any sign-in on/after day N), so nobody
-     * re-enters a later stage.
+     * Sankey nodes after "New players". Each stage only follows the players who
+     * were still playing at the one before; "not back yet", "lapsed" and "too
+     * recent" are sinks. Uses the same per-player facts as the stat cards, so a
+     * node and the card with the same name agree.
      */
-    private function _flowPath($back, $age, $span)
+    private static function _flowPath(array $f)
     {
-        if (!$back) {
-            return [$age < self::COME_BACK_DAYS ? 'Not back yet' : 'Never came back'];
+        if ($f['Back'] === null) {
+            return ['Not back yet'];
+        }
+        if (!$f['Back']) {
+            return ['Not back within 30 days'];
         }
         $path = ['Came back'];
         foreach (self::FLOW_MILESTONES as $m) {
-            if ($age < $m) {
+            if ($f['Play'][$m] === null) {
                 $path[] = "Day $m: too recent";
                 break;
             }
-            if ($span < $m) {
+            if (!$f['Play'][$m]) {
                 $path[] = "Day $m: lapsed";
                 break;
             }

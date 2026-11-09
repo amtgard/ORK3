@@ -290,12 +290,18 @@ class Controller_Park extends Controller
         $this->data['CanBonusCredits'] = $uid > 0 && $this->BonusCredit->can_grant($uid, (int)$park_id);
         $this->data['CanAdminPark']  = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
+        // Reports-tab link to the Player Recruitment Report: same gate as the report.
+        if (!isset($this->Reports)) {
+            $this->load_model('Reports');
+        }
+        $this->data['CanViewRecruitment'] = $uid > 0
+            && $this->Reports->can_view_recruitment($uid, 'Park', (int)$park_id);
         // "How did you find us?" options for the Create Player modal.
         if ($this->data['CanAdminPark']) {
             if (!isset($this->Player)) {
                 $this->load_model('Player');
             }
-            $this->data['RecruitmentSourceOptions'] = $this->Player->recruitment_source_options();
+            $this->data['RecruitmentSourceField'] = $this->Player->recruitment_source_field('officer');
         }
         // Park admins can merge two players who both belong to THIS park.
         // Cross-park or cross-kingdom merges still need higher rights and are

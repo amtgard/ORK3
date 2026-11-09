@@ -180,10 +180,14 @@ class Model_Player extends Model
         return $this->Player->get_recruitment_source($mundane_id, $viewer_id);
     }
 
-    /** Ordered code => label list for every "How did you find us?" dropdown. */
-    public function recruitment_source_options()
+    /**
+     * Options, label, placeholder and hint for a "How did you find us?" field
+     * (templates render it with _recruitment_source_select.tpl).
+     * $audience: 'officer' for the create-player modals, 'self' for player-facing forms.
+     */
+    public function recruitment_source_field($audience)
     {
-        return RecruitmentSource::CODES;
+        return RecruitmentSource::field($audience);
     }
 
     public function create_player($request)

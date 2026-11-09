@@ -129,7 +129,7 @@ class Controller_SelfReg extends Controller
         $this->data['park_name']   = $park_name;
         $this->data['link']        = $link;
         $this->data['ttl_seconds'] = $ttl_seconds;
-        $this->data['RecruitmentSourceOptions'] = $this->Player->recruitment_source_options();
+        $this->data['RecruitmentSourceField'] = $this->Player->recruitment_source_field('self');
     }
 
     // Live username-availability check used by the SelfReg form. The selfreg

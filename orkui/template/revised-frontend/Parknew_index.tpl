@@ -1246,7 +1246,7 @@
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/population_explorer&ParkId=<?= $park_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
-							<?php if (!empty($CanAdminPark)): ?><li><a href="<?= UIR ?>Reports/player_recruitment&ParkId=<?= (int)$park_id ?>"><i class="fas fa-bullhorn"></i> Player Recruitment</a></li><?php endif; ?>
+							<?php if (!empty($CanViewRecruitment)): ?><li><a href="<?= UIR ?>Reports/player_recruitment&ParkId=<?= (int)$park_id ?>"><i class="fas fa-bullhorn"></i> Player Recruitment</a></li><?php endif; ?>
 							<?php endif; ?>
 						</ul>
 					</div>
@@ -2629,17 +2629,10 @@ var PkBannerConfig = {
 					<input type="password" id="pk-addplayer-password" placeholder="optional" autocomplete="new-password">
 				</div>
 			</div>
-			<?php if (!empty($RecruitmentSourceOptions)): ?>
+			<?php if (!empty($RecruitmentSourceField)): ?>
+			<?php include_once __DIR__ . '/_recruitment_source_select.tpl'; ?>
 			<div class="plr-field-row">
-				<div class="plr-field plr-field-grow">
-					<label for="pk-addplayer-recruitment">How did you find us?</label>
-					<select id="pk-addplayer-recruitment">
-						<option value="">&mdash; Select &mdash;</option>
-						<?php foreach ($RecruitmentSourceOptions as $_rsCode => $_rsLabel): ?>
-						<option value="<?= htmlspecialchars($_rsCode) ?>"><?= htmlspecialchars($_rsLabel) ?></option>
-						<?php endforeach; ?>
-					</select>
-				</div>
+				<?= ork_recruitment_source_select($RecruitmentSourceField, ['id' => 'pk-addplayer-recruitment', 'wrap_class' => 'plr-field plr-field-grow']) ?>
 			</div>
 			<?php endif; ?>
 			<div class="plr-field-row">

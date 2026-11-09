@@ -45,7 +45,7 @@ class Controller_Admin extends Controller
         if (!isset($this->Player)) {
             $this->load_model('Player');
         }
-        $this->data['RecruitmentSourceOptions'] = $this->Player->recruitment_source_options();
+        $this->data['RecruitmentSourceField'] = $this->Player->recruitment_source_field('officer');
 
         $this->template = '../revised-frontend/Admin_index.tpl';
     }

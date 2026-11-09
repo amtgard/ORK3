@@ -2811,16 +2811,9 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				</div>
 			</div>
 
-			<?php if (isset($RecruitmentSourceOptions) && is_array($RecruitmentSourceOptions)): ?>
-			<div class="pn-acct-field">
-				<label for="pn-acct-recruitment">How did you find us?</label>
-				<select id="pn-acct-recruitment" name="RecruitmentSource">
-					<option value="">&mdash; Select &mdash;</option>
-					<?php foreach ($RecruitmentSourceOptions as $_rsCode => $_rsLabel): ?>
-					<option value="<?= htmlspecialchars($_rsCode) ?>"<?= ($RecruitmentSource ?? '') === $_rsCode ? ' selected' : '' ?>><?= htmlspecialchars($_rsLabel) ?></option>
-					<?php endforeach; ?>
-				</select>
-			</div>
+			<?php if (!empty($RecruitmentSourceField)): ?>
+			<?php include_once __DIR__ . '/_recruitment_source_select.tpl'; ?>
+			<?= ork_recruitment_source_select($RecruitmentSourceField, ['id' => 'pn-acct-recruitment', 'name' => 'RecruitmentSource', 'selected' => $RecruitmentSource ?? '', 'wrap_class' => 'pn-acct-field', 'hint_class' => 'pn-acct-hint']) ?>
 			<?php endif; ?>
 
 			<div class="pn-acct-field">

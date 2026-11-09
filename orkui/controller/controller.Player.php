@@ -535,8 +535,8 @@ class Controller_Player extends Controller
         // viewers who can open that modal (self / park EDIT / admin); GetPlayer
         // never carries it.
         if ($uid === (int)$id || $canEdit) {
-            $this->data['RecruitmentSource']        = (string)$this->Player->get_recruitment_source((int)$id, $uid);
-            $this->data['RecruitmentSourceOptions'] = $this->Player->recruitment_source_options();
+            $this->data['RecruitmentSource']      = (string)$this->Player->get_recruitment_source((int)$id, $uid);
+            $this->data['RecruitmentSourceField'] = $this->Player->recruitment_source_field('self');
         }
         $this->data['Player']['ParkName'] = $this->session->park_name;
 

@@ -427,6 +427,15 @@ class Model_Reports extends Model
         return is_array($r) ? $r : ['Status' => ProcessingError()];
     }
 
+    /**
+     * Who may open the Player Recruitment Report for a scope. The one gate for
+     * both the report itself and the Reports-tab links. $scopeType: 'Kingdom' | 'Park'.
+     */
+    public function can_view_recruitment($uid, string $scopeType, $scopeId): bool
+    {
+        return (bool)(new RecruitmentReport())->CanView_Scope((int)$uid, $scopeType, (int)$scopeId);
+    }
+
     /** Ordered code => label for the recruitment source filter, plus the "not answered" key/label. */
     public function recruitment_sources(): array
     {

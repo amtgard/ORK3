@@ -129,7 +129,7 @@
 }
 .sr-field-hint {
 	font-size: 11px;
-	color: #a0aec0;
+	color: #718096;
 	margin-top: 4px;
 }
 .sr-field-row {
@@ -250,7 +250,7 @@ html[data-theme="dark"] .sr-field select:focus {
 	border-color: #38a169;
 	box-shadow: 0 0 0 3px rgba(56,161,105,0.2);
 }
-html[data-theme="dark"] .sr-field-hint { color: var(--ork-text-lighter, #718096); }
+html[data-theme="dark"] .sr-field-hint { color: #a0aec0; }
 html[data-theme="dark"] .sr-btn-primary { background: #38a169; color: #fff; }
 html[data-theme="dark"] .sr-btn-primary:hover:not(:disabled) { background: #48bb78; }
 html[data-theme="dark"] .sr-btn-primary:disabled { background: var(--ork-bg-tertiary, #4a5568); color: var(--ork-text-muted, #a0aec0); }
@@ -284,7 +284,7 @@ html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert
 	html:not([data-theme="light"]) .sr-field select:focus {
 		border-color: #38a169; box-shadow: 0 0 0 3px rgba(56,161,105,0.2);
 	}
-	html:not([data-theme="light"]) .sr-field-hint { color: #718096; }
+	html:not([data-theme="light"]) .sr-field-hint { color: #a0aec0; }
 	html:not([data-theme="light"]) .sr-btn-primary:hover:not(:disabled) { background: #48bb78; }
 	html:not([data-theme="light"]) .sr-btn-primary:disabled { background: #4a5568; color: #a0aec0; }
 	html:not([data-theme="light"]) .sr-expired-wrap i { color: #fc8181; }
@@ -417,16 +417,9 @@ html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert
 			</div>
 			<!-- A15: Inline password mismatch error -->
 			<div class="sr-inline-error" id="sr-pw-error" role="alert">Passwords do not match.</div>
-			<?php if (!empty($RecruitmentSourceOptions)): ?>
-			<div class="sr-field">
-				<label for="sr-recruitment">How did you find us?</label>
-				<select name="RecruitmentSource" id="sr-recruitment">
-					<option value="">&mdash; Select &mdash;</option>
-					<?php foreach ($RecruitmentSourceOptions as $_rsCode => $_rsLabel): ?>
-					<option value="<?= htmlspecialchars($_rsCode) ?>"<?= ($form['RecruitmentSource'] ?? '') === $_rsCode ? ' selected' : '' ?>><?= htmlspecialchars($_rsLabel) ?></option>
-					<?php endforeach; ?>
-				</select>
-			</div>
+			<?php if (!empty($RecruitmentSourceField)): ?>
+			<?php include_once __DIR__ . '/_recruitment_source_select.tpl'; ?>
+			<?= ork_recruitment_source_select($RecruitmentSourceField, ['id' => 'sr-recruitment', 'name' => 'RecruitmentSource', 'selected' => $form['RecruitmentSource'] ?? '', 'wrap_class' => 'sr-field', 'hint_class' => 'sr-field-hint']) ?>
 			<?php endif; ?>
 			<button type="submit" class="sr-btn-primary" id="sr-submit-btn">
 				<i class="fas fa-user-plus"></i> Create Account &amp; Join

@@ -1162,7 +1162,7 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 }
 .pn-acct-hint {
     font-size: 11px;
-    color: #a0aec0;
+    color: var(--ork-text-muted, #718096);
     margin-top: 3px;
 }
 .pn-acct-modal-body {
@@ -5995,6 +5995,10 @@ html[data-theme="dark"] .kn-admin-award-search-empty { color:var(--ork-text-mute
 .plr-field input:focus, .plr-field select:focus { outline:none; background:var(--ork-card-bg); border-color:#63b3ed; box-shadow:0 0 0 2px rgba(66,153,225,0.15); }
 .plr-req { color:#e53e3e; }
 .plr-hint { font-size:10px; color:#a0aec0; font-weight:400; text-transform:none; letter-spacing:0; }
+/* Field help text under a control (e.g. "How did you find us?" in the officer create-player modals). */
+.ork-field-hint { font-size:11px; line-height:1.4; color:var(--ork-text-muted, #718096); font-weight:400; text-transform:none; letter-spacing:0; margin-top:4px; }
+.plr-field .ork-field-hint { margin-top:0; }
+html[data-theme="dark"] .ork-field-hint { color:var(--ork-text-muted, #a0aec0); }
 .plr-radio-row { display:flex; gap:16px; padding:6px 0; }
 .plr-radio { display:flex; align-items:center; gap:5px; font-size:13px; color:var(--ork-text); cursor:pointer; font-weight:400; text-transform:none; letter-spacing:0; }
 .plr-radio input[type=radio] { margin:0; cursor:pointer; }

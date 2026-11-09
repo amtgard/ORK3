@@ -1891,8 +1891,13 @@ class Player extends Ork3
                 if (!empty($request['PronounCustom'])) {
                     $this->mundane->pronoun_custom = $request['PronounCustom'];
                 }
-                // "How did you find us?" — optional; '' = not answered.
+                // "How did you find us?" — optional; '' = not answered. An answer
+                // given here is stamped 'registration' (see recruitment_source_via).
                 $this->mundane->recruitment_source = RecruitmentSource::normalize($request['RecruitmentSource'] ?? '');
+                if ($this->mundane->recruitment_source !== '') {
+                    $this->mundane->recruitment_source_via    = RecruitmentSource::VIA_REGISTRATION;
+                    $this->mundane->recruitment_source_set_at = date('Y-m-d H:i:s');
+                }
                 $this->mundane->penalty_box = 0;
                 $this->mundane->active = $request['IsActive'];
                 $this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
@@ -2214,6 +2219,10 @@ class Player extends Ork3
         $this->mundane->waiver_ext        = '';
         $this->mundane->reeve_qualified_until = '0000-00-00';
         $this->mundane->recruitment_source = RecruitmentSource::normalize($request['RecruitmentSource'] ?? '');
+        if ($this->mundane->recruitment_source !== '') {
+            $this->mundane->recruitment_source_via    = RecruitmentSource::VIA_REGISTRATION;
+            $this->mundane->recruitment_source_set_at = date('Y-m-d H:i:s');
+        }
         $this->mundane->save();
 
         $new_mundane_id = (int)$this->mundane->mundane_id;
@@ -2923,8 +2932,18 @@ class Player extends Ork3
                 $this->mundane->pronoun_custom = is_null($request['PronounCustom']) ? $this->mundane->pronoun_custom : $request['PronounCustom'];
                 // "How did you find us?" backfill. Absent/null = leave unchanged (so
                 // callers that don't know the field never wipe it); '' clears it.
+                // Only a real change touches via/set_at, so re-saving the Account
+                // modal never turns a registration answer into a backfill.
+                // set_at = when the answer last changed, clears included; a clear
+                // resets via to '' (never answered).
                 if (isset($request['RecruitmentSource'])) {
-                    $this->mundane->recruitment_source = RecruitmentSource::normalize($request['RecruitmentSource']);
+                    $_rsOld = RecruitmentSource::normalize((string)$this->mundane->recruitment_source);
+                    $_rsNew = RecruitmentSource::normalize($request['RecruitmentSource']);
+                    if ($_rsNew !== $_rsOld) {
+                        $this->mundane->recruitment_source        = $_rsNew;
+                        $this->mundane->recruitment_source_via    = $_rsNew === '' ? '' : RecruitmentSource::VIA_BACKFILL;
+                        $this->mundane->recruitment_source_set_at = date('Y-m-d H:i:s');
+                    }
                 }
 
                 // Profile customization fields — own profile or ORK admin.

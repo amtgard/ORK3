@@ -294,7 +294,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				<li><a href="<?= UIR ?>Unit/unitlist"><i class="fas fa-users"></i><span>Companies &amp; Households<span class="cp-report-list-desc">All registered units</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/topparks"><i class="fas fa-trophy"></i><span>Top Parks by Attendance<span class="cp-report-list-desc">Ranked attendance report</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/new_player_attendance"><i class="fas fa-star"></i><span>New Player Attendance<span class="cp-report-list-desc">First-time attendees by kingdom</span></span></a></li>
-				<li><a href="<?= UIR ?>Reports/player_recruitment"><i class="fas fa-seedling"></i><span>Player Recruitment<span class="cp-report-list-desc">How new players found us, and who stayed</span></span></a></li>
+				<li><a href="<?= UIR ?>Reports/player_recruitment&Pick=1"><i class="fas fa-seedling"></i><span>Player Recruitment<span class="cp-report-list-desc">How new players found us, and who stayed</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/auditlog"><i class="fas fa-history"></i><span>Audit Log<span class="cp-report-list-desc">System changes &amp; admin actions</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/serverhealth"><i class="fas fa-heartbeat"></i><span>Server Health<span class="cp-report-list-desc">PHP-FPM workers, DB metrics &amp; load test</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/stateofamtgard"><i class="fas fa-globe"></i><span>State of Amtgard Report<span class="cp-report-list-desc">Annual recruitment, retention &amp; class data</span></span></a></li>
@@ -437,16 +437,9 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 					<input type="password" id="cp-cp-password" autocomplete="new-password" placeholder="optional">
 				</div>
 			</div>
-			<?php if (!empty($RecruitmentSourceOptions)): ?>
-			<div class="cp-field">
-				<label for="cp-cp-recruitment">How did you find us?</label>
-				<select id="cp-cp-recruitment">
-					<option value="">&mdash; Select &mdash;</option>
-					<?php foreach ($RecruitmentSourceOptions as $_rsCode => $_rsLabel): ?>
-					<option value="<?= htmlspecialchars($_rsCode) ?>"><?= htmlspecialchars($_rsLabel) ?></option>
-					<?php endforeach; ?>
-				</select>
-			</div>
+			<?php if (!empty($RecruitmentSourceField)): ?>
+			<?php include_once __DIR__ . '/_recruitment_source_select.tpl'; ?>
+			<?= ork_recruitment_source_select($RecruitmentSourceField, ['id' => 'cp-cp-recruitment', 'wrap_class' => 'cp-field']) ?>
 			<?php endif; ?>
 			<div class="cp-field-row">
 				<div class="cp-field">

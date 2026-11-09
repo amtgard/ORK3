@@ -835,7 +835,7 @@
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
-							<?php if ($CanManageKingdom ?? false): ?><li><a href="<?= UIR ?>Reports/player_recruitment&KingdomId=<?= (int)$kingdom_id ?>"><i class="fas fa-bullhorn"></i> Player Recruitment</a></li><?php endif; ?>
+							<?php if (!empty($CanViewRecruitment)): ?><li><a href="<?= UIR ?>Reports/player_recruitment&KingdomId=<?= (int)$kingdom_id ?>"><i class="fas fa-bullhorn"></i> Player Recruitment</a></li><?php endif; ?>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
 						</ul>
@@ -2452,17 +2452,10 @@ var KnBannerConfig = {
 					<input type="password" id="kn-addplayer-password" placeholder="optional" autocomplete="new-password">
 				</div>
 			</div>
-			<?php if (!empty($RecruitmentSourceOptions)): ?>
+			<?php if (!empty($RecruitmentSourceField)): ?>
+			<?php include_once __DIR__ . '/_recruitment_source_select.tpl'; ?>
 			<div class="plr-field-row">
-				<div class="plr-field plr-field-grow">
-					<label for="kn-addplayer-recruitment">How did you find us?</label>
-					<select id="kn-addplayer-recruitment">
-						<option value="">&mdash; Select &mdash;</option>
-						<?php foreach ($RecruitmentSourceOptions as $_rsCode => $_rsLabel): ?>
-						<option value="<?= htmlspecialchars($_rsCode) ?>"><?= htmlspecialchars($_rsLabel) ?></option>
-						<?php endforeach; ?>
-					</select>
-				</div>
+				<?= ork_recruitment_source_select($RecruitmentSourceField, ['id' => 'kn-addplayer-recruitment', 'wrap_class' => 'plr-field plr-field-grow']) ?>
 			</div>
 			<?php endif; ?>
 			<div class="plr-field-row">

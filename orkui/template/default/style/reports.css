@@ -980,9 +980,51 @@ html[data-theme="dark"] .rp-table-area table.dataTable thead th:hover {
 /* prefers-color-scheme fallback */
 
 /* =====================================================
+   Parameter form (sidebar filters) — light mode.
+   Plain single-class selectors so pages that still inline their
+   own copies (Top Parks, New Player Attendance, ...) keep winning.
+   ===================================================== */
+.rp-param-form { display: flex; flex-direction: column; gap: 10px; }
+.rp-form-group { display: flex; flex-direction: column; gap: 3px; }
+.rp-form-group label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--rp-text-muted); }
+.rp-form-input,
+.rp-form-select { width: 100%; border: 1px solid var(--rp-border-mid); border-radius: 5px; padding: 6px 8px; font-size: 13px; color: var(--rp-text); background: var(--ork-input-bg, #fff); box-sizing: border-box; }
+.rp-form-input:focus,
+.rp-form-select:focus { outline: none; border-color: var(--rp-accent-mid); }
+.rp-btn-run { width: 100%; padding: 8px 0; background: var(--rp-accent); color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
+.rp-btn-run:hover { background: #3730a3; }
+.rp-btn-run[disabled] { opacity: 0.7; cursor: progress; }
+@media (max-width: 600px) {
+  .rp-form-input, .rp-form-select { font-size: 16px; min-height: 44px; }
+  .rp-btn-run { min-height: 44px; }
+}
+
+/* =====================================================
+   data-tip tooltips — opt in with .rp-tips on the .rp-root
+   (several .rp-root pages ship their own [data-tip] rules).
+   Opens below; .rp-tip-right anchors it to the right edge.
+   ===================================================== */
+.rp-root.rp-tips [data-tip] { position: relative; }
+.rp-root.rp-tips [data-tip]:hover::after,
+.rp-root.rp-tips [data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: 240px; white-space: normal; line-height: 1.35; text-align: left;
+  background: #1a202c; color: #fff; font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0;
+  padding: 6px 8px; border-radius: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); z-index: 60; pointer-events: none;
+}
+.rp-root.rp-tips .rp-tip-right[data-tip]:hover::after,
+.rp-root.rp-tips .rp-tip-right[data-tip]:focus-visible::after { left: auto; right: 0; transform: none; }
+html[data-theme="dark"] .rp-root.rp-tips [data-tip]:hover::after,
+html[data-theme="dark"] .rp-root.rp-tips [data-tip]:focus-visible::after { background: #0f141c; border: 1px solid #4a5568; }
+@media (max-width: 600px) {
+  .rp-root.rp-tips [data-tip]:hover::after { max-width: 200px; }
+}
+
+/* =====================================================
    DARK MODE — Top Parks report (rp-form-*, rp-rank-*)
    ===================================================== */
 html[data-theme="dark"] .rp-form-input,
+html[data-theme="dark"] .rp-form-select,
 html[data-theme="dark"] .be-selector-bar select,
 html[data-theme="dark"] #hw-search,
 html[data-theme="dark"] .lg-search-bar input {

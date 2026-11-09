@@ -62,10 +62,12 @@ checks must have `_` in its name (JSON service exposure rule).
 ## Part 2 — Player Recruitment Report
 
 Route `Reports/player_recruitment` with `&KingdomId=` or `&ParkId=` (defaults
-to session park, then kingdom). Template in `revised-frontend/`, using the
-shared `.rp-*` shell (`default/style/reports.css`). Charts: **Apache ECharts**
-(Apache-2.0) pinned from cdnjs (Highcharts is non-MIT and only in the legacy
-theme).
+to session park, then kingdom; `&Pick=1` skips that default and shows the
+kingdom picker, which is what the ORK Admin link uses). Template in
+`revised-frontend/`, using the shared `.rp-*` shell (`default/style/reports.css`,
+which also holds the shared light/dark `.rp-form-*` controls and the opt-in
+`.rp-root.rp-tips [data-tip]` tooltip). Charts: **Apache ECharts** (Apache-2.0)
+pinned from cdnjs (Highcharts is non-MIT and only in the legacy theme).
 
 ### Access
 ORK admin; or kingdom officer (AUTH_KINGDOM, EDIT) for a kingdom scope; or
@@ -75,42 +77,72 @@ principalities via `Kingdom::GetStatsKingdomIds` (same as New Player
 Attendance).
 
 ### Definitions
+Every rate uses an eligible-only denominator (players whose window is over) and
+is shown with its n. Rates from fewer than 10 eligible players (`MIN_N`) are
+greyed out as "too few" (table cells muted with n; bars hatched grey with
+"n=X, too few").
 - **New player** = their first-ever sign-in (`ork_attendance`, `mundane_id>0`,
   `park_id>0`) falls in the date range, at a park in scope. Same definition as
   the existing New Player Attendance report, so the numbers agree.
-- **Day N** counted from the first sign-in date. **Still playing at day N** =
-  has any sign-in (anywhere) dated ≥ first + N days. Monotonic by construction.
-- **Too recent** = day N hasn't elapsed yet (first + N > today). Such players
-  are excluded from the denominator for that milestone and shown as a separate
-  "too recent" sink in the Sankey, never counted as drop-offs.
-- Milestones: 2nd sign-in, day 30, 60, 90, 180, 365.
+- **Day N** counted from the first sign-in date; "within N days" = day offset ≤ N.
+- **Came back** = a second distinct sign-in date within 30 days of the first.
+  Eligible once the first sign-in is ≥ 30 days old; younger players are
+  "not back yet".
+- **Still playing at day N** = at least one sign-in (anywhere) dated in
+  [first + N, first + N + 30). Not monotonic: a single late visit doesn't count
+  as playing at every milestone before it.
+- **Too recent** = the day-N window isn't over yet (first + N + 30 > today).
+  Such players are excluded from the denominator for that milestone and shown
+  as a separate "too recent" sink in the Sankey, never counted as drop-offs.
+- Milestones: day 30, 60, 90, 180, 365.
+- **Return funnel** = reached the Nth distinct sign-in date (2, 3, 5, 10, 25)
+  within 180 days of the first; eligible once ≥ 180 days old.
 - **Early award** = a non-revoked `ork_awards` row for the player dated within
   X days of first sign-in (X filter, default 30; options 14/30/60/90).
-- **Dues paid** = any non-revoked `ork_dues` row for the player created on/after
-  first sign-in.
+  Landmark comparison: both groups are restricted to players whose X days are
+  over and who signed in on/after day X; only milestones N > X are compared
+  (N ≤ X shown greyed as "in window").
+- **Dues paid** = a non-revoked `ork_dues` row dated (created_on, else
+  dues_from) within 90 days of the first sign-in; eligible once ≥ 90 days old.
+  The player detail table still shows "any dues since the first sign-in".
+- **Answered at registration vs later**: `ork_mundane.recruitment_source_via`
+  (`registration` | `backfill` | `''`). Backfilled answers come mostly from
+  players who stayed, which inflates a source's retention (survivorship), so the
+  report has an Answers filter (All / At registration only; in the latter, any
+  answer not given at registration counts as Not answered) and shows the split
+  next to Answered %.
 
 ### Filters (sidebar)
-Date range of first sign-in (default: last 12 months), park (kingdom scope
-only), recruitment source (all / one / not answered), early-award window X.
-Run button; results load in one request.
+Date range of first sign-in (default: last 12 months; at most 5 years, enforced
+in `RecruitmentReport::Run` and in the Flatpickr min/max), park (kingdom scope
+only), recruitment source (all / one / not answered), Answers (all / at
+registration only), early-award window X. Run button; results load in one
+request.
 
 ### Sections
-1. **Stat cards:** New players · Source answered % · Came back (2+ sign-ins) % ·
-   Still playing at day 90 % (of eligible).
+1. **Stat cards:** New players · Source answered % (with the registration /
+   added-later split) · Came back % · Still playing at day 90 % (of eligible).
 2. **Where they came from:** horizontal bar of counts by source incl.
-   "Not answered", plus a table: source, new players, % of total, came back %,
-   day 30 / 90 / 180 retention %, dues paid %. This is the headline table.
+   "Not answered" (short axis labels, `RecruitmentSource::SHORT`; full labels in
+   tooltips and the table), plus a DataTables table (no paging/search/info,
+   sortable, numeric `data-order`, empty values last): source, new players,
+   % of total, came back %, day 30 / 90 / 180 retention %, dues paid %, each
+   with n. This is the headline table, captioned with the backfill bias.
 3. **New players by month:** stacked columns by source.
-4. **Retention flow (Sankey):** New players → Came back / Never came back →
-   Day 30 playing / Lapsed / Too recent → Day 60 → Day 90 → Day 180. A source
+4. **Retention flow (Sankey):** New players → Came back / Not back within 30
+   days / Not back yet → Day 30 playing / Lapsed / Too recent → Day 60 → Day 90
+   → Day 180. Stages chain: only players still playing at one stage flow to the
+   next. Uses the same per-player facts as the stat cards, so "Came back"
+   matches the card. Below 600px it scrolls sideways with a fade and hint. A source
    selector above it re-renders client-side (data for every source shipped in
    the one response).
-5. **Return funnel table:** reached 2nd, 3rd, 5th, 10th, 25th sign-in (counts
-   and % of cohort).
+5. **Return funnel table:** reached 2nd, 3rd, 5th, 10th, 25th sign-in within
+   180 days (counts and % of eligible).
 6. **Early awards and retention:** grouped bars + table comparing players with
    vs without an award in their first X days, retention at day 30/60/90/180
-   (eligible-only denominators, with n shown). Caption: correlation, not proof
-   of cause.
+   (eligible-only denominators, with n shown; landmark rules above). Caption
+   explains the in-window exclusion and that it's correlation, not proof of
+   cause.
 7. **Player detail (DataTables):** persona (link), park, first sign-in, source,
    total sign-ins, last sign-in, first award date, dues paid. Default sort first
    sign-in desc.
@@ -118,10 +150,11 @@ Run button; results load in one request.
 Empty and loading states, dark mode, ≤900px layout follow the rp shell rules.
 
 ### Entry points
-- Kingdom profile **Admin Tasks** tab (`#kn-tab-admin`) and Park profile
-  **Admin Tasks** tab (`#pk-tab-admin`): "Player Recruitment" link (inherits the
-  existing officer gate).
-- ORK Admin (`Admin_index.tpl`) report list next to New Player Attendance.
+- Kingdom and Park profile **Reports** tab, Players group, next to Population
+  Explorer: "Player Recruitment" link. The report's Back button returns there
+  (`&tab=reports`).
+- ORK Admin (`Admin_index.tpl`) report list next to New Player Attendance,
+  linking with `&Pick=1` so admins get the kingdom picker.
 - Account modal source field help text: none needed.
 
 ## Non-goals
@@ -136,5 +169,9 @@ SQL only in `system/lib/ork3/` (new report method on `Report` or a new
 non-whitelisted `class.RecruitmentReport.php` — builder's call; if on `Report`,
 it must take a Token and check authority, or have `_` in its name).
 `orkui/model` is the only membrane. Integer-cast all ids;
-`mysql_real_escape_string` is a no-op, so regex-validate dates. Cache report
-results with ghettocache (300s) like New Player Attendance.
+`mysql_real_escape_string` is a no-op, so regex-validate dates. The cohort's
+numeric per-player facts (first date, credited park, sign-in day offsets, first
+award, first dues) are cached with ghettocache (300s) per scope + range;
+persona, recruitment_source and recruitment_source_via are never cached and are
+re-read every run (chunked, int-cast `IN` list), so an Account-modal backfill
+shows up on the next run.

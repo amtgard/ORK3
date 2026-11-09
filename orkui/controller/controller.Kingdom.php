@@ -382,12 +382,18 @@ class Controller_Kingdom extends Controller
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+        // Reports-tab link to the Player Recruitment Report: same gate as the report.
+        if (!isset($this->Reports)) {
+            $this->load_model('Reports');
+        }
+        $this->data['CanViewRecruitment'] = $uid > 0
+            && $this->Reports->can_view_recruitment($uid, 'Kingdom', (int)$kingdom_id);
         // "How did you find us?" options for the Create Player modal.
         if ($this->data['CanManageKingdom']) {
             if (!isset($this->Player)) {
                 $this->load_model('Player');
             }
-            $this->data['RecruitmentSourceOptions'] = $this->Player->recruitment_source_options();
+            $this->data['RecruitmentSourceField'] = $this->Player->recruitment_source_field('officer');
         }
         // Bonus Credits button + modal: kingdom EDIT hands credits out, CREATE
         // also defines them, and a named manager does both with no kingdom row.

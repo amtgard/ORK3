@@ -13,10 +13,16 @@
 -- '' = not answered (distinct from 'other', which is "Other / prefer not to say").
 -- NOT NULL DEFAULT '' because yapo drops null assignments.
 --
--- Idempotent: ADD COLUMN / INDEX IF NOT EXISTS; safe to re-run.
+-- recruitment_source_via / _set_at record HOW and WHEN the answer was given:
+-- 'registration' (create-player modals, self-registration) or 'backfill'
+-- (Account modal, later). Backfill only reaches players who stayed, so the
+-- report can separate the two to avoid survivorship bias. '' / NULL = never set.
+-- No index on recruitment_source: the report joins on the PK and buckets in PHP.
+--
+-- Idempotent: ADD COLUMN IF NOT EXISTS; safe to re-run.
 -- After applying: docker restart ork3-php8-app (APCu schema cache).
 
 ALTER TABLE ork_mundane
-  ADD COLUMN IF NOT EXISTS recruitment_source VARCHAR(32) NOT NULL DEFAULT '';
-
-CREATE INDEX IF NOT EXISTS idx_mundane_recruitment_source ON ork_mundane (recruitment_source);
+  ADD COLUMN IF NOT EXISTS recruitment_source VARCHAR(32) NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS recruitment_source_via VARCHAR(16) NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS recruitment_source_set_at DATETIME NULL DEFAULT NULL;
