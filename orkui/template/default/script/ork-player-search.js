@@ -28,14 +28,15 @@
 */
 window.OrkPlayerSearch = (function () {
   var DEBOUNCE = 220, MINLEN = 2, uidSeq = 0;
+  var EXCLUDE_CAP = 200;  // max excludeIds sent server-side; the full set is filtered client-side
   var instances = [];   // module-level registry → ONE set of global listeners, no per-attach leak
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
-  function csv(v){
+  function list(v){
     var a = (typeof v === 'function') ? (v() || []) : (v || []);
-    if (!a.length) return '';
-    return a.filter(function(x){ return x != null && x !== ''; }).join(',');
+    return a.filter(function(x){ return x != null && x !== ''; });
   }
+  function csv(v){ return list(v).join(','); }
 
   // Shared global listeners (registered once for the whole module, not per attach()).
   document.addEventListener('click', function(e){
@@ -91,6 +92,7 @@ window.OrkPlayerSearch = (function () {
     var hasMore = false;
     var lastTerm = '';
     var loading = false;
+    var served = 0;          // rows the server has returned for lastTerm (offset for Load more)
 
     function abortInflight(){ if (ctrl) { ctrl.abort(); ctrl = null; } }
     function close(){
@@ -104,8 +106,15 @@ window.OrkPlayerSearch = (function () {
     function position(){
       var r = input.getBoundingClientRect();
       dd.style.position = 'fixed';
-      dd.style.left = r.left + 'px';
-      dd.style.width = r.width + 'px';
+      // Wider than a narrow input so the detail line (kingdom · park · real name · username)
+      // fits on one line: at least the input's width, ideally DD_WIDTH, never wider than the
+      // viewport minus an 8px gutter each side. Shift left when it would run off the right.
+      var DD_WIDTH = 440, GUTTER = 8;
+      var vw = document.documentElement.clientWidth || window.innerWidth;
+      var width = Math.min(Math.max(r.width, DD_WIDTH), vw - GUTTER * 2);
+      var left = Math.min(r.left, vw - GUTTER - width);
+      dd.style.left = Math.max(GUTTER, left) + 'px';
+      dd.style.width = width + 'px';
       // Flip up / clamp height when there is not enough room below.
       var spaceBelow = window.innerHeight - r.bottom - 8;
       var spaceAbove = r.top - 8;
@@ -125,15 +134,28 @@ window.OrkPlayerSearch = (function () {
       if (p.Active === 0) return ' <span class="ops-ac-badge ops-ac-inactive">Inactive</span>';
       return '';
     }
+    // Detail line: "KCG · Angler's Rift", plus "· Real Name · username" for officers (the
+    // server only sends GivenName/Surname/UserName to officers; restricted names arrive blank).
+    function detailLine(p){
+      var parts = [];
+      if (p.KAbbr) parts.push(p.KAbbr);
+      if (p.ParkName) parts.push(p.ParkName);
+      var real = ((p.GivenName||'') + ' ' + (p.Surname||'')).trim();
+      if (real) parts.push(real);
+      if (p.UserName) parts.push(p.UserName);
+      return parts.map(esc).join(' · ');
+    }
     function rowHtml(p, i){
-      var loc = (p.KAbbr||'') + (p.PAbbr ? ':'+p.PAbbr : '');
+      var detail = detailLine(p);
       var cls = 'ops-ac-item'
         + (p.Banned || p.PenaltyBox || p.Suspended ? ' ops-ac-row-banned' : '')
         + (p.Active === 0 && !p.Banned && !p.PenaltyBox && !p.Suspended ? ' ops-ac-row-inactive' : '');
-      return '<div class="'+cls+'" id="'+ddId+'-opt-'+i+'" role="option" data-i="'+i+'" tabindex="-1">'
-        + esc(p.Persona)
-        + (loc ? ' <span class="ops-ac-loc">('+esc(loc)+')</span>' : '')
-        + badges(p)
+      // Typo-tolerant "close matches" come after every exact match; label where they start.
+      var head = (p.Fuzzy && !(i > 0 && items[i-1] && items[i-1].Fuzzy))
+        ? '<div class="ops-ac-section" aria-hidden="true">Close matches</div>' : '';
+      return head + '<div class="'+cls+'" id="'+ddId+'-opt-'+i+'" role="option" data-i="'+i+'" tabindex="-1">'
+        + '<span class="ops-ac-name">' + esc(p.Persona) + badges(p) + '</span>'
+        + (detail ? '<span class="ops-ac-loc">'+detail+'</span>' : '')
         + '</div>';
     }
     function advUrl(){
@@ -145,24 +167,23 @@ window.OrkPlayerSearch = (function () {
         + (opts.kingdomId ? '&kingdomId=' + encodeURIComponent(opts.kingdomId) : '');
     }
     function render(){
-      var html = '';
-      if (!items.length){
-        html = '<div class="ops-ac-empty">No players found</div>';
+      // An empty page can still have more results behind it (rows filtered client-side
+      // by a long excludeIds list), so the footer is rendered in both cases.
+      var html = items.length
+        ? items.map(rowHtml).join('')
+        : '<div class="ops-ac-empty">No players found</div>';
+      // Footer: when more results exist, split the row — "Load more…" (left) and a real
+      // "…or Advanced Search" link (right) that opens the rich search page in a new tab.
+      // With no more results, just offer the Advanced Search escalation full-width.
+      if (hasMore) {
+        html += '<div class="ops-ac-foot">'
+          + '<span class="ops-ac-more" data-i="'+items.length+'" role="option" id="'+ddId+'-more" tabindex="-1">Load more…</span>'
+          + '<a class="ops-ac-adv" href="'+esc(advUrl())+'" target="_blank" rel="noopener" tabindex="-1">…or Advanced Search</a>'
+          + '</div>';
       } else {
-        html = items.map(rowHtml).join('');
-        // Footer: when more results exist, split the row — "Load more…" (left) and a real
-        // "…or Advanced Search" link (right) that opens the rich search page in a new tab.
-        // With no more results, just offer the Advanced Search escalation full-width.
-        if (hasMore) {
-          html += '<div class="ops-ac-foot">'
-            + '<span class="ops-ac-more" data-i="'+items.length+'" role="option" id="'+ddId+'-more" tabindex="-1">Load more…</span>'
-            + '<a class="ops-ac-adv" href="'+esc(advUrl())+'" target="_blank" rel="noopener" tabindex="-1">…or Advanced Search</a>'
-            + '</div>';
-        } else {
-          html += '<div class="ops-ac-foot">'
-            + '<a class="ops-ac-adv ops-ac-adv-full" href="'+esc(advUrl())+'" target="_blank" rel="noopener" tabindex="-1">Advanced Search</a>'
-            + '</div>';
-        }
+        html += '<div class="ops-ac-foot">'
+          + '<a class="ops-ac-adv ops-ac-adv-full" href="'+esc(advUrl())+'" target="_blank" rel="noopener" tabindex="-1">Advanced Search</a>'
+          + '</div>';
       }
       dd.innerHTML = html;
       position();
@@ -198,9 +219,8 @@ window.OrkPlayerSearch = (function () {
       input.value = p.Persona; close();
       if (opts.onSelect) opts.onSelect(p);
     }
-    function buildUrl(term, offset){
+    function buildUrl(term, offset, ex){
       var uir = opts.uir || window.UIR || '';
-      var ex = csv(opts.excludeIds);
       var rk = csv(opts.restrictKingdomIds);
       return uir + 'SearchAjax/players'
         + '&parkId='    + (opts.parkId    || 0)
@@ -221,7 +241,15 @@ window.OrkPlayerSearch = (function () {
       ctrl = hasAC ? new AbortController() : null;
       loading = true;
       if (!append) showState('ops-ac-loading', 'Searching…');
-      fetch(buildUrl(term, offset), ctrl ? { signal: ctrl.signal } : undefined)
+      // Long exclusion lists (e.g. big attendance rosters) would blow the GET line: send only
+      // the first EXCLUDE_CAP server-side and drop the rest from the returned rows client-side.
+      var exAll = list(opts.excludeIds);
+      var exSet = null;
+      if (exAll.length > EXCLUDE_CAP) {
+        exSet = {};
+        exAll.forEach(function(id){ exSet[String(id)] = 1; });
+      }
+      fetch(buildUrl(term, offset, exAll.slice(0, EXCLUDE_CAP).join(',')), ctrl ? { signal: ctrl.signal } : undefined)
         .then(function(r){
           if (!r.ok) throw new Error('HTTP ' + r.status);
           return r.json();
@@ -231,6 +259,8 @@ window.OrkPlayerSearch = (function () {
           // Tolerate both the envelope {rows,hasMore} and a bare array (defensive).
           var rows = Array.isArray(data) ? data : (data && data.rows) || [];
           hasMore  = Array.isArray(data) ? false : !!(data && data.hasMore);
+          served   = (append ? served : 0) + rows.length;
+          if (exSet) rows = rows.filter(function(p){ return !exSet[String(p.MundaneId)]; });
           if (append) items = items.concat(rows); else items = rows;
           render();
         })
@@ -242,13 +272,14 @@ window.OrkPlayerSearch = (function () {
         });
     }
     function search(term){ lastTerm = term; fetchPage(term, 0, false); }
-    function loadMore(){ if (!hasMore || loading) return; fetchPage(lastTerm, items.length, true); }
+    function loadMore(){ if (!hasMore || loading) return; fetchPage(lastTerm, served, true); }
 
     var inst = { input: input, dd: dd, close: close, position: position };
     instances.push(inst);
 
     function onInput(){
       clearTimeout(timer);
+      abortInflight();                    // every edit cancels the stale request
       if (opts.onClear) opts.onClear();   // any edit invalidates a prior selection
       var t = input.value.trim();
       if (t.length === 0){ close(); return; }
@@ -275,8 +306,11 @@ window.OrkPlayerSearch = (function () {
       }
     }
     function onDdMousedown(e){
+      // Keep focus in the input for ANY mousedown in the dropdown (incl. the Advanced Search
+      // link), so blur-close doesn't hide it before the click lands.
+      e.preventDefault();
       var it = e.target.closest('[role=option]'); if (!it) return;
-      e.preventDefault(); pick(parseInt(it.dataset.i,10));
+      pick(parseInt(it.dataset.i,10));
     }
     function onFocus(){
       if (input.value.trim() === '' && opts.preload && opts.preload.length) {

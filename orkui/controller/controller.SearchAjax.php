@@ -52,7 +52,7 @@ class Controller_SearchAjax extends Controller
         };
 
         $limit  = min(max((int)($_GET['limit'] ?? 15), 1), 100);
-        $offset = max((int)($_GET['offset'] ?? 0), 0);
+        $offset = min(max((int)($_GET['offset'] ?? 0), 0), 2000);
 
         $svc  = new SearchService();
         // Probe one extra row to know whether a "Load more…" page exists, without a second COUNT query.
@@ -65,7 +65,9 @@ class Controller_SearchAjax extends Controller
             'excludeKingdomId'   => (int)($_GET['excludeKingdomId'] ?? 0) ?: null,
             'excludeParkId'      => (int)($_GET['excludeParkId']    ?? 0) ?: null,
             'excludeIds'         => $csvIds('excludeIds'),
-            'bannedScope'        => $_GET['bannedScope'] ?? '',
+            // Banned scope is derived server-side from the viewer's grants; the client may only
+            // narrow it ('kingdom'), never widen it.
+            'bannedScope'        => (($_GET['bannedScope'] ?? '') === 'kingdom') ? 'kingdom' : '',
             'limit'              => $limit + 1,
             'offset'             => $offset,
             'token'              => $this->session->token ?? null,
@@ -85,7 +87,8 @@ class Controller_SearchAjax extends Controller
     {
         header('Content-Type: application/json');
         if (!isset($this->session->user_id)) {
-            echo json_encode(['rows' => [], 'hasMore' => false, 'offset' => 0, 'canSeeRealName' => 0, 'canSeeBanned' => 0]);
+            // needLogin lets the page show a sign-in prompt instead of "No players found".
+            echo json_encode(['rows' => [], 'hasMore' => false, 'offset' => 0, 'canSeeRealName' => 0, 'canSeeBanned' => 0, 'needLogin' => 1]);
             exit;
         }
         $svc = new SearchService();

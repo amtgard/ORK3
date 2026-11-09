@@ -1,3 +1,4 @@
+<?php $__h = function($v, $double = true){ return is_scalar($v) ? htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8', $double) : ''; }; ?>
 <script type='text/javascript'>
 	$(function() {
 		$( "#SrcParkName" ).autocomplete({
@@ -24,6 +25,9 @@
 			select: function (e, ui) {
 				showLabel('#SrcParkName', ui);
 				$('#SrcParkId').val(ui.item.value);
+				$('#PlayerName').val('');
+				$('#MundaneId').val('');
+				OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { parkId: parseInt(ui.item.value, 10) || 0 });
 				return false;
 			}
 		});
@@ -52,12 +56,13 @@
 			delay: 500,
 			select: function (e, ui) {
 				showLabel('#ParkName', ui);
-				$('#ParkId').val(ui.item.value); if (window.OrkPlayerSearch) OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { parkId: parseInt(ui.item.value, 10) || 0 });
+				$('#ParkId').val(ui.item.value);
 				return false;
 			}
 		});
 		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
 			uir: '<?=UIR ?>',
+			parkId: <?=valid_id($Admin_moveplayer['SrcParkId'] ?? 0) ? (int)$Admin_moveplayer['SrcParkId'] : (valid_id($ParkId) ? (int)$ParkId : 0) ?>,
 			onSelect: function(p) {
 				document.getElementById('MundaneId').value = p.MundaneId;
 			},
@@ -80,24 +85,24 @@
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/moveplayer/submit'>
 		<div>
 			<span>Player's Current Home Park:</span>
-			<span><input type='text' value='<?=$Admin_moveplayer['SrcParkName'] ?>' name='SrcParkName' id='SrcParkName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_moveplayer['SrcParkName'] ?? '') ?>' name='SrcParkName' id='SrcParkName' /></span>
 		</div>
 		<div>
 			<span>Player:</span>
-			<span><input type='text' value='<?=$Admin_moveplayer['PlayerName'] ?>' name='PlayerName' id='PlayerName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_moveplayer['PlayerName'] ?? '') ?>' name='PlayerName' id='PlayerName' /></span>
 		</div>
 <?php if (! valid_id($ParkId)) : ?>
 		<div>
 			<span>New Park:</span>
-			<span><input type='text' class='required-field' value='<?=$Admin_moveplayer['ParkName'] ?>' name='ParkName' id='ParkName' /></span>
+			<span><input type='text' class='required-field' value='<?=$__h($Admin_moveplayer['ParkName'] ?? '') ?>' name='ParkName' id='ParkName' /></span>
 		</div>
 <?php endif; ?>
 		<div>
 			<span></span>
 			<span><input type='submit' value='Move Player' name='Move Player' /></span>
 		</div>
-		<input type='hidden' name='MundaneId' id='MundaneId' value='<?=$Admin_moveplayer['MundaneId'] ?>' />
-		<input type='hidden' name='ParkId' id='ParkId' value='<?=valid_id($ParkId)?$ParkId:$Admin_moveplayer['ParkId'] ?>' />
-		<input type='hidden' name='SrcParkId' id='SrcParkId' value='<?=$Admin_moveplayer['SrcParkId'] ?>' />
+		<input type='hidden' name='MundaneId' id='MundaneId' value='<?=$__h($Admin_moveplayer['MundaneId'] ?? '') ?>' />
+		<input type='hidden' name='ParkId' id='ParkId' value='<?=$__h(valid_id($ParkId)?$ParkId:$Admin_moveplayer['ParkId']) ?>' />
+		<input type='hidden' name='SrcParkId' id='SrcParkId' value='<?=$__h($Admin_moveplayer['SrcParkId'] ?? '') ?>' />
 	</form>
 </div>

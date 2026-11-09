@@ -22,6 +22,8 @@ class SearchService extends Ork3
         $unit->clear();
         $unit->active = 'Active';
         $unit->like('name', "%$name%");
+        // Bound the result set in SQL; the loop below emits at most $limit + 1 rows.
+        $unit->limit(max((int)$limit, 0) + 1, 0);
         if ($unit->find()) {
             $r = array();
             do {
@@ -33,6 +35,9 @@ class SearchService extends Ork3
                         'Url' => $unit->url
                     );
             } while ($unit->next() && $limit-- > 0);
+            if (strlen($name) > 3) {
+                return $r;
+            }
             return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
         }
         return array();
@@ -229,6 +234,10 @@ class SearchService extends Ork3
         } else {
             $sql .= " order by COALESCE(k.name, pk.name), p.name, e.name";
         }
+        // Bound the result set in SQL (the fetch loop below stops at $limit rows anyway).
+        if (!is_null($limit) && (int)$limit > 0) {
+            $sql .= " limit " . (int)$limit;
+        }
         $d = $this->db->query($sql);
         $i = 0;
         $r = array();
@@ -271,7 +280,7 @@ class SearchService extends Ork3
     public function Kingdom($name, $limit = null)
     {
 
-        $key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $kingdom_id, $limit));
+        $key = Ork3::$Lib->ghettocache->key(array(substr($name, 0, 3), $limit));
         // Only serve cache for short prefixes to avoid the truncation collision.
         if (strlen($name) <= 3 && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false) {
             return $cache;
@@ -295,6 +304,9 @@ class SearchService extends Ork3
                     $limit--;
                 }
             } while ($kingdom->next());
+            if (strlen($name) > 3) {
+                return $r;
+            }
             return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
         } else {
             return array();
@@ -337,6 +349,9 @@ class SearchService extends Ork3
                 'Active'      => $d->active,
             );
         }
+        if (strlen($name) != 2) {
+            return $r;
+        }
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $r);
     }
     public function magic_search($term, $kingdom_id, $park_id)
@@ -374,14 +389,14 @@ class SearchService extends Ork3
         // clear it so an explicit Token is evaluated for this call (not a prior actor).
         // IsAuthorized/HasAuthority also leave bound parameters on the shared DB handle;
         // clear them so the next raw query in this function doesn't try to bind them.
-        $is_ork_admin = false;
         if (!empty($token)) {
             unset($_SESSION['is_authorized_mundane_id']);
-            $_caller_uid = Ork3::$Lib->authorization->IsAuthorized($token);
-            if ($_caller_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_caller_uid, AUTH_ADMIN, null, null)) {
-                $is_ork_admin = true;
-            }
         }
+        $_caps        = $this->viewerCaps($token);
+        $is_ork_admin = $_caps['is_admin'];
+        // Real-name and username matching is for officers only; everyone else matches
+        // persona (and an exact numeric player id) only.
+        $is_officer   = $_caps['is_officer'];
         $this->db->clear();
         // Restricted gate fragments for the WHERE clause — empty wrapper for admins so the
         // gate effectively disappears.
@@ -391,13 +406,18 @@ class SearchService extends Ork3
         $searchtokens = preg_split("/[\s,-]+/", $search ?? '');
         $opt = array("1");
         $limit = min(valid_id($limit) ? $limit : 15, 100);
-        switch (strtoupper($type)) {
+        $_search_type = strtoupper($type);
+        if (!$is_officer && in_array($_search_type, ['MUNDANE', 'USER'], true)) {
+            // Real-name / username lookups are officer-only: match nothing.
+            $_search_type = 'NONE';
+        }
+        switch ($_search_type) {
+            case 'NONE':
+                $s = "0";
+                break;
             case 'PERSONA':
-                if (count($searchtokens) > 0) {
-                    $s = implode(' or ', array_map(function ($t) {
-                        return "`persona` like '%" . $this->likeEscape($t) . "%'";
-                    }, $searchtokens));
-                }
+                // Every typed word must appear in the persona, in any order.
+                $s = $this->nameMatchStrict($this->nameTokens((string)$search), false, false) ?: '0';
                 $order = "order by m.active DESC, persona,surname,given_name";
                 $opt[] = "length(`persona`) > 0";
                 break;
@@ -420,15 +440,12 @@ class SearchService extends Ork3
                 $opt[] = "length(`username`) > 0";
                 break;
             default:
-                $zztop = $searchtokens[0] . '*';
-                // MATCH-AGAINST is the fast path (fulltext index), but it tokenizes
-                // on underscores — so e.g. `lord_kismet_shenchu` is one token and
-                // `kis*` won't prefix-match it. OR with the LIKE clauses so
-                // substring hits succeed even when fulltext misses.
-                $s = "(match(`given_name`, `surname`, `other_name`, `username`, `persona`) against ('" . $this->likeEscape($zztop) . "' in boolean mode)
-				or `username` like '%" . $this->likeEscape($search) . "%'
-				or `other_name` like '%" . $this->likeEscape($search) . "%' or `persona` like '%" . $this->likeEscape($search) . "%'
-				or " . $_rg_open . "`given_name` like '%" . $this->likeEscape($search) . "%' or `surname` like '%" . $this->likeEscape($search) . "%' or concat(`given_name`,' ',`surname`) like '%" . $this->likeEscape($search) . "%'" . $_rg_close . ")";
+                $_id_match = ctype_digit((string)$search) ? " or m.`mundane_id` = " . (int)$search : '';
+                // Every typed word must appear, in any order (see nameMatchStrict). Persona for
+                // everyone; username, other_name and real names for officers only (restricted
+                // real names: admins only). Replaces the old whole-phrase LIKE + first-word
+                // fulltext MATCH, which missed "Tobias Ard"-style queries.
+                $s = "(" . ($this->nameMatchStrict($this->nameTokens((string)$search), $is_officer, $is_ork_admin, ['other_name']) ?: '0') . $_id_match . ")";
                 break;
         }
         if ($persona_required === true) {
@@ -444,19 +461,28 @@ class SearchService extends Ork3
             $opt[] = "waivered =".($waivered ? 1 : 0);
         }
         $opt[] = "(m.kingdom_id != 15 AND (p.kingdom_id IS NULL OR p.kingdom_id != 15))";
+        // Banned (suspended / penalty box) players are visible only within the viewer's
+        // grant-derived banned scope, exactly as in RankedPlayers.
+        if ($_caps['banned_kids'] !== 'all') {
+            $opt[] = empty($_caps['banned_kids'])
+                ? "(m.suspended = 0 AND m.penalty_box = 0)"
+                : "((m.suspended = 0 AND m.penalty_box = 0) OR m.kingdom_id IN (" . implode(',', $_caps['banned_kids']) . "))";
+        }
         $order = $order ?? 'order by m.active DESC, persona';
         // Relevance ranking: float exact and prefix persona matches to the top so a short,
         // common token (e.g. "Silent") surfaces its exact match before the row limit truncates
         // the alphabetical tail. Every search type's $order begins with "order by m.active DESC,".
-        // Escape for a SQL string literal by doubling single quotes. NOTE: the file-wide
-        // use of mysql_real_escape_string elsewhere is a no-op polyfill (pre-existing,
-        // separate issue) — this one new line does its own proper escaping.
-        $_rel = str_replace("'", "''", (string)$search);
-        $order = preg_replace(
-            '/^order by m\.active DESC,/i',
-            "order by m.active DESC, (`persona` = '{$_rel}') DESC, (`persona` like '{$_rel}%') DESC,",
-            $order
-        );
+        // Escape for a SQL string literal: backslash FIRST, then the single quote (MariaDB
+        // treats backslash as an escape inside literals). The LIKE literal also escapes the
+        // wildcards. Spliced with plain string concatenation, never as a regex replacement,
+        // so `$n` / `\n` in the search text are not interpreted.
+        $_rel      = str_replace(['\\', "'"], ['\\\\', "''"], (string)$search);
+        $_rel_like = $this->likeEscape($search);
+        $_order_prefix = 'order by m.active DESC,';
+        if (stripos($order, $_order_prefix) === 0) {
+            $order = "order by m.active DESC, (`persona` = '" . $_rel . "') DESC, (`persona` like '" . $_rel_like . "%') DESC,"
+                . substr($order, strlen($_order_prefix));
+        }
         $sql = "select 
 						`mundane_id`, m.`active`, `given_name`, `surname`, `other_name`, concat(`given_name`,' ',`surname`) as `mundane`, `username`, `persona`, p.park_id, k.kingdom_id, 
 						`restricted`, `suspended`, `suspended_at`, `suspended_until`, `waivered`, `company_id`, `penalty_box`, k.name as kingdom_name, p.name as park_name, p.abbreviation as p_abbr, k.abbreviation as k_abbr,
@@ -477,7 +503,7 @@ class SearchService extends Ork3
                         'GivenName' => '',//$q->restricted==1?"Restricted":$q->given_name,
                         'Surname' => '',//$q->restricted==1?"Restricted":$q->surname,
                         'Mundane' => '',//$q->mundane,
-                        'UserName' => $q->username,
+                        'UserName' => $is_officer ? $q->username : '',
                         'Persona' => $q->persona,
                         'Restricted' => $q->restricted,
                         'KingdomId' => $q->kingdom_id,
@@ -490,8 +516,8 @@ class SearchService extends Ork3
                         'KAbbr' => $q->k_abbr,
                         'PAbbr' => $q->p_abbr,
                         'Suspended' => $q->suspended,
-                        'SuspendedAt' => $q->suspended_at,
-                        'SuspendedUntil' => $q->suspended_until,
+                        'SuspendedAt' => $is_officer ? $q->suspended_at : null,
+                        'SuspendedUntil' => $is_officer ? $q->suspended_until : null,
                         // Whether a mailbox exists, never the address itself. The IDP
                         // needs this to avoid offering "Email Code" for a record that
                         // can never receive one -- 74% of active players have no email
@@ -520,8 +546,196 @@ class SearchService extends Ork3
         return str_replace(['\\', "'", '%', '_'], ['\\\\', "''", '\\%', '\\_'], (string)$s);
     }
 
+    /* ── Player name matching ──────────────────────────────────────────────────────────────
+     * A query is split into words (letters/digits only). A player matches when EVERY word
+     * appears somewhere in the name, in any order, so "Tobias Ard", "ard tob" and "mal" all
+     * find "Tobias Malcom Ardente". Because words are letters/digits only they can never
+     * carry quotes, backslashes or LIKE/REGEXP metacharacters, so they are safe to inline.
+     * Persona is matched for everyone; username + real names for officers only, and a
+     * restricted player's real name for global admins only (same rule as before).
+     *
+     * Typo tolerance (fuzzy fallback): each word of 4+ characters may also match with ONE
+     * edit — a wrong, missing, extra, or swapped pair of letters (Damerau distance 1) —
+     * expressed as LIKE patterns so it reuses the same WHERE/scoping. It only runs when the
+     * strict search comes up short, and its rows are ranked below every strict match.
+     * ──────────────────────────────────────────────────────────────────────────────────── */
+
+    /** Lower-cased letter/digit words of a search string; deduped, at most 6. */
+    private function nameTokens(string $s): array
+    {
+        $parts = preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($s, 'UTF-8'), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        return array_slice(array_values(array_unique($parts)), 0, 6);
+    }
+
+    /** One LIKE body (already safe) tested against every column this viewer may match on. */
+    private function nameColumnsLike(string $body, bool $is_officer, bool $is_admin, array $extraOfficerCols = []): string
+    {
+        $sql = "m.persona LIKE '{$body}'";
+        if ($is_officer) {
+            $real = "m.given_name LIKE '{$body}' OR m.surname LIKE '{$body}'";
+            $sql .= " OR m.username LIKE '{$body}' OR " . ($is_admin ? $real : "(m.restricted = 0 AND ({$real}))");
+            foreach ($extraOfficerCols as $col) {
+                $sql .= " OR m.{$col} LIKE '{$body}'";
+            }
+        }
+        return "({$sql})";
+    }
+
+    /** Strict match: every word is a substring of some name column. '' when there are no words. */
+    private function nameMatchStrict(array $tokens, bool $is_officer, bool $is_admin, array $extraOfficerCols = []): string
+    {
+        $parts = [];
+        foreach ($tokens as $t) {
+            $parts[] = $this->nameColumnsLike('%' . $t . '%', $is_officer, $is_admin, $extraOfficerCols);
+        }
+        return $parts ? '(' . implode(' AND ', $parts) . ')' : '';
+    }
+
+    /**
+     * Match quality on the persona (lower is better): 0 exact, 1 persona starts with the
+     * query, 2 every word starts a word of the persona, 3 anything else (mid-word hit, or a
+     * real-name/username hit). Used after tier/ring so the right person surfaces first.
+     */
+    private function nameRankSql(string $search, array $tokens): string
+    {
+        $phrase = trim($search);
+        $eq     = str_replace(['\\', "'"], ['\\\\', "''"], $phrase);
+        $pre    = $this->likeEscape($phrase);
+        $starts = [];
+        foreach ($tokens as $t) {
+            $starts[] = "m.persona REGEXP '(^|[^[:alnum:]])" . $t . "'";
+        }
+        $allStart = $starts ? implode(' AND ', $starts) : '0';
+        return "CASE WHEN m.persona = '{$eq}' THEN 0 WHEN m.persona LIKE '{$pre}%' THEN 1 WHEN {$allStart} THEN 2 ELSE 3 END";
+    }
+
+    /** All Damerau-distance-1 variants of a word as LIKE bodies ('_' = any one character). */
+    private function typoVariants(string $t): array
+    {
+        $chars = preg_split('//u', $t, -1, PREG_SPLIT_NO_EMPTY);
+        $n = count($chars);
+        $out = [];
+        for ($i = 0; $i < $n; $i++) {
+            $sub = $chars;
+            $sub[$i] = '_';
+            $out[] = implode('', $sub);   // wrong letter
+            $del = $chars;
+            array_splice($del, $i, 1);
+            $out[] = implode('', $del); // extra letter typed
+        }
+        for ($i = 0; $i <= $n; $i++) {
+            $ins = $chars;
+            array_splice($ins, $i, 0, ['_']);
+            $out[] = implode('', $ins); // letter missed
+        }
+        for ($i = 0; $i < $n - 1; $i++) {
+            $sw = $chars;
+            [$sw[$i], $sw[$i + 1]] = [$sw[$i + 1], $sw[$i]];
+            $out[] = implode('', $sw); // swapped pair
+        }
+        // A variant must keep at least 3 real letters, or it matches nearly everything.
+        $out = array_filter($out, fn ($v) => mb_strlen(str_replace('_', '', $v)) >= 3 && $v !== $t);
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * Fuzzy match: every word matches strictly OR (words of 4+ chars) within one edit; the
+     * strict set is excluded so these rows are only the extra "close matches". '' when no
+     * word is long enough to fuzz.
+     */
+    private function nameMatchFuzzy(array $tokens, bool $is_officer, bool $is_admin, array $extraOfficerCols = []): string
+    {
+        $parts = [];
+        $anyFuzz = false;
+        foreach ($tokens as $t) {
+            $alts = [$this->nameColumnsLike('%' . $t . '%', $is_officer, $is_admin, $extraOfficerCols)];
+            $n = mb_strlen($t);
+            if ($n >= 4) {
+                $anyFuzz = true;
+                // Typos are tolerated on the persona only (real names still match exactly for
+                // officers) — 5x fewer patterns. Cheap prefilter first: any one-edit variant
+                // leaves the word's first or last floor((n-1)/2) letters intact, so rows with
+                // neither half skip the ~30 variant LIKEs (measured 5-10x faster, same rows).
+                $h  = intdiv($n - 1, 2);
+                $h1 = mb_substr($t, 0, $h);
+                $h2 = mb_substr($t, $n - $h);
+                $variants = array_map(fn ($v) => "m.persona LIKE '%{$v}%'", $this->typoVariants($t));
+                $alts[] = "((m.persona LIKE '%{$h1}%' OR m.persona LIKE '%{$h2}%') AND (" . implode(' OR ', $variants) . "))";
+            }
+            $parts[] = '(' . implode(' OR ', $alts) . ')';
+        }
+        if (!$anyFuzz) {
+            return '';
+        }
+        $strict = $this->nameMatchStrict($tokens, $is_officer, $is_admin, $extraOfficerCols);
+        // COALESCE: a NULL real-name column makes the strict test NULL (not false), and a bare
+        // NOT would then drop the row from the fuzzy set too.
+        return '(' . implode(' AND ', $parts) . ' AND COALESCE(' . $strict . ', 0) = 0)';
+    }
+
+    /** Optimal-string-alignment (Damerau) distance between two short lower-case strings. */
+    private static function osaDistance(string $a, string $b): int
+    {
+        $a = preg_split('//u', $a, -1, PREG_SPLIT_NO_EMPTY);
+        $b = preg_split('//u', $b, -1, PREG_SPLIT_NO_EMPTY);
+        $n = count($a);
+        $m = count($b);
+        $d = [];
+        for ($i = 0; $i <= $n; $i++) {
+            $d[$i][0] = $i;
+        }
+        for ($j = 0; $j <= $m; $j++) {
+            $d[0][$j] = $j;
+        }
+        for ($i = 1; $i <= $n; $i++) {
+            for ($j = 1; $j <= $m; $j++) {
+                $cost = ($a[$i - 1] === $b[$j - 1]) ? 0 : 1;
+                $d[$i][$j] = min($d[$i - 1][$j] + 1, $d[$i][$j - 1] + 1, $d[$i - 1][$j - 1] + $cost);
+                if ($i > 1 && $j > 1 && $a[$i - 1] === $b[$j - 2] && $a[$i - 2] === $b[$j - 1]) {
+                    $d[$i][$j] = min($d[$i][$j], $d[$i - 2][$j - 2] + 1);
+                }
+            }
+        }
+        return $d[$n][$m];
+    }
+
+    /**
+     * How close a fuzzy row is to the query (lower is better): for each query word, the
+     * smallest distance to any word of the given name texts — comparing against the word's
+     * same-length prefix too, so a half-typed word ("tobai") scores as close to "tobias".
+     */
+    private function typoScore(array $tokens, array $texts): int
+    {
+        $words = [];
+        foreach ($texts as $txt) {
+            foreach ($this->nameTokens((string)$txt) as $w) {
+                $words[] = $w;
+            }
+        }
+        $total = 0;
+        foreach ($tokens as $t) {
+            $best = 9;
+            $tl = mb_strlen($t);
+            foreach ($words as $w) {
+                if (mb_strpos($w, $t) !== false) {
+                    $best = 0;
+                    break;
+                }
+                $best = min($best, self::osaDistance($t, $w), self::osaDistance($t, mb_substr($w, 0, $tl)) + 1);
+            }
+            $total += $best;
+        }
+        return $total;
+    }
+
+    /** @var array<string, array{0:int,1:int,2:string}> per-request memo of resolveAbbrevPrefix() */
+    private static $abbrevMemo = [];
+
     private function resolveAbbrevPrefix($q)
     {
+        if (isset(self::$abbrevMemo[$q])) {
+            return self::$abbrevMemo[$q];
+        }
         $filterKid = 0;
         $filterPid = 0;
         $search = $q;
@@ -544,7 +758,103 @@ class SearchService extends Ork3
             }
             $search = trim($m[3]);
         }
-        return [$filterKid, $filterPid, $search];
+        return self::$abbrevMemo[$q] = [$filterKid, $filterPid, $search];
+    }
+
+    /** @var array<string, array> per-request memo of viewerCaps(), keyed by token */
+    private static $viewerCapsMemo = [];
+
+    /**
+     * The one definition of what a viewer may see in player search, derived ONLY from the
+     * session's grants (never from client parameters).
+     *   is_officer  — global admin, or a create/edit/admin grant scoped to a PARK or KINGDOM
+     *                 (event and unit grants do not count).
+     *   banned_kids — 'all' for global admins and kingdom-level officers; for park-only officers
+     *                 the union of GetFamilyKingdomIds() of their parks' kingdoms; [] otherwise.
+     * Memoised per request, and cached 60s per uid so revoked grants lapse quickly.
+     *
+     * @return array{uid:int, is_admin:bool, is_officer:bool, banned_kids:string|list<int>}
+     */
+    private function viewerCaps($token): array
+    {
+        $none = ['uid' => 0, 'is_admin' => false, 'is_officer' => false, 'banned_kids' => []];
+        if (empty($token) || !is_string($token)) {
+            return $none;
+        }
+        if (isset(self::$viewerCapsMemo[$token])) {
+            return self::$viewerCapsMemo[$token];
+        }
+        $uid = (int)Ork3::$Lib->authorization->IsAuthorized($token);
+        if ($uid <= 0) {
+            $this->db->clear();
+            return self::$viewerCapsMemo[$token] = $none;
+        }
+        $cacheKey = Ork3::$Lib->ghettocache->key([$uid]);
+        $cached   = Ork3::$Lib->ghettocache->get(__CLASS__ . '.viewerCaps', $cacheKey, 60);
+        if (is_array($cached) && isset($cached['uid']) && (int)$cached['uid'] === $uid) {
+            $this->db->clear();
+            return self::$viewerCapsMemo[$token] = $cached;
+        }
+
+        $caps = ['uid' => $uid, 'is_admin' => false, 'is_officer' => false, 'banned_kids' => []];
+        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null)) {
+            $caps['is_admin']    = true;
+            $caps['is_officer']  = true;
+            $caps['banned_kids'] = 'all';
+        } else {
+            // Park/kingdom grants only. A row with a kingdom_id is a kingdom grant (matching
+            // Authorization::DetermineAuthType, where kingdom overrides park).
+            $this->db->clear();
+            $rs = $this->db->query("SELECT a.park_id, a.kingdom_id, p.kingdom_id AS park_kingdom_id
+                FROM " . DB_PREFIX . "authorization a
+                LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id
+                WHERE a.mundane_id = {$uid}
+                  AND a.role IN ('create', 'edit', 'admin')
+                  AND a.event_id = 0 AND a.unit_id = 0
+                  AND (a.park_id > 0 OR a.kingdom_id > 0)");
+            $kids = [];
+            $all  = false;
+            if ($rs !== false && $rs->size() > 0) {
+                while ($rs->Next()) {
+                    $caps['is_officer'] = true;
+                    if ((int)$rs->kingdom_id > 0) {
+                        $all = true;
+                        break;
+                    }
+                    if ((int)$rs->park_kingdom_id > 0) {
+                        $kids[(int)$rs->park_kingdom_id] = true;
+                    }
+                }
+            }
+            if ($all) {
+                $caps['banned_kids'] = 'all';
+            } else {
+                $fam = [];
+                foreach (array_keys($kids) as $kid) {
+                    foreach ((array)Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid) as $fk) {
+                        if ((int)$fk > 0) {
+                            $fam[(int)$fk] = (int)$fk;
+                        }
+                    }
+                }
+                $caps['banned_kids'] = array_values($fam);
+            }
+        }
+        $this->db->clear();
+        self::$viewerCapsMemo[$token] = $caps;
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.viewerCaps', $cacheKey, $caps);
+    }
+
+    /**
+     * viewerCaps() for the UI layer (Controller_Search::advanced via Model_Search), so the page
+     * flags use the same officer definition as the server. The underscore keeps it off the JSON
+     * service's public-method surface.
+     *
+     * @return array{uid:int, is_admin:bool, is_officer:bool, banned_kids:string|list<int>}
+     */
+    public function viewer_caps($token): array
+    {
+        return $this->viewerCaps($token);
     }
 
     /**
@@ -558,14 +868,17 @@ class SearchService extends Ork3
      *   excludeKingdomId   (int)    omit members of this kingdom (move-INTO-kingdom context)
      *   excludeParkId      (int)    omit members of this park    (move-INTO-park context)
      *   excludeIds         (int[])  omit specific mundane ids    (already-added / opposite merge field)
-     *   limit              (int, default 15, clamped 1..100), offset (int, default 0)  — paging
-     *   token              (string) session token — gates banned visibility + restricted real names
-     *   bannedScope        ('kingdom'|'all') override for how wide banned players are surfaced
+     *   limit              (int, default 15, clamped 1..101 — 101 leaves room for a caller's
+     *                      +1 "has more" probe), offset (int, default 0, capped 2000) — paging
+     *   token              (string) session token — gates banned visibility + real-name matching
+     *   bannedScope        ('kingdom'|'all') may only NARROW the banned scope; 'all' is honoured
+     *                      only for viewers already entitled to Amtgard-wide banned visibility
      *
      * Tiers (always, every surface): 0 active, 1 inactive (last resort), 2 banned. Banned
-     * (suspended OR penalty_box) is shown ONLY to viewers holding CREATE/EDIT authority relevant
-     * to the surface, and is scoped one level wider than the active centre — a park surface
-     * surfaces the kingdom's banned players; a kingdom or unscoped surface surfaces Amtgard-wide.
+     * (suspended OR penalty_box) visibility is derived ONLY from the viewer's grants (viewerCaps):
+     * global admins and kingdom-level officers see Amtgard-wide, park-only officers see their
+     * parks' kingdom families, everyone else sees none. A park surface additionally narrows the
+     * banned tier to the park kingdom's family.
      *
      * Legacy positional signature ($q, $parkId, $kingdomId, $restrictTo, $includeInactive,
      * $includeSuspended, $limit, $token, $excludeKingdomId, $excludeParkId, $restrictKingdomIds)
@@ -603,8 +916,8 @@ class SearchService extends Ork3
         $exclude_kingdom_id = (int)($o['excludeKingdomId'] ?? 0);
         $exclude_park_id    = (int)($o['excludeParkId']    ?? 0);
         $restrict_to        = in_array(($o['restrictTo'] ?? ''), ['park', 'kingdom'], true) ? $o['restrictTo'] : '';
-        $limit              = min(max((int)($o['limit'] ?? 15), 1), 100);
-        $offset             = max((int)($o['offset'] ?? 0), 0);
+        $limit              = min(max((int)($o['limit'] ?? 15), 1), 101);
+        $offset             = min(max((int)($o['offset'] ?? 0), 0), 2000);
         $token              = $o['token'] ?? null;
         $banned_scope_req   = in_array(($o['bannedScope'] ?? ''), ['kingdom', 'all'], true) ? $o['bannedScope'] : '';
 
@@ -629,8 +942,10 @@ class SearchService extends Ork3
         list($filterKid, $filterPid, $search) = $this->resolveAbbrevPrefix($q);
         $term = $this->likeEscape($search);
 
-        // Derive the ring-centre kingdom from the park when only a park id was supplied.
-        if ($park_id > 0 && $kingdom_id <= 0) {
+        // Derive the ring-centre kingdom from the park whenever a park id is supplied; a
+        // mismatching client kingdomId is ignored.
+        if ($park_id > 0) {
+            $kingdom_id = 0;
             $rs = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
             if ($rs !== false && $rs->size() > 0) {
                 $rs->Next();
@@ -638,49 +953,25 @@ class SearchService extends Ork3
             }
         }
 
-        // Authorisation: only viewers with CREATE/EDIT authority relevant to the surface may see
-        // banned players. HasAuthority(..., AUTH_EDIT) is true for create-, edit-, scoped-admin- and
-        // global-admin-holders (and kingdom officers cascade down onto their parks), so it is the
-        // correct "create-or-edit-or-higher" probe.
-        $uid = 0;
-        $is_admin = false;
-        if (!empty($token)) {
-            $uid = (int)Ork3::$Lib->authorization->IsAuthorized($token);
-            if ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null)) {
-                $is_admin = true;
-            }
-        }
-        $can_see_banned = false;
-        if ($is_admin) {
-            $can_see_banned = true;
-        } elseif ($uid > 0) {
-            if ($park_id > 0) {
-                $can_see_banned = (bool)Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_EDIT);
-            } elseif ($kingdom_id > 0) {
-                $can_see_banned = (bool)Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT);
-            } else {
-                $grants = Ork3::$Lib->authorization->GetAuthorizations_h($uid);
-                if (is_array($grants)) {
-                    foreach ($grants as $g) {
-                        if (in_array(strtolower($g['Role'] ?? ''), ['create', 'edit', 'admin'], true)) {
-                            $can_see_banned = true;
-                            break;
-                        }
-                    }
-                }
-            }
+        // Authorisation comes only from the viewer's grants (see viewerCaps).
+        $caps       = $this->viewerCaps($token);
+        $is_admin   = $caps['is_admin'];
+        $is_officer = $caps['is_officer'];
+        $banned_cap = $caps['banned_kids'];   // 'all' | int[]
+        if ($banned_scope_req === 'all' && $banned_cap !== 'all') {
+            $banned_scope_req = '';
         }
 
-        // Banned tier is scoped one level wider than the active centre. On a park surface (no hard
-        // restriction) banned is capped to the park kingdom's family; everywhere else, Amtgard-wide.
-        $banned_family_kids = [];
-        if ($can_see_banned) {
-            $widen_to_family = ($banned_scope_req === 'kingdom')
-                || ($banned_scope_req === '' && $park_id > 0 && empty($restrict_kids) && $restrict_to === '' && $filterPid === 0 && $filterKid === 0);
-            if ($widen_to_family && $kingdom_id > 0) {
-                $banned_family_kids = Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id);
-            }
+        // The client may only NARROW the banned cap: bannedScope 'kingdom', or a plain park
+        // surface (no hard restriction), intersects it with the surface kingdom's family.
+        $narrow_to_family = ($banned_scope_req === 'kingdom')
+            || ($banned_scope_req === '' && $park_id > 0 && empty($restrict_kids) && $restrict_to === '' && $filterPid === 0 && $filterKid === 0);
+        if ($narrow_to_family && $kingdom_id > 0 && ($banned_cap === 'all' || !empty($banned_cap))) {
+            $fam = array_map('intval', (array)Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id));
+            $banned_cap = ($banned_cap === 'all') ? $fam : array_values(array_intersect($banned_cap, $fam));
         }
+        $can_see_banned     = ($banned_cap === 'all') || !empty($banned_cap);
+        $banned_family_kids = ($banned_cap === 'all') ? [] : $banned_cap;
 
         $tier = "CASE WHEN (m.suspended = 1 OR m.penalty_box = 1) THEN 2 WHEN m.active = 0 THEN 1 ELSE 0 END";
         if ($park_id > 0) {
@@ -694,38 +985,43 @@ class SearchService extends Ork3
         $where = ["LENGTH(m.persona) > 0"];
         $where[] = "(m.kingdom_id != 15 AND (p.kingdom_id IS NULL OR p.kingdom_id != 15))";
 
+        // Name match (see nameMatchStrict): every typed word must appear, in any order. Persona
+        // for everyone; username + real names for officers (restricted real names: admins only).
+        $tokens     = $this->nameTokens($search);
+        $name_match = $this->nameMatchStrict($tokens, $is_officer, $is_admin);
+        if ($name_match === '') {
+            // No letters/digits left (e.g. a bare "KD:PK" prefix): the prefix filter alone scopes it.
+            $name_match = ($filterKid > 0 || $filterPid > 0) ? '1' : '0';
+        }
         if ($numeric_id > 0) {
-            // Direct id lookup: match the exact player and ignore proximity/scope restrictions so a
-            // pasted id resolves on any surface. Tier visibility (active/inactive/banned-auth) and the
-            // kingdom-15 archive exclusion below still apply.
-            $where[] = "m.mundane_id = {$numeric_id}";
+            // A digits-only query matches the exact player id (ranked first) OR the usual name
+            // match, so numeric personas stay findable. Hard scope/exclude filters still apply.
+            $where[] = strlen($q) >= 2
+                ? "(m.mundane_id = {$numeric_id} OR {$name_match})"
+                : "m.mundane_id = {$numeric_id}";
         } else {
-            $name_match = $is_admin
-                ? "OR m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'"
-                : "OR (m.restricted = 0 AND (m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'))";
-            $where[] = "(m.persona LIKE '%{$term}%' OR m.username LIKE '%{$term}%' {$name_match})";
-
-            if ($filterPid > 0) {
-                $where[] = "m.park_id = {$filterPid}";
-            } elseif ($filterKid > 0) {
-                $where[] = "m.kingdom_id = {$filterKid}";
-            } elseif (!empty($restrict_kids)) {
-                $where[] = "m.kingdom_id IN (" . implode(',', $restrict_kids) . ")";
-            } elseif ($restrict_to === 'park' && $park_id > 0) {
-                $where[] = "m.park_id = {$park_id}";
-            } elseif ($restrict_to === 'kingdom' && $kingdom_id > 0) {
-                // Kingdom scope ALWAYS includes child principalities (family), matching the documented
-                // playersearch rule — so a "move within kingdom" / kingdom-merge surface still finds
-                // principality members. (Centralised here so callers just pass restrictTo:'kingdom'.)
-                $fam = array_filter(array_map('intval', (array)Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)));
-                $where[] = "m.kingdom_id IN (" . implode(',', $fam ?: [$kingdom_id]) . ")";
-            }
-            if ($exclude_kingdom_id > 0) {
-                $where[] = "m.kingdom_id != {$exclude_kingdom_id}";
-            }
-            if ($exclude_park_id > 0) {
-                $where[] = "m.park_id != {$exclude_park_id}";
-            }
+            $where[] = "__NAME__";
+        }
+        if ($filterPid > 0) {
+            $where[] = "m.park_id = {$filterPid}";
+        } elseif ($filterKid > 0) {
+            $where[] = "m.kingdom_id = {$filterKid}";
+        } elseif (!empty($restrict_kids)) {
+            $where[] = "m.kingdom_id IN (" . implode(',', $restrict_kids) . ")";
+        } elseif ($restrict_to === 'park' && $park_id > 0) {
+            $where[] = "m.park_id = {$park_id}";
+        } elseif ($restrict_to === 'kingdom' && $kingdom_id > 0) {
+            // Kingdom scope ALWAYS includes child principalities (family), matching the documented
+            // playersearch rule — so a "move within kingdom" / kingdom-merge surface still finds
+            // principality members. (Centralised here so callers just pass restrictTo:'kingdom'.)
+            $fam = array_filter(array_map('intval', (array)Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)));
+            $where[] = "m.kingdom_id IN (" . implode(',', $fam ?: [$kingdom_id]) . ")";
+        }
+        if ($exclude_kingdom_id > 0) {
+            $where[] = "m.kingdom_id != {$exclude_kingdom_id}";
+        }
+        if ($exclude_park_id > 0) {
+            $where[] = "m.park_id != {$exclude_park_id}";
         }
         if (!empty($exclude_ids)) {
             $where[] = "m.mundane_id NOT IN (" . implode(',', $exclude_ids) . ")";
@@ -742,39 +1038,95 @@ class SearchService extends Ork3
             $where[] = "(m.suspended = 0 AND m.penalty_box = 0)";
         }
 
-        $sql = "SELECT m.mundane_id, m.persona, m.active, m.suspended, m.penalty_box,
-                       k.kingdom_id, k.name AS kingdom_name, k.abbreviation AS k_abbr,
-                       p.park_id, p.name AS park_name, p.abbreviation AS p_abbr,
-                       ({$ring}) AS ring,
-                       ({$tier}) AS tier
-                FROM " . DB_PREFIX . "mundane m
-                LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
-                LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
-                WHERE " . implode(' AND ', $where) . "
-                ORDER BY tier ASC, ring ASC, m.persona ASC, m.mundane_id ASC
-                LIMIT {$limit} OFFSET {$offset}";
+        $match_rank = $tokens ? $this->nameRankSql($search, $tokens) : '3';
+        $select = function (string $nameSql, string $order, int $lim, int $off) use ($where, $ring, $tier, $match_rank): string {
+            $w = str_replace('__NAME__', $nameSql, implode(' AND ', $where));
+            return "SELECT m.mundane_id, m.persona, m.active, m.suspended, m.penalty_box,
+                           m.given_name, m.surname, m.username, m.restricted,
+                           k.kingdom_id, k.name AS kingdom_name, k.abbreviation AS k_abbr,
+                           p.park_id, p.name AS park_name, p.abbreviation AS p_abbr,
+                           ({$ring}) AS ring,
+                           ({$tier}) AS tier,
+                           ({$match_rank}) AS match_rank
+                    FROM " . DB_PREFIX . "mundane m
+                    LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
+                    LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
+                    WHERE {$w}
+                    ORDER BY {$order}
+                    LIMIT {$lim} OFFSET {$off}";
+        };
+        $shape = function ($rs, int $fuzzy) use ($is_officer, $is_admin): array {
+            $banned = ((int)$rs->suspended === 1 || (int)$rs->penalty_box === 1) ? 1 : 0;
+            $row = [
+                'MundaneId'   => (int)$rs->mundane_id,
+                'Persona'     => $rs->persona,
+                'KingdomId'   => (int)$rs->kingdom_id,
+                'ParkId'      => (int)$rs->park_id,
+                'KAbbr'       => $rs->k_abbr,
+                'PAbbr'       => $rs->p_abbr,
+                'KingdomName' => $rs->kingdom_name,
+                'ParkName'    => $rs->park_name,
+                'Active'      => (int)$rs->active,
+                'Suspended'   => (int)$rs->suspended,
+                'PenaltyBox'  => (int)$rs->penalty_box,
+                'Banned'      => $banned,
+                'Ring'        => (int)$rs->ring,
+                'Tier'        => (int)$rs->tier,
+                'Fuzzy'       => $fuzzy,
+            ];
+            if ($is_officer) {
+                // Officer detail line: real name (hidden for restricted players unless admin) + username.
+                $show_real = ((int)$rs->restricted !== 1) || $is_admin;
+                $row['GivenName']      = $show_real ? (string)$rs->given_name : '';
+                $row['Surname']        = $show_real ? (string)$rs->surname : '';
+                $row['RealNameHidden'] = $show_real ? 0 : 1;
+                $row['UserName']       = (string)$rs->username;
+            }
+            return $row;
+        };
+
+        $order = ($numeric_id > 0 ? "(m.mundane_id = {$numeric_id}) DESC, " : '')
+               . "tier ASC, ring ASC, match_rank ASC, m.persona ASC, m.mundane_id ASC";
         $this->db->clear();
-        $rs = $this->db->query($sql);
+        $rs = $this->db->query($select($name_match, $order, $limit, $offset));
         $out = [];
         if ($rs !== false && $rs->size() > 0) {
             while ($rs->Next()) {
-                $banned = ((int)$rs->suspended === 1 || (int)$rs->penalty_box === 1) ? 1 : 0;
-                $out[] = [
-                    'MundaneId'   => (int)$rs->mundane_id,
-                    'Persona'     => $rs->persona,
-                    'KingdomId'   => (int)$rs->kingdom_id,
-                    'ParkId'      => (int)$rs->park_id,
-                    'KAbbr'       => $rs->k_abbr,
-                    'PAbbr'       => $rs->p_abbr,
-                    'KingdomName' => $rs->kingdom_name,
-                    'ParkName'    => $rs->park_name,
-                    'Active'      => (int)$rs->active,
-                    'Suspended'   => (int)$rs->suspended,
-                    'PenaltyBox'  => (int)$rs->penalty_box,
-                    'Banned'      => $banned,
-                    'Ring'        => (int)$rs->ring,
-                    'Tier'        => (int)$rs->tier,
-                ];
+                $out[] = $shape($rs, 0);
+            }
+        }
+
+        // Typo tolerance: when the strict search finds fewer than 5 people, add "close matches"
+        // below them. Capped at $limit - 1 in total so it never fakes a "has more" probe row
+        // (callers ask for limit+1), and never on later pages, so paging stays stable.
+        $room = $limit - 1 - count($out);
+        if ($offset === 0 && $numeric_id <= 0 && count($out) < 5 && $room > 0 && !empty($o['fuzzy'] ?? true)) {
+            $fuzzy_match = $this->nameMatchFuzzy($tokens, $is_officer, $is_admin);
+            if ($fuzzy_match !== '') {
+                $this->db->clear();
+                $rs = $this->db->query($select($fuzzy_match, "tier ASC, ring ASC, m.persona ASC, m.mundane_id ASC", 200, 0));
+                $cands = [];
+                if ($rs !== false && $rs->size() > 0) {
+                    while ($rs->Next()) {
+                        $texts = [$rs->persona];
+                        if ($is_officer) {
+                            $texts[] = $rs->username;
+                            if ((int)$rs->restricted !== 1 || $is_admin) {
+                                $texts[] = $rs->given_name;
+                                $texts[] = $rs->surname;
+                            }
+                        }
+                        $row = $shape($rs, 1);
+                        $row['_score'] = $this->typoScore($tokens, $texts);
+                        $cands[] = $row;
+                    }
+                }
+                usort($cands, fn ($a, $b) => [$a['_score'], $a['Tier'], $a['Ring'], strtolower((string)$a['Persona']), $a['MundaneId']]
+                                         <=> [$b['_score'], $b['Tier'], $b['Ring'], strtolower((string)$b['Persona']), $b['MundaneId']]);
+                foreach (array_slice($cands, 0, $room) as $row) {
+                    unset($row['_score']);
+                    $out[] = $row;
+                }
             }
         }
         return $out;
@@ -789,7 +1141,8 @@ class SearchService extends Ork3
      *        includeBanned(bool — honoured only for officers), lastAttendanceFrom/To ('YYYY-MM-DD'),
      *        limit(=50, max 200), offset, token.
      * Real names: officers see given/surname; for players flagged restricted, only global admins do.
-     * Banned: Amtgard-wide for officers. A pure-numeric q is a direct mundane_id lookup.
+     * Banned: within the viewer's grant-derived banned scope (viewerCaps). A pure-numeric q is a
+     * direct mundane_id lookup.
      * Requires at least one of {q/id, kingdomId, parkId} or returns needFilter (avoids a full scan).
      */
     public function AdvancedPlayers($opts = [])
@@ -803,31 +1156,15 @@ class SearchService extends Ork3
         $inc_inactive = array_key_exists('includeInactive', $o) ? !empty($o['includeInactive']) : true;
         $inc_banned_q = !empty($o['includeBanned']);
         $limit  = min(max((int)($o['limit'] ?? 50), 1), 1000);  // higher cap: page loads one batch into a client DataTable
-        $offset = max((int)($o['offset'] ?? 0), 0);
+        $offset = min(max((int)($o['offset'] ?? 0), 0), 2000);
         $token  = $o['token'] ?? null;
 
-        // Authorisation: officer (create/edit/admin anywhere) or global admin.
-        $uid = 0;
-        $is_admin = false;
-        if (!empty($token)) {
-            $uid = (int)Ork3::$Lib->authorization->IsAuthorized($token);
-            if ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null)) {
-                $is_admin = true;
-            }
-        }
-        $is_officer = $is_admin;
-        if (!$is_officer && $uid > 0) {
-            $grants = Ork3::$Lib->authorization->GetAuthorizations_h($uid);
-            if (is_array($grants)) {
-                foreach ($grants as $g) {
-                    if (in_array(strtolower($g['Role'] ?? ''), ['create', 'edit', 'admin'], true)) {
-                        $is_officer = true;
-                        break;
-                    }
-                }
-            }
-        }
-        $can_see_banned   = $is_officer;            // Amtgard-wide for officers (power-user tool)
+        // Authorisation: officer = global admin or a park/kingdom create/edit/admin grant (viewerCaps).
+        $caps       = $this->viewerCaps($token);
+        $is_admin   = $caps['is_admin'];
+        $is_officer = $caps['is_officer'];
+        $banned_cap = $caps['banned_kids'];         // 'all' | int[] — grant-derived banned scope
+        $can_see_banned   = ($banned_cap === 'all') || !empty($banned_cap);
         $can_see_realname = $is_officer;            // restricted players gated to global admins in output
         $inc_banned = $inc_banned_q && $can_see_banned;
 
@@ -851,11 +1188,10 @@ class SearchService extends Ork3
         if ($numeric_id > 0) {
             $where[] = "m.mundane_id = {$numeric_id}";
         } elseif (strlen($q) >= 2) {
-            $term = $this->likeEscape($q);
-            $name_match = $is_admin
-                ? "OR m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'"
-                : "OR (m.restricted = 0 AND (m.given_name LIKE '%{$term}%' OR m.surname LIKE '%{$term}%'))";
-            $where[] = "(m.persona LIKE '%{$term}%' OR m.username LIKE '%{$term}%' {$name_match})";
+            // Every typed word must appear, in any order (see nameMatchStrict). Username +
+            // real names for officers only (restricted real names: admins only).
+            $tokens = $this->nameTokens($q);
+            $where[] = $tokens ? '__NAME__' : '0';
         }
 
         if ($numeric_id <= 0) {
@@ -876,7 +1212,9 @@ class SearchService extends Ork3
             $tiers[] = "(m.suspended = 0 AND m.penalty_box = 0 AND m.active = 0)";
         }
         if ($inc_banned) {
-            $tiers[] = "(m.suspended = 1 OR m.penalty_box = 1)";
+            $tiers[] = ($banned_cap === 'all')
+                ? "(m.suspended = 1 OR m.penalty_box = 1)"
+                : "((m.suspended = 1 OR m.penalty_box = 1) AND m.kingdom_id IN (" . implode(',', $banned_cap) . "))";
         }
         if (empty($tiers)) {
             return array_merge(['rows' => [], 'hasMore' => false, 'offset' => $offset], $meta);
@@ -895,25 +1233,28 @@ class SearchService extends Ork3
                 . "WHERE a.mundane_id = m.mundane_id ORDER BY a.date DESC, a.attendance_id DESC LIMIT 1)";
         $tier = "CASE WHEN (m.suspended = 1 OR m.penalty_box = 1) THEN 2 WHEN m.active = 0 THEN 1 ELSE 0 END";
 
-        $sql = "SELECT m.mundane_id, m.persona, m.given_name, m.surname, m.restricted,
+        $tokens     = $tokens ?? [];
+        $match_rank = $tokens ? $this->nameRankSql($q, $tokens) : '3';
+        $strict     = $tokens ? $this->nameMatchStrict($tokens, $is_officer, $is_admin) : '1';
+        $sqlFor = function (string $nameSql, string $order, int $lim, int $off) use ($where, $latest, $tier, $match_rank): string {
+            return "SELECT m.mundane_id, m.persona, m.given_name, m.surname, m.restricted,
                        m.active, m.suspended, m.penalty_box,
                        k.kingdom_id, k.name AS kingdom_name, k.abbreviation AS k_abbr,
                        p.park_id, p.name AS park_name, p.abbreviation AS p_abbr,
                        la.date AS last_att_date, lak.name AS last_att_kingdom, lap.name AS last_att_park,
-                       ({$tier}) AS tier
+                       ({$tier}) AS tier, ({$match_rank}) AS match_rank
                 FROM " . DB_PREFIX . "mundane m
                 LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
                 LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
                 LEFT JOIN " . DB_PREFIX . "attendance la ON la.attendance_id = {$latest}
                 LEFT JOIN " . DB_PREFIX . "kingdom lak ON lak.kingdom_id = la.kingdom_id
                 LEFT JOIN " . DB_PREFIX . "park lap ON lap.park_id = la.park_id
-                WHERE " . implode(' AND ', $where) . "
-                ORDER BY tier ASC, m.persona ASC, m.mundane_id ASC
-                LIMIT " . ($limit + 1) . " OFFSET {$offset}";
-        $this->db->clear();
-        $rs = $this->db->query($sql);
+                WHERE " . str_replace('__NAME__', $nameSql, implode(' AND ', $where)) . "
+                ORDER BY {$order}
+                LIMIT {$lim} OFFSET {$off}";
+        };
         $rows = [];
-        if ($rs !== false && $rs->size() > 0) {
+        $collect = function ($rs, int $fuzzy) use (&$rows, $can_see_realname, $is_admin, $is_officer, $tokens) {
             while ($rs->Next()) {
                 $banned     = ((int)$rs->suspended === 1 || (int)$rs->penalty_box === 1) ? 1 : 0;
                 $restricted = ((int)$rs->restricted === 1);
@@ -938,12 +1279,47 @@ class SearchService extends Ork3
                     'PenaltyBox'     => (int)$rs->penalty_box,
                     'Banned'         => $banned,
                     'Tier'           => (int)$rs->tier,
+                    'Fuzzy'          => $fuzzy,
                 ];
+                if ($fuzzy) {
+                    $texts = [$rs->persona];
+                    if ($is_officer && ((int)$rs->restricted !== 1 || $is_admin)) {
+                        $texts[] = $rs->given_name;
+                        $texts[] = $rs->surname;
+                    }
+                    $rows[count($rows) - 1]['_score'] = $this->typoScore($tokens, $texts);
+                }
             }
+        };
+        $this->db->clear();
+        $rs = $this->db->query($sqlFor($strict, "tier ASC, match_rank ASC, m.persona ASC, m.mundane_id ASC", $limit + 1, $offset));
+        if ($rs !== false && $rs->size() > 0) {
+            $collect($rs, 0);
         }
         $hasMore = count($rows) > $limit;
         if ($hasMore) {
             $rows = array_slice($rows, 0, $limit);
+        }
+
+        // Typo tolerance (same rule as RankedPlayers): first page, strict found fewer than 5.
+        if (!$hasMore && $offset === 0 && $numeric_id <= 0 && $tokens && count($rows) < 5) {
+            $fuzzy = $this->nameMatchFuzzy($tokens, $is_officer, $is_admin);
+            if ($fuzzy !== '') {
+                $strictCount = count($rows);
+                $this->db->clear();
+                $rs = $this->db->query($sqlFor($fuzzy, "tier ASC, m.persona ASC, m.mundane_id ASC", 200, 0));
+                if ($rs !== false && $rs->size() > 0) {
+                    $collect($rs, 1);
+                }
+                $close = array_slice($rows, $strictCount);
+                usort($close, fn ($a, $b) => [$a['_score'], $a['Tier'], strtolower((string)$a['Persona'])]
+                                         <=> [$b['_score'], $b['Tier'], strtolower((string)$b['Persona'])]);
+                $close = array_map(function ($r) {
+                    unset($r['_score']);
+                    return $r;
+                }, array_slice($close, 0, max(0, $limit - $strictCount)));
+                $rows = array_merge(array_slice($rows, 0, $strictCount), $close);
+            }
         }
         return array_merge(['rows' => $rows, 'hasMore' => $hasMore, 'offset' => $offset], $meta);
     }
@@ -1020,14 +1396,19 @@ class SearchService extends Ork3
      */
     public function UniversalBudgets(string $focus = ''): array
     {
-        $focus = trim($focus);
+        $defaults = ['player' => 4, 'park' => 3, 'kingdom' => 2, 'unit' => 3];
+        // Focus is one type ('park') or a comma list ('park,kingdom'). One type gets the full
+        // budget of 10; several keep their default budgets. Unlisted types get 0 (not queried).
+        $types = array_values(array_intersect(array_map('trim', explode(',', strtolower($focus))), array_keys($defaults)));
+        if (empty($types)) {
+            return $defaults;
+        }
+        $out = [];
+        foreach ($defaults as $type => $budget) {
+            $out[$type] = in_array($type, $types, true) ? (count($types) === 1 ? 10 : $budget) : 0;
+        }
 
-        return [
-            'player'  => $focus === 'player' ? 10 : ($focus ? 0 : 4),
-            'park'    => $focus === 'park' ? 10 : ($focus ? 0 : 3),
-            'kingdom' => $focus === 'kingdom' ? 10 : ($focus ? 0 : 2),
-            'unit'    => $focus === 'unit' ? 10 : ($focus ? 0 : 3),
-        ];
+        return $out;
     }
 
     /**
@@ -1049,24 +1430,8 @@ class SearchService extends Ork3
         // RankedPlayers resolves the banned-tier auth gate from a session token, not a user id.
         $token           = $request['Token'] ?? null;
 
-        $filterKid = 0;
-        $filterPid = 0;
-        $searchQ   = $q;
-        if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
-            $kAbbr = self::EscapeLike($m[1]);
-            $rs    = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
-            if ($rs !== false && $rs->size() > 0 && $rs->next()) {
-                $filterKid = (int)$rs->kingdom_id;
-            }
-            if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
-                $pAbbr = self::EscapeLike($m[2]);
-                $rs    = $this->db->query("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
-                if ($rs !== false && $rs->size() > 0 && $rs->next()) {
-                    $filterPid = (int)$rs->park_id;
-                }
-            }
-            $searchQ = trim($m[3]);
-        }
+        // Same memoised resolver RankedPlayers uses, so the prefix is looked up once per request.
+        list($filterKid, $filterPid, $searchQ) = $this->resolveAbbrevPrefix($q);
 
         $searchQ = $this->FoldPunctText($searchQ);
         $term    = self::EscapeLike($searchQ);
@@ -1087,15 +1452,18 @@ class SearchService extends Ork3
         $parkOrder = valid_id($pid)
             ? "CASE WHEN p.park_id = {$pid} THEN 0 WHEN p.kingdom_id = {$kid} THEN 1 ELSE 2 END, p.name"
             : (valid_id($kid) ? "CASE WHEN p.kingdom_id = {$kid} THEN 0 ELSE 1 END, p.name" : 'p.name');
-        $this->db->clear();
-        $rs = $this->db->query("
-			SELECT p.park_id, p.name, k.abbreviation AS k_abbr, k.name AS k_name, k.kingdom_id
-			FROM " . DB_PREFIX . "park p
-			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
-			WHERE {$parkWhere}
-			ORDER BY {$parkOrder}
-			LIMIT {$parkBudget}");
         $parks = [];
+        $rs    = false;
+        if ($parkBudget > 0) {
+            $this->db->clear();
+            $rs = $this->db->query("
+				SELECT p.park_id, p.name, k.abbreviation AS k_abbr, k.name AS k_name, k.kingdom_id
+				FROM " . DB_PREFIX . "park p
+				LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+				WHERE {$parkWhere}
+				ORDER BY {$parkOrder}
+				LIMIT {$parkBudget}");
+        }
         if ($rs !== false && $rs->size() > 0) {
             while ($rs->next()) {
                 $parks[] = [
@@ -1108,10 +1476,14 @@ class SearchService extends Ork3
                 ];
             }
         }
-        $playerBudget += $parkBudget - count($parks);
+        // Unused category budget tops up players only when players were requested at all.
+        $topUp = ($budgets['player'] > 0);
+        if ($topUp) {
+            $playerBudget += $parkBudget - count($parks);
+        }
 
         $kingdoms = [];
-        if ($filterKid === 0) {
+        if ($filterKid === 0 && $kingdomBudget > 0) {
             $kingdomWhere = $fold('k.name') . " LIKE '%{$term}%' OR k.abbreviation LIKE '%{$term}%'";
             $this->db->clear();
             $rs = $this->db->query("
@@ -1131,17 +1503,22 @@ class SearchService extends Ork3
                 }
             }
         }
-        $playerBudget += $kingdomBudget - count($kingdoms);
+        if ($topUp) {
+            $playerBudget += $kingdomBudget - count($kingdoms);
+        }
 
         $unitWhere = "active = 'Active' AND (" . $fold('name') . " LIKE '%{$term}%')";
-        $this->db->clear();
-        $rs = $this->db->query("
-			SELECT unit_id, name, type
-			FROM " . DB_PREFIX . "unit
-			WHERE {$unitWhere}
-			ORDER BY name
-			LIMIT {$unitBudget}");
         $units = [];
+        $rs    = false;
+        if ($unitBudget > 0) {
+            $this->db->clear();
+            $rs = $this->db->query("
+				SELECT unit_id, name, type
+				FROM " . DB_PREFIX . "unit
+				WHERE {$unitWhere}
+				ORDER BY name
+				LIMIT {$unitBudget}");
+        }
         if ($rs !== false && $rs->size() > 0) {
             while ($rs->next()) {
                 $units[] = [
@@ -1152,13 +1529,15 @@ class SearchService extends Ork3
                 ];
             }
         }
-        $playerBudget += $unitBudget - count($units);
+        if ($topUp) {
+            $playerBudget += $unitBudget - count($units);
+        }
 
-        // Players — delegate to RankedPlayers for the standardized concentric-ring ranking and the
-        // active/inactive/banned tier model. $q is passed as-is; resolveAbbrevPrefix() handles the
-        // "KD:PK term" prefix internally. bannedScope 'all' so an officer's Amtgard-wide header
-        // search surfaces bans (still auth-gated inside RankedPlayers). Skip the query entirely when
-        // a focused non-player search left no budget.
+        // Players — delegate to RankedPlayers for the standardized concentric-ring ranking, the
+        // active/inactive/banned tier model and the officer-only real-name matching. $q is passed
+        // as-is; the "KD:PK term" prefix resolves from the per-request memo. bannedScope 'all' only
+        // lifts the park-surface narrowing, and only for viewers whose grants already entitle them
+        // to Amtgard-wide banned visibility. Skip the query entirely when there is no budget.
         $players = [];
         if ($playerBudget > 0) {
             $rows = $this->RankedPlayers([
@@ -1178,199 +1557,14 @@ class SearchService extends Ork3
                     'park'   => $row['ParkName'] ?? '',
                     'active' => $row['Active'],
                     'banned' => $row['Banned'] ?? 0,
+                    'fuzzy'  => $row['Fuzzy'] ?? 0,
+                    // Officer-only detail (RankedPlayers adds these keys only for officers).
+                    'realname' => trim(($row['GivenName'] ?? '') . ' ' . ($row['Surname'] ?? '')),
+                    'username' => $row['UserName'] ?? '',
                 ];
             }
         }
 
         return ['players' => $players, 'parks' => $parks, 'kingdoms' => $kingdoms, 'units' => $units];
-    }
-
-    /**
-     * @param array{
-     *   Query?: string,
-     *   Scope?: string,
-     *   KingdomId?: int,
-     *   ParkId?: int,
-     *   EventId?: int,
-     *   ScopeParkId?: int,
-     *   IncludeInactive?: bool,
-     *   IncludeSuspended?: bool,
-     *   Prioritize?: bool,
-     *   Limit?: int,
-     *   Format?: string
-     * } $request
-     * @return list<array<string, mixed>>
-     */
-    public function ScopedPlayerSearch(array $request): array
-    {
-        $q = trim($request['Query'] ?? '');
-        if (strlen($q) < 2) {
-            return [];
-        }
-
-        $scope            = trim($request['Scope'] ?? 'global');
-        $kingdomId        = (int)($request['KingdomId'] ?? 0);
-        $parkId           = (int)($request['ParkId'] ?? 0);
-        $eventId          = (int)($request['EventId'] ?? 0);
-        $scopeParkId      = (int)($request['ScopeParkId'] ?? 0);
-        $includeInactive  = !empty($request['IncludeInactive']);
-        $includeSuspended = !empty($request['IncludeSuspended']);
-        $prioritize       = !empty($request['Prioritize']);
-        $limit            = min(max((int)($request['Limit'] ?? 15), 1), 100);
-        $format           = trim($request['Format'] ?? 'kingdom');
-
-        $filterKid = 0;
-        $filterPid = 0;
-        $searchQ   = $q;
-        if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
-            $kAbbr = self::EscapeLike($m[1]);
-            $rs    = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
-            if ($rs !== false && $rs->size() > 0 && $rs->next()) {
-                $filterKid = (int)$rs->kingdom_id;
-            }
-            if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
-                $pAbbr = self::EscapeLike($m[2]);
-                $rs    = $this->db->query("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
-                if ($rs !== false && $rs->size() > 0 && $rs->next()) {
-                    $filterPid = (int)$rs->park_id;
-                }
-            }
-            $searchQ = trim($m[3]);
-        }
-        $term = self::EscapeLike($searchQ);
-
-        $kingdomClause = '';
-        $parkClause    = '';
-        $orderClause   = 'm.suspended ASC, m.active DESC, m.persona';
-
-        if ($filterPid > 0) {
-            $parkClause = "AND m.park_id = {$filterPid}";
-        } elseif ($filterKid > 0) {
-            $kingdomClause = "AND m.kingdom_id = {$filterKid}";
-        } elseif ($scope === 'global') {
-            $limit = min($limit, 20);
-        } elseif ($scope === 'kingdom_exclude') {
-            $kingdomClause = "AND m.kingdom_id != {$kingdomId}";
-            $parkClause    = valid_id($scopeParkId) ? "AND m.park_id = {$scopeParkId}" : '';
-            $orderClause   = "m.suspended ASC, m.active DESC, CASE WHEN m.kingdom_id = {$kingdomId} THEN 0 ELSE 1 END, m.persona";
-        } elseif ($scope === 'kingdom_all') {
-            $orderClause = "m.suspended ASC, m.active DESC, CASE WHEN m.kingdom_id = {$kingdomId} THEN 0 ELSE 1 END, m.persona";
-        } elseif ($scope === 'kingdom_own') {
-            $familyIds     = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdomId)));
-            $kingdomClause = "AND m.kingdom_id IN ({$familyIds})";
-            $parkClause    = valid_id($scopeParkId) ? "AND m.park_id = {$scopeParkId}" : '';
-            $orderClause   = "m.suspended ASC, m.active DESC, CASE WHEN m.kingdom_id = {$kingdomId} THEN 0 ELSE 1 END, m.persona";
-        } elseif ($scope === 'park_own') {
-            $parkClause  = "AND m.park_id = {$parkId}";
-            $orderClause = $this->parkOrderClause($parkId, $prioritize);
-        } elseif ($scope === 'park_exclude') {
-            $parkClause  = "AND m.park_id != {$parkId}";
-            $orderClause = $this->parkOrderClause($parkId, $prioritize);
-        } elseif ($scope === 'park_all') {
-            $orderClause = $this->parkOrderClause($parkId, $prioritize);
-        } elseif ($scope === 'event_prioritized') {
-            $includeInactive  = false;
-            $includeSuspended = false;
-            $limit            = min($limit, 15);
-            $this->db->clear();
-            $evRow = $this->db->query('SELECT park_id, kingdom_id FROM ' . DB_PREFIX . "event WHERE event_id = {$eventId} LIMIT 1");
-            $evParkId    = 0;
-            $evKingdomId = 0;
-            if ($evRow !== false && $evRow->size() > 0 && $evRow->next()) {
-                $evParkId    = (int)$evRow->park_id;
-                $evKingdomId = (int)$evRow->kingdom_id;
-            }
-            $orderClause = "CASE
-			   WHEN m.park_id = {$evParkId} AND {$evParkId} > 0 THEN 0
-			   WHEN m.kingdom_id = {$evKingdomId} AND {$evKingdomId} > 0 THEN 1
-			   ELSE 2 END, m.persona";
-        }
-
-        $suspendedSql = $includeSuspended ? '' : 'AND m.suspended = 0';
-        $activeSql    = $includeInactive ? '' : 'AND m.active = 1';
-
-        $sql = "
-			SELECT m.mundane_id, m.persona, m.park_id, m.kingdom_id,
-			       k.name AS kingdom_name, p.name AS park_name,
-			       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-			       m.suspended, m.active
-			FROM " . DB_PREFIX . "mundane m
-			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
-			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
-			WHERE LENGTH(m.persona) > 0
-			  {$suspendedSql}
-			  {$activeSql}
-			  {$kingdomClause}
-			  {$parkClause}
-			  AND (m.persona LIKE '%{$term}%'
-			    OR m.given_name LIKE '%{$term}%'
-			    OR m.surname LIKE '%{$term}%'
-			    OR m.username LIKE '%{$term}%')
-			ORDER BY {$orderClause}
-			LIMIT {$limit}";
-
-        $this->db->clear();
-        $d = $this->db->query($sql);
-        if ($d === false || $d->size() === 0) {
-            return [];
-        }
-
-        $results = [];
-        while ($d->next()) {
-            $results[] = $this->formatScopedPlayerRow($d, $format);
-        }
-
-        return $results;
-    }
-
-    private function parkOrderClause(int $parkId, bool $prioritize): string
-    {
-        $order = $prioritize
-            ? "CASE WHEN m.park_id = {$parkId} THEN 0 WHEN m.kingdom_id = (SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$parkId} LIMIT 1) THEN 1 ELSE 2 END,"
-            : '';
-
-        return 'm.suspended ASC, m.active DESC, ' . $order . ' m.persona';
-    }
-
-    /**
-     * @param object $row
-     * @return array<string, mixed>
-     */
-    private function formatScopedPlayerRow($row, string $format): array
-    {
-        if ($format === 'admin') {
-            return [
-                'MundaneId' => (int)$row->mundane_id,
-                'Persona'   => $row->persona,
-                'PAbbr'     => $row->p_abbr,
-                'KAbbr'     => $row->k_abbr,
-            ];
-        }
-        if ($format === 'event') {
-            return [
-                'MundaneId'   => (int)$row->mundane_id,
-                'Persona'     => $row->persona,
-                'KingdomId'   => (int)$row->kingdom_id,
-                'ParkId'      => (int)$row->park_id,
-                'KingdomName' => $row->kingdom_name,
-                'ParkName'    => $row->park_name,
-                'KAbbr'       => $row->k_abbr,
-                'PAbbr'       => $row->p_abbr,
-                'Suspended'   => (int)$row->suspended,
-            ];
-        }
-
-        return [
-            'MundaneId'   => (int)$row->mundane_id,
-            'Persona'     => $row->persona,
-            'KingdomId'   => (int)$row->kingdom_id,
-            'ParkId'      => (int)$row->park_id,
-            'KingdomName' => $row->kingdom_name,
-            'ParkName'    => $row->park_name,
-            'KAbbr'       => $row->k_abbr,
-            'PAbbr'       => $row->p_abbr,
-            'Suspended'   => (int)$row->suspended,
-            'Active'      => (int)$row->active,
-        ];
     }
 }

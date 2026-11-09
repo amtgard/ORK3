@@ -1,9 +1,14 @@
-.ops-ac-results{ display:none; z-index:2147483000; max-height:280px; overflow-y:auto;
+.ops-ac-results{ display:none; box-sizing:border-box; z-index:2147483000; max-height:280px; overflow-y:auto;
   background:#fff; border:1px solid #cbd5e0; border-radius:6px; box-shadow:0 4px 14px rgba(0,0,0,.18); }
 .ops-ac-results.ops-ac-open{ display:block; }
 .ops-ac-item{ padding:7px 11px; cursor:pointer; font-size:13px; color:#2d3748; }
 .ops-ac-item:hover, .ops-ac-item.ops-ac-active{ background:#ebf2fb; }
-.ops-ac-loc{ color:#a0aec0; font-size:11px; }
+.ops-ac-name{ display:block; }
+/* Detail line under the persona: kingdom · park (· real name · username for officers). */
+.ops-ac-loc{ display:block; color:#718096; font-size:11px; line-height:1.35; margin-top:1px; }
+/* Divider above typo-tolerant "close matches" (not an option; keyboard nav skips it). */
+.ops-ac-section{ padding:6px 11px 3px; font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.05em; color:#718096; border-top:1px solid #e2e8f0; background:#f7fafc; }
 /* Status badges — visually distinct so a benign "Inactive" never reads as an alarming "Banned". */
 .ops-ac-badge{ font-size:10px; font-weight:700; margin-left:5px; text-transform:uppercase; letter-spacing:.02em; }
 .ops-ac-badge.ops-ac-inactive{ color:#718096; }
@@ -35,7 +40,8 @@ html[data-theme="dark"] .ops-ac-results{ background:#2d3748; border-color:#4a556
 html[data-theme="dark"] .ops-ac-item{ color:#e2e8f0; }
 html[data-theme="dark"] .ops-ac-item:hover,
 html[data-theme="dark"] .ops-ac-item.ops-ac-active{ background:#3b4960; }
-html[data-theme="dark"] .ops-ac-loc{ color:#718096; }
+html[data-theme="dark"] .ops-ac-loc{ color:#a0aec0; }
+html[data-theme="dark"] .ops-ac-section{ color:#a0aec0; border-top-color:#4a5568; background:#283141; }
 html[data-theme="dark"] .ops-ac-empty, html[data-theme="dark"] .ops-ac-hint{ color:#718096; }
 html[data-theme="dark"] .ops-ac-loading{ color:#a0aec0; }
 html[data-theme="dark"] .ops-ac-badge.ops-ac-inactive{ color:#a0aec0; }

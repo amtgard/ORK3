@@ -745,8 +745,8 @@ $(function() {
 		},
 		focus:  function(e, ui) { return showLabel('#KingdomName', ui); },
 		delay:  250,
-		select: function(e, ui) { showLabel('#KingdomName', ui); $('#KingdomId').val(ui.item.value); attRescopePlayer(); return false; },
-		change: function(e, ui) { if (!ui.item) { showLabel('#KingdomName', null); $('#KingdomId').val(null); attRescopePlayer(); } return false; },
+		select: function(e, ui) { showLabel('#KingdomName', ui); if (String($('#KingdomId').val()) !== String(ui.item.value)) { $('#ParkName').val(''); $('#ParkId').val(''); } $('#KingdomId').val(ui.item.value); attRescopePlayer(); return false; },
+		change: function(e, ui) { if (!ui.item) { showLabel('#KingdomName', null); $('#KingdomId').val(null); $('#ParkName').val(''); $('#ParkId').val(''); attRescopePlayer(); } return false; },
 		minLength: 0
 	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
 
@@ -780,13 +780,13 @@ $(function() {
 			attCheckSubmit();
 		}
 	});
-	function attRescopePlayer(){ OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { parkId: parseInt($('#ParkId').val()) || <?=intval($pid) ?>, kingdomId: parseInt($('#KingdomId').val()) || <?=intval($kid) ?> }); }
+	function attRescopePlayer(){ OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { parkId: parseInt($('#ParkId').val()) || 0, kingdomId: parseInt($('#KingdomId').val()) || <?=intval($kid) ?> }); }
 
 	var ATT_CLASSES = <?=json_encode(array_values($Classes['Classes'] ?? []))?>;
 
 	/* ── Quick Add Modal ────────────────────────────── */
 	(function() {
-		var RECENT     = <?=json_encode(array_values(is_array($RecentAttendees['Attendees'] ?? null) ? $RecentAttendees['Attendees'] : []))?>;
+		var RECENT     = <?=json_encode(array_values(is_array($RecentAttendees['Attendees'] ?? null) ? $RecentAttendees['Attendees'] : []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)?>;
 		var CLASSES    = ATT_CLASSES;
 		var ADD_URL    = '<?=UIR?>AttendanceAjax/park/<?=(int)$Id?>/add';
 		var ADDED_IDS  = new Set(<?=json_encode($already_added_ids)?>);
@@ -832,7 +832,11 @@ $(function() {
 				tr.dataset.mundaneId = a.MundaneId;
 
 				var td1 = document.createElement('td');
-				td1.innerHTML = '<a href="<?=UIR?>Player/profile/' + a.MundaneId + '" target="_blank">' + a.Persona + '</a>';
+				var link = document.createElement('a');
+				link.href = '<?=UIR?>Player/profile/' + parseInt(a.MundaneId, 10);
+				link.target = '_blank';
+				link.textContent = a.Persona || '';
+				td1.appendChild(link);
 				tr.appendChild(td1);
 
 				var td2 = document.createElement('td');

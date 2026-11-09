@@ -7,9 +7,15 @@ class Model_Search extends Model
         parent::__construct();
     }
 
-    public function scoped_player_search(array $request): array
+    public function ranked_players(array $opts): array
     {
-        return $this->_search_service()->ScopedPlayerSearch($request);
+        return $this->_search_service()->RankedPlayers($opts);
+    }
+
+    // Grant-derived search capabilities (officer / admin / banned scope) for the viewer's token.
+    public function viewer_caps($token): array
+    {
+        return $this->_search_service()->viewer_caps($token);
     }
 
     public function universal_search(array $request): array

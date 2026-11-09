@@ -508,8 +508,8 @@ $(function() {
 		},
 		focus:  function(e, ui) { return showLabel('#KingdomName', ui); },
 		delay:  250,
-		select: function(e, ui) { showLabel('#KingdomName', ui); $('#KingdomId').val(ui.item.value); attRescopePlayer(); return false; },
-		change: function(e, ui) { if (!ui.item) { showLabel('#KingdomName', null); $('#KingdomId').val(null); attRescopePlayer(); } return false; },
+		select: function(e, ui) { showLabel('#KingdomName', ui); if (String($('#KingdomId').val()) !== String(ui.item.value)) { $('#ParkName').val(''); $('#ParkId').val(''); } $('#KingdomId').val(ui.item.value); attRescopePlayer(); return false; },
+		change: function(e, ui) { if (!ui.item) { showLabel('#KingdomName', null); $('#KingdomId').val(null); $('#ParkName').val(''); $('#ParkId').val(''); attRescopePlayer(); } return false; },
 		minLength: 0
 	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
 

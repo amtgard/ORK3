@@ -185,17 +185,6 @@ html[data-theme="dark"] #qt-manager-search {
 	color: var(--ork-text, #e2e8f0) !important;
 }
 html[data-theme="dark"] #qt-manager-search::placeholder { color: var(--ork-text-muted, #a0aec0); }
-html[data-theme="dark"] #qt-manager-ac-results {
-	background: var(--ork-card-bg, #2d3748) !important;
-	border-color: var(--ork-border, #4a5568) !important;
-	color: var(--ork-text, #e2e8f0);
-}
-html[data-theme="dark"] .qt-ac-item { border-bottom-color: var(--ork-border, #4a5568) !important; color: var(--ork-text, #e2e8f0); }
-html[data-theme="dark"] .qt-ac-item:hover { background: #4a5568; }
-/* Keyboard/pointer highlight is a class, not an inline background — an inline hex cannot be
-   reached by the dark rule and measured 1.11:1 against the dark text. */
-.qt-ac-item.qt-ac-active { background: #ebf4ff; }
-html[data-theme="dark"] .qt-ac-item.qt-ac-active { background: #4a5568; color: var(--ork-text, #e2e8f0); }
 html[data-theme="dark"] .qt-manager-row { border-bottom-color: var(--ork-border, #4a5568) !important; }
 html[data-theme="dark"] .qt-reset-retakes-btn {
 	background: #44337a !important;
@@ -554,7 +543,6 @@ html[data-theme="dark"] .qt-tooltip-icon:focus-visible { outline-color: #63b3ed;
 					<input type="text" id="qt-manager-search" placeholder="Search player name&hellip;" autocomplete="off"
 					       style="width:220px;padding:5px 8px;border:1px solid var(--ork-input-border);background:var(--ork-card-bg);border-radius:4px;font-size:0.9rem;">
 					<input type="hidden" id="qt-manager-id-input">
-					<div id="qt-manager-ac-results" style="display:none;position:absolute;bottom:100%;left:0;right:0;background:var(--ork-card-bg);border:1px solid var(--ork-input-border);border-radius:4px;box-shadow:var(--ork-shadow-dropdown);z-index:200;max-height:200px;overflow-y:auto;"></div>
 				</div>
 				<button id="qt-add-manager-btn" class="qt-save-btn" style="white-space:nowrap;"><i class="fas fa-user-plus"></i> Add Manager</button>
 				<span id="qt-manager-error" style="font-size:0.82rem;color:#e53e3e;display:none;"></span>
@@ -727,12 +715,9 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 (function() {
 	var kingdomId  = <?= (int)$KingdomId ?>;
 	var ajaxBase   = '<?= UIR ?>QualTestAjax/';
-	var searchBase = '<?= UIR ?>SearchAjax/universal';
 
 	var searchInput = document.getElementById('qt-manager-search');
 	var idInput     = document.getElementById('qt-manager-id-input');
-	var acDrop      = document.getElementById('qt-manager-ac-results');
-	var _acTimer, _acItems = [], _acIndex = -1;
 
 	function escHtml(s) {
 		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -744,72 +729,12 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 		el.style.display = msg ? 'inline' : 'none';
 	}
 
-	// Autocomplete
-	function acClose() { acDrop.style.display = 'none'; _acItems = []; _acIndex = -1; }
-	function acHighlight(idx) {
-		_acIndex = idx;
-		_acItems.forEach(function(el, i) { el.classList.toggle('qt-ac-active', i === idx); });
-		if (idx >= 0 && _acItems[idx] && _acItems[idx].scrollIntoView) {
-			_acItems[idx].scrollIntoView({ block: 'nearest' });
-		}
-	}
-	function acSelect(item) {
-		if (!item) return;
-		searchInput.value = item.dataset.name;
-		idInput.value     = item.dataset.id;
-		acClose();
-	}
-
-	searchInput.addEventListener('input', function() {
-		idInput.value = '';
-		var q = searchInput.value.trim();
-		if (q.length < 2) { acClose(); return; }
-		clearTimeout(_acTimer);
-		_acTimer = setTimeout(function() {
-			fetch(searchBase + '&q=' + encodeURIComponent(q) + '&kid=' + kingdomId)
-				.then(function(r) { return r.json(); })
-				.then(function(data) {
-					var items = data.players || [];
-					if (!items.length) { acClose(); return; }
-					acDrop.innerHTML = items.map(function(pl) {
-						return '<div class="qt-ac-item" data-id="' + pl.id + '" data-name="' + escHtml(pl.name) + '"'
-							+ ' style="padding:6px 10px;cursor:pointer;font-size:0.88rem;border-bottom:1px solid #f0f4f8;">'
-							+ escHtml(pl.name)
-							+ (pl.park ? '<div style="font-size:0.75rem;color:#718096;">' + escHtml(pl.park) + '</div>' : '')
-							+ '</div>';
-					}).join('');
-					acDrop.style.display = 'block';
-					_acItems = Array.prototype.slice.call(acDrop.querySelectorAll('.qt-ac-item'));
-					_acIndex = -1;
-					_acItems.forEach(function(item, i) {
-						item.addEventListener('mousedown', function(e) { e.preventDefault(); acSelect(item); });
-						item.addEventListener('mouseenter', function() { acHighlight(i); });
-					});
-				}).catch(function(){});
-		}, 220);
-	});
-
-	// Keyboard: ↓/↑ move through matches, Enter chooses, Esc closes.
-	searchInput.addEventListener('keydown', function(e) {
-		var open = acDrop.style.display !== 'none' && _acItems.length;
-		if (e.key === 'ArrowDown') {
-			if (!open) return;
-			e.preventDefault();
-			acHighlight((_acIndex + 1) % _acItems.length);
-		} else if (e.key === 'ArrowUp') {
-			if (!open) return;
-			e.preventDefault();
-			acHighlight((_acIndex - 1 + _acItems.length) % _acItems.length);
-		} else if (e.key === 'Enter') {
-			if (open && _acIndex >= 0) { e.preventDefault(); acSelect(_acItems[_acIndex]); }
-			else if (open && _acItems.length === 1) { e.preventDefault(); acSelect(_acItems[0]); }
-		} else if (e.key === 'Escape') {
-			acClose();
-		}
-	});
-
-	document.addEventListener('click', function(e) {
-		if (!e.target.closest('.qt-manager-search-wrap')) acClose();
+	// Autocomplete — shared player picker (abort, stale guard, paging, status badges)
+	OrkPlayerSearch.attach(searchInput, {
+		uir: '<?= UIR ?>',
+		kingdomId: kingdomId,
+		onSelect: function(p) { idInput.value = p.MundaneId; },
+		onClear:  function()  { idInput.value = ''; }
 	});
 
 	// Add button

@@ -1,5 +1,6 @@
+<?php $__h = function($v, $double = true){ return is_scalar($v) ? htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8', $double) : ''; }; ?>
 <div class='info-container' id='player-editor'>
-	<h3><?=$Player['Persona'] ?></h3>
+	<h3><?=htmlspecialchars($Player['Persona'] ?? '', ENT_QUOTES) ?></h3>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/update' enctype="multipart/form-data">
 		<div>
 			<span>Heraldry:</span>
@@ -59,15 +60,15 @@
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/update' enctype="application/x-www-form-urlencoded">
 		<div>
 			<span>Given Name:</span>
-			<span><input type='text' class='name-field' value='<?=html_encode(isset($Admin_player)?$Admin_player['GivenName']:$Player['GivenName']) ?>' name='GivenName' id='GivenName' /></span>
+			<span><input type='text' class='name-field' value='<?=$__h(isset($Admin_player)?$Admin_player['GivenName']:$Player['GivenName'], false) ?>' name='GivenName' id='GivenName' /></span>
 		</div>
 		<div>
 			<span>Surname:</span>
-			<span><input type='text' class='name-field' value='<?=html_encode(isset($Admin_player)?$Admin_player['Surname']:$Player['Surname']) ?>' name='Surname' id='Surname' /></span>
+			<span><input type='text' class='name-field' value='<?=$__h(isset($Admin_player)?$Admin_player['Surname']:$Player['Surname'], false) ?>' name='Surname' id='Surname' /></span>
 		</div>
 		<div>
 			<span>Persona:</span>
-			<span><input type='text' class='required-field name-field' value='<?=html_encode(isset($Admin_player)?$Admin_player['Persona']:$Player['Persona']) ?>' name='Persona' id='Persona' /></span>
+			<span><input type='text' class='required-field name-field' value='<?=$__h(isset($Admin_player)?$Admin_player['Persona']:$Player['Persona'], false) ?>' name='Persona' id='Persona' /></span>
 		</div>
 		<div>
 			<span>Pronouns:</span>
@@ -78,7 +79,7 @@
 				</select>
 				<a id="pronoun-picker" href="#">custom</a>
 			</span>
-			<input id="pronoun_custom" type="hidden" name="PronounCustom" value='<?php echo isset($Admin_player)?$Admin_player['PronounCustom']:$Player['PronounCustom']; ?>' />
+			<input id="pronoun_custom" type="hidden" name="PronounCustom" value='<?php echo $__h(isset($Admin_player)?$Admin_player['PronounCustom']:$Player['PronounCustom']); ?>' />
 		</div>
 		<div>
 			<span>&nbsp;</span>
@@ -86,19 +87,19 @@
 		</div>
 		<div>
 			<span>Username:</span>
-			<span><input type='text' class='required-field name-field' value='<?=html_encode(isset($Admin_player)?$Admin_player['UserName']:$Player['UserName']) ?>' name='UserName' id='UserName' /></span>
+			<span><input type='text' class='required-field name-field' value='<?=$__h(isset($Admin_player)?$Admin_player['UserName']:$Player['UserName'], false) ?>' name='UserName' id='UserName' /></span>
 		</div>
 		<div>
 			<span>Password:</span>
-			<span><input type='password' value='<?=isset($Admin_player)?$Admin_player['Password']:$Player['Password'] ?>' name='Password' id='Password' /></span>
+			<span><input type='password' value='' name='Password' id='Password' /></span>
 		</div>
 		<div>
 			<span>Password (Again):</span>
-			<span><input type='password' value='<?=isset($Admin_player)?$Admin_player['PasswordAgain']:$Player['PasswordAgain'] ?>' name='PasswordAgain' id='PasswordAgain' /></span>
+			<span><input type='password' value='' name='PasswordAgain' id='PasswordAgain' /></span>
 		</div>
 		<div>
 			<span>Email:</span>
-			<span><input type='text' class='most-emails-field' value='<?=html_encode(isset($Admin_player)?$Admin_player['Email']:$Player['Email']) ?>' name='Email' id='Email' /></span>
+			<span><input type='text' class='most-emails-field' value='<?=$__h(isset($Admin_player)?$Admin_player['Email']:$Player['Email'], false) ?>' name='Email' id='Email' /></span>
 		</div>
 		<div>
 			<span>Restricted:</span>
@@ -134,8 +135,8 @@
 		<div class="unimplemented">
 			<span>Dues Semesters:</span>
 			<span>
-				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['DuesDate']:$Player['DuesDate'] ?>' name='DuesDate' id='DuesDate'  disabled="disabled"/>
-				<input type='text' class='numeric-field integer-field' value='<?=isset($Admin_player)?$Admin_player['DuesSemesters']:$Player['DuesSemesters'] ?>' name='DuesSemesters' id='DuesSemesters' style='float: none;'  disabled="disabled"/>
+				<input type='text' class='' value='<?=$__h(isset($Admin_player)?$Admin_player['DuesDate']:$Player['DuesDate']) ?>' name='DuesDate' id='DuesDate'  disabled="disabled"/>
+				<input type='text' class='numeric-field integer-field' value='<?=$__h(isset($Admin_player)?$Admin_player['DuesSemesters']:$Player['DuesSemesters']) ?>' name='DuesSemesters' id='DuesSemesters' style='float: none;'  disabled="disabled"/>
 			</span>
 		</div>
 		<div>
@@ -152,7 +153,7 @@
 		<div>
 			<span>Reeve Until:</span>
 			<span>
-				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['ReeveQualifiedUntil']:$Player['ReeveQualifiedUntil'] ?>' name='ReeveQualifiedUntil' id='ReeveQualifiedUntil' />
+				<input type='text' class='' value='<?=$__h(isset($Admin_player)?$Admin_player['ReeveQualifiedUntil']:$Player['ReeveQualifiedUntil']) ?>' name='ReeveQualifiedUntil' id='ReeveQualifiedUntil' />
 			</span>
 		</div>
 		<div>
@@ -166,12 +167,12 @@
 		<div>
 			<span>Corpora Until:</span>
 			<span>
-				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['CorporaQualifiedUntil']:$Player['CorporaQualifiedUntil'] ?>' name='CorporaQualifiedUntil' id='CorporaQualifiedUntil' />
+				<input type='text' class='' value='<?=$__h(isset($Admin_player)?$Admin_player['CorporaQualifiedUntil']:$Player['CorporaQualifiedUntil']) ?>' name='CorporaQualifiedUntil' id='CorporaQualifiedUntil' />
 		</div>
 		<div>
       <span>Park Member Since:</span>
 			<span>
-				<input type='text' class='' value='<?=isset($Admin_player)?$Admin_player['ParkMemberSince']:$Player['ParkMemberSince'] ?>' name='ParkMemberSince' id='ParkMemberSince' />
+				<input type='text' class='' value='<?=$__h(isset($Admin_player)?$Admin_player['ParkMemberSince']:$Player['ParkMemberSince']) ?>' name='ParkMemberSince' id='ParkMemberSince' />
 			</span>
 		</div>
 		<div>
@@ -201,9 +202,9 @@
 			<span></span>
 			<span><input type='submit' id='Add' value='Add Dues' /></span>
 		</div>
-		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=isset($Admin_player)?$Admin_player['MundaneId']:0 ?>' />
-		<input type='hidden' id='ParkId' name='ParkId' value='<?=isset($Admin_player)?$Admin_player['ParkId']:$Player['ParkId'] ?>' />
-		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=isset($Admin_player)?$Admin_player['KingdomId']:$Player['KingdomId'] ?>' />
+		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=$__h(isset($Admin_player)?$Admin_player['MundaneId']:0) ?>' />
+		<input type='hidden' id='ParkId' name='ParkId' value='<?=$__h(isset($Admin_player)?$Admin_player['ParkId']:$Player['ParkId']) ?>' />
+		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=$__h(isset($Admin_player)?$Admin_player['KingdomId']:$Player['KingdomId']) ?>' />
 	</form>
 	<table class='information-table form-container' id='DuesTable'>
 		<thead>
@@ -219,8 +220,8 @@
 		<tbody>
 			<?php if (is_array($Dues)) foreach ($Dues as $k => $v) : ?>
 				<tr class="<?= ($v['Revoked'] == 1) ? 'penalty-box': '' ?>">
-					<td><?= $v['KingdomName'] ?></td>
-					<td><?= $v['ParkName'] ?></td>
+					<td><?= htmlspecialchars($v['KingdomName'] ?? '', ENT_QUOTES) ?></td>
+					<td><?= htmlspecialchars($v['ParkName'] ?? '', ENT_QUOTES) ?></td>
 					<td style="<?= ($v['DuesUntil'] >= $v['DuesFrom']) ? 'border: 2px dashed green; background-color: #ccf0cd;' : '' ?>"><?= $v['DuesUntil'] ?></td>
 					<td><?= $v['DuesFrom'] ?></td>
 					<td style="<?= ($v['DuesForLife'] == 1) ? 'border: 2px dashed green; background-color: #ccf0cd;' : '' ?>"><?= ($v['DuesForLife'] == 1) ? 'Yes':'No' ?></td>
@@ -252,7 +253,7 @@
 <?php if (!is_array($Units['Units'])) $Units['Units'] = array(); ?>
 <?php foreach ($Units['Units'] as $key => $unit) : ?>
 			<tr>
-				<td><a href='<?=UIR ?>Unit/index/<?=$unit['UnitId'] ?>'><?=$unit['Name'] ?></td>
+				<td><a href='<?=UIR ?>Unit/index/<?=(int)$unit['UnitId'] ?>'><?=htmlspecialchars($unit['Name'] ?? '', ENT_QUOTES) ?></td>
 				<td><?=ucfirst($unit['Type']) ?></td>
 				<td class='deletion'><a class="confirm-remove-unit" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/quitunit/<?=$unit['UnitMundaneId'] ?>'>&times;</a></td>
 			</tr>
@@ -453,7 +454,7 @@
 		});
 		$( "#GivenAt" ).autocomplete({
 			source: function( request, response ) {
-				park_id = $('#ParkId').val();
+				park_id = $('#GivenAt').closest('form').find('input[name=ParkId]').val();
 				$.getJSON(
 					"<?=HTTP_SERVICE ?>Search/SearchService.php",
 					{
@@ -489,8 +490,8 @@
 			},
 			change: function (e, ui) {
 				if (ui.item == null) {
-					showLabel('#GivenBy',null);
-					$('#GivenById').val('');
+					setSideEffects({KingdomId: '', ParkId: '', EventId: ''});
+					checkRequiredFields();
 				}
 				return false;
 			}
@@ -516,9 +517,11 @@
 	});
 
 	function setSideEffects(details) {
-		$( '#KingdomId' ).val(details['KingdomId']);
-		$( '#ParkId' ).val(details['ParkId']);
-		$( '#EventId' ).val(details['EventId']);
+		// Scope to the award form: #ParkId/#KingdomId are duplicated by the Dues form earlier on the page.
+		var awardForm = $('#GivenAt').closest('form');
+		awardForm.find('input[name=KingdomId]').val(details['KingdomId']);
+		awardForm.find('input[name=ParkId]').val(details['ParkId']);
+		awardForm.find('input[name=EventId]').val(details['EventId']);
 	}
 	function checkRequiredFields() {
 		var hasAward = $('#AwardId').val() !== '' && $('#AwardId').val() !== null;
@@ -529,7 +532,7 @@
 
 
 <div class='info-container'>
-	<h3>Player Operations for <?=$Player['Persona'] ?></h3>
+	<h3>Player Operations for <?=htmlspecialchars($Player['Persona'] ?? '', ENT_QUOTES) ?></h3>
 	<ul>
 		<li>Events
 			<ul>
@@ -553,8 +556,8 @@
 		<tbody>
 <?php if (is_array($Notes)) foreach ($Notes as $key => $note) : ?>
     		<tr>
-				<td><?=$note['Note'] ?></td>
-    			<td><?=$note['Description'] ?></td>
+				<td><?=htmlspecialchars($note['Note'] ?? '', ENT_QUOTES) ?></td>
+    			<td><?=htmlspecialchars($note['Description'] ?? '', ENT_QUOTES) ?></td>
     			<td class='form-informational-field' style='text-wrap: nowrap'><?=$note['Date'] . (strtotime($note['DateComplete'])>0?(" - " . $note['DateComplete']):"") ?></td>
     			<td class='deletion'><a class="confirm-delete-note" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deletenote/<?=$note['NoteId'] ?>'>&times;</a></td>
 			</tr>
@@ -581,37 +584,37 @@
 		</div>
 		<div id='AwardNameField'>
 			<span>Award Name:</span>
-			<span><input type='text' value='<?=isset($Admin_player)?$Admin_player['AwardName']:$Player['AwardName'] ?>' name='AwardName' id='AwardName' /></span>
+			<span><input type='text' value='<?=$__h(isset($Admin_player)?$Admin_player['AwardName']:$Player['AwardName']) ?>' name='AwardName' id='AwardName' /></span>
 		</div>
 		<div id='AwardRankField'>
 			<span>Rank:</span>
-			<span><input type='text' class='numeric-field' style='float:none;' value='<?=isset($Admin_player)?$Admin_player['Rank']:$Player['Rank'] ?>' name='Rank' id='Rank' /></span>
+			<span><input type='text' class='numeric-field' style='float:none;' value='<?=$__h(isset($Admin_player)?$Admin_player['Rank']:$Player['Rank']) ?>' name='Rank' id='Rank' /></span>
 		</div>
 		<div>
 			<span>Date:</span>
-			<span><input type='text' value='<?=isset($Admin_player)?$Admin_player['Date']:$Player['Date'] ?>' name='Date' id='Date' /></span>
+			<span><input type='text' value='<?=$__h(isset($Admin_player)?$Admin_player['Date']:$Player['Date']) ?>' name='Date' id='Date' /></span>
 		</div>
 		<div>
 			<span>Given By:</span>
-			<span><input type='text' value='<?=isset($Admin_player)?$Admin_player['GivenBy']:$Player['GivenBy'] ?>' name='GivenBy' id='GivenBy' /></span>
+			<span><input type='text' value='<?=$__h(isset($Admin_player)?$Admin_player['GivenBy']:$Player['GivenBy']) ?>' name='GivenBy' id='GivenBy' /></span>
 		</div>
 		<div>
 			<span>Given At:</span>
-			<span><input type='text' value='<?=isset($Admin_player)?$Admin_player['GivenAt']:$Player['GivenAt'] ?>' name='GivenAt' id='GivenAt' /></span>
+			<span><input type='text' value='<?=$__h(isset($Admin_player)?$Admin_player['GivenAt']:$Player['GivenAt']) ?>' name='GivenAt' id='GivenAt' /></span>
 		</div>
 		<div>
 			<span>Given For:</span>
-			<span><input type='text' value='<?=isset($Admin_player)?$Admin_player['Note']:$Player['Note'] ?>' name='Note' id='Note' /></span>
+			<span><input type='text' value='<?=$__h(isset($Admin_player)?$Admin_player['Note']:$Player['Note']) ?>' name='Note' id='Note' /></span>
 		</div>
 		<div>
 			<span></span>
 			<span><input type='submit' id='AddAward' value='Add' disabled /><button type='button' id='Cancel' value='Cancel'>Cancel</button></span>
 		</div>
 		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=$Player['MundaneId'] ?>' />
-		<input type='hidden' id='GivenById' name='GivenById' value='<?=isset($Admin_player)?$Admin_player['GivenById']:'' ?>' />
-		<input type='hidden' id='ParkId' name='ParkId' value='<?=isset($Admin_player)?$Admin_player['ParkId']:$Player['ParkId'] ?>' />
-		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=isset($Admin_player)?$Admin_player['KingdomId']:$Player['KingdomId'] ?>' />
-		<input type='hidden' id='EventId' name='EventId' value='<?=isset($Admin_player)?$Admin_player['EventId']:$Player['EventId'] ?>' />
+		<input type='hidden' id='GivenById' name='GivenById' value='<?=$__h(isset($Admin_player)?$Admin_player['GivenById']:'') ?>' />
+		<input type='hidden' id='ParkId' name='ParkId' value='<?=$__h(isset($Admin_player)?$Admin_player['ParkId']:$Player['ParkId']) ?>' />
+		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=$__h(isset($Admin_player)?$Admin_player['KingdomId']:$Player['KingdomId']) ?>' />
+		<input type='hidden' id='EventId' name='EventId' value='<?=$__h(isset($Admin_player)?$Admin_player['EventId']:$Player['EventId']) ?>' />
 	</form>
 </div>
 
@@ -669,9 +672,7 @@
 		$( '#Note' ).val('');
 		$( '#MundaneId' ).val('<?=$Player['MundaneId'] ?>');
 		$( '#GivenById' ).val('');
-		$( '#ParkId' ).val('');
-		$( '#KingdomId' ).val('');
-		$( '#EventId' ).val('');
+		setSideEffects({KingdomId: '', ParkId: '', EventId: ''});
 		checkRequiredFields();
 	}
 
@@ -696,9 +697,7 @@
 				$( '#GivenAt' ).val((data['AtEventId'] > 0)?(data['EventName']):((data['AtParkId']>0)?data['ParkName']:data['KingdomName']));
 				$( '#Note' ).val(data['Note']);
 				$( '#GivenById' ).val(data['GivenById']);
-				$( '#ParkId' ).val(data['ParkId']);
-				$( '#KingdomId' ).val(data['KingdomId']);
-				$( '#EventId' ).val(data['EventId']);
+				setSideEffects(data);
 			});
 	}
 </script>
@@ -736,12 +735,12 @@
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
 <?php if (in_array($detail['OfficerRole'], ['none', null]) && $detail['IsTitle'] != 1) : ?>
 			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
-				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
+				<?php $__awn = trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName']; ?><td><?=$__h($__awn) ?><?=$__awn!=$detail['Name']?' <i>('.$__h($detail['Name']).')</i>':'' ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='award-date'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
-				<td><a href='<?=UIR ?>Admin/player/<?=$detail['GivenById'] ?>'><?=$detail['GivenBy'] ?></a></td>
-				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
-				<td class='award-note'><?=$detail['Note'] ?></td>
+				<td><a href='<?=UIR ?>Admin/player/<?=(int)$detail['GivenById'] ?>'><?=$__h($detail['GivenBy']) ?></a></td>
+				<td><?=$__h(trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]")) ?></td>
+				<td class='award-note'><?=htmlspecialchars($detail['Note'] ?? '', ENT_QUOTES) ?></td>
 				<td class='deletion'><a class="confirm-delete-award" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
 				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='confirm-strip-award revocation'>Strip</a></td>
 			</tr>
@@ -784,12 +783,12 @@
 <?php foreach ($Details['Awards'] as $key => $detail) : ?>
 <?php if (!in_array($detail['OfficerRole'], ['none', null]) || $detail['IsTitle'] == 1) : ?>
 			<tr onClick='javascript:EditAward(<?=$detail['AwardsId'] ?>)' awardsid='<?=$detail['AwardsId'] ?>' awardid='' rank='' givenby='' parkid='' kingdomid='' eventid=''>
-				<td><?=trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'] ?><?=(trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName'])!=$detail['Name']?" <i>($detail[Name])</i>":"" ?></td>
+				<?php $__awn = trimlen($detail['CustomAwardName'])>0?$detail['CustomAwardName']:$detail['KingdomAwardName']; ?><td><?=$__h($__awn) ?><?=$__awn!=$detail['Name']?' <i>('.$__h($detail['Name']).')</i>':'' ?></td>
 				<td><?=valid_id($detail['Rank'])?$detail['Rank']:'' ?></td>
 				<td class='award-date'><?=strtotime($detail['Date'])>0?$detail['Date']:'' ?></td>
-				<td><a href='<?=UIR ?>Admin/player/<?=$detail['GivenById'] ?>'><?=$detail['GivenBy'] ?></a></td>
-				<td><?=trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]") ?></td>
-				<td class='award-note'><?=$detail['Note'] ?></td>
+				<td><a href='<?=UIR ?>Admin/player/<?=(int)$detail['GivenById'] ?>'><?=$__h($detail['GivenBy']) ?></a></td>
+				<td><?=$__h(trimlen($detail['ParkName'])>0?"$detail[ParkName], $detail[KingdomName]":(valid_id($detail['EventId'])?"$detail[EventName]":"$detail[KingdomName]")) ?></td>
+				<td class='award-note'><?=htmlspecialchars($detail['Note'] ?? '', ENT_QUOTES) ?></td>
 				<td class='deletion'><a class="confirm-delete-award" href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/deleteaward/<?=$detail['AwardsId'] ?>'>&times;</a></td>
 				<td><a href='<?=UIR ?>Admin/player/<?=$Player['MundaneId'] ?>/revokeaward/<?=$detail['AwardsId'] ?>/' class='confirm-strip-award revocation'>Strip</a></td>
 			</tr>
@@ -807,7 +806,7 @@ var buttons = [
 	{text:"Need help?", value:"yolo", class:"help", close:false}
 ];
 
-<?php $pronoun_custom_arr = isset($Admin_player)? json_decode($Admin_player['PronounCustom']) : json_decode($Player['PronounCustom']);
+<?php $__pc = isset($Admin_player) ? $Admin_player['PronounCustom'] : $Player['PronounCustom']; $pronoun_custom_arr = is_string($__pc) ? json_decode($__pc) : null;
 $curr_custom_pronoun_txt = $Player['PronounCustomText'];
  ?>
 

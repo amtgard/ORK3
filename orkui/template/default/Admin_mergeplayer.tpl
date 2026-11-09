@@ -1,3 +1,4 @@
+<?php $__h = function($v, $double = true){ return is_scalar($v) ? htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8', $double) : ''; }; ?>
 <script type='text/javascript'>
 	$(function() {
 		$( "#FromParkName" ).autocomplete({
@@ -27,6 +28,7 @@
 			select: function (e, ui) {
 				showLabel('#FromParkName', ui);
 				$('#FromParkId').val(ui.item.value);
+				OrkPlayerSearch.reattach(document.getElementById('FromPlayerName'), { parkId: parseInt(ui.item.value, 10) || 0 });
 				return false;
 			}
 		});
@@ -57,11 +59,14 @@
 			select: function (e, ui) {
 				showLabel('#ToParkName', ui);
 				$('#ToParkId').val(ui.item.value);
+				OrkPlayerSearch.reattach(document.getElementById('ToPlayerName'), { parkId: parseInt(ui.item.value, 10) || 0 });
 				return false;
 			}
 		});
 		OrkPlayerSearch.attach(document.getElementById('FromPlayerName'), {
 			uir: '<?=UIR ?>',
+			parkId: <?=valid_id($ParkId) ? (int)$ParkId : 0 ?>,
+			kingdomId: <?=valid_id($KingdomId) ? (int)$KingdomId : 0 ?>,
 			includeInactive: true,
 			excludeIds: function() { return [parseInt(document.getElementById('ToMundaneId').value) || 0]; },
 			onSelect: function(p) {
@@ -73,6 +78,8 @@
 		});
 		OrkPlayerSearch.attach(document.getElementById('ToPlayerName'), {
 			uir: '<?=UIR ?>',
+			parkId: <?=valid_id($ParkId) ? (int)$ParkId : 0 ?>,
+			kingdomId: <?=valid_id($KingdomId) ? (int)$KingdomId : 0 ?>,
 			includeInactive: true,
 			excludeIds: function() { return [parseInt(document.getElementById('FromMundaneId').value) || 0]; },
 			onSelect: function(p) {
@@ -96,30 +103,30 @@
 <?php if (! valid_id($ParkId)) : ?>
 		<div>
 			<span>From Park:</span>
-			<span><input type='text' value='<?=$Admin_mergeplayer['FromParkName'] ?>' name='FromParkName' id='FromParkName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_mergeplayer['FromParkName'] ?? '') ?>' name='FromParkName' id='FromParkName' /></span>
 		</div>
 <?php endif ; ?>
 		<div>
 			<span>From Player (this player will be destroyed):</span>
-			<span><input type='text' value='<?=$Admin_mergeplayer['FromPlayerName'] ?>' name='FromPlayerName' id='FromPlayerName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_mergeplayer['FromPlayerName'] ?? '') ?>' name='FromPlayerName' id='FromPlayerName' /></span>
 		</div>
 <?php if (! valid_id($ParkId)) : ?>
 		<div>
 			<span>To Park:</span>
-			<span><input type='text' class='required-field' value='<?=$Admin_mergeplayer['ToParkName'] ?>' name='ToParkName' id='ToParkName' /></span>
+			<span><input type='text' class='required-field' value='<?=$__h($Admin_mergeplayer['ToParkName'] ?? '') ?>' name='ToParkName' id='ToParkName' /></span>
 		</div>
 <?php endif ; ?>
 		<div>
 			<span>To Player:</span>
-			<span><input type='text' class='required-field' value='<?=$Admin_mergeplayer['ToPlayerName'] ?>' name='ToPlayerName' id='ToPlayerName' /></span>
+			<span><input type='text' class='required-field' value='<?=$__h($Admin_mergeplayer['ToPlayerName'] ?? '') ?>' name='ToPlayerName' id='ToPlayerName' /></span>
 		</div>
 		<div>
 			<span></span>
 			<span><input type='submit' value='Merge Player' name='Merge Player' /></span>
 		</div>
-		<input type='hidden' name='FromMundaneId' id='FromMundaneId' value='<?=$Admin_mergeplayer['FromMundaneId'] ?>' />
-		<input type='hidden' name='FromParkId' id='FromParkId' value='<?=valid_id($ParkId)?$ParkId:$Admin_mergeplayer['FromParkId'] ?>' />
-		<input type='hidden' name='ToMundaneId' id='ToMundaneId' value='<?=$Admin_mergeplayer['ToMundaneId'] ?>' />
-		<input type='hidden' name='ToParkId' id='ToParkId' value='<?=valid_id($ParkId)?$ParkId:$Admin_mergeplayer['ToParkId'] ?>' />
+		<input type='hidden' name='FromMundaneId' id='FromMundaneId' value='<?=$__h($Admin_mergeplayer['FromMundaneId'] ?? '') ?>' />
+		<input type='hidden' name='FromParkId' id='FromParkId' value='<?=$__h(valid_id($ParkId)?$ParkId:$Admin_mergeplayer['FromParkId']) ?>' />
+		<input type='hidden' name='ToMundaneId' id='ToMundaneId' value='<?=$__h($Admin_mergeplayer['ToMundaneId'] ?? '') ?>' />
+		<input type='hidden' name='ToParkId' id='ToParkId' value='<?=$__h(valid_id($ParkId)?$ParkId:$Admin_mergeplayer['ToParkId']) ?>' />
 	</form>
 </div>

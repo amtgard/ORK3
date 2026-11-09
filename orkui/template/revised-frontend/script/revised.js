@@ -40,6 +40,28 @@ function tnHeldRank(ranks, opt, baseAwardId) {
 }
 if (typeof window !== 'undefined') { window.tnHeldRank = tnHeldRank; }
 
+/* Load a player's held award ranks for one award/rec modal. One request in
+   flight per modal (keyed by its hidden player-id input): a new call, or a
+   call with no playerId (onClear), aborts the previous one, and a response is
+   applied only while that input still holds the same player. Without this a
+   slow response for player A could overwrite player B's ranks. */
+var tnAwardRanksCtl = {};
+function tnLoadAwardRanks(uir, playerId, idInputId, apply) {
+    if (tnAwardRanksCtl[idInputId]) tnAwardRanksCtl[idInputId].abort();
+    tnAwardRanksCtl[idInputId] = null;
+    if (!playerId) return;
+    var pid = String(playerId);
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    tnAwardRanksCtl[idInputId] = ctl;
+    fetch(uir + 'PlayerAjax/player/' + pid + '/awardranks', ctl ? { signal: ctl.signal } : undefined)
+        .then(function(r) { return r.json(); })
+        .then(function(ranks) {
+            var idEl = document.getElementById(idInputId);
+            if (!idEl || String(idEl.value) !== pid) return;
+            apply(ranks || {});
+        }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+}
+
 /* The top of a ladder is rank 10 (12 for Zodiac) and nothing above it can be
    recommended or granted. When the player already holds that rank the rank
    row cannot lead anywhere, so say so under it and point at the only way
@@ -3618,16 +3640,18 @@ $(document).ready(function() {
             gid('kn-award-player-id').value = player.MundaneId;
             checkRequired();
             knPlayerRanks = {};
-            fetch(UIR_JS + 'PlayerAjax/player/' + player.MundaneId + '/awardranks')
-                .then(function(r) { return r.json(); })
-                .then(function(ranks) {
-                    knPlayerRanks = ranks || {};
-                    var curAward = gid('kn-award-select').value;
-                    if (curAward) buildRankPills(curAward);
-                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+            tnLoadAwardRanks(UIR_JS, player.MundaneId, 'kn-award-player-id', function(ranks) {
+                knPlayerRanks = ranks;
+                var curAward = gid('kn-award-select').value;
+                if (curAward) buildRankPills(curAward);
+            });
         },
         onClear: function() {
             gid('kn-award-player-id').value = '';
+            tnLoadAwardRanks(UIR_JS, 0, 'kn-award-player-id');
+            knPlayerRanks = {};
+            var curAward = gid('kn-award-select').value;
+            if (curAward) buildRankPills(curAward);
             checkRequired();
         }
     });
@@ -3784,14 +3808,11 @@ $(document).ready(function() {
             gid('kn-award-player-id').value   = String(rec.MundaneId || '');
         }
         if (rec.MundaneId) {
-            var pid = String(rec.MundaneId);
-            fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
-                .then(function(r) { return r.json(); })
-                .then(function(ranks) {
-                    knPlayerRanks = ranks || {};
-                    var curAward = gid('kn-award-select').value;
-                    if (curAward) buildRankPills(curAward);
-                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+            tnLoadAwardRanks(UIR_JS, rec.MundaneId, 'kn-award-player-id', function(ranks) {
+                knPlayerRanks = ranks;
+                var curAward = gid('kn-award-select').value;
+                if (curAward) buildRankPills(curAward);
+            });
         }
         if (rec.KingdomAwardId) {
             var sel = gid('kn-award-select');
@@ -4288,13 +4309,11 @@ $(document).ready(function() {
             var pid = gid('kn-award-player-id').value;
             if (pid) {
                 knPlayerRanks = {};
-                fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
-                    .then(function(r) { return r.json(); })
-                    .then(function(ranks) {
-                        knPlayerRanks = ranks || {};
-                        var curAward = gid('kn-award-select').value;
-                        if (curAward) buildRankPills(curAward);
-                    }).catch(function() {});
+                tnLoadAwardRanks(UIR_JS, pid, 'kn-award-player-id', function(ranks) {
+                    knPlayerRanks = ranks;
+                    var curAward = gid('kn-award-select').value;
+                    if (curAward) buildRankPills(curAward);
+                });
             }
             gid('kn-award-select').focus();
         });
@@ -4392,17 +4411,19 @@ $(document).ready(function() {
             gid('kn-rec-player-id').value = player.MundaneId;
             knMoRecheck(player.MundaneId);
             knRecRanks = {};
-            fetch(UIR_JS + 'PlayerAjax/player/' + player.MundaneId + '/awardranks')
-                .then(function(r) { return r.json(); })
-                .then(function(ranks) {
-                    knRecRanks = ranks || {};
-                    var cur = gid('kn-rec-award-select').value;
-                    if (cur) buildRecRankPills(cur);
-                }).catch(function() {});
+            tnLoadAwardRanks(UIR_JS, player.MundaneId, 'kn-rec-player-id', function(ranks) {
+                knRecRanks = ranks;
+                var cur = gid('kn-rec-award-select').value;
+                if (cur) buildRecRankPills(cur);
+            });
             checkRequired();
         },
         onClear: function() {
             gid('kn-rec-player-id').value = '';
+            tnLoadAwardRanks(UIR_JS, 0, 'kn-rec-player-id');
+            knRecRanks = {};
+            var cur = gid('kn-rec-award-select').value;
+            if (cur) buildRecRankPills(cur);
             knMoRecheck(0);
             checkRequired();
         }
@@ -5369,6 +5390,7 @@ $(document).ready(function() {
                 OrkPlayerSearch.attach(ni, {
                     uir: KnConfig.uir,
                     kingdomId: KnConfig.kingdomId,
+                    restrictTo: 'kingdom',
                     onSelect: function(p) { hi.value = p.MundaneId; vb.style.display = ''; },
                     onClear:  function() { hi.value = ''; }
                 });
@@ -7690,16 +7712,18 @@ $(document).ready(function() {
             gid('pk-award-player-id').value = player.MundaneId;
             checkRequired();
             pkPlayerRanks = {};
-            fetch(UIR_JS + 'PlayerAjax/player/' + player.MundaneId + '/awardranks')
-                .then(function(r) { return r.json(); })
-                .then(function(ranks) {
-                    pkPlayerRanks = ranks || {};
-                    var curAward = gid('pk-award-select').value;
-                    if (curAward) buildRankPills(curAward);
-                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+            tnLoadAwardRanks(UIR_JS, player.MundaneId, 'pk-award-player-id', function(ranks) {
+                pkPlayerRanks = ranks;
+                var curAward = gid('pk-award-select').value;
+                if (curAward) buildRankPills(curAward);
+            });
         },
         onClear: function() {
             gid('pk-award-player-id').value = '';
+            tnLoadAwardRanks(UIR_JS, 0, 'pk-award-player-id');
+            pkPlayerRanks = {};
+            var curAward = gid('pk-award-select').value;
+            if (curAward) buildRankPills(curAward);
             checkRequired();
         }
     });
@@ -7837,14 +7861,11 @@ $(document).ready(function() {
             gid('pk-award-player-id').value   = String(rec.MundaneId || '');
         }
         if (rec.MundaneId) {
-            var pid = String(rec.MundaneId);
-            fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
-                .then(function(r) { return r.json(); })
-                .then(function(ranks) {
-                    pkPlayerRanks = ranks || {};
-                    var curAward = gid('pk-award-select').value;
-                    if (curAward) buildRankPills(curAward);
-                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+            tnLoadAwardRanks(UIR_JS, rec.MundaneId, 'pk-award-player-id', function(ranks) {
+                pkPlayerRanks = ranks;
+                var curAward = gid('pk-award-select').value;
+                if (curAward) buildRankPills(curAward);
+            });
         }
         if (rec.KingdomAwardId) {
             var sel = gid('pk-award-select');
@@ -8058,13 +8079,11 @@ $(document).ready(function() {
             var pid = gid('pk-award-player-id').value;
             if (pid) {
                 pkPlayerRanks = {};
-                fetch(UIR_JS + 'PlayerAjax/player/' + pid + '/awardranks')
-                    .then(function(r) { return r.json(); })
-                    .then(function(ranks) {
-                        pkPlayerRanks = ranks || {};
-                        var curAward = gid('pk-award-select').value;
-                        if (curAward) buildRankPills(curAward);
-                    }).catch(function() {});
+                tnLoadAwardRanks(UIR_JS, pid, 'pk-award-player-id', function(ranks) {
+                    pkPlayerRanks = ranks;
+                    var curAward = gid('pk-award-select').value;
+                    if (curAward) buildRankPills(curAward);
+                });
             }
             gid('pk-award-select').focus();
         });
@@ -8176,17 +8195,19 @@ $(document).ready(function() {
             gid('pk-rec-player-id').value = player.MundaneId;
             pkMoRecheck(player.MundaneId);
             pkRecRanks = {};
-            fetch(UIR_JS + 'PlayerAjax/player/' + player.MundaneId + '/awardranks')
-                .then(function(r) { return r.json(); })
-                .then(function(ranks) {
-                    pkRecRanks = ranks || {};
-                    var cur = gid('pk-rec-award-select').value;
-                    if (cur) buildRecRankPills(cur);
-                }).catch(function() {});
+            tnLoadAwardRanks(UIR_JS, player.MundaneId, 'pk-rec-player-id', function(ranks) {
+                pkRecRanks = ranks;
+                var cur = gid('pk-rec-award-select').value;
+                if (cur) buildRecRankPills(cur);
+            });
             checkRequired();
         },
         onClear: function() {
             gid('pk-rec-player-id').value = '';
+            tnLoadAwardRanks(UIR_JS, 0, 'pk-rec-player-id');
+            pkRecRanks = {};
+            var cur = gid('pk-rec-award-select').value;
+            if (cur) buildRecRankPills(cur);
             pkMoRecheck(0);
             checkRequired();
         }
@@ -9531,10 +9552,20 @@ $(document).ready(function() {
             });
             if (!staff.length) { qaRow.style.display = 'none'; return; }
             qaRow.style.display = '';
+            if (!qaList.dataset.qaBound) {
+                qaList.dataset.qaBound = '1';
+                qaList.addEventListener('click', function(e) {
+                    var btn = e.target.closest('.ev-qa-add');
+                    if (!btn || !qaList.contains(btn)) return;
+                    var mid = parseInt(btn.dataset.mid, 10) || 0;
+                    var st = (EvConfig.staffList || []).filter(function(x) { return parseInt(x.MundaneId, 10) === mid; })[0];
+                    if (st) evStaffQuickAddLead(mid, st.Persona);
+                });
+            }
             qaList.innerHTML = staff.map(function(s) {
                 return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid #f0f0f0;font-size:13px">' +
                     '<span>' + escHtmlSt(s.Persona) + '</span>' +
-                    '<button type="button" onclick="evStaffQuickAddLead(' + s.MundaneId + ',\'' + encodeURIComponent(s.Persona) + '\')" ' +
+                    '<button type="button" class="ev-qa-add" data-mid="' + (parseInt(s.MundaneId, 10) || 0) + '" ' +
                     'style="background:#276749;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px">+ Add</button>' +
                     '</div>';
             }).join('');
@@ -9549,8 +9580,7 @@ $(document).ready(function() {
             if (chevron) chevron.style.transform = open ? '' : 'rotate(90deg)';
         };
 
-        window.evStaffQuickAddLead = function(mundaneId, encodedName) {
-            var name = decodeURIComponent(encodedName);
+        window.evStaffQuickAddLead = function(mundaneId, name) {
             if (!evSchedLeads.some(function(l) { return l.MundaneId === mundaneId; })) {
                 evSchedLeads.push({ MundaneId: mundaneId, Persona: name });
                 evRenderSchedLeads();
@@ -13141,6 +13171,7 @@ function setupPronounPicker(cfg) {
                 OrkPlayerSearch.attach(ni, {
                     uir: PkConfig.uir,
                     kingdomId: PkConfig.kingdomId,
+                    restrictTo: 'kingdom',
                     onSelect: function(p) { hi.value = p.MundaneId; vb.style.display = ''; },
                     onClear:  function() { hi.value = ''; }
                 });
@@ -14610,14 +14641,16 @@ window.pnCloseUnitCreateModal = function() {
                 parkId: 0
             };
         }
-        // within / out: locked to THIS kingdom.
-        return {
+        // within / out: locked to THIS kingdom, narrowed to a source park if chosen.
+        var o = {
             restrictTo: 'kingdom',
             kingdomId: KnConfig.kingdomId,
             parkId: 0,
             restrictKingdomIds: null,
             excludeKingdomId: null
         };
+        if (sel.parkId) { o.restrictTo = 'park'; o.parkId = Number(sel.parkId); }
+        return o;
     }
     function knmpReattachPlayerSearch() {
         var input = gid('kn-moveplayer-player-name');

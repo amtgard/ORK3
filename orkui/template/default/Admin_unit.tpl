@@ -37,7 +37,7 @@
 </script>
 
 <div class='info-container'>
-	<h3><?=$Unit['Details']['Unit']['Name'] ?></h3>
+	<h3><?=htmlspecialchars($Unit['Details']['Unit']['Name'] ?? '', ENT_QUOTES) ?></h3>
 <?php if (strlen($Error) > 0) : ?>
 	<div class='error-message'><?=$Error ?></div>
 <?php endif; ?>
@@ -67,11 +67,11 @@
 		</div>
 		<div>
 			<span>Description:</span>
-			<span class='form-informational-field'><textarea name='Description' rows=10 cols=50><?=$Unit['Details']['Unit']['Description'] ?></textarea></span>
+			<span class='form-informational-field'><textarea name='Description' rows=10 cols=50><?=htmlspecialchars($Unit['Details']['Unit']['Description'] ?? '', ENT_QUOTES) ?></textarea></span>
 		</div>
 		<div>
 			<span>History:</span>
-			<span class='form-informational-field'><textarea name='History' rows=10 cols=50><?=$Unit['Details']['Unit']['History'] ?></textarea></span>
+			<span class='form-informational-field'><textarea name='History' rows=10 cols=50><?=htmlspecialchars($Unit['Details']['Unit']['History'] ?? '', ENT_QUOTES) ?></textarea></span>
 		</div>
 		<div>
 			<span></span>
@@ -93,9 +93,9 @@
 			</thead>
 			<tbody>
 <?php foreach ($Unit['Authorizations']['Authorizations'] as $k => $auth) : ?>
-				<tr onClick="javascript:document.location.href='<?=UIR ?>Player/profile/<?=$auth['MundaneId'] ?>'">
-					<td><?=$auth['UserName'] ?></td>
-					<td><?=$auth['Persona'] ?></td>
+				<tr onClick="javascript:document.location.href='<?=UIR ?>Player/profile/<?=(int)$auth['MundaneId'] ?>'">
+					<td><?=htmlspecialchars($auth['UserName'] ?? '', ENT_QUOTES) ?></td>
+					<td><?=htmlspecialchars($auth['Persona'] ?? '', ENT_QUOTES) ?></td>
 					<td class='deletion'><a href='<?=UIR . 'Admin/unit/' . $Unit['Details']['Unit']['UnitId'] . '&Action=deleteauth&AuthorizationId=' . $auth['AuthorizationId'] ?>'>&times;</a></td>
 				</tr>
 <?php endforeach; ?>
@@ -151,9 +151,9 @@
 			<tbody>
 <?php foreach ($Unit['Members']['Roster'] as $k => $member) : ?>
 				<tr onClick="javascript:EditMember($(this), <?=$member['UnitMundaneId'] ?>)">
-					<td><a href='<?=UIR ?>Player/profile/<?=$member['MundaneId'] ?>'><?=$member['Persona'] ?></a></td>
+					<td><a href='<?=UIR ?>Player/profile/<?=(int)$member['MundaneId'] ?>'><?=htmlspecialchars($member['Persona'] ?? '', ENT_QUOTES) ?></a></td>
 					<td><?=ucfirst($member['UnitRole']) ?></td>
-					<td><?=$member['UnitTitle'] ?></td>
+					<td><?=htmlspecialchars($member['UnitTitle'] ?? '', ENT_QUOTES) ?></td>
 					<td><a href='<?=UIR . 'Admin/unit/' . $Unit['Details']['Unit']['UnitId'] . '&Action=retire&UnitMundaneId=' . $member['UnitMundaneId'] ?>'>Quit</a></td>
 					<td class='deletion'><a href='<?=UIR . 'Admin/unit/' . $Unit['Details']['Unit']['UnitId'] . '&Action=remove&UnitMundaneId=' . $member['UnitMundaneId'] ?>'>&times;</a></td>
 				</tr>
@@ -178,7 +178,7 @@
 </div>
 
 <div class='info-container'>
-	<h3>Unit Operations for <?=$Unit['Details']['Unit']['Name'] ?></h3>
+	<h3>Unit Operations for <?=htmlspecialchars($Unit['Details']['Unit']['Name'] ?? '', ENT_QUOTES) ?></h3>
 	<ul>
 		<li>Events
 			<ul>

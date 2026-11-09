@@ -8,7 +8,8 @@
 						Action: 'Search/Player',
 						type: 'all',
 						search: request.term,
-                        limit: 15
+                        limit: 15,
+						token: '<?= htmlspecialchars((string)($this->__session->token ?? ''), ENT_QUOTES) ?>'
 					},
 					function( data ) {
 						var suggestions = [];

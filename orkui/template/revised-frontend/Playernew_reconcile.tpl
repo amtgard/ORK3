@@ -322,12 +322,30 @@ var RcConfig = {
 	'use strict';
 
 	// ── Autocomplete ────────────────────────────────────────────────────────
-	var _t = {};
-	function acSearch(q, cb) {
-		clearTimeout(_t[q]);
-		_t[q] = setTimeout(function() {
-			fetch(RcConfig.uir + 'SearchAjax/universal&q=' + encodeURIComponent(q) + '&kid=' + RcConfig.kingdomId + '&inactive=1')
-				.then(function(r){ return r.json(); }).then(cb).catch(function(){});
+	// One debounce timer, request counter and AbortController per input, so each
+	// keystroke cancels the previous one and a stale response never renders.
+	function acState(input) {
+		return input._rcAc || (input._rcAc = { timer: null, seq: 0, ctrl: null });
+	}
+	function acCancel(input) {
+		var st = acState(input);
+		clearTimeout(st.timer);
+		st.seq++;
+		if (st.ctrl) { st.ctrl.abort(); st.ctrl = null; }
+		return st;
+	}
+	function acSearch(input, q, cb) {
+		var st = acCancel(input);
+		var n  = st.seq;
+		st.timer = setTimeout(function() {
+			var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+			st.ctrl = ctrl;
+			// Only parks and kingdoms are used here, so skip the player and unit queries.
+			fetch(RcConfig.uir + 'SearchAjax/universal&focus=park,kingdom&q=' + encodeURIComponent(q) + '&kid=' + RcConfig.kingdomId,
+				ctrl ? { signal: ctrl.signal } : undefined)
+				.then(function(r){ return r.json(); })
+				.then(function(data){ if (n === st.seq) cb(data); })
+				.catch(function(){});
 		}, 220);
 	}
 
@@ -366,8 +384,8 @@ var RcConfig = {
 			locText.addEventListener('input', function() {
 				locPark.value = 0; locKingdom.value = 0; locEvent.value = 0;
 				var q = locText.value.trim();
-				if (q.length < 2) { locDrop.style.display = 'none'; return; }
-				acSearch(q, function(data) {
+				if (q.length < 2) { acCancel(locText); locDrop.style.display = 'none'; return; }
+				acSearch(locText, q, function(data) {
 					var items = [];
 					(data.parks    || []).forEach(function(p){ items.push({id:p.id, name:p.name, sub:p.abbr||'', type:'park'}); });
 					(data.kingdoms || []).forEach(function(k){ items.push({id:k.id, name:k.name, sub:'Kingdom',     type:'kingdom'}); });

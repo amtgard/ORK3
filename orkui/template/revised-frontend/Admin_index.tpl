@@ -851,8 +851,9 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		var results = document.getElementById(opts.resultsId);
 		var timer   = null;
 		var minLen  = opts.minLen || 2;
+		var reqSeq  = 0; // bumped on every edit/close so superseded responses are dropped
 
-		function acClose() { results.classList.remove('kn-ac-open'); results.innerHTML = ''; }
+		function acClose() { reqSeq++; results.classList.remove('kn-ac-open'); results.innerHTML = ''; }
 		function acOpen(items) {
 			if (!items.length) { acClose(); return; }
 			results.innerHTML = items.map(function(item) {
@@ -873,10 +874,11 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 			var term = this.value.trim();
 			hidden.value = '';
 			clearTimeout(timer);
+			var seq = ++reqSeq;
 			if (opts.onClear) opts.onClear();
 			if (term.length < minLen) { acClose(); return; }
 			timer = setTimeout(function() {
-				opts.fetchFn(term, function(items) { acOpen(items); });
+				opts.fetchFn(term, function(items) { if (seq === reqSeq) acOpen(items); });
 			}, 220);
 		});
 		results.addEventListener('click', function(e) {
@@ -946,19 +948,19 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 			}));
 		}).catch(function(){cb([]);});
 	}
-	var cpKingdomsCache = null;
+	var cpKingdomsP = null; // cache the promise so back-to-back cascades share one request
 	function cpLoadKingdoms(cb) {
-		if (cpKingdomsCache) { cb(cpKingdomsCache); return; }
-		fetch(UIR + 'KingdomAjax/getkingdoms').then(function(r){return r.json();}).then(function(d){ cpKingdomsCache = (d && d.kingdoms) || []; cb(cpKingdomsCache); }).catch(function(){cb([]);});
+		cpKingdomsP = cpKingdomsP || fetch(UIR + 'KingdomAjax/getkingdoms').then(function(r){return r.json();}).then(function(d){ return (d && d.kingdoms) || []; }).catch(function(){ return []; });
+		cpKingdomsP.then(cb);
 	}
 	function cpWireCascade(kSelId, pSelId, onChange, parkLabel) {
 		var kSel = document.getElementById(kSelId), pSel = document.getElementById(pSelId);
 		if (!kSel || !pSel) return { get: function(){ return { kingdomId:0, parkId:0 }; } };
 		function resetPark(show) { pSel.innerHTML = '<option value="">' + (parkLabel || 'All Parks') + '</option>'; pSel.style.display = show ? '' : 'none'; }
-		function fillParks(kid) { fetch(UIR + 'KingdomAjax/kingdom/' + kid + '/getparks').then(function(r){return r.json();}).then(function(d){ resetPark(true); (d.parks||[]).forEach(function(pk){ var o=document.createElement('option'); o.value=pk.ParkId; o.textContent=pk.Name; pSel.appendChild(o); }); }).catch(function(){}); }
+		function fillParks(kid) { return fetch(UIR + 'KingdomAjax/kingdom/' + kid + '/getparks').then(function(r){return r.json();}).then(function(d){ resetPark(true); (d.parks||[]).forEach(function(pk){ var o=document.createElement('option'); o.value=pk.ParkId; o.textContent=pk.Name; pSel.appendChild(o); }); }).catch(function(){}); }
 		cpLoadKingdoms(function(ks){ ks.forEach(function(k){ var o=document.createElement('option'); o.value=k.KingdomId; o.textContent=k.KingdomName; kSel.appendChild(o); }); });
 		resetPark(false);
-		kSel.addEventListener('change', function(){ var kid=parseInt(this.value,10)||0; if(kid) fillParks(kid); else resetPark(false); onChange(); });
+		kSel.addEventListener('change', function(){ var kid=parseInt(this.value,10)||0; resetPark(!!kid); onChange(); if(kid) fillParks(kid).then(onChange); });
 		pSel.addEventListener('change', onChange);
 		return { get: function(){ return { kingdomId: parseInt(kSel.value,10)||0, parkId: parseInt(pSel.value,10)||0 }; } };
 	}

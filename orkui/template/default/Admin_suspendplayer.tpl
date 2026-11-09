@@ -1,3 +1,4 @@
+<?php $__h = function($v, $double = true){ return is_scalar($v) ? htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8', $double) : ''; }; ?>
 <script type='text/javascript'>
 	$(function() {
 		$( "#SrcParkName" ).autocomplete({
@@ -24,12 +25,14 @@
 			select: function (e, ui) {
 				showLabel('#SrcParkName', ui);
 				$('#SrcParkId').val(ui.item.value);
+				OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { parkId: parseInt(ui.item.value, 10) || 0 });
 				return false;
 			}
 		});
 
 		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
 			uir: '<?=UIR ?>',
+			parkId: <?=(int)($Admin_suspendplayer['SrcParkId'] ?? 0) ?>,
 			onSelect: function(p) {
 				document.getElementById('MundaneId').value = p.MundaneId;
 			},
@@ -65,38 +68,38 @@
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/suspendplayer/submit'>
 		<div>
 			<span>Park:</span>
-			<span><input type='text' value='<?=$Admin_suspendplayer['SrcParkName'] ?>' name='SrcParkName' id='SrcParkName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_suspendplayer['SrcParkName'] ?? '') ?>' name='SrcParkName' id='SrcParkName' /></span>
 		</div>
 		<div>
 			<span>Player:</span>
-			<span><input type='text' value='<?=$Admin_suspendplayer['PlayerName'] ?>' name='PlayerName' id='PlayerName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_suspendplayer['PlayerName'] ?? '') ?>' name='PlayerName' id='PlayerName' /></span>
 		</div>
 		<div>
 			<span>Suspended From:</span>
-			<span><input type='text' value='<?=$Admin_suspendplayer['SuspendedAt'] ?>' name='SuspendedAt' id='SuspendedAt' /></span>
+			<span><input type='text' value='<?=$__h($Admin_suspendplayer['SuspendedAt'] ?? '') ?>' name='SuspendedAt' id='SuspendedAt' /></span>
 		</div>
 		<div>
 			<span>Suspended Until:</span>
-			<span><input type='text' value='<?=$Admin_suspendplayer['SuspendedUntil'] ?>' name='SuspendedUntil' id='SuspendedUntil' /></span>
+			<span><input type='text' value='<?=$__h($Admin_suspendplayer['SuspendedUntil'] ?? '') ?>' name='SuspendedUntil' id='SuspendedUntil' /></span>
 		</div>
 		<div>
 			<span>Suspended By:</span>
-			<span><input type='text' value='<?=$Admin_suspendplayer['Suspendator'] ?>' name='Suspendator' id='Suspendator' /></span>
+			<span><input type='text' value='<?=$__h($Admin_suspendplayer['Suspendator'] ?? '') ?>' name='Suspendator' id='Suspendator' /></span>
 		</div>
 		<div>
 			<span>Comment:</span>
-			<span><input type='text' value='<?=$Admin_suspendplayer['Suspension'] ?>' name='Suspension' /></span>
+			<span><input type='text' value='<?=$__h($Admin_suspendplayer['Suspension'] ?? '') ?>' name='Suspension' /></span>
 		</div>
 		<div>
 			<span style='vertical-align: middle'><b>Restore (Unsuspend)?</b></span>
-			<span style='height: 3em;'><input style='transform: scale(3); position: relative; top: 1em; left: 1em;' type='checkbox' value='<?=$Admin_suspendplayer['Suspended'] ?>' name='Suspended' CHECKED /></span>
+			<span style='height: 3em;'><input style='transform: scale(3); position: relative; top: 1em; left: 1em;' type='checkbox' value='<?=$__h($Admin_suspendplayer['Suspended'] ?? '') ?>' name='Suspended' CHECKED /></span>
 		</div>
 		<div>
 			<span></span>
 			<span><input type='submit' value='Set' name='Suspend Player' /></span>
 		</div>
-		<input type='hidden' name='MundaneId' id='MundaneId' value='<?=$Admin_suspendplayer['MundaneId'] ?>' />
-		<input type='hidden' name='SuspendatorId' id='SuspendatorId' value='<?=$Admin_suspendplayer['SuspendatorId'] ?>' />
-		<input type='hidden' name='SrcParkId' id='SrcParkId' value='<?=$Admin_suspendplayer['SrcParkId'] ?>' />
+		<input type='hidden' name='MundaneId' id='MundaneId' value='<?=$__h($Admin_suspendplayer['MundaneId'] ?? '') ?>' />
+		<input type='hidden' name='SuspendatorId' id='SuspendatorId' value='<?=$__h($Admin_suspendplayer['SuspendatorId'] ?? '') ?>' />
+		<input type='hidden' name='SrcParkId' id='SrcParkId' value='<?=$__h($Admin_suspendplayer['SrcParkId'] ?? '') ?>' />
 	</form>
 </div>
