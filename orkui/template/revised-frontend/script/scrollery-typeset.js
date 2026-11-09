@@ -2085,10 +2085,9 @@
         }
 
         var leadBand = null;
-        function leadFor(placeSize) {
-            var cap = Math.min(caps.leadMax, Math.max(caps.leadMin, placeSize));
+        function leadAt(cap, scale) {
             setLeadSize(ctx, A, cap);
-            if (rightOn) { applyRight(ctx, A, k, 1); }
+            if (rightOn) { applyRight(ctx, A, k, scale); }
 
             /* The lead runs from its left edge to the column's, or to where the right
                flourish's ink begins in the lead's rows, less ORN_GAP, if that is sooner. */
@@ -2105,6 +2104,22 @@
                 avail = right - rect.x0;
             }
             return sizeLead(ctx, A, k, leadM, avail, cap, caps.leadMin);
+        }
+        /* The right flourish at its natural size first. When its ink in the lead's rows
+           leaves the lead short of its floor, the smaller scales the ornament pass may
+           pick (ORN_SCALES) are tried before Classic is given up: a smaller flourish hangs
+           further right and lower, so it takes less of the lead's row. The Custom Ribbon's
+           right piece lifts its tail into that row, and at natural size it pushed a long
+           place's lead just under the floor and the whole heading to Centered. A lead
+           that fits at no scale is measured again at the natural size, as before. */
+        function leadFor(placeSize) {
+            var cap = Math.min(caps.leadMax, Math.max(caps.leadMin, placeSize));
+            var scales = rightOn ? CONST.ORN_SCALES : [1], out = null;
+            for (var i = 0; i < scales.length; i++) {
+                out = leadAt(cap, scales[i]);
+                if (out.fits) { return out; }
+            }
+            return scales.length > 1 ? leadAt(cap, 1) : out;
         }
 
         var res = converge(ctx, A, caps, placeFor, leadFor, pmin);
