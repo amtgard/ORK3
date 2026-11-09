@@ -531,6 +531,13 @@ class Controller_Player extends Controller
         $this->data['UpcomingRsvps']   = $this->Event->get_upcoming_rsvps((int)$id);
         $this->data['KingdomEvents']   = ($uid === (int)$id) ? $this->Event->get_kingdom_upcoming_events((int)$this->session->kingdom_id, (int)$id) : [];
         $this->data['IsOwnProfile']    = $uid === (int)$id;
+        // "How did you find us?" backfill in the Account modal. Only fetched for
+        // viewers who can open that modal (self / park EDIT / admin); GetPlayer
+        // never carries it.
+        if ($uid === (int)$id || $canEdit) {
+            $this->data['RecruitmentSource']        = (string)$this->Player->get_recruitment_source((int)$id, $uid);
+            $this->data['RecruitmentSourceOptions'] = $this->Player->recruitment_source_options();
+        }
         $this->data['Player']['ParkName'] = $this->session->park_name;
 
         // Bonus credits (class credits that are not attendance): listed on the

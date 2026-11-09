@@ -41,6 +41,12 @@ class Controller_Admin extends Controller
         $this->data['PrevWeekly'] = $dashboard['PrevWeekly'];
         $this->data['PrevMonthly'] = $dashboard['PrevMonthly'];
 
+        // "How did you find us?" options for the Create Player modal.
+        if (!isset($this->Player)) {
+            $this->load_model('Player');
+        }
+        $this->data['RecruitmentSourceOptions'] = $this->Player->recruitment_source_options();
+
         $this->template = '../revised-frontend/Admin_index.tpl';
     }
 
@@ -1082,6 +1088,8 @@ class Controller_Admin extends Controller
                                     'ReeveQualifiedUntil' => array_key_exists('ReeveQualifiedUntil', $_POST) ? (($v = $this->request->Admin_player->ReeveQualifiedUntil) && strlen($v) > 0 && $v !== '0000-00-00' && ($ts = strtotime($v)) && $ts > 0 ? date('Y-m-d', $ts) : null) : null,
                                     'CorporaQualified' => array_key_exists('CorporaQualified', $_POST) ? (($this->request->Admin_player->CorporaQualified == 1) ? 1 : 0) : null,
                                     'CorporaQualifiedUntil' => array_key_exists('CorporaQualifiedUntil', $_POST) ? (($v = $this->request->Admin_player->CorporaQualifiedUntil) && strlen($v) > 0 && $v !== '0000-00-00' && ($ts = strtotime($v)) && $ts > 0 ? date('Y-m-d', $ts) : null) : null,
+                                    // "How did you find us?": null (absent) leaves it unchanged; '' clears it.
+                                    'RecruitmentSource' => array_key_exists('RecruitmentSource', $_POST) ? (string)$_POST['RecruitmentSource'] : null,
                                     'Token' => $this->session->token
                                 ));
                             if ($this->request->Admin_player->Password != $this->request->Admin_player->PasswordAgain) {

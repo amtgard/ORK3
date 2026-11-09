@@ -952,6 +952,89 @@ class Controller_Reports extends Controller
         }
     }
 
+    /**
+     * Player Recruitment Report: Reports/player_recruitment&KingdomId=N | &ParkId=N
+     * (defaults to the session park, then kingdom). Officers of the scope and ORK
+     * admins only; the domain enforces that, this renders the no-access state.
+     * Filters arrive on GET so a run is a shareable URL.
+     */
+    public function player_recruitment($params = null)
+    {
+        $this->template = '../revised-frontend/Reports_playerrecruitment.tpl';
+        $this->data['page_title'] = 'Player Recruitment';
+
+        $type = null;
+        $id = 0;
+        if (isset($this->request->ParkId) && valid_id($this->request->ParkId)) {
+            $type = 'Park';
+            $id = (int)$this->request->ParkId;
+        } elseif (isset($this->request->KingdomId) && valid_id($this->request->KingdomId)) {
+            $type = 'Kingdom';
+            $id = (int)$this->request->KingdomId;
+        } elseif (isset($this->session->park_id) && valid_id($this->session->park_id)) {
+            $type = 'Park';
+            $id = (int)$this->session->park_id;
+        } elseif (isset($this->session->kingdom_id) && valid_id($this->session->kingdom_id)) {
+            $type = 'Kingdom';
+            $id = (int)$this->session->kingdom_id;
+        }
+
+        $this->data['rr_state'] = 'no_scope';
+        $this->data['rr_scope_type'] = $type;
+        $this->data['rr_scope_id'] = $id;
+        $this->data['rr_scope_name'] = '';
+        $this->data['rr_meta'] = $this->Reports->recruitment_sources();
+        $this->data['rr_result'] = null;
+        $this->data['rr_error'] = '';
+
+        if ($type === null) {
+            $this->load_model('Kingdom');
+            $kingdoms = $this->Kingdom->list_kingdoms();
+            usort($kingdoms, function ($a, $b) {
+                return strcasecmp($a['KingdomName'] ?? '', $b['KingdomName'] ?? '');
+            });
+            $this->data['rr_kingdoms'] = $kingdoms;
+            return;
+        }
+
+        $this->data['menu']['reports']['url'] = UIR . ($type === 'Park' ? 'Park' : 'Kingdom') . '/profile/' . $id . '&tab=reports';
+        $this->data['rr_scope_name'] = $this->_resolve_scope_name($type, $id);
+
+        $date = function ($v, $fallback) {
+            return is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : $fallback;
+        };
+        $req = [
+            'ScopeType'    => $type,
+            'ScopeId'      => $id,
+            'StartDate'    => $date($this->request->StartDate ?? null, date('Y-m-d', strtotime('-12 months'))),
+            'EndDate'      => $date($this->request->EndDate ?? null, date('Y-m-d')),
+            'FilterParkId' => (int)($this->request->FilterParkId ?? 0),
+            'Source'       => is_string($this->request->Source ?? null) ? $this->request->Source : '',
+            'AwardWindow'  => (int)($this->request->AwardWindow ?? 0),
+        ];
+        $token = isset($this->session->token) ? (string)$this->session->token : '';
+        $r = $this->Reports->player_recruitment($token, $req);
+        $status = (int)($r['Status']['Status'] ?? ServiceErrorIds::ProcessingError);
+
+        if ($status === ServiceErrorIds::SecureTokenFailure) {
+            header('Location: ' . UIR . 'Login/login/Reports/player_recruitment');
+            exit;
+        }
+        if ($status === ServiceErrorIds::NoAuthorization) {
+            $this->data['rr_state'] = 'no_access';
+            return;
+        }
+        $this->_pe_scope_breadcrumb($type, $id, $this->data['rr_scope_name']);
+        if ($status !== ServiceErrorIds::Success) {
+            $this->data['rr_state'] = 'error';
+            $this->data['rr_error'] = (string)($r['Status']['Detail'] ?? $r['Status']['Error'] ?? 'The report could not be run.');
+            $this->data['rr_filters'] = $req;
+            return;
+        }
+        $this->data['rr_state'] = 'ready';
+        $this->data['rr_result'] = $r;
+    }
+
     public function park_attendance_explorer($params = null)
     {
         if (empty($this->session->user_id)) {

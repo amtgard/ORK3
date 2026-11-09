@@ -922,6 +922,33 @@ class Player extends Ork3
         }
     }
 
+    /**
+     * "How did you find us?" code for one player, for the Account modal.
+     * Deliberately not part of GetPlayer's public output: only the player,
+     * an officer with AUTH_EDIT over the player's park, or an admin may see
+     * it. Returns the code ('' = not answered) or null when the viewer may
+     * not see it. Underscored so the JSON service never exposes it.
+     */
+    public function get_recruitment_source($mundane_id, $viewer_id)
+    {
+        $mundane_id = (int)$mundane_id;
+        $viewer_id  = (int)$viewer_id;
+        if ($mundane_id <= 0 || $viewer_id <= 0) {
+            return null;
+        }
+        $this->mundane->clear();
+        $this->mundane->mundane_id = $mundane_id;
+        if (!$this->mundane->find()) {
+            return null;
+        }
+        if ($viewer_id !== $mundane_id
+            && !Ork3::$Lib->authorization->HasAuthority($viewer_id, AUTH_PARK, (int)$this->mundane->park_id, AUTH_EDIT)
+            && !Ork3::$Lib->authorization->HasAuthority($viewer_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+            return null;
+        }
+        return RecruitmentSource::normalize((string)$this->mundane->recruitment_source);
+    }
+
     public function GetPlayer($request)
     {
         $fetchprivate = true;
@@ -1864,6 +1891,8 @@ class Player extends Ork3
                 if (!empty($request['PronounCustom'])) {
                     $this->mundane->pronoun_custom = $request['PronounCustom'];
                 }
+                // "How did you find us?" — optional; '' = not answered.
+                $this->mundane->recruitment_source = RecruitmentSource::normalize($request['RecruitmentSource'] ?? '');
                 $this->mundane->penalty_box = 0;
                 $this->mundane->active = $request['IsActive'];
                 $this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 365);
@@ -2184,6 +2213,7 @@ class Player extends Ork3
         $this->mundane->xtoken            = md5(uniqid(rand(), true));
         $this->mundane->waiver_ext        = '';
         $this->mundane->reeve_qualified_until = '0000-00-00';
+        $this->mundane->recruitment_source = RecruitmentSource::normalize($request['RecruitmentSource'] ?? '');
         $this->mundane->save();
 
         $new_mundane_id = (int)$this->mundane->mundane_id;
@@ -2891,6 +2921,11 @@ class Player extends Ork3
                 $this->mundane->persona = is_null($request['Persona']) ? $this->mundane->persona : trim($request['Persona']);
                 $this->mundane->pronoun_id = is_null($request['PronounId']) ? $this->mundane->pronoun_id : $request['PronounId'];
                 $this->mundane->pronoun_custom = is_null($request['PronounCustom']) ? $this->mundane->pronoun_custom : $request['PronounCustom'];
+                // "How did you find us?" backfill. Absent/null = leave unchanged (so
+                // callers that don't know the field never wipe it); '' clears it.
+                if (isset($request['RecruitmentSource'])) {
+                    $this->mundane->recruitment_source = RecruitmentSource::normalize($request['RecruitmentSource']);
+                }
 
                 // Profile customization fields — own profile or ORK admin.
                 // Stored in ork_mundane_design (paired 1:1 row) since 2026-04-23.

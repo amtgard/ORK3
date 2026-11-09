@@ -2811,6 +2811,18 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				</div>
 			</div>
 
+			<?php if (isset($RecruitmentSourceOptions) && is_array($RecruitmentSourceOptions)): ?>
+			<div class="pn-acct-field">
+				<label for="pn-acct-recruitment">How did you find us?</label>
+				<select id="pn-acct-recruitment" name="RecruitmentSource">
+					<option value="">&mdash; Select &mdash;</option>
+					<?php foreach ($RecruitmentSourceOptions as $_rsCode => $_rsLabel): ?>
+					<option value="<?= htmlspecialchars($_rsCode) ?>"<?= ($RecruitmentSource ?? '') === $_rsCode ? ' selected' : '' ?>><?= htmlspecialchars($_rsLabel) ?></option>
+					<?php endforeach; ?>
+				</select>
+			</div>
+			<?php endif; ?>
+
 			<div class="pn-acct-field">
 				<label>
 					<input type="checkbox" name="Restricted" value="Restricted" <?= $Player['Restricted'] == 1 ? 'checked' : '' ?> style="margin-right:6px" />

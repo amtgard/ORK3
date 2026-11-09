@@ -415,6 +415,30 @@ class Model_Reports extends Model
         return false;
     }
 
+    /**
+     * Player Recruitment Report: one call returns every section (stat cards,
+     * per-source table, monthly series, Sankey flows, funnel, early-award
+     * comparison, detail rows) plus the scope's park list. The domain checks
+     * the token and the officer gate itself; read Status before anything else.
+     */
+    public function player_recruitment(string $token, array $request): array
+    {
+        $r = (new RecruitmentReport())->Run(['Token' => $token] + $request);
+        return is_array($r) ? $r : ['Status' => ProcessingError()];
+    }
+
+    /** Ordered code => label for the recruitment source filter, plus the "not answered" key/label. */
+    public function recruitment_sources(): array
+    {
+        return [
+            'Codes'           => RecruitmentSource::CODES,
+            'NoneKey'         => RecruitmentReport::SOURCE_NONE,
+            'NoneLabel'       => RecruitmentSource::NOT_ANSWERED_LABEL,
+            'AwardWindows'    => RecruitmentReport::AWARD_WINDOWS,
+            'DefaultWindow'   => RecruitmentReport::DEFAULT_AWARD_WINDOW,
+        ];
+    }
+
     // Public: the list of kingdom IDs that have voting-eligibility rules defined.
     public function supported_voting_kingdom_ids()
     {

@@ -12621,6 +12621,7 @@ function setupPronounPicker(cfg) {
         gid('kn-addplayer-email').value    = '';
         gid('kn-addplayer-username').value = '';
         gid('kn-addplayer-password').value = '';
+        if (gid('kn-addplayer-recruitment')) gid('kn-addplayer-recruitment').value = '';
         gid('kn-addplayer-waiver-row').style.display = 'none';
         ov.querySelectorAll('input[type=radio]').forEach(function(r) { if (r.value === '0') r.checked = true; });
         hideFeedback(gid('kn-addplayer-feedback'));
@@ -12695,6 +12696,8 @@ function setupPronounPicker(cfg) {
             var waivered   = document.querySelector('input[name="kn-addplayer-waivered"]:checked');
             fd.append('Restricted', restricted ? restricted.value : '0');
             fd.append('Waivered',   waivered   ? waivered.value   : '0');
+            var recruitSel = gid('kn-addplayer-recruitment');
+            fd.append('RecruitmentSource', recruitSel ? recruitSel.value : '');
             var waiverFile = gid('kn-addplayer-waiver');
             if (waiverFile && waiverFile.files[0]) fd.append('Waiver', waiverFile.files[0]);
 
@@ -12746,6 +12749,7 @@ function setupPronounPicker(cfg) {
         gid('pk-addplayer-email').value    = '';
         gid('pk-addplayer-username').value = '';
         gid('pk-addplayer-password').value = '';
+        if (gid('pk-addplayer-recruitment')) gid('pk-addplayer-recruitment').value = '';
         gid('pk-addplayer-waiver-row').style.display = 'none';
         ov.querySelectorAll('input[type=radio]').forEach(function(r) { if (r.value === '0') r.checked = true; });
         hideFeedback(gid('pk-addplayer-feedback'));
@@ -12803,6 +12807,8 @@ function setupPronounPicker(cfg) {
             var waivered   = document.querySelector('input[name="pk-addplayer-waivered"]:checked');
             fd.append('Restricted', restricted ? restricted.value : '0');
             fd.append('Waivered',   waivered   ? waivered.value   : '0');
+            var recruitSel = gid('pk-addplayer-recruitment');
+            fd.append('RecruitmentSource', recruitSel ? recruitSel.value : '');
             var waiverFile = gid('pk-addplayer-waiver');
             if (waiverFile && waiverFile.files[0]) fd.append('Waiver', waiverFile.files[0]);
 

@@ -1297,6 +1297,7 @@
 							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
 							<?php if (!empty($CanMergePlayers)): ?><li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li><?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
+							<li><a href="<?= UIR ?>Reports/player_recruitment&ParkId=<?= (int)$park_id ?>">Player Recruitment</a></li>
 						</ul>
 					</div>
 					<div class="kn-report-group">
@@ -2628,6 +2629,19 @@ var PkBannerConfig = {
 					<input type="password" id="pk-addplayer-password" placeholder="optional" autocomplete="new-password">
 				</div>
 			</div>
+			<?php if (!empty($RecruitmentSourceOptions)): ?>
+			<div class="plr-field-row">
+				<div class="plr-field plr-field-grow">
+					<label for="pk-addplayer-recruitment">How did you find us?</label>
+					<select id="pk-addplayer-recruitment">
+						<option value="">&mdash; Select &mdash;</option>
+						<?php foreach ($RecruitmentSourceOptions as $_rsCode => $_rsLabel): ?>
+						<option value="<?= htmlspecialchars($_rsCode) ?>"><?= htmlspecialchars($_rsLabel) ?></option>
+						<?php endforeach; ?>
+					</select>
+				</div>
+			</div>
+			<?php endif; ?>
 			<div class="plr-field-row">
 				<div class="plr-field">
 					<label>Restrict Mundane Name Visibility</label>

@@ -174,6 +174,18 @@ class Model_Player extends Model
         $r = $this->Player->SetBan($request);
         return $r;
     }
+    /** "How did you find us?" code for the Account modal; null when the viewer may not see it. */
+    public function get_recruitment_source($mundane_id, $viewer_id)
+    {
+        return $this->Player->get_recruitment_source($mundane_id, $viewer_id);
+    }
+
+    /** Ordered code => label list for every "How did you find us?" dropdown. */
+    public function recruitment_source_options()
+    {
+        return RecruitmentSource::CODES;
+    }
+
     public function create_player($request)
     {
         return $this->Player->CreatePlayer($request);
