@@ -468,4 +468,44 @@ final class ScrollCustomBorderRenderTest extends TestCase
         $this->assertStringNotContainsString('red;x:y', $raw);
         $this->assertStringContainsString('--knot-c1:' . Scroll::DEFAULT_DESIGN['color1'], $raw);
     }
+
+    /**
+     * The Style toggle: knotStyle picks which sprite's symbols the knot layer draws.
+     * Anything outside Scroll::KNOT_STYLES is the Jovious knot, and the generated
+     * styles always print in exact colours (match blending was tuned on the Jovious
+     * knot's own passes).
+     */
+    public function testKnotStyleChoosesTheSprite(): void
+    {
+        $this->assertSame(1, Scroll::NormaliseDesign([])['knotStyle']);
+        foreach (['2' => 2, '4' => 4, '9' => 1, '0' => 1, '2x' => 1, '-3' => 1, '' => 1] as $raw => $want) {
+            $this->assertSame($want, Scroll::NormaliseDesign(['knotStyle' => (string) $raw])['knotStyle'], "knotStyle '{$raw}'");
+        }
+        foreach (Scroll::KNOT_STYLES as $n => $def) {
+            $this->assertFileExists(DIR_ASSETS . 'scrolls/' . $def['sprite']);
+            $sprite = (string) file_get_contents(DIR_ASSETS . 'scrolls/' . $def['sprite']);
+            $this->assertStringContainsString('id="' . $def['symbol'] . '-Band-1"', $sprite, "style {$n}");
+            $this->assertStringContainsString('id="' . $def['symbol'] . '-Band-2"', $sprite, "style {$n}");
+
+            $html = $this->render('jovious', $this->border(false, ['knotStyle' => (string) $n]));
+            $this->assertStringContainsString('href="#' . $def['symbol'] . '-Band-1"', $html, "style {$n}");
+            $this->assertStringContainsString('href="#' . $def['symbol'] . '-Band-2"', $html, "style {$n}");
+        }
+        // Match asked for on a generated style draws exactly one plain knot.
+        $html = $this->render('jovious', $this->border(true, ['knotStyle' => '3']));
+        $this->assertSame(1, substr_count($html, 'class="sc-knot"'));
+        $this->assertStringContainsString('mix-blend-mode:normal', $html);
+    }
+
+    /** Every style's symbols are on the page, so the composer can switch style in place. */
+    public function testKnotDefsCarryEveryStyle(): void
+    {
+        ob_start();
+        include DIR_TEMPLATE . 'revised-frontend/scroll/_knot_defs.tpl';
+        $defs = (string) ob_get_clean();
+        foreach (Scroll::KNOT_STYLES as $def) {
+            $this->assertStringContainsString('id="' . $def['symbol'] . '-Band-1"', $defs);
+            $this->assertStringContainsString('id="' . $def['symbol'] . '-Band-2"', $defs);
+        }
+    }
 }

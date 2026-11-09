@@ -21,16 +21,20 @@
  *                    scroll array.
  * $style           — the blend: a replaced pass's own style in match mode, or
  *                    mix-blend-mode:normal in exact mode.
+ * $knotKind        — which knot: a key of Scroll::KNOT_STYLES (1, the Jovious knot,
+ *                    when absent or unknown). Every style's symbols are on the page.
+ *                    (Not $knotStyle: that name is this file's own inline style.)
  */
 $knotStyle = '--knot-c1:' . Scroll::NormaliseHexColour((string) ($color1 ?? ''), Scroll::DEFAULT_DESIGN['color1'])
     . ';--knot-c2:' . Scroll::NormaliseHexColour((string) ($color2 ?? ''), Scroll::DEFAULT_DESIGN['color2'])
     . ';' . (isset($style) ? (string) $style : '');
+$knotSymbol = (Scroll::KNOT_STYLES[(int) ($knotKind ?? 1)] ?? Scroll::KNOT_STYLES[1])['symbol'];
 ?>
     <div class="sc-knot" style="<?= scroll_e($knotStyle) ?>">
         <svg viewBox="0 0 2550 3300" width="2550" height="3300" aria-hidden="true" focusable="false">
             <?php /* Band 1 then band 2: the second passes over the first at every
                      crossing the artist drew it on top. */ ?>
-            <use href="#Knot-Band-1"/>
-            <use href="#Knot-Band-2"/>
+            <use href="#<?= scroll_e($knotSymbol) ?>-Band-1"/>
+            <use href="#<?= scroll_e($knotSymbol) ?>-Band-2"/>
         </svg>
     </div>

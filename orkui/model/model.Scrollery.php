@@ -1015,6 +1015,7 @@ class Model_Scrollery extends Model
                     'color1'         => $str('color1'),
                     'color2'         => $str('color2'),
                     'matchStyle'     => $str('matchStyle'),
+                    'knotStyle'      => $str('knotStyle'),
                     'customRibbon'   => $str('customRibbon'),
                     'ribbonColor'    => $str('ribbonColor'),
                 ],

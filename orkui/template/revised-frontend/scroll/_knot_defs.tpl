@@ -28,13 +28,18 @@ if (!empty($GLOBALS['scroll_knot_defs'])) {
 }
 $GLOBALS['scroll_knot_defs'] = true;
 
-$knotSvg     = (string) @file_get_contents(DIR_ASSETS . 'scrolls/' . Scroll::KNOT_SPRITE);
-$knotSvg     = (string) preg_replace('/<!--.*?-->/s', '', $knotSvg);
-$knotFirst   = strpos($knotSvg, '<symbol');
-$knotLast    = strrpos($knotSvg, '</symbol>');
-$knotSymbols = ($knotFirst === false || $knotLast === false)
-    ? ''
-    : (string) preg_replace('/>\s+</', '><', substr($knotSvg, $knotFirst, $knotLast + 9 - $knotFirst));
+// Every style's symbols (Scroll::KNOT_STYLES), so the composer can switch style on a
+// page that has already been sent; each sprite is read and trimmed the same way.
+$knotSymbols = '';
+foreach (Scroll::KNOT_STYLES as $knotStyleDef) {
+    $knotSvg   = (string) @file_get_contents(DIR_ASSETS . 'scrolls/' . $knotStyleDef['sprite']);
+    $knotSvg   = (string) preg_replace('/<!--.*?-->/s', '', $knotSvg);
+    $knotFirst = strpos($knotSvg, '<symbol');
+    $knotLast  = strrpos($knotSvg, '</symbol>');
+    if ($knotFirst !== false && $knotLast !== false) {
+        $knotSymbols .= (string) preg_replace('/>\s+</', '><', substr($knotSvg, $knotFirst, $knotLast + 9 - $knotFirst));
+    }
+}
 ?>
 <svg version="1.1" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"
      style="position:absolute;left:0;top:0;right:auto;bottom:auto;width:0;height:0;overflow:hidden;">

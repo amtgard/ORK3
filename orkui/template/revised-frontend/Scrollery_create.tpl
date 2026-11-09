@@ -585,17 +585,23 @@ html[data-theme="dark"] .sc-key-fwd   { background: linear-gradient(135deg, #345
                             <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
                         </span>
                         <div class="sc-design-sub" id="sc-custom-border-colors" hidden>
+                            <?php /* Style: a key of Scroll::KNOT_STYLES. 1 the Jovious knot,
+                                     2 interlock, 3 single strand with its holes filled
+                                     (Color 2), 4 single strand with clear holes (no Color 2). */
+                                  $knotStyleNow = (int) ($designDefaults['knotStyle'] ?? 1); ?>
+                            <div class="sc-field">
+                                <span class="sc-field-label" id="sc-knot-style-label">Style</span>
+                                <div class="sc-seg" role="group" aria-labelledby="sc-knot-style-label">
+                                    <?php foreach (array_keys(Scroll::KNOT_STYLES) as $ks): ?>
+                                        <button type="button" class="sc-seg-btn" data-knot-style="<?= (int) $ks ?>"
+                                                aria-pressed="<?= $ks === $knotStyleNow ? 'true' : 'false' ?>"><?= (int) $ks ?></button>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
                             <div class="sc-row">
                                 <?= $colorControl('sc-color1', 'Color 1', (string) $designDefaults['color1']) ?>
                                 <?= $colorControl('sc-color2', 'Color 2', (string) $designDefaults['color2']) ?>
                             </div>
-                            <p class="sc-hint">Color 1 is the band that is blue on the Jovious scroll, Color 2 the pink one.</p>
-                            <label class="sc-opt">
-                                <input type="checkbox" id="sc-match-style"<?= !empty($designDefaults['matchStyle']) ? ' checked' : '' ?>>
-                                <span>Match scroll style?</span>
-                            </label>
-                            <p class="sc-hint">Blends the knot into the paper the way the original border was, so the colours shift with it.</p>
-                            <p class="sc-hint" id="sc-match-fallback-hint" role="status" hidden>Very dark colours can't blend on this background — printed in exact colours.</p>
                         </div>
                     </div>
 

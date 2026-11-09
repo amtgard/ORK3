@@ -600,7 +600,10 @@
         // The Customize Design choices that change the picture — only when honoured,
         // for the same reason the inert recipe parts are left out above.
         if (customBorderActive()) {
-            parts.push('custom knot border in ' + colors.c1 + ' and ' + colors.c2
+            // Style 4 has no second colour, so naming one would describe ink that is not there.
+            var ks = knotStyle || 1;
+            parts.push('custom knot border, style ' + ks + ', in ' + colors.c1
+                + (ks === 4 ? '' : ' and ' + colors.c2)
                 + (matchEl && matchEl.checked ? ', matched to the scroll style' : ''));
         }
         if (ribbonEl && ribbonEl.checked) { parts.push('ribbons in ' + colors.ribbon); }
@@ -701,7 +704,8 @@
         stampEl      = $('sc-heraldry-stamp'),
         drawInEl     = $('sc-draw-in'),
         drawInShapes = $('sc-draw-in-shapes'),
-        drawInBtns   = document.querySelectorAll('[data-draw-in]');
+        drawInBtns   = document.querySelectorAll('[data-draw-in]'),
+        knotStyleBtns = document.querySelectorAll('[data-knot-style]');
 
     /*
      * Hex input, the one shape the server accepts (Scroll::NormaliseHexColour): six
@@ -1207,6 +1211,83 @@
     }
 
     /*
+     * The Custom Border's Style toggle: a key of Scroll::KNOT_STYLES. 1 is the Jovious
+     * knot; 2 interlock (Color 1 and Color 2 alternate piece by piece); 3 a single strand
+     * whose enclosed holes are filled with Color 2; 4 the same strand with clear holes,
+     * which has no second colour, so Color 2 is hidden. A style is different artwork, so
+     * changing it costs a round trip; recolouring within one still does not.
+     */
+    var KNOT_STYLE_STORE = 'scrollery.customBorder.style';
+
+    function pressedKnotStyle() {
+        var n = 1;
+        knotStyleBtns.forEach(function (b) { if (b.getAttribute('aria-pressed') === 'true') { n = Number(b.dataset.knotStyle) || 1; } });
+        return n;
+    }
+
+    var knotStyle = (function () {
+        try {
+            var saved = Number(window.localStorage.getItem(KNOT_STYLE_STORE));
+            if (saved && document.querySelector('[data-knot-style="' + saved + '"]')) { return saved; }
+        } catch (e) { /* convenience only */ }
+        return pressedKnotStyle();
+    }());
+
+    /*
+     * The dark partner of a colour, for style 3's holes: the same hue, a little less
+     * saturated, at about a third of its lightness (emerald -> forest, crimson ->
+     * oxblood). The officer can recolour it like any other.
+     */
+    function darkPartner(hex) {
+        var h = normHex(hex);
+        if (!h) { return '#1B1B1B'; }
+        var r = parseInt(h.substr(1, 2), 16) / 255, g = parseInt(h.substr(3, 2), 16) / 255, b = parseInt(h.substr(5, 2), 16) / 255;
+        var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, hue = 0, sat = 0;
+        if (d) {
+            sat = d / (1 - Math.abs(2 * l - 1));
+            hue = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+            hue *= 60; if (hue < 0) { hue += 360; }
+        }
+        var L = Math.max(0.08, l * 0.32), S = sat * 0.85, C = (1 - Math.abs(2 * L - 1)) * S, X = C * (1 - Math.abs((hue / 60) % 2 - 1)), m = L - C / 2;
+        var rgb = hue < 60 ? [C, X, 0] : hue < 120 ? [X, C, 0] : hue < 180 ? [0, C, X] : hue < 240 ? [0, X, C] : hue < 300 ? [X, 0, C] : [C, 0, X];
+        return '#' + rgb.map(function (v) { var n = Math.round((v + m) * 255); return (n < 16 ? '0' : '') + n.toString(16); }).join('').toUpperCase();
+    }
+
+    var styleThreeSwap = null;   // { before, dark }: Color 2 as it was before style 3 darkened it
+
+    function paintKnotStyleBar() {
+        knotStyleBtns.forEach(function (b) {
+            b.setAttribute('aria-pressed', Number(b.dataset.knotStyle) === knotStyle ? 'true' : 'false');
+        });
+        var c2 = $('sc-color2'), c2Field = c2 && c2.closest('.sc-color');
+        if (c2Field) { c2Field.hidden = knotStyle === 4; }
+    }
+
+    knotStyleBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var next = Number(btn.dataset.knotStyle) || 1;
+            if (next === knotStyle) { return; }
+            // Style 3 opens on one of the colours already in use (Color 1) with its
+            // dark partner in the holes, as the examples were drawn. Leaving style 3
+            // gives Color 2 back, unless the officer recoloured it in the meantime.
+            var c2ctl = COLOR_CONTROLS.filter(function (c) { return c.key === 'c2'; })[0];
+            if (c2ctl && next === 3 && colors.c1) {
+                styleThreeSwap = { before: colors.c2, dark: darkPartner(colors.c1) };
+                setColor(c2ctl, styleThreeSwap.dark, 'style');
+            } else if (c2ctl && knotStyle === 3 && styleThreeSwap && colors.c2 === styleThreeSwap.dark && styleThreeSwap.before) {
+                setColor(c2ctl, styleThreeSwap.before, 'style');
+                styleThreeSwap = null;
+            }
+            knotStyle = next;
+            try { window.localStorage.setItem(KNOT_STYLE_STORE, String(knotStyle)); } catch (e) { /* convenience only */ }
+            paintKnotStyleBar();
+            syncSummary();
+            reload();
+        });
+    });
+    paintKnotStyleBar();
+
+    /*
      * The toggles change which layers are drawn (the knot and its frameless ground, the
      * blend slot, the ribbon art), so like the award they cost a round trip. The
      * colours do not — see paintKnot().
@@ -1228,6 +1309,7 @@
         if (stampEl && stampEl.checked && !stampEl.disabled) { params.set('heraldryStamp', '1'); }
         if (drawingIn()) { params.set('drawIn', drawInShape); }
         if (cbEl && cbEl.checked)         { params.set('customBorder', '1'); }
+        params.set('knotStyle', String(knotStyle));
         if (matchEl && matchEl.checked)   { params.set('matchStyle', '1'); }
         if (ribbonEl && ribbonEl.checked) { params.set('customRibbon', '1'); }
         if (colors.c1)     { params.set('color1', colors.c1); }
