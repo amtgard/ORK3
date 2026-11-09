@@ -1246,6 +1246,7 @@
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Park Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/closest_parks&ParkId=<?= $park_id ?>"><i class="fas fa-map-marker-alt"></i> Closest Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/population_explorer&ParkId=<?= $park_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
+							<?php if (!empty($CanAdminPark)): ?><li><a href="<?= UIR ?>Reports/player_recruitment&ParkId=<?= (int)$park_id ?>"><i class="fas fa-bullhorn"></i> Player Recruitment</a></li><?php endif; ?>
 							<?php endif; ?>
 						</ul>
 					</div>
@@ -1297,7 +1298,6 @@
 							<li><a href="#" onclick="pkOpenMovePlayerModal();return false;">Move Player</a></li>
 							<?php if (!empty($CanMergePlayers)): ?><li><a href="#" onclick="pkOpenMergePlayerModal();return false;">Merge Players</a></li><?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspensions</a></li>
-							<li><a href="<?= UIR ?>Reports/player_recruitment&ParkId=<?= (int)$park_id ?>">Player Recruitment</a></li>
 						</ul>
 					</div>
 					<div class="kn-report-group">

@@ -835,6 +835,7 @@
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
+							<?php if ($CanManageKingdom ?? false): ?><li><a href="<?= UIR ?>Reports/player_recruitment&KingdomId=<?= (int)$kingdom_id ?>"><i class="fas fa-bullhorn"></i> Player Recruitment</a></li><?php endif; ?>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
 						</ul>
@@ -923,7 +924,6 @@
 						<li><a href="#" onclick="knOpenMovePlayerModal();return false;">Move Player</a></li>
 						<li><a href="#" onclick="knOpenMergePlayerModal();return false;">Merge Players</a></li>
 						<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kingdom_id ?>">Suspensions</a></li>
-						<li><a href="<?= UIR ?>Reports/player_recruitment&KingdomId=<?= (int)$kingdom_id ?>">Player Recruitment</a></li>
 					</ul>
 				</div>
 				<div class="kn-report-group">
