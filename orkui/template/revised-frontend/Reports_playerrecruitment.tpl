@@ -11,12 +11,12 @@ $rr_state      = (string)($rr_state ?? 'no_scope');
 $rr_scope_type = $rr_scope_type ?? null;
 $rr_scope_id   = (int)($rr_scope_id ?? 0);
 $rr_scope_name = (string)($rr_scope_name ?? '');
-$rr_meta       = is_array($rr_meta ?? null) ? $rr_meta : ['Codes' => [], 'NoneKey' => 'none', 'NoneLabel' => 'Not answered', 'AwardWindows' => [30], 'DefaultWindow' => 30];
+$rr_meta       = is_array($rr_meta ?? null) ? $rr_meta : [];
 $rr_result     = is_array($rr_result ?? null) ? $rr_result : null;
 $rr_is_park    = ($rr_scope_type === 'Park');
 $rr_f          = $rr_result['Filters'] ?? ($rr_filters ?? []);
-$rr_start      = (string)($rr_f['StartDate'] ?? date('Y-m-d', strtotime('-12 months')));
-$rr_end        = (string)($rr_f['EndDate'] ?? date('Y-m-d'));
+$rr_start      = (string)(($rr_f['StartDate'] ?? '') !== '' ? $rr_f['StartDate'] : ($rr_meta['DefaultRange']['StartDate'] ?? ''));
+$rr_end        = (string)(($rr_f['EndDate'] ?? '') !== '' ? $rr_f['EndDate'] : ($rr_meta['DefaultRange']['EndDate'] ?? ''));
 $rr_fpark      = (int)($rr_f['FilterParkId'] ?? 0);
 $rr_source     = (string)($rr_f['Source'] ?? '');
 $rr_window     = (int)($rr_f['AwardWindow'] ?? ($rr_meta['DefaultWindow'] ?? 30));
@@ -26,9 +26,8 @@ $rr_scope_link = $rr_scope_type ? UIR . ($rr_is_park ? 'Park' : 'Kingdom') . '/p
 $rr_back_link  = $rr_scope_link !== '' ? $rr_scope_link . '&tab=reports' : UIR . 'Admin';
 $rr_stats      = $rr_result['Stats'] ?? [];
 $rr_n          = (int)($rr_stats['NewPlayers'] ?? 0);
-$rr_rules      = $rr_result['Rules'] ?? [];
-$rr_min_n      = (int)($rr_rules['MinN'] ?? 10);
-$rr_max_years  = (int)($rr_rules['MaxYears'] ?? 5);
+$rr_min_n      = (int)($rr_meta['MinN'] ?? 0);
+$rr_max_years  = (int)($rr_meta['MaxYears'] ?? 0);
 $rr_json_flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
 
 $rr_pct = function ($v) {
@@ -37,20 +36,20 @@ $rr_pct = function ($v) {
 $rr_date = function ($d) {
 	return ($d && $d !== '0000-00-00') ? date('M j, Y', strtotime($d)) : '&mdash;';
 };
-$rr_rate = function ($pct, $n) use ($rr_pct, $rr_min_n) {
+$rr_rate = function ($pct, $n, $few = false) use ($rr_pct) {
 	// "42%" with the eligible n beneath; muted with "too few" under the minimum n;
 	// a dash when nobody is eligible yet.
 	$n = (int)$n;
 	if ($n === 0 || $pct === null) {
 		return '<span class="prr-muted">&mdash;</span>';
 	}
-	if ($n < $rr_min_n) {
+	if (!empty($few)) {
 		return '<span class="prr-few">' . $rr_pct($pct) . '</span><span class="prr-n">n=' . number_format($n) . ', too few</span>';
 	}
 	return $rr_pct($pct) . '<span class="prr-n">n=' . number_format($n) . '</span>';
 };
 $rr_ret = function ($r) use ($rr_rate) {
-	return is_array($r) ? $rr_rate($r['Pct'], $r['Eligible']) : '<span class="prr-muted">&mdash;</span>';
+	return is_array($r) ? $rr_rate($r['Pct'], $r['Eligible'], $r['Few'] ?? false) : '<span class="prr-muted">&mdash;</span>';
 };
 // DataTables sort key: the percentage, or '' (sorted last either way) when there is none.
 $rr_ord = function ($pct) {
@@ -67,7 +66,7 @@ $rr_ord = function ($pct) {
 .prr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .prr-main .rp-chart-card { min-width: 0; }
 .prr-root .rp-chart-card-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.prr-root h2.rp-chart-card-title { background: none; border: 0; padding: 0; }
+.prr-root h2.rp-chart-card-title { background: none; border: 0; padding: 0; text-shadow: none; }
 .prr-sub { font-size: 12px; color: var(--rp-text-muted); margin: -4px 0 10px; line-height: 1.45; }
 .prr-chart { width: 100%; height: 320px; }
 .prr-chart-sources { height: 340px; }
@@ -94,7 +93,7 @@ $rr_ord = function ($pct) {
 
 .prr-state { text-align: center; padding: 48px 20px; color: var(--rp-text-muted); }
 .prr-state i { font-size: 30px; opacity: 0.45; display: block; margin-bottom: 12px; }
-.prr-state h2 { font-size: 18px; color: var(--rp-text); margin: 0 0 8px; background: none; border: 0; padding: 0; }
+.prr-root .prr-state h2 { font-size: 18px; color: var(--rp-text); margin: 0 0 8px; background: none; border: 0; padding: 0; text-shadow: none; }
 .prr-state p { margin: 0 auto; max-width: 460px; font-size: 14px; line-height: 1.5; }
 .prr-state form { margin: 18px auto 0; max-width: 320px; display: flex; gap: 8px; }
 .prr-state form .rp-btn-run { width: auto; padding: 8px 16px; }
@@ -109,9 +108,13 @@ $rr_ord = function ($pct) {
 .prr-yes { color: #0f7a3d; font-weight: 600; }
 html[data-theme="dark"] .prr-yes { color: #68d391; }
 html[data-theme="dark"] .prr-later { border-color: #4a5568; }
+/* Tooltips in the tables open upward and are not clipped; horizontal scroll returns at 900px. */
+.prr-dt.rp-table-area, .prr-detail.rp-table-area { overflow: visible; }
+.prr-root .rp-table-area [data-tip]:hover::after, .prr-root .rp-table-area [data-tip]:focus-visible::after { top: auto; bottom: calc(100% + 6px); }
 
 @media (max-width: 900px) {
 	.prr-main { width: 100%; }
+	.prr-dt.rp-table-area, .prr-detail.rp-table-area { overflow-x: auto; }
 }
 @media (max-width: 600px) {
 	.prr-chart { height: 280px; }
@@ -325,11 +328,11 @@ html[data-theme="dark"] .prr-later { border-color: #4a5568; }
 								<td><span class="prr-swatch" data-src="<?= htmlspecialchars($s['Key']) ?>"></span><?= htmlspecialchars($s['Label']) ?></td>
 								<td class="prr-num" data-order="<?= (int)$s['N'] ?>"><?= number_format($s['N']) ?></td>
 								<td class="prr-num" data-order="<?= $rr_ord($s['PctOfTotal']) ?>"><?= $rr_pct($s['PctOfTotal']) ?></td>
-								<td class="prr-num" data-order="<?= $rr_ord($s['BackPct']) ?>"><?= $rr_rate($s['BackPct'], $s['BackElig']) ?></td>
+								<td class="prr-num" data-order="<?= $rr_ord($s['BackPct']) ?>"><?= $rr_rate($s['BackPct'], $s['BackElig'], $s['BackFew']) ?></td>
 <?php foreach ([30, 90, 180] as $m) : ?>
 								<td class="prr-num" data-order="<?= $rr_ord($s['Retention'][$m]['Pct']) ?>"><?= $rr_ret($s['Retention'][$m]) ?></td>
 <?php endforeach; ?>
-								<td class="prr-num" data-order="<?= $rr_ord($s['DuesPct']) ?>"><?= $rr_rate($s['DuesPct'], $s['DuesElig']) ?></td>
+								<td class="prr-num" data-order="<?= $rr_ord($s['DuesPct']) ?>"><?= $rr_rate($s['DuesPct'], $s['DuesElig'], $s['DuesFew']) ?></td>
 							</tr>
 <?php endforeach; ?>
 						</tbody>
@@ -337,11 +340,11 @@ html[data-theme="dark"] .prr-later { border-color: #4a5568; }
 							<td>All new players</td>
 							<td class="prr-num"><?= number_format($overall['N']) ?></td>
 							<td class="prr-num">100%</td>
-							<td class="prr-num"><?= $rr_rate($overall['BackPct'], $overall['BackElig']) ?></td>
+							<td class="prr-num"><?= $rr_rate($overall['BackPct'], $overall['BackElig'], $overall['BackFew']) ?></td>
 <?php foreach ([30, 90, 180] as $m) : ?>
 							<td class="prr-num"><?= $rr_ret($overall['Retention'][$m]) ?></td>
 <?php endforeach; ?>
-							<td class="prr-num"><?= $rr_rate($overall['DuesPct'], $overall['DuesElig']) ?></td>
+							<td class="prr-num"><?= $rr_rate($overall['DuesPct'], $overall['DuesElig'], $overall['DuesFew']) ?></td>
 						</tr></tfoot>
 					</table>
 				</div>
@@ -362,7 +365,7 @@ html[data-theme="dark"] .prr-later { border-color: #4a5568; }
 					<select id="prr-flow-source" class="rp-form-select" style="width:auto;">
 						<option value="all">All new players (<?= number_format($rr_n) ?>)</option>
 <?php foreach ($sources as $s) : if ($s['N'] === 0) continue; ?>
-						<option value="<?= htmlspecialchars($s['Key']) ?>"><?= htmlspecialchars($s['Label']) ?> (<?= number_format($s['N']) ?><?= $s['N'] < $rr_min_n ? ', too few to compare' : '' ?>)</option>
+						<option value="<?= htmlspecialchars($s['Key']) ?>"><?= htmlspecialchars($s['Label']) ?> (<?= number_format($s['N']) ?><?= !empty($s['Few']) ? ', too few to compare' : '' ?>)</option>
 <?php endforeach; ?>
 					</select>
 				</div>
@@ -388,7 +391,7 @@ html[data-theme="dark"] .prr-later { border-color: #4a5568; }
 							<tr><td>1st sign-in</td><td class="prr-num"><?= number_format((int)$fn['Eligible']) ?></td><td class="prr-num">100%</td></tr>
 <?php foreach ($fn['Steps'] as $f) : ?>
 <?php $ord = [2 => '2nd', 3 => '3rd', 5 => '5th', 10 => '10th', 25 => '25th'][$f['Reached']] ?? ($f['Reached'] . 'th'); ?>
-							<tr><td><?= $ord ?> sign-in</td><td class="prr-num"><?= number_format($f['N']) ?></td><td class="prr-num"><?= $rr_rate($f['Pct'], $fn['Eligible']) ?></td></tr>
+							<tr><td><?= $ord ?> sign-in</td><td class="prr-num"><?= number_format($f['N']) ?></td><td class="prr-num"><?= $rr_rate($f['Pct'], $fn['Eligible'], $fn['Few'] ?? false) ?></td></tr>
 <?php endforeach; ?>
 						</tbody>
 					</table>
@@ -475,7 +478,6 @@ html[data-theme="dark"] .prr-later { border-color: #4a5568; }
 <script>
 window.PrrData = <?= json_encode([
 	'sources'  => array_map(function ($s) { return ['key' => $s['Key'], 'label' => $s['Label'], 'short' => $s['Short'], 'n' => $s['N']]; }, $rr_result['Sources']),
-	'minN'     => $rr_min_n,
 	'monthly'  => $rr_result['Monthly'],
 	'sankey'   => $rr_result['Sankey'],
 	'award'    => $rr_result['EarlyAward'],
@@ -599,15 +601,15 @@ window.PrrData = <?= json_encode([
 	}
 
 	function buildAward(t) {
-		var a = D.award, ms = [30, 60, 90, 180], minN = D.minN;
+		var a = D.award, ms = [30, 60, 90, 180];
 		var cols = t.dark ? CAT.dark : CAT.light;
 		// Milestones inside the award window aren't compared (landmark analysis); groups
-		// under minN draw greyed and hatched with "n=X, too few".
+		// flagged Few (under the minimum n) draw greyed and hatched with "n=X, too few".
 		function pts(g) {
 			return ms.map(function (m) {
 				var r = g.Retention[m];
 				if (!a.Comparable[m]) return { value: null, inWindow: true };
-				var few = r.Eligible > 0 && r.Eligible < minN;
+				var few = !!r.Few;
 				var d = { value: r.Pct, n: r.Eligible, playing: r.Playing, few: few };
 				if (few) d.itemStyle = { color: t.none, opacity: 0.55, decal: { symbol: 'rect', symbolSize: 1, rotation: Math.PI / 4, dashArrayX: [1, 0], dashArrayY: [2, 4], color: t.dark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.7)' } };
 				return d;
@@ -719,7 +721,7 @@ window.PrrData = <?= json_encode([
 			{ data: 'Source', render: function (v, type, row) {
 			if (type !== 'display') return v;
 			if (row.SourceKey === 'none') return '<span class="prr-muted">' + esc(v) + '</span>';
-			return esc(v) + (row.Later ? '<span class="prr-later" data-tip="Answered later from the Account modal, not at registration.">later</span>' : '');
+			return esc(v) + (row.Later ? '<span class="prr-later" tabindex="0" data-tip="Answered later from the Account modal, not at registration.">later</span>' : '');
 		} },
 			{ data: 'SignIns', className: 'prr-num' },
 			dateCol('LastDate'),

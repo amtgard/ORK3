@@ -129,7 +129,7 @@
 }
 .sr-field-hint {
 	font-size: 11px;
-	color: #718096;
+	color: var(--ork-text-muted, #718096);
 	margin-top: 4px;
 }
 .sr-field-row {
@@ -250,7 +250,6 @@ html[data-theme="dark"] .sr-field select:focus {
 	border-color: #38a169;
 	box-shadow: 0 0 0 3px rgba(56,161,105,0.2);
 }
-html[data-theme="dark"] .sr-field-hint { color: #a0aec0; }
 html[data-theme="dark"] .sr-btn-primary { background: #38a169; color: #fff; }
 html[data-theme="dark"] .sr-btn-primary:hover:not(:disabled) { background: #48bb78; }
 html[data-theme="dark"] .sr-btn-primary:disabled { background: var(--ork-bg-tertiary, #4a5568); color: var(--ork-text-muted, #a0aec0); }

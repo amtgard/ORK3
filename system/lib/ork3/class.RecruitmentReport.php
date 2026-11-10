@@ -42,6 +42,8 @@ class RecruitmentReport extends Ork3
     public const MIN_N = 10;
     /** Longest date range one run may cover. */
     public const MAX_RANGE_YEARS = 5;
+    /** Range a run covers when no dates are given: the last this many months. */
+    public const DEFAULT_RANGE_MONTHS = 12;
     /** Source filter value meaning "not answered" (recruitment_source = ''). */
     public const SOURCE_NONE = 'none';
     /** Answers filter: every answer, or only answers given at registration. */
@@ -54,9 +56,18 @@ class RecruitmentReport extends Ork3
         parent::__construct();
     }
 
+    /** The default reporting window as ['StartDate' => Y-m-d, 'EndDate' => Y-m-d]. */
+    public static function defaultRange(): array
+    {
+        return [
+            'StartDate' => date('Y-m-d', strtotime('-' . self::DEFAULT_RANGE_MONTHS . ' months')),
+            'EndDate'   => date('Y-m-d'),
+        ];
+    }
+
     /**
      * @param array $request Token, ScopeType ('Kingdom'|'Park'), ScopeId,
-     *   StartDate, EndDate (Y-m-d), FilterParkId (kingdom scope only, 0 = all),
+     *   StartDate, EndDate (Y-m-d; empty = defaultRange()), FilterParkId (kingdom scope only, 0 = all),
      *   Source ('' = all, a RecruitmentSource code, or 'none'), AwardWindow,
      *   Answers ('all' | 'registration').
      */
@@ -77,6 +88,13 @@ class RecruitmentReport extends Ork3
 
         $start = (string)($request['StartDate'] ?? '');
         $end = (string)($request['EndDate'] ?? '');
+        $defaults = self::defaultRange();
+        if ($start === '') {
+            $start = $defaults['StartDate'];
+        }
+        if ($end === '') {
+            $end = $defaults['EndDate'];
+        }
         if (!self::_validDate($start) || !self::_validDate($end) || $start > $end) {
             return ['Status' => InvalidParameter('Pick a valid date range.')];
         }
@@ -517,6 +535,7 @@ class RecruitmentReport extends Ork3
                 'Label'      => $labels[$k],
                 'Short'      => $shorts[$k],
                 'N'          => $b['N'],
+                'Few'        => $b['N'] < self::MIN_N,
                 'PctOfTotal' => self::_pct($b['N'], $n),
             ] + self::_rates($b);
         }
@@ -558,7 +577,7 @@ class RecruitmentReport extends Ork3
             'Overall'  => $overall,
             'Monthly'  => ['Months' => $months, 'Series' => $monthly],
             'Sankey'   => $sankey,
-            'Funnel'   => ['Days' => self::FUNNEL_DAYS, 'Eligible' => $all['FunnelElig'], 'TooRecent' => $n - $all['FunnelElig'], 'Steps' => $funnel],
+            'Funnel'   => ['Days' => self::FUNNEL_DAYS, 'Eligible' => $all['FunnelElig'], 'Few' => $all['FunnelElig'] > 0 && $all['FunnelElig'] < self::MIN_N, 'TooRecent' => $n - $all['FunnelElig'], 'Steps' => $funnel],
             'EarlyAward' => [
                 'Window'     => $window,
                 'TooRecent'  => $awardTooRecent,
@@ -587,14 +606,16 @@ class RecruitmentReport extends Ork3
             'Back'      => $b['Back'],
             'BackElig'  => $b['BackElig'],
             'BackPct'   => self::_pct($b['Back'], $b['BackElig']),
+            'BackFew'   => $b['BackElig'] > 0 && $b['BackElig'] < self::MIN_N,
             'Retention' => self::_retention($b),
             'Dues'      => $b['Dues'],
             'DuesElig'  => $b['DuesElig'],
             'DuesPct'   => self::_pct($b['Dues'], $b['DuesElig']),
+            'DuesFew'   => $b['DuesElig'] > 0 && $b['DuesElig'] < self::MIN_N,
         ];
     }
 
-    /** milestone => [Eligible, Playing, Pct, TooRecent]. */
+    /** milestone => [Eligible, Playing, Pct, Few, TooRecent]. */
     private static function _retention(array $b)
     {
         $out = [];
@@ -603,6 +624,7 @@ class RecruitmentReport extends Ork3
                 'Eligible'  => $b['Elig'][$m],
                 'Playing'   => $b['Play'][$m],
                 'Pct'       => self::_pct($b['Play'][$m], $b['Elig'][$m]),
+                'Few'       => $b['Elig'][$m] > 0 && $b['Elig'][$m] < self::MIN_N,
                 'TooRecent' => $b['N'] - $b['Elig'][$m],
             ];
         }

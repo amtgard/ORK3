@@ -531,12 +531,17 @@ class Controller_Player extends Controller
         $this->data['UpcomingRsvps']   = $this->Event->get_upcoming_rsvps((int)$id);
         $this->data['KingdomEvents']   = ($uid === (int)$id) ? $this->Event->get_kingdom_upcoming_events((int)$this->session->kingdom_id, (int)$id) : [];
         $this->data['IsOwnProfile']    = $uid === (int)$id;
-        // "How did you find us?" backfill in the Account modal. Only fetched for
-        // viewers who can open that modal (self / park EDIT / admin); GetPlayer
-        // never carries it.
-        if ($uid === (int)$id || $canEdit) {
-            $this->data['RecruitmentSource']      = (string)$this->Player->get_recruitment_source((int)$id, $uid);
-            $this->data['RecruitmentSourceField'] = $this->Player->recruitment_source_field('self');
+        // "How did you find us?" backfill in the Account modal. The domain decides
+        // who may see it (self / park EDIT / admin) and returns null otherwise;
+        // the field is only rendered when the answer was returned, so a refusal
+        // never renders as "Not answered" and clears the stored value on save.
+        // GetPlayer never carries it.
+        if ($uid > 0) {
+            $rs = $this->Player->get_recruitment_source((int)$id, $uid);
+            if ($rs !== null) {
+                $this->data['RecruitmentSource']      = (string)$rs;
+                $this->data['RecruitmentSourceField'] = $this->Player->recruitment_source_field('self');
+            }
         }
         $this->data['Player']['ParkName'] = $this->session->park_name;
 

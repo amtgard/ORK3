@@ -1003,18 +1003,15 @@ class Controller_Reports extends Controller
         $this->data['menu']['reports']['url'] = UIR . ($type === 'Park' ? 'Park' : 'Kingdom') . '/profile/' . $id . '&tab=reports';
         $this->data['rr_scope_name'] = $this->_resolve_scope_name($type, $id);
 
-        $date = function ($v, $fallback) {
-            return is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : $fallback;
-        };
         $req = [
             'ScopeType'    => $type,
             'ScopeId'      => $id,
-            'StartDate'    => $date($this->request->StartDate ?? null, date('Y-m-d', strtotime('-12 months'))),
-            'EndDate'      => $date($this->request->EndDate ?? null, date('Y-m-d')),
+            'StartDate'    => is_string($this->request->StartDate ?? null) ? $this->request->StartDate : '',
+            'EndDate'      => is_string($this->request->EndDate ?? null) ? $this->request->EndDate : '',
             'FilterParkId' => (int)($this->request->FilterParkId ?? 0),
             'Source'       => is_string($this->request->Source ?? null) ? $this->request->Source : '',
             'AwardWindow'  => (int)($this->request->AwardWindow ?? 0),
-            'Answers'      => ($this->request->Answers ?? '') === 'registration' ? 'registration' : 'all',
+            'Answers'      => is_string($this->request->Answers ?? null) ? $this->request->Answers : '',
         ];
         $token = isset($this->session->token) ? (string)$this->session->token : '';
         $r = $this->Reports->player_recruitment($token, $req);

@@ -445,6 +445,9 @@ class Model_Reports extends Model
             'NoneLabel'       => RecruitmentSource::NOT_ANSWERED_LABEL,
             'AwardWindows'    => RecruitmentReport::AWARD_WINDOWS,
             'DefaultWindow'   => RecruitmentReport::DEFAULT_AWARD_WINDOW,
+            'MinN'            => RecruitmentReport::MIN_N,
+            'MaxYears'        => RecruitmentReport::MAX_RANGE_YEARS,
+            'DefaultRange'    => RecruitmentReport::defaultRange(),
         ];
     }
 

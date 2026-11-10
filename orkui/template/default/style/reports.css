@@ -1017,7 +1017,8 @@ html[data-theme="dark"] .rp-table-area table.dataTable thead th:hover {
 html[data-theme="dark"] .rp-root.rp-tips [data-tip]:hover::after,
 html[data-theme="dark"] .rp-root.rp-tips [data-tip]:focus-visible::after { background: #0f141c; border: 1px solid #4a5568; }
 @media (max-width: 600px) {
-  .rp-root.rp-tips [data-tip]:hover::after { max-width: 200px; }
+  .rp-root.rp-tips [data-tip]:hover::after,
+  .rp-root.rp-tips [data-tip]:focus-visible::after { max-width: 200px; }
 }
 
 /* =====================================================
@@ -1032,7 +1033,11 @@ html[data-theme="dark"] .lg-search-bar input {
   border-color: var(--ork-input-border, #4a5568);
   color: var(--ork-text, #e2e8f0);
 }
-html[data-theme="dark"] .rp-form-input:focus {
+/* #theme_container-qualified so it outranks orkui.css's dark
+   `#theme_container select/input` border rule (1,x,x); without it the
+   focus border never changes in dark mode. */
+html[data-theme="dark"] #theme_container .rp-form-input:focus,
+html[data-theme="dark"] #theme_container .rp-form-select:focus {
   border-color: #818cf8;
 }
 html[data-theme="dark"] .rp-form-group label {
