@@ -138,7 +138,7 @@ final class DeploymentTier
             return true;
         }
 
-        $appStage = $this->resolveConfigConstant('APP_STAGE');
+        $appStage = $this->resolveAppStage();
         if (is_string($appStage) && strtoupper($appStage) === 'DEV') {
             return true;
         }
@@ -153,41 +153,24 @@ final class DeploymentTier
 
     private function resolveConfigHostname(): ?string
     {
-        return $this->resolveConfigConstant('DB_HOSTNAME');
-    }
-
-    private function resolveConfigConstant(string $name): ?string
-    {
-        foreach ($this->configCandidates() as $path) {
-            if (!is_readable($path)) {
-                continue;
-            }
-
-            $contents = file_get_contents($path);
-            if ($contents === false) {
-                continue;
-            }
-
-            if (preg_match(
-                "/define\\('{$name}',\\s*'([^']*)'\\)/",
-                $contents,
-                $matches
-            ) === 1) {
-                return $matches[1];
+        foreach (['DB_HOSTNAME', 'ORK3_DB_HOST', 'ORK3_TEST_DB_HOST'] as $key) {
+            $value = getenv($key);
+            if (is_string($value) && $value !== '') {
+                return $value;
             }
         }
 
         return null;
     }
 
-    /** @return list<string> */
-    private function configCandidates(): array
+    private function resolveAppStage(): ?string
     {
-        return [
-            $this->repoRoot . '/config.php',
-            $this->repoRoot . '/config.dev.php',
-            $this->repoRoot . '/config.test.php',
-        ];
+        $value = getenv('APP_STAGE');
+        if (!is_string($value) || $value === '') {
+            return null;
+        }
+
+        return $value;
     }
 
     private function isLocalHostname(string $hostname): bool

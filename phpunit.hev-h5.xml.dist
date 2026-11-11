@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/Unit/OrkDb/bootstrap.php"
+         colors="true"
+         cacheDirectory="build/phpunit-hev-h5-cache">
+    <testsuites>
+        <testsuite name="hev-h5">
+            <file>tests/Unit/OrkDb/DeploymentTierTest.php</file>
+            <file>tests/Unit/OrkDb/TierRefusalCliTest.php</file>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <file>tools/ork-db/lib/DeploymentTier.php</file>
+        </include>
+    </source>
+    <coverage>
+        <report>
+            <text outputFile="php://stdout" showUncoveredFiles="true"/>
+        </report>
+    </coverage>
+</phpunit>

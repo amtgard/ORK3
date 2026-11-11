@@ -40,7 +40,15 @@ git clone https://github.com/amtgard/ORK3.git
 cd ORK3
 ```
 
-**2. Build and start the containers.** There are two: one for PHP, one for MariaDB.
+**2. Copy environment defaults** (non-secrets only; passwords and API keys belong in `.env` / a vault seed, not in git):
+
+```
+cp .env.example .env
+```
+
+Edit `.env` for your machine, or load secrets with `host-env` / `plaintext` mode and a seed from `host-env/secrets.example/ork-web.env` when you deploy with green-blue. See the deploy runbook when that lands in the repo.
+
+**3. Build and start the containers.** There are two: one for PHP, one for MariaDB.
 
 ```
 docker-compose -f docker-compose.php8.yml up -d
@@ -48,7 +56,7 @@ docker-compose -f docker-compose.php8.yml up -d
 
 Drop the `-d` if you'd rather watch the output instead of running detached.
 
-**3. Import the database.** Adjust the filename to match what you downloaded:
+**4. Import the database.** Adjust the filename to match what you downloaded:
 
 ```
 gunzip -c ~/Downloads/ork-redacted-2026-10-08-1416.sql.gz \
@@ -75,7 +83,7 @@ docker restart ork3-php8-app
 
 This is easy to miss and the symptoms are confusing — see [Restart PHP after schema changes](#restart-php-after-schema-changes).
 
-**4. Extract the assets** (optional). Unzip it **into the ORK3 folder you just cloned**:
+**5. Extract the assets** (optional). Unzip it **into the ORK3 folder you just cloned**:
 
 ```
 unzip ~/Downloads/ork-assets-2026-10-08.zip -d /path/to/your/ORK3
@@ -83,7 +91,7 @@ unzip ~/Downloads/ork-assets-2026-10-08.zip -d /path/to/your/ORK3
 
 The archive already has a top-level `assets/` directory, so it merges with the one in the repo — don't make a subfolder for it. Afterwards you'll have `assets/heraldry/`, `assets/images/` and `assets/players/` full of files. `git status` stays clean; those paths are gitignored.
 
-**5. Open the site** at `http://localhost:19080/orkui/` and log in with the credentials you were given.
+**6. Open the site** at `http://localhost:19080/orkui/` and log in with the credentials you were given.
 
 One of those accounts is a full **ORK admin**, so you can change anyone else's password or grant yourself whatever you need from inside the app. The redacted database contains no live sessions, so logging in is the only way in — by design. To print the accounts again, or reset their passwords:
 
@@ -128,7 +136,7 @@ Do this after importing a database as well as after a migration.
 
 ### Blank API keys, and what they turn off
 
-`config.dev.php` is committed with every external service key empty, on purpose. Nothing in the [Quick start](#quick-start) needs one — but a few features then look broken when they are only unconfigured:
+`.env.example` lists every integration key with empty or placeholder values on purpose. Nothing in the [Quick start](#quick-start) needs one — but a few features then look broken when they are only unconfigured:
 
 | key | what stops working |
 |---|---|
@@ -144,7 +152,7 @@ Weather needs no key at all — it comes from [Open-Meteo](https://open-meteo.co
 
 **Amtgard single sign-on does not work locally.** `IDP_API_URL` points at `host.docker.internal:37080`, an identity provider you almost certainly aren't running, so the "log in with Amtgard" button will fail. Ordinary username and password login doesn't touch the IDP and works normally — which is what the credentials you were given are for.
 
-If you do need a real key locally, there is no separate override file: edit `config.dev.php`, which **is tracked by git**, so take care not to commit it. Two of them can come from the environment instead, which avoids that — `CF_API_TOKEN` and `GA4_SA_KEY_PATH` fall back to `getenv()`, so you can pass them to the container with `-e`.
+If you do need a real key locally, put it in your gitignored `.env` or in the vault seed for the `ork-web` profile — never commit secrets. `CF_API_TOKEN` and `GA4_SA_KEY_PATH` are also read from the process environment, so you can pass them to the container with `-e` when that is easier.
 
 ### Starting over with a clean database
 

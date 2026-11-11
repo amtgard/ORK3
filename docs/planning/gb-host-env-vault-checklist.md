@@ -155,14 +155,14 @@ Leave `greenblue.sh` unchanged. Do not delete config PHP files. Full unit suite 
 
 ## H5 — Retire PHP config files
 
-- [ ] `config.dist.php`, `config.dev.php`, and `config.test.php` deleted
-- [ ] No request entrypoint includes them
-- [ ] `DeploymentTier` reads environment, and its tests use env fixtures
-- [ ] `heartbeat.sh` no longer appends secret env lines to the fpm pool
-- [ ] README no longer tells operators to edit `config.dev.php`
-- [ ] Scoped Infection on edited PHP at 80%; 95% line coverage of that PHP
+- [x] `config.dist.php`, `config.dev.php`, and `config.test.php` deleted
+- [x] No request entrypoint includes them
+- [x] `DeploymentTier` reads environment, and its tests use env fixtures
+- [x] `heartbeat.sh` no longer appends secret env lines to the fpm pool
+- [x] README no longer tells operators to edit `config.dev.php`
+- [x] Scoped Infection on edited PHP at 80%; 95% line coverage of that PHP
 - [ ] Full unit suite green, or `blocked` if the sandbox database is down
-- [ ] Checklist and gate log updated
+- [x] Checklist and gate log updated
 
 ### H5 prompt
 
@@ -209,5 +209,5 @@ Do not change PHP or compose. Check the H6 boxes. Gate log: `docs-only`. One com
 | H2 | stack/ork3-hev-h02-bootstrap | (this commit) | bootstrap 96.6% lines; Ork3BootstrapConfig infection MSI 99.0% / covered 100%; phpunit hev-h1+hev-h2 green; run-unit-tests SKIP drift-check (pre-existing strict) |
 | H3 | stack/ork3-hev-h03-vault-catalog | (this commit) | Ork3SecretsMigrate 97.3% lines; infection MSI/covered 100%; bash -n on new scripts; phpunit hev-h3 green; run-unit-tests SKIP drift-check (pre-existing strict) |
 | H4 | stack/ork3-hev-h04-gb-compose | (this commit) | bash -n on gb scripts; phpunit hev-h4 green (GbComposeConfigTest); no new PHP source (Infection n/a) |
-| H5 | | | |
+| H5 | stack/ork3-hev-h05-retire-config | (this commit) | DeploymentTier 95.7% lines; infection MSI 98% / covered 100%; phpunit hev-h5 green (18); run-unit-tests blocked (drift-check --strict pre-existing; mirror 19306 down) |
 | H6 | | | |
