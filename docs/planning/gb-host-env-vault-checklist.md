@@ -54,12 +54,12 @@ Commit the two planning docs only. Check the H0 boxes and add a gate-log row `do
 
 ## H1 — EnvFile parser
 
-- [ ] `system/lib/system/class.EnvFile.php` Parser, methods at or under 80 lines
-- [ ] Unit tests plus a separate trace test
-- [ ] Scoped Infection >= 80% MSI and covered MSI; line coverage of `class.EnvFile.php` >= 95%
+- [x] `system/lib/system/class.EnvFile.php` Parser, methods at or under 80 lines
+- [x] Unit tests plus a separate trace test
+- [x] Scoped Infection >= 80% MSI and covered MSI; line coverage of `class.EnvFile.php` >= 95%
 - [ ] `sh bin/run-unit-tests.sh` green, or `blocked` if the sandbox database is down
-- [ ] `sh bin/cleanup-mutation-artifacts.sh` before commit
-- [ ] Checklist and gate log updated in the one commit
+- [x] `sh bin/cleanup-mutation-artifacts.sh` before commit
+- [x] Checklist and gate log updated in the one commit
 
 ### H1 prompt
 
@@ -205,7 +205,7 @@ Do not change PHP or compose. Check the H6 boxes. Gate log: `docs-only`. One com
 | Milestone | Branch | Commit | Gates |
 | --- | --- | --- | --- |
 | H0 | stack/ork3-hev-h00-preflight | (this commit) | docs-only, no PHPUnit |
-| H1 | | | |
+| H1 | stack/ork3-hev-h01-env-file | (this commit) | EnvFile 100% lines; infection MSI/covered MSI 100%; unit suite blocked (MariaDB + drift-check) |
 | H2 | | | |
 | H3 | | | |
 | H4 | | | |

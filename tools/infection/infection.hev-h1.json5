@@ -1,0 +1,39 @@
+{
+    "$schema": "../../vendor/infection/infection/resources/schema.json",
+    "timeout": 120,
+    "source": {
+        "directories": [
+            "system/lib/system"
+        ],
+        "excludes": [
+            "class.AJAXController.php",
+            "class.APIModel.php",
+            "class.Controller.php",
+            "class.Errors.php",
+            "class.JSONModel.php",
+            "class.JSONService.php",
+            "class.JsonServer.php",
+            "class.Log.php",
+            "class.Model.php",
+            "class.Request.php",
+            "class.Session.php",
+            "class.Settings.php",
+            "class.View.php"
+        ]
+    },
+    "logs": {
+        "text": "build/infection-hev-h1.log",
+        "summary": "build/infection-hev-h1-summary.log"
+    },
+    "mutators": {
+        "@default": true
+    },
+    "minMsi": 80,
+    "minCoveredMsi": 80,
+    "testFramework": "phpunit",
+    "bootstrap": "tests/Unit/EnvFile/bootstrap.php",
+    "phpUnit": {
+        "configDir": "."
+    },
+    "tmpDir": "build/infection-hev-h1"
+}
