@@ -2,7 +2,7 @@
 
 **Design:** [gb-host-env-vault-plan.md](gb-host-env-vault-plan.md)  
 **Stack base:** `master` @ `22981eb6` (`origin/master`, 2026-11-11). This repo has no `main`.  
-**Resume from:** H1  
+**Resume from:** done  
 **Skill:** branch-orchestrator. Workers follow the development skill with the ORK3 gates in this file, not a Slim health test and not the host-env-vault Rust `gate.sh`.
 
 The workspace that prepared this checklist was on `stack/warrior-w01-schema` with staged tournament SQL (`db-migrations/2026-03-18-event-external-links.sql` and siblings) and unrelated untracked `* 2.*` copies. That work is not part of this stack. If `git status` shows that branch or those staged migrations, stop with `blocked` and use a clean worktree of the base named below. Copy only this checklist and the plan into that worktree for H0.
@@ -184,11 +184,11 @@ Infection config `tools/infection/infection.hev-h5.json5` scoped to `DeploymentT
 
 ## H6 — Operator runbook
 
-- [ ] `docs/deploy-gb-host-env-vault.md` and `host-env/README.md`
-- [ ] Runbook says both slots stay up and `gb revert` flips nginx
-- [ ] SSM export described as a later operator step
-- [ ] Checklist and gate log updated
-- [ ] Docs-only: no PHPUnit
+- [x] `docs/deploy-gb-host-env-vault.md` and `host-env/README.md`
+- [x] Runbook says both slots stay up and `gb revert` flips nginx
+- [x] SSM export described as a later operator step
+- [x] Checklist and gate log updated
+- [x] Docs-only: no PHPUnit
 
 ### H6 prompt
 
@@ -210,4 +210,4 @@ Do not change PHP or compose. Check the H6 boxes. Gate log: `docs-only`. One com
 | H3 | stack/ork3-hev-h03-vault-catalog | (this commit) | Ork3SecretsMigrate 97.3% lines; infection MSI/covered 100%; bash -n on new scripts; phpunit hev-h3 green; run-unit-tests SKIP drift-check (pre-existing strict) |
 | H4 | stack/ork3-hev-h04-gb-compose | (this commit) | bash -n on gb scripts; phpunit hev-h4 green (GbComposeConfigTest); no new PHP source (Infection n/a) |
 | H5 | stack/ork3-hev-h05-retire-config | (this commit) | DeploymentTier 95.7% lines; infection MSI 98% / covered 100%; phpunit hev-h5 green (18); run-unit-tests blocked (drift-check --strict pre-existing; mirror 19306 down) |
-| H6 | | | |
+| H6 | stack/ork3-hev-h06-operator-doc | (this commit) | docs-only, no PHPUnit |

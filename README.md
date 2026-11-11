@@ -46,7 +46,7 @@ cd ORK3
 cp .env.example .env
 ```
 
-Edit `.env` for your machine, or load secrets with `host-env` / `plaintext` mode and a seed from `host-env/secrets.example/ork-web.env` when you deploy with green-blue. See the deploy runbook when that lands in the repo.
+Edit `.env` for your machine, or load secrets with `host-env` / `plaintext` mode and a seed from `host-env/secrets.example/ork-web.env` when you deploy with green-blue. See [docs/deploy-gb-host-env-vault.md](docs/deploy-gb-host-env-vault.md) and [host-env/README.md](host-env/README.md).
 
 **3. Build and start the containers.** There are two: one for PHP, one for MariaDB.
 
