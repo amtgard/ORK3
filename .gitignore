@@ -3,6 +3,8 @@ package-lock.json
 build/
 *config.php
 # Local docker / env overlays (do not commit secrets)
+.greenblue
+.gb/
 .env
 .env.*
 !.env.example

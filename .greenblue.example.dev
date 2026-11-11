@@ -1,0 +1,60 @@
+# Dev stack (bind-mounted source). Copy to .greenblue at the repo root (do not commit).
+# Run from anywhere (project root = this repo, must contain .greenblue):
+#   /path/to/generic-green-blue-deployment/bin/gb /full/path/to/ORK3 deploy
+# Or: cd /full/path/to/ORK3 && gb "$PWD" deploy
+
+# shellcheck source=scripts/gb-greenblue-helpers.sh disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/scripts/gb-greenblue-helpers.sh"
+
+GB_MODE="dev"
+
+GB_PROJECT_NAME="ork3"
+GB_CONTAINER_APP_DIR="/var/www/ork.amtgard.com"
+GB_COMPOSE_SERVICE="ork3app"
+
+GB_LEGACY_CONTAINER="ork3-php8-app"
+GB_BLUE_CONTAINER="ork3-php8-app-blue"
+GB_GREEN_CONTAINER="ork3-php8-app-green"
+GB_BLUE_PORT="29080"
+GB_GREEN_PORT="19080"
+
+GB_WEB_COMPOSE_PROJECT="ork3-php8"
+GB_WEB_COMPOSE_BASE="docker/compose.prod.yml"
+GB_WEB_COMPOSE_SLOT="docker/compose.%slot%.yml"
+GB_WEB_COMPOSE_DEV="docker/compose.dev.yml"
+GB_SHARED_NETWORK="ork3-php8-net"
+GB_STATE_DIR="${GB_ROOT}/.gb/state"
+
+GB_NGINX_STRATEGY="color-symlink"
+GB_NGINX_SITES_AVAILABLE_DIR="/etc/nginx/sites-available"
+GB_NGINX_SITES_ENABLED_DEFAULT="/etc/nginx/sites-enabled/default"
+
+GB_DEV_STACKS="web"
+GB_DEPLOY_STACKS="web"
+
+GB_APP_INSTALL="none"
+
+GB_HOOK_HEV_AFTER_RENDER="scripts/gb-hev-after-render.sh"
+GB_HOOK_PRE_DEPLOY="scripts/gb-pre-hev-sync.sh"
+
+# host-env-vault (local dev-shared tree). Override GB_HEV_VAULT_ROOT / GB_HEV_CONFIG if needed.
+# GB_HEV_VAULT_ROOT="/absolute/path/to/host-env-vault/Untitled"
+# GB_HEV_CONFIG="${GB_HEV_VAULT_ROOT}/dev-shared/host-config.toml"
+# GB_HEV_REPO="${GB_HEV_VAULT_ROOT}"
+
+GB_HEV_PROFILES="ork-web"
+GB_HEV_SYNC_ON_DEV_UP="1"
+GB_HEV_RENDER_ON_DEV_UP="1"
+GB_HEV_SYNC_ON_DEPLOY="0"
+GB_HEV_RENDER_ON_DEPLOY="0"
+GB_HEV_SYNC_SOURCE="local"
+GB_HEV_SYNC_STRICT="0"
+
+GB_HEV_MOUNT_MAP="ork-web:ORK_HEV_WEB_SECRETS"
+
+# Secrets posture: plaintext | local | host-store (see scripts/ork3-secrets-mode.sh)
+# shellcheck source=host-env/load-secrets-mode.sh disable=SC1091
+source "${GB_ROOT}/host-env/load-secrets-mode.sh"
+
+# Dev deploy does not run GB_HOOK_PRE_DEPLOY; refresh catalog before gb runs HEV sync/render.
+bash "${GB_ROOT}/scripts/gb-pre-hev-sync.sh"

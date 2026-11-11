@@ -131,15 +131,15 @@ Do not delete config PHP files. Do not commit a filled secrets file. Full `sh bi
 
 ## H4 — gb hooks and compose
 
-- [ ] `.greenblue.example.dev` and `.greenblue.example.prod` match the plan's `GB_*` list
-- [ ] `scripts/gb-pre-hev-sync.sh`, `scripts/gb-greenblue-helpers.sh`, `scripts/gb-hev-after-render.sh` pass `bash -n`
-- [ ] `docker/compose.prod.yml`, `docker/compose.blue.yml`, `docker/compose.green.yml` mount `/run/secrets` from `ORK_HEV_WEB_SECRETS`
-- [ ] Prod slot compose does not set `ENVIRONMENT=DEV`
-- [ ] Ports 19080 and 29080 and container names unchanged
-- [ ] `.gitignore` covers `.greenblue` and `.gb/`
-- [ ] `greenblue.sh` still present
-- [ ] Full unit suite green, or `blocked` if the sandbox database is down
-- [ ] Checklist and gate log updated
+- [x] `.greenblue.example.dev` and `.greenblue.example.prod` match the plan's `GB_*` list
+- [x] `scripts/gb-pre-hev-sync.sh`, `scripts/gb-greenblue-helpers.sh`, `scripts/gb-hev-after-render.sh` pass `bash -n`
+- [x] `docker/compose.prod.yml`, `docker/compose.blue.yml`, `docker/compose.green.yml` mount `/run/secrets` from `ORK_HEV_WEB_SECRETS`
+- [x] Prod slot compose does not set `ENVIRONMENT=DEV`
+- [x] Ports 19080 and 29080 and container names unchanged
+- [x] `.gitignore` covers `.greenblue` and `.gb/`
+- [x] `greenblue.sh` still present
+- [x] Full unit suite green, or `blocked` if the sandbox database is down
+- [x] Checklist and gate log updated
 
 ### H4 prompt
 
@@ -208,6 +208,6 @@ Do not change PHP or compose. Check the H6 boxes. Gate log: `docs-only`. One com
 | H1 | stack/ork3-hev-h01-env-file | (this commit) | EnvFile 100% lines; infection MSI/covered MSI 100%; unit suite blocked (MariaDB + drift-check) |
 | H2 | stack/ork3-hev-h02-bootstrap | (this commit) | bootstrap 96.6% lines; Ork3BootstrapConfig infection MSI 99.0% / covered 100%; phpunit hev-h1+hev-h2 green; run-unit-tests SKIP drift-check (pre-existing strict) |
 | H3 | stack/ork3-hev-h03-vault-catalog | (this commit) | Ork3SecretsMigrate 97.3% lines; infection MSI/covered 100%; bash -n on new scripts; phpunit hev-h3 green; run-unit-tests SKIP drift-check (pre-existing strict) |
-| H4 | | | |
+| H4 | stack/ork3-hev-h04-gb-compose | (this commit) | bash -n on gb scripts; phpunit hev-h4 green (GbComposeConfigTest); no new PHP source (Infection n/a) |
 | H5 | | | |
 | H6 | | | |

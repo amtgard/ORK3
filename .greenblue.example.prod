@@ -1,0 +1,54 @@
+# Production blue-green for ORK3 (host nginx color-symlink). Copy to .greenblue (do not commit).
+#
+#   /var/gb/generic-green-blue-deployment/bin/gb /var/www/ork.amtgard.com deploy
+#   /var/gb/generic-green-blue-deployment/bin/gb /var/www/ork.amtgard.com revert
+#
+# With host-env-vault (recommended on the server):
+#   /var/gb/generic-green-blue-deployment/bin/gb \
+#     --hev-config /etc/host-env-vault/config.toml \
+#     /var/www/ork.amtgard.com deploy
+
+GB_MODE="prod"
+
+GB_PROJECT_NAME="ork3"
+GB_CONTAINER_APP_DIR="/var/www/ork.amtgard.com"
+GB_COMPOSE_SERVICE="ork3app"
+
+GB_LEGACY_CONTAINER="ork3-php8-app"
+GB_BLUE_CONTAINER="ork3-php8-app-blue"
+GB_GREEN_CONTAINER="ork3-php8-app-green"
+GB_BLUE_PORT="29080"
+GB_GREEN_PORT="19080"
+
+GB_WEB_COMPOSE_PROJECT="ork3-php8"
+GB_WEB_COMPOSE_BASE="docker/compose.prod.yml"
+GB_WEB_COMPOSE_SLOT="docker/compose.%slot%.yml"
+GB_WEB_COMPOSE_DEV="docker/compose.dev.yml"
+GB_SHARED_NETWORK="ork3-php8-net"
+GB_STATE_DIR="/var/lib/ork3-greenblue"
+
+GB_NGINX_STRATEGY="color-symlink"
+GB_NGINX_SITES_AVAILABLE_DIR="/etc/nginx/sites-available"
+GB_NGINX_SITES_ENABLED_DEFAULT="/etc/nginx/sites-enabled/default"
+
+GB_DEV_STACKS="web"
+GB_DEPLOY_STACKS="web"
+
+GB_APP_INSTALL="none"
+
+GB_HOOK_HEV_AFTER_RENDER="scripts/gb-hev-after-render.sh"
+GB_HOOK_PRE_DEPLOY="scripts/gb-pre-hev-sync.sh"
+
+# Production vault (SSM). Set absolute paths on the host.
+# GB_HEV_CONFIG="/etc/host-env-vault/config.toml"
+# GB_HEV_VAULT_ROOT="/var/lib/host-env-vault"
+# GB_HEV_RENDER_ROOT="/var/lib/host-env-vault/run"
+
+GB_HEV_PROFILES="ork-web"
+GB_HEV_SYNC_ON_DEV_UP="0"
+GB_HEV_RENDER_ON_DEV_UP="0"
+GB_HEV_SYNC_ON_DEPLOY="1"
+GB_HEV_RENDER_ON_DEPLOY="1"
+# Omit GB_HEV_SYNC_SOURCE on SSM hosts (default).
+
+GB_HEV_MOUNT_MAP="ork-web:ORK_HEV_WEB_SECRETS"

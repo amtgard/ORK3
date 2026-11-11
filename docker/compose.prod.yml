@@ -1,0 +1,27 @@
+services:
+  ork3app:
+    build:
+      context: ./
+      dockerfile: Dockerfile.prod
+    working_dir: /var/www
+    restart: unless-stopped
+    volumes:
+      - ./.env:/var/www/ork.amtgard.com/.env:ro
+      - ${ORK_HEV_WEB_SECRETS:-./.local/empty-secrets}:/run/secrets:ro
+      - ${HOST_ENV_VAULT_RUNTIME_DIR:-./.local/empty-runtime}:/run/host-env-vault:ro
+      - /var/log/apps/ork.amtgard.com:/var/log
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=PROD
+      - HOST_ENV_SECRETS_DIR=/run/secrets
+      - HOST_ENV_VAULT_RUNTIME_DIR=/run/host-env-vault
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ork3-php8-net
+
+networks:
+  ork3-php8-net:
+    name: ork3-php8-net
+    external: true
