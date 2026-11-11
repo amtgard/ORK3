@@ -562,6 +562,7 @@ class Award extends Ork3
             6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
             6577, 94, 7084, 6171, 6574, 7254,
             7513, // Hunter (The Painted Skies) -- added 2026-10-04
+            7531, // Order of the Marksman (13 Roads) -- added 2026-11-05
         ];
     }
 
