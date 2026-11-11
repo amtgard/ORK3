@@ -1,6 +1,6 @@
 <?php
 
-include_once("../config.php");
+require_once __DIR__ . '/../config/bootstrap.php';
 error_reporting(E_ERROR | E_WARNING | E_PARSE);
 include_once("import.primary.php");
 include_once("import.ork2.wl.php");

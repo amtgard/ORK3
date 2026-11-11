@@ -17,7 +17,7 @@ function pre_print_r($array) {
 	echo "<pre>\n\n" . print_r($array, true) . "\n\n</pre>\n";
 }
 
-include_once('../config.php');
+require_once __DIR__ . '/../config/bootstrap.php';
 
 echo "<h1>Configure Import</h1>";
 

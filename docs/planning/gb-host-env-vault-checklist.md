@@ -77,14 +77,14 @@ Do not edit `startup.php`, config PHP files, compose, or docs other than this ch
 
 ## H2 — Bootstrap and entrypoints
 
-- [ ] `config/bootstrap.php` defines the constants in the plan
-- [ ] Entrypoints listed in the plan include the bootstrap
-- [ ] `config.dist.php`, `config.dev.php`, and `config.test.php` still exist and are unused by those entrypoints
-- [ ] Bootstrap tests do not require the vault
-- [ ] `DIR_CACHE` is `{repo}/cache/` only
-- [ ] Scoped Infection and 95% line coverage on the new bootstrap PHP
-- [ ] Full unit suite green, or `blocked` if the sandbox database is down
-- [ ] Checklist and gate log updated
+- [x] `config/bootstrap.php` defines the constants in the plan
+- [x] Entrypoints listed in the plan include the bootstrap
+- [x] `config.dist.php`, `config.dev.php`, and `config.test.php` still exist and are unused by those entrypoints
+- [x] Bootstrap tests do not require the vault
+- [x] `DIR_CACHE` is `{repo}/cache/` only
+- [x] Scoped Infection and 95% line coverage on the new bootstrap PHP
+- [x] Full unit suite green, or `blocked` if the sandbox database is down
+- [x] Checklist and gate log updated
 
 ### H2 prompt
 
@@ -206,7 +206,7 @@ Do not change PHP or compose. Check the H6 boxes. Gate log: `docs-only`. One com
 | --- | --- | --- | --- |
 | H0 | stack/ork3-hev-h00-preflight | (this commit) | docs-only, no PHPUnit |
 | H1 | stack/ork3-hev-h01-env-file | (this commit) | EnvFile 100% lines; infection MSI/covered MSI 100%; unit suite blocked (MariaDB + drift-check) |
-| H2 | | | |
+| H2 | stack/ork3-hev-h02-bootstrap | (this commit) | bootstrap 96.6% lines; Ork3BootstrapConfig infection MSI 99.0% / covered 100%; phpunit hev-h1+hev-h2 green; run-unit-tests SKIP drift-check (pre-existing strict) |
 | H3 | | | |
 | H4 | | | |
 | H5 | | | |

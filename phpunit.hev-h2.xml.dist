@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/Unit/Bootstrap/bootstrap.php"
+         colors="true"
+         cacheDirectory="build/phpunit-hev-h2-cache">
+    <testsuites>
+        <testsuite name="hev-h2">
+            <file>tests/Unit/BootstrapTest.php</file>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <file>config/bootstrap.php</file>
+            <file>system/lib/system/class.Ork3Bootstrap.php</file>
+        </include>
+    </source>
+    <coverage>
+        <report>
+            <text outputFile="php://stdout" showUncoveredFiles="true"/>
+        </report>
+    </coverage>
+</phpunit>
