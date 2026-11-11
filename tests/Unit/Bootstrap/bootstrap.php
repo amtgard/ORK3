@@ -6,3 +6,4 @@ define('ORK3_ROOT', dirname(__DIR__, 3));
 
 require_once ORK3_ROOT . '/system/lib/system/class.EnvFile.php';
 require_once ORK3_ROOT . '/system/lib/system/class.Ork3Bootstrap.php';
+require_once ORK3_ROOT . '/system/lib/system/class.Ork3SecretsMigrate.php';

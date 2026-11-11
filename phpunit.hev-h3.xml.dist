@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/Unit/Bootstrap/bootstrap.php"
+         colors="true"
+         cacheDirectory="build/phpunit-hev-h3-cache">
+    <testsuites>
+        <testsuite name="hev-h3">
+            <file>tests/Unit/MigrateOrk3SecretsTest.php</file>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <file>system/lib/system/class.Ork3SecretsMigrate.php</file>
+        </include>
+    </source>
+    <coverage>
+        <report>
+            <text outputFile="php://stdout" showUncoveredFiles="true"/>
+        </report>
+    </coverage>
+</phpunit>

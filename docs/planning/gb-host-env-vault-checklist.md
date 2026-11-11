@@ -102,13 +102,13 @@ Do not delete the three config PHP files. Do not add dotenv. Do not print the co
 
 ## H3 — Catalog, manifests, secrets mode, migrate script
 
-- [ ] `host-env/catalog.d/30-ork3.json` and `host-env/manifests/ork-web.env-host-vault` name the same inject keys and `ga4-sa.json`
-- [ ] `host-env/secrets.example/ork-web.env` and `.env.example` have placeholders only
-- [ ] `scripts/ork3-secrets-mode.sh` supports `plaintext`, `local`, and `host-store`
-- [ ] Migrate script tested with a fixture; fixture secret absent from captured output
-- [ ] Full unit suite green, or `blocked` if the sandbox database is down
-- [ ] Infection scoped to any new PHP helper at 80%; skip Infection if this milestone adds no PHP
-- [ ] Checklist and gate log updated
+- [x] `host-env/catalog.d/30-ork3.json` and `host-env/manifests/ork-web.env-host-vault` name the same inject keys and `ga4-sa.json`
+- [x] `host-env/secrets.example/ork-web.env` and `.env.example` have placeholders only
+- [x] `scripts/ork3-secrets-mode.sh` supports `plaintext`, `local`, and `host-store`
+- [x] Migrate script tested with a fixture; fixture secret absent from captured output
+- [x] Full unit suite green, or `blocked` if the sandbox database is down
+- [x] Infection scoped to any new PHP helper at 80%; skip Infection if this milestone adds no PHP
+- [x] Checklist and gate log updated
 
 ### H3 prompt
 
@@ -207,7 +207,7 @@ Do not change PHP or compose. Check the H6 boxes. Gate log: `docs-only`. One com
 | H0 | stack/ork3-hev-h00-preflight | (this commit) | docs-only, no PHPUnit |
 | H1 | stack/ork3-hev-h01-env-file | (this commit) | EnvFile 100% lines; infection MSI/covered MSI 100%; unit suite blocked (MariaDB + drift-check) |
 | H2 | stack/ork3-hev-h02-bootstrap | (this commit) | bootstrap 96.6% lines; Ork3BootstrapConfig infection MSI 99.0% / covered 100%; phpunit hev-h1+hev-h2 green; run-unit-tests SKIP drift-check (pre-existing strict) |
-| H3 | | | |
+| H3 | stack/ork3-hev-h03-vault-catalog | (this commit) | Ork3SecretsMigrate 97.3% lines; infection MSI/covered 100%; bash -n on new scripts; phpunit hev-h3 green; run-unit-tests SKIP drift-check (pre-existing strict) |
 | H4 | | | |
 | H5 | | | |
 | H6 | | | |
