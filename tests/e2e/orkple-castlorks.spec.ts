@@ -1,30 +1,17 @@
 /**
- * CRYSTAL CASTLORKS (ORKPLE II game): loads from the ORK GAMES menu, plays in the real terminal, and leaves cleanly.
+ * GEM CASTLORKS (ORKPLE II game): loads from the ORK GAMES menu, plays in the real terminal, and leaves cleanly.
  * Set CASTLORKS_SHOT to a directory to keep a canvas screenshot of every castle.
  */
 import { test, expect, Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-
-async function appReachable(baseURL: string): Promise<boolean> {
-  try {
-    const res = await fetch(baseURL, { method: 'HEAD' });
-    return res.ok || res.status === 302 || res.status === 405;
-  } catch {
-    return false;
-  }
-}
+import { orkpleSetup, log, bootGame, tick } from './orkple-helpers';
 
 const MOTION = process.env.CASTLORKS_MOTION === '1';
 test.use({ contextOptions: { reducedMotion: MOTION ? 'no-preference' : 'reduce' } });
 
-test.beforeEach(async ({ baseURL }, testInfo) => {
-  if (!baseURL || !(await appReachable(baseURL))) {
-    testInfo.skip(true, 'ORK3 app not reachable — start docker compose php8 stack');
-  }
-});
+orkpleSetup();
 
-const log = (page: Page) => page.locator('#orkple [role=log]');
 const state = (page: Page) => page.evaluate(() => {
   const g = (window as any).OrkpleGames.castlorks._dbg();
   return { mode: g.mode, score: g.score, x: g.p ? g.p.x : -1, y: g.p ? g.p.y : -1, level: g.level, left: g.left, got: g.got, lives: g.lives, air: !!(g.p && g.p.air) };
@@ -35,18 +22,7 @@ const shot = async (page: Page, name: string) => {
 };
 
 async function openGame(page: Page) {
-  await page.goto('./index.php?Route=Search');
-  await page.locator('#orkple-floppy').click({ force: MOTION });
-  await expect(log(page)).toContainText('ORKPLE II', { timeout: 10000 });
-  await page.keyboard.type('ork');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
-  await page.keyboard.type('4');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('6. CRYSTAL CASTLORKS', { timeout: 10000 });
-  await page.keyboard.type('6');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('C A S T L O R K S', { timeout: 10000 });
+  await bootGame(page, 'castlorks', { ready: 'C A S T L O R K S' });
 }
 
 // Park the looters and pages so a scripted test is not a fight, whatever the clock does.
@@ -146,7 +122,7 @@ test('CASTLORKS: all four keys walk the castle, gems score, SPACE jumps, and a s
     g.loot.forEach((m: any) => { m.state = 'walk'; m.acc = 0; });
     g.p.x = 4; g.p.y = 4; g.p.fx = 4; g.p.fy = 4;
   });
-  await page.waitForTimeout(1800);
+  await tick(page, 1800);
   await shot(page, 'level1-power');
 
   // P holds.
@@ -179,7 +155,7 @@ test('CASTLORKS clears all five castles to the ending, then SPACE returns to the
     await page.keyboard.press('Space');
     await expect.poll(async () => (await state(page)).mode, { timeout: 8000 }).toBe('PLAY');
     await page.evaluate(() => { (window as any).OrkpleGames.castlorks._dbg().lives = 9; });
-    await page.waitForTimeout(MOTION ? (i === 4 ? 7000 : 3500) : 600);
+    await tick(page, MOTION ? (i === 4 ? 7000 : 3500) : 600);
     await expect.poll(async () => (await state(page)).mode, { timeout: 8000 }).toBe('PLAY');   // let looters, pages and the boss come out in the real-motion run
     await shot(page, `level${i + 1}`);
     await calm(page);
@@ -200,7 +176,7 @@ test('CASTLORKS clears all five castles to the ending, then SPACE returns to the
     await shot(page, `level${i + 1}-clear`);
   }
   await expect(log(page)).toContainText('BOUNDARY ROCKS', { timeout: 20000 });
-  await page.waitForTimeout(1500);
+  await tick(page, 1500);
   await shot(page, 'win');
   await expect.poll(async () => (await state(page)).mode, { timeout: 20000 }).toBe('OVER');
   await page.keyboard.press('Space');
@@ -311,14 +287,14 @@ test('CASTLORKS: the how-to-play screen is true, and no message overruns the 40 
   page.on('pageerror', e => errors.push(e.message));
   await openGame(page);
   await expect.poll(async () => (await state(page)).mode).toBe('TITLE');
-  await page.waitForTimeout(700);
+  await tick(page, 700);
   await shot(page, 'title');
   await page.keyboard.press('h');
   await expect(log(page)).toContainText('SPACE JUMPS TWO CELLS', { timeout: 10000 });
-  await page.waitForTimeout(500);
+  await tick(page, 500);
   await shot(page, 'help1');
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(700);
+  await tick(page, 700);
   await shot(page, 'help2');
   await expect(log(page)).toContainText('LOOTERS CAN TAG A LOW JUMP.');
   expect(errors).toEqual([]);

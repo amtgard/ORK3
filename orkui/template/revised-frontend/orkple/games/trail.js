@@ -1393,7 +1393,6 @@ if (D.t < blowUntil && !host.reduced) { host.text(10, 0, pad('BLOWS ' + left, 11
     window.OrkpleGames.trail = {
         title: 'ORKEGON TRAIL',
         start: start,
-        _dbg: function () { return dbg; },
         _test: {
             choiceRows: choiceRows, satHead: satHead, pickIn: pickIn,
             ROLES: ROLES, ITEMS: ITEMS, PACE: PACE, RAT: RAT, newGame: newGame, upkeep: upkeep, driveTurn: driveTurn, restTurn: restTurn,
@@ -1402,4 +1401,6 @@ if (D.t < blowUntil && !host.reduced) { host.text(10, 0, pad('BLOWS ' + left, 11
             score: score, hallInsert: hallInsert, validHall: validHall, clock: clock, wrap: wrap, hLabel: hLabel, LM: LM
         }
     };
+    // State hook for the specs, attached only when the test flag is set.
+    if (window.OrkpleStrict) { window.OrkpleGames.trail._dbg = function () { return dbg; }; }
 }());

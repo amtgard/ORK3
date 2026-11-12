@@ -33,6 +33,33 @@ class Controller
         return $message;
     }
 
+    // The single source of a release's Release Notes anchor id ("release-<slug>"),
+    // shared by the Release Notes cards and the What's New modal's link to them.
+    protected static function release_anchor($version)
+    {
+        return 'release-' . preg_replace('/[^a-z0-9]+/', '-', strtolower($version));
+    }
+
+    // The single source of "is the ORKPLE II holiday event live": the ORKPLE_ENABLED kill
+    // switch, then the orkple_preview=1 cookie, then today's server date inside the 'orkple'
+    // release's [event_start, event_end]. The kill switch beats the cookie.
+    public static function orkple_live(array $releases)
+    {
+        if (!defined('ORKPLE_ENABLED') || !ORKPLE_ENABLED) {
+            return false;
+        }
+        if (($_COOKIE['orkple_preview'] ?? '') === '1') {
+            return true;
+        }
+        $today = date('Y-m-d');
+        foreach ($releases as $release) {
+            if (!empty($release['orkple']) && !empty($release['event_start']) && !empty($release['event_end'])) {
+                return $today >= $release['event_start'] && $today <= $release['event_end'];
+            }
+        }
+        return false;
+    }
+
     public function __construct($method = null, $action = null)
     {
         $this->method = is_null($method) ? 'index' : $method;
@@ -103,20 +130,33 @@ class Controller
         $this->data['ViewerDyslexiaFonts'] = 0;
         $this->data['ShowWhatsNew']        = false;
         $this->data['WhatsNewRelease']     = null;
+
+        // `require`, not `require_once`: the file is safe to read twice, and a subclass or a
+        // second controller in the same request still needs $WHATS_NEW_ITEMS in its scope.
+        require(DIR_UI . 'whats_new_content.php');
+        $this->data['OrkpleEnabled'] = (bool) ORKPLE_ENABLED;
+        $this->data['OrkpleLive']    = self::orkple_live($WHATS_NEW_ITEMS);
+
         if ($_uid > 0) {
             $this->load_model('Player');
             $prefs = $this->Player->get_viewer_preferences($_uid);
             $this->data['ViewerBasicFonts']    = (int) ($prefs['BasicFonts'] ?? 0);
             $this->data['ViewerDyslexiaFonts'] = (int) ($prefs['DyslexiaFonts'] ?? 0);
 
-            require_once(DIR_UI . 'whats_new_content.php');
             foreach ($WHATS_NEW_ITEMS as $_release) {
                 if ($_release['date'] === WHATS_NEW_VERSION) {
+                    $_release['anchor'] = self::release_anchor($_release['version']);
                     $this->data['WhatsNewRelease'] = $_release;
                     break;
                 }
             }
-            if ($this->data['WhatsNewRelease'] !== null) {
+            // An ORKPLE release outside its event window (or with the kill switch off) shows no
+            // modal and marks nothing seen, so the CRT reveal still appears when the window opens.
+            // &wn=0 (the modal's own links to Release Notes) skips the modal for that one
+            // request, so it never covers the card it sent the viewer to. Nothing is marked seen.
+            if ($this->data['WhatsNewRelease'] !== null
+                && (string) ($_GET['wn'] ?? '') !== '0'
+                && !(!empty($this->data['WhatsNewRelease']['orkple']) && !$this->data['OrkpleLive'])) {
                 $this->data['ShowWhatsNew'] = !$this->Player->get_whats_new_seen($_uid, WHATS_NEW_VERSION);
             }
         }

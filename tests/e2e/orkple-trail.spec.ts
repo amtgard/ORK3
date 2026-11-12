@@ -2,97 +2,64 @@
  * ORKEGON TRAIL (ORKPLE II game): loads from the ORK GAMES menu, shows the title, and Q leaves.
  */
 import { test, expect, Page } from '@playwright/test';
-
-async function appReachable(baseURL: string): Promise<boolean> {
-  try {
-    const res = await fetch(baseURL, { method: 'HEAD' });
-    return res.ok || res.status === 302 || res.status === 405;
-  } catch {
-    return false;
-  }
-}
+import { orkpleSetup, log, bootGame, tick } from './orkple-helpers';
 
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
-test.beforeEach(async ({ baseURL }, testInfo) => {
-  if (!baseURL || !(await appReachable(baseURL))) {
-    testInfo.skip(true, 'ORK3 app not reachable — start docker compose php8 stack');
-  }
-});
-
-const log = (page: Page) => page.locator('#orkple [role=log]');
-
-async function type(page: Page, text: string) {
-  await page.keyboard.type(text);
-  await page.keyboard.press('Enter');
-}
+orkpleSetup();
 
 // The live log keeps only its last 30 lines, so count the ORK GAMES menu only when it is the tail of the log
 // (the title now speaks its wording into the log, which pushes the first menu out of the window).
 const menuCount = async (page: Page) => (/0\. MAIN MENU\s*$/.test((await log(page).innerText()).trimEnd()) ? 1 : 0);
 const dbgState = (page: Page) => page.evaluate(() => { const d = (window as any).OrkpleGames.trail._dbg(); return { armed: d.qArmed(), live: !!d.state(), ready: d.ready() }; });
 
+// The 4 s ORKEK title card comes first; the title and role screens are grid-drawn (not in the text log).
+async function openTrail(page: Page) {
+  await bootGame(page, 'trail');
+  await tick(page, 5500);   // 4 s ORKEK title card, then the title screen (game time, not wall time)
+}
+
 // Title -> role (middle budget) -> four names -> the store, waiting for each prompt so no Return is dropped.
 async function toStore(page: Page) {
   await page.keyboard.press('1');
-  await page.waitForTimeout(800);
+  await tick(page, 800);
   await page.keyboard.press('2');
   await expect(log(page)).toContainText('WHO IS IN THE CAR', { timeout: 10000 });
-  // The prompt text is grid-drawn, so pace the Returns: one dropped during output would leave a name unanswered.
+  // The prompt text is grid-drawn, so pace the Returns (in game time): one dropped during output would leave a name unanswered.
   for (let i = 0; i < 4; i++) {
-    await page.waitForTimeout(900);
+    await tick(page, 900);
     await page.keyboard.press('Enter');
   }
   await expect.poll(async () => (await dbgState(page)).ready, { timeout: 10000 }).toBe(true);
 }
 
 test('ORKEGON TRAIL starts from ORK GAMES, reaches the names and store, and Q returns to the menu', async ({ page }) => {
-  await page.goto('./index.php?Route=Search');
-  await page.locator('#orkple-floppy').click();
-  await expect(log(page)).toContainText('ORKPLE II', { timeout: 10000 });
-  await type(page, 'ork');
-  await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
-  await type(page, '4');
-  await expect(log(page)).toContainText('ORKEGON TRAIL', { timeout: 10000 });
-  await type(page, '1');
-  // The 4 s ORKEK title card comes first; the title and role screens are grid-drawn (not in the text log).
-  await page.waitForTimeout(5500);
+  await openTrail(page);
   await toStore(page);
   const before = await menuCount(page);
   // One Q mid-run only asks; the second Q (within 2 s) leaves.
   await page.keyboard.press('q');
-  await page.waitForTimeout(300);
+  await tick(page, 300);
   expect((await dbgState(page)).armed).toBe(true);
   expect(await menuCount(page)).toBe(before);
   await page.keyboard.press('q');
   await expect.poll(() => menuCount(page), { timeout: 10000 }).toBe(before + 1);
 });
 
-async function openTrail(page: Page) {
-  await page.goto('./index.php?Route=Search');
-  await page.locator('#orkple-floppy').click();
-  await expect(log(page)).toContainText('ORKPLE II', { timeout: 10000 });
-  await type(page, 'ork');
-  await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
-  await type(page, '4');
-  await expect(log(page)).toContainText('ORKEGON TRAIL', { timeout: 10000 });
-  await type(page, '1');
-  await page.waitForTimeout(5500);   // 4 s ORKEK title card, then the title screen
-}
 
 test('ORKEGON TRAIL: a lone Q at the store does not end the run, and the ask times out', async ({ page }) => {
   await openTrail(page);
   await toStore(page);
   const before = await menuCount(page);
   await page.keyboard.press('q');
-  await page.waitForTimeout(400);
+  await tick(page, 400);
   expect(await dbgState(page)).toEqual({ armed: true, live: true, ready: true });
-  await page.waitForTimeout(2300);
+  await tick(page, 2300);
   expect((await dbgState(page)).armed).toBe(false);
   expect(await menuCount(page)).toBe(before);
   // A later lone Q asks again instead of leaving.
   await page.keyboard.press('q');
-  await page.waitForTimeout(300);
+  await tick(page, 300);
   expect((await dbgState(page)).armed).toBe(true);
   expect(await menuCount(page)).toBe(before);
 });

@@ -6,7 +6,6 @@
  */
 import { test, expect, Page } from '@playwright/test';
 
-const SCRATCH = '/private/tmp/claude-501/-Users-averykrouse-GitHub-ORK-tobias-ORK3-tobias/d4a03171-dc47-4ef6-af33-e92cb0cdbd0c/scratchpad/';
 const SVC = '../orkservice/Json/index.php?call=';
 
 async function appReachable(baseURL: string): Promise<boolean> {
@@ -21,7 +20,11 @@ async function appReachable(baseURL: string): Promise<boolean> {
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
 const log = (page: Page) => page.locator('#orkple [role=log]');
-const endsOn = (page: Page, re: RegExp) => expect(log(page)).toHaveText(re, { timeout: 20000 });
+// The kingdom header's PARKS, EVENTS and AVG counts load behind the screen and are written in just before its last line
+// as they arrive, so screen endings and menus are matched without those lines.
+const STAT = /^(PARKS|EVENTS|AVG\/WEEK|AVG\/MONTH) (--|\d[\d.,]*)$/;
+const menuText = async (page: Page) => ((await log(page).innerText()) || '').split('\n').filter((l) => !STAT.test(l)).join('\n');
+const endsOn = (page: Page, re: RegExp) => expect.poll(() => menuText(page), { timeout: 20000 }).toMatch(re);
 const calls: string[] = [];
 const uiCalls: string[] = [];
 
@@ -38,6 +41,8 @@ test.beforeEach(async ({ baseURL, page }, testInfo) => {
     const u = /index\.php\?Route=((?:Search|SearchAjax|Unit|UnitAjax)\/[A-Za-z_]+)/.exec(r.url());
     if (u && !/Route=Search$/.test(r.url())) uiCalls.push(u[1]);
   });
+  // ORKPLE is only live in its event window (or with the preview cookie); the floppy is not on the page otherwise.
+  await page.context().addCookies([{ name: 'orkple_preview', value: '1', url: new URL('/', baseURL).href }]);
   await page.goto('./index.php?Route=Search');
 });
 
@@ -64,7 +69,7 @@ async function toMenu(page: Page) {
   await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
 }
 async function lastScreen(page: Page): Promise<string[]> {
-  const lines = (((await log(page).textContent()) || '').split('\n'));
+  const lines = (((await log(page).innerText()) || '').split('\n'));
   let idx = -1;
   lines.forEach((l, i) => { if (/PAGE \d+ OF \d+$/.test(l)) idx = i; });
   return idx < 0 ? lines : lines.slice(idx);
@@ -80,7 +85,7 @@ async function settled(page: Page, title?: RegExp, pageNo?: number): Promise<str
   return got;
 }
 async function widthOk(page: Page) {
-  const lines = ((await log(page).textContent()) || '').split('\n');
+  const lines = ((await log(page).innerText()) || '').split('\n');
   // the ARMS OF line is the screen reader's stand-in for the arms bitmap, never drawn
   for (const l of lines.filter((x) => !/^ARMS OF /.test(x))) expect(l.length, `"${l}"`).toBeLessThanOrEqual(39);
 }
@@ -100,7 +105,7 @@ async function pickRow(page: Page, re: RegExp): Promise<void> {
 }
 async function shot(page: Page, name: string) {
   await page.waitForTimeout(150);
-  await page.locator('#orkple canvas').screenshot({ path: SCRATCH + name + '.png' });
+  await page.locator('#orkple canvas').screenshot({ path: test.info().outputPath(name + '.png') });
 }
 // The text lines of a pager screen: between the rule under the title and the menu keys at the foot.
 function bodyOf(s: string[]): string[] {
@@ -134,6 +139,28 @@ async function search(page: Page, term: string) {
   await type(page, term);
   return settled(page, /^FOUND /);
 }
+// Fixtures for the unit profile walk: which players and companies a search finds, and a unit's leaders and texts,
+// change with the data. The search is served for 'asura' (two players, then unit 2541 at row 3), and fixUnit serves
+// unit 2541 itself with one leader and no ABOUT or HISTORY text. The parity tests below read the real records.
+const SEARCH_ASURA = {
+  players: [
+    { type: 'player', id: 900001, name: 'Asura', abbr: 'OLD', park: 'Test Park', active: 1 },
+    { type: 'player', id: 900002, name: 'Bakasura', abbr: 'RM', park: 'Test Park', active: 1 },
+  ],
+  parks: [], kingdoms: [],
+  units: [{ type: 'unit', id: 2541, name: 'Asura', unitType: 'Company' }],
+};
+const UNIT_ASURA = { UnitId: 2541, Name: 'Asura', Type: 'Company', Active: 'Active', Description: '', History: '', Url: '', HasHeraldry: 1 };
+const json = (body: unknown) => ({ contentType: 'application/json', body: JSON.stringify(body) });
+// The patterns differ from the ones the failure tests route and unroute, so those leave these in place.
+async function fixSearch(page: Page) {
+  await page.route(/SearchAjax\/universal&q=asura$/i, (r) => r.fulfill(json(SEARCH_ASURA)));
+}
+async function fixUnit(page: Page) {
+  await page.route(/call=Unit\/GetUnit&.*2541/, (r) => r.fulfill(json({ Status: { Status: 0 }, Unit: UNIT_ASURA })));
+  await page.route(/Search\/unitsearch&q=Asura$/, (r) => r.fulfill(json([{ UnitId: 2541, LeaderNames: 'Test Leader' }])));
+}
+
 // Pick the row after a group heading (PLAYERS, PARKS, KINGDOMS, COMPANIES, HOUSEHOLDS) whose text matches.
 async function pickInGroup(page: Page, group: string, re: RegExp): Promise<void> {
   const s = await settled(page);
@@ -151,7 +178,7 @@ const UNIT_END = /2\. HISTORY\s+0\. [A-Z ]+\s*$/;
 
 test('the main menu keeps 1 to 4 where they were and adds 5. SEARCH THE ORK and 6. THE ORK TODAY', async ({ page }) => {
   await toMenu(page);
-  const t = (await log(page).textContent()) || '';
+  const t = (await log(page).innerText()) || '';
   expect(t).toMatch(/1\. KINGDOMS\s+2\. PLAYERS\s+3\. MY PROFILE\s+4\. ORK GAMES\s+5\. SEARCH THE ORK\s+6\. THE ORK TODAY\s*(E\.P\.[^\n]*)?\s*$/);
   await type(page, '7');
   await expect(log(page)).toContainText('?ILLEGAL QUANTITY ERROR');
@@ -161,12 +188,12 @@ test('the main menu keeps 1 to 4 where they were and adds 5. SEARCH THE ORK and 
 
 test('the kingdom profile gets 4. COMPANIES AND HOUSEHOLDS after PAST EVENTS; a kingdom with principalities gets 5', async ({ page }) => {
   await toKcgProfile(page);
-  expect((await log(page).textContent()) || '').toMatch(/1\. PARKS\s+2\. EVENTS\s+3\. PAST EVENTS\s+4\. COMPANIES AND HOUSEHOLDS\s+5\. KNIGHTS AND MASTERS\s+0\. KINGDOM LIST\s*$/);
+  expect(await menuText(page)).toMatch(/1\. PARKS\s+2\. EVENTS\s+3\. PAST EVENTS\s+4\. COMPANIES AND HOUSEHOLDS\s+5\. KNIGHTS AND MASTERS\s+0\. KINGDOM LIST\s*$/);
   await type(page, '0');
   await settled(page, /^KINGDOMS/);
   await pickRow(page, /^(\d)\. KINGDOM OF NORTHERN LIGHTS/);
   await endsOn(page, PROFILE_END);
-  expect((await log(page).textContent()) || '').toMatch(/1\. PARKS\s+2\. EVENTS\s+3\. PRINCIPALITIES\s+4\. PAST EVENTS\s+5\. COMPANIES AND HOUSEHOLDS\s+6\. KNIGHTS AND MASTERS\s+0\. KINGDOM LIST\s*$/);
+  expect(await menuText(page)).toMatch(/1\. PARKS\s+2\. EVENTS\s+3\. PRINCIPALITIES\s+4\. PAST EVENTS\s+5\. COMPANIES AND HOUSEHOLDS\s+6\. KNIGHTS AND MASTERS\s+0\. KINGDOM LIST\s*$/);
 });
 
 // ---- the kingdom list ----
@@ -256,7 +283,7 @@ test('a row opens the unit; 0 returns to the same page of the same filter', asyn
   const name = /^3\. (.+?) +CO\*?$/.exec(row)![1];
   await type(page, '3');
   await endsOn(page, /2\. HISTORY\s+0\. UNIT LIST\s*$/);
-  expect((await log(page).textContent()) || '').toContain('ARMS OF ' + name);
+  expect((await log(page).innerText()) || '').toContain('ARMS OF ' + name);
   await type(page, '0');
   s.length && await settled(page, /^COMPANIES +PAGE 2 OF/);
   await type(page, '0');
@@ -266,9 +293,11 @@ test('a row opens the unit; 0 returns to the same page of the same filter', asyn
 // ---- the unit profile ----
 
 test('unit 2541 (Asura) through SEARCH THE ORK: type, leaders, arms, empty ABOUT and HISTORY, 0 returns to the results', async ({ page }) => {
+  await fixSearch(page);
+  await fixUnit(page);
   await toSearch(page);
   await widthOk(page);
-  expect((await log(page).textContent()) || '').toMatch(/SEARCH THE ORK\s+=+\s+TYPE A NAME\. FINDS PLAYERS, PARKS,/);
+  expect((await log(page).innerText()) || '').toMatch(/SEARCH THE ORK\s+=+\s+TYPE A NAME\. FINDS PLAYERS, PARKS,/);
   const s = await search(page, 'asura');
   await widthOk(page);
   const t = s.join('\n');
@@ -276,27 +305,27 @@ test('unit 2541 (Asura) through SEARCH THE ORK: type, leaders, arms, empty ABOUT
   await shot(page, 'search-results');
   await type(page, '3');
   await endsOn(page, UNIT_END);
-  const u = (await log(page).textContent()) || '';
+  const u = (await log(page).innerText()) || '';
   const prof = u.slice(u.lastIndexOf('ARMS OF'));
-  expect(prof).toMatch(/^ARMS OF ASURA\nASURA\nCOMPANY\n=+\nLEADERS\nBRENNON VIRIDIAN\n/);
+  expect(prof).toMatch(/^ARMS OF ASURA\nASURA\nCOMPANY\n=+\nLEADERS\nTEST LEADER\n/);
   expect(prof).toMatch(/1\. ABOUT\n2\. HISTORY\n0\. RESULTS\s*$/);
   await widthOk(page);
   await shot(page, 'unit-asura');
   await type(page, '1');
   await settled(page, /^ABOUT/);
-  expect((await log(page).textContent()) || '').toMatch(/NO DESCRIPTION PROVIDED\.\s+0\. BACK\s*$/);
+  expect((await log(page).innerText()) || '').toMatch(/NO DESCRIPTION PROVIDED\.\s+0\. BACK\s*$/);
   await type(page, '0');
   await endsOn(page, UNIT_END);
   await type(page, '2');
   await settled(page, /^HISTORY/);
-  expect((await log(page).textContent()) || '').toMatch(/NO HISTORY PROVIDED\.\s+0\. BACK\s*$/);
+  expect((await log(page).innerText()) || '').toMatch(/NO HISTORY PROVIDED\.\s+0\. BACK\s*$/);
   await type(page, '0');
   await endsOn(page, UNIT_END);
   await type(page, '3');
   await expect(log(page)).toContainText('?ILLEGAL QUANTITY ERROR');
   await type(page, '0');
   await settled(page, /^FOUND ASURA/);
-  expect((await log(page).textContent()) || '').toMatch(/COMPANIES\n3\. ASURA\n/);
+  expect((await log(page).innerText()) || '').toMatch(/COMPANIES\n3\. ASURA\n/);
 });
 
 test('unit 2541 matches the unit page for an anonymous visitor: name, type, leaders', async ({ page, request }) => {
@@ -309,11 +338,12 @@ test('unit 2541 matches the unit page for an anonymous visitor: name, type, lead
     const tds = [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((x) => x[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
     return { persona: tds[0].replace(/\(inactive\)/, '').trim(), role: tds[3] };
   }).filter((r) => /^(Captain|Lord)$/.test(r.role)).map((r) => r.persona).sort();
+  await fixSearch(page);   // the search is a fixture (row 3 is unit 2541); the unit and its leaders are real
   await toSearch(page);
   await search(page, 'asura');
   await type(page, '3');
   await endsOn(page, UNIT_END);
-  const u = (await log(page).textContent()) || '';
+  const u = (await log(page).innerText()) || '';
   const prof = u.slice(u.lastIndexOf('ARMS OF'));
   expect(words(prof)).toContain(words('ARMS OF ' + name + ' ' + name + ' ' + unitType));
   expect(words(prof)).toContain(words(leaders.join(' ')));
@@ -368,7 +398,7 @@ test('a retired unit shows RETIRED and the anonymous unit page says retired too'
   await search(page, 'dragonstorm');
   await type(page, '1');
   await endsOn(page, UNIT_END);
-  const u = (await log(page).textContent()) || '';
+  const u = (await log(page).innerText()) || '';
   expect(u.slice(u.lastIndexOf('ARMS OF'))).toMatch(/^ARMS OF DRAGONSTORM\nDRAGONSTORM\nCOMPANY\nRETIRED\n=+\n/);
 });
 
@@ -394,7 +424,7 @@ test('results group PLAYERS, PARKS, KINGDOMS, COMPANIES; each opens its profile 
   // kingdom
   await pickRow(page, /^(\d)\. KINGDOM OF CRYSTAL GROVES/);
   await endsOn(page, /0\. BACK\s*$/);
-  expect((await log(page).textContent()) || '').toContain('4. COMPANIES AND HOUSEHOLDS');
+  expect((await log(page).innerText()) || '').toContain('4. COMPANIES AND HOUSEHOLDS');
   await type(page, '0');
   s = await settled(page, /^FOUND CRYSTAL +PAGE 2 OF 2/);
   expect(s.join('\n')).toBe(t);   // back on the same page, same rows
@@ -443,21 +473,35 @@ test('retired kingdoms stay out of the KINGDOMS group, as they are not on the KI
   expect(t).not.toMatch(/\d\. NORTHERN LIGHTS +NL\n/);
 });
 
-test('the player shortcuts KCG:AR and KCG: work in SEARCH THE ORK and in PLAYERS', async ({ page }) => {
+test('the player shortcuts KCG:AR and KCG: work in SEARCH THE ORK and in PLAYERS', async ({ page, request }) => {
+  // The subject is picked at runtime: an officer of Angler's Rift (KCG:AR) with a plain persona that the
+  // site's own search finds under the shortcut.
+  const officers = (await (await request.get(`${SVC}Park/GetOfficers&request[ParkId]=1049`)).json()).Officers as any[];
+  let who = '';
+  for (const o of officers) {
+    const p = String(o.Persona || '').trim();
+    if (!(+o.MundaneId > 0) || !/^[A-Za-z][A-Za-z ]{2,24}$/.test(p)) continue;
+    const r = await (await request.get('./index.php?Route=SearchAjax/universal&q=' + encodeURIComponent('KCG:AR ' + p))).json();
+    if ((r.players || []).some((x: any) => +x.id === +o.MundaneId)) { who = p.toUpperCase(); break; }
+  }
+  test.skip(!who, 'no Angler\'s Rift officer the KCG:AR shortcut finds');
+  const rowOf = (s: string[]) => s.map((l) => new RegExp('^(\\d)\\. ' + who + ' +\\(KCG\\)$').exec(l)).find(Boolean) as RegExpExecArray | undefined;
   await toSearch(page);
-  let s = await search(page, 'KCG:AR TOBIAS');
-  expect(s.join('\n')).toMatch(/PLAYERS\n1\. TOBIAS OF HERALDSBRIDGE +\(KCG\)/);
-  expect(s[0]).toMatch(/^FOUND KCG:AR TOBIAS/);
-  await type(page, '1');
+  let s = await search(page, 'KCG:AR ' + who);
+  expect(s[0]).toMatch(new RegExp('^FOUND KCG:AR ' + who));
+  expect(s.join('\n')).toMatch(/^PLAYERS$/m);
+  const row = rowOf(s);
+  expect(row, s.join('\n')).toBeTruthy();
+  await type(page, row![1]);
   await endsOn(page, /0\. BACK\s*$/);
-  await expect(log(page)).toContainText('TOBIAS OF HERALDSBRIDGE');
+  await expect(log(page)).toContainText(who);
   await type(page, '0');
   await settled(page, /^FOUND KCG:AR/);
   await type(page, '0');
   await endsOn(page, /0\. MAIN MENU\s*$/);
-  await type(page, 'kcg: tobias');
-  s = await settled(page, /^FOUND KCG: TOBIAS/);
-  expect(s.join('\n')).toContain('TOBIAS OF HERALDSBRIDGE');
+  await type(page, 'kcg: ' + who.toLowerCase());
+  s = await settled(page, /^FOUND KCG: /);
+  expect(s.join('\n')).toContain(who);
   // a bare prefix or one letter is a hint, not a search
   await type(page, '0');
   await type(page, 'KCG:AR');
@@ -469,12 +513,13 @@ test('the player shortcuts KCG:AR and KCG: work in SEARCH THE ORK and in PLAYERS
   await type(page, '0');
   await type(page, '2');
   await expect(log(page)).toContainText('PLAYER SEARCH');
-  await type(page, 'KCG:AR TOBIAS');
-  s = await settled(page, /^MATCHES FOR KCG:AR TOBIAS/);
-  expect(s.join('\n')).toContain('TOBIAS OF HERALDSBRIDGE');
+  await type(page, 'KCG:AR ' + who);
+  s = await settled(page, /^MATCHES FOR KCG:AR /);
+  expect(s.join('\n')).toContain(who);
 });
 
 test('SEARCH THE ORK: nothing found re-prompts, EXIT and 0 work, a miss on the results page is an error', async ({ page }) => {
+  await fixSearch(page);   // three results, so 8 is not on offer
   await toSearch(page);
   await type(page, 'zzqqxxww');
   await expect(log(page)).toContainText('NOTHING FOUND.');
@@ -515,20 +560,20 @@ test('failures: each read gives ?I/O ERROR, a missing record ?FILE NOT FOUND, an
   const reset = async () => { await type(page, '1'); await settled(page, /PARKS/); await type(page, '0'); await endsOn(page, PROFILE_END); };
   await page.route(sum, (r) => r.abort());
   await type(page, '4');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await page.unroute(sum);
   await reset();
   await page.route(act, (r) => r.abort());
   await page.waitForTimeout(200);
   await type(page, '4');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await page.unroute(act);
   await reset();
   // a service refusal
   await page.route(sum, (r) => r.fulfill({ contentType: 'application/json', body: '{"Status":{"Status":5,"Error":"x","Detail":"SELECT secret FROM t"}}' }));
   await type(page, '4');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
-  expect((await log(page).textContent()) || '').not.toContain('SELECT secret');
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
+  expect((await log(page).innerText()) || '').not.toContain('SELECT secret');
   await page.unroute(sum);
   await reset();
   // an empty kingdom
@@ -539,7 +584,7 @@ test('failures: each read gives ?I/O ERROR, a missing record ?FILE NOT FOUND, an
   await page.waitForTimeout(200);
   await type(page, '4');
   await settled(page, UNITS);
-  expect((await log(page).textContent()) || '').toMatch(/NO COMPANIES OR HOUSEHOLDS HERE\.\s+0\. BACK\s*$/);   // no filter key with nothing to filter
+  expect((await log(page).innerText()) || '').toMatch(/NO COMPANIES OR HOUSEHOLDS HERE\.\s+0\. BACK\s*$/);   // no filter key with nothing to filter
   await type(page, '0');
   await endsOn(page, PROFILE_END);
   await page.unroute(sum);
@@ -556,24 +601,26 @@ test('failures: each read gives ?I/O ERROR, a missing record ?FILE NOT FOUND, an
   expect(s.join('\n')).toMatch(/1\. HEARTH +HH\n/);
   await type(page, '8');
   await settled(page, /^COMPANIES +PAGE 1 OF 1/);
-  expect((await log(page).textContent()) || '').toMatch(/NONE OF THAT TYPE HERE\.\s+8\. HOUSEHOLDS ONLY\s+0\. BACK\s*$/);
+  expect((await log(page).innerText()) || '').toMatch(/NONE OF THAT TYPE HERE\.\s+8\. HOUSEHOLDS ONLY\s+0\. BACK\s*$/);
   await page.unroute(sum);
   await page.unroute(act);
 });
 
 test('failures: the unit record and the search', async ({ page }) => {
+  await fixSearch(page);
+  await fixUnit(page);
   await toSearch(page);
   const uni = /SearchAjax\/universal/;
   await page.route(uni, (r) => r.abort());
   await type(page, 'asura');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await page.unroute(uni);
   await type(page, '0');   // a screen change starts the error count again
   await type(page, '5');
   await endsOn(page, /0\. MAIN MENU\s*$/);
   await page.route(uni, (r) => r.fulfill({ contentType: 'application/json', body: '{"nope":1}' }));
   await type(page, 'asura');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await page.unroute(uni);
   await page.waitForTimeout(200);
   const again = async () => { await type(page, '0'); await endsOn(page, /0\. MAIN MENU\s*$/); await search(page, 'asura'); };   // a new screen starts the error count again
@@ -592,20 +639,22 @@ test('failures: the unit record and the search', async ({ page }) => {
   await again();
   await page.route(rec, (r) => r.abort());
   await type(page, '3');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await page.unroute(rec);
   await again();
   const ls = /Search\/unitsearch/;
   await page.route(ls, (r) => r.abort());
   await type(page, '3');
   await endsOn(page, UNIT_END);
-  const t = (await log(page).textContent()) || '';
+  const t = (await log(page).innerText()) || '';
   expect(t.slice(t.lastIndexOf('ARMS OF'))).toMatch(/^ARMS OF ASURA\nASURA\nCOMPANY\n=+\n\n?1\. ABOUT/);
   expect(t.slice(t.lastIndexOf('ARMS OF'))).not.toContain('LEADERS');
   await page.unroute(ls);
 });
 
 test('the arms of a unit fall back to the shield when the image is missing', async ({ page }) => {
+  await fixSearch(page);
+  await fixUnit(page);
   await toSearch(page);
   await search(page, 'asura');
   await page.route(/assets\/heraldry\/unit\//, (r) => r.abort());

@@ -1178,9 +1178,9 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php else: ?>
 					<span class="pn-badge pn-badge-yellow"><i class="fas fa-exclamation-circle"></i> Needs Waiver</span>
 				<?php endif; ?>
-				<?php if ($_duesForLife || (!empty($Player['DuesThrough']) && strtotime($Player['DuesThrough']) >= time())): ?>
+				<?php if (($Player['DuesStatus'] ?? '') === 'paid'): ?>
 					<span class="pn-badge pn-badge-green"><i class="fas fa-receipt"></i> Dues Paid</span>
-				<?php elseif (!empty($Player['LastDuesThrough'])): ?>
+				<?php elseif (($Player['DuesStatus'] ?? '') === 'expired'): ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> Dues Expired</span>
 				<?php else: ?>
 					<span class="pn-badge pn-badge-gray"><i class="fas fa-receipt"></i> No Dues on File</span>
@@ -1344,12 +1344,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Reeve</span>
 				<span class="pn-detail-value" id="pn-qual-reeve-val">
-					<?php if ($Player['ReeveQualified'] != 0): ?>
+					<?php if (($Player['ReeveStatus'] ?? 'no') !== 'no'): ?>
 						<?php
 							$reeveUntil = (!empty($Player['ReeveQualifiedUntil']) && $Player['ReeveQualifiedUntil'] !== '0000-00-00') ? $Player['ReeveQualifiedUntil'] : '';
-							$reeveExpired = $reeveUntil && strtotime($reeveUntil) < time();
+							$reeveExpired = $Player['ReeveStatus'] === 'expired';
 						?>
-						<?php if (!$reeveUntil): ?>
+						<?php if ($Player['ReeveStatus'] === 'no_end'): ?>
 							<span class="pn-badge pn-badge-green">No end date</span>
 						<?php else: ?>
 							<span class="pn-badge <?= $reeveExpired ? 'pn-badge-red' : 'pn-badge-green' ?>"><?= $reeveExpired ? 'Expired' : 'Until' ?> <?= $reeveUntil ?></span>
@@ -1362,12 +1362,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Corpora</span>
 				<span class="pn-detail-value" id="pn-qual-corpora-val">
-					<?php if ($Player['CorporaQualified'] != 0): ?>
+					<?php if (($Player['CorporaStatus'] ?? 'no') !== 'no'): ?>
 						<?php
 							$corporaUntil = (!empty($Player['CorporaQualifiedUntil']) && $Player['CorporaQualifiedUntil'] !== '0000-00-00') ? $Player['CorporaQualifiedUntil'] : '';
-							$corporaExpired = $corporaUntil && strtotime($corporaUntil) < time();
+							$corporaExpired = $Player['CorporaStatus'] === 'expired';
 						?>
-						<?php if (!$corporaUntil): ?>
+						<?php if ($Player['CorporaStatus'] === 'no_end'): ?>
 							<span class="pn-badge pn-badge-green">No end date</span>
 						<?php else: ?>
 							<span class="pn-badge <?= $corporaExpired ? 'pn-badge-red' : 'pn-badge-green' ?>"><?= $corporaExpired ? 'Expired' : 'Until' ?> <?= $corporaUntil ?></span>

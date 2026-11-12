@@ -19,6 +19,7 @@
     var CHAR_MS = 5;               // print rate
     var LINE_MS = 180;             // boot screen: pause after each whole line
     var GARBAGE_MS = 800;          // power-on garbage duration
+    var BOOT_DISK_MS = 1500;       // the ORKPLE ][ banner and disk sound before DOS comes up
     var BLINK_MS = 400;            // ~2.5Hz
     var LIVE_MAX = 30;
     var FETCH_MS = 12000;          // disk read timeout
@@ -395,7 +396,9 @@
         if (p.isPrinz && p.parentName) { right = right.concat(wrap('PRINCIPALITY OF ' + noThe(clean(p.parentName)).replace(/^(KINGDOM|EMPIRE) OF (THE )?/, ''), colW)); }
         right.push(rep('=', colW));
         var n = function (v) { return (v === null || v === undefined) ? '--' : String(v); };
-        right.push('PARKS ' + n(p.parkCount), 'EVENTS ' + n(p.eventCount), 'AVG/WEEK ' + n(p.avgWeek), 'AVG/MONTH ' + n(p.avgMonth));
+        // The four counts: rows statRow.. of the screen, to the right of the arms. They may fill in after it prints.
+        var statRow = right.length, stat = ['PARKS ' + n(p.parkCount), 'EVENTS ' + n(p.eventCount), 'AVG/WEEK ' + n(p.avgWeek), 'AVG/MONTH ' + n(p.avgMonth)];
+        right = right.concat(stat);
         var head = Math.max(ART_H, right.length), lines = [];
         for (var h = 0; h < head; h++) {
             lines.push((spaces(ART_W + ART_GAP) + trunc(right[h] || '', colW)).replace(/ +$/, ''));
@@ -422,7 +425,7 @@
         lines.push((p.prinz && p.prinz.length ? '6' : '5') + '. KNIGHTS AND MASTERS');
         lines.push('0. ' + back);
         lines = fitRows(lines, head);
-        return { lines: lines, head: head, log: log };
+        return { lines: lines, head: head, log: log, stat: { row: statRow, col: ART_W + ART_GAP, width: colW, lines: stat } };
     }
     function profileLines(p, back) { return profileParts(p, back).lines; }
     // A screen may print 23 lines (the prompt takes the 24th row). Over that, drop blank spacer lines below the arms, last first.
@@ -467,28 +470,6 @@
         for (var i = 0; i < PARK_MENU.length; i++) { lines.push((i + 1) + '. ' + PARK_MENU[i][0]); }
         lines.push('0. ' + back);
         return { lines: lines, head: head, log: ['ARMS OF ' + clean(p.name)].concat(right) };
-    }
-    // Does the park meet in person on this date (YYYY-MM-DD)? The page's own recurrence rules (Parknew_index.tpl);
-    // online days never count, as the page's Next Park Day card leaves them out.
-    var FULL_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    function parkMeetsOn(days, date) {
-        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || ''));
-        if (!m || !Array.isArray(days)) { return false; }
-        var ms = Date.UTC(+m[1], +m[2] - 1, +m[3]), wd = new Date(ms).getUTCDay(), dom = +m[3];
-        return days.some(function (x) {
-            if (!x || +x.Online) { return false; }
-            var wn = FULL_DAYS.indexOf(String(x.WeekDay || '').toLowerCase());
-            if (x.Recurrence === 'weekly') { return wn >= 0 && wn === wd; }
-            if (x.Recurrence === 'week-of-month') { return wn >= 0 && wn === wd && Math.ceil(dom / 7) === (+x.WeekOfMonth || 0); }
-            if (x.Recurrence === 'every-x-weeks') {
-                var iv = +x.WeekInterval || 0, a = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(x.StartDate || ''));
-                if (iv < 1 || !a) { return false; }
-                var diff = Math.round((ms - Date.UTC(+a[1], +a[2] - 1, +a[3])) / 86400000);
-                return diff >= 0 && diff % (iv * 7) === 0;
-            }
-            if (x.Recurrence === 'monthly') { return (+x.MonthDay || 0) === dom; }
-            return false;
-        });
     }
     // One park day as screen lines: when, what and where, then the page's own short description.
     function parkDayText(day) {
@@ -750,15 +731,23 @@
             else if (!list.length) { lines.push('  NONE'); }
             else { list.forEach(function (x) { lines.push(trunc('  ' + fmt(x), W)); }); }
         }
-        // Upcoming RSVPs are private to their owner: the service answers only a logged-in call, and no UI route
-        // returns them. When the read is refused the block is left out, not printed as (UNAVAILABLE).
+        // The home park's next meeting from the kingdom calendar (the server expands the recurrences). No home park, no line.
+        if (m.parkDay !== undefined) {
+            lines.push('NEXT PARK DAY');
+            if (m.parkDay === null) { lines.push('  (UNAVAILABLE)'); }
+            else if (!m.parkDay) { lines.push('  NONE IN THE NEXT FIVE WEEKS'); }
+            else { lines.push(trunc('  ' + parkDayNext(m.parkDay), W)); }
+            lines.push('');
+        }
+        // Upcoming RSVPs come from the signed-in session's own route (EventRsvpAjax/mine, no player id). Logged out,
+        // the route refuses and the block is left out, not printed as (UNAVAILABLE).
         if (m.rsvps !== null) {
             lines.push('NEXT UP');
             section(m.rsvps, function (r) { return fmtDate(r.EventStart) + ' ' + clean(r.EventName); });
             lines.push('');
         }
         lines.push('RECENT CLASSES');
-        section(m.classes, function (c) { return leftRight(clean(c.ClassName), 'LV' + c.Level + ' ' + fmtNum(c.Credits), W - 2); });
+        section(m.classes, function (c) { return classRow(c, 9); });
         lines.push('', 'LATEST AWARD');
         section(m.award, function (a) { return awardRows([a])[0]; });
         lines.push('', 'FULL DASHBOARD: THE MODERN ORK', '', '0. BACK');
@@ -773,15 +762,11 @@
         }
         return '';
     }
-    function qualWord(q, until) {
-        if (!q) { return 'NO'; }
-        if (!until || until === '0000-00-00') { return 'YES, NO END DATE'; }
-        return (until < today() ? 'EXPIRED ' : 'UNTIL ') + fmtDate(until);
-    }
-    function today() {
-        var d = new Date();
-        function two(n) { return (n < 10 ? '0' : '') + n; }
-        return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
+    // The words for a qualification the service already judged on server time (Player/GetPlayer ReeveStatus, CorporaStatus).
+    function qualWord(status, until) {
+        if (status === 'no_end') { return 'YES, NO END DATE'; }
+        if (status === 'until' || status === 'expired') { return (status === 'expired' ? 'EXPIRED ' : 'UNTIL ') + fmtDate(until); }
+        return 'NO';
     }
     // The player profile, from the fields the public page shows a logged-out visitor (never the account name,
     // the id, real names, email, notes or a suspension reason). Returns the lines above the prompt.
@@ -834,6 +819,40 @@
         var rank = Math.max(0, +l.Rank || 0), max = Math.max(1, +l.MaxRank || 10);
         return padTo(trunc(clean(l.Short || l.Name), 9), 9) + ' [' + barCells(rank, max) + '] ' + (l.Approx ? '~' : '') + rank + '/' + max + (l.HasMaster ? ' M' : '');
     }
+    // A class as a loader bar filling toward the next level (credits 5/12/21/34/53 make LV2-LV6, as ClassLevel):
+    // WARRIOR     [#####.....] LV4 27/34. A full bar at LV6. labelW is the name's column; the bar's two \x01
+    // markers count toward the trunc width, so labelW + 14 + 12 + 2 stays within the row.
+    var CLASS_STEPS = [0, 5, 12, 21, 34, 53];
+    function classRow(c, labelW) {
+        var lv = Math.min(6, Math.max(1, +c.Level || 1)), cr = +c.Credits || 0;
+        var lo = CLASS_STEPS[lv - 1], hi = CLASS_STEPS[lv];
+        var bar = lv >= 6 ? barCells(1, 1) : barCells(cr - lo, hi - lo);
+        return padTo(trunc(clean(c.ClassName), labelW), labelW) + ' [' + bar + '] LV' + lv + ' ' + fmtNum(cr) + (lv >= 6 ? '' : '/' + hi);
+    }
+    // One upcoming park day from the calendar feed: {start, title}, as SAT 11/14/26 11:00 AM PARK DAY.
+    function parkDayNext(r) {
+        var d = String(r.start).slice(0, 10), t = String(r.start).slice(11, 16);
+        return weekdayOf(d) + ' ' + fmtDate(d) + (t && t !== '00:00' ? ' ' + fmtTime(t) : '') + ' ' + clean(String(r.title).replace(/^[^:]*: /, ''));
+    }
+    // The park page's Next Park Day card counts only in-person meetings. The calendar feed does not say which rows are
+    // online, so a row is matched to the park's own days by purpose (the feed's title label), time and day. It is
+    // online only when every day it matches is online; a row that matches no day is kept.
+    var PD_LABEL = { 'park-day': 'PARK DAY', 'fighter-practice': 'FIGHTER PRACTICE', 'arts-day': 'A&S DAY' };
+    function parkDayInPerson(r, days) {
+        var d = String(r.start).slice(0, 10), t = String(r.start).slice(11, 19) || '00:00:00';
+        var label = clean(String(r.title).replace(/^[^:]*: /, '')), m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+        if (!m) { return true; }
+        var wd = weekdayOf(d), dom = +m[3], last = new Date(Date.UTC(+m[1], +m[2], 0)).getUTCDate();
+        var online = false, inPerson = false;
+        days.forEach(function (x) {
+            var lbl = PD_LABEL[x.Purpose] || clean(String(x.Purpose || '').replace(/-/g, ' '));
+            var tm = String(x.Time || '') || '00:00:00';
+            var on = x.Recurrence === 'monthly' ? Math.min(+x.MonthDay || 0, last) === dom : clean(x.WeekDay).slice(0, 3) === wd;
+            if (lbl !== label || tm !== t || !on) { return; }
+            if (+x.Online) { online = true; } else { inPerson = true; }
+        });
+        return inPerson || !online;
+    }
     // Bars in the ladder look: [{label, value}] scaled to the biggest value, which gets the full bar.
     function barChart(items) {
         var max = 1;
@@ -868,16 +887,11 @@
         if (!d || !d.ok || !d.ep || typeof d.ep.formatted !== 'string' || !clean(d.ep.formatted)) { return null; }
         return { text: clean(d.ep.formatted), holiday: typeof d.holiday === 'string' ? clean(d.holiday) : '' };
     }
-    // The home page's own weekly rule: weeks in the six months to today (rounded up), at least one.
-    function weeksIn(start, end) {
-        function ms(s) { return Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)); }
-        return Math.max(1, Math.ceil((ms(end) - ms(start)) / (7 * 86400000)));
-    }
     function kingdomShort(n) { return noThe(clean(n)).replace(/^(KINGDOM|EMPIRE) OF (THE )?/, ''); }
-    // Kingdoms (not principalities, as the home page's cards) ranked by average players a week, six months.
-    function standingRows(list, weeks) {
+    // Kingdoms (not principalities, as the home page's cards) ranked by average players a week, six months (AvgPerWeek).
+    function standingRows(list) {
         return list.filter(function (k) { return +k.KingdomId > 0 && clean(k.KingdomName) && !(+k.ParentKingdomId); }).map(function (k) {
-            return { id: +k.KingdomId, name: k.KingdomName, parks: +k.ParkCount || 0, weekly: (+k.Attendance || 0) / weeks };
+            return { id: +k.KingdomId, name: k.KingdomName, parks: +k.ParkCount || 0, weekly: +k.AvgPerWeek || 0 };
         }).sort(function (a, b) { return (b.weekly - a.weekly) || (clean(a.name) < clean(b.name) ? -1 : 1); });
     }
     function standingText(r) { return leftRight(kingdomShort(r.name), r.parks + 'P ' + r.weekly.toFixed(1), W - 3); }
@@ -1000,13 +1014,9 @@
         }
         return out;
     }
-    // The player's own switches for the milestones they show: a type left out of the config shows (as on the page).
-    function milestoneRows(list, cfg) {
-        cfg = cfg && typeof cfg === 'object' ? cfg : {};
-        var rows = list.filter(function (m) {
-            return m && clean(m.description) && validDay(String(m.date || '')) && (!cfg.hasOwnProperty(m.type) || cfg[m.type]);
-        }).sort(function (a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
-        return cfg.newest_first ? rows.reverse() : rows;
+    // The service already applied the player's own switches and order (ApplyVisibility); keep the readable rows.
+    function milestoneRows(list) {
+        return list.filter(function (m) { return m && clean(m.description) && validDay(String(m.date || '')); });
     }
     function milestoneText(m) { return capRows(wrap(fmtDate(m.date) + ' ' + clean(m.description), W), 3, W).join('\n'); }
 
@@ -1023,7 +1033,7 @@
     ];
     var MENU = ['1. KINGDOMS', '2. PLAYERS', '3. MY PROFILE', '4. ORK GAMES', '5. SEARCH THE ORK', '6. THE ORK TODAY'];
     // Titles in GAMES order: the menu entries and the ORKEK title cards both read this.
-    var GAME_TITLES = ['ORKEGON TRAIL', 'zORK', 'NUMBER MUNCHORKS', 'PAC-MORK', 'ASTERORKS', 'CRYSTAL CASTLORKS', 'FROGGORK', 'SPACE INVADORKS'];
+    var GAME_TITLES = ['ORKEGON TRAIL', 'DUNGEORK', 'NUMBER MUNCHORKS', 'MORKMAZE', 'ASTERORKS', 'GEM CASTLORKS', 'FROGGORK', 'INVADORKS'];
     var GAME_MENU = ['ORK GAMES', rep('=', W), ''].concat(GAME_TITLES.map(function (t, i) { return (i + 1) + '. ' + t; }), ['', '0. MAIN MENU']);
     function gameTitle(id) {
         var i = GAMES.indexOf(id);
@@ -1124,12 +1134,13 @@
     function badInput(P, t) {
         P.bad(/^[0-9]$/.test(t) ? '?ILLEGAL QUANTITY ERROR' : '?SYNTAX ERROR');
     }
-    function ioFail(P) { P.bad('?I/O ERROR', 2); }
+    // e.timeout marks a read the FETCH_MS clock gave up on; anything else is a failed read.
+    function ioFail(P, e) { P.bad('?I/O ERROR', 2, e && e.timeout ? 'THE ORK IS SLOW TODAY. TRY AGAIN.' : 'DISK READ FAILED. TRY AGAIN.'); }
     function openProfile(P, id, before) {
         P.load(function () { return P.data.profile(id); }, function () {
             if (before) { before(); }
             P.go('PROFILE', { id: id });
-        }, function () { ioFail(P); });
+        }, function (e) { ioFail(P, e); });
     }
     // cfg.extras is a list of {key, label, go}, or a function (P, arg) returning one when the labels depend on state.
     // d.nineLast / cfg.nine: on the last page (or the only page) 9 does that instead of wrapping to the first page.
@@ -1169,7 +1180,7 @@
         P.load(function () { return P.data.park(id); }, function () {
             P.S.pkret = ret;
             P.go('PARK', { id: id });
-        }, function (e) { if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P); } });
+        }, function (e) { if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P, e); } });
     }
     // A persona on a park screen opens that player's profile, and 0 there comes back to the same page.
     function openPlayerFrom(P, mundaneId, ret) {
@@ -1177,7 +1188,7 @@
             P.S.pfrom = 'RET';
             P.S.pret = ret;
             P.go('PPROFILE', { id: mundaneId });
-        }, function (e) { if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P); } });
+        }, function (e) { if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P, e); } });
     }
     function parkBack(P, a) { P.go('PARK', { id: a.id }); }
     // A park list screen: loaded by PARK's menu, drawn from P.data.parkPeek.
@@ -1191,7 +1202,7 @@
         P.load(function () { return P.data.event(eid, did, name); }, function () {
             P.S.evret = ret;
             P.go('EVENT', { did: +did });
-        }, function (e) { if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P); } });
+        }, function (e) { if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P, e); } });
     }
     // The month on screen is P.S.cal {id, y, m, pd}; pd is the page's Park Days filter (off, as on the page).
     function calRows(P) {
@@ -1202,7 +1213,7 @@
         P.load(function () { return P.data.calMonth(id, y, m); }, function () {
             P.S.cal.y = y; P.S.cal.m = m;
             P.go('EVENTS', { id: id, page: 0 });
-        }, function () { ioFail(P); });
+        }, function (e) { ioFail(P, e); });
     }
     function openCal(P, id, y, m, pd) {
         var now = P.data.now();
@@ -1210,19 +1221,19 @@
         P.load(function () { return P.data.calMonth(id, y, m); }, function () {
             P.S.cal = { id: id, y: y, m: m, pd: !!pd };
             P.go('EVENTS', { id: id, page: 0 });
-        }, function () { ioFail(P); });
+        }, function (e) { ioFail(P, e); });
     }
     function openPast(P, scope, id, back) {
         P.load(function () { return P.data.past(scope, id); }, function () {
             P.go('PASTEV', { scope: scope, id: id, page: 0 });
-        }, function () { ioFail(P); });
+        }, function (e) { ioFail(P, e); });
     }
 
     function openUnit(P, id, ret) {
         P.load(function () { return P.data.unit(id); }, function () {
             P.S.unret = ret;
             P.go('UNIT', { id: id });
-        }, function (e) { if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P); } });
+        }, function (e) { if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P, e); } });
     }
     // The kingdom's list as the website's default shows it, narrowed by the f key ('', 'Company' or 'Household').
     function unitRowsOf(P, a) {
@@ -1236,9 +1247,9 @@
                 P.block(true);
                 P.blank();
                 P.line('ORKPLE II', { center: true });
-                P.line('DOS VERSION 3.3  SYSTEM MASTER', { center: true });
+                P.line('ORKDOS 3.3 SYSTEM MASTER', { center: true });
                 P.blank();
-                P.line('JANUARY 1, 1983', { center: true });
+                P.line('NOVEMBER 20, 1983', { center: true });
                 P.blank();
                 P.line('COPYRIGHT AMTGARD INTERNATIONAL 1983', { center: true });
                 P.line('  TRY TYPING ORK  ', { center: true, inv: true });
@@ -1248,6 +1259,13 @@
             line: function (P, t) {
                 if (t === '') { P.prompt(']'); return; }
                 if (t === 'EXIT') { P.exit(); return; }
+                var snd = /^SOUND(?: (ON|OFF))?$/.exec(t);
+                if (snd) {
+                    // A bare SOUND reports the setting; SOUND ON / SOUND OFF changes it.
+                    P.print((snd[1] ? P.sound(snd[1] === 'ON') : P.soundOn()) ? 'SOUND ON' : 'SOUND OFF');
+                    P.prompt(']');
+                    return;
+                }
                 if (t === 'ORK') {
                     P.print('LOADING ORK 0.1...');
                     P.wait(P.reduced ? 300 : 1000);
@@ -1278,7 +1296,7 @@
                 if (t === '') { P.prompt('SELECT: '); return; }
                 if (t === 'EXIT') { P.exit(); return; }
                 if (t === '1') {
-                    P.load(function () { return P.data.kingdoms(); }, function () { P.go('KINGDOMS', { page: 0 }); }, function () { ioFail(P); });
+                    P.load(function () { return P.data.kingdoms(); }, function () { P.go('KINGDOMS', { page: 0 }); }, function (e) { ioFail(P, e); });
                 } else if (t === '2') {
                     P.go('PSEARCH');
                 } else if (t === '4') {
@@ -1292,7 +1310,7 @@
                     P.load(function () { return P.data.player(P.data.user); }, function () {
                         P.S.pfrom = 'MENU';
                         P.go('PPROFILE', { id: P.data.user });
-                    }, function (e) { if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P); } });
+                    }, function (e) { if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P, e); } });
                 } else {
                     badInput(P, t);
                 }
@@ -1331,25 +1349,32 @@
         PROFILE: {
             enter: function (P, arg, quick) {
                 var p = P.data.peek(arg.id);
-                var top = P.S.stack[P.S.stack.length - 1];
-                var parts = profileParts(p, !top || top.name === 'KINGDOMS' ? 'KINGDOM LIST' : 'BACK');
+                var top = P.S.stack[P.S.stack.length - 1], back = !top || top.name === 'KINGDOMS' ? 'KINGDOM LIST' : 'BACK';
+                var parts = profileParts(p, back);
                 P.screen(parts.lines, quick, { rows: parts.head, log: parts.log, art: p.art || shieldBitmap() });
+                // Counts still out (or failed before) are read now and written into their rows as each arrives.
+                if (p.parkCount === null || p.eventCount === null || p.avgWeek === null) {
+                    P.patch(P.data.profileStats(arg.id), function () { return profileParts(P.data.peek(arg.id), back).stat; });
+                }
                 P.prompt('SELECT: ');
             },
             line: function (P, t) {
                 var a = P.arg, p = P.data.peek(a.id);
                 if (t === '') { P.prompt('SELECT: '); return; }
                 if (t === 'EXIT') { P.exit(); return; }
-                if (t === '1') { P.go('PARKS', { id: a.id, page: 0 }); return; }
+                if (t === '1') {
+                    P.load(function () { return P.data.kingdomParks(a.id); }, function () { P.go('PARKS', { id: a.id, page: 0 }); }, function (e) { ioFail(P, e); });
+                    return;
+                }
                 if (t === '2') { openCal(P, a.id, null, null, false); return; }
                 if (t === '3' && p.prinz && p.prinz.length) { P.go('PRINCES', { id: a.id, page: 0 }); return; }
                 if (t === (p.prinz && p.prinz.length ? '4' : '3')) { openPast(P, 'Kingdom', a.id, { name: 'PROFILE', arg: { id: a.id } }); return; }
                 if (t === (p.prinz && p.prinz.length ? '5' : '4')) {
-                    P.load(function () { return P.data.kingdomUnits(a.id); }, function () { P.go('KUNITS', { id: a.id, page: 0, f: '' }); }, function () { ioFail(P); });
+                    P.load(function () { return P.data.kingdomUnits(a.id); }, function () { P.go('KUNITS', { id: a.id, page: 0, f: '' }); }, function (e) { ioFail(P, e); });
                     return;
                 }
                 if (t === (p.prinz && p.prinz.length ? '6' : '5')) {
-                    P.load(function () { return P.data.kingdomKam(a.id); }, function () { P.go('KAM', { id: a.id, page: 0 }); }, function () { ioFail(P); });
+                    P.load(function () { return P.data.kingdomKam(a.id); }, function () { P.go('KAM', { id: a.id, page: 0 }); }, function (e) { ioFail(P, e); });
                     return;
                 }
                 if (t === '0') {
@@ -1437,7 +1462,7 @@
                 }
                 if (/^[1-4]$/.test(t)) {
                     var item = EVENT_MENU[+t - 1];
-                    P.load(function () { return P.data.eventList(a.did, item[1]); }, function () { P.go(item[2], { did: a.did, page: 0 }); }, function () { ioFail(P); });
+                    P.load(function () { return P.data.eventList(a.did, item[1]); }, function () { P.go(item[2], { did: a.did, page: 0 }); }, function (e) { ioFail(P, e); });
                     return;
                 }
                 badInput(P, t);
@@ -1574,7 +1599,7 @@
                     if (!rows.length) { P.print('NOTHING FOUND.'); P.prompt('SEARCH: '); return; }
                     P.S.osearch = { term: t, rows: rows };
                     P.go('OSRESULTS', { page: 0 });
-                }, function () { ioFail(P); });
+                }, function (e) { ioFail(P, e); });
             }
         },
         OSRESULTS: pagerProgram('OSRESULTS', {
@@ -1610,7 +1635,7 @@
                     if (!list.length) { P.print('NO SUCH PLAYER.'); P.prompt('NAME: '); return; }
                     P.S.psearch = { term: t, list: list, page: 0 };
                     P.go('PRESULTS', { page: 0 });
-                }, function () { ioFail(P); });
+                }, function (e) { ioFail(P, e); });
             }
         },
         PRESULTS: pagerProgram('PRESULTS', {
@@ -1633,7 +1658,7 @@
                 P.S.psearch.page = a.page;
                 if (r.kind === 'park') { openPark(P, r.id, { name: 'PRESULTS', arg: { page: a.page }, label: 'RESULTS' }); return; }
                 P.load(function () { return P.data.player(r.id); }, function () { P.S.pfrom = 'RESULTS'; P.go('PPROFILE', { id: r.id }); }, function (e) {
-                    if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P); }
+                    if (e && e.notFound) { P.bad('?FILE NOT FOUND'); } else { ioFail(P, e); }
                 });
             }
         }),
@@ -1653,19 +1678,19 @@
                     return;
                 }
                 if (t === '5' && a.id === P.data.user) {
-                    P.load(function () { return P.data.myAmtgard(a.id); }, function () { P.go('PMYA', { id: a.id }); }, function () { ioFail(P); });
+                    P.load(function () { return P.data.myAmtgard(a.id); }, function (my) { P.go('PMYA', { id: a.id, my: my }); }, function (e) { ioFail(P, e); });
                     return;
                 }
                 if (t === '2') {
                     P.load(function () { return P.data.awardsEntry(a.id); }, function (hasLadders) {
                         P.go(hasLadders ? 'PLADDERS' : 'PAWARDS', { id: a.id, page: 0 });
-                    }, function () { ioFail(P); });
+                    }, function (e) { ioFail(P, e); });
                     return;
                 }
                 var more = PLAYER_MORE[+t - (a.id === P.data.user ? 6 : 5)];
                 if (/^[5-8]$/.test(t) && more) {
                     if (more[1] === 'miles') {
-                        P.load(function () { return P.data.playerList(a.id, 'milestones'); }, function () { P.go('PMILES', { id: a.id, page: 0 }); }, function () { ioFail(P); });
+                        P.load(function () { return P.data.playerList(a.id, 'milestones'); }, function () { P.go('PMILES', { id: a.id, page: 0 }); }, function (e) { ioFail(P, e); });
                     } else {
                         P.go(more[1] === 'about' ? 'PABOUT' : 'PLCOMP', { id: a.id, page: 0 });
                     }
@@ -1674,7 +1699,7 @@
                 var kinds = { '1': 'classes', '2': 'awards', '3': 'attendance', '4': 'titles' };
                 if (kinds[t]) {
                     var name = { classes: 'PCLASSES', awards: 'PAWARDS', attendance: 'PATTEND', titles: 'PTITLES' }[kinds[t]];
-                    P.load(function () { return P.data.playerList(a.id, kinds[t]); }, function () { P.go(name, { id: a.id, page: 0 }); }, function () { ioFail(P); });
+                    P.load(function () { return P.data.playerList(a.id, kinds[t]); }, function () { P.go(name, { id: a.id, page: 0 }); }, function (e) { ioFail(P, e); });
                     return;
                 }
                 badInput(P, t);
@@ -1683,7 +1708,7 @@
         // A light taste of the real My Amtgard tab: RSVPs, recent classes, latest award. No notifications.
         PMYA: {
             enter: function (P, arg, quick) {
-                P.screen(myLines(P.data.peekPlayer(arg.id).my), quick);
+                P.screen(myLines(arg.my || P.data.peekPlayer(arg.id).my), quick);
                 P.prompt('SELECT: ');
             },
             line: function (P, t) {
@@ -1698,7 +1723,7 @@
             build: function (P, a) {
                 return {
                     title: 'CLASSES', back: 'BACK',
-                    items: P.data.peekPlayer(a.id).classes.map(function (c) { return leftRight(clean(c.ClassName), 'LV' + c.Level + ' ' + fmtNum(c.Credits)); })
+                    items: P.data.peekPlayer(a.id).classes.map(function (c) { return classRow(c, 11); })
                 };
             },
             back: function (P, a) { P.go('PPROFILE', { id: a.id }); }
@@ -1750,7 +1775,7 @@
                 if (t === '0') { P.go('ORK_MENU'); return; }
                 if (/^[1-5]$/.test(t)) {
                     var item = TODAY_MENU[+t - 1], kid = 0;
-                    P.load(function () { return P.data.today(item[1], kid); }, function () { P.go(item[1], { page: 0, kid: kid }); }, function () { ioFail(P); });
+                    P.load(function () { return P.data.today(item[1], kid); }, function () { P.go(item[1], { page: 0, kid: kid }); }, function (e) { ioFail(P, e); });
                     return;
                 }
                 badInput(P, t);
@@ -1796,8 +1821,8 @@
                 };
             },
             extras: function (P, a) {
-                var list = [{ key: '8', label: 'A KINGDOM', go: function (P2, a2) { P2.load(function () { return P2.data.kingdoms(); }, function () { P2.go('TWKING', { kid: a2.kid, page: 0 }); }, function () { ioFail(P2); }); } }];
-                if (a.kid) { list.unshift({ key: '7', label: 'ALL OF AMTGARD', go: function (P2) { P2.load(function () { return P2.data.today('TWEEK', 0); }, function () { P2.go('TWEEK', { kid: 0, page: 0 }); }, function () { ioFail(P2); }); } }); }
+                var list = [{ key: '8', label: 'A KINGDOM', go: function (P2, a2) { P2.load(function () { return P2.data.kingdoms(); }, function () { P2.go('TWKING', { kid: a2.kid, page: 0 }); }, function (e2) { ioFail(P2, e2); }); } }];
+                if (a.kid) { list.unshift({ key: '7', label: 'ALL OF AMTGARD', go: function (P2) { P2.load(function () { return P2.data.today('TWEEK', 0); }, function () { P2.go('TWEEK', { kid: 0, page: 0 }); }, function (e2) { ioFail(P2, e2); }); } }); }
                 return list;
             },
             back: function (P) { P.go('TODAY'); },
@@ -1816,7 +1841,7 @@
             back: function (P, a) { P.go('TWEEK', { kid: a.kid, page: 0 }); },
             pick: function (P, a, idx) {
                 var k = P.data.kingdomList()[idx];
-                if (k) { P.load(function () { return P.data.today('TWEEK', k.id); }, function () { P.go('TWEEK', { kid: k.id, page: 0 }); }, function () { ioFail(P); }); }
+                if (k) { P.load(function () { return P.data.today('TWEEK', k.id); }, function () { P.go('TWEEK', { kid: k.id, page: 0 }); }, function (e) { ioFail(P, e); }); }
             }
         }),
         TLIVE: pagerProgram('TLIVE', {
@@ -1944,7 +1969,7 @@
                 }
                 if (/^[1-8]$/.test(t)) {
                     var item = PARK_MENU[+t - 1];
-                    P.load(function () { return P.data.parkList(a.id, item[1]); }, function () { P.go(item[2], { id: a.id, page: 0 }); }, function () { ioFail(P); });
+                    P.load(function () { return P.data.parkList(a.id, item[1]); }, function () { P.go(item[2], { id: a.id, page: 0 }); }, function (e) { ioFail(P, e); });
                     return;
                 }
                 badInput(P, t);
@@ -2047,7 +2072,7 @@
                 if (!date) { return; }
                 P.load(function () { return P.data.parkDay(a.id, date); }, function () {
                     P.go('PDAY', { id: a.id, date: date, page: 0, from: a.page });
-                }, function () { ioFail(P); });
+                }, function (e) { ioFail(P, e); });
             }
         }),
         PDAY: pagerProgram('PDAY', {
@@ -2063,60 +2088,93 @@
         })
     };
 
+    var RECAP_FIELDS = ['Status', 'WeekStart', 'WeekEnd', 'TopEvents', 'EventId', 'EventCalendarDetailId', 'EventName', 'Attendance', 'TopParks', 'ParkId', 'ParkName',
+        'Knightings', 'Masterhoods', 'Paragons', 'MundaneId', 'Persona', 'AwardName', 'NewPlayers', 'Players', 'Count'];
     /* ---- the allow-list: every endpoint the terminal may call, kept in step with docs/superpowers/plans/2026-11-01-orkple-read-surfaces.md.
        Adding one means checking the matching website page first (a screen shows nothing the page hides from the same visitor).
-       Names are Class/Method for the JSON service and Controller/action for the UI routes. Under test (window.OrkpleStrict or
-       mount option strict) an unlisted call throws; in production it is only logged and noted in window.OrkpleViolations. ---- */
+       Names are Class/Method for the JSON service and Controller/action for the UI routes. A call to anything else is refused
+       (and logged, and noted in window.OrkpleViolations). Each entry's third column is the field projection: getJson() keeps
+       only those keys, at any depth, before a loader sees the answer. Keys that are ids (all digits) are kept, so maps keyed by
+       id survive; a top-level Status keeps only Status and Error. List every key a loader or screen reads, containers included. ---- */
     var ALLOWED = [
-        ['Kingdom/GetKingdoms', 'KINGDOMS list'],
-        ['Kingdom/GetKingdomShortInfo', 'kingdom profile'],
-        ['Kingdom/GetKingdomDetails', 'kingdom profile: principality roll-up flag'],
-        ['Kingdom/GetOfficers', 'kingdom profile'],
-        ['Kingdom/GetPrincipalities', 'kingdom profile'],
-        ['Report/GetKingdomParkAverages', 'kingdom PARKS (active parks only, as the Parks tab)'],
-        ['KingdomAjax/calendar', 'KINGDOM CALENDAR (a month)'],
-        ['Kingdom/park_averages_json', 'kingdom and park averages'],
-        ['Heraldry/GetHeraldryUrl', 'arms: Kingdom, Park'],
-        ['SearchAjax/universal', 'player, park, kingdom, company and household search'],
-        ['Player/GetPlayer', 'player profile'],
-        ['Player/AttendanceForPlayer', 'player profile and ATTENDANCE'],
-        ['Player/ComputeClassProgress', 'player CLASSES'],
-        ['Player/AwardsForPlayer', 'player AWARDS and TITLES'],
-        ['Player/GetLadderProgress', 'player LADDERS'],
-        ['Event/GetUpcomingRsvps', 'MY AMTGARD (own profile)'],
-        ['Park/GetParkShortInfo', 'park header, player home park'],
-        ['Park/GetParkDetails', 'park header and WHERE TO FIND US'],
-        ['Park/GetParkDays', 'park MEETING DAYS (recurrence only); header AT FIELD NOW, only on a park day'],
-        ['Park/GetOfficers', 'park OFFICERS'],
-        ['Report/GetParkFieldCountToday', 'park header'],
-        ['Report/RecentParkAttendees', 'park RECENT PLAYERS'],
-        ['SearchService/Event', 'park EVENTS; event name, host, arms flag and publish check (event_id)'],
-        ['SearchService/CalendarDetail', 'EVENT DETAIL'],
-        ['Event/GetRsvpCounts', 'EVENT RSVP COUNTS (numbers only)'],
-        ['EventEmbed/schedule', 'EVENT SCHEDULE'],
-        ['Report/AttendanceForEvent', 'EVENT WHO CAME (EventId and EventCalendarDetailId)'],
-        ['Report/EventAttendanceReport', 'PAST EVENTS (KingdomId or ParkId)'],
-        ['Report/UnitSummary', 'park COMPANIES (ParkId, IncludeCompanies); kingdom COMPANIES AND HOUSEHOLDS (KingdomId, both Include flags, TopBySize, Limit 100)'],
-        ['Unit/GetUnit', 'UNIT PROFILE (UnitId)'],
-        ['Search/unitactivity', 'kingdom unit list: members signed in over 12 months, 25 ids a call'],
-        ['Search/unitsearch', 'UNIT PROFILE leaders, for a unit opened from search (q is its exact name)'],
-        ['Report/GetMonthlyChartData', 'park ATTENDANCE (ParkId, Periods, PerMonths)'],
-        ['Report/GetAttendanceDates', 'park SIGN-INS BY DAY (Type Park, Id)'],
-        ['Report/AttendanceForDate', 'park SIGN-INS BY DAY (ParkId and a listed Date)'],
-        ['Report/GetActiveKingdomsSummary', 'THE ORK TODAY: KINGDOM STANDINGS'],
-        ['Report/GetTopParksByAttendance', 'THE ORK TODAY: TOP PARKS (Limit, StartDate, EndDate)'],
-        ['Recap/json', 'THE ORK TODAY: THIS WEEK, all of Amtgard'],
-        ['Recap/json_kingdom', 'THE ORK TODAY: THIS WEEK, one kingdom'],
-        ['Live/stats', 'THE ORK TODAY: ON THE FIELD NOW'],
-        ['Live/recent', 'THE ORK TODAY: LATEST SIGN-INS'],
-        ['WeatherService/GetPlayForDate', 'THE ORK TODAY: WEATHER FOR PLAY (date, empty Token)'],
-        ['EraPhoenice/today', 'main menu date line'],
-        ['Report/PlayerAwards', 'kingdom KNIGHTS AND MASTERS (KingdomId, ParkId 0, IncludeKnights, IncludeMasters)'],
-        ['Player/GetPlayerMilestones', 'player MILESTONES']
+        ['Kingdom/GetKingdoms', 'KINGDOMS list', ['Kingdoms', 'KingdomId', 'KingdomName', 'ParentKingdomId']],
+        ['Kingdom/GetKingdomShortInfo', 'kingdom profile', ['KingdomInfo', 'KingdomName', 'Abbreviation', 'HasHeraldry', 'IsPrincipality', 'ParentKingdomId']],
+        ['Kingdom/GetKingdomDetails', 'kingdom profile: principality roll-up flag', ['KingdomConfiguration', 'IncludePrincipalityInStatistics', 'Value']],
+        ['Kingdom/GetOfficers', 'kingdom profile', ['Officers', 'OfficerRole', 'MundaneId', 'Persona']],
+        ['Kingdom/GetPrincipalities', 'kingdom profile', ['Principalities', 'KingdomId', 'Name']],
+        ['Report/GetKingdomParkAverages', 'kingdom PARKS (active parks only, as the Parks tab)', ['KingdomParkAveragesSummary', 'ParkId', 'ParkName', 'Title']],
+        ['KingdomAjax/calendar', 'KINGDOM CALENDAR (a month); MY AMTGARD NEXT PARK DAY (park-day rows, five weeks)', ['events', 'type', 'title', 'start', 'end', 'allDay', 'url', 'extendedProps', 'eventId', 'detailId', 'rawStart', 'rawEnd', 'description', 'parkId']],
+        ['Kingdom/park_averages_json', 'kingdom and park averages', ['_kingdom', 'wk', 'mo', 'att']],
+        ['Heraldry/GetHeraldryUrl', 'arms: Kingdom, Park, Unit, Event', ['Url']],
+        ['SearchAjax/universal', 'player, park, kingdom, company and household search', ['players', 'parks', 'kingdoms', 'units', 'id', 'name', 'abbr', 'park', 'active', 'unitType']],
+        ['Player/GetPlayer', 'player profile', ['Player', 'MundaneId', 'ParkId', 'KingdomId', 'IsActive', 'DuesStatus', 'NamePrefix', 'Persona', 'NameSuffix', 'SuffixComma',
+            'PronunciationGuide', 'PronounCustomText', 'PronounText', 'ReeveStatus', 'ReeveQualifiedUntil', 'CorporaStatus', 'CorporaQualifiedUntil',
+            'AboutPersona', 'AboutStory', 'Company', 'UnitId', 'Name', 'Type']],
+        ['Player/AttendanceForPlayer', 'player profile and ATTENDANCE', ['Attendance', 'Date', 'ClassId', 'ClassName', 'EventName', 'ParkName']],
+        ['Player/ComputeClassProgress', 'player CLASSES', ['Detail', 'ClassId', 'ClassName', 'Level', 'Credits']],
+        ['Player/AwardsForPlayer', 'player AWARDS and TITLES', ['Awards', 'AwardsId', 'IsTitleEffective', 'CustomAwardName', 'KingdomAwardName', 'Name', 'AliasAwardName', 'Date', 'Rank']],
+        ['Player/GetLadderProgress', 'player LADDERS', ['Detail', 'Short', 'Name', 'Rank', 'MaxRank', 'Approx', 'HasMaster']],
+        ['EventRsvpAjax/mine', 'MY AMTGARD NEXT UP (the signed-in session\'s own RSVPs, no player id)', ['status', 'UpcomingRsvps', 'EventName', 'EventStart']],
+        ['Park/GetParkShortInfo', 'park header, player home park', ['ParkInfo', 'KingdomInfo', 'ParkName', 'KingdomName', 'KingdomId', 'Abbreviation', 'Active', 'HasHeraldry']],
+        ['Park/GetParkDetails', 'park header and WHERE TO FIND US', ['ParkName', 'ParkTitle', 'Address', 'City', 'Province', 'PostalCode', 'Directions', 'Description', 'Url']],
+        ['Park/GetParkDays', 'park MEETING DAYS (recurrence only); header AT FIELD NOW, only on a park day',
+            ['ParkDays', 'WeekDay', 'Recurrence', 'WeekOfMonth', 'WeekInterval', 'MonthDay', 'Purpose', 'Time', 'Online', 'Address', 'City', 'Province', 'PostalCode', 'Description']],
+        ['Park/GetOfficers', 'park OFFICERS', ['Officers', 'OfficerRole', 'MundaneId', 'Persona']],
+        ['Report/GetParkFieldCountToday', 'park header', ['Count', 'IsParkDay']],
+        ['Report/RecentParkAttendees', 'park RECENT PLAYERS', ['Attendees', 'MundaneId', 'Persona', 'LastSignIn']],
+        ['SearchService/Event', 'park EVENTS; event name, host, arms flag and publish check (event_id)', ['EventId', 'Name', 'NextDate', 'NextDetailId', 'HasHeraldry', 'ParkName', 'KingdomName']],
+        ['SearchService/CalendarDetail', 'EVENT DETAIL', ['EventId', 'AtParkId', 'EventType', 'EventStart', 'EventEnd', 'Address', 'City', 'Province', 'Price', 'Description', 'Url']],
+        ['Event/GetRsvpCounts', 'EVENT RSVP COUNTS (numbers only)', ['Going', 'Interested', 'Total']],
+        ['EventEmbed/schedule', 'EVENT SCHEDULE', ['ok', 'days', 'date', 'day_label', 'items', 'start', 'end', 'title', 'location', 'leads']],
+        ['Report/AttendanceForEvent', 'EVENT WHO CAME (EventId and EventCalendarDetailId)', ['Attendance', 'MundaneId', 'Persona', 'ClassName']],
+        ['Report/EventAttendanceReport', 'PAST EVENTS (KingdomId or ParkId)', ['Events', 'EventId', 'DetailId', 'EventName', 'EventStart', 'EventEnd', 'AttendanceCount']],
+        ['Report/UnitSummary', 'park COMPANIES (ParkId, IncludeCompanies); kingdom COMPANIES AND HOUSEHOLDS (KingdomId, both Include flags, TopBySize, Limit 100)',
+            ['Units', 'UnitId', 'Name', 'Type', 'Active', 'LeaderNames', 'MemberCount', 'ActiveMemberCount', 'TotalMemberCount']],
+        ['Unit/GetUnit', 'UNIT PROFILE (UnitId)', ['Unit', 'UnitId', 'Name', 'Type', 'Active', 'Description', 'History', 'Url', 'HasHeraldry']],
+        ['Search/unitactivity', 'kingdom unit list: members signed in over 12 months, 25 ids a call', []],
+        ['Search/unitsearch', 'UNIT PROFILE leaders, for a unit opened from search (q is its exact name)', ['UnitId', 'LeaderNames']],
+        ['Report/GetMonthlyChartData', 'park ATTENDANCE (ParkId, Periods, PerMonths)', ['Month', 'Year', 'Count']],
+        ['Report/GetAttendanceDates', 'park SIGN-INS BY DAY (Type Park, Id)', ['Dates']],
+        ['Report/AttendanceForDate', 'park SIGN-INS BY DAY (ParkId and a listed Date)', ['Attendance', 'MundaneId', 'Persona', 'AttendancePersona', 'ClassName']],
+        ['Report/GetActiveKingdomsSummary', 'THE ORK TODAY: KINGDOM STANDINGS', ['ActiveKingdomsSummaryList', 'KingdomId', 'KingdomName', 'ParentKingdomId', 'ParkCount', 'AvgPerWeek']],
+        ['Report/GetTopParksByAttendance', 'THE ORK TODAY: TOP PARKS (Limit, StartDate, EndDate)', ['TopParksSummary', 'ParkId', 'ParkName', 'AvgPerWeek']],
+        ['Recap/json', 'THE ORK TODAY: THIS WEEK, all of Amtgard', RECAP_FIELDS],
+        ['Recap/json_kingdom', 'THE ORK TODAY: THIS WEEK, one kingdom', RECAP_FIELDS],
+        ['Live/stats', 'THE ORK TODAY: ON THE FIELD NOW', ['active_3h', 'parks', 'events', 'name', 'h3', 'calendar_detail_id']],
+        ['Live/recent', 'THE ORK TODAY: LATEST SIGN-INS', ['signins', 'parks', 'events', 'name']],
+        ['WeatherService/GetPlayForDate', 'THE ORK TODAY: WEATHER FOR PLAY (date, empty Token)', ['park_id', 'park_name', 'badges', 'label', 'forecast', 'hi_f', '_score']],
+        ['EraPhoenice/today', 'main menu date line', ['ok', 'ep', 'formatted', 'holiday']],
+        ['Report/PlayerAwards', 'kingdom KNIGHTS AND MASTERS (KingdomId, ParkId 0, IncludeKnights, IncludeMasters)', ['Awards', 'Peerage', 'MundaneId', 'Persona', 'AwardName', 'Date', 'ParkId', 'ParkName']],
+        ['Player/GetPlayerMilestones', 'player MILESTONES', ['Detail', 'date', 'description']]
     ];
-    function isAllowed(name) {
-        for (var i = 0; i < ALLOWED.length; i++) { if (ALLOWED[i][0] === name) { return true; } }
-        return false;
+    function allowedEntry(name) {
+        for (var i = 0; i < ALLOWED.length; i++) { if (ALLOWED[i][0] === name) { return ALLOWED[i]; } }
+        return null;
+    }
+    function isAllowed(name) { return !!allowedEntry(name); }
+    // Keep only the listed keys (and id keys) of an answer, at every depth. Arrays keep their order; plain values pass.
+    function project(v, keep, top) {
+        if (Array.isArray(v)) { return v.map(function (x) { return project(x, keep, false); }); }
+        if (!v || typeof v !== 'object') { return v; }
+        var o = {};
+        for (var k in v) {
+            if (!v.hasOwnProperty(k)) { continue; }
+            if (top && k === 'Status') {
+                var st = v.Status;
+                o.Status = (st && typeof st === 'object') ? { Status: st.Status, Error: st.Error } : st;
+            } else if (top && k === 'Result') {
+                o.Result = project(v.Result, keep, false);
+            } else if (keep[k] === true || /^\d+$/.test(k)) {
+                o[k] = project(v[k], keep, false);
+            }
+        }
+        return o;
+    }
+    function projectFor(name, d) {
+        var e = allowedEntry(name), keep = {};
+        if (!e) { return null; }
+        (e[2] || []).forEach(function (k) { keep[k] = true; });
+        return project(d, keep, true);
     }
 
     // Keep only path and query, so an http-configured constant cannot make mixed content on an https page.
@@ -2125,11 +2183,29 @@
         try { var u = new URL(String(x), window.location.href); return u.pathname + u.search; } catch (e) { return ''; }
     }
 
+    // Disk reads kept across mounts, so ESC and back in reads nothing twice. A mount that starts once the set is
+    // CACHE_MS old (about the life of the server's own ghettocache) starts a fresh one; a mount already running keeps
+    // the set it began with. Pending reads are kept too (shared by a second ask), and a read that fails is forgotten.
+    // A mount's destroy() aborts its reads (pending arms images included) but keeps what already arrived.
+    var CACHE_MS = 10 * 60 * 1000, dataCache = null;
+    function sharedCache() {
+        if (!dataCache || Date.now() - dataCache.at > CACHE_MS) {
+            dataCache = {
+                at: Date.now(), skew: 0, kingdomsP: null, kingdomsMem: null, profileP: {}, profileMem: {}, armsP: {}, avgP: {},
+                playerP: {}, playerMem: {}, parkP: {}, parkMem: {}, calP: {}, calMem: {}, evP: {}, evMem: {}, pastP: {}, pastMem: {},
+                unitKP: {}, unitKMem: {}, unitLeaders: {}, unitP: {}, unitMem: {}, epMem: null, epP: null,
+                todayP: {}, todayMem: {}, weekP: {}, weekMem: {}, liveP: null, liveMem: null, kamP: {}, kamMem: {}, nextDayP: {}
+            };
+        }
+        return dataCache;
+    }
+
     function mount(opts) {
         var canvas = opts.canvas, input = opts.input, live = opts.live;
         var onExit = opts.onExit, reduced = !!opts.reducedMotion;
+        var power = opts.power || null, sound = opts.sound || null;   // sound: {on(), set(on)} from the shell's speaker switch
+        function soundOn() { return !sound || sound.on() !== false; }
         var svcBase = sameOrigin(opts.service), uiBase = sameOrigin(opts.ui), userId = parseInt(opts.user, 10) || 0;
-        var strict = !!opts.strict || window.OrkpleStrict === true;
         var ctx = canvas.getContext('2d');
         canvas.width = COLS * CW;
         canvas.height = ROWS * CH;
@@ -2141,9 +2217,11 @@
         var accepting = false, cursorOn = true, promptStr = '', promptCol = 0, buf = '', cap = 38;
         var ahead = '';                // type-ahead: keys pressed while output is printing, '\n' for Return
         var current = null;
-        var blockOn = false, blockBuf = [], liveLines = [];
+        var blockOn = false, blockBuf = [];
         var dateSlot = null, scrollCount = 0;   // the menu's Era Phoenice row, and how often the page has scrolled since
+        var screenGen = 0;                       // bumped by every clear, so a late in-place write knows its screen is gone
         var game = null, gameCb = null, keyCb = null, rawOn = false, keyNoRepeat = false, gameTimers = {}, gameSeq = 0, rngState = 0;
+        var heldKeys = {};             // keys down right now, by game key name (A, LEFT, SPACE); see host.held
         var gfx = null;                // arms bitmap layer: {canvas, w, h, row, rows} anchored at cell column 0
         var spriteDefs = {}, spriteList = [];  // game sprites: drawn over the text cells, on the 280x192 pixel grid
         var splash = null;             // the ORKEK title card while it is up: a full-page canvas over everything
@@ -2203,10 +2281,16 @@
             for (var c = 0; c < COLS; c++) { s += scr[r][c].ch; }
             return s.replace(/\s+$/, '').replace(/^\s+/, '');
         }
+        // One child per line, oldest dropped past LIVE_MAX: the log only ever gains nodes, so screen
+        // readers announce the new lines and never re-read the ones already spoken.
         function pushLive(lines) {
             if (!live || !lines.length) { return; }
-            liveLines = liveLines.concat(lines).slice(-LIVE_MAX);
-            live.textContent = liveLines.join('\n');
+            for (var i = 0; i < lines.length; i++) {
+                var d = document.createElement('div');
+                d.textContent = lines[i];
+                live.appendChild(d);
+            }
+            while (live.childNodes.length > LIVE_MAX) { live.removeChild(live.firstChild); }
         }
         function logLine(t) {
             if (!t) { return; }
@@ -2246,6 +2330,7 @@
             markDirty();
         }
         function clearScreen() {
+            screenGen++;
             gfx = null;
             dateSlot = null;
             for (var r = 0; r < ROWS; r++) { scr[r] = blankRow(); }
@@ -2324,6 +2409,23 @@
             for (var i = 0; i < t.length && i < COLS; i++) { row[i].ch = G[t.charAt(i)] ? t.charAt(i) : '?'; row[i].inv = false; }
             markDirty();
         }
+        // Overwrite text cells in place (P.patch); a row that changed goes to the live log too, just before anchor (the
+        // screen's last line when it finished printing), so the log still ends on that screen's last line.
+        function writeCells(row, col, text, anchor) {
+            var r = scr[row], before = '';
+            if (!r) { return; }
+            for (var c = col; c < col + text.length && c < COLS; c++) { before += r[c].ch; }
+            if (before === text.slice(0, before.length)) { return; }
+            for (var i = 0; i < text.length && col + i < COLS; i++) { r[col + i].ch = G[text.charAt(i)] ? text.charAt(i) : '?'; r[col + i].inv = false; }
+            var t = text.replace(/\s+$/, '');
+            if (t && live && !blockOn && anchor && anchor.parentNode === live) {
+                var d = document.createElement('div');
+                d.textContent = t;
+                live.insertBefore(d, anchor);
+                while (live.childNodes.length > LIVE_MAX) { live.removeChild(live.firstChild); }
+            } else { logLine(t); }
+            markDirty();
+        }
         function holdDate() {
             var slot = dateSlot = { row: cy, scrolls: scrollCount };
             function show(ep) {
@@ -2390,17 +2492,30 @@
             buf = v;
             paintInput();
         }
+        // The game's name for a key: UP DOWN LEFT RIGHT ENTER BACKSPACE SPACE, or the character upper-cased; '' for the rest.
+        function gameKeyName(k) {
+            var named = { ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', Enter: 'ENTER', Backspace: 'BACKSPACE', ' ': 'SPACE' }[k];
+            return named || (k && k.length === 1 ? k.toUpperCase() : '');
+        }
+        function onKeyup(e) {
+            var name = gameKeyName(e.key);
+            if (name) { delete heldKeys[name]; }
+        }
+        // A key released while the page is hidden or unfocused never sends its keyup, so forget them all.
+        function releaseKeys() { heldKeys = {}; }
+        function onVisibility() { if (document.hidden) { releaseKeys(); } }
         function onKeydown(e) {
             if (destroyed) { return; }
             var k = e.key;
             if (rawOn && keyCb) {
+                if (e.ctrlKey || e.metaKey || e.altKey) { return; }
+                var name = gameKeyName(k);
+                if (name) { heldKeys[name] = true; }
                 // host.keys(fn, { noRepeat: true }): holding a key sends one press, not a stream.
                 if (keyNoRepeat && e.repeat) { e.preventDefault(); return; }
-                if (e.ctrlKey || e.metaKey || e.altKey) { return; }
-                var named = { ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', Enter: 'ENTER', Backspace: 'BACKSPACE', ' ': 'SPACE' }[k];
-                if (named || (k && k.length === 1)) {
+                if (name) {
                     e.preventDefault();
-                    sendKey(named || k.toUpperCase());
+                    sendKey(name);
                 } else if (k === 'Home' || k === 'End') {
                     e.preventDefault();
                 }
@@ -2439,6 +2554,13 @@
             block: function (on) { enq({ o: 'block', on: on }); },
             say: function (t) { enq({ o: 'say', t: t }); },
             beep: function (freq, ms) { enq({ o: 'beep', freq: freq, ms: ms }); },
+            soundOn: function () { return soundOn(); },
+            // SOUND ON / SOUND OFF; with no argument, flips it. Returns the new setting.
+            sound: function (on) {
+                var next = on === undefined ? !soundOn() : !!on;
+                if (sound && sound.set) { sound.set(next); } else if (!next) { stopDisk(); }
+                return soundOn();
+            },
             wait: function (ms) { enq({ o: 'wait', ms: ms }); },
             blank: function () { enq({ o: 'nl', log: false }); },
             dateLine: function () { enq({ o: 'date' }); },
@@ -2483,6 +2605,20 @@
             go: function (name, arg) {
                 enq({ o: 'fn', f: function () { current = programs[name]; P.arg = arg || {}; P.errs = 0; P.pstr = current.prompt || 'SELECT: '; current.enter(P, P.arg, false); } });
             },
+            // Fill rows in place as reads arrive: rowsOf() returns {row, col, width, lines}. Nothing is written once the
+            // screen has been cleared or has scrolled since it printed.
+            patch: function (list, rowsOf) {
+                enq({ o: 'fn', f: function () {
+                    var gen = screenGen, scrolls = scrollCount, anchor = live ? live.lastChild : null;
+                    list.forEach(function (pr) {
+                        pr.then(function () {
+                            if (destroyed || gen !== screenGen || scrolls !== scrollCount) { return; }
+                            var s = rowsOf();
+                            for (var i = 0; i < s.lines.length; i++) { writeCells(s.row + i, s.col, padTo(trunc(s.lines[i], s.width), s.width), anchor); }
+                        }, function () { /* the row keeps -- */ });
+                    });
+                } });
+            },
             // Redraw the current screen at once (after repeated errors have scrolled it away).
             redraw: function () {
                 enq({ o: 'fn', f: function () { P.errs = 0; current.enter(P, P.arg, true); } });
@@ -2510,7 +2646,7 @@
         };
 
         /* ---- disk reads: GET only, 12s timeout, all aborted on destroy ---- */
-        var images = [], inflight = [], clockSkew = 0;   // clockSkew: server clock minus ours, from the Date header
+        var images = [], inflight = [], C = sharedCache();   // C.skew: server clock minus ours, from the Date header
         function abortAll() {
             var list = inflight;
             inflight = [];
@@ -2524,19 +2660,22 @@
             m = /^([A-Za-z_]+\/[A-Za-z_]+)/.exec(rest);
             return m ? m[1] : rest;
         }
+        // The endpoint's name when it is on the allow-list; otherwise the call is logged, noted and refused.
         function checkAllowed(url) {
             var name = endpointOf(url);
-            if (isAllowed(name)) { return; }
+            if (isAllowed(name)) { return name; }
             window.OrkpleViolations = (window.OrkpleViolations || []).concat(name);
             if (window.console) { console.error('ORKPLE: endpoint not on the allow-list: ' + name); }
-            if (strict) { throw new Error('endpoint not on the allow-list: ' + name); }
+            return null;
         }
         function getJson(url) {
             if (destroyed || !url || !window.fetch || !window.AbortController) { return Promise.reject(new Error('no disk')); }
-            checkAllowed(url);
+            var name = checkAllowed(url);
+            if (name === null) { return Promise.reject(new Error('endpoint not on the allow-list: ' + endpointOf(url))); }
             var ac = new AbortController();
             inflight.push(ac);
-            var t = setTimeout(function () { ac.abort(); }, FETCH_MS);
+            var timedOut = false;
+            var t = setTimeout(function () { timedOut = true; ac.abort(); }, FETCH_MS);
             function settle() {
                 clearTimeout(t);
                 var k = inflight.indexOf(ac);
@@ -2545,9 +2684,13 @@
             return fetch(url, { credentials: 'same-origin', signal: ac.signal }).then(function (r) {
                 if (!r.ok) { throw new Error('http ' + r.status); }
                 var hd = Date.parse(r.headers.get('Date') || '');
-                if (hd) { clockSkew = hd - Date.now(); }
+                if (hd) { C.skew = hd - Date.now(); }
                 return r.json();
-            }).then(function (d) { settle(); return d; }, function (e) { settle(); throw e; });
+            }).then(function (d) { settle(); return projectFor(name, d); }, function (e) {
+                settle();
+                if (timedOut) { var te = new Error('disk read timed out'); te.timeout = true; throw te; }
+                throw e;
+            });
         }
         function qs(params, wrapped) {
             var out = [];
@@ -2559,7 +2702,7 @@
             return out.join('&');
         }
         // Kingdom/Report calls take a request[] envelope; SearchService takes plain params. Three response shapes:
-        //   {Status: {Status: 0, Error, Detail}, ...fields}  fields at the top level; Detail is never shown (it can hold SQL)
+        //   {Status: {Status: 0, Error, Detail}, ...fields}  fields at the top level; Detail is never shown
         //   {Status: true, Result: ...}                      resolves to Result
         //   {Status: 2}                                      a bare number: 0 is success, anything above is a failure
         function svc(call, params, plain) {
@@ -2578,7 +2721,16 @@
                 return d.hasOwnProperty('Result') ? d.Result : d;
             });
         }
-        function soft(p) { return p.then(function (v) { return v; }, function () { return null; }); }
+        // A failed read is null, except after destroy(): then it stays a failure, so nothing half-read is kept.
+        function soft(p) { return p.then(function (v) { return v; }, function (e) { if (destroyed) { throw e; } return null; }); }
+        // Share a pending read under key in pend; forget it if it fails.
+        function memo(pend, key, make) {
+            if (pend[key]) { return pend[key]; }
+            var pr = make();
+            pend[key] = pr;
+            pr.then(null, function () { if (pend[key] === pr) { delete pend[key]; } });
+            return pr;
+        }
         function listOf(d, key) {
             if (!d || !Array.isArray(d[key])) { throw new Error('bad ' + key); }
             return d[key];
@@ -2588,9 +2740,11 @@
             return new Promise(function (resolve, reject) {
                 if (!url || destroyed) { reject(new Error('no image')); return; }
                 var img = new Image(), t = setTimeout(function () { img.src = ''; reject(new Error('image timeout')); }, ART_MS);
+                // destroy() fails a pending image at once, so the shared arms read is dropped, not left to time out.
+                img.orkFail = function () { clearTimeout(t); if (!img.orkDone) { img.src = ''; reject(new Error('aborted')); } };
                 images.push(img);
-                img.onload = function () { clearTimeout(t); resolve(img); };
-                img.onerror = function () { clearTimeout(t); reject(new Error('image failed')); };
+                img.onload = function () { clearTimeout(t); img.orkDone = true; resolve(img); };
+                img.onerror = function () { clearTimeout(t); img.orkDone = true; reject(new Error('image failed')); };
                 img.src = url;
             });
         }
@@ -2606,7 +2760,7 @@
         }
         function eventsOf(id) {
             if (!uiBase) { return Promise.reject(new Error('no ui')); }
-            var now = new Date(Date.now() + clockSkew), lo = new Date(now.getTime() - 7 * 86400000), hi = new Date(now.getTime());
+            var now = new Date(Date.now() + C.skew), lo = new Date(now.getTime() - 7 * 86400000), hi = new Date(now.getTime());
             hi.setUTCMonth(hi.getUTCMonth() + 12);
             var loS = stamp(lo), hiS = stamp(hi), end = new Date(hi.getTime() + 86400000);
             return getJson(uiBase + 'KingdomAjax/calendar/' + id + '&start=' + loS.slice(0, 10) + '&end=' + stamp(end).slice(0, 10)).then(function (d) {
@@ -2622,8 +2776,19 @@
                 return out;
             });
         }
+        // The active park list. AverageMonths 6, in this order, is the request park_averages_json makes of the same
+        // report, so both share the server's cached copy; the figures shown come only from park_averages_json (wk, mo).
         function parksOf(id) {
-            return svc('Report/GetKingdomParkAverages', { KingdomId: id }).then(function (d) { return listOf(d, 'KingdomParkAveragesSummary'); });
+            return svc('Report/GetKingdomParkAverages', { KingdomId: id, AverageMonths: 6 }).then(function (d) { return listOf(d, 'KingdomParkAveragesSummary'); });
+        }
+        // The kingdom page's per-week and per-month figures, worked out on the server; one read per kingdom for the kingdom and park screens.
+        function averagesOf(kid) {
+            return memo(C.avgP, kid, function () {
+                return (uiBase ? getJson(uiBase + 'Kingdom/park_averages_json/' + kid) : Promise.reject(new Error('no ui'))).then(function (avg) {
+                    if (!avg || typeof avg !== 'object' || Array.isArray(avg)) { throw new Error('bad averages'); }
+                    return avg;
+                });
+            });
         }
         function sortEvents(list) {
             return list.slice().sort(function (a, b) {
@@ -2632,10 +2797,10 @@
             });
         }
 
-        var kingdomsP = null, kingdomsMem = null, profileP = {}, profileMem = {};
+        var profileP = C.profileP, profileMem = C.profileMem;
         function loadKingdoms() {
-            if (!kingdomsP) {
-                kingdomsP = svc('Kingdom/GetKingdoms', { x: 1 }).then(function (d) {
+            if (!C.kingdomsP) {
+                C.kingdomsP = svc('Kingdom/GetKingdoms', { x: 1 }).then(function (d) {
                     if (!d || !d.Kingdoms) { throw new Error('no kingdoms'); }
                     var raw = d.Kingdoms, list = [];
                     for (var k in raw) {
@@ -2644,33 +2809,51 @@
                         }
                     }
                     list.sort(byName);
-                    kingdomsMem = list;
+                    C.kingdomsMem = list;
                     return list;
                 });
-                kingdomsP.then(null, function () { kingdomsP = null; });
+                C.kingdomsP.then(null, function () { C.kingdomsP = null; });
             }
-            return kingdomsP;
+            return C.kingdomsP;
         }
         function nameOf(id) {
-            var list = kingdomsMem || [];
+            var list = C.kingdomsMem || [];
             for (var i = 0; i < list.length; i++) { if (list[i].id === id) { return list[i].name; } }
             return '';
         }
         // With IncludePrincipalityInStatistics on, the page rolls its principalities' parks into the park count.
-        function rollUp(p, prinz) {
-            return soft(svc('Kingdom/GetKingdomDetails', { KingdomId: p.id })).then(function (dt) {
-                var flag = dt && dt.KingdomConfiguration && dt.KingdomConfiguration.IncludePrincipalityInStatistics;
-                if (!flag || +flag.Value !== 1) { return p; }
-                return Promise.all(prinz.map(function (k) { return soft(parksOf(k.id)); })).then(function (kids) {
-                    kids.forEach(function (kd) {
-                        if (!kd || p.parkCount === null) { p.parkCount = null; } else { p.parkCount += kd.length; }
-                    });
+        // The flag is one cheap read, made behind the header: off, the count is the kingdom's own parks at once.
+        // On, it takes one read per principality, so that part runs only when PARKS is opened.
+        function rollFlag(p) {
+            return memo(p.stat, 'flag', function () {
+                return svc('Kingdom/GetKingdomDetails', { KingdomId: p.id }).then(function (dt) {
+                    if (!dt) { throw new Error('no details'); }
+                    var flag = dt.KingdomConfiguration && dt.KingdomConfiguration.IncludePrincipalityInStatistics;
+                    return !!flag && +flag.Value === 1;
+                });
+            });
+        }
+        // The count when the flag is off; parkCount stays null when a read fails or the flag is on.
+        function plainCount(p) {
+            return Promise.all([rollFlag(p), kParks(p)]).then(function (r) {
+                if (!r[0]) { p.parkCount = p.parks.length; }
+                return p;
+            });
+        }
+        function rollUp(p) {
+            return soft(rollFlag(p)).then(function (on) {
+                if (on === null) { return p; }
+                if (!on) { p.parkCount = p.parks.length; return p; }
+                return Promise.all(p.prinz.map(function (k) { return soft(parksOf(k.id)); })).then(function (kids) {
+                    var n = p.parks.length;
+                    for (var i = 0; i < kids.length && n !== null; i++) { n = kids[i] ? n + kids[i].length : null; }
+                    p.parkCount = n;
                     return p;
                 });
             });
         }
         // Arms for a Kingdom, Park, Unit or Event as a 1-bit bitmap; null when it has none or the image will not load.
-        var armsP = {};
+        var armsP = C.armsP;
         function loadArms(type, id) {
             var key = type + id;
             if (!armsP[key]) {
@@ -2681,6 +2864,8 @@
             }
             return armsP[key];
         }
+        // The kingdom header waits only for its record, arms, officers and principalities. The counts (parks, events,
+        // averages) load behind it and fill in on screen as they arrive (P.patch); each is kept on p.stat once read.
         function loadProfile(id) {
             if (profileP[id]) { return profileP[id]; }
             var infoP = svc('Kingdom/GetKingdomShortInfo', { KingdomId: id }).then(function (d) {
@@ -2690,45 +2875,84 @@
             var artP = infoP.then(function (info) {
                 return +info.HasHeraldry ? loadArms('Kingdom', id) : null;
             });
-            var avgP = uiBase ? getJson(uiBase + 'Kingdom/park_averages_json/' + id) : Promise.reject(new Error('no ui'));
             var pr = Promise.all([
                 infoP,
                 soft(svc('Kingdom/GetOfficers', { KingdomId: id }).then(function (d) { return listOf(d, 'Officers'); })),
-                soft(parksOf(id)),
-                soft(avgP),
-                soft(eventsOf(id)),
                 soft(svc('Kingdom/GetPrincipalities', { KingdomId: id }).then(function (d) { return listOf(d, 'Principalities'); })),
                 soft(loadKingdoms()),
                 soft(artP)
             ]).then(function (r) {
-                var info = r[0], parks = r[2], avg = r[3], events = r[4];
-                var prinz = r[5] ? r[5].map(function (k) { return { id: +k.KingdomId, name: noThe(clean(k.Name)) }; }).sort(byName) : null;
+                var info = r[0];
+                var prinz = r[2] ? r[2].map(function (k) { return { id: +k.KingdomId, name: noThe(clean(k.Name)) }; }).sort(byName) : null;
                 var p = {
                     id: id, name: info.KingdomName, abbr: info.Abbreviation, isPrinz: !!(+info.IsPrincipality),
                     parentName: nameOf(+info.ParentKingdomId || 0),
-                    officers: r[1], prinz: prinz, art: r[7], events: events ? sortEvents(events) : null,
-                    parks: parks ? parks.slice().sort(function (a, b) { var x = clean(a.ParkName), y = clean(b.ParkName); return x < y ? -1 : (x > y ? 1 : 0); }) : null,
-                    parkCount: parks ? parks.length : null, eventCount: events ? events.length : null,
-                    avgWeek: null, avgMonth: null,
-                    parkAvg: function () { return '--'; }
+                    officers: r[1], prinz: prinz, art: r[4], events: null, parks: null,
+                    parkCount: null, eventCount: null, avgWeek: null, avgMonth: null,
+                    parkAvg: function () { return '--'; },
+                    stat: {}
                 };
-                if (avg) {
-                    // Same formulas as knFillAverages in Kingdomnew_index.tpl.
-                    var kg = avg._kingdom, wk = (kg && kg.wk_count) ? kg.wk_count : 26;
-                    var total = 0, ours = {};
-                    if (parks) { parks.forEach(function (k) { ours[k.ParkId] = true; }); }
-                    for (var key in avg) {
-                        if (avg.hasOwnProperty(key) && key !== '_kingdom' && (!parks || ours[key])) { total += avg[key].att || 0; }
-                    }
-                    p.avgWeek = (((kg && kg.att) ? kg.att : total) / wk).toFixed(1);
-                    p.avgMonth = ((kg && kg.mo) ? kg.mo : 0).toFixed(1);
-                    p.parkAvg = function (parkId) { return avg[parkId] ? ((avg[parkId].att || 0) / wk).toFixed(1) : '--'; };
-                }
-                return (!p.isPrinz && prinz && prinz.length) ? rollUp(p, prinz) : p;
-            }).then(function (p) { profileMem[id] = p; return p; });
+                // A kingdom with principalities may roll their parks into its count: that count waits for PARKS.
+                p.rolls = !p.isPrinz && !!(prinz && prinz.length);
+                profileMem[id] = p;
+                // A header with a failed read is shown, but not kept: the next visit asks again.
+                if (r[1] === null || r[2] === null || (+info.HasHeraldry && !r[4])) { delete profileP[id]; }
+                profileStats(id);
+                return p;
+            });
             profileP[id] = pr;
             pr.then(null, function () { delete profileP[id]; });
             return pr;
+        }
+        function kParks(p) {
+            return memo(p.stat, 'parks', function () {
+                return parksOf(p.id).then(function (parks) {
+                    p.parks = parks.slice().sort(function (a, b) { var x = clean(a.ParkName), y = clean(b.ParkName); return x < y ? -1 : (x > y ? 1 : 0); });
+                    if (!p.rolls) { p.parkCount = parks.length; }
+                    return p.parks;
+                });
+            });
+        }
+        function kAvg(p) {
+            return memo(p.stat, 'avg', function () {
+                return averagesOf(p.id).then(function (avg) {
+                    // The per-week figures the server worked out (wk), as knFillAverages in Kingdomnew_index.tpl shows them.
+                    var kg = avg._kingdom || {};
+                    p.avgWeek = (+kg.wk || 0).toFixed(1);
+                    p.avgMonth = (+kg.mo || 0).toFixed(1);
+                    p.parkAvg = function (parkId) { return avg[parkId] ? (+avg[parkId].wk || 0).toFixed(1) : '--'; };
+                    return avg;
+                });
+            });
+        }
+        function kEvents(p) {
+            return memo(p.stat, 'events', function () {
+                return eventsOf(p.id).then(function (events) {
+                    p.events = sortEvents(events);
+                    p.eventCount = events.length;
+                    return p.events;
+                });
+            });
+        }
+        // The count reads behind a kingdom header, started (or retried after a failure) each time it is shown.
+        function profileStats(id) {
+            var p = profileMem[id];
+            if (!p) { return []; }
+            var list = [p.rolls ? plainCount(p) : kParks(p), kAvg(p), kEvents(p)];
+            list.forEach(function (x) { x.then(null, function () { /* the header keeps -- */ }); });
+            return list;
+        }
+        // PARKS: the list, the per-park averages and, only here, the principality roll-up of the count.
+        function kingdomParks(id) {
+            var p = profileMem[id];
+            if (!p) { return Promise.reject(new Error('no kingdom')); }
+            var roll = memo(p.stat, 'roll', function () {
+                return kParks(p).then(function () { return p.rolls ? rollUp(p) : p; }).then(function () {
+                    if (p.parkCount === null) { delete p.stat.roll; }   // a failed principality read: ask again next time
+                    return p;
+                });
+            });
+            return Promise.all([roll, soft(kAvg(p))]);
         }
         /* ---- players: search, then the public (logged-out) profile ---- */
         function searchPlayers(text) {
@@ -2745,8 +2969,7 @@
                 }));
             });
         }
-        var playerP = {}, playerMem = {};
-        function parseCfg(s) { try { var c = JSON.parse(String(s || '')); return c && typeof c === 'object' && !Array.isArray(c) ? c : {}; } catch (e) { return {}; } }
+        var playerP = C.playerP, playerMem = C.playerMem;
         function missing(msg) { var e = new Error(msg); e.notFound = true; return e; }
         function loadPlayer(id) {
             if (playerP[id]) { return playerP[id]; }
@@ -2772,23 +2995,22 @@
                     return svc('Player/AttendanceForPlayer', q).then(function (d) { return listOf(d, 'Attendance'); });
                 };
                 return Promise.all([soft(wherePr), soft(att({ order: 'desc' })), soft(att({ order: 'asc', date_start: '1988-01-01' }))]).then(function (r) {
-                    var suspended = +P0.Suspended === 1, active = +P0.Active === 1 && !suspended;
-                    var dues = 'NONE ON FILE';
-                    var life = (P0.DuesPaidList || []).some(function (x) { return +x.DuesForLife === 1 && !(+x.Revoked); });
-                    if (life || (P0.DuesThrough && P0.DuesThrough !== '0000-00-00' && P0.DuesThrough >= today())) { dues = 'PAID'; }
-                    else if (P0.LastDuesThrough) { dues = 'EXPIRED'; }
+                    // A record with a failed read is shown, but not kept: the next visit asks again.
+                    if (r[0] === null || r[1] === null || r[2] === null) { delete playerP[id]; }
+                    var active = +P0.IsActive === 1;
+                    var dues = { paid: 'PAID', expired: 'EXPIRED' }[P0.DuesStatus] || 'NONE ON FILE';
                     var name = (P0.NamePrefix ? P0.NamePrefix + ' ' : '') + P0.Persona;
                     if (P0.NameSuffix) { name += (+P0.SuffixComma ? ', ' : ' ') + P0.NameSuffix; }
                     var day = function (rows) { return rows === null ? '--' : (rows.length ? fmtDate(rows[0].Date) : 'N/A'); };
                     // Only the fields the public page shows; nothing from the account, the real name or the notes is kept.
                     var p = {
-                        id: id, name: name, pronunciation: P0.PronunciationGuide || '', pronouns: P0.PronounCustomText || P0.PronounText || '',
-                        where: r[0] || '', status: active ? 'ACTIVE' : (suspended ? 'INACTIVE, SUSPENDED' : 'INACTIVE'),
+                        id: id, parkId: parkId, kingdomId: kingdomId, name: name, pronunciation: P0.PronunciationGuide || '', pronouns: P0.PronounCustomText || P0.PronounText || '',
+                        where: r[0] || '', status: active ? 'ACTIVE' : 'INACTIVE',
                         since: day(r[2]), last: day(r[1]), dues: dues,
-                        reeve: qualWord(+P0.ReeveQualified !== 0, P0.ReeveQualifiedUntil), corpora: qualWord(+P0.CorporaQualified !== 0, P0.CorporaQualifiedUntil),
+                        reeve: qualWord(P0.ReeveStatus, P0.ReeveQualifiedUntil), corpora: qualWord(P0.CorporaStatus, P0.CorporaQualifiedUntil),
                         classes: null, awards: null, titles: null, attendance: null,
-                        // The About text, the active companies and the player's milestone switches: what the public page shows anyone.
-                        persona: P0.Persona || '', aboutPersona: P0.AboutPersona || '', aboutStory: P0.AboutStory || '', msCfg: parseCfg(P0.MilestoneConfig),
+                        // The About text and the active companies: what the public page shows anyone.
+                        persona: P0.Persona || '', aboutPersona: P0.AboutPersona || '', aboutStory: P0.AboutStory || '',
                         companies: Array.isArray(P0.Company) ? P0.Company.filter(function (u) { return +u.UnitId > 0 && clean(u.Name); }).map(function (u) { return { id: +u.UnitId, name: u.Name, type: u.Type }; }) : null
                         };
                     playerMem[id] = p;
@@ -2803,21 +3025,24 @@
         function loadPlayerList(id, kind) {
             var p = playerMem[id];
             if (p[kind]) { return Promise.resolve(p[kind]); }
+            if (kind === 'classes' || kind === 'attendance' || kind === 'milestones') {
+                return memo(p._listP || (p._listP = {}), kind, function () { return playerList(p, id, kind); });
+            }
+            return playerList(p, id, kind);
+        }
+        function playerList(p, id, kind) {
             var pr;
             if (kind === 'classes') {
                 pr = svc('Player/ComputeClassProgress', { MundaneId: id }).then(function (d) { return listOf(d, 'Detail'); });
             } else if (kind === 'attendance') {
                 pr = svc('Player/AttendanceForPlayer', { MundaneId: id }).then(function (d) { return listOf(d, 'Attendance'); });
             } else if (kind === 'milestones') {
-                pr = svc('Player/GetPlayerMilestones', { MundaneId: id }).then(function (d) { return milestoneRows(listOf(d, 'Detail'), p.msCfg); });
+                pr = svc('Player/GetPlayerMilestones', { MundaneId: id, ApplyVisibility: 1 }).then(function (d) { return milestoneRows(listOf(d, 'Detail')); });
             } else {
                 if (p._awardsP) { pr = p._awardsP; } else {
                     pr = p._awardsP = svc('Player/AwardsForPlayer', { MundaneId: id }).then(function (d) {
                         var all = listOf(d, 'Awards'), awards = [], titles = [];
-                        all.forEach(function (a) {
-                            var isTitle = !(a.OfficerRole === null || a.OfficerRole === 'none' || a.OfficerRole === undefined) || +a.IsTitle === 1;
-                            (isTitle ? titles : awards).push(a);
-                        });
+                        all.forEach(function (a) { (+a.IsTitleEffective === 1 ? titles : awards).push(a); });
                         return { awards: awards, titles: titles };
                     });
                 }
@@ -2830,14 +3055,48 @@
         // Awards and the ladder bars together: true when the player has ladders to show first.
         function awardsEntry(id) {
             var p = playerMem[id];
-            var lad = p.ladders ? Promise.resolve(p.ladders) : soft(svc('Player/GetLadderProgress', { MundaneId: id }).then(function (d) { return listOf(d, 'Detail'); })).then(function (r) { p.ladders = r || []; return p.ladders; });
+            var lad = p.ladders ? Promise.resolve(p.ladders) : memo(p, '_ladP', function () {
+                return soft(svc('Player/GetLadderProgress', { MundaneId: id }).then(function (d) { return listOf(d, 'Detail'); })).then(function (r) {
+                    if (r) { p.ladders = r; } else { delete p._ladP; }   // a failed read shows no bars and is asked again next time
+                    return r || [];
+                });
+            });
             return Promise.all([loadPlayerList(id, 'awards'), lad]).then(function (r) { return r[1].length > 0; });
         }
-        // MY AMTGARD: the next three RSVPs, the three most recently played classes with credits, the latest award.
+        // The home park's next meeting: the kingdom calendar's park-day rows (the server expands every recurrence,
+        // every-x-weeks included) for the next five weeks, earliest in-person one first (online meetings are left out,
+        // as on the park page; the park's own day list says which are online). false when it meets on none of them.
+        function nextParkDay(parkId, kid) {
+            return memo(C.nextDayP, parkId, function () {
+                if (!uiBase) { return Promise.reject(new Error('no ui')); }
+                var today = serverToday(), end = new Date(Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1, +today.slice(8, 10)) + 35 * 86400000);
+                return Promise.all([
+                    getJson(uiBase + 'KingdomAjax/calendar/' + kid + '&start=' + today + '&end=' + stamp(end).slice(0, 10)),
+                    svc('Park/GetParkDays', { ParkId: parkId }).then(function (d) { return listOf(d, 'ParkDays'); })
+                ]).then(function (res) {
+                    var best = null;
+                    listOf(res[0], 'events').forEach(function (e) {
+                        var r = calRow(e);
+                        if (r && r.kind === 'P' && r.parkId === parkId && r.start.slice(0, 10) >= today && (!best || r.start < best.start) && parkDayInPerson(r, res[1])) { best = r; }
+                    });
+                    return best || false;
+                });
+            });
+        }
+        // MY AMTGARD: the home park's next park day, the next three RSVPs, the three most recently played classes
+        // with credits, the latest award.
         function loadMy(id) {
             var p = playerMem[id];
             if (p.my) { return Promise.resolve(p.my); }
-            var rsvps = soft(svc('Event/GetUpcomingRsvps', { MundaneId: id }).then(function (d) { return listOf(d, 'UpcomingRsvps'); }))
+            return memo(p, '_myP', function () { return readMy(p, id); });
+        }
+        function readMy(p, id) {
+            // undefined leaves the line out (no home park); null prints (UNAVAILABLE).
+            var parkDay = (p.parkId > 0 && p.kingdomId > 0) ? soft(nextParkDay(p.parkId, p.kingdomId)) : Promise.resolve(undefined);
+            var rsvps = soft((uiBase ? getJson(uiBase + 'EventRsvpAjax/mine') : Promise.reject(new Error('no ui'))).then(function (d) {
+                if (!d || +d.status !== 0) { throw new Error('no rsvps'); }
+                return listOf(d, 'UpcomingRsvps');
+            }))
                 .then(function (r) { return r && r.slice().sort(function (a, b) { return String(a.EventStart) < String(b.EventStart) ? -1 : 1; }).slice(0, 3); });
             var classes = soft(Promise.all([loadPlayerList(id, 'attendance'), loadPlayerList(id, 'classes')]).then(function (r) {
                 var byId = {}, seen = {}, out = [];
@@ -2853,10 +3112,15 @@
                 var all = sortNewest(r[0].concat(r[1]), 'Date', 'AwardsId');
                 return all.length ? [all[0]] : [];
             }));
-            return Promise.all([rsvps, classes, award]).then(function (r) { p.my = { rsvps: r[0], classes: r[1], award: r[2] }; return p.my; });
+            return Promise.all([rsvps, classes, award, parkDay]).then(function (r) {
+                var my = { rsvps: r[0], classes: r[1], award: r[2], parkDay: r[3] };
+                // A screen with a failed read is shown, but not kept: the next visit asks again.
+                if (r[1] !== null && r[2] !== null && r[3] !== null) { p.my = my; } else { delete p._myP; }
+                return my;
+            });
         }
         /* ---- parks: the header loads with the park; each menu list loads when picked and is kept for the mount ---- */
-        var parkP = {}, parkMem = {};
+        var parkP = C.parkP, parkMem = C.parkMem;
         function loadPark(id) {
             id = parseInt(id, 10) || 0;
             if (!(id > 0)) { return Promise.reject(missing('no park')); }
@@ -2872,27 +3136,28 @@
                     if (!x || !x.ParkName) { throw new Error('no details'); }
                     return x;
                 }));
-                var avgP = (kid && uiBase) ? getJson(uiBase + 'Kingdom/park_averages_json/' + kid) : Promise.reject(new Error('no ui'));
+                var avgP = kid ? averagesOf(kid) : Promise.reject(new Error('no kingdom'));
                 return Promise.all([
                     detailsP,
-                    soft(svc('Report/GetParkFieldCountToday', { ParkId: id }).then(function (x) { return typeof x.Count === 'number' ? x.Count : null; })),
+                    soft(svc('Report/GetParkFieldCountToday', { ParkId: id }).then(function (x) { return typeof x.Count === 'number' ? { count: x.Count, parkDay: +x.IsParkDay === 1 } : null; })),
                     soft(avgP),
-                    soft(+pi.HasHeraldry ? loadArms('Park', id) : Promise.resolve(null)),
-                    soft(svc('Park/GetParkDays', { ParkId: id }).then(function (x) { return listOf(x, 'ParkDays'); }))
+                    soft(+pi.HasHeraldry ? loadArms('Park', id) : Promise.resolve(null))
                 ]).then(function (r) {
-                    var avg = r[2], mine = avg && avg[id], kg = avg && avg._kingdom, wk = (kg && kg.wk_count) ? kg.wk_count : 26;
+                    var avg = r[2], mine = avg && avg[id];
                     var fig = function (v) { return v > 0 ? v.toFixed(1) : null; };
                     var p = {
                         id: id, name: pi.ParkName, abbr: pi.Abbreviation, kingdomId: kid, kingdomAbbr: ki.Abbreviation || '',
-                        retired: !!pi.Active && pi.Active !== 'Active', details: r[0], field: r[1], art: r[3],
-                        // The field count shows only when today is an in-person park day (the server's date, as the page without a forecast).
-                        parkDayToday: !!r[4] && parkMeetsOn(r[4], serverToday()),
-                        // The kingdom page's own formulas (knFillAverages), so a park shows the same figures everywhere.
-                        avgWeek: mine ? fig((mine.att || 0) / wk) : null, avgMonth: mine ? fig(+mine.mo || 0) : null,
+                        retired: !!pi.Active && pi.Active !== 'Active', details: r[0], field: r[1] ? r[1].count : null, art: r[3],
+                        // The field count shows only when today is an in-person park day (the service judges it on the server's date).
+                        parkDayToday: !!r[1] && r[1].parkDay,
+                        // The per-week and per-month figures the server already worked out for the kingdom page.
+                        avgWeek: mine ? fig(+mine.wk || 0) : null, avgMonth: mine ? fig(+mine.mo || 0) : null,
                         lists: {}, listP: {}, days: {}
                     };
                     if (r[0]) { p.lists.details = r[0]; }
                     parkMem[id] = p;
+                    // A header with a failed read is shown, but not kept: the next visit asks again.
+                    if (r[0] === null || r[1] === null || (kid && r[2] === null) || (+pi.HasHeraldry && !r[3])) { delete parkP[id]; }
                     return p;
                 });
             });
@@ -2901,7 +3166,7 @@
             return pr;
         }
         // Server clock minus ours is already known from the Date header; cut windows on the server's clock.
-        function serverNow() { return new Date(Date.now() + clockSkew); }
+        function serverNow() { return new Date(Date.now() + C.skew); }
         // The app runs on America/Chicago time (config.dist.php), so "today" on the page is that date, not UTC's.
         function serverToday() {
             var d = serverNow();
@@ -2969,28 +3234,32 @@
             var p = parkMem[id];
             if (!p || !p.lists.dates || p.lists.dates.indexOf(date) < 0) { return Promise.reject(new Error('no such day')); }
             if (p.days[date]) { return Promise.resolve(p.days[date]); }
-            return svc('Report/AttendanceForDate', { ParkId: id, Date: date }).then(function (d) {
-                var rows = listOf(d, 'Attendance');
-                p.days[date] = rows;
-                return rows;
+            return memo(p.dayP || (p.dayP = {}), date, function () {
+                return svc('Report/AttendanceForDate', { ParkId: id, Date: date }).then(function (d) {
+                    var rows = listOf(d, 'Attendance');
+                    p.days[date] = rows;
+                    return rows;
+                });
             });
         }
         /* ---- events: a month of the kingdom calendar, one event with its lists, past events ---- */
-        var calMem = {};
+        var calMem = C.calMem;
         function loadCalMonth(id, y, m) {
             var key = id + '-' + y + '-' + m;
             if (calMem[key]) { return Promise.resolve(calMem[key]); }
             if (!uiBase) { return Promise.reject(new Error('no ui')); }
             function two(n) { return (n < 10 ? '0' : '') + n; }
             var lo = y + '-' + two(m) + '-01', hi = (m === 12 ? y + 1 : y) + '-' + two(m === 12 ? 1 : m + 1) + '-01';
-            return getJson(uiBase + 'KingdomAjax/calendar/' + id + '&start=' + lo + '&end=' + hi).then(function (d) {
-                var rows = listOf(d, 'events').map(calRow).filter(Boolean);
-                rows.sort(function (a, b) { return a.start < b.start ? -1 : (a.start > b.start ? 1 : (a.title < b.title ? -1 : (a.title > b.title ? 1 : 0))); });
-                calMem[key] = rows;
-                return rows;
+            return memo(C.calP, key, function () {
+                return getJson(uiBase + 'KingdomAjax/calendar/' + id + '&start=' + lo + '&end=' + hi).then(function (d) {
+                    var rows = listOf(d, 'events').map(calRow).filter(Boolean);
+                    rows.sort(function (a, b) { return a.start < b.start ? -1 : (a.start > b.start ? 1 : (a.title < b.title ? -1 : (a.title > b.title ? 1 : 0))); });
+                    calMem[key] = rows;
+                    return rows;
+                });
             });
         }
-        var evP = {}, evMem = {};
+        var evP = C.evP, evMem = C.evMem;
         // One occurrence: its record, the event's own record (name, host, arms flag) and, when the occurrence names no
         // place, the hosting park's address, as the page does. Lists (description, RSVP counts, schedule, who came) load on demand.
         function loadEvent(eid, did, nameHint) {
@@ -3006,8 +3275,8 @@
                     if (!(Array.isArray(list) && list[0] && +list[0].EventId === eid)) { throw missing('no event'); }
                     return list[0];
                 });
-                var atId = +det.AtParkId || 0;
-                var parkP = (evNoPlace(det) && atId > 0)
+                var atId = +det.AtParkId || 0, wantPark = evNoPlace(det) && atId > 0;
+                var parkP = wantPark
                     ? soft(svc('Park/GetParkDetails', { ParkId: atId }).then(function (x) { if (!x || !x.ParkName) { throw new Error('no park'); } return x; }))
                     : Promise.resolve(null);
                 return Promise.all([infoP, parkP]).then(function (r) {
@@ -3015,6 +3284,8 @@
                     return soft((info && +info.HasHeraldry) ? loadArms('Event', eid) : Promise.resolve(null)).then(function (art) {
                         var e = { eid: eid, did: did, name: (info && info.Name) || nameHint || 'EVENT', detail: det, info: info, atPark: r[1], art: art, lists: {}, listP: {} };
                         evMem[did] = e;
+                        // A screen with a failed read is shown, but not kept: the next visit asks again.
+                        if ((wantPark && !r[1]) || (+info.HasHeraldry && !art)) { delete evP[did]; }
                         return e;
                     });
                 });
@@ -3054,7 +3325,7 @@
             return e.listP[kind];
         }
         // Events that are over, newest first. The report also carries future occurrences and undated ones; both stay out.
-        var pastP = {}, pastMem = {};
+        var pastP = C.pastP, pastMem = C.pastMem;
         function loadPast(scope, id) {
             var key = scope + id;
             if (pastMem[key]) { return Promise.resolve(pastMem[key]); }
@@ -3075,7 +3346,7 @@
         }
         /* ---- companies and households ---- */
         // A list row's leaders are the personas of active captains and lords, as on the website's unit list.
-        var unitKP = {}, unitKMem = {}, unitLeaders = {}, unitP = {}, unitMem = {};
+        var unitKP = C.unitKP, unitKMem = C.unitKMem, unitLeaders = C.unitLeaders, unitP = C.unitP, unitMem = C.unitMem;
         function unitRowOf(u) {
             var id = +u.UnitId;
             unitLeaders[id] = String(u.LeaderNames === null || u.LeaderNames === undefined ? '' : u.LeaderNames);
@@ -3124,7 +3395,7 @@
                 var leadersP = unitLeaders.hasOwnProperty(id) ? Promise.resolve(unitLeaders[id]) : soft(uiBase ? getJson(uiBase + 'Search/unitsearch&q=' + encodeURIComponent(String(u.Name).replace(/^\s+|\s+$/g, ''))).then(function (list) {
                     if (!Array.isArray(list)) { throw new Error('bad unit list'); }
                     for (var i = 0; i < list.length; i++) { if (+list[i].UnitId === id) { return unitLeaders[id] = String(list[i].LeaderNames || ''); } }
-                    return null;
+                    return unitLeaders[id] = null;
                 }) : Promise.reject(new Error('no ui')));
                 return Promise.all([leadersP, soft(+u.HasHeraldry ? loadArms('Unit', id) : Promise.resolve(null))]).then(function (r) {
                     var m = {
@@ -3132,6 +3403,8 @@
                         leaders: r[0] === undefined ? null : r[0], art: r[1]
                     };
                     unitMem[id] = m;
+                    // A screen with a failed read is shown, but not kept: the next visit asks again.
+                    if (!unitLeaders.hasOwnProperty(id) || (+u.HasHeraldry && !r[1])) { delete unitP[id]; }
                     return m;
                 });
             });
@@ -3167,20 +3440,19 @@
             });
         }
         /* ---- THE ORK TODAY: each read mirrors a public page (home page, Top Parks, Recap, Live, Weather) ---- */
-        var epMem = null, epP = null;
         function loadEp() {
-            if (epMem) { return Promise.resolve(epMem); }
-            if (epP) { return epP; }
+            if (C.epMem) { return Promise.resolve(C.epMem); }
+            if (C.epP) { return C.epP; }
             if (!uiBase) { return Promise.reject(new Error('no ui')); }
-            epP = getJson(uiBase + 'EraPhoenice/today').then(function (d) {
+            var pr = C.epP = getJson(uiBase + 'EraPhoenice/today').then(function (d) {
                 var ep = epOf(d);
                 if (!ep) { throw new Error('bad date'); }
-                return (epMem = ep);
+                return (C.epMem = ep);
             });
-            epP.then(null, function () { epP = null; });
-            return epP;
+            pr.then(null, function () { if (C.epP === pr) { C.epP = null; } });
+            return pr;
         }
-        var todayMem = {}, weekMem = {}, liveMem = null;
+        var todayMem = C.todayMem, weekMem = C.weekMem;
         function sixMonthsBack(day) {
             var d = new Date(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10)));
             d.setUTCMonth(d.getUTCMonth() - 6);
@@ -3190,39 +3462,46 @@
             kid = parseInt(kid, 10) || 0;
             if (weekMem[kid]) { return Promise.resolve(weekMem[kid]); }
             if (!uiBase) { return Promise.reject(new Error('no ui')); }
-            return getJson(uiBase + (kid ? 'Recap/json_kingdom/' + kid : 'Recap/json')).then(function (d) {
-                if (!d || typeof d !== 'object' || Array.isArray(d)) { throw new Error('bad recap'); }
-                var recap = (d.Status === 'not_computed' || !d.WeekStart) ? { empty: true } : d;
-                var w = recap.empty ? { rows: [], groups: [] } : weekRows(recap);
-                return (weekMem[kid] = { recap: recap, rows: w.rows, groups: w.groups });
+            return memo(C.weekP, kid, function () {
+                return getJson(uiBase + (kid ? 'Recap/json_kingdom/' + kid : 'Recap/json')).then(function (d) {
+                    if (!d || typeof d !== 'object' || Array.isArray(d)) { throw new Error('bad recap'); }
+                    var recap = (d.Status === 'not_computed' || !d.WeekStart) ? { empty: true } : d;
+                    var w = recap.empty ? { rows: [], groups: [] } : weekRows(recap);
+                    return (weekMem[kid] = { recap: recap, rows: w.rows, groups: w.groups });
+                });
             });
         }
+        // Read again each time it is opened; a second ask while one is out shares it.
         function loadLive() {
             if (!uiBase) { return Promise.reject(new Error('no ui')); }
-            return Promise.all([getJson(uiBase + 'Live/stats'), soft(getJson(uiBase + 'Live/recent'))]).then(function (r) {
+            if (C.liveP) { return C.liveP; }
+            var pr = C.liveP = Promise.all([getJson(uiBase + 'Live/stats'), soft(getJson(uiBase + 'Live/recent'))]).then(function (r) {
                 var s = r[0];
                 if (!s || typeof s !== 'object' || typeof s.active_3h !== 'number') { throw new Error('bad live'); }
                 var recent = r[1] && typeof r[1] === 'object' && Array.isArray(r[1].signins) ? recentRows(r[1], s) : null;
-                return (liveMem = { active3h: s.active_3h, rows: liveRows(s), recent: recent });
+                return (C.liveMem = { active3h: s.active_3h, rows: liveRows(s), recent: recent });
             });
+            var done = function () { if (C.liveP === pr) { C.liveP = null; } };
+            pr.then(done, done);
+            return pr;
         }
         // One THE ORK TODAY screen's data, kept for the mount except the live feed, which is read again each time.
         function loadToday(kind, kid) {
             if (kind === 'TWEEK') { return loadWeek(kid); }
             if (kind === 'TLIVE') { return loadLive(); }
             if (todayMem[kind]) { return Promise.resolve(todayMem[kind]); }
+            if (C.todayP[kind]) { return C.todayP[kind]; }
             var pr;
             if (kind === 'TSTAND') {
                 pr = svc('Report/GetActiveKingdomsSummary', {}).then(function (d) {
-                    var end = serverToday();
-                    return standingRows(listOf(d, 'ActiveKingdomsSummaryList'), weeksIn(sixMonthsBack(end), end));
+                    return standingRows(listOf(d, 'ActiveKingdomsSummaryList'));
                 });
             } else if (kind === 'TPARKS') {
                 // The Top Parks page: 25 parks, the six months to today, ranked by average players a week.
-                var end = serverToday(), start = sixMonthsBack(end), wk = weeksIn(start, end);
+                var end = serverToday(), start = sixMonthsBack(end);
                 pr = svc('Report/GetTopParksByAttendance', { Limit: 25, StartDate: start, EndDate: end }).then(function (d) {
                     var rows = listOf(d, 'TopParksSummary').filter(function (p) { return +p.ParkId > 0 && clean(p.ParkName); }).map(function (p) {
-                        return { id: +p.ParkId, name: p.ParkName, avg: (+p.AttendanceCount || 0) / wk };
+                        return { id: +p.ParkId, name: p.ParkName, avg: +p.AvgPerWeek || 0 };
                     });
                     return { rows: rows, start: start, end: end };
                 });
@@ -3234,26 +3513,28 @@
             } else {
                 return Promise.reject(new Error('no such screen'));
             }
-            return pr.then(function (v) { return (todayMem[kind] = v); });
+            return memo(C.todayP, kind, function () { return pr.then(function (v) { return (todayMem[kind] = v); }); });
         }
         // A kingdom's knights and masters: the report is read scoped to the kingdom and kept to the named fields.
-        var kamMem = {};
+        var kamMem = C.kamMem;
         function loadKam(id) {
             id = parseInt(id, 10) || 0;
             if (!(id > 0)) { return Promise.reject(new Error('no kingdom')); }
             if (kamMem[id]) { return Promise.resolve(kamMem[id]); }
-            return svc('Report/PlayerAwards', { KingdomId: id, ParkId: 0, IncludeKnights: 1, IncludeMasters: 1 }).then(function (d) {
-                return (kamMem[id] = kamRows(listOf(d, 'Awards')));
+            return memo(C.kamP, id, function () {
+                return svc('Report/PlayerAwards', { KingdomId: id, ParkId: 0, IncludeKnights: 1, IncludeMasters: 1 }).then(function (d) {
+                    return (kamMem[id] = kamRows(listOf(d, 'Awards')));
+                });
             });
         }
         P.data = {
             epToday: loadEp,
-            epPeek: function () { return epMem; },
+            epPeek: function () { return C.epMem; },
             today: loadToday,
             peekToday: function (kind) { return todayMem[kind]; },
             peekWeek: function (kid) { return weekMem[parseInt(kid, 10) || 0]; },
-            peekLive: function () { return liveMem; },
-            skew: function () { return clockSkew; },
+            peekLive: function () { return C.liveMem; },
+            skew: function () { return C.skew; },
             kingdomName: nameOf,
             kingdomKam: loadKam,
             peekKam: function (id) { return kamMem[id] || []; },
@@ -3282,8 +3563,10 @@
             peekPlayer: function (id) { return playerMem[id]; },
             playerList: loadPlayerList,
             kingdoms: loadKingdoms,
-            kingdomList: function () { return kingdomsMem || []; },
+            kingdomList: function () { return C.kingdomsMem || []; },
             profile: loadProfile,
+            profileStats: profileStats,
+            kingdomParks: kingdomParks,
             peek: function (id) { return profileMem[id]; }
         };
 
@@ -3410,12 +3693,27 @@
                 save: function (key, value) {
                     try { window.localStorage.setItem('orkple.games.' + g.id + '.' + key, JSON.stringify(value)); } catch (e) { /* storage off */ }
                 },
-                load: function (key) {
+                // load(key, valid): a stored value that fails valid(value) comes back as null, so a bad save cannot stick.
+                load: function (key, valid) {
                     try {
                         var v = window.localStorage.getItem('orkple.games.' + g.id + '.' + key);
-                        return v === null ? null : JSON.parse(v);
+                        v = v === null ? null : JSON.parse(v);
+                        return v !== null && typeof valid === 'function' && !valid(v) ? null : v;
                     } catch (e) { return null; }
                 },
+                // The shared check for a saved best: an object whose score is a whole number of 0 or more,
+                // every other field a finite number, except won, which is true or false.
+                isBest: function (v) {
+                    if (!v || typeof v !== 'object' || Array.isArray(v)) { return false; }
+                    if (typeof v.score !== 'number' || !isFinite(v.score) || v.score < 0 || Math.floor(v.score) !== v.score) { return false; }
+                    for (var f in v) {
+                        if (!v.hasOwnProperty(f)) { continue; }
+                        if (f === 'won' ? typeof v[f] !== 'boolean' : typeof v[f] !== 'number' || !isFinite(v[f])) { return false; }
+                    }
+                    return true;
+                },
+                // held('A'): is that key down right now? Same names as keys() sends. Cleared on blur and when the page hides.
+                held: function (key) { return game === g && !destroyed && !!heldKeys[String(key).toUpperCase()]; },
                 rand: function (n) { return Math.floor(rnd() * Math.max(1, Math.floor(n))); },
                 seed: function (n) { rngState = (n | 0) || 1; }
             };
@@ -3433,6 +3731,10 @@
                     splash = null;
                     ahead = '';            // keys pressed at the title card do not reach the game
                     markDirty();
+                    // window.OrkpleSeed (a number) makes host.rand repeatable from the start of the game, for tests.
+                    var sd = window.OrkpleSeed;
+                    rngState = typeof sd === 'number' && isFinite(sd) ? ((sd | 0) || 1) : 0;
+                    releaseKeys();
                     guard(g, function () { reg.start(makeHost(g)); });
                 }, SPLASH_MS);
             }, function () { P.bad('?FILE NOT FOUND'); });
@@ -3469,9 +3771,8 @@
             if (cb) { cb(t); }
         };
 
-        /* ---- disk drive: plays under the ORKEK title card ----
-           sounds/disk-read.m4a is the first 4s of "reading floppy disc 2" from the
-           freesound community (royalty free), normalized with a 250ms fade-out.
+        /* ---- disk drive: plays under the ORKEK title card and the ORKPLE ][ boot banner ----
+           sounds/disk-read.m4a: source, edits and license status are recorded in sounds/CREDITS.txt.
            Fetched once; if it arrives after the card goes up, it joins in step. */
         var diskSrc = null, diskBuf = null, diskLoading = null, diskSeq = 0, diskFailed = false;
         function loadDisk() {
@@ -3487,8 +3788,10 @@
                 .catch(function () { diskLoading = null; diskFailed = true; return null; });
             return diskLoading;
         }
+        var bootDisk = false;          // true while the boot banner is up, so the disk plays without a title card
         function diskSound(ms) {
             stopDisk();
+            if (!soundOn()) { return; }
             try {
                 var AC = window.AudioContext || window.webkitAudioContext;
                 if (!AC) { return; }
@@ -3497,7 +3800,7 @@
             } catch (e) { return; }
             var seq = diskSeq, t0 = Date.now(), len = ms / 1000;
             loadDisk().then(function (buf) {
-                if (!buf || !audio || destroyed || seq !== diskSeq || !splash) { return; }
+                if (!buf || !audio || destroyed || seq !== diskSeq || !(splash || bootDisk) || !soundOn()) { return; }
                 var off = (Date.now() - t0) / 1000;
                 if (off > len - 0.3) { return; }
                 try {
@@ -3526,6 +3829,7 @@
 
         /* ---- beep ---- */
         function beep(freq, ms) {
+            if (!soundOn()) { return; }
             try {
                 var AC = window.AudioContext || window.webkitAudioContext;
                 if (!AC) { return; }
@@ -3562,29 +3866,58 @@
             if (!window.matchMedia) { return true; }
             return window.matchMedia('(any-pointer: fine)').matches;
         }
-        // Nothing here takes input: POWER is the way out, and a disabled input keeps the phone keyboard away.
+        // The input stays disabled to keep the phone keyboard away; POWER (or ESC) is the way out and takes focus.
+        // A real key press proves a keyboard (an iPad with one reports no fine pointer), so it boots DOS after all.
+        var biosOn = false;
+        function onBiosKey(e) {
+            if (!biosOn || destroyed) { return; }
+            var k = e.key;
+            if (!k || k === 'Unidentified' || k === 'Escape' || k === 'Esc' || k === 'Tab' || k === 'Shift' || k === 'Control' || k === 'Alt' || k === 'Meta' || k === 'CapsLock') { return; }
+            // Browser and OS shortcuts (Cmd+R, Ctrl+L) keep working; they are not "any key".
+            if (e.ctrlKey || e.metaKey || e.altKey) { return; }
+            // Return or Space on a focused button presses that button (POWER); every other key still boots DOS.
+            if ((k === 'Enter' || k === ' ' || k === 'Spacebar') && e.target && e.target.tagName === 'BUTTON') { return; }
+            e.preventDefault();
+            leaveBios();
+            queue = [];
+            if (waitT) { clearTimeout(waitT); delete timers[waitT]; waitT = 0; }
+            input.disabled = false;
+            try { input.focus({ preventScroll: true }); } catch (e2) { input.focus(); }
+            bootDos(true);
+        }
+        function leaveBios() {
+            if (!biosOn) { return; }
+            biosOn = false;
+            window.removeEventListener('keydown', onBiosKey, true);
+        }
         function biosError() {
             var hold = reduced ? 0 : 260;
             input.disabled = true;
             beep(220, 300);
             [
                 '', '', '', '',
-                'SYSTEM BIOS ERROR',
+                'ORKPLE ][',
                 '',
-                'NO MOUSE DETECTED',
-                'NO KEYBOARD DETECTED',
-                '',
-                'BOOT SEQUENCE INTERRUPTED',
+                '*',
+                '?NO KEYBOARD ERROR',
+                '*',
                 '', '',
                 '(WE\'RE SORRY, BUT THE ORKPLE II',
                 'WORKS BEST ON A DESKTOP',
                 'OR LAPTOP DEVICE!)',
                 '', '',
-                'PRESS POWER TO RETURN'
-            ].forEach(function (t) { P.line(t, { center: true, hold: t ? hold : 0 }); });
+                'PRESS POWER OR ESC TO RETURN'
+            ].forEach(function (t) {
+                // The monitor's * prompt and its error sit at the left edge, as on the real machine.
+                var left = t === '*' || t.charAt(0) === '?';
+                P.line(t, { center: !left, hold: t ? hold : 0 });
+            });
+            biosOn = true;
+            window.addEventListener('keydown', onBiosKey, true);
+            if (power) { try { power.focus({ preventScroll: true }); } catch (e) { power.focus(); } }
         }
-        function bootDos() {
-            if (!suitableDevice()) { biosError(); return; }
+        function bootDos(keyboard) {
+            if (!keyboard && !suitableDevice()) { biosError(); return; }
             current = programs.DOS;
             current.enter(P);
         }
@@ -3594,6 +3927,10 @@
             started = true;
             input.addEventListener('input', onInput);
             input.addEventListener('keydown', onKeydown);
+            input.addEventListener('keyup', onKeyup);
+            input.addEventListener('blur', releaseKeys);
+            window.addEventListener('blur', releaseKeys);
+            document.addEventListener('visibilitychange', onVisibility);
             blinkId = setInterval(function () {
                 if (accepting) { cursorOn = !cursorOn; markDirty(); }
             }, BLINK_MS);
@@ -3607,8 +3944,19 @@
                 clearInterval(garbageId); garbageId = 0;
                 beep();
                 clearScreen();
+                // The machine's name on the top line while the Disk II grinds through the boot.
+                var name = 'ORKPLE ][', c0 = Math.floor((COLS - name.length) / 2);
+                for (var i = 0; i < name.length; i++) { scr[0][c0 + i].ch = name.charAt(i); scr[0][c0 + i].inv = false; }
                 markDirty();
-                bootDos();
+                bootDisk = true;
+                diskSound(BOOT_DISK_MS);
+                later(function () {
+                    bootDisk = false;
+                    stopDisk();
+                    clearScreen();
+                    markDirty();
+                    bootDos();
+                }, BOOT_DISK_MS);
             }, GARBAGE_MS);
         }
 
@@ -3616,10 +3964,11 @@
             if (destroyed) { return; }
             destroyed = true;
             accepting = false;
+            leaveBios();
             queue = [];
             abortAll();
             endGame();
-            images.forEach(function (im) { im.onload = im.onerror = null; });
+            images.forEach(function (im) { im.onload = im.onerror = null; if (im.orkFail) { im.orkFail(); } });
             for (var id in timers) { if (timers.hasOwnProperty(id)) { clearTimeout(+id); } }
             timers = {};
             if (blinkId) { clearInterval(blinkId); blinkId = 0; }
@@ -3627,6 +3976,11 @@
             if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
             input.removeEventListener('input', onInput);
             input.removeEventListener('keydown', onKeydown);
+            input.removeEventListener('keyup', onKeyup);
+            input.removeEventListener('blur', releaseKeys);
+            window.removeEventListener('blur', releaseKeys);
+            document.removeEventListener('visibilitychange', onVisibility);
+            releaseKeys();
             try { input.value = ''; } catch (e) { /* ignore */ }
             if (audio) { try { audio.close(); } catch (e2) { /* ignore */ } audio = null; }
         }
@@ -3642,14 +3996,17 @@
             return out;
         }
 
-        return { start: start, destroy: destroy, screenRows: screenRows, probe: getJson };   // probe: tests only, goes through the allow-list
+        var api = { start: start, destroy: destroy, screenRows: screenRows, hush: stopDisk };
+        // probe: tests only, attached only when the test flag window.OrkpleStrict is set at mount; goes through the allow-list.
+        if (window.OrkpleStrict) { api.probe = getJson; }
+        return api;
     }
 
     window.OrkpleTerminal = {
         mount: mount,
         lib: {
             orkekSplash: orkekSplash, gameTitle: gameTitle, clean: clean, wrap: wrap, pagerLines: pagerLines, profileLines: profileLines, profileParts: profileParts, renderArt: renderArt, sameOrigin: sameOrigin,
-            htmlText: htmlText, barChart: barChart, eventParts: eventParts, evWhen: evWhen, evDecode: evDecode, eventDescLines: eventDescLines, schedPages: schedPages, calRow: calRow, calRowText: calRowText, calItemLines: calItemLines, parkMeetsOn: parkMeetsOn, shortLinks: shortLinks, parkParts: parkParts, parkDayText: parkDayText, parkWhereLines: parkWhereLines, unitParts: unitParts, unitRowText: unitRowText, unitTextLines: unitTextLines, unitAboutLines: unitAboutLines, osRowText: osRowText, todayLines: todayLines, epOf: epOf, standingRows: standingRows, standingText: standingText, topParkText: topParkText, weekRows: weekRows, liveRows: liveRows, liveText: liveText, recentRows: recentRows, recentText: recentText, wxFlagged: wxFlagged, wxText: wxText, kamRows: kamRows, kamText: kamText, kamDetailLines: kamDetailLines, aboutLines: aboutLines, milestoneRows: milestoneRows, milestoneText: milestoneText, playerLines: playerLines, allowed: ALLOWED.map(function (x) { return x[0]; })
+            htmlText: htmlText, barChart: barChart, eventParts: eventParts, evWhen: evWhen, evDecode: evDecode, eventDescLines: eventDescLines, schedPages: schedPages, calRow: calRow, calRowText: calRowText, calItemLines: calItemLines, shortLinks: shortLinks, parkParts: parkParts, parkDayText: parkDayText, parkDayInPerson: parkDayInPerson, parkWhereLines: parkWhereLines, unitParts: unitParts, unitRowText: unitRowText, unitTextLines: unitTextLines, unitAboutLines: unitAboutLines, osRowText: osRowText, todayLines: todayLines, epOf: epOf, standingRows: standingRows, standingText: standingText, topParkText: topParkText, weekRows: weekRows, liveRows: liveRows, liveText: liveText, recentRows: recentRows, recentText: recentText, wxFlagged: wxFlagged, wxText: wxText, kamRows: kamRows, kamText: kamText, kamDetailLines: kamDetailLines, aboutLines: aboutLines, milestoneRows: milestoneRows, milestoneText: milestoneText, playerLines: playerLines, allowed: ALLOWED.map(function (x) { return x[0]; })
         }
     };
 }());

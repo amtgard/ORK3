@@ -1,30 +1,19 @@
 /**
  * ORKPLE II easter egg: floppy launcher, CRT power-off, Apple II monitor, clean exit.
- * Reduced motion keeps the floppy still (clickable) and skips the animations.
+ * Reduced motion keeps the floppy still (clickable) and skips the animations; the 'full motion' block runs
+ * the exits again through the full-length CRT animations. The Release Notes / What's New entry points
+ * are in orkple-entry.spec.ts.
  */
 import { test, expect, Page } from '@playwright/test';
-
-async function appReachable(baseURL: string): Promise<boolean> {
-  try {
-    const res = await fetch(baseURL, { method: 'HEAD' });
-    return res.ok || res.status === 302 || res.status === 405;
-  } catch {
-    return false;
-  }
-}
+import { orkpleSetup, log } from './orkple-helpers';
 
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
-test.beforeEach(async ({ baseURL }, testInfo) => {
-  if (!baseURL || !(await appReachable(baseURL))) {
-    testInfo.skip(true, 'ORK3 app not reachable — start docker compose php8 stack');
-  }
-});
+orkpleSetup();
 
-const log = (page: Page) => page.locator('#orkple [role=log]');
-
-async function boot(page: Page) {
-  await page.locator('#orkple-floppy').click();
+async function boot(page: Page, force = false) {
+  // The floppy bobs under full motion, so a pointer click there skips the stability wait.
+  await page.locator('#orkple-floppy').click({ force });
   await expect(page.locator('#orkple')).toBeVisible({ timeout: 10000 });
   await expect(log(page)).toContainText('ORKPLE II', { timeout: 10000 });
 }
@@ -48,8 +37,32 @@ test('floppy is visible bottom-left', async ({ page }) => {
 test('click boots the monitor with boot text', async ({ page }) => {
   await boot(page);
   await expect(page.locator('#orkple canvas')).toBeVisible();
-  await expect(log(page)).toContainText('DOS VERSION 3.3');
+  await expect(log(page)).toContainText('ORKDOS 3.3');
   await expect(log(page)).toContainText('COPYRIGHT AMTGARD');
+});
+
+test('the live log adds one line per entry and never rewrites the lines it already holds', async ({ page }) => {
+  await boot(page);
+  await expect(log(page)).toContainText('TRY TYPING ORK', { timeout: 10000 });
+  // Tag the current last line; it must survive (same node) while new lines are appended after it.
+  await page.evaluate(() => { const l = document.querySelector('#orkple [role=log]')!; (l.lastElementChild as HTMLElement).dataset.mark = '1'; });
+  await type(page, 'hello');
+  await expect(log(page)).toContainText('?SYNTAX ERROR');
+  const r = await page.evaluate(() => {
+    const l = document.querySelector('#orkple [role=log]')!;
+    const kids = Array.from(l.children);
+    const mark = l.querySelector('[data-mark]');
+    return { divs: kids.every((k) => k.tagName === 'DIV'), marked: !!mark, after: mark ? kids.length - 1 - kids.indexOf(mark) : -1, rel: l.getAttribute('aria-relevant') };
+  });
+  expect(r).toMatchObject({ divs: true, marked: true, rel: 'additions' });
+  expect(r.after).toBeGreaterThan(0);
+  // Past LIVE_MAX the oldest lines go, so the log stays bounded.
+  for (let i = 0; i < 20; i++) {
+    await type(page, 'zz' + i);
+    // Keys typed while the terminal prints are dropped: wait for each reply.
+    await expect.poll(() => log(page).innerText()).toMatch(new RegExp('ZZ' + i + '\\s*\\?SYNTAX ERROR\\s*$'));
+  }
+  expect(await log(page).locator(':scope > div').count()).toBeLessThanOrEqual(30);
 });
 
 test('junk gives ?SYNTAX ERROR', async ({ page }) => {
@@ -179,7 +192,8 @@ test('a failed disk read gives ?I/O ERROR and a working prompt', async ({ page }
 // ---- option 2: PLAYERS ----
 
 // A screen is done printing when the log ends on its last line; only then does it take input.
-const endsOn = (page: Page, re: RegExp) => expect(log(page)).toHaveText(re, { timeout: 15000 });
+// innerText, not textContent: the live log is one <div> per line, so only innerText keeps the line breaks.
+const endsOn = (page: Page, re: RegExp) => expect.poll(() => log(page).innerText(), { timeout: 15000 }).toMatch(re);
 
 async function toSearch(page: Page) {
   await toMenu(page);
@@ -266,7 +280,7 @@ test('option 3 logged out says to log in, with a working prompt', async ({ page 
   await expect(log(page)).toContainText('LOG IN TO THE ORK FIRST.');
 });
 
-test('ORK GAMES lists three games; a missing game file gives ?FILE NOT FOUND; a game runs and quits', async ({ page }) => {
+test('ORK GAMES lists all eight games; a missing game file gives ?FILE NOT FOUND; a game runs and quits', async ({ page }) => {
   await page.route(/games\/zork\.js/, (route) => route.fulfill({ status: 404, body: 'no' }));
   await page.route(/games\/trail\.js/, (route) => route.fulfill({
     contentType: 'application/javascript',
@@ -275,7 +289,9 @@ test('ORK GAMES lists three games; a missing game file gives ?FILE NOT FOUND; a 
   await toMenu(page);
   await type(page, '4');
   await endsOn(page, /0\. MAIN MENU\s*$/);
-  await expect(log(page)).toContainText('2. zORK');
+  for (const g of ['1. ORKEGON TRAIL', '2. DUNGEORK', '3. NUMBER MUNCHORKS', '4. MORKMAZE', '5. ASTERORKS', '6. GEM CASTLORKS', '7. FROGGORK', '8. INVADORKS']) {
+    await expect(log(page)).toContainText(g);
+  }
   await type(page, '2');
   await expect(log(page)).toContainText('?FILE NOT FOUND');
   await page.waitForTimeout(300);
@@ -287,24 +303,102 @@ test('ORK GAMES lists three games; a missing game file gives ?FILE NOT FOUND; a 
   await endsOn(page, /0\. MAIN MENU\s*$/);
 });
 
+test.describe('full motion', () => {
+  test.use({ contextOptions: { reducedMotion: 'no-preference' } });
+
+  // The 940/760 ms CRT branches put transforms, inline styles and inert on html/body: every exit must undo them.
+  test('ESC, POWER and EXIT leave the page pristine after the full-length animations', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await boot(page, true);
+    await page.keyboard.press('Escape');
+    await pageIsPristine(page);
+    await boot(page, true);
+    await page.locator('#orkple button', { hasText: /power/i }).click();
+    await pageIsPristine(page);
+    await boot(page, true);
+    await type(page, 'exit');
+    await pageIsPristine(page);
+    expect(errors).toEqual([]);
+  });
+
+  test('ESC pressed during the insert animation does not strand the page', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.locator('#orkple-floppy').click({ force: true });
+    await page.keyboard.press('Escape');
+    // Mid power-off: the page is collapsing and ORKPLE II has not printed its banner yet.
+    expect(await log(page).filter({ hasText: 'ORKPLE II' }).count()).toBe(0);
+    // Either the ESC is ignored and ORKPLE II finishes booting, or it backs out; both must end usable.
+    await expect.poll(async () => {
+      if (await page.locator('#orkple').isVisible()) { return 'open'; }
+      const cls = await page.evaluate(() => document.documentElement.className);
+      return /orkple/.test(cls) ? 'busy' : 'closed';
+    }, { timeout: 10000 }).not.toBe('busy');
+    if (await page.locator('#orkple').count()) {
+      await expect(log(page)).toContainText('ORKPLE II', { timeout: 10000 });
+      await page.keyboard.press('Escape');
+    }
+    await pageIsPristine(page);
+    // And the floppy still works afterwards.
+    await boot(page, true);
+    await page.keyboard.press('Escape');
+    await pageIsPristine(page);
+    expect(errors).toEqual([]);
+  });
+
+  test('ESC on the boot screen, before the DOS banner, shuts down cleanly', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.locator('#orkple-floppy').click({ force: true });
+    await expect(page.locator('#orkple')).toBeVisible({ timeout: 10000 });
+    expect(await log(page).filter({ hasText: 'TRY TYPING ORK' }).count()).toBe(0);
+    await page.keyboard.press('Escape');
+    await pageIsPristine(page);
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('on a touch-only device', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
-  test('stops at the BIOS error, takes no input, and POWER brings the page back', async ({ page }) => {
+  // Touch-only devices get no floppy; the disk still starts from Orkple.insert() (the Release Notes button).
+  async function insertDisk(page: Page) {
+    await page.goto('./index.php?Route=Search');
+    await expect.poll(() => page.evaluate(() => typeof (window as any).Orkple?.insert)).toBe('function');
+    await expect(page.locator('#orkple-floppy-dock')).toHaveCount(0);
+    await page.evaluate(() => (window as any).Orkple.insert());
+    const screen = page.locator('#orkple [role=log]');
+    await expect(screen).toContainText('?NO KEYBOARD ERROR', { timeout: 10000 });
+    return screen;
+  }
+
+  test('stops at the BIOS screen with POWER focused, and POWER brings the page back', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', e => errors.push(e.message));
-    await page.goto('./index.php?Route=Search');
-    await page.locator('#orkple-floppy').tap();
-    const screen = page.locator('#orkple [role=log]');
-    await expect(screen).toContainText('SYSTEM BIOS ERROR', { timeout: 10000 });
-    await expect(screen).toContainText('NO MOUSE DETECTED');
-    await expect(screen).toContainText('NO KEYBOARD DETECTED');
-    await expect(screen).toContainText('BOOT SEQUENCE INTERRUPTED');
+    const screen = await insertDisk(page);
+    await expect(screen).toContainText('ORKPLE ][');
     await expect(screen).toContainText('WORKS BEST ON A DESKTOP');
-    await expect(screen).not.toContainText('DOS VERSION');
+    await expect(screen).toContainText('PRESS POWER OR ESC TO RETURN');
+    await expect(screen).not.toContainText('ORKDOS');
     await expect(page.locator('#orkple input')).toBeDisabled();
+    await expect(page.locator('#orkple button[aria-label="Power off"]')).toBeFocused();
     await page.locator('#orkple button[aria-label="Power off"]').tap();
     await expect(page.locator('#orkple')).toHaveCount(0, { timeout: 10000 });
+    expect(errors).toEqual([]);
+  });
+
+  test('a real key on the BIOS screen boots DOS, but a modifier shortcut does not', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    const screen = await insertDisk(page);
+    await expect(page.locator('#orkple button[aria-label="Power off"]')).toBeFocused();
+    await page.keyboard.press('Control+l');
+    await expect(page.locator('#orkple input')).toBeDisabled();
+    await expect(screen).not.toContainText('ORKDOS');
+    await page.keyboard.press('a');
+    await expect(screen).toContainText('ORKDOS 3.3', { timeout: 10000 });
+    await expect(page.locator('#orkple input')).toBeEnabled();
     expect(errors).toEqual([]);
   });
 });

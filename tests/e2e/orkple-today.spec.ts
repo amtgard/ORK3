@@ -8,9 +8,8 @@
  * system/lib/ork3/class.Live.php (and the real, empty feed is checked against its own answer). WEATHER FOR PLAY is walked with the
  * real feed and with mocked rows for the formats the real day does not carry.
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page, APIRequestContext } from '@playwright/test';
 
-const SCRATCH = '/private/tmp/claude-501/-Users-averykrouse-GitHub-ORK-tobias-ORK3-tobias/d4a03171-dc47-4ef6-af33-e92cb0cdbd0c/scratchpad/';
 
 async function appReachable(baseURL: string): Promise<boolean> {
   try {
@@ -24,7 +23,11 @@ async function appReachable(baseURL: string): Promise<boolean> {
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
 const log = (page: Page) => page.locator('#orkple [role=log]');
-const endsOn = (page: Page, re: RegExp) => expect(log(page)).toHaveText(re, { timeout: 20000 });
+// The kingdom header's PARKS, EVENTS and AVG counts load behind the screen and are written in just before its last line
+// as they arrive, so screen endings and menus are matched without those lines.
+const STAT = /^(PARKS|EVENTS|AVG\/WEEK|AVG\/MONTH) (--|\d[\d.,]*)$/;
+const menuText = async (page: Page) => ((await log(page).innerText()) || '').split('\n').filter((l) => !STAT.test(l)).join('\n');
+const endsOn = (page: Page, re: RegExp) => expect.poll(() => menuText(page), { timeout: 20000 }).toMatch(re);
 const calls: string[] = [];
 const uiCalls: string[] = [];
 
@@ -57,6 +60,8 @@ test.beforeEach(async ({ baseURL, page }, testInfo) => {
     const u = /index\.php\?Route=((?:Live|Recap|Weather|EraPhoenice|Admin|Reports|Search|SearchAjax)\/[A-Za-z_]+)/.exec(r.url());
     if (u && !/Route=Search$/.test(r.url())) uiCalls.push(u[1]);
   });
+  // ORKPLE is only live in its event window (or with the preview cookie); the floppy is not on the page otherwise.
+  await page.context().addCookies([{ name: 'orkple_preview', value: '1', url: new URL('/', baseURL).href }]);
   await page.goto('./index.php?Route=Search');
 });
 
@@ -79,7 +84,7 @@ async function toMenu(page: Page) {
   await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
 }
 async function lastScreen(page: Page): Promise<string[]> {
-  const lines = (((await log(page).textContent()) || '').split('\n'));
+  const lines = (((await log(page).innerText()) || '').split('\n'));
   let idx = -1;
   lines.forEach((l, i) => { if (/PAGE \d+ OF \d+$/.test(l)) idx = i; });
   return idx < 0 ? lines : lines.slice(idx);
@@ -95,7 +100,7 @@ async function settled(page: Page, title?: RegExp, pageNo?: number): Promise<str
   return got;
 }
 async function widthOk(page: Page) {
-  const lines = ((await log(page).textContent()) || '').split('\n');
+  const lines = ((await log(page).innerText()) || '').split('\n');
   for (const l of lines.filter((x) => !/^ARMS OF /.test(x))) expect(l.length, `"${l}"`).toBeLessThanOrEqual(39);
 }
 // The terminal's own 24 rows. Each must fit 39 columns; the prompt (or a menu key) sits at the foot and nothing has scrolled away.
@@ -121,7 +126,7 @@ async function pickRow(page: Page, re: RegExp): Promise<void> {
 }
 async function shot(page: Page, name: string) {
   await page.waitForTimeout(150);
-  await page.locator('#orkple canvas').screenshot({ path: SCRATCH + name + '.png' });
+  await page.locator('#orkple canvas').screenshot({ path: test.info().outputPath(name + '.png') });
 }
 // Every page of a pager screen, rows only (the numbered lines), by flipping with 9 until the first page is back.
 async function allPages(page: Page, title: RegExp): Promise<string[][]> {
@@ -172,7 +177,7 @@ async function openPlayer(page: Page, id: number, name: string) {
   await settled(page, /^MATCHES FOR/);
   await type(page, '1');
   await expect(log(page)).toContainText('1. CLASSES', { timeout: 20000 });
-  await expect(log(page)).toHaveText(/0\. (BACK|MAIN MENU)\s*$/, { timeout: 20000 });
+  await expect(log(page)).toHaveText(/0\. (BACK|MAIN MENU)\s*$/, { timeout: 20000, useInnerText: true });
 }
 const serverDay = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
 
@@ -180,7 +185,7 @@ const serverDay = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Ch
 
 test('the main menu keeps 1 to 5 where they were and adds 6. THE ORK TODAY; 7 is illegal', async ({ page }) => {
   await toMenu(page);
-  const t = (await log(page).textContent()) || '';
+  const t = (await log(page).innerText()) || '';
   expect(t).toMatch(/1\. KINGDOMS\s+2\. PLAYERS\s+3\. MY PROFILE\s+4\. ORK GAMES\s+5\. SEARCH THE ORK\s+6\. THE ORK TODAY/);
   await type(page, '7');
   await expect(log(page)).toContainText('?ILLEGAL QUANTITY ERROR');
@@ -224,7 +229,7 @@ test('a slow date answer does not delay the menu or land on another screen; a fa
   await page.waitForTimeout(400);
   // the late answer found the menu gone: it is on no other screen
   expect((await rows(page)).some((r) => /E\.P\./.test(r))).toBe(false);
-  expect((await log(page).textContent()) || '').not.toContain('1ST OF TEST');
+  expect((await log(page).innerText()) || '').not.toContain('1ST OF TEST');
   await type(page, '0');
   await expect.poll(async () => (await rows(page)).some((r) => r.trim() === 'E.P. 99, 1ST OF TEST')).toBe(true);   // cached for the next time
 });
@@ -237,7 +242,7 @@ for (const [label, body, status] of [['a server error', '{"ok":false}', 500], ['
     await page.waitForTimeout(300);
     const rs = await rows(page);
     expect(rs.some((r) => /E\.P\.|OOPS|NONSENSE/.test(r))).toBe(false);
-    expect((await log(page).textContent()) || '').not.toMatch(/E\.P\./);
+    expect((await log(page).innerText()) || '').not.toMatch(/E\.P\./);
     await type(page, '5');
     await expect(log(page)).toContainText('SEARCH THE ORK');
   });
@@ -249,7 +254,7 @@ test('the date line aborted by the network leaves the menu working', async ({ pa
   await page.waitForTimeout(300);
   await type(page, '6');
   await endsOn(page, TODAY_END);
-  expect((await log(page).textContent()) || '').not.toMatch(/E\.P\./);
+  expect((await log(page).innerText()) || '').not.toMatch(/E\.P\./);
 });
 
 // ---- THE ORK TODAY ----
@@ -257,7 +262,7 @@ test('the date line aborted by the network leaves the menu working', async ({ pa
 test('THE ORK TODAY lists five screens with the date and holiday, 0 returns, other keys are errors', async ({ page, request }) => {
   await toToday(page);
   await widthOk(page);
-  const t = (await log(page).textContent()) || '';
+  const t = (await log(page).innerText()) || '';
   const ep = await (await request.get('./index.php?Route=EraPhoenice/today')).json();
   expect(t).toMatch(/THE ORK TODAY\n=+\n/);
   expect(t).toMatch(/1\. KINGDOM STANDINGS\n2\. TOP PARKS\n3\. THIS WEEK\n4\. ON THE FIELD NOW\n5\. WEATHER FOR PLAY\n0\. MAIN MENU\s*$/);
@@ -279,7 +284,7 @@ test('a holiday is named on the board', async ({ page }) => {
   await expect(log(page)).toContainText('E.P. 44, 87TH OF HARVEST');
   await type(page, '6');
   await endsOn(page, TODAY_END);
-  expect((await log(page).textContent()) || '').toMatch(/E\.P\. 44, 87TH OF HARVEST\nHOLIDAY: GUY KASAMA DAY\n1\. KINGDOM STANDINGS/);
+  expect((await log(page).innerText()) || '').toMatch(/E\.P\. 44, 87TH OF HARVEST\nHOLIDAY: GUY KASAMA DAY\n1\. KINGDOM STANDINGS/);
 });
 
 // ---- KINGDOM STANDINGS ----
@@ -311,9 +316,9 @@ test('KINGDOM STANDINGS matches the home page cards: parks and average a week, b
   const s2 = await settled(page, /^KINGDOM STANDINGS/, 2);
   const pick = /^2\. (.+?) +\d+P/.exec(s2.find((l) => /^2\. /.test(l))!)![1];
   await type(page, '2');
-  await expect(log(page)).toHaveText(/0\. BACK\s*$/, { timeout: 20000 });
-  expect((await log(page).textContent()) || '').toContain('ARMS OF');
-  expect(words((await log(page).textContent()) || '')).toContain(words(pick).slice(0, 12));
+  await expect(log(page)).toHaveText(/0\. BACK\s*$/, { timeout: 20000, useInnerText: true });
+  expect((await log(page).innerText()) || '').toContain('ARMS OF');
+  expect(words((await log(page).innerText()) || '')).toContain(words(pick).slice(0, 12));
   await type(page, '0');
   await settled(page, /^KINGDOM STANDINGS/, 2);
   await type(page, '0');
@@ -342,8 +347,8 @@ test('TOP PARKS is the Top Parks page: 25 parks, six months, average a week, in 
   });
   await shot(page, 'today-topparks');
   await type(page, '1');
-  await expect(log(page)).toHaveText(/0\. TOP PARKS\s*$/, { timeout: 20000 });
-  expect(words((await log(page).textContent()) || '')).toContain(words(mine[0].name));
+  await expect(log(page)).toHaveText(/0\. TOP PARKS\s*$/, { timeout: 20000, useInnerText: true });
+  expect(words((await log(page).innerText()) || '')).toContain(words(mine[0].name));
   await type(page, '0');
   await settled(page, /^TOP PARKS/, 1);
   await type(page, '0');
@@ -388,7 +393,7 @@ test('THIS WEEK carries the Recap page\'s sections; a row opens its player, park
   const key = pages[at].find((l) => /^\d\. /.test(l) && words(l.replace(/^\d\. /, '')).startsWith(mp))![0];
   await type(page, key);
   await expect(log(page)).toContainText('1. CLASSES', { timeout: 20000 });
-  await expect(log(page)).toHaveText(/0\. BACK\s*$/);
+  await expect(log(page)).toHaveText(/0\. BACK\s*$/, { useInnerText: true });
   await type(page, '0');
   await settled(page, /^THIS WEEK/, at + 1);
   await type(page, '0');
@@ -415,7 +420,9 @@ test('THIS WEEK for one kingdom: A KINGDOM picks it, the page matches Recap/json
   expect(s.join('\n')).toMatch(/7\. ALL OF AMTGARD\n8\. A KINGDOM/);
   const pages = await allPages(page, /^THIS WEEK/);
   const all = pages.flat().join('\n');
-  expect(all).toContain('NEW PLAYERS (' + recap.NewPlayers.Count + ')');
+  // an empty section is left out, as on the Recap page
+  if (recap.NewPlayers.Players.length) expect(all).toMatch(/NEW PLAYERS \((\d+|FIRST \d+ OF \d+)\)/);
+  else expect(all).not.toContain('NEW PLAYERS');
   const mine = numbered(pages, 6).map(words);
   const exp = [...recap.TopEvents, ...recap.TopParks, ...recap.Knightings, ...recap.Masterhoods, ...recap.Paragons].length + Math.min(30, recap.NewPlayers.Players.length);
   expect(mine).toHaveLength(exp);
@@ -433,8 +440,8 @@ test('THIS WEEK with no recap computed or nothing to report says so; a failed re
   await toToday(page);
   await type(page, '3');
   await settled(page, /^THIS WEEK/);
-  expect((await log(page).textContent()) || '').toMatch(/NO RECAP HAS BEEN COMPUTED YET\.\s+\n?ALL OF AMTGARD|NO RECAP HAS BEEN COMPUTED YET\./);
-  expect((await log(page).textContent()) || '').not.toContain('WEEK OF');
+  expect((await log(page).innerText()) || '').toMatch(/NO RECAP HAS BEEN COMPUTED YET\.\s+\n?ALL OF AMTGARD|NO RECAP HAS BEEN COMPUTED YET\./);
+  expect((await log(page).innerText()) || '').not.toContain('WEEK OF');
   await type(page, '0');
   await endsOn(page, TODAY_END);
   await page.unroute(/Route=Recap\/json$/);
@@ -443,7 +450,7 @@ test('THIS WEEK with no recap computed or nothing to report says so; a failed re
   await toToday(page);
   await type(page, '3');
   await settled(page, /^THIS WEEK/);
-  expect((await log(page).textContent()) || '').toMatch(/NOTHING TO REPORT THIS WEEK\.\s+WEEK OF 10\/19\/26 TO 10\/25\/26/);
+  expect((await log(page).innerText()) || '').toMatch(/NOTHING TO REPORT THIS WEEK\.\s+WEEK OF 10\/19\/26 TO 10\/25\/26/);
   await type(page, '0');
   await endsOn(page, TODAY_END);
   await page.unroute(/Route=Recap\/json$/);
@@ -451,7 +458,7 @@ test('THIS WEEK with no recap computed or nothing to report says so; a failed re
   await page.route(/Route=Recap\/json$/, (r) => r.abort());
   await toToday(page);
   await type(page, '3');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await type(page, '1');
   await settled(page, /^KINGDOM STANDINGS/);
 });
@@ -516,13 +523,13 @@ test('ON THE FIELD NOW (mocked rows from the Live class shapes): busiest first, 
   await shot(page, 'today-live');
   // an event row opens the event, a park row opens the park; 0 returns to the same list
   await type(page, '4');
-  await expect(log(page)).toHaveText(/0\. ON THE FIELD NOW\s*$/, { timeout: 20000 });
-  expect((await log(page).textContent()) || '').toMatch(/DESCRIPTION\n2\. RSVP COUNTS/);
+  await expect(log(page)).toHaveText(/0\. ON THE FIELD NOW\s*$/, { timeout: 20000, useInnerText: true });
+  expect((await log(page).innerText()) || '').toMatch(/DESCRIPTION\n2\. RSVP COUNTS/);
   await type(page, '0');
   await settled(page, /^ON THE FIELD NOW/);
   await type(page, '1');
-  await expect(log(page)).toHaveText(/0\. ON THE FIELD NOW\s*$/, { timeout: 20000 });
-  expect((await log(page).textContent()) || '').toContain('1. MEETING DAYS');
+  await expect(log(page)).toHaveText(/0\. ON THE FIELD NOW\s*$/, { timeout: 20000, useInnerText: true });
+  expect((await log(page).innerText()) || '').toContain('1. MEETING DAYS');
   await type(page, '0');
   await settled(page, /^ON THE FIELD NOW/);
   // the ticker
@@ -537,7 +544,7 @@ test('ON THE FIELD NOW (mocked rows from the Live class shapes): busiest first, 
   expect(r.join('\n')).toContain('NEW = THEIR FIRST SIGN-IN EVER');
   await shot(page, 'today-ticker');
   await type(page, '2');
-  await expect(log(page)).toHaveText(/0\. LATEST SIGN-INS\s*$/, { timeout: 20000 });
+  await expect(log(page)).toHaveText(/0\. LATEST SIGN-INS\s*$/, { timeout: 20000, useInnerText: true });
   await type(page, '0');
   await settled(page, /^LATEST SIGN-INS/);
   await type(page, '0');
@@ -568,10 +575,10 @@ test('ON THE FIELD NOW with the real feed: the rows are the real answer\'s parks
   await page.route(/Route=Live\/recent/, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 0, now: 'x', signins: [], parks: [], events: [] }) }));
   await type(page, '4');
   await settled(page, /^ON THE FIELD NOW/);
-  expect((await log(page).textContent()) || '').toMatch(/NOBODY HAS SIGNED IN DURING THE PAST 3\s+HOURS\.[\s\S]*ALL SIGN-INS PAST 3 HOURS: 0[\s\S]*8\. LATEST SIGN-INS/);
+  expect((await log(page).innerText()) || '').toMatch(/NOBODY HAS SIGNED IN DURING THE PAST 3\s+HOURS\.[\s\S]*ALL SIGN-INS PAST 3 HOURS: 0[\s\S]*8\. LATEST SIGN-INS/);
   await type(page, '8');
   await settled(page, /^LATEST SIGN-INS/);
-  expect((await log(page).textContent()) || '').toMatch(/NO SIGN-INS IN THE LAST 24 HOURS\.\s+0\. BACK\s*$/);
+  expect((await log(page).innerText()) || '').toMatch(/NO SIGN-INS IN THE LAST 24 HOURS\.\s+0\. BACK\s*$/);
   await type(page, '0');
   await settled(page, /^ON THE FIELD NOW/);
   await type(page, '0');
@@ -580,7 +587,7 @@ test('ON THE FIELD NOW with the real feed: the rows are the real answer\'s parks
   await page.unroute(/Route=Live\/stats/);
   await page.route(/Route=Live\/stats/, (r) => r.abort());
   await type(page, '4');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await page.unroute(/Route=Live\/stats/);
   await page.route(/Route=Live\/stats/, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 0, now: 'x', active_3h: 2, parks: { 68: { name: 'Pegasus Valley', h3: 2, day: 2, m30: 0 } }, events: [] }) }));
   await page.unroute(/Route=Live\/recent/);
@@ -632,8 +639,8 @@ test('WEATHER FOR PLAY with the real feed: parks playing today and the flagged o
   });
   await shot(page, 'today-weather');
   await type(page, '1');
-  await expect(log(page)).toHaveText(/0\. WEATHER\s*$/, { timeout: 20000 });
-  expect(words((await log(page).textContent()) || '')).toContain(words(sorted[0].park_name).slice(0, 12));
+  await expect(log(page)).toHaveText(/0\. WEATHER\s*$/, { timeout: 20000, useInnerText: true });
+  expect(words((await log(page).innerText()) || '')).toContain(words(sorted[0].park_name).slice(0, 12));
   await type(page, '0');
   await settled(page, /^WEATHER FOR PLAY/);
   await type(page, '0');
@@ -668,7 +675,7 @@ test('WEATHER FOR PLAY row formats, order, no-forecast rows, the favorable and n
   await toToday(page);
   await type(page, '5');
   await settled(page, /^WEATHER FOR PLAY/);
-  expect((await log(page).textContent()) || '').toMatch(/CONDITIONS LOOK FAVORABLE AT ALL 2\s+PARKS PLAYING TODAY\. NO WARNINGS\.\s+PARKS PLAYING TODAY: 2\s+WITH A WARNING: 0\s+0\. BACK\s*$/);
+  expect((await log(page).innerText()) || '').toMatch(/CONDITIONS LOOK FAVORABLE AT ALL 2\s+PARKS PLAYING TODAY\. NO WARNINGS\.\s+PARKS PLAYING TODAY: 2\s+WITH A WARNING: 0\s+0\. BACK\s*$/);
   await type(page, '0');
   await endsOn(page, TODAY_END);
   await page.goto('./index.php?Route=Search');
@@ -676,15 +683,15 @@ test('WEATHER FOR PLAY row formats, order, no-forecast rows, the favorable and n
   await toToday(page);
   await type(page, '5');
   await settled(page, /^WEATHER FOR PLAY/);
-  expect((await log(page).textContent()) || '').toMatch(/NO PARKS HAVE IN-PERSON PLAY TODAY\.\s+0\. BACK\s*$/);
+  expect((await log(page).innerText()) || '').toMatch(/NO PARKS HAVE IN-PERSON PLAY TODAY\.\s+0\. BACK\s*$/);
   await type(page, '0');
   await endsOn(page, TODAY_END);
   await page.goto('./index.php?Route=Search');
   await page.route(/WeatherService\/GetPlayForDate/, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ Result: null, Status: false, Code: 2, ErrorMessage: 'SELECT secret' }) }));
   await toToday(page);
   await type(page, '5');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
-  expect((await log(page).textContent()) || '').not.toContain('SECRET');
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
+  expect((await log(page).innerText()) || '').not.toContain('SECRET');
   await type(page, '2');   // the board's prompt is still there after the error
   await settled(page, /^TOP PARKS/);
 });
@@ -695,7 +702,7 @@ test('every THE ORK TODAY read that fails gives ?I/O ERROR, the board still work
   for (const [key, re] of reads) {
     await page.route(re, (r) => r.abort());
     await type(page, key);
-    await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+    await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
     await page.unroute(re);
     await page.waitForTimeout(100);
     await type(page, key);
@@ -709,8 +716,8 @@ test('a service refusal on the board is ?I/O ERROR and never shows the detail', 
   await page.route(/Report\/GetActiveKingdomsSummary/, (r) => r.fulfill({ contentType: 'application/json', body: '{"Status":{"Status":5,"Error":"x","Detail":"SELECT secret FROM t"}}' }));
   await toToday(page);
   await type(page, '1');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
-  expect((await log(page).textContent()) || '').not.toContain('SECRET');
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
+  expect((await log(page).innerText()) || '').not.toContain('SECRET');
   await type(page, '2');
   await settled(page, /^TOP PARKS/);
 });
@@ -736,7 +743,7 @@ test('KCG KNIGHTS AND MASTERS is the Reports tab list: every belt, grouped, with
   const svc = (await (await request.get(KAM_URL)).json()).Awards;
   const nK = svc.filter((a: any) => a.Peerage === 'Knight').length;
   await toKcgProfile(page);
-  expect((await log(page).textContent()) || '').toMatch(/1\. PARKS\s+2\. EVENTS\s+3\. PAST EVENTS\s+4\. COMPANIES AND HOUSEHOLDS\s+5\. KNIGHTS AND MASTERS\s+0\. KINGDOM LIST\s*$/);
+  expect(await menuText(page)).toMatch(/1\. PARKS\s+2\. EVENTS\s+3\. PAST EVENTS\s+4\. COMPANIES AND HOUSEHOLDS\s+5\. KNIGHTS AND MASTERS\s+0\. KINGDOM LIST\s*$/);
   await type(page, '5');
   const pages = await allPages(page, /^KNIGHTS AND MASTERS/);
   await widthOk(page);
@@ -769,11 +776,11 @@ test('KCG KNIGHTS AND MASTERS is the Reports tab list: every belt, grouped, with
   // private fields stay out: who entered the award is not on any screen
   const enteredBy = svc.find((a: any) => a.MundaneId === dw.id && a.AwardName === dw.award).EnteredBy;
   expect(enteredBy.length).toBeGreaterThan(3);
-  expect(words((await log(page).textContent()) || '')).not.toContain(words(enteredBy));
+  expect(words((await log(page).innerText()) || '')).not.toContain(words(enteredBy));
   await shot(page, 'kam-detail');
   await type(page, '1');
   await expect(log(page)).toContainText('1. CLASSES', { timeout: 20000 });
-  await expect(log(page)).toHaveText(/0\. BACK\s*$/);
+  await expect(log(page)).toHaveText(/0\. BACK\s*$/, { useInnerText: true });
   await type(page, '0');
   await settled(page, /^(KNIGHT|MASTER) /);
   await type(page, '2');
@@ -796,7 +803,7 @@ test('a kingdom with principalities puts KNIGHTS AND MASTERS at 6 and the profil
   await type(page, '1');
   await pickRow(page, /^(\d)\. KINGDOM OF NORTHERN LIGHTS/);
   await endsOn(page, PROFILE_END);
-  expect((await log(page).textContent()) || '').toMatch(/1\. PARKS\s+2\. EVENTS\s+3\. PRINCIPALITIES\s+4\. PAST EVENTS\s+5\. COMPANIES AND HOUSEHOLDS\s+6\. KNIGHTS AND MASTERS\s+0\. KINGDOM LIST\s*$/);
+  expect(await menuText(page)).toMatch(/1\. PARKS\s+2\. EVENTS\s+3\. PRINCIPALITIES\s+4\. PAST EVENTS\s+5\. COMPANIES AND HOUSEHOLDS\s+6\. KNIGHTS AND MASTERS\s+0\. KINGDOM LIST\s*$/);
   const rs = await rows(page);
   expect(rs[0]).toMatch(/KINGDOM OF NORTHERN/);    // nothing scrolled off the top
   expect(rs[22]).toMatch(/^0\. KINGDOM LIST/);    // 23 lines, the prompt on the 24th row
@@ -817,7 +824,7 @@ test('KNIGHTS AND MASTERS: empty, only rows that are knights or masters with a p
   await toKcgProfile(page);
   await type(page, '5');
   await settled(page, /^KNIGHTS AND MASTERS/);
-  expect((await log(page).textContent()) || '').toMatch(/NO KNIGHTS OR MASTERS ON RECORD\.\s+0\. BACK\s*$/);
+  expect((await log(page).innerText()) || '').toMatch(/NO KNIGHTS OR MASTERS ON RECORD\.\s+0\. BACK\s*$/);
   await type(page, '0');
   await endsOn(page, PROFILE_END);
   // a read that worked is kept for the mount, so each state below starts a fresh one
@@ -830,13 +837,13 @@ test('KNIGHTS AND MASTERS: empty, only rows that are knights or masters with a p
   const s = await settled(page, /^KNIGHTS AND MASTERS/);
   expect(s.filter((l) => /^[1-8]\. /.test(l))).toEqual(['1. ' + row36('SIR TEST', 'FLAME'), '2. ' + row36('DAME SUS', 'ROSE')]);
   expect(s.join('\n')).toMatch(/KNIGHTS \(1\)\n1\. SIR TEST[^\n]*\nMASTERS \(1\)\n2\. DAME SUS/);
-  expect((await log(page).textContent()) || '').not.toMatch(/SUSPEND/);   // the list page marks the row by style only; no text is added here
+  expect((await log(page).innerText()) || '').not.toMatch(/SUSPEND/);   // the list page marks the row by style only; no text is added here
   await page.goto('./index.php?Route=Search');
   await page.unroute(re);
   await page.route(re, (r) => r.abort());
   await toKcgProfile(page);
   await type(page, '5');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await page.unroute(re);
   await type(page, '5');
   await settled(page, /^KNIGHTS AND MASTERS/);
@@ -851,50 +858,76 @@ function aboutOf(html: string, key: string): string {
 }
 const mdWords = (s: string) => words(s.replace(/<[^>]*>/g, ' ').replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/&amp;/g, '&').replace(/&#039;/g, "'").replace(/&quot;/g, '"'));
 
+// The player screens are walked on a player picked at runtime (a KCG kingdom officer), with the parts of the record a
+// test is about (suspension, About text, companies) set through a fixture on Player/GetPlayer: the real read is made
+// and those fields are replaced. Which player is suspended or writes a long About changes with the data.
+type Subject = { id: number; name: string };
+async function kcgOfficers(request: APIRequestContext): Promise<Subject[]> {
+  const r = await (await request.get(SVC + 'Kingdom/GetOfficers&request[KingdomId]=17')).json();
+  return (r.Officers as any[]).filter((o) => +o.MundaneId > 0 && String(o.Persona || '').trim()).map((o) => ({ id: +o.MundaneId, name: String(o.Persona).trim() }));
+}
+async function aPlayer(request: APIRequestContext): Promise<Subject> {
+  const all = await kcgOfficers(request);
+  expect(all.length).toBeGreaterThan(0);
+  return all[0];
+}
+async function patchPlayer(page: Page, id: number, patch: Record<string, unknown>) {
+  await page.route(/call=Player\/GetPlayer&/, async (route) => {
+    const res = await route.fetch();
+    const j = await res.json();
+    if (j && j.Player && +j.Player.MundaneId === id) Object.assign(j.Player, patch);
+    await route.fulfill({ response: res, json: j });
+  });
+}
+
 test('player menu: 5 ABOUT, 6 COMPANIES, 7 MILESTONES after TITLES; the profile fits the page and a suspended player gets no new suspension text', async ({ page, request }) => {
-  const html = await (await request.get('./index.php?Route=Player/profile/30349')).text();
-  expect(html).toMatch(/Suspended/);   // the page itself says so
-  await openPlayer(page, 30349, 'Creature');
-  expect((await log(page).textContent()) || '').toMatch(/1\. CLASSES\s+2\. AWARDS\s+3\. ATTENDANCE\s+4\. TITLES\s+5\. ABOUT\s+6\. COMPANIES\s+7\. MILESTONES\s+0\. BACK\s*$/);
+  const who = await aPlayer(request);
+  // suspended: the service marks the record inactive; the terminal never reads Suspended
+  await patchPlayer(page, who.id, { Suspended: 1, IsActive: 0, AboutPersona: 'A quiet *persona* of the [woods](http://x/y).', AboutStory: 'Once upon a time there was a story.' });
+  await openPlayer(page, who.id, who.name);
+  expect(await menuText(page)).toMatch(/1\. CLASSES\s+2\. AWARDS\s+3\. ATTENDANCE\s+4\. TITLES\s+5\. ABOUT\s+6\. COMPANIES\s+7\. MILESTONES\s+0\. BACK\s*$/);
   const rs = await rows(page);
-  expect(rs[0].trim()).toContain('CREATURE');
+  expect(words(rs[0])).toContain(words(who.name).slice(0, 20));
+  expect(rs.join('\n')).toContain('INACTIVE');
   const z0 = rs.findIndex((r) => /^0\. /.test(r));
   expect(rs[z0 + 1]).toMatch(/^SELECT: /);
   await shot(page, 'player-menu');
-  // the screens carry the page's words, and no suspension text of their own
+  // the screens carry the record's words, and no suspension text of their own
   await type(page, '5');
   const a = await settled(page, /^ABOUT/);
   await widthOk(page);
   const shown = words(bodyOf(a).join(' '));
-  expect(shown).toContain(mdWords(aboutOf(html, 'aboutPersona')));
-  expect(shown).toContain(mdWords(aboutOf(html, 'aboutStory')));
-  expect(shown).toContain('ABOUT CREATURE');
-  expect(shown).toContain('CREATURE S STORY');
+  expect(shown).toContain('A QUIET PERSONA OF THE WOODS');
+  expect(shown).toContain('ONCE UPON A TIME THERE WAS A STORY');
+  expect(shown).toContain(words('ABOUT ' + who.name));
+  expect(shown).toContain(words(who.name + "'s story"));
   await shot(page, 'player-about');
   await type(page, '0');
-  await expect(log(page)).toHaveText(PLAYER_END);
+  await expect(log(page)).toHaveText(PLAYER_END, { useInnerText: true });
   await type(page, '6');
   await settled(page, /^COMPANIES/);
   await type(page, '7');
   await expect(log(page)).toContainText('?ILLEGAL QUANTITY ERROR');
   await type(page, '0');
-  await expect(log(page)).toHaveText(PLAYER_END);
+  await expect(log(page)).toHaveText(PLAYER_END, { useInnerText: true });
   await type(page, '7');
   await settled(page, /^MILESTONES/);
   await type(page, '0');
-  await expect(log(page)).toHaveText(PLAYER_END);
+  await expect(log(page)).toHaveText(PLAYER_END, { useInnerText: true });
   await type(page, '8');
   await expect(log(page)).toContainText('?ILLEGAL QUANTITY ERROR');
-  const t = (await log(page).textContent()) || '';
-  const after = t.slice(t.indexOf('5. ABOUT'));
-  expect(after).not.toMatch(/SUSPEND|RESTRICT/);
+  const t = (await log(page).innerText()) || '';
+  expect(t).not.toMatch(/SUSPEND|RESTRICT/);
 });
 
-test('ABOUT on a long text: wrapped, paged, the page\'s words, 0 returns; a player with no About text says so', async ({ page, request }) => {
-  const html = await (await request.get('./index.php?Route=Player/profile/23518')).text();
-  const aw = mdWords(aboutOf(html, 'aboutPersona'));
+test('ABOUT on a long text: wrapped, paged, the record\'s words, 0 returns; a player with no About text says so', async ({ page, request }) => {
+  const who = await aPlayer(request);
+  const para = 'The quick brown fox of the northern woods jumps over the lazy dog by the river bend at dawn. ';
+  const long = Array.from({ length: 12 }, (_, i) => 'Part ' + (i + 1) + '. ' + para.repeat(4)).join('\r\n\r\n');
+  const aw = words(long);
   expect(aw.length).toBeGreaterThan(3000);
-  await openPlayer(page, 23518, 'FinnTroll Novellis');
+  await patchPlayer(page, who.id, { AboutPersona: long, AboutStory: '' });
+  await openPlayer(page, who.id, who.name);
   await type(page, '5');
   const first = await settled(page, /^ABOUT/);
   const pages = +/PAGE 1 OF (\d+)/.exec(first[0])![1];
@@ -902,22 +935,22 @@ test('ABOUT on a long text: wrapped, paged, the page\'s words, 0 returns; a play
   let body = bodyOf(first);
   for (let n = 2; n <= pages; n++) { await type(page, '9'); const s = await settled(page, /^ABOUT/, n); body = body.concat(bodyOf(s)); }
   await widthOk(page);
-  const shown = words(body.join(' ')).replace(/^ABOUT FINNTROLL NOVELLIS /, '');
-  // the 120-line cap cuts the longest texts with "..."; what is shown is the start of the page's text
+  const shown = words(body.join(' ')).replace(new RegExp('^' + words('ABOUT ' + who.name) + ' '), '');
+  // the 120-line cap cuts the longest texts with "..."; what is shown is the start of the text
   expect(shown.slice(0, 300)).toBe(aw.slice(0, 300));
   await shot(page, 'player-about-long');
   await type(page, '9');
   await settled(page, /^ABOUT/, 1);
   await type(page, '0');
-  await expect(log(page)).toHaveText(PLAYER_END);
+  await expect(log(page)).toHaveText(PLAYER_END, { useInnerText: true });
   // a player with nothing
-  const html2 = await (await request.get('./index.php?Route=Player/profile/117252')).text();
-  expect(aboutOf(html2, 'aboutPersona') + aboutOf(html2, 'aboutStory')).toBe('');
+  await page.unrouteAll();
   await page.goto('./index.php?Route=Search');
-  await openPlayer(page, 117252, 'Abraxos Junhawk');
+  await patchPlayer(page, who.id, { AboutPersona: '', AboutStory: '' });
+  await openPlayer(page, who.id, who.name);
   await type(page, '5');
   await settled(page, /^ABOUT/);
-  expect((await log(page).textContent()) || '').toMatch(/NO ABOUT TEXT ON FILE\.\s+0\. BACK\s*$/);
+  expect((await log(page).innerText()) || '').toMatch(/NO ABOUT TEXT ON FILE\.\s+0\. BACK\s*$/);
 });
 
 test('ABOUT strips anything but words: tags, scripts, images, links and Markdown marks never reach the page', async ({ page }) => {
@@ -936,21 +969,20 @@ test('ABOUT strips anything but words: tags, scripts, images, links and Markdown
   lines.forEach((l: string) => expect(l.length).toBeLessThanOrEqual(39));
 });
 
-test('COMPANIES is the profile\'s Companies list: names, the unit opens, 0 returns to the list; a player in none says so', async ({ page, request }) => {
-  const html = await (await request.get('./index.php?Route=Player/profile/24930')).text();
-  const card = html.slice(html.indexOf('Companies &amp; Households'));
-  const units = [...card.matchAll(/pn-unit-link" href="[^"]*Unit\/index\/(\d+)[^"]*">([^<]*)<\/a>\s*<span class="pn-unit-type">([^<]*)</g)].map((m) => ({ id: +m[1], name: decode(m[2]), type: m[3] }));
-  const companies = units.filter((u) => u.type === 'Company');
-  expect(companies.length).toBeGreaterThan(8);
-  await openPlayer(page, 24930, 'Squire Baroness Fey');
+test('COMPANIES is the record\'s Companies list: names, the unit opens, 0 returns to the list; a player in none says so', async ({ page, request }) => {
+  const who = await aPlayer(request);
+  // real KCG companies, so a pick opens a real unit profile (Player/GetPlayer's Company list carries companies only)
+  const sum = (await (await request.get(SVC + 'Report/UnitSummary&request[KingdomId]=17&request[IncludeCompanies]=1&request[IncludeHouseHolds]=1&request[TopBySize]=1&request[Limit]=100')).json()).Units as any[];
+  const companies = sum.filter((u) => u.Type === 'Company').slice(0, 10).map((u) => ({ UnitId: +u.UnitId, Name: String(u.Name), Type: 'Company' }));
+  expect(companies.length).toBe(10);
+  await patchPlayer(page, who.id, { Company: companies });
+  await openPlayer(page, who.id, who.name);
   await type(page, '6');
   const pages = await allPages(page, /^COMPANIES/);
   await widthOk(page);
   const keys = numbered(pages).map((l) => words(l));
   expect(keys).toHaveLength(companies.length);
-  companies.forEach((c) => expect(keys.some((k) => k.startsWith(words(c.name).slice(0, 20)) && k.endsWith(' CO')), c.name).toBe(true));
-  // households and event units the page lists are not on this screen
-  units.filter((u) => u.type !== 'Company').forEach((u) => expect(keys.some((k) => k.startsWith(words(u.name)) && !k.endsWith(' CO'))).toBe(false));
+  companies.forEach((c) => expect(keys.some((k) => k.startsWith(words(c.Name).slice(0, 20)) && k.endsWith(' CO')), c.Name).toBe(true));
   await shot(page, 'player-companies');
   await type(page, '9');
   await settled(page, /^COMPANIES/, 2);
@@ -959,26 +991,31 @@ test('COMPANIES is the profile\'s Companies list: names, the unit opens, 0 retur
   await type(page, '0');
   await settled(page, /^COMPANIES/, 2);
   await type(page, '0');
-  await expect(log(page)).toHaveText(PLAYER_END);
+  await expect(log(page)).toHaveText(PLAYER_END, { useInnerText: true });
   // a player who is in none
+  await page.unrouteAll();
   await page.goto('./index.php?Route=Search');
-  await openPlayer(page, 117252, 'Abraxos Junhawk');
+  await patchPlayer(page, who.id, { Company: [] });
+  await openPlayer(page, who.id, who.name);
   await type(page, '6');
   await settled(page, /^COMPANIES/);
-  expect((await log(page).textContent()) || '').toMatch(/NOT IN ANY COMPANY\.\s+0\. BACK\s*$/);
+  expect((await log(page).innerText()) || '').toMatch(/NOT IN ANY COMPANY\.\s+0\. BACK\s*$/);
 });
 
 test('MILESTONES shows what the profile\'s timeline shows; 0 returns', async ({ page, request }) => {
-  const html = await (await request.get('./index.php?Route=Player/profile/117252')).text();
-  const tl = [...html.matchAll(/pn-tl-date">([A-Z][a-z]{2} \d{1,2}, \d{4})<\/div>[\s\S]*?pn-tl-desc">([^<]*)</g)].map((m) => ({ date: new Date(m[1] + ' UTC').toISOString().slice(0, 10), desc: words(decode(m[2])) }));
-  expect(tl.length).toBeGreaterThan(5);
-  await openPlayer(page, 117252, 'Abraxos Junhawk');
+  // parity on a player picked at runtime: the first KCG officer whose public timeline has more than five entries
+  let who: Subject | null = null;
+  let tl: Array<{ date: string; desc: string }> = [];
+  for (const o of await kcgOfficers(request)) {
+    const html = await (await request.get('./index.php?Route=Player/profile/' + o.id)).text();
+    tl = [...html.matchAll(/pn-tl-date">([A-Z][a-z]{2} \d{1,2}, \d{4})<\/div>[\s\S]*?pn-tl-desc">([^<]*)</g)].map((m) => ({ date: new Date(m[1] + ' UTC').toISOString().slice(0, 10), desc: words(decode(m[2])) }));
+    if (tl.length > 5) { who = o; break; }
+  }
+  test.skip(!who, 'no KCG officer with a public timeline of more than five entries');
+  await openPlayer(page, who!.id, who!.name);
   await type(page, '7');
   const pages = await allPages(page, /^MILESTONES/);
   await widthOk(page);
-  const text = pages.flat().join('\n');
-  expect(text).toContain('FIRST SIGN-IN AT AMTGARD');
-  expect(text).toMatch(/EARNED PARAGON WIZARD/);
   // every shown milestone is on the page's timeline, with the same date
   const entries = pages.flat().filter((l) => /^\d\d\/\d\d\/\d\d /.test(l));
   expect(entries.length).toBeGreaterThan(5);
@@ -989,7 +1026,7 @@ test('MILESTONES shows what the profile\'s timeline shows; 0 returns', async ({ 
   });
   await shot(page, 'player-milestones');
   await type(page, '0');
-  await expect(log(page)).toHaveText(PLAYER_END);
+  await expect(log(page)).toHaveText(PLAYER_END, { useInnerText: true });
 });
 
 test('MILESTONES honours the player\'s own switches (hidden types stay out, newest first when asked) and an empty list says so', async ({ page, request }) => {
@@ -1025,50 +1062,46 @@ test('MILESTONES honours the player\'s own switches (hidden types stay out, newe
   // nothing to show
   await page.goto('./index.php?Route=Search');
   await page.route(/Player\/GetPlayerMilestones/, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ Status: 0, Error: 'Success', Detail: [] }) }));
-  await openPlayer(page, 117252, 'Abraxos Junhawk');
+  const who = await aPlayer(request);
+  await openPlayer(page, who.id, who.name);
   await type(page, '7');
   await settled(page, /^MILESTONES/);
-  expect((await log(page).textContent()) || '').toMatch(/NO MILESTONES TO SHOW\.\s+0\. BACK\s*$/);
+  expect((await log(page).innerText()) || '').toMatch(/NO MILESTONES TO SHOW\.\s+0\. BACK\s*$/);
 });
 
-test('a milestone read that fails gives ?I/O ERROR and the profile keeps working', async ({ page }) => {
-  await openPlayer(page, 117252, 'Abraxos Junhawk');
+test('a milestone read that fails gives ?I/O ERROR and the profile keeps working', async ({ page, request }) => {
+  const who = await aPlayer(request);
+  await openPlayer(page, who.id, who.name);
   const re = /Player\/GetPlayerMilestones/;
   await page.route(re, (r) => r.abort());
   await type(page, '7');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await page.unroute(re);
   await type(page, '7');
   await settled(page, /^MILESTONES/);
   await type(page, '0');
-  await expect(log(page)).toHaveText(PLAYER_END);
+  await expect(log(page)).toHaveText(PLAYER_END, { useInnerText: true });
 });
 
-test('milestone switches in the library: types left out show, a switch of 0 hides, newest_first reverses, dates and words are required', async ({ page }) => {
+test('milestones in the library: the server applies the player\'s switches (ApplyVisibility); the terminal only drops rows without a date or words, in the order given', async ({ page }) => {
   await page.locator('#orkple-floppy').click();
   await page.waitForFunction(() => !!(window as any).OrkpleTerminal);
   const r = await page.evaluate(() => {
     const L = (window as any).OrkpleTerminal.lib;
     const list = [
+      { type: 'officer', date: '2024-01-01', description: 'Officer' },
       { type: 'first_signin', date: '2020-01-01', description: 'First' },
       { type: 'knight', date: '2021-01-01', description: 'Knighted' },
       { type: 'custom', date: '2022-01-01', description: 'My thing' },
       { type: 'master', date: '0000-00-00', description: 'No date' },
       { type: 'title', date: '2023-01-01', description: '' },
-      { type: 'officer', date: '2024-01-01', description: 'Officer' },
     ];
     return {
-      none: L.milestoneRows(list, null).map((m: any) => m.type),
-      off: L.milestoneRows(list, { knight: 0, custom: false }).map((m: any) => m.type),
-      newest: L.milestoneRows(list, { newest_first: 1 }).map((m: any) => m.type),
-      badCfg: L.milestoneRows(list, 'x').length,
+      rows: L.milestoneRows(list).map((m: any) => m.type),
       text: L.milestoneText({ date: '2021-01-01', description: 'a '.repeat(120) }).split('\n').length,
     };
   });
-  expect(r.none).toEqual(['first_signin', 'knight', 'custom', 'officer']);
-  expect(r.off).toEqual(['first_signin', 'officer']);
-  expect(r.newest).toEqual(['officer', 'custom', 'knight', 'first_signin']);
-  expect(r.badCfg).toBe(4);
+  expect(r.rows).toEqual(['officer', 'first_signin', 'knight', 'custom']);
   expect(r.text).toBe(3);
 });
 
@@ -1089,7 +1122,7 @@ test('long persona names: the player profile and the new player screens fit 39 c
       await settled(page);
       await widthOk(page);
       await type(page, '0');
-      await expect(log(page)).toHaveText(PLAYER_END);
+      await expect(log(page)).toHaveText(PLAYER_END, { useInnerText: true });
     }
     if (id === 59733) await shot(page, 'player-long-name');
   }

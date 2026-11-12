@@ -1,10 +1,12 @@
 /* ASTERORKS: an ORKPLE II game. An archer, a wrapping field, and a horde that breaks apart when hit.
    Runs against the terminal's game host; touches nothing but window.OrkpleGames.
-   The host sends key presses only (no key-up), so every control is a tap: A/D turn, W run, S brake, SPACE shoot. */
+   A/D turn (a tap turns one step; holding keeps turning at about 180 degrees a second when the host reports held keys),
+   W run, S brake, SPACE shoot. */
 (function () {
     'use strict';
 
     var TICK = 40, DT = TICK / 1000;
+    var TURN_MS = 250;				// one 45 degree step per 250ms while A or D is held: 180 degrees a second
     // The field is drawn as pixel sprites on the host's 280x192 pixel grid (a text cell is 7x8 pixels).
     // Row 0 is the status line and row 23 the message line, so the field is the 280x176 pixels between them.
     var W = 280, H_PX = 176, TOP_PX = 8;
@@ -206,7 +208,8 @@
 
     function start(H) {
         var G = {
-            mode: 'BUSY', round: 1, score: 0, lives: 3, nextExtra: EXTRA_EVERY, best: H.load('best'),
+            mode: 'BUSY', round: 1, score: 0, lives: 3, nextExtra: EXTRA_EVERY, best: H.load('best', H.isBest),
+            turnAct: '', turnMs: 0,
             p: { x: START_X, y: START_Y, vx: 0, vy: 0, face: 2, alive: true, safeMs: 0, brakeMs: 0, runnerMs: 0, waitMs: 0, dieMs: 0 },
             zombies: [], arrows: [], bolts: [], necro: null, necroMs: 0,
             total: 0, spawned: 0, msg: '', msgMs: 0, ms: 0, wasMode: '', sfxQ: [], sfxWait: 0, blink: 0, deaths: 0, hits: 0, sprites: [], clock: 0, stage: 0, stageMsg: '', fx: [], hbMs: 0, hbFlip: 0, warMs: 0, warFlip: 0, won: false
@@ -451,6 +454,20 @@
             if (!p.alive) { return; }
             p.face = mod(p.face + dirn, 8);
             sfx([[300, 15]], true);
+        }
+        function turnHeld(act) { return !!H.held && (act === 'LEFT' ? H.held('A') || H.held('LEFT') : H.held('D') || H.held('RIGHT')); }
+        // A press turns at once; while the key stays down, one more step every TURN_MS.
+        // The OS auto-repeat presses that arrive meanwhile are ignored, so a hold turns at a steady rate.
+        function pressTurn(act) {
+            if (G.turnAct === act && turnHeld(act)) { return; }
+            G.turnAct = act; G.turnMs = 0;
+            turn(act === 'LEFT' ? -1 : 1);
+        }
+        function holdTurn() {
+            if (!G.turnAct) { return; }
+            if (!turnHeld(G.turnAct)) { G.turnAct = ''; G.turnMs = 0; return; }
+            G.turnMs += TICK;
+            while (G.turnMs >= TURN_MS) { G.turnMs -= TURN_MS; turn(G.turnAct === 'LEFT' ? -1 : 1); }
         }
         function run() {
             var p = G.p, d = FACE[p.face], len = Math.sqrt(d[0] * d[0] + d[1] * d[1]), sp;
@@ -748,9 +765,11 @@
                     break;
                 case 'READY':
                     G.ms += TICK;
+                    holdTurn();
                     if (G.ms >= 1000) { G.mode = 'PLAY'; G.layMs = 900; flash('LAY ON!', 1200); }
                     break;
                 case 'PLAY':
+                    holdTurn();
                     updatePlay();
                     break;
                 case 'CLEAR':
@@ -846,7 +865,7 @@
                     break;
                 case 'PLAY':
                 case 'READY':
-                    if (act === 'LEFT') { turn(-1); } else if (act === 'RIGHT') { turn(1); } else if (act === 'RUN') { run(); } else if (act === 'BRAKE') { brake(); } else if (key === 'Q') { askQuit(); } else if (G.mode === 'PLAY') {
+                    if (act === 'LEFT' || act === 'RIGHT') { pressTurn(act); } else if (act === 'RUN') { run(); } else if (act === 'BRAKE') { brake(); } else if (key === 'Q') { askQuit(); } else if (G.mode === 'PLAY') {
                         if (key === 'SPACE') { shoot(); } else if (key === 'H') { callRunner(); } else if (key === 'P') {
                             G.mode = 'HOLD';
                             draw();
@@ -866,7 +885,7 @@
             }
         }
 
-        start.dbg = G;
+        if (window.OrkpleStrict) { start.dbg = G; }   // tests only
         defAll();
         H.every(TICK, tick);
         H.keys(onKey);
@@ -881,7 +900,8 @@
             WIN_ROUND: WIN_ROUND, STAGES: STAGES, orientOf: orientOf, stageFor: stageFor, rot90: rot90, countFor: countFor, speedFor: speedFor, speedMul: speedMul, splitTotal: splitTotal, circlesOf: circlesOf, wdist: wdist,
             BASE_ZOMBIES: BASE_ZOMBIES, BASE_SPEED: BASE_SPEED, GROWTH: GROWTH, SIZE_MUL: SIZE_MUL, SIZE_PTS: SIZE_PTS, FACE: FACE,
             W: W, H: H_PX, TOP: TOP_PX, START_X: START_X, START_Y: START_Y, MAX_ARROWS: MAX_ARROWS, ARROW_RANGE: ARROW_RANGE, MAX_RUN: MAX_RUN
-        },
-        _dbg: function () { return start.dbg; }
+        }
     };
+    // State hook for the specs, attached only when the test flag is set.
+    if (window.OrkpleStrict) { window.OrkpleGames.asterorks._dbg = function () { return start.dbg; }; }
 }());

@@ -12,7 +12,8 @@ const SRC = path.join(__dirname, '../../orkui/template/revised-frontend/orkple/g
 const FONT = '@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_ !"#$%&\'()*+,-./0123456789:;<=>?z';
 
 function load(opts: { reduced?: boolean; seed?: number; best?: any } = {}) {
-  const win: any = {};
+  // The _dbg state hook is attached only under the test flag (window.OrkpleStrict).
+  const win: any = { OrkpleStrict: true };
   vm.runInNewContext(fs.readFileSync(SRC, 'utf8'), { window: win });
   const game = win.OrkpleGames.munchorks;
   let rs = opts.seed ?? 1234, tick: any = null, key: any = null;

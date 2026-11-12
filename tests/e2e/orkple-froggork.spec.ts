@@ -3,43 +3,17 @@
  * The field is pixel art on the host sprite layer; the tests drive the game through hops and read its state via _dbg.
  */
 import { test, expect, Page } from '@playwright/test';
+import { orkpleSetup, log, bootGame, tick } from './orkple-helpers';
 
-async function appReachable(baseURL: string): Promise<boolean> {
-  try {
-    const res = await fetch(baseURL, { method: 'HEAD' });
-    return res.ok || res.status === 302 || res.status === 405;
-  } catch {
-    return false;
-  }
-}
+orkpleSetup();
 
-test.beforeEach(async ({ baseURL }, testInfo) => {
-  if (!baseURL || !(await appReachable(baseURL))) {
-    testInfo.skip(true, 'ORK3 app not reachable — start docker compose php8 stack');
-  }
-});
-
-const log = (page: Page) => page.locator('#orkple [role=log]');
 const state = (page: Page) => page.evaluate(() => {
   const g = (window as any).OrkpleGames.froggork._dbg();
   return { mode: g.mode, score: g.score, lives: g.lives, band: g.p ? g.p.band : -1, x: g.p ? g.p.x : -1, level: g.level, cause: g.cause, filled: g.filled, carry: g.p ? g.p.carry : false, ms: g.ms, timeMs: g.timeMs, lastSay: g.lastSay };
 });
 
 async function openGame(page: Page) {
-  await page.goto('./index.php?Route=Search');
-  // A DOM click, not a pointer click: it removes pointer and bob-animation timing. orkple.spec.ts covers the real click.
-  await page.locator('#orkple-floppy').evaluate((b: HTMLElement) => b.click());
-  await expect(log(page)).toContainText('TRY TYPING ORK', { timeout: 15000 });
-  await page.waitForTimeout(500);
-  await page.keyboard.type('ork');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
-  await page.keyboard.type('4');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('7. FROGGORK', { timeout: 10000 });
-  await page.keyboard.type('7');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('F R O G G O R K', { timeout: 10000 });
+  await bootGame(page, 'froggork', { ready: 'F R O G G O R K' });
 }
 
 // Clear the lanes of anything that could hurt, and stop the random extras, so a test controls what the field does.
@@ -128,7 +102,7 @@ for (const motion of ['reduce', 'no-preference'] as const) {
       expect(r0.band).toBe(5);
       expect(r0.mode).toBe('PLAY');
       await shot(page, tag + 'ride');
-      await page.waitForTimeout(500);
+      await tick(page, 500);
       const r1 = await state(page);
       expect(r1.band).toBe(5);
       expect(r1.x).toBeGreaterThan(r0.x + 8);
@@ -171,7 +145,7 @@ for (const motion of ['reduce', 'no-preference'] as const) {
         await expect(log(page)).toContainText(names[lv], { timeout: 10000 });
         await page.keyboard.press('Space');
         await toPlay(page);
-        await page.waitForTimeout(700);
+        await tick(page, 700);
         await shot(page, tag + 'level' + (lv + 1));
         await calmField(page);
         // Four tables are already signed; the player hops into the last one.
@@ -214,10 +188,10 @@ test.describe('polish', () => {
         g.ev = c === 'lurker' ? { slot: 1, kind: 'lurker', ms: 900 } : null; g.evNext = 1e9;
         g.cause = c; g.mode = 'DYING'; g.ms = 0;
       }, cause);
-      await page.waitForTimeout(260);
+      await tick(page, 260);
       if (cause === 'mud' || cause === 'ball' || cause === 'tent') { await shot(page, 'death-' + cause); }
       await page.evaluate(() => { (window as any).OrkpleGames.froggork._dbg().ms = 1000; });
-      await page.waitForTimeout(120);
+      await tick(page, 120);
       await expect.poll(async () => (await state(page)).mode, { timeout: 4000 }).toMatch(/READY|PLAY/);
       await calmField(page);
     }
@@ -294,7 +268,7 @@ test.describe('game over', () => {
     for (let i = 0; i < 60; i++) {
       if ((await state(page)).mode === 'OVER') { break; }
       await page.evaluate(() => { const g = (window as any).OrkpleGames.froggork._dbg(); if (g.mode === 'PLAY') { g.timeMs = 40; } });
-      await page.waitForTimeout(250);
+      await tick(page, 250);
     }
     await expect(log(page)).toContainText('OUT OF LIVES', { timeout: 15000 });
     await expect.poll(async () => (await state(page)).mode).toBe('OVER');

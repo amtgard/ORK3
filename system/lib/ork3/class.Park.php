@@ -647,6 +647,48 @@ class Park extends Ork3
         return $out;
     }
 
+    /**
+     * Does any of these park days (GetParkDays rows) meet in person on $date (Y-m-d)?
+     * Online park days never count. Same recurrence rules as the park page's calendar.
+     */
+    public static function park_meets_on(array $parkDays, $date)
+    {
+        $d = DateTime::createFromFormat('!Y-m-d', substr((string)$date, 0, 10));
+        if (!$d) {
+            return false;
+        }
+        $names = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        $wd = (int)$d->format('w');
+        $dom = (int)$d->format('j');
+        foreach ($parkDays as $pd) {
+            if (!is_array($pd) || !empty($pd['Online'])) {
+                continue;
+            }
+            $wn = array_search(strtolower((string)($pd['WeekDay'] ?? '')), $names, true);
+            switch ($pd['Recurrence'] ?? '') {
+                case 'weekly':
+                    $hit = $wn !== false && $wn === $wd;
+                    break;
+                case 'week-of-month':
+                    $hit = $wn !== false && $wn === $wd && (int)ceil($dom / 7) === (int)($pd['WeekOfMonth'] ?? 0);
+                    break;
+                case 'every-x-weeks':
+                    $next = (clone $d)->modify('+1 day');
+                    $hit = !empty(self::ExpandEveryXWeeks($pd['StartDate'] ?? '', (int)($pd['WeekInterval'] ?? 0), $d, $next));
+                    break;
+                case 'monthly':
+                    $hit = (int)($pd['MonthDay'] ?? 0) === $dom;
+                    break;
+                default:
+                    $hit = false;
+            }
+            if ($hit) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static function CalculateNextParkDay($recurrence, $week_of_month, $month_day, $week_day, $from_date = null, $start_date = null, $week_interval = 0)
     {
         if (is_null($from_date)) {

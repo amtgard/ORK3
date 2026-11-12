@@ -10,6 +10,22 @@ class Controller_EventRsvpAjax extends Controller
         }
     }
 
+    // The signed-in player's own upcoming RSVPs. Keyed on the session only:
+    // there is no MundaneId parameter, so it cannot be pointed at anyone else.
+    public function mine($p = null)
+    {
+        header('Content-Type: application/json');
+        $this->requireLogin();
+
+        $this->load_model('Event');
+        $list = $this->Event->get_my_upcoming_rsvps(
+            (int)$this->session->user_id,
+            (string)($this->session->token ?? '')
+        );
+        echo json_encode(['status' => 0, 'UpcomingRsvps' => $list]);
+        exit;
+    }
+
     public function set($p = null)
     {
         header('Content-Type: application/json');

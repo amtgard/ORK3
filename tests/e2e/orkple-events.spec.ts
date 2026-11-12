@@ -6,9 +6,8 @@
  */
 import { test, expect, Page } from '@playwright/test';
 
-const SCRATCH = '/private/tmp/claude-501/-Users-averykrouse-GitHub-ORK-tobias-ORK3-tobias/d4a03171-dc47-4ef6-af33-e92cb0cdbd0c/scratchpad/';
 const PARK = 1049;
-const KFC = { eid: 17767, did: 8535 };      // Kingdom Fall Coronation: a 4 day event, 179 sign-ins, no schedule
+const KFC = { eid: 17767, did: 8535 };      // Kingdom Fall Coronation 10/08/26: a 4 day event with sign-ins, no schedule
 const TOURNEY = { eid: 18762, did: 9321 };  // Kingdom Tournament at Angler's Rift: a two item schedule, no sign-ins
 
 async function appReachable(baseURL: string): Promise<boolean> {
@@ -23,7 +22,11 @@ async function appReachable(baseURL: string): Promise<boolean> {
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
 const log = (page: Page) => page.locator('#orkple [role=log]');
-const endsOn = (page: Page, re: RegExp) => expect(log(page)).toHaveText(re, { timeout: 20000 });
+// The kingdom header's PARKS, EVENTS and AVG counts load behind the screen and are written in just before its last line
+// as they arrive, so screen endings and menus are matched without those lines.
+const STAT = /^(PARKS|EVENTS|AVG\/WEEK|AVG\/MONTH) (--|\d[\d.,]*)$/;
+const menuText = async (page: Page) => ((await log(page).innerText()) || '').split('\n').filter((l) => !STAT.test(l)).join('\n');
+const endsOn = (page: Page, re: RegExp) => expect.poll(() => menuText(page), { timeout: 20000 }).toMatch(re);
 const calls: string[] = [];
 
 test.beforeEach(async ({ baseURL, page }, testInfo) => {
@@ -36,6 +39,8 @@ test.beforeEach(async ({ baseURL, page }, testInfo) => {
     const m = /Json\/index\.php\?call=([^&]+)/.exec(r.url());
     if (m) calls.push(decodeURIComponent(m[1]));
   });
+  // ORKPLE is only live in its event window (or with the preview cookie); the floppy is not on the page otherwise.
+  await page.context().addCookies([{ name: 'orkple_preview', value: '1', url: new URL('/', baseURL).href }]);
   await page.goto('./index.php?Route=Search');
 });
 
@@ -64,7 +69,7 @@ async function toMenu(page: Page) {
   await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
 }
 async function lastScreen(page: Page): Promise<string[]> {
-  const lines = (((await log(page).textContent()) || '').split('\n'));
+  const lines = (((await log(page).innerText()) || '').split('\n'));
   let idx = -1;
   lines.forEach((l, i) => { if (/PAGE \d+ OF \d+$/.test(l)) idx = i; });
   return idx < 0 ? lines : lines.slice(idx);
@@ -80,7 +85,7 @@ async function settled(page: Page, title?: RegExp, pageNo?: number): Promise<str
   return got;
 }
 async function widthOk(page: Page) {
-  const lines = ((await log(page).textContent()) || '').split('\n');
+  const lines = ((await log(page).innerText()) || '').split('\n');
   for (const l of lines) expect(l.length, `"${l}"`).toBeLessThanOrEqual(39);
 }
 async function pickRow(page: Page, re: RegExp, first = 1): Promise<void> {
@@ -140,13 +145,13 @@ async function toPark(page: Page) {
 
 test('the kingdom profile opens the calendar: dated rows, 9 is the next month, 7 the previous, 0 goes back', async ({ page }) => {
   await toKcgProfile(page);
-  expect((await log(page).textContent()) || '').toMatch(/2\. EVENTS\s+3\. PAST EVENTS\s+4\. COMPANIES AND HOUSEHOLDS\s+5\. KNIGHTS AND MASTERS\s+0\. KINGDOM LIST/);
+  expect(await menuText(page)).toMatch(/2\. EVENTS\s+3\. PAST EVENTS\s+4\. COMPANIES AND HOUSEHOLDS\s+5\. KNIGHTS AND MASTERS\s+0\. KINGDOM LIST/);
   await type(page, '2');
   let s = await settled(page, CAL);
   await widthOk(page);
   expect(s[0]).toMatch(/^KCG EVENTS [A-Z]{3} \d{4} +PAGE 1 OF \d+$/);
   expect(s.join('\n')).toMatch(/7\. PREVIOUS MONTH\s+8\. PARK DAYS: OFF\s+9\. (MORE|NEXT MONTH \([A-Z]{3}\))\s+0\. BACK/);
-  await page.locator('#orkple canvas').screenshot({ path: SCRATCH + 'events-calendar.png' });
+  await page.locator('#orkple canvas').screenshot({ path: test.info().outputPath('events-calendar.png') });
 
   s = await gotoMonth(page, 'OCT', 2026);
   const rows = s.filter((l) => /^[1-6]\. /.test(l));
@@ -186,7 +191,7 @@ test('rows of every type: park days off by default, on with 8; a park day opens 
   await gotoMonth(page, 'AUG', 2026);
   await pickRow(page, /^(\d)\. 08\/02 PH: QUEST DAY/);
   await endsOn(page, /CALENDAR ITEM +PAGE 1 OF 1[\s\S]*0\. CALENDAR\s*$/);
-  const t = (await log(page).textContent()) || '';
+  const t = (await log(page).innerText()) || '';
   expect(t).toContain('PH: QUEST DAY');
   expect(t).toMatch(/SUN 08\/02\/26 1:00 PM\s+TO 4:00 PM/);
   expect(t).toContain('PARK-LEVEL CALENDAR ITEM');
@@ -239,7 +244,7 @@ test('an empty month says so, and a failed read gives ?I/O ERROR with the prompt
   // a failure on the next month
   await page.route(re, (route) => route.abort());
   await type(page, '9');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await page.unroute(re);
   await page.waitForTimeout(200);
   await type(page, '9');
@@ -250,7 +255,7 @@ test('an empty month says so, and a failed read gives ?I/O ERROR with the prompt
   // a status:1 reply is a failure too
   await page.route(re, (route) => route.fulfill({ contentType: 'application/json', body: '{"status":1,"error":"Invalid date range"}' }));
   await type(page, '9');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
   await page.unroute(re);
 });
 
@@ -258,7 +263,7 @@ test('an empty month says so, and a failed read gives ?I/O ERROR with the prompt
 
 test('EVENT DETAIL: name, dates, place and arms; the menu; back to the calendar month', async ({ page }) => {
   await toKfc(page);
-  const t = (await log(page).textContent()) || '';
+  const t = (await log(page).innerText()) || '';
   const screen = t.slice(t.lastIndexOf('ARMS OF'));
   expect(screen).toContain('ARMS OF KINGDOM FALL CORONATION (KFC)');
   expect(screen).toContain('CORONATION');
@@ -269,7 +274,7 @@ test('EVENT DETAIL: name, dates, place and arms; the menu; back to the calendar 
   for (const [n, name] of ['DESCRIPTION', 'RSVP COUNTS', 'SCHEDULE', 'WHO CAME'].entries()) expect(screen).toContain(`${n + 1}. ${name}`);
   expect(screen).toContain('0. CALENDAR');
   await widthOk(page);
-  await page.locator('#orkple canvas').screenshot({ path: SCRATCH + 'events-detail.png' });
+  await page.locator('#orkple canvas').screenshot({ path: test.info().outputPath('events-detail.png') });
   // junk and an unlisted digit keep the prompt working
   await type(page, '9');
   await expect(log(page)).toContainText('?ILLEGAL QUANTITY ERROR');
@@ -320,7 +325,7 @@ test('WHO CAME matches the real attendance table, a persona opens the profile, 0
   expect(s[0]).toMatch(new RegExp('^WHO CAME \\(' + n + '\\) +PAGE 1 OF ' + Math.ceil(n / 8) + '$'));
   expect(s.filter((l) => /^[1-8]\. /.test(l)).length).toBe(8);
   await widthOk(page);
-  await page.locator('#orkple canvas').screenshot({ path: SCRATCH + 'events-who-came.png' });
+  await page.locator('#orkple canvas').screenshot({ path: test.info().outputPath('events-who-came.png') });
   // every sign-in persona of the page is in ours, paging through
   const want = [...html.matchAll(/<tr data-att-id=[\s\S]*?<td><a href="[^"]*Player\/profile\/\d+">([^<]*)<\/a><\/td>/g)].map((m) => m[1].replace(/&amp;/g, '&').replace(/&#0?39;/g, "'").normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase());
   const got: string[] = [];
@@ -375,7 +380,7 @@ test('SCHEDULE: day pages, times, place and leads match the real event page; an 
   expect(t).toContain('AT MAIN FIELD');
   expect(t).toContain('LEAD HANK THE TANK');
   await widthOk(page);
-  await page.locator('#orkple canvas').screenshot({ path: SCRATCH + 'events-schedule.png' });
+  await page.locator('#orkple canvas').screenshot({ path: test.info().outputPath('events-schedule.png') });
   await type(page, '0');
   await endsOn(page, EVENT_END);
   // no sign-ins: WHO CAME is empty, not an error
@@ -390,7 +395,7 @@ test('event detail parity with the real page: dates, place, description words, s
   expect(html).toContain('Oct 11, 2026');
   expect(html).toMatch(/Culpeper/);
   await toKfc(page);
-  const t = (await log(page).textContent()) || '';
+  const t = (await log(page).innerText()) || '';
   expect(t).toContain('THU 10/08/26');
   expect(t).toContain('SUN 10/11/26');
   expect(t).toContain('CULPEPER, VIRGINIA');
@@ -432,9 +437,11 @@ test('kingdom PAST EVENTS: newest first, only events that are over, sign-in coun
   }
   expect(Math.abs(total - past.length)).toBeLessThanOrEqual(2);   // the day the window turns over may differ by an event
   expect(pages).toBeGreaterThan(5);
-  // the KFC row (10/08/26, 179 sign-ins)
+  // the KFC row (10/08/26), with the report's own sign-in count (it moves with late sign-ins)
+  const kfc = rep.Events.find((e: any) => +e.DetailId === KFC.did);
+  expect(+kfc.AttendanceCount).toBeGreaterThan(0);
   await type(page, '9');
-  await pickRow(page, /^(\d)\. 10\/08\/26 KINGDOM FALL CORON.* 179$/);
+  await pickRow(page, new RegExp('^(\\d)\\. 10\\/08\\/26 KINGDOM FALL CORON.* ' + kfc.AttendanceCount + '$'));
   await endsOn(page, /4\. WHO CAME\s+0\. PAST EVENTS\s*$/);
   await type(page, '0');
   await settled(page, /^PAST EVENTS/);
@@ -527,7 +534,7 @@ test('every event read that fails gives ?I/O ERROR, the menu still works, and a 
   for (const [re, item, title] of fail) {
     await page.route(re, (route) => route.abort());
     await type(page, String(item));
-    await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+    await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
     await page.unroute(re);
     await page.waitForTimeout(200);
     await type(page, String(item));
@@ -539,7 +546,7 @@ test('every event read that fails gives ?I/O ERROR, the menu still works, and a 
   for (const r of [{ status: 404, body: '{"ok":false,"error":"Event not found"}' }, { status: 200, body: '{"ok":false}' }]) {
     await page.route(/EventEmbed\/schedule/, (route) => route.fulfill({ status: r.status, contentType: 'application/json', body: r.body }));
     await type(page, '3');
-    await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+    await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+(?:DISK READ FAILED|THE ORK IS SLOW TODAY)\. TRY AGAIN\.\s*$/);
     await page.unroute(/EventEmbed\/schedule/);
     await type(page, '1');   // a good read resets the error count (three in a row redraw the screen)
     await settled(page, /DESCRIPTION/);
@@ -566,7 +573,7 @@ test('an event that is gone gives ?FILE NOT FOUND, a failed header read gives ?I
   await page.waitForTimeout(200);
   await pickRow(page, /^(\d)\. 10\/08 KINGDOM FALL CORONATION/);
   await endsOn(page, EVENT_END);
-  expect((await log(page).textContent()) || '').toContain('ARMS OF KINGDOM FALL CORONATION');
+  expect((await log(page).innerText()) || '').toContain('ARMS OF KINGDOM FALL CORONATION');
   for (const r of opt) await page.unroute(r);
 });
 
@@ -602,12 +609,12 @@ test('PAST EVENTS lists a draft the report cannot tell from the rest, but it doe
   await type(page, '1');
   await pickRow(page, /^(\d)\. KINGDOM OF NORTHERN LIGHTS/);
   await endsOn(page, /0\. KINGDOM LIST\s*$/);
-  const menu = (await log(page).textContent()) || '';
+  const menu = (await log(page).innerText()) || '';
   await type(page, /4\. PAST EVENTS/.test(menu) ? '4' : '3');
   await settled(page, /^PAST EVENTS/);
   await pickRow(page, /^(\d)\. 08\/25\/26 NL ONLINE CREDIT 2026/);
   await endsOn(page, /READING DISK\.\.\.\s+\?FILE NOT FOUND\s*$/);
-  expect((await log(page).textContent()) || '').not.toContain('ARMS OF NL ONLINE CREDIT');
+  expect((await log(page).innerText()) || '').not.toContain('ARMS OF NL ONLINE CREDIT');
 });
 
 // ---- widths ----
@@ -662,55 +669,27 @@ test('nothing over 39 columns or 23 rows prints, even for very long names and re
 
 // ---- extras: AT FIELD NOW, NEXT UP, host.keys noRepeat ----
 
-test('park AT FIELD NOW shows only when today is an in-person park day, by the page\'s own rules', async ({ page, request }) => {
-  const head = await request.get('./index.php?Route=Search');
-  // the app runs on America/Chicago time (config.dist.php): its "today" is that date
-  const ymd = new Date(head.headers()['date']).toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
-  const dow = new Date(ymd + 'T00:00:00Z').getUTCDay();
-  const wd = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][dow];
-  const other = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][(dow + 3) % 7];
-  const day = (name: string, extra: any = {}) => ({ ParkDayId: 1, ParkId: PARK, Recurrence: 'weekly', WeekOfMonth: 0, WeekDay: name, MonthDay: 0, StartDate: '1000-01-01', WeekInterval: 0, Time: '12:00:00', Purpose: 'park-day', Description: '', Online: 0, ...extra });
-  const open = async (days: any[], field: number) => {
-    await page.route(/call=Park\/GetParkDays/, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ Status: { Status: 0 }, ParkDays: days }) }));
-    await page.route(/call=Report\/GetParkFieldCountToday/, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ Status: { Status: 0 }, Count: field }) }));
+test('park AT FIELD NOW shows only when the server says today is a park day and someone is on the field', async ({ page }) => {
+  // Whether today is an in-person park day is the server's rule (Park::park_meets_on behind Report/GetParkFieldCountToday);
+  // the terminal shows the count only when IsParkDay is set and the count is above zero.
+  const open = async (isParkDay: number, field: number) => {
+    const re = /call=Report\/GetParkFieldCountToday/;
+    await page.route(re, (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ Status: { Status: 0 }, Count: field, Today: '2026-11-02', IsParkDay: isParkDay }) }));
     await page.goto('./index.php?Route=Search');
     await toPark(page);
-    const t = (await log(page).textContent()) || '';
-    await page.unroute(/call=Park\/GetParkDays/);
-    await page.unroute(/call=Report\/GetParkFieldCountToday/);
+    const t = (await log(page).innerText()) || '';
+    await page.unroute(re);
     return t.slice(t.lastIndexOf('ARMS OF'));
   };
-  expect(await open([day(wd)], 7)).toContain('AT FIELD NOW 7');
-  expect(await open([day(other)], 7)).not.toContain('AT FIELD NOW');
-  expect(await open([day(wd, { Online: 1 })], 7)).not.toContain('AT FIELD NOW');   // an online day does not count
-  expect(await open([day(wd)], 0)).not.toContain('AT FIELD NOW');                    // nobody yet: the page hides it too
-  // the rule for every recurrence, against fixed dates (2026-11-02 is a Monday)
-  const r = await page.evaluate(() => {
-    const m = (window as any).OrkpleTerminal.lib.parkMeetsOn;
-    const d = (x: any) => Object.assign({ Online: 0, StartDate: '1000-01-01', WeekInterval: 0, WeekOfMonth: 0, MonthDay: 0 }, x);
-    return [
-      m([d({ Recurrence: 'weekly', WeekDay: 'Monday' })], '2026-11-02'),
-      m([d({ Recurrence: 'weekly', WeekDay: 'Monday' })], '2026-11-03'),
-      m([d({ Recurrence: 'week-of-month', WeekDay: 'Monday', WeekOfMonth: 1 })], '2026-11-02'),
-      m([d({ Recurrence: 'week-of-month', WeekDay: 'Monday', WeekOfMonth: 2 })], '2026-11-02'),
-      m([d({ Recurrence: 'week-of-month', WeekDay: 'Monday', WeekOfMonth: 2 })], '2026-11-09'),
-      m([d({ Recurrence: 'every-x-weeks', WeekDay: 'Monday', WeekInterval: 2, StartDate: '2026-10-19' })], '2026-11-02'),
-      m([d({ Recurrence: 'every-x-weeks', WeekDay: 'Monday', WeekInterval: 2, StartDate: '2026-10-19' })], '2026-11-09'),
-      m([d({ Recurrence: 'every-x-weeks', WeekDay: 'Monday', WeekInterval: 2, StartDate: '2026-11-16' })], '2026-11-02'),
-      m([d({ Recurrence: 'monthly', MonthDay: 2 })], '2026-11-02'),
-      m([d({ Recurrence: 'monthly', MonthDay: 3 })], '2026-11-02'),
-      m([d({ Recurrence: 'weekly', WeekDay: 'Monday', Online: 1 })], '2026-11-02'),
-      m([], '2026-11-02'), m(null, '2026-11-02'),
-    ];
-  });
-  expect(r).toEqual([true, false, true, false, true, true, false, false, true, false, false, false, false]);
+  expect(await open(1, 7)).toContain('AT FIELD NOW 7');
+  expect(await open(0, 7)).not.toContain('AT FIELD NOW');   // not a park day (or an online one): no count
+  expect(await open(1, 0)).not.toContain('AT FIELD NOW');   // nobody yet: the page hides it too
 });
 
-test('AT FIELD NOW follows the page: every KCG park\'s header agrees with its own page on whether today is a park day', async ({ page, request }) => {
-  await loadTerminal(page);
+test('AT FIELD NOW follows the page: every KCG park\'s IsParkDay agrees with its own page on whether today is a park day', async ({ request }) => {
   const head = await request.get('./index.php?Route=Search');
   const today = new Date(head.headers()['date']).toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
-  // The page uses each park's own timezone and the terminal uses server time, so for the hour between
+  // The page uses each park's own timezone and the service uses server time, so for the hour between
   // midnight Eastern and midnight Central they name different days. Nobody is on the field then.
   const eastern = new Date(head.headers()['date']).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   test.skip(today !== eastern, 'Eastern and Central are on different dates right now');
@@ -718,11 +697,10 @@ test('AT FIELD NOW follows the page: every KCG park\'s header agrees with its ow
   expect(parks.length).toBeGreaterThan(5);
   const disagree: string[] = [];
   for (const p of parks) {
-    const days = (await (await request.get(`../orkservice/Json/index.php?call=Park/GetParkDays&request[ParkId]=${p.ParkId}`)).json()).ParkDays;
+    const svc = await (await request.get(`../orkservice/Json/index.php?call=Report/GetParkFieldCountToday&request[ParkId]=${p.ParkId}`)).json();
     const html = await (await request.get(`./index.php?Route=Park/profile/${p.ParkId}`)).text();
     const pageSays = /pk-stat-label">Park Day Today</.test(html);
-    const ours = await page.evaluate(([d, t]) => (window as any).OrkpleTerminal.lib.parkMeetsOn(d, t), [days, today] as [any, string]);
-    if (pageSays !== ours) disagree.push(`${p.ParkName}: page ${pageSays}, ours ${ours}`);
+    if (pageSays !== (+svc.IsParkDay === 1)) disagree.push(`${p.ParkName}: page ${pageSays}, service ${svc.IsParkDay}`);
   }
   expect(disagree).toEqual([]);
 });
@@ -737,12 +715,13 @@ test('MY AMTGARD: NEXT UP shows when the RSVPs read works and is left out, not (
     await endsOn(page, /4\. TITLES\s+5\. MY AMTGARD\s+6\. ABOUT\s+7\. COMPANIES\s+8\. MILESTONES\s+0\. MAIN MENU\s*$/);
     await type(page, '5');
     await endsOn(page, /FULL DASHBOARD: THE MODERN ORK\s+0\. BACK\s*$/);
-    const t = (await log(page).textContent()) || '';
+    const t = (await log(page).innerText()) || '';
     return t.slice(t.lastIndexOf('MY AMTGARD\n'));
   };
-  const re = /call=Event\/GetUpcomingRsvps/;
-  // refused, as the pending API guard does for an anonymous call (status 5)
-  await page.route(re, (r) => r.fulfill({ contentType: 'application/json', body: '{"Status":{"Status":5,"Error":"Not authorized","Detail":null}}' }));
+  // NEXT UP reads the signed-in session's own route, which takes no player id
+  const re = /Route=EventRsvpAjax\/mine/;
+  // refused, as the route does for a visitor who is not signed in (status 5)
+  await page.route(re, (r) => r.fulfill({ contentType: 'application/json', body: '{"status":5,"error":"Not logged in"}' }));
   let t = await myAmtgard();
   expect(t).not.toContain('NEXT UP');
   expect(t).not.toContain('(UNAVAILABLE)');
@@ -750,12 +729,12 @@ test('MY AMTGARD: NEXT UP shows when the RSVPs read works and is left out, not (
   expect(t).toContain('LATEST AWARD');
   await page.unroute(re);
   // empty list: the block shows NONE
-  await page.route(re, (r) => r.fulfill({ contentType: 'application/json', body: '{"Status":{"Status":0},"UpcomingRsvps":[]}' }));
+  await page.route(re, (r) => r.fulfill({ contentType: 'application/json', body: '{"status":0,"UpcomingRsvps":[]}' }));
   t = await myAmtgard();
   expect(t).toMatch(/NEXT UP\s+NONE/);
   await page.unroute(re);
   // one RSVP
-  await page.route(re, (r) => r.fulfill({ contentType: 'application/json', body: '{"Status":{"Status":0},"UpcomingRsvps":[{"EventName":"Test Fair","EventStart":"2027-03-04 10:00:00"}]}' }));
+  await page.route(re, (r) => r.fulfill({ contentType: 'application/json', body: '{"status":0,"UpcomingRsvps":[{"EventName":"Test Fair","EventStart":"2027-03-04 10:00:00"}]}' }));
   t = await myAmtgard();
   expect(t).toMatch(/NEXT UP\s+03\/04\/27 TEST FAIR/);
   await page.unroute(re);

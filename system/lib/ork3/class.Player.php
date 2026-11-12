@@ -1015,6 +1015,11 @@ class Player extends Ork3
                     'CorporaQualifiedUntil' => $this->mundane->corpora_qualified_until,
                     'DuesThrough' => $old_dues_through, //Ork3::$Lib->treasury->dues_through($this->mundane->mundane_id, $this->mundane->kingdom_id, $this->mundane->park_id, 0),
                 'LastDuesThrough' => $last_dues_through,
+                    // Derived on server time so every client shows the profile's own words.
+                    'DuesStatus' => self::dues_status($dues, $old_dues_through, $last_dues_through),
+                    'IsActive' => ((int)$this->mundane->active === 1 && (int)$this->mundane->suspended !== 1) ? 1 : 0,
+                    'ReeveStatus' => self::qualification_status($this->mundane->reeve_qualified, $this->mundane->reeve_qualified_until),
+                    'CorporaStatus' => self::qualification_status($this->mundane->corpora_qualified, $this->mundane->corpora_qualified_until),
                     'HasHeraldry' => $this->mundane->has_heraldry,
                     'Heraldry' => $heraldry['Url'] . '?' . strtotime($this->mundane->modified),
                     'HasImage' => $this->mundane->has_image,
@@ -1150,6 +1155,45 @@ class Player extends Ork3
         return $response;
     }
 
+    /**
+     * 'paid' (a dues-for-life row or dues through today or later), 'expired' (dues on file, none current) or 'none'.
+     */
+    private static function dues_status(array $activeDues, $duesThrough, $lastDuesThrough)
+    {
+        foreach ($activeDues as $d) {
+            if ((int)($d['DuesForLife'] ?? 0) === 1 && (int)($d['Revoked'] ?? 0) === 0) {
+                return 'paid';
+            }
+        }
+        if (!empty($duesThrough) && $duesThrough !== '0000-00-00' && strtotime($duesThrough) >= time()) {
+            return 'paid';
+        }
+        return !empty($lastDuesThrough) ? 'expired' : 'none';
+    }
+
+    /**
+     * A reeve/corpora qualification: 'no' (not qualified), 'no_end' (qualified, no end date),
+     * 'until' (qualified to a date still ahead) or 'expired' (that date has passed).
+     */
+    private static function qualification_status($qualified, $until)
+    {
+        if ((int)$qualified === 0) {
+            return 'no';
+        }
+        if (empty($until) || $until === '0000-00-00') {
+            return 'no_end';
+        }
+        return strtotime($until) < time() ? 'expired' : 'until';
+    }
+
+    /**
+     * An award row counts as a title when it carries an officer role or is flagged a title.
+     */
+    private static function is_title_effective($officerRole, $isTitle)
+    {
+        return !in_array($officerRole, ['none', null]) || (int)$isTitle === 1;
+    }
+
     public function AwardsForPlayer($request)
     {
         if (valid_id($request['AwardsId'])) {
@@ -1213,6 +1257,7 @@ class Player extends Ork3
                         'IsLadder' => $_isPseudoLadder ? 1 : $r->is_ladder,
                         'IsPseudoLadder' => $_isPseudoLadder ? 1 : 0,
                         'IsTitle' => $r->is_title,
+                        'IsTitleEffective' => self::is_title_effective($r->officer_role, $r->is_title) ? 1 : 0,
                         'TitleClass' => $r->title_class,
                         'OfficerRole' => $r->officer_role,
                         'Peerage' => $r->peerage,
@@ -1363,8 +1408,11 @@ class Player extends Ork3
      *   Awards?: ?list,
      *   BeltlinePeers?: ?list,
      *   BeltlineAssociates?: ?list,
-     *   IncludeCustom?: bool
+     *   IncludeCustom?: bool,
+     *   ApplyVisibility?: bool
      * } $request
+     * ApplyVisibility drops the milestone types the player switched off in their
+     * design milestone_config and puts the newest first when they asked for that.
      * @return array{Status: int, Error?: string, Detail: list<array<string, mixed>>}
      */
     public function GetPlayerMilestones(array $request)
@@ -1568,7 +1616,31 @@ class Player extends Ork3
             return strtotime($a['date'] ?? '') - strtotime($b['date'] ?? '');
         });
 
+        if (!empty($request['ApplyVisibility']) && valid_id($mundaneId)) {
+            $milestones = $this->apply_milestone_visibility($mundaneId, $milestones);
+        }
+
         return Success($milestones);
+    }
+
+    /**
+     * The player's own milestone switches: a type left out of milestone_config shows;
+     * newest_first reverses the (oldest-first) list.
+     */
+    private function apply_milestone_visibility($mundaneId, array $milestones)
+    {
+        $design = new yapo($this->db, DB_PREFIX . 'mundane_design');
+        $design->clear();
+        $design->mundane_id = (int)$mundaneId;
+        $cfg = $design->find() ? json_decode((string)$design->milestone_config, true) : null;
+        if (!is_array($cfg)) {
+            $cfg = [];
+        }
+        $milestones = array_values(array_filter($milestones, function ($m) use ($cfg) {
+            $type = $m['type'] ?? '';
+            return !isset($cfg[$type]) || $cfg[$type];
+        }));
+        return !empty($cfg['newest_first']) ? array_reverse($milestones) : $milestones;
     }
 
     /**

@@ -1,28 +1,15 @@
 /**
- * ORKPLE II game "zORK": real key input through the first rooms, the dark-room lose,
+ * ORKPLE II game "DUNGEORK" (zork.js): real key input through the first rooms, the dark-room lose,
  * instant restart, and QUIT back to the ORK GAMES menu.
  */
 import { test, expect, Page } from '@playwright/test';
 
-async function appReachable(baseURL: string): Promise<boolean> {
-  try {
-    const res = await fetch(baseURL, { method: 'HEAD' });
-    return res.ok || res.status === 302 || res.status === 405;
-  } catch {
-    return false;
-  }
-}
+import { orkpleSetup, log, bootGame } from './orkple-helpers';
 
 // ORKPLE_FULL_MOTION=1 runs the same specs with the title wait and note holds live.
 test.use({ contextOptions: { reducedMotion: process.env.ORKPLE_FULL_MOTION ? 'no-preference' : 'reduce' } });
 
-test.beforeEach(async ({ baseURL }, testInfo) => {
-  if (!baseURL || !(await appReachable(baseURL))) {
-    testInfo.skip(true, 'ORK3 app not reachable — start docker compose php8 stack');
-  }
-});
-
-const log = (page: Page) => page.locator('#orkple [role=log]');
+orkpleSetup();
 
 // Keys typed while the terminal is still printing are dropped, so let the log go quiet first.
 async function settled(page: Page, quietMs = 400) {
@@ -46,15 +33,7 @@ async function type(page: Page, text: string) {
 }
 
 async function openZork(page: Page) {
-  await page.goto('./index.php?Route=Search');
-  await page.locator('#orkple-floppy').click({ force: true });
-  await expect(log(page)).toContainText('ORKPLE II', { timeout: 10000 });
-  await type(page, 'ork');
-  await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
-  await type(page, '4');
-  await expect(log(page)).toContainText('NUMBER MUNCHORKS', { timeout: 10000 });
-  await type(page, '2');
-  await expect(log(page)).toContainText('THE ONLINE RECORD DUNGEON', { timeout: 15000 });
+  await bootGame(page, 'zork', { ready: 'THE ONLINE RECORD DUNGEON' });
   // The title now stands alone on a hi-res screen; RETURN clears it for the first room.
   await settled(page);
   await page.keyboard.press('Enter');

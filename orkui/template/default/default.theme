@@ -151,6 +151,7 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 	.wn-crt-item-body { margin:2px 0 0 18px; opacity:0.9; font-size:13px; }
 	.wn-crt-insert { display:block; width:100%; margin:16px 0 10px; padding:10px 8px; background:var(--orkple-phosphor); color:var(--orkple-screen); border:0; border-radius:0; font-weight:700; text-shadow:none; box-shadow:0 0 14px rgba(124,245,196,0.45); }
 	.wn-crt-insert:hover, .wn-crt-insert:focus-visible { outline:2px dashed var(--orkple-phosphor); outline-offset:3px; }
+	.wn-crt-note { margin:-4px 0 10px; text-align:center; font-size:13px; }
 	.wn-crt-links { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:13px; }
 	.wn-crt-links a, .wn-crt-links button { color:var(--orkple-phosphor); background:none; border:0; padding:2px 0; text-decoration:underline; text-underline-offset:3px; }
 	.wn-crt-links a:hover, html[data-theme="dark"] .wn-crt-links a, html[data-theme="dark"] .wn-crt-links a:hover { color:var(--orkple-phosphor); }
@@ -828,12 +829,12 @@ document.addEventListener('keydown', function (e) {
 <?php
 // --- What's New modal ---
 // ShowWhatsNew + WhatsNewRelease are set on Controller::$data and exposed via View::$__data.
-// Do not re-read $WHATS_NEW_ITEMS here: Controller already require_once'd whats_new_content.php
-// in a different scope, so require_once in this theme would leave $WHATS_NEW_ITEMS unset.
+// Do not re-read $WHATS_NEW_ITEMS here: Controller already loaded whats_new_content.php in its
+// own scope, and that is where the release data is resolved.
 $__wnShow = !empty($this->__data['ShowWhatsNew']);
 $__currentRelease = $this->__data['WhatsNewRelease'] ?? null;
 ?>
-<?php if ($__wnShow && $__currentRelease && !empty($__currentRelease['orkple'])): ?>
+<?php if ($__wnShow && $__currentRelease && !empty($__currentRelease['orkple']) && !empty($this->__data['OrkpleLive'])): ?>
 <div class="wn-overlay wn-open" id="wn-overlay">
   <div class="wn-crt" role="dialog" aria-modal="true" aria-labelledby="wn-crt-title">
     <div class="wn-crt-screen">
@@ -850,10 +851,10 @@ $__currentRelease = $this->__data['WhatsNewRelease'] ?? null;
           </li>
         <?php endforeach; ?>
         </ul>
-        <?php $__wnAnchor = 'release-' . preg_replace('/[^a-z0-9]+/', '-', strtolower($__currentRelease['version'])); ?>
         <button type="button" class="wn-crt-insert" onclick="wnInsertDisk()">Insert Floppy Disk</button>
+        <p class="wn-crt-note" id="wn-crt-note" role="status" hidden></p>
         <div class="wn-crt-links">
-          <a href="<?=UIR?>ReleaseNotes#<?=$__wnAnchor?>" onclick="wnDismiss()">Release Notes</a>
+          <a href="<?=UIR?>ReleaseNotes&amp;wn=0#<?=htmlspecialchars($__currentRelease['anchor'])?>" onclick="wnDismiss()">Release Notes</a>
           <button type="button" onclick="wnDismiss()">Later<span class="wn-crt-cursor" aria-hidden="true"></span></button>
         </div>
       </div>
@@ -888,7 +889,7 @@ $__currentRelease = $this->__data['WhatsNewRelease'] ?? null;
     <?php endforeach; ?>
     </ul>
     <div class="wn-footer">
-      <a class="wn-all-versions" href="<?=UIR?>ReleaseNotes" onclick="wnDismiss()">See the Full Release Notes</a>
+      <a class="wn-all-versions" href="<?=UIR?>ReleaseNotes&amp;wn=0" onclick="wnDismiss()">See the Full Release Notes</a>
       <button class="wn-dismiss" onclick="wnDismiss()">Got it!</button>
     </div>
   </div>
@@ -902,16 +903,57 @@ function wnDismiss() {
   document.getElementById('wn-overlay').classList.remove('wn-open');
   $.post(wnUir + 'WnAjax/dismiss', { version: wnVersion });
 }
-// ORK 0.1: start ORKPLE II. If it cannot start here (still loading, blocked, framed),
-// keep the release unseen and go to its Release Notes card, which has the same button.
-function wnInsertDisk() {
-  if (window.Orkple && typeof window.Orkple.insert === 'function') { wnDismiss(); window.Orkple.insert(); return; }
+// ORK 0.1: start ORKPLE II, and mark the release seen only once the disk is actually loading.
+// Touch-only devices get "Release Notes" instead (ORKPLE II needs a keyboard). If the launcher
+// is still loading, wait for the page to finish and try again; framed pages get a note; anything
+// else keeps the release unseen and goes to its Release Notes card (&wn=0: no modal over it).
+function wnCrtNote(text) {
+  var n = document.getElementById('wn-crt-note');
+  if (n) { n.textContent = text; n.hidden = false; }
+}
+function wnInsertDisk(retried) {
   var a = document.querySelector('.wn-crt-links a');
+  if (window.matchMedia && !window.matchMedia('(any-pointer: fine)').matches) {
+    wnDismiss();
+    if (a) { window.location.href = a.href; }
+    return;
+  }
+  if (window.Orkple && typeof window.Orkple.insert === 'function') {
+    if (window.Orkple.insert() !== false) { wnDismiss(); }
+    return;
+  }
+  if (window.self !== window.top) { wnCrtNote('ORKPLE II needs a full window. Open the ORK in its own tab.'); return; }
+  if (!retried && document.readyState !== 'complete') {
+    window.addEventListener('load', function () { wnInsertDisk(true); }, { once: true });
+    return;
+  }
   if (a) { window.location.href = a.href; }
 }
-document.getElementById('wn-overlay').addEventListener('click', function(e) {
-  if (e.target === this) wnDismiss();
-});
+(function () {
+  var ov = document.getElementById('wn-overlay');
+  ov.addEventListener('click', function(e) {
+    if (e.target === this) wnDismiss();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && ov.classList.contains('wn-open')) { e.preventDefault(); wnDismiss(); }
+  });
+  var ins = ov.querySelector('.wn-crt-insert');
+  if (ins) {
+    if (window.matchMedia && !window.matchMedia('(any-pointer: fine)').matches) {
+      ins.textContent = 'Release Notes';
+      wnCrtNote('ORKPLE II needs a keyboard. Visit on a computer to play.');
+      // The relabeled button already goes to Release Notes; drop the duplicate link.
+      var dup = ov.querySelector('.wn-crt-links a');
+      if (dup) { dup.hidden = true; }
+    }
+    var focusIns = function () { try { ins.focus({ preventScroll: true }); } catch (err) { ins.focus(); } };
+    focusIns();
+    // A page script that focuses its own field on ready/load would pull focus out from under the modal.
+    window.addEventListener('load', function () {
+      if (ov.classList.contains('wn-open') && !ov.contains(document.activeElement)) { focusIns(); }
+    }, { once: true });
+  }
+})();
 </script>
 <?php endif; ?>
 <?php endif; ?>
@@ -1334,9 +1376,14 @@ if (typeof Highcharts !== 'undefined') {
 </script>
 
 
-<?php $orkpleDir = 'revised-frontend/orkple/'; ?>
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE.$orkpleDir?>orkple-floppy.css?v=<?=filemtime(DIR_TEMPLATE.$orkpleDir.'orkple-floppy.css')?>">
-<?php $orkpleGames = array_map('filemtime', glob(DIR_TEMPLATE.$orkpleDir.'games/*.js') ?: []); ?>
-<script defer src="<?=HTTP_TEMPLATE.$orkpleDir?>orkple-floppy.js?v=<?=filemtime(DIR_TEMPLATE.$orkpleDir.'orkple-floppy.js')?>" data-v="<?=max(filemtime(DIR_TEMPLATE.$orkpleDir.'orkple.css'), filemtime(DIR_TEMPLATE.$orkpleDir.'orkple.js'), filemtime(DIR_TEMPLATE.$orkpleDir.'orkple-terminal.js'), ...$orkpleGames)?>" data-service="<?=htmlspecialchars(HTTP_SERVICE, ENT_QUOTES)?>" data-ui="<?=htmlspecialchars(UIR, ENT_QUOTES)?>" data-user="<?=(int)$this->__session->user_id?>"></script>
+<?php
+// ORKPLE II launcher: on every page while the event is live (Controller::orkple_live());
+// outside it, only on a page that asks for it (Release Notes), without the floppy button.
+$__orkpleLive = !empty($this->__data['OrkpleLive']);
+if ($__orkpleLive || (!empty($this->__data['OrkpleEnabled']) && !empty($this->__data['OrkpleInsertOnly']))):
+    $orkpleDir = 'revised-frontend/orkple/';
+?>
+<script async src="<?=HTTP_TEMPLATE.$orkpleDir?>orkple-floppy.js?v=<?=ORKPLE_ASSET_VERSION?>" data-v="<?=ORKPLE_ASSET_VERSION?>"<?=$__orkpleLive ? '' : ' data-floppy="0"'?> data-service="<?=htmlspecialchars(HTTP_SERVICE, ENT_QUOTES)?>" data-ui="<?=htmlspecialchars(UIR, ENT_QUOTES)?>" data-user="<?=(int)$this->__session->user_id?>"></script>
+<?php endif; ?>
 </body>
 </html>

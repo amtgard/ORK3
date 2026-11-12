@@ -517,6 +517,7 @@ $server->wsdl->addComplexType(
     'all',
     '',
     array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
                 'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int')
             )
 );

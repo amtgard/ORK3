@@ -581,7 +581,7 @@ function defAll(H) {
             rule: '', flavor: '', quitConfirm: false,
             biteLock: 0, notes: {}, pops: {}, streak: 0, seen: {}, startBest: 0
         };
-        game._dbg = function () { return G; };
+        if (window.OrkpleStrict) { game._dbg = function () { return G; }; }   // state hook for the specs only
         function rng(n) { return H.rand(n); }
         G.best = loadBest(H.load('best'));
             defAll(H);

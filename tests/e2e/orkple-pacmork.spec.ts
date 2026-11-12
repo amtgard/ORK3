@@ -1,47 +1,23 @@
 /**
- * PAC-MORK (ORKPLE II game): loads from the ORK GAMES menu, plays in the real terminal, and leaves cleanly.
+ * MORKMAZE (ORKPLE II game): loads from the ORK GAMES menu, plays in the real terminal, and leaves cleanly.
  */
 import { test, expect, Page } from '@playwright/test';
-
-async function appReachable(baseURL: string): Promise<boolean> {
-  try {
-    const res = await fetch(baseURL, { method: 'HEAD' });
-    return res.ok || res.status === 302 || res.status === 405;
-  } catch {
-    return false;
-  }
-}
+import { orkpleSetup, log, bootGame } from './orkple-helpers';
 
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
-test.beforeEach(async ({ baseURL }, testInfo) => {
-  if (!baseURL || !(await appReachable(baseURL))) {
-    testInfo.skip(true, 'ORK3 app not reachable — start docker compose php8 stack');
-  }
-});
+orkpleSetup();
 
-const log = (page: Page) => page.locator('#orkple [role=log]');
 const state = (page: Page) => page.evaluate(() => {
   const g = (window as any).OrkpleGames.pacmork._dbg();
   return { mode: g.mode, score: g.score, c: g.p.c, r: g.p.r, level: g.level };
 });
 
 async function openGame(page: Page) {
-  await page.goto('./index.php?Route=Search');
-  await page.locator('#orkple-floppy').click();
-  await expect(log(page)).toContainText('ORKPLE II', { timeout: 10000 });
-  await page.keyboard.type('ork');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
-  await page.keyboard.type('4');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('4. PAC-MORK', { timeout: 10000 });
-  await page.keyboard.type('4');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('P A C - M O R K', { timeout: 10000 });
+  await bootGame(page, 'pacmork', { ready: 'M O R K M A Z E' });
 }
 
-test('PAC-MORK plays a field: spellballs score, and a stray Q does not end the run', async ({ page }) => {
+test('MORKMAZE plays a field: spellballs score, and a stray Q does not end the run', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   await openGame(page);
@@ -81,7 +57,7 @@ test('PAC-MORK plays a field: spellballs score, and a stray Q does not end the r
   expect(errors).toEqual([]);
 });
 
-test('PAC-MORK clears all three fields through the between-level scenes to the ending', async ({ page }) => {
+test('MORKMAZE clears all three fields through the between-level scenes to the ending', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   await openGame(page);
@@ -108,7 +84,7 @@ test('PAC-MORK clears all three fields through the between-level scenes to the e
   expect(errors).toEqual([]);
 });
 
-test('PAC-MORK wizard sprite keeps its lit pixels inside one cell and rings them dark', async ({ page }) => {
+test('MORKMAZE wizard sprite keeps its lit pixels inside one cell and rings them dark', async ({ page }) => {
   await openGame(page);
   const art = await page.evaluate(() => {
     const X = (window as any).OrkpleGames.pacmork._pure;
@@ -136,7 +112,7 @@ test('PAC-MORK wizard sprite keeps its lit pixels inside one cell and rings them
   expect(art.left[2]).toEqual(art.right[2].map((r: string) => r.split('').reverse().join('')));
 });
 
-test('PAC-MORK tagging a dagger carrier pauses briefly and shows its points as a sprite; a death sinks the wizard', async ({ page }) => {
+test('MORKMAZE tagging a dagger carrier pauses briefly and shows its points as a sprite; a death sinks the wizard', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   await openGame(page);

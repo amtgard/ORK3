@@ -498,7 +498,7 @@ class Controller_Player extends Controller
         ];
         if (is_array($this->data['Details']['Awards'])) {
             foreach ($this->data['Details']['Awards'] as $a) {
-                if (in_array($a['OfficerRole'], ['none', null]) && $a['IsTitle'] != 1) {
+                if (empty($a['IsTitleEffective'])) {
                     $this->data['Stats']['TotalAwards']++;
                 } else {
                     $this->data['Stats']['TotalTitles']++;

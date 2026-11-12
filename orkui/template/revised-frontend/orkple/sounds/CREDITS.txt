@@ -1,0 +1,27 @@
+ORKPLE II sound credits
+=======================
+
+disk-read.m4a
+-------------
+Plays under the ORKEK title card when a game loads, and under the ORKPLE ][
+banner during the power-on boot (see diskSound() in ../orkple-terminal.js).
+
+What is known:
+  Original title : "reading floppy disc 2"
+  From           : the "freesound community" (described as royalty free)
+  Supplied by    : the project maintainer
+  Edits          : trimmed to the first 4 seconds, normalized, 250ms fade-out.
+                   The edited clip is a derivative work of the original.
+
+Still to record (maintainer to fill in):
+  Source URL     : TODO
+  Uploader       : TODO
+  License        : TODO
+
+"freesound community" could mean freesound.org (each clip is CC0, CC-BY or
+CC-BY-NC) or Pixabay's "freesound_community" account (Pixabay Content License).
+Once the source page is found:
+  - CC0 or Pixabay Content License: record it here; nothing else is needed.
+  - CC-BY: record it here and add a credit line to the ORK 0.1 release notes.
+  - CC-BY-NC, or the source cannot be found: replace the clip with a CC0 clip
+    or a WebAudio-synthesized drive seek sound.

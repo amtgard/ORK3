@@ -1,24 +1,11 @@
 /**
- * SPACE INVADORKS (ORKPLE II game): loads from the ORK GAMES menu, plays in the real terminal, and leaves cleanly.
+ * INVADORKS (ORKPLE II game): loads from the ORK GAMES menu, plays in the real terminal, and leaves cleanly.
  */
 import { test, expect, Page } from '@playwright/test';
+import { orkpleSetup, log, bootGame, tick } from './orkple-helpers';
 
-async function appReachable(baseURL: string): Promise<boolean> {
-  try {
-    const res = await fetch(baseURL, { method: 'HEAD' });
-    return res.ok || res.status === 302 || res.status === 405;
-  } catch {
-    return false;
-  }
-}
+orkpleSetup();
 
-test.beforeEach(async ({ baseURL }, testInfo) => {
-  if (!baseURL || !(await appReachable(baseURL))) {
-    testInfo.skip(true, 'ORK3 app not reachable — start docker compose php8 stack');
-  }
-});
-
-const log = (page: Page) => page.locator('#orkple [role=log]');
 const state = (page: Page) => page.evaluate(() => {
   const g = (window as any).OrkpleGames.invadorks._dbg();
   const al = g.fm ? g.fm.al.reduce((a: number, r: boolean[]) => a + r.filter(Boolean).length, 0) : 0;
@@ -31,18 +18,7 @@ const shotPath = (name: string, shot: string) => shot.replace('.png', `-${name}.
 const snap = (page: Page, path: string) => page.locator('#orkple canvas').first().screenshot({ path });
 
 async function openGame(page: Page) {
-  await page.goto('./index.php?Route=Search');
-  await page.locator('#orkple-floppy').click({ force: true });
-  await expect(log(page)).toContainText('ORKPLE II', { timeout: 10000 });
-  await page.keyboard.type('ork');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
-  await page.keyboard.type('4');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('8. SPACE INVADORKS', { timeout: 10000 });
-  await page.keyboard.type('8');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('I N V A D O R K S', { timeout: 10000 });
+  await bootGame(page, 'invadorks', { ready: 'I N V A D O R K S' });
 }
 
 async function startPlay(page: Page) {
@@ -94,21 +70,29 @@ async function play(page: Page, shot: string) {
   expect(s.live).toBe(45);
   expect(s.lives).toBe(3);
 
-  // Walking: a tap sets a direction and the archer keeps walking; S stops.
+  // Walking: the archer walks only while A or D is held, a tap still moves it, and S stops a held walk.
   await calm(page);
   const x0 = s.ax;
-  await page.keyboard.press('d');
+  await page.keyboard.down('d');
   await expect.poll(async () => (await state(page)).dir).toBe(1);
   await expect.poll(async () => (await state(page)).ax, { timeout: 3000 }).toBeGreaterThan(x0 + 12);
-  await page.keyboard.press('s');
+  await page.keyboard.up('d');
   await expect.poll(async () => (await state(page)).dir).toBe(0);
   const x1 = (await state(page)).ax;
-  await page.waitForTimeout(300);
+  await tick(page, 300);
   expect((await state(page)).ax).toBe(x1);
   await page.keyboard.press('a');
+  await expect.poll(async () => (await state(page)).ax, { timeout: 3000 }).toBeLessThan(x1);
+  await expect.poll(async () => (await state(page)).dir).toBe(0);
+  const x2 = (await state(page)).ax;
+  await tick(page, 300);
+  expect((await state(page)).ax).toBe(x2);
+  await page.keyboard.down('a');
   await expect.poll(async () => (await state(page)).dir).toBe(-1);
-  await expect.poll(async () => (await state(page)).ax, { timeout: 3000 }).toBeLessThan(x1 - 12);
+  await expect.poll(async () => (await state(page)).ax, { timeout: 3000 }).toBeLessThan(x2 - 12);
   await page.keyboard.press('s');
+  await expect.poll(async () => (await state(page)).dir).toBe(0);
+  await page.keyboard.up('a');
 
   // The march steps and the interval is shown by the debug state.
   await page.evaluate(() => { const g = (window as any).OrkpleGames.invadorks._dbg(); g.stepMs = g.ivl; });

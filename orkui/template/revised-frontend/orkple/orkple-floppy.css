@@ -1,11 +1,18 @@
 /* ORKPLE II easter egg: floppy launcher + page-level CRT power-off/on.
    Loaded on every page; keep it tiny. The overlay styles live in orkple.css. */
 
-#orkple-floppy {
+/* The dock holds the floppy and its small "hide the disk" button. */
+#orkple-floppy-dock {
     position: fixed;
     left: calc(14px + env(safe-area-inset-left, 0px));
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-    z-index: 9000;
+    z-index: 800;
+    width: 44px;
+    height: 44px;
+}
+#orkple-floppy {
+    position: relative;
+    display: block;
     width: 44px;
     height: 44px;
     min-width: 0;
@@ -21,7 +28,8 @@
     cursor: pointer;
     line-height: 0;
     -webkit-tap-highlight-color: transparent;
-    animation: orkple-bob 3.6s ease-in-out infinite;
+    /* A short hello, not a perpetual one (WCAG 2.2.2). */
+    animation: orkple-bob 3.6s ease-in-out 3;
 }
 #orkple-floppy svg {
     display: block;
@@ -47,6 +55,77 @@ html[data-theme="dark"] #orkple-floppy .of-jacket { stroke: #e4e4ea; stroke-widt
 html[data-theme="dark"] #orkple-floppy svg {
     filter: drop-shadow(0 0 5px rgba(255, 255, 255, .28));
 }
+html[data-theme="dark"] #orkple-floppy:focus-visible { outline-color: #a5b4fc; }
+@media (max-width: 600px) {
+    body:has(#cp-mobile-runbar) #orkple-floppy-dock { bottom: calc(54px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* "Hide the disk": a small chip on the jacket corner, shown on hover or keyboard focus.
+   The choice is per viewer (localStorage, see orkple-floppy.js). */
+#orkple-floppy-hide {
+    position: absolute;
+    top: -7px;
+    right: -9px;
+    width: 18px;
+    height: 18px;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #1d1d21;
+    border-radius: 50%;
+    background: #f1e9d0;
+    color: #1d1d21;
+    font: 700 12px/16px Helvetica, Arial, sans-serif;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .15s ease;
+}
+#orkple-floppy-dock:hover #orkple-floppy-hide,
+#orkple-floppy-hide:focus-visible {
+    opacity: 1;
+}
+#orkple-floppy-hide:focus-visible {
+    outline: 2px solid #4f46e5;
+    outline-offset: 2px;
+}
+#orkple-floppy-hide[data-tip]:hover::after,
+#orkple-floppy-hide[data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    width: max-content;
+    max-width: 200px;
+    white-space: normal;
+    padding: 5px 8px;
+    border-radius: 4px;
+    background: #2d3748;
+    color: #fff;
+    font: 400 11px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+    text-align: left;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+    pointer-events: none;
+}
+html[data-theme="dark"] #orkple-floppy-hide { border-color: #e4e4ea; }
+html[data-theme="dark"] #orkple-floppy-hide:focus-visible { outline-color: #a5b4fc; }
+html[data-theme="dark"] #orkple-floppy-hide[data-tip]:hover::after,
+html[data-theme="dark"] #orkple-floppy-hide[data-tip]:focus-visible::after { background: #000; }
+
+/* ORKPLE II needs a keyboard: no disk on touch-only devices (matches suitableDevice()). */
+@media not (any-pointer: fine) {
+    #orkple-floppy-dock { display: none !important; }
+}
+
+/* Shown beside an Insert Floppy Disk button when ORKPLE II cannot start here. */
+.orkple-note {
+    display: block;
+    margin-top: 6px;
+    font-size: 13px;
+    font-style: italic;
+}
 
 @keyframes orkple-bob {
     0%, 100% { transform: translateY(0); }
@@ -54,7 +133,7 @@ html[data-theme="dark"] #orkple-floppy svg {
 }
 
 @media print {
-    #orkple-floppy { display: none !important; }
+    #orkple-floppy-dock { display: none !important; }
 }
 
 /* ---- Page-level CRT power-off / power-on -------------------------------
@@ -74,20 +153,56 @@ html.orkple-crt-off body {
 html.orkple-crt-on body {
     animation: orkple-on .7s cubic-bezier(.2, .6, .3, 1) both;
 }
+/* The bright scan line: a fixed overlay on <html> (outside the scaled body) that
+   animates only opacity and transform, so no frame repaints the page. --ok-fx is
+   the scaleX that leaves ~4px of the viewport width (set by orkple-floppy.js). */
+html.orkple-crt-off::after,
+html.orkple-crt-on::after {
+    content: '';
+    position: fixed;
+    left: 0;
+    top: calc(50% - 1px);
+    width: 100%;
+    height: 2px;
+    z-index: 2147483647;
+    background: #fff;
+    box-shadow: 0 0 10px 3px rgba(255, 255, 255, .85), 0 0 26px 8px rgba(190, 230, 255, .45);
+    pointer-events: none;
+    transform-origin: 50% 50%;
+    will-change: transform, opacity;
+}
+html.orkple-crt-off::after {
+    animation: orkple-flash-off .9s cubic-bezier(.55, 0, .75, .4) forwards;
+}
+html.orkple-crt-on::after {
+    animation: orkple-flash-on .7s cubic-bezier(.2, .6, .3, 1) both;
+}
 @keyframes orkple-off {
-    0%   { transform: scale(1, 1); filter: brightness(1); opacity: 1; }
-    50%  { transform: scale(1, var(--ok-ly, .003)); filter: brightness(7); opacity: 1; }
-    82%  { transform: scale(var(--ok-lx, .01), var(--ok-ly, .003)); filter: brightness(14); opacity: 1; }
-    100% { transform: scale(0, 0); filter: brightness(14); opacity: 0; }
+    0%   { transform: scale(1, 1); opacity: 1; }
+    50%  { transform: scale(1, var(--ok-ly, .003)); opacity: 1; }
+    82%  { transform: scale(var(--ok-lx, .01), var(--ok-ly, .003)); opacity: 1; }
+    100% { transform: scale(0, 0); opacity: 0; }
 }
 @keyframes orkple-on {
-    0%   { transform: scale(var(--ok-lx, .01), var(--ok-ly, .003)); filter: brightness(14); opacity: 1; }
-    45%  { transform: scale(1, var(--ok-ly, .003)); filter: brightness(7); opacity: 1; }
-    100% { transform: scale(1, 1); filter: brightness(1); opacity: 1; }
+    0%   { transform: scale(var(--ok-lx, .01), var(--ok-ly, .003)); opacity: 1; }
+    45%  { transform: scale(1, var(--ok-ly, .003)); opacity: 1; }
+    100% { transform: scale(1, 1); opacity: 1; }
+}
+@keyframes orkple-flash-off {
+    0%   { transform: scaleX(1); opacity: 0; }
+    50%  { transform: scaleX(1); opacity: 1; }
+    82%  { transform: scaleX(var(--ok-fx, .01)); opacity: 1; }
+    100% { transform: scaleX(0); opacity: 0; }
+}
+@keyframes orkple-flash-on {
+    0%   { transform: scaleX(var(--ok-fx, .01)); opacity: 1; }
+    45%  { transform: scaleX(1); opacity: 1; }
+    100% { transform: scaleX(1); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
     #orkple-floppy { animation: none; }
-    #orkple-floppy svg { transition: none; }
+    #orkple-floppy svg, #orkple-floppy-hide { transition: none; }
+    html.orkple-crt-off::after, html.orkple-crt-on::after { content: none; animation: none; }
     html.orkple-crt-off body { animation: orkple-fade-out .15s linear forwards; }
     html.orkple-crt-on body { animation: orkple-fade-in .15s linear both; }
     @keyframes orkple-fade-out { from { opacity: 1; } to { opacity: 0; } }

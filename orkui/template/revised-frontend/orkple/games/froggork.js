@@ -346,7 +346,7 @@
 
     function start(H) {
         var G = {
-            mode: 'BUSY', level: 0, score: 0, lives: 3, extra: false, best: H.load('best'),
+            mode: 'BUSY', level: 0, score: 0, lives: 3, extra: false, best: H.load('best', H.isBest),
             world: null, t: 0, p: null, filled: [], timeMs: 0, ms: 0, msgMs: 0, cause: '', wasMode: '',
             ev: null, evNext: 0, pax: null, paxNext: 0, sfxQ: [], sfxWait: 0, hopMs: 0, homeSlot: -1, lastSec: -1, blink: false,
             titled: false, extraPend: false, buf: null, lastSay: '', askSay: '', loiterMs: 0, loitered: false, clearLine: false
@@ -907,7 +907,7 @@
             }
         }
 
-        start.dbg = G;
+        if (window.OrkpleStrict) { start.dbg = G; }   // tests only
         ART.define(H);
         H.every(TICK, tick);
         H.keys(onKey, { noRepeat: true });
@@ -921,7 +921,8 @@
         _pure: {
             LEVELS: LEVELS, KINDS: KINDS, makeWorld: makeWorld, judge: judge, advancePlayer: advancePlayer, hopPlayer: hopPlayer, copies: copies,
             duckState: duckState, slotAt: slotAt, SLOTC: SLOTC, TOL: TOL, HOP: HOP, W: W, TICK: TICK, START_X: START_X, PW: PW, STARTB: STARTB
-        },
-        _dbg: function () { return start.dbg; }
+        }
     };
+    // State hook for the specs, attached only when the test flag is set.
+    if (window.OrkpleStrict) { window.OrkpleGames.froggork._dbg = function () { return start.dbg; }; }
 }());

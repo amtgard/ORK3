@@ -178,7 +178,7 @@ html[data-theme="dark"] .rn-orkple-insert {
 	$rel_date = $release['display_date'] ?? date('F j, Y', strtotime($release['date']));
 	$rel_label = $release['label'] ?? 'v' . $release['version'];
 ?>
-		<div class="rn-release<?=!empty($release['orkple']) ? ' rn-orkple' : ''?>" id="release-<?=htmlspecialchars(preg_replace('/[^a-z0-9]+/', '-', strtolower($release['version'])))?>">
+		<div class="rn-release<?=!empty($release['orkple']) ? ' rn-orkple' : ''?>" id="<?=htmlspecialchars($release['anchor'])?>">
 			<div class="rn-release-header">
 				<div class="rn-release-title"><?=htmlspecialchars($rel_label)?></div>
 				<div class="rn-release-date"><?=htmlspecialchars($rel_date)?></div>
@@ -190,7 +190,7 @@ html[data-theme="dark"] .rn-orkple-insert {
 					<div class="rn-item-content">
 						<div class="rn-item-title"><?=htmlspecialchars($item['title'])?></div>
 						<p class="rn-item-body"><?=htmlspecialchars($item['body'])?></p>
-<?php if (($item['action'] ?? '') === 'orkple') : ?>
+<?php if (($item['action'] ?? '') === 'orkple' && !empty($OrkpleEnabled)) : ?>
 						<button type="button" class="rn-orkple-insert" data-orkple-insert><i class="fas fa-save" aria-hidden="true"></i> Insert Floppy Disk</button>
 <?php endif; ?>
 					</div>

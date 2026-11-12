@@ -1,9 +1,10 @@
 /* ORKPLE II easter egg: floppy launcher and page-level CRT power-off.
-   Loaded deferred on every page. Lazily pulls orkple.css, orkple-terminal.js
-   and orkple.js on first click while the page plays its CRT-off animation. */
+   Loaded async (during the event on every page; otherwise on Release Notes with
+   data-floppy="0"). Links its own orkple-floppy.css, then lazily pulls orkple.css,
+   orkple-terminal.js and orkple.js on first click while the page plays its CRT-off
+   animation. */
 (function () {
     'use strict';
-    if (window.self !== window.top) { return; }
     var script = document.currentScript;
     if (!script || !script.src || (window.Orkple && window.Orkple.insert)) { return; }
     var base = script.src.slice(0, script.src.lastIndexOf('/') + 1);
@@ -11,12 +12,52 @@
     var html = document.documentElement;
     var body = document.body;
     var busy = false;
+    var HIDE_KEY = 'orkple-floppy-hidden';
+
+    /* Put a one-line note under whatever asked for the disk (no native dialogs). */
+    function note(anchor, text) {
+        if (!anchor || !anchor.parentNode) { return; }
+        var n = anchor.nextElementSibling;
+        if (!n || !n.classList.contains('orkple-note')) {
+            n = document.createElement('span');
+            n.className = 'orkple-note';
+            n.setAttribute('role', 'status');
+            /* Inline: in a frame this script returns before it links orkple-floppy.css. */
+            n.style.cssText = 'display:block;margin-top:6px;font-size:13px;font-style:italic;';
+            anchor.parentNode.insertBefore(n, anchor.nextSibling);
+        }
+        n.textContent = text;
+    }
+
+    /* Framed (a preview or an embed): ORKPLE II takes over the whole window, so it does
+       not run here. Say so instead of leaving the Insert Floppy Disk buttons dead. */
+    if (window.self !== window.top) {
+        document.addEventListener('click', function (e) {
+            var a = e.target && e.target.closest ? e.target.closest('[data-orkple-insert]') : null;
+            if (!a) { return; }
+            e.preventDefault();
+            note(a, 'ORKPLE II needs a full window. Open this page in its own tab.');
+        });
+        return;
+    }
 
     function reduced() {
         return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     }
     function url(name) {
         return base + name + (ver ? '?v=' + encodeURIComponent(ver) : '');
+    }
+    /* Same test as the terminal's suitableDevice(): touch-only devices get no disk. */
+    function finePointer() {
+        return !window.matchMedia || window.matchMedia('(any-pointer: fine)').matches;
+    }
+    function hiddenByViewer() {
+        try { return window.localStorage.getItem(HIDE_KEY) === '1'; } catch (e) { return false; }
+    }
+    function setHidden(on) {
+        try {
+            if (on) { window.localStorage.setItem(HIDE_KEY, '1'); } else { window.localStorage.removeItem(HIDE_KEY); }
+        } catch (e) { /* storage blocked: the choice lasts for this page only */ }
     }
 
     /* Shared with orkple.js, which merges its own methods into window.Orkple. */
@@ -28,6 +69,7 @@
             body.style.removeProperty('--ok-ly');
             body.style.removeProperty('--ok-lx');
             html.style.removeProperty('--ok-doc-h');
+            html.style.removeProperty('--ok-fx');
             if (!html.getAttribute('style')) { html.removeAttribute('style'); }
             if (!body.getAttribute('style')) { body.removeAttribute('style'); }
         },
@@ -40,6 +82,8 @@
             body.style.transformOrigin = (window.innerWidth / 2 - r.left) + 'px ' + (window.innerHeight / 2 - r.top) + 'px';
             body.style.setProperty('--ok-ly', Math.min(1, 2 / Math.max(r.height, 1)).toFixed(6));
             body.style.setProperty('--ok-lx', Math.min(1, 4 / Math.max(r.width, 1)).toFixed(6));
+            /* The scan-line overlay spans the viewport, not the body. */
+            html.style.setProperty('--ok-fx', Math.min(1, 4 / Math.max(window.innerWidth, 1)).toFixed(6));
         },
         /* Quick power-on of the real page, then clean up after itself. */
         powerOn: function () {
@@ -61,10 +105,38 @@
     /* The signed-in player's id (0 when logged out); never a token. */
     O.user = script.getAttribute('data-user') || '0';
 
-    /* ---- Floppy button: data-floppy="0" hides it; Orkple.insert() and
-       [data-orkple-insert] links (the ORK 0.1 release notes) still work ---- */
+    /* The launcher's own styles (floppy button + page CRT classes), linked from here
+       so the page never waits on them. */
+    var fcss = document.getElementById('orkple-floppy-css');
+    if (!fcss) {
+        fcss = document.createElement('link');
+        fcss.rel = 'stylesheet';
+        fcss.id = 'orkple-floppy-css';
+        fcss.href = url('orkple-floppy.css');
+        document.head.appendChild(fcss);
+    }
+
+    /* Warm the HTTP cache for the disk while the pointer or focus is on the way in. */
+    var prefetched = false;
+    function prefetch() {
+        if (prefetched || (typeof O.boot === 'function' && window.OrkpleTerminal)) { return; }
+        prefetched = true;
+        [['orkple.css', 'style'], ['orkple-terminal.js', 'script'], ['orkple.js', 'script']].forEach(function (f) {
+            var l = document.createElement('link');
+            l.rel = 'prefetch';
+            l.as = f[1];
+            l.href = url(f[0]);
+            document.head.appendChild(l);
+        });
+    }
+
+    /* ---- Floppy button: data-floppy="0" hides it, as do a touch-only device and the
+       viewer's own "hide the disk" choice. Orkple.insert() and [data-orkple-insert]
+       links (the ORK 0.1 release notes) still work ---- */
     var btn = null;
-    if (script.getAttribute('data-floppy') !== '0') {
+    if (script.getAttribute('data-floppy') !== '0' && finePointer() && !hiddenByViewer()) {
+        var dock = document.createElement('div');
+        dock.id = 'orkple-floppy-dock';
         btn = document.createElement('button');
         btn.id = 'orkple-floppy';
         btn.type = 'button';
@@ -83,8 +155,38 @@
             '<circle cx="66" cy="43" r="2.4" fill="#07070a"/>' +
             '<rect x="43" y="73" width="14" height="22" rx="7" fill="#07070a"/>' +
             '</svg>';
-        body.appendChild(btn);
         btn.addEventListener('click', insert);
+        btn.addEventListener('pointerenter', prefetch);
+        btn.addEventListener('focus', prefetch);
+        var hide = document.createElement('button');
+        hide.id = 'orkple-floppy-hide';
+        hide.type = 'button';
+        hide.setAttribute('aria-label', 'Hide the ORKPLE II disk');
+        hide.setAttribute('data-tip', 'Hide the disk. Release Notes still has one.');
+        hide.innerHTML = '<span aria-hidden="true">&times;</span>';
+        hide.addEventListener('click', function () {
+            setHidden(true);
+            if (dock.parentNode) { dock.parentNode.removeChild(dock); }
+            btn = null;
+            /* Focus would otherwise fall to <body>: say what happened, then move focus
+               to the page's main content (or its first heading). */
+            var msg = document.createElement('div');
+            msg.setAttribute('role', 'status');
+            msg.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;';
+            body.appendChild(msg);
+            setTimeout(function () { msg.textContent = 'ORKPLE II disk hidden. Release Notes still has one.'; }, 50);
+            setTimeout(function () { if (msg.parentNode) { msg.parentNode.removeChild(msg); } }, 5000);
+            var to = document.querySelector('main, [role="main"], h1');
+            if (to) {
+                if (!to.hasAttribute('tabindex')) { to.setAttribute('tabindex', '-1'); }
+                try { to.focus({ preventScroll: true }); } catch (err) { to.focus(); }
+            }
+        });
+        dock.appendChild(btn);
+        dock.appendChild(hide);
+        /* Show the dock once its styles are in, so it never flashes unstyled. */
+        var showBtn = function () { if (!dock.parentNode) { body.appendChild(dock); } };
+        if (fcss.sheet) { showBtn(); } else { fcss.addEventListener('load', showBtn); }
     }
     O.insert = insert;
     document.addEventListener('click', function (e) {
@@ -95,8 +197,10 @@
     });
 
     /* ---- Insert the disk: load + play CRT-off in parallel, then boot ---- */
+    /* Returns true when the disk actually starts loading (callers such as the What's New
+       modal only mark the release seen then). */
     function insert() {
-        if (busy || document.documentElement.classList.contains('orkple-on')) { return; }
+        if (busy || document.documentElement.classList.contains('orkple-on')) { return false; }
         busy = true;
         if (btn) { btn.setAttribute('aria-disabled', 'true'); }
         /* Whatever started the disk gets focus back on exit (orkple.js finish). */
@@ -133,7 +237,7 @@
         var ready = typeof O.boot === 'function' && window.OrkpleTerminal && document.getElementById('orkple-css');
         if (ready) {
             loadDone = true;
-            return;
+            return true;
         }
         timeout = setTimeout(function () { cleanupLoaders(); fail(); }, 15000);
         var pending = 3, els = [];
@@ -165,5 +269,6 @@
             els.push(s);
         });
         els.forEach(function (el) { (el.tagName === 'LINK' ? document.head : document.body).appendChild(el); });
+        return true;
     }
 })();

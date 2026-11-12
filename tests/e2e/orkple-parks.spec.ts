@@ -7,7 +7,6 @@ import { test, expect, Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const SCRATCH = '/private/tmp/claude-501/-Users-averykrouse-GitHub-ORK-tobias-ORK3-tobias/d4a03171-dc47-4ef6-af33-e92cb0cdbd0c/scratchpad/';
 const PARK = 1049;
 
 async function appReachable(baseURL: string): Promise<boolean> {
@@ -22,7 +21,11 @@ async function appReachable(baseURL: string): Promise<boolean> {
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
 const log = (page: Page) => page.locator('#orkple [role=log]');
-const endsOn = (page: Page, re: RegExp) => expect(log(page)).toHaveText(re, { timeout: 20000 });
+// The kingdom header's PARKS, EVENTS and AVG counts load behind the screen and are written in just before its last line
+// as they arrive, so screen endings and menus are matched without those lines.
+const STAT = /^(PARKS|EVENTS|AVG\/WEEK|AVG\/MONTH) (--|\d[\d.,]*)$/;
+const menuText = async (page: Page) => ((await log(page).innerText()) || '').split('\n').filter((l) => !STAT.test(l)).join('\n');
+const endsOn = (page: Page, re: RegExp) => expect.poll(() => menuText(page), { timeout: 20000 }).toMatch(re);
 const calls: string[] = [];
 
 test.beforeEach(async ({ baseURL, page }, testInfo) => {
@@ -36,6 +39,8 @@ test.beforeEach(async ({ baseURL, page }, testInfo) => {
     const m = /Json\/index\.php\?call=([^&]+)/.exec(r.url());
     if (m) calls.push(decodeURIComponent(m[1]));
   });
+  // ORKPLE is only live in its event window (or with the preview cookie); the floppy is not on the page otherwise.
+  await page.context().addCookies([{ name: 'orkple_preview', value: '1', url: new URL('/', baseURL).href }]);
   await page.goto('./index.php?Route=Search');
 });
 
@@ -68,7 +73,7 @@ async function toMenu(page: Page) {
 
 // The lines of the screen on top: from the last "PAGE n OF m" title line, or the whole log when there is none.
 async function lastScreen(page: Page): Promise<string[]> {
-  const lines = (((await log(page).textContent()) || '').split('\n'));
+  const lines = (((await log(page).innerText()) || '').split('\n'));
   let idx = -1;
   lines.forEach((l, i) => { if (/PAGE \d+ OF \d+$/.test(l)) idx = i; });
   return idx < 0 ? lines : lines.slice(idx);
@@ -88,7 +93,7 @@ async function settled(page: Page, title?: RegExp, pageNo?: number): Promise<str
 
 // Every printed line fits 39 columns (a 40th would auto-wrap and eat a row).
 async function widthOk(page: Page) {
-  const lines = ((await log(page).textContent()) || '').split('\n');
+  const lines = ((await log(page).innerText()) || '').split('\n');
   for (const l of lines) expect(l.length, `"${l}"`).toBeLessThanOrEqual(39);
 }
 
@@ -137,7 +142,7 @@ test('the KCG park list is selectable and a pick opens the park profile', async 
   await widthOk(page);
   await pickRow(page, /^(\d)\. ANGLER'S RIFT/);
   await endsOn(page, /8\. SIGN-INS BY DAY\s+0\. PARK LIST\s*$/);
-  const t = (await log(page).textContent()) || '';
+  const t = (await log(page).innerText()) || '';
   expect(t).toContain("ARMS OF ANGLER'S RIFT");
   expect(t).toContain('BARONY, KCG');
   expect(t).toContain('CATONSVILLE, MARYLAND');
@@ -147,13 +152,19 @@ test('the KCG park list is selectable and a pick opens the park profile', async 
     expect(t).toContain(`${n + 1}. ${name}`);
   }
   await widthOk(page);
-  await page.locator('#orkple canvas').screenshot({ path: SCRATCH + 'park-profile.png' });
+  await page.locator('#orkple canvas').screenshot({ path: test.info().outputPath('park-profile.png') });
   // 0 returns to the park list, page 2 where Angler's Rift sits or wherever it was picked.
   await type(page, '0');
   await settled(page, /PARKS +PAGE \d OF 2$/);
 });
 
-test('MEETING DAYS, WHERE TO FIND US, OFFICERS: content, persona opens the profile, back paths', async ({ page }) => {
+test('MEETING DAYS, WHERE TO FIND US, OFFICERS: content, persona opens the profile, back paths', async ({ page, request }) => {
+  // OFFICERS is served from the real list with the second office vacated: who holds office changes with the data,
+  // and the park page parity test checks the real list.
+  const real = (await (await request.get(`../orkservice/Json/index.php?call=Park/GetOfficers&request[ParkId]=${PARK}`)).json()).Officers as any[];
+  expect(real.length).toBeGreaterThanOrEqual(2);
+  const officers = real.map((o, i) => (i === 1 ? { ...o, MundaneId: 0, Persona: '', UserName: '' } : o));
+  await page.route(/call=Park\/GetOfficers(&|$)/, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ Status: { Status: 0 }, Officers: officers }) }));
   await toPark(page);
 
   let s = await visit(page, 1, /MEETING DAYS/);
@@ -181,17 +192,19 @@ test('MEETING DAYS, WHERE TO FIND US, OFFICERS: content, persona opens the profi
 
   s = await visit(page, 3, /^OFFICERS/);
   t = s.join('\n');
-  expect(t).toMatch(/MONARCH +VENN/);
-  expect(t).toMatch(/REGENT +\(VACANT\)/);
-  expect(t).toMatch(/PRIME MIN +ATHERIS COININ LABRISE/);
-  expect(t).not.toMatch(/CRYSTALWAVE|ATHERIS$|\d{4,}/);   // no usernames, no ids
+  const role = (o: any) => String(o.OfficerRole).toUpperCase().replace('PRIME MINISTER', 'PRIME MIN');
+  const first = String(officers[0].Persona).toUpperCase();
+  expect(s.find((l) => /^1\. /.test(l))!.replace(/\s+/g, ' ').startsWith(`1. ${role(officers[0])} ${first}`.slice(0, 30))).toBe(true);
+  expect(s.find((l) => /^2\. /.test(l))!.replace(/\s+/g, ' ')).toBe(`2. ${role(officers[1])} (VACANT)`);
+  for (const o of officers) if (o.UserName && !String(o.Persona).toUpperCase().includes(String(o.UserName).toUpperCase())) expect(t).not.toContain(String(o.UserName).toUpperCase());   // no usernames
+  expect(t).not.toMatch(/\d{4,}/);   // no ids
   // a vacant office cannot be opened
   await type(page, '2');
   await expect(log(page)).toContainText('?VACANT OFFICE');
   // a persona opens the player profile and 0 comes back to OFFICERS
   await type(page, '1');
   await endsOn(page, /4\. TITLES\s+5\. ABOUT\s+6\. COMPANIES\s+7\. MILESTONES\s+0\. BACK\s*$/);
-  await expect(log(page)).toContainText('VENN');
+  await expect(log(page)).toContainText(first);
   await type(page, '0');
   await settled(page, /^OFFICERS/);
   await backToPark(page);
@@ -212,14 +225,15 @@ test('RECENT PLAYERS, EVENTS, COMPANIES: content and back paths', async ({ page 
   await backToPark(page);
 
   s = await visit(page, 5, /^EVENTS/);
-  const t = s.join('\n');
-  expect(t).toContain('NAMELESS NIGHT CARNIVAL');
-  expect(t).toContain('AR WINTER CORONATION');
-  expect(t).not.toContain('4TH OF JULY');   // past events stay out, as on the page
+  // which events are coming changes with the data (park page parity checks the names); here: dated rows, none of them over
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dated = s.map((l) => /^\d\. (\d\d)\/(\d\d)\/(\d\d) \S/.exec(l)).filter(Boolean) as RegExpExecArray[];
+  if (!dated.length) expect(s.join('\n')).toContain('NO UPCOMING EVENTS.');
+  for (const m of dated) expect(new Date(2000 + +m[3], +m[1] - 1, +m[2]).getTime(), m[0]).toBeGreaterThanOrEqual(today.getTime() - 86400000 * 7);   // past events stay out (a multi-day event that started this week can still run)
   await backToPark(page);
 
   s = await visit(page, 6, /COMPANIES/);
-  expect(s.some((l) => /^ASURA +\d+\/\d+$/.test(l))).toBe(true);
+  expect(s.some((l) => /^\S.* +\d+\/\d+$/.test(l))).toBe(true);   // NAME  ACTIVE/TOTAL (the names are checked against the unit list below)
   expect(s.join('\n')).toContain('ACTIVE/TOTAL MEMBERS');
   await type(page, '9');
   await settled(page, /COMPANIES/, 2);
@@ -230,9 +244,11 @@ test('ATTENDANCE bars, SIGN-INS BY DAY list and a day, back paths and screenshot
   await toPark(page);
 
   let s = await visit(page, 7, /^ATTENDANCE/);
-  expect(s.filter((l) => /^[A-Z]{3} \d{4} +\[/.test(l)).length).toBe(6);
+  const bars = s.filter((l) => /^[A-Z]{3} \d{4} +\[/.test(l)).length;
+  expect(bars).toBeGreaterThanOrEqual(6);   // six months back plus, from the server, the month in progress (parity checks the exact rows)
+  expect(bars).toBeLessThanOrEqual(7);
   expect(s.join('\n')).toContain('DISTINCT PLAYERS PER MONTH');
-  await page.locator('#orkple canvas').screenshot({ path: SCRATCH + 'park-attendance-chart.png' });
+  await page.locator('#orkple canvas').screenshot({ path: test.info().outputPath('park-attendance-chart.png') });
   await backToPark(page);
 
   s = await visit(page, 8, /SIGN-IN DAYS/);
@@ -242,7 +258,7 @@ test('ATTENDANCE bars, SIGN-INS BY DAY list and a day, back paths and screenshot
   expect(day[0]).toMatch(/^[A-Z]{3} \d\d\/\d\d\/\d\d \(\d+\)/);
   expect(day.join('\n')).not.toMatch(/SELECT|FROM ORK_|SELECT \*/i);   // Status.Detail never reaches the screen
   await widthOk(page);
-  await page.locator('#orkple canvas').screenshot({ path: SCRATCH + 'park-signins-day.png' });
+  await page.locator('#orkple canvas').screenshot({ path: test.info().outputPath('park-signins-day.png') });
   await type(page, '0');
   await settled(page, /SIGN-IN DAYS/);
   await backToPark(page);
@@ -320,7 +336,7 @@ test('an endpoint failure gives ?I/O ERROR, the menu still works, and a retry su
     const re = new RegExp('call=' + call.replace('/', '\\/') + '(&|$)');
     await page.route(re, (route) => route.abort());
     await type(page, String(item));
-    await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+    await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+DISK READ FAILED\. TRY AGAIN\.\s*$/);
     await page.unroute(re);
     await page.waitForTimeout(200);
     await type(page, String(item));
@@ -335,21 +351,21 @@ test('a bare numeric Status or a failure Status object is an error, and its Deta
   const bare = /call=Park\/GetOfficers(&|$)/;
   await page.route(bare, (route) => route.fulfill({ contentType: 'application/json', body: '{"Status":2}' }));
   await type(page, '3');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+DISK READ FAILED\. TRY AGAIN\.\s*$/);
   await page.unroute(bare);
   // a Status object with a failure code is a failure too, and its Detail (it can hold SQL) is never shown
   const obj = /call=Report\/RecentParkAttendees(&|$)/;
   await page.route(obj, (route) => route.fulfill({ contentType: 'application/json', body: '{"Status":{"Status":4,"Error":"bad","Detail":"SELECT secret FROM ork_x"},"Attendees":[]}' }));
   await type(page, '4');
   // two failures in a row redraw the park screen, as everywhere in the terminal
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+ARMS OF[\s\S]*0\. PARK LIST\s*$/);
-  expect((await log(page).textContent()) || '').not.toMatch(/SECRET/i);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+DISK READ FAILED\. TRY AGAIN\.\s+ARMS OF[\s\S]*0\. PARK LIST\s*$/);
+  expect((await log(page).innerText()) || '').not.toMatch(/SECRET/i);
   await page.unroute(obj);
   // Status:false is a failure
   const no = /call=Report\/UnitSummary(&|$)/;
   await page.route(no, (route) => route.fulfill({ contentType: 'application/json', body: '{"Status":false}' }));
   await type(page, '6');
-  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s*$/);
+  await endsOn(page, /READING DISK\.\.\.\s+\?I\/O ERROR\s+DISK READ FAILED\. TRY AGAIN\.\s*$/);
   await page.unroute(no);
   // and the same screens still open afterwards
   await type(page, '3');
@@ -357,6 +373,10 @@ test('a bare numeric Status or a failure Status object is an error, and its Deta
 });
 
 test('a failed park header read gives ?I/O ERROR on the list and a missing field is handled', async ({ page }) => {
+  // Details, field count and averages are optional. The averages are one kingdom read shared with the park list,
+  // so they are failed before the list is read.
+  const opt = [/call=Park\/GetParkDetails(&|$)/, /call=Report\/GetParkFieldCountToday(&|$)/, /Kingdom\/park_averages_json/];
+  for (const r of opt) await page.route(r, (route) => route.abort());
   await toKcgParks(page);
   await settled(page, /PARKS +PAGE 1 OF 2$/);
   const re = /call=Park\/GetParkShortInfo(&|$)/;
@@ -364,13 +384,11 @@ test('a failed park header read gives ?I/O ERROR on the list and a missing field
   await type(page, '1');
   await expect(log(page)).toContainText('?I/O ERROR', { timeout: 10000 });
   await page.unroute(re);
-  // Details, field count and averages are optional: with all three gone the profile still opens, with dashes.
-  const opt = [/call=Park\/GetParkDetails(&|$)/, /call=Report\/GetParkFieldCountToday(&|$)/, /Kingdom\/park_averages_json/];
-  for (const r of opt) await page.route(r, (route) => route.abort());
+  // with all three gone the profile still opens, with dashes
   await page.waitForTimeout(200);
   await type(page, '1');
   await endsOn(page, /8\. SIGN-INS BY DAY\s+0\. PARK LIST\s*$/);
-  const t = (await log(page).textContent()) || '';
+  const t = (await log(page).innerText()) || '';
   expect(t).toContain('AVG/WEEK --');
   expect(t).toContain('AVG/MONTH --');
   // and WHERE TO FIND US retries the read, failing cleanly
@@ -392,7 +410,7 @@ test('park page parity: officers, averages, schedule, events and attendance matc
   await toPark(page);
 
   // header figures
-  const head = (await log(page).textContent()) || '';
+  const head = (await log(page).innerText()) || '';
   const stat = (label: string) => new RegExp('pk-stat-value[^>]*>([^<]*)</div>\\s*<div class="pk-stat-label">' + label).exec(html)![1].trim();
   expect(head).toContain('AVG/WEEK ' + stat('Avg / Week'));
   expect(head).toContain('AVG/MONTH ' + stat('Avg / Month'));
@@ -571,33 +589,40 @@ test('the plan document lists exactly the endpoints the terminal allows', async 
   expect(inDoc).toEqual(allowed.slice().sort());
 });
 
-test('an endpoint off the list throws in strict mode and only logs otherwise', async ({ page }) => {
+test('an endpoint off the list is always refused and logged, whatever the test flag says; the probe hook is tests only', async ({ page }) => {
   await loadTerminal(page);
   const r = await page.evaluate(async () => {
     const T = (window as any).OrkpleTerminal;
     const out: any = {};
+    const opts = () => ({ canvas: document.createElement('canvas'), input: document.createElement('input'), live: document.createElement('div'), service: '/orkservice/', ui: '/orkui/index.php?Route=', onExit() {}, reducedMotion: true, user: 0 });
+    // Without the test flag at mount there is no probe hook at all.
+    (window as any).OrkpleStrict = false;
+    const plain = T.mount(opts());
+    out.probeWithoutFlag = typeof plain.probe;
+    plain.destroy();
+    // Mount with the flag (for the hook), then run the probes with it on and off: the refusal does not depend on it.
+    (window as any).OrkpleStrict = true;
+    const t = T.mount(opts());
     for (const strict of [true, false]) {
       (window as any).OrkpleStrict = strict;
       (window as any).OrkpleViolations = [];
-      const t = T.mount({ canvas: document.createElement('canvas'), input: document.createElement('input'), live: document.createElement('div'), service: '/orkservice/', ui: '/orkui/index.php?Route=', onExit() {}, reducedMotion: true, user: 0 });
-      for (const url of ['/orkservice/Json/index.php?call=Kingdom/GetSecretThing&request[x]=1', '/orkui/index.php?Route=Admin/secret']) {
+      for (const [key, url] of [['secret', '/orkservice/Json/index.php?call=Kingdom/GetSecretThing&request[x]=1'], ['admin', '/orkui/index.php?Route=Admin/secret']]) {
         let how = 'no throw';
         try { await t.probe(url); } catch (e: any) { how = /allow-list/.test(String(e.message)) ? 'allow-list throw' : 'other: ' + e.message; }
-        out[String(strict) + ' ' + url.split('=').pop()] = how;
+        out[strict + ' ' + key] = how;
       }
       out['violations ' + strict] = (window as any).OrkpleViolations.slice();
-      t.destroy();
     }
+    t.destroy();
     (window as any).OrkpleViolations = [];
     (window as any).OrkpleStrict = true;
     return out;
   });
-  expect(r['true GetSecretThing&request[x]']).toBeUndefined();
-  expect(r['true 1']).toBe('allow-list throw');
-  expect(r['true Admin/secret']).toBe('allow-list throw');
-  expect(r['false 1']).not.toBe('allow-list throw');
-  expect(r['false Admin/secret']).not.toBe('allow-list throw');
-  expect(r['violations true']).toEqual(['Kingdom/GetSecretThing', 'Admin/secret']);
-  expect(r['violations false']).toEqual(['Kingdom/GetSecretThing', 'Admin/secret']);
-  calls.length = 0;   // the probe's own request is the point of this test
+  expect(r.probeWithoutFlag).toBe('undefined');
+  for (const strict of [true, false]) {
+    expect(r[strict + ' secret']).toBe('allow-list throw');
+    expect(r[strict + ' admin']).toBe('allow-list throw');
+    expect(r['violations ' + strict]).toEqual(['Kingdom/GetSecretThing', 'Admin/secret']);
+  }
+  expect(calls).not.toContain('Kingdom/GetSecretThing');   // refused before any request goes out
 });

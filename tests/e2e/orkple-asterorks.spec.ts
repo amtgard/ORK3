@@ -2,23 +2,9 @@
  * ASTERORKS (ORKPLE II game): loads from the ORK GAMES menu, plays in the real terminal, and leaves cleanly.
  */
 import { test, expect, Page } from '@playwright/test';
+import { orkpleSetup, log, bootGame, tick, canvasLit } from './orkple-helpers';
 
-async function appReachable(baseURL: string): Promise<boolean> {
-  try {
-    const res = await fetch(baseURL, { method: 'HEAD' });
-    return res.ok || res.status === 302 || res.status === 405;
-  } catch {
-    return false;
-  }
-}
-
-test.beforeEach(async ({ baseURL }, testInfo) => {
-  if (!baseURL || !(await appReachable(baseURL))) {
-    testInfo.skip(true, 'ORK3 app not reachable — start docker compose php8 stack');
-  }
-});
-
-const log = (page: Page) => page.locator('#orkple [role=log]');
+orkpleSetup();
 const state = (page: Page) => page.evaluate(() => {
   const g = (window as any).OrkpleGames.asterorks._dbg();
   return {
@@ -28,18 +14,7 @@ const state = (page: Page) => page.evaluate(() => {
 });
 
 async function openGame(page: Page) {
-  await page.goto('./index.php?Route=Search');
-  await page.locator('#orkple-floppy').click({ force: true });
-  await expect(log(page)).toContainText('ORKPLE II', { timeout: 10000 });
-  await page.keyboard.type('ork');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
-  await page.keyboard.type('4');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('5. ASTERORKS', { timeout: 10000 });
-  await page.keyboard.type('5');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('A S T E R O R K S', { timeout: 10000 });
+  await bootGame(page, 'asterorks', { ready: 'A S T E R O R K S' });
 }
 
 // Start round 1 and wait for live play, then replace the horde with a controlled one, east of the archer.
@@ -210,17 +185,7 @@ test('ASTERORKS: clearing round 5 wins, pays for spare lives, and records FIELD 
 });
 
 test('ASTERORKS: pure helpers (round scaling, pair orientation, arrow rotation)', async ({ page }) => {
-  await page.goto('./index.php?Route=Search');
-  await page.locator('#orkple-floppy').click({ force: true });
-  await expect(log(page)).toContainText('ORKPLE II', { timeout: 10000 });
-  await page.keyboard.type('ork');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('ORK GAMES', { timeout: 10000 });
-  await page.keyboard.type('4');
-  await page.keyboard.press('Enter');
-  await page.keyboard.type('5');
-  await page.keyboard.press('Enter');
-  await expect(log(page)).toContainText('A S T E R O R K S', { timeout: 10000 });
+  await openGame(page);
   const r = await page.evaluate(() => {
     const X = (window as any).OrkpleGames.asterorks._pure;
     return {
@@ -256,16 +221,31 @@ test('ASTERORKS: all four pair headings draw, including at the edges', async ({ 
     g.zombies.push({ n: 4, o: 0, x: 140, y: 40, vx: 0, vy: 0 }, { n: 1, o: 0, x: 90, y: 130, vx: 0, vy: 0 });
     g.arrows = [0, 1, 2, 3, 4, 5, 6, 7].map(f => ({ x: 20 + f * 30, y: 120, vx: 0, vy: 0, face: f, left: 1e9 }));
   });
-  await page.waitForTimeout(300);
-  await page.locator('#orkple canvas').first().screenshot({ path: process.env.ASTERORKS_SHOT_PAIRS || 'test-results/asterorks-pairs.png' });
+  await tick(page, 300);
+  // Still in play with every planted group drawn: 10 pairs, a 4-cluster and a single, and the 8 arrows.
+  const s = await state(page);
+  expect(s.mode).toBe('PLAY');
+  expect(s.groups).toBe(12);
+  expect(s.live).toBe(25);
+  expect(s.arrows).toBe(8);
+  expect(await canvasLit(page)).toBe(true);
+  if (process.env.ASTERORKS_SHOT_PAIRS) { await page.locator('#orkple canvas').first().screenshot({ path: process.env.ASTERORKS_SHOT_PAIRS }); }
   expect(errors).toEqual([]);
 });
 
-test('ASTERORKS: main screen screenshot', async ({ page }) => {
+test('ASTERORKS: the main screen draws round 1 in play', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
   await openGame(page);
   await startPlay(page);
-  await page.waitForTimeout(1500);
-  await page.locator('#orkple canvas').first().screenshot({ path: process.env.ASTERORKS_SHOT_MAIN || 'test-results/asterorks-main.png' });
+  await tick(page, 1500);
+  const s = await state(page);
+  expect(['PLAY', 'DYING']).toContain(s.mode);
+  expect(s.round).toBe(1);
+  expect(s.live).toBeGreaterThan(0);
+  expect(await canvasLit(page)).toBe(true);
+  if (process.env.ASTERORKS_SHOT_MAIN) { await page.locator('#orkple canvas').first().screenshot({ path: process.env.ASTERORKS_SHOT_MAIN }); }
+  expect(errors).toEqual([]);
 });
 
 test('ASTERORKS: graphics screenshots (set ASTERORKS_GFX to a directory)', async ({ page }) => {
@@ -274,26 +254,26 @@ test('ASTERORKS: graphics screenshots (set ASTERORKS_GFX to a directory)', async
   const cv = () => page.locator('#orkple canvas').first();
   await openGame(page);
   await expect.poll(async () => (await state(page)).mode).toBe('TITLE');
-  await page.waitForTimeout(600);
+  await tick(page, 600);
   await cv().screenshot({ path: `${dir}/asterorks-title.png` });
   await page.keyboard.press('h');
   await expect.poll(async () => (await state(page)).mode).toBe('HOW');
-  await page.waitForTimeout(400);
+  await tick(page, 400);
   await cv().screenshot({ path: `${dir}/asterorks-help1.png` });
   await page.keyboard.press('Space');
-  await page.waitForTimeout(400);
+  await tick(page, 400);
   await cv().screenshot({ path: `${dir}/asterorks-help2.png` });
   await page.keyboard.press('Space');
   await expect.poll(async () => (await state(page)).mode).toBe('TITLE');
   await page.keyboard.press('Space');
   await expect(log(page)).toContainText('ROUND 1  ZOMBIES 12', { timeout: 10000 });
-  await page.waitForTimeout(500);
+  await tick(page, 500);
   await cv().screenshot({ path: `${dir}/asterorks-card.png` });
   await page.keyboard.press('Space');
-  await page.waitForTimeout(300);
+  await tick(page, 300);
   await cv().screenshot({ path: `${dir}/asterorks-ready.png` });
   await expect.poll(async () => (await state(page)).mode, { timeout: 8000 }).toBe('PLAY');
-  await page.waitForTimeout(1500);
+  await tick(page, 1500);
   await cv().screenshot({ path: `${dir}/asterorks-play.png` });
   await plant(page, [{ n: 4, dx: 60 }, { n: 2, dx: 90 }, { n: 1, dx: -70 }]);
   await page.evaluate(() => {
@@ -302,7 +282,7 @@ test('ASTERORKS: graphics screenshots (set ASTERORKS_GFX to a directory)', async
     g.necro = { dir: 1, x: 100, y: 25, bolt: 1e9 };
     g.arrows = [{ x: 175, y: 88, vx: 0, vy: 0, face: 1, left: 1e9 }];
   });
-  await page.waitForTimeout(300);
+  await tick(page, 300);
   await cv().screenshot({ path: `${dir}/asterorks-scene.png` });
   await page.evaluate(() => {
     const g = (window as any).OrkpleGames.asterorks._dbg();
@@ -310,7 +290,7 @@ test('ASTERORKS: graphics screenshots (set ASTERORKS_GFX to a directory)', async
     g.zombies = [{ n: 1, x: g.p.x, y: g.p.y, vx: 0, vy: 0 }, { n: 1, x: 20, y: 20, vx: 0, vy: 0 }];
   });
   await expect(log(page)).toContainText('OUT OF LIVES', { timeout: 8000 });
-  await page.waitForTimeout(800);
+  await tick(page, 800);
   await cv().screenshot({ path: `${dir}/asterorks-lose.png` });
   await page.keyboard.press('Space');
   await expect.poll(async () => (await state(page)).mode).toBe('TITLE');
@@ -319,6 +299,6 @@ test('ASTERORKS: graphics screenshots (set ASTERORKS_GFX to a directory)', async
   await plant(page, [{ n: 1, dx: 60 }]);
   await page.keyboard.press('Space');
   await expect(log(page)).toContainText('THE FIELD IS HELD', { timeout: 10000 });
-  await page.waitForTimeout(800);
+  await tick(page, 800);
   await cv().screenshot({ path: `${dir}/asterorks-win.png` });
 });
