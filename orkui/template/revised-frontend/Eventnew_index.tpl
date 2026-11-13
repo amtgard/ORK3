@@ -2074,12 +2074,15 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<?php
 				$mapQuery    = urlencode($mapQueryAddress);
 				$mapOpenUrl  = $mapQueryAddress ? 'https://maps.google.com/maps?q=' . $mapQuery : ($mapLink ?: null);
-				// Coordinates → JS-API pin map, so touch devices pan with one finger
-				// (embed iframes are locked to two-finger panning). An address-only
-				// event has no coordinates to pin, so it keeps the embed iframe.
-				$mapPin = ($mapLink && preg_match('/q=@(-?[0-9.]+),(-?[0-9.]+)/', $mapLink, $_mapPt))
-					? ['lat' => (float)$_mapPt[1], 'lng' => (float)$_mapPt[2]] : null;
-				$mapEmbedUrl = 'https://maps.google.com/maps?q=' . $mapQuery . '&output=embed';
+				// Always an embed iframe (free), never a JS-API pin map: JS-API map
+				// loads bill against the Dynamic Maps SKU past 10,000 a month, and the
+				// park/event pin maps pushed ORK well past that in late October 2026.
+				if ($mapLink && strpos($mapLink, 'q=@') !== false) {
+					// lat/lng link — strip @ for embed (Google Maps embed doesn't accept @)
+					$mapEmbedUrl = str_replace('?q=@', '?q=', $mapLink) . '&output=embed&z=14';
+				} else {
+					$mapEmbedUrl = 'https://maps.google.com/maps?q=' . $mapQuery . '&output=embed';
+				}
 				if (!$mapOpenUrl) $mapOpenUrl = 'https://maps.google.com/maps?q=' . $mapQuery;
 			?>
 			<?php // ---- Map Tab ---- ?>
@@ -2090,9 +2093,6 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					</a>
 				</div>
 				<div style="width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--ork-border)">
-					<?php if ($mapPin): ?>
-					<div class="ork-pin-map" role="region" aria-label="Event location map" data-lat="<?= $mapPin['lat'] ?>" data-lng="<?= $mapPin['lng'] ?>" data-zoom="14" style="height:400px"></div>
-					<?php else: ?>
 					<iframe
 						src="<?= htmlspecialchars($mapEmbedUrl) ?>"
 						width="100%"
@@ -2102,7 +2102,6 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 						loading="lazy"
 						referrerpolicy="no-referrer-when-downgrade"
 					></iframe>
-					<?php endif; ?>
 				</div>
 			</div><!-- /.ev-tab-panel -->
 			<?php endif; ?>
