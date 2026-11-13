@@ -533,6 +533,15 @@ class Controller_Player extends Controller
         $this->data['IsOwnProfile']    = $uid === (int)$id;
         $this->data['Player']['ParkName'] = $this->session->park_name;
 
+        // Awards planned on future courts: only for a logged-in viewer who is not looking at
+        // their own profile (an officer is not spoiled on a surprise award). The lookup is
+        // skipped outright otherwise, and Court filters it to the courts the viewer manages.
+        $this->data['PlannedCourtLines'] = [];
+        if ($uid > 0 && $uid !== (int)$id) {
+            $this->load_model('Court');
+            $this->data['PlannedCourtLines'] = $this->Court->get_player_planned_court_lines((int)$id, $uid);
+        }
+
         // Bonus credits (class credits that are not attendance): listed on the
         // Class Levels tab so a credit never reads as an unexplained number.
         // Live ones only; revoked history is kept for a management tool, not
