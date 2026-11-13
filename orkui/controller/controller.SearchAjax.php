@@ -18,6 +18,7 @@ class Controller_SearchAjax extends Controller
             'Kid'             => (int)($_GET['kid'] ?? 0),
             'Pid'             => (int)($_GET['pid'] ?? 0),
             'IncludeInactive' => !empty($_GET['inactive']),
+            'IncludeLegend'   => $_GET['include_legend'] ?? '', // '1', or 'admin' (global admins only)
             'Focus'           => trim($_GET['focus'] ?? ''),
             'CallerUserId'    => isset($this->session->user_id) ? (int)$this->session->user_id : 0,
         ]);

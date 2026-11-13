@@ -105,6 +105,9 @@ class Tournament extends Ork3 {
 	}
 	
 	public function AddParticipant($request) {
+		$entrants = array((int)($request['MundaneId'] ?? 0));
+		foreach ((array)($request['Members'] ?? array()) as $member) $entrants[] = (int)($member['MundaneId'] ?? 0);
+		foreach ($entrants as $entrant) if (Legend::isLegend($entrant)) return NoAuthorization(Legend::REFUSED);
 	
 		if (!$this->check_auth($request)) return NoAuthorization();
 		

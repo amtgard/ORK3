@@ -48,6 +48,9 @@ class Treasury extends Ork3 {
 			return InvalidParameter('Player could not be found.');
         logtrace('Found Player', $request);
 				
+		if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId']))
+			return NoAuthorization(Legend::REFUSED);
+
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $player['ParkId'], AUTH_EDIT)) {
 			$sql = "select 
@@ -74,6 +77,7 @@ class Treasury extends Ork3 {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $player['ParkId'], AUTH_EDIT)) {
 				
+			if (Legend::isLegend((int)$request['MundaneId'])) return NoAuthorization(Legend::REFUSED);
 			$park_info = Ork3::$Lib->park->GetParkShortInfo(array('ParkId'=>$player['ParkId']));
 			if ($park_info['Status']['Status'] > 0)
 				return InvalidParameter('Park information could not be fetched.');

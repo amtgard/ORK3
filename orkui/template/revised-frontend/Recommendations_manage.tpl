@@ -1243,7 +1243,8 @@ function rmOpenGrantModal(rec, tr, courts) {
     // just the row badge the officer scrolled past. Memorial honors are legitimate —
     // this states the fact, it does not block.
     rmGid('rm-grant-sub').textContent = 'Grant ' + (rec.AwardName || 'this award') + rankTxt + ' to “' + (rec.Persona || '') + '”.'
-        + (rec.IsRetired ? ' This recipient is retired or deceased in the ORK — confirm this is an intended memorial honor.' : '');
+        + (rec.IsLegend ? ' This recipient is a Legend of Amtgard, so this honor would be posthumous — confirm that is intended.'
+            : (rec.IsRetired ? ' This recipient is retired or deceased in the ORK — confirm this is an intended memorial honor.' : ''));
     rmGrantErr('');
     rmSetGrantDate(rmTodayYMD());
     rmGid('rm-grant-givenby').value = RmConfig.userName || '';
@@ -1456,14 +1457,15 @@ rmGid('rm-grant-rank-pills').addEventListener('click', function (e) {
         clearTimeout(timer);
         if (term.length < 2) { results.classList.remove('rm-ac-open'); results.innerHTML = ''; return; }
         timer = setTimeout(function () {
-            var url = RmConfig.uir + 'KingdomAjax/playersearch/' + (RmConfig.kingdomId || 0) + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+            var url = RmConfig.uir + 'KingdomAjax/playersearch/' + (RmConfig.kingdomId || 0) + '&scope=all&include_inactive=1&include_suspended=1&include_legend=1&q=' + encodeURIComponent(term);
             fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (data) {
                 if (!data || !data.length) { results.innerHTML = '<div class="rm-ac-none">No players found</div>'; results.classList.add('rm-ac-open'); return; }
                 results.innerHTML = data.map(function (pl) {
                     return '<div class="rm-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona || '') + '">' +
                         rmEsc(pl.Persona || '') +
                         ' <span style="color:var(--rm-muted);font-size:11px">(' + rmEsc(pl.KAbbr || '') + ':' + rmEsc(pl.PAbbr || '') + ')</span>' +
-                        (pl.Suspended ? ' <span style="color:var(--rm-danger);font-size:10px;font-weight:600">(Banned)</span>' : '') +
+                        (pl.Legend ? ' <span class="legend-pill">Legend</span>' : '') +
+                        (pl.Suspended && !pl.Legend ? ' <span style="color:var(--rm-danger);font-size:10px;font-weight:600">(Banned)</span>' : '') +
                         '</div>';
                 }).join('');
                 results.classList.add('rm-ac-open');
@@ -1519,13 +1521,18 @@ function rmOpenCourtModal(targets) {
     rmCourtTargets = targets;
     // Same retired signal as the Grant modal: staging a memorial honor on a live
     // court agenda is legitimate, but the officer must be told at the moment of it.
-    var retired = targets.filter(function (t) { return t && t.IsRetired; });
+    var legends = targets.filter(function (t) { return t && t.IsLegend; });
+    var retired = targets.filter(function (t) { return t && t.IsRetired && !t.IsLegend; });
+    var legTxt = !legends.length ? ''
+        : (legends.length === 1
+            ? ' “' + (legends[0].Persona || 'One recipient') + '” is a Legend of Amtgard, so this honor would be posthumous — confirm that is intended.'
+            : ' ' + legends.length + ' of these recipients are Legends of Amtgard, so these honors would be posthumous — confirm that is intended.');
     var retTxt = !retired.length ? ''
         : (retired.length === 1
             ? ' “' + (retired[0].Persona || 'One recipient') + '” is retired or deceased in the ORK — confirm this is an intended memorial honor.'
             : ' ' + retired.length + ' of these recipients are retired or deceased in the ORK — confirm these are intended memorial honors.');
     document.getElementById('rm-court-sub').textContent = (targets.length === 1
-        ? 'Adding 1 recommendation.' : 'Adding ' + targets.length + ' recommendations.') + retTxt;
+        ? 'Adding 1 recommendation.' : 'Adding ' + targets.length + ' recommendations.') + legTxt + retTxt;
     document.getElementById('rm-court-overlay').hidden = false;
     // Same shared trap as the Grant modal: Escape, Tab wrapping, focus restore.
     rmCourtRelease = rmDialogTrap(document.getElementById('rm-court-overlay'), { onEscape: rmCloseCourtModal });

@@ -656,7 +656,7 @@ html[data-theme="dark"] .cp-rec-cite-status.cp-rec-cite-status-error { color: #f
                 </span>
                 <span class="cp-rec-c cp-rec-c-recip" data-tip="<?= htmlspecialchars($aw['Persona'] ?? '') ?>">
                     <span class="cp-rec-c-label">Recipient</span>
-                    <?= htmlspecialchars($aw['Persona'] ?? '') ?><?php if (!empty($aw['ParkAbbrev'])): ?> <span class="cp-rec-park"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?>
+                    <?= htmlspecialchars($aw['Persona'] ?? '') ?><?php if (!empty($aw['IsLegend'])): ?> <span class="legend-pill">Legend</span><?php endif; ?><?php if (!empty($aw['ParkAbbrev'])): ?> <span class="cp-rec-park"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?>
                 </span>
                 <span class="cp-rec-c cp-rec-c-award" data-tip="<?= htmlspecialchars($aw['AwardName'] ?? '') ?>">
                     <span class="cp-rec-c-label">Award</span>
@@ -787,7 +787,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
                     <span class="cp-rec-c-label">Recipient</span>
                     <div class="cp-ac-wrap">
                         <input type="text" id="cp-rec-walkon-persona" class="cp-rec-walkon-input" placeholder="Search player name…" autocomplete="off"
-                               oninput="cpAcSearch(this,'cp-rec-walkon-ac','cp-rec-walkon-mundane-id')"
+                               oninput="cpAcSearch(this,'cp-rec-walkon-ac','cp-rec-walkon-mundane-id',null,true)"
                                onkeydown="cpRecWalkOnKeydown(event,'recipient')">
                         <div class="cp-ac-dropdown" id="cp-rec-walkon-ac"></div>
                     </div>
@@ -915,6 +915,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
     var courtMeta        = window.courtMeta   = {
         name: <?= json_encode($court['Name'] ?? '') ?>,
         date: <?= json_encode($court['CourtDate'] ?? '') ?>,
+        heldBeforeToday: <?= json_encode(!empty($court['HeldBeforeToday'])) ?>,
         eventId: <?= (int)($court['EventCalendarDetailId'] ?? 0) ?>,
         eventName: <?= json_encode($court['EventName'] ?? '') ?>,
         recorderId: <?= (int)($court['RecorderMundaneId'] ?? 0) ?>,
@@ -1101,7 +1102,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
         if (status) { status.textContent = 'Saving…'; status.className = 'cp-rec-strip-status'; }
         post('CourtAjax/update_court', fd, true).then(function(d) {
             if (d.status === 0) {
-                if ('CourtDate' in fields) courtMeta.date = fields.CourtDate;
+                if ('CourtDate' in fields) { courtMeta.date = fields.CourtDate; courtMeta.heldBeforeToday = !!d.heldBeforeToday; }
                 if ('EventCalendarDetailId' in fields) courtMeta.eventId = parseInt(fields.EventCalendarDetailId, 10) || 0;
                 if ('RecorderMundaneId' in fields) courtMeta.recorderId = parseInt(fields.RecorderMundaneId, 10) || 0;
                 if (status) {
@@ -1618,7 +1619,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
     window.cpRecGiverPopInput = function(input) {
         cpAcSearch(input, 'cp-rec-giver-pop-ac', 'cp-rec-giver-pop-hidden', function(p) {
             cpRecGiverPopPick(p.MundaneId, p.Persona);
-        });
+        }, courtMeta.heldBeforeToday);
     };
     // "Apply to the rest below" — updates every row below the currently-open one to
     // the giver just picked for THIS row. Deliberately calls cpRecSetGiverChip() only
@@ -2000,7 +2001,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
             '<button type="button" class="cp-rec-seg-btn cp-rec-seg-skipped" aria-pressed="false" onclick="cpRecMark(' + caid + ',\'skipped\')">Skipped</button>' +
             '<button type="button" class="cp-rec-seg-btn cp-rec-seg-none" aria-pressed="true" onclick="cpRecMark(' + caid + ',\'none\')" data-tip="Clear this mark">&mdash;</button>' +
             '</span>';
-        html += '<span class="cp-rec-c cp-rec-c-recip" data-tip="' + esc(aw.Persona || '') + '"><span class="cp-rec-c-label">Recipient</span>' + esc(aw.Persona || '') +
+        html += '<span class="cp-rec-c cp-rec-c-recip" data-tip="' + esc(aw.Persona || '') + '"><span class="cp-rec-c-label">Recipient</span>' + esc(aw.Persona || '') + (aw.IsLegend ? ' <span class="legend-pill">Legend</span>' : '') +
             (aw.ParkAbbrev ? ' <span class="cp-rec-park">' + esc(aw.ParkAbbrev) + '</span>' : '') + '</span>';
         html += '<span class="cp-rec-c cp-rec-c-award" data-tip="' + esc(aw.AwardName || '') + '"><span class="cp-rec-c-label">Award</span>' + esc(aw.AwardName || '') + '</span>';
 
@@ -2058,6 +2059,7 @@ unset($__i, $aw, $caid, $mark, $rowClass); ?>
             CourtAwardId: aw.CourtAwardId,
             MundaneId: aw.MundaneId,
             Persona: aw.Persona,
+            IsLegend: !!aw.IsLegend,
             ParkAbbrev: aw.ParkAbbrev || '',
             KingdomAwardId: aw.KingdomAwardId,
             AwardName: aw.AwardName,

@@ -326,7 +326,7 @@ var RcConfig = {
 	function acSearch(q, cb) {
 		clearTimeout(_t[q]);
 		_t[q] = setTimeout(function() {
-			fetch(RcConfig.uir + 'SearchAjax/universal&q=' + encodeURIComponent(q) + '&kid=' + RcConfig.kingdomId + '&inactive=1')
+			fetch(RcConfig.uir + 'SearchAjax/universal&q=' + encodeURIComponent(q) + '&kid=' + RcConfig.kingdomId + '&inactive=1&include_legend=1')
 				.then(function(r){ return r.json(); }).then(cb).catch(function(){});
 		}, 220);
 	}
@@ -353,7 +353,8 @@ var RcConfig = {
 					gbDrop.innerHTML = items.map(function(p) {
 						return '<div class="rc-ac-item" data-id="' + p.id + '" data-name="' + escH(p.name) + '">'
 							+ escH(p.name)
-							+ (p.active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+							+ (p.Legend ? ' <span class="legend-pill">Legend</span>' : '')
+							+ (p.active === 0 && !p.Legend ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
 							+ (p.park ? '<div class="rc-ac-item-sub">' + escH(p.park) + '</div>' : '')
 							+ '</div>';
 					}).join('');

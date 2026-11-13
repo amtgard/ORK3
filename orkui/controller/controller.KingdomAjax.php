@@ -833,6 +833,7 @@ class Controller_KingdomAjax extends Controller
         $park_id          = (int)($_GET['park_id']        ?? 0);
         $include_inactive  = !empty($_GET['include_inactive']);
         $include_suspended = !empty($_GET['include_suspended']);
+        $include_legend    = $_GET['include_legend'] ?? ''; // opt-in: '1', or 'admin' (global admins only); Legends are hidden by default
         if (strlen($q) < 2) {
             echo json_encode([]);
             exit;
@@ -853,6 +854,8 @@ class Controller_KingdomAjax extends Controller
             'ScopeParkId'      => $park_id,
             'IncludeInactive'  => $include_inactive,
             'IncludeSuspended' => $include_suspended,
+            'IncludeLegend'    => $include_legend,
+            'CallerUserId'     => (int)$this->session->user_id,
             'Limit'            => 15,
             'Format'           => 'kingdom',
         ]);

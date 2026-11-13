@@ -1,6 +1,7 @@
 <?php
 	$error           = isset($error)           ? $error           : '';
 	$detail          = isset($detail)          ? $detail          : '';
+	$refusal         = isset($refusal)         ? $refusal         : '';
 	$session_message = isset($session_message) ? $session_message : '';
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -430,7 +431,11 @@ html[data-theme="dark"] .lg-session-notice { background: #1a365d; border-color: 
 
 		<?php if (strlen($error) > 0): ?>
 			<div class="lg-error">
-				Login failed. If you cannot remember your password, use the <strong>Forgot your password?</strong> link above.
+				<?php if (strlen($refusal) > 0): ?>
+					<?= htmlspecialchars($refusal) ?>
+				<?php else: ?>
+					Login failed. If you cannot remember your password, use the <strong>Forgot your password?</strong> link above.
+				<?php endif; ?>
 			</div>
 		<?php endif; ?>
 

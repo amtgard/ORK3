@@ -15,11 +15,14 @@ class Notification
         return str_replace(["'", '\\'], ["''", '\\\\'], (string)$v);
     }
 
-    // Insert one notification. Returns 1 on insert, 0 if the target is invalid.
+    // Insert one notification. Returns 1 on insert, 0 if the target is invalid or a
+    // Legend (In Memoriam): every in-app notice, including the recommendation
+    // granted, pass-down and unrecorded-court notices, goes through here, and a
+    // Legend can no longer sign in to read one.
     public function Add($mundaneId, $type, $message, $link = null)
     {
         $mundaneId = (int)$mundaneId;
-        if ($mundaneId <= 0) {
+        if ($mundaneId <= 0 || Legend::isLegend($mundaneId)) {
             return 0;
         }
         $linkSql = ($link === null || $link === '') ? 'NULL' : "'" . $this->esc($link) . "'";

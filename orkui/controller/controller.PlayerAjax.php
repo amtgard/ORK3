@@ -692,7 +692,9 @@ class Controller_PlayerAjax extends Controller
         $this->load_model('Player');
         $attendance = $this->Player->fetch_player_attendance($mundane_id);
         $parkEditAuth = [];
-        if (isset($this->session->user_id)) {
+        // A park officer reads a Legend's attendance; only those who may edit the Legend correct it.
+        $this->load_model('Legend');
+        if (isset($this->session->user_id) && !$this->Legend->blocks_edit((int)$this->session->user_id, $mundane_id)) {
             $uid = (int)$this->session->user_id;
             $uniqueParkIds = array_unique(array_filter(array_column(
                 array_filter($attendance, fn ($a) => (int)($a['EventId'] ?? 0) === 0),

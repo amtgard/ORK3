@@ -68,6 +68,10 @@ class IdpIntegration extends Ork3
             return NoAuthorization();
         }
 
+        if (Legend::isLegend($mundaneId)) {
+            return NoAuthorization(Legend::REFUSED);
+        }
+
         if (!$this->loadOpenChallenge($idpUserId, $mundaneId)) {
             return NoAuthorization();
         }
@@ -186,7 +190,8 @@ class IdpIntegration extends Ork3
         $email = strtolower(trim((string) $this->mundane->email));
         if ($email === '' || !str_contains($email, '@')
             || (int) $this->mundane->suspended !== 0
-            || (int) $this->mundane->penalty_box !== 0) {
+            || (int) $this->mundane->penalty_box !== 0
+            || (int) $this->mundane->is_legend !== 0) {
             $this->log->Write('IdpIntegration BeginClaimOrkMail skipped', 0, LOG_EDIT, [
                 'reason' => 'no_mailbox',
                 'mundane_id' => $mundaneId,

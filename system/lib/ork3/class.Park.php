@@ -1098,6 +1098,9 @@ class Park extends Ork3
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request[ 'Token' ])) > 0
             && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT)
         ) {
+            if (Legend::isLegend((int)($request['MundaneId'] ?? 0))) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             if (!isset($request['KingdomId'])) {
                 if (!isset($request['ParkId'])) {
                     return InvalidParameter('Either ParkId or KingdomId must be set to update officers.');

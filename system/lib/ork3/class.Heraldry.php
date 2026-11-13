@@ -62,6 +62,9 @@ class Heraldry extends Ork3
 
     public function RemovePlayerHeraldry($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         $mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
 
         if ((($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
@@ -87,6 +90,9 @@ class Heraldry extends Ork3
 
     public function SetPlayerHeraldry($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         $mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
 
         if ((($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
