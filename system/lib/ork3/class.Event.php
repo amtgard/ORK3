@@ -471,11 +471,53 @@ class Event extends Ork3
     // would be compared against tomorrow's date and dropped. That is the exact
     // window this method exists to cover, so both sides of the comparison have
     // to be read off the same clock.
+    /**
+     * A player's upcoming RSVPs. Token required: the player themself, or an
+     * actor with park / kingdom (or global admin) authority over that player.
+     */
     public function GetUpcomingRsvps($request)
     {
         $mundaneId = (int)($request['MundaneId'] ?? 0);
         if (!valid_id($mundaneId)) {
             return InvalidParameter('MundaneId is required.');
+        }
+        $actorId = (int) Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if (!valid_id($actorId) || !$this->_canViewPlayerRsvps($actorId, $mundaneId)) {
+            return NoAuthorization();
+        }
+        return $this->_rsvpOkResponse(['UpcomingRsvps' => $this->upcoming_rsvps_list($mundaneId)]);
+    }
+
+    private function _canViewPlayerRsvps(int $actorId, int $mundaneId): bool
+    {
+        if ($actorId === $mundaneId) {
+            return true;
+        }
+        $this->db->Clear();
+        $p = $this->db->DataSet(
+            'SELECT park_id, kingdom_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        if (!$p || !$p->Next()) {
+            return false;
+        }
+        $parkId = (int) $p->park_id;
+        $kingdomId = (int) $p->kingdom_id;
+        $auth = Ork3::$Lib->authorization;
+        return ($parkId > 0 && $auth->HasAuthority($actorId, AUTH_PARK, $parkId, AUTH_EDIT))
+            || ($kingdomId > 0 && $auth->HasAuthority($actorId, AUTH_KINGDOM, $kingdomId, AUTH_EDIT))
+            || $auth->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_ADMIN);
+    }
+
+    /**
+     * Server-side read with no token check, for callers that have already
+     * decided the viewer may see the list (the profile page). The underscore
+     * keeps it off the public JSON service.
+     */
+    public function upcoming_rsvps_list($mundaneId)
+    {
+        $mundaneId = (int) $mundaneId;
+        if (!valid_id($mundaneId)) {
+            return [];
         }
         $today = date('Y-m-d');
         $this->db->Clear();
@@ -500,7 +542,7 @@ class Event extends Ork3
                 ];
             }
         }
-        return $this->_rsvpOkResponse(['UpcomingRsvps' => $list]);
+        return $list;
     }
 
     public function GetKingdomUpcomingEventsWithoutRsvp($request)

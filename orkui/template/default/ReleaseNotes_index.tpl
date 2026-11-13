@@ -93,6 +93,61 @@ $version = $ork_version ?? '3.x';
 	line-height: 1.5;
 	margin: 0;
 }
+
+/* ── ORK 0.1: the pinned ORKPLE II release, in green phosphor ── */
+html[data-theme] .rn-release.rn-orkple,
+.rn-release.rn-orkple {
+	--orkple-phosphor: #7cf5c4;
+	--orkple-screen: #0b0f0d;
+	border-color: #1f3b31;
+}
+
+/* .rn-release.rn-orkple beats orkui.css's html[data-theme="dark"] .rn-release-header,
+   so the CRT header stays screen-black in both themes. */
+.rn-release.rn-orkple .rn-release-header {
+	background: var(--orkple-screen);
+	border-bottom-color: #1f3b31;
+}
+
+.rn-orkple .rn-release-title,
+.rn-orkple .rn-release-date {
+	color: var(--orkple-phosphor);
+	font-family: "Courier New", Courier, monospace;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	text-shadow: 0 0 6px rgba(124, 245, 196, 0.45);
+}
+
+.rn-orkple .rn-item-icon {
+	background: var(--orkple-screen);
+	color: var(--orkple-phosphor);
+}
+
+.rn-orkple-insert {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 10px;
+	padding: 8px 14px;
+	border: 2px solid var(--orkple-screen);
+	border-radius: 4px;
+	background: var(--orkple-phosphor);
+	color: var(--orkple-screen);
+	font: 700 13px/1 "Courier New", Courier, monospace;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+
+.rn-orkple-insert:hover,
+.rn-orkple-insert:focus-visible {
+	background: var(--orkple-screen);
+	color: var(--orkple-phosphor);
+}
+
+html[data-theme="dark"] .rn-orkple-insert {
+	border-color: var(--orkple-phosphor);
+}
 </style>
 
 <div class="rp-root">
@@ -120,11 +175,12 @@ $version = $ork_version ?? '3.x';
 	<div class="rn-body">
 
 <?php foreach ($releases as $release) :
-	$rel_date = date('F j, Y', strtotime($release['date']));
+	$rel_date = $release['display_date'] ?? date('F j, Y', strtotime($release['date']));
+	$rel_label = $release['label'] ?? 'v' . $release['version'];
 ?>
-		<div class="rn-release">
+		<div class="rn-release<?=!empty($release['orkple']) ? ' rn-orkple' : ''?>" id="<?=htmlspecialchars($release['anchor'])?>">
 			<div class="rn-release-header">
-				<div class="rn-release-title">v<?=htmlspecialchars($release['version'])?></div>
+				<div class="rn-release-title"><?=htmlspecialchars($rel_label)?></div>
 				<div class="rn-release-date"><?=htmlspecialchars($rel_date)?></div>
 			</div>
 			<ul class="rn-items">
@@ -134,6 +190,9 @@ $version = $ork_version ?? '3.x';
 					<div class="rn-item-content">
 						<div class="rn-item-title"><?=htmlspecialchars($item['title'])?></div>
 						<p class="rn-item-body"><?=htmlspecialchars($item['body'])?></p>
+<?php if (($item['action'] ?? '') === 'orkple' && !empty($OrkpleEnabled)) : ?>
+						<button type="button" class="rn-orkple-insert" data-orkple-insert><i class="fas fa-save" aria-hidden="true"></i> Insert Floppy Disk</button>
+<?php endif; ?>
 					</div>
 				</li>
 <?php endforeach; ?>

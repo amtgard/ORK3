@@ -2563,7 +2563,7 @@ class Report extends Ork3
 
         $wkStart = date('Y-m-d', strtotime('-6 month'));
         $wkEnd = date('Y-m-d');
-        $wkCount = max(1, (int) ceil((strtotime($wkEnd) - strtotime($wkStart)) / (7 * 86400)));
+        $wkCount = self::weeks_in_window($wkStart, $wkEnd);
         $statsKids = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kid)));
 
         $weekly = $this->GetKingdomParkAverages(['KingdomId' => $kid, 'AverageMonths' => 6]);
@@ -2624,7 +2624,10 @@ class Report extends Ork3
         $this->db->Clear();
         $knMoResult = $this->db->DataSet($knMoSql);
         $kmo = ($knMoResult && $knMoResult->Next()) ? round((float) $knMoResult->kmo, 1) : 0;
-        $result['_kingdom'] = ['att' => $katt, 'mo' => $kmo, 'wk_count' => $wkCount];
+        foreach ($result as $pid => $row) {
+            $result[$pid]['wk'] = round($row['att'] / $wkCount, 3); // average players a week
+        }
+        $result['_kingdom'] = ['att' => $katt, 'mo' => $kmo, 'wk_count' => $wkCount, 'wk' => round($katt / $wkCount, 3)];
 
         if ($isAdmin) {
             $this->db->Clear();
@@ -2677,6 +2680,15 @@ class Report extends Ork3
         }
 
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.GetKingdomExtendedParkAverages', $cacheKey, $result);
+    }
+
+    /**
+     * Weeks in a Y-m-d window, rounded up, at least one: the divisor for every
+     * "average players a week" figure.
+     */
+    private static function weeks_in_window($start, $end)
+    {
+        return max(1, (int) ceil((strtotime($end) - strtotime($start)) / (7 * 86400)));
     }
 
     public function GetTopParksByAttendance($request = null)
@@ -2742,9 +2754,11 @@ class Report extends Ork3
             $response['Status'] = InvalidParameter();
         } else {
             $report = array();
+            $weeks = self::weeks_in_window($request['StartDate'], $request['EndDate']);
             while ($r->next()) {
                 $report[] = array(
                     'AttendanceCount' => $r->attendance_count,
+                    'AvgPerWeek' => round($r->attendance_count / $weeks, 3),
                     'ParkId' => $r->park_id,
                     'ParkName' => $r->name,
                     'HasHeraldry' => $r->has_heraldry,
@@ -2776,6 +2790,7 @@ class Report extends Ork3
             $request['ReportFromDate'] = 'curdate()';
         }
         $wk_start = date("Y-m-d", strtotime("-6 month"));
+        $wk_weeks = self::weeks_in_window($wk_start, date("Y-m-d"));
         $mo_start = date("Y-m-d", strtotime("-1 year"));
         $sql = "SELECT k.name, k.kingdom_id, k.parent_kingdom_id, pcount.park_count, ifnull(attendance_count,0) attendance, ifnull(monthly_attendance_count,0) monthly, ifnull(avg_monthly_att.avg_monthly,0) avg_monthly, ifnull(activeparks.parkcount,0) active_parks
 					FROM `" . DB_PREFIX . "kingdom` k
@@ -2831,7 +2846,7 @@ class Report extends Ork3
         while ($r->next()) {
             $report[] = array( 'KingdomName' => $r->name, 'ParentKingdomId' => $r->parent_kingdom_id,
                                     'IsPrincipality' => $r->parent_kingdom_id > 0 ? 1 : 0, 'KingdomId' => $r->kingdom_id,
-                                    'ParkCount' => $r->park_count, 'Attendance' => $r->attendance, 'Monthly' => $r->monthly, 'MonthlyAvg' => round((float)$r->avg_monthly, 1), 'Participation' => $r->active_parks );
+                                    'ParkCount' => $r->park_count, 'Attendance' => $r->attendance, 'AvgPerWeek' => round($r->attendance / $wk_weeks, 3), 'Monthly' => $r->monthly, 'MonthlyAvg' => round((float)$r->avg_monthly, 1), 'Participation' => $r->active_parks );
         }
         $response = array(
             'Status' => Success(),
@@ -8368,6 +8383,8 @@ class Report extends Ork3
      * UNGATED: park-level aggregate, same class of data as the public Live
      * map. Real-time only for parks using QR sign-in links; reeve-entered
      * attendance appears when it's typed in.
+     * Also returns Today (the server's date) and IsParkDay (the park meets in
+     * person today, per Park::park_meets_on), so clients need no recurrence rules.
      */
     public function GetParkFieldCountToday($request)
     {
@@ -8375,6 +8392,9 @@ class Report extends Ork3
         if ($park_id <= 0) {
             return array('Status' => InvalidParameter(), 'Count' => 0);
         }
+        $today = date('Y-m-d');
+        $days = Ork3::$Lib->park->GetParkDays(array('ParkId' => $park_id));
+        $is_park_day = Park::park_meets_on(is_array($days['ParkDays'] ?? null) ? $days['ParkDays'] : array(), $today);
         $r = $this->db->query(
             'SELECT COUNT(DISTINCT mundane_id) AS c FROM ' . DB_PREFIX . "attendance
 			 WHERE park_id = $park_id AND date = CURDATE()"
@@ -8383,7 +8403,7 @@ class Report extends Ork3
         if ($r !== false && $r->size() > 0 && $r->next()) {
             $count = (int)$r->c;
         }
-        return array('Status' => Success(), 'Count' => $count);
+        return array('Status' => Success(), 'Count' => $count, 'Today' => $today, 'IsParkDay' => $is_park_day ? 1 : 0);
     }
 
     public function GetAttendanceDates($request)

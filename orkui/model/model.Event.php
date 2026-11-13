@@ -245,14 +245,36 @@ class Model_Event extends Model
         return $r['RsvpPlayers'] ?? [];
     }
 
+    /**
+     * Profile-page read. The profile template decides who sees the card, so
+     * this uses the domain's token-free internal read; the public
+     * Event/GetUpcomingRsvps call is token-gated.
+     */
     public function get_upcoming_rsvps($mundane_id)
     {
-        $r = $this->Event->GetUpcomingRsvps(['MundaneId' => (int)$mundane_id]);
+        return $this->_upcomingRsvpRows($this->Event->upcoming_rsvps_list((int)$mundane_id));
+    }
+
+    /**
+     * The signed-in player's own upcoming RSVPs, through the token-gated
+     * domain call. Returns [] when nobody is signed in.
+     */
+    public function get_my_upcoming_rsvps($mundane_id, $token)
+    {
+        if (!valid_id((int)$mundane_id) || (string)$token === '') {
+            return [];
+        }
+        $r = $this->Event->GetUpcomingRsvps(['Token' => (string)$token, 'MundaneId' => (int)$mundane_id]);
         if (!$this->_eventApiOk($r)) {
             return [];
         }
+        return $this->_upcomingRsvpRows($r['UpcomingRsvps'] ?? []);
+    }
+
+    private function _upcomingRsvpRows($rows)
+    {
         $list = [];
-        foreach ($r['UpcomingRsvps'] ?? [] as $row) {
+        foreach (is_array($rows) ? $rows : [] as $row) {
             $list[] = [
                 'EventCalendarDetailId' => $row['EventCalendarDetailId'],
                 'EventId' => $row['EventId'],
