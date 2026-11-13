@@ -207,12 +207,13 @@ DROP TABLE IF EXISTS `ork_bracket`;
 CREATE TABLE IF NOT EXISTS `ork_bracket` (
   `bracket_id` int(11) NOT NULL AUTO_INCREMENT,
   `tournament_id` int(11) NOT NULL,
-  `style` enum('Single Sword','Florentine','Sword and Shield','Great Weapon','Missile','Other','Jugging','Battlegame','Quest') NOT NULL,
+  `style` enum('Single Sword','Florentine','Sword and Shield','Great Weapon','Missile','Other','Jugging','Battlegame','Quest','Open Weapons') NOT NULL,
   `style_note` varchar(255) NOT NULL,
   `method` enum('single','double','swiss','round-robin','ironman','score') NOT NULL,
   `rings` int(11) NOT NULL,
   `participants` enum('individual','team') NOT NULL,
   `seeding` enum('manual','glicko2','random','glicko2-manual','random-manual') NOT NULL,
+  `first_round_mode` enum('byes','play-in') NOT NULL DEFAULT 'byes',
   PRIMARY KEY (`bracket_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 AUTO_INCREMENT=1 ;
 
@@ -423,7 +424,7 @@ CREATE TABLE IF NOT EXISTS `ork_glicko2` (
   `sigma` double(12,5) NOT NULL,
   `modified` datetime NOT NULL,
   `style_specific` tinyint(1) NOT NULL DEFAULT '0',
-  `style` enum('Single Sword','Florentine','Sword and Shield','Great Weapon','Missile','Other','Jugging','Battlegame','Quest') NOT NULL,
+  `style` enum('Single Sword','Florentine','Sword and Shield','Great Weapon','Missile','Other','Jugging','Battlegame','Quest','Open Weapons') NOT NULL,
   PRIMARY KEY (`glicko2_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 AUTO_INCREMENT=1 ;
 
@@ -505,6 +506,8 @@ CREATE TABLE IF NOT EXISTS `ork_match` (
   `participant_1_id` int(11) NOT NULL,
   `participant_2_id` int(11) NOT NULL,
   `result` enum('1-wins','2-wins','tie','1-forfeits','2-forfeits','1-is-disqualified','2-is-disqualified','1-is-bye','2-is-bye','score') NOT NULL,
+  `voided` tinyint(1) NOT NULL DEFAULT 0,
+  `auto_resolved` tinyint(1) NOT NULL DEFAULT 0,
   `tournament_id` int(11) NOT NULL,
   `bracket_id` int(11) NOT NULL,
   `round` varchar(20) NOT NULL,
@@ -720,6 +723,7 @@ CREATE TABLE IF NOT EXISTS `ork_participant` (
   `unit_id` int(11) NOT NULL,
   `park_id` int(11) NOT NULL,
   `kingdom_id` int(11) NOT NULL,
+  `withdraw_mode` enum('forfeit','annul') NULL DEFAULT NULL,
   PRIMARY KEY (`participant_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 AUTO_INCREMENT=1 ;
 

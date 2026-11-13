@@ -1350,3 +1350,142 @@ html[data-theme="dark"] .apexcharts-tooltip-text-y-label,
 html[data-theme="dark"] .apexcharts-tooltip-text-y-value {
     color: var(--ork-text, #e2e8f0) !important;
 }
+
+/* ===== Tournament Report (uses rp- shell + --rp-* vars for dark mode) ===== */
+
+/* Date filter in the dark rp-header */
+.rp-header .tnr-filter { display:flex; gap:6px; align-items:center; }
+.rp-header .tnr-date {
+    width:120px; padding:6px 9px; font-size:12px;
+    background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25);
+    border-radius:6px; color:#fff;
+}
+.rp-header .tnr-date::placeholder { color:rgba(255,255,255,0.6); }
+.rp-header .tnr-date:focus { outline:none; border-color:rgba(255,255,255,0.55); background:rgba(255,255,255,0.18); }
+
+/* Tabs */
+.tnr-tabs { display:flex; gap:4px; border-bottom:1px solid var(--rp-border); margin:18px 0 14px; flex-wrap:wrap; }
+.tnr-tab {
+    background:transparent; border:none; padding:9px 16px; cursor:pointer;
+    color:var(--rp-text-muted); font-weight:600; font-size:14px;
+    border-bottom:2px solid transparent; display:inline-flex; align-items:center; gap:6px;
+}
+.tnr-tab:hover { color:var(--rp-text); }
+.tnr-tab.tnr-active { color:var(--rp-accent); border-bottom-color:var(--rp-accent); }
+.tnr-panel { display:none; }
+.tnr-panel.tnr-active { display:block; }
+
+/* Cards / breakdown rows */
+.tnr-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+.tnr-card {
+    background:var(--rp-bg-light); border:1px solid var(--rp-border);
+    border-radius:8px; padding:14px;
+}
+.tnr-h {
+    font-size:13px; font-weight:700; color:var(--rp-text); margin:0 0 8px;
+    text-transform:uppercase; letter-spacing:0.04em;
+    /* reset global h1-h6 box */
+    background-color:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
+}
+html[data-theme="dark"] .tnr-h {
+    background-color:transparent !important; border:none !important; padding:0 !important;
+    color:var(--rp-text) !important; text-shadow:none !important;
+}
+.tnr-bar-row {
+    display:flex; justify-content:space-between; padding:4px 0; font-size:13px;
+    color:var(--rp-text-body); border-bottom:1px solid var(--rp-border);
+}
+.tnr-bar-row:last-child { border-bottom:none; }
+.tnr-bar-row b { color:var(--rp-text); }
+
+/* Tables */
+.tnr-table { width:100%; border-collapse:collapse; }
+.tnr-table th, .tnr-table td { padding:8px 10px; border-bottom:1px solid var(--rp-border); text-align:left; color:var(--rp-text); }
+.tnr-table th { font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--rp-text-muted); white-space:nowrap; }
+.tnr-table tbody tr:hover > td { background:var(--rp-bg-light); }
+.tnr-table a { color:var(--rp-accent); text-decoration:none; font-weight:600; }
+.tnr-table a:hover { text-decoration:underline; }
+
+.tnr-empty { padding:24px; text-align:center; color:var(--rp-text-hint); font-size:13px; }
+
+/* Trend chart */
+.tnr-trend { width:100%; height:auto; max-height:260px; display:block; }
+.tnr-bar-p { fill:var(--rp-accent); }
+.tnr-grid { stroke:var(--rp-border); stroke-width:1; }
+.tnr-axis { fill:var(--rp-text-muted); font-size:11px; }
+.tnr-axis-y { text-anchor:end; }
+.tnr-axis-x { text-anchor:middle; }
+.tnr-bar-lbl { text-anchor:middle; font-size:11px; font-weight:700; fill:var(--rp-text-muted); }
+.tnr-bar-lbl-in { fill:#fff; }
+.tnr-legend { font-size:12px; color:var(--rp-text-muted); margin-top:8px; }
+
+/* Tournaments tab cards */
+.tnr-tcard { background:var(--rp-bg-light); border:1px solid var(--rp-border); border-radius:8px; padding:14px 16px; margin-bottom:12px; }
+.tnr-tcard-top { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap; }
+.tnr-tcard-info { flex:1 1 auto; min-width:0; }
+.tnr-tcard-name { font-weight:700; font-size:15px; color:var(--rp-accent); text-decoration:none; }
+.tnr-tcard-name:hover { text-decoration:underline; }
+.tnr-tcard-meta { font-size:12px; color:var(--rp-text-muted); margin-top:2px; }
+.tnr-warstats { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.tnr-warstat { border:1px solid var(--rp-border); border-radius:6px; padding:4px 10px; font-size:12px; color:var(--rp-text-muted); }
+.tnr-warstat b { color:var(--rp-text); font-size:13px; font-weight:700; }
+.tnr-warstat-hi { border-color:var(--rp-accent); color:var(--rp-accent); }
+.tnr-warstat-hi b { color:var(--rp-accent); }
+
+/* Per-rank participant distribution (Order of the Warrior 1-10, W=Warlord, K=Sword Knight) */
+.tnr-rankdist { display:flex; align-items:flex-end; gap:3px; margin:0; flex:0 0 auto; }
+.tnr-rankcol { display:flex; flex-direction:column; align-items:center; width:24px; flex:0 0 auto; }
+.tnr-rankcount { font-size:11px; font-weight:700; color:var(--rp-text-hint); line-height:1; margin-bottom:3px; }
+.tnr-rankcount-has { color:var(--rp-text); }
+.tnr-rankbar-wrap { height:32px; display:flex; align-items:flex-end; }
+.tnr-rankbar { width:16px; background:var(--rp-accent); border-radius:2px 2px 0 0; }
+.tnr-rankcol-elite .tnr-rankbar { background:var(--rp-accent-mid); }
+.tnr-ranklabel { font-size:10px; color:var(--rp-text-muted); margin-top:3px; padding-top:3px; border-top:1px solid var(--rp-border); width:100%; text-align:center; }
+.tnr-rankcol-elite .tnr-ranklabel { color:var(--rp-accent); font-weight:700; }
+.tnr-tstandings { margin-top:4px; }
+.tnr-tstandings th, .tnr-tstandings td { padding:5px 8px; }
+.tnr-tstandings td.tnr-tstandings-empty { text-align:center; color:var(--rp-text-hint); font-size:12px; }
+.tnr-tcard .tnr-thidden { display:none; }
+.tnr-tcard.tnr-show-all .tnr-thidden { display:table-row; }
+.tnr-showmore { margin-top:8px; background:transparent; border:1px solid var(--rp-border); color:var(--rp-accent); border-radius:6px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; }
+.tnr-showmore:hover { background:var(--rp-accent); color:#fff; }
+
+/* Award candidate cards */
+.tnr-cand {
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+    padding:12px 14px; border:1px solid var(--rp-border); border-radius:8px;
+    margin-bottom:8px; background:var(--rp-bg-light);
+}
+.tnr-cand-ootw { border-color:var(--rp-accent); box-shadow:0 0 0 1px var(--rp-accent) inset; }
+.tnr-cand-name { font-weight:700; color:var(--rp-accent); margin-right:8px; text-decoration:none; }
+.tnr-cand-name:hover { text-decoration:underline; }
+.tnr-cand-wl { font-size:12px; color:var(--rp-text-muted); }
+.tnr-cand-note { font-size:13px; color:var(--rp-text-body); margin-top:4px; }
+.tnr-cand-btn { flex-shrink:0; }
+.tnr-pill {
+    display:inline-block; background:var(--rp-accent); color:#fff; font-size:11px;
+    font-weight:600; padding:2px 9px; border-radius:10px; margin-left:6px;
+}
+
+@media (max-width:700px){
+    .tnr-grid2 { grid-template-columns:1fr; }
+    .tnr-table:not(.dataTable) { display:block; overflow-x:auto; }
+    .rp-header .tnr-date { width:100px; }
+}
+
+/* Team Champions tab */
+.tnr-tc-card .tnr-tcard-top { margin-bottom:12px; }
+.tnr-tc-podium { display:flex; gap:16px; flex-wrap:wrap; }
+.tnr-tc-place { flex:1 1 200px; border:1px solid var(--rp-border); border-radius:8px; padding:12px 14px; background:var(--rp-bg); }
+.tnr-tc-first { border-color:var(--rp-accent); background:color-mix(in srgb, var(--rp-accent) 6%, var(--rp-bg)); }
+.tnr-tc-badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--rp-text-muted); margin-bottom:6px; }
+.tnr-tc-first .tnr-tc-badge { color:var(--rp-accent); }
+.tnr-tc-teamname { font-size:16px; font-weight:700; color:var(--rp-text); margin-bottom:8px; }
+.tnr-tc-first .tnr-tc-teamname { color:var(--rp-accent); }
+.tnr-tc-roster { margin:0; padding:0 0 0 14px; list-style:disc; }
+.tnr-tc-roster li { font-size:13px; color:var(--rp-text-body); padding:2px 0; }
+.tnr-tc-roster a { color:var(--rp-accent); text-decoration:none; font-weight:500; }
+.tnr-tc-roster a:hover { text-decoration:underline; }
+.tnr-context { font-size:13px; color:var(--rp-text-muted); padding:8px 0 14px; }
+html[data-theme="dark"] .tnr-tc-place { background:var(--rp-bg-light); }
+html[data-theme="dark"] .tnr-tc-first { background:color-mix(in srgb, var(--rp-accent) 10%, var(--rp-bg-light)); }
