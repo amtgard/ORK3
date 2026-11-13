@@ -174,6 +174,22 @@ class Model_Player extends Model
         $r = $this->Player->SetBan($request);
         return $r;
     }
+    /** "How did you find us?" code for the Account modal; null when the viewer may not see it. */
+    public function get_recruitment_source($mundane_id, $viewer_id)
+    {
+        return $this->Player->get_recruitment_source($mundane_id, $viewer_id);
+    }
+
+    /**
+     * Options, label, placeholder and hint for a "How did you find us?" field
+     * (templates render it with _recruitment_source_select.tpl).
+     * $audience: 'officer' for the create-player modals, 'self' for player-facing forms.
+     */
+    public function recruitment_source_field($audience)
+    {
+        return RecruitmentSource::field($audience);
+    }
+
     public function create_player($request)
     {
         return $this->Player->CreatePlayer($request);

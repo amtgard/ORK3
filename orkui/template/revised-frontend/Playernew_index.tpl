@@ -2811,6 +2811,11 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				</div>
 			</div>
 
+			<?php if (!empty($RecruitmentSourceField)): ?>
+			<?php include_once __DIR__ . '/_recruitment_source_select.tpl'; ?>
+			<?= ork_recruitment_source_select($RecruitmentSourceField, ['id' => 'pn-acct-recruitment', 'name' => 'RecruitmentSource', 'selected' => $RecruitmentSource ?? '', 'wrap_class' => 'pn-acct-field', 'hint_class' => 'pn-acct-hint']) ?>
+			<?php endif; ?>
+
 			<div class="pn-acct-field">
 				<label>
 					<input type="checkbox" name="Restricted" value="Restricted" <?= $Player['Restricted'] == 1 ? 'checked' : '' ?> style="margin-right:6px" />

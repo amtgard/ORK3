@@ -835,6 +835,7 @@
 							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
 							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
 							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
+							<?php if (!empty($CanViewRecruitment)): ?><li><a href="<?= UIR ?>Reports/player_recruitment&KingdomId=<?= (int)$kingdom_id ?>"><i class="fas fa-bullhorn"></i> Player Recruitment</a></li><?php endif; ?>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
 						</ul>
@@ -2451,6 +2452,12 @@ var KnBannerConfig = {
 					<input type="password" id="kn-addplayer-password" placeholder="optional" autocomplete="new-password">
 				</div>
 			</div>
+			<?php if (!empty($RecruitmentSourceField)): ?>
+			<?php include_once __DIR__ . '/_recruitment_source_select.tpl'; ?>
+			<div class="plr-field-row">
+				<?= ork_recruitment_source_select($RecruitmentSourceField, ['id' => 'kn-addplayer-recruitment', 'wrap_class' => 'plr-field plr-field-grow']) ?>
+			</div>
+			<?php endif; ?>
 			<div class="plr-field-row">
 				<div class="plr-field">
 					<label>Restrict Mundane Name Visibility</label>
