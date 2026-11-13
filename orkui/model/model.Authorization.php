@@ -28,6 +28,11 @@ class Model_Authorization extends Model
         return $this->_authorization_gate()->check($uid, $type, $id, $role);
     }
 
+    public function has_any_kingdom_authorization(int $uid): bool
+    {
+        return $this->_authorization_gate()->HasAnyKingdomAuthorization($uid);
+    }
+
     /**
      * First-class audit write for auth / staff mutations (replaces inline new Dangeraudit()).
      */
