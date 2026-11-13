@@ -9586,7 +9586,7 @@ $(document).ready(function() {
                     var kid = EvConfig.kingdomId || 0;
                     if (!kid) {
                         // No kingdom on this event — search all players via SearchService
-                        fetch(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10')
+                        fetch(orkPlayerSearchUrl(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10'))
                             .then(function(r) { return r.json(); })
                             .then(function(d) {
                                 var res = (d || []).map(function(pl) {
@@ -9930,7 +9930,7 @@ $(document).ready(function() {
                 evSchedLeadAcTimer = setTimeout(function() {
                     var kid = EvConfig.kingdomId || 0;
                     if (!kid) {
-                        fetch(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10')
+                        fetch(orkPlayerSearchUrl(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10'))
                             .then(function(r) { return r.json(); })
                             .then(function(d) {
                                 var res = (d || []).map(function(pl) { return { MundaneId: pl.MundaneId, Persona: pl.Persona, KAbbr: pl.KAbbr || '', PAbbr: pl.PAbbr || '' }; });
@@ -13156,7 +13156,7 @@ function setupPronounPicker(cfg) {
                     // Award giver is intentionally global (cross-kingdom): a noble from another kingdom
                     // can grant an award, so do not scope the giver search by kingdom.
                     var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=15';
-                    fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+                    fetch(orkPlayerSearchUrl(url)).then(function(r) { return r.json(); }).then(function(data) {
                         if (!data || !data.length) {
                             editGbResults.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
                         } else {
