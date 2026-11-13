@@ -412,13 +412,12 @@ final class Render
     private function sectionCatalogs(): string
     {
         $lines = ["-- Section: catalogs\n"];
-        $extractDir = $this->toolRoot . '/extracted';
 
         foreach ($this->fixedExtractTables() as $table) {
-            $path = $extractDir . '/' . $table . '.sql';
+            $path = $this->catalogPath($table);
             if (!is_readable($path)) {
                 throw new ValidationException(
-                    "Missing extract for catalog '{$table}'. Run bin/ork-db extract first."
+                    "Missing committed catalog '{$table}' at templates/catalogs/{$table}.sql."
                 );
             }
             $lines[] = '-- catalog: ' . $table;
@@ -995,6 +994,18 @@ final class Render
         return array_map('strval', $this->extractManifest['fixed_embedded'] ?? []);
     }
 
+    /**
+     * Committed reference catalogs live in templates/catalogs/, tracked by git — both the
+     * hand-maintained `fixed_embedded` ones and the `fixed_extract` ones that
+     * `bin/ork-db extract` refreshes from the mirror. Keeping them out of the .gitignored
+     * extracted/ directory is what makes this section of the render byte-identical on every
+     * machine. See manifests/extract-sources.json5.
+     */
+    private function catalogPath(string $table): string
+    {
+        return $this->toolRoot . '/templates/catalogs/' . $table . '.sql';
+    }
+
     /** @return list<array<string, mixed>> */
     private function loadExtractedEvents(): array
     {
@@ -1030,7 +1041,7 @@ final class Render
     /** @return list<int> */
     private function loadClassIds(): array
     {
-        $path = $this->toolRoot . '/extracted/class.sql';
+        $path = $this->catalogPath('class');
         if (!is_readable($path)) {
             return [];
         }
@@ -1048,9 +1059,9 @@ final class Render
     /** @return list<array{award_id: int, name: string, is_title: int, title_class: int}> */
     private function loadAwardRows(): array
     {
-        $path = $this->toolRoot . '/extracted/award.sql';
+        $path = $this->catalogPath('award');
         if (!is_readable($path)) {
-            throw new ValidationException('Missing award extract. Run bin/ork-db extract first.');
+            throw new ValidationException('Missing committed catalog templates/catalogs/award.sql.');
         }
 
         $rows = [];

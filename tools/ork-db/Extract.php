@@ -12,6 +12,24 @@ final class Extract
     private const DB_PREFIX = 'ork_';
     private const PROD_CANARY_MARKER = 'ORK3_PROD_CANARY_v1';
 
+    /**
+     * Committed home of the `fixed_extract` reference catalogs, relative to the tool root.
+     *
+     * These four tables are extracted from the mirror but CHECKED IN, next to the
+     * hand-maintained `fixed_embedded` catalogs. See manifests/extract-sources.json5 for
+     * why they no longer live in the .gitignored extracted/ directory.
+     */
+    private const CATALOG_DIR = 'templates/catalogs';
+
+    /**
+     * Source label written into committed catalog dumps.
+     *
+     * Deliberately NOT Wiring::mirrorTargetLabel(): that embeds the developer's own
+     * host:port/database, which would churn the committed file (and its recorded hash)
+     * from machine to machine for no schema or data reason.
+     */
+    private const CATALOG_SOURCE_LABEL = 'mirror';
+
     /** @var array<string, mixed> */
     private array $manifest;
 
@@ -77,6 +95,21 @@ final class Extract
             $written[] = $kingdomAwardFile;
         }
 
+        // `files` stays a list of bare basenames inside extracted/ — Bootstrap::extractArtifactsFresh()
+        // resolves it against that directory to decide whether a re-extract is needed. The committed
+        // catalogs are listed separately, tool-root-relative, because they are tracked by git and
+        // their presence says nothing about extract freshness.
+        $catalogDir = $this->toolRoot . '/' . self::CATALOG_DIR;
+        $extractedFiles = [];
+        $catalogFiles = [];
+        foreach ($written as $path) {
+            if (str_starts_with($path, $catalogDir . '/')) {
+                $catalogFiles[] = self::CATALOG_DIR . '/' . basename($path);
+                continue;
+            }
+            $extractedFiles[] = basename($path);
+        }
+
         $manifestPath = $outputDir . '/manifest.json';
         $this->writeFile(
             $manifestPath,
@@ -84,7 +117,8 @@ final class Extract
                 [
                     'source' => $this->wiring->mirrorTargetLabel(),
                     'extracted_at' => gmdate('c'),
-                    'files' => array_map(static fn (string $path): string => basename($path), $written),
+                    'files' => $extractedFiles,
+                    'catalogs' => $catalogFiles,
                     'warnings' => $warnings,
                 ],
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
@@ -103,7 +137,7 @@ final class Extract
         }
 
         $fullTable = self::DB_PREFIX . $table;
-        $sql = $this->buildTableDump($pdo, $fullTable);
+        $sql = $this->buildTableDump($pdo, $fullTable, null, self::CATALOG_SOURCE_LABEL);
 
         return 'sha256:' . hash('sha256', $sql);
     }
@@ -147,6 +181,14 @@ final class Extract
         }
     }
 
+    /**
+     * Refresh one committed reference catalog from the mirror.
+     *
+     * The output path is tracked by git on purpose. Overwriting it is the supported way to
+     * pick up a genuine production reference-data change: the developer reviews the result
+     * as a diff and re-records the hash in fingerprints.json5. `$outputDir` (extracted/) is
+     * NOT used for these tables.
+     */
     private function extractVerbatimTable(PDO $pdo, string $table, string $outputDir): string
     {
         $allowed = $this->fixedExtractTables();
@@ -161,11 +203,21 @@ final class Extract
             throw new ValidationException("Mirror table missing: {$fullTable}");
         }
 
-        $sql = $this->buildTableDump($pdo, $fullTable);
-        $path = $outputDir . '/' . $table . '.sql';
+        $sql = $this->buildTableDump($pdo, $fullTable, null, self::CATALOG_SOURCE_LABEL);
+        $path = $this->catalogPath($table);
+        $directory = dirname($path);
+        if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+            throw new \RuntimeException("Failed to create catalog output directory: {$directory}");
+        }
         $this->writeFile($path, $sql);
 
         return $path;
+    }
+
+    /** Absolute path of a committed reference catalog. */
+    public function catalogPath(string $table): string
+    {
+        return $this->toolRoot . '/' . self::CATALOG_DIR . '/' . $table . '.sql';
     }
 
     private function extractConfiguration(PDO $pdo, string $outputDir): string
@@ -400,8 +452,12 @@ final class Extract
     /**
      * @param list<string>|null $configurationKeys
      */
-    private function buildTableDump(PDO $pdo, string $fullTable, ?array $configurationKeys = null): string
-    {
+    private function buildTableDump(
+        PDO $pdo,
+        string $fullTable,
+        ?array $configurationKeys = null,
+        ?string $sourceLabel = null,
+    ): string {
         $columns = $this->getColumns($pdo, $fullTable);
         $query = 'SELECT * FROM `' . $fullTable . '`';
         $params = [];
@@ -417,7 +473,13 @@ final class Extract
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
 
-        return $this->renderInsertStatements($pdo, $fullTable, $columns, $rows, $this->wiring->mirrorTargetLabel());
+        return $this->renderInsertStatements(
+            $pdo,
+            $fullTable,
+            $columns,
+            $rows,
+            $sourceLabel ?? $this->wiring->mirrorTargetLabel()
+        );
     }
 
     /**

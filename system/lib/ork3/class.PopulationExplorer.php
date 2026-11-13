@@ -1212,7 +1212,7 @@ class PopulationExplorer extends Ork3
 
     /**
      * Officer authority over the scope, which unlocks the restricted criteria (spec
-     * §3.3, ruling A1):
+     * §3.3, ruling A1). Each scoped arm is park.report.view OR the legacy role named:
      * - global admin;
      * - Kingdom scope: kingdom AUTH_EDIT for that kingdom (a principality resolves to
      *   its parent kingdom's officers through HasAuthority's parent walk);
@@ -1240,16 +1240,20 @@ class PopulationExplorer extends Ork3
                 || $auth->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_CREATE)) {
                 return true;
             }
+            // park.report.view is the branch's report key; the legacy roles are the
+            // ones this gate always asked (park CREATE, kingdom EDIT), so every old
+            // holder keeps access and a role holder with the key gains it.
+            $gate = Ork3::$Lib->authorizationgate;
             if ($scopeType === 'Park') {
-                if ($auth->HasAuthority($actorId, AUTH_PARK, $scopeId, AUTH_CREATE)) {
+                if ($gate->checkPermissionOrAuthority($actorId, 'park.report.view', 'park', $scopeId, AUTH_CREATE)) {
                     return true;
                 }
                 $r = $this->_select('SELECT kingdom_id FROM ' . $this->_t('park') . ' WHERE park_id = ' . (int)$scopeId);
                 $parkKingdom = $r->next() ? (int)$r->kingdom_id : 0;
                 return valid_id($parkKingdom)
-                    && (bool)$auth->HasAuthority($actorId, AUTH_KINGDOM, $parkKingdom, AUTH_EDIT);
+                    && $gate->checkPermissionOrAuthority($actorId, 'park.report.view', 'kingdom', $parkKingdom, AUTH_EDIT);
             }
-            return (bool)$auth->HasAuthority($actorId, AUTH_KINGDOM, $scopeId, AUTH_EDIT);
+            return $gate->checkPermissionOrAuthority($actorId, 'park.report.view', 'kingdom', $scopeId, AUTH_EDIT);
         } catch (Throwable $e) {
             logtrace('PopulationExplorer::IsScopeOfficer failure', $e->getMessage());
             return false;

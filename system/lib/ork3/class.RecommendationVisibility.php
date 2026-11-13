@@ -227,16 +227,18 @@ class RecommendationVisibility extends Ork3
      * builds three predicates per call, and the kingdom profile builds one per load).
      *
      *   officerKingdoms  every kingdom K with officerLevel(viewer, K, 0) = kingdom
-     *   authKingdoms     every kingdom K with HasAuthority(viewer, AUTH_KINGDOM, K):
-     *                    HasAuthority(AUTH_PARK, P) climbs to P's OWN kingdom, so this
-     *                    covers the parks of K whatever the recipient's mundane row says
-     *   authParks        parks with a direct HasAuthority(viewer, AUTH_PARK, P) grant
+     *   authKingdoms     every kingdom K where park.court.manage holds at kingdom scope
+     *                    (RBAC at K or an ancestor, or legacy kingdom EDIT): a park check
+     *                    climbs to P's OWN kingdom, so this covers the parks of K
+     *                    whatever the recipient's mundane row says
+     *   authParks        parks where park.court.manage holds (RBAC or legacy park EDIT)
      *   seatParks        [kingdom_id, park_id] Monarch/Regent/PM park seats; canManage
      *                    matches a park seat only on BOTH ids, so these stay pairs
      *
-     * Candidates come from the viewer's own authorization rows and seats, plus every
-     * descendant principality (parent-kingdom authority covers them); each one is
-     * confirmed through the same functions canSee() uses, so SQL and PHP agree.
+     * Candidates come from the viewer's own authorization rows, RBAC role assignments
+     * and seats, plus every descendant principality (parent-kingdom authority covers
+     * them); each one is confirmed through the same gate canSee() uses, so SQL and PHP
+     * agree.
      *
      * @return array{officerKingdoms:list<int>,authKingdoms:list<int>,authParks:list<int>,seatParks:list<array{0:int,1:int}>}
      */
@@ -248,6 +250,10 @@ class RecommendationVisibility extends Ork3
         $candKingdoms = [];
         $candParks    = [];
         $seatParks    = [];
+        // Both stored forms of each crown seat, as Court::canManage matches them.
+        $seatRoles = implode(',', array_map(function ($role) {
+            return "'" . str_replace("'", "''", (string) $role) . "'";
+        }, PermissionRegistry::OfficerRoleVariants(['Monarch', 'Regent', 'Prime Minister'])));
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT a.kingdom_id, a.park_id, 0 AS seat FROM ' . DB_PREFIX . 'authorization a
@@ -255,9 +261,12 @@ class RecommendationVisibility extends Ork3
              UNION
              SELECT o.kingdom_id, o.park_id, 1 AS seat FROM ' . DB_PREFIX . 'officer o
               WHERE o.mundane_id = ' . $viewer . ' AND o.kingdom_id > 0
-                AND o.role IN (\'Monarch\',\'Regent\',\'Prime Minister\')'
+                AND o.role IN (' . $seatRoles . ')'
         );
-        if ($rs) {
+        $collect = function ($rs) use (&$candKingdoms, &$candParks, &$seatParks) {
+            if (!$rs) {
+                return;
+            }
             while ($rs->Next()) {
                 $kid = (int) $rs->kingdom_id;
                 $pid = (int) $rs->park_id;
@@ -276,7 +285,19 @@ class RecommendationVisibility extends Ork3
                     $candParks[$pid] = $pid;
                 }
             }
-        }
+        };
+        $collect($rs);
+        // RBAC role assignments are candidates too: canManage admits a
+        // kingdom.court.manage / park.court.manage role holder with no authorization
+        // row at all, and the SQL twin must find them or it hides what canSee() shows.
+        // A separate query so a database without the RBAC tables keeps the legacy
+        // candidates above instead of losing the whole UNION.
+        $this->db->Clear();
+        $collect($this->db->DataSet(
+            'SELECT ur.kingdom_id, ur.park_id, 0 AS seat FROM ' . DB_PREFIX . 'user_role ur
+              WHERE ur.mundane_id = ' . $viewer . ' AND (ur.kingdom_id > 0 OR ur.park_id > 0)
+                AND (ur.expires_at IS NULL OR ur.expires_at > NOW())'
+        ));
         // Principalities under any candidate (bounded: the hierarchy is shallow, and
         // a corrupt cycle must not loop).
         $frontier = $candKingdoms;
@@ -297,20 +318,24 @@ class RecommendationVisibility extends Ork3
             }
         }
 
-        $auth = Ork3::$Lib->authorization;
+        // The park branch of Court::canManage, exactly: park.court.manage with legacy
+        // park EDIT. Asked at KINGDOM scope it answers "every park of K" -- the RBAC
+        // cascade climbs from a park to its kingdom chain, and legacy park authority
+        // climbs to the park's own kingdom the same way.
+        $gate = Ork3::$Lib->authorizationgate;
         $officerKingdoms = [];
         $authKingdoms    = [];
         foreach ($candKingdoms as $kid) {
             if ($this->officerLevel($viewer, $kid, 0) === self::LEVEL_KINGDOM) {
                 $officerKingdoms[] = $kid;
             }
-            if ($auth->HasAuthority($viewer, AUTH_KINGDOM, $kid, AUTH_EDIT)) {
+            if ($gate->checkPermissionOrAuthority($viewer, 'park.court.manage', 'kingdom', $kid, AUTH_EDIT)) {
                 $authKingdoms[] = $kid;
             }
         }
         $authParks = [];
         foreach ($candParks as $pid) {
-            if ($auth->HasAuthority($viewer, AUTH_PARK, $pid, AUTH_EDIT)) {
+            if ($gate->checkPermissionOrAuthority($viewer, 'park.court.manage', 'park', $pid, AUTH_EDIT)) {
                 $authParks[] = $pid;
             }
         }
@@ -375,8 +400,8 @@ class RecommendationVisibility extends Ork3
         }
 
         // Park level = Court::canManage(viewer, m.kingdom_id, m.park_id) beyond the
-        // kingdom grants above: a park authorization (direct, or through authority
-        // over the park's own kingdom), or a park seat filed under the recipient's
+        // kingdom grants above: park.court.manage (at the park, or held over the park's
+        // own kingdom), or a park seat filed under the recipient's
         // kingdom. officerLevel() treats kingdom 0 as "no officer", hence the guard.
         $parkTerms = [];
         if ($g['authParks']) {
@@ -414,6 +439,11 @@ class RecommendationVisibility extends Ork3
             return true;
         }
         $g = $this->viewerGrants($viewer);
+        // park.court.manage held over the whole kingdom (an RBAC role assigned at
+        // kingdom scope without kingdom.court.manage): a park officer of every park in it.
+        if (in_array($kingdomId, $g['authKingdoms'], true)) {
+            return true;
+        }
         $parks = $g['authParks'];
         foreach ($g['seatParks'] as [$sk, $sp]) {
             if ($sk === $kingdomId) {

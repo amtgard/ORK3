@@ -5,6 +5,7 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/../Support/PopulationExplorerProbe.php';
+require_once __DIR__ . '/../Support/RbacRoleFixture.php';
 
 /**
  * Population Explorer: scoped execution, authorization, parity against the
@@ -37,8 +38,14 @@ final class PopulationExplorerRunTest extends TestCase
         $this->fixture->insertGlobalAdmin($this->admin['mundane_id']);
     }
 
+    private ?RbacRoleFixture $rbac = null;
+
     protected function tearDown(): void
     {
+        if ($this->rbac !== null) {
+            $this->rbac->cleanup();
+            $this->rbac = null;
+        }
         if (isset($this->fixture)) {
             $this->fixture->cleanup();
         }
@@ -543,6 +550,32 @@ final class PopulationExplorerRunTest extends TestCase
             'SELECT COUNT(*) FROM ' . DB_PREFIX . "mundane WHERE mundane_id IN ($idList) AND kingdom_id NOT IN (" . implode(',', $in) . ')'
         )->fetchColumn();
         $this->assertSame(0, $bad);
+    }
+
+    /**
+     * park.report.view through an RBAC role, with no ork_authorization row, makes the
+     * holder an officer for the restricted criteria -- at the assignment's scope only.
+     */
+    public function testReportRoleHolderIsAnOfficerAtTheAssignedScope(): void
+    {
+        $this->rbac = new RbacRoleFixture($this->fixture->pdo(), 'PERBAC', $this->kid);
+
+        $parkHolder = $this->player('pe-rbac-park');
+        $parkRole = $this->rbac->seedRoleWith('park.report.view', 'park', $this->kid);
+        $this->rbac->assignRole($parkHolder['mundane_id'], $parkRole, ['park_id' => $this->parkId]);
+        $this->assertSame(0, (int) $this->fixture->pdo()->query('SELECT COUNT(*) FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ' . $parkHolder['mundane_id'])->fetchColumn());
+        $this->assertTrue($this->isOfficer($parkHolder['token'], 'Park', $this->parkId), 'park role, own park');
+        $this->assertFalse($this->isOfficer($parkHolder['token'], 'Kingdom', $this->kid), 'park role does not reach the kingdom');
+        $p2 = $this->fixture->secondParkIdInKingdom($this->kid, $this->parkId);
+        if ($p2 > 0) {
+            $this->assertFalse($this->isOfficer($parkHolder['token'], 'Park', $p2), 'park role does not reach a sibling park');
+        }
+
+        $kingdomHolder = $this->player('pe-rbac-kingdom');
+        $kingdomRole = $this->rbac->seedRoleWith('park.report.view', 'kingdom', $this->kid);
+        $this->rbac->assignRole($kingdomHolder['mundane_id'], $kingdomRole, ['kingdom_id' => $this->kid]);
+        $this->assertTrue($this->isOfficer($kingdomHolder['token'], 'Kingdom', $this->kid), 'kingdom role, own kingdom');
+        $this->assertTrue($this->isOfficer($kingdomHolder['token'], 'Park', $this->parkId), 'kingdom role covers its parks');
     }
 
     private function isOfficer(string $token, string $type, int $id): bool

@@ -8,7 +8,6 @@
 	<h3><?=$KingdomInfo['KingdomName'] ?> Administration</h3>
 	<ul>
 		<li><a href='<?=UIR ?>Admin/createpark/kingdom/<?=$this->__session->kingdom_id ?>'>Create Park</a></li>
-		<li><a href='<?=UIR ?>Admin/setkingdomofficers&KingdomId=<?=$KingdomInfo['KingdomId'] ?>'>Set <?=$IsPrinz?'Principality':'Kingdom' ?> Officers</a></li>
 		<li><a href='<?=UIR ?>Admin/editkingdom/<?=$KingdomInfo['KingdomId'] ?>'>Configure <?=$IsPrinz?'Principality':'Kingdom' ?></a></li>
 		<li><a href='<?=UIR ?>Admin/editparks/<?=$KingdomInfo['KingdomId'] ?>'>Configure Parks</a></li>
 	</ul>
