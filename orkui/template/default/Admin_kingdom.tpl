@@ -8,8 +8,8 @@
 	<h3><?=$KingdomInfo['KingdomName'] ?> Administration</h3>
 	<ul>
 		<li><a href='<?=UIR ?>Admin/createpark/kingdom/<?=$this->__session->kingdom_id ?>'>Create Park</a></li>
-		<li><a href='<?=UIR ?>Admin/setkingdomofficers&KingdomId=<?=$KingdomInfo['KingdomId'] ?>'>Set <?=$IsPrinz?'Principality':'Kingdom' ?> Officers</a></li>
-		<li><a href='<?=UIR ?>Admin/editkingdom/<?=$KingdomInfo['KingdomId'] ?>'>Configure <?=$IsPrinz?'Principality':'Kingdom' ?></a></li>
+		<li><a href='<?=UIR ?>Admin/setkingdomofficers&KingdomId=<?=$KingdomInfo['KingdomId'] ?>'>Set <?=$IsPrinz?($OrgUnitLabel ?? 'Principality'):'Kingdom' ?> Officers</a></li>
+		<li><a href='<?=UIR ?>Admin/editkingdom/<?=$KingdomInfo['KingdomId'] ?>'>Configure <?=$IsPrinz?($OrgUnitLabel ?? 'Principality'):'Kingdom' ?></a></li>
 		<li><a href='<?=UIR ?>Admin/editparks/<?=$KingdomInfo['KingdomId'] ?>'>Configure Parks</a></li>
 	</ul>
 </div>
@@ -33,7 +33,7 @@
 				<li><a href='<?=UIR ?>Admin/createevent'>Schedule an Event</a></li>
 				</ul>
 		</li>
-		<li><a href='<?=UIR ?>Admin/downloadkingdom/<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Download <?=$IsPrinz?'Principality':'Kingdom' ?> Dataset</a></li>
+		<li><a href='<?=UIR ?>Admin/downloadkingdom/<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Download <?=$IsPrinz?($OrgUnitLabel ?? 'Principality'):'Kingdom' ?> Dataset</a></li>
 		<li><a href='<?=UIR ?>Tournament/create&KingdomId=<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Create Tournament</a></li>	</ul>
 </div>
 <?php if (!empty($CanEditKingdomReports)) : ?>
@@ -85,7 +85,7 @@
 <?php endif; ?>
 <div id="dialogs" style="display: none">
 	<div id="reset-waivers" title="Confirmation Required">
-		This will reset all waivers for the <?=$IsPrinz?'principality':'kingdom' ?>. This action cannot be undone. Continue?
+		This will reset all waivers for the <?=$IsPrinz?strtolower($OrgUnitLabel ?? 'Principality'):'kingdom' ?>. This action cannot be undone. Continue?
 	</div>
 </div>
 <script>

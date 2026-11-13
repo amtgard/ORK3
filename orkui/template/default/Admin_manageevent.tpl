@@ -444,7 +444,7 @@
 	<table class='information-table action-table' id='EventListTable'>
 		<thead>
 			<tr>
-				<th><?=$IsPrinz?'Principality':'Kingdom' ?></th>
+				<th><?=$IsPrinz?($OrgUnitLabel ?? 'Principality'):'Kingdom' ?></th>
 				<th>Park</th>
 				<th>Unit</th>
 				<th>Player</th>
