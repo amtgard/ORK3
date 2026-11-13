@@ -138,18 +138,21 @@ final class CourtFixture
             'pass_to_local'   => 0,
             'scroll_maker_id' => null,
             'regalia_maker_id' => null,
+            'scroll_status'   => 0,
+            'given_by_mundane_id' => null,
         ], $overrides);
 
         $st = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'court_award
              (court_id, mundane_id, kingdomaward_id, rank, status, sort_order, notes, public_comment,
-              pass_to_local, scroll_maker_id, regalia_maker_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+              pass_to_local, scroll_maker_id, regalia_maker_id, scroll_status, given_by_mundane_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $st->execute([
             $courtId, $mundaneId, $row['kingdomaward_id'], $row['rank'], $row['status'],
             $row['sort_order'], $row['notes'], $row['public_comment'], $row['pass_to_local'],
-            $row['scroll_maker_id'], $row['regalia_maker_id'],
+            $row['scroll_maker_id'], $row['regalia_maker_id'], $row['scroll_status'],
+            $row['given_by_mundane_id'],
         ]);
         $id = (int) $this->pdo->lastInsertId();
         $this->awardIds[] = $id;

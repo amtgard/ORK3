@@ -1,0 +1,74 @@
+#!/bin/sh
+#
+# ORK3 shared pre-push hook (versioned; activated via core.hooksPath=.githooks,
+# which `npm install` sets through package.json's "prepare" script, or
+# `sh bin/setup-dev-hooks.sh`).
+#
+# This is the repo's only LOCAL gate that can actually fail. .githooks/pre-commit
+# is deliberately advisory — it formats and never blocks. So the Scrollery asset
+# guard lives here, where it runs before anything leaves the machine. Its PR-side
+# twin is .github/workflows/scroll-guards.yml, which runs the same
+# bin/check-scroll-assets.sh (with --require-db, plus the rendition manifest check and
+# a PHP 8.1 parse) on pull requests that touch the scroll paths and on pushes to
+# master — the half that catches a contributor whose hooks are not installed.
+#
+# It runs only when the push touches something the guard is about: the scroll art,
+# the recipe vocabulary, class.Scroll.php, the certificate partials or the guard's own
+# files. A push that changes none of those is not slowed down at all.
+#
+# Escape hatch: `git push --no-verify`, or SKIP_SCROLL_ASSET_CHECK=1.
+#
+# It is deliberately tolerant of a missing sandbox database — see the note in
+# bin/check-scroll-assets.sh. "Docker is not running" must not block a push.
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT" || exit 0
+
+[ "${SKIP_SCROLL_ASSET_CHECK:-0}" = "1" ] && exit 0
+[ -f bin/check-scroll-assets.sh ] || exit 0
+
+# What is being pushed? stdin gives "<local ref> <local sha> <remote ref> <remote sha>"
+# per ref. A brand-new remote branch reports the all-zero remote sha, in which case
+# diff against the upstream default branch rather than against nothing.
+RANGE=""
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [ -z "$local_sha" ] && continue
+    case "$local_sha" in *[!0]*) ;; *) continue ;; esac   # deletion — nothing to check
+    case "$remote_sha" in
+        *[!0]*) RANGE="$remote_sha..$local_sha" ;;
+        *)      RANGE="$(git merge-base "$local_sha" origin/master 2>/dev/null || echo '')..$local_sha" ;;
+    esac
+    break
+done
+
+GUARDED='^(assets/scrolls/|system/lib/ork3/class\.Scroll\.php|system/lib/ork3/data/scroll-|orkui/template/revised-frontend/scroll/|orkui/template/revised-frontend/style/scrollery\.css|tests/Unit/ScrollAssetPathsTest\.php|tests/Unit/ScrollGroundContrastTest\.php|bin/build-scroll-renditions\.sh|bin/check-scroll-assets\.sh)'
+
+if [ -n "$RANGE" ] && [ "${RANGE#..}" = "$RANGE" ]; then
+    # A resolvable range is authoritative: an empty diff means there is genuinely
+    # nothing being pushed, so there is nothing to guard.
+    git diff --name-only "$RANGE" 2>/dev/null | grep -qE "$GUARDED" || exit 0
+else
+    # No usable range (no stdin, or no merge-base against origin/master). Fall back to
+    # the working tree rather than skipping — better to run the guard once too often.
+    git diff --name-only HEAD 2>/dev/null | grep -qE "$GUARDED" || exit 0
+fi
+
+echo "Scrollery asset guard (pre-push) — SKIP_SCROLL_ASSET_CHECK=1 or --no-verify to bypass"
+if sh bin/check-scroll-assets.sh; then
+    exit 0
+fi
+
+cat >&2 <<'EOF'
+
+Push blocked: the Scrollery asset guard failed.
+
+  * "references missing …"  — a certificate partial points at art that is not there.
+                              This is the rebase-orphaned-art case the guard exists for.
+  * "has no measured contrast" / "measures N:1"
+                            — a ground was added or its art changed; see
+                              tests/Unit/ScrollGroundContrastTest.php for the regen command.
+  * "renditions are not current"
+                            — run: sh bin/build-scroll-renditions.sh
+
+EOF
+exit 1

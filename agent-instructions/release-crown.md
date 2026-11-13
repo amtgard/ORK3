@@ -167,8 +167,12 @@ column end-to-end:
   picker.
 - `getUpcomingEvents($kingdom_id)` — for `event_calendardetail_id`
   linkage.
-- `updateAwardTrackingStatus($courtAwardId, $type)` — toggles
-  scroll/regalia tracking on the planning row.
+- `setAwardTrackingStatus($courtAwardId, $type, $status, $rowVersion)` —
+  sets scroll/regalia tracking on the planning row to an explicit value,
+  guarded by the row's `row_version`. Scroll has six states: `0` Pending,
+  `1` Assigned, `4` In Progress, `3` Scrollery Print (setting it clears the
+  scroll maker), `2` Complete, `5` Not Needed. Regalia has five (no
+  Scrollery Print). The definitions live in `Court::trackingStatusDefinitions()`.
 
 `class.Player.php` is extended with:
 - Snooze set/clear methods writing the 3 columns.
@@ -190,7 +194,7 @@ column end-to-end:
   `create_court`, `update_court_status`, `add_award`,
   `remove_award`, `update_award`, `reorder_awards`, `add_artisan`,
   `remove_artisan`, `grant_award`, `skip_award`,
-  `update_award_tracking_status`.
+  `set_award_tracking_status`.
 
 ### Templates / frontend
 - `Court_list.tpl`, `Court_detail.tpl` — legacy-default templates

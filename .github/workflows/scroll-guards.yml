@@ -1,0 +1,110 @@
+# Scrollery asset guards.
+#
+# This is the first workflow in the repo — there was no .github/workflows/ before it,
+# which is exactly the finding it answers: tests/Unit/ScrollAssetPathsTest.php has
+# always been able to catch a certificate that references art which is not there, and
+# it ran in no automation at all. A rebase against upstream could silently orphan a
+# plate and nobody would know until an officer printed it.
+#
+# The load-bearing gate today is .githooks/pre-push, which runs the same script
+# (bin/check-scroll-assets.sh) locally and does not depend on Actions being enabled.
+# This file is the upstream-facing half: it is what makes the guard survive a pull
+# request from someone whose hooks are not installed.
+#
+# Deliberately narrow. It does NOT try to be the repo's whole CI — it runs the two
+# Scrollery guards and the rendition manifest check, nothing else, so it cannot
+# become a maintenance burden or a source of unrelated red X's.
+#
+# On the database service: tests/bootstrap.php requires startup.php, which constructs
+# YapoMysql eagerly (startup.php:31), so PHPUnit cannot start without a reachable
+# connection. Verified locally against a throwaway container: the Scroll suite needs
+# the CONNECTION but no schema — 313 tests pass against a completely empty `ork_test`.
+# Hence a bare MariaDB service and no fixture load.
+#
+# First ran on GitHub with the Scrollery PR (2026-10); it failed at composer install
+# because it pinned PHP 8.2 against a lock that needs 8.4 — see the setup-php note.
+
+name: Scroll guards
+
+on:
+  pull_request:
+    paths:
+      - 'assets/scrolls/**'
+      - 'system/lib/ork3/class.Scroll.php'
+      - 'system/lib/ork3/data/scroll-*.php'
+      - 'orkui/template/revised-frontend/scroll/**'
+      - 'orkui/template/revised-frontend/style/scrollery.css'
+      - 'tests/Unit/ScrollAssetPathsTest.php'
+      - 'tests/Unit/ScrollGroundContrastTest.php'
+      - 'system/lib/ork3/data/scroll-ground-luminance.json'
+      - 'bin/build-scroll-renditions.sh'
+      - 'bin/check-scroll-assets.sh'
+      - '.github/workflows/scroll-guards.yml'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  scroll-assets:
+    runs-on: ubuntu-latest
+
+    services:
+      ork_test:
+        image: mariadb:latest
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: ork_test
+          MARIADB_USER: ork
+          MARIADB_PASSWORD: secret
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      ORK3_TEST_DB_HOST: 127.0.0.1
+      ORK3_TEST_DB_PORT: '3306'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The manifest half needs no PHP at all, so run it before anything can fail.
+      # It is what catches art added, removed or edited without rebuilding the WebP
+      # renditions.
+      - name: Renditions in step with masters
+        run: sh bin/build-scroll-renditions.sh --check
+
+      # Production runs PHP 8.1 (Dockerfile.prod: Ubuntu 22.04's php8.1-fpm), but the
+      # locked test toolchain cannot: PHPUnit 11 needs 8.2, and composer.lock pins
+      # infection/abstract-testframework-adapter (^8.3) and symfony/string v8.1
+      # (>=8.4.1). So the scroll code is first parsed on production's 8.1 — the
+      # failure that would actually take a certificate down — and PHPUnit then runs
+      # on 8.4, the lowest version the lock installs on.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Scroll code parses on production PHP (8.1)
+        run: |
+          git ls-files system/lib/ork3/class.Scroll.php 'system/lib/ork3/data/scroll-*.php' \
+            'orkui/template/revised-frontend/scroll/' \
+            | xargs -n1 php -l
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          # gd only affects ScrollGroundContrastTest's recompute-from-pixels check.
+          # Without it that one test skips and the fixture still carries the guard —
+          # it is included because verifying the numbers is cheap and worth having.
+          # redis: composer.json requires ext-redis, so the install refuses without it.
+          extensions: pdo_mysql, gd, mbstring, redis
+          coverage: none
+
+      - uses: ramsey/composer-install@v3
+
+      - name: Scroll asset paths and ground contrast
+        run: sh bin/check-scroll-assets.sh --require-db
