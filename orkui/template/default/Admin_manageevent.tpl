@@ -1,9 +1,15 @@
+<?php $__h = function($v, $double = true){ return is_scalar($v) ? htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8', $double) : ''; }; ?>
 <script type='text/javascript'>
+
+	function escHtml(v) {
+		return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+	}
 
 	function SetEvents( request, response ) {
 <?php if (!valid_id($CreateUnitId) && !valid_id($CreateMundaneId)) : ?>
 		park_id = $('#ParkId').val() > 0 ? $('#ParkId').val() : 0;
 		kingdom_id = $('#KingdomId').val();
+		find_mundane_id = $('#MundaneId').val() > 0 ? $('#MundaneId').val() : null;
 <?php endif; ?>
 <?php if (valid_id($CreateMundaneId)) : ?>
 		mundane_id = $('#CreateMundaneId').val();
@@ -18,6 +24,7 @@
 <?php if (!valid_id($CreateUnitId) && !valid_id($CreateMundaneId)) : ?>
 				park_id: park_id,
 				kingdom_id: kingdom_id,
+				mundane_id: find_mundane_id,
 <?php endif; ?>
 <?php if (valid_id($CreateMundaneId)) : ?>
 				mundane_id: mundane_id,
@@ -31,7 +38,7 @@
 			success: function( data ) {
 				$('#EventListTable tbody').html('');
 				$.each(data, function(i, val) {
-					$('#EventListTable tbody').append("<tr onclick='javascript:window.location.href=\"<?=UIR ?>Admin/event/" + val.EventId + "\"'><td>" + (val.KingdomName!=null?val.KingdomName:"") + "</td><td>" + (val.ParkName!=null?val.ParkName:"") + "</td><td>" + (val.UnitName!=null?val.UnitName:"") + "</td><td>" + (val.Persona!=null?val.Persona:"") + "</td><td>" + val.Name + "</td></tr>");
+					$('#EventListTable tbody').append("<tr onclick='javascript:window.location.href=\"<?=UIR ?>Admin/event/" + (parseInt(val.EventId, 10) || 0) + "\"'><td>" + escHtml(val.KingdomName) + "</td><td>" + escHtml(val.ParkName) + "</td><td>" + escHtml(val.UnitName) + "</td><td>" + escHtml(val.Persona) + "</td><td>" + escHtml(val.Name) + "</td></tr>");
 				});
 				if (response != null) {
 					var suggestions = [];
@@ -215,51 +222,22 @@
 			}
 		});
 <?php endif ?>
-		$( "#PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#ParkId').val();
-				kingdom_id = $('#KingdomId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: <?= ((isset($this->__session->park_id))?$this->__session->park_id:"park_id.length>0?park_id:null") ?>,
-						kingdom_id: kingdom_id,
-						limit: 6
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId + "|" + val.PenaltyBox });
-						});
-						response(suggestions);
-					}
-				);
+		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			uir: '<?=UIR ?>',
+<?php if (isset($this->__session->park_id) && valid_id($this->__session->park_id)): ?>
+			parkId: <?=(int)$this->__session->park_id ?>,
+<?php elseif (isset($this->__session->kingdom_id) && valid_id($this->__session->kingdom_id)): ?>
+			kingdomId: <?=(int)$this->__session->kingdom_id ?>,
+<?php endif ?>
+			includeSuspended: true,
+			onSelect: function(p) {
+				document.getElementById('MundaneId').value = p.MundaneId;
+				SetEvents(null, null);
 			},
-			focus: function( event, ui ) {
-				return showLabel('#PlayerName', ui);
-			}, 
-			delay: 250,
-			select: function (e, ui) {
-				showLabel('#PlayerName', ui);
-				$('#MundaneId').val(ui.item.value.split("|")[0]);
-				if (ui.item.value.split("|")[1] == "0") {
-					$('input[name=Ban]:eq(0)').attr('checked', 'checked');
-				} else {
-					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
-				}
-				SetEvents(null,null);
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#PlayerName',null);
-					$('#MundaneId').val(null);
-					SetEvents(null,null);
-				}
-				return false;
+			onClear: function() {
+				var hadId = document.getElementById('MundaneId').value !== '';
+				document.getElementById('MundaneId').value = '';
+				if (hadId) SetEvents(null, null);
 			}
 		});
 		$( "#EventName" ).autocomplete({
@@ -284,50 +262,22 @@
 				return false;
 			}
 		});
-		$( "#CreatePlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#CreateParkId').val();
-				kingdom_id = $('#CreateKingdomId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: <?=((isset($this->__session->park_id))?$this->__session->park_id:"park_id.length>0?park_id:null") ?>,
-						kingdom_id: kingdom_id,
-						limit: 6
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId + "|" + val.PenaltyBox });
-						});
-						response(suggestions);
-					}
-				);
+		OrkPlayerSearch.attach(document.getElementById('CreatePlayerName'), {
+			uir: '<?=UIR ?>',
+<?php if (isset($this->__session->park_id) && valid_id($this->__session->park_id)): ?>
+			parkId: <?=(int)$this->__session->park_id ?>,
+<?php elseif (isset($this->__session->kingdom_id) && valid_id($this->__session->kingdom_id)): ?>
+			kingdomId: <?=(int)$this->__session->kingdom_id ?>,
+<?php endif ?>
+			includeSuspended: true,
+			onSelect: function(p) {
+				document.getElementById('CreateMundaneId').value = p.MundaneId;
+				SetEvents(null, null);
 			},
-			focus: function( event, ui ) {
-				return showLabel('#CreatePlayerName', ui);
-			}, 
-			delay: 250,
-			select: function (e, ui) {
-				showLabel('#CreatePlayerName', ui);
-				$('#CreateMundaneId').val(ui.item.value.split("|")[0]);
-				if (ui.item.value.split("|")[1] == "0") {
-					$('input[name=Ban]:eq(0)').attr('checked', 'checked');
-				} else {
-					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
-				}
-				SetEvents(null,null);
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#CreatePlayerName',null);
-					$('#CreateMundaneId').val(null);
-				}
-				return false;
+			onClear: function() {
+				var hadId = document.getElementById('CreateMundaneId').value !== '';
+				document.getElementById('CreateMundaneId').value = '';
+				if (hadId) SetEvents(null, null);
 			}
 		});
 		$('#event-creation-form').hide();
@@ -366,7 +316,7 @@
 <?php if (strlen($Message) > 0) : ?>
 	<div class='success-message'><?=$Message ?></div>
 <?php endif; ?>		
-	<form id='event-creation-form' class='form-container' method='post' action='<?=UIR ?>Admin/manageevent/create<?=((isset($CreateUnitId)||isset($Admin_manageevent['CreateUnitId']))?"&UnitId=$CreateUnitId":"") ?><?=((isset($CreateMundaneId)||isset($Admin_manageevent['CreateMundaneId']))?"&MundaneId=$CreateMundaneId":"") ?>' enctype='multipart/form-data'>
+	<form id='event-creation-form' class='form-container' method='post' action='<?=UIR ?>Admin/manageevent/create<?=((isset($CreateUnitId)||isset($Admin_manageevent['CreateUnitId']))?"&UnitId=".$__h($CreateUnitId):"") ?><?=((isset($CreateMundaneId)||isset($Admin_manageevent['CreateMundaneId']))?"&MundaneId=".$__h($CreateMundaneId):"") ?>' enctype='multipart/form-data'>
 <?php if (!isset($this->__session->kingdom_id) && !isset($this->__session->park_id)) : ?>
 		<div>
 			<span>Hosted:</span>
@@ -379,33 +329,33 @@
 <?php if (!isset($this->__session->kingdom_id)) : ?>
 		<div class='kingdom-park-event'>
 			<span>Kingdom:</span>
-			<span><input type='text' value='<?=$Admin_manageevent['CreateKingdomName'] ?>' name='CreateKingdomName' id='CreateKingdomName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_manageevent['CreateKingdomName'] ?? '') ?>' name='CreateKingdomName' id='CreateKingdomName' /></span>
 		</div>
 <?php endif ?>
 <?php if (!valid_id($this->__session->park_id)) : ?>
 		<div class='kingdom-park-event'>
 			<span>Park:</span>
-			<span><input type='text' value='<?=$Admin_manageevent['CreateParkName'] ?>' name='CreateParkName' id='CreateParkName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_manageevent['CreateParkName'] ?? '') ?>' name='CreateParkName' id='CreateParkName' /></span>
 		</div>
 <?php endif ?>
 <?php if (!isset($this->__session->kingdom_id) && !isset($this->__session->park_id)) : ?>
 		<div class='personal-interkingdom'>
 			<span>Player:</span>
-			<span><input type='text' value='<?=$Admin_manageevent['CreatePlayerName'] ?>' name='CreatePlayerName' id='CreatePlayerName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_manageevent['CreatePlayerName'] ?? '') ?>' name='CreatePlayerName' id='CreatePlayerName' /></span>
 		</div>
 <?php endif ?>
 		<div>
 			<span>Template Name:</span>
-			<span><input type='text' class='name-field' value='<?=$Admin_manageevent['CreateEventName'] ?>' name='CreateEventName' id='CreateEventName' /></span>
+			<span><input type='text' class='name-field' value='<?=$__h($Admin_manageevent['CreateEventName'] ?? '') ?>' name='CreateEventName' id='CreateEventName' /></span>
 		</div>
 		<div>
 			<span></span>
 			<span><input type='submit' value='Create Event Template' name='Create Event' /></span>
 		</div>
-		<input type='hidden' name='CreateUnitId' id='CreateUnitId' value='<?=(isset($CreateUnitId)?$CreateUnitId:$Admin_manageevent['CreateUnitId']) ?>' />
-		<input type='hidden' name='CreateKingdomId' id='CreateKingdomId' value='<?=(isset($this->__session->kingdom_id)?$this->__session->kingdom_id:$Admin_manageevent['CreateKingdomId']) ?>' />
-		<input type='hidden' name='CreateMundaneId' id='CreateMundaneId' value='<?=isset($CreateMundaneId)?$CreateMundaneId:$Admin_manageevent['CreateMundaneId'] ?>' />
-		<input type='hidden' name='CreateParkId' id='CreateParkId' value='<?=(valid_id($this->__session->park_id)?$this->__session->park_id:$Admin_manageevent['CreateParkId']) ?>' />
+		<input type='hidden' name='CreateUnitId' id='CreateUnitId' value='<?=$__h((isset($CreateUnitId)?$CreateUnitId:$Admin_manageevent['CreateUnitId'])) ?>' />
+		<input type='hidden' name='CreateKingdomId' id='CreateKingdomId' value='<?=$__h((isset($this->__session->kingdom_id)?$this->__session->kingdom_id:$Admin_manageevent['CreateKingdomId'])) ?>' />
+		<input type='hidden' name='CreateMundaneId' id='CreateMundaneId' value='<?=$__h(isset($CreateMundaneId)?$CreateMundaneId:$Admin_manageevent['CreateMundaneId']) ?>' />
+		<input type='hidden' name='CreateParkId' id='CreateParkId' value='<?=$__h((valid_id($this->__session->park_id)?$this->__session->park_id:$Admin_manageevent['CreateParkId'])) ?>' />
 	</form>
 </div>
 
@@ -415,27 +365,27 @@
 <?php if (!isset($this->__session->kingdom_id)) : ?>
 		<div>
 			<span>Kingdom:</span>
-			<span><input type='text' value='<?=$Admin_manageevent['KingdomName'] ?>' name='KingdomName' id='KingdomName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_manageevent['KingdomName'] ?? '') ?>' name='KingdomName' id='KingdomName' /></span>
 		</div>
 <?php endif ?>
 <?php if (!valid_id($this->__session->park_id)) : ?>
 		<div>
 			<span>Park:</span>
-			<span><input type='text' value='<?=$Admin_manageevent['ParkName'] ?>' name='ParkName' id='ParkName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_manageevent['ParkName'] ?? '') ?>' name='ParkName' id='ParkName' /></span>
 		</div>
 <?php endif ?>
 		<div>
 			<span>Player:</span>
-			<span><input type='text' value='<?=$Admin_manageevent['PlayerName'] ?>' name='PlayerName' id='PlayerName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_manageevent['PlayerName'] ?? '') ?>' name='PlayerName' id='PlayerName' /></span>
 		</div>
 		<div>
 			<span>Template Name:</span>
-			<span><input type='text' value='<?=$Admin_manageevent['EventName'] ?>' name='EventName' id='EventName' /></span>
+			<span><input type='text' value='<?=$__h($Admin_manageevent['EventName'] ?? '') ?>' name='EventName' id='EventName' /></span>
 		</div>
-		<input type='hidden' name='KingdomId' id='KingdomId' value='<?=(isset($this->__session->kingdom_id)?$this->__session->kingdom_id:$Admin_manageevent['KingdomId']) ?>' />
-		<input type='hidden' name='MundaneId' id='MundaneId' value='<?=$Admin_manageevent['MundaneId'] ?>' />
-		<input type='hidden' name='ParkId' id='ParkId' value='<?=(isset($this->__session->park_id)?$this->__session->park_id:$Admin_manageevent['ParkId']) ?>' />
-		<input type='hidden' name='EventId' id='EventId' value='<?=$Admin_manageevent['EventId'] ?>' />
+		<input type='hidden' name='KingdomId' id='KingdomId' value='<?=$__h((isset($this->__session->kingdom_id)?$this->__session->kingdom_id:$Admin_manageevent['KingdomId'])) ?>' />
+		<input type='hidden' name='MundaneId' id='MundaneId' value='<?=$__h($Admin_manageevent['MundaneId'] ?? '') ?>' />
+		<input type='hidden' name='ParkId' id='ParkId' value='<?=$__h((isset($this->__session->park_id)?$this->__session->park_id:$Admin_manageevent['ParkId'])) ?>' />
+		<input type='hidden' name='EventId' id='EventId' value='<?=$__h($Admin_manageevent['EventId'] ?? '') ?>' />
 	</div>
 </div>
 

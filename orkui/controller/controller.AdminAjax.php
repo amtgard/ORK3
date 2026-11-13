@@ -5,7 +5,7 @@ class Controller_AdminAjax extends Controller
     /**
      * Global ORK-level AJAX handler.
      * Route: AdminAjax/global/{action}
-     * Actions: playersearch, addauth, removeauth
+     * Actions: addauth, removeauth
      */
     public function global($p = null)
     {
@@ -24,22 +24,7 @@ class Controller_AdminAjax extends Controller
 
         $action = trim($p ?? '');
 
-        if ($action === 'playersearch') {
-            $q = trim($_GET['q'] ?? '');
-            if (strlen($q) < 2) {
-                echo json_encode([]);
-                exit;
-            }
-            $this->load_model('Search');
-            $results = $this->Search->scoped_player_search([
-                'Query' => $q,
-                'Scope' => 'global',
-                'Limit' => 20,
-                'Format' => 'admin',
-            ]);
-            echo json_encode($results);
-
-        } elseif ($action === 'addauth') {
+        if ($action === 'addauth') {
             $mid = (int)($_POST['MundaneId'] ?? 0);
             if (!$mid) {
                 echo json_encode(['status' => 1, 'error' => 'Invalid player.']);

@@ -289,13 +289,17 @@ class Controller_EventAjax extends Controller
                 echo json_encode([]);
                 exit;
             }
+            // The one ranked search: rings centred on the event's park/kingdom, inactive ranked
+            // last, banned + real names gated by the viewer's own grants.
+            $this->load_model('Event');
+            $scope = $this->Event->get_event_redirect_scope($event_id);
             $this->load_model('Search');
-            $results = $this->Search->scoped_player_search([
-                'Query'   => $q,
-                'Scope'   => 'event_prioritized',
-                'EventId' => $event_id,
-                'Limit'   => 15,
-                'Format'  => 'event',
+            $results = $this->Search->ranked_players([
+                'q'         => $q,
+                'parkId'    => $scope['park_id'] ?: null,
+                'kingdomId' => $scope['kingdom_id'] ?: null,
+                'limit'     => 15,
+                'token'     => $this->session->token ?? null,
             ]);
             echo json_encode($results);
 

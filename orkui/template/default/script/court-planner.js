@@ -114,8 +114,8 @@
         if (window.cpAcOpenDrop && window.cpAcOpenDrop.style.display === 'none') cpAcUnbind();
     }
 
-    var cpAcTimer = null;
-
+    // Debounce timer and in-flight request live on each input (input._cpTimer /
+    // input._cpCtrl), so tabbing between pickers never drops another picker's search.
     // Scoped to the COURT's kingdom (KingdomAjax/playersearch/{kingdomId}), never the
     // session's — the recorder/artisan/giver searches must find players in the kingdom
     // whose court this is. `onPick` is optional: the Record view's strip fields use it
@@ -127,15 +127,18 @@
         if (!drop) return;
         var hidden = gid(hiddenId);
         if (hidden) hidden.value = '';
+        clearTimeout(input._cpTimer);
+        if (input._cpCtrl) { input._cpCtrl.abort(); input._cpCtrl = null; }
         if (q.length < 2) {
             drop.style.display = 'none';
             drop.innerHTML = '';
             if (window.cpAcOpenDrop === drop) cpAcUnbind();
             return;
         }
-        clearTimeout(cpAcTimer);
-        cpAcTimer = setTimeout(function () {
+        input._cpTimer = setTimeout(function () {
             var c = cfg();
+            var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+            input._cpCtrl = ctrl;
             // scope=all, not the endpoint's 'own' default. Without it playersearch
             // applies "AND m.kingdom_id IN (family)" and only this kingdom's players
             // are reachable -- but a scroll maker, regalia maker or contributing
@@ -143,9 +146,13 @@
             // was the only way to reach them. kingdom_all drops the filter and keeps
             // the ordering, floating this kingdom to the top before everyone else.
             // c.kingdomId is the COURT's kingdom, not the signed-in user's.
-            fetch(c.uir + 'KingdomAjax/playersearch/' + c.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=all')
+            fetch(c.uir + 'KingdomAjax/playersearch/' + c.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=all',
+                ctrl ? { signal: ctrl.signal } : undefined)
             .then(function (r) { return r.json(); })
             .then(function (data) {
+                // Stale: superseded by a newer request, or the input no longer holds q.
+                if (input._cpCtrl !== ctrl || input.value.trim() !== q) return;
+                input._cpCtrl = null;
                 drop.innerHTML = '';
                 if (!data || !data.length) {
                     drop.innerHTML = '<div class="cp-ac-item cp-ac-empty" style="color:#a0aec0;cursor:default">No players found</div>';
@@ -175,7 +182,9 @@
                 cpPositionAc(input, drop);
                 drop.style.display = 'block';
             })
-            .catch(function () {
+            .catch(function (err) {
+                if ((err && err.name === 'AbortError') || input._cpCtrl !== ctrl) return;
+                input._cpCtrl = null;
                 drop.style.display = 'none';
                 if (window.cpAcOpenDrop === drop) cpAcUnbind();
             });

@@ -8,7 +8,8 @@
 						Action: 'Search/Player',
 						type: 'all',
 						search: request.term,
-						<?=($Type=='ParkId')?'park_id':'kingdom_id' ?>: <?=$Id ?>
+						<?=($Type=='ParkId')?'park_id':'kingdom_id' ?>: <?=$Id ?>,
+						token: '<?= htmlspecialchars((string)($this->__session->token ?? ''), ENT_QUOTES) ?>'
 					},
 					function( data ) {
 						var suggestions = [];

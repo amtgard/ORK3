@@ -1,3 +1,4 @@
+<?php $__h = function($v, $double = true){ return is_scalar($v) ? htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8', $double) : ''; }; ?>
 <script type='text/javascript'>
 	$(function() {
 		$( "#ParkName" ).autocomplete({
@@ -27,39 +28,17 @@
 				return false;
 			}
 		});
-		$( "#PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#ParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: park_id.length>0?park_id:null
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: val.MundaneId + "|" + val.PenaltyBox });
-						});
-						response(suggestions);
-					}
-				);
+		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			uir: '<?=UIR ?>',
+			includeSuspended: true,
+			onSelect: function(p) {
+				document.getElementById('MundaneId').value = p.MundaneId;
+				$('#Banned').prop('checked', !!p.PenaltyBox);
+				$('#NotBanned').prop('checked', !p.PenaltyBox);
 			},
-			focus: function( event, ui ) {
-				return showLabel('#PlayerName', ui);
-			}, 
-			delay: 500,
-			select: function (e, ui) {
-				showLabel('#PlayerName', ui);
-				$('#MundaneId').val(ui.item.value.split("|")[0]);
-				if (ui.item.value.split("|")[1] == "0") {
-					$('input[name=Ban]:eq(0)').attr('checked', 'checked');
-				} else {
-					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
-				}
-				return false;
+			onClear: function() {
+				document.getElementById('MundaneId').value = '';
+				$('#Banned, #NotBanned').prop('checked', false);
 			}
 		});
 	});
@@ -76,11 +55,11 @@
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/banplayer/submit'>
 		<div>
 			<span>Park:</span>
-			<span><input type='text' class='name-field' value='<?=$Admin_banplayer['ParkName'] ?>' name='ParkName' id='ParkName' /></span>
+			<span><input type='text' class='name-field' value='<?=$__h($Admin_banplayer['ParkName'] ?? '') ?>' name='ParkName' id='ParkName' /></span>
 		</div>
 		<div>
 			<span>Player:</span>
-			<span><input type='text' class='name-field' value='<?=$Admin_banplayer['PlayerName'] ?>' name='PlayerName' id='PlayerName' /></span>
+			<span><input type='text' class='name-field' value='<?=$__h($Admin_banplayer['PlayerName'] ?? '') ?>' name='PlayerName' id='PlayerName' /></span>
 		</div>
 		<div>
 			<span>Ban:</span>
@@ -91,8 +70,8 @@
 			<span></span>
 			<span><input type='submit' value='Set Ban' name='Set Ban' /></span>
 		</div>
-		<input type='hidden' name='MundaneId' id='MundaneId' value='<?=$Admin_banplayer['MundaneId'] ?>' />
-		<input type='hidden' name='ParkId' id='ParkId' value='<?=$Admin_banplayer['ParkId'] ?>' />
+		<input type='hidden' name='MundaneId' id='MundaneId' value='<?=$__h($Admin_banplayer['MundaneId'] ?? '') ?>' />
+		<input type='hidden' name='ParkId' id='ParkId' value='<?=$__h($Admin_banplayer['ParkId'] ?? '') ?>' />
 	</form>
 </div>
 <?php if (count($banned_players)>0): ?>
@@ -100,7 +79,7 @@
 	<h3>Penalty Box</h3>
 	<ul>
 <?php foreach ($banned_players as $k => $info): ?>
-<li><a href="<?=UIR.'Player/profile/'.$info['MundaneId'] ?>"><?= $info['Persona']; ?></a></li>
+<li><a href="<?=UIR.'Player/profile/'.(int)$info['MundaneId'] ?>"><?= htmlspecialchars($info['Persona'] ?? '', ENT_QUOTES) ?></a></li>
 <?php endforeach ?>
 	</ul>
 </div>
