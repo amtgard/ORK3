@@ -29,6 +29,34 @@ class Model_Authorization extends Model
     }
 
     /**
+     * Resolve a session token to its owning mundane_id, or 0 when the token is
+     * unknown, expired, or the wrong length.
+     *
+     * NOT a pure read: on a session older than 60s the lib also slides
+     * last_seen/expires forward, which is what keeps an active tab signed in.
+     *
+     * @param  string $token
+     * @return int    owning mundane_id, or 0
+     */
+    public function validate_session_by_token($token): int
+    {
+        return (int) $this->Authorization->ValidateSessionByToken($token);
+    }
+
+    /**
+     * The caller's live sessions, most-recently-active first, for the
+     * logout-everywhere dialog. The presented token must itself be live; an
+     * unknown or expired one yields an empty list rather than an error.
+     *
+     * @param  string $token
+     * @return array<int, array{session_id:int, created:string, last_seen:string, user_agent:string, ip:string, current:bool}>
+     */
+    public function list_sessions_for_token($token): array
+    {
+        return (array) $this->Authorization->ListSessionsForToken($token);
+    }
+
+    /**
      * First-class audit write for auth / staff mutations (replaces inline new Dangeraudit()).
      */
     public function audit($call, $parameters, $entity, $entity_id, $prior_state = null, $post_state = null)
