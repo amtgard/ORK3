@@ -539,6 +539,18 @@ class Model_Player extends Model
         return $this->_player()->GetWhatsNewSeen($mundane_id, $version);
     }
 
+    /** Upsert one OrkTour progress row; validation lives in Player::save_tour_progress(). */
+    public function save_tour_progress(int $mundane_id, string $tour_id, $version, string $status, $last_step): array
+    {
+        return $this->_player()->save_tour_progress($mundane_id, $tour_id, $version, $status, $last_step);
+    }
+
+    /** @return array<string, array{v: int, status: string, at: string}> tour id => progress */
+    public function get_tour_progress(int $mundane_id): array
+    {
+        return $this->_player()->get_tour_progress($mundane_id);
+    }
+
     /** @return array{KingdomId: int, ParentKingdomId: int} */
     public function get_home_kingdom(int $mundane_id): array
     {

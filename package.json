@@ -7,7 +7,8 @@
     "@fullcalendar/core": "^6.1.15",
     "@fullcalendar/daygrid": "^6.1.15",
     "@fullcalendar/interaction": "^6.1.15",
-    "@zootools/email-spell-checker": "^1.12.0"
+    "@zootools/email-spell-checker": "^1.12.0",
+    "driver.js": "^1.10.2"
   },
   "devDependencies": {
     "esbuild": "^0.28.0",
@@ -16,9 +17,10 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
     "test:e2e": "playwright test tests/e2e/rsvp.spec.ts",
-    "postinstall": "mkdir -p orkui/template/default/script/js/fullcalendar && cp node_modules/@fullcalendar/core/index.global.min.js orkui/template/default/script/js/fullcalendar/core.global.min.js && cp node_modules/@fullcalendar/daygrid/index.global.min.js orkui/template/default/script/js/fullcalendar/daygrid.global.min.js && cp node_modules/@fullcalendar/interaction/index.global.min.js orkui/template/default/script/js/fullcalendar/interaction.global.min.js && npx esbuild node_modules/@zootools/email-spell-checker/dist/index.js --bundle --format=iife --global-name=EmailSpellChecker --minify --outfile=orkui/template/revised-frontend/script/email-spell-checker.min.js",
+    "postinstall": "mkdir -p orkui/template/default/script/js/fullcalendar && cp node_modules/@fullcalendar/core/index.global.min.js orkui/template/default/script/js/fullcalendar/core.global.min.js && cp node_modules/@fullcalendar/daygrid/index.global.min.js orkui/template/default/script/js/fullcalendar/daygrid.global.min.js && cp node_modules/@fullcalendar/interaction/index.global.min.js orkui/template/default/script/js/fullcalendar/interaction.global.min.js && npx esbuild node_modules/@zootools/email-spell-checker/dist/index.js --bundle --format=iife --global-name=EmailSpellChecker --minify --outfile=orkui/template/revised-frontend/script/email-spell-checker.min.js && npm run copy-driverjs",
     "copy-fullcalendar": "mkdir -p orkui/template/default/script/js/fullcalendar && cp node_modules/@fullcalendar/core/index.global.min.js orkui/template/default/script/js/fullcalendar/core.global.min.js && cp node_modules/@fullcalendar/daygrid/index.global.min.js orkui/template/default/script/js/fullcalendar/daygrid.global.min.js && cp node_modules/@fullcalendar/interaction/index.global.min.js orkui/template/default/script/js/fullcalendar/interaction.global.min.js",
     "build-email-spell-checker": "npx esbuild node_modules/@zootools/email-spell-checker/dist/index.js --bundle --format=iife --global-name=EmailSpellChecker --minify --outfile=orkui/template/revised-frontend/script/email-spell-checker.min.js",
+    "copy-driverjs": "mkdir -p orkui/template/revised-frontend/script/driverjs && cp node_modules/driver.js/dist/driver.js.iife.js node_modules/driver.js/dist/driver.css node_modules/driver.js/dist/hints.iife.js node_modules/driver.js/dist/hints.css node_modules/driver.js/dist/checklist.iife.js node_modules/driver.js/dist/checklist.css node_modules/driver.js/LICENSE orkui/template/revised-frontend/script/driverjs/",
     "fuzz:record": "bin/fuzzy-validator record",
     "fuzz:validate": "bin/fuzzy-validator validate",
     "fuzz:capture": "bin/fuzzy-validator record",

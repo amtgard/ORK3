@@ -3476,6 +3476,7 @@ function knEscapeAttr(s) {
 <?php endif; ?>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+<script defer src="<?= HTTP_TEMPLATE ?>revised-frontend/script/tours/kingdom-profile.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/tours/kingdom-profile.js') ?>"></script>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>

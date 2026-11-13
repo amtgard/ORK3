@@ -334,6 +334,9 @@ class Controller_Park extends Controller
 
         $this->load_model('Court');
         $this->data['CanManageCourt']      = $uid > 0 && $this->Court->can_manage($uid, (int)$this->session->kingdom_id, (int)$park_id);
+        // Manage Recs: the exact check Recommendations::manage runs (the park's own kingdom),
+        // so the button is never shown to someone the Manager would refuse.
+        $this->data['CanManageRecs']       = $uid > 0 && $this->Court->can_manage($uid, (int)($this->data['park_info']['ParkInfo']['KingdomId'] ?? 0), (int)$park_id);
         // Offered to an officer of this park or its kingdom. The player search is
         // kingdom-wide, so the modal re-checks against each picked recipient
         // (ParkAjax monarchyonlyeligible); the server's create path stays the authority.
