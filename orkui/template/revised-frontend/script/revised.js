@@ -18176,7 +18176,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
 };
 
 // =============================================================================
-// Google Maps — shared touch gestures, loader, and pin maps
+// Google Maps — shared touch gestures and loader
 // =============================================================================
 // Touch devices pan the map with ONE finger ('greedy') instead of Google's
 // default two-finger 'cooperative' mode. Mouse pointers keep 'auto' so the
@@ -18202,38 +18202,11 @@ window.orkEnsureGoogleMaps = (function() {
     };
 })();
 
-// Single-pin location maps: <div class="ork-pin-map" data-lat data-lng data-zoom>.
-// Built the first time the element is on screen, so a map inside a hidden tab
-// panel waits until the tab opens (Google Maps renders blank at zero size) and
-// pages that never scroll to a map never load the API.
-(function() {
-    function build(el) {
-        var pos = { lat: parseFloat(el.getAttribute('data-lat')), lng: parseFloat(el.getAttribute('data-lng')) };
-        if (isNaN(pos.lat) || isNaN(pos.lng)) return;
-        orkEnsureGoogleMaps(function() {
-            var map = new google.maps.Map(el, {
-                center: pos,
-                zoom: parseInt(el.getAttribute('data-zoom'), 10) || 14,
-                gestureHandling: orkMapGestureHandling(),
-                mapTypeControl: false, streetViewControl: false
-            });
-            new google.maps.Marker({ position: pos, map: map });
-        });
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-        var els = document.querySelectorAll('.ork-pin-map');
-        if (!els.length) return;
-        if (!('IntersectionObserver' in window)) { els.forEach(build); return; }
-        var io = new IntersectionObserver(function(entries) {
-            entries.forEach(function(en) {
-                if (!en.isIntersecting) return;
-                io.unobserve(en.target);
-                build(en.target);
-            });
-        });
-        els.forEach(function(el) { io.observe(el); });
-    });
-})();
+// The single-pin ".ork-pin-map" builder that used to live here (Park sidebar
+// and Event Map tab) was retired on 2026-11-13: every JS-API map load counts
+// against the Dynamic Maps SKU, free only up to 10,000 a month, and the pin maps
+// alone ran ~900 a day. Those surfaces are embed iframes again, which are free.
+// Bring it back from git history once the nonprofit Maps credit is attached.
 
 // =============================================================================
 // Calendar Enhancements R2: RSVP dropdowns, Map view
