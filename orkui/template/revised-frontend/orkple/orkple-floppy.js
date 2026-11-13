@@ -51,12 +51,17 @@
     function finePointer() {
         return !window.matchMedia || window.matchMedia('(any-pointer: fine)').matches;
     }
+    /* The hide choice lasts one holiday season (July-June), so next year's event brings the disk back. */
+    function season() {
+        var d = new Date();
+        return String(d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1);
+    }
     function hiddenByViewer() {
-        try { return window.localStorage.getItem(HIDE_KEY) === '1'; } catch (e) { return false; }
+        try { return window.localStorage.getItem(HIDE_KEY) === season(); } catch (e) { return false; }
     }
     function setHidden(on) {
         try {
-            if (on) { window.localStorage.setItem(HIDE_KEY, '1'); } else { window.localStorage.removeItem(HIDE_KEY); }
+            if (on) { window.localStorage.setItem(HIDE_KEY, season()); } else { window.localStorage.removeItem(HIDE_KEY); }
         } catch (e) { /* storage blocked: the choice lasts for this page only */ }
     }
 
@@ -193,6 +198,7 @@
         var a = e.target && e.target.closest ? e.target.closest('[data-orkple-insert]') : null;
         if (!a) { return; }
         e.preventDefault();
+        setHidden(false); /* asking for the disk on purpose brings the floppy back */
         insert();
     });
 

@@ -98,7 +98,9 @@ html[data-theme="dark"] #orkple-floppy:focus-visible { outline-color: #a5b4fc; }
     bottom: calc(100% + 6px);
     left: 0;
     width: max-content;
+    min-width: 0;
     max-width: 200px;
+    transform: none;
     white-space: normal;
     padding: 5px 8px;
     border-radius: 4px;

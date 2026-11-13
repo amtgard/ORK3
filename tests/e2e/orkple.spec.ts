@@ -292,6 +292,8 @@ test('ORK GAMES lists all eight games; a missing game file gives ?FILE NOT FOUND
   for (const g of ['1. ORKEGON TRAIL', '2. DUNGEORK', '3. NUMBER MUNCHORKS', '4. MORKMAZE', '5. ASTERORKS', '6. GEM CASTLORKS', '7. FROGGORK', '8. INVADORKS']) {
     await expect(log(page)).toContainText(g);
   }
+  await expect(log(page)).toContainText('INDEPENDENT PARODY WORK');
+  await expect(log(page)).toContainText('RESPECTIVE OWNERS.');
   await type(page, '2');
   await expect(log(page)).toContainText('?FILE NOT FOUND');
   await page.waitForTimeout(300);

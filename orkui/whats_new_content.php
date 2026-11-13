@@ -19,7 +19,7 @@ if (!defined('ORK_VERSION')) {
 // Cache-busting version for the ORKPLE II assets (revised-frontend/orkple/, games included).
 // Bump it whenever any of those files change, so browsers fetch the new copies.
 if (!defined('ORKPLE_ASSET_VERSION')) {
-    define('ORKPLE_ASSET_VERSION', '2026-11-20.3');
+    define('ORKPLE_ASSET_VERSION', '2026-11-20.5');
 }
 
 // Kill switch for the ORKPLE II holiday event. false turns it off everywhere: no floppy on

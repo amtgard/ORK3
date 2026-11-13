@@ -1034,7 +1034,8 @@
     var MENU = ['1. KINGDOMS', '2. PLAYERS', '3. MY PROFILE', '4. ORK GAMES', '5. SEARCH THE ORK', '6. THE ORK TODAY'];
     // Titles in GAMES order: the menu entries and the ORKEK title cards both read this.
     var GAME_TITLES = ['ORKEGON TRAIL', 'DUNGEORK', 'NUMBER MUNCHORKS', 'MORKMAZE', 'ASTERORKS', 'GEM CASTLORKS', 'FROGGORK', 'INVADORKS'];
-    var GAME_MENU = ['ORK GAMES', rep('=', W), ''].concat(GAME_TITLES.map(function (t, i) { return (i + 1) + '. ' + t; }), ['', '0. MAIN MENU']);
+    var GAME_NOTICE = '* ALL ORK GAMES ARE CONSIDERED AN INDEPENDENT PARODY WORK AND ARE NOT AFFILIATED WITH THE ORIGINAL CREATORS OR OWNERS OF THE GAMES BEING PARODIED. ALL TRADEMARKS BELONG TO THEIR RESPECTIVE OWNERS.';
+    var GAME_MENU = ['ORK GAMES', rep('=', W), ''].concat(GAME_TITLES.map(function (t, i) { return (i + 1) + '. ' + t; }), [''], wrap(GAME_NOTICE, W), ['', '0. MAIN MENU']);
     function gameTitle(id) {
         var i = GAMES.indexOf(id);
         return i < 0 ? '' : GAME_TITLES[i];
