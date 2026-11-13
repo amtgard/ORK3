@@ -29,6 +29,38 @@ class Model_Event extends Model
         return $r;
     }
 
+    public function share_event_to_kingdom($token, $event_id, $kingdom_id)
+    {
+        return $this->Event->ShareEventToKingdom(array('Token' => $token, 'EventId' => $event_id, 'KingdomId' => $kingdom_id));
+    }
+
+    public function unshare_event_from_kingdom($token, $event_id, $kingdom_id)
+    {
+        return $this->Event->UnshareEventFromKingdom(array('Token' => $token, 'EventId' => $event_id, 'KingdomId' => $kingdom_id));
+    }
+
+    public function get_shareable_kingdoms_for_event($mundane_id, $event_id, $owning_kingdom_id)
+    {
+        $r = $this->Event->GetShareableKingdomsForEvent(array(
+            'MundaneId' => $mundane_id,
+            'EventId' => $event_id,
+            'OwningKingdomId' => $owning_kingdom_id,
+        ));
+        return $r['Kingdoms'] ?? array();
+    }
+
+    public function get_shared_kingdoms_for_event($event_id)
+    {
+        $r = $this->Event->GetSharedKingdomsForEvent(array('EventId' => $event_id));
+        return $r['KingdomIds'] ?? array();
+    }
+
+    public function get_shared_kingdom_list_for_event($event_id)
+    {
+        $r = $this->Event->GetSharedKingdomsForEvent(array('EventId' => $event_id));
+        return $r['Kingdoms'] ?? array();
+    }
+
     public function get_event_details($event_id)
     {
 
