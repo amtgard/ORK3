@@ -937,6 +937,7 @@
     return {
         snap: snap,
         boardPos: boardPos,
+        span: span,
         moveTimes: moveTimes,
         shiftTimes: shiftTimes,
         resizeTimes: resizeTimes,

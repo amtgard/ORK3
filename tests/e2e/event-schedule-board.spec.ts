@@ -313,6 +313,18 @@ test.describe('editing', () => {
     await signIn(page);
   });
 
+  // Adds an item from the quick line (Edit mode on) and waits for it to save.
+  async function addViaQuickLine(page: Page, text: string) {
+    await quickAdd(page, text);
+  }
+  // The stored item's [StartTime, EndTime], seconds trimmed.
+  async function timesOf(page: Page, title: string): Promise<string[]> {
+    return page.evaluate(t => {
+      const it = (window as any).EvBoardEdit.store.items().find((i: any) => i.Title === t);
+      return it ? [it.StartTime, it.EndTime].map((v: string) => String(v).slice(0, 16)) : [];
+    }, title);
+  }
+
   // Removes every item this run created, through the batch endpoint.
   test.afterAll(async ({ browser }) => {
     if (!ready) return;
@@ -1347,5 +1359,61 @@ test.describe('editing', () => {
       await expect(block).toHaveAttribute('data-category', cat);
       await expect.poll(autos).toEqual(want);
     }
+  });
+
+  // ---- Phase 4: drag, resize and nudge ----
+
+  test('dragging a block moves it and saves once', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `fri 9-10 ${PREFIX} drag me`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} drag me` });
+    // The mouse does not scroll: bring the block on screen first.
+    await block.scrollIntoViewIfNeeded();
+    const box = (await block.boundingBox())!;
+    const pxPerMin = await page.evaluate(() => (window as any).EvBoardView.PX_PER_MIN);
+    await page.mouse.move(box.x + box.width / 2, box.y + 6);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y + 6 + 90 * pxPerMin, { steps: 8 });
+    await expect(page.locator('.evb-drag-ghost')).toBeVisible();
+    await page.mouse.up();
+    expect(await timesOf(page, `${PREFIX} drag me`)).toEqual(['2026-11-20 10:30', '2026-11-20 11:30']);
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await page.locator('.evb-undo').click();
+    expect(await timesOf(page, `${PREFIX} drag me`)).toEqual(['2026-11-20 09:00', '2026-11-20 10:00']);
+  });
+  test('Escape cancels a drag; the bottom grip resizes', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `fri 1-2p ${PREFIX} resize me`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} resize me` });
+    // The mouse does not scroll: bring the block on screen first.
+    await block.scrollIntoViewIfNeeded();
+    const box = (await block.boundingBox())!;
+    const pxPerMin = await page.evaluate(() => (window as any).EvBoardView.PX_PER_MIN);
+    await page.mouse.move(box.x + box.width / 2, box.y + 6);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y + 80, { steps: 5 });
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    expect(await timesOf(page, `${PREFIX} resize me`)).toEqual(['2026-11-20 13:00', '2026-11-20 14:00']);
+    await block.click();
+    const grip = (await block.locator('.evb-resize-bottom').boundingBox())!;
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 + 30 * pxPerMin, { steps: 5 });
+    await page.mouse.up();
+    expect(await timesOf(page, `${PREFIX} resize me`)).toEqual(['2026-11-20 13:00', '2026-11-20 14:30']);
+  });
+  test('arrow keys nudge the selected block', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `fri 3-4p ${PREFIX} nudge me`);
+    await page.locator('.evb-block', { hasText: `${PREFIX} nudge me` }).click();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    await page.keyboard.press('Alt+ArrowUp');
+    await page.keyboard.press('ArrowRight');
+    expect(await timesOf(page, `${PREFIX} nudge me`)).toEqual(['2026-11-21 15:10', '2026-11-21 16:25']);
   });
 });

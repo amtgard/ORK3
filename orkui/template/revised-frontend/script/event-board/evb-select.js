@@ -10,6 +10,12 @@
  * block. A small toolbar floats over the selected block: Rename, Category (the
  * ten categories), Details (the full schedule form) and Delete.
  *
+ * The arrow keys nudge the selection: Up and Down move it 15 minutes, Shift
+ * with them moves only its end, Left and Right move it a day; Alt makes the
+ * step 5 minutes. Nudged times are not snapped. The selected block carries
+ * resize grips (.evb-resize-top on its first segment, .evb-resize-bottom on its
+ * last), which evb-drag.js handles.
+ *
  * Selection is board state, kept by cid: the board re-renders its whole DOM on
  * every change, so the selected class, aria-pressed, the toolbar and (when it
  * was on a block, or the render dropped it) keyboard focus are put back after
@@ -17,6 +23,8 @@
  *
  * Attached through EvBoardEdit.onEnter / onExit.
  *   EvBoardSelect.selected() -> cid or null
+ *   EvBoardSelect.selection() -> [cid]   the selection (one item, or none, for now)
+ *   EvBoardSelect.select([cid])          select these items ([] clears)
  */
 (function (root, factory) {
     root.EvBoardSelect = factory(root);
@@ -180,6 +188,7 @@
             var on = !!s.cid && b.getAttribute('data-cid') === s.cid;
             b.classList.toggle('evb-selected', on);
             b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            grips(b, on);
         });
         if (s.cid) position(); else hideBar();
         if (refocus && s.cid && !typing()) {
@@ -187,6 +196,24 @@
             var dropped = s.focusEl && !doc.contains(s.focusEl) && (!a || a === doc.body);
             if (b && a !== b && (refocus === 'force' || dropped)) b.focus({ preventScroll: true });
         }
+    }
+
+    // The resize grips: on the selected item's first segment (top) and last
+    // (bottom), out of the tab order and hidden from assistive tech (the keys
+    // resize it). Every render rebuilds the blocks, so apply() puts them back.
+    function grips(b, on) {
+        [['evb-resize-top', !b.classList.contains('evb-block-continued')],
+            ['evb-resize-bottom', !b.classList.contains('evb-block-continues')]].forEach(function (g) {
+            var el = b.querySelector(':scope > .' + g[0]);
+            if (on && g[1] && !el) {
+                el = doc.createElement('div');
+                el.className = g[0];
+                el.setAttribute('aria-hidden', 'true');
+                b.appendChild(el);
+            } else if (!(on && g[1]) && el) {
+                b.removeChild(el);
+            }
+        });
     }
 
     function syncToolbar(item) {
@@ -212,6 +239,42 @@
         s.cid = null;
         s.id = 0;
         apply();
+    }
+
+    function selection() { return s.cid ? [s.cid] : []; }
+
+    // Selection is single for now: the first item given, or none.
+    function selectAll(cids) {
+        if (!s.ctx) return;
+        var first = (cids || []).filter(function (c) { return !!s.ctx.store.get(c); })[0];
+        if (first) select(first); else clear();
+    }
+
+    // ---- nudging with the arrow keys ----
+
+    // Up/Down move the selection by step minutes, Shift+Up/Down move only its
+    // end (never under 5 minutes long), Left/Right move it a day. One undo step.
+    function nudge(key, shift, step) {
+        var store = s.ctx.store, C = win.EvBoardCore;
+        var dir = (key === 'ArrowUp' || key === 'ArrowLeft') ? -1 : 1;
+        var cids = selection().filter(function (c) { return !!store.get(c); });
+        if (!cids.length || leaving()) return;
+        store.batch(function () {
+            cids.forEach(function (cid) {
+                var item = store.get(cid), t;
+                if (key === 'ArrowLeft' || key === 'ArrowRight') t = C.shiftTimes(item, 0, dir);
+                else if (shift) t = C.resizeTimes(item, 'end', C.span(item).end + dir * step);
+                else t = C.shiftTimes(item, dir * step, 0);
+                store.update(cid, { StartTime: t.StartTime, EndTime: t.EndTime });
+            });
+        });
+        // The axis grows to take the item in; keep it on screen (its day, when the
+        // board shows a single day, and the frame's scroll).
+        var moved = store.get(s.cid), shown = V().getDay();
+        var day = moved && C.span(moved).day;
+        if (shown && day && day !== shown) V().setDay(day);
+        var b = shownBlock();
+        if (b) V().reveal(b);
     }
 
     // ---- actions ----
@@ -334,7 +397,11 @@
     }
 
     function onKeyDown(e) {
-        if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey) return;
+        // Alt only changes the arrow keys' step; Shift only the vertical arrows'.
+        var arrow = /^Arrow(Up|Down|Left|Right)$/.test(e.key);
+        if (e.altKey && !arrow) return;
+        if (arrow && e.shiftKey && /Left|Right/.test(e.key)) return;
         var t = e.target && e.target.closest ? e.target : null;
         var onBlock = t && s.rootEl.contains(t) ? t.closest('.evb-block[data-cid]') : null;
         if (!s.cid && !onBlock) return;
@@ -349,12 +416,17 @@
         // A focused button or link (the mode bar's Undo, a toolbar tool) keeps
         // its keys: Enter presses it, and nothing else acts on the selection.
         if (!onBlock && t && t.closest('button, a[href]')) return;
-        if (!/^(Delete|Backspace|Enter|[0-9])$/.test(e.key)) return;
+        if (!arrow && !/^(Delete|Backspace|Enter|[0-9])$/.test(e.key)) return;
         // The keys act on the focused block (focus selects it; Esc may have cleared it).
         if (onBlock && onBlock.getAttribute('data-cid') !== s.cid) select(onBlock.getAttribute('data-cid'));
         if (!s.cid) return;
         // The rest act only on a block on screen.
         if (!shownBlock()) return;
+        if (arrow) {
+            e.preventDefault();
+            nudge(e.key, e.shiftKey, e.altKey ? 5 : 15);
+            return;
+        }
         if (e.key === 'Delete' || e.key === 'Backspace') {
             e.preventDefault();
             removeSelected();
@@ -408,6 +480,7 @@
         if (s.rootEl) {
             s.rootEl.querySelectorAll('.evb-selected').forEach(function (b) { b.classList.remove('evb-selected'); });
             s.rootEl.querySelectorAll('.evb-block[aria-pressed]').forEach(function (b) { b.removeAttribute('aria-pressed'); });
+            s.rootEl.querySelectorAll('.evb-resize-top, .evb-resize-bottom').forEach(function (g) { g.parentNode.removeChild(g); });
         }
         if (s.layer && s.layer.parentNode) s.layer.parentNode.removeChild(s.layer);
         s.ctx = s.layer = s.bar = s.menu = s.rootEl = s.focusEl = null;
@@ -422,6 +495,8 @@
     }
 
     return {
-        selected: function () { return s.cid; }
+        selected: function () { return s.cid; },
+        selection: selection,
+        select: selectAll
     };
 });

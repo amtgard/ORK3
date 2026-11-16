@@ -2844,6 +2844,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-edit.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-edit.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-type.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-type.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-select.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-select.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-drag.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-drag.js') ?>"></script>
 <?php endif; ?>
 <script>
 (function() {

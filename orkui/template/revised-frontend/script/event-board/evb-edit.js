@@ -223,6 +223,10 @@
             row(kbd('Enter'), 'add it and start the next one after it') +
             row(kbd('Tab'), 'add it and start one alongside') +
             row(kbd('Esc'), 'stop') +
+            row('Drag', 'a block to move it; a selected block\'s top or bottom edge to resize it') +
+            row(kbd('↑') + kbd('↓'), 'move the selected item 15 minutes (with ' + kbd('Alt') + ', 5)') +
+            row(kbd('Shift ↑') + kbd('Shift ↓'), 'move only its end') +
+            row(kbd('←') + kbd('→'), 'move it a day') +
             '</tbody></table>';
     }
 
