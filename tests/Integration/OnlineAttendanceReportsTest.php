@@ -1170,4 +1170,40 @@ final class OnlineAttendanceReportsTest extends TestCase
         $this->assertStringContainsString('>' . $this->day2 . '<', $x, "A's last online sign-in");
         $this->assertStringContainsString('use online sign-ins only.', $x);
     }
+
+    public function testParkFieldCountTodayIsInPersonOnly(): void
+    {
+        // The count uses the DB's CURDATE(), which can differ from PHP's date().
+        $today = (string) $this->fixture->pdo()->query('SELECT CURDATE()')->fetchColumn();
+        $before = (int) $this->report->GetParkFieldCountToday(['ParkId' => $this->parkId])['Count'];
+        $p = $this->fixture->createPlayer($this->parkId, 'oar-field');
+        $this->fixture->insertAttendance($p['mundane_id'], $this->parkId, $this->kingdomId, $today, 0, 1);
+        $this->assertSame($before, (int) $this->report->GetParkFieldCountToday(['ParkId' => $this->parkId])['Count'], 'online row adds nothing');
+        $q = $this->fixture->createPlayer($this->parkId, 'oar-field2');
+        $this->fixture->insertAttendance($q['mundane_id'], $this->parkId, $this->kingdomId, $today, 0, 0);
+        $this->assertSame($before + 1, (int) $this->report->GetParkFieldCountToday(['ParkId' => $this->parkId])['Count'], 'in-person row adds one');
+    }
+
+    public function testFeatureUtilizationOnlineSignInsMatchesSeededRows(): void
+    {
+        $find = function (): int {
+            foreach ($this->report->ReleaseFeatureUtilization()['releases'] as $release) {
+                foreach ($release['features'] as $feature) {
+                    foreach ($feature['kpis'] as $kpi) {
+                        if ($kpi['label'] === 'Online sign-ins (30 days)') {
+                            return (int) $kpi['value'];
+                        }
+                    }
+                }
+            }
+            $this->fail('Online sign-ins KPI missing.');
+        };
+        $before = $find();
+        $p = $this->fixture->createPlayer($this->parkId, 'oar-util');
+        $recent = date('Y-m-d', strtotime('-3 days'));
+        $this->fixture->insertAttendance($p['mundane_id'], $this->parkId, $this->kingdomId, $recent, 0, 1);
+        $this->fixture->insertAttendance($p['mundane_id'], $this->parkId, $this->kingdomId, date('Y-m-d', strtotime('-4 days')), 0, 1);
+        $this->fixture->insertAttendance($p['mundane_id'], $this->parkId, $this->kingdomId, date('Y-m-d', strtotime('-5 days')), 0, 0);
+        $this->assertSame($before + 2, $find(), 'delta equals the seeded online rows in the window');
+    }
 }

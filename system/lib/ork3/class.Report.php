@@ -7261,6 +7261,7 @@ class Report extends Ork3
         // legacy 'manual' — a recent window shows how players are checking in now.
         $attnSignin     = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}attendance` WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND entry_method = 'signin_link'");
         $attnSelfreg    = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}attendance` WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND entry_method = 'self_reg'");
+        $attnOnline     = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}attendance` a WHERE a.`date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)" . Attendance::TypeClause('online', 'a'));
         $entryBreak     = $this->_rfuBreakdown(
             "SELECT entry_method AS k, COUNT(*) AS c FROM `{$p}attendance`
 			 WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND entry_method IS NOT NULL AND entry_method <> ''
@@ -7278,6 +7279,7 @@ class Report extends Ork3
                 $this->_rfuKpi('Self-reg links created', $selfregLinks, null, null, 'rows in self-registration link'),
                 $this->_rfuKpi('Self-reg links redeemed', $selfregUsed, $selfregLinks, $selfregConv, 'self-reg links that created a new player', null, null, 'of self-reg links were used'),
                 $this->_rfuKpi('Self-reg check-ins recorded (30d)', $attnSelfreg, null, null, "attendance in the last 30 days with entry_method 'self_reg'"),
+                $this->_rfuKpi('Online sign-ins (30 days)', $attnOnline, null, null, 'attendance in the last 30 days marked Online'),
             ),
             'charts' => array(
                 $this->_rfuChartFromBreakdown('rfu-entry-method', 'pie', 'Attendance by entry method (last 30 days)', $entryBreak, 'Sign-ins'),
@@ -8496,7 +8498,8 @@ class Report extends Ork3
      * "is there many people at field?" number for the public park page.
      * UNGATED: park-level aggregate, same class of data as the public Live
      * map. Real-time only for parks using QR sign-in links; reeve-entered
-     * attendance appears when it's typed in.
+     * attendance appears when it's typed in. In-person only: online sign-ins
+     * are not people physically on the field. (No cache layer: nothing stale.)
      */
     public function GetParkFieldCountToday($request)
     {
@@ -8505,8 +8508,8 @@ class Report extends Ork3
             return array('Status' => InvalidParameter(), 'Count' => 0);
         }
         $r = $this->db->query(
-            'SELECT COUNT(DISTINCT mundane_id) AS c FROM ' . DB_PREFIX . "attendance
-			 WHERE park_id = $park_id AND date = CURDATE()"
+            'SELECT COUNT(DISTINCT a.mundane_id) AS c FROM ' . DB_PREFIX . "attendance a
+			 WHERE a.park_id = $park_id AND a.date = CURDATE()" . Attendance::TypeClause('in_person', 'a')
         );
         $count = 0;
         if ($r !== false && $r->size() > 0 && $r->next()) {

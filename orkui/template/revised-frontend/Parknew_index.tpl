@@ -389,8 +389,8 @@
 			<div class="pk-stat-value" style="font-size:1.1rem"><?= $_pdIsToday ? 'Today' : date('M j', strtotime($nextParkDayDate)) ?></div>
 			<div class="pk-stat-sub"><?= $_pdIsToday ? date('l, M j', strtotime($nextParkDayDate)) : date('l', strtotime($nextParkDayDate)) ?></div>
 			<?php if ($_pdIsToday && !empty($TodayAtField)): ?>
-				<div class="pk-stat-sub pk-field-count" title="Distinct players credited with attendance today. Parks using QR sign-in links update live; reeve-entered attendance appears when it's typed in.">
-					<i class="fas fa-users"></i> <?= (int)$TodayAtField ?> at field so far
+				<div class="pk-stat-sub pk-field-count" data-tip="Distinct players credited with in-person attendance today (online sign-ins are not counted). Parks using QR sign-in links update live; reeve-entered attendance appears when it's typed in.">
+					<i class="fas fa-users"></i> <?= (int)$TodayAtField ?> on the field today (in person)
 				</div>
 			<?php endif; ?>
 			<?php if ($nextPdForecast && $nextPdForecast['hi_f'] !== null):
