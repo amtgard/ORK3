@@ -2523,3 +2523,18 @@ html[data-theme="dark"] .orn-online-badge[data-tip]:hover::after {
 .orn-online-check input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
 .form-container label.orn-online-check { display: inline-flex; width: auto; margin-left: 0; }
 html[data-theme="dark"] .form-container label.orn-online-check { color: var(--ork-text); }
+
+/* ---- Attendance type control (In-Person | Online | All) — see ornAttendanceTypeControl() in orkui.js ---- */
+.orn-type-control { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--ork-border-dark); border-radius: 8px; overflow: hidden; background: var(--ork-card-bg); }
+.orn-type-control .orn-type-opt { min-height: 44px; min-width: 44px; padding: 0 16px; margin: 0; border: 0; border-radius: 0; background: transparent; color: var(--ork-text-secondary); font: inherit; font-size: 14px; font-weight: 600; line-height: 1.2; cursor: pointer; flex: 1 1 auto; }
+.orn-type-control .orn-type-opt + .orn-type-opt { border-left: 1px solid var(--ork-border-dark); }
+.orn-type-control .orn-type-opt:hover { background: var(--ork-bg-inset); color: var(--ork-text); }
+.orn-type-control .orn-type-opt.orn-type-active,
+.orn-type-control .orn-type-opt[aria-pressed="true"] { background: var(--ork-link); color: #fff; }
+.orn-type-control .orn-type-opt:focus-visible { outline: 2px solid var(--ork-link-bright); outline-offset: -2px; }
+html[data-theme="dark"] .orn-type-control { background: var(--ork-card-bg); border-color: var(--ork-border-dark); }
+html[data-theme="dark"] .orn-type-control .orn-type-opt { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .orn-type-control .orn-type-opt:hover { background: var(--ork-bg-inset); color: var(--ork-text); }
+html[data-theme="dark"] .orn-type-control .orn-type-opt.orn-type-active,
+html[data-theme="dark"] .orn-type-control .orn-type-opt[aria-pressed="true"] { background: var(--ork-link-bright); color: #1a202c; }
+@media (max-width: 480px) { .orn-type-control .orn-type-opt { padding: 0 10px; } }

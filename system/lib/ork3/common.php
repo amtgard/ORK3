@@ -129,6 +129,28 @@ function ork_online_badge(): string
 }
 
 /**
+ * Segmented In-Person | Online | All attendance-type control. Server-rendered;
+ * bound by ornAttendanceTypeControl() in default/script/orkui.js and styled by
+ * .orn-type-control in default/style/orkui.css (both loaded on every page).
+ * $current is normalised via Attendance::NormalizeType (junk becomes 'all').
+ */
+function ork_attendance_type_control(string $current, string $name = 'AttendanceType'): string
+{
+    $current = Attendance::NormalizeType($current);
+    $options = array('in_person' => 'In-Person', 'online' => 'Online', 'all' => 'All');
+    $enc = function ($v) {
+        return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+    };
+    $html = '<div class="orn-type-control" role="group" aria-label="Attendance type" data-name="' . $enc($name) . '" data-value="' . $enc($current) . '">';
+    foreach ($options as $value => $label) {
+        $on = ($value === $current);
+        $html .= '<button type="button" class="orn-type-opt' . ($on ? ' orn-type-active' : '') . '" data-value="' . $enc($value)
+            . '" aria-pressed="' . ($on ? 'true' : 'false') . '">' . $enc($label) . '</button>';
+    }
+    return $html . '</div>';
+}
+
+/**
  * Next occurrence dates for a park-day row, mirroring the recurrence
  * predicates in Weather::parks_playing_on(). $pd uses the GetParkDays keys:
  * Recurrence, WeekDay, WeekOfMonth, MonthDay, StartDate, WeekInterval.
