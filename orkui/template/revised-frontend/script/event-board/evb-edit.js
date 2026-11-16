@@ -12,7 +12,7 @@
  *
  * Other Edit-mode surfaces (evb-type.js, ...) attach through three hooks, each
  * called with the same edit context {store, root, head, quickLine,
- * entryContext, add, addNotice} (see editContext below):
+ * entryContext, add, addNotice, isLeaving} (see editContext below):
  *   EvBoardEdit.onEnter(fn)      after Edit mode opens
  *   EvBoardEdit.onBeforeExit(fn) when Done is pressed, before anything else;
  *                                returning false keeps Edit mode open
@@ -327,7 +327,9 @@
     }
 
     // Add a valid parse as an item; the quick line's day and "then" follow it.
+    // Null once Done is leaving: the store is about to go.
     function addParsed(r) {
+        if (state.leaving) return null;
         var cid;
         state.committing = true;
         try {
@@ -362,7 +364,9 @@
             quickLine: state.entry,
             entryContext: entryContext,
             add: addParsed,
-            addNotice: addNotice
+            addNotice: addNotice,
+            // Done is in progress: nothing more may be added or opened.
+            isLeaving: function () { return !!state.leaving; }
         };
     }
 

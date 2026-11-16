@@ -25,7 +25,6 @@
 
     var STEP = 15;      // minutes per slot
     var DRAG_PX = 4;    // movement before a press becomes a drag
-    var HEAD_PX = 34;   // the sticky day heads cover the top of the board's frame
     var doc = win.document;
 
     var s = {
@@ -40,6 +39,7 @@
         live: null,     // { day, start, end, category } as the text reads now
         layoutKey: '',
         posKey: '',
+        unshownTimer: 0,
         press: null,    // a mouse or pen press on the board
         tap: null,      // a touch press on the board
         closing: false,
@@ -50,16 +50,8 @@
 
     function V() { return win.EvBoardView; }
 
-    function catsByName() {
-        var by = {};
-        ((win.EvConfig && win.EvConfig.scheduleCategories) || []).forEach(function (c) { by[c.name] = c; });
-        return by;
-    }
-
-    function boldOf(name) {
-        var by = catsByName(), def = by[name] || by.Other;
-        return (def && def.bold) || '#616161';
-    }
+    // Done is in progress: the store is about to go, so nothing opens or adds.
+    function leaving() { return !!(s.ctx && s.ctx.isLeaving && s.ctx.isLeaving()); }
 
     // The length of the last item created in this Edit session (60 at first).
     function lastLength() {
@@ -151,7 +143,7 @@
             : { day: o.day, start: o.start, end: o.end, category: 'Other' };
         var l = s.live;
         s.blockEl.setAttribute('data-category', l.category);
-        s.blockEl.style.setProperty('--evb-fill', boldOf(l.category));
+        s.blockEl.style.setProperty('--evb-fill', V().boldFor(l.category));
         s.metaEl.textContent = C.fmtRange(l.start, l.end);
         // Lane layout depends on the times and the category, never on the title.
         var key = [l.day, l.start, l.end, l.category].join('|');
@@ -173,6 +165,8 @@
             s.blockEl.style.clipPath = 'inset(50%)';
             s.pop.style.visibility = 'hidden';
             s.posKey = '';
+            // Not after a render's callbacks re-render: settle on the next turn.
+            if (!s.unshownTimer) s.unshownTimer = win.setTimeout(settleUnshown, 0);
             return;
         }
         var lr = s.layer.getBoundingClientRect(), r = ph.getBoundingClientRect();
@@ -196,7 +190,7 @@
         bs.clipPath = (it || ib || il || ir) ? 'inset(' + it + 'px ' + ir + 'px ' + ib + 'px ' + il + 'px)' : '';
 
         var ps = s.pop.style;
-        var shown = r.top + h > vt + HEAD_PX && r.top < vb;
+        var shown = r.top + h > vt + V().HEAD_PX && r.top < vb;
         ps.visibility = shown ? '' : 'hidden';
         ps.left = (r.left - lr.left) + 'px';
         var below = r.top + h + 4, ph2 = s.pop.offsetHeight;
@@ -224,17 +218,35 @@
         if (!s.entry.getText().trim()) return 'empty';
         var r = s.entry.result();
         if (!r || !r.ok) return 'invalid';
-        s.ctx.add(r);
-        return 'added';
+        return s.ctx.add(r) == null ? 'refused' : 'added';
     }
 
     // The block is being left (a click elsewhere, Done): add a valid entry,
     // discard an empty one, keep text with no title. False when it was kept.
     function settle() {
         if (!s.open) return true;
-        if (addCurrent() === 'invalid') return false;
+        var res = addCurrent();
+        if (res === 'invalid' || res === 'refused') return false;
         closeBlock();
         return true;
+    }
+
+    // The board stopped showing the block (List view, another tab, another day):
+    // settle it as a click elsewhere would, and a line that cannot be added yet
+    // goes to the quick line (or the notice) instead of a focused invisible input.
+    function settleUnshown() {
+        s.unshownTimer = 0;
+        if (!s.open) return;
+        var ph = s.rootEl.querySelector('.evb-placeholder');
+        if (ph && ph.offsetParent) return; // showing again
+        var text = s.entry.getText().trim();
+        if (settle()) return;
+        var r = s.entry.result(), o = s.open;
+        var line = (r && r.given && r.given.time ? C.dayLabel(o.day) + ' ' : C.slotLine(o.day, o.start, o.end)) + text;
+        closeBlock();
+        var q = s.ctx.quickLine;
+        if (!q.getText().trim() && !q.input.readOnly) q.setText(line);
+        else s.ctx.addNotice('The item you were typing on the board was not added yet.', line);
     }
 
     function menuOpen() { return s.entry.input.getAttribute('aria-expanded') === 'true'; }
@@ -243,6 +255,10 @@
     // list is open, which keeps Enter, Tab and Esc for picking.
     function onKeyDown(e) {
         if (!s.open || e.isComposing || e.keyCode === 229 || menuOpen()) return;
+        if (leaving()) {
+            if (e.key === 'Enter' || e.key === 'Tab') e.preventDefault();
+            return;
+        }
         if (e.key === 'Escape') {
             e.preventDefault();
             e.stopPropagation();
@@ -326,11 +342,13 @@
             if (!body) return;
             var cur = slotFor(body, e.clientY);
             p.start = Math.min(p.min, cur);
-            p.end = Math.max(p.min, cur) + STEP;
+            // Under pointer capture the pointer can leave the day: end at the axis.
+            p.end = Math.min(Math.max(p.min, cur) + STEP, V().board.axisEnd);
+            p.start = Math.min(p.start, p.end - STEP);
             showHover(p.day, p.start, p.end - p.start, true);
             return;
         }
-        if (p || e.pointerType === 'touch') return;
+        if (p || e.pointerType === 'touch' || leaving()) { if (!p) hideHover(); return; }
         var b = emptyBody(e.target);
         if (!b) { hideHover(); return; }
         showHover(b.getAttribute('data-day'), slotFor(b, e.clientY), lastLength(), false);
@@ -338,7 +356,7 @@
 
     function onPointerDown(e) {
         var body = emptyBody(e.target);
-        if (!body || e.button !== 0) return;
+        if (!body || e.button !== 0 || leaving()) return;
         var day = body.getAttribute('data-day'), min = slotFor(body, e.clientY);
         if (e.pointerType === 'touch') {
             s.tap = { id: e.pointerId, day: day, min: min };
@@ -356,9 +374,10 @@
         var t = s.tap;
         if (t && e.pointerId === t.id) {
             s.tap = null;
+            if (leaving()) return;
             // A tap fills the quick line: the day and time, ready for a title.
             var line = s.ctx.quickLine;
-            line.setText(C.dayLabel(t.day) + ' ' + C.fmtTime(t.min) + ' ');
+            line.setText(C.slotLine(t.day, t.min));
             line.input.focus();
             return;
         }
@@ -367,6 +386,7 @@
         s.press = null;
         try { s.rootEl.releasePointerCapture(p.id); } catch (err) { /* already released */ }
         hideHover();
+        if (leaving()) return;
         if (p.dragging) openBlock(p.day, p.start, p.end);
         else openBlock(p.day, p.min, p.min + lastLength());
     }
@@ -419,7 +439,8 @@
         s.offs.forEach(function (off) { off(); });
         s.offs = [];
         if (s.raf) win.cancelAnimationFrame(s.raf);
-        s.raf = 0;
+        if (s.unshownTimer) win.clearTimeout(s.unshownTimer);
+        s.raf = s.unshownTimer = 0;
         if (s.entry) s.entry.destroy();
         if (s.layer && s.layer.parentNode) s.layer.parentNode.removeChild(s.layer);
         s.ctx = s.entry = s.layer = s.blockEl = s.metaEl = s.pop = null;

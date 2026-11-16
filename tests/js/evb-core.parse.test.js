@@ -176,3 +176,18 @@ test('formatEntry with no title ends cleanly', () => {
   assert.equal(C.formatEntry(Object.assign({ Title: '' }, base)), '9–10a #bg');
   assert.equal(C.formatEntry(base), '9–10a #bg');
 });
+test('a tapped slot line, with a title typed after it, parses to the tapped day and minute', () => {
+  for (const [day, min] of [['2026-11-20', 825], ['2026-11-21', 600], ['2026-11-21', 1470], ['2026-11-22', 720]]) {
+    const line = C.slotLine(day, min);
+    const r = p(line + 'Archery practice');
+    assert.equal(r.ok, true, line);
+    assert.deepEqual(pick(r, ['day', 'startMin', 'title']), [day, min, 'Archery practice'], line);
+  }
+  assert.equal(C.slotLine('2026-11-20', 825), 'Friday 1:45p ');
+});
+test('a slot line with an end keeps the range', () => {
+  const r = p(C.slotLine('2026-11-21', 840, 900) + '2-3');
+  assert.deepEqual(pick(r, ['day', 'startMin', 'endMin']), ['2026-11-21', 840, 900]);
+  const z = p(C.slotLine('2026-11-21', 840, 840) + 'Bell');
+  assert.deepEqual(pick(z, ['startMin', 'endMin', 'title']), [840, 840, 'Bell']);
+});

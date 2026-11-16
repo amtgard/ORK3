@@ -728,6 +728,15 @@
         return out;
     }
 
+    // The start of a line naming a board slot, ready for a title: 'Friday 1:45p '
+    // or, with an end, 'Friday 1:45–2:45p '. parseEntry reads it back to the
+    // same board day and minutes (an end equal to the start reads as '0m').
+    function slotLine(day, startMin, endMin) {
+        var t = endMin == null ? fmtTime(startMin)
+            : endMin === startMin ? fmtTime(startMin) + ' 0m' : fmtRange(startMin, endMin);
+        return dayLabel(day) + ' ' + t + ' ';
+    }
+
     return {
         BOARD_DAY_START: BOARD_DAY_START,
         CATEGORY_NAMES: CATEGORY_NAMES,
@@ -736,6 +745,7 @@
         guessCategory: guessCategory,
         parseEntry: parseEntry,
         formatEntry: formatEntry,
+        slotLine: slotLine,
         parseNaive: parseNaive,
         toNaive: toNaive,
         addDays: addDays,

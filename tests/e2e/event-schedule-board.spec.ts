@@ -407,6 +407,13 @@ test.describe('editing', () => {
   async function lastDay(page: Page): Promise<string> {
     return page.evaluate(() => String((window as any).EvConfig.eventEnd).slice(0, 10));
   }
+  // The day before the occurrence's last day (YYYY-MM-DD).
+  async function dayBeforeLast(page: Page): Promise<string> {
+    return page.evaluate(() => {
+      const [y, m, d] = String((window as any).EvConfig.eventEnd).slice(0, 10).split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+    });
+  }
 
   test('click, type, Enter, type, Enter makes a run of items', async ({ page }) => {
     await openBoard(page, EDIT_EVENT);
@@ -485,6 +492,59 @@ test.describe('editing', () => {
     await page.locator('.evb-quickline .evb-entry-input').click();
     await expect(page.locator('.evb-block-editing')).toHaveCount(0);
     await expect(page.locator('.evb-block', { hasText: `${PREFIX} dragged` })).toContainText('5–6:30p');
+  });
+
+  test('Done with a titleless block stays in Edit mode', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const SUNDAY = await lastDay(page);
+    await page.locator('.evb-edit-btn').click();
+    await clickSlot(page, SUNDAY, '08:00');
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await editor.type('2-3');
+    await page.locator('.evb-done').click();
+    await expect(page.locator('.evb-notice')).toContainText('no title');
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    await expect(editor).toHaveValue('2-3');
+    await editor.press('Escape');
+    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
+  });
+
+  test('a run can cross midnight', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const SATURDAY = await dayBeforeLast(page);
+    await page.locator('.evb-edit-btn').click();
+    await clickSlot(page, SATURDAY, '23:30');
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await editor.type(`${PREFIX} late court`);
+    await editor.press('Enter');
+    await editor.type(`${PREFIX} wee watch`);
+    await editor.press('Enter');
+    await editor.press('Escape');
+    const start = await page.evaluate(title => {
+      const it = (window as any).EvBoardEdit.store.items().find((i: any) => i.Title === title);
+      return it ? String(it.StartTime) : '';
+    }, `${PREFIX} wee watch`);
+    expect(start.startsWith('2026-11-22 00:30')).toBe(true);
+    await expect(page.locator(`.evb-block[data-day="${SATURDAY}"]`, { hasText: `${PREFIX} wee watch` })).toHaveCount(1);
+  });
+
+  test('nothing is added once Done is leaving', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const SUNDAY = await lastDay(page);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    // Done re-fetches the page: hold that answer back so the leaving window stays open.
+    await page.route(/Route=Event\/detail\//, async route => {
+      await new Promise(r => setTimeout(r, 1500));
+      await route.continue();
+    });
+    await page.locator('.evb-done').click();
+    await clickSlot(page, SUNDAY, '09:00');
+    await page.keyboard.type(`${PREFIX} too late`);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
+    await expect(page.locator('.evb-modebar')).toHaveCount(0, { timeout: 10000 });
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} too late` })).toHaveCount(0);
   });
 
   test('returning to the tab picks up changes made elsewhere', async ({ page, context }) => {

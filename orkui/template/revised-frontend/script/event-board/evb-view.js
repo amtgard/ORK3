@@ -20,6 +20,7 @@
     var MIN_BLOCK_MIN = 15;  // shorter items still draw this tall
     var TALL_MIN = 90;       // blocks this long show location and leads
     var LANE_MIN_PX = 110;   // narrowest a lane may get before the board scrolls
+    var HEAD_PX = 34;        // the sticky day heads (.evb-head) cover the top of the frame
     var STORAGE_KEY = 'ev-sched-view-mode';
     var PHONE_QUERY = '(max-width: 700px)';
 
@@ -223,6 +224,7 @@
     };
     var api = {
         PX_PER_MIN: PX_PER_MIN,
+        HEAD_PX: HEAD_PX,
         esc: esc,
         blockHtml: blockHtml,
         slotAt: slotAt,
@@ -435,7 +437,7 @@
         var scroller = g && g.offsetParent && state.rootEl && state.rootEl.querySelector('.evb-scroller');
         if (!scroller) return;
         var sr = scroller.getBoundingClientRect(), gr = g.getBoundingClientRect();
-        var head = 34, gutter = 48, pad = 12; // the sticky day heads and hour gutter cover the frame's edges
+        var head = HEAD_PX, gutter = 48, pad = 12; // the sticky day heads and hour gutter cover the frame's edges
         if (gr.top < sr.top + head) scroller.scrollTop -= sr.top + head + pad - gr.top;
         else if (gr.bottom > sr.bottom) scroller.scrollTop += Math.min(gr.bottom - sr.bottom + pad, gr.top - sr.top - head - pad);
         if (gr.left < sr.left + gutter) scroller.scrollLeft -= sr.left + gutter + pad - gr.left;
@@ -706,6 +708,8 @@
     api.isEditing = function () { return state.editing; };
     api.setGhosts = setGhosts;
     api.setPlaceholder = setPlaceholder;
+    // A category's bold fill; unknown names fall back to Other's.
+    api.boldFor = function (name) { return boldOf(catName(name, state.catsByName), state.catsByName); };
     api.reveal = reveal;
     api.getItems = function () { return state.items; };
     api.setView = setView;
