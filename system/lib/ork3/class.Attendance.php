@@ -650,6 +650,7 @@ class Attendance extends Ork3
         $this->attendance_link->credits                 = $credits;
         $this->attendance_link->expires_at              = $expires_at;
         $this->attendance_link->created_at              = gmdate('Y-m-d H:i:s');
+        $this->attendance_link->online                  = self::NormalizeOnline($request['Online'] ?? 0);
         $this->attendance_link->save();
 
         if (!$this->attendance_link->link_id) {
@@ -709,6 +710,7 @@ class Attendance extends Ork3
             'ExpiresAt'              => $this->attendance_link->expires_at,
             'EventName'              => $eventName,
             'ScopeType'              => $scopeType,
+            'Online'                => (int)$this->attendance_link->online,
         ]);
     }
 
@@ -823,6 +825,7 @@ class Attendance extends Ork3
         // is preserved in ork_attendance_link.by_whom_id if reports want to
         // surface "link issued by Lacris, used by Augustus".
         $this->attendance->entry_method             = 'signin_link';
+        $this->attendance->online                   = (int)$this->attendance_link->online;
         $this->attendance->event_id                 = $event_id;
         $this->attendance->event_calendardetail_id  = $event_calendardetail_id;
         $this->attendance->date_year                = 0;
@@ -1011,7 +1014,7 @@ class Attendance extends Ork3
         }
 
         $this->db->Clear();
-        $rows = $this->db->DataSet('SELECT al.link_id, al.token, al.credits, al.expires_at, al.park_id, COALESCE(p.name, \'\') AS park_name FROM ' . DB_PREFIX . 'attendance_link al LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = al.park_id AND al.park_id > 0 WHERE ' . $where . ' AND al.revoked_at IS NULL AND al.expires_at > NOW() ORDER BY al.expires_at DESC LIMIT 20');
+        $rows = $this->db->DataSet('SELECT al.link_id, al.token, al.credits, al.expires_at, al.park_id, al.online, COALESCE(p.name, \'\') AS park_name FROM ' . DB_PREFIX . 'attendance_link al LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = al.park_id AND al.park_id > 0 WHERE ' . $where . ' AND al.revoked_at IS NULL AND al.expires_at > NOW() ORDER BY al.expires_at DESC LIMIT 20');
         $links = [];
         if ($rows) {
             while ($rows->Next()) {
@@ -1022,6 +1025,7 @@ class Attendance extends Ork3
                     'ExpiresAt' => $rows->expires_at,
                     'ParkId'    => (int)$rows->park_id,
                     'ParkName'  => (string)$rows->park_name,
+                    'Online'    => (int)$rows->online,
                 ];
             }
         }

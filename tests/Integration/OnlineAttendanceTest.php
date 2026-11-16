@@ -110,4 +110,62 @@ final class OnlineAttendanceTest extends TestCase
         $this->set($o, $p, $park, $id);
         $this->assertSame(1, $this->fixture->fetchOnline($id));
     }
+
+    public function testCreateParkLinkStoresOnline(): void
+    {
+        [$o, , $park] = $this->actors('lnk');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $c = $this->attendanceDomain->CreateAttendanceLink([
+            'Token' => $o['token'], 'ParkId' => $park, 'Credits' => 1, 'Hours' => 1, 'Online' => 1,
+        ]);
+        $this->assertSame(0, $c['Status']);
+        $this->fixture->trackLink((int) $c['Detail']['LinkId']);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $l = $this->attendanceDomain->GetAttendanceLinks(['Token' => $o['token'], 'ParkId' => $park]);
+        $this->assertSame(0, $l['Status']);
+        $found = null;
+        foreach ($l['Detail'] as $row) {
+            if ($row['LinkId'] === (int) $c['Detail']['LinkId']) {
+                $found = $row;
+            }
+        }
+        $this->assertNotNull($found);
+        $this->assertSame(1, $found['Online']);
+
+        $info = $this->attendanceDomain->GetAttendanceLinkInfo(['LinkToken' => $c['Detail']['Token']]);
+        $this->assertSame(1, $info['Detail']['Online']);
+    }
+
+    private function useLink(int $online): int
+    {
+        $parkId = $this->fixture->firstParkId();
+        $kingdomId = $this->fixture->kingdomIdForPark($parkId);
+        $officer = $this->fixture->createParkOfficer($parkId, 'on-lo' . $online);
+        $player = $this->fixture->createPlayer($parkId, 'on-lp' . $online);
+        $link = $this->fixture->insertParkLink($parkId, $kingdomId, $officer['mundane_id'], null, $online);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $use = $this->attendanceDomain->UseAttendanceLink([
+            'Token' => $player['token'],
+            'LinkToken' => $link['token'],
+            'ClassId' => $this->fixture->firstClassId(),
+        ]);
+        $this->assertSame(0, $use['Status']);
+        $id = (int) $use['Detail'];
+        $this->fixture->trackAttendance($id);
+
+        return $id;
+    }
+
+    public function testUseOnlineLinkWritesOnlineRow(): void
+    {
+        $id = $this->useLink(1);
+        $this->assertSame(1, $this->fixture->fetchOnline($id));
+    }
+
+    public function testLegacyLinkWritesInPersonRow(): void
+    {
+        $id = $this->useLink(0);
+        $this->assertSame(0, $this->fixture->fetchOnline($id));
+    }
 }

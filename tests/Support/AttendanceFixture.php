@@ -244,17 +244,17 @@ final class AttendanceFixture
     /**
      * @return array{token: string, link_id: int}
      */
-    public function insertParkLink(int $parkId, int $kingdomId, int $byWhomId, ?string $expiresAt = null): array
+    public function insertParkLink(int $parkId, int $kingdomId, int $byWhomId, ?string $expiresAt = null, int $online = 0): array
     {
         $token = bin2hex(random_bytes(24));
         $expiresAt ??= gmdate('Y-m-d H:i:s', time() + 7200);
 
         $stmt = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'attendance_link
-             (token, park_id, kingdom_id, event_id, event_calendardetail_id, by_whom_id, credits, expires_at, created_at)
-             VALUES (?, ?, ?, NULL, NULL, ?, 1, ?, UTC_TIMESTAMP())'
+             (token, park_id, kingdom_id, event_id, event_calendardetail_id, by_whom_id, credits, expires_at, created_at, online)
+             VALUES (?, ?, ?, NULL, NULL, ?, 1, ?, UTC_TIMESTAMP(), ?)'
         );
-        $stmt->execute([$token, $parkId, $kingdomId, $byWhomId, $expiresAt]);
+        $stmt->execute([$token, $parkId, $kingdomId, $byWhomId, $expiresAt, $online]);
         $linkId = (int) $this->pdo->lastInsertId();
         $this->linkIds[] = $linkId;
 
@@ -285,6 +285,11 @@ final class AttendanceFixture
         $this->linkIds[] = $linkId;
 
         return ['token' => $token, 'link_id' => $linkId];
+    }
+
+    public function trackLink(int $linkId): void
+    {
+        $this->linkIds[] = $linkId;
     }
 
     public function expireLink(int $linkId): void

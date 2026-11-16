@@ -237,7 +237,7 @@ class Controller_AttendanceAjax extends Controller
             }
             $credits = (float)$_POST['Credits'];
 
-            $args = ['Token' => $this->session->token, 'Credits' => $credits];
+            $args = ['Token' => $this->session->token, 'Credits' => $credits, 'Online' => $_POST['Online'] ?? 0];
             if ($scope === 'park') {
                 $args['ParkId'] = $id;
                 $args['Hours'] = min(120, max(1, (int)($_POST['Hours'] ?? 3)));
