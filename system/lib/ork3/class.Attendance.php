@@ -10,6 +10,34 @@ class Attendance extends Ork3
         $this->attendance_link = new yapo($this->db, DB_PREFIX . 'attendance_link');
     }
 
+    /**
+     * Normalise an attendance-type filter to 'all' | 'in_person' | 'online'.
+     * Anything unrecognised becomes 'all'.
+     */
+    public static function NormalizeType($mode): string
+    {
+        return (is_string($mode) && in_array($mode, array('all', 'in_person', 'online'), true)) ? $mode : 'all';
+    }
+
+    /**
+     * SQL fragment filtering ork_attendance by the online flag. $alias must be
+     * a plain identifier, else 'a' is used.
+     */
+    public static function TypeClause($mode, string $alias = 'a'): string
+    {
+        if (!preg_match('/^[a-z_][a-z0-9_]*$/i', $alias)) {
+            $alias = 'a';
+        }
+        switch (self::NormalizeType($mode)) {
+            case 'in_person':
+                return " AND {$alias}.online = 0";
+            case 'online':
+                return " AND {$alias}.online = 1";
+            default:
+                return '';
+        }
+    }
+
     public function GetClasses($request)
     {
         $this->class->clear();
