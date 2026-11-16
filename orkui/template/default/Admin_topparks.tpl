@@ -255,19 +255,5 @@ $(function () {
 </script>
 <script>
 /* In-Person / Online / All: keep the hidden field in step; re-run the report when it has already run. */
-(function () {
-	var form = document.querySelector('form[action$="Admin/topparks"]');
-	if (!form || typeof window.ornAttendanceTypeControl !== 'function') return;
-	var input = form.querySelector('input[name="AttendanceType"]');
-	var ran = true; // this page always shows results
-	var ctl = window.ornAttendanceTypeControl(form.querySelector('.orn-type-control'), {
-		onChange: function (v) {
-			input.value = v;
-			if (!ran) return;
-			var btn = form.querySelector('button[type="submit"]');
-			if (form.requestSubmit) form.requestSubmit(btn); else btn.click();
-		}
-	});
-	if (ctl) input.value = ctl.get();
-})();
+if (window.ornBindAttendanceTypeForm) window.ornBindAttendanceTypeForm(document.querySelector('form[action$="Admin/topparks"]'), true);
 </script>

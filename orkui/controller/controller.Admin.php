@@ -34,7 +34,7 @@ class Controller_Admin extends Controller
 
         // Kingdom Overview In-Person / Online / All; the domain normalizes the value.
         $this->load_model('Admin');
-        $this->data['AttendanceType'] = (string)($this->request->AttendanceType ?? 'all');
+        $this->data['AttendanceType'] = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
         $this->data['ActiveKingdomSummary'] = $this->Admin->get_active_kingdoms_summary($this->data['AttendanceType']);
         $this->data['TotalActivePlayers'] = $this->Report->GetDistinctActivePlayerCount(26);
 
@@ -1903,7 +1903,7 @@ class Controller_Admin extends Controller
             : date('Y-m-d');
 
         // In-Person / Online / All; passed through unchanged, the domain normalizes it.
-        $attendance_type = (string)($this->request->AttendanceType ?? 'all');
+        $attendance_type = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
         $this->data['form'] = array('StartDate' => $start_date, 'EndDate' => $end_date, 'AttendanceType' => $attendance_type);
         $this->data['page_title'] = 'New Player Attendance';
 
@@ -1980,7 +1980,7 @@ class Controller_Admin extends Controller
         $native_populace = !empty($this->request->NativePopulace);
         $waivered = !empty($this->request->Waivered);
         // In-Person / Online / All; passed through unchanged, the domain normalizes it.
-        $attendance_type = (string)($this->request->AttendanceType ?? 'all');
+        $attendance_type = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
         $result = $this->Admin->get_top_parks_by_attendance($limit, $start_date, $end_date, $native_populace, $waivered, $attendance_type);
         $this->data['TopParks'] = $result['TopParksSummary'];
         $this->data['StartDate'] = $start_date;

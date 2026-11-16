@@ -2975,12 +2975,11 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 
 	var knAvgTypeEl = document.querySelector('#kn-avg-type .orn-type-control');
 	if (knAvgTypeEl && typeof window.ornAttendanceTypeControl === 'function') {
-		var knAvgNotes = { in_person: 'Showing in-person sign-ins only.', online: 'Showing online sign-ins only.' };
 		window.ornAttendanceTypeControl(knAvgTypeEl, {
 			value: 'all',
 			onChange: function(type) {
 				var note = document.getElementById('kn-avg-type-note');
-				if (note) note.textContent = knAvgNotes[type] || '';
+				if (note) note.textContent = window.ornAttendanceTypeControl.note(type);
 				knLoadAverages(type);
 			}
 		});

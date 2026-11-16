@@ -7,14 +7,16 @@ $chart_dates     = [];
 $chart_counts    = [];
 $chart_in_person = [];
 $chart_online    = [];
+$chart_online_only = [];
 $chart_is_event  = [];
 foreach ($_att_dates as $_d) {
 	$chart_dates[]  = valid_id($_d['EventId'])
 		? (date('Y-m-d', strtotime($_d['EventStart'])) . ' – ' . date('Y-m-d', strtotime($_d['EventEnd'])))
 		: date('Y-m-d', strtotime($_d['Date']));
 	$chart_counts[]    = (int)$_d['DistinctPlayers'];
-	$chart_in_person[] = (int)($_d['DistinctPlayersInPerson'] ?? $_d['DistinctPlayers']);
+	$chart_in_person[] = (int)($_d['DistinctPlayersInPerson'] ?? 0);
 	$chart_online[]    = (int)($_d['DistinctPlayersOnline'] ?? 0);
+	$chart_online_only[] = (int)($_d['DistinctPlayersOnlineOnly'] ?? 0);
 	$chart_is_event[]  = valid_id($_d['EventId']) ? true : false;
 }
 
@@ -22,6 +24,7 @@ $chart_dates     = array_reverse($chart_dates);
 $chart_counts    = array_reverse($chart_counts);
 $chart_in_person = array_reverse($chart_in_person);
 $chart_online    = array_reverse($chart_online);
+$chart_online_only = array_reverse($chart_online_only);
 $chart_is_event  = array_reverse($chart_is_event);
 
 /* Total Credits comes from attendance_summary to match the table/CSV */
@@ -78,12 +81,14 @@ $_monthly_dates     = [];
 $_monthly_counts    = [];
 $_monthly_in_person = [];
 $_monthly_online    = [];
+$_monthly_online_only = [];
 $_month_names = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 foreach ((array)($monthly_chart_data ?? []) as $_m) {
 	$_monthly_dates[]     = $_month_names[(int)$_m['Month']] . ' ' . $_m['Year'];
 	$_monthly_counts[]    = (int)$_m['Count'];
-	$_monthly_in_person[] = (int)($_m['InPerson'] ?? $_m['Count']);
+	$_monthly_in_person[] = (int)($_m['InPerson'] ?? 0);
 	$_monthly_online[]    = (int)($_m['Online'] ?? 0);
+	$_monthly_online_only[] = (int)($_m['OnlineOnly'] ?? 0);
 }
 $_has_monthly = count($_monthly_counts) >= 2;
 $_monthly_avg = $_has_monthly ? array_sum($_monthly_counts) / count($_monthly_counts) : 0;
@@ -110,7 +115,7 @@ $_att_th = function ($label, $tip) {
 };
 /* In-person / online sub-line under a stat card number. */
 $_att_split = function ($ip, $on, $decimals = 0) {
-	return '<div class="rp-stat-split">' . number_format($ip, $decimals) . ' in-person &middot; ' . number_format($on, $decimals) . ' online</div>';
+	return '<div class="rp-stat-hint">' . number_format($ip, $decimals) . ' in-person &middot; ' . number_format($on, $decimals) . ' online</div>';
 };
 
 /* ── Unique parks (Kingdom scope only) ── */
@@ -239,10 +244,9 @@ if ($Type !== 'Event') {
 	cursor: pointer; white-space: nowrap;
 }
 .rp-view-btn-active { background: #4338ca; color: #fff; border-color: #4338ca; }
-.rp-stat-split { font-size: 10px; color: var(--rp-text-hint); margin-top: 2px; }
 .rp-col-tip { margin-left: 3px; vertical-align: 1px; }
 .rp-att-key-ip { color: #4338ca; }
-.rp-att-key-on { color: #0284c7; }
+.rp-att-key-on { color: #0369a1; }
 html[data-theme="dark"] .rp-att-key-ip { color: #a5b4fc; }
 html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 </style>
@@ -679,22 +683,21 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 	var chartIsEvent = <?=json_encode($chart_is_event)?>;
 	var chartInPerson = <?=json_encode($chart_in_person)?>;
 	var chartOnline   = <?=json_encode($chart_online)?>;
+	var chartOnlineOnly = <?=json_encode($chart_online_only)?>;
 	var monthlyDates  = <?=json_encode($_monthly_dates)?>;
 	var monthlyCounts = <?=json_encode($_monthly_counts)?>;
 	var monthlyInPerson = <?=json_encode($_monthly_in_person)?>;
 	var monthlyOnline   = <?=json_encode($_monthly_online)?>;
+	var monthlyOnlineOnly = <?=json_encode($_monthly_online_only)?>;
 	var attChart = null;
 	var ATT_ONLINE_COLOR = '#0ea5e9';
 
 	/* Stacked columns: in-person players (park days vs event weeks) plus the
 	   online-only remainder, so the full bar is every distinct player. A player
 	   with both kinds sits in the in-person part only. */
-	function attOnlineOnly(totals, inPerson) {
-		return totals.map(function (t, i) { return Math.max(0, t - inPerson[i]); });
-	}
 	var regularData = [];
 	var eventData   = [];
-	var onlineOnlyData = attOnlineOnly(chartCounts, chartInPerson);
+	var onlineOnlyData = chartOnlineOnly;
 	for (var i = 0; i < chartCounts.length; i++) {
 		if (chartIsEvent[i]) {
 			regularData.push(null);
@@ -708,8 +711,7 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 	/* Shared tooltip body for one bar, labelled like the legend: the In-Person and
 	   Online only segments, the Total (bar height), and, when it differs from the
 	   segment, how many players had any online sign-in (the tables' Online column). */
-	function attSplitTip(ip, on, tot) {
-		var onlineOnly = Math.max(0, tot - ip);
+	function attSplitTip(ip, on, onlineOnly, tot) {
 		var s = '<br/><span style="color:#4338ca">\u25A0</span> In-Person: <b>' + Highcharts.numberFormat(ip, 0) + '</b>'
 			+ '<br/><span style="color:' + ATT_ONLINE_COLOR + '">\u25A0</span> Online only: <b>' + Highcharts.numberFormat(onlineOnly, 0) + '</b>'
 			+ '<br/>Total: <b>' + Highcharts.numberFormat(tot, 0) + '</b>';
@@ -764,7 +766,7 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 				if (chartIsEvent[i]) {
 					s += ' <span style="color:#d97706;font-style:italic;">(event week)</span>';
 				}
-				s += attSplitTip(chartInPerson[i], chartOnline[i], chartCounts[i]);
+				s += attSplitTip(chartInPerson[i], chartOnline[i], chartOnlineOnly[i], chartCounts[i]);
 				this.points.forEach(function (pt) {
 					if (pt.series.type !== 'column') {
 						s += '<br/><span style="color:' + pt.color + '">\u2014</span> '
@@ -844,7 +846,7 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 			tooltip: Object.assign({ shared: true,
 				formatter: function() {
 					var i = this.points[0].point.x;
-					var s = '<b>' + this.x + '</b>' + attSplitTip(monthlyInPerson[i], monthlyOnline[i], monthlyCounts[i]);
+					var s = '<b>' + this.x + '</b>' + attSplitTip(monthlyInPerson[i], monthlyOnline[i], monthlyOnlineOnly[i], monthlyCounts[i]);
 					this.points.forEach(function(pt) {
 						if (pt.series.type !== 'column') {
 							s += '<br/><span style="color:' + pt.color + '">\u2014</span> ' + pt.series.name + ': <b>' + Highcharts.numberFormat(pt.y, 1) + '</b>';
@@ -855,7 +857,7 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 			}, attTooltipTheme()),
 			plotOptions: { column: { stacking: 'normal', borderRadius: 3, borderWidth: 0, groupPadding: 0, pointPadding: 0.05 } },
 			series: [
-				{ name: 'Online only', legendIndex: 1, type: 'column', data: attOnlineOnly(monthlyCounts, monthlyInPerson), color: ATT_ONLINE_COLOR },
+				{ name: 'Online only', legendIndex: 1, type: 'column', data: monthlyOnlineOnly, color: ATT_ONLINE_COLOR },
 				{ name: 'In-Person', legendIndex: 0, type: 'column', data: monthlyInPerson, color: '#4338ca' },
 				{ name: '3-Month Avg', legendIndex: 2, type: 'spline', data: ma3, color: '#059669', lineWidth: 2.5, marker: { enabled: false }, dashStyle: 'ShortDash', zIndex: 5, connectNulls: false }
 			],

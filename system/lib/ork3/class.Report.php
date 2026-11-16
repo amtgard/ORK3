@@ -1905,6 +1905,7 @@ class Report extends Ork3
         $sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, count(DISTINCT a.mundane_id) as distinct_players,
 					count(DISTINCT case when a.had_in_person then a.mundane_id end) as distinct_in_person,
 					count(DISTINCT case when a.had_online then a.mundane_id end) as distinct_online,
+					count(DISTINCT case when a.had_online and not a.had_in_person then a.mundane_id end) as distinct_online_only,
 					a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name,
 					ifnull(a.park_id, ep.park_id) as park_id, ifnull(p.name, ep.name) as park_name, year(a.date) as year, week(a.date, 3) as week,
 					ifnull(k.kingdom_id, ek.kingdom_id) as kingdom_id, ifnull(k.name, ek.name) as kingdom_name, ifnull(k.parent_kingdom_id, ek.parent_kingdom_id) as parent_kingdom_id
@@ -1940,6 +1941,7 @@ class Report extends Ork3
                         'DistinctPlayers' => (int)$r->distinct_players,
                         'DistinctPlayersInPerson' => (int)$r->distinct_in_person,
                         'DistinctPlayersOnline' => (int)$r->distinct_online,
+                        'DistinctPlayersOnlineOnly' => (int)$r->distinct_online_only,
                         'EventCalendarDetailId' => $r->event_calendardetail_id,
                         'EventId' => $r->event_id,
                         'ParkId' => $r->park_id,
@@ -2996,6 +2998,7 @@ class Report extends Ork3
                     'Total' => (int)$r->monthly_unique,
                     'InPerson' => (int)$r->monthly_in_person,
                     'Online' => (int)$r->monthly_online,
+                    'OnlineOnly' => max(0, (int)$r->monthly_unique - (int)$r->monthly_in_person),
                 ];
             }
         }

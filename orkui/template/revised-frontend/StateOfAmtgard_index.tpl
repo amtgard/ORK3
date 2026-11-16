@@ -2297,9 +2297,6 @@ html[data-theme="dark"] .sor-filter-heading {
 html[data-theme="dark"] .sor-filter-group label {
   color: var(--ork-text-secondary);
 }
-html[data-theme="dark"] .sor-type-note {
-  color: var(--ork-text-secondary);
-}
 html[data-theme="dark"] .sor-filter-group input[type="date"],
 html[data-theme="dark"] .sor-filter-kingdoms select {
   background: var(--ork-input-bg);
@@ -4531,7 +4528,7 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
     window.ornAttendanceTypeControl(el, {
       value: 'all',
       onChange: function (v) {
-        _sorAttendanceType = SOR_TYPE_LABELS[v] ? v : 'all';
+        _sorAttendanceType = v;
         var note = document.getElementById('sor-type-note');
         if (note) note.textContent = SOR_TYPE_NOTES[_sorAttendanceType] || '';
         var report = document.getElementById('sor-report');

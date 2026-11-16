@@ -2103,8 +2103,6 @@ html[data-theme="dark"] .kn-md-help-btn:hover { background:var(--ork-bg-tertiary
 .kn-avg-type-note, .pk-avg-type-note { font-size: 13px; color: var(--ork-text-secondary); }
 .kn-avg-type-note:empty, .pk-avg-type-note:empty { display: none; }
 .kn-avg-loading .kn-park-tile-stats, .kn-avg-loading td.kn-col-numeric, .pk-avg-loading { opacity: .45; transition: opacity .15s; }
-html[data-theme="dark"] .kn-avg-type-label, html[data-theme="dark"] .pk-avg-type-label { color: var(--ork-text-muted); }
-html[data-theme="dark"] .kn-avg-type-note, html[data-theme="dark"] .pk-avg-type-note { color: var(--ork-text-secondary); }
 @media (max-width: 600px) {
     .pk-avg-type { justify-content: flex-start; margin-top: -4px; }
 }

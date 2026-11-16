@@ -25392,4 +25392,24 @@ function _typeof(e) {
             set: function (v) { cur = norm(v); paint(); }
         };
     };
+    w.ornAttendanceTypeControl.normalize = norm;
+    w.ornAttendanceTypeControl.note = function (v) {
+        return { in_person: 'Showing in-person sign-ins only.', online: 'Showing online sign-ins only.' }[norm(v)] || '';
+    };
+    /* Report forms: keep the hidden AttendanceType field in step with the form's
+       control; when autoSubmit, re-run the report on change. */
+    w.ornBindAttendanceTypeForm = function (form, autoSubmit) {
+        if (!form) return null;
+        var input = form.querySelector('input[name="AttendanceType"]');
+        var ctl = w.ornAttendanceTypeControl(form.querySelector('.orn-type-control'), {
+            onChange: function (v) {
+                if (input) input.value = v;
+                if (!autoSubmit) return;
+                var btn = form.querySelector('button[type="submit"]');
+                if (form.requestSubmit) form.requestSubmit(btn); else if (btn) btn.click();
+            }
+        });
+        if (ctl && input) input.value = ctl.get();
+        return ctl;
+    };
 })(window, document);

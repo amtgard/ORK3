@@ -193,7 +193,10 @@
     var preRun = null;           // the results area as it was when the current Run started
     var idleHtml = '';           // the idle placeholder's original text
     var TYPE_WORD = { in_person: 'in-person', online: 'online' };
-    function normType(v) { return TYPE_WORD[v] ? v : 'all'; }
+    function normType(v) {
+        var ctl = window.ornAttendanceTypeControl;
+        return (ctl && typeof ctl.normalize === 'function') ? ctl.normalize(v) : (TYPE_WORD[v] ? v : 'all');
+    }
     var attType = normType(PE.initial && PE.initial.attendanceType); // Sign-ins counted: in_person | online | all
 
     /* ── edit generation ─────────────────────────────────── */

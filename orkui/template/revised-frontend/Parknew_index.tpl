@@ -1945,7 +1945,6 @@ window.pkEventMapNoLocCount = <?= (int)($pkEventMapNoLocCount ?? 0) ?>;
 (function () {
 	var el = document.querySelector('#pk-avg-type .orn-type-control');
 	if (!el || typeof window.ornAttendanceTypeControl !== 'function' || !PkConfig.parkId) return;
-	var notes = { in_person: 'Showing in-person sign-ins only.', online: 'Showing online sign-ins only.' };
 	var seq = 0;
 	function fmt(n) {
 		n = Number(n) || 0;
@@ -1958,7 +1957,7 @@ window.pkEventMapNoLocCount = <?= (int)($pkEventMapNoLocCount ?? 0) ?>;
 			var wk = document.getElementById('pk-stat-avgwk');
 			var mo = document.getElementById('pk-stat-avgmo');
 			var note = document.getElementById('pk-avg-type-note');
-			if (note) note.textContent = notes[type] || '';
+			if (note) note.textContent = window.ornAttendanceTypeControl.note(type);
 			[wk, mo].forEach(function (n) { if (n) n.classList.add('pk-avg-loading'); });
 			var qs = type !== 'all' ? '&AttendanceType=' + encodeURIComponent(type) : '';
 			fetch(PkConfig.uir + 'Park/attendance_averages_json/' + PkConfig.parkId + qs)

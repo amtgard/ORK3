@@ -2532,9 +2532,6 @@ html[data-theme="dark"] .form-container label.orn-online-check { color: var(--or
 .orn-type-control .orn-type-opt.orn-type-active,
 .orn-type-control .orn-type-opt[aria-pressed="true"] { background: var(--ork-link); color: #fff; }
 .orn-type-control .orn-type-opt:focus-visible { outline: 2px solid var(--ork-link-bright); outline-offset: -2px; }
-html[data-theme="dark"] .orn-type-control { background: var(--ork-card-bg); border-color: var(--ork-border-dark); }
-html[data-theme="dark"] .orn-type-control .orn-type-opt { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .orn-type-control .orn-type-opt:hover { background: var(--ork-bg-inset); color: var(--ork-text); }
 html[data-theme="dark"] .orn-type-control .orn-type-opt.orn-type-active,
 html[data-theme="dark"] .orn-type-control .orn-type-opt[aria-pressed="true"] { background: var(--ork-link-bright); color: #1a202c; }
-@media (max-width: 480px) { .orn-type-control .orn-type-opt { padding: 0 10px; } }
+@media (max-width: 600px) { .orn-type-control .orn-type-opt { padding: 0 10px; } }

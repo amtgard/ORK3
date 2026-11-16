@@ -930,7 +930,7 @@ class Controller_Reports extends Controller
                             ? $this->request->EndDate : date('Y-m-d');
 
         // In-Person / Online / All; passed through unchanged, the domain normalizes it.
-        $attendance_type = (string)($this->request->AttendanceType ?? 'all');
+        $attendance_type = is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all';
 
         $form = array(
             'KingdomId'         => $kingdom_id,
@@ -1010,7 +1010,7 @@ class Controller_Reports extends Controller
             'LocalPlayersOnly' => isset($this->request->LocalPlayersOnly) ? 1 : 0,
             'GridView' => isset($this->request->GridView) ? 1 : 0,
             // In-Person / Online / All; passed through unchanged, the domain normalizes it.
-            'AttendanceType' => (string)($this->request->AttendanceType ?? 'all')
+            'AttendanceType' => is_string($this->request->AttendanceType ?? null) ? $this->request->AttendanceType : 'all'
         );
         $this->data['form'] = $form;
 
