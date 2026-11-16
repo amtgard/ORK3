@@ -225,4 +225,58 @@ final class OnlineAttendanceTest extends TestCase
         $this->assertFalse($r['InPerson']);
         $this->assertNotSame(0, $this->dayType($park, '2026-13-40')['Status']['Status']);
     }
+
+    /** @return array<int, array> rows keyed by AttendanceId */
+    private function byId(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['AttendanceId']] = $row;
+        }
+
+        return $out;
+    }
+
+    public function testAttendanceForPlayerCarriesOnline(): void
+    {
+        [$o, $p, $park] = $this->actors('lp');
+        $d = fn (int $n) => date('Y-m-d', strtotime("-$n days"));
+        $online = $this->add($o, $p, $park, ['Online' => 1, 'Date' => $d(1)]);
+        $inPerson = $this->add($o, $p, $park, ['Online' => 0, 'Date' => $d(2)]);
+
+        $r = (new Player())->AttendanceForPlayer(['MundaneId' => $p['mundane_id']]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $rows = $this->byId($r['Attendance']);
+        $this->assertSame(1, $rows[$online]['Online']);
+        $this->assertSame(0, $rows[$inPerson]['Online']);
+    }
+
+    public function testAttendanceForDateCarriesOnline(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $o = $this->fixture->createParkOfficer($parkId, 'on-o-ld');
+        $p1 = $this->fixture->createPlayer($parkId, 'on-p-ld1');
+        $p2 = $this->fixture->createPlayer($parkId, 'on-p-ld2');
+        $date = date('Y-m-d', strtotime('-3 days'));
+        $online = $this->add($o, $p1, $parkId, ['Online' => 1, 'Date' => $date]);
+        $inPerson = $this->add($o, $p2, $parkId, ['Online' => 0, 'Date' => $date]);
+
+        $r = (new Report())->AttendanceForDate(['ParkId' => $parkId, 'Date' => $date]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $rows = $this->byId($r['Attendance']);
+        $this->assertSame(1, $rows[$online]['Online']);
+        $this->assertSame(0, $rows[$inPerson]['Online']);
+    }
+
+    public function testAttendanceDisplayRowCarriesOnline(): void
+    {
+        [$o, $p, $park] = $this->actors('dr');
+        $d = fn (int $n) => date('Y-m-d', strtotime("-$n days"));
+        $online = $this->add($o, $p, $park, ['Online' => 1, 'Date' => $d(4)]);
+        $inPerson = $this->add($o, $p, $park, ['Online' => 0, 'Date' => $d(5)]);
+
+        $ep = new EventPlanning();
+        $this->assertSame(1, $ep->GetAttendanceDisplayRow($online)['Online']);
+        $this->assertSame(0, $ep->GetAttendanceDisplayRow($inPerson)['Online']);
+    }
 }

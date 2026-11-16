@@ -7721,6 +7721,7 @@ $(function() {
 						+ '<th data-sorttype="text">Park</th><th data-sorttype="text">Event</th>'
 						+ '<th data-sorttype="text">Class</th><th data-sorttype="numeric">Credits</th>'
 						+ '<th data-sorttype="text">By</th>'
+						+ '<th class="pn-export-only">Online</th>'
 						+ (canEditAny ? '<th class="pn-nosort" style="width:52px;min-width:52px"></th>' : '')
 						+ '</tr></thead><tbody>';
 					att.forEach(function(d) {
@@ -7732,6 +7733,7 @@ $(function() {
 							: '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.Date) + '</a>';
 						var classLabel = (d.Flavor && d.Flavor.trim()) ? esc(d.Flavor) : esc(d.ClassName);
 						var canEditThis = !!(parkAuth[pid] && eid === 0);
+						var isOnline = parseInt(d.Online, 10) === 1;
 						// "By" cell: show the entry source. signin_link / self_reg
 						// surface as labels (not a link to the player themselves —
 						// that would be redundant and look like "John entered
@@ -7749,11 +7751,12 @@ $(function() {
 						html += '<tr>'
 							+ '<td class="pn-col-nowrap">' + dateLink + '</td>'
 							+ '<td><a href="' + uir + 'Kingdom/profile/' + esc(d.KingdomId) + '">' + esc(d.KingdomName) + '</a></td>'
-							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a></td>'
+							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a>' + (isOnline ? ' ' + ornOnlineBadge() : '') + '</td>'
 							+ '<td>' + (eid > 0 ? '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.EventName) + '</a>' : '') + '</td>'
 							+ '<td>' + classLabel + '</td>'
 							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>'
-							+ '<td>' + byCell + '</td>';
+							+ '<td>' + byCell + '</td>'
+							+ '<td>' + (isOnline ? 'Yes' : '') + '</td>';
 						if (canEditAny) {
 							html += '<td class="pn-award-actions-cell">';
 							if (canEditThis) {
@@ -7763,6 +7766,7 @@ $(function() {
 									+ ' data-credits="' + parseFloat(d.Credits) + '"'
 									+ ' data-class-id="' + parseInt(d.ClassId) + '"'
 									+ ' data-mundane-id="' + parseInt(d.MundaneId) + '"'
+									+ ' data-online="' + (isOnline ? 1 : 0) + '"'
 									+ ' title="Edit attendance"><i class="fas fa-pencil-alt"></i></button>'
 									+ ' <button class="pn-award-action-btn pn-award-del-btn pn-att-del-btn"'
 									+ ' data-att-id="' + parseInt(d.AttendanceId) + '"'

@@ -1872,8 +1872,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					</thead>
 					<tbody>
 						<?php foreach ($attendanceList as $att): ?>
-						<tr data-att-id="<?= (int)$att['AttendanceId'] ?>" data-mundane-id="<?= (int)$att['MundaneId'] ?>" data-att-class="<?= (int)$att['ClassId'] ?>" data-att-date="<?= htmlspecialchars($att['Date'] ?? '') ?>">
-							<td><a href="<?= UIR ?>Player/profile/<?= (int)$att['MundaneId'] ?>"><?= htmlspecialchars($att['Persona']) ?></a></td>
+						<?php $_attOnline = (int)($att['Online'] ?? 0) === 1; ?>
+						<tr data-att-id="<?= (int)$att['AttendanceId'] ?>" data-mundane-id="<?= (int)$att['MundaneId'] ?>" data-att-class="<?= (int)$att['ClassId'] ?>" data-att-date="<?= htmlspecialchars($att['Date'] ?? '') ?>" data-online="<?= $_attOnline ? 1 : 0 ?>">
+							<td><a href="<?= UIR ?>Player/profile/<?= (int)$att['MundaneId'] ?>"><?= htmlspecialchars($att['Persona']) ?></a><?= $_attOnline ? ' ' . ork_online_badge() : '' ?></td>
 							<td><?php if (!empty($att['KingdomId'])): ?><a href="<?= UIR ?>Kingdom/profile/<?= (int)$att['KingdomId'] ?>"><?= htmlspecialchars($att['KingdomName']) ?></a><?php else: ?><?= htmlspecialchars($att['KingdomName'] ?? '') ?><?php endif; ?></td>
 							<td><?php if (!empty($att['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$att['ParkId'] ?>"><?= htmlspecialchars($att['ParkName']) ?></a><?php else: ?><?= htmlspecialchars($att['ParkName'] ?? '') ?><?php endif; ?></td>
 							<td class="ev-class-cell"><?= htmlspecialchars($att['ClassName']) ?></td>
@@ -3270,7 +3271,7 @@ function evPrintAttendance() {
 	if (trs.length) {
 		tblHtml = '<table><thead><tr>' + evAttCols.map(function(h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
 			trs.map(function(tr) {
-				return '<tr>' + evAttCols.map(function(_, i) { return '<td>' + (tr.cells[i] ? tr.cells[i].innerHTML : '') + '</td>'; }).join('') + '</tr>';
+				return '<tr>' + evAttCols.map(function(_, i) { return '<td>' + (tr.cells[i] ? ornStripOnlineBadge(tr.cells[i].innerHTML) + (i === 0 && tr.dataset.online === '1' ? ' (Online)' : '') : '') + '</td>'; }).join('') + '</tr>';
 			}).join('') + '</tbody></table>';
 	}
 	var sub = EvConfig.eventDate || '';
@@ -3291,9 +3292,14 @@ function evCsvSlug() {
 }
 function evExportAttendanceCsv() {
 	var rows = evAttRowNodes(true).map(function(tr) {
-		return evAttCols.map(function(_, i) { return tr.cells[i] ? tr.cells[i].textContent.trim() : ''; });
+		return evAttCols.map(function(_, i) {
+			if (!tr.cells[i]) return '';
+			var cell = tr.cells[i].cloneNode(true);
+			cell.querySelectorAll('.orn-online-badge').forEach(function(b) { b.remove(); });
+			return cell.textContent.trim();
+		}).concat([tr.dataset.online === '1' ? 'Yes' : '']);
 	});
-	evExportCsv(evCsvSlug() + '-attendance.csv', evAttCols, rows);
+	evExportCsv(evCsvSlug() + '-attendance.csv', evAttCols.concat(['Online']), rows);
 }
 function evExportRsvpCsv() {
 	var rows = [];

@@ -1055,7 +1055,7 @@ class EventPlanning extends Ork3
             "SELECT a.attendance_id AS AttendanceId, a.mundane_id AS MundaneId, m.persona AS Persona,
                     m.kingdom_id AS KingdomId, k.name AS KingdomName, k.abbreviation AS KAbbr,
                     m.park_id AS ParkId, p.name AS ParkName, p.abbreviation AS PAbbr,
-                    c.name AS ClassName, a.credits AS Credits
+                    c.name AS ClassName, a.credits AS Credits, a.online AS Online
              FROM " . DB_PREFIX . "attendance a
              LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
              LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
@@ -1079,6 +1079,7 @@ class EventPlanning extends Ork3
             'PAbbr' => $row->PAbbr,
             'ClassName' => $row->ClassName,
             'Credits' => $row->Credits,
+            'Online' => (int) $row->Online,
         ];
     }
 

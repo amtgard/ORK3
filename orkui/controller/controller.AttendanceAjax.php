@@ -72,6 +72,7 @@ class Controller_AttendanceAjax extends Controller
                     'Persona'     => (string)($att['Persona'] ?? $att['AttendancePersona'] ?? ''),
                     'ClassId'     => (int)($att['ClassId'] ?? 0),
                     'Credits'     => (float)($att['Credits'] ?? 1),
+                    'Online'      => (int)($att['Online'] ?? 0),
                 ];
             }
             echo json_encode(['status' => 0, 'entries' => array_values($entries)]);

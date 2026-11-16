@@ -604,19 +604,23 @@ html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
 						<th>Credits</th>
 						<th>Entered By</th>
 <?php if ($has_events) : ?><th>Event</th><?php endif; ?>
+						<th class="att-export-only">Online</th>
 <?php if ($CanAddAttendance) : ?>
-						<th></th>
+						<th class="no-export"></th>
 <?php endif; ?>
 					</tr>
 				</thead>
 				<tbody>
 <?php foreach ($att_rows as $row) : ?>
-				<tr data-att-id="<?=(int)$row['AttendanceId']?>" data-att-date="<?=htmlspecialchars($AttendanceDate)?>" data-att-class="<?=(int)$row['ClassId']?>" data-att-mundane="<?=(int)$row['MundaneId']?>">
+				<tr data-att-id="<?=(int)$row['AttendanceId']?>" data-att-date="<?=htmlspecialchars($AttendanceDate)?>" data-att-class="<?=(int)$row['ClassId']?>" data-att-mundane="<?=(int)$row['MundaneId']?>" data-att-online="<?=(int)($row['Online'] ?? 0) === 1 ? 1 : 0?>">
 					<td>
 <?php if ((int)$row['MundaneId'] === 0) : ?>
 						<?=htmlspecialchars($row['AttendancePersona'])?><?=strlen($row['Note']??'')>0?' ('.htmlspecialchars($row['Note']).')':''?>
 <?php else : ?>
 						<a href="<?=UIR.'Player/profile/'.$row['MundaneId']?>"><?=htmlspecialchars($row['Persona'])?></a>
+<?php endif; ?>
+<?php if ((int)($row['Online'] ?? 0) === 1) : ?>
+						<?=ork_online_badge()?>
 <?php endif; ?>
 					</td>
 					<td><?php if (!empty($row['FromKingdomId'])) : ?><a href="<?=UIR.'Kingdom/profile/'.$row['FromKingdomId']?>"><?=htmlspecialchars($row['FromKingdomName']??'')?></a><?php else : ?><?=htmlspecialchars($row['FromKingdomName']??'')?><?php endif; ?></td>
@@ -625,6 +629,7 @@ html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
 					<td class="att-credits-cell"><?=(int)$row['Credits']?></td>
 					<td class="att-enteredby-cell" data-enteredby-id="<?=(int)$row['EnteredById']?>"><a href="<?=UIR.'Player/profile/'.$row['EnteredById']?>"><?=htmlspecialchars($row['EnteredBy']??'')?></a></td>
 <?php if ($has_events) : ?><td><?php if (!empty($row['EventId'])) : ?><a href="<?=UIR.'Event/detail/'.$row['EventId'].'/'.$row['EventCalendarDetailId']?>"><?=htmlspecialchars($row['EventName']??'')?></a><?php endif; ?></td><?php endif; ?>
+					<td><?=(int)($row['Online'] ?? 0) === 1 ? 'Yes' : ''?></td>
 <?php if ($CanAddAttendance) : ?>
 					<td style="text-align:center;white-space:nowrap;">
 						<button class="att-edit-btn" title="Edit class &amp; credits" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:0.8rem;margin-right:4px;" onclick="attOpenEdit(this)"><i class="fas fa-pencil-alt"></i></button>
@@ -971,13 +976,18 @@ $(function() {
 
 <?php if ($total > 0) : ?>
 	/* ── DataTable ───────────────────────────────────── */
+	// CSV carries the hidden Online column, so drop the badge text from cells.
+	function attStripOnlineBadge(data) {
+		return typeof data === 'string' ? data.replace(/<span class="orn-online-badge"[^>]*>[\s\S]*?<\/span>/g, '') : data;
+	}
 	var table = $('#att-park-table').DataTable({
 		dom: 'lfrtip',
 		buttons: [
-			{ extend: 'csv',   filename: 'Park Attendance <?=addslashes($AttendanceDate)?>', exportOptions: { columns: ':not(:last-child)' } },
-			{ extend: 'print', exportOptions: { columns: ':not(:last-child)' } }
+			{ extend: 'csv',   filename: 'Park Attendance <?=addslashes($AttendanceDate)?>', exportOptions: { columns: ':not(.no-export)', format: { body: attStripOnlineBadge } } },
+			{ extend: 'print', exportOptions: { columns: ':visible:not(.no-export)' } }
 		],
 		columnDefs: [
+			{ targets: 'att-export-only', visible: false, searchable: false },
 			{ targets: [4], type: 'num', className: 'dt-right' },
 <?php if ($has_events) : ?>
 			{ targets: [6], orderable: false, searchable: false },

@@ -914,6 +914,20 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
 //   - data-sorttype="date" -> that column sorts as a date
 //   - class="pn-nosort"     -> action-button column (no sort/search/export)
 // opts: { order: [[col,'desc']], filename: 'Awards', pageLength: 25 }
+// Online badge (wifi icon) for attendance rows signed in online. Same markup as
+// ork_online_badge() in system/lib/ork3/common.php; styled in orkui.css.
+function ornOnlineBadge() {
+    return '<span class="orn-online-badge" role="img" aria-label="Signed in online" data-tip="Signed in online">'
+        + '<i class="fa-solid fa-wifi" aria-hidden="true"></i></span>';
+}
+
+// Drop ornOnlineBadge() markup from exported cell HTML (CSV carries a separate Online column).
+function ornStripOnlineBadge(html) {
+    return typeof html === 'string'
+        ? html.replace(/<span class="orn-online-badge"[^>]*>[\s\S]*?<\/span>/g, '')
+        : html;
+}
+
 function pnInitDataTable(selector, opts) {
     opts = opts || {};
     if (!$.fn || !$.fn.DataTable) return null;
@@ -922,10 +936,14 @@ function pnInitDataTable(selector, opts) {
     if ($.fn.DataTable.isDataTable($table)) { $table.DataTable().destroy(); }
 
     var colDefs = [];
-    var hasAction = false;
+    // Export columns: every data column; <th class="pn-export-only"> columns are
+    // hidden on screen but still exported (e.g. the attendance Online column).
+    var exportCols = [];
     $table.find('thead th').each(function(i) {
         var $th = $(this);
-        if ($th.hasClass('pn-nosort')) { hasAction = true; colDefs.push({ targets: i, orderable: false, searchable: false }); }
+        if ($th.hasClass('pn-nosort')) colDefs.push({ targets: i, orderable: false, searchable: false });
+        else exportCols.push(i);
+        if ($th.hasClass('pn-export-only')) colDefs.push({ targets: i, visible: false, searchable: false });
         if ($th.data('sorttype') === 'date') colDefs.push({ targets: i, type: 'date' });
     });
 
@@ -936,7 +954,10 @@ function pnInitDataTable(selector, opts) {
             className: 'pn-dt-csv-btn',
             text: '<i class="fas fa-download"></i> CSV',
             filename: opts.filename || 'Export',
-            exportOptions: { columns: hasAction ? ':not(.pn-nosort)' : ':visible' }
+            exportOptions: {
+                columns: exportCols,
+                format: { body: function(data) { return ornStripOnlineBadge(data); } }
+            }
         }],
         columnDefs: colDefs,
         order: opts.order || [],
@@ -9302,8 +9323,9 @@ $(document).ready(function() {
         var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
         var kingCell = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
         var parkCell = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '">' +
-            '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
+        var isOnline = parseInt(att.Online, 10) === 1;
+        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '" data-online="' + (isOnline ? 1 : 0) + '">' +
+            '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a>' + (isOnline ? ' ' + ornOnlineBadge() : '') + '</td>' +
             '<td>' + kingCell + '</td>' +
             '<td>' + parkCell + '</td>' +
             '<td class="ev-class-cell">' + escHtml(att.ClassName || '') + '</td>' +
@@ -10838,6 +10860,7 @@ $(document).ready(function() {
         tr.dataset.mundaneId    = entry.MundaneId || 0;
         tr.dataset.classId      = entry.ClassId || 0;
         tr.dataset.credits      = entry.Credits || 1;
+        tr.dataset.online       = entry.Online ? 1 : 0;
         var td1 = document.createElement('td');
         var td1Link = document.createElement('a');
         td1Link.href = PkConfig.uir + 'Player/profile/' + (entry.MundaneId || 0);
@@ -10849,6 +10872,7 @@ $(document).ready(function() {
         td1Icon.style.cssText = 'margin-left:5px;font-size:10px;color:#a0aec0;vertical-align:middle';
         td1Link.appendChild(td1Icon);
         td1.appendChild(td1Link);
+        if (parseInt(entry.Online, 10) === 1) td1.insertAdjacentHTML('beforeend', ' ' + ornOnlineBadge());
         var td2 = document.createElement('td'); td2.className = 'pk-att-class-cell';  td2.textContent = className;
         var td3 = document.createElement('td'); td3.className = 'pk-att-credits-cell'; td3.textContent = entry.Credits || 1;
         var td4 = document.createElement('td'); td4.className = 'pk-att-actions-cell';

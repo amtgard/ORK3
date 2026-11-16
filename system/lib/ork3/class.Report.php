@@ -2011,6 +2011,7 @@ class Report extends Ork3
                         'UnitName' => $r->unit_name,
                         'Persona' => $r->persona,
                         'ClassName' => $r->class_name,
+                        'Online' => (int) $r->online,
                     );
             }
             $response['Status'] = Success();
@@ -2103,6 +2104,7 @@ class Report extends Ork3
                         'AttendancePersona' => $r->attendance_persona,
                         'Note' => $r->note,
                         'Flavor' => $r->class_id == 6 ? $r->flavor : '',
+                        'Online' => (int) $r->online,
                     );
             }
             $response['Status'] = Success($sql);
