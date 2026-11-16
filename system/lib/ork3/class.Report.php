@@ -1898,20 +1898,20 @@ class Report extends Ork3
         }
 
 
-        // In-Person / Online split columns (not a filter, so not Attendance::TypeClause):
-        // the inner query flags whether each player had an in-person and/or an online
+        // In-Person / Online split columns (Attendance::TypePredicate, the single source
+        // of the online predicate): the inner query flags whether each player had an in-person and/or an online
         // sign-in in the group; the outer counts distinct players per flag. A player
         // with both kinds in one period counts once in each split and once in the total.
         $sql = "select max(a.date) as `date`, count(a.mundane_id) as attendees, count(DISTINCT a.mundane_id) as distinct_players,
-					count(DISTINCT case when a.had_in_person = 1 then a.mundane_id end) as distinct_in_person,
-					count(DISTINCT case when a.had_online = 1 then a.mundane_id end) as distinct_online,
+					count(DISTINCT case when a.had_in_person then a.mundane_id end) as distinct_in_person,
+					count(DISTINCT case when a.had_online then a.mundane_id end) as distinct_online,
 					a.event_start, a.event_end, a.event_id, a.event_calendardetail_id, a.event_id, e.name as event_name,
 					ifnull(a.park_id, ep.park_id) as park_id, ifnull(p.name, ep.name) as park_name, year(a.date) as year, week(a.date, 3) as week,
 					ifnull(k.kingdom_id, ek.kingdom_id) as kingdom_id, ifnull(k.name, ek.name) as kingdom_name, ifnull(k.parent_kingdom_id, ek.parent_kingdom_id) as parent_kingdom_id
 					from
 						(select max(ssa.date) as `date`, max(ssa.date_year) as date_year, max(ssa.date_month) as date_month, max(date_week3) as date_week3,
               ssa.mundane_id, ssd.event_start, ssd.event_end, ssa.park_id, ssd.event_calendardetail_id, ssd.event_id,
-              max(ssa.online = 0) as had_in_person, max(ssa.online = 1) as had_online
+              max(" . Attendance::TypePredicate('in_person', 'ssa') . ") as had_in_person, max(" . Attendance::TypePredicate('online', 'ssa') . ") as had_online
 							from " . DB_PREFIX . "attendance ssa
 								left join " . DB_PREFIX . "event_calendardetail ssd on ssa.event_calendardetail_id = ssd.event_calendardetail_id
 								left join " . DB_PREFIX . "park p on ssa.park_id = p.park_id
@@ -1936,8 +1936,8 @@ class Report extends Ork3
                         'Date' => $r->date,
                         'Year' => $r->year,
                         'Week' => $r->week,
-                        'Attendees' => $r->attendees,
-                        'DistinctPlayers' => $r->distinct_players,
+                        'Attendees' => (int)$r->attendees,
+                        'DistinctPlayers' => (int)$r->distinct_players,
                         'DistinctPlayersInPerson' => (int)$r->distinct_in_person,
                         'DistinctPlayersOnline' => (int)$r->distinct_online,
                         'EventCalendarDetailId' => $r->event_calendardetail_id,
@@ -2880,54 +2880,54 @@ class Report extends Ork3
             $per_period = date('Y-m-d', strtotime("$report_to -{$request['Periods']} day"));
         }
 
-        // In-Person / Online split columns (not a filter, so not Attendance::TypeClause).
+        // In-Person / Online split columns via Attendance::TypePredicate.
         // Distinct-player semantics: a player with both kinds counts once in each split
         // and once in the total. Weekly averages share one denominator (weeks with any
         // attendance), so each split average is <= the total average.
         $sql_total = "SELECT COUNT(DISTINCT a.mundane_id) AS total_distinct,
-				COUNT(DISTINCT CASE WHEN a.online = 0 THEN a.mundane_id END) AS total_in_person,
-				COUNT(DISTINCT CASE WHEN a.online = 1 THEN a.mundane_id END) AS total_online
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('in_person') . " THEN a.mundane_id END) AS total_in_person,
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('online') . " THEN a.mundane_id END) AS total_online
 			FROM " . DB_PREFIX . "attendance a
 			WHERE a.date > '$per_period' AND a.date <= '$report_to' AND a.mundane_id > 0 $where";
 
         $sql_avg = "SELECT AVG(weekly_unique) AS avg_per_week, AVG(weekly_in_person) AS avg_in_person, AVG(weekly_online) AS avg_online FROM (
 			SELECT COUNT(DISTINCT a.mundane_id) AS weekly_unique,
-				COUNT(DISTINCT CASE WHEN a.online = 0 THEN a.mundane_id END) AS weekly_in_person,
-				COUNT(DISTINCT CASE WHEN a.online = 1 THEN a.mundane_id END) AS weekly_online
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('in_person') . " THEN a.mundane_id END) AS weekly_in_person,
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('online') . " THEN a.mundane_id END) AS weekly_online
 			FROM " . DB_PREFIX . "attendance a
 			WHERE a.date > '$per_period' AND a.date <= '$report_to' AND a.mundane_id > 0 $where
 			GROUP BY a.date_year, a.date_week3
 		) sub";
 
         $total = 0;
-        $total_in_person = 0;
-        $total_online = 0;
+        $in_person_total = 0;
+        $online_total = 0;
         $avg = 0;
-        $avg_in_person = 0;
-        $avg_online = 0;
+        $in_person_avg = 0;
+        $online_avg = 0;
 
         $r = $this->db->query($sql_total);
         if ($r && $r->next()) {
             $total = (int)$r->total_distinct;
-            $total_in_person = (int)$r->total_in_person;
-            $total_online = (int)$r->total_online;
+            $in_person_total = (int)$r->total_in_person;
+            $online_total = (int)$r->total_online;
         }
 
         $r = $this->db->query($sql_avg);
         if ($r && $r->next()) {
             $avg = round((float)$r->avg_per_week, 1);
-            $avg_in_person = round((float)$r->avg_in_person, 1);
-            $avg_online = round((float)$r->avg_online, 1);
+            $in_person_avg = round((float)$r->avg_in_person, 1);
+            $online_avg = round((float)$r->avg_online, 1);
         }
 
         return array(
             'Status' => Success(),
             'TotalDistinctPlayers' => $total,
-            'TotalDistinctPlayersInPerson' => $total_in_person,
-            'TotalDistinctPlayersOnline' => $total_online,
+            'TotalDistinctPlayersInPerson' => $in_person_total,
+            'TotalDistinctPlayersOnline' => $online_total,
             'AvgDistinctPerWeek' => $avg,
-            'AvgDistinctPerWeekInPerson' => $avg_in_person,
-            'AvgDistinctPerWeekOnline' => $avg_online
+            'AvgDistinctPerWeekInPerson' => $in_person_avg,
+            'AvgDistinctPerWeekOnline' => $online_avg
         );
     }
 
@@ -2954,12 +2954,12 @@ class Report extends Ork3
             $per_period = date('Y-m-d', strtotime("$report_to -{$request['Periods']} day"));
         }
 
-        // In-Person / Online split columns (not a filter, so not Attendance::TypeClause).
+        // In-Person / Online split columns via Attendance::TypePredicate.
         // Distinct players per month: a player with both kinds counts once in each split
         // and once in Total, so InPerson + Online can exceed Total.
         $sql = "SELECT a.date_year, a.date_month, COUNT(DISTINCT a.mundane_id) AS monthly_unique,
-				COUNT(DISTINCT CASE WHEN a.online = 0 THEN a.mundane_id END) AS monthly_in_person,
-				COUNT(DISTINCT CASE WHEN a.online = 1 THEN a.mundane_id END) AS monthly_online
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('in_person') . " THEN a.mundane_id END) AS monthly_in_person,
+				COUNT(DISTINCT CASE WHEN " . Attendance::TypePredicate('online') . " THEN a.mundane_id END) AS monthly_online
 			FROM " . DB_PREFIX . "attendance a
 			WHERE a.date > '$per_period' AND a.date <= '$report_to' AND a.mundane_id > 0 $where
 			GROUP BY a.date_year, a.date_month

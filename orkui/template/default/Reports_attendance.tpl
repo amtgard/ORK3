@@ -465,8 +465,8 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 							<a href="<?=UIR?>Park/profile/<?=$ev['ParkId']?>" style="color:var(--rp-text-muted);"><?=htmlspecialchars($ev['ParkName'])?></a><?php endif; ?>
 						</td>
 						<td class="dt-right"><?=(int)($ev['DistinctPlayersInPerson'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)($ev['DistinctPlayersOnline'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)$ev['DistinctPlayers']?></td>
+						<td class="dt-right"><?=(int)($ev['DistinctPlayersOnline'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)$ev['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$ev['Attendees']?></td>
 					</tr>
 <?php endforeach; ?>
@@ -499,8 +499,8 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 					<tr>
 						<td><?=date('Y-m-d', strtotime($kr['Date']))?></td>
 						<td class="dt-right"><?=(int)($kr['DistinctPlayersInPerson'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)($kr['DistinctPlayersOnline'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)$kr['DistinctPlayers']?></td>
+						<td class="dt-right"><?=(int)($kr['DistinctPlayersOnline'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)$kr['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$kr['Attendees']?></td>
 					</tr>
 <?php endforeach; ?>
@@ -531,8 +531,8 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 					<tr>
 						<td><a href="<?=UIR?>Attendance/park/<?=$date['ParkId']?>&AttendanceDate=<?=$date['Date']?>"><?=date('Y-m-d', strtotime($date['Date']))?></a></td>
 						<td class="dt-right"><?=(int)($date['DistinctPlayersInPerson'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
 <?php endforeach; ?>
@@ -541,8 +541,8 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 					<tr>
 						<td><a href="<?=UIR?>Event/detail/<?=$date['EventId']?>/<?=$date['EventCalendarDetailId']?>#ev-tab-attendance"><?=date('Y-m-d', strtotime($date['EventStart']))?></a></td>
 						<td class="dt-right"><?=(int)($date['DistinctPlayersInPerson'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
 <?php endforeach; ?>
@@ -551,8 +551,8 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 					<tr>
 						<td><a href="<?=UIR?>Attendance/kingdom/<?=$date['KingdomId']?>&AttendanceDate=<?=$date['Date']?>"><?=date('Y-m-d', strtotime($date['Date']))?></a></td>
 						<td class="dt-right"><?=(int)($date['DistinctPlayersInPerson'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
 <?php endforeach; ?>
@@ -567,8 +567,8 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 						<td><a href="<?=UIR?>Kingdom/profile/<?=$date['KingdomId']?>"><?=htmlspecialchars($date['KingdomName'])?></a></td>
 						<td><a href="<?=UIR?>Park/profile/<?=$date['ParkId']?>"><?=htmlspecialchars($date['ParkName'])?></a></td>
 						<td class="dt-right"><?=(int)($date['DistinctPlayersInPerson'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
-							<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
+						<td class="dt-right"><?=(int)($date['DistinctPlayersOnline'] ?? 0)?></td>
+						<td class="dt-right"><?=(int)$date['DistinctPlayers']?></td>
 						<td class="dt-right"><?=(int)$date['Attendees']?></td>
 					</tr>
 <?php endforeach; ?>
@@ -705,11 +705,18 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 		}
 	}
 
-	/* Shared tooltip body: In-Person / Online / Total for one bar. */
+	/* Shared tooltip body for one bar, labelled like the legend: the In-Person and
+	   Online only segments, the Total (bar height), and, when it differs from the
+	   segment, how many players had any online sign-in (the tables' Online column). */
 	function attSplitTip(ip, on, tot) {
-		return '<br/><span style="color:#4338ca">\u25A0</span> In-Person: <b>' + Highcharts.numberFormat(ip, 0) + '</b>'
-			+ '<br/><span style="color:' + ATT_ONLINE_COLOR + '">\u25A0</span> Online: <b>' + Highcharts.numberFormat(on, 0) + '</b>'
-			+ '<br/>Total players: <b>' + Highcharts.numberFormat(tot, 0) + '</b>';
+		var onlineOnly = Math.max(0, tot - ip);
+		var s = '<br/><span style="color:#4338ca">\u25A0</span> In-Person: <b>' + Highcharts.numberFormat(ip, 0) + '</b>'
+			+ '<br/><span style="color:' + ATT_ONLINE_COLOR + '">\u25A0</span> Online only: <b>' + Highcharts.numberFormat(onlineOnly, 0) + '</b>'
+			+ '<br/>Total: <b>' + Highcharts.numberFormat(tot, 0) + '</b>';
+		if (on !== onlineOnly) {
+			s += '<br/><span style="font-style:italic;">Any online sign-in: ' + Highcharts.numberFormat(on, 0) + '</span>';
+		}
+		return s;
 	}
 	function attLegendStyle() {
 		return { fontSize: '12px', fontWeight: '600', color: attIsDark() ? '#cbd5e0' : '#4a5568' };
@@ -890,6 +897,13 @@ html[data-theme="dark"] .rp-att-key-on { color: #7dd3fc; }
 		bub.style.display = 'block';
 		bub.style.top  = (r.bottom + 6) + 'px';
 		bub.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 214)) + 'px';
+	});
+	/* Header tip icons sit inside sortable <th>s: keep clicks/keys on them from sorting
+	   (capture phase, so it runs before DataTables' header handlers). */
+	['click', 'keydown'].forEach(function(type) {
+		document.addEventListener(type, function(e) {
+			if (e.target.closest && e.target.closest('.rp-col-tip')) e.stopPropagation();
+		}, true);
 	});
 	document.addEventListener('mouseout', function(e) {
 		var el = e.target.closest ? e.target.closest('.rp-stat-tip-icon[data-tip]') : null;

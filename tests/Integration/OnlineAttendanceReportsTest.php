@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
  * is exact. Seed (same ISO week, same month):
  *   day 1: player A in-person, player B in-person, player C online
  *   day 2: player A online (A has both kinds in the week/month)
+ * The event-linked and kingdom-level tests add their own rows a week later.
  */
 final class OnlineAttendanceReportsTest extends TestCase
 {
@@ -28,6 +29,9 @@ final class OnlineAttendanceReportsTest extends TestCase
 
     private string $monthEnd = '';
 
+    /** @var list<int> */
+    private array $calendarDetailIds = [];
+
     protected function setUp(): void
     {
         if (!ork3_test_db_available()) {
@@ -41,12 +45,13 @@ final class OnlineAttendanceReportsTest extends TestCase
             'SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $this->parkId
         )->fetchColumn();
 
-        // Find a March with no attendance for this park (a Tuesday and Thursday in one ISO week).
+        // Find a March with no attendance anywhere in this park's kingdom (so kingdom
+        // scoped rows are exact too), then a Tuesday and Thursday in one ISO week.
         $stmt = $this->fixture->pdo()->prepare(
-            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'attendance WHERE park_id = ? AND date BETWEEN ? AND ?'
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'attendance WHERE (park_id = ? OR kingdom_id = ?) AND date BETWEEN ? AND ?'
         );
         for ($year = 2003; $year > 1980; $year--) {
-            $stmt->execute([$this->parkId, "$year-02-01", "$year-04-30"]);
+            $stmt->execute([$this->parkId, $this->kingdomId, "$year-02-01", "$year-04-30"]);
             if ((int) $stmt->fetchColumn() === 0) {
                 $tuesday = strtotime("second tuesday of march $year");
                 $this->day1 = date('Y-m-d', $tuesday);
@@ -70,6 +75,11 @@ final class OnlineAttendanceReportsTest extends TestCase
 
     protected function tearDown(): void
     {
+        if ($this->fixture !== null && $this->calendarDetailIds !== []) {
+            $in = implode(',', array_map('intval', $this->calendarDetailIds));
+            $this->fixture->pdo()->exec('DELETE FROM ' . DB_PREFIX . "event_calendardetail WHERE event_calendardetail_id IN ({$in})");
+            $this->calendarDetailIds = [];
+        }
         if ($this->fixture !== null) {
             $this->fixture->cleanup();
             $this->fixture = null;
@@ -164,5 +174,75 @@ final class OnlineAttendanceReportsTest extends TestCase
         $this->assertSame(2, $month['Online']);
         $this->assertLessThanOrEqual($month['Total'], $month['InPerson']);
         $this->assertLessThanOrEqual($month['Total'], $month['Online']);
+    }
+
+    private function day3(): string
+    {
+        return date('Y-m-d', strtotime('+7 days', strtotime($this->day1)));
+    }
+
+    public function testEventLinkedRowSplitsPlayers(): void
+    {
+        $owner = $this->fixture->createPlayer($this->parkId, 'oar-owner');
+        $eventId = $this->fixture->insertKingdomEvent($this->kingdomId, $owner['mundane_id'], 'oar-event');
+        $day3 = $this->day3();
+        $pdo = $this->fixture->pdo();
+        $pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . "event_calendardetail
+             (event_id, at_park_id, current, price, event_start, event_end, description, url, url_name, address,
+              province, postal_code, city, country, map_url, map_url_name, google_geocode, location, latitude, longitude)
+             VALUES (?, ?, 1, 0, ?, ?, '', '', '', '', '', '', '', '', '', '', '', '', 0, 0)"
+        )->execute([$eventId, $this->parkId, "$day3 10:00:00", "$day3 18:00:00"]);
+        $cdId = (int) $pdo->lastInsertId();
+        $this->calendarDetailIds[] = $cdId;
+
+        $d = $this->fixture->createPlayer($this->parkId, 'oar-d');
+        $e = $this->fixture->createPlayer($this->parkId, 'oar-e');
+        $ids = [
+            $this->fixture->insertAttendance($d['mundane_id'], $this->parkId, $this->kingdomId, $day3, $eventId, 0),
+            $this->fixture->insertAttendance($e['mundane_id'], $this->parkId, $this->kingdomId, $day3, $eventId, 1),
+        ];
+        $pdo->exec('UPDATE ' . DB_PREFIX . 'attendance SET event_calendardetail_id = ' . $cdId
+            . ' WHERE attendance_id IN (' . implode(',', $ids) . ')');
+
+        $rows = $this->rowsByDate($this->report->AttendanceSummary($this->request()));
+        $this->assertArrayHasKey($day3, $rows);
+        $row = $rows[$day3];
+        $this->assertSame($cdId, (int) $row['EventCalendarDetailId']);
+        $this->assertSame($eventId, (int) $row['EventId']);
+        $this->assertSame(2, (int) $row['DistinctPlayers']);
+        $this->assertSame(1, (int) $row['DistinctPlayersInPerson']);
+        $this->assertSame(1, (int) $row['DistinctPlayersOnline']);
+        $this->assertSame(
+            (int) $row['DistinctPlayers'],
+            (int) $row['DistinctPlayersInPerson'] + (int) $row['DistinctPlayersOnline']
+        );
+    }
+
+    public function testKingdomLevelRowSplitsPlayers(): void
+    {
+        $day3 = $this->day3();
+        $f = $this->fixture->createPlayer($this->parkId, 'oar-f');
+        $g = $this->fixture->createPlayer($this->parkId, 'oar-g');
+        // Kingdom-level attendance: no park, no event.
+        $this->fixture->insertAttendance($f['mundane_id'], 0, $this->kingdomId, $day3, 0, 0);
+        $this->fixture->insertAttendance($g['mundane_id'], 0, $this->kingdomId, $day3, 0, 1);
+
+        $request = $this->request();
+        unset($request['ParkId']);
+        $request['KingdomId'] = $this->kingdomId;
+        $rows = $this->rowsByDate($this->report->AttendanceSummary($request));
+
+        $this->assertArrayHasKey($day3, $rows);
+        $row = $rows[$day3];
+        $this->assertEmpty($row['ParkId'], 'Kingdom-level row must have no park');
+        $this->assertSame(2, (int) $row['DistinctPlayers']);
+        $this->assertSame(1, (int) $row['DistinctPlayersInPerson']);
+        $this->assertSame(1, (int) $row['DistinctPlayersOnline']);
+
+        // The park-day rows from setUp are unchanged in kingdom scope.
+        $this->assertSame(3, (int) $rows[$this->day1]['DistinctPlayers']);
+        $this->assertSame(2, (int) $rows[$this->day1]['DistinctPlayersInPerson']);
+        $this->assertSame(1, (int) $rows[$this->day1]['DistinctPlayersOnline']);
     }
 }
