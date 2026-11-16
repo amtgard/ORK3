@@ -1842,6 +1842,10 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 								<input type="text" id="ev-Credits" name="Credits" style="width:55px" oninput="evSyncCredits(this.value)"
 									value="<?= (float)($attendanceForm['Credits'] ?? $defaultCredits) ?>">
 							</div>
+							<div class="ev-form-field ev-online-field">
+								<span id="ev-att-online-switch"></span>
+								<input type="hidden" id="ev-att-online" name="Online" value="0">
+							</div>
 							<div class="ev-form-field" style="justify-content:flex-end">
 								<label>&nbsp;</label>
 								<button type="submit" class="ev-submit-btn">
@@ -2351,6 +2355,10 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 						<input type="number" name="Credits" value="1" min="0.25" step="0.25" oninput="evSyncCredits(this.value)">
 					</div>
 				</div>
+				<div class="ev-modal-row">
+					<span id="ev-checkin-online-switch"></span>
+					<input type="hidden" id="ev-checkin-online" name="Online" value="0">
+				</div>
 			</div>
 			<div class="ev-modal-footer">
 				<button type="button" class="ev-modal-btn-cancel" onclick="evCloseCheckinModal()">Cancel</button>
@@ -2421,6 +2429,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					<input class="att-edit-input" type="number" id="ev-att-edit-credits" min="0.5" max="4" step="0.5">
 				</div>
 			</div>
+			<label class="orn-online-check" for="ev-att-edit-online">
+				<input type="checkbox" id="ev-att-edit-online" value="1"> Online?
+			</label>
 		</div>
 		<div class="att-edit-modal-footer">
 			<button class="att-edit-btn-cancel" id="ev-att-edit-cancel">Cancel</button>
@@ -3448,6 +3459,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		var credCell = tr.querySelector('.ev-credits-cell');
 		cred.value = credCell ? credCell.textContent.trim() : lastCredits;
 		cred.style.borderColor = '';
+		document.getElementById('ev-att-edit-online').checked = tr.dataset.online === '1';
 		document.getElementById('ev-att-edit-feedback').style.display = 'none';
 		document.getElementById('ev-att-edit-save').disabled = false;
 		document.getElementById('ev-att-edit-save').textContent = 'Save';
@@ -3478,10 +3490,11 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		var date      = document.getElementById('ev-att-edit-date').value;
 		var mundaneId = document.getElementById('ev-att-edit-mundane').value;
 		var saveBtn   = document.getElementById('ev-att-edit-save');
+		var newOnline = document.getElementById('ev-att-edit-online').checked ? 1 : 0;
 		saveBtn.disabled = true;
 		saveBtn.textContent = '…';
 		$.post('<?= UIR ?>AttendanceAjax/attendance/' + attId + '/edit', {
-			Date: date, Credits: newCredits, ClassId: newClassId, MundaneId: mundaneId
+			Date: date, Credits: newCredits, ClassId: newClassId, MundaneId: mundaneId, Online: newOnline
 		}, function(r) {
 			if (r.status === 0) {
 				var newClassName = sel.options[sel.selectedIndex].text;
@@ -3492,6 +3505,11 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 					var credCell  = tr.querySelector('.ev-credits-cell');
 					if (classCell) classCell.textContent = newClassName;
 					if (credCell)  credCell.textContent  = newCredits;
+					tr.dataset.online = newOnline;
+					var nameCell = tr.cells[0];
+					var oldBadge = nameCell && nameCell.querySelector('.orn-online-badge');
+					if (oldBadge) oldBadge.remove();
+					if (newOnline && nameCell) nameCell.insertAdjacentHTML('beforeend', ' ' + ornOnlineBadge());
 				}
 				lastCredits = newCredits;
 				closeModal();

@@ -17,6 +17,7 @@ class Controller_AttendanceAjax extends Controller
         if ($action === 'add') {
             $this->load_model('Attendance');
             $mundaneId = (int)($_POST['MundaneId'] ?? 0);
+            $online    = (int)!empty($_POST['Online']);
             $r = $this->Attendance->add_attendance(
                 $this->session->token,
                 $_POST['AttendanceDate'] ?? date('Y-m-d'),
@@ -24,13 +25,15 @@ class Controller_AttendanceAjax extends Controller
                 null,
                 $mundaneId,
                 (int)($_POST['ClassId']   ?? 0),
-                (float)($_POST['Credits'] ?? 1)
+                (float)($_POST['Credits'] ?? 1),
+                $online
             );
             if ($r['Status'] == 0) {
                 echo json_encode([
                     'status' => 0,
                     'attendanceId' => (int)($r['Detail'] ?? 0),
                     'reactivated' => (int)($r['Reactivated'] ?? 0),
+                    'online' => $online,
                 ]);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
@@ -156,7 +159,9 @@ class Controller_AttendanceAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid class']);
                 exit;
             }
-            $r = $this->Attendance->update_attendance($this->session->token, $attendance_id, $date, $credits, $classId, $mundaneId);
+            // Online is sent only by forms that render the checkbox; absent = leave unchanged.
+            $online = array_key_exists('Online', $_POST) ? (int)!empty($_POST['Online']) : null;
+            $r = $this->Attendance->update_attendance($this->session->token, $attendance_id, $date, $credits, $classId, $mundaneId, $online);
             if ($r['Status'] == 0) {
                 echo json_encode([
                     'status' => 0,

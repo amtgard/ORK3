@@ -7300,6 +7300,10 @@ function pnOpenTestChooser() {
 				<label>Class</label>
 				<select id="pn-player-att-class" style="width:100%"></select>
 			</div>
+			<div class="pn-acct-field">
+				<span id="pn-player-att-online-switch"></span>
+				<span class="orn-online-hint" id="pn-player-att-online-hint" style="display:none"></span>
+			</div>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-player-att-cancel">Cancel</button>
@@ -7334,6 +7338,9 @@ function pnOpenTestChooser() {
 					<input type="number" id="pn-att-edit-credits" value="1" min="0.5" max="4" step="0.5" style="width:100%">
 				</div>
 			</div>
+			<label class="orn-online-check" for="pn-att-edit-online">
+				<input type="checkbox" id="pn-att-edit-online" value="1"> Online?
+			</label>
 		</div>
 		<div class="pn-modal-footer">
 			<button class="pn-btn pn-btn-secondary" id="pn-att-edit-cancel">Cancel</button>

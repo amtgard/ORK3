@@ -2110,6 +2110,8 @@ var PkBannerConfig = {
 					<span id="pk-att-date-label"></span>
 				</button>
 				<input type="hidden" id="pk-att-date">
+				<span id="pk-att-online-switch"></span>
+				<span class="orn-online-hint" id="pk-att-online-hint" style="display:none"></span>
 			</div>
 			<div class="pk-att-cal" id="pk-att-cal" style="display:none">
 				<div class="pk-att-cal-hdr">
