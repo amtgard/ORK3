@@ -142,8 +142,10 @@ park days for that date:
 - If an **online** park day occurs on that date and **no in-person** park day does → the
   switch turns on, with a small hint "Online park day".
 - If both an online and an in-person park day occur that date → switch stays as-is (off on
-  open) and the hint reads "This park has an online and an in-person park day today."
+  open) and the hint reads "This park has an online and an in-person park day on this date."
 - Otherwise → off.
+- A manual flip clears the hint; it comes back only when the rule re-derives (date change
+  or reopening the form).
 
 Occurrence matching reuses the existing recurrence logic (`ork_parkday_next_occurrences`
 in `common.php` / `Park::CalculateNextParkDay`); the server supplies the park's park days

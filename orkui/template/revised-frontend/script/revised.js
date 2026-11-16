@@ -908,12 +908,6 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
 })();
 
 
-// ---- Unified DataTables initializer for player-profile data tables ----
-// Gives every profile grid the same feature set: click-sort, "Show N" length
-// menu, pagination, a search box, and CSV export. Header cells:
-//   - data-sorttype="date" -> that column sorts as a date
-//   - class="pn-nosort"     -> action-button column (no sort/search/export)
-// opts: { order: [[col,'desc']], filename: 'Awards', pageLength: 25 }
 // Online badge (wifi icon) for attendance rows signed in online. Same markup as
 // ork_online_badge() in system/lib/ork3/common.php; styled in orkui.css.
 function ornOnlineBadge() {
@@ -953,6 +947,9 @@ function ornOnlineSwitch(container, opts) {
     btn.addEventListener('click', function() {
         on = !on;
         render();
+        // A manual flip clears the derived hint; it returns only when the rule
+        // re-derives (date change / reopen) via set(val, reason).
+        setHint('');
         if (typeof opts.onChange === 'function') opts.onChange(on);
     });
     var api = {
@@ -984,7 +981,7 @@ function ornApplyParkDayType(sw, r) {
     if (r && r.status === 0 && r.online && !r.inPerson) {
         sw.set(true, 'Online park day');
     } else if (r && r.status === 0 && r.online && r.inPerson) {
-        sw.set(false, 'This park has an online and an in-person park day today.');
+        sw.set(false, 'This park has an online and an in-person park day on this date.');
     } else {
         sw.set(false);
     }
@@ -998,6 +995,13 @@ function ornStripOnlineBadge(html) {
     return $d.html();
 }
 
+// ---- Unified DataTables initializer for player-profile data tables ----
+// Gives every profile grid the same feature set: click-sort, "Show N" length
+// menu, pagination, a search box, and CSV export. Header cells:
+//   - data-sorttype="date" -> that column sorts as a date
+//   - class="pn-nosort"     -> action-button column (no sort/search/export)
+//   - class="pn-export-only" -> hidden on screen, still in the CSV export
+// opts: { order: [[col,'desc']], filename: 'Awards', pageLength: 25 }
 function pnInitDataTable(selector, opts) {
     opts = opts || {};
     if (!$.fn || !$.fn.DataTable) return null;
@@ -9372,6 +9376,8 @@ $(document).ready(function() {
         fd.append('ClassId', classId);
         fd.append('Credits', evGetSavedCredits());
         fd.append('AttendanceDate', new Date().toISOString().slice(0, 10));
+        // Honour the add form's Online? switch.
+        fd.append('Online', evAddOnline && evAddOnline.get() ? '1' : '0');
         fetch(EvConfig.uir + 'EventAjax/add_attendance/' + EvConfig.eventId + '/' + EvConfig.detailId, { method: 'POST', body: fd })
         .then(function(r) { return r.json(); })
         .then(function(data) {
