@@ -908,11 +908,99 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
 })();
 
 
+// Online badge (wifi icon) for attendance rows signed in online. Same markup as
+// ork_online_badge() in system/lib/ork3/common.php; styled in orkui.css.
+function ornOnlineBadge() {
+    return '<span class="orn-online-badge" role="img" aria-label="Signed in online" data-tip="Signed in online">'
+        + '<i class="fa-solid fa-wifi" aria-hidden="true"></i></span>';
+}
+
+// "Online?" switch for attendance-entry forms. Builds (once per container) a
+// role="switch" button with a >=44px hit area plus an optional hint line.
+// opts: { initial:bool, hintEl?:Element, input?:HTMLInputElement,
+// onChange?:function(bool) }. `input` (e.g. a hidden name="Online") is kept at
+// "1"/"0" so FormData-based forms post it. onChange fires only on a user flip,
+// so callers can let a manual choice win over a derived default.
+// Returns { get():bool, set(bool, reason?:string), el }.
+function ornOnlineSwitch(container, opts) {
+    if (!container) return null;
+    if (container._ornOnlineSwitch) return container._ornOnlineSwitch;
+    opts = opts || {};
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'orn-online-switch';
+    btn.setAttribute('role', 'switch');
+    btn.innerHTML = '<span class="orn-online-switch-track" aria-hidden="true"><span class="orn-online-switch-thumb"></span></span>'
+        + '<span class="orn-online-switch-label">Online?</span>';
+    container.appendChild(btn);
+    var hintEl = opts.hintEl || null;
+    var on = false;
+    function render() {
+        btn.setAttribute('aria-checked', on ? 'true' : 'false');
+        if (opts.input) opts.input.value = on ? '1' : '0';
+    }
+    function setHint(reason) {
+        if (!hintEl) return;
+        hintEl.textContent = reason || '';
+        hintEl.style.display = reason ? '' : 'none';
+    }
+    btn.addEventListener('click', function() {
+        on = !on;
+        render();
+        // A manual flip clears the derived hint; it returns only when the rule
+        // re-derives (date change / reopen) via set(val, reason).
+        setHint('');
+        if (typeof opts.onChange === 'function') opts.onChange(on);
+    });
+    var api = {
+        el: btn,
+        get: function() { return on; },
+        set: function(val, reason) { on = !!val; render(); setHint(reason); }
+    };
+    api.set(!!opts.initial);
+    container._ornOnlineSwitch = api;
+    return api;
+}
+
+// Force an element's data-tip tooltip visible for `ms` (default 4s) via the
+// .is-flashing class (revised.css); re-callable, each call restarts the timer.
+function ornFlashTip(el, ms) {
+    if (!el) return;
+    clearTimeout(el._ornFlashTimer);
+    el.classList.remove('is-flashing');
+    void el.offsetWidth; // restart the pulse animation
+    el.classList.add('is-flashing');
+    el._ornFlashTimer = setTimeout(function() { el.classList.remove('is-flashing'); }, ms || 4000);
+}
+
+// Apply a park-day-type lookup (AttendanceAjax/park/{id}/daytype) to an
+// ornOnlineSwitch: online-only day -> on; online + in-person -> off with a
+// hint; anything else (incl. errors) -> off.
+function ornApplyParkDayType(sw, r) {
+    if (!sw) return;
+    if (r && r.status === 0 && r.online && !r.inPerson) {
+        sw.set(true, 'Online park day');
+    } else if (r && r.status === 0 && r.online && r.inPerson) {
+        sw.set(false, 'This park has an online and an in-person park day on this date.');
+    } else {
+        sw.set(false);
+    }
+}
+
+// Drop ornOnlineBadge() markup from exported cell HTML (CSV carries a separate Online column).
+function ornStripOnlineBadge(html) {
+    if (typeof html !== 'string' || html.indexOf('orn-online-badge') < 0) return html;
+    var $d = jQuery('<div>').html(html);
+    $d.find('.orn-online-badge').remove();
+    return $d.html();
+}
+
 // ---- Unified DataTables initializer for player-profile data tables ----
 // Gives every profile grid the same feature set: click-sort, "Show N" length
 // menu, pagination, a search box, and CSV export. Header cells:
 //   - data-sorttype="date" -> that column sorts as a date
 //   - class="pn-nosort"     -> action-button column (no sort/search/export)
+//   - class="pn-export-only" -> hidden on screen, still in the CSV export
 // opts: { order: [[col,'desc']], filename: 'Awards', pageLength: 25 }
 function pnInitDataTable(selector, opts) {
     opts = opts || {};
@@ -922,10 +1010,14 @@ function pnInitDataTable(selector, opts) {
     if ($.fn.DataTable.isDataTable($table)) { $table.DataTable().destroy(); }
 
     var colDefs = [];
-    var hasAction = false;
+    // Export columns: every data column; <th class="pn-export-only"> columns are
+    // hidden on screen but still exported (e.g. the attendance Online column).
+    var exportCols = [];
     $table.find('thead th').each(function(i) {
         var $th = $(this);
-        if ($th.hasClass('pn-nosort')) { hasAction = true; colDefs.push({ targets: i, orderable: false, searchable: false }); }
+        if ($th.hasClass('pn-nosort')) colDefs.push({ targets: i, orderable: false, searchable: false });
+        else exportCols.push(i);
+        if ($th.hasClass('pn-export-only')) colDefs.push({ targets: i, visible: false, searchable: false });
         if ($th.data('sorttype') === 'date') colDefs.push({ targets: i, type: 'date' });
     });
 
@@ -936,7 +1028,10 @@ function pnInitDataTable(selector, opts) {
             className: 'pn-dt-csv-btn',
             text: '<i class="fas fa-download"></i> CSV',
             filename: opts.filename || 'Export',
-            exportOptions: { columns: hasAction ? ':not(.pn-nosort)' : ':visible' }
+            exportOptions: {
+                columns: exportCols,
+                format: { body: function(d) { return jQuery.fn.dataTable.Buttons.stripData(ornStripOnlineBadge(d)); } }
+            }
         }],
         columnDefs: colDefs,
         order: opts.order || [],
@@ -5727,6 +5822,7 @@ $(document).ready(function() {
             var keyLabels = {
                 'AwardRecsPublic': 'Award Recommendations Visibility',
                 'IncludePrincipalityInStatistics': 'Include Principality in Statistics',
+                'CountOnlineAttendance': 'Count Online Attendance',
                 'QualTestReeveEnabled': "Reeve's Test",
                 'QualTestCorporaEnabled': 'Corpora Test'
             };
@@ -5737,6 +5833,7 @@ $(document).ready(function() {
                 'AttendanceCreditMinimum': 'Minimum total credits earned in the last 6 months. Leave blank to not require this.',
                 'MonthlyCreditMaximum':    'Cap on credits counted per calendar month (excess is discarded). Leave blank for no cap.',
                 'IncludePrincipalityInStatistics': 'When looking at statistics, graphs, and reports, include relevant metrics from Principality(ies) such as attendance and player counts.',
+                'CountOnlineAttendance': 'When off, sign-ins marked Online are not counted toward Voting Eligibility for this Kingdom. Class credits, active status, player records, other reports and attendance history are not affected.',
             };
             if (keyHints[cfg.Key]) {
                 var hint = document.createElement('span');
@@ -5794,7 +5891,7 @@ $(document).ready(function() {
                     else optPrivate.selected = true;
                     inp.appendChild(optPublic);
                     inp.appendChild(optPrivate);
-                } else if (cfg.Key === 'IncludePrincipalityInStatistics') {
+                } else if (cfg.Key === 'IncludePrincipalityInStatistics' || cfg.Key === 'CountOnlineAttendance') {
                     inp = document.createElement('input');
                     inp.type = 'checkbox';
                     inp.className = 'kn-admin-config-input';
@@ -9243,7 +9340,13 @@ $(document).ready(function() {
         var n = parseFloat(val);
         if (n > 0) localStorage.setItem('ev_credits_default', n);
     }
+    // "Online?" switches on the event add forms: default off, no park-day lookup.
+    var evAddOnline = ornOnlineSwitch(document.getElementById('ev-att-online-switch'),
+        { initial: false, input: document.getElementById('ev-att-online') });
+    var evCheckinOnline = ornOnlineSwitch(document.getElementById('ev-checkin-online-switch'),
+        { initial: false, input: document.getElementById('ev-checkin-online') });
     window.evOpenCheckinModal = function(mundaneId, personaName, classId) {
+        if (evCheckinOnline) evCheckinOnline.set(false);
         document.getElementById('ev-checkin-mundane-id').value = mundaneId;
         document.getElementById('ev-checkin-name').textContent = personaName;
         var creditsInput = document.querySelector('#ev-checkin-form [name="Credits"]');
@@ -9273,6 +9376,8 @@ $(document).ready(function() {
         fd.append('ClassId', classId);
         fd.append('Credits', evGetSavedCredits());
         fd.append('AttendanceDate', new Date().toISOString().slice(0, 10));
+        // Honour the add form's Online? switch.
+        fd.append('Online', evAddOnline && evAddOnline.get() ? '1' : '0');
         fetch(EvConfig.uir + 'EventAjax/add_attendance/' + EvConfig.eventId + '/' + EvConfig.detailId, { method: 'POST', body: fd })
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -9302,8 +9407,9 @@ $(document).ready(function() {
         var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
         var kingCell = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
         var parkCell = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '">' +
-            '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
+        var isOnline = parseInt(att.Online, 10) === 1;
+        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '" data-online="' + (isOnline ? 1 : 0) + '">' +
+            '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a>' + (isOnline ? ' ' + ornOnlineBadge() : '') + '</td>' +
             '<td>' + kingCell + '</td>' +
             '<td>' + parkCell + '</td>' +
             '<td class="ev-class-cell">' + escHtml(att.ClassName || '') + '</td>' +
@@ -10813,7 +10919,30 @@ $(document).ready(function() {
 
     var ADD_URL    = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/add';
     var GETDAY_URL = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/getday';
+    var DAYTYPE_URL = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/daytype';
     var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
+
+    // "Online?" switch: derived from the park-day rule for the modal's chosen
+    // (browser-local) date; a manual flip wins until the date changes, and the
+    // whole thing resets on reopen.
+    var pkOnlineManual = false, pkOnlineDate = null, pkOnlineReq = 0;
+    var pkOnline = ornOnlineSwitch(document.getElementById('pk-att-online-switch'), {
+        initial: false,
+        hintEl: document.getElementById('pk-att-online-hint'),
+        onChange: function() { pkOnlineManual = true; }
+    });
+    function pkOnlineVal() { return (pkOnline && pkOnline.get()) ? 1 : 0; }
+    function pkDeriveOnline(date) {
+        if (!pkOnline || date === pkOnlineDate) return;
+        pkOnlineDate = date;
+        pkOnlineManual = false;
+        pkOnline.set(false);
+        var req = ++pkOnlineReq;
+        $.getJSON(DAYTYPE_URL, { date: date }, function(r) {
+            if (req !== pkOnlineReq || pkOnlineManual) return;
+            ornApplyParkDayType(pkOnline, r);
+        });
+    }
 
     // MundaneIds already entered for the selected date
     var pkAttEntered = {};
@@ -10838,6 +10967,7 @@ $(document).ready(function() {
         tr.dataset.mundaneId    = entry.MundaneId || 0;
         tr.dataset.classId      = entry.ClassId || 0;
         tr.dataset.credits      = entry.Credits || 1;
+        tr.dataset.online       = parseInt(entry.Online, 10) === 1 ? 1 : 0;
         var td1 = document.createElement('td');
         var td1Link = document.createElement('a');
         td1Link.href = PkConfig.uir + 'Player/profile/' + (entry.MundaneId || 0);
@@ -10849,6 +10979,7 @@ $(document).ready(function() {
         td1Icon.style.cssText = 'margin-left:5px;font-size:10px;color:#a0aec0;vertical-align:middle';
         td1Link.appendChild(td1Icon);
         td1.appendChild(td1Link);
+        if (parseInt(entry.Online, 10) === 1) td1.insertAdjacentHTML('beforeend', ' ' + ornOnlineBadge());
         var td2 = document.createElement('td'); td2.className = 'pk-att-class-cell';  td2.textContent = className;
         var td3 = document.createElement('td'); td3.className = 'pk-att-credits-cell'; td3.textContent = entry.Credits || 1;
         var td4 = document.createElement('td'); td4.className = 'pk-att-actions-cell';
@@ -10879,6 +11010,7 @@ $(document).ready(function() {
 
         var origClass   = tr.dataset.classId;
         var origCredits = tr.dataset.credits;
+        var origOnline  = tr.dataset.online === '1';
 
         // Replace class cell with select
         var sel = document.createElement('select');
@@ -10896,6 +11028,13 @@ $(document).ready(function() {
         inp.type = 'number'; inp.min = '0.5'; inp.step = '0.5';
         inp.value = origCredits; inp.className = 'pk-att-inline-credits';
         td3.innerHTML = ''; td3.appendChild(inp);
+        var onlineLbl = document.createElement('label');
+        onlineLbl.className = 'orn-online-check';
+        var onlineChk = document.createElement('input');
+        onlineChk.type = 'checkbox'; onlineChk.checked = origOnline;
+        onlineLbl.appendChild(onlineChk);
+        onlineLbl.appendChild(document.createTextNode('Online?'));
+        td3.appendChild(onlineLbl);
 
         // Replace action buttons with save/cancel
         td4.innerHTML = '';
@@ -10929,13 +11068,19 @@ $(document).ready(function() {
             var aid        = tr.dataset.attendanceId;
             var mid        = tr.dataset.mundaneId;
             var date       = gid('pk-att-date').value;
+            var newOnline  = onlineChk.checked ? 1 : 0;
             saveBtn.disabled = true;
             $.post(PkConfig.uir + 'AttendanceAjax/attendance/' + aid + '/edit',
-                { Date: date, Credits: newCredits, ClassId: newClass, MundaneId: mid },
+                { Date: date, Credits: newCredits, ClassId: newClass, MundaneId: mid, Online: newOnline },
                 function(r) {
                     if (r && r.status === 0) {
                         tr.dataset.classId = newClass;
                         tr.dataset.credits = newCredits;
+                        tr.dataset.online  = newOnline;
+                        var nameCell = tr.cells[0];
+                        var oldBadge = nameCell && nameCell.querySelector('.orn-online-badge');
+                        if (oldBadge) oldBadge.remove();
+                        if (newOnline && nameCell) nameCell.insertAdjacentHTML('beforeend', ' ' + ornOnlineBadge());
                         tr.classList.remove('pk-att-editing');
                         td2.innerHTML = ''; td2.textContent = pkClassNames[newClass] || '';
                         td3.innerHTML = ''; td3.textContent = newCredits;
@@ -11174,6 +11319,7 @@ $(document).ready(function() {
             pkBuildQuickAddRows();
         }
         pkUpdateEventNudge(val);
+        pkDeriveOnline(val);
         pkFetchDayEntered(val, cb);
     }
 
@@ -11203,6 +11349,7 @@ $(document).ready(function() {
         if (qaTbody) { qaTbody.innerHTML = ''; delete qaTbody.dataset.built; }
         gid('pk-att-overlay').classList.add('pk-att-open');
         document.body.style.overflow = 'hidden';
+        pkOnlineDate = null; // reopen resets any manual flip; re-derived for the date below
         pkSetDate(today);
         // Drop any stale "no active links" cache so every modal open reflects
         // current DB state. The reset helper lives in the sign-in-link IIFE
@@ -11283,13 +11430,13 @@ $(document).ready(function() {
         if (!classId) { pkAttShowFeedback('Select a class for ' + attendee.Persona + '.', false); return; }
         btn.disabled = true; btn.textContent = '\u2026';
         pkSubmit(
-            { AttendanceDate: gid('pk-att-date').value, MundaneId: attendee.MundaneId, ClassId: classId, Credits: credits },
-            function(ok, err, aid) {
+            { AttendanceDate: gid('pk-att-date').value, MundaneId: attendee.MundaneId, ClassId: classId, Credits: credits, Online: pkOnlineVal() },
+            function(ok, err, aid, reactivated, online) {
                 if (ok) {
                     pkAttEntered[attendee.MundaneId] = true;
                     tr.classList.add('pk-att-done');
                     btn.disabled = true; btn.textContent = '\u2713'; btn.classList.add('pk-att-qa-added');
-                    pkAttRecorded({ AttendanceId: aid, MundaneId: attendee.MundaneId, Persona: attendee.Persona, ClassId: classId, Credits: credits });
+                    pkAttRecorded({ AttendanceId: aid, MundaneId: attendee.MundaneId, Persona: attendee.Persona, ClassId: classId, Credits: credits, Online: online });
                     pkAttHideFeedback();
                 } else {
                     btn.disabled = false; btn.textContent = '+';
@@ -11321,8 +11468,8 @@ $(document).ready(function() {
         btn.disabled = true;
         var wasInactive = pkAttSelectedInactive;
         pkSubmit(
-            { AttendanceDate: gid('pk-att-date').value, MundaneId: pid, ClassId: cls, Credits: cred },
-            function(ok, err, aid, reactivated) {
+            { AttendanceDate: gid('pk-att-date').value, MundaneId: pid, ClassId: cls, Credits: cred, Online: pkOnlineVal() },
+            function(ok, err, aid, reactivated, online) {
                 if (ok) {
                     var midInt = parseInt(pid, 10);
                     pkAttEntered[midInt] = true;
@@ -11332,7 +11479,7 @@ $(document).ready(function() {
                     } else {
                         pkAttHideFeedback();
                     }
-                    pkAttRecorded({ AttendanceId: aid, MundaneId: midInt, Persona: name, ClassId: cls, Credits: cred });
+                    pkAttRecorded({ AttendanceId: aid, MundaneId: midInt, Persona: name, ClassId: cls, Credits: cred, Online: online });
                     gid('pk-att-player-name').value = '';
                     gid('pk-att-player-id').value   = '';
                     pkAttSelectedInactive = false;
@@ -11348,9 +11495,9 @@ $(document).ready(function() {
     // --- Core AJAX ---
     function pkSubmit(data, cb) {
         $.post(ADD_URL, data, function(r) {
-            if (r && r.status === 0) {  cb(true, null, r.attendanceId || 0, !!r.reactivated); }
-            else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0, false);
-        }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0, false); });
+            if (r && r.status === 0) {  cb(true, null, r.attendanceId || 0, !!r.reactivated, parseInt(r.online, 10) === 1 ? 1 : 0); }
+            else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0, false, 0);
+        }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0, false, 0); });
     }
 
     // --- Feedback helpers ---
@@ -11840,6 +11987,15 @@ $(document).ready(function() {
 
     window.pkCloseQrModal = function() { orkCloseQrModal('pk-qr-overlay'); };
 
+    // Online? switch: park links default to online; flash the tooltip each time
+    // the Sign-in Link tab is opened so officers notice the default.
+    var pkLinkOnline = ornOnlineSwitch(document.getElementById('pk-att-link-online-switch'), { initial: true });
+    if (pkLinkOnline) pkLinkOnline.el.setAttribute('data-tip', 'Not for an online event? Disable this.');
+    var pkLinkTab = document.getElementById('pk-att-tab-link');
+    if (pkLinkTab && pkLinkOnline) {
+        pkLinkTab.addEventListener('click', function() { ornFlashTip(pkLinkOnline.el); });
+    }
+
     genBtn.addEventListener('click', function() {
         var hours   = Math.max(1, Math.min(96, parseInt(document.getElementById('pk-att-link-hours').value, 10) || 3));
         var credits = Math.max(0.5, Math.min(10, parseFloat(document.getElementById('pk-att-link-credits').value) || 1));
@@ -11847,7 +12003,7 @@ $(document).ready(function() {
         genBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
         document.getElementById('pk-att-link-result').style.display = 'none';
         $.post(PkConfig.uir + 'AttendanceAjax/link/park/' + PkConfig.parkId + '/create',
-            { Hours: hours, Credits: credits },
+            { Hours: hours, Credits: credits, Online: (pkLinkOnline && pkLinkOnline.get()) ? 1 : 0 },
             function(r) {
                 genBtn.disabled = false;
                 genBtn.innerHTML = '<i class="fas fa-link"></i> Generate';
@@ -11968,7 +12124,7 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.dataset.linkId = lnk.LinkId;
                 tr.innerHTML =
-                    '<td style="padding:4px 6px">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px">' + expStr + (parseInt(lnk.Online, 10) === 1 ? ' ' + ornOnlineBadge() : '') + '</td>' +
                     '<td style="padding:4px 6px">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button class="pk-btn pk-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
@@ -12102,6 +12258,9 @@ $(document).ready(function() {
     creditsEl.addEventListener('input', evSyncGenBtn);
     evSyncGenBtn();
 
+    // Online? switch: event links default to in-person (off), no flash.
+    var evLinkOnline = ornOnlineSwitch(document.getElementById('ev-signin-online-switch'), { initial: false });
+
     // Styled in-modal feedback replaces native alert() so server errors
     // ("This event has already ended", etc.) render inline with the same
     // visual treatment as the rest of the modal.
@@ -12126,7 +12285,7 @@ $(document).ready(function() {
         document.getElementById('ev-signin-link-result').style.display = 'none';
         evSigninFeedbackClear();
         $.post(EvConfig.uir + 'AttendanceAjax/link/event/' + EvConfig.eventId + '/create',
-            { Credits: credits, EventCalendarDetailId: EvConfig.detailId },
+            { Credits: credits, EventCalendarDetailId: EvConfig.detailId, Online: (evLinkOnline && evLinkOnline.get()) ? 1 : 0 },
             function(r) {
                 genBtn.innerHTML = origHtml;
                 evSyncGenBtn();
@@ -12210,7 +12369,7 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.dataset.linkId = lnk.LinkId;
                 tr.innerHTML =
-                    '<td style="padding:4px 6px">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px">' + expStr + (parseInt(lnk.Online, 10) === 1 ? ' ' + ornOnlineBadge() : '') + '</td>' +
                     '<td style="padding:4px 6px">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button type="button" class="ev-icon-btn ev-signin-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-copy"></i> Copy</button>' +
@@ -12295,6 +12454,9 @@ $(document).ready(function() {
 
     window.knCloseQrModal = function() { orkCloseQrModal('kn-qr-overlay'); };
 
+    var knLinkOnline = ornOnlineSwitch(document.getElementById('kn-signinlink-online-switch'), { initial: true });
+    if (knLinkOnline) knLinkOnline.el.setAttribute('data-tip', 'Not for an online event? Disable this.');
+
     var copyBtn = document.getElementById('kn-signinlink-copy-btn');
 
     // Park autocomplete
@@ -12359,7 +12521,9 @@ $(document).ready(function() {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
         errEl.style.display = 'none';
         document.getElementById('kn-signinlink-result').style.display = 'none';
-        $.post(postUrl, { Hours: hours, Credits: credits }, function(r) {
+        // The kingdom-modal generator markup was removed (Kingdomnew_index.tpl,
+        // 2026-08-21), so no switch renders; keep the park-link default (online).
+        $.post(postUrl, { Hours: hours, Credits: credits, Online: knLinkOnline ? (knLinkOnline.get() ? 1 : 0) : 1 }, function(r) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-link"></i> Generate';
             if (r && r.status === 0) {
@@ -12439,7 +12603,7 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.innerHTML =
                     '<td style="padding:4px 6px;color:#4a5568;font-size:11px">' + scope + '</td>' +
-                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + (parseInt(lnk.Online, 10) === 1 ? ' ' + ornOnlineBadge() : '') + '</td>' +
                     '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button class="kn-btn kn-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
@@ -16111,6 +16275,8 @@ window.pnCloseUnitCreateModal = function() {
         var credits  = btn.dataset.credits;
         var classId  = parseInt(btn.dataset.classId, 10);
         var mundaneId = btn.dataset.mundaneId;
+        var onlineChk = gid('pn-att-edit-online');
+        if (onlineChk) onlineChk.checked = btn.dataset.online === '1';
         gid('pn-att-edit-id').value        = attId;
         gid('pn-att-edit-mundane-id').value = mundaneId;
         gid('pn-att-edit-date').value      = date;
@@ -16148,6 +16314,7 @@ window.pnCloseUnitCreateModal = function() {
             var classId   = gid('pn-att-edit-class').value;
             var credits   = gid('pn-att-edit-credits').value;
             var mundaneId = gid('pn-att-edit-mundane-id').value;
+            var onlineChk = gid('pn-att-edit-online');
             var fb        = gid('pn-att-edit-feedback');
             fb.style.display = 'none';
             if (!date)    { fb.textContent = 'Date is required.';         fb.style.display = ''; return; }
@@ -16155,9 +16322,9 @@ window.pnCloseUnitCreateModal = function() {
             var btn = this;
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            $.post(BASE_URL + attId + '/edit', {
-                Date: date, Credits: credits, ClassId: classId, MundaneId: mundaneId
-            }, function(r) {
+            var payload = { Date: date, Credits: credits, ClassId: classId, MundaneId: mundaneId };
+            if (onlineChk) payload.Online = onlineChk.checked ? 1 : 0;
+            $.post(BASE_URL + attId + '/edit', payload, function(r) {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-save"></i> Save';
                 if (r && r.status === 0) {
@@ -16214,6 +16381,27 @@ window.pnCloseUnitCreateModal = function() {
 
     function gid(id) { return document.getElementById(id); }
 
+    // "Online?" switch: once both park and date are chosen, derive it from the
+    // park-day rule; a manual flip wins until the park or date changes, and it
+    // resets on reopen.
+    var pnOnline = null, pnOnlineManual = false, pnOnlineKey = null, pnOnlineReq = 0;
+    function pnDeriveOnline() {
+        if (!pnOnline) return;
+        var parkId = gid('pn-player-att-park-id').value;
+        var date   = gid('pn-player-att-date').value;
+        var key    = parkId + '|' + date;
+        if (key === pnOnlineKey) return;
+        pnOnlineKey = key;
+        pnOnlineManual = false;
+        pnOnline.set(false);
+        if (!(parseInt(parkId, 10) > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+        var req = ++pnOnlineReq;
+        $.getJSON(ADD_URL + parseInt(parkId, 10) + '/daytype', { date: date }, function(r) {
+            if (req !== pnOnlineReq || pnOnlineManual) return;
+            ornApplyParkDayType(pnOnline, r);
+        });
+    }
+
     function showFb(msg, ok) {
         var el = gid('pn-player-att-feedback');
         el.textContent = msg;
@@ -16241,7 +16429,8 @@ window.pnCloseUnitCreateModal = function() {
     window.pnOpenPlayerAttModal = function() {
         var ov = gid('pn-player-att-overlay');
         if (!ov) return;
-        var today = new Date().toISOString().slice(0, 10);
+        var _n = new Date();
+        var today = _n.getFullYear() + '-' + String(_n.getMonth() + 1).padStart(2, '0') + '-' + String(_n.getDate()).padStart(2, '0');
         gid('pn-player-att-date').value    = today;
         gid('pn-player-att-credits').value = '1';
         gid('pn-player-att-feedback').style.display = 'none';
@@ -16249,6 +16438,8 @@ window.pnCloseUnitCreateModal = function() {
         if (_dw) _dw.style.display = (PnConfig.attendanceDates || []).indexOf(today) !== -1 ? '' : 'none';
         gid('pn-player-att-park-results').classList.remove('pn-ac-open');
         buildClassOptions(PnConfig.lastClassId || 0);
+        pnOnlineKey = null;
+        pnDeriveOnline();
         ov.classList.add('pn-open');
         document.body.style.overflow = 'hidden';
         setTimeout(function() { gid('pn-player-att-date').focus(); }, 50);
@@ -16260,6 +16451,11 @@ window.pnCloseUnitCreateModal = function() {
 
         var parkInput   = gid('pn-player-att-park-name');
         var parkResults = gid('pn-player-att-park-results');
+        pnOnline = ornOnlineSwitch(gid('pn-player-att-online-switch'), {
+            initial: false,
+            hintEl: gid('pn-player-att-online-hint'),
+            onChange: function() { pnOnlineManual = true; }
+        });
 
         parkInput.addEventListener('input', function() {
             gid('pn-player-att-park-id').value = '';
@@ -16286,6 +16482,7 @@ window.pnCloseUnitCreateModal = function() {
             parkInput.value = decodeURIComponent(item.dataset.name);
             gid('pn-player-att-park-id').value = item.dataset.id;
             parkResults.classList.remove('pn-ac-open');
+            pnDeriveOnline();
         });
 
         document.addEventListener('click', function(e) {
@@ -16301,6 +16498,8 @@ window.pnCloseUnitCreateModal = function() {
         }
         gid('pn-player-att-date').addEventListener('change', checkAttDate);
         gid('pn-player-att-date').addEventListener('input',  checkAttDate);
+        gid('pn-player-att-date').addEventListener('change', pnDeriveOnline);
+        gid('pn-player-att-date').addEventListener('input',  pnDeriveOnline);
 
         gid('pn-player-att-close').addEventListener('click', closeModal);
         gid('pn-player-att-cancel').addEventListener('click', closeModal);
@@ -16325,7 +16524,8 @@ window.pnCloseUnitCreateModal = function() {
                 AttendanceDate: date,
                 MundaneId:      PnConfig.playerId,
                 ClassId:        classId,
-                Credits:        credits
+                Credits:        credits,
+                Online:         (pnOnline && pnOnline.get()) ? 1 : 0
             }, function(r) {
                 btn.disabled = false;
                 if (r && r.status === 0) {

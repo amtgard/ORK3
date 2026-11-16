@@ -10,6 +10,50 @@ class Attendance extends Ork3
         $this->attendance_link = new yapo($this->db, DB_PREFIX . 'attendance_link');
     }
 
+    /**
+     * Normalise an attendance-type filter to 'all' | 'in_person' | 'online'.
+     * Anything unrecognised becomes 'all'.
+     */
+    public static function NormalizeType($mode): string
+    {
+        return (is_string($mode) && in_array($mode, array('all', 'in_person', 'online'), true)) ? $mode : 'all';
+    }
+
+    /**
+     * Boolean SQL predicate on ork_attendance's online flag: "{alias}.online = 0"
+     * (in_person), "{alias}.online = 1" (online) or '1=1' (all). The single source
+     * of the online predicate; use it for split expressions such as
+     * COUNT(DISTINCT CASE WHEN <predicate> THEN ... END). $alias must be a plain
+     * identifier, else 'a' is used.
+     */
+    public static function TypePredicate($mode, string $alias = 'a'): string
+    {
+        if (!preg_match('/^[a-z_][a-z0-9_]*$/i', $alias)) {
+            $alias = 'a';
+        }
+        switch (self::NormalizeType($mode)) {
+            case 'in_person':
+                return "{$alias}.online = 0";
+            case 'online':
+                return "{$alias}.online = 1";
+            default:
+                return '1=1';
+        }
+    }
+
+    /**
+     * SQL fragment filtering ork_attendance by the online flag: '' for all,
+     * else ' AND ' . TypePredicate(). $alias must be a plain identifier, else
+     * 'a' is used.
+     */
+    public static function TypeClause($mode, string $alias = 'a'): string
+    {
+        if (self::NormalizeType($mode) === 'all') {
+            return '';
+        }
+        return ' AND ' . self::TypePredicate($mode, $alias);
+    }
+
     public function GetClasses($request)
     {
         $this->class->clear();
@@ -63,6 +107,12 @@ class Attendance extends Ork3
         }
     }
 
+    /** Normalize an Online request value to 0|1. */
+    public static function NormalizeOnline($v): int
+    {
+        return (!empty($v) && (string)$v !== '0') ? 1 : 0;
+    }
+
     public function AddAttendance($request)
     {
         logtrace("Attendance->AddAttendance()", $request);
@@ -94,6 +144,7 @@ class Attendance extends Ork3
         // Officer-keyed entry from Enter Attendance modal (Search / Recent tabs).
         // Self-signin and self-reg paths set this column to their own value below.
         $this->attendance->entry_method = 'manual';
+        $this->attendance->online = self::NormalizeOnline($request['Online'] ?? 0);
         $this->attendance->event_id = 0;
         $this->attendance->event_calendardetail_id = 0;
         $this->attendance->date_year = 0;
@@ -195,6 +246,7 @@ class Attendance extends Ork3
         $attendance->persona = $this->attendance->persona;
         $attendance->flavor = $this->attendance->flavor;
         $attendance->note = $this->attendance->note;
+        $attendance->online = $this->attendance->online;
 
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $attendance->mundane_id, $attendance);
 
@@ -204,6 +256,10 @@ class Attendance extends Ork3
         $this->attendance->credits = $request['Credits'];
         $this->attendance->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         $this->attendance->entered_at = date("Y-m-d H:i:s");
+        // Online: only touched when the caller sends a value; absent, null or '' = unchanged.
+        if (isset($request['Online']) && $request['Online'] !== '') {
+            $this->attendance->online = self::NormalizeOnline($request['Online']);
+        }
         // Recompute date partitions when date changes.
         $_parts = $this->_computeDatePartitions($this->attendance->date);
         $this->attendance->date_year  = $_parts['date_year'];
@@ -610,6 +666,7 @@ class Attendance extends Ork3
         $this->attendance_link->credits                 = $credits;
         $this->attendance_link->expires_at              = $expires_at;
         $this->attendance_link->created_at              = gmdate('Y-m-d H:i:s');
+        $this->attendance_link->online                  = self::NormalizeOnline($request['Online'] ?? 0);
         $this->attendance_link->save();
 
         if (!$this->attendance_link->link_id) {
@@ -669,6 +726,7 @@ class Attendance extends Ork3
             'ExpiresAt'              => $this->attendance_link->expires_at,
             'EventName'              => $eventName,
             'ScopeType'              => $scopeType,
+            'Online'                => (int)$this->attendance_link->online,
         ]);
     }
 
@@ -783,6 +841,7 @@ class Attendance extends Ork3
         // is preserved in ork_attendance_link.by_whom_id if reports want to
         // surface "link issued by Lacris, used by Augustus".
         $this->attendance->entry_method             = 'signin_link';
+        $this->attendance->online                   = (int)$this->attendance_link->online;
         $this->attendance->event_id                 = $event_id;
         $this->attendance->event_calendardetail_id  = $event_calendardetail_id;
         $this->attendance->date_year                = 0;
@@ -971,7 +1030,7 @@ class Attendance extends Ork3
         }
 
         $this->db->Clear();
-        $rows = $this->db->DataSet('SELECT al.link_id, al.token, al.credits, al.expires_at, al.park_id, COALESCE(p.name, \'\') AS park_name FROM ' . DB_PREFIX . 'attendance_link al LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = al.park_id AND al.park_id > 0 WHERE ' . $where . ' AND al.revoked_at IS NULL AND al.expires_at > NOW() ORDER BY al.expires_at DESC LIMIT 20');
+        $rows = $this->db->DataSet('SELECT al.link_id, al.token, al.credits, al.expires_at, al.park_id, al.online, COALESCE(p.name, \'\') AS park_name FROM ' . DB_PREFIX . 'attendance_link al LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = al.park_id AND al.park_id > 0 WHERE ' . $where . ' AND al.revoked_at IS NULL AND al.expires_at > NOW() ORDER BY al.expires_at DESC LIMIT 20');
         $links = [];
         if ($rows) {
             while ($rows->Next()) {
@@ -982,6 +1041,7 @@ class Attendance extends Ork3
                     'ExpiresAt' => $rows->expires_at,
                     'ParkId'    => (int)$rows->park_id,
                     'ParkName'  => (string)$rows->park_name,
+                    'Online'    => (int)$rows->online,
                 ];
             }
         }

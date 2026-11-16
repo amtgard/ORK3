@@ -44,6 +44,16 @@ final class VotingRulesTest extends TestCase
         $this->assertCount(18, $actual);
     }
 
+    public function testKingdom20OnlineExclusionMovedToSetting(): void
+    {
+        $rules = $this->mirrorVotingRules(20);
+        $this->assertNotNull($rules);
+        $this->assertArrayNotHasKey('ExcludeOnline', $rules);
+        $this->assertSame('days', $rules['AttendanceMode']);
+        $this->assertSame(6, $rules['AttendanceRequired']);
+        $this->assertTrue($rules['WeekSnap']);
+    }
+
     public function testProvinceModeEligibility(): void
     {
         $rules = $this->mirrorVotingRules(17);
