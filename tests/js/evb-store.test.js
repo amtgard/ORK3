@@ -84,7 +84,7 @@ test('batch is one undo step; a new change clears redo; undoable:false records n
   assert.equal(s.items().length, 3);
   s.undo();
   assert.deepEqual(s.items().map(i => i.Title), ['Old']);
-  s.redo(); s.undo(); s.add(item('C'));
+  assert.equal(s.redo(), true); assert.equal(s.undo(), true); s.add(item('C'));
   assert.ok(!s.canRedo());
   s.undo();
   s.remove('i7', { undoable: false });
@@ -119,6 +119,83 @@ test('a change the server rejects is reverted, reported, and does not block the 
   assert.equal(s.status().state, 'saved');
   s.undo();
   assert.equal(s.get(good), null);
+});
+test('redo brings back an undone add, and undo history survives', async () => {
+  const f = fake();
+  const s = S.create({ items: [], send: f.send, saveMeal: true });
+  const a = s.add(item('A'));
+  s.update(a, { Title: 'A2' });
+  assert.equal(s.undo(), true);
+  assert.equal(s.undo(), true);
+  assert.equal(s.get(a), null);
+  assert.equal(s.redo(), true);
+  assert.equal(s.get(a).Title, 'A');
+  assert.equal(s.redo(), true);
+  assert.equal(s.get(a).Title, 'A2');
+  await s.idle();
+  assert.ok(s.get(a).EventScheduleId > 0);
+});
+test('a batch survives the undo and redo of a later step', async () => {
+  const f = fake();
+  const s = S.create({ items: [], send: f.send, saveMeal: true });
+  let a, b;
+  s.batch(() => { a = s.add(item('A')); b = s.add(item('B')); });
+  s.remove(a);
+  assert.equal(s.undo(), true); assert.ok(s.get(a));
+  assert.equal(s.redo(), true); assert.equal(s.get(a), null);
+  assert.equal(s.undo(), true);
+  assert.equal(s.undo(), true);
+  assert.deepEqual(s.items(), []);
+  assert.equal(s.get(b), null);
+  await s.idle();
+});
+test('a malformed success response is treated as not saved', async () => {
+  for (const bad of [{ status: 0 }, undefined, 'short']) {
+    const f = fake();
+    let first = true;
+    const send = ops => {
+      if (first) {
+        first = false;
+        if (bad === 'short') return f.send(ops).then(r => Object.assign({}, r, { results: r.results.slice(0, ops.length - 1) }));
+        return Promise.resolve(bad);
+      }
+      return f.send(ops);
+    };
+    const s = S.create({ items: [], send, saveMeal: true });
+    const a = s.add(item('A'));
+    await s.idle();
+    s.update(a, { Title: 'A2' });
+    await s.idle();
+    assert.equal(s.status().state, 'offline', String(bad && JSON.stringify(bad)));
+    assert.ok(s.status().pending > 0);
+    s.retry(); await s.idle();
+    assert.ok(s.get(a).EventScheduleId > 0);
+    const id = s.get(a).EventScheduleId;
+    const sent = f.calls.slice(bad === 'short' ? 1 : 0).flat();
+    assert.ok(sent.some(o => o.op === 'add' && o.item.Title === 'A2') ||
+      (sent.some(o => o.op === 'add') && sent.some(o => o.op === 'update' && o.id === id && o.fields.Title === 'A2')));
+    assert.equal(s.status().state, 'saved');
+  }
+});
+test('a rejection in a later request reverts only its item', async () => {
+  const f = fake(); f.hold();
+  const s = S.create({ items: [item('Old', { EventScheduleId: 7 }), item('Two', { EventScheduleId: 8 })], send: f.send, saveMeal: true });
+  const rejected = []; s.on('rejected', r => rejected.push(r));
+  f.rejectTitle('Bad', 'A title is required.');
+  s.update('i7', { Title: 'Old2' });
+  await tick();
+  const bad = s.add(item('Bad'));
+  s.update('i8', { Title: 'Two2' });
+  f.release(); await s.idle();
+  // Requests the server applied: every one that did not carry the rejected add.
+  const applied = f.calls.filter(c => !c.some(o => o.op === 'add' && o.item.Title === 'Bad')).flat();
+  assert.deepEqual(applied.filter(o => o.op === 'update' && o.id === 7).map(o => o.fields.Title), ['Old2']);
+  assert.deepEqual(applied.filter(o => o.op === 'update' && o.id === 8).map(o => o.fields.Title), ['Two2']);
+  assert.equal(s.get('i7').Title, 'Old2');
+  assert.equal(s.get('i8').Title, 'Two2');
+  assert.equal(s.get(bad), null);
+  assert.equal(rejected.length, 1);
+  assert.equal(s.status().state, 'saved');
 });
 test('a non-undoable remove also forgets earlier steps on that item', async () => {
   const f = fake();

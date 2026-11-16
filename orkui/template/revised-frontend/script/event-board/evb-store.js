@@ -113,7 +113,7 @@
             });
             if (!changes.length) return;
             undoStack.push(changes);
-            redoStack = [];
+            redoStack.length = 0;
         }
 
         // ---- the queue ----
@@ -162,7 +162,10 @@
             return out;
         }
 
-        // Returns the wire op for a queue entry, or null if it has nothing to send.
+        // Returns the wire op for a queue entry, null if it has nothing to send (dropped),
+        // or WAIT if it cannot be addressed yet (kept: an update or remove never goes
+        // out without a server id, and is never silently discarded for lacking one).
+        var WAIT = {};
         function toWire(e) {
             if (e.op === 'add') {
                 var local = find(e.cid);
@@ -170,22 +173,37 @@
                 e.snap = clone(local);
                 return { op: 'add', cid: e.cid, item: wireFields(local) };
             }
+            var f = e.op === 'update' ? wireFields(e.fields) : null;
+            if (f && !Object.keys(f).length) return null; // nothing this caller may save
             var id = serverId(e.cid);
-            if (!id) return null;
+            if (!isId(id)) return WAIT;
             if (e.op === 'remove') return { op: 'remove', id: id };
-            var f = wireFields(e.fields);
-            if (!Object.keys(f).length) return null;
             e.sent = f;
             return { op: 'update', id: id, fields: f };
         }
 
+        // A positive integer id (a digit string from a PHP row counts too).
+        function isId(v) { return (typeof v === 'number' || typeof v === 'string') && /^[1-9]\d*$/.test(String(v)); }
+
+        // A success response must hold one row per op sent, and give every add an id.
+        function wellFormed(sent, results) {
+            if (!Array.isArray(results) || results.length !== sent.length) return false;
+            return sent.every(function (e, i) {
+                var r = results[i];
+                if (!r || typeof r !== 'object') return false;
+                return e.op !== 'add' || isId(r.id || (r.schedule && r.schedule.EventScheduleId));
+            });
+        }
+
         function pump() {
             if (inflight || offline) return;
-            var sent = [], wire = [];
+            var sent = [], wire = [], waiting = [];
             while (queue.length && wire.length < MAX_OPS) {
                 var e = queue.shift(), w = toWire(e);
-                if (w) { sent.push(e); wire.push(w); }
+                if (w === WAIT) waiting.push(e);
+                else if (w) { sent.push(e); wire.push(w); }
             }
+            queue = waiting.concat(queue);
             if (!wire.length) return;
             inflight = sent;
             var p;
@@ -204,8 +222,10 @@
             if (!res || typeof res !== 'object') return goOffline(sent);
             var fi = res.failedIndex;
             if (res.status === 0) {
+                // A malformed success is a protocol failure: keep everything and go offline.
+                if (!wellFormed(sent, res.results)) return goOffline(sent);
                 inflight = null;
-                applyResults(sent, res.results || []);
+                applyResults(sent, res.results);
             } else if ((res.status === 1 || res.status === 3) && typeof fi === 'number' &&
                 fi % 1 === 0 && fi >= 0 && fi < sent.length) {
                 inflight = null;
@@ -226,7 +246,7 @@
 
         function applyResults(sent, results) {
             sent.forEach(function (e, i) {
-                var r = results[i] || {}, row = r.schedule || {}, local;
+                var r = results[i], row = r.schedule || {}, local;
                 if (e.op === 'add') {
                     var id = r.id || row.EventScheduleId;
                     saved[e.cid] = Object.assign({}, e.snap, row, { EventScheduleId: id, cid: e.cid });
@@ -268,22 +288,30 @@
             rejections.push({ kind: e.op, cid: cid, item: lastHad, message: message || '' });
         }
 
+        // History stacks are only ever changed in place, so a caller holding them
+        // (step() during an undo or redo) never pushes into a stale array.
+        function keepSteps(stack, fn) {
+            var kept = stack.filter(fn);
+            stack.length = 0;
+            kept.forEach(function (s) { stack.push(s); });
+        }
+
+        // A rejection: prune the item's changes from every step.
         function dropHistory(cid) {
-            function prune(stack) {
-                return stack.map(function (step) {
-                    return step.filter(function (ch) { return ch.cid !== cid; });
-                }).filter(function (step) { return step.length; });
-            }
-            undoStack = prune(undoStack);
-            redoStack = prune(redoStack);
+            [undoStack, redoStack].forEach(function (stack) {
+                stack.forEach(function (s, i) {
+                    stack[i] = s.filter(function (ch) { return ch.cid !== cid; });
+                });
+                keepSteps(stack, function (s) { return s.length > 0; });
+            });
         }
 
         // A non-undoable remove: no later undo or redo may bring the item back or act
         // on it, so every step touching it is dropped whole, including a batch in progress.
         function forgetItem(cid) {
-            function touches(step) { return step.some(function (ch) { return ch.cid === cid; }); }
-            undoStack = undoStack.filter(function (s) { return !touches(s); });
-            redoStack = redoStack.filter(function (s) { return !touches(s); });
+            function untouched(s) { return !s.some(function (ch) { return ch.cid === cid; }); }
+            keepSteps(undoStack, untouched);
+            keepSteps(redoStack, untouched);
             if (recording && recording.map[cid]) recording.discard = true;
         }
 
@@ -312,11 +340,13 @@
             enqueue({ op: 'update', cid: cid, fields: f });
         }
 
-        function doRemove(cid, rec) {
+        // rec: record in the current undo step. forget: drop the item's history
+        // (only the public remove with {undoable:false}; never undo or redo replay).
+        function doRemove(cid, rec, forget) {
             var i = indexOf(cid);
             if (i < 0) return;
             touch(cid, rec);
-            if (!rec) forgetItem(cid);
+            if (forget) forgetItem(cid);
             var snap = list.splice(i, 1)[0];
             changed = true;
             enqueue({ op: 'remove', cid: cid, item: snap });
@@ -325,7 +355,7 @@
         // Bring an item to a snapshot (null = absent) without recording history.
         function applySnapshot(cid, target) {
             var local = find(cid);
-            if (!target) { if (local) doRemove(cid, false); return; }
+            if (!target) { if (local) doRemove(cid, false, false); return; }
             if (!local) { doAdd(target, cid, false); return; }
             var diff = {};
             Object.keys(target).forEach(function (k) {
@@ -366,7 +396,8 @@
                 run(function () { doUpdate(cid, f, !o || o.undoable !== false); }, true);
             },
             remove: function (cid, o) {
-                run(function () { doRemove(cid, !o || o.undoable !== false); }, true);
+                var undoable = !o || o.undoable !== false;
+                run(function () { doRemove(cid, undoable, !undoable); }, true);
             },
             batch: function (fn) { run(fn, true); },
             undo: function () { return step(undoStack, redoStack, 'before', true); },
@@ -385,7 +416,7 @@
                 if (status().state !== 'saved') return false;
                 run(function () {
                     load(serverItems);
-                    undoStack = []; redoStack = [];
+                    undoStack.length = 0; redoStack.length = 0;
                     changed = true;
                 }, false);
                 return true;
