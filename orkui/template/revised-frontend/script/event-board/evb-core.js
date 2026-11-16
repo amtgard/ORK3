@@ -958,6 +958,30 @@
         return out;
     }
 
+    // How far a group of items may move together: dMin (board minutes) and dDays
+    // reduced toward 0 so that every item, moved by both, starts at or after
+    // bounds.minStart, ends at or before bounds.maxEnd (board minutes on its own
+    // board day) and stays between bounds.firstDay and bounds.lastDay. Any bound
+    // may be left out. An item already outside a bound only stops the group from
+    // moving further that way. -> {dMin, dDays}
+    function groupShiftLimit(items, dMin, dDays, bounds) {
+        var b = bounds || {}, minHi = Infinity, minLo = -Infinity, dayHi = Infinity, dayLo = -Infinity;
+        (items || []).forEach(function (it) {
+            var sp = span(it);
+            if (!sp) return;
+            if (b.maxEnd != null) minHi = Math.min(minHi, b.maxEnd - sp.end);
+            if (b.minStart != null) minLo = Math.max(minLo, b.minStart - sp.start);
+            if (b.lastDay) dayHi = Math.min(dayHi, diffDays(sp.day, b.lastDay));
+            if (b.firstDay) dayLo = Math.max(dayLo, diffDays(sp.day, b.firstDay));
+        });
+        var m = dMin || 0, d = dDays || 0;
+        if (m > 0) m = Math.min(m, Math.max(0, minHi));
+        else if (m < 0) m = Math.max(m, Math.min(0, minLo));
+        if (d > 0) d = Math.min(d, Math.max(0, dayHi));
+        else if (d < 0) d = Math.max(d, Math.min(0, dayLo));
+        return { dMin: m, dDays: d };
+    }
+
     function duplicateTimes(item) {
         var sp = span(item);
         return times(sp.day, sp.end, sp.end + (sp.end - sp.start));
@@ -1201,6 +1225,7 @@
         resizeTimes: resizeTimes,
         repeatSlots: repeatSlots,
         duplicateTimes: duplicateTimes,
+        groupShiftLimit: groupShiftLimit,
         pastePlan: pastePlan,
         clipboardText: clipboardText,
         BOARD_DAY_START: BOARD_DAY_START,

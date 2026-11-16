@@ -1638,4 +1638,124 @@ test.describe('editing', () => {
     await expect(page.locator('.evb-block', { hasText: `${PREFIX} group games` })).toHaveCount(1);
     await expect(page.locator('.evb-block', { hasText: `${PREFIX} group stew` })).toHaveCount(0);
   });
+
+  // ---- Phase 4 review fixes ----
+
+  test('a two-block group dragged against the bottom of the axis keeps its spacing', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `fri 9-10p ${PREFIX} late pair a`);
+    await addViaQuickLine(page, `fri 10:30-11:30p ${PREFIX} late pair b`);
+    const a = page.locator('.evb-block', { hasText: `${PREFIX} late pair a` });
+    const b = page.locator('.evb-block', { hasText: `${PREFIX} late pair b` });
+    await a.evaluate(el => el.scrollIntoView({ block: 'center' }));
+    await a.click();
+    await b.click({ modifiers: ['Shift'] });
+    // The axis before the drag: it would grow to take in a block moved past it.
+    const axisEnd = await page.evaluate(() => Math.min((window as any).EvBoardView.board.axisEnd, (window as any).EvBoardCore.BOARD_DAY_END));
+    const box = (await a.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y + 10 + 280, { steps: 8 });
+    await page.mouse.up();
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    const [pa, pb] = await page.evaluate(t => {
+      const w = window as any, items = w.EvBoardEdit.store.items();
+      const pos = (title: string) => {
+        const sp = w.EvBoardCore.span(items.find((i: any) => i.Title === title));
+        return [sp.day, sp.start, sp.end];
+      };
+      return [pos(t + 'a'), pos(t + 'b')];
+    }, `${PREFIX} late pair `);
+    expect(pa[1]).toBeGreaterThan(21 * 60);          // it moved
+    expect([pa[0], pb[0]]).toEqual(['2026-11-20', '2026-11-20']);
+    expect((pb[1] as number) - (pa[1] as number)).toBe(90);
+    // The whole group stopped at the bottom of the axis.
+    expect(pb[2]).toBe(axisEnd);
+  });
+  test('a copy of an item with no length has no length, five minutes on', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    const title = `${PREFIX} instant`;
+    // Out of the quick line, which keeps its own keys.
+    await page.locator('.evb-board').click({ position: { x: 4, y: 4 } });
+    await page.evaluate(t => {
+      const w = window as any;
+      const cid = w.EvBoardEdit.store.add({ Title: t, StartTime: '2026-11-22 08:00', EndTime: '2026-11-22 08:00', Category: 'Other',
+        SecondaryCategory: '', Location: '', Description: '', Leads: [] });
+      w.EvBoardSelect.select([cid]);
+    }, title);
+    await page.keyboard.press('ControlOrMeta+d');
+    await expect(page.locator('.evb-block', { hasText: title })).toHaveCount(2);
+    const times = await page.evaluate(t => (window as any).EvBoardEdit.store.items().filter((i: any) => i.Title === t)
+      .map((i: any) => [String(i.StartTime).slice(11, 16), String(i.EndTime).slice(11, 16)]).sort(), title);
+    expect(times).toEqual([['08:00', '08:00'], ['08:05', '08:05']]);
+  });
+  test('pasting with the copied blocks still selected puts the copies right after them', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `sat 7-7:30a ${PREFIX} early one`);
+    await addViaQuickLine(page, `sat 8-8:30a ${PREFIX} early two`);
+    await page.locator('.evb-block', { hasText: `${PREFIX} early one` }).click();
+    await page.locator('.evb-block', { hasText: `${PREFIX} early two` }).click({ modifiers: ['Shift'] });
+    await page.keyboard.press('ControlOrMeta+c');
+    await page.keyboard.press('ControlOrMeta+v');
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} early one` })).toHaveCount(2);
+    const starts = await page.evaluate(t => (window as any).EvBoardEdit.store.items()
+      .filter((i: any) => i.Title.startsWith(t)).map((i: any) => String(i.StartTime).slice(0, 16)).sort(), `${PREFIX} early `);
+    expect(starts).toEqual(['2026-11-21 07:00', '2026-11-21 08:00', '2026-11-21 08:30', '2026-11-21 09:30']);
+  });
+  // Dispatches a paste of text on the page; returns whether something default-prevented it.
+  async function pasteText(page: Page, text: string): Promise<boolean> {
+    return page.evaluate(t => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', t);
+      const e = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+      document.body.dispatchEvent(e);
+      return e.defaultPrevented;
+    }, text);
+  }
+  test('pasting other text on the board adds nothing', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `fri 8-8:30a ${PREFIX} paste guard`);
+    const count = () => page.evaluate(() => (window as any).EvBoardEdit.store.items().length);
+    const before = await count();
+    await page.locator('.evb-board').click({ position: { x: 4, y: 4 } });
+    expect(await pasteText(page, 'hello world')).toBe(false);
+    await page.locator('.evb-block', { hasText: `${PREFIX} paste guard` }).click();
+    await page.keyboard.press('ControlOrMeta+c');
+    expect(await pasteText(page, 'hello world')).toBe(false);
+    expect(await count()).toBe(before);
+  });
+  test('copying with text selected on the page leaves the browser\'s copy alone', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `fri 8:30-9a ${PREFIX} copy guard`);
+    await page.locator('.evb-block', { hasText: `${PREFIX} copy guard` }).click();
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__copy = 'none';
+      document.addEventListener('copy', (e: Event) => { w.__copy = e.defaultPrevented ? 'prevented' : 'browser'; });
+      const r = document.createRange();
+      r.selectNodeContents(document.querySelector('.evb-modebar-title')!);
+      const sel = window.getSelection()!;
+      sel.removeAllRanges();
+      sel.addRange(r);
+    });
+    await page.keyboard.press('ControlOrMeta+c');
+    await expect.poll(() => page.evaluate(() => (window as any).__copy)).toBe('browser');
+  });
+  test('select-all inside the quick line selects its text, not every block', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `fri 7-7:30a ${PREFIX} select all guard`);
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill('sat 9a something');
+    await line.press('ControlOrMeta+a');
+    await expect(page.locator('.evb-selected')).toHaveCount(0);
+    expect(await line.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, 'sat 9a something'.length]);
+    await line.fill('');
+  });
 });

@@ -124,7 +124,23 @@
         return null;
     }
 
-    function shownBlock() { return shownBlockOf(anchorCid()); }
+    // Where the toolbar or badge sits: the single selected block; for several,
+    // the earliest selected block (by day, then start) inside the board's frame,
+    // else the earliest one in a shown day.
+    function shownBlock() {
+        if (s.sel.length < 2) return shownBlockOf(anchorCid());
+        var list = cids(), scroller = s.rootEl.querySelector('.evb-scroller');
+        var sr = scroller && scroller.getBoundingClientRect();
+        var shown = Array.prototype.slice.call(s.rootEl.querySelectorAll('.evb-block[data-cid]')).filter(function (b) {
+            return list.indexOf(b.getAttribute('data-cid')) >= 0 && b.offsetParent;
+        }).map(function (b) {
+            return { b: b, day: b.getAttribute('data-day') || '', top: parseFloat(b.style.top) || 0, r: b.getBoundingClientRect() };
+        }).sort(function (x, y) { return x.day < y.day ? -1 : x.day > y.day ? 1 : x.top - y.top; });
+        var inView = sr && shown.filter(function (o) {
+            return o.r.bottom > sr.top + V().HEAD_PX && o.r.top < sr.bottom && o.r.right > sr.left + V().GUTTER_PX && o.r.left < sr.right;
+        });
+        return ((inView && inView[0]) || shown[0] || {}).b || null;
+    }
 
     function anyShown() {
         return s.sel.some(function (e) { return !!shownBlockOf(e.cid); });
@@ -333,12 +349,25 @@
         var dir = (key === 'ArrowUp' || key === 'ArrowLeft') ? -1 : 1;
         var list = cids().filter(function (c) { return !!store.get(c); });
         if (!list.length || leaving()) return;
+        var sideways = key === 'ArrowLeft' || key === 'ArrowRight';
+        var dMin = sideways ? 0 : dir * step, dDays = sideways ? dir : 0;
+        // A group moves together, only as far as all of it stays on the axis and
+        // the board's days (a single block may still step onto a new day).
+        if (list.length > 1 && !shift) {
+            var b = V().board, days = b.days.map(function (d) { return d.day; });
+            var lim = Co.groupShiftLimit(list.map(function (c) { return store.get(c); }), dMin, dDays, {
+                minStart: Math.max(b.axisStart, Co.BOARD_DAY_START), maxEnd: Math.min(b.axisEnd, Co.BOARD_DAY_END),
+                firstDay: days[0], lastDay: days[days.length - 1]
+            });
+            dMin = lim.dMin;
+            dDays = lim.dDays;
+            if (!dMin && !dDays) return;
+        }
         store.batch(function () {
             list.forEach(function (cid) {
                 var item = store.get(cid), t;
-                if (key === 'ArrowLeft' || key === 'ArrowRight') t = Co.shiftTimes(item, 0, dir);
-                else if (shift) t = Co.resizeTimes(item, 'end', Co.span(item).end + dir * step);
-                else t = Co.shiftTimes(item, dir * step, 0);
+                if (shift && !sideways) t = Co.resizeTimes(item, 'end', Co.span(item).end + dir * step);
+                else t = Co.shiftTimes(item, dMin, dDays);
                 store.update(cid, { StartTime: t.StartTime, EndTime: t.EndTime });
             });
         });
@@ -410,11 +439,14 @@
         delete c.EventScheduleId;
         if (!cfg().canManageFeast) MEAL_FIELDS.forEach(function (k) { delete c[k]; });
         c.StartTime = times.StartTime;
-        c.EndTime = times.EndTime;
+        // A copy of an item with no length has none either.
+        var sp = C().span(item);
+        c.EndTime = sp && sp.end === sp.start ? times.StartTime : times.EndTime;
         return c;
     }
 
-    // An item with no length counts as 5 minutes long when it is copied along the day.
+    // An item with no length counts as 5 minutes long when copies of it are
+    // spaced along the day (copyItem keeps the copies at no length).
     function atLeastFive(item) {
         var sp = C().span(item);
         if (!sp || sp.end > sp.start) return item;
@@ -532,9 +564,11 @@
         clear();
     }
 
-    // Board keys may act: Edit mode is showing the board, nothing else has the keys.
+    // Board keys may act: Edit mode is showing the board, nothing else has the
+    // keys, and no pointer gesture is in progress.
     function keysFree(e) {
-        return !s.ctx.isTextField(e.target) && !s.ctx.modalOpen() && s.ctx.boardShown() && !typing() && !leaving();
+        return !s.ctx.isTextField(e.target) && !s.ctx.modalOpen() && s.ctx.boardShown() && !typing() && !leaving() &&
+            !(win.EvBoardDrag && win.EvBoardDrag.isActive());
     }
 
     // Cmd/Ctrl+A selects every block; Cmd/Ctrl+D duplicates the selection.

@@ -83,3 +83,23 @@ test('a drag moves an item by the columns crossed, from its own start day', () =
   assert.deepEqual(C.dragTarget(a, '2026-11-20', '2026-11-20', -300, 15, { min: 420, max: 1425 }),
     { StartTime: '2026-11-20 07:00', EndTime: '2026-11-20 08:00' });
 });
+test('a group moves only as far as its first and last members allow', () => {
+  const a = it('2026-11-20 09:00:00', '2026-11-20 10:00:00');
+  const b = it('2026-11-20 22:00:00', '2026-11-20 23:00:00');
+  assert.deepEqual(C.groupShiftLimit([a, b], 360, 0, { minStart: 420, maxEnd: 1440 }), { dMin: 60, dDays: 0 });
+  assert.deepEqual(C.groupShiftLimit([a, b], -700, 0, { minStart: 420, maxEnd: 1440 }), { dMin: -120, dDays: 0 });
+  assert.deepEqual(C.groupShiftLimit([a, b], 30, 0, { minStart: 420, maxEnd: 1440 }), { dMin: 30, dDays: 0 });
+  const fri = it('2026-11-20 09:00:00', '2026-11-20 10:00:00');
+  const sun = it('2026-11-22 09:00:00', '2026-11-22 10:00:00');
+  const days = { firstDay: '2026-11-20', lastDay: '2026-11-22' };
+  assert.deepEqual(C.groupShiftLimit([fri, sun], 0, 2, days), { dMin: 0, dDays: 0 });
+  assert.deepEqual(C.groupShiftLimit([fri, sun], 0, -1, days), { dMin: 0, dDays: 0 });
+  // A single item is limited the same way.
+  assert.deepEqual(C.groupShiftLimit([fri], 0, 2, days), { dMin: 0, dDays: 2 });
+  assert.deepEqual(C.groupShiftLimit([fri], 0, 3, days), { dMin: 0, dDays: 2 });
+  assert.deepEqual(C.groupShiftLimit([b], 360, 0, { maxEnd: 1440 }), { dMin: 60, dDays: 0 });
+  // A member already past a bound only stops the group moving further that way.
+  const past = it('2026-11-20 23:30:00', '2026-11-21 00:30:00');
+  assert.deepEqual(C.groupShiftLimit([past], 30, 0, { maxEnd: 1440 }), { dMin: 0, dDays: 0 });
+  assert.deepEqual(C.groupShiftLimit([past], -30, 0, { maxEnd: 1440 }), { dMin: -30, dDays: 0 });
+});

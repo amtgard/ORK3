@@ -14,16 +14,20 @@
  * Copy (Cmd/Ctrl+C with blocks selected and no text selected on the page) puts
  * EvBoardCore.clipboardText of the selection on the clipboard, inside the copy
  * event, and remembers the items and that text. A paste of exactly that text
- * adds copies of them at the slot cursor (EvBoardCore.pastePlan: same spacing)
- * in one store.batch and selects them. Any other pasted text is left alone.
+ * adds copies of them (EvBoardCore.pastePlan: same spacing) in one store.batch
+ * and selects them: right after the selection's latest block when blocks are
+ * selected, else at the slot cursor. Any other pasted text goes to the
+ * onForeignPaste hook, and is left alone when there is none.
  *
  * None of it acts while Done is leaving, a page modal is open, a text field has
- * focus or the board is not the view on screen. The board re-renders its whole
- * DOM on every change, so the cursor is board state, drawn again after every
- * render and every change of selection.
+ * focus, a pointer gesture is in progress or the board is not the view on
+ * screen. The board re-renders its whole DOM on every change, so the cursor is
+ * board state, drawn again after every render and every change of selection.
  *
  * Attached through EvBoardEdit.onEnter / onExit.
  *   EvBoardKeys.cursor() -> {day, min} or null   where the slot cursor is
+ *   EvBoardKeys.onForeignPaste(fn)   fn(text, event) -> true when it used text
+ *                                    that is not a copy of blocks
  */
 (function (root, factory) {
     root.EvBoardKeys = factory(root.EvBoardCore, root);
@@ -50,10 +54,16 @@
     function typing() { return !!(win.EvBoardType && win.EvBoardType.isOpen()); }
     function selection() { return Sel() ? Sel().selection() : []; }
 
-    // Board keys may act: Edit mode is showing the board, nothing else has the keys.
+    // Board keys may act: Edit mode is showing the board, nothing else has the
+    // keys, and no pointer gesture is in progress.
     function keysFree(target) {
-        return !!s.ctx && !s.ctx.isTextField(target) && !s.ctx.modalOpen() && s.ctx.boardShown() && !typing() && !leaving();
+        return !!s.ctx && !s.ctx.isTextField(target) && !s.ctx.modalOpen() && s.ctx.boardShown() && !typing() && !leaving() &&
+            !(win.EvBoardDrag && win.EvBoardDrag.isActive());
     }
+
+    // Controls whose own arrow keys must not move the cursor.
+    var ARROW_OWNERS = 'input[type="radio"], input[type="range"], select, [role="menu"], [role="menuitem"], ' +
+        '[role="listbox"], [role="option"], [role="tab"], [role="slider"]';
 
     function bodyFor(day) {
         return s.rootEl.querySelector('.evb-day-body[data-day="' + day + '"]');
@@ -140,16 +150,18 @@
     }
 
     function onKeyDown(e) {
-        if (e.defaultPrevented || e.isComposing || !s.ctx || selection().length || !keysFree(e.target)) return;
+        if (e.defaultPrevented || e.isComposing || e.keyCode === 229 || !s.ctx || selection().length || !keysFree(e.target)) return;
         // A focused button or link keeps its keys.
         var t = e.target && e.target.closest ? e.target : null;
         if (t && !t.closest('.evb-block') && t.closest('button, a[href]')) return;
-        var mod = e.ctrlKey || e.metaKey || e.altKey;
+        // AltGr (Ctrl+Alt on Windows) types characters; it is not a shortcut.
+        var altGr = !!(e.getModifierState && e.getModifierState('AltGraph'));
+        var mod = (e.ctrlKey || e.metaKey || e.altKey) && !altGr;
         var cur = current();
         if (!cur || !bodyFor(cur.day) || !win.EvBoardType) return;
         var arrow = /^Arrow(Up|Down|Left|Right)$/.exec(e.key);
         if (arrow) {
-            if (mod || e.shiftKey) return;
+            if (mod || altGr || e.shiftKey || (t && t.closest(ARROW_OWNERS))) return;
             e.preventDefault();
             if (arrow[1] === 'Up') move(-STEP, 0);
             else if (arrow[1] === 'Down') move(STEP, 0);
@@ -189,15 +201,23 @@
     // Line endings may come back as CRLF from the system clipboard.
     function lines(text) { return String(text == null ? '' : text).replace(/\r\n?/g, '\n'); }
 
-    // The one paste listener: the blocks copied here, pasted at the cursor.
-    function onPaste(e) {
-        if (!s.copied || !keysFree(doc.activeElement) || !e.clipboardData || !Sel()) return;
-        if (lines(e.clipboardData.getData('text/plain')) !== lines(s.copied.text)) return;
-        var cur = current();
-        if (!cur) return;
-        e.preventDefault();
-        var store = s.ctx.store, added = [];
-        var plan = C.pastePlan(s.copied.items, cur.day, cur.min);
+    // Where pasted blocks go: right after the selection's latest block (on its
+    // day) when blocks are selected, else at the cursor.
+    function pasteAt() {
+        var store = s.ctx.store, best = null;
+        selection().forEach(function (cid) {
+            var it = store.get(cid), sp = it && C.span(it);
+            if (!sp) return;
+            var end = C.diffDays('1970-01-01', sp.day) * C.DAY_MIN + sp.end;
+            if (!best || end > best.abs) best = { abs: end, day: sp.day, min: sp.end };
+        });
+        return best ? { day: best.day, min: best.min } : current();
+    }
+
+    // The blocks copied here, pasted in one step and selected.
+    function pasteBlocks() {
+        var at = pasteAt(), store = s.ctx.store, added = [];
+        var plan = at ? C.pastePlan(s.copied.items, at.day, at.min) : [];
         if (!plan.length) return;
         store.batch(function () {
             plan.forEach(function (it) { added.push(store.add(Sel().copyItem(it, it))); });
@@ -205,6 +225,22 @@
         Sel().select(added);
         Sel().revealItem(added[0]);
     }
+
+    // The one paste listener. Text copied from the board as blocks pastes those
+    // blocks; any other text goes to the onForeignPaste hook, if there is one,
+    // and is left alone otherwise.
+    function onPaste(e) {
+        if (!keysFree(doc.activeElement) || !e.clipboardData || !Sel()) return;
+        var text = e.clipboardData.getData('text/plain');
+        if (s.copied && lines(text) === lines(s.copied.text)) {
+            e.preventDefault();
+            pasteBlocks();
+            return;
+        }
+        if (foreignPaste && foreignPaste(text, e) === true) e.preventDefault();
+    }
+
+    var foreignPaste = null;
 
     // ---- attach and detach (EvBoardEdit hooks) ----
 
@@ -246,6 +282,9 @@
     }
 
     return {
-        cursor: function () { return s.ctx ? current() : null; }
+        cursor: function () { return s.ctx ? current() : null; },
+        // fn(text, event) -> true when it used the pasted text (the paste is then
+        // default-prevented). One function; a later call replaces it.
+        onForeignPaste: function (fn) { foreignPaste = typeof fn === 'function' ? fn : null; }
     };
 });

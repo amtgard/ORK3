@@ -551,6 +551,10 @@ html[data-theme="dark"] .evb-block.evb-fill-ghost { outline-color: #90cdf4; }
     font-size: 10px; font-weight: 700; line-height: 14px; color: #2b6cb0; overflow: hidden;
 }
 html[data-theme="dark"] .evb-slot-cursor { border-color: #90cdf4; background: rgba(99, 179, 237, 0.14); color: #90cdf4; }
+/* Touch screens have no keyboard cursor to show. */
+@media (hover: none) {
+    .evb-slot-cursor { display: none; }
+}
 
 /* Edit mode: each legend chip shows its category's number key. */
 .evb-legend-key { display: none; }

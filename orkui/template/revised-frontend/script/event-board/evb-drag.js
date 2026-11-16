@@ -81,6 +81,15 @@
         return clamp(min, Math.max(b.axisStart, C.BOARD_DAY_START), Math.min(b.axisEnd, C.BOARD_DAY_END));
     }
 
+    // Where a group may go: the axis (within the board day) and the board's days.
+    function boardBounds() {
+        var b = V().board, days = b.days.map(function (d) { return d.day; });
+        return {
+            minStart: Math.max(b.axisStart, C.BOARD_DAY_START), maxEnd: Math.min(b.axisEnd, C.BOARD_DAY_END),
+            firstDay: days[0], lastDay: days[days.length - 1]
+        };
+    }
+
     // The shown day column at a viewport x, inside the frame's width (not under
     // the hour gutter), or null. Above or below the frame still counts as the
     // column: the minute is clamped to the axis.
@@ -238,6 +247,13 @@
                     min: Math.max(b.axisStart, C.BOARD_DAY_START),
                     max: Math.min(b.axisEnd - ROW, C.BOARD_DAY_END)
                 });
+            // A group moves together, only as far as all of it stays on the axis and the board's days.
+            if (g.group.length > 1) {
+                var to = C.span(g.times), store = s.api.store;
+                var lim = C.groupShiftLimit(g.group.map(function (c) { return store.get(c); }).filter(Boolean),
+                    to.start - sp.start, C.diffDays(sp.day, to.day), boardBounds());
+                g.times = C.shiftTimes(g.item, lim.dMin, lim.dDays);
+            }
         } else {
             // The edge follows the pointer in its own day's column, whichever column the pointer is over.
             var body = bodyFor(g.pressDay);
