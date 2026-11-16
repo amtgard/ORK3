@@ -2,16 +2,18 @@
  * EvBoardSelect: acting on the blocks already on the Event Schedule Board in
  * Edit mode.
  *
- * Click a block to select it (a double-click retypes it). With a block
- * selected and no text field or page modal in the way: Delete or Backspace
- * removes it, 1-9 and 0 set its category by the category's key, Enter retypes
- * it in place (EvBoardType.editItem), Esc clears the selection. A small
- * toolbar floats over the selected block: Category (a menu of the ten
- * categories), Details (the full schedule form) and Delete.
+ * Click a block, or move keyboard focus to it, to select it (a double-click
+ * retypes it). With a block selected and no text field or page modal in the
+ * way: Delete or Backspace removes it, 1-9 and 0 set its category by the
+ * category's key, Enter retypes it in place (EvBoardType.editItem), Esc clears
+ * the selection. Those keys are ignored on a button or link other than a
+ * block. A small toolbar floats over the selected block: Rename, Category (the
+ * ten categories), Details (the full schedule form) and Delete.
  *
- * Selection is board state, kept by cid, not DOM focus: the board re-renders
- * its whole DOM on every change, so the selected class and the toolbar are put
- * back after every render. The toolbar lives in a layer beside #evb-root.
+ * Selection is board state, kept by cid: the board re-renders its whole DOM on
+ * every change, so the selected class, aria-pressed, the toolbar and (when it
+ * was on a block, or the render dropped it) keyboard focus are put back after
+ * every render. The toolbar lives in a layer beside #evb-root.
  *
  * Attached through EvBoardEdit.onEnter / onExit.
  *   EvBoardSelect.selected() -> cid or null
@@ -34,6 +36,7 @@
         menu: null,     // .evb-cat-menu
         cid: null,      // the selected item
         id: 0,          // its server id, to find it again after a refresh renames cids
+        focusEl: null,  // the block that last had keyboard focus, while focus is on a block
         offs: []
     };
 
@@ -50,18 +53,20 @@
         var layer = doc.createElement('div');
         layer.className = 'evb-select-layer';
         var menu = cats().map(function (c) {
-            return '<button type="button" role="menuitemradio" aria-checked="false" data-category="' + esc(c.name) + '"' +
+            return '<button type="button" aria-pressed="false" data-category="' + esc(c.name) + '"' +
                 ' aria-label="' + esc(c.name + ' (' + c.key + ')') + '" data-tip="' + esc(c.name) + '"' +
                 ' style="--evb-fill:' + esc(c.bold) + '">' + esc(c.key) + '</button>';
         }).join('');
         layer.innerHTML = '<div class="evb-block-toolbar" role="toolbar" aria-label="Selected item" hidden>' +
+            '<button type="button" class="evb-block-tool" data-evb-act="rename" aria-label="Rename" data-tip="Rename">' +
+            '<i class="fas fa-pencil-alt" aria-hidden="true"></i></button>' +
             '<button type="button" class="evb-block-tool" data-evb-act="category" aria-label="Category" data-tip="Category"' +
-            ' aria-haspopup="menu" aria-expanded="false"><span class="evb-tool-swatch" aria-hidden="true"></span></button>' +
+            ' aria-expanded="false" aria-controls="evb-cat-menu"><span class="evb-tool-swatch" aria-hidden="true"></span></button>' +
             '<button type="button" class="evb-block-tool" data-evb-act="details" aria-label="Details" data-tip="Details">' +
             '<i class="fas fa-sliders-h" aria-hidden="true"></i></button>' +
             '<button type="button" class="evb-block-tool evb-block-tool-danger" data-evb-act="delete" aria-label="Delete" data-tip="Delete">' +
             '<i class="fas fa-trash-alt" aria-hidden="true"></i></button>' +
-            '<div class="evb-cat-menu" role="menu" aria-label="Category" hidden>' + menu + '</div>' +
+            '<div class="evb-cat-menu" id="evb-cat-menu" role="group" aria-label="Category" hidden>' + menu + '</div>' +
             '</div>';
         s.rootEl.parentNode.insertBefore(layer, s.rootEl.nextSibling);
         s.layer = layer;
@@ -123,12 +128,24 @@
         }
     }
 
-    function setMenu(open) {
+    function catButton() { return s.bar && s.bar.querySelector('[data-evb-act="category"]'); }
+
+    // opts.focus: opening moves focus to the current category's button; closing
+    // returns it to the toolbar's Category button (as does closing with focus inside).
+    function setMenu(open, opts) {
         if (!s.menu) return;
+        var had = s.menu.contains(doc.activeElement);
         s.menu.hidden = !open;
-        var btn = s.bar.querySelector('[data-evb-act="category"]');
-        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-        if (open) placeMenu();
+        catButton().setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) {
+            placeMenu();
+            if (opts && opts.focus) {
+                var cur = s.menu.querySelector('[aria-pressed="true"]') || s.menu.querySelector('button');
+                if (cur) cur.focus({ preventScroll: true });
+            }
+        } else if (((opts && opts.focus) || had) && !s.bar.hidden) {
+            catButton().focus({ preventScroll: true });
+        }
     }
 
     function menuOpen() { return !!(s.menu && !s.menu.hidden); }
@@ -136,8 +153,10 @@
     // ---- selection ----
 
     // After every render: find the item again (a refresh renames new items'
-    // cids), mark its blocks and move the toolbar to it.
-    function apply() {
+    // cids), mark its blocks and move the toolbar to it. refocus: 'render' puts
+    // focus back on the selected block when the render removed the block that
+    // had it; 'force' (a rename closed from the keyboard) puts it there always.
+    function apply(refocus) {
         if (!s.ctx || !s.rootEl) return;
         if (s.cid) {
             var store = s.ctx.store, item = store.get(s.cid);
@@ -157,9 +176,17 @@
                 s.id = 0;
             }
         }
-        s.rootEl.querySelectorAll('.evb-block.evb-selected').forEach(function (b) { b.classList.remove('evb-selected'); });
-        blocks().forEach(function (b) { b.classList.add('evb-selected'); });
+        s.rootEl.querySelectorAll('.evb-block[data-cid]').forEach(function (b) {
+            var on = !!s.cid && b.getAttribute('data-cid') === s.cid;
+            b.classList.toggle('evb-selected', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
         if (s.cid) position(); else hideBar();
+        if (refocus && s.cid && !typing()) {
+            var a = doc.activeElement, b = shownBlock();
+            var dropped = s.focusEl && !doc.contains(s.focusEl) && (!a || a === doc.body);
+            if (b && a !== b && (refocus === 'force' || dropped)) b.focus({ preventScroll: true });
+        }
     }
 
     function syncToolbar(item) {
@@ -167,7 +194,7 @@
         s.bar.querySelector('.evb-tool-swatch').style.background = V().boldFor(cat);
         s.bar.querySelector('[data-evb-act="category"]').setAttribute('data-tip', 'Category: ' + cat);
         s.menu.querySelectorAll('[data-category]').forEach(function (m) {
-            m.setAttribute('aria-checked', m.getAttribute('data-category') === cat ? 'true' : 'false');
+            m.setAttribute('aria-pressed', m.getAttribute('data-category') === cat ? 'true' : 'false');
         });
     }
 
@@ -224,23 +251,30 @@
     function rename() {
         if (!s.cid || leaving() || !win.EvBoardType || !win.EvBoardType.editItem) return;
         setMenu(false);
-        // The block under the editor replaces the item while it is retyped.
-        if (win.EvBoardType.editItem(s.cid, { onDone: apply })) hideBar();
+        // The block under the editor replaces the item while it is retyped; when it
+        // closes, the keys go back to the selected block.
+        var onDone = function (how) { apply(how && how.keyboard ? 'force' : false); };
+        if (win.EvBoardType.editItem(s.cid, { onDone: onDone })) hideBar();
     }
 
-    // The full form, once the item has a server id (an add may still be saving).
+    var STILL_SAVING = 'Still saving. Try Details again in a moment.';
+
+    // The full form, once the item has a server id. An add still saving is waited
+    // for, and the form opens only if that item is still the selection; a store
+    // that cannot save says so instead.
     function details() {
-        var cid = s.cid, store = s.ctx.store;
+        var cid = s.cid, ctx = s.ctx, store = ctx.store;
         if (!cid || leaving() || typeof win.evOpenScheduleModalForItem !== 'function') return;
         setMenu(false);
-        var open = function () {
-            var item = store.get(cid);
-            if (!item || !+item.EventScheduleId || !s.ctx || s.ctx.store !== store || leaving()) return;
-            win.evOpenScheduleModalForItem(item);
-        };
         var item = store.get(cid);
-        if (item && +item.EventScheduleId) open();
-        else store.idle().then(open);
+        if (item && +item.EventScheduleId) { win.evOpenScheduleModalForItem(item); return; }
+        if (store.status().state === 'offline') { ctx.addNotice(STILL_SAVING); return; }
+        store.idle().then(function () {
+            if (s.ctx !== ctx || s.cid !== cid || leaving()) return;
+            var now = store.get(cid);
+            if (now && +now.EventScheduleId) win.evOpenScheduleModalForItem(now);
+            else if (now) ctx.addNotice(STILL_SAVING);
+        });
     }
 
     function onToolbarClick(e) {
@@ -251,7 +285,8 @@
         var act = t.closest('[data-evb-act]');
         if (!act) return;
         var name = act.getAttribute('data-evb-act');
-        if (name === 'category') setMenu(!menuOpen());
+        if (name === 'rename') rename();
+        else if (name === 'category') setMenu(!menuOpen(), { focus: true });
         else if (name === 'details') details();
         else if (name === 'delete') removeSelected();
     }
@@ -261,6 +296,22 @@
     function onRootClick(e) {
         var b = e.target.closest && e.target.closest('.evb-block[data-cid]');
         if (b) select(b.getAttribute('data-cid'));
+    }
+
+    // Keyboard focus arriving on a block selects it. The focused block is
+    // remembered so a render that replaces it can hand focus to its successor.
+    function onFocusIn(e) {
+        var b = e.target.closest && e.target.closest('.evb-block[data-cid]');
+        if (!b) return;
+        s.focusEl = b;
+        if (b.getAttribute('data-cid') !== s.cid && !leaving()) select(b.getAttribute('data-cid'));
+    }
+
+    // Focus moving on to something that is not a block (a removed element moves
+    // it nowhere, and is left to the render's refocus).
+    function onFocusOut(e) {
+        var to = e.relatedTarget;
+        if (to && !(to.closest && to.closest('.evb-block[data-cid]'))) s.focusEl = null;
     }
 
     function onDblClick(e) {
@@ -275,19 +326,30 @@
     // in the page, so where it was is unknown: it changes nothing.
     function onDocClick(e) {
         if (!s.cid || !e.target.closest || !doc.contains(e.target) || s.ctx.modalOpen()) return;
-        if (e.target.closest('.evb-block[data-cid], .evb-block-toolbar, #ork-confirm-overlay, #ev-schedule-modal')) return;
+        if (e.target.closest('.evb-block[data-cid], .evb-block-toolbar, .evb-type-layer, #ork-confirm-overlay, #ev-schedule-modal')) return;
         clear();
     }
 
     function onKeyDown(e) {
-        if (!s.cid || e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
-        if (s.ctx.isTextField(e.target) || s.ctx.modalOpen() || typing() || leaving()) return;
+        if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+        var t = e.target && e.target.closest ? e.target : null;
+        var onBlock = t && s.rootEl.contains(t) ? t.closest('.evb-block[data-cid]') : null;
+        if (!s.cid && !onBlock) return;
+        if (s.ctx.isTextField(e.target) || s.ctx.modalOpen() || !s.ctx.boardShown() || typing() || leaving()) return;
         if (e.key === 'Escape') {
+            if (!s.cid) return;
             e.preventDefault();
-            if (menuOpen()) setMenu(false);
+            if (menuOpen()) setMenu(false, { focus: true });
             else clear();
             return;
         }
+        // A focused button or link (the mode bar's Undo, a toolbar tool) keeps
+        // its keys: Enter presses it, and nothing else acts on the selection.
+        if (!onBlock && t && t.closest('button, a[href]')) return;
+        if (!/^(Delete|Backspace|Enter|[0-9])$/.test(e.key)) return;
+        // The keys act on the focused block (focus selects it; Esc may have cleared it).
+        if (onBlock && onBlock.getAttribute('data-cid') !== s.cid) select(onBlock.getAttribute('data-cid'));
+        if (!s.cid) return;
         // The rest act only on a block on screen.
         if (!shownBlock()) return;
         if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -302,8 +364,7 @@
             setCategory(def.name);
             return;
         }
-        // Enter on a focused button presses it.
-        if (e.key === 'Enter' && !(e.target.closest && e.target.closest('button, a[href]'))) {
+        if (e.key === 'Enter') {
             e.preventDefault();
             rename();
         }
@@ -326,6 +387,8 @@
             s.offs.push(function () { target.removeEventListener(type, fn, opt); });
         };
         on(s.rootEl, 'click', onRootClick);
+        on(s.rootEl, 'focusin', onFocusIn);
+        on(s.rootEl, 'focusout', onFocusOut);
         on(s.rootEl, 'dblclick', onDblClick);
         on(doc, 'click', onDocClick);
         on(doc, 'keydown', onKeyDown);
@@ -339,14 +402,17 @@
         if (!s.ctx) return;
         s.offs.forEach(function (off) { off(); });
         s.offs = [];
-        if (s.rootEl) s.rootEl.querySelectorAll('.evb-selected').forEach(function (b) { b.classList.remove('evb-selected'); });
+        if (s.rootEl) {
+            s.rootEl.querySelectorAll('.evb-selected').forEach(function (b) { b.classList.remove('evb-selected'); });
+            s.rootEl.querySelectorAll('.evb-block[aria-pressed]').forEach(function (b) { b.removeAttribute('aria-pressed'); });
+        }
         if (s.layer && s.layer.parentNode) s.layer.parentNode.removeChild(s.layer);
-        s.ctx = s.layer = s.bar = s.menu = s.rootEl = null;
+        s.ctx = s.layer = s.bar = s.menu = s.rootEl = s.focusEl = null;
         s.cid = null;
         s.id = 0;
     }
 
-    if (V() && V().onRender) V().onRender(function () { if (s.ctx) apply(); });
+    if (V() && V().onRender) V().onRender(function () { if (s.ctx) apply('render'); });
     if (win.EvBoardEdit && win.EvBoardEdit.onEnter) {
         win.EvBoardEdit.onEnter(attach);
         win.EvBoardEdit.onExit(detach);

@@ -664,4 +664,380 @@ test.describe('editing', () => {
     await expect(page.locator('text=Remove this schedule item?')).toBeVisible();
     expect(nativeDialog).toBe(false);
   });
+
+  // ---- Phase 2 review fixes ----
+
+  // Adds items through the batch endpoint from the signed-in page; returns their ids.
+  async function addViaBatch(page: Page, items: object[]): Promise<number[]> {
+    return page.evaluate(async list => {
+      const c = (window as any).EvConfig;
+      const fd = new FormData();
+      fd.append('Ops', JSON.stringify(list.map((item, i) => ({ op: 'add', cid: 'x' + i, item }))));
+      const res = await (await fetch(c.uir + 'EventAjax/schedule_batch/' + c.eventId + '/' + c.detailId, {
+        method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      })).json();
+      if (res.status !== 0) throw new Error('batch add failed: ' + JSON.stringify(res));
+      return res.results.map((r: any) => +(r.id || r.schedule.EventScheduleId));
+    }, items);
+  }
+  // Adds an item from the quick line and waits for it to save.
+  async function quickAdd(page: Page, line: string) {
+    const input = page.locator('.evb-quickline .evb-entry-input');
+    await input.fill(line);
+    await input.press('Enter');
+    await expect(input).toHaveValue('');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+  }
+  // The stored item with this title (null when there is none).
+  async function storeItem(page: Page, title: string) {
+    return page.evaluate(t => (window as any).EvBoardEdit.store.items().find((i: any) => i.Title === t) || null, title);
+  }
+  const isFocused = (loc: ReturnType<Page['locator']>) => loc.evaluate(el => document.activeElement === el);
+
+  test('renaming leaves an untouched multi-line description and odd location alone', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const SUNDAY = await lastDay(page);
+    const title = `${PREFIX} odd one`;
+    const [id] = await addViaBatch(page, [{
+      Title: title, StartTime: `${SUNDAY} 12:00`, EndTime: `${SUNDAY} 13:00`, Category: 'Other', SecondaryCategory: '',
+      Location: 'Hall #2', Description: 'Line one\nLine two', Leads: [],
+    }]);
+    let batches = 0;
+    page.on('request', r => { if (r.url().includes('schedule_batch')) batches++; });
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    const block = page.locator(`.evb-block[data-id="${id}"]`);
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    const fields = () => page.evaluate(i => {
+      const it = (window as any).EvBoardEdit.store.items().find((x: any) => +x.EventScheduleId === i);
+      return it ? { Title: it.Title, Location: it.Location, Description: it.Description } : null;
+    }, id);
+
+    // Opened and left without typing: nothing is written.
+    await block.dblclick();
+    await expect(editor).toBeFocused();
+    await page.locator('.evb-modebar-title').click();
+    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
+    expect(await fields()).toEqual({ Title: title, Location: 'Hall #2', Description: 'Line one\nLine two' });
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect(batches).toBe(0);
+
+    // One word of the title changed: only the title is written.
+    await block.dblclick();
+    await expect(editor).toBeFocused();
+    await editor.fill((await editor.inputValue()).replace(' odd ', ' even '));
+    await editor.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect(await fields()).toEqual({ Title: `${PREFIX} even one`, Location: 'Hall #2', Description: 'Line one\nLine two' });
+    expect(batches).toBe(1);
+  });
+
+  test('blocks can be selected and changed from the keyboard', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sun 1p ${PREFIX} kb one`);
+    await quickAdd(page, `sun 2p ${PREFIX} kb two`);
+    const one = page.locator('.evb-block', { hasText: `${PREFIX} kb one` });
+    const two = page.locator('.evb-block', { hasText: `${PREFIX} kb two` });
+    await one.focus();
+    await expect(one).toHaveAttribute('aria-pressed', 'true');
+    await expect(two).toHaveAttribute('aria-pressed', 'false');
+    // The toolbar leads with Rename.
+    await expect(page.locator('.evb-block-toolbar .evb-block-tool').first()).toHaveAttribute('data-evb-act', 'rename');
+    for (let i = 0; i < 60 && !(await isFocused(two)); i++) await page.keyboard.press('Tab');
+    expect(await isFocused(two)).toBe(true);
+    await expect(two).toHaveAttribute('aria-pressed', 'true');
+    await expect(one).toHaveAttribute('aria-pressed', 'false');
+    await page.keyboard.press('5');
+    await expect(two).toHaveAttribute('data-category', 'Class');
+    expect(await isFocused(two)).toBe(true);
+    await page.keyboard.press('Delete');
+    await expect(two).toHaveCount(0);
+    await expect(one).toHaveCount(1);
+
+    // Rename from the toolbar; Esc hands the keys back to the block.
+    await one.click();
+    await page.locator('.evb-block-toolbar [data-evb-act="rename"]').click();
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await expect(editor).toHaveValue(`${PREFIX} kb one`);
+    await editor.press('Escape');
+    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
+    expect(await isFocused(one)).toBe(true);
+  });
+
+  test('Delete on a focused toolbar button does not delete the block', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sun 3p ${PREFIX} keep me`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} keep me` });
+    await block.click();
+    await page.locator('.evb-block-toolbar [data-evb-act="details"]').focus();
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('Backspace');
+    await page.locator('.evb-undo').focus();
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('5');
+    await expect(block).toHaveCount(1);
+    await expect(block).toHaveClass(/evb-selected/);
+    await expect(block).not.toHaveAttribute('data-category', 'Class');
+  });
+
+  test('a signed-out save says so and Retry keeps the change', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await page.route(/schedule_batch/, route => route.fulfill({
+      contentType: 'application/json', body: JSON.stringify({ status: 5, error: 'Not logged in' }),
+    }), { times: 1 });
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sun 4p ${PREFIX} signed out`);
+    await line.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('You’re signed out. Sign in in another tab, then press Retry.');
+    await page.locator('.evb-save-retry').click();
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect((await storeItem(page, `${PREFIX} signed out`))?.EventScheduleId).toBeGreaterThan(0);
+  });
+
+  test('board keys stand down while the Schedule tab is hidden', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sun 5p ${PREFIX} hidden tab`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} hidden tab` });
+    await block.focus();
+    await expect(block).toHaveAttribute('aria-pressed', 'true');
+    await page.evaluate(() => (window as any).evShowTab(document.querySelector('[data-tab="ev-tab-details"]'), 'ev-tab-details'));
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('5');
+    await page.keyboard.press('/');
+    expect(await page.evaluate(() => !!document.activeElement?.closest('.evb-quickline'))).toBe(false);
+    const it = await storeItem(page, `${PREFIX} hidden tab`);
+    expect(it).not.toBeNull();
+    expect(it.Category).not.toBe('Class');
+    await page.evaluate(() => (window as any).evShowTab(document.querySelector('[data-tab="ev-tab-schedule"]'), 'ev-tab-schedule'));
+    await expect(block).toHaveCount(1);
+  });
+
+  test('Esc closes the help without clearing the selection', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sun 6p ${PREFIX} help esc`);
+    await page.locator('.evb-help').click();
+    await expect(page.locator('.evb-help-pop')).toBeVisible();
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} help esc` });
+    await block.focus();
+    await expect(block).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.evb-help-pop')).toBeHidden();
+    await expect(block).toHaveAttribute('aria-pressed', 'true');
+    await expect(block).toHaveClass(/evb-selected/);
+  });
+
+  test('Ctrl+Z in an emptied rename box does not undo the board', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sun 7p ${PREFIX} undo guard`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} undo guard` });
+    await block.dblclick();
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await expect(editor).toBeFocused();
+    await editor.fill('');
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Meta+z');
+    expect(await storeItem(page, `${PREFIX} undo guard`)).not.toBeNull();
+    await page.locator('.evb-block-editing .evb-entry-input').press('Escape');
+    await expect(block).toHaveCount(1);
+  });
+
+  test('Details waits for a save, and says so when it cannot', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    await expect(page.locator('.evb-notice')).toHaveAttribute('role', 'alert');
+    // A slow save: the selection moves on before it lands, so the form never opens.
+    await page.route(/schedule_batch/, async route => {
+      await new Promise(r => setTimeout(r, 1500));
+      await route.continue();
+    }, { times: 1 });
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sun 8p ${PREFIX} slow details`);
+    await line.press('Enter');
+    await page.locator('.evb-block', { hasText: `${PREFIX} slow details` }).click();
+    await page.locator('.evb-block-toolbar [data-evb-act="details"]').click();
+    await page.locator('.evb-modebar-title').click();
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await page.waitForTimeout(300);
+    await expect(page.locator('#ev-schedule-modal')).toBeHidden();
+
+    // Offline: a notice instead of nothing.
+    await page.route(/schedule_batch/, route => route.abort(), { times: 1 });
+    await line.fill(`sun 9p ${PREFIX} offline details`);
+    await line.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('Couldn’t reach the server');
+    await page.locator('.evb-block', { hasText: `${PREFIX} offline details` }).click();
+    await page.locator('.evb-block-toolbar [data-evb-act="details"]').click();
+    await expect(page.locator('.evb-notice')).toContainText('Still saving. Try Details again in a moment.');
+    await expect(page.locator('#ev-schedule-modal')).toBeHidden();
+    await page.locator('.evb-save-retry').click();
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+  });
+
+  test('a chip x is reachable by keyboard and finger-sized on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`${PREFIX} chipx at Zqx Yard`);
+    await expect(page.locator('.evb-quickline .evb-chip[data-part="location"]')).toContainText('Zqx Yard');
+    await line.press('Tab');
+    const x = page.locator('.evb-quickline .evb-chip-x:focus');
+    await expect(x).toHaveAttribute('aria-label', 'Not a location');
+    const box = await x.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(28);
+    expect(box!.height).toBeGreaterThanOrEqual(28);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.evb-quickline .evb-chip[data-part="location"]')).toHaveCount(0);
+    await expect(line).toBeFocused();
+    await line.press('Escape');
+  });
+
+  test('the category menu is a group of pressed buttons', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sun 10p #class ${PREFIX} cat menu`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} cat menu` });
+    await block.click();
+    const catBtn = page.locator('.evb-block-toolbar [data-evb-act="category"]');
+    await catBtn.click();
+    const menu = page.locator('.evb-cat-menu');
+    await expect(menu).toHaveAttribute('role', 'group');
+    await expect(menu).toHaveAttribute('aria-label', 'Category');
+    expect(await page.locator('.evb-select-layer [role="menu"], .evb-select-layer [role="menuitemradio"]').count()).toBe(0);
+    const current = menu.locator('button[data-category="Class"]');
+    await expect(current).toHaveAttribute('aria-pressed', 'true');
+    await expect(current).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(catBtn).toBeFocused();
+    await expect(block).toHaveClass(/evb-selected/);
+  });
+
+  test('$0 typed on a feast item with no cost is saved', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    test.skip(!(await page.evaluate(() => !!(window as any).EvConfig.canManageFeast)), 'the test account cannot manage feast');
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sun 12p #feast ${PREFIX} lunch`);
+    expect([null, undefined, ''].includes((await storeItem(page, `${PREFIX} lunch`)).Cost)).toBe(true);
+    await page.locator('.evb-block', { hasText: `${PREFIX} lunch` }).dblclick();
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await expect(editor).toBeFocused();
+    await editor.fill(`${await editor.inputValue()} $0`);
+    await editor.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    const cost = (await storeItem(page, `${PREFIX} lunch`)).Cost;
+    expect(cost === null || cost === undefined || cost === '').toBe(false);
+    expect(+cost).toBe(0);
+  });
+
+  test('clicking inside the rename box keeps the selection', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sun 11a ${PREFIX} click inside`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} click inside` });
+    await block.dblclick();
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await expect(editor).toBeFocused();
+    await editor.click();
+    await editor.press('Escape');
+    await expect(block).toHaveClass(/evb-selected/);
+  });
+
+  test('a refresh during a rename does not draw the item under its editor', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sun 10a ${PREFIX} refreshed`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} refreshed` });
+    await block.dblclick();
+    await expect(page.locator('.evb-block-editing .evb-entry-input')).toBeFocused();
+    // A refresh takes the server's copy, which renames every cid.
+    expect(await page.evaluate(() => {
+      const st = (window as any).EvBoardEdit.store;
+      return st.reset(st.items().map((it: any) => { const c = Object.assign({}, it); delete c.cid; return c; }));
+    })).toBe(true);
+    await expect(block).toHaveCount(0);
+    await page.locator('.evb-block-editing .evb-entry-input').press('Escape');
+    await expect(block).toHaveCount(1);
+  });
+
+  test('in single-day view the board follows the block being typed', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await openBoard(page, EDIT_EVENT);
+    const SATURDAY = await dayBeforeLast(page);
+    const SUNDAY = await lastDay(page);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    await page.locator(`.evb-day-pill[data-day="${SATURDAY}"]`).click();
+    await expect(page.locator('.evb-day:visible')).toHaveAttribute('data-day', SATURDAY);
+    await clickSlot(page, SATURDAY, '22:00');
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await expect(editor).toBeFocused();
+    await editor.type(`11p-6a ${PREFIX} vigil`);
+    await editor.press('Enter');
+    // The next block starts at 6am, on the following board day.
+    await expect(page.locator('.evb-day:visible')).toHaveAttribute('data-day', SUNDAY);
+    await expect(editor).toBeFocused();
+    await expect(page.locator('.evb-type-block')).toBeVisible();
+    await editor.press('Escape');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+  });
+
+  test('Undo and Redo stay disabled while Done is leaving', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    await page.route(/schedule_batch/, async route => {
+      await new Promise(r => setTimeout(r, 800));
+      await route.continue();
+    }, { times: 1 });
+    await page.route(/Route=Event\/detail\//, async route => {
+      await new Promise(r => setTimeout(r, 2500));
+      await route.continue();
+    });
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sun 9a ${PREFIX} leaving`);
+    await line.press('Enter');
+    await page.locator('.evb-done').click();
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    await expect(page.locator('.evb-undo')).toBeDisabled();
+    await expect(page.locator('.evb-redo')).toBeDisabled();
+    await expect(page.locator('.evb-modebar')).toHaveCount(0, { timeout: 10000 });
+  });
+
+  test('deleting an item with meal details asks first when you cannot manage feast', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    test.skip(!(await page.evaluate(() => !!(window as any).EvConfig.canManageFeast)), 'the test account cannot save a menu');
+    const SUNDAY = await lastDay(page);
+    const [id] = await addViaBatch(page, [{
+      Title: `${PREFIX} stew supper`, StartTime: `${SUNDAY} 13:00`, EndTime: `${SUNDAY} 14:00`,
+      Category: 'Feast and Food', SecondaryCategory: '', Location: '', Description: '', Leads: [], Menu: 'Stew',
+    }]);
+    await page.evaluate(() => { (window as any).EvConfig.canManageFeast = false; });
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    const block = page.locator(`.evb-block[data-id="${id}"]`);
+    const confirm = page.locator('#ork-confirm-overlay.ork-confirm-open');
+    await block.click();
+    await page.keyboard.press('Delete');
+    await expect(confirm.locator('#ork-confirm-msg'))
+      .toHaveText('This item has menu and dietary details that you will not be able to restore. Remove it?');
+    await confirm.locator('#ork-confirm-cancel').click();
+    await expect(confirm).toHaveCount(0);
+    await expect(block).toHaveCount(1);
+    await block.click();
+    await page.keyboard.press('Delete');
+    await confirm.locator('#ork-confirm-ok').click();
+    await expect(block).toHaveCount(0);
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect(await page.evaluate(() => (window as any).EvBoardEdit.store.canUndo())).toBe(false);
+    await expect(page.locator('.evb-undo')).toBeDisabled();
+  });
 });

@@ -290,10 +290,13 @@
 
     // The single day on show, or null for all days. A chosen day wins; phones
     // fall back to today's board day when it is on the board, else the first day.
-    // When one day shows, a ghost's day wins while it shows, so the preview is on screen.
+    // When one day shows, the day of the block being typed on the board (else a
+    // ghost's) wins while it shows, so the block or the preview is on screen.
     function resolvedDay() {
         if (!api.board || !api.board.days.length) return null;
-        var ghostDay = state.ghosts.length ? (C.segments(state.ghosts[0])[0] || {}).day : null;
+        var ph = state.editing ? state.placeholder : null;
+        var shown = ph || state.ghosts[0];
+        var ghostDay = shown ? (C.segments(shown)[0] || {}).day : null;
         if ((isPhone() || boardHasDay(state.day)) && boardHasDay(ghostDay)) return ghostDay;
         if (boardHasDay(state.day)) return state.day;
         if (!isPhone()) return null;

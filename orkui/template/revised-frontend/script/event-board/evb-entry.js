@@ -88,8 +88,8 @@
                 '<i class="fas ' + p[1] + '" aria-hidden="true"></i>' +
                 '<span class="evb-sr">' + esc(PART_NAMES[part]) + ': </span>' +
                 '<span class="evb-chip-label">' + esc(val) + '</span>' +
-                (canDismiss ? '<button type="button" class="evb-chip-x" data-ignore="' + p[2] + '" tabindex="-1"' +
-                    ' aria-label="Read the ' + esc(PART_NAMES[part].toLowerCase()) + ' as title text" data-tip="Treat as title text">&times;</button>' : '') +
+                (canDismiss ? '<button type="button" class="evb-chip-x" data-ignore="' + p[2] + '"' +
+                    ' aria-label="Not a ' + esc(PART_NAMES[part].toLowerCase()) + '" data-tip="Treat as title text">&times;</button>' : '') +
                 '</span>';
         });
         return h;

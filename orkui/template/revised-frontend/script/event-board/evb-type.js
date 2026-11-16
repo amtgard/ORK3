@@ -17,13 +17,18 @@
  *
  * The same block retypes an existing item in place (editItem): it opens over
  * the item prefilled with '<Title>[ at <Location>][ "<Description>"]', and
- * Enter, Tab or a click elsewhere updates only the parts that changed. Text
- * left as it was prefilled changes nothing.
+ * Enter, Tab or a click elsewhere updates only the parts the person changed:
+ * the prefill is parsed once as it opens, the edited text is parsed the same
+ * way, and only parts whose parsed value differs from that first parse are
+ * written (never a comparison with the stored item, which the one-line prefill
+ * cannot always spell exactly). Text left as it was prefilled changes nothing.
  *
  * Attached through EvBoardEdit.onEnter / onBeforeExit / onExit.
  *   EvBoardType.isOpen() -> bool   an editing block is open
+ *   EvBoardType.isFresh() -> bool  a new block is open and nothing was typed in it
  *   EvBoardType.editItem(cid, {onDone}) -> bool   retype an item in place;
- *                                  onDone runs when its block closes
+ *                                  onDone({keyboard}) runs when its block closes
+ *                                  (keyboard: closed with focus still in it)
  */
 (function (root, factory) {
     root.EvBoardType = factory(root.EvBoardCore, root);
@@ -44,7 +49,8 @@
         entry: null,
         open: null,     // { day, start, end } the block as opened, while open
         live: null,     // { day, start, end, category } as the text reads now
-        edit: null,     // { cid, id, item, text, onDone } while an item is retyped in place
+        edit: null,     // { cid, id, item, text, base, onDone } while an item is retyped in place
+        typed: false,   // something was typed in the open block
         layoutKey: '',
         posKey: '',
         unshownTimer: 0,
@@ -98,6 +104,7 @@
 
         s.blockEl.addEventListener('keydown', onKeyDown, true);
         s.entry.input.addEventListener('blur', onBlur);
+        s.entry.input.addEventListener('input', function () { s.typed = true; });
         // A press on the block or its chips keeps focus in the input.
         [s.blockEl, s.pop].forEach(function (el) {
             el.addEventListener('mousedown', function (e) {
@@ -113,6 +120,7 @@
     function openBlock(day, start, end, opts) {
         s.open = { day: day, start: start, end: end };
         s.live = null;
+        s.typed = false;
         s.layoutKey = s.posKey = '';
         s.blockEl.className = 'evb-type-block evb-block evb-block-editing';
         s.blockEl.hidden = false;
@@ -133,7 +141,7 @@
 
     function closeBlock() {
         if (!s.open) return;
-        var done = s.edit && s.edit.onDone;
+        var done = s.edit && s.edit.onDone, keyboard = false;
         s.open = s.live = s.edit = null;
         s.closing = true;
         try {
@@ -143,13 +151,14 @@
             s.pop.hidden = true;
             s.blockEl.style.clipPath = '';
             V().setPlaceholder(null);
-            // A retyped item hands the keys back to the board (its selection), not
-            // to an input hidden in a closed block.
-            if (done && doc.activeElement === s.entry.input) s.entry.input.blur();
+            // A retyped item closed from the keyboard hands the keys back to the
+            // board (its selection), not to an input hidden in a closed block.
+            keyboard = !!done && doc.activeElement === s.entry.input;
+            if (keyboard) s.entry.input.blur();
         } finally {
             s.closing = false;
         }
-        if (done) done();
+        if (done) done({ keyboard: keyboard });
     }
 
     // What the text says now: the block moves, resizes and recolours to follow it.
@@ -168,10 +177,31 @@
         var key = [l.day, l.start, l.end, l.category].join('|');
         if (key === s.layoutKey) return;
         s.layoutKey = key;
+        placeholder();
+    }
+
+    // The invisible block the board lays out where the editor is. A retyped item's
+    // placeholder carries its cid, so the board leaves the item itself out.
+    function placeholder() {
+        var l = s.live;
+        if (!l) return;
         V().setPlaceholder({
             EventScheduleId: 0, Title: '', Leads: [], Category: l.category, cid: s.edit ? s.edit.cid : undefined,
             StartTime: C.toNaive(l.day, l.start), EndTime: C.toNaive(l.day, l.end)
         });
+    }
+
+    // A refresh renames items' cids: follow the item being retyped to its new cid
+    // (by server id), so it is not drawn underneath its own editor.
+    function followEditTarget() {
+        if (!s.open || !s.edit) return;
+        var item = editTarget();
+        if (!item) return;
+        if (+item.EventScheduleId) s.edit.id = +item.EventScheduleId;
+        s.edit.item = item;
+        if (item.cid === s.edit.cid) return;
+        s.edit.cid = item.cid;
+        placeholder();
     }
 
     // Put the block over its placeholder, clipped to the board's frame, with the
@@ -267,24 +297,46 @@
         return item;
     }
 
-    function t16(v) { return String(v || '').replace('T', ' ').slice(0, 16); }
+    // A typed cost, or null when none was typed: an absent cost differs from $0.
+    function costOf(r) { return r.given.cost && r.cost != null ? +r.cost : null; }
+    // A category the line names (typed, or a 'Name:' prefix), or null: the item keeps its own.
+    function categoryOf(r) { return r.given.category ? r.category : null; }
 
-    // The fields a parse changes on an item: the title, place and notes always
-    // (the line spelled them out), the time, categories and cost only when typed.
-    function changedFields(r, item) {
-        var f = {};
-        if (r.title !== (item.Title || '')) f.Title = r.title;
-        if (r.location !== (item.Location || '')) f.Location = r.location;
-        if (r.description !== (item.Description || '')) f.Description = r.description;
-        if (r.given.time) {
-            if (r.start !== t16(item.StartTime)) f.StartTime = r.start;
-            if (r.end !== t16(item.EndTime)) f.EndTime = r.end;
+    // The title after an edit. The prefill's parse can read part of the stored
+    // title differently (a '#2' from 'at Hall #2' joins it), so when the first
+    // parse is not the stored title, the one span the person changed is carried
+    // into the stored title where it lines up; otherwise the new parse is taken.
+    function editedTitle(stored, before, after) {
+        if (before === stored) return after;
+        var p = 0, B = before.length, A = after.length;
+        while (p < B && p < A && before[p] === after[p]) p++;
+        var q = 0;
+        while (q < B - p && q < A - p && before[B - 1 - q] === after[A - 1 - q]) q++;
+        var end = B - q; // the changed span is before[p, end)
+        if (end <= stored.length && stored.slice(0, end) === before.slice(0, end)) {
+            return (stored.slice(0, p) + after.slice(p, A - q) + stored.slice(end)).replace(/\s+/g, ' ').trim();
         }
-        if (r.given.category && r.category !== (item.Category || 'Other')) f.Category = r.category;
-        if (r.secondaryCategory && r.secondaryCategory !== (item.SecondaryCategory || '')) f.SecondaryCategory = r.secondaryCategory;
+        return after;
+    }
+
+    // The fields a retyped line changes: every part whose parse differs from the
+    // parse of the prefill (s.edit.base). A part the person left alone is never
+    // written, whatever the parser made of it.
+    function changedFields(r, base, item) {
+        var f = {};
+        if (r.title !== base.title) f.Title = editedTitle(String(item.Title || ''), base.title, r.title);
+        if (r.location !== base.location) f.Location = r.location;
+        if (r.description !== base.description) f.Description = r.description;
+        if (r.start !== base.start) f.StartTime = r.start;
+        if (r.end !== base.end) f.EndTime = r.end;
+        var cat = categoryOf(r);
+        if (cat !== categoryOf(base) && cat && cat !== (item.Category || 'Other')) f.Category = cat;
+        if (r.secondaryCategory !== base.secondaryCategory) f.SecondaryCategory = r.secondaryCategory;
         // A stripe the same as the new category would never show: drop it.
-        if (f.Category && f.Category === (f.SecondaryCategory || item.SecondaryCategory)) f.SecondaryCategory = '';
-        if (r.given.cost && +r.cost !== +item.Cost) f.Cost = r.cost;
+        if (f.Category && f.Category === (f.SecondaryCategory !== undefined ? f.SecondaryCategory : item.SecondaryCategory)) {
+            f.SecondaryCategory = '';
+        }
+        if (costOf(r) !== costOf(base) && costOf(r) !== null) f.Cost = r.cost;
         return f;
     }
 
@@ -299,7 +351,7 @@
         if (leaving()) return 'refused';
         var item = editTarget();
         if (!item) return 'gone';
-        var f = changedFields(r, item);
+        var f = s.edit.base ? changedFields(r, s.edit.base, item) : {};
         if (Object.keys(f).length) s.ctx.store.update(item.cid, f);
         return 'saved';
     }
@@ -324,8 +376,13 @@
         if (!t) return false;
         if (s.open && !settle()) { s.entry.focus(); shake(); return false; }
         var text = editText(item);
-        s.edit = { cid: cid, id: +item.EventScheduleId || 0, item: item, text: text, onDone: opts && opts.onDone };
+        s.edit = { cid: cid, id: +item.EventScheduleId || 0, item: item, text: text, base: null, onDone: opts && opts.onDone };
         openBlock(t.day, t.start, t.end, { text: text, reveal: true });
+        // What the box really holds (an input drops a description's line breaks),
+        // and its parse with the item's own day and time fixed: the reference every
+        // later change is measured against.
+        s.edit.text = s.entry.getText();
+        s.edit.base = s.entry.result();
         return true;
     }
 
@@ -372,7 +429,7 @@
     // Runs before the entry's own key handling (capture), unless its suggestion
     // list is open, which keeps Enter, Tab and Esc for picking.
     function onKeyDown(e) {
-        if (!s.open || e.isComposing || e.keyCode === 229 || menuOpen()) return;
+        if (!s.open || e.isComposing || e.keyCode === 229 || menuOpen() || !s.ctx.boardShown()) return;
         if (leaving()) {
             if (e.key === 'Enter' || e.key === 'Tab') e.preventDefault();
             return;
@@ -546,7 +603,7 @@
         on(s.rootEl, 'pointerleave', onPointerLeave);
         on(doc, 'scroll', onScroll, true);
         on(win, 'resize', onScroll);
-        s.offs.push(ctx.store.on('change', function () { s.len = null; }));
+        s.offs.push(ctx.store.on('change', function () { s.len = null; followEditTarget(); }));
     }
 
     // Done: a block with no title yet keeps Edit mode open.
@@ -583,6 +640,7 @@
 
     return {
         isOpen: function () { return !!s.open; },
+        isFresh: function () { return !!s.open && !s.edit && !s.typed; },
         editItem: editItem
     };
 });

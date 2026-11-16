@@ -27,10 +27,10 @@ test('loaded and new items get client ids; an add is saved and takes its server 
   assert.equal(s.items()[0].cid, 'i7');
   const cid = s.add(item('Mothman'));
   assert.equal(s.get(cid).EventScheduleId, 0);
-  assert.deepEqual(s.status(), { state: 'saving', pending: 1 });
+  assert.deepEqual(s.status(), { state: 'saving', pending: 1, reason: null });
   await s.idle();
   assert.equal(s.get(cid).EventScheduleId, 100);
-  assert.deepEqual(s.status(), { state: 'saved', pending: 0 });
+  assert.deepEqual(s.status(), { state: 'saved', pending: 0, reason: null });
   assert.deepEqual(f.calls[0].map(o => [o.op, o.cid, o.item.Title]), [['add', cid, 'Mothman']]);
   assert.equal(f.calls[0][0].item.cid, undefined);
 });
@@ -216,6 +216,39 @@ test('a non-undoable remove also forgets earlier steps on that item', async () =
   const sent = f.calls.flat();
   assert.ok(sent.some(o => o.op === 'remove' && o.id === 7));
   assert.ok(!sent.some(o => o.op === 'add' && (o.item.Title === 'Old' || o.item.Title === 'Renamed')));
+});
+test('a non-undoable remove also drops redo steps on that item', async () => {
+  const f = fake();
+  const s = S.create({ items: [item('Old', { EventScheduleId: 7 })], send: f.send, saveMeal: true });
+  s.update('i7', { Title: 'Renamed' });
+  assert.equal(s.undo(), true);
+  assert.ok(s.canRedo());
+  s.remove('i7', { undoable: false });
+  assert.ok(!s.canRedo());
+  assert.equal(s.redo(), false);
+  assert.equal(s.get('i7'), null);
+  await s.idle();
+});
+test('an offline store says why: network, signed out, forbidden or an unexpected reply', async () => {
+  const cases = [
+    ['network', 'network'],
+    [{ status: 5, error: 'Not logged in' }, 'signed-out'],
+    [{ status: 3, error: 'Not authorized.', failedIndex: -1 }, 'forbidden'],
+    [{ status: 7, error: '?' }, 'protocol'],
+  ];
+  for (const [answer, reason] of cases) {
+    const f = fake(); f.failWith(answer);
+    const s = S.create({ items: [], send: f.send, saveMeal: true });
+    const seen = []; s.on('status', st => seen.push(st));
+    const a = s.add(item('A'));
+    await s.idle();
+    assert.deepEqual(s.status(), { state: 'offline', pending: 1, reason }, reason);
+    assert.equal(seen[seen.length - 1].reason, reason);
+    assert.ok(s.get(a), 'nothing is lost');
+    s.retry(); await s.idle();
+    assert.deepEqual(s.status(), { state: 'saved', pending: 0, reason: null });
+    assert.ok(s.get(a).EventScheduleId > 0);
+  }
 });
 test('a rejected update restores the saved values; meal fields are sent only when allowed; reset refuses while busy', async () => {
   const f = fake();

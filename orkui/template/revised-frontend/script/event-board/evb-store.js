@@ -9,6 +9,10 @@
  * copy of the item (absent for an add the server has not confirmed); a
  * rejected change reverts to it.
  *
+ * status() -> {state: 'saved'|'saving'|'offline', pending, reason}; reason says
+ * why the store is offline ('network', 'signed-out', 'forbidden', 'protocol')
+ * and is null otherwise. Offline keeps every change; retry() sends them again.
+ *
  * Undo steps are lists of {cid, before, after} snapshots (null = absent).
  * Undoing a remove therefore brings the item back as a new add under the same
  * cid; the remove still reaches the server.
@@ -38,6 +42,8 @@
         var queue = [];     // unsent entries: {op, cid, fields?, item?}
         var inflight = null; // entries of the request in flight
         var offline = false;
+        // Why the store is offline: 'network', 'signed-out', 'forbidden' or 'protocol'.
+        var offlineReason = null;
 
         var listeners = { change: [], status: [], rejected: [] };
         var waiters = [];
@@ -93,7 +99,7 @@
             // so status and idleness are read only after these listeners have run.
             if (didChange) emit('change');
             rej.forEach(function (r) { emit('rejected', r); });
-            var st = status(), stKey = st.state + ':' + st.pending;
+            var st = status(), stKey = st.state + ':' + st.pending + ':' + st.reason;
             if (stKey !== lastStatus) { lastStatus = stKey; emit('status', st); }
             if (depth === 0 && isIdle()) waiters.splice(0).forEach(function (r) { r(); });
         }
@@ -209,29 +215,41 @@
             var p;
             try { p = Promise.resolve(send(wire)); } catch (err) { p = Promise.reject(err); }
             p.then(function (res) { run(function () { settle(sent, res); }, false); },
-                function () { run(function () { goOffline(sent); }, false); });
+                function (err) {
+                    // send may say why it failed (err.reason); otherwise the server was not reached.
+                    var why = err && REASONS.indexOf(err.reason) >= 0 ? err.reason : 'network';
+                    run(function () { goOffline(sent, why); }, false);
+                });
         }
 
-        function goOffline(sent) {
+        var REASONS = ['network', 'signed-out', 'forbidden', 'protocol'];
+
+        function goOffline(sent, reason) {
             inflight = null;
             offline = true;
+            offlineReason = reason || 'protocol';
             requeue(sent);
         }
 
         function settle(sent, res) {
-            if (!res || typeof res !== 'object') return goOffline(sent);
+            if (!res || typeof res !== 'object') return goOffline(sent, 'protocol');
             var fi = res.failedIndex;
+            var validIndex = typeof fi === 'number' && fi % 1 === 0 && fi >= 0 && fi < sent.length;
             if (res.status === 0) {
                 // A malformed success is a protocol failure: keep everything and go offline.
-                if (!wellFormed(sent, res.results)) return goOffline(sent);
+                if (!wellFormed(sent, res.results)) return goOffline(sent, 'protocol');
                 inflight = null;
                 applyResults(sent, res.results);
-            } else if ((res.status === 1 || res.status === 3) && typeof fi === 'number' &&
-                fi % 1 === 0 && fi >= 0 && fi < sent.length) {
+            } else if ((res.status === 1 || res.status === 3) && validIndex) {
                 inflight = null;
                 reject(sent, fi, res.error);
+            } else if (res.status === 5) {
+                return goOffline(sent, 'signed-out');
+            } else if (res.status === 3) {
+                // Refused as a whole, not for one op: the permission is gone.
+                return goOffline(sent, 'forbidden');
             } else {
-                return goOffline(sent);
+                return goOffline(sent, 'protocol');
             }
             pump();
         }
@@ -369,7 +387,11 @@
 
         function status() {
             var pending = queue.length + (inflight ? inflight.length : 0);
-            return { state: offline ? 'offline' : (pending ? 'saving' : 'saved'), pending: pending };
+            return {
+                state: offline ? 'offline' : (pending ? 'saving' : 'saved'),
+                pending: pending,
+                reason: offline ? offlineReason : null
+            };
         }
 
         function step(from, to, key, reverse) {
@@ -382,7 +404,7 @@
             return true;
         }
 
-        lastStatus = status().state + ':0';
+        lastStatus = status().state + ':0:null';
 
         return {
             items: function () { return list.map(clone); },
@@ -406,7 +428,7 @@
             canRedo: function () { return redoStack.length > 0; },
             status: status,
             retry: function () {
-                run(function () { offline = false; pump(); }, false);
+                run(function () { offline = false; offlineReason = null; pump(); }, false);
             },
             idle: function () {
                 if (isIdle()) return Promise.resolve();

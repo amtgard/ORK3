@@ -12,7 +12,7 @@
  *
  * Other Edit-mode surfaces (evb-type.js, evb-select.js) attach through three
  * hooks, each called with the same edit context {store, root, head, quickLine,
- * entryContext, add, addNotice, isLeaving, isTextField, modalOpen} (see
+ * entryContext, add, addNotice, isLeaving, isTextField, modalOpen, boardShown} (see
  * editContext below):
  *   EvBoardEdit.onEnter(fn)      after Edit mode opens
  *   EvBoardEdit.onBeforeExit(fn) when Done is pressed, before anything else;
@@ -66,7 +66,11 @@
         return win.fetch(endpoint('schedule_batch'), { method: 'POST', body: fd, headers: XHR, credentials: 'same-origin' })
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.json();
+                return r.json().catch(function () {
+                    var err = new Error('The reply was not JSON');
+                    err.reason = 'protocol';
+                    throw err;
+                });
             });
     }
 
@@ -209,19 +213,27 @@
             '<button type="button" class="ev-submit-btn evb-done">Done</button>' +
             '</span></div>' +
             '<div class="evb-quickline"></div>' +
-            '<div class="evb-notice" hidden><div class="evb-notice-rows"></div>' +
+            '<div class="evb-notice" role="alert" hidden><div class="evb-notice-rows"></div>' +
             '<button type="button" class="evb-notice-close" aria-label="Dismiss">&times;</button></div>';
     }
 
     function q(sel) { return state.head && state.head.querySelector(sel); }
 
-    var SAVE_TEXT = { saving: 'Saving…', saved: 'All changes saved', offline: 'Couldn’t reach the server' };
+    var SAVE_TEXT = { saving: 'Saving…', saved: 'All changes saved' };
+    // Offline, by the store's reason; Retry stays offered in every case.
+    var OFFLINE_TEXT = {
+        network: 'Couldn’t reach the server',
+        'signed-out': 'You’re signed out. Sign in in another tab, then press Retry.',
+        forbidden: 'You no longer have permission to edit this schedule.',
+        protocol: 'The server sent an unexpected reply.'
+    };
 
     function showStatus() {
         if (!state.store || !state.head) return;
-        var st = state.store.status().state;
+        var status = state.store.status(), st = status.state;
         q('.evb-save').setAttribute('data-state', st);
-        q('.evb-save-state').textContent = SAVE_TEXT[st];
+        q('.evb-save-state').textContent = st === 'offline'
+            ? OFFLINE_TEXT[status.reason] || OFFLINE_TEXT.network : SAVE_TEXT[st];
         q('.evb-save-retry').hidden = st !== 'offline';
         // Leaving the page asks first only while something is unsaved.
         guardUnload(st !== 'saved');
@@ -237,8 +249,9 @@
 
     function showHistory() {
         if (!state.store || !state.head) return;
-        q('.evb-undo').disabled = !state.store.canUndo();
-        q('.evb-redo').disabled = !state.store.canRedo();
+        // Done is leaving: nothing may change, so neither looks available.
+        q('.evb-undo').disabled = !!state.leaving || !state.store.canUndo();
+        q('.evb-redo').disabled = !!state.leaving || !state.store.canRedo();
     }
 
     // A row in the notice; restoreText adds a button that puts a rejected line
@@ -370,7 +383,8 @@
             isLeaving: function () { return !!state.leaving; },
             // Board keys stay out of text fields and page modals.
             isTextField: isTextField,
-            modalOpen: modalOpen
+            modalOpen: modalOpen,
+            boardShown: boardShown
         };
     }
 
@@ -399,13 +413,22 @@
             '#ork-confirm-overlay.ork-confirm-open, [id$="-overlay"].kn-open, [id$="-overlay"].pn-open, [id$="-modal"].kn-open');
     }
 
+    // Board keys act only while the Schedule tab is on screen showing the board.
+    function boardShown() {
+        var p = panel();
+        if (!p || !p.isConnected || win.getComputedStyle(p).display === 'none' || !p.getClientRects().length) return false;
+        return V().getView() === 'board';
+    }
+
     function undo() { if (state.store && !state.leaving) state.store.undo(); }
     function redo() { if (state.store && !state.leaving) state.store.redo(); }
 
     function onKeyDown(e) {
-        if (!state.editing || modalOpen()) return;
+        if (!state.editing || modalOpen() || !boardShown()) return;
         var t = e.target;
         if (e.key === 'Escape' && q('.evb-help-pop') && !q('.evb-help-pop').hidden) {
+            // This Esc closes the help and does nothing else (the selection stays).
+            e.preventDefault();
             setHelp(false);
             q('.evb-help').focus();
             return;
@@ -416,9 +439,12 @@
             return;
         }
         if ((e.metaKey || e.ctrlKey) && !e.altKey && String(e.key).toLowerCase() === 'z') {
-            // Text fields keep their own undo; an empty quick line (or block being
-            // typed on the board) has none, so it undoes the board.
-            var emptyLine = state.entry && (t === state.entry.input || !!(t.closest && t.closest('.evb-block-editing'))) && !t.value;
+            // Text fields keep their own undo; an empty quick line, or a new block on
+            // the board not yet typed in, has none, so it undoes the board. A rename
+            // emptied by the person keeps the field's own undo.
+            var freshBlock = !!(t.closest && t.closest('.evb-block-editing')) &&
+                !!(win.EvBoardType && win.EvBoardType.isFresh && win.EvBoardType.isFresh());
+            var emptyLine = state.entry && (t === state.entry.input || freshBlock) && !t.value;
             if (isTextField(t) && !emptyLine) return;
             e.preventDefault();
             if (e.shiftKey) redo(); else undo();
@@ -585,6 +611,7 @@
         if (old) old.parentNode.removeChild(old);
         var box = doc.createElement('div');
         box.className = 'evb-notice evb-open-failed';
+        box.setAttribute('role', 'alert');
         box.innerHTML = '<div class="evb-notice-rows"><div class="evb-notice-row"></div></div>' +
             '<button type="button" class="evb-notice-close" aria-label="Dismiss">&times;</button>';
         box.querySelector('.evb-notice-row').textContent = 'Couldn’t open Edit mode (' + reason + '). Try again.';
