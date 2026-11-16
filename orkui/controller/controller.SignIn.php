@@ -101,6 +101,7 @@ class Controller_SignIn extends Controller
         $classes = $this->Attendance->enrich_classes_with_progress((int)$this->session->user_id, array_values($classes));
 
         $this->data['link']            = $link;
+        $this->data['link_online']     = (int)($link['Online'] ?? 0) === 1;
         $this->data['scope_name']      = $scope_name;
         $this->data['scope_type']      = $scope_type;
         $this->data['link_token']      = $link_token;

@@ -11038,3 +11038,52 @@ html[data-theme="dark"] .orn-online-switch-thumb { background: #e2e8f0; }
 html[data-theme="dark"] .orn-online-switch:focus-visible { outline-color: #63b3ed; }
 html[data-theme="dark"] .orn-online-hint { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .orn-online-check { color: var(--ork-text); }
+
+/* Sign-in link panels: switch on its own row under the inputs */
+.pk-att-link-online-row,
+.ev-signin-link-online-row { margin-top: 8px; margin-left: -8px; }
+
+/* Switch tooltip: left-anchored and wrapping so it stays inside narrow modals.
+   .is-flashing (ornFlashTip) forces it visible for a few seconds with a subtle
+   pulse. !important beats the generic [data-tip]:not(...)x5:hover::after rule. */
+.orn-online-switch[data-tip]:hover::after,
+.orn-online-switch[data-tip].is-flashing::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 4px) !important;
+  left: 8px !important;
+  transform: none !important;
+  width: max-content;
+  min-width: 0 !important;
+  max-width: min(240px, calc(100vw - 48px)) !important;
+  white-space: normal !important;
+  background: #1a202c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 6px 10px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  /* Parknew/Kingdomnew inline "instant tooltip" CSS hides [data-tip]::after
+     with opacity:0 and adds a centered ::before arrow; neither fits here. */
+  opacity: 1 !important;
+}
+.orn-online-switch[data-tip]::before { content: none !important; }
+.orn-online-switch[data-tip].is-flashing::after {
+  animation: orn-tip-pulse 1.3s ease-in-out 3;
+}
+@keyframes orn-tip-pulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18), 0 0 0 0 rgba(43, 108, 176, 0.55); }
+  50%      { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18), 0 0 0 5px rgba(43, 108, 176, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orn-online-switch[data-tip].is-flashing::after { animation: none; }
+}
+html[data-theme="dark"] .orn-online-switch[data-tip]:hover::after,
+html[data-theme="dark"] .orn-online-switch[data-tip].is-flashing::after {
+  background: #f7fafc;
+  color: #1a202c;
+}

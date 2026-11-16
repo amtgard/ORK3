@@ -965,6 +965,17 @@ function ornOnlineSwitch(container, opts) {
     return api;
 }
 
+// Force an element's data-tip tooltip visible for `ms` (default 4s) via the
+// .is-flashing class (revised.css); re-callable, each call restarts the timer.
+function ornFlashTip(el, ms) {
+    if (!el) return;
+    clearTimeout(el._ornFlashTimer);
+    el.classList.remove('is-flashing');
+    void el.offsetWidth; // restart the pulse animation
+    el.classList.add('is-flashing');
+    el._ornFlashTimer = setTimeout(function() { el.classList.remove('is-flashing'); }, ms || 4000);
+}
+
 // Apply a park-day-type lookup (AttendanceAjax/park/{id}/daytype) to an
 // ornOnlineSwitch: online-only day -> on; online + in-person -> off with a
 // hint; anything else (incl. errors) -> off.
@@ -11969,6 +11980,15 @@ $(document).ready(function() {
 
     window.pkCloseQrModal = function() { orkCloseQrModal('pk-qr-overlay'); };
 
+    // Online? switch: park links default to online; flash the tooltip each time
+    // the Sign-in Link tab is opened so officers notice the default.
+    var pkLinkOnline = ornOnlineSwitch(document.getElementById('pk-att-link-online-switch'), { initial: true });
+    if (pkLinkOnline) pkLinkOnline.el.setAttribute('data-tip', 'Not for an online event? Disable this.');
+    var pkLinkTab = document.getElementById('pk-att-tab-link');
+    if (pkLinkTab && pkLinkOnline) {
+        pkLinkTab.addEventListener('click', function() { ornFlashTip(pkLinkOnline.el); });
+    }
+
     genBtn.addEventListener('click', function() {
         var hours   = Math.max(1, Math.min(96, parseInt(document.getElementById('pk-att-link-hours').value, 10) || 3));
         var credits = Math.max(0.5, Math.min(10, parseFloat(document.getElementById('pk-att-link-credits').value) || 1));
@@ -11976,7 +11996,7 @@ $(document).ready(function() {
         genBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
         document.getElementById('pk-att-link-result').style.display = 'none';
         $.post(PkConfig.uir + 'AttendanceAjax/link/park/' + PkConfig.parkId + '/create',
-            { Hours: hours, Credits: credits },
+            { Hours: hours, Credits: credits, Online: (pkLinkOnline && pkLinkOnline.get()) ? 1 : 0 },
             function(r) {
                 genBtn.disabled = false;
                 genBtn.innerHTML = '<i class="fas fa-link"></i> Generate';
@@ -12097,7 +12117,7 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.dataset.linkId = lnk.LinkId;
                 tr.innerHTML =
-                    '<td style="padding:4px 6px">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px">' + expStr + (parseInt(lnk.Online, 10) === 1 ? ' ' + ornOnlineBadge() : '') + '</td>' +
                     '<td style="padding:4px 6px">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button class="pk-btn pk-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
@@ -12231,6 +12251,9 @@ $(document).ready(function() {
     creditsEl.addEventListener('input', evSyncGenBtn);
     evSyncGenBtn();
 
+    // Online? switch: event links default to in-person (off), no flash.
+    var evLinkOnline = ornOnlineSwitch(document.getElementById('ev-signin-online-switch'), { initial: false });
+
     // Styled in-modal feedback replaces native alert() so server errors
     // ("This event has already ended", etc.) render inline with the same
     // visual treatment as the rest of the modal.
@@ -12255,7 +12278,7 @@ $(document).ready(function() {
         document.getElementById('ev-signin-link-result').style.display = 'none';
         evSigninFeedbackClear();
         $.post(EvConfig.uir + 'AttendanceAjax/link/event/' + EvConfig.eventId + '/create',
-            { Credits: credits, EventCalendarDetailId: EvConfig.detailId },
+            { Credits: credits, EventCalendarDetailId: EvConfig.detailId, Online: (evLinkOnline && evLinkOnline.get()) ? 1 : 0 },
             function(r) {
                 genBtn.innerHTML = origHtml;
                 evSyncGenBtn();
@@ -12339,7 +12362,7 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.dataset.linkId = lnk.LinkId;
                 tr.innerHTML =
-                    '<td style="padding:4px 6px">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px">' + expStr + (parseInt(lnk.Online, 10) === 1 ? ' ' + ornOnlineBadge() : '') + '</td>' +
                     '<td style="padding:4px 6px">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button type="button" class="ev-icon-btn ev-signin-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-copy"></i> Copy</button>' +
@@ -12424,6 +12447,9 @@ $(document).ready(function() {
 
     window.knCloseQrModal = function() { orkCloseQrModal('kn-qr-overlay'); };
 
+    var knLinkOnline = ornOnlineSwitch(document.getElementById('kn-signinlink-online-switch'), { initial: true });
+    if (knLinkOnline) knLinkOnline.el.setAttribute('data-tip', 'Not for an online event? Disable this.');
+
     var copyBtn = document.getElementById('kn-signinlink-copy-btn');
 
     // Park autocomplete
@@ -12488,7 +12514,9 @@ $(document).ready(function() {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
         errEl.style.display = 'none';
         document.getElementById('kn-signinlink-result').style.display = 'none';
-        $.post(postUrl, { Hours: hours, Credits: credits }, function(r) {
+        // The kingdom-modal generator markup was removed (Kingdomnew_index.tpl,
+        // 2026-08-21), so no switch renders; keep the park-link default (online).
+        $.post(postUrl, { Hours: hours, Credits: credits, Online: knLinkOnline ? (knLinkOnline.get() ? 1 : 0) : 1 }, function(r) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-link"></i> Generate';
             if (r && r.status === 0) {
@@ -12568,7 +12596,7 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.innerHTML =
                     '<td style="padding:4px 6px;color:#4a5568;font-size:11px">' + scope + '</td>' +
-                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + (parseInt(lnk.Online, 10) === 1 ? ' ' + ornOnlineBadge() : '') + '</td>' +
                     '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button class="kn-btn kn-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +

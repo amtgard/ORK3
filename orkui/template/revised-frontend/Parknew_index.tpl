@@ -2218,6 +2218,7 @@ var PkBannerConfig = {
 							</button>
 						</div>
 					</div>
+					<div class="pk-att-link-online-row" id="pk-att-link-online-switch"></div>
 					<div id="pk-att-link-result" style="display:none;margin-top:12px">
 						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
 							<input type="text" id="pk-att-link-url" readonly

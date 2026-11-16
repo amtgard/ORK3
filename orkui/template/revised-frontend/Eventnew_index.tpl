@@ -2516,6 +2516,7 @@ var _evRsvpCr = document.getElementById('ev-rsvp-credits'); if (_evRsvpCr && _ev
 					</button>
 				</div>
 			</div>
+			<div class="ev-signin-link-online-row" id="ev-signin-online-switch"></div>
 			<div id="ev-signin-feedback" class="ev-signin-feedback" style="display:none"></div>
 			<div id="ev-signin-link-result" style="display:none">
 				<div class="ev-signin-link-url-row">
