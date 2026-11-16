@@ -818,7 +818,132 @@
         return dayLabel(day) + ' ' + t + ' ';
     }
 
+    // ---- Gesture arithmetic: pure helpers for drag, resize, nudge, repeat, paste. ----
+
+    var MIN_ITEM = 5;       // a gesture never leaves an item shorter than this
+    var REPEAT_GAP = 30;    // default gap between repeated copies
+
+    function snap(min, step) { return Math.round(min / step) * step; }
+
+    // The board day and board minute (300 to 1740) of a naive time.
+    function boardPos(naive) {
+        var p = parseNaive(naive);
+        if (!p) return null;
+        return p.min < BOARD_DAY_START ? { day: addDays(p.day, -1), min: p.min + DAY_MIN } : p;
+    }
+
+    // An item's start and end as board minutes from its start's board day.
+    function span(item) {
+        var s = boardPos(item.StartTime);
+        if (!s) return null;
+        var e = parseNaive(item.EndTime);
+        var endMin = e ? diffDays(s.day, e.day) * DAY_MIN + e.min : s.min;
+        if (endMin < s.min) endMin = s.min;
+        return { day: s.day, start: s.min, end: endMin };
+    }
+
+    // Minutes since the epoch day's board 00:00, for ordering items across days.
+    function absStart(sp) { return dayNumber(sp.day) * DAY_MIN + sp.start; }
+
+    function times(day, start, end) {
+        return { StartTime: toNaive(day, start), EndTime: toNaive(day, end) };
+    }
+
+    function moveTimes(item, toDay, toStartMin) {
+        var sp = span(item);
+        return times(toDay, toStartMin, toStartMin + (sp.end - sp.start));
+    }
+
+    function shiftTimes(item, deltaMin, deltaDays) {
+        var sp = span(item);
+        return times(addDays(sp.day, deltaDays || 0), sp.start + deltaMin, sp.end + deltaMin);
+    }
+
+    function resizeTimes(item, edge, toMin) {
+        var sp = span(item);
+        var start = sp.start, end = sp.end;
+        if (edge === 'start') start = Math.min(toMin, end - MIN_ITEM);
+        else end = Math.max(toMin, start + MIN_ITEM);
+        return times(sp.day, start, end);
+    }
+
+    // Copies of the item, one after another, each ending at or before untilMin
+    // (a board minute on the item's board day). The gap follows the nearest
+    // earlier same-category item in dayItems; 30 minutes when there is none or
+    // the gap would be negative.
+    function repeatSlots(item, dayItems, untilMin) {
+        var sp = span(item);
+        var len = sp.end - sp.start;
+        var cat = item.Category || 'Other';
+        var here = absStart(sp);
+        var prevStart = null, prevEnd = 0;
+        (dayItems || []).forEach(function (o) {
+            if (o === item || (o.cid && o.cid === item.cid)) return;
+            if ((o.Category || 'Other') !== cat) return;
+            var os = span(o);
+            if (!os) return;
+            var a = absStart(os);
+            if (a >= here || (prevStart !== null && a <= prevStart)) return;
+            prevStart = a;
+            prevEnd = a + (os.end - os.start);
+        });
+        var gap = prevStart === null ? REPEAT_GAP : here - prevEnd;
+        if (gap < 0) gap = REPEAT_GAP;
+        var step = len + gap, out = [];
+        if (step <= 0) return out;
+        for (var s = sp.end + gap; s + len <= untilMin && out.length < 500; s += step) {
+            out.push(times(sp.day, s, s + len));
+        }
+        return out;
+    }
+
+    function duplicateTimes(item) {
+        var sp = span(item);
+        return times(sp.day, sp.end, sp.end + (sp.end - sp.start));
+    }
+
+    // Copies of the items without ids, the earliest placed at toDay / toStartMin
+    // and the rest keeping their offsets from it. Nested values are copied.
+    function pastePlan(copied, toDay, toStartMin) {
+        var rows = [];
+        (copied || []).forEach(function (it) {
+            var sp = span(it);
+            if (sp) rows.push({ item: it, abs: absStart(sp), len: sp.end - sp.start });
+        });
+        rows.sort(function (a, b) { return a.abs - b.abs; });
+        return rows.map(function (r) {
+            var c = JSON.parse(JSON.stringify(r.item));
+            delete c.EventScheduleId;
+            delete c.cid;
+            var start = toStartMin + (r.abs - rows[0].abs);
+            var t = times(toDay, start, start + r.len);
+            c.StartTime = t.StartTime;
+            c.EndTime = t.EndTime;
+            return c;
+        });
+    }
+
+    // One 'day range title ...' line per item, sorted by start.
+    function clipboardText(items) {
+        var rows = [];
+        (items || []).forEach(function (it) {
+            var sp = span(it);
+            if (sp) rows.push({ item: it, abs: absStart(sp) });
+        });
+        rows.sort(function (a, b) { return a.abs - b.abs; });
+        return rows.map(function (r) { return formatEntry(r.item, { withDay: true }); }).join('\n');
+    }
+
     return {
+        snap: snap,
+        boardPos: boardPos,
+        moveTimes: moveTimes,
+        shiftTimes: shiftTimes,
+        resizeTimes: resizeTimes,
+        repeatSlots: repeatSlots,
+        duplicateTimes: duplicateTimes,
+        pastePlan: pastePlan,
+        clipboardText: clipboardText,
         BOARD_DAY_START: BOARD_DAY_START,
         CATEGORY_NAMES: CATEGORY_NAMES,
         CATEGORY_TAGS: CATEGORY_TAGS,
