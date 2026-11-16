@@ -134,6 +134,14 @@ final class AttendanceFixture
         return (int) $stmt->fetchColumn();
     }
 
+    public function fetchOnline(int $attendanceId): int
+    {
+        $stmt = $this->pdo->prepare('SELECT online FROM ' . DB_PREFIX . 'attendance WHERE attendance_id = ?');
+        $stmt->execute([$attendanceId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
     public function fetchPersona(int $mundaneId): string
     {
         $stmt = $this->pdo->prepare('SELECT persona FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ?');

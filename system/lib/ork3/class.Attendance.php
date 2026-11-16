@@ -91,6 +91,12 @@ class Attendance extends Ork3
         }
     }
 
+    /** Normalize an Online request value to 0|1. */
+    public static function NormalizeOnline($v): int
+    {
+        return (!empty($v) && (string)$v !== '0') ? 1 : 0;
+    }
+
     public function AddAttendance($request)
     {
         logtrace("Attendance->AddAttendance()", $request);
@@ -122,6 +128,7 @@ class Attendance extends Ork3
         // Officer-keyed entry from Enter Attendance modal (Search / Recent tabs).
         // Self-signin and self-reg paths set this column to their own value below.
         $this->attendance->entry_method = 'manual';
+        $this->attendance->online = self::NormalizeOnline($request['Online'] ?? 0);
         $this->attendance->event_id = 0;
         $this->attendance->event_calendardetail_id = 0;
         $this->attendance->date_year = 0;
@@ -223,6 +230,7 @@ class Attendance extends Ork3
         $attendance->persona = $this->attendance->persona;
         $attendance->flavor = $this->attendance->flavor;
         $attendance->note = $this->attendance->note;
+        $attendance->online = $this->attendance->online;
 
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $attendance->mundane_id, $attendance);
 
@@ -232,6 +240,10 @@ class Attendance extends Ork3
         $this->attendance->credits = $request['Credits'];
         $this->attendance->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         $this->attendance->entered_at = date("Y-m-d H:i:s");
+        // Online: only touched when the caller sends the key; absent = unchanged.
+        if (array_key_exists('Online', $request)) {
+            $this->attendance->online = self::NormalizeOnline($request['Online']);
+        }
         // Recompute date partitions when date changes.
         $_parts = $this->_computeDatePartitions($this->attendance->date);
         $this->attendance->date_year  = $_parts['date_year'];
