@@ -29,4 +29,13 @@ final class AttendanceTypeControlTest extends TestCase
         $this->assertStringNotContainsString('<script>', $h);
         $this->assertStringContainsString('&lt;script&gt;', $h);
     }
+
+    public function testNote(): void
+    {
+        $this->assertSame('Showing in-person sign-ins only.', ork_attendance_type_note('in_person'));
+        $this->assertSame('Showing online sign-ins only.', ork_attendance_type_note('online'));
+        $this->assertSame('', ork_attendance_type_note('all'));
+        $this->assertSame('', ork_attendance_type_note(null));
+        $this->assertSame('', ork_attendance_type_note('bogus'));
+    }
 }

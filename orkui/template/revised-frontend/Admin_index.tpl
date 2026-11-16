@@ -15,6 +15,13 @@ $totalAttendance = array_sum(array_column($kingdomList, 'Attendance'));
 $uir             = UIR;
 $prevWeekly  = is_array($PrevWeekly  ?? null) ? $PrevWeekly  : [];
 $prevMonthly = is_array($PrevMonthly ?? null) ? $PrevMonthly : [];
+// Kingdom Overview attendance type. Trend arrows compare against all-attendance
+// prior periods, so they are hidden when the overview is filtered.
+$typeNote = ork_attendance_type_note($AttendanceType ?? 'all');
+if ($typeNote !== '') {
+	$prevWeekly  = [];
+	$prevMonthly = [];
+}
 
 function cpTrend(int $cur, ?int $prev): string {
 	if ($prev === null) return '';
@@ -229,10 +236,14 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<i class="fas fa-table"></i> Kingdom Overview
 					<span class="adm-count"><?= count($kingdomList) ?></span>
 				</div>
+				<?= ork_attendance_type_control((string)($AttendanceType ?? 'all')) ?>
 				<div class="cp-overview-search">
 					<input type="text" id="cp-kd-search" placeholder="Filter kingdoms…" oninput="cpFilterTable(this.value)">
 				</div>
 			</div>
+			<?php if ($typeNote !== ''): ?>
+			<div class="cp-overview-note"><i class="fas fa-filter" aria-hidden="true"></i> <?= htmlspecialchars($typeNote) ?> Trend arrows are hidden.</div>
+			<?php endif; ?>
 			<div style="overflow-x:auto">
 				<table class="cp-kd-table" id="cp-kd-table">
 					<thead>
@@ -1543,3 +1554,10 @@ window.OrkBcCfg = {
 };
 </script>
 <?php include __DIR__ . '/_bonus_credit_assets.tpl'; ?>
+<script>
+/* Kingdom Overview In-Person / Online / All: reloads with &AttendanceType=<value>. */
+(function () {
+	var el = document.querySelector('.cp-overview-header .orn-type-control');
+	if (el && typeof window.ornAttendanceTypeControl === 'function') window.ornAttendanceTypeControl(el);
+})();
+</script>

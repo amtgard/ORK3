@@ -1350,3 +1350,8 @@ html[data-theme="dark"] .apexcharts-tooltip-text-y-label,
 html[data-theme="dark"] .apexcharts-tooltip-text-y-value {
     color: var(--ork-text, #e2e8f0) !important;
 }
+
+/* In-Person / Online / All control (orkui.css .orn-type-control) inside a report sidebar
+   form: one row across the narrow sidebar. Colours and dark mode come from orkui.css. */
+.rp-form-group .orn-type-control { display: flex; flex-wrap: nowrap; width: 100%; }
+.rp-form-group .orn-type-control .orn-type-opt { padding: 0 6px; font-size: 13px; min-width: 0; }

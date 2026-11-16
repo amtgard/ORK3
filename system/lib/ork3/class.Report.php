@@ -2693,6 +2693,7 @@ class Report extends Ork3
 
     public function GetTopParksByAttendance($request = null)
     {
+        $type = $this->_takeAttendanceType($request);
         $key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false) {
             return $cache;
@@ -2737,6 +2738,7 @@ class Report extends Ork3
 									date >= '$escaped_start'
 									and date <= '$escaped_end'
 									and a.mundane_id > 0
+									" . Attendance::TypeClause($type, 'a') . "
 								group by date_year, date_week3, mundane_id, a.park_id) mundanesbyweek
 							on p.park_id = mundanesbyweek.park_id
 				where p.active = 'Active'
@@ -2773,6 +2775,7 @@ class Report extends Ork3
 
     public function GetActiveKingdomsSummary($request = null)
     {
+        $type = $this->_takeAttendanceType($request);
         $key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 3600)) !== false) {
             return $cache;
@@ -2801,7 +2804,7 @@ class Report extends Ork3
 										a.mundane_id, a.date_year, a.date_week3 as week, p.kingdom_id
 									from " . DB_PREFIX . "attendance a
 									inner join " . DB_PREFIX . "park p on p.park_id = a.park_id
-									where a.date >= '$wk_start' and a.mundane_id > 0 group by a.date_year, a.date_week3, a.mundane_id, p.kingdom_id)
+									where a.date >= '$wk_start' and a.mundane_id > 0" . Attendance::TypeClause($type, 'a') . " group by a.date_year, a.date_week3, a.mundane_id, p.kingdom_id)
 									mundanesbyweek group by kingdom_id) total_attendance on total_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select
@@ -2809,8 +2812,8 @@ class Report extends Ork3
 							from
 								(select
 										mundane_id, date_month as month, kingdom_id
-									from " . DB_PREFIX . "attendance
-									where date > '$mo_start' and mundane_id > 0 group by date_month, mundane_id, kingdom_id)
+									from " . DB_PREFIX . "attendance am
+									where date > '$mo_start' and mundane_id > 0" . Attendance::TypeClause($type, 'am') . " group by date_month, mundane_id, kingdom_id)
 									mundanesbymonth group by kingdom_id) monthly_attendance on monthly_attendance.kingdom_id = k.kingdom_id
 					left join
 						(select kingdom_id, AVG(monthly_unique) AS avg_monthly
@@ -2818,7 +2821,7 @@ class Report extends Ork3
 								select a.date_year, a.date_month, p2.kingdom_id, COUNT(DISTINCT a.mundane_id) AS monthly_unique
 								from " . DB_PREFIX . "attendance a
 								inner join " . DB_PREFIX . "park p2 on p2.park_id = a.park_id
-								where a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) and a.mundane_id > 0
+								where a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) and a.mundane_id > 0" . Attendance::TypeClause($type, 'a') . "
 								group by a.date_year, a.date_month, p2.kingdom_id
 							) mo_sub
 							group by kingdom_id) avg_monthly_att on avg_monthly_att.kingdom_id = k.kingdom_id
@@ -2831,8 +2834,8 @@ class Report extends Ork3
 									from
 										(select
 												kingdom_id, park_id
-											from " . DB_PREFIX . "attendance
-											where date > '" . date("Y-m-d", strtotime("-$request[ParkAttendanceWithin] week")) . "' group by date_week3, mundane_id) mundanesbyweek
+											from " . DB_PREFIX . "attendance ap
+											where date > '" . date("Y-m-d", strtotime("-$request[ParkAttendanceWithin] week")) . "'" . Attendance::TypeClause($type, 'ap') . " group by date_week3, mundane_id) mundanesbyweek
 									group by kingdom_id, park_id) parkcount
 							group by kingdom_id) activeparks on activeparks.kingdom_id = k.kingdom_id
 					where active = 'Active'
@@ -3375,6 +3378,25 @@ class Report extends Ork3
     /*  Park Attendance Explorer helpers & methods                        */
     /* ------------------------------------------------------------------ */
 
+    /**
+     * Read the In-Person / Online / All request key for a report that filters by
+     * attendance type, and rewrite it in $request so the GhettoCache key carries it.
+     * 'all' (the default, also for missing or unknown values) removes the key, so All
+     * shares the pre-change cache entry and returns the pre-change result.
+     */
+    private function _takeAttendanceType(&$request): string
+    {
+        if (!is_array($request)) {
+            $request = array();
+        }
+        $type = Attendance::NormalizeType($request['AttendanceType'] ?? null);
+        unset($request['AttendanceType']);
+        if ($type !== 'all') {
+            $request['AttendanceType'] = $type;
+        }
+        return $type;
+    }
+
     private function _periodExpr($period, $alias = 'a')
     {
         switch ($period) {
@@ -3393,6 +3415,7 @@ class Report extends Ork3
 
     public function ParkAttendanceAllParks($request)
     {
+        $type = $this->_takeAttendanceType($request);
         $cache_key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false) {
             return $cache;
@@ -3425,6 +3448,7 @@ class Report extends Ork3
 					AND a.park_id > 0
 					AND p.active = 'Active'
 					$local_clause
+					" . Attendance::TypeClause($type, 'a') . "
 				GROUP BY p.park_id, period_label
 				ORDER BY p.name, period_label";
 
@@ -3459,7 +3483,8 @@ class Report extends Ork3
 					AND a2.date <= '$end_date'
 					AND a2.park_id > 0
 					AND p2.active = 'Active'"
-                    . ($local_only ? " AND m2.park_id = a2.park_id" : '');
+                    . ($local_only ? " AND m2.park_id = a2.park_id" : '')
+                    . Attendance::TypeClause($type, 'a2');
 
         $r_kw = $this->db->query($sql_kw);
         if ($r_kw !== false) {
@@ -3486,6 +3511,7 @@ class Report extends Ork3
 						AND a.date <= '$end_date'
 						AND a.park_id > 0
 						AND p.active = 'Active'
+						" . Attendance::TypeClause($type, 'a') . "
 					GROUP BY a.park_id, period_label, a.mundane_id
 				) sub
 				GROUP BY sub.park_id, sub.period_label";
@@ -3523,6 +3549,13 @@ class Report extends Ork3
 
     public function GetNewPlayerAttendance($request)
     {
+        // Attendance type (In-Person / Online / All). Who counts as a new player, and
+        // their first park, always come from ALL attendance: an online sign-in is real
+        // participation, so a player whose first sign-in was online is not "new" again
+        // at their first in-person visit. The type filters only the attendance counted
+        // and shown: visits, returning (2+ visits), last sign-in; New Players becomes the
+        // new players with at least one sign-in of that type in range.
+        $type = $this->_takeAttendanceType($request);
         $cache_key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false) {
             return $cache;
@@ -3555,19 +3588,24 @@ class Report extends Ork3
         } else {
             $visit_scope = "AND a_range.kingdom_id IN ($kidList)";
         }
+        $visit_scope .= Attendance::TypeClause($type, 'a_range');
+        // All: every new player. Filtered: new players with an in-range sign-in of that
+        // type (np.has_type), so In-Person equals All when no sign-in is online.
+        $new_player_col = $type === 'all' ? 'np.mundane_id' : 'CASE WHEN np.has_type = 1 THEN np.mundane_id END';
 
         // Summary query: all active parks with new player stats; parks with no new players show zeros.
         $sql_summary = "SELECT
 				p.park_id,
 				p.name AS park_name,
-				COUNT(DISTINCT np.mundane_id) AS new_players,
+				COUNT(DISTINCT $new_player_col) AS new_players,
 				SUM(CASE WHEN vc.visit_count >= 2 THEN 1 ELSE 0 END) AS returning_players,
 				COALESCE(SUM(vc.visit_count), 0) AS new_player_visits
 			FROM " . DB_PREFIX . "park p
 			LEFT JOIN (
 				-- New players: first sign-in is in range AND no earlier sign-in exists.
 				-- NOT EXISTS uses the mundane_id index on a_pre; avoids a full-table MIN() scan.
-				SELECT a_in.mundane_id, MIN(a_in.park_id) AS first_park_id
+				SELECT a_in.mundane_id, MIN(a_in.park_id) AS first_park_id,
+				       MAX(" . Attendance::TypePredicate($type, 'a_in') . ") AS has_type
 				FROM " . DB_PREFIX . "attendance a_in
 				WHERE a_in.mundane_id > 0
 				  AND a_in.park_id > 0
@@ -3664,11 +3702,12 @@ class Report extends Ork3
 					GROUP BY a_range.mundane_id
 				) vc ON vc.mundane_id = np.mundane_id
 				INNER JOIN (
-					SELECT mundane_id, MAX(date) AS last_signin_date
-					FROM " . DB_PREFIX . "attendance
-					WHERE mundane_id > 0
-					  AND date >= '$start_date'
-					GROUP BY mundane_id
+					SELECT a_last.mundane_id, MAX(a_last.date) AS last_signin_date
+					FROM " . DB_PREFIX . "attendance a_last
+					WHERE a_last.mundane_id > 0
+					  AND a_last.date >= '$start_date'
+					  " . Attendance::TypeClause($type, 'a_last') . "
+					GROUP BY a_last.mundane_id
 				) ls ON ls.mundane_id = np.mundane_id
 				ORDER BY p.name, m.persona";
 
@@ -3697,6 +3736,10 @@ class Report extends Ork3
 
     public function GetNewPlayerAttendanceByKingdom($request)
     {
+        // Attendance type: same rule as GetNewPlayerAttendance. New-player identity and
+        // first kingdom come from ALL attendance; the type filters the counted visits,
+        // and New Players becomes those with at least one sign-in of that type in range.
+        $type = $this->_takeAttendanceType($request);
         $cache_key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false) {
             return $cache;
@@ -3704,18 +3747,20 @@ class Report extends Ork3
 
         $start_date = mysql_real_escape_string($request['StartDate']);
         $end_date   = mysql_real_escape_string($request['EndDate']);
+        $new_player_col = $type === 'all' ? 'np.mundane_id' : 'CASE WHEN np.has_type = 1 THEN np.mundane_id END';
 
         $sql = "SELECT
 				k.kingdom_id,
 				k.name AS kingdom_name,
-				COUNT(DISTINCT np.mundane_id) AS new_players,
+				COUNT(DISTINCT $new_player_col) AS new_players,
 				SUM(CASE WHEN vc.visit_count >= 2 THEN 1 ELSE 0 END) AS returning_players,
 				COALESCE(SUM(vc.visit_count), 0) AS new_player_visits
 			FROM " . DB_PREFIX . "kingdom k
 			LEFT JOIN (
 				-- New players: first sign-in is in range AND no earlier sign-in exists.
 				-- NOT EXISTS uses the mundane_id index on a_pre; avoids a full-table MIN() scan.
-				SELECT a_in.mundane_id, p.kingdom_id AS first_kingdom_id
+				SELECT a_in.mundane_id, p.kingdom_id AS first_kingdom_id,
+				       MAX(" . Attendance::TypePredicate($type, 'a_in') . ") AS has_type
 				FROM " . DB_PREFIX . "attendance a_in
 				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a_in.park_id
 				WHERE a_in.mundane_id > 0
@@ -3737,6 +3782,7 @@ class Report extends Ork3
 				WHERE a_range.date >= '$start_date'
 				  AND a_range.date <= '$end_date'
 				  AND a_range.mundane_id > 0
+				  " . Attendance::TypeClause($type, 'a_range') . "
 				GROUP BY a_range.mundane_id, a_range.kingdom_id
 			) vc ON vc.mundane_id = np.mundane_id AND vc.kingdom_id = k.kingdom_id
 			WHERE k.active = 'Active'
@@ -3777,6 +3823,7 @@ class Report extends Ork3
 
     public function ParkAttendanceSinglePark($request)
     {
+        $type = $this->_takeAttendanceType($request);
         $key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
             return $cache;
@@ -3804,6 +3851,7 @@ class Report extends Ork3
 					AND a2.date >= '$start_date'
 					AND a2.date <= '$end_date'
 					AND a2.mundane_id > 0
+					" . Attendance::TypeClause($type, 'a2') . "
 				GROUP BY a2.mundane_id
 				HAVING COUNT(*) >= $min_signins
 			)";
@@ -3830,6 +3878,7 @@ class Report extends Ork3
 					AND a.mundane_id > 0
 					$local_filter
 					$min_filter
+					" . Attendance::TypeClause($type, 'a') . "
 				GROUP BY a.mundane_id, period_label
 				ORDER BY m.persona, period_label";
 

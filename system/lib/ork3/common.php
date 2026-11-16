@@ -151,6 +151,22 @@ function ork_attendance_type_control(string $current, string $name = 'Attendance
 }
 
 /**
+ * One-line note for a report filtered by attendance type, shown beside the
+ * results when the control is not on All. Returns '' for All (and junk values).
+ */
+function ork_attendance_type_note($current): string
+{
+    switch (Attendance::NormalizeType($current)) {
+        case 'in_person':
+            return 'Showing in-person sign-ins only.';
+        case 'online':
+            return 'Showing online sign-ins only.';
+        default:
+            return '';
+    }
+}
+
+/**
  * Next occurrence dates for a park-day row, mirroring the recurrence
  * predicates in Weather::parks_playing_on(). $pd uses the GetParkDays keys:
  * Recurrence, WeekDay, WeekOfMonth, MonthDay, StartDate, WeekInterval.

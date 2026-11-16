@@ -20,14 +20,19 @@ class Model_Admin extends Model
         return $this->Report->GetKingdomParkAverages(array('KingdomId' => $kingdom_id));
     }
 
-    public function get_top_parks_by_attendance($limit = 25, $start_date = null, $end_date = null, $native_populace = false, $waivered = false)
+    public function get_top_parks_by_attendance($limit = 25, $start_date = null, $end_date = null, $native_populace = false, $waivered = false, $attendance_type = 'all')
     {
-        return $this->Report->GetTopParksByAttendance(array('Limit' => $limit, 'StartDate' => $start_date, 'EndDate' => $end_date, 'NativePopulace' => $native_populace, 'Waivered' => $waivered));
+        return $this->Report->GetTopParksByAttendance(array('Limit' => $limit, 'StartDate' => $start_date, 'EndDate' => $end_date, 'NativePopulace' => $native_populace, 'Waivered' => $waivered, 'AttendanceType' => $attendance_type));
     }
 
-    public function get_new_player_attendance_by_kingdom($start_date, $end_date)
+    public function get_new_player_attendance_by_kingdom($start_date, $end_date, $attendance_type = 'all')
     {
-        return $this->Report->GetNewPlayerAttendanceByKingdom(array('StartDate' => $start_date, 'EndDate' => $end_date));
+        return $this->Report->GetNewPlayerAttendanceByKingdom(array('StartDate' => $start_date, 'EndDate' => $end_date, 'AttendanceType' => $attendance_type));
+    }
+
+    public function get_active_kingdoms_summary($attendance_type = 'all')
+    {
+        return $this->Report->GetActiveKingdomsSummary(array('AttendanceType' => $attendance_type));
     }
 
     public function get_inactive_kingdoms()

@@ -6588,7 +6588,8 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* Card */
 .adm-card { background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 10px; box-shadow: var(--ork-shadow-card); overflow: hidden; margin-bottom: 24px; }
 .adm-card-header,
-.cp-overview-header { padding: 14px 20px; border-bottom: 1px solid var(--ork-divider); background: var(--ork-bg-secondary); display: flex; align-items: center; justify-content: space-between; }
+.cp-overview-header { padding: 14px 20px; border-bottom: 1px solid var(--ork-divider); background: var(--ork-bg-secondary); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.cp-overview-note { padding: 8px 20px; border-bottom: 1px solid var(--ork-divider); font-size: 13px; color: var(--ork-text-secondary); }
 .adm-card-title,
 .cp-overview-title { font-size: 14px; font-weight: 700; color: var(--ork-text); display: flex; align-items: center; gap: 8px; }
 .adm-count { background: #e2e8f0; color: #4a5568; border-radius: 10px; padding: 1px 8px; font-size: 12px; font-weight: 600; }
@@ -9102,6 +9103,7 @@ html[data-theme="dark"] .cp-report-list-desc { color: var(--ork-text-muted); }
 html[data-theme="dark"] .cp-overview-wrap { background: var(--ork-card-bg); border-color: var(--ork-border); }
 html[data-theme="dark"] .cp-overview-header { background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .cp-overview-title { color: var(--ork-text); }
+html[data-theme="dark"] .cp-overview-note { border-bottom-color: var(--ork-border); color: var(--ork-text-secondary); }
 html[data-theme="dark"] .cp-overview-search input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .cp-kd-table thead th { background: var(--ork-bg-secondary); color: var(--ork-text-muted); border-bottom-color: var(--ork-border); text-shadow: none; }
 html[data-theme="dark"] .cp-kd-table thead th:hover { color: var(--ork-text); }
