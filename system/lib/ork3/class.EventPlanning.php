@@ -1794,20 +1794,10 @@ class EventPlanning extends Ork3
         }
 
         $skippedFeast = 0;
-        if (!$caps['can_feast']) {
-            $this->db->Clear();
-            $feastRow = $this->db->DataSet(
-                'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . "event_schedule
-                 WHERE event_calendardetail_id = " . $sourceId . "
-                   AND (category = 'Feast and Food' OR secondary_category = 'Feast and Food')"
-            );
-            $skippedFeast = ($feastRow && $feastRow->Next()) ? (int) $feastRow->c : 0;
-        }
-
         $mod = ['schedule' => true, 'feast' => $caps['can_feast'], 'meals' => $caps['can_feast']];
         $this->db->BeginTrans();
         try {
-            $newIds = $this->copyScheduleModules($sourceId, $detailId, $mod, $shiftDays);
+            $newIds = $this->copyScheduleModules($sourceId, $detailId, $mod, $shiftDays, null, $skippedFeast);
         } catch (\RuntimeException $e) {
             $this->db->RollbackTrans();
             return ['Status' => ProcessingError('Could not copy the schedule.')];
@@ -1840,6 +1830,7 @@ class EventPlanning extends Ork3
      */
     private function scheduleCopySources(int $eventId, int $detailId): array
     {
+        // CopyScheduleInto accepts only sources in this list, so a same-event occurrence beyond the cap cannot be copied from.
         $limit = 25;
         $this->db->Clear();
         $eventRow = $this->db->DataSet(
@@ -2836,11 +2827,20 @@ class EventPlanning extends Ork3
      * With $deltaSeconds null every time moves by $shiftDays calendar days with its
      * clock time kept; otherwise by $deltaSeconds seconds (CreateEventWithCopy).
      *
+     * $skippedFeast receives the number of feast items left out because $mod['feast'] is off.
+     *
      * @return list<int> the new schedule ids, in source start order
      * @throws \RuntimeException when a write fails
      */
-    private function copyScheduleModules(int $srcDetailId, int $newDetailId, array $mod, int $shiftDays, ?int $deltaSeconds = null): array
-    {
+    private function copyScheduleModules(
+        int $srcDetailId,
+        int $newDetailId,
+        array $mod,
+        int $shiftDays,
+        ?int $deltaSeconds = null,
+        ?int &$skippedFeast = null
+    ): array {
+        $skippedFeast = 0;
         $copyMeals = $mod['meals'] ?? true;
         $this->db->Clear();
         $schedRs = $this->db->DataSet(
@@ -2870,6 +2870,9 @@ class EventPlanning extends Ork3
         foreach ($sourceRows as $row) {
             $isFeast = ($row['category'] === 'Feast and Food' || $row['secondary_category'] === 'Feast and Food');
             if (!($isFeast ? !empty($mod['feast']) : !empty($mod['schedule']))) {
+                if ($isFeast) {
+                    $skippedFeast++;
+                }
                 continue;
             }
 

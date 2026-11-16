@@ -855,7 +855,14 @@ final class EventPlanningTest extends TestCase
         $this->fixture->insertScheduleAt($src['detail_id'], 'Night Quest', 'Roleplay and Quests', '2026-10-31 23:30:00', '2026-11-01 00:30:00');
         $existing = $this->fixture->insertScheduleAt($dst['detail_id'], 'Already Here', 'Other', '2026-11-06 09:00:00', '2026-11-06 10:00:00');
         unset($_SESSION['is_authorized_mundane_id']);
-        $r = $this->planning->CopyScheduleInto(['Token' => $grantor['token'], 'EventId' => $dst['event_id'], 'EventCalendarDetailId' => $dst['detail_id'], 'SourceDetailId' => $src['detail_id']]);
+        // A zone with a clock change between source and target, so a seconds-based shift would be an hour off.
+        $tz = date_default_timezone_get();
+        date_default_timezone_set('America/New_York');
+        try {
+            $r = $this->planning->CopyScheduleInto(['Token' => $grantor['token'], 'EventId' => $dst['event_id'], 'EventCalendarDetailId' => $dst['detail_id'], 'SourceDetailId' => $src['detail_id']]);
+        } finally {
+            date_default_timezone_set($tz);
+        }
         $this->assertSame(0, $r['Status']['Status']);
         $this->assertSame(
             [['Opening Court', '2026-11-06 18:00:00', '2026-11-06 19:00:00'], ['Night Quest', '2026-11-07 23:30:00', '2026-11-08 00:30:00']],
@@ -885,6 +892,41 @@ final class EventPlanningTest extends TestCase
         $denied = $this->planning->CopyScheduleInto($req + ['Token' => $nobody['token']]);
         $this->assertNotSame(0, $denied['Status']['Status']);
         $this->assertSame(1, $this->fixture->countSchedule($dst['detail_id']));
+    }
+
+    public function testCopyScheduleIntoRefusesASourceOutsideTheAllowedSet(): void
+    {
+        $dst = $this->fixture->createPublishedEventOn('copy-refuse-dst', '2026-11-06');
+        $draft = $this->fixture->createPublishedEventOn('copy-refuse-draft', '2026-10-30', 'draft');
+        $this->fixture->insertScheduleAt($draft['detail_id'], 'Secret Plan', 'Court', '2026-10-30 18:00:00', '2026-10-30 19:00:00');
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $dst['park_id'], AUTH_CREATE, 'copy-refuse-admin');
+        $req = ['Token' => $grantor['token'], 'EventId' => $dst['event_id'], 'EventCalendarDetailId' => $dst['detail_id']];
+        $before = $this->fixture->countSchedule($dst['detail_id']);
+        foreach ([$draft['detail_id'], 2000000000] as $sourceId) {
+            unset($_SESSION['is_authorized_mundane_id']);
+            $r = $this->planning->CopyScheduleInto($req + ['SourceDetailId' => $sourceId]);
+            $this->assertNotSame(0, $r['Status']['Status'], 'source ' . $sourceId);
+            $this->assertSame($before, $this->fixture->countSchedule($dst['detail_id']));
+        }
+    }
+
+    public function testCopyScheduleIntoHandlesANegativeShiftAndCopiesMealFieldsWithFeastRights(): void
+    {
+        $src = $this->fixture->createPublishedEventOn('copy-neg-src', '2026-11-13');
+        $dst = $this->fixture->createPublishedEventOn('copy-neg-dst', '2026-11-06');
+        $feast = $this->fixture->insertScheduleAt($src['detail_id'], 'Feast', 'Feast and Food', '2026-11-13 17:00:00', '2026-11-13 18:00:00');
+        $this->fixture->setScheduleMeal($feast, 'Stew and bread', 12.5);
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $dst['park_id'], AUTH_CREATE, 'copy-neg-admin');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->planning->CopyScheduleInto(['Token' => $grantor['token'], 'EventId' => $dst['event_id'], 'EventCalendarDetailId' => $dst['detail_id'], 'SourceDetailId' => $src['detail_id']]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame(0, $r['SkippedFeast']);
+        $this->assertCount(1, $r['Schedule']);
+        $row = $this->fixture->fetchScheduleRow((int) $r['Schedule'][0]['EventScheduleId']);
+        $this->assertSame(
+            ['2026-11-06 17:00:00', '2026-11-06 18:00:00', 'Stew and bread', 12.5],
+            [$row['start_time'], $row['end_time'], $row['menu'], (float) $row['cost']]
+        );
     }
 
     public function testScheduleCopySourcesListThisEventsOtherOccurrencesFirst(): void

@@ -138,12 +138,12 @@ final class EventPlanningFixture
      *
      * @return array{event_id: int, detail_id: int, kingdom_id: int, park_id: int, mundane_id: int}
      */
-    public function createPublishedEventOn(string $suffix, string $startDate): array
+    public function createPublishedEventOn(string $suffix, string $startDate, string $status = 'published'): array
     {
         $kingdomId = $this->firstKingdomId();
         $parkId = $this->firstParkId();
         $ownerId = $this->insertMundane($suffix . '-owner', $parkId, $kingdomId);
-        $eventId = $this->insertEvent($kingdomId, $parkId, $ownerId, $suffix, 'published');
+        $eventId = $this->insertEvent($kingdomId, $parkId, $ownerId, $suffix, $status);
         $endDate = (new \DateTimeImmutable($startDate))->modify('+2 days')->format('Y-m-d');
         $detailId = $this->insertDetail($eventId, $startDate . ' 09:00:00', $endDate . ' 16:00:00');
 
@@ -237,6 +237,12 @@ final class EventPlanningFixture
         $this->scheduleIds[] = $id;
 
         return $id;
+    }
+
+    public function setScheduleMeal(int $scheduleId, string $menu, float $cost): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'event_schedule SET menu = ?, cost = ? WHERE event_schedule_id = ?')
+            ->execute([$menu, $cost, $scheduleId]);
     }
 
     public function insertScheduleLead(int $scheduleId, int $mundaneId, bool $isAuto = false): void
