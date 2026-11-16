@@ -727,9 +727,35 @@ final class EventPlanningTest extends TestCase
         $this->assertSame([$a => true, $b => false], $byId);
         $this->batch($ctx, $token, [['op' => 'update', 'id' => $id, 'fields' => ['Leads' => [['MundaneId' => $a]]]]]);
         $this->assertSame([['mundane_id' => $a, 'is_auto' => 0]], $this->fixture->fetchScheduleLeads($id));
+        $this->saveStaff($ctx, $token, $b, ['Class', 'Battlegame']);
         unset($_SESSION['is_authorized_mundane_id']);
         $list = $this->planning->GetScheduleForManage(['Token' => $token, 'EventId' => $ctx['event_id'], 'EventCalendarDetailId' => $ctx['detail_id']]);
-        $this->assertArrayHasKey('LeadCategories', $list['StaffList'][0] ?? ['LeadCategories' => []]);
+        $this->assertSame(0, $list['Status']['Status']);
+        $this->assertCount(1, $list['StaffList']);
+        $this->assertSame(['Battlegame', 'Class'], $list['StaffList'][0]['LeadCategories']);
+        $this->assertSame([false], array_column($list['ScheduleList'][0]['Leads'], 'Auto'));
+    }
+
+    public function testEditingStaffWithoutLeadCategoriesKeepsThem(): void
+    {
+        [$ctx, $token] = $this->batchContext('lead-keep');
+        $warcrat = $this->fixture->createPlayer('lead-keep-w');
+        $item = $this->fixture->insertSchedule($ctx['detail_id'], 'Mothman', 'Battlegame');
+        $staffId = (int) $this->saveStaff($ctx, $token, $warcrat, ['Battlegame'])['Staff']['EventStaffId'];
+        $this->assertSame([['mundane_id' => $warcrat, 'is_auto' => 1]], $this->fixture->fetchScheduleLeads($item));
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->planning->AddEventStaff([
+            'Token' => $token, 'EventId' => $ctx['event_id'], 'EventCalendarDetailId' => $ctx['detail_id'],
+            'MundaneId' => $warcrat, 'RoleName' => 'Head Warcrat', 'StaffId' => $staffId,
+        ]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame('Head Warcrat', $this->fixture->fetchStaffRow($staffId)['role_name']);
+        $this->assertSame(['Battlegame'], $this->fixture->fetchStaffCategories($staffId));
+        $this->assertSame(['Battlegame'], $r['Staff']['LeadCategories']);
+        $this->assertSame([['mundane_id' => $warcrat, 'is_auto' => 1]], $this->fixture->fetchScheduleLeads($item));
+        $this->assertSame(0, $r['LeadsAdded']);
+        $this->assertSame(0, $r['LeadsRemoved']);
     }
 
     public function testStaffChangesRejectAnOccurrenceOfAnotherEvent(): void

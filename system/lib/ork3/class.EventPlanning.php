@@ -2379,7 +2379,6 @@ class EventPlanning extends Ork3
         return $text !== '' ? $text : null;
     }
 
-    /** Trimmed string for a scalar request value; '' for anything else. */
     /**
      * A strictly positive integer id from request data, or 0. Digit strings are
      * accepted; floats, exponents ("1e3"), decimals ("5.9") and signs are not.
@@ -2402,6 +2401,7 @@ class EventPlanning extends Ork3
         return is_array($lead) && !empty($lead['Auto']) && $lead['Auto'] !== 'false';
     }
 
+    /** Trimmed string for a scalar request value; '' for anything else. */
     private function scheduleText(mixed $value): string
     {
         return is_scalar($value) ? trim((string) $value) : '';
