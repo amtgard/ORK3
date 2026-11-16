@@ -9930,11 +9930,16 @@ $(document).ready(function() {
             evRefreshStaffQuickAdd();
         }
 
-        // Adding an item: its primary category's leads, while the list is untouched.
+        // The primary category's leads. Adding an item: the category's leads, while
+        // the list is untouched. Editing one: its auto-filled leads are swapped for
+        // the new category's, and hand-picked ones stay.
         window.evSchedApplyCategoryLeads = function() {
             var mode = gid('ev-sched-mode'), cat = gid('ev-sched-category');
-            if (!mode || mode.value !== 'add' || !cat || evSchedLeadsTouched || !window.EvBoardCore) return;
-            evSchedLeads = EvBoardCore.leadsForCategory(EvConfig.staffList || [], cat.value || 'Other');
+            if (!mode || !cat || !window.EvBoardCore) return;
+            var staff = EvConfig.staffList || [], name = cat.value || 'Other';
+            if (mode.value === 'edit') evSchedLeads = EvBoardCore.swapAutoLeads(evSchedLeads, staff, name);
+            else if (mode.value === 'add' && !evSchedLeadsTouched) evSchedLeads = EvBoardCore.leadsForCategory(staff, name);
+            else return;
             evRenderSchedLeads();
             evRefreshStaffQuickAdd();
         };

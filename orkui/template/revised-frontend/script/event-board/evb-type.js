@@ -296,8 +296,9 @@
 
     // Save a renamed item: 'same' (nothing changed), 'saved', 'empty' (saves
     // nothing), 'refused' (Done is leaving) or 'gone'. The title is the text as
-    // typed, trimmed, without an '@query' still being typed.
+    // typed, trimmed (an unresolved '@query' is kept as text once the box is left).
     function saveEdit() {
+        s.entry.settleQuery();
         var r = s.entry.result();
         if (!r || !r.ok) return 'empty';
         var f = {};
@@ -344,6 +345,7 @@
     // 'invalid' (text with no title), and leaves the block open.
     function addCurrent() {
         if (!s.entry.getText().trim()) return 'empty';
+        s.entry.settleQuery();
         var r = s.entry.result();
         if (!r || !r.ok) return 'invalid';
         return s.ctx.add(r, s.entry.getLeads()) == null ? 'refused' : 'added';
@@ -418,6 +420,7 @@
         }
         e.preventDefault();
         e.stopPropagation();
+        s.entry.settleQuery();
         var r = s.entry.result();
         if (!r || !r.ok) { shake(); return; }
         var len = r.endMin - r.startMin;

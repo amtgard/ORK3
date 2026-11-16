@@ -18,7 +18,8 @@
  *
  * Title mode (setText(text, {titleOnly: true, leads})): nothing is parsed; the
  * result is {ok, titleOnly, title} with the text as typed, and the chips are the
- * leads alone. An '@query' still being typed is never part of the title.
+ * leads alone. While an '@query' is being typed it is left out of the reading;
+ * one still unresolved when the field is left or committed is kept as text.
  *
  *   EvBoardEntry.create(hostEl, {
  *     getContext: () => ctx,      // parseEntry's ctx (days, day, lastEnd, ...)
@@ -503,6 +504,8 @@
         }
 
         function commit() {
+            // An '@query' still open is committed as the text it is.
+            settleQuery();
             if (!result || !(result.ok || result.setDay)) {
                 // A line with no title cannot be added: say so on the field.
                 if (input.value.trim()) {
@@ -574,7 +577,21 @@
             input.focus();
         }
 
-        function onBlur() { cancelSearch(); closeMenu(); }
+        // Leaving the field settles an unresolved '@query' as ordinary text, as
+        // Enter with nothing to pick does: nothing typed is dropped.
+        function onBlur() {
+            cancelSearch();
+            closeMenu();
+            settleQuery();
+        }
+
+        // An '@query' still open becomes ordinary text.
+        function settleQuery() {
+            var a = activeLead();
+            if (!a) return;
+            dismissedAt = 'lead:' + a.from;
+            parse();
+        }
 
         function onViewportMove() { if (menu && menu.sug.kind === 'lead') placeLeadMenu(); }
 
@@ -629,6 +646,7 @@
             setText: setText,
             clear: clear,
             reparse: parse,
+            settleQuery: settleQuery,
             result: function () { return result; },
             getLeads: function () {
                 return leadsNow.map(function (l) { return { MundaneId: l.MundaneId, Persona: l.Persona, Auto: !!l.Auto }; });

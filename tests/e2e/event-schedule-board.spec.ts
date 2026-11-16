@@ -1249,11 +1249,11 @@ test.describe('editing', () => {
     await expect(editor).toHaveValue(`${PREFIX} renamed lead two `);
     await expect(chips).toHaveCount(1);
     await expect(chips).not.toHaveClass(/evb-chip-auto/);
-    // A half-typed '@query' left in the box is not saved into the title.
+    // A half-typed '@query' left in the box when it is left is kept as text.
     await editor.pressSequentially('@E2E Sch');
     await page.locator('.evb-modebar-title').click();
     await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
-    const it = await storeItem(page, `${PREFIX} renamed lead two`);
+    const it = await storeItem(page, `${PREFIX} renamed lead two @E2E Sch`);
     expect(it.Leads.map((l: any) => [l.Persona, !!l.Auto])).toEqual([['E2E Schedule Editor', false]]);
     expect(it.Category).toBe('Battlegame');
   });
@@ -1282,5 +1282,70 @@ test.describe('editing', () => {
       return it ? it.Leads.map((l: any) => [l.Persona, !!l.Auto]) : null;
     }, `${PREFIX} modal lead`);
     expect(stored).toEqual([['E2E Schedule Editor', true]]);
+  });
+
+  test('an unresolved @word is kept as typed when you click away', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const SATURDAY = await dayBeforeLast(page);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    const away = page.locator('.evb-modebar-title');
+
+    // A new block on the board.
+    await clickSlot(page, SATURDAY, '18:00');
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await expect(editor).toBeFocused();
+    await editor.pressSequentially(`${PREFIX} talk @zzqqx`);
+    await expect(page.locator('.evb-type-pop .evb-entry-menu')).toBeVisible();
+    await away.click();
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect(await storeItem(page, `${PREFIX} talk @zzqqx`)).not.toBeNull();
+
+    // The quick line: away, back, Enter.
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.click();
+    await line.pressSequentially(`sat 7p ${PREFIX} line @zzqqx`);
+    await away.click();
+    await line.click();
+    await line.press('End');
+    await line.press('Enter');
+    await expect(line).toHaveValue('');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect(await storeItem(page, `${PREFIX} line @zzqqx`)).not.toBeNull();
+
+    // A rename.
+    await quickAdd(page, `sun 3p ${PREFIX} rename keep`);
+    await page.locator('.evb-block', { hasText: `${PREFIX} rename keep` }).dblclick();
+    await expect(editor).toBeFocused();
+    await editor.press('End');
+    await editor.pressSequentially(' @zzqqx');
+    await away.click();
+    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect(await storeItem(page, `${PREFIX} rename keep @zzqqx`)).not.toBeNull();
+  });
+
+  test('changing the category in the full form swaps auto leads', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sat 4p bg: ${PREFIX} modal swap`);
+    const title = `${PREFIX} modal swap`;
+    const autos = () => page.evaluate(t => {
+      const it = (window as any).EvBoardEdit.store.items().find((i: any) => i.Title === t);
+      return it ? it.Leads.map((l: any) => !!l.Auto) : null;
+    }, title);
+    expect(await autos()).toEqual([true]);
+    const block = page.locator('.evb-block', { hasText: title });
+    const modal = page.locator('#ev-schedule-modal');
+    for (const [cat, want] of [['Court', []], ['Battlegame', [true]]] as const) {
+      await block.click();
+      await page.locator('.evb-block-toolbar [data-evb-act="details"]').click();
+      await expect(modal).toBeVisible();
+      await page.locator('#ev-sched-category').selectOption(cat);
+      await page.locator('#ev-sched-save-btn').click();
+      await expect(modal).toBeHidden();
+      await expect(block).toHaveAttribute('data-category', cat);
+      await expect.poll(autos).toEqual(want);
+    }
   });
 });

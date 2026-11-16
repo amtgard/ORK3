@@ -682,6 +682,7 @@
         // Nothing typed is dropped: a complete line is added first, a line with no
         // title stays, and a line that only names a day applies nothing.
         if (state.entry.getText().trim()) {
+            state.entry.settleQuery();
             var r = state.entry.result();
             if (r && !r.ok && r.setDay) {
                 state.entry.clear();
