@@ -20,6 +20,12 @@ class EventPlanning extends Ork3
         'Other'               => ['key' => '0', 'icon' => 'fa-star',           'color' => '#757575', 'bg' => '#fafafa', 'colorDark' => '#bdbdbd', 'bgDark' => '#2a2a2a', 'bold' => '#616161'],
     ];
 
+    /** Most changes one schedule batch may carry. */
+    private const SCHEDULE_BATCH_MAX_OPS = 200;
+
+    /** Fields a feast-capable caller may write; everyone else's are ignored. */
+    private const SCHEDULE_MEAL_FIELDS = ['Menu' => 'menu', 'Cost' => 'cost', 'Dietary' => 'dietary', 'Allergens' => 'allergens'];
+
     /**
      * Ordered map of category name to its definition
      * (`key`, `icon`, `color`, `bg`, `colorDark`, `bgDark`, `bold`).
@@ -802,8 +808,13 @@ class EventPlanning extends Ork3
         return $staffList;
     }
 
-    /** @return list<array<string, mixed>> */
-    private function fetchScheduleList(int $detailId): array
+    /**
+     * Schedule items of one occurrence with their leads; a positive $scheduleId
+     * narrows it to that one item (still scoped to the occurrence).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function fetchScheduleList(int $detailId, int $scheduleId = 0): array
     {
         $this->db->Clear();
         $scheduleRows = $this->db->DataSet(
@@ -813,7 +824,8 @@ class EventPlanning extends Ork3
                     secondary_category AS SecondaryCategory,
                     menu AS Menu, cost AS Cost, dietary AS Dietary, allergens AS Allergens
              FROM ' . DB_PREFIX . 'event_schedule
-             WHERE event_calendardetail_id = ' . $detailId . '
+             WHERE event_calendardetail_id = ' . $detailId
+            . ($scheduleId > 0 ? ' AND event_schedule_id = ' . $scheduleId : '') . '
              ORDER BY start_time'
         );
         $scheduleList = [];
@@ -1258,7 +1270,8 @@ class EventPlanning extends Ork3
         if ($mundaneId <= 0) {
             return BadToken();
         }
-        if (!valid_id($eventId) || !valid_id($detailId) || !valid_id($scheduleId)) {
+        if (!valid_id($eventId) || !valid_id($detailId) || !valid_id($scheduleId)
+            || !$this->detailBelongsToEvent($detailId, $eventId)) {
             return InvalidParameter('Invalid parameters.');
         }
 
@@ -1287,6 +1300,96 @@ class EventPlanning extends Ork3
         );
 
         return Success();
+    }
+
+    /**
+     * Applies a list of schedule changes to one occurrence in a single transaction:
+     * either every op is applied or none is.
+     *
+     * Ops: ['op' => 'add', 'cid' => string, 'item' => array],
+     *      ['op' => 'update', 'id' => int, 'fields' => array] (only the keys sent change),
+     *      ['op' => 'remove', 'id' => int].
+     *
+     * @return array{Status: array, Results?: list<array{op: string, cid: string, id: int, schedule: ?array}>, FailedIndex?: int}
+     */
+    public function ApplyScheduleOps(array $request): array
+    {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        $ops = $request['Ops'] ?? null;
+
+        if ($mundaneId <= 0) {
+            return ['Status' => BadToken(), 'FailedIndex' => -1];
+        }
+        if (!valid_id($eventId) || !valid_id($detailId) || !is_array($ops) || !array_is_list($ops)) {
+            return ['Status' => InvalidParameter('Invalid parameters.'), 'FailedIndex' => -1];
+        }
+        $caps = $this->staffScheduleCaps($mundaneId, $eventId, $detailId);
+        if (!$caps['can_schedule']) {
+            return ['Status' => NoAuthorization(), 'FailedIndex' => -1];
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.'), 'FailedIndex' => -1];
+        }
+        if (count($ops) > self::SCHEDULE_BATCH_MAX_OPS) {
+            return ['Status' => InvalidParameter('Too many changes in one request.'), 'FailedIndex' => -1];
+        }
+        if ($ops === []) {
+            return ['Status' => Success(), 'Results' => []];
+        }
+
+        $results = [];
+        $this->db->BeginTrans();
+        try {
+            foreach ($ops as $index => $op) {
+                [$error, $result] = $this->applyScheduleOp(is_array($op) ? $op : [], $detailId, $caps['can_feast']);
+                if ($error !== null) {
+                    $this->db->RollbackTrans();
+                    return ['Status' => $error, 'FailedIndex' => $index];
+                }
+                $results[] = $result;
+            }
+        } catch (\Throwable $e) {
+            $this->db->RollbackTrans();
+            throw $e;
+        }
+        if (!$this->db->CommitTrans()) {
+            return ['Status' => ProcessingError('Could not save the schedule.'), 'FailedIndex' => -1];
+        }
+
+        return ['Status' => Success(), 'Results' => $results];
+    }
+
+    /**
+     * The occurrence's schedule and staff for a caller who can manage the schedule.
+     *
+     * @return array{Status: array, ScheduleList?: list<array<string, mixed>>, StaffList?: list<array<string, mixed>>}
+     */
+    public function GetScheduleForManage(array $request): array
+    {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+
+        if ($mundaneId <= 0) {
+            return ['Status' => BadToken()];
+        }
+        if (!valid_id($eventId) || !valid_id($detailId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+        if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'schedule')) {
+            return ['Status' => NoAuthorization()];
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+
+        return [
+            'Status' => Success(),
+            'ScheduleList' => $this->fetchScheduleList($detailId),
+            'StaffList' => $this->fetchStaffList($detailId),
+        ];
     }
 
     public function ListCopySourceEvents($request)
@@ -1547,7 +1650,7 @@ class EventPlanning extends Ork3
         if ($mundaneId <= 0) {
             return BadToken();
         }
-        if (!valid_id($eventId) || !valid_id($detailId)) {
+        if (!valid_id($eventId) || !valid_id($detailId) || !$this->detailBelongsToEvent($detailId, $eventId)) {
             return InvalidParameter('Invalid Event ID.');
         }
         if ($isUpdate && !valid_id($scheduleId)) {
@@ -1564,16 +1667,8 @@ class EventPlanning extends Ork3
         $endTime = trim((string) ($request['EndTime'] ?? ''));
         $location = trim((string) ($request['Location'] ?? ''));
         $description = trim((string) ($request['Description'] ?? ''));
-        $category = trim((string) ($request['Category'] ?? 'Other'));
-        $secondaryCategory = trim((string) ($request['SecondaryCategory'] ?? ''));
-
-        $allowedCategories = array_keys(self::ScheduleCategories());
-        if (!in_array($category, $allowedCategories, true)) {
-            $category = 'Other';
-        }
-        if ($secondaryCategory !== '' && !in_array($secondaryCategory, $allowedCategories, true)) {
-            $secondaryCategory = '';
-        }
+        $category = $this->coerceScheduleCategory(trim((string) ($request['Category'] ?? 'Other')));
+        $secondaryCategory = $this->coerceSecondaryCategory(trim((string) ($request['SecondaryCategory'] ?? '')));
 
         $isFeast = ($category === 'Feast and Food' || $secondaryCategory === 'Feast and Food');
         if ($isFeast) {
@@ -1582,6 +1677,10 @@ class EventPlanning extends Ork3
             }
         } elseif (!$caps['can_schedule']) {
             return NoAuthorization();
+        }
+
+        if ($isUpdate && !$this->scheduleBelongsToDetail($scheduleId, $detailId)) {
+            return InvalidParameter('Schedule item not found.');
         }
 
         if ($title === '') {
@@ -1596,35 +1695,22 @@ class EventPlanning extends Ork3
         $endFmt = '';
 
         if (!$isUpdate || $caps['can_schedule']) {
-            if ($startTime === '' || $endTime === '') {
-                return InvalidParameter('Start and end times are required.');
+            [$timeError, $startFmt, $endFmt] = $this->normalizeScheduleTimes($startTime, $endTime);
+            if ($timeError !== null) {
+                return InvalidParameter($timeError);
             }
-            $startTs = strtotime($startTime);
-            $endTs = strtotime($endTime);
-            if (!$startTs || !$endTs) {
-                return InvalidParameter('Invalid time format.');
-            }
-            if ($endTs < $startTs) {
-                return InvalidParameter('End time cannot be before start time.');
-            }
-            $startFmt = date('Y-m-d H:i:s', $startTs);
-            $endFmt = date('Y-m-d H:i:s', $endTs);
         }
 
         if ($caps['can_feast']) {
-            $rawMenu = trim((string) ($request['Menu'] ?? ''));
-            $rawCost = trim((string) ($request['Cost'] ?? ''));
-            $rawDietary = trim((string) ($request['Dietary'] ?? ''));
-            $rawAllergens = trim((string) ($request['Allergens'] ?? ''));
-            $menu = ($rawMenu !== '') ? $rawMenu : null;
-            $cost = ($rawCost !== '' && is_numeric($rawCost)) ? round((float) $rawCost, 2) : null;
-            $dietary = ($rawDietary !== '') ? $rawDietary : null;
-            $allergens = ($rawAllergens !== '') ? $rawAllergens : null;
+            $menu = $this->normalizeMealField('Menu', $request['Menu'] ?? '');
+            $cost = $this->normalizeMealField('Cost', $request['Cost'] ?? '');
+            $dietary = $this->normalizeMealField('Dietary', $request['Dietary'] ?? '');
+            $allergens = $this->normalizeMealField('Allergens', $request['Allergens'] ?? '');
         } elseif ($isUpdate) {
             $this->db->Clear();
             $existRow = $this->db->DataSet(
                 'SELECT menu, cost, dietary, allergens FROM ' . DB_PREFIX . 'event_schedule
-                 WHERE event_schedule_id = ' . $scheduleId . ' LIMIT 1'
+                 WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId . ' LIMIT 1'
             );
             if (!$existRow || !$existRow->Next()) {
                 return InvalidParameter('Schedule item not found.');
@@ -1720,6 +1806,303 @@ class EventPlanning extends Ork3
                 'Leads' => $leadsOut,
             ],
         ];
+    }
+
+    /**
+     * One batch op, run inside ApplyScheduleOps's transaction.
+     *
+     * @return array{0: ?array, 1: ?array} [error status or null, result or null]
+     */
+    private function applyScheduleOp(array $op, int $detailId, bool $canFeast): array
+    {
+        $kind = $op['op'] ?? null;
+        $cid = is_scalar($op['cid'] ?? null) ? (string) $op['cid'] : '';
+
+        if ($kind === 'add') {
+            if (!is_array($op['item'] ?? null)) {
+                return [InvalidParameter('Invalid parameters.'), null];
+            }
+            [$error, $scheduleId] = $this->insertScheduleItem($detailId, $op['item'], $canFeast);
+        } elseif ($kind === 'update' || $kind === 'remove') {
+            $scheduleId = is_numeric($op['id'] ?? null) ? (int) $op['id'] : 0;
+            $stored = valid_id($scheduleId) ? $this->fetchScheduleTimesOnDetail($scheduleId, $detailId) : null;
+            if ($stored === null) {
+                return [InvalidParameter('Schedule item not found.'), null];
+            }
+            if ($kind === 'remove') {
+                $error = $this->deleteScheduleItem($scheduleId, $detailId);
+            } elseif (!is_array($op['fields'] ?? null)) {
+                $error = InvalidParameter('Invalid parameters.');
+            } else {
+                $error = $this->updateScheduleItem($scheduleId, $detailId, $op['fields'], $stored, $canFeast);
+            }
+        } else {
+            return [InvalidParameter('Unknown change type.'), null];
+        }
+        if ($error !== null) {
+            return [$error, null];
+        }
+
+        $schedule = null;
+        if ($kind !== 'remove') {
+            $schedule = $this->fetchScheduleRowForResult($scheduleId, $detailId);
+            if ($schedule === null) {
+                return [ProcessingError('Could not save the schedule.'), null];
+            }
+        }
+
+        return [null, ['op' => $kind, 'cid' => $cid, 'id' => $scheduleId, 'schedule' => $schedule]];
+    }
+
+    /** @return array{0: ?array, 1: int} [error status or null, new schedule id] */
+    private function insertScheduleItem(int $detailId, array $item, bool $canFeast): array
+    {
+        $title = $this->scheduleText($item['Title'] ?? '');
+        if ($title === '') {
+            return [InvalidParameter('A title is required.'), 0];
+        }
+        [$timeError, $start, $end] = $this->normalizeScheduleTimes(
+            $this->scheduleText($item['StartTime'] ?? ''),
+            $this->scheduleText($item['EndTime'] ?? '')
+        );
+        if ($timeError !== null) {
+            return [InvalidParameter($timeError), 0];
+        }
+
+        $values = [
+            'event_calendardetail_id' => $detailId,
+            'title' => $title,
+            'start_time' => $start,
+            'end_time' => $end,
+            'location' => $this->scheduleText($item['Location'] ?? ''),
+            'description' => $this->scheduleText($item['Description'] ?? ''),
+            'category' => $this->coerceScheduleCategory($this->scheduleText($item['Category'] ?? 'Other')),
+            'secondary_category' => $this->coerceSecondaryCategory($this->scheduleText($item['SecondaryCategory'] ?? '')),
+        ];
+        if ($canFeast) {
+            foreach (self::SCHEDULE_MEAL_FIELDS as $key => $column) {
+                $values[$column] = $this->normalizeMealField($key, $item[$key] ?? '');
+            }
+        }
+
+        $this->db->Clear();
+        foreach ($values as $column => $value) {
+            $this->db->$column = $value;
+        }
+        $columns = array_keys($values);
+        $ok = $this->db->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'event_schedule (' . implode(', ', $columns) . ')
+             VALUES (:' . implode(', :', $columns) . ')'
+        );
+        $scheduleId = $ok ? (int) $this->db->GetLastInsertId() : 0;
+        if ($scheduleId <= 0) {
+            return [ProcessingError('Could not save the schedule.'), 0];
+        }
+
+        if (array_key_exists('Leads', $item)) {
+            $error = $this->replaceScheduleLeads($scheduleId, $item['Leads'], false);
+            if ($error !== null) {
+                return [$error, 0];
+            }
+        }
+
+        return [null, $scheduleId];
+    }
+
+    /**
+     * Writes only the fields present in $fields. Meal fields are skipped unless
+     * $canFeast; when only one of start/end is sent, the order check uses the stored other.
+     *
+     * @param array{start_time: string, end_time: string} $stored
+     */
+    private function updateScheduleItem(int $scheduleId, int $detailId, array $fields, array $stored, bool $canFeast): ?array
+    {
+        $values = [];
+        if (array_key_exists('Title', $fields)) {
+            $values['title'] = $this->scheduleText($fields['Title']);
+            if ($values['title'] === '') {
+                return InvalidParameter('A title is required.');
+            }
+        }
+        $hasStart = array_key_exists('StartTime', $fields);
+        $hasEnd = array_key_exists('EndTime', $fields);
+        if ($hasStart || $hasEnd) {
+            [$timeError, $values['start_time'], $values['end_time']] = $this->normalizeScheduleTimes(
+                $hasStart ? $this->scheduleText($fields['StartTime']) : $stored['start_time'],
+                $hasEnd ? $this->scheduleText($fields['EndTime']) : $stored['end_time']
+            );
+            if ($timeError !== null) {
+                return InvalidParameter($timeError);
+            }
+        }
+        if (array_key_exists('Location', $fields)) {
+            $values['location'] = $this->scheduleText($fields['Location']);
+        }
+        if (array_key_exists('Description', $fields)) {
+            $values['description'] = $this->scheduleText($fields['Description']);
+        }
+        if (array_key_exists('Category', $fields)) {
+            $values['category'] = $this->coerceScheduleCategory($this->scheduleText($fields['Category']));
+        }
+        if (array_key_exists('SecondaryCategory', $fields)) {
+            $values['secondary_category'] = $this->coerceSecondaryCategory($this->scheduleText($fields['SecondaryCategory']));
+        }
+        if ($canFeast) {
+            foreach (self::SCHEDULE_MEAL_FIELDS as $key => $column) {
+                if (array_key_exists($key, $fields)) {
+                    $values[$column] = $this->normalizeMealField($key, $fields[$key]);
+                }
+            }
+        }
+
+        if ($values !== []) {
+            $this->db->Clear();
+            $setParts = [];
+            foreach ($values as $column => $value) {
+                $this->db->$column = $value;
+                $setParts[] = $column . ' = :' . $column;
+            }
+            $ok = $this->db->ExecuteChecked(
+                'UPDATE ' . DB_PREFIX . 'event_schedule SET ' . implode(', ', $setParts)
+                . ' WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId
+            );
+            if (!$ok) {
+                return ProcessingError('Could not save the schedule.');
+            }
+        }
+
+        if (array_key_exists('Leads', $fields)) {
+            return $this->replaceScheduleLeads($scheduleId, $fields['Leads'], true);
+        }
+
+        return null;
+    }
+
+    private function deleteScheduleItem(int $scheduleId, int $detailId): ?array
+    {
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $scheduleId
+        );
+        if ($ok) {
+            $this->db->Clear();
+            $ok = $this->db->ExecuteChecked(
+                'DELETE FROM ' . DB_PREFIX . 'event_schedule
+                 WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId
+            );
+        }
+
+        return $ok ? null : ProcessingError('Could not save the schedule.');
+    }
+
+    /** Sets an item's leads to $leads (list of ['MundaneId' => int]); $clearFirst drops the old ones. */
+    private function replaceScheduleLeads(int $scheduleId, mixed $leads, bool $clearFirst): ?array
+    {
+        if (!is_array($leads)) {
+            return InvalidParameter('Invalid parameters.');
+        }
+        if ($clearFirst) {
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked(
+                'DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $scheduleId
+            )) {
+                return ProcessingError('Could not save the schedule.');
+            }
+        }
+        foreach ($leads as $lead) {
+            $leadId = (is_array($lead) && is_numeric($lead['MundaneId'] ?? null)) ? (int) $lead['MundaneId'] : 0;
+            if (!valid_id($leadId)) {
+                continue;
+            }
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked(
+                'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id)
+                 VALUES (' . $scheduleId . ', ' . $leadId . ')'
+            )) {
+                return ProcessingError('Could not save the schedule.');
+            }
+        }
+
+        return null;
+    }
+
+    /** One item in the fetchScheduleList shape, or null when it is not on this occurrence. */
+    private function fetchScheduleRowForResult(int $scheduleId, int $detailId): ?array
+    {
+        $rows = $this->fetchScheduleList($detailId, $scheduleId);
+
+        return $rows[0] ?? null;
+    }
+
+    /** @return array{start_time: string, end_time: string}|null null when the item is not on this occurrence */
+    private function fetchScheduleTimesOnDetail(int $scheduleId, int $detailId): ?array
+    {
+        $this->db->Clear();
+        $row = $this->db->DataSet(
+            'SELECT start_time, end_time FROM ' . DB_PREFIX . 'event_schedule
+             WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId . ' LIMIT 1'
+        );
+        if (!$row || !$row->Next()) {
+            return null;
+        }
+
+        return ['start_time' => (string) $row->start_time, 'end_time' => (string) $row->end_time];
+    }
+
+    private function scheduleBelongsToDetail(int $scheduleId, int $detailId): bool
+    {
+        return $this->fetchScheduleTimesOnDetail($scheduleId, $detailId) !== null;
+    }
+
+    /**
+     * Validates a start/end pair and formats both as 'Y-m-d H:i:s'.
+     *
+     * @return array{0: ?string, 1: string, 2: string} [error message or null, start, end]
+     */
+    private function normalizeScheduleTimes(string $start, string $end): array
+    {
+        if ($start === '' || $end === '') {
+            return ['Start and end times are required.', '', ''];
+        }
+        $startTs = strtotime($start);
+        $endTs = strtotime($end);
+        if (!$startTs || !$endTs) {
+            return ['Invalid time format.', '', ''];
+        }
+        if ($endTs < $startTs) {
+            return ['End time cannot be before start time.', '', ''];
+        }
+
+        return [null, date('Y-m-d H:i:s', $startTs), date('Y-m-d H:i:s', $endTs)];
+    }
+
+    /** Unknown categories become 'Other'. */
+    private function coerceScheduleCategory(string $category): string
+    {
+        return array_key_exists($category, self::SCHEDULE_CATEGORIES) ? $category : 'Other';
+    }
+
+    /** Unknown secondary categories become empty. */
+    private function coerceSecondaryCategory(string $category): string
+    {
+        return array_key_exists($category, self::SCHEDULE_CATEGORIES) ? $category : '';
+    }
+
+    /** A meal field as stored: trimmed text or null; Cost is a 2-place number or null. */
+    private function normalizeMealField(string $key, mixed $raw): string|float|null
+    {
+        $text = $this->scheduleText($raw);
+        if ($key === 'Cost') {
+            return ($text !== '' && is_numeric($text)) ? round((float) $text, 2) : null;
+        }
+
+        return $text !== '' ? $text : null;
+    }
+
+    /** Trimmed string for a scalar request value; '' for anything else. */
+    private function scheduleText(mixed $value): string
+    {
+        return is_scalar($value) ? trim((string) $value) : '';
     }
 
     private function staffHasFlag(int $mundaneId, int $eventId, int $detailId, string $flag): bool

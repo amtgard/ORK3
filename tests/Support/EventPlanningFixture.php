@@ -358,6 +358,29 @@ final class EventPlanningFixture
         return (bool) $stmt->fetchColumn();
     }
 
+    public function fetchScheduleRow(int $scheduleId): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT title, start_time, end_time, location, description, category, secondary_category,
+                    menu, cost, dietary, allergens, event_calendardetail_id
+             FROM ' . DB_PREFIX . 'event_schedule WHERE event_schedule_id = ?'
+        );
+        $stmt->execute([$scheduleId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ?: null;
+    }
+
+    public function countSchedule(int $detailId): int
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ?'
+        );
+        $stmt->execute([$detailId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
     public function countScheduleLeads(int $scheduleId): int
     {
         $stmt = $this->pdo->prepare(

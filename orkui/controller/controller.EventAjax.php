@@ -602,7 +602,72 @@ class Controller_EventAjax extends Controller
         exit;
     }
 
+    // POST EventAjax/schedule_batch/{eventId}/{detailId} with Ops = JSON list of
+    // add/update/remove changes; all are applied or none are.
+    public function schedule_batch($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
+        $params    = explode('/', $p ?? '');
+        $event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+
+        if (!valid_id($event_id) || !valid_id($detail_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+            exit;
+        }
+
+        $ops = json_decode((string)($_POST['Ops'] ?? ''), true);
+        if (!is_array($ops) || !array_is_list($ops)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid request.']);
+            exit;
+        }
+
+        $this->load_model('EventPlanning');
+        $r = $this->EventPlanning->schedule_batch([
+            'Token' => $this->session->token,
+            'EventId' => $event_id,
+            'EventCalendarDetailId' => $detail_id,
+            'Ops' => $ops,
+        ]);
+        $error = $this->EventPlanning->json_error($r);
+        if ($error !== null) {
+            $error['failedIndex'] = (int)($r['FailedIndex'] ?? -1);
+            echo json_encode($error);
+            exit;
+        }
+        echo json_encode(['status' => 0, 'results' => $r['Results'] ?? []]);
+        exit;
+    }
+
+    // GET EventAjax/schedule_list/{eventId}/{detailId}: the schedule and staff for a schedule manager.
+    public function schedule_list($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        $params    = explode('/', $p ?? '');
+        $event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+
+        if (!valid_id($event_id) || !valid_id($detail_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+            exit;
+        }
+
+        $this->load_model('EventPlanning');
+        $r = $this->EventPlanning->schedule_list_for_manage($this->session->token, $event_id, $detail_id);
+        $this->EventPlanning->emit_json($r);
+        echo json_encode(['status' => 0, 'schedule' => $r['ScheduleList'] ?? [], 'staff' => $r['StaffList'] ?? []]);
+        exit;
+    }
 
     public function heraldry($p = null)
     {
