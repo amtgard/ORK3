@@ -15,18 +15,20 @@
  * after every render. Typing therefore never rebuilds the input: the caret,
  * focus and IME composition survive every re-render.
  *
- * The same block retypes an existing item in place (editItem): it opens over
- * the item prefilled with '<Title>[ at <Location>][ "<Description>"]', and
- * Enter, Tab or a click elsewhere updates only the parts the person changed:
- * the prefill is parsed once as it opens, the edited text is parsed the same
- * way, and only parts whose parsed value differs from that first parse are
- * written (never a comparison with the stored item, which the one-line prefill
- * cannot always spell exactly). Text left as it was prefilled changes nothing.
+ * The same block renames an existing item in place (editItem): it opens over
+ * the item holding its stored title exactly, with its leads as chips beside it.
+ * Nothing typed there is parsed: Enter, Tab or a click elsewhere saves the title
+ * as typed (trimmed) when it differs, and the leads when a chip was removed or
+ * one added with '@'; an empty box saves nothing and Esc drops the change.
+ * Nothing else about the item is touched.
+ *
+ * A new block's item takes the entry's lead chips (its category's leads, filled
+ * in, and anyone tagged with '@').
  *
  * Attached through EvBoardEdit.onEnter / onBeforeExit / onExit.
  *   EvBoardType.isOpen() -> bool   an editing block is open
  *   EvBoardType.isFresh() -> bool  a new block is open and nothing was typed in it
- *   EvBoardType.editItem(cid, {onDone}) -> bool   retype an item in place;
+ *   EvBoardType.editItem(cid, {onDone}) -> bool   rename an item in place;
  *                                  onDone({keyboard}) runs when its block closes
  *                                  (keyboard: closed with focus still in it)
  */
@@ -49,7 +51,7 @@
         entry: null,
         open: null,     // { day, start, end } the block as opened, while open
         live: null,     // { day, start, end, category } as the text reads now
-        edit: null,     // { cid, id, item, text, base, onDone } while an item is retyped in place
+        edit: null,     // { cid, id, item, text, leads, onDone } while an item is renamed in place
         typed: false,   // something was typed in the open block
         layoutKey: '',
         posKey: '',
@@ -96,7 +98,9 @@
                 return s.ctx.entryContext({ fixedDay: o.day, fixedStart: o.start, fixedEnd: o.end, lastEnd: null });
             },
             onParse: onParse,
-            onCommit: function () { return false; } // Enter is handled below
+            onCommit: function () { return false; }, // Enter is handled below
+            getStaff: s.ctx.getStaff,
+            searchPlayers: s.ctx.searchPlayers
         });
         // The chips and suggestion list float below the block, not inside it.
         s.pop.appendChild(s.entry.el.querySelector('.evb-entry-chips'));
@@ -116,7 +120,7 @@
     }
 
     // Open (or move) the editing block; the same input stays focused through a run.
-    // opts.text prefills it (an item retyped in place).
+    // opts.edit: the item renamed in place (its title, as stored, and its leads).
     function openBlock(day, start, end, opts) {
         s.open = { day: day, start: start, end: end };
         s.live = null;
@@ -127,8 +131,8 @@
         s.pop.hidden = false;
         s.pop.classList.toggle('evb-type-retyping', !!s.edit);
         s.entry.input.setAttribute('aria-label', (s.edit ? 'Rename item, ' : 'New item, ') + C.dayLabel(day) + ' ' + C.fmtRange(start, end));
-        // Either parses the line: onParse lays the placeholder out.
-        if (opts && opts.text) s.entry.setText(opts.text);
+        // Either reads the line: onParse lays the placeholder out.
+        if (opts && opts.edit) s.entry.setText(opts.edit.Title || '', { titleOnly: true, leads: opts.edit.Leads || [] });
         else s.entry.clear();
         s.entry.focus();
         if (opts && opts.reveal) {
@@ -165,10 +169,10 @@
     function onParse(r) {
         if (!s.open) return;
         var o = s.open;
-        // Retyping an item keeps its category unless one is typed.
-        var keep = s.edit && !(r && r.given.category) ? (s.edit.item.Category || 'Other') : null;
-        s.live = r ? { day: r.day || o.day, start: r.startMin, end: r.endMin, category: keep || r.category || 'Other' }
-            : { day: o.day, start: o.start, end: o.end, category: keep || 'Other' };
+        // A rename touches only the title: the block keeps its own time and category.
+        if (s.edit) s.live = { day: o.day, start: o.start, end: o.end, category: s.edit.item.Category || 'Other' };
+        else if (r) s.live = { day: r.day || o.day, start: r.startMin, end: r.endMin, category: r.category || 'Other' };
+        else s.live = { day: o.day, start: o.start, end: o.end, category: 'Other' };
         var l = s.live;
         s.blockEl.setAttribute('data-category', l.category);
         s.blockEl.style.setProperty('--evb-fill', V().boldFor(l.category));
@@ -273,17 +277,6 @@
         return { day: day, start: start, end: Math.max(end, start) };
     }
 
-    // The line an item is retyped from (the quotes are formatEntry's).
-    function editText(item) {
-        var out = String(item.Title || '');
-        if (item.Location) out += ' at ' + item.Location;
-        if (item.Description) {
-            var d = String(item.Description);
-            out += d.indexOf('"') >= 0 ? ' \u201C' + d + '\u201D' : ' "' + d + '"';
-        }
-        return out;
-    }
-
     // The item being retyped, by cid, or by server id after a refresh renamed it.
     function editTarget() {
         var e = s.edit, store = s.ctx.store, item = store.get(e.cid);
@@ -297,74 +290,37 @@
         return item;
     }
 
-    // A typed cost, or null when none was typed: an absent cost differs from $0.
-    function costOf(r) { return r.given.cost && r.cost != null ? +r.cost : null; }
-    // A category the line names (typed, or a 'Name:' prefix), or null: the item keeps its own.
-    function categoryOf(r) { return r.given.category ? r.category : null; }
-
-    // The title after an edit. The prefill's parse can read part of the stored
-    // title differently (a '#2' from 'at Hall #2' joins it), so when the first
-    // parse is not the stored title, the one span the person changed is carried
-    // into the stored title where it lines up; otherwise the new parse is taken.
-    function editedTitle(stored, before, after) {
-        if (before === stored) return after;
-        var p = 0, B = before.length, A = after.length;
-        while (p < B && p < A && before[p] === after[p]) p++;
-        var q = 0;
-        while (q < B - p && q < A - p && before[B - 1 - q] === after[A - 1 - q]) q++;
-        var end = B - q; // the changed span is before[p, end)
-        if (end <= stored.length && stored.slice(0, end) === before.slice(0, end)) {
-            return (stored.slice(0, p) + after.slice(p, A - q) + stored.slice(end)).replace(/\s+/g, ' ').trim();
-        }
-        return after;
+    function leadsKey(leads) {
+        return JSON.stringify((leads || []).map(function (l) { return [+l.MundaneId, !!l.Auto]; }));
     }
 
-    // The fields a retyped line changes: every part whose parse differs from the
-    // parse of the prefill (s.edit.base). A part the person left alone is never
-    // written, whatever the parser made of it.
-    function changedFields(r, base, item) {
-        var f = {};
-        if (r.title !== base.title) f.Title = editedTitle(String(item.Title || ''), base.title, r.title);
-        if (r.location !== base.location) f.Location = r.location;
-        if (r.description !== base.description) f.Description = r.description;
-        if (r.start !== base.start) f.StartTime = r.start;
-        if (r.end !== base.end) f.EndTime = r.end;
-        var cat = categoryOf(r);
-        if (cat !== categoryOf(base) && cat && cat !== (item.Category || 'Other')) f.Category = cat;
-        if (r.secondaryCategory !== base.secondaryCategory) f.SecondaryCategory = r.secondaryCategory;
-        // A stripe the same as the new category would never show: drop it.
-        if (f.Category && f.Category === (f.SecondaryCategory !== undefined ? f.SecondaryCategory : item.SecondaryCategory)) {
-            f.SecondaryCategory = '';
-        }
-        if (costOf(r) !== costOf(base) && costOf(r) !== null) f.Cost = r.cost;
-        return f;
-    }
-
-    // Save a retyped item: 'same' (the text as prefilled), 'saved', 'empty',
-    // 'invalid' (no title), 'refused' (Done is leaving) or 'gone'.
+    // Save a renamed item: 'same' (nothing changed), 'saved', 'empty' (saves
+    // nothing), 'refused' (Done is leaving) or 'gone'. The title is the text as
+    // typed, trimmed, without an '@query' still being typed.
     function saveEdit() {
-        var text = s.entry.getText().trim();
-        if (text === s.edit.text.trim()) return 'same';
-        if (!text) return 'empty';
         var r = s.entry.result();
-        if (!r || !r.ok) return 'invalid';
+        if (!r || !r.ok) return 'empty';
+        var f = {};
+        if (r.title !== s.edit.text.trim()) f.Title = r.title;
+        var leads = s.entry.getLeads();
+        if (leadsKey(leads) !== s.edit.leads) f.Leads = leads;
+        if (!Object.keys(f).length) return 'same';
         if (leaving()) return 'refused';
         var item = editTarget();
         if (!item) return 'gone';
-        var f = s.edit.base ? changedFields(r, s.edit.base, item) : {};
-        if (Object.keys(f).length) s.ctx.store.update(item.cid, f);
+        s.ctx.store.update(item.cid, f);
         return 'saved';
     }
 
-    // Settle a retyped item; false keeps the block open (text with no title,
-    // or Done leaving). An item removed meanwhile hands the text to the notice.
+    // Settle a renamed item; false keeps the block open (Done leaving). An item
+    // removed meanwhile hands the text to the notice.
     function settleEdit() {
         var res = saveEdit();
-        if (res === 'invalid' || res === 'refused') return false;
+        if (res === 'refused') return false;
         if (res === 'gone') {
             var o = s.open;
             s.ctx.addNotice('The item you were renaming is no longer on the board, so the change was not saved.',
-                C.slotLine(o.day, o.start, o.end) + s.entry.getText().trim());
+                C.slotLine(o.day, o.start, o.end) + s.entry.result().title, s.entry.getLeads().filter(function (l) { return !l.Auto; }));
         }
         closeBlock();
         return true;
@@ -375,14 +331,12 @@
         var item = s.ctx.store.get(cid), t = item && timing(item);
         if (!t) return false;
         if (s.open && !settle()) { s.entry.focus(); shake(); return false; }
-        var text = editText(item);
-        s.edit = { cid: cid, id: +item.EventScheduleId || 0, item: item, text: text, base: null, onDone: opts && opts.onDone };
-        openBlock(t.day, t.start, t.end, { text: text, reveal: true });
-        // What the box really holds (an input drops a description's line breaks),
-        // and its parse with the item's own day and time fixed: the reference every
-        // later change is measured against.
+        s.edit = { cid: cid, id: +item.EventScheduleId || 0, item: item, text: '', leads: '', onDone: opts && opts.onDone };
+        openBlock(t.day, t.start, t.end, { edit: item, reveal: true });
+        // What the box really holds (an input drops line breaks) and the leads as
+        // shown: the reference a change is measured against.
         s.edit.text = s.entry.getText();
-        s.edit.base = s.entry.result();
+        s.edit.leads = leadsKey(s.entry.getLeads());
         return true;
     }
 
@@ -392,7 +346,7 @@
         if (!s.entry.getText().trim()) return 'empty';
         var r = s.entry.result();
         if (!r || !r.ok) return 'invalid';
-        return s.ctx.add(r) == null ? 'refused' : 'added';
+        return s.ctx.add(r, s.entry.getLeads()) == null ? 'refused' : 'added';
     }
 
     // The block is being left (a click elsewhere, Done): add a valid entry,
@@ -418,10 +372,12 @@
         if (settle()) return;
         var r = s.entry.result(), o = s.open;
         var line = (r && r.given && r.given.time ? C.dayLabel(o.day) + ' ' : C.slotLine(o.day, o.start, o.end)) + text;
+        // Hand-picked leads go along as chips; the category fills its own again.
+        var leads = s.entry.getLeads().filter(function (l) { return !l.Auto; });
         closeBlock();
         var q = s.ctx.quickLine;
-        if (!q.getText().trim() && !q.input.readOnly) q.setText(line);
-        else s.ctx.addNotice('The item you were typing on the board was not added yet.', line);
+        if (!q.getText().trim() && !q.input.readOnly) q.setText(line, { leads: leads });
+        else s.ctx.addNotice('The item you were typing on the board was not added yet.', line, leads);
     }
 
     function menuOpen() { return s.entry.input.getAttribute('aria-expanded') === 'true'; }
@@ -466,7 +422,7 @@
         if (!r || !r.ok) { shake(); return; }
         var len = r.endMin - r.startMin;
         if (len <= 0) len = Math.max(s.open.end - s.open.start, STEP);
-        s.ctx.add(r);
+        s.ctx.add(r, s.entry.getLeads());
         // Enter: the next block starts where this one ended; Tab: alongside it.
         var start = e.key === 'Enter' ? r.endMin : r.startMin;
         openBlock(r.day, start, start + len, { reveal: e.key === 'Enter' });

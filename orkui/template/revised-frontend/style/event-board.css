@@ -327,6 +327,22 @@ html[data-theme="dark"] .evb-chip .evb-chip-x:focus-visible { outline-color: #63
 html[data-theme="dark"] .evb-entry-option-active { background: #4a5568; }
 .evb-entry-option-tag { margin-left: auto; font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ork-text-muted); }
 
+/* Leads: '@' suggestions (fixed, so the board's scrolling frame cannot clip them) and chips. */
+.evb-entry-menu.evb-entry-menu-fixed,
+.evb-type-pop .evb-entry-menu.evb-entry-menu-fixed {
+    position: fixed; margin-top: 0; width: max-content; min-width: 260px;
+    max-width: min(380px, calc(100vw - 16px)); max-height: min(320px, 60vh); overflow-y: auto;
+}
+.evb-entry-option-lead { gap: 6px; }
+.evb-entry-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evb-entry-option-muted { font-size: 12px; font-weight: 400; color: var(--ork-text-muted); white-space: nowrap; }
+.evb-entry-option-swatches { display: inline-flex; gap: 3px; margin-left: auto; padding-left: 6px; }
+.evb-entry-option-swatches .evb-legend-swatch { width: 8px; height: 8px; border-radius: 2px; }
+.evb-entry-menu-note { padding: 6px 8px; font-size: 12px; font-style: italic; color: var(--ork-text-muted); }
+.evb-chip-lead .evb-chip-label { max-width: 180px; }
+.evb-chip-auto { border-style: dotted; border-color: var(--ork-text-muted); }
+.evb-chip-suffix { font-size: 10px; font-weight: 400; color: var(--ork-text-muted); }
+
 /* ---- Notices (rejected saves) ---- */
 .evb-notice {
     display: flex; align-items: flex-start; gap: 8px; margin: 0 10px 10px; padding: 8px 10px;
@@ -400,8 +416,6 @@ html[data-theme="dark"] #theme_container .evb-block-editing .evb-entry .evb-entr
 .evb-type-pop .evb-chip { box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2); }
 html[data-theme="dark"] .evb-type-pop .evb-chip { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
 .evb-type-pop .evb-entry-menu { position: static; margin-top: 4px; }
-/* Retyping an item keeps its category unless one is typed, so no guess is shown. */
-.evb-type-pop.evb-type-retyping .evb-chip-category.evb-chip-guess { display: none; }
 
 /* ---- Selecting blocks (evb-select.js) ---- */
 /* A white inner ring and an outer ring in the focus colour, over its neighbours. */
@@ -496,6 +510,8 @@ html[data-theme="dark"] .evb-row-error { color: #fc8181; }
     .evb-modebar .evb-help { width: 36px; }
     .evb-quickline { padding: 8px; }
     .evb-entry-menu { min-width: 0; width: 100%; }
+    .evb-entry-menu.evb-entry-menu-fixed,
+    .evb-type-pop .evb-entry-menu.evb-entry-menu-fixed { min-width: 0; width: calc(100vw - 16px); }
     .evb-entry-option { padding: 9px 8px; }
     /* A chip's x at finger size; the negative margins keep the chip's own height. */
     .evb-entry-chips { row-gap: 10px; }

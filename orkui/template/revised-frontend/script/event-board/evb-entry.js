@@ -8,14 +8,28 @@
  * schedule's locations. The widget never saves anything: Enter hands the parse
  * to opts.onCommit, which returns false to keep the text.
  *
+ * Leads: '@' at the start of a word opens a list of event staff, then players
+ * from the player search, and picking one adds a lead chip and takes the
+ * '@query' out of the text. When the line's category has category leads they
+ * appear as auto chips (evb-chip-auto); a removed auto chip stays removed for
+ * that category until the line is cleared. An '@Persona' of a staff member
+ * typed in full is a lead too; an '@word' that matches no one stays title text.
+ * getLeads() is the chips: [{MundaneId, Persona, Auto}].
+ *
+ * Title mode (setText(text, {titleOnly: true, leads})): nothing is parsed; the
+ * result is {ok, titleOnly, title} with the text as typed, and the chips are the
+ * leads alone. An '@query' still being typed is never part of the title.
+ *
  *   EvBoardEntry.create(hostEl, {
  *     getContext: () => ctx,      // parseEntry's ctx (days, day, lastEnd, ...)
  *     onParse(result|null),       // after every change; null when the line is empty
  *                                 // (result.ok is false while there is no title)
  *     onCommit(result) -> bool,   // Enter on a valid line or a day name
  *     onCancel(),                 // Esc on an empty line
+ *     getStaff: () => staff,      // [{MundaneId, Persona, RoleName, LeadCategories}]
+ *     searchPlayers(query) -> Promise<[{MundaneId, Persona, Detail}]>,
  *     placeholder, compact
- *   }) -> { focus, setText, getText, clear, destroy, input, el, reparse, result }
+ *   }) -> { focus, setText, getText, clear, destroy, input, el, reparse, result, getLeads }
  */
 (function (root, factory) {
     root.EvBoardEntry = factory(root.EvBoardCore, root);
@@ -106,6 +120,45 @@
         return null;
     }
 
+    // An '@' lead being typed: from an '@' at the start of a word to the caret
+    // (names may hold spaces). Null when there is none.
+    function leadQueryAt(text, caret) {
+        var m = /(^|\s)@([^@\n]{0,40})$/.exec(text.slice(0, caret));
+        return m ? { kind: 'lead', from: caret - m[2].length - 1, query: m[2] } : null;
+    }
+
+    // Lead chips, after the others: a person icon and the persona; an auto-filled
+    // one has a dotted edge and says 'auto'.
+    function leadChipsHtml(leads) {
+        return leads.map(function (l) {
+            return '<span class="evb-chip evb-chip-lead' + (l.Auto ? ' evb-chip-auto' : '') + '" data-part="lead"' +
+                ' data-mundane-id="' + (+l.MundaneId) + '"' + (l.Auto ? ' data-tip="Leads this category"' : '') + '>' +
+                '<i class="fas fa-user" aria-hidden="true"></i>' +
+                '<span class="evb-sr">Lead: </span>' +
+                '<span class="evb-chip-label">' + esc(l.Persona) + '</span>' +
+                (l.Auto ? '<span class="evb-chip-suffix">auto</span>' : '') +
+                '<button type="button" class="evb-chip-x" data-lead="' + (+l.MundaneId) + '"' +
+                ' aria-label="Remove lead ' + esc(l.Persona) + '" data-tip="Remove lead">&times;</button>' +
+                '</span>';
+        }).join('');
+    }
+
+    // The viewport x of the caret position 'index' in a text input.
+    var measureCtx = null;
+    function caretX(input, index) {
+        var r = input.getBoundingClientRect();
+        try {
+            var cs = win.getComputedStyle(input);
+            measureCtx = measureCtx || win.document.createElement('canvas').getContext('2d');
+            measureCtx.font = cs.font || (cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily);
+            var w = measureCtx.measureText(input.value.slice(0, index)).width;
+            var x = r.left + (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.paddingLeft) || 0) + w - input.scrollLeft;
+            return Math.max(r.left, Math.min(x, r.right - 8));
+        } catch (e) {
+            return r.left;
+        }
+    }
+
     function categoryOptions(query) {
         var q = squash(query).replace(/ /g, '');
         var exact = C.resolveCategoryTag(query);
@@ -155,24 +208,210 @@
         var result = null;
         var menu = null;          // { sug, options, active } while the list is open
         var dismissedAt = null;   // the suggestion position Esc closed, until the caret leaves it
+        var titleOnly = false;    // a rename: the text is the title, nothing is parsed
+        var picked = [];          // leads given (a rename's own) or picked: [{MundaneId, Persona, Auto}]
+        var removed = {};         // 'p<id>' a typed '@Persona' removed; 'a<id>|<category>' an auto lead removed
+        var leadsNow = [];        // the lead chips: picked, then typed, then the category's
+        var search = null;        // { query, pending, results } of the player search
+        var searchSeq = 0, searchTimer = 0;
+        var seenPlayers = [];     // personas the last search found (keeps a spaced '@query' going)
+
+        function staff() { return (opts.getStaff && opts.getStaff()) || []; }
 
         function context() {
             var ctx = Object.assign({}, opts.getContext ? opts.getContext() : {});
             ctx.ignore = Object.assign({}, ctx.ignore || {}, ignore);
+            ctx.staff = staff();
+            // An '@word' that matches no one stays in the title as typed.
+            ctx.keepUnmatchedLeads = true;
             return ctx;
         }
 
-        function parse() {
-            var text = input.value;
-            if (!text.trim()) {
-                result = null;
-                chipsEl.innerHTML = '';
-            } else {
-                result = C.parseEntry(text, context());
-                chipsEl.innerHTML = chipsHtml(result, catDefs);
+        function caretPos() { return input.selectionStart == null ? input.value.length : input.selectionStart; }
+
+        // The '@query' at the caret while it can still name someone: one word, or
+        // words some staff member or a found player's persona contains.
+        function leadSuggestion() {
+            if (input.selectionStart !== input.selectionEnd) return null;
+            var sug = leadQueryAt(input.value, caretPos());
+            if (!sug || !/\s/.test(sug.query)) return sug;
+            var q = squash(sug.query);
+            var names = staff().map(function (s) { return s.Persona; }).concat(seenPlayers);
+            return names.some(function (n) { return squash(n).indexOf(q) >= 0; }) ? sug : null;
+        }
+        function activeLead() {
+            var sug = leadSuggestion();
+            return sug && dismissedAt !== 'lead:' + sug.from ? sug : null;
+        }
+
+        // The text without an '@query' still being typed.
+        function textToRead() {
+            var v = input.value, a = activeLead();
+            return a ? v.slice(0, a.from) + v.slice(a.from + 1 + a.query.length) : v;
+        }
+
+        function computeLeads() {
+            var out = [];
+            var has = function (mid) { return out.some(function (l) { return l.MundaneId === mid; }); };
+            picked.forEach(function (l) {
+                if (!has(+l.MundaneId)) out.push({ MundaneId: +l.MundaneId, Persona: l.Persona, Auto: !!l.Auto, src: 'x' });
+            });
+            if (result && !titleOnly) {
+                (result.leads || []).forEach(function (l) {
+                    if (!removed['p' + l.MundaneId] && !has(l.MundaneId)) out.push({ MundaneId: l.MundaneId, Persona: l.Persona, Auto: false, src: 'p' });
+                });
+                var cat = result.category;
+                C.leadsForCategory(staff(), cat).forEach(function (l) {
+                    if (!removed['a' + l.MundaneId + '|' + cat] && !has(l.MundaneId)) {
+                        out.push({ MundaneId: l.MundaneId, Persona: l.Persona, Auto: true, src: 'a', cat: cat });
+                    }
+                });
             }
+            leadsNow = out;
+        }
+
+        function parse() {
+            var text = textToRead();
+            if (titleOnly) {
+                // Stored as typed: only the ends are trimmed.
+                result = input.value.trim() ? { ok: text.trim() !== '', titleOnly: true, title: text.trim(), given: {} } : null;
+            } else {
+                result = text.trim() ? C.parseEntry(text, context()) : null;
+            }
+            computeLeads();
+            chipsEl.innerHTML = (result && !titleOnly ? chipsHtml(result, catDefs) : '') + leadChipsHtml(leadsNow);
             el.classList.remove('evb-entry-invalid');
             if (opts.onParse) opts.onParse(result);
+        }
+
+        // ---- leads ----
+        function addLead(person) {
+            var mid = +person.MundaneId;
+            // One person once: picking an auto-filled lead makes it hand-picked.
+            picked = picked.filter(function (l) { return +l.MundaneId !== mid; });
+            picked.push({ MundaneId: mid, Persona: person.Persona, Auto: false });
+            delete removed['p' + mid];
+        }
+
+        function removeLead(mid) {
+            var l = leadsNow.filter(function (x) { return x.MundaneId === mid; })[0];
+            if (!l) return;
+            if (l.src === 'x') picked = picked.filter(function (x) { return +x.MundaneId !== mid; });
+            else if (l.src === 'p') removed['p' + mid] = true;
+            else removed['a' + mid + '|' + l.cat] = true;
+        }
+
+        function cancelSearch() {
+            searchSeq++;
+            if (searchTimer) win.clearTimeout(searchTimer);
+            searchTimer = 0;
+            search = null;
+        }
+
+        // The player search, after the same pause as the schedule modal's.
+        function startSearch(q) {
+            cancelSearch();
+            if (!opts.searchPlayers || q.length < 2) return;
+            var mine = searchSeq;
+            search = { query: q, pending: true, results: [] };
+            searchTimer = win.setTimeout(function () {
+                searchTimer = 0;
+                var done = function (list) {
+                    if (mine !== searchSeq) return;
+                    search.pending = false;
+                    search.results = Array.isArray(list) ? list : [];
+                    seenPlayers = search.results.map(function (p) { return p.Persona || ''; });
+                    if (doc.activeElement !== input) return;
+                    updateMenu();
+                    parse();
+                };
+                var p;
+                try { p = Promise.resolve(opts.searchPlayers(q)); } catch (e) { p = Promise.reject(e); }
+                p.then(done, function () { done([]); });
+            }, 220);
+        }
+
+        function leadOptions(sug) {
+            var q = squash(sug.query);
+            var team = staff();
+            var staffIds = team.map(function (s) { return +s.MundaneId; });
+            var staffOpts = team.filter(function (s) { return !q || squash(s.Persona).indexOf(q) >= 0; })
+                .map(function (s) { return { kind: 'staff', person: { MundaneId: +s.MundaneId, Persona: s.Persona }, staff: s }; });
+            if (!search || search.query !== q) startSearch(q);
+            var players = search && search.query === q ? search.results : [];
+            var playerOpts = players.filter(function (p) { return +p.MundaneId > 0 && staffIds.indexOf(+p.MundaneId) < 0; })
+                .map(function (p) { return { kind: 'player', person: { MundaneId: +p.MundaneId, Persona: p.Persona }, detail: p.Detail || '' }; });
+            return { staff: staffOpts, players: playerOpts, pending: !!(search && search.query === q && search.pending) };
+        }
+
+        function leadOptionHtml(o, i) {
+            var inner;
+            if (o.kind === 'staff') {
+                var leads = o.staff.LeadCategories || [];
+                inner = '<span class="evb-entry-option-name">' + esc(o.person.Persona) + '</span>' +
+                    (o.staff.RoleName ? '<span class="evb-entry-option-muted">' + esc(o.staff.RoleName) + '</span>' : '') +
+                    (leads.length ? '<span class="evb-entry-option-swatches" aria-hidden="true">' + leads.map(function (c) {
+                        var def = catDefs[c] || {};
+                        return '<span class="evb-legend-swatch" style="background:' + esc(def.bold || '#616161') + '"></span>';
+                    }).join('') + '</span><span class="evb-sr">, leads ' + esc(leads.join(', ')) + '</span>' : '');
+            } else {
+                inner = '<span class="evb-entry-option-name">' + esc(o.person.Persona) +
+                    (o.detail ? ' <span class="evb-entry-option-muted">(' + esc(o.detail) + ')</span>' : '') + '</span>';
+            }
+            return '<div class="evb-entry-option evb-entry-option-lead" role="option" id="' + id + '-opt-' + i + '" data-index="' + i + '"' +
+                ' aria-selected="false">' + inner + '</div>';
+        }
+
+        function showLeadMenu(sug) {
+            var found = leadOptions(sug);
+            var options = found.staff.concat(found.players);
+            var keep = menu && menu.sug.kind === 'lead' && menu.sug.from === sug.from ? menu.active : 0;
+            menu = { sug: sug, options: options, active: 0 };
+            var h = '', i = 0;
+            if (found.staff.length) {
+                h += '<div class="evb-entry-menu-head" aria-hidden="true">Event staff</div>';
+                found.staff.forEach(function (o) { h += leadOptionHtml(o, i++); });
+            }
+            if (found.players.length) {
+                h += '<div class="evb-entry-menu-head" aria-hidden="true">Players</div>';
+                found.players.forEach(function (o) { h += leadOptionHtml(o, i++); });
+            }
+            if (found.pending) h += '<div class="evb-entry-menu-note" role="status">Searching…</div>';
+            else if (!options.length) h += '<div class="evb-entry-menu-note" role="status">No one found</div>';
+            menuEl.innerHTML = h;
+            menuEl.classList.add('evb-entry-menu-fixed');
+            menuEl.hidden = false;
+            input.setAttribute('aria-expanded', 'true');
+            setActive(Math.min(keep, Math.max(options.length - 1, 0)));
+            placeLeadMenu();
+        }
+
+        // Fixed under the '@' so no scrolling frame clips it; above the input when
+        // there is no room below.
+        function placeLeadMenu() {
+            if (!menu || menu.sug.kind !== 'lead') return;
+            var r = input.getBoundingClientRect();
+            var w = menuEl.offsetWidth, h = menuEl.offsetHeight;
+            var vw = win.innerWidth || doc.documentElement.clientWidth;
+            var vh = win.innerHeight || doc.documentElement.clientHeight;
+            var left = Math.max(8, Math.min(caretX(input, menu.sug.from), vw - w - 8));
+            var top = r.bottom + 4;
+            if (top + h > vh && r.top - 4 - h > 0) top = r.top - 4 - h;
+            menuEl.style.left = Math.round(left) + 'px';
+            menuEl.style.top = Math.round(top) + 'px';
+        }
+
+        function pickLead(o) {
+            var sug = menu.sug, v = input.value;
+            var before = v.slice(0, sug.from), rest = v.slice(sug.from + 1 + sug.query.length);
+            if (!before || /\s$/.test(before)) rest = rest.replace(/^\s+/, '');
+            input.value = before + rest;
+            input.setSelectionRange(before.length, before.length);
+            addLead(o.person);
+            cancelSearch();
+            closeMenu();
+            parse();
+            updateMenu();
         }
 
         // ---- suggestions ----
@@ -180,20 +419,26 @@
             menu = null;
             menuEl.hidden = true;
             menuEl.innerHTML = '';
+            menuEl.classList.remove('evb-entry-menu-fixed');
+            menuEl.style.left = menuEl.style.top = '';
             input.setAttribute('aria-expanded', 'false');
             input.removeAttribute('aria-activedescendant');
         }
 
         function updateMenu() {
-            var caret = input.selectionStart == null ? input.value.length : input.selectionStart;
-            var sug = input.selectionStart === input.selectionEnd ? suggestionAt(input.value, caret) : null;
+            var caret = caretPos();
+            var collapsed = input.selectionStart === input.selectionEnd;
+            var sug = leadSuggestion() || (collapsed ? suggestionAt(input.value, caret) : null);
             if (sug && dismissedAt === sug.kind + ':' + sug.from) sug = null;
             else dismissedAt = null;
+            if (sug && sug.kind === 'lead') { showLeadMenu(sug); return; }
+            cancelSearch();
             var options = !sug ? [] : sug.kind === 'category' ? categoryOptions(sug.query)
                 : locationOptions(sug.query, (opts.getContext ? opts.getContext() : {}).locations);
             options = options.slice(0, MAX_OPTIONS);
             // Nothing to pick when what is typed already is the only match.
             if (!options.length || (options.length === 1 && options[0].exact)) { closeMenu(); return; }
+            closeMenu();
             menu = { sug: sug, options: options, active: 0 };
             var head = sug.kind === 'category' ? 'Category' : 'Locations in this schedule';
             menuEl.innerHTML = '<div class="evb-entry-menu-head" aria-hidden="true">' + head + '</div>' +
@@ -215,6 +460,7 @@
         function setActive(i) {
             if (!menu) return;
             var n = menu.options.length;
+            if (!n) { input.removeAttribute('aria-activedescendant'); return; }
             menu.active = (i + n) % n;
             menuEl.querySelectorAll('.evb-entry-option').forEach(function (o, k) {
                 var on = k === menu.active;
@@ -226,9 +472,10 @@
 
         // Replace the token being typed with the picked option and a space.
         function pick(i) {
-            if (!menu) return;
+            if (!menu || !menu.options[i]) return;
             var o = menu.options[i], sug = menu.sug, v = input.value;
-            var caret = input.selectionStart == null ? v.length : input.selectionStart;
+            if (sug.kind === 'lead') { pickLead(o); return; }
+            var caret = caretPos();
             var rest = v.slice(caret);
             if (sug.kind === 'category') rest = rest.replace(/^\S*/, ''); // the rest of the tag word
             rest = rest.replace(/^\s+/, '');
@@ -240,10 +487,19 @@
             updateMenu();
         }
 
+        // Esc (or Enter with nothing to pick) closes the list and leaves the text.
+        function dismissMenu() {
+            dismissedAt = menu.sug.kind + ':' + menu.sug.from;
+            cancelSearch();
+            closeMenu();
+            parse(); // an '@query' left as typed is read as text again
+        }
+
         // ---- events ----
+        // The list first: it decides whether an '@query' is still being typed.
         function onInput() {
-            parse();
             updateMenu();
+            parse();
         }
 
         function commit() {
@@ -263,6 +519,7 @@
         function onKeyDown(e) {
             if (e.isComposing || e.keyCode === 229) return;
             if (menu) {
+                var n = menu.options.length;
                 if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                     e.preventDefault();
                     setActive(menu.active + (e.key === 'ArrowDown' ? 1 : -1));
@@ -270,14 +527,15 @@
                 }
                 if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
                     e.preventDefault();
-                    pick(menu.active);
+                    e.stopPropagation();
+                    if (n) pick(menu.active);
+                    else dismissMenu();
                     return;
                 }
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     e.stopPropagation();
-                    dismissedAt = menu.sug.kind + ':' + menu.sug.from;
-                    closeMenu();
+                    dismissMenu();
                     return;
                 }
             }
@@ -296,7 +554,9 @@
         function onCaret(e) {
             if (e.type === 'keyup' && /^(Arrow(Up|Down)|Enter|Tab|Escape)$/.test(e.key)) return;
             if (e.type === 'keyup' && !/^(Arrow(Left|Right)|Home|End)$/.test(e.key)) return;
+            var was = textToRead();
             updateMenu();
+            if (textToRead() !== was) parse();
         }
 
         function onMenuDown(e) {
@@ -308,12 +568,15 @@
         function onChipClick(e) {
             var x = e.target.closest && e.target.closest('.evb-chip-x');
             if (!x) return;
-            ignore[x.getAttribute('data-ignore')] = true;
+            if (x.hasAttribute('data-lead')) removeLead(+x.getAttribute('data-lead'));
+            else ignore[x.getAttribute('data-ignore')] = true;
             parse();
             input.focus();
         }
 
-        function onBlur() { closeMenu(); }
+        function onBlur() { cancelSearch(); closeMenu(); }
+
+        function onViewportMove() { if (menu && menu.sug.kind === 'lead') placeLeadMenu(); }
 
         input.addEventListener('input', onInput);
         input.addEventListener('keydown', onKeyDown);
@@ -323,24 +586,39 @@
         menuEl.addEventListener('mousedown', onMenuDown);
         chipsEl.addEventListener('mousedown', function (e) { if (e.target.closest('.evb-chip-x')) e.preventDefault(); });
         chipsEl.addEventListener('click', onChipClick);
+        win.addEventListener('scroll', onViewportMove, true);
+        win.addEventListener('resize', onViewportMove);
 
         // ---- API ----
-        function clear() {
-            input.value = '';
+        function reset(o) {
             ignore = {};
             dismissedAt = null;
+            titleOnly = !!(o && o.titleOnly);
+            picked = (o && o.leads || []).map(function (l) {
+                return { MundaneId: +l.MundaneId, Persona: l.Persona, Auto: !!l.Auto };
+            });
+            removed = {};
+            seenPlayers = [];
+            cancelSearch();
             closeMenu();
+        }
+
+        function clear() {
+            input.value = '';
+            reset(null);
             parse();
         }
 
-        function setText(text) {
+        // o: {titleOnly, leads} for a rename; a plain line otherwise.
+        function setText(text, o) {
             input.value = String(text == null ? '' : text);
-            ignore = {};
-            dismissedAt = null;
-            closeMenu();
-            parse();
+            reset(o);
             var n = input.value.length;
             try { input.setSelectionRange(n, n); } catch (e) { /* not focusable yet */ }
+            // Text put in whole is read whole: an '@' at its end is not being typed.
+            var tail = leadQueryAt(input.value, n);
+            if (tail) dismissedAt = 'lead:' + tail.from;
+            parse();
         }
 
         return {
@@ -352,12 +630,18 @@
             clear: clear,
             reparse: parse,
             result: function () { return result; },
+            getLeads: function () {
+                return leadsNow.map(function (l) { return { MundaneId: l.MundaneId, Persona: l.Persona, Auto: !!l.Auto }; });
+            },
             destroy: function () {
+                cancelSearch();
                 closeMenu();
+                win.removeEventListener('scroll', onViewportMove, true);
+                win.removeEventListener('resize', onViewportMove);
                 if (el.parentNode) el.parentNode.removeChild(el);
             }
         };
     }
 
-    return { create: create, suggestionAt: suggestionAt };
+    return { create: create, suggestionAt: suggestionAt, leadQueryAt: leadQueryAt };
 });

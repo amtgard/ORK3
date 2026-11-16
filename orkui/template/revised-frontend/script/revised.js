@@ -9500,8 +9500,12 @@ $(document).ready(function() {
         if (added > 0)   parts.push('Added as lead on ' + items(added) + '.');
         if (removed > 0) parts.push('Removed as lead from ' + items(removed) + '.');
         el.textContent = parts.join(' ');
-        // Items gained or lost a lead, so the Schedule views re-read them.
-        if (parts.length && typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
+        // The Schedule views re-read the page through evOnStaffChanged (evb-view.js).
+    }
+    // A message under the Staff table (no native dialogs).
+    function evStaffNoteText(msg) {
+        var el = document.getElementById('ev-staff-lead-note');
+        if (el) el.textContent = msg;
     }
 
     // ---- Staff Modal ----
@@ -9899,18 +9903,42 @@ $(document).ready(function() {
                     evStaffLeadNote(0, data.leadsRemoved || 0);
                     evNotifyStaffChanged();
                 } else {
-                    alert(data.error || 'Could not remove staff member.');
+                    evStaffNoteText(data.error || 'Could not remove staff member.');
                 }
             })
-            .catch(function(err) { alert('Request failed: ' + err.message); });
+            .catch(function(err) { evStaffNoteText('Request failed: ' + err.message); });
             }, { title: 'Remove Staff Member', okLabel: 'Remove' });
         };
 
         // ---- Schedule modal ----
 
         // --- Schedule leads state & helpers ---
+        // [{MundaneId, Persona, Auto}]: Auto marks a lead filled in from its
+        // category; every save posts it back so the server keeps it.
         var evSchedLeads = [];
         var evSchedLeadAcTimer = null;
+        // Set once leads are changed by hand: the category no longer fills them.
+        var evSchedLeadsTouched = false;
+
+        // Add a lead by hand; someone already filled in from the category becomes hand-picked.
+        function evAddSchedLead(mundaneId, persona) {
+            evSchedLeadsTouched = true;
+            var have = evSchedLeads.filter(function(l) { return l.MundaneId === mundaneId; })[0];
+            if (have) have.Auto = false;
+            else evSchedLeads.push({ MundaneId: mundaneId, Persona: persona, Auto: false });
+            evRenderSchedLeads();
+            evRefreshStaffQuickAdd();
+        }
+
+        // Adding an item: its primary category's leads, while the list is untouched.
+        window.evSchedApplyCategoryLeads = function() {
+            var mode = gid('ev-sched-mode'), cat = gid('ev-sched-category');
+            if (!mode || mode.value !== 'add' || !cat || evSchedLeadsTouched || !window.EvBoardCore) return;
+            evSchedLeads = EvBoardCore.leadsForCategory(EvConfig.staffList || [], cat.value || 'Other');
+            evRenderSchedLeads();
+            evRefreshStaffQuickAdd();
+        };
+        if (gid('ev-sched-category')) gid('ev-sched-category').addEventListener('change', window.evSchedApplyCategoryLeads);
 
         function evSchedLeadsCell(leads) {
             if (!leads || !leads.length) return '';
@@ -9929,12 +9957,14 @@ $(document).ready(function() {
             list.innerHTML = evSchedLeads.map(function(l) {
                 return '<span style="display:inline-flex;align-items:center;gap:4px;background:#e2e8f0;color:#2d3748;border-radius:4px;padding:3px 8px;font-size:12px">' +
                     escHtmlSt(l.Persona) +
+                    (l.Auto ? '<span style="font-size:10px;color:#718096" data-tip="Leads this category">auto</span>' : '') +
                     '<button type="button" onclick="evRemoveSchedLead(' + l.MundaneId + ')" style="background:none;border:none;cursor:pointer;color:#718096;font-size:13px;padding:0;margin-left:2px;line-height:1">&times;</button>' +
                     '</span>';
             }).join('');
         }
 
         window.evRemoveSchedLead = function(mundaneId) {
+            evSchedLeadsTouched = true;
             evSchedLeads = evSchedLeads.filter(function(l) { return l.MundaneId !== mundaneId; });
             evRenderSchedLeads();
             evRefreshStaffQuickAdd();
@@ -9946,6 +9976,7 @@ $(document).ready(function() {
         // so feast items opened for edit showed no leads.
         window.evSetSchedLeads = function(leads) {
             evSchedLeads = Array.isArray(leads) ? leads : [];
+            evSchedLeadsTouched = true; // an existing item keeps its leads as they are
             evRenderSchedLeads();
         };
 
@@ -9977,12 +10008,7 @@ $(document).ready(function() {
         };
 
         window.evStaffQuickAddLead = function(mundaneId, encodedName) {
-            var name = decodeURIComponent(encodedName);
-            if (!evSchedLeads.some(function(l) { return l.MundaneId === mundaneId; })) {
-                evSchedLeads.push({ MundaneId: mundaneId, Persona: name });
-                evRenderSchedLeads();
-                evRefreshStaffQuickAdd();
-            }
+            evAddSchedLead(mundaneId, decodeURIComponent(encodedName));
         };
 
         // Lead player autocomplete
@@ -10052,9 +10078,8 @@ $(document).ready(function() {
                 var name = decodeURIComponent(item.dataset.name);
                 leadAcEl.classList.remove(OPEN_CLASS);
                 leadInputEl.value = '';
-                if (!mid || evSchedLeads.some(function(l) { return l.MundaneId === mid; })) return;
-                evSchedLeads.push({ MundaneId: mid, Persona: name });
-                evRenderSchedLeads();
+                if (!mid) return;
+                evAddSchedLead(mid, name);
             });
 
             leadInputEl.addEventListener('blur', function() {
@@ -10105,7 +10130,9 @@ $(document).ready(function() {
             gid('ev-sched-description').value  = '';
             gid('ev-sched-error').style.display = 'none';
             evSchedLeads = [];
+            evSchedLeadsTouched = false;
             evRenderSchedLeads();
+            window.evSchedApplyCategoryLeads();
             // Collapse staff quick-add and refresh
             var qaList = gid('ev-sched-staff-qa-list');
             var qaChevron = gid('ev-sched-staff-qa-chevron');
@@ -10232,6 +10259,8 @@ $(document).ready(function() {
             gid('ev-sched-description').value  = row.getAttribute('data-description') || '';
             gid('ev-sched-error').style.display = 'none';
             try { evSchedLeads = JSON.parse(row.getAttribute('data-leads') || '[]'); } catch(e) { evSchedLeads = []; }
+            if (!Array.isArray(evSchedLeads)) evSchedLeads = [];
+            evSchedLeadsTouched = true; // an existing item keeps its leads as they are
             evRenderSchedLeads();
             // Collapse staff quick-add and refresh
             var qaList = gid('ev-sched-staff-qa-list');
@@ -10295,7 +10324,10 @@ $(document).ready(function() {
             fd.append('EndTime',     end.replace('T', ' '));
             fd.append('Location',    loc);
             fd.append('Description', desc);
-            fd.append('Leads',       JSON.stringify(evSchedLeads));
+            // Each lead keeps its Auto flag; one added here by hand is false.
+            fd.append('Leads',       JSON.stringify(evSchedLeads.map(function(l) {
+                return { MundaneId: l.MundaneId, Persona: l.Persona, Auto: !!l.Auto };
+            })));
 
             var isEdit = gid('ev-sched-mode').value === 'edit';
             var schedId = gid('ev-sched-id').value;

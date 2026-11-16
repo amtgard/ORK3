@@ -224,6 +224,9 @@
         var f = { Category: name };
         // A stripe the same as the new category would never show.
         if (item.SecondaryCategory === name) f.SecondaryCategory = '';
+        // Auto-filled leads follow the category; hand-picked ones stay.
+        var leads = win.EvBoardCore.swapAutoLeads(item.Leads || [], cfg().staffList || [], name);
+        if (JSON.stringify(leads) !== JSON.stringify(item.Leads || [])) f.Leads = leads;
         s.ctx.store.update(s.cid, f);
     }
 

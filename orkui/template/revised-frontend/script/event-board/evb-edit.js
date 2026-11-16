@@ -12,8 +12,8 @@
  *
  * Other Edit-mode surfaces (evb-type.js, evb-select.js) attach through three
  * hooks, each called with the same edit context {store, root, head, quickLine,
- * entryContext, add, addNotice, isLeaving, isTextField, modalOpen, boardShown} (see
- * editContext below):
+ * entryContext, add(parse, leads), getStaff, searchPlayers, addNotice, isLeaving,
+ * isTextField, modalOpen, boardShown} (see editContext below):
  *   EvBoardEdit.onEnter(fn)      after Edit mode opens
  *   EvBoardEdit.onBeforeExit(fn) when Done is pressed, before anything else;
  *                                returning false keeps Edit mode open
@@ -88,6 +88,35 @@
             });
     }
 
+    // The schedule modal's lead search (revised.js, beside evSchedLeads), same
+    // endpoints and scope: the event's kingdom first, then everyone else.
+    // Resolves to [{MundaneId, Persona, Detail: 'K:P'}].
+    function searchPlayers(term) {
+        var c = cfg(), kid = c.kingdomId || 0;
+        var json = function (url) {
+            return win.fetch(url, { headers: XHR, credentials: 'same-origin' }).then(function (r) { return r.json(); });
+        };
+        var shape = function (list) {
+            return (Array.isArray(list) ? list : []).map(function (p) {
+                return { MundaneId: +p.MundaneId, Persona: String(p.Persona || ''), Detail: p.KAbbr && p.PAbbr ? p.KAbbr + ':' + p.PAbbr : '' };
+            });
+        };
+        var q = encodeURIComponent(term);
+        if (!kid) {
+            return json(c.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + q + '&limit=10').then(shape);
+        }
+        var base = c.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + q;
+        return json(base + '&scope=own').then(function (own) {
+            own = shape(own);
+            if (own.length >= 5) return own;
+            return json(base + '&scope=exclude').then(function (other) {
+                return own.concat(shape(other).slice(0, 10 - own.length));
+            });
+        });
+    }
+
+    function staffList() { return cfg().staffList || []; }
+
     // ---- the parse context ----
 
     // An item's board day and its start and end in that day's minutes.
@@ -149,12 +178,13 @@
         return Object.assign(ctx, overrides || {});
     }
 
-    // The item a parse describes, as the store and the board take it.
-    function itemFrom(r) {
+    // The item a parse describes, as the store and the board take it; its leads
+    // are the entry's lead chips.
+    function itemFrom(r, leads) {
         var it = {
             Title: r.title, StartTime: r.start, EndTime: r.end,
             Category: r.category || 'Other', SecondaryCategory: r.secondaryCategory || '',
-            Location: r.location || '', Description: r.description || '', Leads: []
+            Location: r.location || '', Description: r.description || '', Leads: leads || []
         };
         if (r.cost != null && cfg().canManageFeast) it.Cost = r.cost;
         return it;
@@ -255,8 +285,9 @@
     }
 
     // A row in the notice; restoreText adds a button that puts a rejected line
-    // back in the quick line (used when the line held other text).
-    function addNotice(message, restoreText) {
+    // (with its hand-picked restoreLeads as chips) back in the quick line (used
+    // when the line held other text).
+    function addNotice(message, restoreText, restoreLeads) {
         var box = q('.evb-notice');
         if (!box) return;
         var row = doc.createElement('div');
@@ -268,8 +299,9 @@
             b.className = 'evb-notice-restore';
             b.textContent = 'Put it back in the line';
             b.evbRestoreText = restoreText;
+            b.evbRestoreLeads = restoreLeads || [];
             b.addEventListener('click', function () {
-                state.entry.setText(restoreText);
+                state.entry.setText(restoreText, { leads: b.evbRestoreLeads });
                 state.entry.focus();
                 row.parentNode.removeChild(row);
                 if (!box.querySelector('.evb-notice-row')) box.hidden = true;
@@ -305,23 +337,28 @@
         if (!state.committing && state.entry && state.entry.getText().trim()) state.entry.reparse();
     }
 
+    function handPicked(leads) { return (leads || []).filter(function (l) { return !l.Auto; }); }
+
     function onRejected(r) {
         var title = (r.item && r.item.Title) || 'an item';
         var msg = String(r.message || 'The server refused it').replace(/[.\s]+$/, '');
-        var restore = null;
+        var restore = null, leads = null;
         if (r.kind === 'add' && r.item) {
-            var text = C.formatEntry(r.item, { withDay: true });
+            // The leads come back as chips, not as '@' text: the category fills
+            // its own again, and the hand-picked ones are kept.
+            var text = C.formatEntry(Object.assign({}, r.item, { Leads: [] }), { withDay: true });
+            leads = handPicked(r.item.Leads);
             // Someone typing elsewhere (a block on the board) keeps the keyboard.
             var a = doc.activeElement;
             var typingElsewhere = isTextField(a) && a !== state.entry.input;
             if (!state.entry.getText().trim() && !typingElsewhere) {
-                state.entry.setText(text);
+                state.entry.setText(text, { leads: leads });
                 state.entry.focus();
             } else {
                 restore = text;
             }
         }
-        addNotice('Couldn’t save “' + title + '”: ' + msg + '. It was undone.', restore);
+        addNotice('Couldn’t save “' + title + '”: ' + msg + '. It was undone.', restore, leads);
     }
 
     // ---- the quick line ----
@@ -337,17 +374,17 @@
 
     function onParse(r) {
         if (state.committing) return;
-        V().setGhosts(r && r.ok ? [itemFrom(r)] : []);
+        V().setGhosts(r && r.ok ? [itemFrom(r, state.entry && state.entry.getLeads())] : []);
     }
 
-    // Add a valid parse as an item; the quick line's day and "then" follow it.
-    // Null once Done is leaving: the store is about to go.
-    function addParsed(r) {
+    // Add a valid parse as an item with the given leads; the quick line's day and
+    // "then" follow it. Null once Done is leaving: the store is about to go.
+    function addParsed(r, leads) {
         if (state.leaving) return null;
         var cid;
         state.committing = true;
         try {
-            cid = state.store.add(itemFrom(r));
+            cid = state.store.add(itemFrom(r, leads));
             state.recent.push({ cid: cid, id: 0 });
         } finally {
             state.committing = false;
@@ -364,7 +401,7 @@
             return true;
         }
         V().setGhosts([]);
-        addParsed(r);
+        addParsed(r, state.entry.getLeads());
         return true;
     }
 
@@ -378,6 +415,8 @@
             quickLine: state.entry,
             entryContext: entryContext,
             add: addParsed,
+            getStaff: staffList,
+            searchPlayers: searchPlayers,
             addNotice: addNotice,
             // Done is in progress: nothing more may be added or opened.
             isLeaving: function () { return !!state.leaving; },
@@ -475,7 +514,7 @@
         return JSON.stringify(items.map(function (it) {
             return [+it.EventScheduleId, it.Title || '', t16(it.StartTime), t16(it.EndTime), it.Location || '',
                 it.Description || '', it.Category || '', it.SecondaryCategory || '',
-                (it.Leads || []).map(function (l) { return +l.MundaneId; }).sort(),
+                (it.Leads || []).map(function (l) { return +l.MundaneId + (l.Auto ? 'a' : ''); }).sort(),
                 it.Menu || '', num(it.Cost), it.Dietary || '', it.Allergens || ''];
         }).sort(function (a, b) { return a[0] - b[0]; }));
     }
@@ -529,6 +568,8 @@
             getContext: function () { return entryContext(); },
             onParse: onParse,
             onCommit: onCommit,
+            getStaff: staffList,
+            searchPlayers: searchPlayers,
             placeholder: PLACEHOLDER
         });
         state.entry.input.setAttribute('aria-label', 'Add a schedule item');
@@ -619,31 +660,6 @@
         root.parentNode.insertBefore(box, root);
     }
 
-    // Swap in the List and Feast tabs, their counts and the board's schedule
-    // from a fresh copy of the page. False when the copy is not the event page.
-    function swapFromPage(html) {
-        var fresh = new win.DOMParser().parseFromString(html, 'text/html');
-        var data = fresh.getElementById('evb-schedule-data');
-        if (!data || !fresh.getElementById('ev-schedule-container')) return false;
-        var items = JSON.parse(data.textContent || '[]');
-        ['ev-schedule-container', 'ev-meal-list'].forEach(function (id) {
-            var mine = doc.getElementById(id), theirs = fresh.getElementById(id);
-            if (mine && theirs) mine.innerHTML = theirs.innerHTML;
-        });
-        ['ev-schedule-empty', 'ev-meal-empty'].forEach(function (id) {
-            var mine = doc.getElementById(id), theirs = fresh.getElementById(id);
-            if (mine && theirs) mine.style.display = theirs.style.display;
-        });
-        ['ev-tab-schedule', 'ev-tab-feast'].forEach(function (tab) {
-            var sel = '[data-tab="' + tab + '"] .ev-tab-count';
-            var mine = doc.querySelector(sel), theirs = fresh.querySelector(sel);
-            if (mine && theirs) mine.textContent = theirs.textContent;
-        });
-        if (win.EvConfig) win.EvConfig.schedule = items;
-        if (typeof win.evBuildScheduleFilters === 'function') win.evBuildScheduleFilters();
-        return items;
-    }
-
     // The page once the store is idle; it waits again if something was sent meanwhile.
     function settledPage(store) {
         return store.idle().then(function () {
@@ -681,7 +697,7 @@
         // A refused line still waiting in the notice comes back to the line first.
         var restore = q('.evb-notice-restore');
         if (restore) {
-            state.entry.setText(restore.evbRestoreText);
+            state.entry.setText(restore.evbRestoreText, { leads: restore.evbRestoreLeads });
             var row = restore.parentNode;
             row.removeChild(restore);
             row.appendChild(doc.createTextNode('Its line is back in the quick line: fix it and press Enter, or Esc to drop it, then Done.'));
@@ -695,7 +711,7 @@
         state.entry.input.readOnly = true;
         var store = state.store;
         state.leaving = settledPage(store).then(function (html) {
-            var items = swapFromPage(html);
+            var items = V().swapFromPage(html);
             if (!items) throw new Error('page');
             state.leaving = null;
             unmount();
@@ -718,6 +734,12 @@
 
     function init() {
         if (!cfg().canManageSchedule || !doc.getElementById('evb-root')) return;
+        // New staff or new category leads: the line being typed reads them at once.
+        if (typeof win.evOnStaffChanged === 'function') {
+            win.evOnStaffChanged(function () {
+                if (state.entry && state.entry.getText().trim()) state.entry.reparse();
+            });
+        }
         doc.querySelectorAll('.evb-edit-btn').forEach(function (b) {
             b.addEventListener('click', function () { enter(); });
         });

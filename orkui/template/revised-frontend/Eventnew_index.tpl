@@ -2317,7 +2317,7 @@ $evbSchedule = array_map(function ($it) {
 		'Description'       => (string)($it['Description'] ?? ''),
 		'Category'          => (string)($it['Category'] ?? ''),
 		'SecondaryCategory' => (string)($it['SecondaryCategory'] ?? ''),
-		'Leads'             => array_map(function ($l) { return ['MundaneId' => (int)$l['MundaneId'], 'Persona' => (string)$l['Persona']]; }, $it['Leads'] ?? []),
+		'Leads'             => array_map(function ($l) { return ['MundaneId' => (int)$l['MundaneId'], 'Persona' => (string)$l['Persona'], 'Auto' => !empty($l['Auto'])]; }, $it['Leads'] ?? []),
 		'Menu'              => (string)($it['Menu'] ?? ''),
 		'Cost'              => $it['Cost'] ?? null,
 		'Dietary'           => (string)($it['Dietary'] ?? ''),
@@ -3415,6 +3415,8 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		setTimeout(function() {
 			var cat = document.getElementById('ev-sched-category');
 			if (cat) { cat.value = 'Feast and Food'; evSchedToggleMealPanel(); }
+			// The category's leads, as choosing it by hand would fill them.
+			if (window.evSchedApplyCategoryLeads) window.evSchedApplyCategoryLeads();
 			evSchedClearMealFields();
 		}, 20);
 	};

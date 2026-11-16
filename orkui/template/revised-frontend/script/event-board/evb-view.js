@@ -594,6 +594,49 @@
     // refresh is numbered; a response to one that is no longer the latest is
     // dropped, so a slow earlier fetch cannot overwrite a newer schedule.
     var refreshSeq = 0;
+    // Swap in the List and Feast tabs, their counts and the board's schedule
+    // from a fresh copy of the page. Returns the schedule, or false when the copy
+    // is not the event page.
+    function swapFromPage(html) {
+        var doc = win.document;
+        var fresh = new win.DOMParser().parseFromString(html, 'text/html');
+        var data = fresh.getElementById('evb-schedule-data');
+        if (!data || !fresh.getElementById('ev-schedule-container')) return false;
+        var items = JSON.parse(data.textContent || '[]');
+        ['ev-schedule-container', 'ev-meal-list'].forEach(function (id) {
+            var mine = doc.getElementById(id), theirs = fresh.getElementById(id);
+            if (mine && theirs) mine.innerHTML = theirs.innerHTML;
+        });
+        ['ev-schedule-empty', 'ev-meal-empty'].forEach(function (id) {
+            var mine = doc.getElementById(id), theirs = fresh.getElementById(id);
+            if (mine && theirs) mine.style.display = theirs.style.display;
+        });
+        ['ev-tab-schedule', 'ev-tab-feast'].forEach(function (tab) {
+            var sel = '[data-tab="' + tab + '"] .ev-tab-count';
+            var mine = doc.querySelector(sel), theirs = fresh.querySelector(sel);
+            if (mine && theirs) mine.textContent = theirs.textContent;
+        });
+        if (win.EvConfig) win.EvConfig.schedule = items;
+        if (typeof win.evBuildScheduleFilters === 'function') win.evBuildScheduleFilters();
+        return items;
+    }
+
+    // After a staff change: the List's server-rendered rows (their Leads) and the
+    // board both re-read the page; in Edit mode the store re-reads the schedule.
+    function refreshPage() {
+        var seq = ++refreshSeq;
+        win.fetch(win.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+            .then(function (html) {
+                if (seq !== refreshSeq) return;
+                var items = swapFromPage(html);
+                if (!items) return;
+                if (state.editing) { if (win.EvBoardEdit && win.EvBoardEdit.refresh) win.EvBoardEdit.refresh(); }
+                else setItems(items);
+            })
+            .catch(function () { /* the page stays as it is */ });
+    }
+
     function refreshFromServer() {
         // In Edit mode the store owns the board, so it re-reads the schedule instead.
         if (state.editing && win.EvBoardEdit && win.EvBoardEdit.refresh) { win.EvBoardEdit.refresh(); return; }
@@ -707,6 +750,7 @@
             return '?view=board' + (boardHasDay(state.day) ? '&day=' + state.day.replace(/-/g, '') : '');
         };
         win.evRefreshScheduleGrid = refreshFromServer;
+        if (typeof win.evOnStaffChanged === 'function') win.evOnStaffChanged(refreshPage);
     }
 
     api.init = init;
@@ -719,6 +763,7 @@
     // A category's bold fill; unknown names fall back to Other's.
     api.boldFor = function (name) { return boldOf(catName(name, state.catsByName), state.catsByName); };
     api.reveal = reveal;
+    api.swapFromPage = swapFromPage;
     api.getItems = function () { return state.items; };
     api.setView = setView;
     api.getView = getView;

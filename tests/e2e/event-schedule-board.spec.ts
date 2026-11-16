@@ -317,26 +317,44 @@ test.describe('editing', () => {
   test.afterAll(async ({ browser }) => {
     if (!ready) return;
     const page = await browser.newPage();
-    await signIn(page);
-    await openBoard(page, EDIT_EVENT);
-    const left = await page.evaluate(async prefix => {
-      const c = (window as any).EvConfig;
-      const base = c.uir + 'EventAjax/';
-      const path = c.eventId + '/' + c.detailId;
-      const opts = { credentials: 'same-origin' as RequestCredentials, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
-      const list = await (await fetch(base + 'schedule_list/' + path, opts)).json();
-      const ops = (list.schedule || []).filter((it: any) => String(it.Title).startsWith(prefix))
-        .map((it: any) => ({ op: 'remove', id: it.EventScheduleId }));
-      if (!ops.length) return 0;
-      const fd = new FormData();
-      fd.append('Ops', JSON.stringify(ops));
-      const res = await (await fetch(base + 'schedule_batch/' + path, Object.assign({ method: 'POST', body: fd }, opts))).json();
-      return res.status === 0 ? 0 : ops.length;
-    }, PREFIX);
+    let left: number | string = 'not run';
+    let cleared = 'not run';
+    try {
+      await signIn(page);
+      await openBoard(page, EDIT_EVENT);
+      left = await page.evaluate(async prefix => {
+        const c = (window as any).EvConfig;
+        const base = c.uir + 'EventAjax/';
+        const path = c.eventId + '/' + c.detailId;
+        const opts = { credentials: 'same-origin' as RequestCredentials, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+        const list = await (await fetch(base + 'schedule_list/' + path, opts)).json();
+        const ops = (list.schedule || []).filter((it: any) => String(it.Title).startsWith(prefix))
+          .map((it: any) => ({ op: 'remove', id: it.EventScheduleId }));
+        if (!ops.length) return 0;
+        const fd = new FormData();
+        fd.append('Ops', JSON.stringify(ops));
+        const res = await (await fetch(base + 'schedule_batch/' + path, Object.assign({ method: 'POST', body: fd }, opts))).json();
+        return res.status === 0 ? 0 : ops.length;
+      }, PREFIX);
+    } catch (e) {
+      left = String(e);
+    } finally {
+      // The test account leaves this spec leading no category, whatever happened
+      // above, saved through the staff endpoint with its other fields as the
+      // staff table carries them.
+      cleared = await clearTestLeads(page).catch(e => String(e));
+      await page.close();
+    }
     expect(left).toBe(0);
-    // The test account leaves this spec leading no category, saved through the
-    // staff endpoint with its other fields as the staff table carries them.
-    const cleared = await page.evaluate(async () => {
+    expect(cleared).toBe('ok');
+  });
+
+  async function clearTestLeads(page: Page): Promise<string> {
+    if (!/Event\/detail\//.test(page.url())) {
+      await signIn(page);
+      await openBoard(page, EDIT_EVENT);
+    }
+    return page.evaluate(async () => {
       const c = (window as any).EvConfig;
       const row = document.querySelector('#ev-staff-tbody tr[data-persona="E2E Schedule Editor"]') as HTMLElement | null;
       if (!row) return 'no staff row';
@@ -355,9 +373,7 @@ test.describe('editing', () => {
       })).json();
       return res.status === 0 && res.staff.LeadCategories.length === 0 ? 'ok' : JSON.stringify(res);
     });
-    expect(cleared).toBe('ok');
-    await page.close();
-  });
+  }
 
   test('Edit schedule is offered to an editor and not to a signed-out viewer', async ({ page, browser }) => {
     await openBoard(page, EDIT_EVENT);
@@ -655,6 +671,9 @@ test.describe('editing', () => {
     await editor.press('Enter');
     const renamed = page.locator('.evb-block', { hasText: `${PREFIX} renamed` });
     await expect(renamed).toHaveAttribute('data-category', 'Class');
+    // A rename is the title, verbatim: ' at Hall' is not read as a location.
+    const it = await page.evaluate(t => (window as any).EvBoardEdit.store.items().find((i: any) => i.Title === t), `${PREFIX} renamed at Hall`);
+    expect([it && it.Title, it && it.Location]).toEqual([`${PREFIX} renamed at Hall`, '']);
     await renamed.click();
     await page.keyboard.press('Delete');
     await expect(renamed).toHaveCount(0);
@@ -752,6 +771,25 @@ test.describe('editing', () => {
     await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
     expect(await fields()).toEqual({ Title: `${PREFIX} even one`, Location: 'Hall #2', Description: 'Line one\nLine two' });
     expect(batches).toBe(1);
+
+    // The box holds the title alone, and what is typed is stored exactly.
+    await block.dblclick();
+    await expect(editor).toHaveValue(`${PREFIX} even one`);
+    await editor.fill(`${PREFIX} New name at Field #2`);
+    await editor.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect(await fields()).toEqual({ Title: `${PREFIX} New name at Field #2`, Location: 'Hall #2', Description: 'Line one\nLine two' });
+
+    // Esc puts the title back; an empty box saves nothing.
+    await block.dblclick();
+    await editor.fill(`${PREFIX} not kept`);
+    await editor.press('Escape');
+    await block.dblclick();
+    await editor.fill('');
+    await page.locator('.evb-modebar-title').click();
+    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
+    expect((await fields())!.Title).toBe(`${PREFIX} New name at Field #2`);
+    expect(batches).toBe(2);
   });
 
   test('blocks can be selected and changed from the keyboard', async ({ page }) => {
@@ -942,21 +980,21 @@ test.describe('editing', () => {
     await expect(block).toHaveClass(/evb-selected/);
   });
 
-  test('$0 typed on a feast item with no cost is saved', async ({ page }) => {
+  test('$0 typed on a feast item is saved as free; a rename keeps $ as title text', async ({ page }) => {
     await openBoard(page, EDIT_EVENT);
     test.skip(!(await page.evaluate(() => !!(window as any).EvConfig.canManageFeast)), 'the test account cannot manage feast');
     await page.locator('.evb-edit-btn').click();
-    await quickAdd(page, `sun 12p #feast ${PREFIX} lunch`);
-    expect([null, undefined, ''].includes((await storeItem(page, `${PREFIX} lunch`)).Cost)).toBe(true);
-    await page.locator('.evb-block', { hasText: `${PREFIX} lunch` }).dblclick();
-    const editor = page.locator('.evb-block-editing .evb-entry-input');
-    await expect(editor).toBeFocused();
-    await editor.fill(`${await editor.inputValue()} $0`);
-    await editor.press('Enter');
-    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await quickAdd(page, `sun 12p #feast ${PREFIX} lunch $0`);
     const cost = (await storeItem(page, `${PREFIX} lunch`)).Cost;
     expect(cost === null || cost === undefined || cost === '').toBe(false);
     expect(+cost).toBe(0);
+    await page.locator('.evb-block', { hasText: `${PREFIX} lunch` }).dblclick();
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await expect(editor).toBeFocused();
+    await editor.fill(`${await editor.inputValue()} $5`);
+    await editor.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect(+(await storeItem(page, `${PREFIX} lunch $5`)).Cost).toBe(0);
   });
 
   test('clicking inside the rename box keeps the selection', async ({ page }) => {
@@ -1087,6 +1125,8 @@ test.describe('editing', () => {
     await page.locator('#ev-staff-save-btn').click();
     await expect(row.locator('.evb-cat-chip[data-category="Battlegame"]')).toBeVisible();
     await expect(page.locator('#ev-staff-lead-note')).toHaveText(/^Added as lead on \d+ items?\.$/);
+    // The List's server-rendered rows are re-read: the item now shows its lead.
+    await expect(page.locator('#ev-schedule-container tr', { hasText: `${PREFIX} lead fill` })).toContainText('E2E Schedule Editor');
     await expect.poll(() => changed.length).toBe(1);
     expect(changed[0].find((s: any) => s.Persona === 'E2E Schedule Editor').LeadCategories).toEqual(['Battlegame']);
     expect(await page.evaluate(() => (window as any).EvConfig.staffList)).toEqual(changed[0]);
@@ -1100,5 +1140,147 @@ test.describe('editing', () => {
     await page.reload();
     await expect(page.locator('#ev-staff-tbody tr', { hasText: 'E2E Schedule Editor' }).locator('.evb-cat-chip[data-category="Battlegame"]')).toBeVisible();
     expect(await page.evaluate(() => (window as any).EvConfig.staffList.find((s: any) => s.Persona === 'E2E Schedule Editor').LeadCategories)).toEqual(['Battlegame']);
+  });
+
+  // ---- Leads while typing (the test account leads Battlegame from here on) ----
+
+  test('a category lead is filled in, can be removed before adding, and @ adds one', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sat 1p bg: ${PREFIX} auto lead`);
+    await expect(page.locator('.evb-chip-auto[data-part="lead"]')).toContainText('E2E Schedule Editor');
+    await line.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await line.fill(`sat 2p bg: ${PREFIX} no lead`);
+    await page.locator('.evb-chip-auto[data-part="lead"] .evb-chip-x').click();
+    await expect(page.locator('.evb-chip[data-part="lead"]')).toHaveCount(0);
+    // Removed stays removed when the same category is read again.
+    await line.press('End');
+    await line.pressSequentially(' x');
+    await expect(page.locator('.evb-chip[data-part="lead"]')).toHaveCount(0);
+    await line.press('Backspace');
+    await line.press('Backspace');
+    await line.press('Enter');
+    await line.fill(`sat 3p class: ${PREFIX} tagged @E2E`);
+    await expect(page.locator('.evb-entry-option').first()).toContainText('E2E Schedule Editor');
+    await line.press('Enter');
+    await expect(line).toHaveValue(new RegExp(`${PREFIX} tagged\\s*$`));
+    await expect(page.locator('.evb-chip[data-part="lead"]:not(.evb-chip-auto)')).toContainText('E2E Schedule Editor');
+    await line.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    const leads = await page.evaluate((prefix) => {
+      const items = (window as any).EvBoardEdit.store.items();
+      const of = (t: string) => items.find((i: any) => i.Title === `${prefix} ${t}`).Leads.map((l: any) => [l.Persona, !!l.Auto]);
+      return [of('auto lead'), of('no lead'), of('tagged')];
+    }, PREFIX);
+    expect(leads).toEqual([[['E2E Schedule Editor', true]], [], [['E2E Schedule Editor', false]]]);
+    await page.locator('.evb-done').click();
+    await page.reload();
+    await page.locator('.evb-block', { hasText: `${PREFIX} no lead` }).click();
+    await expect(page.locator('.evb-popover')).not.toContainText('E2E Schedule Editor');
+  });
+
+  test('an @ that matches no one stays in the title; picking an auto lead makes it hand-picked', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sat 4p ${PREFIX} mail @zzqqxx`);
+    const menu = page.locator('.evb-quickline .evb-entry-menu');
+    await expect(menu).toContainText('No one found');
+    await line.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(page.locator('.evb-chip[data-part="title"]')).toContainText('@zzqqxx');
+    await line.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect(await storeItem(page, `${PREFIX} mail @zzqqxx`)).not.toBeNull();
+
+    await line.fill(`sat 5p bg: ${PREFIX} once @E2E`);
+    await expect(page.locator('.evb-entry-option').first()).toContainText('E2E Schedule Editor');
+    await line.press('Enter');
+    await expect(page.locator('.evb-chip[data-part="lead"]')).toHaveCount(1);
+    await expect(page.locator('.evb-chip[data-part="lead"]')).not.toHaveClass(/evb-chip-auto/);
+    await line.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect((await storeItem(page, `${PREFIX} once`)).Leads.map((l: any) => [l.Persona, !!l.Auto])).toEqual([['E2E Schedule Editor', false]]);
+  });
+
+  test('changing a category swaps auto-filled leads and keeps hand-picked ones', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sun 1p ${PREFIX} swap`);
+    await line.press('Enter');
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} swap` });
+    await block.click();
+    await page.keyboard.press('3');
+    await expect(block).toHaveAttribute('data-category', 'Battlegame');
+    const after3 = await page.evaluate((t) => (window as any).EvBoardEdit.store.items().find((i: any) => i.Title === t).Leads.map((l: any) => !!l.Auto), `${PREFIX} swap`);
+    expect(after3).toEqual([true]);
+    await page.keyboard.press('7');
+    const after7 = await page.evaluate((t) => (window as any).EvBoardEdit.store.items().find((i: any) => i.Title === t).Leads.length, `${PREFIX} swap`);
+    expect(after7).toBe(0);
+  });
+
+  test('a rename shows the leads as chips; @ adds one and the query never joins the title', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await quickAdd(page, `sun 2p bg: ${PREFIX} renamed lead`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} renamed lead` });
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    const chips = page.locator('.evb-type-pop .evb-chip[data-part="lead"]');
+
+    // Esc drops a removed chip along with the rest of the change.
+    await block.dblclick();
+    await expect(editor).toHaveValue(`${PREFIX} renamed lead`);
+    await expect(chips).toHaveCount(1);
+    await expect(chips).toHaveClass(/evb-chip-auto/);
+    await chips.locator('.evb-chip-x').click();
+    await expect(chips).toHaveCount(0);
+    await editor.press('Escape');
+    expect((await storeItem(page, `${PREFIX} renamed lead`)).Leads.length).toBe(1);
+
+    // '@' while renaming: picking makes the auto lead hand-picked, once.
+    await block.dblclick();
+    await editor.press('End');
+    await editor.pressSequentially(' two @E2E');
+    await expect(page.locator('.evb-entry-option').first()).toContainText('E2E Schedule Editor');
+    await editor.press('Enter');
+    await expect(editor).toHaveValue(`${PREFIX} renamed lead two `);
+    await expect(chips).toHaveCount(1);
+    await expect(chips).not.toHaveClass(/evb-chip-auto/);
+    // A half-typed '@query' left in the box is not saved into the title.
+    await editor.pressSequentially('@E2E Sch');
+    await page.locator('.evb-modebar-title').click();
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    const it = await storeItem(page, `${PREFIX} renamed lead two`);
+    expect(it.Leads.map((l: any) => [l.Persona, !!l.Auto])).toEqual([['E2E Schedule Editor', false]]);
+    expect(it.Category).toBe('Battlegame');
+  });
+
+  test('the schedule modal fills a new item\'s leads from its category and posts Auto', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.evaluate(() => (window as any).evOpenScheduleModal());
+    const leads = page.locator('#ev-sched-leads-list');
+    await expect(leads).toContainText('None assigned');
+    await page.locator('#ev-sched-category').selectOption('Battlegame');
+    await expect(leads).toContainText('E2E Schedule Editor');
+    await expect(leads).toContainText('auto');
+    // Another category without leads empties the untouched list again.
+    await page.locator('#ev-sched-category').selectOption('Class');
+    await expect(leads).toContainText('None assigned');
+    await page.locator('#ev-sched-category').selectOption('Battlegame');
+    await page.locator('#ev-sched-title').fill(`${PREFIX} modal lead`);
+    await page.locator('#ev-sched-save-btn').click();
+    await expect(page.locator('#ev-schedule-modal')).toBeHidden();
+    const stored = await page.evaluate(async title => {
+      const c = (window as any).EvConfig;
+      const list = await (await fetch(c.uir + 'EventAjax/schedule_list/' + c.eventId + '/' + c.detailId, {
+        credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      })).json();
+      const it = (list.schedule || []).find((x: any) => x.Title === title);
+      return it ? it.Leads.map((l: any) => [l.Persona, !!l.Auto]) : null;
+    }, `${PREFIX} modal lead`);
+    expect(stored).toEqual([['E2E Schedule Editor', true]]);
   });
 });
