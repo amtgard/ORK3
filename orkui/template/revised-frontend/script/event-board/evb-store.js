@@ -10,7 +10,7 @@
  * rejected change reverts to it.
  *
  * status() -> {state: 'saved'|'saving'|'offline', pending, reason}; reason says
- * why the store is offline ('network', 'signed-out', 'forbidden', 'protocol')
+ * why the store is offline ('network', 'server', 'signed-out', 'forbidden', 'protocol')
  * and is null otherwise. Offline keeps every change; retry() sends them again.
  *
  * Undo steps are lists of {cid, before, after} snapshots (null = absent).
@@ -42,7 +42,8 @@
         var queue = [];     // unsent entries: {op, cid, fields?, item?}
         var inflight = null; // entries of the request in flight
         var offline = false;
-        // Why the store is offline: 'network', 'signed-out', 'forbidden' or 'protocol'.
+        // Why the store is offline: 'network' (no reply), 'server' (a reply with an
+        // error status), 'signed-out', 'forbidden' or 'protocol'.
         var offlineReason = null;
 
         var listeners = { change: [], status: [], rejected: [] };
@@ -199,7 +200,10 @@
             return sent.every(function (e, i) {
                 var r = results[i];
                 if (!r || typeof r !== 'object') return false;
-                return e.op !== 'add' || isId(r.id || (r.schedule && r.schedule.EventScheduleId));
+                if (e.op === 'add') return isId(r.id || (r.schedule && r.schedule.EventScheduleId));
+                // An update or remove row that names an id must name a real one.
+                var rowId = r.schedule && typeof r.schedule === 'object' ? r.schedule.EventScheduleId : undefined;
+                return (r.id === undefined || isId(r.id)) && (rowId === undefined || isId(rowId));
             });
         }
 
@@ -224,7 +228,7 @@
                 });
         }
 
-        var REASONS = ['network', 'signed-out', 'forbidden', 'protocol'];
+        var REASONS = ['network', 'server', 'signed-out', 'forbidden', 'protocol'];
 
         function goOffline(sent, reason) {
             inflight = null;

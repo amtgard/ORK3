@@ -157,7 +157,10 @@
         if (t && !t.closest('.evb-block') && t.closest('button, a[href]')) return;
         // AltGr (Ctrl+Alt on Windows) types characters; it is not a shortcut.
         var altGr = !!(e.getModifierState && e.getModifierState('AltGraph'));
-        var mod = (e.ctrlKey || e.metaKey || e.altKey) && !altGr;
+        // Option with a character on a Mac types it (accented letters); Alt with an
+        // arrow or another key that is not a character stays a shortcut.
+        var optionChar = e.altKey && !e.ctrlKey && !e.metaKey && String(e.key).length === 1 && /\S/.test(e.key);
+        var mod = (e.ctrlKey || e.metaKey || e.altKey) && !altGr && !optionChar;
         var cur = current();
         if (!cur || !bodyFor(cur.day) || !win.EvBoardType) return;
         var arrow = /^Arrow(Up|Down|Left|Right)$/.exec(e.key);

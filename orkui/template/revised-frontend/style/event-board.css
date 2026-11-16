@@ -443,6 +443,9 @@ html[data-theme="dark"] .evb-bulk-leads, html[data-theme="dark"] .evb-bulk-outsi
 .evb-copy-dialog .evb-copy-source:focus-visible { border-color: #3182ce; background: var(--ork-bg-secondary); color: var(--ork-text); }
 .evb-copy-dialog .evb-copy-source:disabled { opacity: 0.6; cursor: default; }
 .evb-copy-dialog .evb-copy-source[aria-busy="true"] { opacity: 1; border-color: #3182ce; }
+html[data-theme="dark"] .evb-copy-dialog .evb-copy-source:hover:not(:disabled),
+html[data-theme="dark"] .evb-copy-dialog .evb-copy-source:focus-visible,
+html[data-theme="dark"] .evb-copy-dialog .evb-copy-source[aria-busy="true"] { border-color: #63b3ed; }
 .evb-copy-name { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
 .evb-copy-meta { font-size: 12px; color: var(--ork-text-muted); }
 .evb-copy-status, .evb-copy-none { margin: 0 0 8px; font-size: 13px; color: var(--ork-text-muted); }
@@ -452,9 +455,10 @@ html[data-theme="dark"] .evb-bulk-leads, html[data-theme="dark"] .evb-bulk-outsi
 }
 .evb-copy-error[hidden] { display: none; }
 
-/* A double booking: an amber warning in the block's top-right corner (Edit mode). */
+/* A double booking: an amber warning in the block's top-right corner (Edit mode),
+   below the top resize grip's 6px hit area so the grip's whole width still resizes. */
 #evb-root .evb-block > .evb-conflict {
-    position: absolute; top: 3px; right: 3px; z-index: 1;
+    position: absolute; top: 6px; right: 3px; z-index: 1;
     display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
     border-radius: 4px; background: #f6c343; color: #1a202c; font-size: 9px; line-height: 1;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); cursor: inherit;

@@ -894,6 +894,44 @@ final class EventPlanningTest extends TestCase
         $this->assertSame(1, $this->fixture->countSchedule($dst['detail_id']));
     }
 
+    public function testCopyScheduleIntoKeepsALeadAutoOnlyWhereThatPersonLeadsTheCategoryHere(): void
+    {
+        $src = $this->fixture->createPublishedEventOn('copy-auto-src', '2026-10-30');
+        $dst = $this->fixture->createPublishedEventOn('copy-auto-dst', '2026-11-06');
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $dst['park_id'], AUTH_CREATE, 'copy-auto-admin');
+        $warcrat = $this->fixture->createPlayer('copy-auto-w');
+        $item = $this->fixture->insertScheduleAt($src['detail_id'], 'Mothman', 'Battlegame', '2026-10-30 12:00:00', '2026-10-30 12:45:00');
+        $this->fixture->insertScheduleLead($item, $warcrat, true);
+        $req = ['Token' => $grantor['token'], 'EventId' => $dst['event_id'], 'EventCalendarDetailId' => $dst['detail_id'], 'SourceDetailId' => $src['detail_id']];
+
+        // Nobody leads Battlegame on the target: the copied lead is hand-picked there.
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->planning->CopyScheduleInto($req);
+        $this->assertSame(0, $r['Status']['Status']);
+        $first = (int) $r['Schedule'][0]['EventScheduleId'];
+        $this->assertSame([['mundane_id' => $warcrat, 'is_auto' => 0]], $this->fixture->fetchScheduleLeads($first));
+        $this->assertSame([false], array_column($r['Schedule'][0]['Leads'], 'Auto'));
+
+        // Leading another category on the target is not enough.
+        $staff = $this->saveStaff($dst, $grantor['token'], $warcrat, ['Class']);
+        $this->assertSame(0, $staff['Status']['Status']);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $second = (int) $this->planning->CopyScheduleInto($req)['Schedule'][0]['EventScheduleId'];
+        $this->assertSame([['mundane_id' => $warcrat, 'is_auto' => 0]], $this->fixture->fetchScheduleLeads($second));
+
+        // Leading Battlegame on the target: the copied lead stays auto.
+        $this->saveStaff($dst, $grantor['token'], $warcrat, ['Battlegame'], (int) $staff['Staff']['EventStaffId']);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r3 = $this->planning->CopyScheduleInto($req);
+        $third = (int) $r3['Schedule'][0]['EventScheduleId'];
+        $this->assertSame([['mundane_id' => $warcrat, 'is_auto' => 1]], $this->fixture->fetchScheduleLeads($third));
+        $this->assertSame([true], array_column($r3['Schedule'][0]['Leads'], 'Auto'));
+        // The earlier copies keep the lead they were given.
+        $this->assertSame([['mundane_id' => $warcrat, 'is_auto' => 0]], $this->fixture->fetchScheduleLeads($first));
+        // The source is untouched.
+        $this->assertSame([['mundane_id' => $warcrat, 'is_auto' => 1]], $this->fixture->fetchScheduleLeads($item));
+    }
+
     public function testCopyScheduleIntoRefusesASourceOutsideTheAllowedSet(): void
     {
         $dst = $this->fixture->createPublishedEventOn('copy-refuse-dst', '2026-11-06');

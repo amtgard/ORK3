@@ -1798,6 +1798,7 @@ class EventPlanning extends Ork3
         $this->db->BeginTrans();
         try {
             $newIds = $this->copyScheduleModules($sourceId, $detailId, $mod, $shiftDays, null, $skippedFeast);
+            $this->demoteForeignAutoLeads($detailId, $newIds);
         } catch (\RuntimeException $e) {
             $this->db->RollbackTrans();
             return ['Status' => ProcessingError('Could not copy the schedule.')];
@@ -1821,6 +1822,38 @@ class EventPlanning extends Ork3
         }
 
         return ['Status' => Success(), 'Schedule' => $schedule, 'SkippedFeast' => $skippedFeast];
+    }
+
+    /**
+     * A lead copied in from another occurrence stays auto-filled only when that person
+     * leads the item's primary category on this occurrence; otherwise it is stored as
+     * hand-picked, so a later staff change here never removes it.
+     *
+     * @param list<int> $scheduleIds the copied items, all on $detailId
+     * @throws \RuntimeException when the write fails
+     */
+    private function demoteForeignAutoLeads(int $detailId, array $scheduleIds): void
+    {
+        $scheduleIds = array_values(array_filter(array_map('intval', $scheduleIds), 'valid_id'));
+        if ($scheduleIds === []) {
+            return;
+        }
+        $this->db->Clear();
+        if (!$this->db->ExecuteChecked(
+            'UPDATE ' . DB_PREFIX . 'event_schedule_lead sl
+             JOIN ' . DB_PREFIX . 'event_schedule s ON s.event_schedule_id = sl.event_schedule_id
+             SET sl.is_auto = 0
+             WHERE sl.event_schedule_id IN (' . implode(',', $scheduleIds) . ')
+               AND s.event_calendardetail_id = ' . $detailId . ' AND sl.is_auto = 1
+               AND NOT EXISTS (
+                   SELECT 1 FROM ' . DB_PREFIX . 'event_staff st
+                   JOIN ' . DB_PREFIX . 'event_staff_category sc ON sc.event_staff_id = st.event_staff_id
+                   WHERE st.event_calendardetail_id = ' . $detailId . '
+                     AND st.mundane_id = sl.mundane_id AND sc.category = s.category
+               )'
+        )) {
+            throw new \RuntimeException('Could not copy a schedule lead.');
+        }
     }
 
     /**
@@ -2255,9 +2288,12 @@ class EventPlanning extends Ork3
         $leadsOut = [];
         $leadsIn = is_array($request['Leads'] ?? null) ? $request['Leads'] : [];
         if (($isUpdate ? $caps['can_schedule'] : true) && is_array($leadsIn)) {
+            // An update rewrites the item's leads as one step: the delete and the
+            // inserts commit together, so a failure half-way never leaves it with none.
             if ($isUpdate) {
+                $this->db->BeginTrans();
                 $this->db->Clear();
-                $this->db->Execute(
+                $ok = $this->db->ExecuteChecked(
                     'DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ' . $scheduleId
                 );
             }
@@ -2267,12 +2303,24 @@ class EventPlanning extends Ork3
                     continue;
                 }
                 $isAuto = $this->leadIsAuto($lead);
+                $insert = 'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
+                     VALUES (' . $scheduleId . ', ' . $lmid . ', ' . (int) $isAuto . ')';
                 $this->db->Clear();
-                $this->db->Execute(
-                    'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
-                     VALUES (' . $scheduleId . ', ' . $lmid . ', ' . (int) $isAuto . ')'
-                );
+                if ($isUpdate) {
+                    $ok = $ok && $this->db->ExecuteChecked($insert);
+                } else {
+                    $this->db->Execute($insert);
+                }
                 $leadsOut[] = ['MundaneId' => $lmid, 'Persona' => $lead['Persona'] ?? '', 'Auto' => $isAuto];
+            }
+            if ($isUpdate) {
+                if (!$ok) {
+                    $this->db->RollbackTrans();
+                    return ProcessingError('Could not save the schedule.');
+                }
+                if (!$this->db->CommitTrans()) {
+                    return ProcessingError('Could not save the schedule.');
+                }
             }
         }
 

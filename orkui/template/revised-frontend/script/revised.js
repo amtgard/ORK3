@@ -9917,12 +9917,12 @@ $(document).ready(function() {
         // category; every save posts it back so the server keeps it.
         var evSchedLeads = [];
         var evSchedLeadAcTimer = null;
-        // Set once leads are changed by hand: the category no longer fills them.
-        var evSchedLeadsTouched = false;
+        // MundaneIds of auto-filled leads removed by hand while adding an item: the
+        // category does not fill them in again (the quick line's rule).
+        var evSchedRemovedAuto = {};
 
         // Add a lead by hand; someone already filled in from the category becomes hand-picked.
         function evAddSchedLead(mundaneId, persona) {
-            evSchedLeadsTouched = true;
             var have = evSchedLeads.filter(function(l) { return l.MundaneId === mundaneId; })[0];
             if (have) have.Auto = false;
             else evSchedLeads.push({ MundaneId: mundaneId, Persona: persona, Auto: false });
@@ -9930,16 +9930,19 @@ $(document).ready(function() {
             evRefreshStaffQuickAdd();
         }
 
-        // The primary category's leads. Adding an item: the category's leads, while
-        // the list is untouched. Editing one: its auto-filled leads are swapped for
-        // the new category's, and hand-picked ones stay.
+        // The primary category's leads, the rule on every entry path: the leads
+        // picked by hand stay, and the auto-filled ones are the category's
+        // (EvBoardCore.swapAutoLeads). Adding an item, an auto lead removed by
+        // hand is not filled in again.
         window.evSchedApplyCategoryLeads = function() {
             var mode = gid('ev-sched-mode'), cat = gid('ev-sched-category');
             if (!mode || !cat || !window.EvBoardCore) return;
+            if (mode.value !== 'edit' && mode.value !== 'add') return;
             var staff = EvConfig.staffList || [], name = cat.value || 'Other';
-            if (mode.value === 'edit') evSchedLeads = EvBoardCore.swapAutoLeads(evSchedLeads, staff, name);
-            else if (mode.value === 'add' && !evSchedLeadsTouched) evSchedLeads = EvBoardCore.leadsForCategory(staff, name);
-            else return;
+            evSchedLeads = EvBoardCore.swapAutoLeads(evSchedLeads, staff, name);
+            if (mode.value === 'add') {
+                evSchedLeads = evSchedLeads.filter(function(l) { return !(l.Auto && evSchedRemovedAuto[+l.MundaneId]); });
+            }
             evRenderSchedLeads();
             evRefreshStaffQuickAdd();
         };
@@ -9969,7 +9972,7 @@ $(document).ready(function() {
         }
 
         window.evRemoveSchedLead = function(mundaneId) {
-            evSchedLeadsTouched = true;
+            evSchedLeads.forEach(function(l) { if (l.MundaneId === mundaneId && l.Auto) evSchedRemovedAuto[+mundaneId] = true; });
             evSchedLeads = evSchedLeads.filter(function(l) { return l.MundaneId !== mundaneId; });
             evRenderSchedLeads();
             evRefreshStaffQuickAdd();
@@ -9981,7 +9984,7 @@ $(document).ready(function() {
         // so feast items opened for edit showed no leads.
         window.evSetSchedLeads = function(leads) {
             evSchedLeads = Array.isArray(leads) ? leads : [];
-            evSchedLeadsTouched = true; // an existing item keeps its leads as they are
+            evSchedRemovedAuto = {};
             evRenderSchedLeads();
         };
 
@@ -10135,7 +10138,7 @@ $(document).ready(function() {
             gid('ev-sched-description').value  = '';
             gid('ev-sched-error').style.display = 'none';
             evSchedLeads = [];
-            evSchedLeadsTouched = false;
+            evSchedRemovedAuto = {};
             evRenderSchedLeads();
             window.evSchedApplyCategoryLeads();
             // Collapse staff quick-add and refresh
@@ -10265,7 +10268,7 @@ $(document).ready(function() {
             gid('ev-sched-error').style.display = 'none';
             try { evSchedLeads = JSON.parse(row.getAttribute('data-leads') || '[]'); } catch(e) { evSchedLeads = []; }
             if (!Array.isArray(evSchedLeads)) evSchedLeads = [];
-            evSchedLeadsTouched = true; // an existing item keeps its leads as they are
+            evSchedRemovedAuto = {};
             evRenderSchedLeads();
             // Collapse staff quick-add and refresh
             var qaList = gid('ev-sched-staff-qa-list');

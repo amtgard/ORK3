@@ -396,6 +396,14 @@
         return win.location.origin + path + '?Route=Event/detail/' + (parseInt(c.eventId, 10) || 0) + '/' + (parseInt(c.detailId, 10) || 0);
     }
 
+    // The board the picture shows: the view's real items only (no preview ghosts,
+    // no editing placeholder) on the view-mode axis, whatever mode the page is in,
+    // so an unsaved item never reaches a posted image. conf: {eventStart, eventEnd}.
+    function modelFor(view, conf) {
+        var c = conf || cfg();
+        return C.buildBoard(view.getItems() || [], { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '' });
+    }
+
     function metaFor(day) {
         var c = cfg();
         var when = day ? C.dayLabelLong(day) : (c.eventDateLabel || '');
@@ -442,7 +450,7 @@
             var meta = metaFor(day);
             var canvas;
             try {
-                canvas = render(view.board, meta, { scale: 2, day: day });
+                canvas = render(modelFor(view), meta, { scale: 2, day: day });
             } catch (e) {
                 if (win.console) win.console.error(e);
                 return;
@@ -488,6 +496,7 @@
         wrapLines: wrapLines,
         fileName: fileName,
         fitScale: fitScale,
+        modelFor: modelFor,
         render: render,
         download: download,
         copy: copy,

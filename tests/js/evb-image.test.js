@@ -41,3 +41,12 @@ test('fitScale holds the area to 100,000,000 pixels', () => {
   assert.ok(Math.ceil(9000 * s) * Math.ceil(9000 * s) <= 100000000, String(s));
   assert.ok(s > 1.1);
 });
+test('the image is built from the real items only, on the view-mode axis', () => {
+  const real = { cid: 'i1', Title: 'Real', Category: 'Other', StartTime: '2026-11-21 10:00', EndTime: '2026-11-21 11:00' };
+  // What an Edit-mode view holds: its board also has a ghost and the widened axis.
+  const view = { getItems: () => [real], board: { days: [], axisStart: 420, axisEnd: 1440 } };
+  const m = I.modelFor(view, { eventStart: '2026-11-21 09:00', eventEnd: '2026-11-21 17:00' });
+  const titles = m.days.flatMap(d => d.segs.map(s => s.item.Title));
+  assert.deepEqual(titles, ['Real']);
+  assert.deepEqual([m.axisStart, m.axisEnd], [600, 660]);
+});

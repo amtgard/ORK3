@@ -327,8 +327,11 @@
         return new RegExp(src + '(?![\\p{L}\\p{N}])', 'iuy');
     }
 
+    var LEAD_TRAIL = ',;.:';
+
     // '@' at the start of a word, at text[i]: { kind: 'lead', lead } spanning the
-    // longest staff persona after it (which may hold spaces or quotes), else
+    // longest staff persona after it (which may hold spaces or quotes) and any
+    // punctuation (LEAD_TRAIL) right after it, else
     // { kind: 'unlead' } spanning the one word after it, else null (a bare '@').
     function leadAt(text, i, staff) {
         var best = null;
@@ -341,6 +344,8 @@
         });
         if (best) {
             var end = i + 1 + best.len;
+            // Punctuation right after the name goes with it ('@Luna, @Kai', '@Luna.').
+            while (end < text.length && LEAD_TRAIL.indexOf(text.charAt(end)) >= 0) end++;
             return { kind: 'lead', text: text.slice(i, end), value: best.staff.Persona, end: end,
                 lead: { MundaneId: +best.staff.MundaneId, Persona: best.staff.Persona } };
         }
@@ -807,7 +812,7 @@
         };
     }
 
-    // An item as a line parseEntry reads back: '<range> [#tag ]<Title>[ at
+    // An item as a line parseEntry reads back: '<range> [#tag [#secondary ]]<Title>[ at
     // <Location>][ "<Description>"]'. opts.withDay prefixes the weekday.
     function formatEntry(item, opts) {
         opts = opts || {};
@@ -823,8 +828,12 @@
         var title = String(item.Title || '');
         var cat = item.Category && CATEGORY_TAGS[item.Category] ? item.Category : 'Other';
         var g = guessCategory(title);
-        // Tag when the title alone would read back as another category, or would lose a prefix.
-        if ((g.category || 'Other') !== cat || g.title !== title) out += ' #' + CATEGORY_TAGS[cat];
+        var sec = item.SecondaryCategory && CATEGORY_TAGS[item.SecondaryCategory] && item.SecondaryCategory !== cat
+            ? item.SecondaryCategory : '';
+        // Tag when the title alone would read back as another category, or would lose a
+        // prefix; a secondary category is always a second tag after the primary's.
+        if (sec || (g.category || 'Other') !== cat || g.title !== title) out += ' #' + CATEGORY_TAGS[cat];
+        if (sec) out += ' #' + CATEGORY_TAGS[sec];
         if (title) out += ' ' + title;
         if (item.Location) out += ' at ' + item.Location;
         if (item.Description) {
@@ -1162,10 +1171,10 @@
             var p = dayParts(d);
             var lines = [(shared ? p.m + '/' + p.d : dayLabel(d).slice(0, 3)) + ':'];
             if (i === 0) {
-                lines.push('12p Troll Opens', '6p Feast');
+                lines.push('12p Troll Opens', '1p Tavern Opens', '6p Feast');
                 if (days.length === 1) lines.push('8p Court');
             } else if (i < days.length - 1) {
-                lines.push('9a Troll Opens', '12p Lunch', '6p Feast', '8p Court');
+                lines.push('9a Troll Opens', '11a Tavern Opens', '6p Feast', '8p Court');
             } else {
                 lines.push('9a Troll Opens', '10a Clean Up', '12p Site Closes');
             }

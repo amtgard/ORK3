@@ -8,12 +8,16 @@
  * notes of the lines not read, the leads left off and the items outside the
  * event's days. Nothing is saved until Add all, which adds every item in one
  * store.batch (one save, one undo step); Discard or Esc drops them. While a
- * preview shows, the quick line is disabled and its own ghost stands down.
+ * preview shows, the quick line is disabled and its own ghost stands down, and
+ * another preview (a paste of several lines, Paste lines of text, Skeleton) or
+ * Done is refused with "Add or discard the preview first." Done never discards.
  *
  * The More menu (.evb-more-btn, in the mode bar before Undo): Paste lines of
  * text, Skeleton, Start from a past event (.evb-copy-dialog, which copies a
  * past occurrence's schedule into this one through EventAjax/schedule_copy_into
- * and adopts the new rows as one undo step) and Copy schedule as text.
+ * and adopts the new rows as one undo step; the dialog cannot be closed while a
+ * copy is on its way, and a copy that succeeds is always adopted while the same
+ * Edit mode is on) and Copy schedule as text.
  *
  * Conflict badges (.evb-conflict): blocks named by EvBoardCore.conflicts get a
  * small warning in the top-right corner after every render, in Edit mode only.
@@ -47,6 +51,9 @@
         tip: null,          // the floating conflict tip
         flashTimer: 0,
         copySeq: 0,
+        copying: false,     // a copy is on its way: the dialog stays open
+        conflictItems: null, // the board items the conflict map was read from
+        conflictMap: {},
         offs: []
     };
 
@@ -71,20 +78,36 @@
 
     // ---- the preview ----
 
-    // An item as Add all will add it: the category's leads when it names none
-    // (the quick line's rule), and a cost only for someone who manages feast.
+    // An item as Add all will add it: its hand-picked leads plus its category's
+    // leads as auto leads (the rule on every entry path), and a cost only for
+    // someone who manages feast.
     function ready(item, staff) {
         var it = Object.assign({}, item);
-        if (!it.Leads || !it.Leads.length) it.Leads = C.leadsForCategory(staff, it.Category);
-        if (it.Cost == null || !cfg().canManageFeast) delete it.Cost;
         it.Category = it.Category || 'Other';
+        it.Leads = C.swapAutoLeads(it.Leads, staff, it.Category);
+        if (it.Cost == null || !cfg().canManageFeast) delete it.Cost;
         return it;
     }
 
+    var REFUSE_TEXT = 'Add or discard the preview first.';
+
+    // A preview is open and something wants to start another, or to leave: say
+    // so once, and put the keyboard on the bar. Nothing in the preview changes.
+    function refuse() {
+        if (!s.ctx || !s.preview) return;
+        var rows = s.ctx.head ? s.ctx.head.querySelectorAll('.evb-notice-row') : [];
+        var shown = Array.prototype.some.call(rows, function (r) { return r.textContent === REFUSE_TEXT; });
+        if (!shown) s.ctx.addNotice(REFUSE_TEXT, null, null, { tone: 'info' });
+        var first = s.bar && s.bar.querySelector('button');
+        if (first) first.focus({ preventScroll: true });
+    }
+
     // Read text into a preview. at: {day, min} reads untimed lines from there
-    // (the board's cursor); otherwise the quick line's context.
+    // (the board's cursor); otherwise the quick line's context. A second preview
+    // never replaces the first: it is refused.
     function openPreview(text, at) {
         if (!s.ctx || leaving()) return false;
+        if (s.preview) { refuse(); return true; }
         var ctx = s.ctx.entryContext();
         if (at) { ctx.day = at.day; ctx.lastEnd = { day: at.day, min: at.min }; }
         var staff = s.ctx.getStaff() || [];
@@ -143,7 +166,7 @@
             // Under the line, in place of its chips.
             s.lockNote = doc.createElement('div');
             s.lockNote.className = 'evb-bulk-lock';
-            s.lockNote.textContent = 'Add or discard the preview first';
+            s.lockNote.textContent = REFUSE_TEXT;
             ql.el.insertBefore(s.lockNote, ql.el.querySelector('.evb-entry-chips'));
         } else if (!on && s.lockNote) {
             if (s.lockNote.parentNode) s.lockNote.parentNode.removeChild(s.lockNote);
@@ -258,6 +281,7 @@
         if (key === 'copy-text') { copyText(it); return; }
         setMenu(false);
         if (leaving()) return;
+        if (s.preview && (key === 'skeleton' || key === 'paste-text')) { refuse(); return; }
         if (key === 'skeleton') openPreview(C.skeletonText(s.ctx.entryContext().days), null);
         else if (key === 'paste-text') openPasteDialog();
         else if (key === 'past-event') openCopyDialog();
@@ -327,11 +351,18 @@
         var downOnBackdrop = false;
         ov.addEventListener('mousedown', function (e) { downOnBackdrop = e.target === ov; });
         ov.addEventListener('click', function (e) {
-            if (e.target === ov && downOnBackdrop) closeDialog(true);
-            else if (e.target.closest && e.target.closest('.evb-dialog-close')) closeDialog(true);
+            if (e.target === ov && downOnBackdrop) askClose();
+            else if (e.target.closest && e.target.closest('.evb-dialog-close')) askClose();
         });
         ov.addEventListener('keydown', onDialogKey);
         return ov;
+    }
+
+    // Esc, the backdrop and ×: nothing closes the dialog while a copy is on its
+    // way (its rows would be saved but never reach the board).
+    function askClose() {
+        if (s.copying) return;
+        closeDialog(true);
     }
 
     function closeDialog(restoreFocus) {
@@ -352,7 +383,7 @@
         if (e.key === 'Escape') {
             e.preventDefault();
             e.stopPropagation();
-            closeDialog(true);
+            askClose();
             return;
         }
         if (e.key !== 'Tab') return;
@@ -480,10 +511,14 @@
         if (!s.ctx || leaving()) return;
         var el = copyEls();
         if (!el) return;
-        var seq = ++s.copySeq, store = s.ctx.store;
+        var store = s.ctx.store, dialog = s.dialog;
         var name = btn.getAttribute('data-name') || 'that event';
         var buttons = el.list.querySelectorAll('.evb-copy-source');
         var meta = btn.querySelector('.evb-copy-meta'), metaText = meta.textContent;
+        var closeBtn = dialog.querySelector('.evb-dialog-close');
+        // Until the answer comes, the dialog cannot be closed.
+        s.copying = true;
+        closeBtn.disabled = true;
         buttons.forEach(function (b) { b.disabled = true; });
         btn.setAttribute('aria-busy', 'true');
         meta.textContent = 'Copying…';
@@ -499,14 +534,15 @@
                 if (!data || data.status !== 0 || !Array.isArray(data.schedule)) {
                     throw new Error((data && data.error) || 'The schedule could not be copied.');
                 }
-                if (seq !== s.copySeq) return;
-                closeDialog(true);
-                // The rows are saved; while Done is leaving the page it reloads shows them.
+                s.copying = false;
+                if (s.dialog === dialog) closeDialog(true);
+                // The rows are saved, so they are always taken while this Edit mode
+                // is on; once Done is leaving, the page it reloads shows them.
                 if (!s.ctx || s.ctx.store !== store || leaving()) return;
                 var rows = data.schedule.map(function (row) { return Object.assign({ Leads: [] }, row); });
                 var cids = store.adopt(rows);
                 var skipped = +data.skippedFeast || 0;
-                s.ctx.addNotice('Added ' + plural(rows.length, 'item', 'items') + ' from ' + name +
+                s.ctx.addNotice('Added ' + plural(cids.length, 'item', 'items') + ' from ' + name +
                     (skipped ? '; ' + plural(skipped, 'feast item was', 'feast items were') + ' skipped' : ''), null, null, { tone: 'info' });
                 if (Sel() && cids.length) {
                     Sel().select(cids);
@@ -514,7 +550,9 @@
                 }
             })
             .catch(function (err) {
-                if (seq !== s.copySeq || !copyEls()) return;
+                s.copying = false;
+                if (s.dialog !== dialog) return;
+                closeBtn.disabled = false;
                 buttons.forEach(function (b) { b.disabled = false; });
                 btn.removeAttribute('aria-busy');
                 meta.textContent = metaText;
@@ -525,12 +563,24 @@
 
     // ---- conflict badges ----
 
+    // The double bookings, read again only when the board's items change (the
+    // view takes a new list from the store on each change; a render for a ghost,
+    // a quick-line keystroke, keeps the same list).
+    function conflictMap() {
+        var items = V().getItems();
+        if (items !== s.conflictItems) {
+            s.conflictItems = items;
+            s.conflictMap = C.conflicts(items || []);
+        }
+        return s.conflictMap;
+    }
+
     // After every render: a badge on each block of an item that is double-booked.
     function drawConflicts() {
         if (!s.ctx) return;
         var rootEl = s.ctx.root;
         if (!rootEl) return;
-        var map = C.conflicts(s.ctx.store.items());
+        var map = conflictMap();
         rootEl.querySelectorAll('.evb-block[data-cid]').forEach(function (b) {
             var msgs = map[b.getAttribute('data-cid')];
             var badge = b.querySelector(':scope > .evb-conflict');
@@ -646,19 +696,18 @@
         drawConflicts();
     }
 
-    // Done: a preview is dropped (nothing in it was saved), and the bar says so first.
-    function beforeExit(ctx) {
-        if (s.preview) {
-            var n = closePreview(false);
-            ctx.addNotice('Discarded a preview of ' + plural(n, 'item', 'items'), null, null, { tone: 'info' });
-        }
+    // Done never discards a preview: while one is open, Edit mode stays on and
+    // the notice asks for Add all or Discard first.
+    function beforeExit() {
         setMenu(false);
+        if (s.preview) { refuse(); return false; }
         closeDialog(false);
         return true;
     }
 
     function detach() {
         if (!s.ctx) return;
+        s.copying = false;
         closeDialog(false);
         resetCopyLabel();
         if (s.preview) closePreview(false);
@@ -670,7 +719,8 @@
         if (s.ctx.root) {
             s.ctx.root.querySelectorAll('.evb-conflict').forEach(function (b) { b.parentNode.removeChild(b); });
         }
-        s.ctx = s.moreWrap = s.bar = s.lockNote = null;
+        s.ctx = s.moreWrap = s.bar = s.lockNote = s.conflictItems = null;
+        s.conflictMap = {};
     }
 
     // The empty state's "Start from a past event": Edit mode, then the dialog.
@@ -685,7 +735,8 @@
         });
     }
 
-    if (V() && V().onRender) V().onRender(function () { if (s.ctx) drawConflicts(); });
+    // A render replaces the blocks: a tip shown for an old badge goes with it.
+    if (V() && V().onRender) V().onRender(function () { hideTip(); if (s.ctx) drawConflicts(); });
     if (win.EvBoardKeys && win.EvBoardKeys.onForeignPaste) win.EvBoardKeys.onForeignPaste(onForeignPaste);
     if (E() && E().onEnter) {
         E().onEnter(attach);

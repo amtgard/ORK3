@@ -43,8 +43,11 @@ test('the skeleton parses on one-day and multi-day events', () => {
   assert.deepEqual(three.items.map(i => i.StartTime.slice(0, 10)).filter((d, n, a) => a.indexOf(d) === n), DAYS);
   assert.ok(three.items.some(i => i.Title === 'Court' && i.Category === 'Court' && i.StartTime === '2026-11-21 20:00'));
   assert.ok(three.items.some(i => i.Title === 'Clean Up' && i.StartTime === '2026-11-22 10:00'));
+  assert.ok(three.items.some(i => i.Title === 'Tavern Opens' && i.StartTime === '2026-11-20 13:00'));
+  assert.ok(three.items.some(i => i.Title === 'Tavern Opens' && i.StartTime === '2026-11-21 11:00'));
+  assert.ok(!three.items.some(i => i.Title === 'Lunch'));
   const one = C.parseLines(C.skeletonText(['2026-11-21']), { days: ['2026-11-21'] });
-  assert.deepEqual(one.items.map(i => i.Title), ['Troll Opens', 'Feast', 'Court']);
+  assert.deepEqual(one.items.map(i => i.Title), ['Troll Opens', 'Tavern Opens', 'Feast', 'Court']);
 });
 test('conflicts name the shared lead or place on both items', () => {
   const a = { cid: 'a', Title: 'Mothman', StartTime: '2026-11-21 10:00', EndTime: '2026-11-21 11:00', Location: 'Main Field', Leads: [{ MundaneId: 2, Persona: 'Luna' }] };
@@ -89,7 +92,7 @@ test('the skeleton heads days with M/D when two days share a weekday', () => {
   const r = C.parseLines(text, { days });
   assert.deepEqual(r.unread, []);
   assert.deepEqual(r.items.map(i => i.StartTime.slice(0, 10)).filter((d, n, a) => a.indexOf(d) === n), days);
-  assert.equal(r.items.length, 2 + 7 * 4 + 3);
+  assert.equal(r.items.length, 3 + 7 * 4 + 3);
   assert.equal(C.skeletonText(DAYS).split('\n')[0], 'Fri:');
   assert.equal(C.skeletonText([]), '');
 });

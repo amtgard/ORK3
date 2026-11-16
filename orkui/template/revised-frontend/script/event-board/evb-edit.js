@@ -34,6 +34,7 @@
         editing: false,
         opening: false,
         leaving: null,      // the exit() promise while Done is in progress
+        exiting: false,     // from Done's press until leaving has fully ended
         store: null,
         entry: null,
         head: null,         // the mode bar + quick line + notice
@@ -60,13 +61,20 @@
 
     // ---- transport ----
 
-    // A non-2xx answer or a body that is not JSON rejects, and the store goes offline.
+    // A non-2xx answer or a body that is not JSON rejects, and the store goes
+    // offline: a reply with an error status is the server's problem ('server'),
+    // a request that got no reply at all rejects as fetch does ('network').
     function send(ops) {
         var fd = new win.FormData();
         fd.append('Ops', JSON.stringify(ops));
         return win.fetch(endpoint('schedule_batch'), { method: 'POST', body: fd, headers: XHR, credentials: 'same-origin' })
             .then(function (r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status);
+                if (!r.ok) {
+                    var bad = new Error('HTTP ' + r.status);
+                    bad.reason = 'server';
+                    bad.status = r.status;
+                    throw bad;
+                }
                 return r.json().catch(function () {
                     var err = new Error('The reply was not JSON');
                     err.reason = 'protocol';
@@ -275,6 +283,7 @@
     // Offline, by the store's reason; Retry stays offered in every case.
     var OFFLINE_TEXT = {
         network: 'Couldn’t reach the server',
+        server: 'The server had a problem. Press Retry in a moment.',
         'signed-out': 'You’re signed out. Sign in in another tab, then press Retry.',
         forbidden: 'You no longer have permission to edit this schedule.',
         protocol: 'The server sent an unexpected reply.'
@@ -301,9 +310,11 @@
 
     function showHistory() {
         if (!state.store || !state.head) return;
-        // Done is leaving: nothing may change, so neither looks available.
-        q('.evb-undo').disabled = !!state.leaving || !state.store.canUndo();
-        q('.evb-redo').disabled = !!state.leaving || !state.store.canRedo();
+        // Done is leaving: nothing may change, so neither looks available until
+        // leaving has ended (the mode bar gone, or Edit mode kept).
+        var busy = !!state.leaving || state.exiting;
+        q('.evb-undo').disabled = busy || !state.store.canUndo();
+        q('.evb-redo').disabled = busy || !state.store.canRedo();
     }
 
     // A row in the notice; restoreText adds a button that puts a rejected line
@@ -741,8 +752,8 @@
         }
         var done = q('.evb-done');
         done.disabled = true;
-        q('.evb-undo').disabled = true;
-        q('.evb-redo').disabled = true;
+        state.exiting = true;
+        showHistory();
         state.entry.input.readOnly = true;
         var store = state.store;
         state.leaving = settledPage(store).then(function (html) {
@@ -750,6 +761,7 @@
             if (!items) throw new Error('page');
             state.leaving = null;
             unmount();
+            state.exiting = false;
             V().setItems(items);
             var btn = doc.querySelector('.evb-edit-btn');
             if (btn) btn.focus({ preventScroll: true });
@@ -760,6 +772,7 @@
                 : 'Your changes are saved, but the page could not be refreshed. Press Done to try again.');
         }).then(function () {
             state.leaving = null;
+            state.exiting = false;
             if (done) done.disabled = false;
             if (state.entry) state.entry.input.readOnly = false;
             showHistory();

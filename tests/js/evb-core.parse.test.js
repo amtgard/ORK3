@@ -252,3 +252,27 @@ test('four-digit 24-hour ranges; a lone four-digit number is never a time', () =
   assert.deepEqual(pick(p('Class of 1999 reunion 5p'), ['title', 'startMin']), ['Class of 1999 reunion', 1020]);
   assert.deepEqual(pick(p('1984 Night 8p'), ['title', 'startMin']), ['1984 Night', 1200]);
 });
+
+// Final review fixes.
+test('a secondary category is written as a second #tag and reads back', () => {
+  const it = { Title: 'Cooking', Category: 'Class', SecondaryCategory: 'Feast and Food',
+    StartTime: '2026-11-21 10:00', EndTime: '2026-11-21 11:00', Location: '', Description: '', Leads: [] };
+  const line = C.formatEntry(it);
+  assert.equal(line, '10–11a #class #feast Cooking');
+  const r = p(line);
+  assert.deepEqual([r.title, r.category, r.secondaryCategory, r.start, r.end],
+    ['Cooking', 'Class', 'Feast and Food', '2026-11-21 10:00', '2026-11-21 11:00']);
+  const back = C.parseLines(C.scheduleText([it]), { days: DAYS });
+  assert.deepEqual(back.items.map(i => [i.Title, i.Category, i.SecondaryCategory]), [['Cooking', 'Class', 'Feast and Food']]);
+  // Without a secondary nothing changes: a title that reads as its own category has no tag.
+  assert.equal(C.formatEntry(Object.assign({}, it, { Title: 'Class', SecondaryCategory: '' })), '10–11a Class');
+});
+test('punctuation right after a matched lead goes with it', () => {
+  const staff = [{ MundaneId: 2, Persona: 'Luna' }, { MundaneId: 3, Persona: 'Kai' }];
+  let r = p('9a Class @Luna, @Kai', { staff });
+  assert.deepEqual([r.title, r.leads.map(l => l.MundaneId)], ['Class', [2, 3]]);
+  r = p('9a Class with @Luna.', { staff });
+  assert.deepEqual([r.title, r.leads.map(l => l.MundaneId)], ['Class with', [2]]);
+  r = p('9a Talk @Luna;@Kai: bring water', { staff });
+  assert.deepEqual([r.title, r.leads.map(l => l.MundaneId)], ['Talk bring water', [2, 3]]);
+});

@@ -325,9 +325,12 @@ test.describe('editing', () => {
     }, title);
   }
 
-  // Removes every item this run created, through the batch endpoint.
-  test.afterAll(async ({ browser }) => {
+  // Removes every item this run created, through the batch endpoint. Items of an
+  // earlier run whose clean-up did not finish ('E2E <earlier time> …') go too:
+  // their locations would show as suggestions in this run's lines.
+  test.afterAll(async ({ browser }, testInfo) => {
     if (!ready) return;
+    testInfo.setTimeout(120000);
     const page = await browser.newPage();
     let left: number | string = 'not run';
     let cleared = 'not run';
@@ -340,7 +343,12 @@ test.describe('editing', () => {
         const path = c.eventId + '/' + c.detailId;
         const opts = { credentials: 'same-origin' as RequestCredentials, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
         const list = await (await fetch(base + 'schedule_list/' + path, opts)).json();
-        const ops = (list.schedule || []).filter((it: any) => String(it.Title).startsWith(prefix))
+        const own = Number(prefix.slice(4));
+        const ours = (t: string) => {
+          const m = /^E2E (\d{13})( |$)/.exec(t);
+          return !!m && Number(m[1]) <= own;
+        };
+        const ops = (list.schedule || []).filter((it: any) => ours(String(it.Title)))
           .map((it: any) => ({ op: 'remove', id: it.EventScheduleId }));
         if (!ops.length) return 0;
         const fd = new FormData();
@@ -1361,6 +1369,52 @@ test.describe('editing', () => {
     }
   });
 
+  // One rule for a new item's leads: the hand-picked ones plus the category's as auto
+  // leads. A second, made-up staff member is added to the page only (nothing with
+  // that lead is saved: the batch is refused here).
+  const FAKE_LEAD = { MundaneId: 999999991, Persona: 'Zed Fakelead', LeadCategories: [] };
+  async function withFakeStaff(page: Page): Promise<number> {
+    return page.evaluate(fake => {
+      const c = (window as any).EvConfig;
+      c.staffList = c.staffList.concat([fake]);
+      return +c.staffList.find((s: any) => s.Persona === 'E2E Schedule Editor').MundaneId;
+    }, FAKE_LEAD);
+  }
+  test('bulk Add all gives hand-picked leads plus the category\'s', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const me = await withFakeStaff(page);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-quickline .evb-entry-input')).toBeFocused();
+    await page.route(/schedule_batch/, route => route.abort());
+    await pasteText(page, ['Sunday', `6a bg: ${PREFIX} bulk both @Zed Fakelead`, `7a bg: ${PREFIX} bulk auto`].join('\n'));
+    await expect(page.locator('.evb-bulkbar')).toContainText('2 items ready');
+    await page.locator('.evb-bulk-add').click();
+    const leads = await page.evaluate(prefix => {
+      const items = (window as any).EvBoardEdit.store.items();
+      const of = (t: string) => items.find((i: any) => i.Title === `${prefix} ${t}`).Leads.map((l: any) => [+l.MundaneId, !!l.Auto]);
+      return [of('bulk both'), of('bulk auto')];
+    }, PREFIX);
+    expect(leads).toEqual([[[FAKE_LEAD.MundaneId, false], [me, true]], [[me, true]]]);
+  });
+  test('the schedule modal adds the category\'s leads to hand-picked ones', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const me = await withFakeStaff(page);
+    await page.evaluate(() => (window as any).evOpenScheduleModal());
+    const leads = page.locator('#ev-sched-leads-list');
+    await page.evaluate(f => (window as any).evStaffQuickAddLead(f.MundaneId, encodeURIComponent(f.Persona)), FAKE_LEAD);
+    await expect(leads).toContainText('Zed Fakelead');
+    await page.locator('#ev-sched-category').selectOption('Battlegame');
+    await expect(leads).toContainText('Zed Fakelead');
+    await expect(leads).toContainText('E2E Schedule Editor');
+    await expect(leads).toContainText('auto');
+    // An auto lead removed by hand is not filled in again.
+    await page.evaluate(id => (window as any).evRemoveSchedLead(id), me);
+    await page.locator('#ev-sched-category').selectOption('Class');
+    await page.locator('#ev-sched-category').selectOption('Battlegame');
+    await expect(leads).toContainText('Zed Fakelead');
+    await expect(leads).not.toContainText('E2E Schedule Editor');
+  });
+
   // ---- Phase 4: drag, resize and nudge ----
 
   test('dragging a block moves it and saves once', async ({ page }) => {
@@ -1792,10 +1846,11 @@ test.describe('editing', () => {
     expect(await page.locator('.evb-ghost').count()).toBeGreaterThan(5);
     await page.locator('.evb-bulk-discard').click();
     await expect(page.locator('.evb-ghost')).toHaveCount(0);
-    await addViaQuickLine(page, `sun 5-6p ${PREFIX} clash a at Hall`);
-    await addViaQuickLine(page, `sun 5:30-6:30p ${PREFIX} clash b at hall`);
+    // A place no other test uses: 'Hall' would also suggest an earlier test's 'Hall #2'.
+    await addViaQuickLine(page, `sun 5-6p ${PREFIX} clash a at Smithy`);
+    await addViaQuickLine(page, `sun 5:30-6:30p ${PREFIX} clash b at smithy`);
     const badge = page.locator('.evb-block', { hasText: `${PREFIX} clash a` }).locator('.evb-conflict');
-    await expect(badge).toHaveAttribute('data-tip', new RegExp(`Hall is also booked for ${PREFIX} clash b`));
+    await expect(badge).toHaveAttribute('data-tip', new RegExp(`Smithy is also booked for ${PREFIX} clash b`));
   });
   test('a past schedule can be copied in and undone', async ({ page }) => {
     await openBoard(page, EDIT_EVENT);
@@ -1807,13 +1862,38 @@ test.describe('editing', () => {
     // The list has loaded when it shows sources, or says there are none.
     await expect(page.locator('.evb-copy-source, .evb-copy-none').first()).toBeVisible();
     test.skip((await sources.count()) === 0, 'no past schedule in scope for the test event');
-    const before = await page.locator('.evb-block').count();
-    await sources.first().click();
-    // The notice only: '.evb-notice, .evb-modebar' would match two elements.
-    await expect(page.locator('.evb-edit-head .evb-notice')).toContainText(/Added \d+ items? from/);
-    expect(await page.locator('.evb-block').count()).toBeGreaterThan(before);
-    await page.locator('.evb-undo').click();
-    await expect(page.locator('.evb-block')).toHaveCount(before);
+    // Copied rows keep their source titles, so the prefix clean-up would miss them:
+    // whatever the copy added and Undo did not take away is removed here.
+    const serverIds = () => page.evaluate(async () => {
+      const c = (window as any).EvConfig;
+      const list = await (await fetch(c.uir + 'EventAjax/schedule_list/' + c.eventId + '/' + c.detailId, {
+        credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      })).json();
+      return (list.schedule || []).map((it: any) => +it.EventScheduleId) as number[];
+    });
+    const idsBefore = await serverIds();
+    try {
+      const before = await page.locator('.evb-block').count();
+      await sources.first().click();
+      // The notice only: '.evb-notice, .evb-modebar' would match two elements.
+      await expect(page.locator('.evb-edit-head .evb-notice')).toContainText(/Added \d+ items? from/);
+      expect(await page.locator('.evb-block').count()).toBeGreaterThan(before);
+      await page.locator('.evb-undo').click();
+      await expect(page.locator('.evb-block')).toHaveCount(before);
+      await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    } finally {
+      const left = (await serverIds()).filter(id => idsBefore.indexOf(id) < 0);
+      if (left.length) {
+        await page.evaluate(async ids => {
+          const c = (window as any).EvConfig;
+          const fd = new FormData();
+          fd.append('Ops', JSON.stringify(ids.map(id => ({ op: 'remove', id }))));
+          await fetch(c.uir + 'EventAjax/schedule_batch/' + c.eventId + '/' + c.detailId, {
+            method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          });
+        }, left);
+      }
+    }
   });
   // The dialog's list and a refused copy, whatever past schedules the local
   // database holds: both endpoints are answered here, so nothing is written.
@@ -1851,5 +1931,183 @@ test.describe('editing', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await expect(page.locator('.evb-more-btn')).toBeFocused();
+  });
+
+  // ---- Final review fixes ----
+
+  // Answered here: nothing is written. The second row repeats the first's id, so
+  // two of the three rows are adopted and the notice counts two.
+  test('the past-event dialog stays open while copying and its rows always arrive', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const SUNDAY = await lastDay(page);
+    const row = (id: number, title: string, hh: string) => ({ EventScheduleId: id, Title: title, StartTime: `${SUNDAY} ${hh}:00:00`,
+      EndTime: `${SUNDAY} ${hh}:30:00`, Location: '', Description: '', Category: 'Other', SecondaryCategory: '', Leads: [] });
+    await page.route(/EventAjax\/schedule_copy_sources\//, route => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 0, sources: [
+        { EventId: 2, EventCalendarDetailId: 22, Name: 'Last Year', StartDate: '2025-11-07', ItemCount: 2, SameEvent: true },
+      ] }),
+    }));
+    await page.route(/EventAjax\/schedule_copy_into\//, async route => {
+      await new Promise(r => setTimeout(r, 800));
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 0, skippedFeast: 0, schedule: [
+        row(1999999001, `${PREFIX} mock copy one`, '06'), row(1999999001, `${PREFIX} mock copy one`, '06'), row(1999999002, `${PREFIX} mock copy two`, '07'),
+      ] }) });
+    });
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    expect(await page.evaluate(() => (window as any).EvBoardEdit.store.canUndo())).toBe(false);
+    await page.locator('.evb-more-btn').click();
+    await page.locator('[data-evb-more="past-event"]').click();
+    const dialog = page.locator('.evb-copy-dialog');
+    const source = dialog.locator('.evb-copy-source');
+    await expect(source).toHaveCount(1);
+    // Dark theme: the hovered source's border has its own colour.
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+    await source.hover();
+    await expect.poll(() => source.evaluate(el => getComputedStyle(el).borderTopColor)).toBe('rgb(99, 179, 237)');
+    await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+    await source.click();
+    await expect(source).toContainText('Copying…');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.evb-dialog-close')).toBeDisabled();
+    await page.mouse.click(5, 5); // the backdrop
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveCount(0, { timeout: 5000 });
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} mock copy` })).toHaveCount(2);
+    await expect(page.locator('.evb-edit-head .evb-notice')).toContainText('Added 2 items from Last Year');
+    expect(await page.evaluate(() => (window as any).EvBoardEdit.store.canUndo())).toBe(true);
+    await expect(page.locator('.evb-undo')).toBeEnabled();
+  });
+
+  test('Done keeps Edit mode on while a bulk preview is open', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-quickline .evb-entry-input')).toBeFocused();
+    await pasteText(page, ['Sunday', `6a ${PREFIX} done one`, `7a ${PREFIX} done two`].join('\n'));
+    await expect(page.locator('.evb-bulkbar')).toContainText('2 items ready');
+    await page.locator('.evb-done').click();
+    await expect(page.locator('.evb-edit-head .evb-notice')).toContainText('Add or discard the preview first.');
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    await expect(page.locator('.evb-bulkbar')).toContainText('2 items ready');
+    await expect(page.locator('.evb-ghost')).toHaveCount(2);
+    await expect(page.locator('.evb-bulk-add')).toBeFocused();
+    await page.locator('.evb-bulk-discard').click();
+    await page.locator('.evb-done').click();
+    await expect(page.locator('.evb-modebar')).toHaveCount(0, { timeout: 10000 });
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} done ` })).toHaveCount(0);
+  });
+
+  test('a second bulk preview is refused while one is open', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-quickline .evb-entry-input')).toBeFocused();
+    await pasteText(page, ['Sunday', `6a ${PREFIX} first one`, `7a ${PREFIX} first two`].join('\n'));
+    await expect(page.locator('.evb-bulkbar')).toContainText('2 items ready');
+    const notice = page.locator('.evb-edit-head .evb-notice');
+    expect(await pasteText(page, ['Sunday', `8a ${PREFIX} second one`, `9a ${PREFIX} second two`, '10a x'].join('\n'))).toBe(true);
+    await expect(notice).toContainText('Add or discard the preview first.');
+    await expect(page.locator('.evb-bulkbar')).toContainText('2 items ready');
+    for (const key of ['skeleton', 'paste-text']) {
+      await page.locator('.evb-more-btn').click();
+      await page.locator(`[data-evb-more="${key}"]`).click();
+      await expect(page.locator('.evb-bulkbar')).toContainText('2 items ready');
+      await expect(page.locator('.evb-paste-dialog')).toHaveCount(0);
+    }
+    // Said once, not once per refusal.
+    await expect(notice.locator('.evb-notice-row', { hasText: 'Add or discard the preview first.' })).toHaveCount(1);
+    await expect(page.locator('.evb-ghost')).toHaveCount(2);
+    await page.locator('.evb-bulk-discard').click();
+  });
+
+  test('the image is drawn from the saved items only, on the view axis', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill('sat 9a GHOSTONLY');
+    await expect(page.locator('.evb-ghost')).toHaveCount(1);
+    const r = await page.evaluate(() => {
+      const w = window as any, view = w.EvBoardView, c = w.EvConfig;
+      const titles = (b: any) => b.days.flatMap((d: any) => d.segs.map((s: any) => s.item.Title));
+      const m = w.EvBoardImage.modelFor(view);
+      const plain = w.EvBoardCore.buildBoard(view.getItems(), { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '' });
+      return { onBoard: titles(view.board).includes('GHOSTONLY'), inImage: titles(m).includes('GHOSTONLY'),
+        axis: [m.axisStart, m.axisEnd], plainAxis: [plain.axisStart, plain.axisEnd], count: titles(m).length, items: view.getItems().length };
+    });
+    expect(r.onBoard).toBe(true);
+    expect(r.inImage).toBe(false);
+    expect(r.axis).toEqual(r.plainAxis);
+    expect(r.count).toBeGreaterThanOrEqual(r.items);
+    await line.fill('');
+  });
+
+  test('Option with a character types at the slot cursor; Alt with an arrow does not move it', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    await page.locator('.evb-board').click({ position: { x: 4, y: 4 } });
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.evb-slot-cursor')).toHaveCount(1);
+    const key = (k: string) => page.evaluate(kk => {
+      const t = document.activeElement || document.body;
+      t.dispatchEvent(new KeyboardEvent('keydown', { key: kk, altKey: true, bubbles: true, cancelable: true }));
+    }, k);
+    const min = () => page.locator('.evb-slot-cursor').getAttribute('data-min');
+    const at = await min();
+    await key('ArrowDown');
+    expect(await min()).toBe(at);
+    await key('é');
+    await expect(page.locator('.evb-block-editing .evb-entry-input')).toHaveValue('é');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
+  });
+
+  test('a server error says so, not that the server could not be reached', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await page.route(/schedule_batch/, route => route.fulfill({ status: 500, contentType: 'text/html', body: 'oops' }), { times: 1 });
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sun 4:30p ${PREFIX} server error`);
+    await line.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('The server had a problem. Press Retry in a moment.');
+    await page.locator('.evb-save-retry').click();
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+  });
+
+  test('conflict badges: below the top grip, tip hidden on render, read only when items change', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `sun 7-8p ${PREFIX} badge a at Barn`);
+    await addViaQuickLine(page, `sun 7:30-8:30p ${PREFIX} badge b at barn`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} badge a` });
+    const badge = block.locator('.evb-conflict');
+    await expect(badge).toHaveCount(1);
+    await block.evaluate(el => el.scrollIntoView({ block: 'center' }));
+    await block.click();
+    // The top grip's right end is the grip, not the badge.
+    const hit = await block.evaluate(el => {
+      const g = el.querySelector('.evb-resize-top')!.getBoundingClientRect();
+      const t = document.elementFromPoint(g.right - 8, g.top + 3);
+      return t ? t.className : '';
+    });
+    expect(hit).toContain('evb-resize-top');
+    // The tip goes with a render. (Shown by an event, with the pointer off the
+    // board, so a pointer resting on the new badge cannot show it again.)
+    await page.locator('.evb-modebar-title').hover();
+    await badge.dispatchEvent('mouseover');
+    await expect(page.locator('.evb-conflict-tip')).toBeVisible();
+    await page.evaluate(() => {
+      const w = window as any, real = w.EvBoardCore.conflicts;
+      w.__conflictCalls = 0;
+      w.EvBoardCore.conflicts = function (items: any) { w.__conflictCalls++; return real(items); };
+    });
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill('sun 9p something');
+    await expect(page.locator('.evb-ghost')).toHaveCount(1);
+    await expect(page.locator('.evb-conflict-tip')).toBeHidden();
+    await line.pressSequentially(' more');
+    expect(await page.evaluate(() => (window as any).__conflictCalls)).toBe(0);
+    await line.fill('');
   });
 });

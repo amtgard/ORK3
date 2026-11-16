@@ -250,6 +250,43 @@ test('an offline store says why: network, signed out, forbidden or an unexpected
     assert.ok(s.get(a).EventScheduleId > 0);
   }
 });
+test('a reply with an error status is a server problem, not an unreachable server', async () => {
+  let first = true;
+  const f = fake();
+  const send = ops => {
+    if (!first) return f.send(ops);
+    first = false;
+    const err = new Error('HTTP 500'); err.reason = 'server'; err.status = 500;
+    return Promise.reject(err);
+  };
+  const s = S.create({ items: [], send, saveMeal: true });
+  const a = s.add(item('A'));
+  await s.idle();
+  assert.deepEqual(s.status(), { state: 'offline', pending: 1, reason: 'server' });
+  s.retry(); await s.idle();
+  assert.deepEqual(s.status(), { state: 'saved', pending: 0, reason: null });
+  assert.ok(s.get(a).EventScheduleId > 0);
+});
+test('an update or remove row with an id that is not a positive integer is a protocol failure', async () => {
+  for (const op of ['update', 'remove']) {
+    for (const badId of [0, -3, 'x', 1.5, '07']) {
+      const f = fake();
+      let first = true;
+      const send = ops => f.send(ops).then(r => {
+        if (!first) return r;
+        first = false;
+        return Object.assign({}, r, { results: r.results.map(x => Object.assign({}, x, { id: badId })) });
+      });
+      const s = S.create({ items: [item('Old', { EventScheduleId: 7 })], send, saveMeal: true });
+      if (op === 'update') s.update('i7', { Title: 'New' }); else s.remove('i7');
+      await s.idle();
+      assert.deepEqual(s.status(), { state: 'offline', pending: 1, reason: 'protocol' }, op + ' ' + badId);
+      if (op === 'update') assert.equal(s.get('i7').EventScheduleId, 7, 'the bad row is not merged');
+      s.retry(); await s.idle();
+      assert.equal(s.status().state, 'saved');
+    }
+  }
+});
 test('a rejected update restores the saved values; meal fields are sent only when allowed; reset refuses while busy', async () => {
   const f = fake();
   const s = S.create({ items: [item('Old', { EventScheduleId: 7, Menu: 'Soup' })], send: f.send, saveMeal: false });
