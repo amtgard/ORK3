@@ -67,6 +67,23 @@ test.describe('viewer', () => {
     const color = await page.locator('.evb-block-title').first().evaluate(e => getComputedStyle(e).color);
     expect(color).toBe('rgb(255, 255, 255)');
   });
+
+  test('share as image downloads a PNG of the board', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    await page.locator('.evb-share-btn').click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('.evb-share-menu [data-evb-share="download-all"]').click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/-schedule\.png$/);
+    const dims = await page.evaluate(() => {
+      const c = (window as any).EvBoardImage.render((window as any).EvBoardView.board,
+        { title: 'T', subtitle: 'S', url: 'u', categories: (window as any).EvConfig.scheduleCategories }, { scale: 2, day: null });
+      return [c.width, c.height];
+    });
+    expect(dims[0]).toBeGreaterThan(800);
+    expect(dims[1]).toBeGreaterThan(400);
+  });
 });
 
 // ---- Signed-in helpers (later phases reuse these) ----

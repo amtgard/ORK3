@@ -146,6 +146,27 @@ html[data-theme="dark"] .evb-now::before { background: #fc8181; }
     overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
+/* ---- "Share as image" (toolbar; the button reuses .ev-sched-copy-btn) ---- */
+.evb-share { position: relative; display: none; }
+#ev-tab-schedule.evb-board-mode .evb-share { display: inline-block; }
+.evb-share-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: var(--z-dropdown, 300);
+    min-width: 190px; padding: 4px; box-sizing: border-box;
+    background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
+}
+.evb-share-menu[hidden] { display: none; }
+.evb-share-menu button {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 0;
+    padding: 8px 10px; border: none; border-radius: 6px; box-shadow: none;
+    background: none; color: var(--ork-text); text-align: left;
+    font-size: 13px; font-weight: 600; line-height: 1.3; cursor: pointer; white-space: nowrap;
+}
+.evb-share-menu button[hidden] { display: none; }
+.evb-share-menu button:hover,
+.evb-share-menu button:focus-visible { background: var(--ork-bg-secondary); color: var(--ork-text); }
+.evb-share-menu button i { width: 14px; font-size: 12px; text-align: center; color: var(--ork-text-muted); }
+
 /* In Board view the legend is the only category filter: hide the list's pills. */
 #ev-tab-schedule.evb-board-mode #ev-sched-filters { display: none !important; }
 
@@ -155,4 +176,6 @@ html[data-theme="dark"] .evb-now::before { background: #fc8181; }
     .evb-day-pills .ev-grid-day-pill { padding: 8px 14px; min-height: 36px; }
     .evb-scroller { max-height: 75vh; }
     .evb-legend-chip { padding: 6px 10px; }
+    /* The toolbar wraps from the left here, so the menu opens rightward. */
+    .evb-share-menu { left: 0; right: auto; }
 }

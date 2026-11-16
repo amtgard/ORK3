@@ -1162,6 +1162,16 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				<button type="button" class="ev-sched-copy-btn" onclick="evCopyScheduleLink(this)" title="Copy a link that opens the schedule in this exact view">
 					<i class="fas fa-link"></i> Copy link
 				</button>
+				<div class="evb-share">
+					<button type="button" class="ev-sched-copy-btn evb-share-btn" aria-haspopup="true" aria-expanded="false" data-tip="A picture of the board to post">
+						<i class="fas fa-image"></i> Share as image
+					</button>
+					<div class="evb-share-menu" hidden>
+						<button type="button" data-evb-share="download-all"><i class="fas fa-download"></i> Download PNG</button>
+						<button type="button" data-evb-share="download-day" hidden><i class="fas fa-calendar-day"></i> Download this day</button>
+						<button type="button" data-evb-share="copy" hidden><i class="fas fa-copy"></i> Copy image</button>
+					</div>
+				</div>
 				<?php if ($canManageSchedule): ?>
 				<button type="button" class="ev-submit-btn" onclick="evOpenScheduleModal()">
 					<i class="fas fa-plus"></i> Add Schedule Item
@@ -2321,6 +2331,9 @@ var EvConfig = {
 	detailId:   <?= $detailId ?>,
 	eventName:  <?= json_encode($info['Name'] ?? 'Event') ?>,
 	eventDate:  <?= json_encode($eventStart ? date('Y-m-d', strtotime($eventStart)) : '') ?>,
+	// For the board image's subtitle: the hero's date range, and the host park or else "City, Province".
+	eventDateLabel: <?= json_encode($dateBadgeText, JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	eventPlace: <?= json_encode(trim((string)($AtParkName ?? '')) !== '' ? trim((string)$AtParkName) : implode(', ', array_filter([trim($city), trim($province)])), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkId:     <?= (int)($atParkId ?: $parkId) ?>,
 	kingdomId:  <?= (int)$kingdomId ?>,
 	eventStart: '<?= $eventStart ? date('Y-m-d\TH:i', strtotime($eventStart)) : '' ?>',
@@ -2797,6 +2810,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-core.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-core.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-view.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-view.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-image.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-image.js') ?>"></script>
 <script>
 (function() {
     // Deep-link hash format: #<tabId>[?key=val&key=val]
@@ -3907,6 +3921,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 <script>
 // The Schedule tab's Board/List switch, deep links and board refresh live in evb-view.js.
 if (window.EvBoardView) EvBoardView.init();
+if (window.EvBoardImage) EvBoardImage.init();
 </script>
 
 <?php endif; /* DraftBlocked */ ?>
