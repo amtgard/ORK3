@@ -35,6 +35,20 @@ class Controller_AttendanceAjax extends Controller
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
+        } elseif ($action === 'daytype') {
+            $this->load_model('Park');
+            $date = $_GET['date'] ?? date('Y-m-d');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid date']);
+                exit;
+            }
+            $r = $this->Park->get_parkday_type_for_date($park_id, $date);
+            if (($r['Status']['Status'] ?? 1) !== 0) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid date']);
+                exit;
+            }
+            echo json_encode(['status' => 0, 'online' => (bool)$r['Online'], 'inPerson' => (bool)$r['InPerson']]);
+            exit;
         } elseif ($action === 'getday') {
             $this->load_model('Attendance');
             $date = $_GET['date'] ?? date('Y-m-d');

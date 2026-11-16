@@ -30,6 +30,9 @@ final class AttendanceFixture
     /** @var list<int> */
     private array $dangerAuditIds = [];
 
+    /** @var list<int> */
+    private array $parkDayIds = [];
+
     public function __construct(
         private readonly PDO $pdo,
     ) {
@@ -287,6 +290,40 @@ final class AttendanceFixture
         return ['token' => $token, 'link_id' => $linkId];
     }
 
+    /** A park (preferring one with no park days) so day-type tests start from a clean slate. */
+    public function parkIdWithoutParkDays(): int
+    {
+        $id = $this->pdo->query(
+            'SELECT p.park_id FROM ' . DB_PREFIX . 'park p LEFT JOIN ' . DB_PREFIX . 'parkday d ON d.park_id = p.park_id '
+            . 'WHERE d.parkday_id IS NULL ORDER BY p.park_id LIMIT 1'
+        )->fetchColumn();
+
+        return $id === false ? 0 : (int) $id;
+    }
+
+    /** Insert a park day row (cleaned up by cleanup()). */
+    public function insertParkDay(int $parkId, array $f): int
+    {
+        $row = $f + [
+            'recurrence' => 'weekly', 'week_of_month' => 0, 'week_day' => 'Tuesday', 'month_day' => 0,
+            'time' => '19:00:00', 'purpose' => 'park', 'description' => 'oa-test', 'online' => 0,
+            'start_date' => '1000-01-01', 'week_interval' => 0,
+        ];
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'parkday (park_id, recurrence, week_of_month, week_day, month_day, `time`, '
+            . 'purpose, description, online, start_date, week_interval, address, google_geocode) '
+            . "VALUES (?,?,?,?,?,?,?,?,?,?,?,'','')"
+        );
+        $stmt->execute([
+            $parkId, $row['recurrence'], $row['week_of_month'], $row['week_day'], $row['month_day'], $row['time'],
+            $row['purpose'], $row['description'], $row['online'], $row['start_date'], $row['week_interval'],
+        ]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->parkDayIds[] = $id;
+
+        return $id;
+    }
+
     public function trackLink(int $linkId): void
     {
         $this->linkIds[] = $linkId;
@@ -334,6 +371,10 @@ final class AttendanceFixture
 
     public function cleanup(): void
     {
+        foreach ($this->parkDayIds as $id) {
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'parkday WHERE parkday_id = ' . (int) $id);
+        }
+
         foreach ($this->dangerAuditIds as $id) {
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'danger_audit WHERE danger_audit_id = ' . (int) $id);
         }

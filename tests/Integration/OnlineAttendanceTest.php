@@ -168,4 +168,61 @@ final class OnlineAttendanceTest extends TestCase
         $id = $this->useLink(0);
         $this->assertSame(0, $this->fixture->fetchOnline($id));
     }
+
+    private function dayType(int $park, string $date): array
+    {
+        return (new Park())->GetParkDayTypeForDate($park, $date);
+    }
+
+    private function dayTypePark(): int
+    {
+        $park = $this->fixture->parkIdWithoutParkDays();
+        $this->assertGreaterThan(0, $park, 'Need a park with no park days');
+
+        return $park;
+    }
+
+    public function testDayTypeOnlineOnlyWeekly(): void
+    {
+        $park = $this->dayTypePark();
+        $this->fixture->insertParkDay($park, ['week_day' => 'Tuesday', 'online' => 1]);
+        $tue = $this->dayType($park, '2026-11-17');
+        $this->assertSame(0, $tue['Status']['Status']);
+        $this->assertTrue($tue['Online']);
+        $this->assertFalse($tue['InPerson']);
+        $wed = $this->dayType($park, '2026-11-18');
+        $this->assertFalse($wed['Online']);
+        $this->assertFalse($wed['InPerson']);
+    }
+
+    public function testDayTypeOnlineAndInPersonSameWeekday(): void
+    {
+        $park = $this->dayTypePark();
+        $this->fixture->insertParkDay($park, ['week_day' => 'Tuesday', 'online' => 1, 'description' => 'oa-online']);
+        $this->fixture->insertParkDay($park, ['week_day' => 'Tuesday', 'online' => 0, 'description' => 'oa-inperson']);
+        $r = $this->dayType($park, '2026-11-17');
+        $this->assertTrue($r['Online']);
+        $this->assertTrue($r['InPerson']);
+    }
+
+    public function testDayTypeEveryXWeeks(): void
+    {
+        $park = $this->dayTypePark();
+        $this->fixture->insertParkDay($park, [
+            'recurrence' => 'every-x-weeks', 'week_day' => 'Tuesday', 'online' => 1,
+            'start_date' => '2026-11-03', 'week_interval' => 2,
+        ]);
+        $this->assertTrue($this->dayType($park, '2026-11-17')['Online']);
+        $this->assertFalse($this->dayType($park, '2026-11-10')['Online']);
+    }
+
+    public function testDayTypeNoParkDaysAndInvalidDate(): void
+    {
+        $park = $this->dayTypePark();
+        $r = $this->dayType($park, '2026-11-17');
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertFalse($r['Online']);
+        $this->assertFalse($r['InPerson']);
+        $this->assertNotSame(0, $this->dayType($park, '2026-13-40')['Status']['Status']);
+    }
 }

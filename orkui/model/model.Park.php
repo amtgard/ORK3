@@ -85,6 +85,11 @@ class Model_Park extends Model
         return $this->Heraldry->RemoveParkHeraldry($request);
     }
 
+    public function get_parkday_type_for_date(int $park_id, string $date): array
+    {
+        return $this->Park->GetParkDayTypeForDate($park_id, $date);
+    }
+
     public function get_park_info($park_id)
     {
         return $this->Park->GetParkShortInfo(array('ParkId' => $park_id));
