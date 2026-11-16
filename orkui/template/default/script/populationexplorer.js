@@ -185,7 +185,7 @@
     var selectedCols = defaultColumns();
     var errorRuleId = null;
     var errorText = '';
-    var lastRun = null;          // {tree, columns} of the last successful run
+    var lastRun = null;          // {tree, columns[, attendanceType]} of the last successful run
     var fpInstances = [];
     var dt = null;
     var running = false;

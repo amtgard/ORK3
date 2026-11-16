@@ -1071,8 +1071,9 @@ final class OnlineAttendanceReportsTest extends TestCase
         ksort($inPerson);
         $this->assertSame($inPerson, $view('in_person'), 'C has no in-person sign-in, so Total sign-ins >= 1 drops C');
         $online = [
-            $a => [1, $this->day2, $this->day2, 0, $parkName],
-            $b => [1, $recent, $recent, 1, $parkName],
+            // Player since (third) is a first-seen anchor: day 1 for every type.
+            $a => [1, $this->day2, $this->day1, 0, $parkName],
+            $b => [1, $recent, $this->day1, 1, $parkName],
             $c => [1, $this->day1, $this->day1, 0, $parkName],
         ];
         ksort($online);
@@ -1123,9 +1124,11 @@ final class OnlineAttendanceReportsTest extends TestCase
         $this->assertSame([], $ids($none, 'all'));
         $this->assertSame([$this->playerC], $ids($none, 'in_person'));
         $this->assertSame([], $ids($none, 'online'));
-        // Status rules ignore the type.
-        $active = ['op' => 'AND', 'children' => [$window['children'][0], ['c' => 'active', 'o' => 'is', 'v' => 'yes']]];
-        $this->assertSame($ids($window, 'online'), $ids($active, 'online'));
+        // Player since ignores the type (first seen = all attendance): A, B and C all date from day 1.
+        $since = ['op' => 'AND', 'children' => [['c' => 'player_since', 'o' => 'eq', 'v' => $this->day1]]];
+        foreach ([null, 'in_person', 'online'] as $type) {
+            $this->assertSame($sorted([$this->playerA, $this->playerB, $this->playerC]), $ids($since, $type), (string) $type);
+        }
     }
 
     public function testPopulationExplorerExportFollowsType(): void

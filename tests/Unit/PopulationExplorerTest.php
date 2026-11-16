@@ -1039,7 +1039,7 @@ final class PopulationExplorerTest extends TestCase
         $this->fail('no sample for ' . $id);
     }
 
-    /** Sign-in subqueries in $sql (each _attSub) and how many carry the online predicate. */
+    /** Number of ork_attendance subqueries (each _attSub) in $sql. */
     private function attendanceSubqueries(string $sql): int
     {
         return substr_count($sql, DB_PREFIX . 'attendance a WHERE a.mundane_id = m.mundane_id');
@@ -1058,9 +1058,16 @@ final class PopulationExplorerTest extends TestCase
             }
             $this->assertStringNotContainsString('online', $omitted, $id);
             $subs = $this->attendanceSubqueries($omitted);
-            $this->assertSame(!empty($def['signins']), $subs > 0, "$id: the signins flag matches the SQL");
             $online = $this->sql($tree, $base + ['attendanceType' => 'online']);
             $inPerson = $this->sql($tree, $base + ['attendanceType' => 'in_person']);
+            $this->assertSame(!empty($def['signins']), $online !== $omitted, "$id: the signins flag matches the SQL");
+            if ($id === 'player_since') {
+                $this->assertGreaterThan(0, $subs);
+                $this->assertSame($omitted, $online, 'Player since is a first-seen anchor: all attendance');
+                $this->assertSame($omitted, $inPerson);
+                continue;
+            }
+            $this->assertSame(!empty($def['signins']), $subs > 0, "$id: a sign-in subquery means the flag");
             if ($subs === 0) {
                 $this->assertSame($omitted, $online, $id);
                 $this->assertSame($omitted, $inPerson, $id);
@@ -1071,7 +1078,7 @@ final class PopulationExplorerTest extends TestCase
             $this->assertSame($subs, substr_count($inPerson, 'WHERE a.mundane_id = m.mundane_id AND a.online = 0'), "$id in_person: every subquery filtered");
             $this->assertSame($omitted, str_replace(' AND a.online = 1', '', $online), "$id: the type is the only change");
         }
-        $this->assertSame(8, $signinCount, 'every sign-in criterion is flagged');
+        $this->assertSame(7, $signinCount, 'every typed sign-in criterion is flagged (not Player since)');
     }
 
     public function testAttendanceTypeFiltersEverySigninColumn(): void
@@ -1083,7 +1090,7 @@ final class PopulationExplorerTest extends TestCase
             $this->assertSame($omitted, $this->pe->ColumnSelectSql($c, $ctx + ['attendanceType' => 'all']), $c);
             $this->assertSame($omitted, $this->pe->ColumnSelectSql($c, $ctx + ['attendanceType' => 'bogus']), $c);
             $online = $this->pe->ColumnSelectSql($c, $ctx + ['attendanceType' => 'online']);
-            $subs = $this->attendanceSubqueries($omitted);
+            $subs = $c === 'player_since' ? 0 : $this->attendanceSubqueries($omitted); // first-seen anchor: untyped
             $this->assertSame($subs, substr_count($online, 'AND a.online = 1'), $c);
             $this->assertSame($subs, substr_count($this->pe->ColumnSelectSql($c, $ctx + ['attendanceType' => 'in_person']), 'AND a.online = 0'), $c);
             if ($subs > 0) {
@@ -1091,7 +1098,7 @@ final class PopulationExplorerTest extends TestCase
             }
         }
         sort($filtered);
-        $this->assertSame(['last_class', 'last_signin', 'last_signin_park', 'player_since', 'signins_6m', 'total_signins'], $filtered);
+        $this->assertSame(['last_class', 'last_signin', 'last_signin_park', 'signins_6m', 'total_signins'], $filtered);
         // The type is per call: a later call without it is back to All.
         $this->pe->ColumnSelectSql('last_signin', $ctx + ['attendanceType' => 'online']);
         $this->assertStringNotContainsString('online', $this->pe->ColumnSelectSql('last_signin', $ctx));

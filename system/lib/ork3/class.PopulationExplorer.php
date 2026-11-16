@@ -9,6 +9,7 @@
  * over alias `m` (ork_mundane). Only ints and validated dates ever reach SQL.
  *
  * Attendance type (In-Person / Online / All) is a page-level setting, not a rule:
+ * (Player since is a first-seen anchor and always reads all attendance.)
  * Run() reads request key AttendanceType, normalizes it with
  * Attendance::NormalizeType and passes it in ctx['attendanceType']. Every
  * sign-in expression (criteria and columns, all built by _attSub) then reads only
@@ -156,7 +157,6 @@ class PopulationExplorer extends Ork3
                 'note'     => self::DAYS_AGO_NOTE,
             ]),
             'player_since'          => $this->_crit('Player since', 'Activity', 'date', [
-                'signins'  => true,
                 'nullable' => true,
                 'neg_note' => 'Players with no sign-in dated 1988 or later are not matched.',
                 'note'     => 'First sign-in dated 1988 or later, as on the player profile. Earlier dates (such as 0000-00-00) are data-entry errors and are ignored.',
@@ -627,10 +627,15 @@ class PopulationExplorer extends Ork3
         return $n;
     }
 
-    private function _attSub(string $select, string $extraWhere = '', string $tail = ''): string
+    /**
+     * Scalar subquery over the player's ork_attendance rows. $typed = true (counted
+     * and displayed sign-ins) applies the page's attendance type; false reads ALL
+     * attendance (first-seen anchors such as Player since).
+     */
+    private function _attSub(string $select, string $extraWhere = '', string $tail = '', bool $typed = true): string
     {
         return '(SELECT ' . $select . ' FROM ' . $this->_t('attendance') . ' a WHERE a.mundane_id = m.mundane_id'
-            . Attendance::TypeClause($this->attendanceType, 'a')
+            . ($typed ? Attendance::TypeClause($this->attendanceType, 'a') : '')
             . ($extraWhere !== '' ? ' AND ' . $extraWhere : '') . ($tail !== '' ? ' ' . $tail : '') . ')';
     }
 
@@ -665,7 +670,8 @@ class PopulationExplorer extends Ork3
     private function _playerSinceExpr(): string
     {
         // MIN(a.date) as the oldest index entry at or after the floor (see _lastSigninExpr).
-        return $this->_attSub('a.date', "a.date >= '" . self::FIRST_SIGNIN_FLOOR . "'", 'ORDER BY a.date LIMIT 1');
+        // Untyped: a first-seen anchor always reads all attendance (online is real participation).
+        return $this->_attSub('a.date', "a.date >= '" . self::FIRST_SIGNIN_FLOOR . "'", 'ORDER BY a.date LIMIT 1', false);
     }
 
     private function _signinsInMonthsExpr(int $n): string

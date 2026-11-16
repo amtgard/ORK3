@@ -16,7 +16,8 @@ $pe_bad_scope  = !empty($pe_bad_scope);
 $pe_load_error = !empty($pe_load_error);
 $pe_link_param = (string)($pe_link_param ?? 'pe');
 // Page-level In-Person / Online / All (a share link may carry it; absent = All).
-$pe_att_type   = Attendance::NormalizeType(is_array($pe_initial) ? ($pe_initial['attendanceType'] ?? 'all') : 'all');
+// ork_attendance_type_control normalizes it.
+$pe_att_type   = is_string($pe_initial['attendanceType'] ?? null) ? $pe_initial['attendanceType'] : 'all';
 $pe_ready      = !$pe_no_scope && !$pe_bad_scope && !$pe_load_error && $pe_scope_type !== null && !empty($pe_registry);
 
 $pe_is_park    = ($pe_scope_type === 'Park');
@@ -344,7 +345,7 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 					<h3 class="pe-help-h" id="pe-help-type" tabindex="-1">Sign-ins counted: In-Person / Online / All</h3>
 					<p>The <strong>Sign-ins counted</strong> switch above Filters sets which sign-ins the whole report reads. <strong>All</strong>, the default, counts every sign-in. <strong>In-Person</strong> or <strong>Online</strong> counts only sign-ins of that kind.</p>
 					<ul>
-						<li>It applies to every rule and column built from sign-ins: Last sign-in date and days ago, Player since, Total sign-ins, Sign-ins in last N months, Last class played, Classes played in last N months and Last sign-in park. With Online, for example, Last sign-in date is the player&rsquo;s last online sign-in, and a player who has never signed in online has none.</li>
+						<li>It applies to every rule and column built from sign-ins: Last sign-in date and days ago, Total sign-ins, Sign-ins in last N months, Last class played, Classes played in last N months and Last sign-in park. With Online, for example, Last sign-in date is the player&rsquo;s last online sign-in, and a player who has never signed in online has none. <strong>Player since</strong> always uses every sign-in: it is when the player was first seen.</li>
 						<li>It does not change who is in this <?=$pe_word?>, or rules that do not read sign-ins, such as Active, Dues paid, Waivered and awards.</li>
 						<li>Changing it marks the results &ldquo;Filters changed since last run&rdquo;; press Run to apply it. Export and Copy link use it too.</li>
 					</ul>
