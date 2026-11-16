@@ -488,9 +488,12 @@ html[data-theme="dark"] .ev-grid-popover-flip:before { border-top-color: var(--o
 html[data-theme="dark"] .ev-sched-pill-inactive { background: var(--ork-bg-secondary) !important; border-color: var(--ork-border) !important; color: var(--ork-text-muted) !important; }
 html[data-theme="dark"] .ev-sched-pill-inactive i { color: var(--ork-text-muted) !important; }
 
-/* Per-category dark palettes — row bg (list), cat-head bg (grid), block bg (grid), col hour-line tint */
+/* List rows: each <tr> carries its category's --evb-soft / --evb-soft-dark (EventPlanning::ScheduleCategories) */
+.ev-sched-table tbody tr { background: var(--evb-soft); }
+html[data-theme="dark"] .ev-sched-table tbody tr { background: var(--evb-soft-dark); }
+
+/* Per-category dark palettes — cat-head bg (grid), block bg (grid), col hour-line tint */
 /* Administrative */
-html[data-theme="dark"] .ev-sched-table tr[data-category="Administrative"] { background: #2a3136 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Administrative"] { background: #2a3136 !important; border-bottom-color: #90a4ae !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Administrative"] .ev-grid-cat-label { color: #cfd8dc !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Administrative"] > i { color: #90a4ae !important; }
@@ -498,7 +501,6 @@ html[data-theme="dark"] .ev-grid-col[data-category="Administrative"] { backgroun
 html[data-theme="dark"] .ev-grid-block[data-category="Administrative"] { background: #2a3136 !important; border-left-color: #90a4ae !important; }
 
 /* Tournament */
-html[data-theme="dark"] .ev-sched-table tr[data-category="Tournament"] { background: #3a2f15 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Tournament"] { background: #3a2f15 !important; border-bottom-color: #ffd54f !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Tournament"] .ev-grid-cat-label { color: #ffe082 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Tournament"] > i { color: #ffd54f !important; }
@@ -506,7 +508,6 @@ html[data-theme="dark"] .ev-grid-col[data-category="Tournament"] { background: r
 html[data-theme="dark"] .ev-grid-block[data-category="Tournament"] { background: #3a2f15 !important; border-left-color: #ffd54f !important; }
 
 /* Battlegame */
-html[data-theme="dark"] .ev-sched-table tr[data-category="Battlegame"] { background: #3d1e1a !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Battlegame"] { background: #3d1e1a !important; border-bottom-color: #ff9a93 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Battlegame"] .ev-grid-cat-label { color: #ffb4ae !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Battlegame"] > i { color: #ff9a93 !important; }
@@ -514,7 +515,6 @@ html[data-theme="dark"] .ev-grid-col[data-category="Battlegame"] { background: r
 html[data-theme="dark"] .ev-grid-block[data-category="Battlegame"] { background: #3d1e1a !important; border-left-color: #ff9a93 !important; }
 
 /* Arts and Sciences */
-html[data-theme="dark"] .ev-sched-table tr[data-category="Arts and Sciences"] { background: #2d1935 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Arts and Sciences"] { background: #2d1935 !important; border-bottom-color: #ce93d8 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Arts and Sciences"] .ev-grid-cat-label { color: #e1bee7 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Arts and Sciences"] > i { color: #ce93d8 !important; }
@@ -522,7 +522,6 @@ html[data-theme="dark"] .ev-grid-col[data-category="Arts and Sciences"] { backgr
 html[data-theme="dark"] .ev-grid-block[data-category="Arts and Sciences"] { background: #2d1935 !important; border-left-color: #ce93d8 !important; }
 
 /* Class */
-html[data-theme="dark"] .ev-sched-table tr[data-category="Class"] { background: #0f2540 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Class"] { background: #0f2540 !important; border-bottom-color: #90caf9 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Class"] .ev-grid-cat-label { color: #bbdefb !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Class"] > i { color: #90caf9 !important; }
@@ -530,7 +529,6 @@ html[data-theme="dark"] .ev-grid-col[data-category="Class"] { background: repeat
 html[data-theme="dark"] .ev-grid-block[data-category="Class"] { background: #0f2540 !important; border-left-color: #90caf9 !important; }
 
 /* Feast and Food */
-html[data-theme="dark"] .ev-sched-table tr[data-category="Feast and Food"] { background: #3a2410 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Feast and Food"] { background: #3a2410 !important; border-bottom-color: #ffb74d !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Feast and Food"] .ev-grid-cat-label { color: #ffcc80 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Feast and Food"] > i { color: #ffb74d !important; }
@@ -538,7 +536,6 @@ html[data-theme="dark"] .ev-grid-col[data-category="Feast and Food"] { backgroun
 html[data-theme="dark"] .ev-grid-block[data-category="Feast and Food"] { background: #3a2410 !important; border-left-color: #ffb74d !important; }
 
 /* Court */
-html[data-theme="dark"] .ev-sched-table tr[data-category="Court"] { background: #2a201d !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Court"] { background: #2a201d !important; border-bottom-color: #bcaaa4 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Court"] .ev-grid-cat-label { color: #d7ccc8 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Court"] > i { color: #bcaaa4 !important; }
@@ -546,7 +543,6 @@ html[data-theme="dark"] .ev-grid-col[data-category="Court"] { background: repeat
 html[data-theme="dark"] .ev-grid-block[data-category="Court"] { background: #2a201d !important; border-left-color: #bcaaa4 !important; }
 
 /* Meeting */
-html[data-theme="dark"] .ev-sched-table tr[data-category="Meeting"] { background: #143024 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Meeting"] { background: #143024 !important; border-bottom-color: #81c784 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Meeting"] .ev-grid-cat-label { color: #a5d6a7 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Meeting"] > i { color: #81c784 !important; }
@@ -554,7 +550,6 @@ html[data-theme="dark"] .ev-grid-col[data-category="Meeting"] { background: repe
 html[data-theme="dark"] .ev-grid-block[data-category="Meeting"] { background: #143024 !important; border-left-color: #81c784 !important; }
 
 /* Other */
-html[data-theme="dark"] .ev-sched-table tr[data-category="Other"] { background: #2a2a2a !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Other"] { background: #2a2a2a !important; border-bottom-color: #bdbdbd !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Other"] .ev-grid-cat-label { color: #e0e0e0 !important; }
 html[data-theme="dark"] .ev-grid-cat-head[data-category="Other"] > i { color: #bdbdbd !important; }
@@ -1242,17 +1237,8 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<div class="ev-tab-panel" id="ev-tab-schedule">
 
 				<?php
-			$evSchedCategories = [
-				'Administrative'    => ['icon' => 'fa-clipboard-list', 'color' => '#546e7a', 'bg' => '#eceff1'],
-				'Tournament'        => ['icon' => 'fa-trophy',          'color' => '#b8860b', 'bg' => '#fffde7'],
-				'Battlegame'        => ['icon' => 'fa-shield-alt',      'color' => '#c0392b', 'bg' => '#fdecea'],
-				'Arts and Sciences' => ['icon' => 'fa-palette',         'color' => '#7b1fa2', 'bg' => '#f3e5f5'],
-				'Class'             => ['icon' => 'fa-graduation-cap',  'color' => '#1565c0', 'bg' => '#e3f2fd'],
-				'Feast and Food'    => ['icon' => 'fa-utensils',        'color' => '#e65100', 'bg' => '#fff3e0'],
-				'Court'             => ['icon' => 'fa-crown',           'color' => '#4e342e', 'bg' => '#efebe9'],
-				'Meeting'           => ['icon' => 'fa-users',           'color' => '#276749', 'bg' => '#f0fff4'],
-				'Other'             => ['icon' => 'fa-star',            'color' => '#757575', 'bg' => '#fafafa'],
-			];
+			// One category source (EventPlanning::ScheduleCategories): name => key/icon/color/bg/colorDark/bgDark/bold.
+			$evSchedCategories = $ScheduleCategories ?? [];
 			$evGridTodayKey = date('Ymd');
 			?>
 			<div class="ev-grid-view-toolbar">
@@ -1343,7 +1329,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							$evSeg = ($item['_IsFirstDay'] && $item['_IsLastDay']) ? 'single'
 								: ($item['_IsFirstDay'] ? 'first' : ($item['_IsLastDay'] ? 'last' : 'mid'));
 						?>
-						<tr <?php if ($item['_IsFirstDay']): ?>id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" <?php endif; ?>data-seg="<?= $evSeg ?>" data-schedule-id="<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" data-menu="<?= htmlspecialchars($item['Menu'] ?? '', ENT_QUOTES) ?>" data-cost="<?= htmlspecialchars((string)($item['Cost'] ?? ''), ENT_QUOTES) ?>" data-dietary="<?= htmlspecialchars($item['Dietary'] ?? '', ENT_QUOTES) ?>" data-allergens="<?= htmlspecialchars($item['Allergens'] ?? '', ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
+						<tr <?php if ($item['_IsFirstDay']): ?>id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" <?php endif; ?>data-seg="<?= $evSeg ?>" data-schedule-id="<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" data-menu="<?= htmlspecialchars($item['Menu'] ?? '', ENT_QUOTES) ?>" data-cost="<?= htmlspecialchars((string)($item['Cost'] ?? ''), ENT_QUOTES) ?>" data-dietary="<?= htmlspecialchars($item['Dietary'] ?? '', ENT_QUOTES) ?>" data-allergens="<?= htmlspecialchars($item['Allergens'] ?? '', ENT_QUOTES) ?>" style="--evb-soft:<?= $evCatCfg['bg'] ?>;--evb-soft-dark:<?= $evCatCfg['bgDark'] ?>">
 							<td style="white-space:nowrap"><?= $item['_IsFirstDay'] ? date('g:ia', $item['_SegStart']) : '(cont.)' ?></td>
 							<td style="white-space:nowrap"><?php
 								if (!$item['_IsLastDay']) {
@@ -2559,6 +2545,12 @@ var EvConfig = {
 	canManage:         <?= !empty($canManage) ? 'true' : 'false' ?>,
 	canManageSchedule: <?= !empty($canManageSchedule) ? 'true' : 'false' ?>,
 	evGridTodayKey: '<?= $evGridTodayKey ?? date('Ymd') ?>',
+	// Ordered [{name, key, icon, color, bg, colorDark, bgDark, bold}] from EventPlanning::ScheduleCategories.
+	scheduleCategories: <?= json_encode(array_map(
+		function ($name, $def) { return ['name' => $name] + $def; },
+		array_keys($evSchedCategories),
+		array_values($evSchedCategories)
+	), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
 	canManageFeast:    <?= !empty($canManageFeast) ? 'true' : 'false' ?>,
 	canManageStaff:    <?= !empty($canManageStaff) ? 'true' : 'false' ?>,
 	canManageAttendance: <?= !empty($canManageAttendance) ? 'true' : 'false' ?>,
@@ -2892,30 +2884,18 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 				<div class="ev-modal-field">
 					<label>Primary Category <span style="cursor:help;color:#a0aec0;font-size:11px;border-bottom:1px dotted #a0aec0" data-tip="The primary category will determine schedule color coding.">(?)</span></label>
 					<select id="ev-sched-category" style="width:100%">
-						<option value="Administrative">Administrative</option>
-						<option value="Tournament">Tournament</option>
-						<option value="Battlegame">Battlegame</option>
-						<option value="Arts and Sciences">Arts and Sciences</option>
-						<option value="Class">Class</option>
-						<option value="Feast and Food">Feast and Food</option>
-						<option value="Court">Court</option>
-						<option value="Meeting">Meeting</option>
-						<option value="Other">Other</option>
+						<?php foreach ($evSchedCategories as $evCatName => $evCatDef): ?>
+						<option value="<?= htmlspecialchars($evCatName, ENT_QUOTES) ?>"><?= htmlspecialchars($evCatName) ?></option>
+						<?php endforeach; ?>
 					</select>
 				</div>
 				<div class="ev-modal-field">
 					<label>Secondary Category <span style="font-size:11px;font-weight:400;color:#a0aec0">(optional)</span></label>
 					<select id="ev-sched-secondary-category" style="width:100%">
 						<option value="">— None —</option>
-						<option value="Administrative">Administrative</option>
-						<option value="Tournament">Tournament</option>
-						<option value="Battlegame">Battlegame</option>
-						<option value="Arts and Sciences">Arts and Sciences</option>
-						<option value="Class">Class</option>
-						<option value="Feast and Food">Feast and Food</option>
-						<option value="Court">Court</option>
-						<option value="Meeting">Meeting</option>
-						<option value="Other">Other</option>
+						<?php foreach ($evSchedCategories as $evCatName => $evCatDef): ?>
+						<option value="<?= htmlspecialchars($evCatName, ENT_QUOTES) ?>"><?= htmlspecialchars($evCatName) ?></option>
+						<?php endforeach; ?>
 					</select>
 				</div>
 			</div>

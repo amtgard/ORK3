@@ -2,10 +2,42 @@
 
 class EventPlanning extends Ork3
 {
+    /**
+     * Schedule item categories, in display order. The single source for the
+     * allow-list, the Schedule tab's palette, selects, filters and board.
+     * `key` is the keyboard shortcut; `bold` is the solid fill behind white text.
+     */
     private const SCHEDULE_CATEGORIES = [
-        'Administrative', 'Tournament', 'Battlegame', 'Arts and Sciences', 'Class',
-        'Feast and Food', 'Court', 'Meeting', 'Other',
+        'Administrative'      => ['key' => '1', 'icon' => 'fa-clipboard-list', 'color' => '#546e7a', 'bg' => '#eceff1', 'colorDark' => '#90a4ae', 'bgDark' => '#2a3136', 'bold' => '#546e7a'],
+        'Tournament'          => ['key' => '2', 'icon' => 'fa-trophy',         'color' => '#b8860b', 'bg' => '#fffde7', 'colorDark' => '#ffd54f', 'bgDark' => '#3a2f15', 'bold' => '#8a6500'],
+        'Battlegame'          => ['key' => '3', 'icon' => 'fa-shield-alt',     'color' => '#c0392b', 'bg' => '#fdecea', 'colorDark' => '#ff9a93', 'bgDark' => '#3d1e1a', 'bold' => '#c0392b'],
+        'Arts and Sciences'   => ['key' => '4', 'icon' => 'fa-palette',        'color' => '#7b1fa2', 'bg' => '#f3e5f5', 'colorDark' => '#ce93d8', 'bgDark' => '#2d1935', 'bold' => '#7b1fa2'],
+        'Class'               => ['key' => '5', 'icon' => 'fa-graduation-cap', 'color' => '#1565c0', 'bg' => '#e3f2fd', 'colorDark' => '#90caf9', 'bgDark' => '#0f2540', 'bold' => '#1565c0'],
+        'Feast and Food'      => ['key' => '6', 'icon' => 'fa-utensils',       'color' => '#e65100', 'bg' => '#fff3e0', 'colorDark' => '#ffb74d', 'bgDark' => '#3a2410', 'bold' => '#bf4d00'],
+        'Court'               => ['key' => '7', 'icon' => 'fa-crown',          'color' => '#4e342e', 'bg' => '#efebe9', 'colorDark' => '#bcaaa4', 'bgDark' => '#2a201d', 'bold' => '#4e342e'],
+        'Meeting'             => ['key' => '8', 'icon' => 'fa-users',          'color' => '#276749', 'bg' => '#f0fff4', 'colorDark' => '#81c784', 'bgDark' => '#143024', 'bold' => '#276749'],
+        'Roleplay and Quests' => ['key' => '9', 'icon' => 'fa-dragon',         'color' => '#c2185b', 'bg' => '#fce4ec', 'colorDark' => '#f48fb1', 'bgDark' => '#3a1626', 'bold' => '#c2185b'],
+        'Other'               => ['key' => '0', 'icon' => 'fa-star',           'color' => '#757575', 'bg' => '#fafafa', 'colorDark' => '#bdbdbd', 'bgDark' => '#2a2a2a', 'bold' => '#616161'],
     ];
+
+    /**
+     * Ordered map of category name to its definition
+     * (`key`, `icon`, `color`, `bg`, `colorDark`, `bgDark`, `bold`).
+     *
+     * @return array<string, array<string, string>>
+     */
+    public static function ScheduleCategories(): array
+    {
+        return self::SCHEDULE_CATEGORIES;
+    }
+
+    public function GetScheduleCategories($request = [])
+    {
+        return [
+            'Status' => Success(),
+            'Categories' => self::ScheduleCategories(),
+        ];
+    }
 
     /** @var array<int, bool> */
     private array $mundaneEligibleCache = [];
@@ -1535,10 +1567,11 @@ class EventPlanning extends Ork3
         $category = trim((string) ($request['Category'] ?? 'Other'));
         $secondaryCategory = trim((string) ($request['SecondaryCategory'] ?? ''));
 
-        if (!in_array($category, self::SCHEDULE_CATEGORIES, true)) {
+        $allowedCategories = array_keys(self::ScheduleCategories());
+        if (!in_array($category, $allowedCategories, true)) {
             $category = 'Other';
         }
-        if ($secondaryCategory !== '' && !in_array($secondaryCategory, self::SCHEDULE_CATEGORIES, true)) {
+        if ($secondaryCategory !== '' && !in_array($secondaryCategory, $allowedCategories, true)) {
             $secondaryCategory = '';
         }
 

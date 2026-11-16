@@ -9996,17 +9996,14 @@ $(document).ready(function() {
         }
 
 
-        var EV_CATEGORIES = {
-            'Administrative':    { icon: 'fa-clipboard-list', color: '#546e7a', bg: '#eceff1' },
-            'Tournament':        { icon: 'fa-trophy',          color: '#b8860b', bg: '#fffde7' },
-            'Battlegame':        { icon: 'fa-shield-alt',      color: '#c0392b', bg: '#fdecea' },
-            'Arts and Sciences': { icon: 'fa-palette',         color: '#7b1fa2', bg: '#f3e5f5' },
-            'Class':             { icon: 'fa-graduation-cap',  color: '#1565c0', bg: '#e3f2fd' },
-            'Feast and Food':    { icon: 'fa-utensils',        color: '#e65100', bg: '#fff3e0' },
-            'Court':             { icon: 'fa-crown',           color: '#4e342e', bg: '#efebe9' },
-            'Meeting':           { icon: 'fa-users',           color: '#276749', bg: '#f0fff4' },
-            'Other':             { icon: 'fa-star',            color: '#757575', bg: '#fafafa' }
-        };
+        // Category name -> {name, key, icon, color, bg, colorDark, bgDark, bold}, built from the
+        // one PHP source (EventPlanning::ScheduleCategories via EvConfig.scheduleCategories).
+        var EV_CATEGORY_ORDER = [];
+        var EV_CATEGORIES = {};
+        (EvConfig.scheduleCategories || []).forEach(function(c) {
+            EV_CATEGORY_ORDER.push(c.name);
+            EV_CATEGORIES[c.name] = c;
+        });
 
         window.evOpenScheduleModal = function() {
             var modal = gid('ev-schedule-modal');
@@ -10262,7 +10259,8 @@ $(document).ready(function() {
                             row.setAttribute('data-category',           s.Category);
                             row.setAttribute('data-secondary-category', s.SecondaryCategory || '');
                             row.setAttribute('data-leads',              JSON.stringify(s.Leads || []));
-                            row.style.background = catCfg.bg;
+                            row.style.setProperty('--evb-soft', catCfg.bg);
+                            row.style.setProperty('--evb-soft-dark', catCfg.bgDark);
                             row.cells[0].innerHTML = startCell;
                             row.cells[1].innerHTML = endCell;
                             row.cells[2].innerHTML = glyphHtml + escHtmlSch(s.Title);
@@ -10282,7 +10280,7 @@ $(document).ready(function() {
                             ' data-category="' + escHtmlSch(s.Category) + '"' +
                             ' data-secondary-category="' + escHtmlSch(s.SecondaryCategory || '') + '"' +
                             ' data-leads="' + JSON.stringify(s.Leads || []).replace(/"/g,'&quot;') + '"' +
-                            ' style="background:' + catCfg.bg + '">' +
+                            ' style="--evb-soft:' + catCfg.bg + ';--evb-soft-dark:' + catCfg.bgDark + '">' +
                             '<td style="white-space:nowrap">' + startCell + '</td>' +
                             '<td style="white-space:nowrap">' + endCell + '</td>' +
                             '<td>' + glyphHtml + escHtmlSch(s.Title) + '</td>' +
@@ -10368,7 +10366,7 @@ $(document).ready(function() {
                 var sec = row.getAttribute('data-secondary-category') || '';
                 if (sec) present[sec] = true;
             });
-            var order = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Meeting','Other'];
+            var order = EV_CATEGORY_ORDER;
             container.innerHTML = '';
             var count = 0;
             order.forEach(function(cat) {

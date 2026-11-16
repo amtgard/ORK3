@@ -202,6 +202,55 @@ final class EventPlanningTest extends TestCase
         $this->assertSame(1, $this->fixture->countScheduleLeads($scheduleId));
     }
 
+    public function testScheduleCategoriesListsTenInOrder(): void
+    {
+        $cats = EventPlanning::ScheduleCategories();
+        $this->assertSame([
+            'Administrative', 'Tournament', 'Battlegame', 'Arts and Sciences', 'Class',
+            'Feast and Food', 'Court', 'Meeting', 'Roleplay and Quests', 'Other',
+        ], array_keys($cats));
+        $this->assertSame(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'], array_column($cats, 'key'));
+        foreach ($cats as $def) {
+            foreach (['icon', 'color', 'bg', 'colorDark', 'bgDark', 'bold'] as $k) {
+                $this->assertNotSame('', (string) ($def[$k] ?? ''), $k);
+            }
+        }
+        $this->assertSame('#c2185b', $cats['Roleplay and Quests']['bold']);
+    }
+
+    public function testAddScheduleAcceptsRoleplayAndQuests(): void
+    {
+        $r = $this->addScheduleWithCategory('sched-rpq', 'Roleplay and Quests');
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame('Roleplay and Quests', $r['Schedule']['Category']);
+    }
+
+    public function testAddScheduleUnknownCategoryBecomesOther(): void
+    {
+        $r = $this->addScheduleWithCategory('sched-unknown', 'Jousting');
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame('Other', $r['Schedule']['Category']);
+    }
+
+    private function addScheduleWithCategory(string $tag, string $category): array
+    {
+        $ctx = $this->fixture->createPublishedEvent($tag);
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $ctx['park_id'], AUTH_CREATE, $tag . '-admin');
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        return $this->planning->AddEventSchedule([
+            'Token' => $grantor['token'],
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'Title' => 'Category check',
+            'StartTime' => date('Y-m-d H:i:s', strtotime('+7 days 10:00')),
+            'EndTime' => date('Y-m-d H:i:s', strtotime('+7 days 11:00')),
+            'Location' => 'Main',
+            'Description' => '',
+            'Category' => $category,
+        ]);
+    }
+
     public function testAddScheduleFeastRequiresFeastCap(): void
     {
         $ctx = $this->fixture->createPublishedEvent('feast-cap');
