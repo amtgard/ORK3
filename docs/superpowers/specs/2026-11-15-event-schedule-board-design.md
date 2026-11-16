@@ -13,7 +13,7 @@ screenshot.**
 
 Today every item goes through a modal (two category selects, title, two date-time pickers,
 save). The schedule in question has about 40 items. The Grid view is display-only, shows one
-day at a time, and uses nine fixed category columns. Nothing on the ORK produces a
+day at a time, and has one column per category in use. Nothing on the ORK produces a
 whole-weekend picture.
 
 ## 2. Goals, non-goals, anti-goals
@@ -71,10 +71,13 @@ whole-weekend picture.
    time. The save layer is a queue, so holding changes until a Publish press could be added
    later without reworking the editor.
 2. **Board editing needs "Can manage schedule".** Feast-only staff keep today's modal flow
-   from the List and Feast tabs. Today's rule lets them add feast items and edit only title
+   from the Feast tab. Today's rule lets them add feast items and edit only title
    and meal fields; mirroring that on a drag surface is not worth its complexity.
 3. **A board day runs 5:00am to 5:00am.** A 12:30am Night Quest belongs to the previous
-   evening's column, as people think of it.
+   evening's column, as people think of it. Typing `sat 12:30a night quest` therefore means
+   Saturday night, stored as Sunday 00:30. The List and the public embed keep grouping by
+   calendar day, so that item reads "12:30am" under Sunday there. Both are true; only the
+   Board follows the evening.
 4. **Grammar markers:** `@` is for people (owner), so location is written `at Main Field`;
    `#` sets a category; `"…"` is the description (owner); `$8` is a feast item's cost.
 5. **The new category is named "Roleplay and Quests"**, matching "Arts and Sciences" and
@@ -83,7 +86,32 @@ whole-weekend picture.
 7. **The skeleton stays**, because it is only canned text fed to the multi-line preview.
 8. **The list's delete uses the themed confirm** instead of the native `confirm()`.
 9. **A category prefix typed in a title is removed** ("BATTLEGAME: Mothman" is stored as
-   "Mothman" in category Battlegame), since the colour and label already say it.
+   "Mothman" in category Battlegame), since the colour and label already say it. Only a
+   category's own name or one of its `#` aliases counts as a prefix, so "Sir Adler: Train the
+   Trainer" and "KL Tournament: Single" keep their full titles.
+10. **Auto-filled leads are remembered as such** (a flag on the item's lead). Removing a
+    category lead from staff takes them off only the items where they were auto-filled; a
+    lead someone picked by hand stays. This came out of the design review: without the flag,
+    un-marking Luna as Class lead would also remove her from her own class.
+11. **Deleting a feast item you cannot restore asks first.** Someone with "Can manage
+    schedule" but not "Can manage feast" cannot write menu, cost or dietary details, so Undo
+    could not bring them back. For that person, deleting an item that has meal details asks
+    for confirmation and is not undoable, and `$8` is not read as a cost.
+12. **A change the server rejects is reverted in view, with a message.** A rejected add puts
+    its text back in the quick line so it can be corrected. Network failures offer Retry.
+13. **Text is stored as typed.** A location that matches one already used in this schedule,
+    ignoring case, takes that existing spelling. Typed times are kept to the minute; only
+    dragging and arrow keys snap to 15 minutes.
+14. **Copy and paste on the board use one rule.** Copying blocks also puts their text lines
+    on the clipboard. Pasting text the board itself copied pastes those blocks at the slot
+    cursor; pasting any other text previews it as new items.
+15. **Starting from a past event appends**, never replaces, and is one undoable step. The
+    shift is the number of days between the two occurrences' first days. Feast items come
+    across only for someone who can manage feast.
+16. **"Copy as text" is for people to read.** Pasting it back restores everything except
+    leads who are not event staff.
+17. **A saved view choice is respected.** Board is the default only for someone who has never
+    chosen.
 
 ## 5. Constraints
 
@@ -92,14 +120,16 @@ whole-weekend picture.
 - Schedule times are **naive local datetimes** (`DATETIME`, server zone fixed, no per-event
   zone). Client code must treat them as strings and do its own arithmetic. It must never
   build a `Date` from a schedule time and read it back in the browser's zone.
-- `db->query()` never returns false, `DataSet()` needs `Clear()` before and `->Next()` after,
-  transactions are issued as SQL (`START TRANSACTION` / `COMMIT` / `ROLLBACK`); the pattern to
-  follow is `EventPlanning::syncCalendarDetailFeesAndLinks`.
+- `db->query()` never returns false and `Execute()` returns nothing, so the checks in
+  `EventPlanning::syncCalendarDetailFeesAndLinks` cannot see a database failure and must not
+  be copied. Transactions use `BeginTrans` / `CommitTrans` / `RollbackTrans` and writes use
+  `ExecuteChecked` (`system/lib/Yapo2/class.YapoMysql.php`). `DataSet()` needs `Clear()`
+  before and `->Next()` after.
 - No native `alert` / `confirm` / `prompt`. Tooltips use `data-tip`, never `title`.
 - Dark mode via `html[data-theme="dark"]`, checked in both themes. Global `orkui.css`
   heading and control rules win, so check computed styles.
 - Player search uses the custom `kn-ac-results` dropdown pattern, always scoped, reusing the
-  endpoint and debounce constant the schedule modal's lead search already uses
+  endpoint, scoping and debounce the schedule modal's lead search already uses
   (`revised.js` around 9904-9995).
 - Dates shown to people are human-readable.
 - New migrations need an entry in `tools/ork-db/manifests/migration-classification.json5` and
@@ -169,7 +199,7 @@ legend, and the event's ORK address. It always uses a white background and is dr
 ```
  Editing schedule · All changes saved          [Undo] [Redo] [?]            [Done]
  ┌──────────────────────────────────────────────────────────────────────────────┐
- │ sat 9:30-10:15 squatch ball at main field @Lu▌                               │
+ │ sat 9:30-10:15 bg: squatch ball at main field @Lu▌                           │
  └──────────────────────────────────────────────────────────────────────────────┘
    Saturday · 9:30–10:15a · Battlegame · "squatch ball" · Main Field · @Sir Warcrat (auto)
                                               ┌ Event staff ──────────────┐
@@ -185,7 +215,9 @@ legend, and the event's ORK address. It always uses a white background and is dr
   Leaving the page while a save is pending or failed asks first (the browser's own
   unload prompt, the one case where it is unavoidable).
 - An empty schedule shows "Build the schedule" (enters Edit mode with the quick line
-  focused) and "Start from a past event".
+  focused) and, once phase 5 ships, "Start from a past event".
+- In view mode, someone who can manage the schedule sees an "Edit" link in a block's popover,
+  which opens the modal for that item.
 - "Add Schedule Item" (the modal) stays available.
 
 ### 7.4 The entry grammar
@@ -203,7 +235,7 @@ One parser serves the quick line, typing inside a block, and pasted lines.
 | `@name` | Lead: opens the inline player search |
 | `at Main Field` | Location |
 | `"Come learn the Viking art of Naalbinding."` | Description |
-| `$8` | Cost, only on a Feast and Food item |
+| `$8` | Cost, only on a Feast and Food item and only for someone who can manage feast |
 | anything else | Title |
 
 - **am/pm when not written:** 7 to 11 is morning; 12 and 1 to 6 are afternoon; an end not
@@ -258,8 +290,9 @@ One parser serves the quick line, typing inside a block, and pasted lines.
 - Editing an item in place shows its title, `at location` and `"description"` as text, with
   category and leads as chips. Its time is its position.
 - "Details" opens the existing modal for everything else (menu, dietary, allergens).
-- Changing an item's category swaps its leads to the new category's leads only when its
-  current leads are exactly the old category's leads (or it has none).
+- Changing an item's category replaces its auto-filled leads with the new category's leads.
+  Leads picked by hand stay.
+- A day or time typed between midnight and 5am belongs to the named day's night (call 4.3).
 - Touch: no dragging. Tapping empty space fills the quick line with that day and time;
   tapping a block shows the toolbar.
 - Keyboard shortcuts apply only while the board has focus and no text field is active.
@@ -269,10 +302,10 @@ One parser serves the quick line, typing inside a block, and pasted lines.
 - The staff modal gains "Category lead for": the categories as colour chips that toggle.
 - The staff table gains a "Leads" column showing those chips.
 - Saving a staff member returns how many existing items changed, shown beside the table:
-  - **Lead added:** they are added to items of that category in this occurrence that have no
-    lead yet.
+  - **Lead added:** they are added, marked auto-filled, to items in this occurrence whose
+    primary category is that category and that have no lead yet.
   - **Lead removed, or the staff member removed:** they are taken off items whose primary
-    category is that category.
+    category is that category, but only where they were auto-filled.
 - The schedule modal applies the same auto-fill when adding an item: choosing a category
   fills its leads if the lead list is untouched.
 - Copying an event with the Staff module copies category leads.
@@ -283,12 +316,15 @@ One parser serves the quick line, typing inside a block, and pasted lines.
   nothing focused) parses each line and shows them all as dashed ghost blocks with a bar:
   "12 items ready · Add all · Discard", listing lines that could not be read. A line that is
   only a day name sets the day for the lines after it. `@Name` in pasted text is matched
-  against event staff by persona; unmatched names are listed and left off.
+  against event staff by persona (the longest staff persona that follows the `@`, ignoring
+  case); unmatched names are listed and left off.
 - **Copy as text.** Puts the schedule on the clipboard as those same lines under day
-  headings, for Discord or email. It round-trips through paste.
-- **Start from a past event.** Pick another occurrence of this event or a past event in the
-  same scope; its schedule is copied into this occurrence, shifted by whole days so clock
-  times are kept. It is one undoable step.
+  headings, for Discord or email. Pasting it back restores everything except leads who are
+  not event staff.
+- **Start from a past event.** Pick another occurrence of this event, or a past event in the
+  same scope (its latest occurrence); its schedule is appended to this occurrence, shifted by
+  the number of days between the two first days so clock times are kept. Feast items are
+  included only for someone who can manage feast. It is one undoable step.
 - **Skeleton.** Drops the usual bones (troll, tavern, feast, court, clean-up) across the
   event's days as ghosts to adjust and add.
 - **Conflict hints** in Edit mode: a small warning on blocks where the same lead, or the same
@@ -314,12 +350,14 @@ They are included from `Eventnew_index.tpl` after `revised.js`, each with the
 `?v=<?= filemtime(...) ?>` cache-bust used by `rank-pill.css`. No bundler.
 
 Tests: `tests/js/*.test.js` on node's built-in runner, wired as
-`"test:js": "node --no-maglev --test tests/js/"` (the flag works around a known V8 problem on
-this machine's node). One Playwright spec, `tests/e2e/event-schedule-board.spec.ts`.
+`"test:js": "node --no-maglev --test \"tests/js/**/*.test.js\""` (the flag works around a
+known V8 problem on this machine's node; a bare directory argument does not work on Node
+26). One Playwright spec, `tests/e2e/event-schedule-board.spec.ts`.
 
-Removed from `Eventnew_index.tpl`: the server-rendered grid (about 1383-1556), its JS (about
-3961-4575, except what the list still needs) and its per-category dark rules. The list's
-category filter pills remain.
+Removed from `Eventnew_index.tpl`: the server-rendered grid (about 1383-1556), its
+grid-only CSS and JS (within about 3961-4590) and its per-category dark rules. That range
+also holds the phone List-card styles (about 4170-4272), which stay, as do the list's
+category filter pills.
 
 ### 8.2 Data the page hands the board
 
@@ -330,6 +368,9 @@ Added to `EvConfig`:
   `Menu`, `Cost`, `Dietary`, `Allergens`).
 - `scheduleCategories`: the ordered category definitions (8.3).
 - `staffList` entries gain `RoleName` and `LeadCategories`.
+- `serverNow`: the server's wall-clock time as a naive string, for the "now" line. The
+  browser adds the minutes elapsed since page load; it never uses its own zone.
+- Each lead in an item's `Leads` gains `Auto` (true when auto-filled from a category lead).
 
 In the browser an item's times are kept as `'YYYY-MM-DD HH:MM'` strings. `evb-core` converts
 to a day key plus minutes with its own arithmetic.
@@ -359,8 +400,10 @@ Each definition also carries the existing accent colour and a dark-theme soft ba
 List rows take their soft backgrounds from CSS variables set on the row, replacing the
 per-category `!important` dark rules. Bold fills must keep white text at 4.5:1 or better.
 
-Guessing (client only; the server stores what it is given). A leading prefix wins; otherwise
-the first match in this order, whole words, case-insensitive, optional trailing "s":
+Guessing (client only; the server stores what it is given). A leading prefix (a category's
+name or one of the `#` aliases below, followed by a colon) wins and is removed from the
+title; otherwise the first match in this order, whole words, case-insensitive, optional
+trailing "s". Nothing else is ever removed from a title:
 
 1. Arts and Sciences: a&s, arts and sciences, judging, dragonmaster
 2. Feast and Food: feast, dinner, lunch, breakfast, brunch, potluck, tavern
@@ -373,8 +416,8 @@ the first match in this order, whole words, case-insensitive, optional trailing 
 9. Administrative: troll, gate, setup, set up, clean, cleanup, teardown, tear down, check-in,
    checkin, offsite, crat
 
-`#` aliases: admin, tourney, bg, as, class, feast, food, court, meeting, rp, quest, other,
-plus any unique prefix of a category name.
+`#` aliases: admin, tourney, bg, battle game, as, a&s, class, feast, food, court, meeting,
+rp, roleplay, quest, other, plus any unique prefix of a category name.
 
 ### 8.4 Board days, axis and lanes (`evb-core`)
 
@@ -399,11 +442,25 @@ plus any unique prefix of a category name.
 **Client.** Every change is an operation: add, update (a subset of fields), remove. Applying
 one updates the board at once, records its inverse for undo, and queues it. The queue sends
 one request at a time and merges consecutive updates to the same item while waiting. Items
-carry a stable client id so undo and redo survive the server assigning or reassigning ids
-(undoing a delete re-creates the item under a new server id). A failed request stops the
-queue, marks the affected blocks, and shows Retry. Undo history lasts for the Edit session.
-On entering Edit mode and when the window regains focus with nothing pending, the list is
-re-fetched to pick up other people's changes.
+carry a stable client id (`cid`) so undo and redo survive the server assigning or
+reassigning ids (undoing a delete re-creates the item under a new server id). Operations
+name items by `cid`; the server id is filled in when the request is sent, so an edit to an
+item whose add is still queued is merged into that add, and one whose add is in flight
+simply waits its turn. Undo history lasts for the Edit session. On entering Edit mode and
+when the window regains focus with nothing pending, the list is re-fetched to pick up other
+people's changes.
+
+Failures come in two kinds:
+
+- **Could not reach the server** (network error, 5xx, not logged in): the queue stops, the
+  affected blocks are marked, and the mode bar offers Retry.
+- **The server said no** (status 1 or 3: validation or permission): retrying cannot help.
+  The operation, and anything queued after it for the same item, is undone on the board,
+  and the mode bar says what was reverted and why until dismissed. A rejected add puts its
+  text (`formatEntry`) into the quick line. The queue then continues.
+
+Deleting an item with meal details as someone who cannot manage feast asks first with the
+themed confirm and records no undo (call 4.11).
 
 **Endpoint.** `POST EventAjax/schedule_batch/{eventId}/{detailId}` with form field `Ops`, a
 JSON array of at most 200:
@@ -417,20 +474,26 @@ JSON array of at most 200:
 Success: `{"status":0,"results":[{"op","cid","id","schedule":{…}}]}` in order. Failure:
 `{"status":N,"error":"…","failedIndex":i}` and nothing is applied.
 
-**Domain.** `EventPlanning::ApplyScheduleOps` runs the batch in one transaction and rolls
-back on the first failure. `saveEventSchedule` is reworked into a shared core with these
-rules:
+**Domain.** `EventPlanning::ApplyScheduleOps` runs the batch in one transaction
+(`BeginTrans`, `ExecuteChecked`, `RollbackTrans` on the first failure) and requires
+"manage schedule" for the whole batch. Its rules:
 
-- An update changes only the fields present. Leads are replaced only when `Leads` is
-  present. Meal fields are never touched unless sent. The modal still sends everything, so
-  its behaviour is unchanged.
-- Update, remove and lead writes first confirm the schedule id belongs to the occurrence
-  (today the lead delete and insert filter by id alone).
-- Authorisation is unchanged and checked per operation.
-- The existing `add_schedule`, `update_schedule` and `remove_schedule` actions remain.
+- The existing `add_schedule`, `update_schedule` and `remove_schedule` actions and
+  `saveEventSchedule` keep today's full-replace behaviour, because their controller cannot
+  tell an absent field from an empty one. Only their ownership gaps are fixed (next point).
+- A batch update is a true partial update: only the fields present change. Leads are
+  replaced only when `Leads` is present. Menu, cost, dietary and allergens change only when
+  present and the caller can manage feast; otherwise they are left exactly as stored. Start
+  and end are validated together against the stored values when only one is sent.
+- Every update, remove, lead write and stored-row read first confirms the schedule id
+  belongs to the occurrence (today the lead writes and the meal-field read filter by id
+  alone).
+- Each result's `schedule` is the row re-read after the write, in the same shape as the
+  page's list.
+- A lead entry may carry `Auto: 1`; it is stored on the lead row.
 
-`GET EventAjax/schedule_list/{eventId}/{detailId}` returns `{status, schedule, staff}` for
-refreshes in Edit mode.
+`GET EventAjax/schedule_list/{eventId}/{detailId}` requires "manage schedule" and returns
+`{status, schedule, staff}` for refreshes in Edit mode.
 
 **Keeping the other views honest.** The modal's save and delete paths, which today call
 `evRefreshScheduleGrid`, instead notify the board store. On "Done" the page is re-fetched
@@ -447,23 +510,33 @@ ork_event_staff_category (
   event_staff_id INT NOT NULL, category VARCHAR(50) NOT NULL,
   PRIMARY KEY (event_staff_id, category),
   FOREIGN KEY (event_staff_id) REFERENCES ork_event_staff (event_staff_id) ON DELETE CASCADE
-) InnoDB utf8mb4
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+
+ALTER TABLE ork_event_schedule_lead ADD COLUMN IF NOT EXISTS is_auto TINYINT(1) NOT NULL DEFAULT 0
 ```
+
+The collation must match `ork_event_schedule.category`, or joining on category fails.
 
 - `AddEventStaff` accepts `LeadCategories` (validated against the category list), replaces
   the staff member's rows, applies the fill and removal rules of 7.6 in the same transaction,
-  and returns `LeadsAdded` and `LeadsRemoved` counts.
+  and returns `LeadsAdded` and `LeadsRemoved` counts. Fills are written with `is_auto = 1`;
+  removals touch only `is_auto = 1` rows.
 - `RemoveEventStaff` applies the removal rule before deleting.
-- `fetchStaffList` returns `LeadCategories`. `copyStaffModule` copies them.
+- `fetchStaffList` returns `LeadCategories`. `fetchScheduleList` returns each lead's `Auto`.
+  `copyStaffModule` copies category leads and `copyScheduleModules` copies `is_auto`.
 - Authorisation for staff changes is unchanged.
 
 ### 8.7 Copy into an existing occurrence
 
 `EventPlanning::CopyScheduleInto` (token, event, occurrence, source occurrence) requires
 "manage schedule" on the target and view access to the source under the same scope rule as
-`ListCopySourceEvents`, reuses `copyScheduleModules` with a whole-day shift, and returns the
-new ids so the client can record one undo step. A companion list call returns candidate
-sources: other occurrences of this event first, then `ListCopySourceEvents`.
+`ListCopySourceEvents`. It appends, and returns the new rows so the client can record one
+undo step. `copyScheduleModules` today adds a number of seconds to each time, which moves
+everything by an hour across a daylight-saving change, and returns nothing; it is reworked
+to shift by a count of days on the calendar date (keeping the clock time) and to return the
+new ids. `CreateEventWithCopy` keeps its current behaviour by passing its shift through the
+same function. A companion list call returns candidate sources: other occurrences of this
+event first, then the latest occurrence of each event from `ListCopySourceEvents`.
 
 ### 8.8 Phases
 
@@ -471,13 +544,15 @@ Each phase ships on its own and leaves the page working.
 
 1. **Board view.** Category source and the tenth category; `EvConfig` data; `evb-core` time,
    board-day and lane logic with tests; `evb-view`; CSS in both themes; phones; deep links;
-   Grid removed; Share as image.
+   Grid removed; Share as image. Because the Grid was how an editor opened an item, the
+   popover's "Edit" link opens the modal, and the board re-renders after every modal add,
+   edit or delete and after a Feast-card delete.
 2. **Edit mode and typed entry.** Batch endpoint and partial updates with tests; `evb-store`
    with tests; Edit mode shell; the parser with tests; the entry widget as quick line and
    in-block editor (day, time, `#`, `at`, quotes, `$`); click and drag to create; select,
    delete, category keys; undo and redo; Details bridge; list refresh on Done.
-3. **Leads.** Category leads on staff end to end; `@` inline search; auto-fill everywhere,
-   including the modal.
+3. **Leads.** Category leads on staff end to end, including the auto-filled flag; `@` inline
+   search; auto-fill everywhere, including the modal; leads following a category change.
 4. **Direct manipulation.** Drag, resize, keyboard nudge, duplicate, copy and paste, fill
    handle, multi-select, slot cursor.
 5. **Starting points and bulk.** Paste lines with ghosts; Copy as text; start from a past

@@ -346,8 +346,9 @@ test('continuing segments are marked', () => {
 - [ ] **Step 4: Run `npm run test:js`.** Expected: pass.
 - [ ] **Step 5: Change the template.**
   - Toolbar: the two toggle buttons become Board (`data-ev-view="board"`, icon `fa-th`) and List; add `<div id="evb-root" class="evb" style="display:none"></div>` where `#ev-schedule-grid-container` was.
-  - Delete the server-rendered grid block and the grid-only CSS, dark rules and JS (`setupGridDays`, `selectGridDay`, the grid popover, `evGridBlockClick`, the now-line timer, `evReinitScheduleGrid`). Keep the list, the day sections, the filter pills, `evCopyScheduleLink`, and the hash plumbing (`evWriteHash`, `evScheduleHashSuffix`).
-  - Emit `EvConfig.schedule` and the JSON data script; include `event-board.css` near line 246 and the two scripts after `revised.js` near line 3053, core before view.
+  - Delete the server-rendered grid block and the grid-only CSS, dark rules and JS (`setupGridDays`, `selectGridDay`, the grid popover, `evGridBlockClick`, the now-line timer, `evReinitScheduleGrid`). Keep the list, the day sections, the filter pills, `evCopyScheduleLink`, and the hash plumbing (`evWriteHash`, `evScheduleHashSuffix`). The `<style>` block at about 3960-4273 mixes grid rules (`.ev-grid-*`) with the phone List-card rules at about 4170-4272 and the toolbar and copy-link button rules: delete only selectors that target `.ev-grid-day`, `.ev-grid-scroller`, `.ev-grid-inner`, `.ev-grid-header-row`, `.ev-grid-cat-*`, `.ev-grid-body-row`, `.ev-grid-time-*`, `.ev-grid-col`, `.ev-grid-block*`, `.ev-grid-now-*`, `.ev-grid-popover*`, `.ev-grid-lead-chip` and `#ev-schedule-grid-container`. `.ev-grid-view-toolbar`, `.ev-grid-view-toggle`, `.ev-grid-view-btn` and `.ev-sched-*` stay.
+  - Emit `EvConfig.schedule` and the JSON data script, and add `serverNow: <?= json_encode(date('Y-m-d H:i')) ?>` to `EvConfig`; include `event-board.css` near line 246 and the two scripts after `revised.js` near line 3053, core before view.
+  - `evRemoveFeastCard` (about 3723-3758) does not refresh the other views today; add a call to `window.evRefreshScheduleGrid()` on its success path.
   - Move the view state machine (`applyMode`, `ev-sched-view-mode` in `localStorage`, hash parsing) into `evb-view.js` as `setView`. A stored or linked `grid` means `board`. With no stored choice the default is `board` when there are items and the viewport is wider than 700px, otherwise `list`. `evScheduleHashSuffix` returns `?view=board` (plus `&day=YYYYMMDD` when a single day is in view, Task 5) or an empty string for list.
 - [ ] **Step 6: Write `event-board.css`.** Sticky `.evb-head` row and sticky left `.evb-gutter` inside `.evb-scroller` (`overflow: auto`; `max-height: 80vh`); hour lines on `.evb-day-body` as a repeating gradient every 72px using `--ork-border`; blocks with white text on `var(--evb-fill)`, 5px radius, 3px 6px padding, title 12px/650 clamped to the lines that fit, meta 10px; a focus ring on `.evb-block:focus-visible`; minimum lane width 110px (day `min-width` is `lanes * 110px`). Dark theme: chrome from `--ork-*` variables; fills unchanged.
 - [ ] **Step 7: Point `revised.js` at the board.** `evApplyGridFilter` becomes a call to `EvBoardView.setFilter(category | null)` (add it: dims non-matching blocks with `.evb-dim`); the two `evRefreshScheduleGrid` call sites stay as they are.
@@ -392,7 +393,7 @@ test('old grid links open the board', async ({ page }) => {
 
 **Interfaces:**
 - Consumes: Task 4's `EvBoardView` and DOM contract.
-- Produces: `EvBoardView.popoverHtml(item, catsByName, uir) -> string` (pure), `EvBoardView.setDay(day | null)` (null shows all days), `EvBoardView.getDay()`, `EvBoardView.autolink(text) -> string` (escapes, then links `http(s)://` URLs with `rel="noopener noreferrer" target="_blank"`).
+- Produces: `EvBoardView.popoverHtml(item, catsByName, uir, opts) -> string` (pure; `opts.canEdit` adds an Edit button), `EvBoardView.nowMinute(serverNow, elapsedMs) -> {day, min}` (pure; the board day and minute for the "now" line), `EvBoardView.setDay(day | null)` (null shows all days), `EvBoardView.getDay()`, `EvBoardView.autolink(text) -> string` (escapes, then links `http(s)://` URLs with `rel="noopener noreferrer" target="_blank"`).
 
 - [ ] **Step 1: Write the failing unit tests** (append to `tests/js/evb-view.html.test.js`):
 
@@ -415,13 +416,24 @@ test('a zero cost reads Free and an absent cost shows nothing', () => {
   assert.ok(V.popoverHtml(Object.assign({ Cost: 0 }, base), cats, '/').includes('Free'));
   assert.ok(!V.popoverHtml(Object.assign({ Cost: null }, base), cats, '/').includes('$'));
 });
+test('only editors get an Edit button in the popover', () => {
+  const item = { EventScheduleId: 5, Title: 'T', Category: 'Class', StartTime: '2026-11-21 10:00:00', EndTime: '2026-11-21 11:00:00', Leads: [] };
+  assert.ok(!V.popoverHtml(item, cats, '/').includes('evb-popover-edit'));
+  assert.match(V.popoverHtml(item, cats, '/', { canEdit: true }), /class="evb-popover-edit"[^>]*data-id="5"/);
+});
+test('the now line follows the server clock and the 5am board day', () => {
+  assert.deepEqual(V.nowMinute('2026-11-21 14:05', 0), { day: '2026-11-21', min: 845 });
+  assert.deepEqual(V.nowMinute('2026-11-21 14:05', 10 * 60000), { day: '2026-11-21', min: 855 });
+  assert.deepEqual(V.nowMinute('2026-11-22 01:30', 0), { day: '2026-11-21', min: 1530 });
+  assert.deepEqual(V.nowMinute('2026-11-21 23:50', 20 * 60000), { day: '2026-11-21', min: 1450 });
+});
 ```
 
 - [ ] **Step 2: Run `npm run test:js`.** Expected: the two new tests fail.
 - [ ] **Step 3: Implement.**
-  - **Popover:** click, Enter or Space on a block opens one `.evb-popover` (position fixed, placed below the block and flipped above when it would leave the viewport, closed by outside click, Esc or scroll). A multi-day item's time reads with weekday names on both ends.
+  - **Popover:** click, Enter or Space on a block opens one `.evb-popover` (position fixed, placed below the block and flipped above when it would leave the viewport, closed by outside click, Esc or scroll). A multi-day item's time reads with weekday names on both ends. When `EvConfig.canManageSchedule` is true, pass `{canEdit: true}`; clicking `.evb-popover-edit` closes the popover and clicks that item's `.ev-edit-link` in the list (`#ev-schedule-row-{id} .ev-edit-link`), which is how the old grid opened the edit modal (the modal reads its values from the list row).
   - **Legend filter:** clicking a chip calls `setFilter` with its category; clicking the active chip clears it. Chips are buttons with `aria-pressed`.
-  - **Now line:** on the board day that contains the current time (compare against `EvConfig.evGridTodayKey`, the server's date, and the browser clock's hours and minutes), draw `.evb-now` across that day and update it every minute while the board is visible.
+  - **Now line:** `nowMinute(EvConfig.serverNow, performance.now() - <value at init>)` gives the board day and minute; when that day is on the board and the minute is inside the axis, draw `.evb-now` across that day, and update it every minute while the board is visible. The browser's own clock and zone are never read.
   - **Phones (700px and under):** the toggle stays visible; Board shows one day at a time using the existing `.ev-sched-pill` bar for day choice, defaulting to today's board day when it is one of the days, else the first. `setDay` drives it and the hash carries `&day=YYYYMMDD`. A `day` in the hash also selects that day on wider screens (others hidden) until "All days" is chosen from the pill bar.
   - **Dark theme and narrow widths:** no horizontal page scroll at 390px; the scroller scrolls inside itself.
 - [ ] **Step 4: Run `npm run test:js`.** Expected: pass.
