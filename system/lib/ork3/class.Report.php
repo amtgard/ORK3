@@ -2413,14 +2413,18 @@ class Report extends Ork3
             return;
         }
         $cache = Ork3::$Lib->ghettocache;
-        $bustKey = $cache->key(['KingdomId' => $kingdomId]);
-        $cache->bust(__CLASS__ . '.GetKingdomParkAverages', $bustKey);
-        $cache->bust(__CLASS__ . '.GetKingdomParkMonthlyAverages', $bustKey);
-        foreach ([0, 1] as $isAdmin) {
-            $cache->bust(
-                __CLASS__ . '.GetKingdomExtendedParkAverages',
-                $cache->key(['KingdomId' => $kingdomId, 'IsAdmin' => $isAdmin])
-            );
+        // All uses the pre-change keys; In-Person / Online carry AttendanceType.
+        foreach (['all', 'in_person', 'online'] as $type) {
+            $typeKey = $type === 'all' ? [] : ['AttendanceType' => $type];
+            $bustKey = $cache->key(['KingdomId' => $kingdomId] + $typeKey);
+            $cache->bust(__CLASS__ . '.GetKingdomParkAverages', $bustKey);
+            $cache->bust(__CLASS__ . '.GetKingdomParkMonthlyAverages', $bustKey);
+            foreach ([0, 1] as $isAdmin) {
+                $cache->bust(
+                    __CLASS__ . '.GetKingdomExtendedParkAverages',
+                    $cache->key(['KingdomId' => $kingdomId, 'IsAdmin' => $isAdmin] + $typeKey)
+                );
+            }
         }
     }
 
@@ -2437,6 +2441,8 @@ class Report extends Ork3
 
     public function GetKingdomParkAverages($request)
     {
+        // Informational In-Person / Online / All split; never tied to park status.
+        $type = $this->_takeAttendanceType($request);
         $key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false) {
             return $cache;
@@ -2489,6 +2495,7 @@ class Report extends Ork3
 										a.kingdom_id IN ($kidList)
 										and date >= '$per_period'
 										and a.mundane_id > 0
+										" . Attendance::TypeClause($type, 'a') . "
 									group by date_year, date_week3, mundane_id, a.park_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
 					where p.kingdom_id IN ($kidList) and p.active = 'Active'
@@ -2514,6 +2521,7 @@ class Report extends Ork3
 
     public function GetKingdomParkMonthlyAverages($request)
     {
+        $type = $this->_takeAttendanceType($request);
         $key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 600)) !== false) {
             return $cache;
@@ -2537,6 +2545,7 @@ class Report extends Ork3
 						WHERE a.kingdom_id IN ($kidList)
 						  AND a.date > '$monthly_period'
 						  AND a.mundane_id > 0
+						  " . Attendance::TypeClause($type, 'a') . "
 						GROUP BY a.date_year, a.date_month, a.park_id
 					) sub
 					GROUP BY park_id";
@@ -2561,14 +2570,22 @@ class Report extends Ork3
     /**
      * Extended kingdom park averages overlay (T-KNG-02): tp/tm per park + kingdom dedup totals.
      *
-     * @param array{KingdomId?: int, IsAdmin?: bool} $request
+     * AttendanceType (in_person | online | all, default all) filters every attendance
+     * subquery. Informational only: the kingdom CountOnlineAttendance setting never
+     * applies here, and no park status/size is derived from these figures.
+     *
+     * @param array{KingdomId?: int, IsAdmin?: bool, AttendanceType?: string} $request
      * @return array<string, array<string, int|float>>
      */
     public function GetKingdomExtendedParkAverages($request)
     {
         $kid = (int) ($request['KingdomId'] ?? 0);
         $isAdmin = !empty($request['IsAdmin']);
-        $cacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid, 'IsAdmin' => (int) $isAdmin]);
+        $type = Attendance::NormalizeType($request['AttendanceType'] ?? null);
+        // All keeps the pre-change key; the other types get their own.
+        $typeKey = $type === 'all' ? [] : ['AttendanceType' => $type];
+        $typeClause = Attendance::TypeClause($type, 'a');
+        $cacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid, 'IsAdmin' => (int) $isAdmin] + $typeKey);
         if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetKingdomExtendedParkAverages', $cacheKey, 1200)) !== false) {
             return $cached;
         }
@@ -2578,8 +2595,8 @@ class Report extends Ork3
         $wkCount = max(1, (int) ceil((strtotime($wkEnd) - strtotime($wkStart)) / (7 * 86400)));
         $statsKids = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kid)));
 
-        $weekly = $this->GetKingdomParkAverages(['KingdomId' => $kid, 'AverageMonths' => 6]);
-        $monthly = $this->GetKingdomParkMonthlyAverages(['KingdomId' => $kid]);
+        $weekly = $this->GetKingdomParkAverages(['KingdomId' => $kid, 'AverageMonths' => 6] + $typeKey);
+        $monthly = $this->GetKingdomParkMonthlyAverages(['KingdomId' => $kid] + $typeKey);
         $result = [];
         foreach ((array) ($weekly['KingdomParkAveragesSummary'] ?? []) as $park) {
             $result[$park['ParkId']] = ['att' => (int) $park['AttendanceCount'], 'mo' => 0, 'tp' => 0, 'tm' => 0];
@@ -2598,7 +2615,7 @@ class Report extends Ork3
             FROM " . DB_PREFIX . "attendance a
             INNER JOIN " . DB_PREFIX . "park p  ON p.park_id  = a.park_id  AND p.kingdom_id IN ({$statsKids})
             INNER JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id AND m.suspended = 0 AND m.active = 1
-            WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND a.mundane_id > 0
+            WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND a.mundane_id > 0{$typeClause}
             GROUP BY a.park_id";
         $this->db->Clear();
         $pcResult = $this->db->DataSet($pcSql);
@@ -2618,7 +2635,7 @@ class Report extends Ork3
                 SELECT a.mundane_id FROM " . DB_PREFIX . "attendance a
                 INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
                 WHERE a.date >= '{$wkStart}'
-                    AND a.mundane_id > 0
+                    AND a.mundane_id > 0{$typeClause}
                 GROUP BY a.date_year, a.date_week3, a.mundane_id
             ) t";
         $this->db->Clear();
@@ -2630,7 +2647,7 @@ class Report extends Ork3
                 FROM " . DB_PREFIX . "attendance a
                 INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
                 WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-                    AND a.mundane_id > 0
+                    AND a.mundane_id > 0{$typeClause}
                 GROUP BY a.date_year, a.date_month
             ) sub";
         $this->db->Clear();
@@ -2649,7 +2666,7 @@ class Report extends Ork3
                      INNER JOIN " . DB_PREFIX . "park pk ON pk.park_id = a.park_id AND pk.kingdom_id IN ({$statsKids})
                      WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
                        AND a.date <  DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-                       AND a.mundane_id > 0
+                       AND a.mundane_id > 0{$typeClause}
                      GROUP BY date_year, date_week3, mundane_id, a.park_id
                  ) mw ON p.park_id = mw.park_id
                  WHERE p.kingdom_id IN ({$statsKids}) AND p.active = 'Active'
@@ -2673,7 +2690,7 @@ class Report extends Ork3
                      INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
                      WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
                        AND a.date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-                       AND a.mundane_id > 0
+                       AND a.mundane_id > 0{$typeClause}
                      GROUP BY a.date_year, a.date_month, a.park_id
                  ) mm
                  GROUP BY park_id"

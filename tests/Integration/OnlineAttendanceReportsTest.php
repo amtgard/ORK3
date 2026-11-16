@@ -512,6 +512,163 @@ final class OnlineAttendanceReportsTest extends TestCase
         $this->assertGreaterThanOrEqual(1, (int) $after['online']['Participation']);
     }
 
+    /* ------------------------------------------------------------------ */
+    /*  Park / kingdom attendance averages (Task 13). Their windows are     */
+    /*  relative to today, so these seed recent rows and compare deltas.    */
+    /*  The test DB holds no online rows, so online figures are exact.      */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * A Tuesday and Wednesday of one recent ISO week, both in one calendar month and
+     * inside every averages window (6 months weekly, 12 months monthly).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function recentWeekPair(): array
+    {
+        for ($w = 1; $w <= 8; $w++) {
+            $tue = strtotime("monday this week -{$w} week +1 day");
+            $wed = strtotime('+1 day', $tue);
+            if (date('Y-m', $tue) === date('Y-m', $wed)) {
+                return [date('Y-m-d', $tue), date('Y-m-d', $wed)];
+            }
+        }
+        $this->fail('No recent same-month week found.');
+    }
+
+    /**
+     * Seeds, in one recent week and month: P1 in-person (Tue) and online (Wed),
+     * P2 in-person, P3 online. Distinct players: all 3, in-person 2 (P1, P2),
+     * online 2 (P1, P3) - P1 counts once under All but once in each type.
+     */
+    private function seedRecentMixedWeek(): void
+    {
+        [$tue, $wed] = $this->recentWeekPair();
+        $p1 = (int) $this->fixture->createPlayer($this->parkId, 'oar-avg1')['mundane_id'];
+        $p2 = (int) $this->fixture->createPlayer($this->parkId, 'oar-avg2')['mundane_id'];
+        $p3 = (int) $this->fixture->createPlayer($this->parkId, 'oar-avg3')['mundane_id'];
+        $this->fixture->insertAttendance($p1, $this->parkId, $this->kingdomId, $tue, 0, 0);
+        $this->fixture->insertAttendance($p1, $this->parkId, $this->kingdomId, $wed, 0, 1);
+        $this->fixture->insertAttendance($p2, $this->parkId, $this->kingdomId, $tue, 0, 0);
+        $this->fixture->insertAttendance($p3, $this->parkId, $this->kingdomId, $tue, 0, 1);
+    }
+
+    public function testKingdomParkAveragesFilterByType(): void
+    {
+        $weeklyReq = ['KingdomId' => $this->kingdomId, 'AverageMonths' => 6];
+        $monthlyReq = ['KingdomId' => $this->kingdomId];
+        $weekly = fn (array $resp): int => (int) ($this->rowFor($resp['KingdomParkAveragesSummary'], 'ParkId', $this->parkId)['AttendanceCount'] ?? -1);
+        $monthly = fn (array $resp): float => (float) ($this->rowFor($resp['KingdomParkMonthlySummary'], 'ParkId', $this->parkId)['MonthlyAvg'] ?? 0);
+        $before = [];
+        foreach (['all', 'in_person', 'online'] as $type) {
+            $before[$type] = $weekly($this->report->GetKingdomParkAverages($weeklyReq + ['AttendanceType' => $type]));
+        }
+
+        $this->seedRecentMixedWeek();
+
+        $w = $this->byType(fn ($req) => $this->report->GetKingdomParkAverages($req), $weeklyReq);
+        $m = $this->byType(fn ($req) => $this->report->GetKingdomParkMonthlyAverages($req), $monthlyReq);
+        $delta = [];
+        foreach (['all', 'in_person', 'online'] as $type) {
+            $delta[$type] = $weekly($w[$type]) - $before[$type];
+        }
+        // Player-weeks: P1 is one player-week under All, and one in each type.
+        $this->assertSame(3, $delta['all']);
+        $this->assertSame(2, $delta['in_person']);
+        $this->assertSame(2, $delta['online'], 'online = the seeded online players (P1, P3)');
+        // Not additive: in-person + online exceeds All by the players with both kinds that week.
+        $this->assertSame($delta['all'] + 1, $delta['in_person'] + $delta['online']);
+        $this->assertSame(0, $before['online']);
+        $this->assertSame(2, $weekly($w['online']));
+
+        // Monthly: AVG of distinct players per month. The only online month is the seeded one.
+        $this->assertSame(2.0, $monthly($m['online']));
+        $this->assertGreaterThan(0.0, $monthly($m['in_person']));
+        $this->assertGreaterThanOrEqual($monthly($m['in_person']), $monthly($m['all']));
+    }
+
+    public function testKingdomExtendedParkAveragesFilterByType(): void
+    {
+        $req = ['KingdomId' => $this->kingdomId, 'IsAdmin' => true];
+        $before = [];
+        foreach (['all', 'in_person', 'online'] as $type) {
+            $before[$type] = $this->report->GetKingdomExtendedParkAverages($req + ['AttendanceType' => $type]);
+        }
+
+        $this->seedRecentMixedWeek();
+
+        $r = $this->byType(fn ($q) => $this->report->GetKingdomExtendedParkAverages($q), $req);
+        $park = fn (array $resp, string $f): float => (float) ($resp[$this->parkId][$f] ?? 0);
+        foreach (['att', 'tp', 'tm'] as $f) {
+            $d = [];
+            foreach (['all', 'in_person', 'online'] as $type) {
+                $d[$type] = $park($r[$type], $f) - $park($before[$type], $f);
+            }
+            $this->assertSame([3.0, 2.0, 2.0], [$d['all'], $d['in_person'], $d['online']], "park $f deltas all / in_person / online");
+        }
+        $k = fn (array $resp, string $f): float => (float) ($resp['_kingdom'][$f] ?? 0);
+        $this->assertSame(3.0, $k($r['all'], 'att') - $k($before['all'], 'att'));
+        $this->assertSame(2.0, $k($r['in_person'], 'att') - $k($before['in_person'], 'att'));
+        $this->assertSame(2.0, $k($r['online'], 'att'), 'kingdom online player-weeks = the seeded online players');
+        $this->assertSame(2.0, $k($r['online'], 'mo'), 'kingdom online monthly avg = one month of 2 players');
+        $this->assertSame(2.0, $park($r['online'], 'mo'));
+        $this->assertSame($k($r['all'], 'wk_count'), $k($r['online'], 'wk_count'), 'same week denominator for every type');
+        // Previous-period trend figures are type-filtered too: no online rows there.
+        $this->assertSame(0.0, $park($r['online'], 'prev_att'));
+    }
+
+    public function testParkAttendanceAveragesFilterByType(): void
+    {
+        $profile = new ParkProfile();
+        $before = [];
+        foreach (['all', 'in_person', 'online'] as $type) {
+            $before[$type] = $profile->GetParkAttendanceAverages($this->parkId, $type);
+        }
+        $this->assertEquals($profile->GetParkAttendanceAverages($this->parkId), $before['all'], 'All equals the default');
+
+        $this->seedRecentMixedWeek();
+
+        $omitted = $profile->GetParkAttendanceAverages($this->parkId);
+        $after = [];
+        foreach (['all', 'in_person', 'online', 'bogus'] as $type) {
+            $after[$type] = $profile->GetParkAttendanceAverages($this->parkId, $type);
+        }
+        $this->assertEquals($omitted, $after['all']);
+        $this->assertEquals($omitted, $after['bogus'], 'Unknown type falls back to All');
+
+        // WeeklyAvg = player-weeks / weeks in 6 months (one denominator for every type),
+        // so the deltas keep the 3 / 2 / 2 player-week relationship.
+        $wkCount = max(1, (int) ceil((strtotime(date('Y-m-d')) - strtotime(date('Y-m-d', strtotime('-6 month')))) / (7 * 86400)));
+        $this->assertSame(0.0, $before['online']['WeeklyAvg']);
+        $this->assertSame(round(2 / $wkCount, 2), $after['online']['WeeklyAvg']);
+        $this->assertEqualsWithDelta(3 / $wkCount, $after['all']['WeeklyAvg'] - $before['all']['WeeklyAvg'], 0.011);
+        $this->assertEqualsWithDelta(2 / $wkCount, $after['in_person']['WeeklyAvg'] - $before['in_person']['WeeklyAvg'], 0.011);
+        // MonthlyAvg = AVG(distinct players per active month): the only online month is the seeded one.
+        $this->assertSame(2.0, $after['online']['MonthlyAvg']);
+        $this->assertGreaterThan(0.0, $after['in_person']['MonthlyAvg']);
+    }
+
+    public function testParkAveragesIgnoreCountOnlineAttendanceSetting(): void
+    {
+        $this->seedRecentMixedWeek();
+        $profile = new ParkProfile();
+        $snapshot = function () use ($profile): array {
+            $out = [];
+            foreach (['all', 'in_person', 'online'] as $type) {
+                $out[$type] = [
+                    $profile->GetParkAttendanceAverages($this->parkId, $type),
+                    $this->report->GetKingdomExtendedParkAverages(['KingdomId' => $this->kingdomId, 'IsAdmin' => false, 'AttendanceType' => $type]),
+                ];
+            }
+
+            return $out;
+        };
+        $this->fixture->setKingdomConfig($this->kingdomId, 'CountOnlineAttendance', '"1"');
+        $on = $snapshot();
+        $this->fixture->setKingdomConfig($this->kingdomId, 'CountOnlineAttendance', '"0"');
+        $this->assertEquals($on, $snapshot(), 'Park averages are informational: the kingdom setting never applies');
+    }
+
     public function testCacheKeyIncludesAttendanceType(): void
     {
         $cache = Ork3::$Lib->ghettocache;
@@ -547,6 +704,9 @@ final class OnlineAttendanceReportsTest extends TestCase
                 fn ($req) => $this->report->ParkAttendanceSinglePark($req + ['KingdomId' => $this->kingdomId, 'ParkId' => $this->parkId, 'Period' => 'Monthly']),
                 fn ($req) => $this->report->GetNewPlayerAttendance($req + ['KingdomId' => $this->kingdomId, 'ParkId' => $this->parkId]),
                 fn ($req) => $this->report->GetActiveKingdomsSummary(['AttendanceType' => $req['AttendanceType'] ?? null] + ['KingdomAverageWeeks' => 26]),
+                fn ($req) => $this->report->GetKingdomParkAverages(['KingdomId' => $this->kingdomId, 'AverageMonths' => 6] + array_intersect_key($req, ['AttendanceType' => 1])),
+                fn ($req) => $this->report->GetKingdomParkMonthlyAverages(['KingdomId' => $this->kingdomId] + array_intersect_key($req, ['AttendanceType' => 1])),
+                fn ($req) => $this->report->GetKingdomExtendedParkAverages(['KingdomId' => $this->kingdomId, 'IsAdmin' => false] + array_intersect_key($req, ['AttendanceType' => 1])),
             ];
             foreach ($calls as $i => $call) {
                 $keys = [];
