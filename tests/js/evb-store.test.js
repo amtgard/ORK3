@@ -120,6 +120,26 @@ test('a change the server rejects is reverted, reported, and does not block the 
   s.undo();
   assert.equal(s.get(good), null);
 });
+test('a non-undoable remove also forgets earlier steps on that item', async () => {
+  const f = fake();
+  const s = S.create({ items: [item('Old', { EventScheduleId: 7 })], send: f.send, saveMeal: true });
+  const b = s.add(item('B'));
+  s.update('i7', { Title: 'Renamed' });
+  s.remove('i7', { undoable: false });
+  assert.equal(s.get('i7'), null);
+  assert.ok(s.canUndo());
+  assert.equal(s.undo(), true);
+  assert.equal(s.get(b), null);
+  assert.ok(!s.items().some(i => i.cid === 'i7'));
+  assert.equal(s.get('i7'), null);
+  assert.equal(s.undo(), false);
+  assert.equal(s.get('i7'), null);
+  await s.idle();
+  assert.equal(s.get('i7'), null);
+  const sent = f.calls.flat();
+  assert.ok(sent.some(o => o.op === 'remove' && o.id === 7));
+  assert.ok(!sent.some(o => o.op === 'add' && (o.item.Title === 'Old' || o.item.Title === 'Renamed')));
+});
 test('a rejected update restores the saved values; meal fields are sent only when allowed; reset refuses while busy', async () => {
   const f = fake();
   const s = S.create({ items: [item('Old', { EventScheduleId: 7, Menu: 'Soup' })], send: f.send, saveMeal: false });

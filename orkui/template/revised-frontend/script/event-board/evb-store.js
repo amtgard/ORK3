@@ -86,7 +86,7 @@
 
         function finish() {
             var step = recording; recording = null;
-            if (step) commitStep(step);
+            if (step && !step.discard) commitStep(step);
             var didChange = changed; changed = false;
             var rej = rejections; rejections = [];
             // A listener may call back into the store; each such call finishes on its own,
@@ -278,6 +278,15 @@
             redoStack = prune(redoStack);
         }
 
+        // A non-undoable remove: no later undo or redo may bring the item back or act
+        // on it, so every step touching it is dropped whole, including a batch in progress.
+        function forgetItem(cid) {
+            function touches(step) { return step.some(function (ch) { return ch.cid === cid; }); }
+            undoStack = undoStack.filter(function (s) { return !touches(s); });
+            redoStack = redoStack.filter(function (s) { return !touches(s); });
+            if (recording && recording.map[cid]) recording.discard = true;
+        }
+
         // ---- local mutations (callers wrap them in run) ----
 
         function doAdd(item, cid, rec) {
@@ -307,6 +316,7 @@
             var i = indexOf(cid);
             if (i < 0) return;
             touch(cid, rec);
+            if (!rec) forgetItem(cid);
             var snap = list.splice(i, 1)[0];
             changed = true;
             enqueue({ op: 'remove', cid: cid, item: snap });
