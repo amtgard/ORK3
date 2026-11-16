@@ -396,4 +396,62 @@ final class OnlineAttendanceTest extends TestCase
         $this->assertSame(6, $row['AttCount']);
         $this->assertSame(2, $row['OnlineExcluded']);
     }
+
+    /**
+     * Kingdom 19's stored rules (MaxOutsideKingdomCredits path: nested in/out-kingdom UNION),
+     * applied to the fixture kingdom. Mode/required pinned so 6 in-person + 1 online is readable.
+     */
+    private function kingdom19Row(int $kid, int $mid): array
+    {
+        $rules = VotingRules::rulesForKingdom(19);
+        $this->assertNotNull($rules);
+        $this->assertGreaterThan(0, (int) $rules['MaxOutsideKingdomCredits']);
+
+        return $this->votingRow($kid, $mid, $rules);
+    }
+
+    public function testOutsideCreditPathExcludesOnlineWhenSettingOff(): void
+    {
+        [$kid, , $mid] = $this->votingPlayer('"0"', 'vo-k19off');
+        [$r, $row] = $this->kingdom19Row($kid, $mid);
+        $this->assertTrue($r['ExcludeOnline']);
+        $this->assertSame(6, $row['AttCount']);
+        $this->assertSame(1, $row['OnlineExcluded']);
+    }
+
+    public function testOutsideCreditPathCountsOnlineWhenSettingOn(): void
+    {
+        [$kid, , $mid] = $this->votingPlayer('"1"', 'vo-k19on');
+        [$r, $row] = $this->kingdom19Row($kid, $mid);
+        $this->assertFalse($r['ExcludeOnline']);
+        $this->assertSame(7, $row['AttCount']);
+    }
+
+    /**
+     * OnlineExcluded uses the main count's scope: an online sign-in the main count would
+     * never read (away from the home park under HomeParkOnly; an event under ExcludeEvents)
+     * is not reported as excluded, so excluded == count(on) - count(off).
+     */
+    public function testOnlineExcludedMatchesCountDifference(): void
+    {
+        [$kid, $parkId, $mid] = $this->votingPlayer('"1"', 'vo-ident');
+        $rf = $this->reports();
+        $otherPark = $rf->secondParkIdInKingdom($kid, $parkId);
+        $this->assertGreaterThan(0, $otherPark, 'Need a second park in the kingdom');
+        $rf->insertAttendance($mid, $otherPark, $kid, date('Y-m-d', strtotime('-9 days')), 0, 1);
+        $eventId = $rf->insertKingdomEvent($kid, $mid, 'ident-evt');
+        $rf->insertAttendance($mid, $parkId, $kid, date('Y-m-d', strtotime('-10 days')), $eventId, 1);
+
+        $rules = ['HomeParkOnly' => true, 'ExcludeEvents' => true];
+        [, $on] = $this->votingRow($kid, $mid, $rules);
+
+        $rf->setKingdomConfig($kid, 'CountOnlineAttendance', '"0"');
+        $this->forgetCountsOnlineCache();
+        [$r, $off] = $this->votingRow($kid, $mid, $rules);
+
+        $this->assertTrue($r['ExcludeOnline']);
+        $this->assertSame(7, $on['AttCount']);
+        $this->assertSame(6, $off['AttCount']);
+        $this->assertSame($on['AttCount'] - $off['AttCount'], $off['OnlineExcluded']);
+    }
 }

@@ -4589,18 +4589,22 @@ class Report extends Ork3
 					           $_per_evt * ($_in_scope_clause)    AS in_credits,
 					           $_per_evt * (NOT $_in_scope_clause) AS out_credits
 					    FROM " . DB_PREFIX . "attendance a
+					    $online_join
 					    WHERE a.event_id IS NOT NULL AND a.event_id != 0
 					      AND a.date >= '$start_date'
 					      $single_att_clause
+					      $online_clause
 					    GROUP BY a.mundane_id, a.event_id, a.kingdom_id
 					    UNION ALL
 					    SELECT a.mundane_id,
 					           ($_in_scope_clause)    AS in_credits,
 					           (NOT $_in_scope_clause) AS out_credits
 					    FROM " . DB_PREFIX . "attendance a
+					    $online_join
 					    WHERE (a.event_id = 0 OR a.event_id IS NULL)
 					      AND a.date >= '$start_date'
 					      $single_att_clause
+					      $online_clause
 					) att_inner
 					GROUP BY mundane_id
 				) att ON att.mundane_id = m.mundane_id";
@@ -4652,15 +4656,26 @@ class Report extends Ork3
         $online_count_join   = '';
         $online_count_select = '';
         if ($exclude_online) {
+            // Same scope as the main attendance count, so for a COUNT-mode report
+            // excluded == (count with the setting on) - (count with it off):
+            // the outside-credit path reads every kingdom's rows, the standard path
+            // uses park membership (or any kingdom with AllKingdoms), HomeParkOnly
+            // keeps only home-park rows, ExcludeEvents keeps only park days.
+            $_online_count_scope       = $max_outside_kingdom_creds > 0 ? '1=1' : ($all_kingdoms ? '1=1' : $_in_scope_clause);
+            $_online_count_home_join   = ($home_park_only && $max_outside_kingdom_creds <= 0) ? $home_park_join : '';
+            $_online_count_home_clause = ($home_park_only && $max_outside_kingdom_creds <= 0) ? 'AND a.park_id = mp.park_id' : '';
             $online_count_join = "
 				LEFT JOIN (
 					SELECT a.mundane_id, COUNT(*) AS online_excluded_count
 					FROM " . DB_PREFIX . "attendance a
 					LEFT JOIN " . DB_PREFIX . "event _oe ON _oe.event_id = a.event_id AND a.event_id != 0
 					LEFT JOIN " . DB_PREFIX . "park  _op ON _op.park_id  = a.park_id
-					WHERE a.kingdom_id = $kingdom_id
+					$_online_count_home_join
+					WHERE $_online_count_scope
 					  AND a.date >= '$start_date'
 					  $single_att_clause
+					  $events_clause
+					  $_online_count_home_clause
 					  AND (a.online = 1 OR _oe.name LIKE '%Online%' OR _op.name LIKE '%Online%')
 					GROUP BY a.mundane_id
 				) oatt ON oatt.mundane_id = m.mundane_id
