@@ -132,3 +132,47 @@ test('formatEntry reads back through parseEntry', () => {
       [it.Title, it.Category, it.Location, it.Description, it.StartTime, it.EndTime]);
   });
 });
+test('"at" before a bare hour is a time', () => {
+  let r = p('Court at 6');
+  assert.deepEqual([r.title, r.startMin, r.location, r.given.time], ['Court', 1080, '', true]);
+  r = p('Feast at 6 in the Hall');
+  assert.deepEqual([r.title, r.startMin, r.location], ['Feast in the Hall', 1080, '']);
+  r = p('Class 101: Intro at 3');
+  assert.deepEqual([r.title, r.startMin], ['Class 101: Intro', 900]);
+  r = p('Hall at 7');
+  assert.deepEqual([r.title, r.startMin], ['Hall', 420]);
+  r = p('Meet at the Gate 5p');
+  assert.deepEqual([r.location, r.startMin], ['the Gate', 1020]);
+  r = p('Court at 6 9-10');
+  assert.deepEqual([r.startMin, r.endMin], [540, 600]);
+  assert.ok(r.title.includes('Court'));
+});
+test('a typed day resets the clock for lengths and then', () => {
+  const last = { lastEnd: { day: '2026-11-20', min: 870 } };
+  assert.deepEqual(pick(p('sun 30m x', last), ['day', 'startMin', 'endMin']), ['2026-11-22', 540, 570]);
+  assert.deepEqual(pick(p('sun then x', last), ['day', 'startMin']), ['2026-11-22', 540]);
+  assert.deepEqual(pick(p('fri 30m x', last), ['day', 'startMin', 'endMin']), ['2026-11-20', 870, 900]);
+});
+test('a rejected cost does not confuse the prefix', () => {
+  let r = p('$8 feast: dinner');
+  assert.deepEqual([r.title, r.given.category, r.category], ['$8 feast: dinner', false, 'Feast and Food']);
+  r = p('feast: dinner $8');
+  assert.deepEqual([r.title, r.category, r.given.category], ['dinner $8', 'Feast and Food', true]);
+});
+test('description whitespace collapses', () => {
+  assert.equal(p('x "Come\tlearn   now"').description, 'Come learn now');
+});
+test('equal sides are zero length and absurd lengths are text', () => {
+  assert.deepEqual(pick(p('9a-9a x'), ['startMin', 'endMin']), [540, 540]);
+  assert.deepEqual(pick(p('12a-12a x'), ['startMin', 'endMin']), [1440, 1440]);
+  assert.deepEqual(pick(p('0-0 x'), ['startMin', 'endMin']), [1440, 1440]);
+  const r = p('99h x');
+  assert.deepEqual([r.title, r.given.time], ['99h x', false]);
+  const d = p('24h x');
+  assert.equal(d.endMin - d.startMin, 1440);
+});
+test('formatEntry with no title ends cleanly', () => {
+  const base = { Category: 'Battlegame', StartTime: '2026-11-21 09:00:00', EndTime: '2026-11-21 10:00:00' };
+  assert.equal(C.formatEntry(Object.assign({ Title: '' }, base)), '9–10a #bg');
+  assert.equal(C.formatEntry(base), '9–10a #bg');
+});

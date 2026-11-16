@@ -417,12 +417,14 @@
         } else if (!a.marked) {
             e = b.min; m = b.mk;
             s = withMarker(a, m);
-            if (s >= e) s = withMarker(a, other(m));
+            if (s > e) s = withMarker(a, other(m));
         } else {
             s = a.min; m = a.mk;
             e = withMarker(b, m);
-            if (s >= e) e = withMarker(b, other(m));
+            if (s > e) e = withMarker(b, other(m));
         }
+        // The same time on both sides is a zero-length item, not a whole day.
+        if (s === e) { s = nightShift(s); return { start: s, end: s }; }
         s = nightShift(s);
         if (e <= s && !b.marked && e + 720 > s) e += 720;
         while (e <= s) e += DAY_MIN;
@@ -431,11 +433,12 @@
 
     var LENGTH_RE = /^(?:(\d+(?:\.\d+)?)h(?:(\d+)m)?|(\d+)m|\+(\d+))$/i;
 
+    // Minutes, or null. Anything over a day ('99h') is not a length but text.
     function readLength(text) {
         var m = LENGTH_RE.exec(text);
         if (!m) return null;
-        if (m[1]) return Math.round(parseFloat(m[1]) * 60) + (m[2] ? +m[2] : 0);
-        return +(m[3] || m[4]);
+        var len = m[1] ? Math.round(parseFloat(m[1]) * 60) + (m[2] ? +m[2] : 0) : +(m[3] || m[4]);
+        return len > DAY_MIN ? null : len;
     }
 
     var RANGE_JOINERS = ['-', '\u2013', 'to'];
@@ -483,6 +486,13 @@
 
     function isAt(t) { return isWord(t) && t.value.toLowerCase() === 'at'; }
 
+    // A bare hour from 1 to 12: no colon, no marker ('6' in 'Court at 6').
+    function bareHourAt(toks, i) {
+        if (!isWord(toks[i])) return null;
+        var side = readSide(toks[i].value);
+        return side && !side.marked && !side.strong ? side : null;
+    }
+
     // The time that starts at token i: { found, upto, weak } or null. 'weak'
     // marks a lone 'noon' or 'midnight', which yields to any other time.
     function timeAt(toks, i, firstIdx, lastIdx) {
@@ -516,6 +526,11 @@
             if (!t.weak) { hit = { at: i, t: t }; break; }
             if (!hit) hit = { at: i, t: t };
         }
+        // Only when the line has no other time: 'at' plus a bare hour, 'Court at 6'.
+        for (i = 0; !hit && i < toks.length; i++) {
+            var hour = isAt(toks[i - 1]) && bareHourAt(toks, i);
+            if (hour) hit = { at: i, t: { found: { start: nightShift(defaultMin(hour)), end: null, length: null, then: false }, upto: i + 1 } };
+        }
         if (!hit) return null;
         var found = hit.t.found, upto = hit.t.upto;
         for (i = hit.at; i < upto; i++) toks[i].claimed = true;
@@ -536,7 +551,8 @@
         for (var i = toks.length - 1; i >= 0; i--) {
             if (!isAt(toks[i])) continue;
             var after = sideAt(toks, i + 1);
-            if (rangeAt(toks, i + 1) || after && after.side.strong) continue; // 'at 3-4': followed by a time
+            // Followed by a time ('at 3-4', 'at 5p') or a bare hour ('at 6'): never a location.
+            if (rangeAt(toks, i + 1) || after && after.side.strong || bareHourAt(toks, i + 1)) continue;
             var j = i + 1;
             while (j < toks.length && isWord(toks[j]) && !/^[#$]/.test(toks[j].value)) j++;
             var count = j - i - 1;
@@ -590,7 +606,7 @@
             }
         }
         var description = '';
-        toks.forEach(function (t) { if (t.kind === 'quote' && t.claimed) description = t.value; });
+        toks.forEach(function (t) { if (t.kind === 'quote' && t.claimed) description = t.value.replace(/\s+/g, ' ').trim(); });
 
         // Tags: the first resolvable is the category, the second the secondary.
         var category = null, secondary = '', tagCount = 0;
@@ -618,24 +634,13 @@
             return toks.filter(function (t) { return !t.claimed; })
                 .map(function (t) { return t.text; }).join(' ').replace(/\s+/g, ' ').trim();
         };
-        // Title, then the category guess (a typed 'Name:' prefix counts as given).
-        var stripPrefix = false;
-        var finishTitle = function () {
-            var t = titleOf();
-            return stripPrefix ? guessCategory(t).title.replace(/\s+/g, ' ').trim() : t;
-        };
-        if (!category && !ign.category) {
-            var raw = titleOf(), g = guessCategory(raw);
-            if (g.category) {
-                category = g.category;
-                if (g.title !== raw) { stripPrefix = true; given.category = true; }
-            }
-        }
-        category = category || 'Other';
+        var guessing = !category && !ign.category;
 
+        // Cost: decided on the category the title would get without the '$' token.
         var cost = null;
         if (costTok) {
-            var feast = category === 'Feast and Food' || secondary === 'Feast and Food';
+            var pre = guessing ? guessCategory(titleOf()).category : category;
+            var feast = pre === 'Feast and Food' || secondary === 'Feast and Food';
             if (ctx.canFeast && !ign.cost && feast) {
                 cost = parseFloat(costTok.value);
                 given.cost = true;
@@ -643,7 +648,16 @@
                 costTok.claimed = false; // not a cost: it is title text
             }
         }
-        var title = finishTitle();
+
+        // Title, then the category guess on the final title (a typed 'Name:'
+        // prefix counts as given).
+        var title = titleOf();
+        if (guessing) {
+            var g = guessCategory(title);
+            category = g.category;
+            if (g.title !== title) { title = g.title.replace(/\s+/g, ' ').trim(); given.category = true; }
+        }
+        category = category || 'Other';
 
         // Day and times.
         var day = ctx.fixedDay || typedDay || null;
@@ -658,8 +672,9 @@
                 day = day || curDay; startMin = 540; endMin = startMin + lastDuration;
             }
         } else if (time.start === null) {
-            // A length alone, or 'then': start where the last item ended.
-            if (lastEnd) { day = day || lastEnd.day; startMin = lastEnd.min; }
+            // A length alone, or 'then': start where the last item ended, unless
+            // a typed day names another day.
+            if (lastEnd && (!day || day === lastEnd.day)) { day = lastEnd.day; startMin = lastEnd.min; }
             else { day = day || curDay; startMin = ctx.fixedStart != null ? ctx.fixedStart : 540; }
             endMin = startMin + (time.length !== null ? time.length : lastDuration);
         } else {
@@ -704,7 +719,7 @@
         var g = guessCategory(title);
         // Tag when the title alone would read back as another category, or would lose a prefix.
         if ((g.category || 'Other') !== cat || g.title !== title) out += ' #' + CATEGORY_TAGS[cat];
-        out += ' ' + title;
+        if (title) out += ' ' + title;
         if (item.Location) out += ' at ' + item.Location;
         if (item.Description) {
             var d = String(item.Description);
