@@ -308,18 +308,21 @@ Queue rules:
 ```js
 const S = require('../../orkui/template/revised-frontend/script/event-board/evb-store.js');
 function fake() {
-  const calls = []; let nextId = 100; let gate = null; let failNext = null;
+  const calls = []; let nextId = 100; let gate = null; let failNext = null; let badTitle = null;
   const send = ops => {
     calls.push(JSON.parse(JSON.stringify(ops)));
     const run = () => {
       if (failNext) { const f = failNext; failNext = null; if (f === 'network') return Promise.reject(new Error('down')); return Promise.resolve(f); }
+      const bad = badTitle ? ops.findIndex(o => o.op === 'add' && o.item.Title === badTitle.title) : -1;
+      if (bad >= 0) return Promise.resolve({ status: 1, error: badTitle.message, failedIndex: bad });
       return Promise.resolve({ status: 0, results: ops.map(o => ({ op: o.op, cid: o.cid || '', id: o.op === 'add' ? nextId++ : o.id,
         schedule: o.op === 'remove' ? null : Object.assign({ EventScheduleId: o.op === 'add' ? nextId - 1 : o.id }, o.item || o.fields) })) });
     };
     if (gate) { const g = gate; return new Promise(res => g.push(res)).then(run); }
     return run();
   };
-  return { send, calls, hold() { gate = []; }, release() { const g = gate; gate = null; g.forEach(r => r()); }, failWith(f) { failNext = f; } };
+  return { send, calls, hold() { gate = []; }, release() { const g = gate; gate = null; g.forEach(r => r()); }, failWith(f) { failNext = f; },
+    rejectTitle(title, message) { badTitle = { title, message }; } };
 }
 const item = (title, more) => Object.assign({ Title: title, StartTime: '2026-11-21 09:00', EndTime: '2026-11-21 10:00', Category: 'Other', Leads: [] }, more);
 const tick = () => new Promise(r => setImmediate(r));
@@ -374,10 +377,13 @@ test('undo and redo', async () => {
   s.undo(); await s.idle();
   assert.equal(s.get('i7').Title, 'Old');
   assert.notEqual(s.get('i7').EventScheduleId, 7);
-  assert.equal(f.calls[f.calls.length - 1][0].op, 'add');
+  assert.ok(f.calls.flat().some(o => o.op === 'remove' && o.id === 7));
+  assert.ok(f.calls.flat().some(o => o.op === 'add' && o.item.Title === 'Old'));
   const cid = s.add(item('New')); s.undo();
   assert.equal(s.get(cid), null);
-  assert.ok(!s.undo() || true);
+  while (s.canUndo()) s.undo();
+  assert.equal(s.undo(), false);
+  await s.idle();
 });
 test('batch is one undo step; a new change clears redo; undoable:false records nothing', async () => {
   const f = fake();
@@ -410,13 +416,11 @@ test('a change the server rejects is reverted, reported, and does not block the 
   const f = fake();
   const s = S.create({ items: [item('Old', { EventScheduleId: 7 })], send: f.send, saveMeal: true });
   const rejected = []; s.on('rejected', r => rejected.push(r));
-  f.hold();
+  f.rejectTitle('Bad', 'A title is required.');
   s.update('i7', { Title: 'First' });
-  await tick();
   const bad = s.add(item('Bad')); const good = s.add(item('Good'));
-  f.release(); await tick(); await tick();
-  f.failWith({ status: 1, error: 'A title is required.', failedIndex: 0 });
   await s.idle();
+  assert.equal(s.get('i7').Title, 'First');
   assert.equal(s.get(bad), null);
   assert.ok(s.get(good).EventScheduleId > 0);
   assert.deepEqual(rejected.map(r => [r.kind, r.item.Title, r.message]), [['add', 'Bad', 'A title is required.']]);
@@ -644,12 +648,13 @@ Behaviour:
 - **Quick line:** every keystroke parses with `entryContext()`; a valid parse shows one ghost and the chips; Enter with a valid parse calls `store.add` with the parsed fields and clears the input; Enter on a `setDay` line switches the default day and clears the input; Esc clears. The next parse context takes its day, last end and last length from the item just added. Dismissing a chip sets the matching `ignore` flag for this entry and re-parses. `/` focuses the quick line when no field has focus.
 - **Suggestions:** typing `#` opens the category list filtered by what follows; typing ` at ` opens the list of locations already in the schedule filtered by what follows (nothing when there are none). Up/Down move, Enter or Tab picks and rewrites that token in the input, Esc closes. While the list is open, Enter does not add the item.
 - **Undo/redo:** the buttons and Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z (when no text field has focus) call the store.
+- **Help:** `button.evb-help` toggles `.evb-help-pop`, a short cheat sheet listing the grammar rows of spec 7.4 that exist so far (day, time, length, `then`, `#`, `at`, quotes, `$`) and the keys available in this phase. It closes on outside click and Esc.
 - **Refresh:** when the window regains focus and the store is `saved`, re-fetch `schedule_list` and `store.reset`.
 - **Leaving:** Done awaits `store.idle()`; if the state is `offline` it stays in Edit mode and says so. Otherwise it re-fetches the page, swaps `#ev-schedule-container`, `#ev-meal-list` and the Schedule and Feast tab counts from the response, hands the board the fresh list, calls `setEditing(false)` and removes the mode bar and quick line. While `pending > 0` or the state is `offline`, a `beforeunload` handler asks before leaving.
 - **Empty schedule:** when there are no items and the viewer can manage the schedule, the empty state shows a "Build the schedule" button that switches to Board view and enters Edit mode.
 - **Phones:** Edit mode works at 390px: the mode bar wraps, the quick line is full width.
 
-- [ ] **Step 1: Create the editor's test event (local, not committed).** Authenticated browser tests need an account that can manage an event. In the `ork` database only, with additive SQL: create a published event named `E2E Schedule Board` at an existing park with one occurrence running from next Friday 09:00 to the following Sunday 16:00 (copy the column values of an existing published event and its occurrence with `INSERT … SELECT`, changing only the name and dates), and add `ork_event_staff` rows for the test account `megiddo` (mundane id 4) with `can_manage = 1`. Verify that `megiddo` can sign in through the proxy with the documented password (`docs/megiddo/refactor/06-test-framework.md`) using curl with a fresh cookie jar. If sign-in fails, stop and report BLOCKED with what you tried; do not change any password and do not use another account. Record the event and occurrence ids in your report. Tests read `ORK3_E2E_USERNAME`, `ORK3_E2E_PASSWORD` and `ORK3_E2E_EDIT_EVENT` (`"eventId/detailId"`) and skip when any is missing; reuse the sign-in helper the existing specs in `tests/e2e/` use.
+- [ ] **Step 1: Wire the editor sign-in for browser tests.** A dedicated local test account and event already exist in this machine's `ork` database: account `e2e_schedule` (its only authority is a staff row with manage, schedule and feast on the event), event `E2E Schedule Board`, occurrence Friday 2026-11-20 09:00 to Sunday 2026-11-22 16:00. The git-ignored file `.superpowers/e2e.env` holds `ORK3_E2E_USERNAME`, `ORK3_E2E_PASSWORD` and `ORK3_E2E_EDIT_EVENT` (`19190/9680`); load it into the environment for Playwright runs (`set -a; . .superpowers/e2e.env; set +a`) and never print or commit its contents. Sign-in is `POST index.php?Route=Login/login` with form fields `username` and `password` (no CSRF token); success redirects to `Player/profile/{id}`. In the spec, add `signIn(page)` (reuse the helper in the existing specs under `tests/e2e/` if one fits; otherwise fill the login form at `index.php?Route=Login` and wait for the redirect) and `openBoard(page, event)`. Editor tests read the three variables and `test.skip` when any is missing. Do not sign in as any other account.
 
 - [ ] **Step 2: Write the failing unit test** (append to `tests/js/evb-view.html.test.js`):
 
@@ -710,6 +715,19 @@ test('undo removes the last add and a category tag is suggested', async ({ page 
   await expect(line).toHaveValue(/#class\s*$/);
   await expect(page.locator('.evb-block', { hasText: '#cl' })).toHaveCount(0);
 });
+test('returning to the tab picks up changes made elsewhere', async ({ page, context }) => {
+  await openBoard(page, EDIT_EVENT);
+  await page.locator('.evb-edit-btn').click();
+  const other = await context.newPage();
+  await openBoard(other, EDIT_EVENT);
+  await other.locator('.evb-edit-btn').click();
+  const line = other.locator('.evb-quickline .evb-entry-input');
+  await line.fill(`sun 4p ${PREFIX} elsewhere`);
+  await line.press('Enter');
+  await expect(other.locator('.evb-save-state')).toHaveText('All changes saved');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.locator('.evb-block', { hasText: `${PREFIX} elsewhere` })).toHaveCount(1);
+});
 ```
 
 `openBoard(page, event)` signs in if needed and opens `…#ev-tab-schedule?view=board`.
@@ -731,7 +749,7 @@ test('undo removes the last add and a category tag is suggested', async ({ page 
 
 **Interfaces:**
 - Consumes: Task 4's `EvBoardEntry` (with `compact: true`), `EvBoardEdit.entryContext`, the store.
-- Produces: `EvBoardView.slotAt(offsetY, axisStart, step) -> number` (pure: the minute at a vertical offset inside a day body, floored to `step` minutes), and in the DOM `.evb-slot-hover` (the hover highlight) and `.evb-block.evb-block-editing` holding the compact entry.
+- Produces: `EvBoardView.slotAt(offsetY, axisStart, step) -> number` (pure: the minute at a vertical offset inside a day body, floored to `step` minutes), and in the DOM `.evb-slot-hover` (the hover highlight) and `.evb-block.evb-block-editing[data-category]` holding the compact entry (`data-category` is the parsed category and updates as the text changes).
 
 Behaviour (Edit mode only, pointer type mouse or pen):
 - Moving over empty space in a day body shows `.evb-slot-hover` on the 15-minute slot under the pointer, as tall as the last length used.
