@@ -1842,6 +1842,10 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 								<input type="text" id="ev-Credits" name="Credits" style="width:55px" oninput="evSyncCredits(this.value)"
 									value="<?= (float)($attendanceForm['Credits'] ?? $defaultCredits) ?>">
 							</div>
+							<div class="ev-form-field ev-online-field">
+								<span id="ev-att-online-switch"></span>
+								<input type="hidden" id="ev-att-online" name="Online" value="0">
+							</div>
 							<div class="ev-form-field" style="justify-content:flex-end">
 								<label>&nbsp;</label>
 								<button type="submit" class="ev-submit-btn">
@@ -1872,8 +1876,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					</thead>
 					<tbody>
 						<?php foreach ($attendanceList as $att): ?>
-						<tr data-att-id="<?= (int)$att['AttendanceId'] ?>" data-mundane-id="<?= (int)$att['MundaneId'] ?>" data-att-class="<?= (int)$att['ClassId'] ?>" data-att-date="<?= htmlspecialchars($att['Date'] ?? '') ?>">
-							<td><a href="<?= UIR ?>Player/profile/<?= (int)$att['MundaneId'] ?>"><?= htmlspecialchars($att['Persona']) ?></a></td>
+						<?php $_attOnline = (int)($att['Online'] ?? 0) === 1; ?>
+						<tr data-att-id="<?= (int)$att['AttendanceId'] ?>" data-mundane-id="<?= (int)$att['MundaneId'] ?>" data-att-class="<?= (int)$att['ClassId'] ?>" data-att-date="<?= htmlspecialchars($att['Date'] ?? '') ?>" data-online="<?= $_attOnline ? 1 : 0 ?>">
+							<td><a href="<?= UIR ?>Player/profile/<?= (int)$att['MundaneId'] ?>"><?= htmlspecialchars($att['Persona']) ?></a><?= $_attOnline ? ' ' . ork_online_badge() : '' ?></td>
 							<td><?php if (!empty($att['KingdomId'])): ?><a href="<?= UIR ?>Kingdom/profile/<?= (int)$att['KingdomId'] ?>"><?= htmlspecialchars($att['KingdomName']) ?></a><?php else: ?><?= htmlspecialchars($att['KingdomName'] ?? '') ?><?php endif; ?></td>
 							<td><?php if (!empty($att['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$att['ParkId'] ?>"><?= htmlspecialchars($att['ParkName']) ?></a><?php else: ?><?= htmlspecialchars($att['ParkName'] ?? '') ?><?php endif; ?></td>
 							<td class="ev-class-cell"><?= htmlspecialchars($att['ClassName']) ?></td>
@@ -2350,6 +2355,10 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 						<input type="number" name="Credits" value="1" min="0.25" step="0.25" oninput="evSyncCredits(this.value)">
 					</div>
 				</div>
+				<div class="ev-modal-row">
+					<span id="ev-checkin-online-switch"></span>
+					<input type="hidden" id="ev-checkin-online" name="Online" value="0">
+				</div>
 			</div>
 			<div class="ev-modal-footer">
 				<button type="button" class="ev-modal-btn-cancel" onclick="evCloseCheckinModal()">Cancel</button>
@@ -2420,6 +2429,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					<input class="att-edit-input" type="number" id="ev-att-edit-credits" min="0.5" max="4" step="0.5">
 				</div>
 			</div>
+			<label class="orn-online-check" for="ev-att-edit-online">
+				<input type="checkbox" id="ev-att-edit-online" value="1"> Online?
+			</label>
 		</div>
 		<div class="att-edit-modal-footer">
 			<button class="att-edit-btn-cancel" id="ev-att-edit-cancel">Cancel</button>
@@ -2504,6 +2516,7 @@ var _evRsvpCr = document.getElementById('ev-rsvp-credits'); if (_evRsvpCr && _ev
 					</button>
 				</div>
 			</div>
+			<div class="ev-signin-link-online-row" id="ev-signin-online-switch"></div>
 			<div id="ev-signin-feedback" class="ev-signin-feedback" style="display:none"></div>
 			<div id="ev-signin-link-result" style="display:none">
 				<div class="ev-signin-link-url-row">
@@ -3270,7 +3283,7 @@ function evPrintAttendance() {
 	if (trs.length) {
 		tblHtml = '<table><thead><tr>' + evAttCols.map(function(h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
 			trs.map(function(tr) {
-				return '<tr>' + evAttCols.map(function(_, i) { return '<td>' + (tr.cells[i] ? tr.cells[i].innerHTML : '') + '</td>'; }).join('') + '</tr>';
+				return '<tr>' + evAttCols.map(function(_, i) { return '<td>' + (tr.cells[i] ? ornStripOnlineBadge(tr.cells[i].innerHTML) + (i === 0 && tr.dataset.online === '1' ? ' (Online)' : '') : '') + '</td>'; }).join('') + '</tr>';
 			}).join('') + '</tbody></table>';
 	}
 	var sub = EvConfig.eventDate || '';
@@ -3291,9 +3304,14 @@ function evCsvSlug() {
 }
 function evExportAttendanceCsv() {
 	var rows = evAttRowNodes(true).map(function(tr) {
-		return evAttCols.map(function(_, i) { return tr.cells[i] ? tr.cells[i].textContent.trim() : ''; });
+		return evAttCols.map(function(_, i) {
+			if (!tr.cells[i]) return '';
+			var cell = tr.cells[i].cloneNode(true);
+			cell.querySelectorAll('.orn-online-badge').forEach(function(b) { b.remove(); });
+			return cell.textContent.trim();
+		}).concat([tr.dataset.online === '1' ? 'Yes' : '']);
 	});
-	evExportCsv(evCsvSlug() + '-attendance.csv', evAttCols, rows);
+	evExportCsv(evCsvSlug() + '-attendance.csv', evAttCols.concat(['Online']), rows);
 }
 function evExportRsvpCsv() {
 	var rows = [];
@@ -3442,6 +3460,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		var credCell = tr.querySelector('.ev-credits-cell');
 		cred.value = credCell ? credCell.textContent.trim() : lastCredits;
 		cred.style.borderColor = '';
+		document.getElementById('ev-att-edit-online').checked = tr.dataset.online === '1';
 		document.getElementById('ev-att-edit-feedback').style.display = 'none';
 		document.getElementById('ev-att-edit-save').disabled = false;
 		document.getElementById('ev-att-edit-save').textContent = 'Save';
@@ -3472,10 +3491,11 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		var date      = document.getElementById('ev-att-edit-date').value;
 		var mundaneId = document.getElementById('ev-att-edit-mundane').value;
 		var saveBtn   = document.getElementById('ev-att-edit-save');
+		var newOnline = document.getElementById('ev-att-edit-online').checked ? 1 : 0;
 		saveBtn.disabled = true;
 		saveBtn.textContent = '…';
 		$.post('<?= UIR ?>AttendanceAjax/attendance/' + attId + '/edit', {
-			Date: date, Credits: newCredits, ClassId: newClassId, MundaneId: mundaneId
+			Date: date, Credits: newCredits, ClassId: newClassId, MundaneId: mundaneId, Online: newOnline
 		}, function(r) {
 			if (r.status === 0) {
 				var newClassName = sel.options[sel.selectedIndex].text;
@@ -3486,6 +3506,11 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 					var credCell  = tr.querySelector('.ev-credits-cell');
 					if (classCell) classCell.textContent = newClassName;
 					if (credCell)  credCell.textContent  = newCredits;
+					tr.dataset.online = newOnline;
+					var nameCell = tr.cells[0];
+					var oldBadge = nameCell && nameCell.querySelector('.orn-online-badge');
+					if (oldBadge) oldBadge.remove();
+					if (newOnline && nameCell) nameCell.insertAdjacentHTML('beforeend', ' ' + ornOnlineBadge());
 				}
 				lastCredits = newCredits;
 				closeModal();

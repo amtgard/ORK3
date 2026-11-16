@@ -17,6 +17,7 @@ class Controller_AttendanceAjax extends Controller
         if ($action === 'add') {
             $this->load_model('Attendance');
             $mundaneId = (int)($_POST['MundaneId'] ?? 0);
+            $online    = (int)!empty($_POST['Online']);
             $r = $this->Attendance->add_attendance(
                 $this->session->token,
                 $_POST['AttendanceDate'] ?? date('Y-m-d'),
@@ -24,17 +25,33 @@ class Controller_AttendanceAjax extends Controller
                 null,
                 $mundaneId,
                 (int)($_POST['ClassId']   ?? 0),
-                (float)($_POST['Credits'] ?? 1)
+                (float)($_POST['Credits'] ?? 1),
+                $online
             );
             if ($r['Status'] == 0) {
                 echo json_encode([
                     'status' => 0,
                     'attendanceId' => (int)($r['Detail'] ?? 0),
                     'reactivated' => (int)($r['Reactivated'] ?? 0),
+                    'online' => $online,
                 ]);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
+        } elseif ($action === 'daytype') {
+            $this->load_model('Park');
+            $date = $_GET['date'] ?? date('Y-m-d');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid date']);
+                exit;
+            }
+            $r = $this->Park->get_parkday_type_for_date($park_id, $date);
+            if (($r['Status']['Status'] ?? 1) !== 0) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid date']);
+                exit;
+            }
+            echo json_encode(['status' => 0, 'online' => (bool)$r['Online'], 'inPerson' => (bool)$r['InPerson']]);
+            exit;
         } elseif ($action === 'getday') {
             $this->load_model('Attendance');
             $date = $_GET['date'] ?? date('Y-m-d');
@@ -58,6 +75,7 @@ class Controller_AttendanceAjax extends Controller
                     'Persona'     => (string)($att['Persona'] ?? $att['AttendancePersona'] ?? ''),
                     'ClassId'     => (int)($att['ClassId'] ?? 0),
                     'Credits'     => (float)($att['Credits'] ?? 1),
+                    'Online'      => (int)($att['Online'] ?? 0),
                 ];
             }
             echo json_encode(['status' => 0, 'entries' => array_values($entries)]);
@@ -141,7 +159,9 @@ class Controller_AttendanceAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid class']);
                 exit;
             }
-            $r = $this->Attendance->update_attendance($this->session->token, $attendance_id, $date, $credits, $classId, $mundaneId);
+            // Online is sent only by forms that render the checkbox; absent = leave unchanged.
+            $online = array_key_exists('Online', $_POST) ? (int)!empty($_POST['Online']) : null;
+            $r = $this->Attendance->update_attendance($this->session->token, $attendance_id, $date, $credits, $classId, $mundaneId, $online);
             if ($r['Status'] == 0) {
                 echo json_encode([
                     'status' => 0,
@@ -237,7 +257,7 @@ class Controller_AttendanceAjax extends Controller
             }
             $credits = (float)$_POST['Credits'];
 
-            $args = ['Token' => $this->session->token, 'Credits' => $credits];
+            $args = ['Token' => $this->session->token, 'Credits' => $credits, 'Online' => $_POST['Online'] ?? 0];
             if ($scope === 'park') {
                 $args['ParkId'] = $id;
                 $args['Hours'] = min(120, max(1, (int)($_POST['Hours'] ?? 3)));

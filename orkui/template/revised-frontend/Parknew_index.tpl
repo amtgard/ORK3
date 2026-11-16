@@ -2110,6 +2110,8 @@ var PkBannerConfig = {
 					<span id="pk-att-date-label"></span>
 				</button>
 				<input type="hidden" id="pk-att-date">
+				<span id="pk-att-online-switch"></span>
+				<span class="orn-online-hint" id="pk-att-online-hint" style="display:none"></span>
 			</div>
 			<div class="pk-att-cal" id="pk-att-cal" style="display:none">
 				<div class="pk-att-cal-hdr">
@@ -2216,6 +2218,7 @@ var PkBannerConfig = {
 							</button>
 						</div>
 					</div>
+					<div class="pk-att-link-online-row" id="pk-att-link-online-switch"></div>
 					<div id="pk-att-link-result" style="display:none;margin-top:12px">
 						<div class="pk-att-link-url-row" style="display:flex;gap:8px;align-items:center">
 							<input type="text" id="pk-att-link-url" readonly
