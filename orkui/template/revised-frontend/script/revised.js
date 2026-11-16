@@ -9462,6 +9462,48 @@ $(document).ready(function() {
         });
     };
 
+    // ---- Staff changes ----
+    // evOnStaffChanged(fn) registers fn to run after every staff save or removal
+    // with the fresh staff list [{MundaneId, Persona, RoleName, LeadCategories}],
+    // read from the staff table; EvConfig.staffList is replaced with that list.
+    var evStaffChangedFns = [];
+    window.evOnStaffChanged = function(fn) {
+        if (typeof fn === 'function') evStaffChangedFns.push(fn);
+    };
+    function evStaffRowLeads(row) {
+        try {
+            var cats = JSON.parse(row.getAttribute('data-lead-categories') || '[]');
+            return Array.isArray(cats) ? cats : [];
+        } catch (e) { return []; }
+    }
+    function evNotifyStaffChanged() {
+        var list = [];
+        document.querySelectorAll('#ev-staff-tbody tr[id^="ev-staff-row-"]').forEach(function(row) {
+            list.push({
+                MundaneId:      parseInt(row.getAttribute('data-mundane-id'), 10) || 0,
+                Persona:        row.getAttribute('data-persona') || '',
+                RoleName:       row.getAttribute('data-role') || '',
+                LeadCategories: evStaffRowLeads(row)
+            });
+        });
+        EvConfig.staffList = list;
+        evStaffChangedFns.forEach(function(fn) {
+            try { fn(list); } catch (e) { if (window.console) console.error(e); }
+        });
+    }
+    // "Added as lead on 2 items. Removed as lead from 1 item." (empty when nothing changed).
+    function evStaffLeadNote(added, removed) {
+        var el = document.getElementById('ev-staff-lead-note');
+        if (!el) return;
+        var items = function(n) { return n + (n === 1 ? ' item' : ' items'); };
+        var parts = [];
+        if (added > 0)   parts.push('Added as lead on ' + items(added) + '.');
+        if (removed > 0) parts.push('Removed as lead from ' + items(removed) + '.');
+        el.textContent = parts.join(' ');
+        // Items gained or lost a lead, so the Schedule views re-read them.
+        if (parts.length && typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
+    }
+
     // ---- Staff Modal ----
     if (EvConfig.canManageStaff || EvConfig.canManageSchedule || EvConfig.canManageFeast) {
         var gid = function(id) { return document.getElementById(id); };
@@ -9488,6 +9530,11 @@ $(document).ready(function() {
             gid('ev-staff-can-attendance').checked = editing ? !!prefill.canAttendance : false;
             if (gid('ev-staff-can-schedule')) gid('ev-staff-can-schedule').checked = editing ? !!prefill.canSchedule : false;
             if (gid('ev-staff-can-feast'))    gid('ev-staff-can-feast').checked    = editing ? !!prefill.canFeast    : false;
+            var leads = (editing && prefill.leadCategories) || [];
+            modal.querySelectorAll('#ev-staff-lead-cats .evb-cat-toggle').forEach(function(t) {
+                t.setAttribute('aria-pressed', leads.indexOf(t.getAttribute('data-category')) !== -1 ? 'true' : 'false');
+            });
+            if (gid('ev-staff-lead-note')) gid('ev-staff-lead-note').textContent = '';
             gid('ev-staff-error').style.display = 'none';
             gid('ev-staff-ac').classList.remove('kn-ac-open');
             // Title + submit-button copy switch on mode.
@@ -9513,9 +9560,30 @@ $(document).ready(function() {
                 canManage:     row.getAttribute('data-manage')     === '1',
                 canAttendance: row.getAttribute('data-attendance') === '1',
                 canSchedule:   row.getAttribute('data-schedule')   === '1',
-                canFeast:      row.getAttribute('data-feast')      === '1'
+                canFeast:      row.getAttribute('data-feast')      === '1',
+                leadCategories: evStaffRowLeads(row)
             });
         };
+
+        var leadCatsEl = gid('ev-staff-lead-cats');
+        if (leadCatsEl) {
+            leadCatsEl.addEventListener('click', function(e) {
+                var t = e.target.closest('.evb-cat-toggle');
+                if (!t) return;
+                t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+            });
+        }
+
+        // The "Leads" cell, matching the PHP-rendered one in the staff table.
+        function evStaffLeadsCell(cats) {
+            if (!cats || !cats.length) return '<td class="evb-staff-leads"><span class="evb-staff-none">&mdash;</span></td>';
+            var byName = {};
+            (EvConfig.scheduleCategories || []).forEach(function(c) { byName[c.name] = c; });
+            return '<td class="evb-staff-leads">' + cats.map(function(name) {
+                var bold = (byName[name] && byName[name].bold) || '#616161';
+                return '<span class="evb-cat-chip" data-category="' + escHtmlSt(name) + '" style="--evb-cat:' + escHtmlSt(bold) + '">' + escHtmlSt(name) + '</span>';
+            }).join('') + '</td>';
+        }
 
         window.evCloseStaffModal = function() {
             var modal = gid('ev-staff-modal');
@@ -9688,6 +9756,14 @@ $(document).ready(function() {
             fd.append('CanAttendance', canAtt);
             fd.append('CanSchedule',   canSched);
             fd.append('CanFeast',      canFeast);
+            // Always sent (possibly empty), so the save sets exactly the pressed set.
+            if (leadCatsEl) {
+                var leadCats = [];
+                leadCatsEl.querySelectorAll('.evb-cat-toggle[aria-pressed="true"]').forEach(function(t) {
+                    leadCats.push(t.getAttribute('data-category'));
+                });
+                fd.append('LeadCategories', JSON.stringify(leadCats));
+            }
             // Editing? Send the staff row id so the backend does an UPDATE
             // instead of an INSERT. ork_event_staff has no UNIQUE constraint
             // on (detail_id, mundane_id) yet, so a bare insert-upsert makes
@@ -9712,9 +9788,11 @@ $(document).ready(function() {
                         + ' data-manage="'     + (s.CanManage     ? 1 : 0) + '"'
                         + ' data-attendance="' + (s.CanAttendance ? 1 : 0) + '"'
                         + ' data-schedule="'   + (s.CanSchedule   ? 1 : 0) + '"'
-                        + ' data-feast="'      + (s.CanFeast      ? 1 : 0) + '">' +
+                        + ' data-feast="'      + (s.CanFeast      ? 1 : 0) + '"'
+                        + ' data-lead-categories="' + escHtmlSt(JSON.stringify(s.LeadCategories || [])) + '">' +
                         '<td><a href="' + EvConfig.uir + 'Player/profile/' + s.MundaneId + '">' + escHtmlSt(s.Persona || '') + '</a></td>' +
                         '<td>' + escHtmlSt(s.RoleName || '') + '</td>' +
+                        evStaffLeadsCell(s.LeadCategories) +
                         '<td>' + (s.CanManage ? chk : x) + '</td>' +
                         '<td>' + (s.CanAttendance ? chk : x) + '</td>' +
                         '<td>' + (s.CanSchedule ? chk : x) + '</td>' +
@@ -9751,6 +9829,8 @@ $(document).ready(function() {
                             }
                         });
                     }
+                    evStaffLeadNote(data.leadsAdded || 0, data.leadsRemoved || 0);
+                    evNotifyStaffChanged();
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
                     errEl.style.display = 'block';
@@ -9816,6 +9896,8 @@ $(document).ready(function() {
                             }
                         }
                     });
+                    evStaffLeadNote(0, data.leadsRemoved || 0);
+                    evNotifyStaffChanged();
                 } else {
                     alert(data.error || 'Could not remove staff member.');
                 }

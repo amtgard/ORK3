@@ -334,6 +334,28 @@ test.describe('editing', () => {
       return res.status === 0 ? 0 : ops.length;
     }, PREFIX);
     expect(left).toBe(0);
+    // The test account leaves this spec leading no category, saved through the
+    // staff endpoint with its other fields as the staff table carries them.
+    const cleared = await page.evaluate(async () => {
+      const c = (window as any).EvConfig;
+      const row = document.querySelector('#ev-staff-tbody tr[data-persona="E2E Schedule Editor"]') as HTMLElement | null;
+      if (!row) return 'no staff row';
+      if (row.dataset.leadCategories === '[]') return 'ok';
+      const fd = new FormData();
+      fd.append('StaffId', row.id.replace('ev-staff-row-', ''));
+      fd.append('MundaneId', row.dataset.mundaneId || '');
+      fd.append('RoleName', row.dataset.role || '');
+      fd.append('CanManage', row.dataset.manage || '0');
+      fd.append('CanAttendance', row.dataset.attendance || '0');
+      fd.append('CanSchedule', row.dataset.schedule || '0');
+      fd.append('CanFeast', row.dataset.feast || '0');
+      fd.append('LeadCategories', '[]');
+      const res = await (await fetch(c.uir + 'EventAjax/add_staff/' + c.eventId + '/' + c.detailId, {
+        method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      })).json();
+      return res.status === 0 && res.staff.LeadCategories.length === 0 ? 'ok' : JSON.stringify(res);
+    });
+    expect(cleared).toBe('ok');
     await page.close();
   });
 
@@ -1039,5 +1061,44 @@ test.describe('editing', () => {
     await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
     expect(await page.evaluate(() => (window as any).EvBoardEdit.store.canUndo())).toBe(false);
     await expect(page.locator('.evb-undo')).toBeDisabled();
+  });
+
+  // Leaves the test account leading Battlegame; the next tests rely on that and
+  // the block's afterAll clears it.
+  test('a staff member can be made a category lead', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EDIT_EVENT}#ev-tab-staff`);
+    // A Battlegame item with no leads, so the save has at least one item to fill.
+    const SUNDAY = await lastDay(page);
+    await addViaBatch(page, [{
+      Title: `${PREFIX} lead fill`, StartTime: `${SUNDAY} 11:00`, EndTime: `${SUNDAY} 12:00`,
+      Category: 'Battlegame', SecondaryCategory: '', Location: '', Description: '', Leads: [],
+    }]);
+    const changed: any[] = [];
+    await page.exposeFunction('e2eStaffChanged', (list: any) => { changed.push(list); });
+    await page.evaluate(() => (window as any).evOnStaffChanged((list: any) => (window as any).e2eStaffChanged(list)));
+
+    const row = page.locator('#ev-staff-tbody tr', { hasText: 'E2E Schedule Editor' });
+    await expect(row.locator('.evb-cat-chip')).toHaveCount(0);
+    await row.locator('[data-tip="Edit"]').click();
+    const toggle = page.locator('#ev-staff-lead-cats .evb-cat-toggle[data-category="Battlegame"]');
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#ev-staff-save-btn').click();
+    await expect(row.locator('.evb-cat-chip[data-category="Battlegame"]')).toBeVisible();
+    await expect(page.locator('#ev-staff-lead-note')).toHaveText(/^Added as lead on \d+ items?\.$/);
+    await expect.poll(() => changed.length).toBe(1);
+    expect(changed[0].find((s: any) => s.Persona === 'E2E Schedule Editor').LeadCategories).toEqual(['Battlegame']);
+    expect(await page.evaluate(() => (window as any).EvConfig.staffList)).toEqual(changed[0]);
+
+    // Opening the modal again clears the note and pre-presses what the row leads.
+    await row.locator('[data-tip="Edit"]').click();
+    await expect(page.locator('#ev-staff-lead-note')).toHaveText('');
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#ev-staff-modal .ev-modal-close').click();
+
+    await page.reload();
+    await expect(page.locator('#ev-staff-tbody tr', { hasText: 'E2E Schedule Editor' }).locator('.evb-cat-chip[data-category="Battlegame"]')).toBeVisible();
+    expect(await page.evaluate(() => (window as any).EvConfig.staffList.find((s: any) => s.Persona === 'E2E Schedule Editor').LeadCategories)).toEqual(['Battlegame']);
   });
 });

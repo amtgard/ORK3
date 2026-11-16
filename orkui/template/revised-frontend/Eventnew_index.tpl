@@ -1757,14 +1757,20 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 						<i class="fas fa-plus"></i> Add Staff
 					</button>
 				</div>
+				<div id="ev-staff-lead-note" class="evb-staff-note" aria-live="polite"></div>
 				<?php endif; ?>
 
+				<?php
+				// Category name => definition, for the bold colour of each "Leads" chip.
+				$evStaffCats = $ScheduleCategories ?? [];
+				?>
 				<?php if (!empty($StaffList)): ?>
 				<table class="ev-table" id="ev-staff-table">
 					<thead>
 						<tr>
 							<th>Player</th>
 							<th>Role</th>
+							<th>Leads</th>
 							<th>Can Manage</th>
 							<th>Attendance</th>
 							<th>Schedule</th>
@@ -1781,9 +1787,11 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							data-manage="<?= (int)!empty($staff['CanManage']) ?>"
 							data-attendance="<?= (int)!empty($staff['CanAttendance']) ?>"
 							data-schedule="<?= (int)!empty($staff['CanSchedule']) ?>"
-							data-feast="<?= (int)!empty($staff['CanFeast']) ?>">
+							data-feast="<?= (int)!empty($staff['CanFeast']) ?>"
+							data-lead-categories="<?= htmlspecialchars(json_encode(array_values($staff['LeadCategories'] ?? []))) ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$staff['MundaneId'] ?>"><?= htmlspecialchars($staff['Persona']) ?></a></td>
 							<td><?= htmlspecialchars($staff['RoleName']) ?></td>
+							<td class="evb-staff-leads"><?php if (empty($staff['LeadCategories'])): ?><span class="evb-staff-none">&mdash;</span><?php else: foreach ($staff['LeadCategories'] as $leadCat): ?><span class="evb-cat-chip" data-category="<?= htmlspecialchars($leadCat) ?>" style="--evb-cat:<?= htmlspecialchars($evStaffCats[$leadCat]['bold'] ?? '#616161') ?>"><?= htmlspecialchars($leadCat) ?></span><?php endforeach; endif; ?></td>
 							<td><?= $staff['CanManage'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
 							<td><?= $staff['CanAttendance'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
 							<td><?= $staff['CanSchedule'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
@@ -2349,7 +2357,7 @@ var EvConfig = {
 	// The schedule as emitted in #evb-schedule-data (naive local datetimes), and the server's clock.
 	schedule:   (function() { try { return JSON.parse(document.getElementById('evb-schedule-data').textContent); } catch (e) { return []; } })(),
 	serverNow:  <?= json_encode(date('Y-m-d H:i')) ?>,
-	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona'], 'RoleName' => $s['RoleName'] ?? '']; }, $StaffList ?? []), JSON_INVALID_UTF8_SUBSTITUTE) ?>,
+	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona'], 'RoleName' => $s['RoleName'] ?? '', 'LeadCategories' => array_values($s['LeadCategories'] ?? [])]; }, $StaffList ?? []), JSON_INVALID_UTF8_SUBSTITUTE) ?>,
 	hasFees:    true,
 	fees:       <?= json_encode(array_map(function($f) { return ['AdmissionType' => $f['AdmissionType'], 'Cost' => (float)$f['Cost']]; }, $eventFees), JSON_INVALID_UTF8_SUBSTITUTE) ?>,
 	hasLinks:   true,
@@ -2416,6 +2424,17 @@ var EvConfig = {
 						<input type="checkbox" id="ev-staff-can-feast" style="width:auto;margin:0">
 						Can manage feast
 					</label>
+				</div>
+			</div>
+			<div class="ev-modal-row" style="margin-top:12px">
+				<div class="ev-modal-field ev-field-full">
+					<label id="ev-staff-lead-label">Category lead for</label>
+					<div id="ev-staff-lead-hint" class="evb-cat-hint">New schedule items in these categories will list this person as lead.</div>
+					<div id="ev-staff-lead-cats" class="evb-cat-toggles" role="group" aria-labelledby="ev-staff-lead-label" aria-describedby="ev-staff-lead-hint">
+						<?php foreach (($ScheduleCategories ?? []) as $leadCatName => $leadCatDef): ?>
+						<button type="button" class="evb-cat-toggle" data-category="<?= htmlspecialchars($leadCatName) ?>" aria-pressed="false" style="--evb-cat:<?= htmlspecialchars($leadCatDef['bold'] ?? '#616161') ?>"><span class="evb-cat-swatch" aria-hidden="true"></span><?= htmlspecialchars($leadCatName) ?></button>
+						<?php endforeach; ?>
+					</div>
 				</div>
 			</div>
 			<div id="ev-staff-error" class="ev-img-form-error" style="display:none;margin-top:10px"></div>
