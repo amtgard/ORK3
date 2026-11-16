@@ -68,3 +68,18 @@ test('early-morning items keep their board day through resize and repeat', () =>
   assert.deepEqual(C.resizeTimes(n, 'end', 1560), { StartTime: '2026-11-22 00:30', EndTime: '2026-11-22 02:00' });
   assert.deepEqual(C.repeatSlots(n, [n], 1560), [{ StartTime: '2026-11-22 01:30', EndTime: '2026-11-22 02:00' }]);
 });
+test('a drag moves an item by the columns crossed, from its own start day', () => {
+  // 4-6am belongs to board day 2026-11-20; its second segment shows in the 2026-11-21 column.
+  const x = it('2026-11-21 04:00', '2026-11-21 06:00');
+  assert.deepEqual(C.dragTarget(x, '2026-11-21', '2026-11-21', 0, 15), { StartTime: '2026-11-21 04:00', EndTime: '2026-11-21 06:00' });
+  assert.deepEqual(C.dragTarget(x, '2026-11-21', '2026-11-21', 6, 15), { StartTime: '2026-11-21 04:00', EndTime: '2026-11-21 06:00' });
+  assert.deepEqual(C.dragTarget(x, '2026-11-21', '2026-11-22', 0, 15), { StartTime: '2026-11-22 04:00', EndTime: '2026-11-22 06:00' });
+  const a = it('2026-11-20 09:00', '2026-11-20 10:00');
+  assert.deepEqual(C.dragTarget(a, '2026-11-20', '2026-11-21', 30, 15), { StartTime: '2026-11-21 09:30', EndTime: '2026-11-21 10:30' });
+  // Snapped to the step outside the half-step dead zone; clamped to the bounds.
+  const odd = it('2026-11-20 09:07', '2026-11-20 10:07');
+  assert.deepEqual(C.dragTarget(odd, '2026-11-20', '2026-11-20', 7, 15), { StartTime: '2026-11-20 09:07', EndTime: '2026-11-20 10:07' });
+  assert.deepEqual(C.dragTarget(odd, '2026-11-20', '2026-11-20', 8, 15), { StartTime: '2026-11-20 09:15', EndTime: '2026-11-20 10:15' });
+  assert.deepEqual(C.dragTarget(a, '2026-11-20', '2026-11-20', -300, 15, { min: 420, max: 1425 }),
+    { StartTime: '2026-11-20 07:00', EndTime: '2026-11-20 08:00' });
+});

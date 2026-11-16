@@ -1415,5 +1415,61 @@ test.describe('editing', () => {
     await page.keyboard.press('Alt+ArrowUp');
     await page.keyboard.press('ArrowRight');
     expect(await timesOf(page, `${PREFIX} nudge me`)).toEqual(['2026-11-21 15:10', '2026-11-21 16:25']);
+    // Shift+Up shortens it, never under 5 minutes.
+    for (let i = 0; i < 8; i++) await page.keyboard.press('Shift+ArrowUp');
+    expect(await timesOf(page, `${PREFIX} nudge me`)).toEqual(['2026-11-21 15:10', '2026-11-21 15:15']);
+  });
+  // Presses the middle of a block and moves the pointer by (dx, dy) in steps; returns the block's box.
+  async function pressAndMove(page: Page, title: string, dx: number, dy: number) {
+    const block = page.locator('.evb-block', { hasText: title });
+    await block.scrollIntoViewIfNeeded();
+    const box = (await block.boundingBox())!;
+    const x = box.x + box.width / 2, y = box.y + 10;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + dx, y + dy, { steps: 6 });
+    return { x, y };
+  }
+  test('releasing a drag beside the board cancels it', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const title = `${PREFIX} beside`;
+    await addViaQuickLine(page, `fri 10-11 ${title}`);
+    const p = await pressAndMove(page, title, 0, 40);
+    await expect(page.locator('.evb-drag-ghost')).toBeVisible();
+    // Over the hour gutter, left of every day column.
+    const frame = (await page.locator('.evb-scroller').boundingBox())!;
+    await page.mouse.move(frame.x + 20, p.y + 40, { steps: 4 });
+    await page.mouse.up();
+    await expect(page.locator('.evb-drag-ghost')).toHaveCount(0);
+    expect(await timesOf(page, title)).toEqual(['2026-11-20 10:00', '2026-11-20 11:00']);
+  });
+  test('dragging a block back to where it started saves nothing', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const title = `${PREFIX} round trip`;
+    await addViaQuickLine(page, `fri 12-1p ${title}`);
+    const pxPerMin = await page.evaluate(() => (window as any).EvBoardView.PX_PER_MIN);
+    let batches = 0;
+    page.on('request', r => { if (r.url().includes('schedule_batch')) batches++; });
+    const p = await pressAndMove(page, title, 0, 60 * pxPerMin);
+    await expect(page.locator('.evb-drag-ghost')).toBeVisible();
+    await page.mouse.move(p.x, p.y, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(1000);
+    expect(batches).toBe(0);
+    expect(await timesOf(page, title)).toEqual(['2026-11-20 12:00', '2026-11-20 13:00']);
+  });
+  test('a Shift-press on a block does not start a drag', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const title = `${PREFIX} shift press`;
+    await addViaQuickLine(page, `fri 4-5p ${title}`);
+    await page.keyboard.down('Shift');
+    await pressAndMove(page, title, 0, 40);
+    await expect(page.locator('.evb-drag-ghost')).toHaveCount(0);
+    await page.mouse.up();
+    await page.keyboard.up('Shift');
+    expect(await timesOf(page, title)).toEqual(['2026-11-20 16:00', '2026-11-20 17:00']);
   });
 });

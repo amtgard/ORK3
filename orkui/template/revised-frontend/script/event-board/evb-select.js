@@ -33,7 +33,6 @@
 
     var doc = win.document;
     var GAP = 6;            // px between the toolbar and its block
-    var GUTTER_PX = 48;     // the hour gutter covers the frame's left edge
     var MEAL_FIELDS = ['Menu', 'Cost', 'Dietary', 'Allergens'];
 
     var s = {
@@ -107,7 +106,7 @@
         if (!b || !scroller || typing()) { hideBar(); return; }
         var lr = s.layer.getBoundingClientRect(), r = b.getBoundingClientRect(), sr = scroller.getBoundingClientRect();
         var ft = sr.top + scroller.clientTop, fb = ft + scroller.clientHeight;
-        var vl = sr.left + scroller.clientLeft + GUTTER_PX, vr = sr.left + scroller.clientLeft + scroller.clientWidth;
+        var vl = sr.left + scroller.clientLeft + V().GUTTER_PX, vr = sr.left + scroller.clientLeft + scroller.clientWidth;
         if (r.bottom <= ft + V().HEAD_PX || r.top >= fb || r.right <= vl || r.left >= vr) { hideBar(); return; }
         s.bar.hidden = false;
         var h = s.bar.offsetHeight, w = s.bar.offsetWidth;

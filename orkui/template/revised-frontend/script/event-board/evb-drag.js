@@ -27,6 +27,7 @@
  *
  *   EvBoardDrag.attach(rootEl, api)   api = {store, getSelection, select, isEditing}
  *   EvBoardDrag.detach()
+ *   EvBoardDrag.isActive() -> bool   a gesture is in progress
  * Attached through EvBoardEdit.onEnter / onExit.
  */
 (function (root, factory) {
@@ -38,9 +39,7 @@
     var EDGE_PX = 40;       // auto-scroll zone at the frame's top and bottom
     var SCROLL_PX = 10;     // auto-scroll per frame
     var EDGE_DWELL_MS = 200; // how long the pointer stays in the zone before it scrolls
-    var GUTTER_PX = 48;     // the sticky hour gutter covers the frame's left edge
     var ROW = 15;           // a row of the board; a move may not start past the last
-    var DAY_MIN = 1440, FIRST_MIN = 300, LAST_MIN = 1740;
     var doc = win.document;
 
     var s = {
@@ -69,7 +68,7 @@
     // The board minute clamped to the axis and to the board day.
     function onAxis(min) {
         var b = V().board;
-        return clamp(min, Math.max(b.axisStart, FIRST_MIN), Math.min(b.axisEnd, LAST_MIN));
+        return clamp(min, Math.max(b.axisStart, C.BOARD_DAY_START), Math.min(b.axisEnd, C.BOARD_DAY_END));
     }
 
     // The shown day column at a viewport x, inside the frame's width (not under
@@ -79,7 +78,7 @@
         var scroller = s.rootEl.querySelector('.evb-scroller');
         if (!scroller) return null;
         var sr = scroller.getBoundingClientRect();
-        if (x < sr.left + GUTTER_PX || x > sr.right) return null;
+        if (x < sr.left + V().GUTTER_PX || x > sr.right) return null;
         var bodies = s.rootEl.querySelectorAll('.evb-day-body');
         for (var i = 0; i < bodies.length; i++) {
             if (!bodies[i].offsetParent) continue;
@@ -90,7 +89,7 @@
     }
 
     // A pointer delta (minutes) as a new edge: snapped to the step, unless the
-    // pointer is still within half a step of where it was pressed.
+    // pointer is still within half a step of where it was pressed (as C.dragTarget).
     function snapped(edge, delta, step) {
         return Math.abs(delta) < step / 2 ? edge : C.snap(edge + delta, step);
     }
@@ -103,6 +102,8 @@
 
     function onPointerDown(e) {
         if (e.pointerType === 'touch' || e.button !== 0 || s.g || !editing() || !V() || !V().board) return;
+        // Ctrl (a context menu on macOS), Cmd and Shift presses are not drags; Alt is the fine step.
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return;
         var t = e.target && e.target.closest ? e.target : null;
         var block = t && t.closest('.evb-block[data-cid]');
         var body = block && block.closest('.evb-day-body');
@@ -138,6 +139,11 @@
         g.x = e.clientX;
         g.y = e.clientY;
         g.alt = e.altKey;
+        // The button is no longer down (its release went elsewhere, a menu took it): the press is over.
+        if ((e.buttons & 1) === 0) {
+            if (g.active) cancel(); else s.g = null;
+            return;
+        }
         if (!g.active) {
             if (Math.abs(g.x - g.x0) <= DRAG_PX && Math.abs(g.y - g.y0) <= DRAG_PX) return;
             if (!editing()) { s.g = null; return; }
@@ -178,16 +184,19 @@
             return;
         }
         if (g.mode === 'move') {
-            var day = col.getAttribute('data-day');
-            var startMin = snapped(sp.start, onAxis(minuteAt(col, g.y)) - g.pressMin, step);
-            // The start stays on the axis: not above the first row, not past the last.
-            startMin = clamp(startMin, Math.max(b.axisStart, FIRST_MIN), Math.min(b.axisEnd - ROW, LAST_MIN));
-            g.times = C.moveTimes(g.item, day, startMin);
+            // The item moves by the columns the pointer crossed (from its own start
+            // day, whichever segment was pressed); its start stays on the axis: not
+            // above the first row, not past the last.
+            g.times = C.dragTarget(g.item, g.pressDay, col.getAttribute('data-day'),
+                onAxis(minuteAt(col, g.y)) - g.pressMin, step, {
+                    min: Math.max(b.axisStart, C.BOARD_DAY_START),
+                    max: Math.min(b.axisEnd - ROW, C.BOARD_DAY_END)
+                });
         } else {
             // The edge follows the pointer in its own day's column, whichever column the pointer is over.
             var body = bodyFor(g.pressDay);
             if (!body) return;
-            var off = C.diffDays(sp.day, g.pressDay) * DAY_MIN;
+            var off = C.diffDays(sp.day, g.pressDay) * C.DAY_MIN;
             var edge = g.mode === 'start' ? sp.start : sp.end;
             var to = snapped(edge, onAxis(minuteAt(body, g.y)) - g.pressMin, step);
             to = off + onAxis(to - off);
@@ -230,8 +239,10 @@
         if (!g || !g.active) return;
         var scroller = s.rootEl.querySelector('.evb-scroller');
         if (scroller) {
+            // The zones are at the visible edges: the frame's bottom is often below the window.
             var r = scroller.getBoundingClientRect(), before = scroller.scrollTop;
-            var dir = g.y < r.top + EDGE_PX ? -1 : g.y > r.bottom - EDGE_PX ? 1 : 0;
+            var top = Math.max(r.top, 0), bottom = Math.min(r.bottom, win.innerHeight);
+            var dir = g.y < top + EDGE_PX ? -1 : g.y > bottom - EDGE_PX ? 1 : 0;
             // A pointer that only passes through the zone (or a block grabbed
             // beside the edge and let go) scrolls nothing: it has to stay a moment.
             if (!dir) g.edgeSince = 0;
@@ -363,6 +374,8 @@
         on(doc, 'keyup', onKeyUp, true);
         on(win, 'click', onClick, true);
         on(win, 'blur', function () { if (s.g) cancel(); });
+        // A context menu takes the press (its release often never arrives).
+        on(doc, 'contextmenu', function () { if (s.g) cancel(); }, true);
     }
 
     function detach() {
@@ -390,6 +403,8 @@
 
     return {
         attach: attach,
-        detach: detach
+        detach: detach,
+        // A gesture is showing (Undo and Redo wait for it to end).
+        isActive: function () { return !!(s.g && s.g.active); }
     };
 });

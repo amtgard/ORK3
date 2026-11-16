@@ -21,6 +21,7 @@
     var TALL_MIN = 90;       // blocks this long show location and leads
     var LANE_MIN_PX = 110;   // narrowest a lane may get before the board scrolls
     var HEAD_PX = 34;        // the sticky day heads (.evb-head) cover the top of the frame
+    var GUTTER_PX = 48;      // the sticky hour gutter (.evb-gutter) covers its left edge
     var STORAGE_KEY = 'ev-sched-view-mode';
     var PHONE_QUERY = '(max-width: 700px)';
 
@@ -225,6 +226,7 @@
     var api = {
         PX_PER_MIN: PX_PER_MIN,
         HEAD_PX: HEAD_PX,
+        GUTTER_PX: GUTTER_PX,
         esc: esc,
         blockHtml: blockHtml,
         slotAt: slotAt,
@@ -445,7 +447,7 @@
         var scroller = g && g.offsetParent && state.rootEl && state.rootEl.querySelector('.evb-scroller');
         if (!scroller) return;
         var sr = scroller.getBoundingClientRect(), gr = g.getBoundingClientRect();
-        var head = HEAD_PX, gutter = 48, pad = 12; // the sticky day heads and hour gutter cover the frame's edges
+        var head = HEAD_PX, gutter = GUTTER_PX, pad = 12; // the sticky day heads and hour gutter cover the frame's edges
         if (gr.top < sr.top + head) scroller.scrollTop -= sr.top + head + pad - gr.top;
         else if (gr.bottom > sr.bottom) scroller.scrollTop += Math.min(gr.bottom - sr.bottom + pad, gr.top - sr.top - head - pad);
         if (gr.left < sr.left + gutter) scroller.scrollLeft -= sr.left + gutter + pad - gr.left;

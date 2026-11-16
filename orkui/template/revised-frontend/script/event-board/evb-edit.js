@@ -463,8 +463,10 @@
         return V().getView() === 'board';
     }
 
-    function undo() { if (state.store && !state.leaving) state.store.undo(); }
-    function redo() { if (state.store && !state.leaving) state.store.redo(); }
+    // Nothing is undone or redone under a drag in progress (evb-drag.js).
+    function dragging() { return !!(win.EvBoardDrag && win.EvBoardDrag.isActive && win.EvBoardDrag.isActive()); }
+    function undo() { if (state.store && !state.leaving && !dragging()) state.store.undo(); }
+    function redo() { if (state.store && !state.leaving && !dragging()) state.store.redo(); }
 
     function onKeyDown(e) {
         if (!state.editing || modalOpen() || !boardShown()) return;

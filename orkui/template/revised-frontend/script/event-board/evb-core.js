@@ -854,6 +854,20 @@
         return times(toDay, toStartMin, toStartMin + (sp.end - sp.start));
     }
 
+    // Where a dragged item goes. The pointer was pressed in the pressDay column
+    // and is now over pointerDay, deltaMin board minutes from where it was
+    // pressed. The item moves by as many days as the pointer crossed columns
+    // (from its own start day, whichever of its segments was pressed), and its
+    // start snaps to step, except within half a step of where it was. bounds
+    // ({min, max}, board minutes) clamps the new start.
+    function dragTarget(item, pressDay, pointerDay, deltaMin, step, bounds) {
+        var sp = span(item);
+        var day = addDays(sp.day, diffDays(pressDay, pointerDay));
+        var start = Math.abs(deltaMin) < step / 2 ? sp.start : snap(sp.start + deltaMin, step);
+        if (bounds) start = Math.max(bounds.min, Math.min(bounds.max, start));
+        return moveTimes(item, day, start);
+    }
+
     function shiftTimes(item, deltaMin, deltaDays) {
         var sp = span(item);
         return times(addDays(sp.day, deltaDays || 0), sp.start + deltaMin, sp.end + deltaMin);
@@ -938,6 +952,7 @@
         snap: snap,
         boardPos: boardPos,
         span: span,
+        dragTarget: dragTarget,
         moveTimes: moveTimes,
         shiftTimes: shiftTimes,
         resizeTimes: resizeTimes,
@@ -946,6 +961,8 @@
         pastePlan: pastePlan,
         clipboardText: clipboardText,
         BOARD_DAY_START: BOARD_DAY_START,
+        BOARD_DAY_END: BOARD_DAY_START + DAY_MIN, // 5:00am the next morning
+        DAY_MIN: DAY_MIN,
         CATEGORY_NAMES: CATEGORY_NAMES,
         CATEGORY_TAGS: CATEGORY_TAGS,
         resolveCategoryTag: resolveCategoryTag,
