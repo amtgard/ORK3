@@ -389,6 +389,104 @@ test.describe('editing', () => {
     await expect(page.locator('.evb-block', { hasText: '#cl' })).toHaveCount(0);
   });
 
+  // ---- Typing on the board ----
+
+  // Clicks the empty board at a time of day (HH:MM) in a day's column.
+  async function clickSlot(page: Page, day: string, hhmm: string) {
+    // Edit mode opens after a fetch, and widens the axis when it does.
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    const body = page.locator(`.evb-day-body[data-day="${day}"]`);
+    const [h, m] = hhmm.split(':').map(Number);
+    const y = await page.evaluate(([hh, mm]) => {
+      const w = window as any;
+      return ((hh * 60 + mm) - w.EvBoardView.board.axisStart) * w.EvBoardView.PX_PER_MIN + 4;
+    }, [h, m]);
+    await body.click({ position: { x: 20, y } });
+  }
+  // The occurrence's last day (YYYY-MM-DD).
+  async function lastDay(page: Page): Promise<string> {
+    return page.evaluate(() => String((window as any).EvConfig.eventEnd).slice(0, 10));
+  }
+
+  test('click, type, Enter, type, Enter makes a run of items', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const SUNDAY = await lastDay(page);
+    await page.locator('.evb-edit-btn').click();
+    await clickSlot(page, SUNDAY, '10:00');
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await expect(editor).toBeFocused();
+    await editor.type(`class: ${PREFIX} first`);
+    await expect(page.locator('.evb-block-editing')).toHaveAttribute('data-category', 'Class');
+    await editor.press('Enter');
+    await expect(editor).toBeFocused();
+    await editor.type(`${PREFIX} second`);
+    await editor.press('Enter');
+    await editor.press('Escape');
+    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} first` })).toContainText('10–11a');
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} second` })).toContainText('11a–12p');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+  });
+
+  test('typing a time inside a block retimes it; Tab starts one alongside', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const SUNDAY = await lastDay(page);
+    await page.locator('.evb-edit-btn').click();
+    await clickSlot(page, SUNDAY, '13:00');
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await editor.type(`2-2:30 ${PREFIX} retimed`);
+    await editor.press('Tab');
+    await editor.type(`${PREFIX} beside`);
+    await editor.press('Enter');
+    await editor.press('Escape');
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} retimed` })).toContainText('2–2:30p');
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} beside` })).toContainText('2–2:30p');
+  });
+
+  test('Escape on a fresh block adds nothing', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const SUNDAY = await lastDay(page);
+    await page.locator('.evb-edit-btn').click();
+    const before = await page.locator('.evb-block').count();
+    await clickSlot(page, SUNDAY, '15:00');
+    await page.locator('.evb-block-editing .evb-entry-input').press('Escape');
+    expect(await page.locator('.evb-block').count()).toBe(before);
+  });
+
+  test('dragging sets the length; clicking into the quick line keeps what was typed', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    const SUNDAY = await lastDay(page);
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    // Bring 5pm to the middle of the board's frame, then work in viewport points.
+    await page.evaluate(day => {
+      const w = window as any;
+      const s = document.querySelector('.evb-scroller') as HTMLElement;
+      s.scrollIntoView({ block: 'end' });
+      s.scrollTop = (17 * 60 - w.EvBoardView.board.axisStart) * w.EvBoardView.PX_PER_MIN - s.clientHeight / 2;
+    }, SUNDAY);
+    const at = (hh: number, mm: number) => page.evaluate(([day, h, m]) => {
+      const w = window as any;
+      const r = document.querySelector(`.evb-day-body[data-day="${day}"]`)!.getBoundingClientRect();
+      return { x: r.left + 20, y: r.top + ((+h * 60 + +m) - w.EvBoardView.board.axisStart) * w.EvBoardView.PX_PER_MIN };
+    }, [SUNDAY, hh, mm] as [string, number, number]);
+    let p = await at(17, 0);
+    await page.mouse.move(p.x, p.y + 4);
+    await expect(page.locator('.evb-slot-hover')).toHaveCount(1);
+    await page.mouse.down();
+    p = await at(18, 0);
+    await page.mouse.move(p.x, p.y, { steps: 4 });
+    p = await at(18, 20);
+    await page.mouse.move(p.x, p.y, { steps: 4 });
+    await page.mouse.up();
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await expect(editor).toBeFocused();
+    await editor.type(`${PREFIX} dragged`);
+    await page.locator('.evb-quickline .evb-entry-input').click();
+    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} dragged` })).toContainText('5–6:30p');
+  });
+
   test('returning to the tab picks up changes made elsewhere', async ({ page, context }) => {
     await openBoard(page, EDIT_EVENT);
     await page.locator('.evb-edit-btn').click();

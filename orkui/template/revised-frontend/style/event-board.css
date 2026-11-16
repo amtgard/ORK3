@@ -350,6 +350,55 @@ html[data-theme="dark"] .evb-entry-option-active { background: #4a5568; }
     outline: 2px dashed rgba(255, 255, 255, 0.95); outline-offset: -4px;
 }
 
+/* ---- Typing on the board (evb-type.js) ---- */
+.evb-editing .evb-day-body { cursor: cell; }
+/* The empty slot under the pointer, as tall as the block a click would open;
+   while dragging it shows the length being chosen. */
+.evb-slot-hover {
+    position: absolute; left: 2px; right: 2px; box-sizing: border-box; pointer-events: none;
+    padding: 2px 6px; border-radius: 5px;
+    background: rgba(66, 153, 225, 0.12); border: 1px dashed rgba(43, 108, 176, 0.7);
+    font-size: 10px; font-weight: 700; line-height: 13px; color: #2b6cb0;
+}
+.evb-slot-hover-drag { background: rgba(66, 153, 225, 0.22); border-style: solid; }
+html[data-theme="dark"] .evb-slot-hover { background: rgba(99, 179, 237, 0.14); border-color: rgba(144, 205, 244, 0.75); color: #90cdf4; }
+html[data-theme="dark"] .evb-slot-hover-drag { background: rgba(99, 179, 237, 0.26); }
+/* The board lays the block being typed out as an invisible placeholder ... */
+.evb-block.evb-placeholder { visibility: hidden; }
+/* ... and the real block sits over it in a layer outside the re-rendered board,
+   under the sticky day heads and hour gutter (z-index 2 and up). */
+.evb-type-layer { position: relative; z-index: 1; height: 0; }
+.evb-type-block[hidden] { display: none; }
+.evb-type-layer .evb-block.evb-block-editing,
+.evb-type-layer .evb-block.evb-block-editing:hover {
+    cursor: text; padding: 3px 6px;
+    box-shadow: inset 0 0 0 2px #fff, 0 3px 10px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="dark"] .evb-type-layer .evb-block.evb-block-editing { box-shadow: inset 0 0 0 2px #fff, 0 3px 10px rgba(0, 0, 0, 0.6); }
+.evb-block-editing .evb-entry .evb-entry-input,
+.evb-block-editing .evb-entry .evb-entry-input:focus {
+    height: 15px; padding: 0; border: none; border-radius: 0; box-shadow: none;
+    background: transparent; color: #fff; caret-color: #fff;
+    font-size: 12px; font-weight: 650; line-height: 15px;
+}
+/* The site's dark input rule (html[data-theme="dark"] #theme_container input[type="text"]) carries an id. */
+html[data-theme="dark"] #theme_container .evb-block-editing .evb-entry .evb-entry-input {
+    background-color: transparent; color: #fff; border: none;
+}
+.evb-block-editing .evb-entry .evb-entry-input::placeholder { color: rgba(255, 255, 255, 0.8); }
+.evb-block-editing .evb-entry-invalid .evb-entry-input { border: none; }
+/* The chips and suggestions float just below the block, over the board. */
+.evb-type-pop {
+    position: absolute; z-index: var(--z-dropdown, 300);
+    width: max-content; min-width: 240px; max-width: min(420px, calc(100vw - 24px)); pointer-events: none;
+}
+.evb-type-pop[hidden] { display: none; }
+.evb-type-pop > * { pointer-events: auto; }
+.evb-type-pop .evb-entry-chips { min-height: 0; margin-top: 0; }
+.evb-type-pop .evb-chip { box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2); }
+html[data-theme="dark"] .evb-type-pop .evb-chip { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+.evb-type-pop .evb-entry-menu { position: static; margin-top: 4px; }
+
 /* ---- Phones: one day at a time, the board scrolls inside its own frame ---- */
 @media (max-width: 700px) {
     .evb-day-pills .evb-day-pill-all { display: none; }

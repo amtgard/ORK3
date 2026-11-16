@@ -9,6 +9,14 @@
  *   EvBoardEdit.store            the store while editing, else null
  *   EvBoardEdit.entryContext(overrides) -> parseEntry ctx built from the store
  *   EvBoardEdit.refresh()        re-read the schedule when nothing is unsaved
+ *
+ * Other Edit-mode surfaces (evb-type.js, ...) attach through three hooks, each
+ * called with the same edit context {store, root, head, quickLine,
+ * entryContext, add, addNotice} (see editContext below):
+ *   EvBoardEdit.onEnter(fn)      after Edit mode opens
+ *   EvBoardEdit.onBeforeExit(fn) when Done is pressed, before anything else;
+ *                                returning false keeps Edit mode open
+ *   EvBoardEdit.onExit(fn)       as Edit mode closes, before the store goes
  */
 (function (root, factory) {
     root.EvBoardEdit = factory(root.EvBoardCore, root);
@@ -37,6 +45,7 @@
         unloadBound: false
     };
     var api = { store: null };
+    var hooks = { enter: [], beforeExit: [], exit: [] };
 
     function V() { return win.EvBoardView; }
     function cfg() { return win.EvConfig || {}; }
@@ -172,6 +181,13 @@
             row(kbd('↑') + kbd('↓') + ' ' + kbd('Tab'), 'choose a suggestion') +
             row(kbd(MOD + ' Z'), 'undo') +
             row(kbd('Shift ' + MOD + ' Z'), 'redo') +
+            '</tbody></table>' +
+            '<div class="evb-help-title">On the board</div>' +
+            '<table class="evb-help-table"><tbody>' +
+            row('Click', 'an empty time to type an item there; drag for its length') +
+            row(kbd('Enter'), 'add it and start the next one after it') +
+            row(kbd('Tab'), 'add it and start one alongside') +
+            row(kbd('Esc'), 'stop') +
             '</tbody></table>';
     }
 
@@ -281,7 +297,10 @@
         var restore = null;
         if (r.kind === 'add' && r.item) {
             var text = C.formatEntry(r.item, { withDay: true });
-            if (!state.entry.getText().trim()) {
+            // Someone typing elsewhere (a block on the board) keeps the keyboard.
+            var a = doc.activeElement;
+            var typingElsewhere = isTextField(a) && a !== state.entry.input;
+            if (!state.entry.getText().trim() && !typingElsewhere) {
                 state.entry.setText(text);
                 state.entry.focus();
             } else {
@@ -307,6 +326,20 @@
         V().setGhosts(r && r.ok ? [itemFrom(r)] : []);
     }
 
+    // Add a valid parse as an item; the quick line's day and "then" follow it.
+    function addParsed(r) {
+        var cid;
+        state.committing = true;
+        try {
+            cid = state.store.add(itemFrom(r));
+            state.recent.push({ cid: cid, id: 0 });
+        } finally {
+            state.committing = false;
+        }
+        setDefaultDay(r.day);
+        return cid;
+    }
+
     function onCommit(r) {
         if (state.leaving) return false;
         if (!r.ok) {
@@ -314,16 +347,32 @@
             setDefaultDay(r.setDay);
             return true;
         }
-        state.committing = true;
-        try {
-            var cid = state.store.add(itemFrom(r));
-            state.recent.push({ cid: cid, id: 0 });
-        } finally {
-            state.committing = false;
-        }
         V().setGhosts([]);
-        setDefaultDay(r.day);
+        addParsed(r);
         return true;
+    }
+
+    // ---- hooks for the other Edit-mode surfaces ----
+
+    function editContext() {
+        return {
+            store: state.store,
+            root: doc.getElementById('evb-root'),
+            head: state.head,
+            quickLine: state.entry,
+            entryContext: entryContext,
+            add: addParsed,
+            addNotice: addNotice
+        };
+    }
+
+    // Runs each hook; true unless one returned false.
+    function runHooks(list) {
+        var ctx = editContext(), ok = true;
+        list.slice().forEach(function (fn) {
+            try { if (fn(ctx) === false) ok = false; } catch (e) { if (win.console) win.console.error(e); }
+        });
+        return ok;
     }
 
     // ---- page-level handlers (bound while editing) ----
@@ -358,8 +407,9 @@
             return;
         }
         if ((e.metaKey || e.ctrlKey) && !e.altKey && String(e.key).toLowerCase() === 'z') {
-            // Text fields keep their own undo; an empty quick line has none, so it undoes the board.
-            var emptyLine = state.entry && t === state.entry.input && !state.entry.getText();
+            // Text fields keep their own undo; an empty quick line (or block being
+            // typed on the board) has none, so it undoes the board.
+            var emptyLine = state.entry && (t === state.entry.input || !!(t.closest && t.closest('.evb-block-editing'))) && !t.value;
             if (isTextField(t) && !emptyLine) return;
             e.preventDefault();
             if (e.shiftKey) redo(); else undo();
@@ -478,9 +528,11 @@
         doc.addEventListener('click', onDocClick);
         win.addEventListener('focus', onFocus);
         state.entry.focus();
+        runHooks(hooks.enter);
     }
 
     function unmount() {
+        runHooks(hooks.exit);
         state.offs.forEach(function (off) { off(); });
         state.offs = [];
         doc.removeEventListener('keydown', onKeyDown);
@@ -571,6 +623,7 @@
     function exit() {
         if (!state.editing) return Promise.resolve();
         if (state.leaving) return state.leaving;
+        if (!runHooks(hooks.beforeExit)) return Promise.resolve();
         // Nothing typed is dropped: a complete line is added first, a line with no
         // title stays, and a line that only names a day applies nothing.
         if (state.entry.getText().trim()) {
@@ -644,5 +697,8 @@
     api.isEditing = function () { return state.editing; };
     api.entryContext = entryContext;
     api.refresh = refresh;
+    api.onEnter = function (fn) { hooks.enter.push(fn); };
+    api.onBeforeExit = function (fn) { hooks.beforeExit.push(fn); };
+    api.onExit = function (fn) { hooks.exit.push(fn); };
     return api;
 });

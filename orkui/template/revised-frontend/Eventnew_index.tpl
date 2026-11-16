@@ -2823,6 +2823,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-store.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-store.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-entry.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-entry.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-edit.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-edit.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-type.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-type.js') ?>"></script>
 <?php endif; ?>
 <script>
 (function() {

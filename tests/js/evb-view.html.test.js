@@ -103,3 +103,18 @@ test('a ghost block is marked, dashed and kept out of the tab order', () => {
   assert.ok(!/tabindex="0"/.test(h));
   assert.ok(!/data-cid=/.test(h));
 });
+test('slotAt floors a pixel offset to the step', () => {
+  assert.equal(V.slotAt(0, 420, 15), 420);
+  assert.equal(V.slotAt(17.9, 420, 15), 420);
+  assert.equal(V.slotAt(18, 420, 15), 435);
+  assert.equal(V.slotAt(100, 540, 15), 615);
+  assert.equal(V.slotAt(-5, 540, 15), 540);
+});
+test('a placeholder block holds a place in the layout but is not a block anyone can use', () => {
+  const h = V.blockHtml(seg({ EventScheduleId: 0, cid: 'x', Title: '', Category: 'Class', Leads: [] }), cats, 0, { placeholder: true });
+  assert.match(h, /class="evb-block[^"]*\bevb-placeholder\b/);
+  assert.ok(!/evb-block-editing/.test(h));
+  assert.match(h, /aria-hidden="true"/);
+  assert.ok(!/tabindex="0"/.test(h));
+  assert.ok(!/data-cid=/.test(h));
+});

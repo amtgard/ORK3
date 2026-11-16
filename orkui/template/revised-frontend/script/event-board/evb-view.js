@@ -38,11 +38,21 @@
         return (def && def.bold) || '#616161';
     }
 
+    // The minute at a vertical offset (px) inside a day body, floored to step
+    // minutes and never above the axis start.
+    function slotAt(offsetY, axisStart, step) {
+        var steps = Math.floor(Math.max(0, offsetY) / PX_PER_MIN / step + 1e-9);
+        return axisStart + steps * step;
+    }
+
     // One block for one segment. axisStart (minutes) sets its top; it defaults to
     // 0 so the markup stays testable without a board. opts.ghost draws the dashed
     // preview of an item not yet added: not focusable and hidden from assistive tech.
+    // opts.placeholder holds the place of the block being typed (evb-type.js
+    // draws the real one over it): laid out like an item, but invisible.
     function blockHtml(seg, catsByName, axisStart, opts) {
-        var ghost = !!(opts && opts.ghost);
+        var placeholder = !!(opts && opts.placeholder);
+        var ghost = !!(opts && opts.ghost) || placeholder;
         var item = seg.item || {};
         var cat = catName(item.Category, catsByName);
         var sec = item.SecondaryCategory && item.SecondaryCategory !== cat &&
@@ -61,7 +71,8 @@
         if (!seg.isLast) cls += ' evb-block-continues';
         if (!seg.isFirst) cls += ' evb-block-continued';
         if (sec) cls += ' evb-block-striped';
-        if (ghost) cls += ' evb-ghost';
+        if (placeholder) cls += ' evb-placeholder';
+        else if (ghost) cls += ' evb-ghost';
 
         // A 1px inset top and bottom keeps back-to-back items reading as two blocks.
         var style = 'top:' + (top + 1).toFixed(1) + 'px;height:' + (height - 2).toFixed(1) + 'px;' +
@@ -204,6 +215,7 @@
         desiredView: 'list',
         editing: false,    // Edit mode: the axis widens and blocks open no popover
         ghosts: [],        // preview items drawn dashed among the real ones
+        placeholder: null, // the item being typed on the board (evb-type.js), or null
         view: 'list',
         popover: null,     // { el, block, id } while a popover is open
         nowBase: 0,        // performance.now() when the page's serverNow was taken
@@ -213,6 +225,7 @@
         PX_PER_MIN: PX_PER_MIN,
         esc: esc,
         blockHtml: blockHtml,
+        slotAt: slotAt,
         autolink: autolink,
         popoverHtml: popoverHtml,
         nowMinute: nowMinute,
@@ -317,7 +330,8 @@
         closePopover(false);
         var c = cfg();
         var ghosts = state.ghosts;
-        var board = C.buildBoard(state.items.concat(ghosts), { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '', editing: state.editing });
+        var ph = state.editing ? state.placeholder : null;
+        var board = C.buildBoard(state.items.concat(ghosts, ph ? [ph] : []), { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '', editing: state.editing });
         // Re-rendering replaces the scroller; keep the same minute and day position in view.
         var oldScroller = state.rootEl.querySelector('.evb-scroller');
         var keep = oldScroller && api.board ? {
@@ -345,7 +359,8 @@
             h += '<div class="evb-head">' + esc(C.dayLabelLong(d.day)) + '</div>';
             h += '<div class="evb-day-body" data-day="' + esc(d.day) + '" style="' + bodyStyle + '">';
             d.segs.forEach(function (sg) {
-                h += blockHtml(sg, state.catsByName, board.axisStart, { ghost: ghosts.indexOf(sg.item) >= 0 });
+                h += blockHtml(sg, state.catsByName, board.axisStart,
+                    { ghost: ghosts.indexOf(sg.item) >= 0, placeholder: sg.item === ph });
             });
             h += '</div></div>';
         });
@@ -359,7 +374,7 @@
         applyFilter();
         applyDay();
         renderNow();
-        revealGhost();
+        reveal(state.rootEl.querySelector('.evb-ghost'));
         state.renderCbs.forEach(function (fn) {
             try { fn(board); } catch (e) { if (win.console) win.console.error(e); }
         });
@@ -392,7 +407,7 @@
     // Edit mode: the axis widens to 7am-midnight and a click on a block opens no popover.
     function setEditing(on) {
         state.editing = !!on;
-        if (!state.editing) state.ghosts = [];
+        if (!state.editing) { state.ghosts = []; state.placeholder = null; }
         if (state.rootEl) state.rootEl.classList.toggle('evb-editing', state.editing);
         render();
     }
@@ -406,10 +421,18 @@
         render();
     }
 
-    // Scroll the board's own frame (never the page) so the ghost is in view.
-    function revealGhost() {
-        var g = state.rootEl && state.rootEl.querySelector('.evb-ghost');
-        var scroller = g && g.offsetParent && state.rootEl.querySelector('.evb-scroller');
+    // The block being typed on the board ({StartTime, EndTime, Category}), laid
+    // out among the real ones as an invisible .evb-placeholder; null removes it.
+    function setPlaceholder(item) {
+        if (!item && !state.placeholder) return;
+        state.placeholder = item || null;
+        render();
+    }
+
+    // Scroll the board's own frame (never the page) so a block (a ghost, the
+    // placeholder) is in view.
+    function reveal(g) {
+        var scroller = g && g.offsetParent && state.rootEl && state.rootEl.querySelector('.evb-scroller');
         if (!scroller) return;
         var sr = scroller.getBoundingClientRect(), gr = g.getBoundingClientRect();
         var head = 34, gutter = 48, pad = 12; // the sticky day heads and hour gutter cover the frame's edges
@@ -682,6 +705,8 @@
     api.setEditing = setEditing;
     api.isEditing = function () { return state.editing; };
     api.setGhosts = setGhosts;
+    api.setPlaceholder = setPlaceholder;
+    api.reveal = reveal;
     api.getItems = function () { return state.items; };
     api.setView = setView;
     api.getView = getView;
