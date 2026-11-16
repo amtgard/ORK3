@@ -6768,6 +6768,9 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* Kingdom overview table */
 .cp-overview-wrap { background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
 .cp-overview-search input { padding: 5px 10px; border: 1.5px solid var(--ork-input-border); border-radius: 6px; font-size: 13px; width: 180px; background: var(--ork-card-bg); }
+/* Phone: type control takes its own full-width line under the heading. The Admin layout is wider than the
+   viewport at this width (pre-existing), so cap at the viewport rather than the header's width. */
+@media (max-width: 600px) { .cp-overview-header .orn-type-control { flex: 0 0 auto; width: min(100%, calc(100vw - 56px)); } }
 .cp-kd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .cp-kd-table thead th { padding: 9px 14px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ork-text-muted); background: var(--ork-bg-secondary); border-bottom: 1px solid var(--ork-divider); white-space: nowrap; cursor: pointer; user-select: none; }
 .cp-kd-table thead th:hover { color: #4a5568; }
