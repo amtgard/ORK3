@@ -15,6 +15,12 @@
  * held near the top or bottom of the board's frame (for 200ms) scrolls it while
  * the gesture lasts.
  *
+ * The fill handle (.evb-fill-handle, drawn by evb-select.js at the bottom right
+ * of a single selected block) repeats the item down its day: dragged down, it
+ * previews the copies EvBoardCore.repeatSlots would make (.evb-fill-ghost) up to
+ * the pointer, and release adds them as full copies and selects them. A pointer
+ * that never passes the first slot adds nothing.
+ *
  * evb-type.js owns a press on empty day space (its target is the day body
  * itself); this file owns one that starts on a block, so one press has one owner.
  *
@@ -22,10 +28,12 @@
  * a block: the gesture is kept by cid, pointer capture is on #evb-root, and the
  * ghost is an element of this file's own, put back into its day after each render.
  *
- * Every gesture ends in one store.batch (one save, one undo step) that sends
- * only StartTime and EndTime; one that ends where it began changes nothing.
+ * Every gesture ends in one store.batch (one save, one undo step): a move or a
+ * resize sends only StartTime and EndTime, and one that ends where it began
+ * changes nothing; a repeat adds its copies.
  *
- *   EvBoardDrag.attach(rootEl, api)   api = {store, getSelection, select, isEditing}
+ *   EvBoardDrag.attach(rootEl, api)   api = {store, getSelection, select, isEditing,
+ *                                            copyItem(item, times), atLeastFive(item)}
  *   EvBoardDrag.detach()
  *   EvBoardDrag.isActive() -> bool   a gesture is in progress
  * Attached through EvBoardEdit.onEnter / onExit.
@@ -46,9 +54,11 @@
         rootEl: null,
         api: null,
         g: null,            // the press or gesture in progress
-        ghost: null,        // .evb-drag-ghost while a gesture shows
+        ghost: null,        // .evb-drag-ghost while a move or resize shows (a repeat's model)
+        fills: [],          // .evb-fill-ghost elements while a repeat shows
         raf: 0,
         swallow: false,     // a drag just ended: swallow its click (dispatched with the release)
+        escUp: null,        // the pointer of a gesture cancelled with Esc, until it is released
         offs: []
     };
 
@@ -101,6 +111,7 @@
     // ---- the gesture ----
 
     function onPointerDown(e) {
+        s.escUp = null;
         if (e.pointerType === 'touch' || e.button !== 0 || s.g || !editing() || !V() || !V().board) return;
         // Ctrl (a context menu on macOS), Cmd and Shift presses are not drags; Alt is the fine step.
         if (e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -111,11 +122,16 @@
         var cid = block.getAttribute('data-cid'), item = s.api.store.get(cid);
         var sp = item && C.span(item);
         if (!sp) return;
-        var grip = t.closest('.evb-resize-top, .evb-resize-bottom');
+        var fill = t.closest('.evb-fill-handle');
+        var grip = !fill && t.closest('.evb-resize-top, .evb-resize-bottom');
+        var mode = fill ? 'fill' : grip ? (grip.classList.contains('evb-resize-top') ? 'start' : 'end') : 'move';
+        var sel = s.api.getSelection() || [];
         s.g = {
             id: e.pointerId,
             cid: cid,
-            mode: grip ? (grip.classList.contains('evb-resize-top') ? 'start' : 'end') : 'move',
+            mode: mode,
+            // The blocks dimmed while it lasts: a move takes the whole selection along.
+            group: mode === 'fill' ? [] : mode === 'move' && sel.indexOf(cid) >= 0 ? sel.slice() : [cid],
             item: item,
             sp: sp,
             pressDay: body.getAttribute('data-day'),
@@ -127,10 +143,12 @@
             active: false,
             edgeSince: 0,   // when the pointer entered an auto-scroll zone
             times: null,    // the item's new {StartTime, EndTime}, or null outside every column
-            day: null       // the day the ghost is drawn in
+            day: null,      // the day the ghost is drawn in
+            slots: [],      // a repeat's copies: [{StartTime, EndTime}]
+            dayItems: null  // a repeat: the items on the item's board day
         };
-        // A grip press is a resize, never a text selection or a focus change.
-        if (grip) e.preventDefault();
+        // A grip or handle press is a gesture, never a text selection or a focus change.
+        if (grip || fill) e.preventDefault();
     }
 
     function onPointerMove(e) {
@@ -157,24 +175,52 @@
         g.active = true;
         try { s.rootEl.setPointerCapture(g.id); } catch (err) { /* capture is a nicety */ }
         s.rootEl.classList.add('evb-dragging');
-        s.rootEl.classList.toggle('evb-dragging-resize', g.mode !== 'move');
-        var ghost = g.proto.cloneNode(true);
+        s.rootEl.classList.toggle('evb-dragging-resize', g.mode === 'start' || g.mode === 'end');
+        s.rootEl.classList.toggle('evb-dragging-fill', g.mode === 'fill');
+        s.ghost = ghostOf(g.proto, g.mode === 'fill' ? 'evb-fill-ghost' : 'evb-drag-ghost');
+        g.proto = null;
+        if (g.mode === 'fill') g.dayItems = dayItems(g.sp.day);
+        if (!s.raf) s.raf = win.requestAnimationFrame(tick);
+    }
+
+    // A copy of a block to draw a preview with: its lane and look, none of its
+    // identity, grips or handle.
+    function ghostOf(block, cls) {
+        var ghost = block.cloneNode(true);
         ['evb-selected', 'evb-dim', 'evb-drag-source', 'evb-block-continues', 'evb-block-continued'].forEach(function (c) {
             ghost.classList.remove(c);
         });
-        ghost.classList.add('evb-drag-ghost');
+        ghost.classList.add(cls);
         ['data-cid', 'role', 'tabindex', 'aria-pressed', 'aria-label'].forEach(function (a) { ghost.removeAttribute(a); });
         ghost.setAttribute('aria-hidden', 'true');
-        ghost.querySelectorAll('.evb-resize-top, .evb-resize-bottom').forEach(function (n) { n.parentNode.removeChild(n); });
-        g.proto = null;
-        s.ghost = ghost;
-        if (!s.raf) s.raf = win.requestAnimationFrame(tick);
+        ghost.querySelectorAll('.evb-resize-top, .evb-resize-bottom, .evb-fill-handle').forEach(function (n) { n.parentNode.removeChild(n); });
+        return ghost;
+    }
+
+    // The items whose start is on a board day.
+    function dayItems(day) {
+        return s.api.store.items().filter(function (it) {
+            var p = C.boardPos(it.StartTime);
+            return p && p.day === day;
+        });
+    }
+
+    // Put a preview block over its times in a day body (at least a row tall).
+    function placeGhost(el, body, times) {
+        var sp = C.span({ StartTime: times.StartTime, EndTime: times.EndTime });
+        var px = V().PX_PER_MIN;
+        el.style.top = ((sp.start - V().board.axisStart) * px + 1).toFixed(1) + 'px';
+        el.style.height = (Math.max(sp.end - sp.start, 15) * px - 2).toFixed(1) + 'px';
+        var meta = el.querySelector('.evb-block-meta');
+        if (meta) meta.textContent = C.fmtRange(sp.start, sp.end);
+        if (el.parentNode !== body) body.appendChild(el);
     }
 
     // Work out where the item would go from the pointer, then draw it.
     function update() {
         var g = s.g;
         if (!g || !g.active) return;
+        if (g.mode === 'fill') { updateFill(g); return; }
         var step = g.alt ? 5 : 15, b = V().board, sp = g.sp;
         var col = columnAt(g.x);
         if (!col) {
@@ -206,13 +252,42 @@
         draw();
     }
 
-    // The ghost in its day, the original dimmed, the target day lit. Run after
-    // every render too, which replaces all three.
+    // A repeat: the copies that fit between the item and the pointer (on the
+    // item's own board day, never past the axis), whichever column the pointer is over.
+    function updateFill(g) {
+        var body = bodyFor(g.pressDay), b = V().board;
+        var item = s.api.store.get(g.cid);
+        if (!body || !item) { g.slots = []; drawFill(); return; }
+        // The pressed segment may be on the item's second day: count in its first day's minutes.
+        var off = C.diffDays(g.sp.day, g.pressDay) * C.DAY_MIN;
+        var until = Math.min(minuteAt(body, g.y) + off, b.axisEnd, C.BOARD_DAY_END);
+        g.slots = C.repeatSlots(s.api.atLeastFive(item), g.dayItems || [], until);
+        drawFill();
+    }
+
+    // The repeat's previews, one per copy, in the item's day.
+    function drawFill() {
+        var g = s.g;
+        if (!g || !g.active || !s.ghost) return;
+        var body = bodyFor(g.sp.day), n = body ? g.slots.length : 0;
+        while (s.fills.length > n) {
+            var el = s.fills.pop();
+            if (el.parentNode) el.parentNode.removeChild(el);
+        }
+        for (var i = 0; i < n; i++) {
+            if (!s.fills[i]) s.fills[i] = s.ghost.cloneNode(true);
+            placeGhost(s.fills[i], body, g.slots[i]);
+        }
+    }
+
+    // The ghost in its day, the original (and every item moved with it) dimmed,
+    // the target day lit. Run after every render too, which replaces all three.
     function draw() {
         var g = s.g;
         if (!g || !g.active || !s.ghost) return;
+        if (g.mode === 'fill') { drawFill(); return; }
         s.rootEl.querySelectorAll('.evb-block[data-cid]').forEach(function (bl) {
-            bl.classList.toggle('evb-drag-source', bl.getAttribute('data-cid') === g.cid);
+            bl.classList.toggle('evb-drag-source', g.group.indexOf(bl.getAttribute('data-cid')) >= 0);
         });
         s.rootEl.querySelectorAll('.evb-day').forEach(function (d) {
             d.classList.toggle('evb-drop-target', !!g.day && d.getAttribute('data-day') === g.day);
@@ -222,13 +297,7 @@
             if (s.ghost.parentNode) s.ghost.parentNode.removeChild(s.ghost);
             return;
         }
-        var sp = C.span({ StartTime: g.times.StartTime, EndTime: g.times.EndTime });
-        var px = V().PX_PER_MIN;
-        s.ghost.style.top = ((sp.start - V().board.axisStart) * px + 1).toFixed(1) + 'px';
-        s.ghost.style.height = (Math.max(sp.end - sp.start, 15) * px - 2).toFixed(1) + 'px';
-        var meta = s.ghost.querySelector('.evb-block-meta');
-        if (meta) meta.textContent = C.fmtRange(sp.start, sp.end);
-        if (s.ghost.parentNode !== body) body.appendChild(s.ghost);
+        placeGhost(s.ghost, body, g.times);
     }
 
     // While the gesture lasts: scroll the frame when the pointer is near its top
@@ -253,8 +322,8 @@
         s.raf = win.requestAnimationFrame(tick);
     }
 
-    // Ends the gesture's display. A gesture that was showing swallows the click
-    // that follows unless it was cancelled with Esc.
+    // Ends the gesture's display. A released gesture that was showing swallows the
+    // click that follows (one cancelled with Esc swallows it on its release).
     function finish(swallow) {
         var g = s.g;
         s.g = null;
@@ -264,27 +333,45 @@
         try { s.rootEl.releasePointerCapture(g.id); } catch (err) { /* already released */ }
         if (s.ghost && s.ghost.parentNode) s.ghost.parentNode.removeChild(s.ghost);
         s.ghost = null;
-        s.rootEl.classList.remove('evb-dragging', 'evb-dragging-resize');
+        s.fills.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
+        s.fills = [];
+        s.rootEl.classList.remove('evb-dragging', 'evb-dragging-resize', 'evb-dragging-fill');
         s.rootEl.querySelectorAll('.evb-drag-source').forEach(function (bl) { bl.classList.remove('evb-drag-source'); });
         s.rootEl.querySelectorAll('.evb-drop-target').forEach(function (d) { d.classList.remove('evb-drop-target'); });
-        if (swallow) {
-            // The browser sends the release's click in the same task; anything later is a new click.
-            s.swallow = true;
-            win.setTimeout(function () { s.swallow = false; }, 0);
-        }
+        if (swallow) swallowClick();
         return g;
+    }
+
+    // The browser sends the release's click in the same task; anything later is a new click.
+    function swallowClick() {
+        s.swallow = true;
+        win.setTimeout(function () { s.swallow = false; }, 0);
     }
 
     function onPointerUp(e) {
         var g = s.g;
+        // The release of a gesture cancelled with Esc: its click neither selects nor clears.
+        if (!g && s.escUp === e.pointerId) { s.escUp = null; swallowClick(); return; }
         if (!g || e.pointerId !== g.id) return;
         if (!g.active) { s.g = null; return; }
         g.x = e.clientX;
         g.y = e.clientY;
         update();
         finish(true);
-        if (!g.times || !editing()) return;
-        apply(g);
+        if (!editing()) return;
+        if (g.mode === 'fill') applyFill(g);
+        else if (g.times) apply(g);
+    }
+
+    // One store.batch: a full copy of the item at each slot; the copies become the selection.
+    function applyFill(g) {
+        var store = s.api.store, item = store.get(g.cid);
+        if (!item || !g.slots.length) return;
+        var added = [];
+        store.batch(function () {
+            g.slots.forEach(function (t) { added.push(store.add(s.api.copyItem(item, t))); });
+        });
+        s.api.select(added);
     }
 
     // One store.batch: the pressed item to its new times and, for a move, every
@@ -322,6 +409,7 @@
         if (e.key === 'Escape') {
             e.preventDefault();
             e.stopImmediatePropagation();
+            s.escUp = g.id;
             cancel();
         } else if (/^Arrow/.test(e.key)) {
             e.preventDefault();
@@ -352,6 +440,7 @@
         var g = s.g;
         if (!g || !g.active) return;
         if (!s.api.store.get(g.cid)) { cancel(); return; }
+        if (g.mode === 'fill') g.dayItems = dayItems(g.sp.day);
         draw();
     }
 
@@ -383,7 +472,7 @@
         cancel();
         s.offs.forEach(function (off) { off(); });
         s.offs = [];
-        s.rootEl = s.api = s.g = null;
+        s.rootEl = s.api = s.g = s.escUp = null;
         s.swallow = false;
     }
 
@@ -395,6 +484,8 @@
                 store: ctx.store,
                 getSelection: function () { return sel ? sel.selection() : []; },
                 select: function (cids) { if (sel) sel.select(cids); },
+                copyItem: function (item, times) { return sel.copyItem(item, times); },
+                atLeastFive: function (item) { return sel.atLeastFive(item); },
                 isEditing: function () { return !ctx.isLeaving() && V().isEditing() && ctx.boardShown(); }
             });
         });

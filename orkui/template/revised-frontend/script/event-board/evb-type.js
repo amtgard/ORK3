@@ -31,6 +31,8 @@
  *   EvBoardType.editItem(cid, {onDone}) -> bool   rename an item in place;
  *                                  onDone({keyboard}) runs when its block closes
  *                                  (keyboard: closed with focus still in it)
+ *   EvBoardType.openAt(day, minute, initialText) -> bool   open a new block at a
+ *                                  slot with initialText typed (the slot cursor)
  */
 (function (root, factory) {
     root.EvBoardType = factory(root.EvBoardCore, root);
@@ -341,6 +343,23 @@
         return true;
     }
 
+    // Open a new block at a slot (the keyboard's slot cursor) as long as the last
+    // item made, with initialText already typed and the caret after it. False
+    // when nothing opened (Done is leaving, or an open block cannot be left).
+    function openAt(day, minute, initialText) {
+        if (!s.ctx || leaving()) return false;
+        if (s.open && !settle()) { s.entry.focus(); shake(); return false; }
+        openBlock(day, minute, minute + lastLength(), { reveal: true });
+        if (initialText) {
+            // As if typed: the entry reads it (and offers '#' or '@' suggestions).
+            var input = s.entry.input;
+            input.value = String(initialText);
+            input.setSelectionRange(input.value.length, input.value.length);
+            input.dispatchEvent(new win.Event('input', { bubbles: true }));
+        }
+        return true;
+    }
+
     // Add the block's item when it reads as one. Returns 'added', 'empty' or
     // 'invalid' (text with no title), and leaves the block open.
     function addCurrent() {
@@ -600,6 +619,7 @@
     return {
         isOpen: function () { return !!s.open; },
         isFresh: function () { return !!s.open && !s.edit && !s.typed; },
-        editItem: editItem
+        editItem: editItem,
+        openAt: openAt
     };
 });

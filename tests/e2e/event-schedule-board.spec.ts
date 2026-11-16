@@ -1433,7 +1433,8 @@ test.describe('editing', () => {
   test('releasing a drag beside the board cancels it', async ({ page }) => {
     await openBoard(page, EDIT_EVENT);
     await page.locator('.evb-edit-btn').click();
-    const title = `${PREFIX} beside`;
+    // Not '… beside': the Tab test above already has an item by that name.
+    const title = `${PREFIX} dropped off board`;
     await addViaQuickLine(page, `fri 10-11 ${title}`);
     const p = await pressAndMove(page, title, 0, 40);
     await expect(page.locator('.evb-drag-ghost')).toBeVisible();
@@ -1471,5 +1472,170 @@ test.describe('editing', () => {
     await page.mouse.up();
     await page.keyboard.up('Shift');
     expect(await timesOf(page, title)).toEqual(['2026-11-20 16:00', '2026-11-20 17:00']);
+  });
+
+  // ---- Phase 4: duplicate, multi-select, copy and paste, repeat, slot cursor ----
+
+  test('duplicate, shift-select and group delete are each one undo step', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `sun 9-9:30 bg: ${PREFIX} dup at Quarry`);
+    const dup = page.locator('.evb-block', { hasText: `${PREFIX} dup` });
+    await dup.click();
+    await page.keyboard.press('ControlOrMeta+d');
+    await expect(dup).toHaveCount(2);
+    const copies = await page.evaluate((t) => (window as any).EvBoardEdit.store.items().filter((i: any) => i.Title === t)
+      .map((i: any) => [i.StartTime.slice(11, 16), i.Location, i.Category]).sort(), `${PREFIX} dup`);
+    expect(copies).toEqual([['09:00', 'Quarry', 'Battlegame'], ['09:30', 'Quarry', 'Battlegame']]);
+    await dup.first().click();
+    await dup.nth(1).click({ modifiers: ['Shift'] });
+    await expect(page.locator('.evb-selected')).toHaveCount(2);
+    await page.keyboard.press('Delete');
+    await expect(dup).toHaveCount(0);
+    await page.locator('.evb-undo').click();
+    await expect(dup).toHaveCount(2);
+  });
+  test('copy and paste at the slot cursor keeps spacing', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `fri 6-6:30p ${PREFIX} copy a`);
+    await addViaQuickLine(page, `fri 7-7:30p ${PREFIX} copy b`);
+    await page.locator('.evb-block', { hasText: `${PREFIX} copy a` }).click();
+    await page.locator('.evb-block', { hasText: `${PREFIX} copy b` }).click({ modifiers: ['Shift'] });
+    await page.keyboard.press('ControlOrMeta+c');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.evb-slot-cursor')).toBeVisible();
+    const cursor = await page.evaluate(() => {
+      const el = document.querySelector('.evb-slot-cursor') as HTMLElement;
+      return [el.getAttribute('data-day'), Number(el.getAttribute('data-min'))];
+    });
+    await page.keyboard.press('ControlOrMeta+v');
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} copy a` })).toHaveCount(2);
+    const starts = await page.evaluate(([t, day]) => (window as any).EvBoardEdit.store.items()
+      .filter((i: any) => i.Title.startsWith(t) && i.StartTime.startsWith(day)).map((i: any) => (window as any).EvBoardCore.boardPos(i.StartTime).min).sort((x: number, y: number) => x - y),
+      [`${PREFIX} copy`, cursor[0] as string]);
+    expect(starts).toEqual([cursor[1], (cursor[1] as number) + 60]);
+  });
+  test('typing at the slot cursor starts an item; shortcuts leave text alone', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `sun 2-3p ${PREFIX} keep while typing`);
+    await page.locator('.evb-block', { hasText: `${PREFIX} keep while typing` }).click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.click();
+    await line.type('sun 5p 3d printing');
+    await line.press('Backspace');
+    await expect(line).toHaveValue('sun 5p 3d printin');
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} keep while typing` })).toHaveCount(1);
+    await line.fill('');
+    await line.press('Escape');
+    await page.locator('.evb-board').click({ position: { x: 4, y: 4 } });
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.type(`${PREFIX} from cursor`);
+    await expect(page.locator('.evb-block-editing .evb-entry-input')).toHaveValue(`${PREFIX} from cursor`);
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} from cursor` })).toHaveCount(1);
+  });
+  test('the fill handle repeats an item down the day', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    // An earlier Battlegame of this run on Saturday would change the rhythm: clear them first.
+    const SATURDAY = await dayBeforeLast(page);
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    await page.evaluate(([prefix, day]) => {
+      const w = window as any, store = w.EvBoardEdit.store;
+      store.batch(() => store.items()
+        .filter((i: any) => String(i.Title).startsWith(prefix) && w.EvBoardCore.boardPos(i.StartTime).day === day)
+        .forEach((i: any) => store.remove(i.cid)));
+    }, [PREFIX, SATURDAY]);
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await addViaQuickLine(page, `sat 5-5:30p bg: ${PREFIX} repeat`);
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} repeat` });
+    // The mouse does not scroll, and the frame scrolls by itself near its bottom: start mid-window.
+    await block.evaluate(el => el.scrollIntoView({ block: 'center' }));
+    await block.click();
+    const h = (await page.locator('.evb-fill-handle').boundingBox())!;
+    const pxPerMin = await page.evaluate(() => (window as any).EvBoardView.PX_PER_MIN);
+    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2 + 125 * pxPerMin, { steps: 8 });
+    await expect(page.locator('.evb-fill-ghost')).toHaveCount(2);
+    await page.mouse.up();
+    await expect(block).toHaveCount(3);
+    await page.locator('.evb-undo').click();
+    await expect(block).toHaveCount(1);
+  });
+  test('Esc cancels a repeat; a group gets a count badge, a category key and Cmd+A', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await addViaQuickLine(page, `fri 2-2:30p ${PREFIX} grp one`);
+    await addViaQuickLine(page, `fri 3-3:30p ${PREFIX} grp two`);
+    const one = page.locator('.evb-block', { hasText: `${PREFIX} grp one` });
+    const two = page.locator('.evb-block', { hasText: `${PREFIX} grp two` });
+    await one.evaluate(el => el.scrollIntoView({ block: 'center' }));
+    await one.click();
+    const h = (await page.locator('.evb-fill-handle').boundingBox())!;
+    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+    await page.mouse.down();
+    // Far enough for one copy whatever gap an earlier item of this run sets (up to 2h).
+    await page.mouse.move(h.x + h.width / 2, h.y + 200, { steps: 6 });
+    await expect(page.locator('.evb-fill-ghost').first()).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect(page.locator('.evb-fill-ghost')).toHaveCount(0);
+    await expect(one).toHaveCount(1);
+
+    await two.click({ modifiers: ['Shift'] });
+    await expect(page.locator('.evb-sel-badge')).toHaveText(/2 selected/);
+    await expect(page.locator('.evb-block-toolbar')).toBeHidden();
+    await expect(page.locator('.evb-fill-handle')).toHaveCount(0);
+    await page.keyboard.press('5');
+    await expect(one).toHaveAttribute('data-category', 'Class');
+    await expect(two).toHaveAttribute('data-category', 'Class');
+    await page.locator('.evb-undo').click();
+    await expect(one).not.toHaveAttribute('data-category', 'Class');
+    await expect(two).not.toHaveAttribute('data-category', 'Class');
+    // Shift-click takes one out again.
+    await two.click({ modifiers: ['Shift'] });
+    await expect(page.locator('.evb-selected')).toHaveCount(1);
+    await expect(page.locator('.evb-block-toolbar [data-evb-act="duplicate"]')).toBeVisible();
+    await expect(page.locator('.evb-slot-cursor')).toHaveCount(0);
+
+    await page.keyboard.press('ControlOrMeta+a');
+    const all = await page.evaluate(() => (window as any).EvBoardEdit.store.items().length);
+    await expect(page.locator('.evb-sel-badge .evb-sel-count')).toHaveText(`${all} selected`);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.evb-selected')).toHaveCount(0);
+    await expect(page.locator('.evb-slot-cursor')).toHaveCount(1);
+  });
+  test('a group delete asks once for meal items and undoes only the others', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    test.skip(!(await page.evaluate(() => !!(window as any).EvConfig.canManageFeast)), 'the test account cannot save a menu');
+    const SUNDAY = await lastDay(page);
+    const [stew, games] = await addViaBatch(page, [
+      { Title: `${PREFIX} group stew`, StartTime: `${SUNDAY} 11:00`, EndTime: `${SUNDAY} 12:00`,
+        Category: 'Feast and Food', SecondaryCategory: '', Location: '', Description: '', Leads: [], Menu: 'Stew' },
+      { Title: `${PREFIX} group games`, StartTime: `${SUNDAY} 12:00`, EndTime: `${SUNDAY} 13:00`,
+        Category: 'Other', SecondaryCategory: '', Location: '', Description: '', Leads: [] },
+    ]);
+    await page.evaluate(() => { (window as any).EvConfig.canManageFeast = false; });
+    await page.locator('.evb-edit-btn').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    const a = page.locator(`.evb-block[data-id="${stew}"]`), b = page.locator(`.evb-block[data-id="${games}"]`);
+    await a.click();
+    await b.click({ modifiers: ['Shift'] });
+    await page.keyboard.press('Delete');
+    const confirm = page.locator('#ork-confirm-overlay.ork-confirm-open');
+    await expect(confirm.locator('#ork-confirm-msg'))
+      .toHaveText('One of these items has menu and dietary details that you will not be able to restore. Remove all 2?');
+    await confirm.locator('#ork-confirm-ok').click();
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} group ` })).toHaveCount(0);
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await page.locator('.evb-undo').click();
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} group games` })).toHaveCount(1);
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} group stew` })).toHaveCount(0);
   });
 });

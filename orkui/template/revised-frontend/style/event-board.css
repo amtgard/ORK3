@@ -437,28 +437,30 @@ html[data-theme="dark"] .evb-editing .evb-block.evb-selected.evb-block-striped {
 }
 .evb-editing .evb-block.evb-selected:focus-visible { outline: none; }
 
-/* The toolbar floats above the board's sticky heads, beside #evb-root. */
+/* The toolbar (one block) or the count badge (several) floats above the
+   board's sticky heads, beside #evb-root. */
 .evb-select-layer { position: relative; z-index: 5; height: 0; }
-.evb-block-toolbar {
+.evb-block-toolbar, .evb-sel-badge {
     position: absolute; display: flex; align-items: center; gap: 2px; padding: 3px;
     background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 8px;
     box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
 }
-.evb-block-toolbar[hidden] { display: none; }
-.evb-block-toolbar .evb-block-tool {
+.evb-block-toolbar[hidden], .evb-sel-badge[hidden] { display: none; }
+.evb-sel-count { padding: 0 6px 0 7px; font-size: 12px; font-weight: 650; line-height: 28px; color: var(--ork-text); white-space: nowrap; }
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool {
     display: inline-flex; align-items: center; justify-content: center;
     width: 28px; height: 28px; min-height: 0; margin: 0; padding: 0;
     border: none; border-radius: 6px; background: transparent; box-shadow: none;
     color: var(--ork-text-muted); font-size: 13px; line-height: 1; cursor: pointer;
 }
-.evb-block-toolbar .evb-block-tool:hover,
-.evb-block-toolbar .evb-block-tool[aria-expanded="true"] { background: var(--ork-bg-secondary); color: var(--ork-text); }
-.evb-block-toolbar .evb-block-tool-danger:hover { color: #e53e3e; }
-.evb-block-toolbar .evb-block-tool:focus-visible { outline: 2px solid #4299e1; outline-offset: 0; }
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:hover,
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool[aria-expanded="true"] { background: var(--ork-bg-secondary); color: var(--ork-text); }
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool-danger:hover { color: #e53e3e; }
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:focus-visible { outline: 2px solid #4299e1; outline-offset: 0; }
 .evb-tool-swatch { width: 14px; height: 14px; border-radius: 4px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15); }
-html[data-theme="dark"] .evb-block-toolbar .evb-block-tool:hover,
-html[data-theme="dark"] .evb-block-toolbar .evb-block-tool[aria-expanded="true"] { background: #4a5568; }
-html[data-theme="dark"] .evb-block-toolbar .evb-block-tool-danger:hover { color: #fc8181; }
+html[data-theme="dark"] :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:hover,
+html[data-theme="dark"] :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool[aria-expanded="true"] { background: #4a5568; }
+html[data-theme="dark"] :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool-danger:hover { color: #fc8181; }
 html[data-theme="dark"] .evb-tool-swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55); }
 
 /* The category menu: ten swatches, five by two, each showing its number key. */
@@ -513,8 +515,42 @@ html[data-theme="dark"] .evb-day.evb-drop-target .evb-day-body { background-colo
 html[data-theme="dark"] .evb-block.evb-drag-ghost { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7); }
 .evb-block.evb-drag-ghost.evb-block-striped { box-shadow: inset -4px 0 0 var(--evb-stripe), 0 6px 16px rgba(15, 23, 42, 0.32); }
 html[data-theme="dark"] .evb-block.evb-drag-ghost.evb-block-striped { box-shadow: inset -4px 0 0 var(--evb-stripe), 0 6px 16px rgba(0, 0, 0, 0.7); }
-/* The selected block's toolbar steps aside while it is dragged. */
-#evb-root.evb-dragging ~ .evb-select-layer .evb-block-toolbar { visibility: hidden; }
+/* The selected block's toolbar (or the badge) steps aside while it is dragged. */
+#evb-root.evb-dragging ~ .evb-select-layer :is(.evb-block-toolbar, .evb-sel-badge) { visibility: hidden; }
+
+/* The fill handle: a 10px square at the bottom right of a single selected
+   block; dragged down it repeats the item (evb-drag.js). Above the bottom grip. */
+.evb-fill-handle {
+    position: absolute; right: -1px; bottom: -1px; z-index: 2; width: 10px; height: 10px; box-sizing: border-box;
+    border: 2px solid #fff; border-radius: 2px; background: #4299e1; cursor: nwse-resize;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+html[data-theme="dark"] .evb-fill-handle { background: #63b3ed; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+/* The site's generic [data-tip] rules (revised.css) make it position: relative
+   and open the tip above it, where the block's own edge would clip it: keep it
+   in the corner and open the tip to its left, inside the block. */
+#evb-root .evb-block > .evb-fill-handle { position: absolute; }
+#evb-root .evb-block > .evb-fill-handle:hover::after { left: auto; right: calc(100% + 4px); bottom: -2px; transform: none; }
+.evb-dragging-fill, .evb-dragging-fill * { cursor: nwse-resize !important; }
+/* The copies a repeat would add: the item's look, faded and dashed. */
+.evb-block.evb-fill-ghost,
+.evb-block.evb-fill-ghost:hover {
+    z-index: 2; pointer-events: none; opacity: 0.6;
+    outline: 2px dashed #2b6cb0; outline-offset: -2px; box-shadow: none;
+}
+html[data-theme="dark"] .evb-block.evb-fill-ghost { outline-color: #90cdf4; }
+@media (hover: none) {
+    .evb-fill-handle { display: none; }
+}
+
+/* The keyboard's slot cursor (evb-keys.js): one 15-minute slot, outlined,
+   under the blocks. */
+.evb-slot-cursor {
+    position: absolute; left: 2px; right: 2px; box-sizing: border-box; pointer-events: none;
+    padding: 0 6px; border: 2px solid #3182ce; border-radius: 4px; background: rgba(66, 153, 225, 0.1);
+    font-size: 10px; font-weight: 700; line-height: 14px; color: #2b6cb0; overflow: hidden;
+}
+html[data-theme="dark"] .evb-slot-cursor { border-color: #90cdf4; background: rgba(99, 179, 237, 0.14); color: #90cdf4; }
 
 /* Edit mode: each legend chip shows its category's number key. */
 .evb-legend-key { display: none; }
@@ -557,7 +593,7 @@ html[data-theme="dark"] .evb-row-error { color: #fc8181; }
         min-width: 28px; min-height: 28px; margin: -3px -9px -3px -2px; padding: 0;
     }
     /* The selected block's toolbar and category menu, at finger size. */
-    .evb-block-toolbar .evb-block-tool { width: 36px; height: 36px; }
+    :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool { width: 36px; height: 36px; }
     .evb-cat-menu { grid-template-columns: repeat(5, 36px); }
     .evb-cat-menu button { width: 36px; height: 36px; line-height: 36px; }
 }

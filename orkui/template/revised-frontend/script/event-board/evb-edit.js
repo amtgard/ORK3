@@ -227,6 +227,16 @@
             row(kbd('↑') + kbd('↓'), 'move the selected item 15 minutes (with ' + kbd('Alt') + ', 5)') +
             row(kbd('Shift ↑') + kbd('Shift ↓'), 'move only its end') +
             row(kbd('←') + kbd('→'), 'move it a day') +
+            row(kbd('Shift') + ' click', 'add a block to the selection, or take it out') +
+            row(kbd(MOD + ' A'), 'select every block') +
+            row(kbd(MOD + ' D'), 'duplicate the selection just after it') +
+            row(kbd(MOD + ' C') + ' ' + kbd(MOD + ' V'), 'copy the selection; paste it at the cursor') +
+            row('Drag', 'the selected block\'s corner square down to repeat it through the day') +
+            '</tbody></table>' +
+            '<div class="evb-help-title">With nothing selected</div>' +
+            '<table class="evb-help-table"><tbody>' +
+            row(kbd('↑') + kbd('↓') + kbd('←') + kbd('→'), 'move the cursor (15 minutes, a day)') +
+            row('Type', 'start an item at the cursor; ' + kbd('Enter') + ' opens it empty') +
             '</tbody></table>';
     }
 
