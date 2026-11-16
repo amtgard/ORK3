@@ -13,6 +13,8 @@ final class OnlineAttendanceTest extends TestCase
 
     private Attendance $attendanceDomain;
 
+    private ?ReportsFixture $reports = null;
+
     protected function setUp(): void
     {
         if (!ork3_test_db_available()) {
@@ -28,6 +30,12 @@ final class OnlineAttendanceTest extends TestCase
     protected function tearDown(): void
     {
         unset($_SESSION['is_authorized_mundane_id']);
+
+        if ($this->reports !== null) {
+            $this->reports->cleanup();
+            $this->reports = null;
+        }
+        $this->forgetCountsOnlineCache();
 
         if (isset($this->fixture)) {
             $this->fixture->cleanup();
@@ -278,5 +286,114 @@ final class OnlineAttendanceTest extends TestCase
         $ep = new EventPlanning();
         $this->assertSame(1, $ep->GetAttendanceDisplayRow($online)['Online']);
         $this->assertSame(0, $ep->GetAttendanceDisplayRow($inPerson)['Online']);
+    }
+
+    // --- Voting Eligibility: kingdom CountOnlineAttendance setting (Task 7) ---
+
+    private function forgetCountsOnlineCache(): void
+    {
+        $kingdomLib = Ork3::$Lib->kingdom;
+        if (property_exists($kingdomLib, 'countsOnlineAttendanceCache')) {
+            $cache = new ReflectionProperty($kingdomLib, 'countsOnlineAttendanceCache');
+            $cache->setAccessible(true);
+            $cache->setValue($kingdomLib, []);
+        }
+    }
+
+    private function reports(): ReportsFixture
+    {
+        return $this->reports ??= ReportsFixture::create();
+    }
+
+    /**
+     * Voting-ready player with 6 in-person days and 1 online day in the window.
+     *
+     * @return array{0: int, 1: int, 2: int} kingdomId, parkId, mundaneId
+     */
+    private function votingPlayer(string $setting, string $suffix): array
+    {
+        $rf = $this->reports();
+        $parkId = $rf->firstParkId();
+        $player = $rf->createPlayer($parkId, $suffix);
+        $kid = $player['kingdom_id'];
+        $mid = $player['mundane_id'];
+        $rf->makeVotingReady($mid);
+        for ($n = 1; $n <= 6; $n++) {
+            $rf->insertAttendance($mid, $parkId, $kid, date('Y-m-d', strtotime("-$n days")));
+        }
+        $rf->insertAttendance($mid, $parkId, $kid, date('Y-m-d', strtotime('-7 days')), 0, 1);
+        $rf->setKingdomConfig($kid, 'CountOnlineAttendance', $setting);
+        $this->forgetCountsOnlineCache();
+
+        return [$kid, $parkId, $mid];
+    }
+
+    private function votingRow(int $kid, int $mid, array $extra = []): array
+    {
+        // Explicit AttendanceMode: the stored-rule merge is skipped, the setting must still apply.
+        $r = (new Report())->GetVotingEligible($extra + [
+            'KingdomId' => $kid,
+            'MundaneId' => $mid,
+            'AttendanceMode' => 'count',
+            'AttendanceRequired' => 7,
+            'MonthsWindow' => 6,
+            'MinMembershipMonths' => 0,
+        ]);
+        $this->assertCount(1, $r['Players']);
+
+        return [$r, $r['Players'][0]];
+    }
+
+    public function testCountsOnlineDefaultsTrueWhenMissing(): void
+    {
+        $rf = $this->reports();
+        $kid = $rf->firstKingdomId();
+        $rf->deleteKingdomConfig($kid, 'CountOnlineAttendance');
+        $this->forgetCountsOnlineCache();
+        $this->assertTrue(Ork3::$Lib->kingdom->CountsOnlineAttendance($kid));
+
+        $rf->setKingdomConfig($kid, 'CountOnlineAttendance', '"0"');
+        $this->forgetCountsOnlineCache();
+        $this->assertFalse(Ork3::$Lib->kingdom->CountsOnlineAttendance($kid));
+
+        $rf->setKingdomConfig($kid, 'CountOnlineAttendance', '1');
+        $this->forgetCountsOnlineCache();
+        $this->assertTrue(Ork3::$Lib->kingdom->CountsOnlineAttendance($kid));
+    }
+
+    public function testVotingExcludesFlaggedOnlineWhenSettingOff(): void
+    {
+        [$kid, , $mid] = $this->votingPlayer('"0"', 'vo-off');
+        [$r, $row] = $this->votingRow($kid, $mid);
+        $this->assertTrue($r['ExcludeOnline']);
+        $this->assertSame(6, $row['AttCount']);
+        $this->assertSame(1, $row['OnlineExcluded']);
+    }
+
+    public function testVotingCountsOnlineWhenSettingOn(): void
+    {
+        [$kid, , $mid] = $this->votingPlayer('"1"', 'vo-on');
+        [$r, $row] = $this->votingRow($kid, $mid);
+        $this->assertFalse($r['ExcludeOnline']);
+        $this->assertSame(7, $row['AttCount']);
+        $this->assertNull($row['OnlineExcluded']);
+    }
+
+    public function testExplicitExcludeOnlineOverridesSetting(): void
+    {
+        [$kid, , $mid] = $this->votingPlayer('"0"', 'vo-ovr');
+        [$r, $row] = $this->votingRow($kid, $mid, ['ExcludeOnline' => false]);
+        $this->assertFalse($r['ExcludeOnline']);
+        $this->assertSame(7, $row['AttCount']);
+    }
+
+    public function testNameMatchStillExcludedWhenSettingOff(): void
+    {
+        [$kid, $parkId, $mid] = $this->votingPlayer('"0"', 'vo-name');
+        $eventId = $this->reports()->insertKingdomEvent($kid, $mid, 'Online Court');
+        $this->reports()->insertAttendance($mid, $parkId, $kid, date('Y-m-d', strtotime('-8 days')), $eventId, 0);
+        [, $row] = $this->votingRow($kid, $mid);
+        $this->assertSame(6, $row['AttCount']);
+        $this->assertSame(2, $row['OnlineExcluded']);
     }
 }

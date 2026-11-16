@@ -7543,6 +7543,10 @@ $(function() {
 				else if (r.active_member === false) sub = 'Contributing';
 				var $sub = $('#pn-voting-badge-sub');
 				if (sub) { $sub.html(sub).show(); }
+				if (r.exclude_online) {
+					var $vb = $('#pn-voting-badge');
+					$vb.attr('data-tip', (($vb.attr('data-tip') || '') + ' Online sign-ins are not counted (Kingdom setting).').trim());
+				}
 				$('#pn-voting-badge').show();
 			}
 		});

@@ -5806,6 +5806,7 @@ $(document).ready(function() {
             var keyLabels = {
                 'AwardRecsPublic': 'Award Recommendations Visibility',
                 'IncludePrincipalityInStatistics': 'Include Principality in Statistics',
+                'CountOnlineAttendance': 'Count Online Attendance',
                 'QualTestReeveEnabled': "Reeve's Test",
                 'QualTestCorporaEnabled': 'Corpora Test'
             };
@@ -5816,6 +5817,7 @@ $(document).ready(function() {
                 'AttendanceCreditMinimum': 'Minimum total credits earned in the last 6 months. Leave blank to not require this.',
                 'MonthlyCreditMaximum':    'Cap on credits counted per calendar month (excess is discarded). Leave blank for no cap.',
                 'IncludePrincipalityInStatistics': 'When looking at statistics, graphs, and reports, include relevant metrics from Principality(ies) such as attendance and player counts.',
+                'CountOnlineAttendance': 'When off, sign-ins marked Online are not counted toward Voting Eligibility for this Kingdom. Class credits, active status, player records, other reports and attendance history are not affected.',
             };
             if (keyHints[cfg.Key]) {
                 var hint = document.createElement('span');
@@ -5873,7 +5875,7 @@ $(document).ready(function() {
                     else optPrivate.selected = true;
                     inp.appendChild(optPublic);
                     inp.appendChild(optPrivate);
-                } else if (cfg.Key === 'IncludePrincipalityInStatistics') {
+                } else if (cfg.Key === 'IncludePrincipalityInStatistics' || cfg.Key === 'CountOnlineAttendance') {
                     inp = document.createElement('input');
                     inp.type = 'checkbox';
                     inp.className = 'kn-admin-config-input';

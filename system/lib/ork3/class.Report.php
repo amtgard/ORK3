@@ -4420,7 +4420,7 @@ class Report extends Ork3
         $kingdom_evt_bonus       = !empty($request['KingdomEventBonus']);
         $active_knight_threshold  = isset($request['ActiveKnightThreshold']) ? (int)$request['ActiveKnightThreshold'] : 0;
         $active_member_threshold  = isset($request['ActiveMemberThreshold']) ? (int)$request['ActiveMemberThreshold'] : 0;
-        $exclude_online           = !empty($request['ExcludeOnline']);
+        $exclude_online           = !empty($request['ExcludeOnline']); // resolved from the kingdom setting below unless passed
         $all_kingdoms             = !empty($request['AllKingdoms']); // count attendance from any kingdom
         $days_window             = isset($request['DaysWindow']) ? (int)$request['DaysWindow'] : 0;
         $min_age                 = isset($request['MinAge']) ? (int)$request['MinAge'] : 0;
@@ -4474,6 +4474,13 @@ class Report extends Ork3
             return ['Players' => [], 'AttendanceRequired' => $att_req, 'MonthsWindow' => $months_win, 'MinMembershipMonths' => $min_mem_mo, 'ProvinceMode' => $province_mode];
         }
 
+        // The kingdom's CountOnlineAttendance setting decides online exclusion unless the caller
+        // passes ExcludeOnline. Independent of the stored-rule merge above (skipped when
+        // AttendanceMode is passed), and applied after a ParkId-only call has resolved its kingdom.
+        if (!array_key_exists('ExcludeOnline', $request)) {
+            $exclude_online = !Ork3::$Lib->kingdom->CountsOnlineAttendance($kingdom_id);
+        }
+
         $park_clause    = $park_id ? " AND m.park_id    = $park_id" : '';
         $mundane_clause = $mundane_id ? " AND m.mundane_id = $mundane_id" : '';
 
@@ -4483,8 +4490,8 @@ class Report extends Ork3
         // kingdom-wide report.
         $single_att_clause = $mundane_id ? " AND a.mundane_id = $mundane_id" : '';
 
-        // Online exclusion: LEFT JOIN event + park inside attendance subqueries, filter out
-        // rows where the event name or park name contains 'Online' (case-insensitive).
+        // Online exclusion: drop rows flagged online, and (historical rows) rows whose event
+        // or park name contains 'Online' (case-insensitive) via LEFT JOINs inside the subqueries.
         // ExcludeEvents: restrict attendance to park-day sign-ins only (event_id = 0 or NULL).
         $events_clause = $exclude_events ? "AND (a.event_id = 0 OR a.event_id IS NULL)" : '';
 
@@ -4495,7 +4502,8 @@ class Report extends Ork3
 					LEFT JOIN " . DB_PREFIX . "park    _op ON _op.park_id  = a.park_id";
             // NULL-safe: a.park_id = 0 (kingdom events) yields NULL park name — allow those through.
             // Only exclude when we can positively confirm 'Online' is in the name.
-            $online_clause = "AND (_oe.name IS NULL OR _oe.name NOT LIKE '%Online%')
+            $online_clause = "AND a.online = 0
+					AND (_oe.name IS NULL OR _oe.name NOT LIKE '%Online%')
 					AND (_op.name IS NULL OR _op.name NOT LIKE '%Online%')";
         }
 
@@ -4653,7 +4661,7 @@ class Report extends Ork3
 					WHERE a.kingdom_id = $kingdom_id
 					  AND a.date >= '$start_date'
 					  $single_att_clause
-					  AND (_oe.name LIKE '%Online%' OR _op.name LIKE '%Online%')
+					  AND (a.online = 1 OR _oe.name LIKE '%Online%' OR _op.name LIKE '%Online%')
 					GROUP BY a.mundane_id
 				) oatt ON oatt.mundane_id = m.mundane_id
 			";
