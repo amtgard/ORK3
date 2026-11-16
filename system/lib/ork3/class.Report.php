@@ -3574,7 +3574,7 @@ class Report extends Ork3
         // participation, so a player whose first sign-in was online is not "new" again
         // at their first in-person visit. The type filters only the attendance counted
         // and shown: visits, returning (2+ visits), last sign-in; New Players becomes the
-        // new players with at least one sign-in of that type in range.
+        // new players with at least one sign-in of that type in range at this scope.
         $type = $this->_takeAttendanceType($request);
         $cache_key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false) {
@@ -3609,9 +3609,22 @@ class Report extends Ork3
             $visit_scope = "AND a_range.kingdom_id IN ($kidList)";
         }
         $visit_scope .= Attendance::TypeClause($type, 'a_range');
-        // All: every new player. Filtered: new players with an in-range sign-in of that
-        // type (np.has_type), so In-Person equals All when no sign-in is online.
-        $new_player_col = $type === 'all' ? 'np.mundane_id' : 'CASE WHEN np.has_type = 1 THEN np.mundane_id END';
+        // All: every new player. Filtered: new players with at least one in-range sign-in
+        // of that type at a park within this report's scope (np.has_type), so a sign-in
+        // of that type somewhere else never counts them here. The scope is by park, the
+        // same as the first-park attribution (not attendance.kingdom_id, which can lag a
+        // park's kingdom), so In-Person equals All when no sign-in is online. All keeps
+        // the original SQL: no has_type column.
+        if ($type === 'all') {
+            $new_player_col = 'np.mundane_id';
+            $np_type_col    = '';
+        } else {
+            $np_scope       = $park_id > 0
+                ? "a_in.park_id = $park_id"
+                : "a_in.park_id IN (SELECT ps.park_id FROM " . DB_PREFIX . "park ps WHERE ps.kingdom_id IN ($kidList))";
+            $new_player_col = 'CASE WHEN np.has_type = 1 THEN np.mundane_id END';
+            $np_type_col    = ",\n\t\t\t\t       MAX($np_scope AND " . Attendance::TypePredicate($type, 'a_in') . ") AS has_type";
+        }
 
         // Summary query: all active parks with new player stats; parks with no new players show zeros.
         $sql_summary = "SELECT
@@ -3624,8 +3637,7 @@ class Report extends Ork3
 			LEFT JOIN (
 				-- New players: first sign-in is in range AND no earlier sign-in exists.
 				-- NOT EXISTS uses the mundane_id index on a_pre; avoids a full-table MIN() scan.
-				SELECT a_in.mundane_id, MIN(a_in.park_id) AS first_park_id,
-				       MAX(" . Attendance::TypePredicate($type, 'a_in') . ") AS has_type
+				SELECT a_in.mundane_id, MIN(a_in.park_id) AS first_park_id$np_type_col
 				FROM " . DB_PREFIX . "attendance a_in
 				WHERE a_in.mundane_id > 0
 				  AND a_in.park_id > 0
@@ -3758,7 +3770,8 @@ class Report extends Ork3
     {
         // Attendance type: same rule as GetNewPlayerAttendance. New-player identity and
         // first kingdom come from ALL attendance; the type filters the counted visits,
-        // and New Players becomes those with at least one sign-in of that type in range.
+        // and New Players becomes those with at least one sign-in of that type in range
+        // in their first kingdom.
         $type = $this->_takeAttendanceType($request);
         $cache_key = Ork3::$Lib->ghettocache->key($request);
         if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cache_key, 300)) !== false) {
@@ -3767,7 +3780,27 @@ class Report extends Ork3
 
         $start_date = mysql_real_escape_string($request['StartDate']);
         $end_date   = mysql_real_escape_string($request['EndDate']);
-        $new_player_col = $type === 'all' ? 'np.mundane_id' : 'CASE WHEN np.has_type = 1 THEN np.mundane_id END';
+        // Filtered: counted only with a sign-in of that type in range at a park of this
+        // kingdom (tk). By park kingdom, the same as the first-kingdom attribution, so
+        // In-Person equals All when no sign-in is online. All keeps the original SQL.
+        if ($type === 'all') {
+            $new_player_col = 'np.mundane_id';
+            $tk_join        = '';
+        } else {
+            $new_player_col = 'CASE WHEN tk.mundane_id IS NOT NULL THEN np.mundane_id END';
+            $tk_join        = "
+			LEFT JOIN (
+				-- New-player candidates with a sign-in of the selected type per park kingdom.
+				SELECT a_t.mundane_id, pt.kingdom_id
+				FROM " . DB_PREFIX . "attendance a_t
+				INNER JOIN " . DB_PREFIX . "park pt ON pt.park_id = a_t.park_id
+				WHERE a_t.mundane_id > 0
+				  AND a_t.date >= '$start_date'
+				  AND a_t.date <= '$end_date'
+				  " . Attendance::TypeClause($type, 'a_t') . "
+				GROUP BY a_t.mundane_id, pt.kingdom_id
+			) tk ON tk.mundane_id = np.mundane_id AND tk.kingdom_id = k.kingdom_id";
+        }
 
         $sql = "SELECT
 				k.kingdom_id,
@@ -3779,8 +3812,7 @@ class Report extends Ork3
 			LEFT JOIN (
 				-- New players: first sign-in is in range AND no earlier sign-in exists.
 				-- NOT EXISTS uses the mundane_id index on a_pre; avoids a full-table MIN() scan.
-				SELECT a_in.mundane_id, p.kingdom_id AS first_kingdom_id,
-				       MAX(" . Attendance::TypePredicate($type, 'a_in') . ") AS has_type
+				SELECT a_in.mundane_id, p.kingdom_id AS first_kingdom_id
 				FROM " . DB_PREFIX . "attendance a_in
 				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a_in.park_id
 				WHERE a_in.mundane_id > 0
@@ -3804,7 +3836,7 @@ class Report extends Ork3
 				  AND a_range.mundane_id > 0
 				  " . Attendance::TypeClause($type, 'a_range') . "
 				GROUP BY a_range.mundane_id, a_range.kingdom_id
-			) vc ON vc.mundane_id = np.mundane_id AND vc.kingdom_id = k.kingdom_id
+			) vc ON vc.mundane_id = np.mundane_id AND vc.kingdom_id = k.kingdom_id$tk_join
 			WHERE k.active = 'Active'
 			  AND k.name IS NOT NULL
 			  AND k.name != ''

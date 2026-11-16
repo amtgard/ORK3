@@ -179,7 +179,7 @@ details > summary::-webkit-details-marker { display: none; }
 							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">New Player Visits ÷ New Players. Indicates how engaged new players were on average during the period.</dd>
 
 							<dt style="font-weight:700;margin-top:8px;color:var(--rp-text);">Attendance Type</dt>
-							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">Who is a new player, and their first park, always come from all sign-ins: an online sign-in counts as playing. In-Person or Online limits the visits, returning players and last sign-in to that kind of sign-in, and New Players to those with at least one sign-in of that kind in the range.</dd>
+							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">Who is a new player, and their first park, always come from all sign-ins: an online sign-in counts as playing. In-Person or Online limits the visits, returning players and last sign-in to that kind of sign-in, and New Players to those with at least one sign-in of that kind in the range at the park (or kingdom) being reported: a sign-in somewhere else does not count.</dd>
 
 							<dt style="font-weight:700;margin-top:8px;color:var(--rp-text);">Last Sign-in Date (Player Details)</dt>
 							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">The most recent sign-in date for each player across all time, not limited to the report period. This lets you see whether a new player from a past muster is still active today.</dd>

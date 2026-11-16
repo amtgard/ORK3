@@ -150,7 +150,7 @@ details > summary::-webkit-details-marker { display: none; }
 							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">Total new player sign-in events ÷ new players. Indicates average engagement during the period.</dd>
 
 							<dt style="font-weight:700;margin-top:8px;color:var(--rp-text);">Attendance Type</dt>
-							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">Who is a new player, and their first kingdom, always come from all sign-ins: an online sign-in counts as playing. In-Person or Online limits the visits and returning players to that kind of sign-in, and New Players to those with at least one sign-in of that kind in the range.</dd>
+							<dd style="margin:2px 0 0 0;color:var(--rp-text-muted);">Who is a new player, and their first kingdom, always come from all sign-ins: an online sign-in counts as playing. In-Person or Online limits the visits and returning players to that kind of sign-in, and New Players to those with at least one sign-in of that kind in the range in their first kingdom.</dd>
 						</dl>
 					</div>
 				</details>

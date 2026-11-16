@@ -416,6 +416,47 @@ final class OnlineAttendanceReportsTest extends TestCase
         $this->assertSame(1, (int) $details['online'][$this->playerA]['VisitsInPeriod']);
     }
 
+    public function testNewPlayerTypedCountIsScopedToThePark(): void
+    {
+        // D is first seen in-person at park A (day 1) and signs in online at park B
+        // (day 2), both in range. A filtered New Players count only players with a
+        // sign-in of that type at the scope being reported, so D's online sign-in at B
+        // never makes D an "Online" new player at A.
+        $parkB = $this->fixture->secondParkIdInKingdom($this->kingdomId, $this->parkId);
+        $this->assertGreaterThan($this->parkId, $parkB, 'Park B must sort after park A');
+        $d = $this->fixture->createPlayer($this->parkId, 'oar-d');
+        $playerD = (int) $d['mundane_id'];
+        $this->fixture->insertAttendance($playerD, $this->parkId, $this->kingdomId, $this->day1, 0, 0);
+        $this->fixture->insertAttendance($playerD, $parkB, $this->kingdomId, $this->day2, 0, 1);
+
+        $base = [
+            'KingdomId' => $this->kingdomId,
+            'StartDate' => $this->monthStart(),
+            'EndDate' => $this->monthEnd,
+            'IncludePlayerDetails' => 1,
+        ];
+        $atA = $this->byType(fn ($req) => $this->report->GetNewPlayerAttendance($req), $base + ['ParkId' => $this->parkId]);
+        $newAt = fn (array $resp, int $parkId): int => (int) ($this->rowFor($resp['Summary'], 'ParkId', $parkId)['NewPlayers'] ?? 0);
+        $detailIds = fn (array $resp): array => array_map(fn ($row) => (int) $row['MundaneId'], $resp['PlayerDetails']);
+
+        // Park A: D is a new player under All and In-Person; under Online only the
+        // fixture's A and C (online sign-ins at A) count, and D is not in the list.
+        $this->assertSame(4, $newAt($atA['all'], $this->parkId));
+        $this->assertSame(3, $newAt($atA['in_person'], $this->parkId));
+        $this->assertSame(2, $newAt($atA['online'], $this->parkId), 'D has no online sign-in at park A');
+        $this->assertSame(2, (int) $this->rowFor($atA['online']['Summary'], 'ParkId', $this->parkId)['NewPlayerVisits']);
+        $this->assertNotContains($playerD, $detailIds($atA['online']));
+        $this->assertContains($playerD, $detailIds($atA['in_person']));
+
+        // Park B: a new player is attributed to their first park, which for D is A
+        // (MIN(park_id) of the in-range sign-ins; A sorts before B). So D is never a new
+        // player at B, in any type, even though D's only online sign-in is there.
+        $atB = $this->byType(fn ($req) => $this->report->GetNewPlayerAttendance($req), $base + ['ParkId' => $parkB]);
+        foreach (['all', 'in_person', 'online'] as $type) {
+            $this->assertSame(0, $newAt($atB[$type], $parkB), "D is not new at park B ($type)");
+        }
+    }
+
     public function testNewPlayerOnlineFirstIsNotNewAgainInPerson(): void
     {
         // C's first-ever sign-in (day 1) was online. A later in-person month must not
