@@ -495,7 +495,9 @@
 
     // The time that starts at token i: { found, upto, weak } or null. 'weak'
     // marks a lone 'noon' or 'midnight', which yields to any other time.
-    function timeAt(toks, i, firstIdx, lastIdx) {
+    // inBlock (typing inside a block, which already has a time): a lone noon or
+    // midnight is a time only straight after 'at' ('Feast at noon', not 'Midnight Madness').
+    function timeAt(toks, i, firstIdx, lastIdx, inBlock) {
         var r = rangeAt(toks, i);
         if (r && (!r.bare || i === firstIdx || r.next - 1 === lastIdx)) {
             return { found: { start: r.start, end: r.end, length: null, then: false }, upto: r.next };
@@ -504,7 +506,8 @@
         if (sa && sa.side.strong) {
             var word = /^[a-z]+$/i.test(toks[i].value);
             // Mid-title ('the Midnight Madness') a lone noon or midnight is a word.
-            if (word && i !== firstIdx && sa.next - 1 !== lastIdx && !isAt(toks[i - 1])) return null;
+            var edge = !inBlock && (i === firstIdx || sa.next - 1 === lastIdx);
+            if (word && !edge && !isAt(toks[i - 1])) return null;
             return { found: { start: nightShift(sideMin(sa.side)), end: null, length: null, then: false }, upto: sa.next, weak: word };
         }
         var len = readLength(toks[i].value);
@@ -517,11 +520,11 @@
 
     // Find the item's time among the tokens and claim it. Returns
     // { start, end, length, then } (any may be null) or null.
-    function claimTime(toks, firstIdx, lastIdx) {
+    function claimTime(toks, firstIdx, lastIdx, inBlock) {
         var hit = null, i;
         for (i = 0; i < toks.length; i++) {
             if (!isWord(toks[i])) continue;
-            var t = timeAt(toks, i, firstIdx, lastIdx);
+            var t = timeAt(toks, i, firstIdx, lastIdx, inBlock);
             if (!t) continue;
             if (!t.weak) { hit = { at: i, t: t }; break; }
             if (!hit) hit = { at: i, t: t };
@@ -593,7 +596,7 @@
             if (firstIdx < 0 && toks[i].kind === 'word') firstIdx = i;
             lastIdx = i;
         }
-        var time = ign.time ? null : claimTime(toks, firstIdx, lastIdx);
+        var time = ign.time ? null : claimTime(toks, firstIdx, lastIdx, ctx.fixedStart != null);
         given.time = !!time;
 
         // Description: the last quoted span with free title text before it.

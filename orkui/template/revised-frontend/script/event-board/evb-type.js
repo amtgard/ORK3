@@ -15,8 +15,15 @@
  * after every render. Typing therefore never rebuilds the input: the caret,
  * focus and IME composition survive every re-render.
  *
+ * The same block retypes an existing item in place (editItem): it opens over
+ * the item prefilled with '<Title>[ at <Location>][ "<Description>"]', and
+ * Enter, Tab or a click elsewhere updates only the parts that changed. Text
+ * left as it was prefilled changes nothing.
+ *
  * Attached through EvBoardEdit.onEnter / onBeforeExit / onExit.
  *   EvBoardType.isOpen() -> bool   an editing block is open
+ *   EvBoardType.editItem(cid, {onDone}) -> bool   retype an item in place;
+ *                                  onDone runs when its block closes
  */
 (function (root, factory) {
     root.EvBoardType = factory(root.EvBoardCore, root);
@@ -37,6 +44,7 @@
         entry: null,
         open: null,     // { day, start, end } the block as opened, while open
         live: null,     // { day, start, end, category } as the text reads now
+        edit: null,     // { cid, id, item, text, onDone } while an item is retyped in place
         layoutKey: '',
         posKey: '',
         unshownTimer: 0,
@@ -101,6 +109,7 @@
     }
 
     // Open (or move) the editing block; the same input stays focused through a run.
+    // opts.text prefills it (an item retyped in place).
     function openBlock(day, start, end, opts) {
         s.open = { day: day, start: start, end: end };
         s.live = null;
@@ -108,8 +117,11 @@
         s.blockEl.className = 'evb-type-block evb-block evb-block-editing';
         s.blockEl.hidden = false;
         s.pop.hidden = false;
-        s.entry.input.setAttribute('aria-label', 'New item, ' + C.dayLabel(day) + ' ' + C.fmtRange(start, end));
-        s.entry.clear(); // parses the empty line: onParse lays the placeholder out
+        s.pop.classList.toggle('evb-type-retyping', !!s.edit);
+        s.entry.input.setAttribute('aria-label', (s.edit ? 'Rename item, ' : 'New item, ') + C.dayLabel(day) + ' ' + C.fmtRange(start, end));
+        // Either parses the line: onParse lays the placeholder out.
+        if (opts && opts.text) s.entry.setText(opts.text);
+        else s.entry.clear();
         s.entry.focus();
         if (opts && opts.reveal) {
             var ph = s.rootEl.querySelector('.evb-placeholder');
@@ -121,7 +133,8 @@
 
     function closeBlock() {
         if (!s.open) return;
-        s.open = s.live = null;
+        var done = s.edit && s.edit.onDone;
+        s.open = s.live = s.edit = null;
         s.closing = true;
         try {
             s.entry.clear();
@@ -130,17 +143,23 @@
             s.pop.hidden = true;
             s.blockEl.style.clipPath = '';
             V().setPlaceholder(null);
+            // A retyped item hands the keys back to the board (its selection), not
+            // to an input hidden in a closed block.
+            if (done && doc.activeElement === s.entry.input) s.entry.input.blur();
         } finally {
             s.closing = false;
         }
+        if (done) done();
     }
 
     // What the text says now: the block moves, resizes and recolours to follow it.
     function onParse(r) {
         if (!s.open) return;
         var o = s.open;
-        s.live = r ? { day: r.day || o.day, start: r.startMin, end: r.endMin, category: r.category || 'Other' }
-            : { day: o.day, start: o.start, end: o.end, category: 'Other' };
+        // Retyping an item keeps its category unless one is typed.
+        var keep = s.edit && !(r && r.given.category) ? (s.edit.item.Category || 'Other') : null;
+        s.live = r ? { day: r.day || o.day, start: r.startMin, end: r.endMin, category: keep || r.category || 'Other' }
+            : { day: o.day, start: o.start, end: o.end, category: keep || 'Other' };
         var l = s.live;
         s.blockEl.setAttribute('data-category', l.category);
         s.blockEl.style.setProperty('--evb-fill', V().boldFor(l.category));
@@ -150,7 +169,7 @@
         if (key === s.layoutKey) return;
         s.layoutKey = key;
         V().setPlaceholder({
-            EventScheduleId: 0, Title: '', Leads: [], Category: l.category,
+            EventScheduleId: 0, Title: '', Leads: [], Category: l.category, cid: s.edit ? s.edit.cid : undefined,
             StartTime: C.toNaive(l.day, l.start), EndTime: C.toNaive(l.day, l.end)
         });
     }
@@ -212,6 +231,104 @@
         el.classList.add('evb-entry-invalid');
     }
 
+    // ---- retyping an item in place ----
+
+    // An item's board day and its start and end in that day's minutes.
+    function timing(item) {
+        var segs = C.segments(item);
+        if (!segs.length) return null;
+        var day = segs[0].day, start = segs[0].startMin;
+        var e = C.parseNaive(item.EndTime);
+        var end = e ? C.diffDays(day, e.day) * 1440 + e.min : start;
+        return { day: day, start: start, end: Math.max(end, start) };
+    }
+
+    // The line an item is retyped from (the quotes are formatEntry's).
+    function editText(item) {
+        var out = String(item.Title || '');
+        if (item.Location) out += ' at ' + item.Location;
+        if (item.Description) {
+            var d = String(item.Description);
+            out += d.indexOf('"') >= 0 ? ' \u201C' + d + '\u201D' : ' "' + d + '"';
+        }
+        return out;
+    }
+
+    // The item being retyped, by cid, or by server id after a refresh renamed it.
+    function editTarget() {
+        var e = s.edit, store = s.ctx.store, item = store.get(e.cid);
+        if (!item && e.id) {
+            store.items().some(function (it) {
+                if (+it.EventScheduleId !== e.id) return false;
+                item = it;
+                return true;
+            });
+        }
+        return item;
+    }
+
+    function t16(v) { return String(v || '').replace('T', ' ').slice(0, 16); }
+
+    // The fields a parse changes on an item: the title, place and notes always
+    // (the line spelled them out), the time, categories and cost only when typed.
+    function changedFields(r, item) {
+        var f = {};
+        if (r.title !== (item.Title || '')) f.Title = r.title;
+        if (r.location !== (item.Location || '')) f.Location = r.location;
+        if (r.description !== (item.Description || '')) f.Description = r.description;
+        if (r.given.time) {
+            if (r.start !== t16(item.StartTime)) f.StartTime = r.start;
+            if (r.end !== t16(item.EndTime)) f.EndTime = r.end;
+        }
+        if (r.given.category && r.category !== (item.Category || 'Other')) f.Category = r.category;
+        if (r.secondaryCategory && r.secondaryCategory !== (item.SecondaryCategory || '')) f.SecondaryCategory = r.secondaryCategory;
+        // A stripe the same as the new category would never show: drop it.
+        if (f.Category && f.Category === (f.SecondaryCategory || item.SecondaryCategory)) f.SecondaryCategory = '';
+        if (r.given.cost && +r.cost !== +item.Cost) f.Cost = r.cost;
+        return f;
+    }
+
+    // Save a retyped item: 'same' (the text as prefilled), 'saved', 'empty',
+    // 'invalid' (no title), 'refused' (Done is leaving) or 'gone'.
+    function saveEdit() {
+        var text = s.entry.getText().trim();
+        if (text === s.edit.text.trim()) return 'same';
+        if (!text) return 'empty';
+        var r = s.entry.result();
+        if (!r || !r.ok) return 'invalid';
+        if (leaving()) return 'refused';
+        var item = editTarget();
+        if (!item) return 'gone';
+        var f = changedFields(r, item);
+        if (Object.keys(f).length) s.ctx.store.update(item.cid, f);
+        return 'saved';
+    }
+
+    // Settle a retyped item; false keeps the block open (text with no title,
+    // or Done leaving). An item removed meanwhile hands the text to the notice.
+    function settleEdit() {
+        var res = saveEdit();
+        if (res === 'invalid' || res === 'refused') return false;
+        if (res === 'gone') {
+            var o = s.open;
+            s.ctx.addNotice('The item you were renaming is no longer on the board, so the change was not saved.',
+                C.slotLine(o.day, o.start, o.end) + s.entry.getText().trim());
+        }
+        closeBlock();
+        return true;
+    }
+
+    function editItem(cid, opts) {
+        if (!s.ctx || leaving()) return false;
+        var item = s.ctx.store.get(cid), t = item && timing(item);
+        if (!t) return false;
+        if (s.open && !settle()) { s.entry.focus(); shake(); return false; }
+        var text = editText(item);
+        s.edit = { cid: cid, id: +item.EventScheduleId || 0, item: item, text: text, onDone: opts && opts.onDone };
+        openBlock(t.day, t.start, t.end, { text: text, reveal: true });
+        return true;
+    }
+
     // Add the block's item when it reads as one. Returns 'added', 'empty' or
     // 'invalid' (text with no title), and leaves the block open.
     function addCurrent() {
@@ -225,6 +342,7 @@
     // discard an empty one, keep text with no title. False when it was kept.
     function settle() {
         if (!s.open) return true;
+        if (s.edit) return settleEdit();
         var res = addCurrent();
         if (res === 'invalid' || res === 'refused') return false;
         closeBlock();
@@ -262,12 +380,20 @@
         if (e.key === 'Escape') {
             e.preventDefault();
             e.stopPropagation();
+            var retyping = !!s.edit;
             closeBlock();
-            s.ctx.quickLine.focus();
+            if (!retyping) s.ctx.quickLine.focus();
             return;
         }
         if (e.key !== 'Enter' && !(e.key === 'Tab' && !e.shiftKey)) return;
         if (e.altKey || e.ctrlKey || e.metaKey) return;
+        if (s.edit) {
+            // Retyping an item: Enter and Tab save it and close; nothing follows on.
+            e.preventDefault();
+            e.stopPropagation();
+            if (!settleEdit()) shake();
+            return;
+        }
         var text = s.entry.getText().trim();
         if (!text) {
             if (e.key === 'Tab') return; // focus moves on and the empty block closes
@@ -456,6 +582,7 @@
     }
 
     return {
-        isOpen: function () { return !!s.open; }
+        isOpen: function () { return !!s.open; },
+        editItem: editItem
     };
 });

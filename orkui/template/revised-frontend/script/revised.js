@@ -10420,8 +10420,28 @@ $(document).ready(function() {
             // These pills filter the list only; the board's legend is its own filter.
         };
 
+        // A failed remove says so in the item's own row, under its buttons.
+        function evScheduleRowError(btn, message) {
+            var cell = btn && btn.closest('td');
+            if (!cell) return;
+            var el = cell.querySelector('.evb-row-error');
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'evb-row-error';
+                el.setAttribute('role', 'alert');
+                cell.appendChild(el);
+            }
+            el.textContent = message;
+        }
+
         window.evRemoveSchedule = function(btn, scheduleId) {
-            if (!confirm('Remove this schedule item?')) return;
+            orkConfirm('Remove this schedule item?', function() { evRemoveScheduleNow(btn, scheduleId); },
+                { title: 'Remove item', okLabel: 'Remove', danger: true });
+        };
+
+        function evRemoveScheduleNow(btn, scheduleId) {
+            var old = btn && btn.closest('td') && btn.closest('td').querySelector('.evb-row-error');
+            if (old) old.remove();
             var fd = new FormData();
             fd.append('ScheduleId', scheduleId);
             fetch(EvConfig.uir + 'EventAjax/remove_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId, {
@@ -10466,11 +10486,11 @@ $(document).ready(function() {
                     // Keep the board in sync with this removal.
                     if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {
-                    alert(data.error || 'Could not remove schedule item.');
+                    evScheduleRowError(btn, data.error || 'Could not remove schedule item.');
                 }
             })
-            .catch(function(err) { alert('Request failed: ' + err.message); });
-        };
+            .catch(function(err) { evScheduleRowError(btn, 'Request failed: ' + err.message); });
+        }
         // Initialize schedule filters on page load
         evBuildScheduleFilters();
     }

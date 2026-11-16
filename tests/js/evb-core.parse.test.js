@@ -191,3 +191,14 @@ test('a slot line with an end keeps the range', () => {
   const z = p(C.slotLine('2026-11-21', 840, 840) + 'Bell');
   assert.deepEqual(pick(z, ['startMin', 'endMin', 'title']), [840, 840, 'Bell']);
 });
+test('inside a block, noon and midnight are words unless they follow at', () => {
+  const blk = { fixedDay: '2026-11-21', fixedStart: 600, fixedEnd: 660 };
+  assert.deepEqual(pick(p('Midnight Madness', blk), ['startMin', 'endMin', 'title']), [600, 660, 'Midnight Madness']);
+  assert.deepEqual(pick(p('Noon Court', blk), ['startMin', 'endMin', 'title']), [600, 660, 'Noon Court']);
+  assert.deepEqual(pick(p('Court of Noon', blk), ['startMin', 'title']), [600, 'Court of Noon']);
+  assert.deepEqual(pick(p('Feast at noon', blk), ['startMin', 'endMin', 'title']), [720, 780, 'Feast']);
+  assert.deepEqual(pick(p('Revel at midnight', blk), ['startMin', 'title']), [1440, 'Revel']);
+  // The quick line keeps reading a lone noon or midnight at either end as a time.
+  assert.deepEqual(pick(p('noon Court'), ['startMin', 'title']), [720, 'Court']);
+  assert.deepEqual(pick(p('Court noon'), ['startMin', 'title']), [720, 'Court']);
+});

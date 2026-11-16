@@ -10,9 +10,10 @@
  *   EvBoardEdit.entryContext(overrides) -> parseEntry ctx built from the store
  *   EvBoardEdit.refresh()        re-read the schedule when nothing is unsaved
  *
- * Other Edit-mode surfaces (evb-type.js, ...) attach through three hooks, each
- * called with the same edit context {store, root, head, quickLine,
- * entryContext, add, addNotice, isLeaving} (see editContext below):
+ * Other Edit-mode surfaces (evb-type.js, evb-select.js) attach through three
+ * hooks, each called with the same edit context {store, root, head, quickLine,
+ * entryContext, add, addNotice, isLeaving, isTextField, modalOpen} (see
+ * editContext below):
  *   EvBoardEdit.onEnter(fn)      after Edit mode opens
  *   EvBoardEdit.onBeforeExit(fn) when Done is pressed, before anything else;
  *                                returning false keeps Edit mode open
@@ -366,7 +367,10 @@
             add: addParsed,
             addNotice: addNotice,
             // Done is in progress: nothing more may be added or opened.
-            isLeaving: function () { return !!state.leaving; }
+            isLeaving: function () { return !!state.leaving; },
+            // Board keys stay out of text fields and page modals.
+            isTextField: isTextField,
+            modalOpen: modalOpen
         };
     }
 
@@ -391,7 +395,8 @@
     function modalOpen() {
         var sm = doc.getElementById('ev-schedule-modal');
         if (sm && win.getComputedStyle(sm).display !== 'none') return true;
-        return !!doc.querySelector('.ev-modal-open, .ev-open, [id$="-overlay"].kn-open, [id$="-overlay"].pn-open, [id$="-modal"].kn-open');
+        return !!doc.querySelector('.ev-modal-overlay.ev-modal-open, .ev-img-overlay.ev-open, #ev-signin-link-overlay.ev-open, ' +
+            '#ork-confirm-overlay.ork-confirm-open, [id$="-overlay"].kn-open, [id$="-overlay"].pn-open, [id$="-modal"].kn-open');
     }
 
     function undo() { if (state.store && !state.leaving) state.store.undo(); }
@@ -450,7 +455,9 @@
     }
 
     // Re-read the schedule when everything here is saved, and take it if it differs
-    // (which also clears Undo). A change made meanwhile wins over the answer.
+    // (which also clears Undo). A change made meanwhile wins over the answer, and
+    // the read is made again once that change is saved (the schedule modal writes
+    // through its own endpoints, and its change must still reach the board).
     // Asked for while changes are unsaved, it runs as soon as they are saved.
     function refresh() {
         if (!state.editing || !state.store) return;
@@ -458,7 +465,8 @@
         state.refreshOwed = false;
         var seq = ++state.refreshSeq, at = state.changeSeq;
         fetchList().then(function (items) {
-            if (!state.editing || seq !== state.refreshSeq || at !== state.changeSeq) return;
+            if (!state.editing || seq !== state.refreshSeq) return;
+            if (at !== state.changeSeq) { refresh(); return; }
             if (canon(items) === canon(state.store.items())) return;
             state.store.reset(items);
         }, function () { /* keep what is here; the next focus tries again */ });

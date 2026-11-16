@@ -2824,6 +2824,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-entry.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-entry.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-edit.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-edit.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-type.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-type.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-select.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-select.js') ?>"></script>
 <?php endif; ?>
 <script>
 (function() {
@@ -3451,6 +3452,38 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		modal.style.display = 'flex';
 		document.body.style.overflow = 'hidden';
 		setTimeout(function() { titleEl.focus(); }, 50);
+	};
+
+	// Open the schedule modal in edit mode from a plain item object (the board's
+	// Details button), with no list row. It goes through evOpenScheduleEditModal and
+	// so through every wrapper on it (dirty flag, meal fields, Flatpickr sync): the
+	// row those read is built here, detached, from the item.
+	window.evOpenScheduleModalForItem = function(item) {
+		var id = parseInt(item && item.EventScheduleId, 10);
+		if (!id || typeof window.evOpenScheduleEditModal !== 'function') return;
+		var t16 = function(v) { return String(v || '').replace(' ', 'T').substring(0, 16); };
+		var row = document.createElement('tr');
+		var attrs = {
+			'data-title': item.Title || '',
+			'data-category': item.Category || 'Other',
+			'data-secondary-category': item.SecondaryCategory || '',
+			'data-location': item.Location || '',
+			'data-description': item.Description || '',
+			'data-start': t16(item.StartTime),
+			'data-end': t16(item.EndTime),
+			'data-leads': JSON.stringify(item.Leads || []),
+			'data-menu': item.Menu || '',
+			'data-dietary': item.Dietary || '',
+			'data-allergens': item.Allergens || ''
+		};
+		if (item.Cost !== null && item.Cost !== undefined && item.Cost !== '') attrs['data-cost'] = String(item.Cost);
+		Object.keys(attrs).forEach(function(k) { row.setAttribute(k, attrs[k]); });
+		var cell = document.createElement('td');
+		var btn = document.createElement('button');
+		btn.type = 'button';
+		cell.appendChild(btn);
+		row.appendChild(cell);
+		window.evOpenScheduleEditModal(id, btn);
 	};
 
 	// Patch evSubmitSchedule to include meal fields on submit.

@@ -255,7 +255,9 @@
         state.cats.forEach(function (c) {
             if (!present[c.name]) return;
             h += '<button type="button" class="evb-legend-chip" data-category="' + esc(c.name) + '" aria-pressed="false">' +
-                '<span class="evb-legend-swatch" style="background:' + esc(c.bold) + '"></span>' + esc(c.name) + '</button>';
+                '<span class="evb-legend-swatch" style="background:' + esc(c.bold) + '"></span>' + esc(c.name) +
+                // The category's number key, shown in Edit mode (event-board.css).
+                (c.key != null ? '<span class="evb-legend-key" aria-hidden="true">' + esc(c.key) + '</span>' : '') + '</button>';
         });
         return h + '</div>';
     }
@@ -333,7 +335,9 @@
         var c = cfg();
         var ghosts = state.ghosts;
         var ph = state.editing ? state.placeholder : null;
-        var board = C.buildBoard(state.items.concat(ghosts, ph ? [ph] : []), { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '', editing: state.editing });
+        // A placeholder with a cid stands in for that item (it is being retyped in place).
+        var items = ph && ph.cid ? state.items.filter(function (it) { return it.cid !== ph.cid; }) : state.items;
+        var board = C.buildBoard(items.concat(ghosts, ph ? [ph] : []), { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '', editing: state.editing });
         // Re-rendering replaces the scroller; keep the same minute and day position in view.
         var oldScroller = state.rootEl.querySelector('.evb-scroller');
         var keep = oldScroller && api.board ? {
@@ -425,6 +429,7 @@
 
     // The block being typed on the board ({StartTime, EndTime, Category}), laid
     // out among the real ones as an invisible .evb-placeholder; null removes it.
+    // With a cid it takes the place of that item, which is not drawn meanwhile.
     function setPlaceholder(item) {
         if (!item && !state.placeholder) return;
         state.placeholder = item || null;

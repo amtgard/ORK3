@@ -238,7 +238,7 @@ async function openBoard(page: Page, event: string) {
 }
 
 // Removes every list item whose title starts with prefix, through the list's own
-// remove button (it still asks with a native confirm, accepted here).
+// remove button and its themed confirm dialog.
 async function removeItemsTitled(page: Page, prefix: string) {
   await page.locator('[data-ev-view="list"]').click();
   for (;;) {
@@ -246,8 +246,8 @@ async function removeItemsTitled(page: Page, prefix: string) {
       .filter({ has: page.locator(`td:has-text("${prefix}")`) }).first();
     if (await row.count() === 0) break;
     const id = await row.getAttribute('data-schedule-id');
-    page.once('dialog', d => d.accept());
     await row.locator('.ev-del-link').click();
+    await page.locator('#ork-confirm-overlay.ork-confirm-open #ork-confirm-ok').click();
     await expect(page.locator(`#ev-schedule-container tr[data-schedule-id="${id}"]`)).toHaveCount(0);
   }
 }
@@ -610,5 +610,58 @@ test.describe('editing', () => {
     expect(await page.evaluate(() => document.activeElement?.classList.contains('evb-entry-input'))).toBe(false);
     await page.locator('#ev-schedule-modal .ev-modal-close').click();
     await expect(page.locator('#ev-schedule-modal')).toBeHidden();
+  });
+
+  // ---- Selecting, changing and deleting blocks ----
+
+  test('select, recategorise with a key, rename in place, delete and undo', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sun 9a ${PREFIX} keys`);
+    await line.press('Enter');
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} keys` });
+    await block.click();
+    await expect(block).toHaveClass(/evb-selected/);
+    await expect(page.locator('.evb-popover')).toHaveCount(0);
+    await page.keyboard.press('5');
+    await expect(block).toHaveAttribute('data-category', 'Class');
+    await page.keyboard.press('Enter');
+    const editor = page.locator('.evb-block-editing .evb-entry-input');
+    await expect(editor).toHaveValue(`${PREFIX} keys`);
+    await editor.fill(`${PREFIX} renamed at Hall`);
+    await editor.press('Enter');
+    const renamed = page.locator('.evb-block', { hasText: `${PREFIX} renamed` });
+    await expect(renamed).toHaveAttribute('data-category', 'Class');
+    await renamed.click();
+    await page.keyboard.press('Delete');
+    await expect(renamed).toHaveCount(0);
+    await page.locator('.evb-undo').click();
+    await expect(renamed).toHaveCount(1);
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+  });
+
+  test('Details opens the full form for the selected item', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sun 11a ${PREFIX} details at Hall`);
+    await line.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await page.locator('.evb-block', { hasText: `${PREFIX} details` }).click();
+    await page.locator('.evb-block-toolbar [data-evb-act="details"]').click();
+    await expect(page.locator('#ev-schedule-modal')).toBeVisible();
+    await expect(page.locator('#ev-sched-title')).toHaveValue(`${PREFIX} details`);
+    await expect(page.locator('#ev-sched-location')).toHaveValue('Hall');
+  });
+
+  test('deleting from the list asks with the themed dialog', async ({ page }) => {
+    let nativeDialog = false;
+    page.on('dialog', d => { nativeDialog = true; d.dismiss(); });
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('[data-ev-view="list"]').click();
+    await page.locator('#ev-schedule-container .ev-del-link').first().click();
+    await expect(page.locator('text=Remove this schedule item?')).toBeVisible();
+    expect(nativeDialog).toBe(false);
   });
 });
