@@ -122,6 +122,39 @@ whole-weekend picture.
 19. **"At" before a bare hour is a time.** "Court at 6" means 6pm, not a place called "6".
 20. **A session that expired mid-edit says so.** The mode bar tells a signed-out editor to
     sign in in another tab and press Retry; nothing typed is lost.
+21. **One rule for a new item's leads.** On every entry path (quick line, on-board typing,
+    pasted lines, the full form) a new item's leads are the people picked by hand plus its
+    category's leads, marked auto-filled; an auto-filled chip can be removed before adding.
+    The back-fill that runs when staff change is deliberately narrower: it only fills items
+    that have no lead at all.
+22. **An unmatched `@word` is kept as typed.** If no one is picked, the text stays in the
+    title on Enter and on clicking away alike.
+23. **Only time ranges may be written as four digits** (`0900-1000`). A lone four-digit
+    number is never a time, so "2026 Kickoff" keeps its title.
+24. **Moving several blocks keeps them together.** A group drag or nudge stops when any
+    member would leave the day's hours or the event's days; a single block may still be
+    nudged onto a day outside the event.
+25. **Done never discards a paste preview.** With a preview open, Done stays in Edit mode
+    and asks for it to be added or discarded first. A second preview is refused the same way.
+26. **Share as image shows saved items only**, in view-mode hours, even when pressed during
+    Edit mode with previews on the board.
+27. **Leads copied from another event are hand-picked here** unless that person leads the
+    same category on this event, so a later staff change cannot remove them by surprise.
+28. **Pasted text is read generously.** Bullets, numbering and bold or heading marks are
+    stripped; headings like "SATURDAY 11/21" or "Saturday, November 21" set the day; items on
+    days outside the event are added but called out; unreadable lines are listed, never
+    guessed.
+
+Left for the owner to decide or try by hand:
+
+- `EventAjax` has no CSRF token on any endpoint, old or new; the new batch endpoint can
+  remove up to 200 items in one request. Adding a token is a separate change to that
+  controller as a whole.
+- Copying and pasting blocks in Safari, and typing at the keyboard cursor with an input
+  method, could not be tested automatically.
+- A real "Start from a past event" copy was exercised in server tests and with mocked
+  responses in the browser, but not end to end in a browser, because the local test park
+  has no past event with a schedule.
 
 ## 5. Constraints
 
