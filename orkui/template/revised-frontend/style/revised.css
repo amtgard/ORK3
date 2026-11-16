@@ -5698,6 +5698,11 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 .pk-att-inline-select { font-size:12px; padding:2px 4px; border:1px solid var(--ork-input-border); border-radius:4px; max-width:120px; }
 .pk-att-inline-credits { font-size:12px; padding:2px 4px; border:1px solid var(--ork-input-border); border-radius:4px; width:52px; }
 .pk-att-editing td { background:#fffbeb !important; }
+/* Narrow screens: stack the Online? control under the credits input so the edit row fits. */
+@media (max-width: 600px) {
+    .pk-att-credits-cell .orn-online-check { display:flex; white-space:normal; font-size:12px; }
+    .pk-att-editing .pk-att-inline-select { max-width:90px; }
+}
 .pk-att-entered-count { font-size:11px; font-weight:400; color:#a0aec0; margin-left:6px; text-transform:none; letter-spacing:0; }
 /* Search scope buttons */
 .pk-att-scope-btns { display:flex; margin-bottom:10px; border:1px solid #cbd5e0; border-radius:6px; overflow:hidden; }
