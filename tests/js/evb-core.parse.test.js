@@ -202,3 +202,34 @@ test('inside a block, noon and midnight are words unless they follow at', () => 
   assert.deepEqual(pick(p('noon Court'), ['startMin', 'title']), [720, 'Court']);
   assert.deepEqual(pick(p('Court noon'), ['startMin', 'title']), [720, 'Court']);
 });
+
+const STAFF = [
+  { MundaneId: 1, Persona: 'Luna', RoleName: 'A&S', LeadCategories: ['Class'] },
+  { MundaneId: 2, Persona: 'Luna Honeybadger', RoleName: 'Warcrat', LeadCategories: ['Battlegame', 'Class'] },
+  { MundaneId: 3, Persona: 'Sir "Quote" <b>', RoleName: 'Gate', LeadCategories: [] },
+];
+test('@ matches the longest staff persona and never stays in the title', () => {
+  let r = p('sat 9a bg: Mothman @luna honeybadger at Field', { staff: STAFF });
+  assert.deepEqual([r.title, r.location, r.leads.map(l => l.MundaneId), r.unmatchedLeads, r.given.leads], ['Mothman', 'Field', [2], [], true]);
+  r = p('9a Class @Luna @nobody here', { staff: STAFF });
+  assert.deepEqual([r.title, r.leads.map(l => l.MundaneId), r.unmatchedLeads], ['Class here', [1], ['nobody']]);
+  r = p('9a Mail crat@example.org about gate', { staff: STAFF });
+  assert.deepEqual([r.title, r.leads, r.given.leads], ['Mail crat@example.org about gate', [], false]);
+  r = p('9a Gate @sir "quote" <b>', { staff: STAFF });
+  assert.deepEqual([r.leads.map(l => l.MundaneId), r.title, r.description], [[3], 'Gate', '']);
+  assert.deepEqual(p('9a Mothman', { staff: STAFF }).leads, []);
+});
+test('category leads and swapping', () => {
+  assert.deepEqual(C.leadsForCategory(STAFF, 'Class').map(l => [l.MundaneId, l.Auto]), [[1, true], [2, true]]);
+  assert.deepEqual(C.leadsForCategory(STAFF, 'Court'), []);
+  const leads = [{ MundaneId: 2, Persona: 'Luna Honeybadger', Auto: true }, { MundaneId: 9, Persona: 'Hand Picked', Auto: false }];
+  assert.deepEqual(C.swapAutoLeads(leads, STAFF, 'Class').map(l => [l.MundaneId, !!l.Auto]), [[9, false], [1, true], [2, true]]);
+  assert.deepEqual(C.swapAutoLeads(leads, STAFF, 'Court').map(l => l.MundaneId), [9]);
+  const handIsAlsoLead = [{ MundaneId: 1, Persona: 'Luna', Auto: false }];
+  assert.deepEqual(C.swapAutoLeads(handIsAlsoLead, STAFF, 'Class').map(l => [l.MundaneId, !!l.Auto]), [[1, false], [2, true]]);
+});
+test('formatEntry writes leads and they read back for staff', () => {
+  const it = { Title: 'Mothman', Category: 'Battlegame', StartTime: '2026-11-21 09:30:00', EndTime: '2026-11-21 10:15:00', Location: '', Description: '', Leads: [{ MundaneId: 2, Persona: 'Luna Honeybadger' }] };
+  assert.equal(C.formatEntry(it), '9:30–10:15a #bg Mothman @Luna Honeybadger');
+  assert.deepEqual(C.parseEntry(C.formatEntry(it), { days: DAYS, staff: STAFF }).leads.map(l => l.MundaneId), [2]);
+});

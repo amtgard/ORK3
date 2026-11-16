@@ -263,3 +263,16 @@ test('a rejected update restores the saved values; meal fields are sent only whe
   assert.deepEqual(s.items().map(i => i.cid), ['i9']);
   assert.ok(!s.canUndo());
 });
+test('leads go out as MundaneId and Auto; the store keeps Persona and Auto', async () => {
+  const f = fake(); f.hold();
+  const s = S.create({ items: [], send: f.send, saveMeal: true });
+  const leads = [{ MundaneId: 5, Persona: 'Luna', Auto: true }, { MundaneId: '6', Persona: 'Hand' }];
+  const cid = s.add(item('Mothman', { Leads: leads }));
+  await tick();
+  assert.deepEqual(f.calls[0][0].item.Leads, [{ MundaneId: 5, Auto: true }, { MundaneId: 6, Auto: false }]);
+  assert.deepEqual(s.get(cid).Leads, leads);
+  f.release(); await s.idle();
+  s.update(cid, { Leads: [{ MundaneId: 6, Persona: 'Hand', Auto: false }] });
+  await s.idle();
+  assert.deepEqual(f.calls[1][0].fields.Leads, [{ MundaneId: 6, Auto: false }]);
+});

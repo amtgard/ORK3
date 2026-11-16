@@ -154,9 +154,11 @@
             Promise.resolve().then(function () { pumpScheduled = false; run(pump, false); });
         }
 
+        // Leads go out as {MundaneId, Auto}; the local items keep Persona too.
         function wireLeads(leads) {
             return (leads || []).map(function (l) {
-                return { MundaneId: +(l && typeof l === 'object' ? l.MundaneId : l) };
+                var obj = l && typeof l === 'object';
+                return { MundaneId: +(obj ? l.MundaneId : l), Auto: !!(obj && l.Auto) };
             });
         }
         function wireFields(src) {

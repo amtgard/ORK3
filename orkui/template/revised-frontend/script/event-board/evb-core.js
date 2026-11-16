@@ -311,7 +311,7 @@
         return { category: null, title: t };
     }
 
-    // Tokens. The scanner yields quoted spans and whitespace-separated words; a
+    // Tokens. The scanner yields '@' lead spans (leadAt, below), quoted spans and whitespace-separated words; a
     // word is then classified by the first matching TOKEN_KINDS entry, so a new
     // kind of token is one more entry here. Anything else is a plain 'word'.
     var QUOTE_CLOSE = { '"': '"', '\u201C': '\u201D', '\u201D': '\u201D' };
@@ -320,11 +320,49 @@
         { kind: 'cost', re: /^\$(\d+(?:\.\d{1,2})?)$/ }
     ];
 
-    function tokenize(text) {
+    // A staff persona as a pattern that matches it ignoring case and the width
+    // of its spaces, and only up to the end of a word ('@Luna' not in '@Lunatic').
+    function personaPattern(persona) {
+        var src = squash(persona).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
+        return new RegExp(src + '(?![\\p{L}\\p{N}])', 'iuy');
+    }
+
+    // '@' at the start of a word, at text[i]: { kind: 'lead', lead } spanning the
+    // longest staff persona after it (which may hold spaces or quotes), else
+    // { kind: 'unlead' } spanning the one word after it, else null (a bare '@').
+    function leadAt(text, i, staff) {
+        var best = null;
+        (staff || []).forEach(function (s) {
+            if (!s || !s.Persona || !squash(s.Persona)) return;
+            var re = personaPattern(s.Persona);
+            re.lastIndex = i + 1;
+            var m = re.exec(text);
+            if (m && (!best || m[0].length > best.len)) best = { len: m[0].length, staff: s };
+        });
+        if (best) {
+            var end = i + 1 + best.len;
+            return { kind: 'lead', text: text.slice(i, end), value: best.staff.Persona, end: end,
+                lead: { MundaneId: +best.staff.MundaneId, Persona: best.staff.Persona } };
+        }
+        var j = i + 1;
+        while (j < text.length && !/\s/.test(text.charAt(j))) j++;
+        if (j === i + 1) return null;
+        return { kind: 'unlead', text: text.slice(i, j), value: text.slice(i + 1, j), end: j };
+    }
+
+    function tokenize(text, staff) {
         var out = [], i = 0, n = text.length;
         while (i < n) {
             var ch = text.charAt(i);
             if (/\s/.test(ch)) { i++; continue; }
+            // '@' leads claim their whole span first: a persona may hold quotes.
+            var lead = ch === '@' ? leadAt(text, i, staff) : null;
+            if (lead) {
+                i = lead.end;
+                delete lead.end;
+                out.push(lead);
+                continue;
+            }
             if (QUOTE_CLOSE[ch]) {
                 var close = text.indexOf(QUOTE_CLOSE[ch], i + 1);
                 var end = close < 0 ? n : close + 1;
@@ -576,9 +614,25 @@
         var curDay = ctx.day || days[0] || null;
         var lastDuration = ctx.lastDuration == null ? 60 : ctx.lastDuration;
         var hasFixed = ctx.fixedStart != null && ctx.fixedEnd != null;
-        var toks = tokenize(String(text == null ? '' : text));
-        var given = { day: false, time: false, category: false, location: false, description: false, cost: false };
+        var toks = tokenize(String(text == null ? '' : text), ctx.staff);
+        var given = { day: false, time: false, category: false, location: false, description: false, cost: false, leads: false };
         var i;
+
+        // Leads: '@Persona' for staff, '@word' for anyone else. Both leave the
+        // title, unless ctx.keepUnmatchedLeads keeps an unmatched one as text.
+        var leads = [], unmatchedLeads = [];
+        toks.forEach(function (t) {
+            if (t.kind === 'lead') {
+                if (!leads.some(function (l) { return l.MundaneId === t.lead.MundaneId; })) leads.push(t.lead);
+            } else if (t.kind === 'unlead') {
+                unmatchedLeads.push(t.value);
+                if (ctx.keepUnmatchedLeads) { t.kind = 'word'; t.value = t.text; return; }
+            } else {
+                return;
+            }
+            t.claimed = true;
+            given.leads = true;
+        });
 
         // Day: only the first token.
         var typedDay = null;
@@ -700,6 +754,8 @@
             location: location,
             description: description,
             cost: cost,
+            leads: leads,
+            unmatchedLeads: unmatchedLeads,
             given: given
         };
     }
@@ -728,6 +784,28 @@
             var d = String(item.Description);
             out += d.indexOf('"') >= 0 ? ' \u201C' + d + '\u201D' : ' "' + d + '"';
         }
+        (item.Leads || []).forEach(function (l) { if (l && l.Persona) out += ' @' + l.Persona; });
+        return out;
+    }
+
+    // Staff who lead a category, in staff order, as auto-filled leads.
+    function leadsForCategory(staff, category) {
+        var out = [];
+        (staff || []).forEach(function (s) {
+            if (!category || (s.LeadCategories || []).indexOf(category) < 0) return;
+            if (out.some(function (l) { return l.MundaneId === +s.MundaneId; })) return;
+            out.push({ MundaneId: +s.MundaneId, Persona: s.Persona, Auto: true });
+        });
+        return out;
+    }
+
+    // An item's leads after its category becomes newCategory: hand-picked leads
+    // kept, auto-filled ones replaced by the new category's, nobody twice.
+    function swapAutoLeads(leads, staff, newCategory) {
+        var out = (leads || []).filter(function (l) { return !l.Auto; });
+        leadsForCategory(staff, newCategory).forEach(function (l) {
+            if (!out.some(function (o) { return +o.MundaneId === l.MundaneId; })) out.push(l);
+        });
         return out;
     }
 
@@ -748,6 +826,8 @@
         guessCategory: guessCategory,
         parseEntry: parseEntry,
         formatEntry: formatEntry,
+        leadsForCategory: leadsForCategory,
+        swapAutoLeads: swapAutoLeads,
         slotLine: slotLine,
         parseNaive: parseNaive,
         toNaive: toNaive,
