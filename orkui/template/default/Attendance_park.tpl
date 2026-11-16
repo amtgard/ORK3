@@ -978,12 +978,15 @@ $(function() {
 	/* ── DataTable ───────────────────────────────────── */
 	// CSV carries the hidden Online column, so drop the badge text from cells.
 	function attStripOnlineBadge(data) {
-		return typeof data === 'string' ? data.replace(/<span class="orn-online-badge"[^>]*>[\s\S]*?<\/span>/g, '') : data;
+		if (typeof data !== 'string' || data.indexOf('orn-online-badge') < 0) return data;
+		var $d = $('<div>').html(data);
+		$d.find('.orn-online-badge').remove();
+		return $d.html();
 	}
 	var table = $('#att-park-table').DataTable({
 		dom: 'lfrtip',
 		buttons: [
-			{ extend: 'csv',   filename: 'Park Attendance <?=addslashes($AttendanceDate)?>', exportOptions: { columns: ':not(.no-export)', format: { body: attStripOnlineBadge } } },
+			{ extend: 'csv',   filename: 'Park Attendance <?=addslashes($AttendanceDate)?>', exportOptions: { columns: ':not(.no-export)', format: { body: function (d) { return $.fn.dataTable.Buttons.stripData(attStripOnlineBadge(d)); } } } },
 			{ extend: 'print', exportOptions: { columns: ':visible:not(.no-export)' } }
 		],
 		columnDefs: [

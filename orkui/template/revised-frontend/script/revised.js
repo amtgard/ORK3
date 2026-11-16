@@ -992,9 +992,10 @@ function ornApplyParkDayType(sw, r) {
 
 // Drop ornOnlineBadge() markup from exported cell HTML (CSV carries a separate Online column).
 function ornStripOnlineBadge(html) {
-    return typeof html === 'string'
-        ? html.replace(/<span class="orn-online-badge"[^>]*>[\s\S]*?<\/span>/g, '')
-        : html;
+    if (typeof html !== 'string' || html.indexOf('orn-online-badge') < 0) return html;
+    var $d = jQuery('<div>').html(html);
+    $d.find('.orn-online-badge').remove();
+    return $d.html();
 }
 
 function pnInitDataTable(selector, opts) {
@@ -1025,7 +1026,7 @@ function pnInitDataTable(selector, opts) {
             filename: opts.filename || 'Export',
             exportOptions: {
                 columns: exportCols,
-                format: { body: function(data) { return ornStripOnlineBadge(data); } }
+                format: { body: function(d) { return jQuery.fn.dataTable.Buttons.stripData(ornStripOnlineBadge(d)); } }
             }
         }],
         columnDefs: colDefs,

@@ -10984,7 +10984,7 @@ html[data-theme="dark"] .tn-ladder-peers { background: #1a202c; border-color: #2
   box-shadow: none;
 }
 .orn-online-switch:focus-visible {
-  outline: 2px solid #2b6cb0;
+  outline: 2px solid var(--ork-link);
   outline-offset: 2px;
 }
 .orn-online-switch-track {
@@ -11007,7 +11007,7 @@ html[data-theme="dark"] .tn-ladder-peers { background: #1a202c; border-color: #2
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   transition: transform 0.15s ease;
 }
-.orn-online-switch[aria-checked="true"] .orn-online-switch-track { background: #2b6cb0; }
+.orn-online-switch[aria-checked="true"] .orn-online-switch-track { background: var(--ork-link); }
 .orn-online-switch[aria-checked="true"] .orn-online-switch-thumb { transform: translateX(16px); }
 .orn-online-hint {
   display: block;
@@ -11018,26 +11018,8 @@ html[data-theme="dark"] .tn-ladder-peers { background: #1a202c; border-color: #2
 /* Park Enter Attendance modal: switch sits beside the date picker, hint below */
 .pk-att-date-row { flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .pk-att-date-row .orn-online-hint { flex: 1 0 100%; text-align: center; }
-/* Inline (table-row) edit: compact labeled checkbox */
-.orn-online-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  font-size: 13px;
-  color: var(--ork-text);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.orn-online-check input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
-
-html[data-theme="dark"] .orn-online-switch { background: transparent; color: var(--ork-text); }
 html[data-theme="dark"] .orn-online-switch-track { background: #4a5568; }
-html[data-theme="dark"] .orn-online-switch[aria-checked="true"] .orn-online-switch-track { background: #63b3ed; }
 html[data-theme="dark"] .orn-online-switch-thumb { background: #e2e8f0; }
-html[data-theme="dark"] .orn-online-switch:focus-visible { outline-color: #63b3ed; }
-html[data-theme="dark"] .orn-online-hint { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .orn-online-check { color: var(--ork-text); }
 
 /* Sign-in link panels: switch on its own row under the inputs */
 .pk-att-link-online-row,
@@ -11065,7 +11047,7 @@ html[data-theme="dark"] .orn-online-check { color: var(--ork-text); }
   padding: 6px 10px;
   border-radius: 4px;
   pointer-events: none;
-  z-index: 500;
+  z-index: var(--z-tooltip);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   /* Parknew/Kingdomnew inline "instant tooltip" CSS hides [data-tip]::after
      with opacity:0 and adds a centered ::before arrow; neither fits here. */

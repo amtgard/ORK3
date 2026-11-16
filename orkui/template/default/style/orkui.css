@@ -2472,7 +2472,7 @@ html[data-theme="dark"] .rp-stats-filter-notice {
 .orn-online-badge {
     display: inline-block;
     position: relative;
-    color: #718096;
+    color: var(--ork-text-muted);
     font-size: 0.85em;
     line-height: 1;
     vertical-align: baseline;
@@ -2501,13 +2501,25 @@ html[data-theme="dark"] .rp-stats-filter-notice {
     white-space: nowrap;
     text-align: left;
     pointer-events: none;
-    z-index: 500;
+    z-index: var(--z-tooltip);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-}
-html[data-theme="dark"] .orn-online-badge {
-    color: #a0aec0;
 }
 html[data-theme="dark"] .orn-online-badge[data-tip]:hover::after {
     background: #f7fafc;
     color: #1a202c;
 }
+/* Online? labeled checkbox (inline edits, Behold). Here for the same reason as the
+   badge: default-theme attendance pages use it too. */
+.orn-online-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    font-size: 13px;
+    color: var(--ork-text);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.orn-online-check input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
+.form-container label.orn-online-check { display: inline-flex; width: auto; margin-left: 0; }
+html[data-theme="dark"] .form-container label.orn-online-check { color: var(--ork-text); }

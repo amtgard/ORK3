@@ -74,10 +74,7 @@
       </tbody>
     </table>
     <p>
-      <label for='BeholdOnline' style='display: inline-flex; align-items: center; gap: 0.5em; min-height: 44px; cursor: pointer;'>
-        <input type='checkbox' name='Online' id='BeholdOnline' value='1' style='width: 20px; height: 20px; margin: 0;' />
-        <span>Online?</span>
-      </label>
+      <label class='orn-online-check' for='BeholdOnline'><input type='checkbox' name='Online' id='BeholdOnline' value='1' /> Online?</label>
     </p>
   	<span><input value='Let them be counted!' type='submit' /></span>
     <input type='hidden' class='required-field' value='<?=trimlen($Attendance_index['AttendanceDate'])?$Attendance_index['AttendanceDate']:$AttendanceDate ?>' name='attendance_date' id='attendance_date' />
