@@ -723,4 +723,244 @@ final class OnlineAttendanceReportsTest extends TestCase
             $cache->memcache = $original;
         }
     }
+
+    /* ------------------------------------------------------------------ */
+    /*  State of Amtgard (Task 14)                                         */
+    /* ------------------------------------------------------------------ */
+
+    /** Runs $fn with GhettoCache always missing, so every call really queries. */
+    private function uncached(callable $fn)
+    {
+        $cache = Ork3::$Lib->ghettocache;
+        $original = $cache->memcache;
+        $cache->memcache = new class () {
+            public function get($k)
+            {
+                return false;
+            }
+
+            public function set($k, $v, $e = 0)
+            {
+                return true;
+            }
+
+            public function delete($k)
+            {
+                return true;
+            }
+        };
+        try {
+            return $fn();
+        } finally {
+            $cache->memcache = $original;
+        }
+    }
+
+    /**
+     * Calls a StateOfAmtgard section with the type omitted and with all / in_person /
+     * online (cache bypassed). Asserts All and an unknown type equal the omitted call.
+     *
+     * @return array{all: mixed, in_person: mixed, online: mixed}
+     */
+    private function sorByType(callable $fn): array
+    {
+        return $this->uncached(function () use ($fn) {
+            $omitted = $fn(null);
+            $out = [];
+            foreach (['all', 'in_person', 'online'] as $type) {
+                $out[$type] = $fn($type);
+            }
+            $this->assertEquals($omitted, $out['all'], 'All must equal the result with the type omitted');
+            $this->assertEquals($omitted, $fn('bogus'), 'Unknown type falls back to All');
+
+            return $out;
+        });
+    }
+
+    /** @return callable(?string): array a StateOfAmtgard section over the fixture month and kingdom */
+    private function sorSection(string $method): callable
+    {
+        $sor = new StateOfAmtgard();
+        $start = $this->monthStart();
+        $end = $this->monthEnd;
+        $ids = [$this->kingdomId];
+
+        return fn (?string $type) => $type === null
+            ? $sor->$method($start, $end, $ids)
+            : $sor->$method($start, $end, $ids, $type);
+    }
+
+    public function testStateOfAmtgardKingdomSignInsFilterByType(): void
+    {
+        $r = $this->sorByType($this->sorSection('getKingdomSignIns'));
+        $count = function (array $rows): int {
+            $row = $this->rowFor($rows, 'kingdom_id', $this->kingdomId);
+
+            return $row === null ? 0 : (int) $row['sign_in_count'];
+        };
+        // Seed: A, B in person + C online on day 1, A online on day 2; the month is otherwise empty.
+        $this->assertSame(4, $count($r['all']));
+        $this->assertSame(2, $count($r['in_person']));
+        $this->assertSame(2, $count($r['online']), 'Online count equals the seeded online rows');
+        $this->assertSame($count($r['all']), $count($r['in_person']) + $count($r['online']));
+        // The prior period is filtered too (empty here), so YoY compares like with like.
+        $this->assertSame(0, (int) $this->rowFor($r['online'], 'kingdom_id', $this->kingdomId)['prior_period_count']);
+    }
+
+    public function testStateOfAmtgardPlayerStatsFilterByType(): void
+    {
+        $r = $this->sorByType($this->sorSection('getPlayerStats'));
+        $this->assertSame(4, $r['all']['total_sign_ins']);
+        $this->assertSame(3, $r['all']['total_players']);
+        $this->assertSame(2, $r['in_person']['total_sign_ins']);
+        $this->assertSame(2, $r['in_person']['total_players'], 'A and B');
+        $this->assertSame(2, $r['online']['total_sign_ins'], 'Online count equals the seeded online rows');
+        $this->assertSame(2, $r['online']['total_players'], 'A and C');
+        // Every sign-in is exactly one type, so sign-ins add up (in range and over ten years);
+        // a player with both kinds is in both populations, so players do not.
+        $this->assertSame($r['all']['total_sign_ins'], $r['in_person']['total_sign_ins'] + $r['online']['total_sign_ins']);
+        $this->assertSame(
+            $r['all']['ten_year']['total_sign_ins'],
+            $r['in_person']['ten_year']['total_sign_ins'] + $r['online']['ten_year']['total_sign_ins']
+        );
+        $this->assertGreaterThanOrEqual($r['all']['ten_year']['total_players'], $r['in_person']['ten_year']['total_players'] + $r['online']['ten_year']['total_players']);
+        $year = (int) substr($this->day1, 0, 4);
+        $trend = fn (array $res): int => (int) ($this->rowFor(array_map(fn ($t) => $t + ['id' => $t['year']], $res['trend_by_year']), 'id', $year)['sign_ins'] ?? 0);
+        $this->assertSame($trend($r['all']), $trend($r['in_person']) + $trend($r['online']));
+    }
+
+    public function testStateOfAmtgardNormalPlayerStatusUsesAllAttendance(): void
+    {
+        // Player D: 2 in-person + 2 online sign-ins (1 credit each, plus credits to reach 12).
+        $d = $this->fixture->createPlayer($this->parkId, 'oar-d');
+        $dates = [$this->monthStart(), date('Y-m-d', strtotime($this->monthStart() . ' +1 day')), date('Y-m-d', strtotime($this->monthStart() . ' +2 days')), date('Y-m-d', strtotime($this->monthStart() . ' +3 days'))];
+        foreach ($dates as $i => $date) {
+            $id = $this->fixture->insertAttendance((int) $d['mundane_id'], $this->parkId, $this->kingdomId, $date, 0, $i % 2);
+            $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'attendance SET credits = 3 WHERE attendance_id = ' . (int) $id);
+        }
+        $r = $this->sorByType($this->sorSection('getPlayerStats'));
+        // D has 4 sign-ins / 12 credits in all, but only 2 of each type: still a normal player in each view.
+        $this->assertSame(1, $r['all']['normal_players']['count']);
+        $this->assertSame(1, $r['in_person']['normal_players']['count']);
+        $this->assertSame(1, $r['online']['normal_players']['count']);
+        $this->assertSame(2, $r['online']['normal_players']['total_sign_ins'], 'Counted sign-ins are the online ones');
+    }
+
+    public function testStateOfAmtgardClassesLongevityAndParksFilterByType(): void
+    {
+        $sum = fn (array $rows, string $k): int => array_sum(array_map(fn ($row) => (int) $row[$k], $rows));
+
+        $classes = $this->sorByType($this->sorSection('getClassSignIns'));
+        $this->assertSame(4, $sum($classes['all'], 'sign_in_count'));
+        $this->assertSame(2, $sum($classes['in_person'], 'sign_in_count'));
+        $this->assertSame(2, $sum($classes['online'], 'sign_in_count'));
+
+        $longevity = $this->sorByType($this->sorSection('getPlayerLongevity'));
+        $this->assertSame(3, $sum($longevity['all'], 'count'));
+        $this->assertSame(2, $sum($longevity['in_person'], 'count'), 'A and B');
+        $this->assertSame(2, $sum($longevity['online'], 'count'), 'A and C');
+
+        $parks = $this->sorByType($this->sorSection('getParksAnalysis'));
+        $top = fn (array $res): int => (int) ($this->rowFor($res['top_parks'], 'park_id', $this->parkId)['sign_in_count'] ?? 0);
+        $this->assertSame(4, $top($parks['all']));
+        $this->assertSame(2, $top($parks['in_person']));
+        $this->assertSame(2, $top($parks['online']));
+        // Park lifecycle (counts, new / lost, at-risk trend) is not filtered.
+        foreach (['total_active', 'new_parks_count', 'lost_parks_count', 'downward_trend_parks'] as $k) {
+            $this->assertEquals($parks['all'][$k], $parks['online'][$k], "$k uses all attendance");
+        }
+    }
+
+    public function testStateOfAmtgardCohortsFilterByType(): void
+    {
+        $r = $this->sorByType($this->sorSection('getPlayerCohorts'));
+        // A, B, C all have their first-ever sign-in in the month.
+        $this->assertSame(3, $r['all']['new_players']);
+        $this->assertSame(2, $r['in_person']['new_players'], 'A and B');
+        $this->assertSame(2, $r['online']['new_players'], 'A and C');
+        // One-time visitors: B (in person) and C (online); A has two sign-ins.
+        $this->assertSame(2, $r['all']['one_time_visitors']);
+        $this->assertSame(1, $r['in_person']['one_time_visitors']);
+        $this->assertSame(1, $r['online']['one_time_visitors']);
+        $this->assertSame(0, $r['online']['returning_players']);
+    }
+
+    public function testStateOfAmtgardRetentionFilterByType(): void
+    {
+        $sor = new StateOfAmtgard();
+        $ids = [$this->kingdomId];
+        $r = $this->sorByType(fn (?string $type) => $type === null ? $sor->getNewPlayerRetention($ids) : $sor->getNewPlayerRetention($ids, $type));
+        // Fixture players are in the mature cohort (first sign-in years ago) of this kingdom.
+        $this->assertGreaterThanOrEqual(3, $r['all']['headline']['cohort']);
+        $this->assertGreaterThanOrEqual(1, $r['online']['headline']['cohort']);
+        $this->assertLessThanOrEqual($r['all']['headline']['cohort'], $r['in_person']['headline']['cohort']);
+        $this->assertLessThanOrEqual($r['all']['headline']['cohort'], $r['online']['headline']['cohort']);
+        $this->assertGreaterThanOrEqual($r['all']['headline']['cohort'], $r['in_person']['headline']['cohort'] + $r['online']['headline']['cohort']);
+    }
+
+    public function testStateOfAmtgardDispatchPassesTypeAndCacheKeys(): void
+    {
+        $sor = new StateOfAmtgard();
+        $ids = [$this->kingdomId];
+        $count = function (?array $payload): int {
+            $row = $this->rowFor($payload['kingdoms'], 'kingdom_id', $this->kingdomId);
+
+            return $row === null ? 0 : (int) $row['sign_in_count'];
+        };
+        $this->uncached(function () use ($sor, $ids, $count) {
+            $this->assertSame(2, $count($sor->DispatchChartSection('kingdoms', $this->monthStart(), $this->monthEnd, $ids, 'online')));
+            $this->assertSame(4, $count($sor->DispatchChartSection('kingdoms', $this->monthStart(), $this->monthEnd, $ids)));
+            $this->assertEquals(
+                $sor->DispatchChartSection('awards', $this->monthStart(), $this->monthEnd, $ids),
+                $sor->DispatchChartSection('awards', $this->monthStart(), $this->monthEnd, $ids, 'online'),
+                'Award grants are never filtered'
+            );
+        });
+
+        $cache = Ork3::$Lib->ghettocache;
+        $original = $cache->memcache;
+        $recorder = new class () {
+            /** @var list<string> */
+            public array $keys = [];
+
+            public function get($k)
+            {
+                $this->keys[] = $k;
+
+                return false;
+            }
+
+            public function set($k, $v, $e = 0)
+            {
+                return true;
+            }
+
+            public function delete($k)
+            {
+                return true;
+            }
+        };
+        $cache->memcache = $recorder;
+        try {
+            foreach (['kingdoms', 'classes', 'parks', 'players', 'cohorts', 'longevity', 'retention'] as $section) {
+                $keys = [];
+                foreach ([null, 'all', 'in_person', 'online'] as $type) {
+                    $recorder->keys = [];
+                    $type === null
+                        ? $sor->DispatchChartSection($section, $this->monthStart(), $this->monthEnd, $ids)
+                        : $sor->DispatchChartSection($section, $this->monthStart(), $this->monthEnd, $ids, $type);
+                    $this->assertNotEmpty($recorder->keys, "$section did not consult the cache");
+                    $keys[(string) $type] = $recorder->keys[0];
+                }
+                $this->assertSame($keys[''], $keys['all'], "$section: All shares the pre-change cache key");
+                $this->assertCount(3, array_unique([$keys['all'], $keys['in_person'], $keys['online']]), "$section: each type has its own cache key");
+            }
+            // The pre-change key string is unchanged for All.
+            $recorder->keys = [];
+            $sor->getKingdomSignIns($this->monthStart(), $this->monthEnd, $ids);
+            $this->assertStringEndsWith('.' . md5($this->monthStart() . '|' . $this->monthEnd . '|' . $this->kingdomId), $recorder->keys[0]);
+        } finally {
+            $cache->memcache = $original;
+        }
+    }
 }

@@ -166,9 +166,9 @@ class Model_AdminDashboard extends Model
         return $this->_state_of_amtgard()->ValidateDateRange($startInput, $endInput, $environment);
     }
 
-    public function state_of_amtgard_chart_section(string $section, string $start, string $end, array $kingdomIds): ?array
+    public function state_of_amtgard_chart_section(string $section, string $start, string $end, array $kingdomIds, string $attendanceType = 'all'): ?array
     {
-        return $this->_state_of_amtgard()->DispatchChartSection($section, $start, $end, $kingdomIds);
+        return $this->_state_of_amtgard()->DispatchChartSection($section, $start, $end, $kingdomIds, $attendanceType);
     }
 
     public function audit_display_maps(array $auditRows, int $byWhomFilter, int $entityFilter, string $entityTypeFilter): array
