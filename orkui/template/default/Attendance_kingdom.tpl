@@ -418,7 +418,7 @@ html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondar
 				</thead>
 				<tbody>
 <?php foreach ($att_rows as $row) : ?>
-				<tr data-att-id="<?=(int)$row['AttendanceId']?>" data-att-date="<?=htmlspecialchars($row['Date']??'')?>" data-att-class="<?=(int)$row['ClassId']?>" data-att-mundane="<?=(int)$row['MundaneId']?>" data-att-online="<?=(int)($row['Online'] ?? 0) === 1 ? 1 : 0?>">
+				<tr data-att-id="<?=(int)$row['AttendanceId']?>" data-att-date="<?=htmlspecialchars($row['Date']??'')?>" data-att-class="<?=(int)$row['ClassId']?>" data-att-mundane="<?=(int)$row['MundaneId']?>">
 					<td><a href="<?=UIR.'Park/profile/'.$row['ParkId']?>"><?=htmlspecialchars($row['ParkName'])?></a></td>
 					<td>
 <?php if ((int)$row['MundaneId'] === 0) : ?>

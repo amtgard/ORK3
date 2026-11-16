@@ -612,7 +612,7 @@ html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
 				</thead>
 				<tbody>
 <?php foreach ($att_rows as $row) : ?>
-				<tr data-att-id="<?=(int)$row['AttendanceId']?>" data-att-date="<?=htmlspecialchars($AttendanceDate)?>" data-att-class="<?=(int)$row['ClassId']?>" data-att-mundane="<?=(int)$row['MundaneId']?>" data-att-online="<?=(int)($row['Online'] ?? 0) === 1 ? 1 : 0?>">
+				<tr data-att-id="<?=(int)$row['AttendanceId']?>" data-att-date="<?=htmlspecialchars($AttendanceDate)?>" data-att-class="<?=(int)$row['ClassId']?>" data-att-mundane="<?=(int)$row['MundaneId']?>">
 					<td>
 <?php if ((int)$row['MundaneId'] === 0) : ?>
 						<?=htmlspecialchars($row['AttendancePersona'])?><?=strlen($row['Note']??'')>0?' ('.htmlspecialchars($row['Note']).')':''?>
