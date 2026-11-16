@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../Support/PopulationExplorerProbe.php';
+
 /**
  * Integration tests: report surfaces split attendance into In-Person / Online / Total.
  *
@@ -962,5 +964,207 @@ final class OnlineAttendanceReportsTest extends TestCase
         } finally {
             $cache->memcache = $original;
         }
+    }
+
+    /* ── Population Explorer: page-level Sign-ins counted ─────────────── */
+
+    /**
+     * Runs a Population Explorer query on the fixture park as a global admin, with
+     * $type as AttendanceType (null = key omitted). Returns [result, statements].
+     */
+    private function peRun(array $tree, array $cols, ?string $type, string $token): array
+    {
+        $req = ['Token' => $token, 'ScopeType' => 'Park', 'ScopeId' => $this->parkId, 'Tree' => $tree, 'Columns' => $cols];
+        if ($type !== null) {
+            $req['AttendanceType'] = $type;
+        }
+        unset($_SESSION['is_authorized_mundane_id']);
+        $pe = new PopulationExplorerProbe();
+        $r = $pe->Run($req);
+        $this->assertSame(0, $r['Status']['Status'], json_encode($r['Status']));
+
+        // GET_LOCK / RELEASE_LOCK names carry no type; CONNECTION_ID is the probe's own.
+        return [$r, array_values(array_filter($pe->statements, static fn (string $q): bool => !preg_match('/_LOCK\(|CONNECTION_ID/', $q)))];
+    }
+
+    /** @return array<int, array> fixture players' rows keyed by mundane_id */
+    private function peFixtureRows(array $result): array
+    {
+        $out = [];
+        foreach ($result['Rows'] as $row) {
+            if (in_array($row['MundaneId'], [$this->playerA, $this->playerB, $this->playerC], true)) {
+                $out[$row['MundaneId']] = $row;
+            }
+        }
+        ksort($out);
+
+        return $out;
+    }
+
+    private function peAdminToken(): string
+    {
+        $admin = $this->fixture->createPlayer($this->parkId, 'oar-pe-admin');
+        $this->fixture->insertGlobalAdmin($admin['mundane_id']);
+
+        return $admin['token'];
+    }
+
+    /** Last-sign-in window = the fixture's empty month: only the seeded players can match it. */
+    private function peWindowTree(): array
+    {
+        return ['op' => 'AND', 'children' => [['c' => 'last_signin', 'o' => 'between', 'v' => [$this->day1, $this->monthEnd]]]];
+    }
+
+    public function testPopulationExplorerAllMatchesOmittedSqlAndResult(): void
+    {
+        $token = $this->peAdminToken();
+        $cols = ['persona', 'last_signin', 'player_since', 'signins_6m', 'total_signins', 'last_signin_park', 'last_class'];
+        $tree = ['op' => 'OR', 'children' => [
+            ['c' => 'total_signins', 'o' => 'gte', 'v' => 1],
+            ['c' => 'signins_last_n_months', 'o' => 'gte', 'v' => 1, 'p' => 6],
+        ]];
+        [$omitted, $omittedSql] = $this->peRun($tree, $cols, null, $token);
+        $this->assertNotEmpty($omittedSql);
+        foreach ($omittedSql as $q) {
+            $this->assertStringNotContainsString('online', $q, 'All adds no online predicate');
+        }
+        unset($omitted['ElapsedMs']);
+        foreach (['all', 'Online', 'nonsense'] as $same) {
+            [$r, $sql] = $this->peRun($tree, $cols, $same, $token);
+            unset($r['ElapsedMs']);
+            $this->assertSame($omittedSql, $sql, "$same: the exact pre-change SQL");
+            $this->assertSame($omitted, $r, "$same: the same result");
+        }
+        [, $onlineSql] = $this->peRun($tree, $cols, 'online', $token);
+        $this->assertStringContainsString('AND a.online = 1', implode("\n", $onlineSql));
+    }
+
+    public function testPopulationExplorerSigninColumnsFollowType(): void
+    {
+        $token = $this->peAdminToken();
+        $recent = date('Y-m-d', strtotime('-10 days'));
+        $this->fixture->insertAttendance($this->playerB, $this->parkId, $this->kingdomId, $recent, 0, 1); // B: recent online
+        $tree = ['op' => 'AND', 'children' => [['c' => 'total_signins', 'o' => 'gte', 'v' => 1]]];
+        $cols = ['persona', 'last_signin', 'player_since', 'signins_6m', 'total_signins', 'last_signin_park'];
+        $parkName = (string) $this->fixture->pdo()->query('SELECT name FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $this->parkId)->fetchColumn();
+
+        $view = function (?string $type) use ($tree, $cols, $token): array {
+            $out = [];
+            foreach ($this->peFixtureRows($this->peRun($tree, $cols, $type, $token)[0]) as $id => $row) {
+                $out[$id] = [$row['total_signins'], $row['last_signin'], $row['player_since'], $row['signins_6m'], $row['last_signin_park']];
+            }
+
+            return $out;
+        };
+        $a = $this->playerA;
+        $b = $this->playerB;
+        $c = $this->playerC;
+        $all = [
+            $a => [2, $this->day2, $this->day1, 0, $parkName],
+            $b => [2, $recent, $this->day1, 1, $parkName],
+            $c => [1, $this->day1, $this->day1, 0, $parkName],
+        ];
+        ksort($all);
+        $this->assertSame($all, $view(null));
+        $this->assertSame($all, $view('all'));
+        $inPerson = [$a => [1, $this->day1, $this->day1, 0, $parkName], $b => [1, $this->day1, $this->day1, 0, $parkName]];
+        ksort($inPerson);
+        $this->assertSame($inPerson, $view('in_person'), 'C has no in-person sign-in, so Total sign-ins >= 1 drops C');
+        $online = [
+            $a => [1, $this->day2, $this->day2, 0, $parkName],
+            $b => [1, $recent, $recent, 1, $parkName],
+            $c => [1, $this->day1, $this->day1, 0, $parkName],
+        ];
+        ksort($online);
+        $this->assertSame($online, $view('online'));
+        // Per player, in-person + online sign-ins = all.
+        foreach ($all as $id => $row) {
+            $this->assertSame($row[0], ($inPerson[$id][0] ?? 0) + $online[$id][0]);
+        }
+    }
+
+    public function testPopulationExplorerSigninCriteriaFollowType(): void
+    {
+        $token = $this->peAdminToken();
+        $recent = date('Y-m-d', strtotime('-10 days'));
+        $this->fixture->insertAttendance($this->playerB, $this->parkId, $this->kingdomId, $recent, 0, 1);
+        $ids = function (array $tree, ?string $type) use ($token): array {
+            return array_keys($this->peFixtureRows($this->peRun($tree, ['persona'], $type, $token)[0]));
+        };
+        $sorted = static function (array $x): array {
+            sort($x);
+
+            return $x;
+        };
+        // Last sign-in inside the empty month: only seeded players can match, so Total is exact.
+        $window = $this->peWindowTree();
+        $totals = [];
+        foreach ([null, 'all', 'in_person', 'online'] as $type) {
+            $totals[(string) $type] = $this->peRun($window, ['persona'], $type, $token)[0]['Total'];
+        }
+        $this->assertSame($totals[''], $totals['all']);
+        $this->assertSame(2, $totals['all'], 'A (day 2) and C (day 1); B last signed in recently');
+        $this->assertSame(2, $totals['in_person'], 'A and B last signed in in person on day 1');
+        $this->assertSame(2, $totals['online'], 'A online on day 2, C online on day 1');
+        $this->assertSame($sorted([$this->playerA, $this->playerC]), $ids($window, 'all'));
+        $this->assertSame($sorted([$this->playerA, $this->playerB]), $ids($window, 'in_person'));
+        $this->assertSame($sorted([$this->playerA, $this->playerC]), $ids($window, 'online'));
+
+        $classId = (int) $this->fixture->pdo()->query('SELECT class_id FROM ' . DB_PREFIX . 'class ORDER BY class_id ASC LIMIT 1')->fetchColumn();
+        $recentTree = ['op' => 'AND', 'children' => [['c' => 'signins_last_n_months', 'o' => 'gte', 'v' => 1, 'p' => 6]]];
+        $classTree = ['op' => 'AND', 'children' => [['c' => 'classes_last_n_months', 'o' => 'in', 'v' => [$classId], 'p' => 6]]];
+        foreach ([$recentTree, $classTree] as $tree) {
+            $this->assertSame([$this->playerB], $ids($tree, null));
+            $this->assertSame([$this->playerB], $ids($tree, 'online'));
+            $this->assertSame([], $ids($tree, 'in_person'));
+        }
+        // Total sign-ins = 0: never signed in *of that type*.
+        $none = ['op' => 'AND', 'children' => [['c' => 'total_signins', 'o' => 'eq', 'v' => 0]]];
+        $this->assertSame([], $ids($none, 'all'));
+        $this->assertSame([$this->playerC], $ids($none, 'in_person'));
+        $this->assertSame([], $ids($none, 'online'));
+        // Status rules ignore the type.
+        $active = ['op' => 'AND', 'children' => [$window['children'][0], ['c' => 'active', 'o' => 'is', 'v' => 'yes']]];
+        $this->assertSame($ids($window, 'online'), $ids($active, 'online'));
+    }
+
+    public function testPopulationExplorerExportFollowsType(): void
+    {
+        $token = $this->peAdminToken();
+        $req = ['Token' => $token, 'ScopeType' => 'Park', 'ScopeId' => $this->parkId, 'Tree' => $this->peWindowTree(), 'Columns' => ['persona', 'last_signin']];
+        $sheet = function (array $r): string {
+            $this->assertSame(0, $r['Status']['Status']);
+            $out = shell_exec('unzip -p ' . escapeshellarg($r['Path']) . ' xl/worksheets/sheet1.xml');
+            @unlink($r['Path']);
+            $this->assertIsString($out, 'unzip reads the workbook');
+
+            return (string) $out;
+        };
+        unset($_SESSION['is_authorized_mundane_id']);
+        $omitted = (new PopulationExplorer())->BuildExport($req);
+        $this->assertMatchesRegularExpression('/^population-explorer-\d{4}-\d{2}-\d{2}\.xlsx$/', $omitted['Filename']);
+        $omittedSheet = $sheet($omitted);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $all = (new PopulationExplorer())->BuildExport($req + ['AttendanceType' => 'all']);
+        $this->assertSame($omitted['Filename'], $all['Filename']);
+        $this->assertSame($omittedSheet, $sheet($all), 'All: byte-identical sheet');
+        $this->assertStringNotContainsString('sign-ins only', $omittedSheet);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $inPerson = (new PopulationExplorer())->BuildExport($req + ['AttendanceType' => 'in_person']);
+        $this->assertMatchesRegularExpression('/^population-explorer-in-person-\d{4}-\d{2}-\d{2}\.xlsx$/', $inPerson['Filename']);
+        $x = $sheet($inPerson);
+        $this->assertStringContainsString('Oar-a', $x);
+        $this->assertStringContainsString('Oar-b', $x);
+        $this->assertStringNotContainsString('Oar-c', $x);
+        $this->assertStringContainsString('use in-person sign-ins only.', $x);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $online = (new PopulationExplorer())->BuildExport($req + ['AttendanceType' => 'online']);
+        $x = $sheet($online);
+        $this->assertStringContainsString('Oar-a', $x);
+        $this->assertStringContainsString('Oar-c', $x);
+        $this->assertStringNotContainsString('Oar-b', $x);
+        $this->assertStringContainsString('>' . $this->day2 . '<', $x, "A's last online sign-in");
+        $this->assertStringContainsString('use online sign-ins only.', $x);
     }
 }

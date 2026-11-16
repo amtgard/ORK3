@@ -1468,6 +1468,8 @@ class Controller_Reports extends Controller
             'ScopeId'   => (int)($body['ScopeId'] ?? 0),
             'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
             'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+            // In-Person / Online / All; the domain normalizes it (anything unknown is All).
+            'AttendanceType' => is_string($body['AttendanceType'] ?? null) ? $body['AttendanceType'] : 'all',
         ]);
         if ((int)($r['Status']['Status'] ?? 1) !== 0) {
             echo json_encode($this->_pe_json_error($r));
@@ -1514,6 +1516,8 @@ class Controller_Reports extends Controller
             'ScopeId'   => (int)($body['ScopeId'] ?? 0),
             'Tree'      => is_array($body['Tree'] ?? null) ? $body['Tree'] : [],
             'Columns'   => is_array($body['Columns'] ?? null) ? $body['Columns'] : [],
+            // In-Person / Online / All; the domain normalizes it (anything unknown is All).
+            'AttendanceType' => is_string($body['AttendanceType'] ?? null) ? $body['AttendanceType'] : 'all',
         ]);
         $path = is_string($r['Path'] ?? null) ? $r['Path'] : '';
         if ($path !== '') {

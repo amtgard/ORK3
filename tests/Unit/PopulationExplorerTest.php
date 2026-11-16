@@ -1017,4 +1017,108 @@ final class PopulationExplorerTest extends TestCase
         $this->assertNotSame(PopulationExplorer::RunLockName($long, 1), PopulationExplorer::RunLockName($long . 'x', 1));
         $this->assertLessThanOrEqual(64, strlen(PopulationExplorer::RunLockName(str_repeat('d', 50), PHP_INT_MAX)));
     }
+
+    /** A valid sample leaf for any static criterion (officer view, so restricted ones too). */
+    private function sampleLeaf(string $id, array $def): array
+    {
+        $p = !empty($def['param']) ? 6 : null;
+        switch ($def['type']) {
+            case 'date':
+                return $this->leaf($id, 'gte', '2025-01-01', $p);
+            case 'number':
+                return $this->leaf($id, 'gte', 1, $p);
+            case 'bool':
+                return $this->leaf($id, 'is', 'yes', $p);
+            case 'peerage_set':
+                return $this->leaf($id, 'is', 'yes', $p);
+            case 'enum_set':
+                $v = ['class' => 1, 'award' => 17][$def['set']] ?? 5;
+
+                return $this->leaf($id, 'in', [$v], $p);
+        }
+        $this->fail('no sample for ' . $id);
+    }
+
+    /** Sign-in subqueries in $sql (each _attSub) and how many carry the online predicate. */
+    private function attendanceSubqueries(string $sql): int
+    {
+        return substr_count($sql, DB_PREFIX . 'attendance a WHERE a.mundane_id = m.mundane_id');
+    }
+
+    public function testAttendanceTypeFiltersEverySigninCriterionAndNothingElse(): void
+    {
+        $base = ['duesScope' => 'd.kingdom_id = 1'];
+        $signinCount = 0;
+        foreach ($this->pe->Registry()['criteria'] as $id => $def) {
+            $tree = ['op' => 'AND', 'children' => [$this->sampleLeaf($id, $def)]];
+            $omitted = $this->sql($tree, $base);
+            // All, and anything unknown, is the pre-change SQL exactly.
+            foreach (['all', 'ONLINE', '', 'in person'] as $same) {
+                $this->assertSame($omitted, $this->sql($tree, $base + ['attendanceType' => $same]), "$id / $same");
+            }
+            $this->assertStringNotContainsString('online', $omitted, $id);
+            $subs = $this->attendanceSubqueries($omitted);
+            $this->assertSame(!empty($def['signins']), $subs > 0, "$id: the signins flag matches the SQL");
+            $online = $this->sql($tree, $base + ['attendanceType' => 'online']);
+            $inPerson = $this->sql($tree, $base + ['attendanceType' => 'in_person']);
+            if ($subs === 0) {
+                $this->assertSame($omitted, $online, $id);
+                $this->assertSame($omitted, $inPerson, $id);
+                continue;
+            }
+            $signinCount++;
+            $this->assertSame($subs, substr_count($online, 'WHERE a.mundane_id = m.mundane_id AND a.online = 1'), "$id online: every subquery filtered");
+            $this->assertSame($subs, substr_count($inPerson, 'WHERE a.mundane_id = m.mundane_id AND a.online = 0'), "$id in_person: every subquery filtered");
+            $this->assertSame($omitted, str_replace(' AND a.online = 1', '', $online), "$id: the type is the only change");
+        }
+        $this->assertSame(8, $signinCount, 'every sign-in criterion is flagged');
+    }
+
+    public function testAttendanceTypeFiltersEverySigninColumn(): void
+    {
+        $ctx = ['duesScope' => 'd.kingdom_id = 1'];
+        $filtered = [];
+        foreach (array_keys($this->pe->Registry()['columns']) as $c) {
+            $omitted = $this->pe->ColumnSelectSql($c, $ctx);
+            $this->assertSame($omitted, $this->pe->ColumnSelectSql($c, $ctx + ['attendanceType' => 'all']), $c);
+            $this->assertSame($omitted, $this->pe->ColumnSelectSql($c, $ctx + ['attendanceType' => 'bogus']), $c);
+            $online = $this->pe->ColumnSelectSql($c, $ctx + ['attendanceType' => 'online']);
+            $subs = $this->attendanceSubqueries($omitted);
+            $this->assertSame($subs, substr_count($online, 'AND a.online = 1'), $c);
+            $this->assertSame($subs, substr_count($this->pe->ColumnSelectSql($c, $ctx + ['attendanceType' => 'in_person']), 'AND a.online = 0'), $c);
+            if ($subs > 0) {
+                $filtered[] = $c;
+            }
+        }
+        sort($filtered);
+        $this->assertSame(['last_class', 'last_signin', 'last_signin_park', 'player_since', 'signins_6m', 'total_signins'], $filtered);
+        // The type is per call: a later call without it is back to All.
+        $this->pe->ColumnSelectSql('last_signin', $ctx + ['attendanceType' => 'online']);
+        $this->assertStringNotContainsString('online', $this->pe->ColumnSelectSql('last_signin', $ctx));
+        $this->assertStringNotContainsString('online', $this->sql(['op' => 'AND', 'children' => [$this->leaf('total_signins', 'gte', 1)]]));
+    }
+
+    public function testDecodeLinkCarriesAttendanceTypeOnlyWhenNotAll(): void
+    {
+        $tree = ['op' => 'AND', 'children' => [$this->leaf('last_signin', 'gte', '2025-01-01')]];
+        foreach (['online' => 'online', 'in_person' => 'in_person'] as $in => $want) {
+            $d = $this->pe->DecodeLink(PopulationExplorer::EncodeLink(['tree' => $tree, 'columns' => ['persona'], 'attendanceType' => $in]), $this->known);
+            $this->assertTrue($d['ok'], (string) $d['error']);
+            $this->assertSame($want, $d['state']['attendanceType']);
+        }
+        $plain = $this->pe->DecodeLink(PopulationExplorer::EncodeLink(['tree' => $tree, 'columns' => ['persona']]), $this->known);
+        foreach (['all', 'ONLINE', 7, ['online']] as $v) {
+            $d = $this->pe->DecodeLink(PopulationExplorer::EncodeLink(['tree' => $tree, 'columns' => ['persona'], 'attendanceType' => $v]), $this->known);
+            $this->assertTrue($d['ok']);
+            $this->assertArrayNotHasKey('attendanceType', $d['state'], json_encode($v));
+            $this->assertSame($plain['state'], $d['state'], 'All links decode exactly like pre-change links');
+        }
+    }
+
+    public function testSigninFlagIsPublicForTheHelpGuide(): void
+    {
+        $crit = $this->pe->PublicCriteria(['officer' => true]);
+        $this->assertTrue($crit['last_signin']['signins']);
+        $this->assertFalse($crit['dues_paid']['signins']);
+    }
 }

@@ -15,6 +15,8 @@ $pe_no_scope   = !empty($pe_no_scope);
 $pe_bad_scope  = !empty($pe_bad_scope);
 $pe_load_error = !empty($pe_load_error);
 $pe_link_param = (string)($pe_link_param ?? 'pe');
+// Page-level In-Person / Online / All (a share link may carry it; absent = All).
+$pe_att_type   = Attendance::NormalizeType(is_array($pe_initial) ? ($pe_initial['attendanceType'] ?? 'all') : 'all');
 $pe_ready      = !$pe_no_scope && !$pe_bad_scope && !$pe_load_error && $pe_scope_type !== null && !empty($pe_registry);
 
 $pe_is_park    = ($pe_scope_type === 'Park');
@@ -132,6 +134,13 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 
 	<div class="rp-main pe-main">
 
+		<!-- Attendance type: page-level, applies to every sign-in rule and column. -->
+		<div class="pe-type-bar" id="pe-type-bar">
+			<span class="pe-type-label"><i class="fas fa-wifi" aria-hidden="true"></i> Sign-ins counted</span>
+			<?=ork_attendance_type_control($pe_att_type)?>
+			<span class="pe-type-note" id="pe-type-note"></span>
+		</div>
+
 		<!-- Filters -->
 		<section class="rp-filter-card pe-card" id="pe-filters-card">
 			<div class="rp-filter-card-header pe-card-head">
@@ -233,6 +242,7 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 						<li><a href="#pe-help-start">Quick start</a></li>
 						<li><a href="#pe-help-rules">Rules</a></li>
 						<li><a href="#pe-help-groups">Groups: AND and OR</a></li>
+						<li><a href="#pe-help-type">Sign-ins counted</a></li>
 						<li><a href="#pe-help-not">&ldquo;Not&rdquo; rules and missing values</a></li>
 						<li><a href="#pe-help-ref">Criteria reference</a></li>
 						<li><a href="#pe-help-results">Columns and results</a></li>
@@ -330,6 +340,15 @@ $pe_page_url   = UIR . 'Reports/population_explorer&' . ($pe_is_park ? 'ParkId' 
 					<p>It reads: signed in on or after Jan 1, 2025 <strong>and</strong> holds the Flame, Sword or Crown <strong>and</strong> has paid dues <strong>and</strong> (more than 5 sign-ins in the last 6 months <strong>or</strong> last played a class other than Druid). A player with no recorded class does not pass the Druid rule (see the next section), so they need the sign-ins rule instead.</p>
 				</section>
 
+				<section class="pe-help-section" aria-labelledby="pe-help-type">
+					<h3 class="pe-help-h" id="pe-help-type" tabindex="-1">Sign-ins counted: In-Person / Online / All</h3>
+					<p>The <strong>Sign-ins counted</strong> switch above Filters sets which sign-ins the whole report reads. <strong>All</strong>, the default, counts every sign-in. <strong>In-Person</strong> or <strong>Online</strong> counts only sign-ins of that kind.</p>
+					<ul>
+						<li>It applies to every rule and column built from sign-ins: Last sign-in date and days ago, Player since, Total sign-ins, Sign-ins in last N months, Last class played, Classes played in last N months and Last sign-in park. With Online, for example, Last sign-in date is the player&rsquo;s last online sign-in, and a player who has never signed in online has none.</li>
+						<li>It does not change who is in this <?=$pe_word?>, or rules that do not read sign-ins, such as Active, Dues paid, Waivered and awards.</li>
+						<li>Changing it marks the results &ldquo;Filters changed since last run&rdquo;; press Run to apply it. Export and Copy link use it too.</li>
+					</ul>
+				</section>
 				<section class="pe-help-section" aria-labelledby="pe-help-not">
 					<h3 class="pe-help-h" id="pe-help-not" tabindex="-1">&ldquo;Not&rdquo; rules and missing values</h3>
 					<p>Some fields can be empty for a player. A rule on an empty field never matches that player, and that includes &ldquo;not&rdquo; rules (<em>&ne;</em>, <em>is not</em>, <em>is none of</em>). For example, <?=$pe_rule('Last class played', 'is not', 'Druid')?> skips players who have no sign-in with a class. The fields that can be empty:</p>
