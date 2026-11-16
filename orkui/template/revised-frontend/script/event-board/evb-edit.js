@@ -32,7 +32,9 @@
         day: null,          // the quick line's default day
         changeSeq: 0,
         refreshSeq: 0,
-        committing: false
+        committing: false,
+        refreshOwed: false, // a refresh asked for while changes were unsaved
+        unloadBound: false
     };
     var api = { store: null };
 
@@ -204,6 +206,16 @@
         q('.evb-save').setAttribute('data-state', st);
         q('.evb-save-state').textContent = SAVE_TEXT[st];
         q('.evb-save-retry').hidden = st !== 'offline';
+        // Leaving the page asks first only while something is unsaved.
+        guardUnload(st !== 'saved');
+        if (st === 'saved' && state.refreshOwed) refresh();
+    }
+
+    function guardUnload(on) {
+        if (on === state.unloadBound) return;
+        state.unloadBound = on;
+        if (on) win.addEventListener('beforeunload', onBeforeUnload);
+        else win.removeEventListener('beforeunload', onBeforeUnload);
     }
 
     function showHistory() {
@@ -225,6 +237,7 @@
             b.type = 'button';
             b.className = 'evb-notice-restore';
             b.textContent = 'Put it back in the line';
+            b.evbRestoreText = restoreText;
             b.addEventListener('click', function () {
                 state.entry.setText(restoreText);
                 state.entry.focus();
@@ -321,8 +334,18 @@
         return t.tagName === 'INPUT' && !/^(button|submit|reset|checkbox|radio|range|color|file|image)$/i.test(t.type || '');
     }
 
+    // A page modal (the schedule modal, a confirm) owns the keyboard while it is open.
+    function modalOpen() {
+        var sm = doc.getElementById('ev-schedule-modal');
+        if (sm && win.getComputedStyle(sm).display !== 'none') return true;
+        return !!doc.querySelector('.ev-modal-open, .ev-open, [id$="-overlay"].kn-open, [id$="-overlay"].pn-open, [id$="-modal"].kn-open');
+    }
+
+    function undo() { if (state.store && !state.leaving) state.store.undo(); }
+    function redo() { if (state.store && !state.leaving) state.store.redo(); }
+
     function onKeyDown(e) {
-        if (!state.editing) return;
+        if (!state.editing || modalOpen()) return;
         var t = e.target;
         if (e.key === 'Escape' && q('.evb-help-pop') && !q('.evb-help-pop').hidden) {
             setHelp(false);
@@ -339,7 +362,7 @@
             var emptyLine = state.entry && t === state.entry.input && !state.entry.getText();
             if (isTextField(t) && !emptyLine) return;
             e.preventDefault();
-            if (e.shiftKey) state.store.redo(); else state.store.undo();
+            if (e.shiftKey) redo(); else undo();
         }
     }
 
@@ -374,8 +397,11 @@
 
     // Re-read the schedule when everything here is saved, and take it if it differs
     // (which also clears Undo). A change made meanwhile wins over the answer.
+    // Asked for while changes are unsaved, it runs as soon as they are saved.
     function refresh() {
-        if (!state.editing || !state.store || state.store.status().state !== 'saved') return;
+        if (!state.editing || !state.store) return;
+        if (state.store.status().state !== 'saved') { state.refreshOwed = true; return; }
+        state.refreshOwed = false;
         var seq = ++state.refreshSeq, at = state.changeSeq;
         fetchList().then(function (items) {
             if (!state.editing || seq !== state.refreshSeq || at !== state.changeSeq) return;
@@ -402,6 +428,7 @@
         state.store = api.store = store;
         state.recent = [];
         state.editing = true;
+        state.refreshOwed = false;
 
         var head = doc.createElement('div');
         head.className = 'evb-edit-head';
@@ -428,8 +455,8 @@
         q('.evb-modebar').addEventListener('mousedown', function (e) {
             if (e.target.closest('.evb-undo, .evb-redo')) e.preventDefault();
         });
-        q('.evb-undo').addEventListener('click', function () { store.undo(); });
-        q('.evb-redo').addEventListener('click', function () { store.redo(); });
+        q('.evb-undo').addEventListener('click', undo);
+        q('.evb-redo').addEventListener('click', redo);
         q('.evb-save-retry').addEventListener('click', function () { store.retry(); });
         q('.evb-help').addEventListener('click', function () { setHelp(q('.evb-help-pop').hidden); });
         q('.evb-done').addEventListener('click', function () { exit(); });
@@ -450,7 +477,6 @@
         doc.addEventListener('keydown', onKeyDown);
         doc.addEventListener('click', onDocClick);
         win.addEventListener('focus', onFocus);
-        win.addEventListener('beforeunload', onBeforeUnload);
         state.entry.focus();
     }
 
@@ -460,7 +486,8 @@
         doc.removeEventListener('keydown', onKeyDown);
         doc.removeEventListener('click', onDocClick);
         win.removeEventListener('focus', onFocus);
-        win.removeEventListener('beforeunload', onBeforeUnload);
+        guardUnload(false);
+        state.refreshOwed = false;
         if (state.entry) state.entry.destroy();
         if (state.head && state.head.parentNode) state.head.parentNode.removeChild(state.head);
         state.entry = state.head = null;
@@ -526,25 +553,9 @@
         return items;
     }
 
-    function exit() {
-        if (!state.editing) return Promise.resolve();
-        if (state.leaving) return state.leaving;
-        // Nothing typed is dropped: a complete line is added first, a line with no title stays.
-        if (state.entry.getText().trim()) {
-            var r = state.entry.result();
-            if (!r || !r.ok) {
-                addNotice('The line has no title yet. Add one and press Enter, or press Esc to clear it, then Done.');
-                state.entry.focus();
-                return Promise.resolve();
-            }
-            onCommit(r);
-            state.entry.clear();
-        }
-        var done = q('.evb-done');
-        done.disabled = true;
-        state.entry.input.readOnly = true;
-        var store = state.store;
-        state.leaving = store.idle().then(function () {
+    // The page once the store is idle; it waits again if something was sent meanwhile.
+    function settledPage(store) {
+        return store.idle().then(function () {
             if (store.status().state === 'offline') throw new Error('offline');
             // A refused add put its line back while saving: stay so it is not lost.
             if (state.entry.getText().trim()) throw new Error('kept');
@@ -553,8 +564,48 @@
                 return r.text();
             });
         }).then(function (html) {
+            return store.status().pending === 0 ? html : settledPage(store);
+        });
+    }
+
+    function exit() {
+        if (!state.editing) return Promise.resolve();
+        if (state.leaving) return state.leaving;
+        // Nothing typed is dropped: a complete line is added first, a line with no
+        // title stays, and a line that only names a day applies nothing.
+        if (state.entry.getText().trim()) {
+            var r = state.entry.result();
+            if (r && !r.ok && r.setDay) {
+                state.entry.clear();
+            } else if (!r || !r.ok) {
+                addNotice('The line has no title yet. Add one and press Enter, or press Esc to clear it, then Done.');
+                state.entry.focus();
+                return Promise.resolve();
+            } else {
+                onCommit(r);
+                state.entry.clear();
+            }
+        }
+        // A refused line still waiting in the notice comes back to the line first.
+        var restore = q('.evb-notice-restore');
+        if (restore) {
+            state.entry.setText(restore.evbRestoreText);
+            var row = restore.parentNode;
+            row.removeChild(restore);
+            row.appendChild(doc.createTextNode('Its line is back in the quick line: fix it and press Enter, or Esc to drop it, then Done.'));
+            state.entry.focus();
+            return Promise.resolve();
+        }
+        var done = q('.evb-done');
+        done.disabled = true;
+        q('.evb-undo').disabled = true;
+        q('.evb-redo').disabled = true;
+        state.entry.input.readOnly = true;
+        var store = state.store;
+        state.leaving = settledPage(store).then(function (html) {
             var items = swapFromPage(html);
             if (!items) throw new Error('page');
+            state.leaving = null;
             unmount();
             V().setItems(items);
             var btn = doc.querySelector('.evb-edit-btn');
@@ -568,6 +619,7 @@
             state.leaving = null;
             if (done) done.disabled = false;
             if (state.entry) state.entry.input.readOnly = false;
+            showHistory();
         });
         return state.leaving;
     }

@@ -358,7 +358,9 @@ html[data-theme="dark"] .evb-entry-option-active { background: #4a5568; }
     .evb-legend-chip { padding: 6px 10px; }
     /* The toolbar wraps from the left here, so the menu opens rightward. */
     .evb-share-menu { left: 0; right: auto; }
-    /* Edit mode: title and save state on one row, the buttons on the next. */
+    /* Edit mode: the head stays in the flow (stuck, it would cover a third of a
+       phone); title and save state on one row, the buttons on the next. */
+    .evb-edit-head { position: static; }
     .evb-modebar { padding: 8px; }
     .evb-modebar-actions { flex: 1 0 100%; margin-left: 0; }
     .evb-modebar .evb-done { margin-left: auto; }

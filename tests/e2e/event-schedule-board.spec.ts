@@ -340,9 +340,11 @@ test.describe('editing', () => {
   test('Edit schedule is offered to an editor and not to a signed-out viewer', async ({ page, browser }) => {
     await openBoard(page, EDIT_EVENT);
     await expect(page.locator('.evb-edit-btn')).toBeVisible();
-    const anon = await (await browser.newContext()).newPage();
+    const anonCtx = await browser.newContext();
+    const anon = await anonCtx.newPage();
     await anon.goto(`index.php?Route=Event/detail/${EDIT_EVENT}#ev-tab-schedule?view=board`);
     await expect(anon.locator('.evb-edit-btn')).toHaveCount(0);
+    await anonCtx.close();
   });
 
   test('the quick line previews, adds and persists an item', async ({ page }) => {
@@ -399,5 +401,56 @@ test.describe('editing', () => {
     await expect(other.locator('.evb-save-state')).toHaveText('All changes saved');
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect(page.locator('.evb-block', { hasText: `${PREFIX} elsewhere` })).toHaveCount(1);
+  });
+
+  test('Done never discards a rejected line', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await page.route(/schedule_batch/, route => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 1, error: 'A title is required.', failedIndex: 0 }),
+    }), { times: 1 });
+    // Hold the line in place while the rejection arrives, so the restore goes to the notice.
+    await line.fill(`sat 4p ${PREFIX} refused`);
+    await page.evaluate(() => {
+      const input = document.querySelector('.evb-quickline .evb-entry-input') as HTMLInputElement;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      input.value = 'sun 2p typed meanwhile';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await expect(page.locator('.evb-notice')).toContainText('Couldn’t save');
+    await expect(page.locator('.evb-notice-restore')).toHaveCount(1);
+    await line.fill(`sun 3p ${PREFIX} other line`);
+    await page.locator('.evb-done').click();
+    await expect(page.locator('.evb-modebar')).toBeVisible();
+    const kept = (await line.inputValue()).includes(`${PREFIX} refused`) ||
+      await page.locator('.evb-notice-restore').count() > 0;
+    expect(kept).toBe(true);
+    await line.press('Escape');
+    await page.locator('.evb-done').click();
+    await expect(page.locator('.evb-modebar')).toHaveCount(0);
+  });
+
+  test('Done on a line that only names a day applies nothing and leaves quietly', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill('sun');
+    await page.locator('.evb-done').click();
+    await expect(page.locator('.evb-modebar')).toHaveCount(0);
+    await expect(page.locator('.evb-notice')).toHaveCount(0);
+  });
+
+  test('board shortcuts do nothing while the schedule modal is open', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await page.getByRole('button', { name: 'Add Schedule Item' }).click();
+    await expect(page.locator('#ev-schedule-modal')).toBeVisible();
+    await page.locator('#ev-schedule-modal .ev-modal-close').focus();
+    await page.keyboard.press('/');
+    expect(await page.evaluate(() => document.activeElement?.classList.contains('evb-entry-input'))).toBe(false);
+    await page.locator('#ev-schedule-modal .ev-modal-close').click();
+    await expect(page.locator('#ev-schedule-modal')).toBeHidden();
   });
 });
