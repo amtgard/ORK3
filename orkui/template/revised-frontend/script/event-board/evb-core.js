@@ -14,6 +14,9 @@
 
     var BOARD_DAY_START = 300; // 5:00am: the board day begins here
     var DAY_MIN = 1440;
+    var MAX_SEGMENTS = 31; // an item never spans more than this many board days
+    var MAX_DAYS = 62;     // a board never draws more than this many event days
+    var MIN_LAYOUT = 15;   // layout treats shorter items as this long, so they hold a lane
     var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
         'August', 'September', 'October', 'November', 'December'];
@@ -116,11 +119,109 @@
                 isLast: false
             });
             if (absEnd <= windowEnd) break;
+            if (out.length >= MAX_SEGMENTS) return out; // absurd data: the last segment is not the true last
             cursor = windowEnd;
             dayNum += 1;
         }
         out[out.length - 1].isLast = true;
         return out;
+    }
+
+    function categoryOf(seg) { return seg.item.Category || 'Other'; }
+
+    function layEnd(seg) { return Math.max(seg.endMin, seg.startMin + MIN_LAYOUT); }
+
+    // Lay one day's segments out in lanes. Clusters of overlapping segments share
+    // lanes; a segment keeps to a lane last used by its own category when one is
+    // free. Adds lane, left and width (percent of the day) to each segment and
+    // returns the day's lane count.
+    function layoutDay(segs) {
+        var clusters = [], cur = [], curEnd = null;
+        segs.sort(function (a, b) { return (a.startMin - b.startMin) || (layEnd(a) - layEnd(b)); });
+        segs.forEach(function (sg) {
+            if (cur.length && sg.startMin >= curEnd) { clusters.push(cur); cur = []; curEnd = null; }
+            cur.push(sg);
+            curEnd = curEnd === null ? layEnd(sg) : Math.max(curEnd, layEnd(sg));
+        });
+        if (cur.length) clusters.push(cur);
+
+        var maxLanes = 0;
+        clusters.forEach(function (cl) {
+            var lanes = []; // { end, cat }
+            cl.forEach(function (sg) {
+                var pick = -1, i, cat = categoryOf(sg);
+                for (i = 0; i < lanes.length; i++) {
+                    if (lanes[i].end <= sg.startMin && lanes[i].cat === cat) { pick = i; break; }
+                }
+                if (pick < 0) {
+                    for (i = 0; i < lanes.length; i++) {
+                        if (lanes[i].end > sg.startMin) continue;
+                        // Skip a lane whose own category needs it again before this segment ends.
+                        var claimed = cl.some(function (o) {
+                            return o !== sg && o.startMin >= sg.startMin && o.startMin < layEnd(sg) &&
+                                categoryOf(o) === lanes[i].cat && categoryOf(o) !== cat;
+                        });
+                        if (!claimed) { pick = i; break; }
+                    }
+                }
+                if (pick < 0) { lanes.push({ end: 0, cat: cat }); pick = lanes.length - 1; }
+                lanes[pick].end = layEnd(sg);
+                lanes[pick].cat = cat;
+                sg.lane = pick;
+            });
+            var n = lanes.length;
+            maxLanes = Math.max(maxLanes, n);
+            cl.forEach(function (sg) {
+                var span = 1;
+                for (var c = sg.lane + 1; c < n; c++) {
+                    var blocked = cl.some(function (o) {
+                        return o.lane === c && o.startMin < layEnd(sg) && layEnd(o) > sg.startMin;
+                    });
+                    if (blocked) break;
+                    span++;
+                }
+                sg.left = sg.lane / n * 100;
+                sg.width = span / n * 100;
+            });
+        });
+        return maxLanes;
+    }
+
+    // Turn schedule items into day columns with laid-out segments and the time
+    // axis. opts = { eventStart, eventEnd, editing }; the dates are naive strings
+    // or empty.
+    function buildBoard(items, opts) {
+        var byDay = {};
+        var lo = null, hi = null;
+        (items || []).forEach(function (item) {
+            segments(item).forEach(function (sg) {
+                (byDay[sg.day] = byDay[sg.day] || []).push(sg);
+                lo = lo === null ? sg.startMin : Math.min(lo, sg.startMin);
+                hi = hi === null ? sg.endMin : Math.max(hi, sg.endMin);
+            });
+        });
+
+        var evStart = parseNaive(opts.eventStart), evEnd = parseNaive(opts.eventEnd);
+        if (evStart && evEnd) {
+            var count = Math.min(diffDays(evStart.day, evEnd.day), MAX_DAYS - 1);
+            for (var i = 0; i <= count; i++) {
+                var d = addDays(evStart.day, i);
+                byDay[d] = byDay[d] || [];
+            }
+        }
+
+        var days = Object.keys(byDay).sort().map(function (day) {
+            var segs = byDay[day];
+            return { day: day, label: dayLabel(day), segs: segs, lanes: layoutDay(segs) };
+        });
+
+        var axisStart = lo === null ? 540 : Math.floor(lo / 60) * 60;
+        var axisEnd = hi === null ? 1080 : Math.ceil(hi / 60) * 60;
+        if (opts.editing) {
+            axisStart = Math.min(axisStart, 420);
+            axisEnd = Math.max(axisEnd, 1440);
+        }
+        return { days: days, axisStart: axisStart, axisEnd: axisEnd };
     }
 
     return {
@@ -133,6 +234,8 @@
         dayLabelLong: dayLabelLong,
         fmtTime: fmtTime,
         fmtRange: fmtRange,
-        segments: segments
+        segments: segments,
+        layoutDay: layoutDay,
+        buildBoard: buildBoard
     };
 });

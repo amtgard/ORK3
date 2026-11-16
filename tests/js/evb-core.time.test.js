@@ -54,3 +54,8 @@ test('ending exactly at 5am leaves no empty segment; zero-length items survive',
   const bad = C.segments({ StartTime: '2026-11-20 10:00:00', EndTime: '2026-11-20 09:00:00' });
   assert.deepEqual([bad.length, bad[0].startMin, bad[0].endMin], [1, 600, 600]);
 });
+test('an item with an absurd end date is capped at 31 segments', () => {
+  const s = C.segments({ StartTime: '2026-11-20 09:00:00', EndTime: '9999-01-01 09:00:00' });
+  assert.equal(s.length, 31);
+  assert.equal(s[30].isLast, false);
+});
