@@ -1159,14 +1159,14 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					<button type="button" class="ev-grid-view-btn" data-ev-view="board" aria-pressed="false"><i class="fas fa-th"></i> Board</button>
 					<button type="button" class="ev-grid-view-btn" data-ev-view="list" aria-pressed="true"><i class="fas fa-list-ul"></i> List</button>
 				</div>
-				<button type="button" class="ev-sched-copy-btn" onclick="evCopyScheduleLink(this)" title="Copy a link that opens the schedule in this exact view">
+				<button type="button" class="ev-sched-copy-btn" onclick="evCopyScheduleLink(this)" data-tip="Copy a link that opens the schedule in this exact view">
 					<i class="fas fa-link"></i> Copy link
 				</button>
 				<div class="evb-share">
-					<button type="button" class="ev-sched-copy-btn evb-share-btn" aria-haspopup="true" aria-expanded="false" data-tip="A picture of the board to post">
+					<button type="button" class="ev-sched-copy-btn evb-share-btn" aria-expanded="false" aria-controls="evb-share-menu" data-tip="A picture of the board to post">
 						<i class="fas fa-image"></i> Share as image
 					</button>
-					<div class="evb-share-menu" hidden>
+					<div class="evb-share-menu" id="evb-share-menu" hidden>
 						<button type="button" data-evb-share="download-all"><i class="fas fa-download"></i> Download PNG</button>
 						<button type="button" data-evb-share="download-day" hidden><i class="fas fa-calendar-day"></i> Download this day</button>
 						<button type="button" data-evb-share="copy" hidden><i class="fas fa-copy"></i> Copy image</button>
@@ -2329,11 +2329,11 @@ var EvConfig = {
 	isPastEvent:       <?= !empty($isPastEvent) ? 'true' : 'false' ?>,
 	eventId:    <?= $eventId ?>,
 	detailId:   <?= $detailId ?>,
-	eventName:  <?= json_encode($info['Name'] ?? 'Event') ?>,
+	eventName:  <?= json_encode($info['Name'] ?? 'Event', JSON_INVALID_UTF8_SUBSTITUTE) ?>,
 	eventDate:  <?= json_encode($eventStart ? date('Y-m-d', strtotime($eventStart)) : '') ?>,
 	// For the board image's subtitle: the hero's date range, and the host park or else "City, Province".
-	eventDateLabel: <?= json_encode($dateBadgeText, JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	eventPlace: <?= json_encode(trim((string)($AtParkName ?? '')) !== '' ? trim((string)$AtParkName) : implode(', ', array_filter([trim($city), trim($province)])), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	eventDateLabel: <?= json_encode($dateBadgeText, JSON_HEX_TAG | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
+	eventPlace: <?= json_encode(trim((string)($AtParkName ?? '')) !== '' ? trim((string)$AtParkName) : implode(', ', array_filter([trim($city), trim($province)])), JSON_HEX_TAG | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
 	parkId:     <?= (int)($atParkId ?: $parkId) ?>,
 	kingdomId:  <?= (int)$kingdomId ?>,
 	eventStart: '<?= $eventStart ? date('Y-m-d\TH:i', strtotime($eventStart)) : '' ?>',
@@ -2341,7 +2341,7 @@ var EvConfig = {
 	// The schedule as emitted in #evb-schedule-data (naive local datetimes), and the server's clock.
 	schedule:   (function() { try { return JSON.parse(document.getElementById('evb-schedule-data').textContent); } catch (e) { return []; } })(),
 	serverNow:  <?= json_encode(date('Y-m-d H:i')) ?>,
-	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona'], 'RoleName' => $s['RoleName'] ?? '']; }, $StaffList ?? [])) ?>,
+	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona'], 'RoleName' => $s['RoleName'] ?? '']; }, $StaffList ?? []), JSON_INVALID_UTF8_SUBSTITUTE) ?>,
 	hasFees:    true,
 	fees:       <?= json_encode(array_map(function($f) { return ['AdmissionType' => $f['AdmissionType'], 'Cost' => (float)$f['Cost']]; }, $eventFees)) ?>,
 	hasLinks:   true,

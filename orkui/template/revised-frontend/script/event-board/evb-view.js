@@ -71,7 +71,7 @@
             ' data-day="' + esc(seg.day) + '"' +
             ' data-category="' + esc(cat) + '"' +
             (sec ? ' data-secondary-category="' + esc(sec) + '"' : '') +
-            ' aria-label="' + esc((item.Title || '') + ', ' + time) + '"' +
+            ' aria-label="' + esc((item.Title || '') + ', ' + C.dayLabel(seg.day) + ' ' + time) + '"' +
             ' style="' + esc(style) + '">';
         h += '<div class="evb-block-title">' + esc(item.Title || '') +
             (hasMenu ? ' <i class="fas fa-scroll evb-block-menu" data-tip="Has menu"></i>' : '') + '</div>';
@@ -219,12 +219,17 @@
         return !!(win && win.matchMedia && win.matchMedia(PHONE_QUERY).matches);
     }
 
-    function legendHtml() {
+    // The categories items on the board use, as primary or secondary.
+    function presentCategories() {
         var present = {};
         state.items.forEach(function (it) {
             present[catName(it.Category, state.catsByName)] = true;
             if (it.SecondaryCategory && state.catsByName[it.SecondaryCategory]) present[it.SecondaryCategory] = true;
         });
+        return present;
+    }
+
+    function legendHtml(present) {
         var h = '<div class="evb-legend">';
         state.cats.forEach(function (c) {
             if (!present[c.name]) return;
@@ -307,7 +312,11 @@
         var bodyH = (board.axisEnd - board.axisStart) * PX_PER_MIN;
         var bodyStyle = 'height:' + bodyH.toFixed(1) + 'px';
 
-        var h = legendHtml() + dayPillsHtml(board);
+        var present = presentCategories();
+        // A filter on a category no item uses any more has no chip to clear it.
+        if (state.filter && !present[state.filter]) state.filter = null;
+
+        var h = legendHtml(present) + dayPillsHtml(board);
         h += '<div class="evb-scroller"><div class="evb-board">';
         h += '<div class="evb-gutter"><div class="evb-head"></div><div class="evb-gutter-body" style="' + bodyStyle + '">';
         for (var m = board.axisStart; m < board.axisEnd; m += 60) {
@@ -418,6 +427,8 @@
         return null;
     }
 
+    var pointerDown = false; // a mouse or touch press is in progress (set in init)
+
     function closePopover(restoreFocus) {
         var p = state.popover;
         if (!p) return;
@@ -464,6 +475,26 @@
                 openEditor(edit.getAttribute('data-id'));
             }
         });
+        // The popover sits at the end of <body>, so keyboard focus leaving it would
+        // otherwise land far from the board (or leave the page). Tab past the last
+        // control, Shift+Tab before the first, or focus moving elsewhere without a
+        // pointer closes it and returns focus to the block. Pointer presses are
+        // left to the document click handler, which keeps the clicked target.
+        el.addEventListener('keydown', function (e) {
+            if (e.key !== 'Tab') return;
+            var f = el.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])');
+            var first = f[0], last = f[f.length - 1];
+            var a = win.document.activeElement;
+            var out = !f.length || (e.shiftKey ? (a === first || a === el) : a === last);
+            if (!out) return;
+            e.preventDefault();
+            closePopover(true);
+        });
+        el.addEventListener('focusout', function (e) {
+            var to = e.relatedTarget;
+            if (pointerDown || !to || el.contains(to)) return;
+            if (state.popover && state.popover.el === el) closePopover(true);
+        });
         win.document.body.appendChild(el);
         placePopover(el, block);
         var r = block.getBoundingClientRect();
@@ -472,11 +503,16 @@
     }
 
     // Re-fetch the page and take the fresh schedule from its JSON data script, so
-    // schedule add/edit/delete (handled in revised.js) reach the board.
+    // schedule add/edit/delete (handled in revised.js) reach the board. Each
+    // refresh is numbered; a response to one that is no longer the latest is
+    // dropped, so a slow earlier fetch cannot overwrite a newer schedule.
+    var refreshSeq = 0;
     function refreshFromServer() {
+        var seq = ++refreshSeq;
         win.fetch(win.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
             .then(function (r) { return r.text(); })
             .then(function (html) {
+                if (seq !== refreshSeq) return;
                 var doc = new win.DOMParser().parseFromString(html, 'text/html');
                 var data = doc.getElementById('evb-schedule-data');
                 if (!data) return;
@@ -543,6 +579,11 @@
         doc.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && state.popover) closePopover(true);
         });
+        // Focus that moves during a press comes from the pointer, not the keyboard.
+        doc.addEventListener('pointerdown', function () { pointerDown = true; }, true);
+        ['pointerup', 'pointercancel'].forEach(function (type) {
+            doc.addEventListener(type, function () { win.setTimeout(function () { pointerDown = false; }, 0); }, true);
+        });
         win.addEventListener('scroll', function () {
             var p = state.popover;
             if (!p) return;
@@ -567,6 +608,10 @@
         win.setInterval(function () {
             if (state.view === 'board' && !doc.hidden) renderNow();
         }, 60000);
+        // The interval skips hidden tabs, so catch up as soon as the tab is back.
+        doc.addEventListener('visibilitychange', function () {
+            if (!doc.hidden) renderNow();
+        });
 
         win.evScheduleHashSuffix = function () {
             if (state.view !== 'board') return '';

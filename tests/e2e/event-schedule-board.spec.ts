@@ -84,6 +84,137 @@ test.describe('viewer', () => {
     expect(dims[0]).toBeGreaterThan(800);
     expect(dims[1]).toBeGreaterThan(400);
   });
+
+  test('a very wide board image stays inside canvas limits', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const dims = await page.evaluate(() => {
+      const board = { axisStart: 540, axisEnd: 1080, days: [{ day: '2026-11-21', label: 'Saturday', segs: [], lanes: 300 }] };
+      const c = (window as any).EvBoardImage.render(board, { title: 'T', subtitle: '', url: '', categories: [] }, { scale: 2, day: null });
+      return [c.width, c.height];
+    });
+    expect(dims[0]).toBeLessThanOrEqual(16384);
+    expect(dims[0] * dims[1]).toBeLessThanOrEqual(100000000);
+    expect(dims[0]).toBeGreaterThan(16000);
+  });
+
+  test('share as image says so when the browser cannot make the image', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    await page.evaluate(() => {
+      HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) { setTimeout(() => cb(null), 0); };
+    });
+    await page.locator('.evb-share-btn').click();
+    await page.locator('.evb-share-menu [data-evb-share="download-all"]').click();
+    await expect(page.locator('.evb-share-btn')).toContainText('Image too large');
+    await expect(page.locator('.evb-share-btn')).toContainText('Share as image', { timeout: 4000 });
+  });
+
+  test('the share button is a disclosure that closes when focus moves past it', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const btn = page.locator('.evb-share-btn');
+    await expect(btn).not.toHaveAttribute('aria-haspopup', /.*/);
+    await expect(btn).toHaveAttribute('aria-controls', 'evb-share-menu');
+    await expect(page.locator('#evb-share-menu')).toHaveCount(1);
+    await btn.click();
+    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#evb-share-menu')).toBeVisible();
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press('Tab');
+      if (!(await page.evaluate(() => !!document.activeElement?.closest('.evb-share')))) break;
+    }
+    await expect(page.locator('#evb-share-menu')).toBeHidden();
+    await expect(btn).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('Copy link uses a data-tip, not a title', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const link = page.locator('.ev-sched-copy-btn:not(.evb-share-btn)');
+    await expect(link).toHaveAttribute('data-tip', /Copy a link/);
+    await expect(link).not.toHaveAttribute('title', /.*/);
+  });
+
+  test('Tab out of a keyboard-opened popover closes it and returns to the block', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const block = page.locator('.evb-block').first();
+    await block.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.evb-popover')).toHaveCount(1);
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press('Tab');
+      if (await page.locator('.evb-popover').count() === 0) break;
+    }
+    await expect(page.locator('.evb-popover')).toHaveCount(0);
+    expect(await block.evaluate(b => document.activeElement === b)).toBe(true);
+
+    // Shift+Tab from the first control does the same.
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.evb-popover')).toHaveCount(1);
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.locator('.evb-popover')).toHaveCount(0);
+    expect(await block.evaluate(b => document.activeElement === b)).toBe(true);
+  });
+
+  test('a filter on a category that leaves the board is cleared', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const cat = await page.locator('.evb-legend-chip').first().getAttribute('data-category');
+    await page.locator('.evb-legend-chip').first().click();
+    await expect(page.locator('.evb-legend-chip[aria-pressed="true"]')).toHaveCount(1);
+    await page.evaluate(c => {
+      const V = (window as any).EvBoardView;
+      V.setItems(V.getItems().filter((it: any) => it.Category !== c && it.SecondaryCategory !== c));
+    }, cat);
+    await expect(page.locator('.evb-legend-chip[aria-pressed="true"]')).toHaveCount(0);
+    await expect(page.locator('.evb-block.evb-dim')).toHaveCount(0);
+  });
+
+  test('a stale board refresh does not overwrite a newer one', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const titles = await page.evaluate(async () => {
+      const w = window as any;
+      const pageFor = (title: string) => '<script type="application/json" id="evb-schedule-data">' + JSON.stringify([
+        { EventScheduleId: 1, Title: title, Category: 'Other', StartTime: '2026-11-21 10:00:00', EndTime: '2026-11-21 11:00:00', Leads: [] }
+      ]) + '</script>';
+      const pending: Array<(v: any) => void> = [];
+      w.fetch = () => new Promise(res => pending.push(res));
+      w.evRefreshScheduleGrid();
+      w.evRefreshScheduleGrid();
+      // The newer answer arrives first, then the older one.
+      pending[1]({ text: () => Promise.resolve(pageFor('Newer')) });
+      await new Promise(r => setTimeout(r, 50));
+      pending[0]({ text: () => Promise.resolve(pageFor('Older')) });
+      await new Promise(r => setTimeout(r, 50));
+      return w.EvBoardView.getItems().map((it: any) => it.Title);
+    });
+    expect(titles).toEqual(['Newer']);
+  });
+
+  test('the now line is redrawn when the tab becomes visible', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const drawn = await page.evaluate(() => {
+      const w = window as any, b = w.EvBoardView.board;
+      const day = b.days[0].day, min = b.axisStart + 30;
+      w.EvConfig.serverNow = day + ' ' + String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+      document.querySelectorAll('.evb-now').forEach(e => e.remove());
+      document.dispatchEvent(new Event('visibilitychange'));
+      return !!document.querySelector(`.evb-day-body[data-day="${day}"] .evb-now`);
+    });
+    expect(drawn).toBe(true);
+  });
+
+  test('dark theme: a pressed legend chip stands out and swatches have a ring', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('ork_theme', 'dark'));
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const chips = page.locator('.evb-legend-chip');
+    test.skip(await chips.count() < 2, 'needs two legend chips');
+    await chips.first().click();
+    const [on, off, ring] = await page.evaluate(() => {
+      const c = document.querySelectorAll('.evb-legend-chip');
+      return [getComputedStyle(c[0]).backgroundColor, getComputedStyle(c[1]).backgroundColor,
+        getComputedStyle(c[1].querySelector('.evb-legend-swatch')!).boxShadow];
+    });
+    expect(on).not.toBe(off);
+    expect(ring).not.toBe('none');
+  });
 });
 
 // ---- Signed-in helpers (later phases reuse these) ----
@@ -147,9 +278,11 @@ test.describe('editor paths (phase 1)', () => {
     await page.getByRole('button', { name: 'Add Schedule Item' }).click();
     await expect(page.locator('#ev-schedule-modal')).toBeVisible();
     await page.fill('#ev-sched-title', title);
+    // The event's own first day, so the test works on any edit event.
     await page.evaluate(() => {
-      (document.getElementById('ev-sched-start') as any)._flatpickr.setDate('2026-11-21 10:00', true);
-      (document.getElementById('ev-sched-end') as any)._flatpickr.setDate('2026-11-21 11:00', true);
+      const day = String((window as any).EvConfig.eventStart).slice(0, 10);
+      (document.getElementById('ev-sched-start') as any)._flatpickr.setDate(`${day} 10:00`, true);
+      (document.getElementById('ev-sched-end') as any)._flatpickr.setDate(`${day} 11:00`, true);
     });
     await page.click('#ev-sched-save-btn');
 

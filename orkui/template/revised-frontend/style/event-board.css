@@ -22,6 +22,13 @@
     box-shadow: inset 0 0 0 1px var(--ork-text);
 }
 .evb-legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+/* Dark theme: --ork-bg-secondary equals the chip's --ork-card-bg there, so the
+   pressed chip takes a lighter fill; a thin light ring keeps dark swatches
+   (Court's brown) visible on the dark chip. */
+html[data-theme="dark"] .evb-legend-chip[aria-pressed="true"] {
+    background: #4a5568; border-color: #e2e8f0; box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+html[data-theme="dark"] .evb-legend-swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55); }
 
 /* ---- Frame: one scroller, sticky day heads and sticky hour gutter ---- */
 .evb-scroller {

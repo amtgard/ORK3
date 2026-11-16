@@ -62,6 +62,24 @@
         return out;
     }
 
+    // Browsers refuse canvases past these limits (toBlob then gives null).
+    var MAX_SIDE = 16384;
+    var MAX_AREA = 100000000;
+
+    // The largest scale up to wantedScale at which a width x height layout fits
+    // the canvas limits once rounded up to whole device pixels. It drops below 1
+    // when even scale 1 is too large.
+    function fitScale(width, height, wantedScale) {
+        var w = Math.max(1, +width || 0), h = Math.max(1, +height || 0);
+        var s = Math.min(+wantedScale > 0 ? +wantedScale : 1, MAX_SIDE / w, MAX_SIDE / h, Math.sqrt(MAX_AREA / (w * h)));
+        s = Math.floor(s * 10000) / 10000;
+        while (s > 0.0001 && (Math.ceil(w * s) > MAX_SIDE || Math.ceil(h * s) > MAX_SIDE ||
+            Math.ceil(w * s) * Math.ceil(h * s) > MAX_AREA)) {
+            s -= 0.0001;
+        }
+        return s;
+    }
+
     function fileName(title) {
         var slug = String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
         return slug ? slug + '-schedule.png' : 'schedule.png';
@@ -238,6 +256,8 @@
         var height = footTop + (urlLine ? 16 : 0) + PAD;
         var width = contentW + PAD * 2;
 
+        // A very wide board draws at a lower scale rather than not at all.
+        scale = fitScale(width, height, scale);
         canvas.width = Math.ceil(width * scale);
         canvas.height = Math.ceil(height * scale);
         ctx = canvas.getContext('2d');
@@ -318,9 +338,13 @@
         return canvas;
     }
 
-    function download(canvas, name) {
+    // Save the image as a file; onFail runs when the browser cannot encode it.
+    function download(canvas, name, onFail) {
         canvas.toBlob(function (blob) {
-            if (!blob) return;
+            if (!blob) {
+                if (typeof onFail === 'function') onFail();
+                return;
+            }
             var url = win.URL.createObjectURL(blob);
             var a = win.document.createElement('a');
             a.href = url;
@@ -333,7 +357,8 @@
         }, 'image/png');
     }
 
-    // Copy the image to the clipboard; resolves false when the browser cannot.
+    // Copy the image to the clipboard. Resolves true when copied, 'too-large'
+    // when the browser could not encode the image, and false when it cannot copy.
     function copy(canvas) {
         return new Promise(function (resolve) {
             var nav = win.navigator;
@@ -342,12 +367,17 @@
                 return;
             }
             try {
+                var noImage = false;
                 // A promised blob keeps the click's user activation in Safari.
                 var blob = new Promise(function (res, rej) {
-                    canvas.toBlob(function (b) { if (b) res(b); else rej(new Error('no image')); }, 'image/png');
+                    canvas.toBlob(function (b) {
+                        if (b) { res(b); return; }
+                        noImage = true;
+                        rej(new Error('no image'));
+                    }, 'image/png');
                 });
                 nav.clipboard.write([new win.ClipboardItem({ 'image/png': blob })])
-                    .then(function () { resolve(true); }, function () { resolve(false); });
+                    .then(function () { resolve(true); }, function () { resolve(noImage ? 'too-large' : false); });
             } catch (e) {
                 resolve(false);
             }
@@ -383,8 +413,17 @@
         var menu = doc.querySelector('.evb-share-menu');
         var view = win.EvBoardView;
         if (!btn || !menu || !view) return;
+        var wrap = btn.closest('.evb-share') || btn.parentNode;
         var label = btn.innerHTML;
         var resetTimer = null;
+
+        // Show a short result on the button for two seconds.
+        function flash(html) {
+            win.clearTimeout(resetTimer);
+            btn.innerHTML = html;
+            resetTimer = win.setTimeout(function () { btn.innerHTML = label; }, 2000);
+        }
+        function tooLarge() { flash('<i class="fas fa-exclamation-circle"></i> Image too large'); }
 
         function setOpen(open) {
             if (open) {
@@ -409,15 +448,14 @@
                 return;
             }
             if (kind === 'copy') {
-                copy(canvas).then(function (ok) {
-                    win.clearTimeout(resetTimer);
-                    btn.innerHTML = ok ? '<i class="fas fa-check"></i> Copied'
-                        : '<i class="fas fa-exclamation-circle"></i> Copy failed';
-                    resetTimer = win.setTimeout(function () { btn.innerHTML = label; }, 2000);
+                copy(canvas).then(function (result) {
+                    if (result === 'too-large') { tooLarge(); return; }
+                    flash(result ? '<i class="fas fa-check"></i> Copied'
+                        : '<i class="fas fa-exclamation-circle"></i> Copy failed');
                 });
                 return;
             }
-            download(canvas, fileName(day ? meta.title + ' ' + day : meta.title));
+            download(canvas, fileName(day ? meta.title + ' ' + day : meta.title), tooLarge);
         }
 
         btn.addEventListener('click', function () { setOpen(menu.hidden); });
@@ -431,6 +469,14 @@
             if (menu.hidden || !e.target.closest || e.target.closest('.evb-share')) return;
             setOpen(false);
         });
+        // A disclosure: it closes when focus moves on past both the button and
+        // the panel. (A null relatedTarget is a click, which the handler above
+        // deals with; Safari does not focus clicked buttons.)
+        wrap.addEventListener('focusout', function (e) {
+            var to = e.relatedTarget;
+            if (menu.hidden || !to || wrap.contains(to)) return;
+            setOpen(false);
+        });
         doc.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape' || menu.hidden) return;
             setOpen(false);
@@ -441,6 +487,7 @@
     return {
         wrapLines: wrapLines,
         fileName: fileName,
+        fitScale: fitScale,
         render: render,
         download: download,
         copy: copy,

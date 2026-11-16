@@ -84,6 +84,7 @@
     function fmtTime(min) { return clock(min) + meridiem(min); }
 
     function fmtRange(startMin, endMin) {
+        if (endMin === startMin) return fmtTime(startMin);
         if (meridiem(startMin) === meridiem(endMin)) {
             return clock(startMin) + '–' + clock(endMin) + meridiem(endMin);
         }
@@ -197,7 +198,8 @@
             segments(item).forEach(function (sg) {
                 (byDay[sg.day] = byDay[sg.day] || []).push(sg);
                 lo = lo === null ? sg.startMin : Math.min(lo, sg.startMin);
-                hi = hi === null ? sg.endMin : Math.max(hi, sg.endMin);
+                // Blocks draw at least MIN_LAYOUT tall, so the axis must reach that far.
+                hi = hi === null ? layEnd(sg) : Math.max(hi, layEnd(sg));
             });
         });
 

@@ -31,6 +31,10 @@ test('time labels', () => {
   assert.equal(C.fmtRange(720, 780), '12–1p');
   assert.equal(C.fmtRange(1380, 1500), '11p–1a');
 });
+test('a zero-length range reads as one time', () => {
+  assert.equal(C.fmtRange(540, 540), '9a');
+  assert.equal(C.fmtRange(720, 720), '12p');
+});
 test('an evening item past midnight stays in its evening column', () => {
   const s = C.segments({ StartTime: '2026-11-20 22:00:00', EndTime: '2026-11-21 01:00:00' });
   assert.equal(s.length, 1);

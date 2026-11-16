@@ -44,6 +44,11 @@ test('empty schedule, edit axis, out-of-range days, unknown category, zero-lengt
   ], { eventStart: '', eventEnd: '', editing: false });
   assert.deepEqual([z.days.length, z.days[0].lanes], [1, 2]);
 });
+test('the axis reaches the bottom of a very short last item', () => {
+  const at = (s, e) => C.buildBoard([{ Title: 'X', StartTime: s, EndTime: e }], { eventStart: '', eventEnd: '', editing: false });
+  assert.equal(at('2026-11-21 17:00:00', '2026-11-21 17:00:00').axisEnd, 1080);
+  assert.equal(at('2026-11-21 16:50:00', '2026-11-21 16:55:00').axisEnd, 1080);
+});
 test('an empty day has one lane', () => {
   const b = C.buildBoard([], opts);
   assert.ok(b.days.length > 0);

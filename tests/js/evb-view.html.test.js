@@ -67,6 +67,25 @@ test('autolink leaves trailing punctuation and an unmatched paren outside the li
   assert.ok(h.includes('</a>).'));
   assert.ok(h.includes('&quot;x&quot;'));
 });
+test('the block label names the day', () => {
+  const h = V.blockHtml(seg({ EventScheduleId: 7, Title: 'Mothman', Category: 'Battlegame', Leads: [] }, { startMin: 720, endMin: 765 }), cats);
+  assert.ok(h.includes('aria-label="Mothman, Saturday 12–12:45p"'), h);
+});
+test('a zero-length item shows one time on the block and in the popover', () => {
+  const item = { EventScheduleId: 3, Title: 'Gate', Category: 'Other', StartTime: '2026-11-21 09:00:00', EndTime: '2026-11-21 09:00:00', Leads: [] };
+  assert.ok(V.blockHtml(seg(item, { startMin: 540, endMin: 540 }), cats).includes('>9a</div>'));
+  assert.ok(V.popoverHtml(item, cats, '/').includes('Saturday · 9a<'));
+});
+test('an overnight item past 5am names both weekdays in the popover', () => {
+  const h = V.popoverHtml({ EventScheduleId: 4, Title: 'Vigil', Category: 'Other', StartTime: '2026-11-20 22:00:00', EndTime: '2026-11-21 06:00:00', Leads: [] }, cats, '/');
+  assert.ok(h.includes('Friday') && h.includes('Saturday'), h);
+});
+test('autolink never links javascript: and keeps quotes out of the href', () => {
+  const h = V.autolink('see javascript:alert(1) and https://x.org/"onmouseover=alert(1) now');
+  assert.ok(!h.includes('href="javascript'));
+  assert.equal((h.match(/<a /g) || []).length, 1);
+  assert.ok(!h.includes('"onmouseover'));
+});
 test('the now line follows the server clock and the 5am board day', () => {
   assert.deepEqual(V.nowMinute('2026-11-21 14:05', 0), { day: '2026-11-21', min: 845 });
   assert.deepEqual(V.nowMinute('2026-11-21 14:05', 10 * 60000), { day: '2026-11-21', min: 855 });
