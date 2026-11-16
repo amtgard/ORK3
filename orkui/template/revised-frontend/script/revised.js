@@ -10333,7 +10333,7 @@ $(document).ready(function() {
                         });
                         evBuildScheduleFilters();
                     }
-                    // Keep the server-rendered grid in sync with this list mutation.
+                    // Keep the board in sync with this list mutation.
                     if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
@@ -10414,33 +10414,20 @@ $(document).ready(function() {
                 var secActive  = secPill  ? secPill.classList.contains('ev-sched-pill-active')  : false;
                 row.style.display = (primActive || secActive) ? '' : 'none';
             });
-            // Grid view shares these pills: hide/show the toggled category's column too.
+            // The board shares these pills.
             evApplyGridFilter();
         };
 
-        // Grid filter: hide the column (header + body) of any category whose pill is
-        // inactive, then reflow --ev-grid-cols so the remaining columns fill the width.
-        // Categories with no pill (not present that day) stay visible.
+        // Board filter: the board dims all but one category, so narrowing the pills
+        // to a single active category focuses the board on it; any other mix clears it.
         window.evApplyGridFilter = function() {
+            if (!window.EvBoardView) return;
             var pills = document.querySelectorAll('#ev-sched-filters .ev-sched-pill');
-            if (!pills.length) return;
-            var active = {};
+            var active = [];
             pills.forEach(function(p) {
-                active[p.getAttribute('data-cat')] = p.classList.contains('ev-sched-pill-active');
+                if (p.classList.contains('ev-sched-pill-active')) active.push(p.getAttribute('data-cat'));
             });
-            document.querySelectorAll('.ev-grid-day').forEach(function(day) {
-                var visible = 0;
-                day.querySelectorAll('.ev-grid-cat-head[data-category]').forEach(function(head) {
-                    var show = active[head.getAttribute('data-category')] !== false;
-                    head.style.display = show ? '' : 'none';
-                    if (show) visible++;
-                });
-                day.querySelectorAll('.ev-grid-col[data-category]').forEach(function(col) {
-                    col.style.display = (active[col.getAttribute('data-category')] !== false) ? '' : 'none';
-                });
-                var inner = day.querySelector('.ev-grid-inner');
-                if (inner) inner.style.setProperty('--ev-grid-cols', Math.max(1, visible));
-            });
+            EvBoardView.setFilter(pills.length > 1 && active.length === 1 ? active[0] : null);
         };
 
         window.evRemoveSchedule = function(btn, scheduleId) {
@@ -10486,7 +10473,7 @@ $(document).ready(function() {
                         }
                     });
                     evBuildScheduleFilters();
-                    // Keep the server-rendered grid in sync with this removal.
+                    // Keep the board in sync with this removal.
                     if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {
                     alert(data.error || 'Could not remove schedule item.');

@@ -203,7 +203,8 @@
 
         var evStart = parseNaive(opts.eventStart), evEnd = parseNaive(opts.eventEnd);
         if (evStart && evEnd) {
-            var count = Math.min(diffDays(evStart.day, evEnd.day), MAX_DAYS - 1);
+            // An end before the start still shows the start day.
+            var count = Math.max(0, Math.min(diffDays(evStart.day, evEnd.day), MAX_DAYS - 1));
             for (var i = 0; i <= count; i++) {
                 var d = addDays(evStart.day, i);
                 byDay[d] = byDay[d] || [];
@@ -212,7 +213,8 @@
 
         var days = Object.keys(byDay).sort().map(function (day) {
             var segs = byDay[day];
-            return { day: day, label: dayLabel(day), segs: segs, lanes: layoutDay(segs) };
+            // An empty day still draws one lane.
+            return { day: day, label: dayLabel(day), segs: segs, lanes: Math.max(1, layoutDay(segs)) };
         });
 
         var axisStart = lo === null ? 540 : Math.floor(lo / 60) * 60;

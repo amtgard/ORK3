@@ -44,3 +44,16 @@ test('empty schedule, edit axis, out-of-range days, unknown category, zero-lengt
   ], { eventStart: '', eventEnd: '', editing: false });
   assert.deepEqual([z.days.length, z.days[0].lanes], [1, 2]);
 });
+test('an empty day has one lane', () => {
+  const b = C.buildBoard([], opts);
+  assert.ok(b.days.length > 0);
+  b.days.forEach(d => assert.equal(d.lanes, 1, d.day));
+});
+test('an end before the start still shows the start day', () => {
+  const b = C.buildBoard([], { eventStart: '2026-11-21T09:00', eventEnd: '2026-11-20T09:00', editing: false });
+  assert.deepEqual(b.days.map(d => d.day), ['2026-11-21']);
+});
+test('an absurd event length is capped', () => {
+  const b = C.buildBoard([], { eventStart: '2026-11-20T09:00', eventEnd: '2099-01-01T09:00', editing: false });
+  assert.ok(b.days.length > 0 && b.days.length <= 62, String(b.days.length));
+});

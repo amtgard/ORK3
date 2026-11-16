@@ -244,6 +244,7 @@
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/event-board.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/event-board.css') ?>">
 <style>
 .ev-export-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 10px; }
 .ev-checkin-locked { display:flex; align-items:flex-start; gap:10px; background:#fffbeb; border:1px solid #f6e05e; border-radius:7px; padding:11px 14px; margin-bottom:14px; font-size:13px; color:#744210; line-height:1.45; }
@@ -453,7 +454,7 @@ html[data-theme="dark"] .ev-ac-section { color: var(--ork-text-muted); backgroun
 html[data-theme="dark"] .ev-ac-empty { color: var(--ork-text-muted); }
 
 /* Schedule pills + day-section table layout */
-/* ==============================================   DARK MODE — Schedule tab (list + grid)
+/* ==============================================   DARK MODE — Schedule tab (list)
    Category palette: darkened, hue-tinted bgs w/ lighter text
    ===================================================== */
 html[data-theme="dark"] .ev-sched-day-header {
@@ -461,29 +462,6 @@ html[data-theme="dark"] .ev-sched-day-header {
 	background: transparent; border-top: none; border-left: none; border-right: none;
 	padding: 3px 0 5px; border-radius: 0; text-shadow: none;
 }
-html[data-theme="dark"] .ev-grid-day { background: var(--ork-card-bg); border-color: var(--ork-border); }
-html[data-theme="dark"] .ev-grid-day-header { background: var(--ork-bg-secondary); color: var(--ork-text); border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] .ev-grid-header-row { background: var(--ork-card-bg); }
-html[data-theme="dark"] .ev-grid-time-col-head { background: var(--ork-card-bg); border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] .ev-grid-time-col { background: var(--ork-bg-secondary); border-right-color: var(--ork-border); }
-html[data-theme="dark"] .ev-grid-time-hour { border-top-color: var(--ork-border); }
-html[data-theme="dark"] .ev-grid-time-half { border-top-color: rgba(255,255,255,0.05); }
-html[data-theme="dark"] .ev-grid-time-lbl { background: var(--ork-bg-secondary); color: var(--ork-text-muted); }
-html[data-theme="dark"] .ev-grid-col { border-left-color: rgba(255,255,255,0.06); }
-html[data-theme="dark"] .ev-grid-block { color: var(--ork-text); border-color: rgba(0,0,0,0.4); box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
-html[data-theme="dark"] .ev-grid-block:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.55); }
-html[data-theme="dark"] .ev-grid-block-title { color: var(--ork-text); }
-html[data-theme="dark"] .ev-grid-block-time { color: var(--ork-text-muted); }
-html[data-theme="dark"] .ev-grid-block-loc { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .ev-grid-block-loc i { color: var(--ork-text-muted); }
-html[data-theme="dark"] .ev-grid-lead-chip { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .ev-grid-cat-count { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.14); color: var(--ork-text); }
-html[data-theme="dark"] .ev-grid-now-dot { box-shadow: 0 0 0 2px var(--ork-bg-secondary); }
-html[data-theme="dark"] .ev-grid-popover { background: var(--ork-card-bg); border-color: var(--ork-border); color: var(--ork-text); box-shadow: 0 8px 24px rgba(0,0,0,0.55); }
-html[data-theme="dark"] .ev-grid-popover h5 { color: var(--ork-text); }
-html[data-theme="dark"] .ev-grid-popover .ev-gp-row { color: var(--ork-text-secondary); }
-html[data-theme="dark"] .ev-grid-popover .ev-gp-row i { color: var(--ork-text-muted); }
-html[data-theme="dark"] .ev-grid-popover-flip:before { border-top-color: var(--ork-card-bg); }
 /* Inactive filter pill */
 html[data-theme="dark"] .ev-sched-pill-inactive { background: var(--ork-bg-secondary) !important; border-color: var(--ork-border) !important; color: var(--ork-text-muted) !important; }
 html[data-theme="dark"] .ev-sched-pill-inactive i { color: var(--ork-text-muted) !important; }
@@ -491,70 +469,6 @@ html[data-theme="dark"] .ev-sched-pill-inactive i { color: var(--ork-text-muted)
 /* List rows: each <tr> carries its category's --evb-soft / --evb-soft-dark (EventPlanning::ScheduleCategories) */
 .ev-sched-table tbody tr { background: var(--evb-soft); }
 html[data-theme="dark"] .ev-sched-table tbody tr { background: var(--evb-soft-dark); }
-
-/* Per-category dark palettes — cat-head bg (grid), block bg (grid), col hour-line tint */
-/* Administrative */
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Administrative"] { background: #2a3136 !important; border-bottom-color: #90a4ae !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Administrative"] .ev-grid-cat-label { color: #cfd8dc !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Administrative"] > i { color: #90a4ae !important; }
-html[data-theme="dark"] .ev-grid-col[data-category="Administrative"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(144,164,174,0.12) 55px, rgba(144,164,174,0.12) 56px) !important; }
-html[data-theme="dark"] .ev-grid-block[data-category="Administrative"] { background: #2a3136 !important; border-left-color: #90a4ae !important; }
-
-/* Tournament */
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Tournament"] { background: #3a2f15 !important; border-bottom-color: #ffd54f !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Tournament"] .ev-grid-cat-label { color: #ffe082 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Tournament"] > i { color: #ffd54f !important; }
-html[data-theme="dark"] .ev-grid-col[data-category="Tournament"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(255,213,79,0.10) 55px, rgba(255,213,79,0.10) 56px) !important; }
-html[data-theme="dark"] .ev-grid-block[data-category="Tournament"] { background: #3a2f15 !important; border-left-color: #ffd54f !important; }
-
-/* Battlegame */
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Battlegame"] { background: #3d1e1a !important; border-bottom-color: #ff9a93 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Battlegame"] .ev-grid-cat-label { color: #ffb4ae !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Battlegame"] > i { color: #ff9a93 !important; }
-html[data-theme="dark"] .ev-grid-col[data-category="Battlegame"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(255,154,147,0.10) 55px, rgba(255,154,147,0.10) 56px) !important; }
-html[data-theme="dark"] .ev-grid-block[data-category="Battlegame"] { background: #3d1e1a !important; border-left-color: #ff9a93 !important; }
-
-/* Arts and Sciences */
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Arts and Sciences"] { background: #2d1935 !important; border-bottom-color: #ce93d8 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Arts and Sciences"] .ev-grid-cat-label { color: #e1bee7 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Arts and Sciences"] > i { color: #ce93d8 !important; }
-html[data-theme="dark"] .ev-grid-col[data-category="Arts and Sciences"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(206,147,216,0.10) 55px, rgba(206,147,216,0.10) 56px) !important; }
-html[data-theme="dark"] .ev-grid-block[data-category="Arts and Sciences"] { background: #2d1935 !important; border-left-color: #ce93d8 !important; }
-
-/* Class */
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Class"] { background: #0f2540 !important; border-bottom-color: #90caf9 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Class"] .ev-grid-cat-label { color: #bbdefb !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Class"] > i { color: #90caf9 !important; }
-html[data-theme="dark"] .ev-grid-col[data-category="Class"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(144,202,249,0.10) 55px, rgba(144,202,249,0.10) 56px) !important; }
-html[data-theme="dark"] .ev-grid-block[data-category="Class"] { background: #0f2540 !important; border-left-color: #90caf9 !important; }
-
-/* Feast and Food */
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Feast and Food"] { background: #3a2410 !important; border-bottom-color: #ffb74d !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Feast and Food"] .ev-grid-cat-label { color: #ffcc80 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Feast and Food"] > i { color: #ffb74d !important; }
-html[data-theme="dark"] .ev-grid-col[data-category="Feast and Food"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(255,183,77,0.10) 55px, rgba(255,183,77,0.10) 56px) !important; }
-html[data-theme="dark"] .ev-grid-block[data-category="Feast and Food"] { background: #3a2410 !important; border-left-color: #ffb74d !important; }
-
-/* Court */
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Court"] { background: #2a201d !important; border-bottom-color: #bcaaa4 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Court"] .ev-grid-cat-label { color: #d7ccc8 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Court"] > i { color: #bcaaa4 !important; }
-html[data-theme="dark"] .ev-grid-col[data-category="Court"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(188,170,164,0.10) 55px, rgba(188,170,164,0.10) 56px) !important; }
-html[data-theme="dark"] .ev-grid-block[data-category="Court"] { background: #2a201d !important; border-left-color: #bcaaa4 !important; }
-
-/* Meeting */
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Meeting"] { background: #143024 !important; border-bottom-color: #81c784 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Meeting"] .ev-grid-cat-label { color: #a5d6a7 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Meeting"] > i { color: #81c784 !important; }
-html[data-theme="dark"] .ev-grid-col[data-category="Meeting"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(129,199,132,0.10) 55px, rgba(129,199,132,0.10) 56px) !important; }
-html[data-theme="dark"] .ev-grid-block[data-category="Meeting"] { background: #143024 !important; border-left-color: #81c784 !important; }
-
-/* Other */
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Other"] { background: #2a2a2a !important; border-bottom-color: #bdbdbd !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Other"] .ev-grid-cat-label { color: #e0e0e0 !important; }
-html[data-theme="dark"] .ev-grid-cat-head[data-category="Other"] > i { color: #bdbdbd !important; }
-html[data-theme="dark"] .ev-grid-col[data-category="Other"] { background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, rgba(189,189,189,0.10) 55px, rgba(189,189,189,0.10) 56px) !important; }
-html[data-theme="dark"] .ev-grid-block[data-category="Other"] { background: #2a2a2a !important; border-left-color: #bdbdbd !important; }
 
 /* ==============================================   Flatpickr time picker — obvious up/down carat buttons
    stacked above and below hour & minute inputs using a
@@ -1239,12 +1153,11 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				<?php
 			// One category source (EventPlanning::ScheduleCategories): name => key/icon/color/bg/colorDark/bgDark/bold.
 			$evSchedCategories = $ScheduleCategories ?? [];
-			$evGridTodayKey = date('Ymd');
 			?>
 			<div class="ev-grid-view-toolbar">
 				<div class="ev-grid-view-toggle" aria-label="Schedule view">
+					<button type="button" class="ev-grid-view-btn" data-ev-view="board" aria-pressed="false"><i class="fas fa-th"></i> Board</button>
 					<button type="button" class="ev-grid-view-btn" data-ev-view="list" aria-pressed="true"><i class="fas fa-list-ul"></i> List</button>
-					<button type="button" class="ev-grid-view-btn" data-ev-view="grid" aria-pressed="false"><i class="fas fa-th"></i> Grid</button>
 				</div>
 				<button type="button" class="ev-sched-copy-btn" onclick="evCopyScheduleLink(this)" title="Copy a link that opens the schedule in this exact view">
 					<i class="fas fa-link"></i> Copy link
@@ -1366,180 +1279,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<?php endforeach; ?>
 			</div><!-- /#ev-schedule-container -->
 
-			<div id="ev-schedule-grid-container" style="display:none">
-			<?php
-			// Build per-day grid data using same $scheduleByDay bucketing.
-			foreach ($scheduleByDay as $dayKey => $dayItems):
-				$dayTs = $dayTsByKey[$dayKey];
-
-				// Collect min/max and per-category buckets
-				$catBuckets = [];
-				$minStart = PHP_INT_MAX;
-				$maxEnd   = 0;
-				foreach ($dayItems as $it) {
-					$s = $it['_SegStart'];
-					$e = $it['_SegEnd'];
-					if ($s < $minStart) $minStart = $s;
-					if ($e > $maxEnd)   $maxEnd   = $e;
-					$cat = $it['Category'] ?? 'Other';
-					if (!isset($evSchedCategories[$cat])) $cat = 'Other';
-					$catBuckets[$cat][] = ['item' => $it, 'start' => $s, 'end' => $e];
-				}
-				if ($minStart === PHP_INT_MAX) continue;
-
-				// Snap to whole hours, padding out by 30-60min, clamped to this calendar day
-				// so a spanned segment can never stretch the grid past midnight. $gridStart
-				// MUST land on an hour: the columns draw their hour lines with a CSS gradient
-				// repeating every 56px from the top of the column, while the time gutter
-				// labels sit at slot*28px from $gridStart. A $gridStart on a half hour puts
-				// every line 28px (30min) out from the label beside it.
-				// Snapping via date() rather than arithmetic on the timestamp: dividing by
-				// 3600 would land on a UTC hour, which is a half past the hour in a zone
-				// offset by :30.
-				$gridStart = max($dayTs, strtotime(date('Y-m-d H:00:00', $minStart - 1800)));
-				$padEnd    = $maxEnd + 1800;
-				$gridEnd   = strtotime(date('Y-m-d H:00:00', $padEnd));
-				if ($gridEnd < $padEnd) $gridEnd = strtotime('+1 hour', $gridEnd);
-				$gridEnd   = min(strtotime('+1 day', $dayTs), $gridEnd);
-				$totalSlots = max(1, (int)(($gridEnd - $gridStart) / 1800));
-
-				// Only categories with items (preserve palette order)
-				$activeCats = [];
-				foreach ($evSchedCategories as $cName => $cCfg) {
-					if (!empty($catBuckets[$cName])) $activeCats[] = $cName;
-				}
-				if (empty($activeCats)) continue;
-
-				// Overlap layout per category: split each column into clusters of
-				// transitively-overlapping items, size lanes per cluster, and let each
-				// item expand rightward into free space. A non-overlapping item renders
-				// full-width even when the column overlaps elsewhere.
-				$laneMap = []; // [cName][scheduleId => ['left'=>%, 'width'=>%]]
-				foreach ($activeCats as $cName) {
-					$items = $catBuckets[$cName];
-					usort($items, function($a,$b){ return ($a['start'] <=> $b['start']) ?: ($a['end'] <=> $b['end']); });
-					$placeCluster = function($cluster) use (&$laneMap, $cName) {
-						// Greedy column assignment within the cluster.
-						$colEnds = [];
-						foreach ($cluster as &$ent) {
-							$ent['col'] = null;
-							foreach ($colEnds as $ci => $cEnd) {
-								if ($cEnd <= $ent['start']) { $colEnds[$ci] = $ent['end']; $ent['col'] = $ci; break; }
-							}
-							if ($ent['col'] === null) { $colEnds[] = $ent['end']; $ent['col'] = count($colEnds) - 1; }
-						}
-						unset($ent);
-						$clusterCols = max(1, count($colEnds));
-						// Expand each item across columns to its right until one holds a conflict.
-						foreach ($cluster as $ent) {
-							$span = 1;
-							for ($c = $ent['col'] + 1; $c < $clusterCols; $c++) {
-								$blocked = false;
-								foreach ($cluster as $other) {
-									if ($other['col'] === $c && $other['start'] < $ent['end'] && $other['end'] > $ent['start']) { $blocked = true; break; }
-								}
-								if ($blocked) break;
-								$span++;
-							}
-							$sid = (int)$ent['item']['EventScheduleId'];
-							$laneMap[$cName][$sid] = ['left' => ($ent['col'] / $clusterCols) * 100, 'width' => ($span / $clusterCols) * 100];
-						}
-					};
-					$cluster = [];
-					$clusterEnd = null;
-					foreach ($items as $entry) {
-						if ($cluster && $entry['start'] >= $clusterEnd) { $placeCluster($cluster); $cluster = []; $clusterEnd = null; }
-						$cluster[] = $entry;
-						$clusterEnd = ($clusterEnd === null) ? $entry['end'] : max($clusterEnd, $entry['end']);
-					}
-					if ($cluster) $placeCluster($cluster);
-					$catBuckets[$cName] = $items; // sorted
-				}
-
-				$nCols = count($activeCats);
-				$bodyHeight = $totalSlots * 28;
-			?>
-				<div class="ev-grid-day" data-date="<?= date('Y-m-d', $dayTs) ?>" data-day-key="<?= $dayKey ?>" data-grid-start="<?= $gridStart ?>" data-grid-end="<?= $gridEnd ?>">
-					<div class="ev-grid-day-header"><?= date('l, F j, Y', $dayTs) ?></div>
-					<div class="ev-grid-scroller">
-						<div class="ev-grid-inner" style="--ev-grid-cols: <?= $nCols ?>;">
-							<div class="ev-grid-header-row">
-								<div class="ev-grid-time-col-head"></div>
-								<?php foreach ($activeCats as $cName):
-									$cCfg = $evSchedCategories[$cName];
-									$cCount = count($catBuckets[$cName]);
-								?>
-								<div class="ev-grid-cat-head" data-category="<?= htmlspecialchars($cName, ENT_QUOTES) ?>" style="background:<?= $cCfg['bg'] ?>;border-bottom-color:<?= $cCfg['color'] ?>">
-									<i class="fas fa-fw <?= $cCfg['icon'] ?>" style="color:<?= $cCfg['color'] ?>"></i>
-									<span class="ev-grid-cat-label" style="color:<?= $cCfg['color'] ?>"><?= htmlspecialchars($cName) ?></span>
-									<span class="ev-grid-cat-count"><?= (int)$cCount ?></span>
-								</div>
-								<?php endforeach; ?>
-							</div>
-							<div class="ev-grid-body-row" style="height:<?= $bodyHeight ?>px">
-								<div class="ev-grid-time-col">
-									<?php for ($s = 0; $s < $totalSlots; $s++):
-										$tt = $gridStart + $s * 1800;
-										$isHour = (date('i', $tt) === '00');
-									?>
-									<div class="ev-grid-time-slot<?= $isHour ? ' ev-grid-time-hour' : ' ev-grid-time-half' ?>" style="top:<?= $s * 28 ?>px">
-										<?php if ($isHour): ?><span class="ev-grid-time-lbl"><?= date('ga', $tt) ?></span><?php endif; ?>
-									</div>
-									<?php endfor; ?>
-									<div class="ev-grid-now-dot" style="display:none"></div>
-								</div>
-								<?php foreach ($activeCats as $cName):
-									$cCfg = $evSchedCategories[$cName];
-								?>
-								<div class="ev-grid-col" data-category="<?= htmlspecialchars($cName, ENT_QUOTES) ?>" style="background:repeating-linear-gradient(to bottom, transparent 0, transparent 55px, #f4f6f8 55px, #f4f6f8 56px)">
-									<?php foreach ($catBuckets[$cName] as $entry):
-										$it  = $entry['item'];
-										$sid = (int)$it['EventScheduleId'];
-										$startM = ($entry['start'] - $gridStart) / 60;
-										$durM   = max(30, ($entry['end'] - $entry['start']) / 60);
-										$topPx  = ($startM / 30) * 28;
-										$hPx    = max(28, ($durM / 30) * 28);
-										$leftPct  = $laneMap[$cName][$sid]['left']  ?? 0;
-										$widthPct = $laneMap[$cName][$sid]['width'] ?? 100;
-										$secCat    = $it['SecondaryCategory'] ?? '';
-										$secCfg    = $secCat ? ($evSchedCategories[$secCat] ?? null) : null;
-										$hasMenu   = ($cName === 'Feast and Food' || $secCat === 'Feast and Food') && !empty($it['Menu']);
-										$compact   = ($hPx < 42);
-										$blockLabel = $it['Title'] . ' at ' . date('g:ia', $entry['start']);
-										if (!$it['_IsLastDay']) $blockLabel .= ' (continues)';
-									?>
-									<div class="ev-grid-block<?= $compact ? ' ev-grid-block-compact' : '' ?>"
-										data-schedule-id="<?= $sid ?>"
-										data-category="<?= htmlspecialchars($cName, ENT_QUOTES) ?>"
-										tabindex="0" role="button" aria-label="<?= htmlspecialchars($blockLabel, ENT_QUOTES) ?>"
-										style="top:<?= (int)round($topPx) ?>px;height:<?= (int)round($hPx) ?>px;left:calc(<?= $leftPct ?>% + 2px);width:calc(<?= $widthPct ?>% - 4px);background:<?= $cCfg['bg'] ?>;border-left-color:<?= $cCfg['color'] ?>;<?= $secCfg ? 'box-shadow: inset -4px 0 0 '. $secCfg['color'] .', 0 1px 2px rgba(0,0,0,0.08);' : '' ?>"
-										onclick="evGridBlockClick(<?= $sid ?>, event)">
-										<div class="ev-grid-block-title">
-											<?= htmlspecialchars($it['Title']) ?>
-											<?php if ($hasMenu): ?><i class="fas fa-scroll" style="color:#e65100;font-size:9px;margin-left:3px" data-tip="Has menu"></i><?php endif; ?>
-										</div>
-										<div class="ev-grid-block-time"><?php if (!$it['_IsFirstDay']): ?>&rarr; <?php endif; ?><?= date('g:ia', $entry['start']) ?> – <?= date('g:ia', $entry['end']) ?><?php if (!$it['_IsLastDay']): ?> &rarr;<?php endif; ?></div>
-										<?php if (!empty($it['Location'])): ?>
-										<div class="ev-grid-block-loc"><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($it['Location']) ?></div>
-										<?php endif; ?>
-										<?php if (!empty($it['Leads'])): ?>
-										<div class="ev-grid-block-leads">
-											<?php foreach (array_slice($it['Leads'], 0, 3) as $_ld): ?>
-												<span class="ev-grid-lead-chip"><?= htmlspecialchars($_ld['Persona']) ?></span>
-											<?php endforeach; ?>
-										</div>
-										<?php endif; ?>
-									</div>
-									<?php endforeach; ?>
-								</div>
-								<?php endforeach; ?>
-								<div class="ev-grid-now-line" style="display:none"></div>
-							</div>
-						</div>
-					</div>
-				</div>
-			<?php endforeach; ?>
-			</div><!-- /#ev-schedule-grid-container -->
+			<div id="evb-root" class="evb" style="display:none"></div>
 			<div class="ev-empty" id="ev-schedule-empty"<?= empty($scheduleList) ? '' : ' style="display:none"' ?>>
 				<i class="fas fa-clock" style="margin-right:6px"></i>No schedule items yet
 			</div>
@@ -2538,13 +2278,34 @@ var _evRsvpCr = document.getElementById('ev-rsvp-credits'); if (_evRsvpCr && _ev
 <script>
 function evCloseQrModal() { if (typeof orkCloseQrModal === 'function') orkCloseQrModal('ev-qr-overlay'); }
 </script>
+<?php
+// The schedule for the board, in its own JSON script so evRefreshScheduleGrid can
+// read a re-fetched copy without evaluating script.
+$evbSchedule = array_map(function ($it) {
+	return [
+		'EventScheduleId'   => (int)$it['EventScheduleId'],
+		'Title'             => (string)($it['Title'] ?? ''),
+		'StartTime'         => (string)($it['StartTime'] ?? ''),
+		'EndTime'           => (string)($it['EndTime'] ?? ''),
+		'Location'          => (string)($it['Location'] ?? ''),
+		'Description'       => (string)($it['Description'] ?? ''),
+		'Category'          => (string)($it['Category'] ?? ''),
+		'SecondaryCategory' => (string)($it['SecondaryCategory'] ?? ''),
+		'Leads'             => array_map(function ($l) { return ['MundaneId' => (int)$l['MundaneId'], 'Persona' => (string)$l['Persona']]; }, $it['Leads'] ?? []),
+		'Menu'              => (string)($it['Menu'] ?? ''),
+		'Cost'              => $it['Cost'] ?? null,
+		'Dietary'           => (string)($it['Dietary'] ?? ''),
+		'Allergens'         => (string)($it['Allergens'] ?? ''),
+	];
+}, $scheduleList);
+?>
+<script type="application/json" id="evb-schedule-data"><?= json_encode($evbSchedule, JSON_HEX_TAG | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE) ?></script>
 <script>
 var EvConfig = {
 	uir:        '<?= UIR ?>',
 	httpService:'<?= HTTP_SERVICE ?>',
 	canManage:         <?= !empty($canManage) ? 'true' : 'false' ?>,
 	canManageSchedule: <?= !empty($canManageSchedule) ? 'true' : 'false' ?>,
-	evGridTodayKey: '<?= $evGridTodayKey ?? date('Ymd') ?>',
 	// Ordered [{name, key, icon, color, bg, colorDark, bgDark, bold}] from EventPlanning::ScheduleCategories.
 	scheduleCategories: <?= json_encode(array_map(
 		function ($name, $def) { return ['name' => $name] + $def; },
@@ -2564,7 +2325,10 @@ var EvConfig = {
 	kingdomId:  <?= (int)$kingdomId ?>,
 	eventStart: '<?= $eventStart ? date('Y-m-d\TH:i', strtotime($eventStart)) : '' ?>',
 	eventEnd:   '<?= $eventEnd   ? date('Y-m-d\TH:i', strtotime($eventEnd))   : '' ?>',
-	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona']]; }, $StaffList ?? [])) ?>,
+	// The schedule as emitted in #evb-schedule-data (naive local datetimes), and the server's clock.
+	schedule:   (function() { try { return JSON.parse(document.getElementById('evb-schedule-data').textContent); } catch (e) { return []; } })(),
+	serverNow:  <?= json_encode(date('Y-m-d H:i')) ?>,
+	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona'], 'RoleName' => $s['RoleName'] ?? '']; }, $StaffList ?? [])) ?>,
 	hasFees:    true,
 	fees:       <?= json_encode(array_map(function($f) { return ['AdmissionType' => $f['AdmissionType'], 'Cost' => (float)$f['Cost']]; }, $eventFees)) ?>,
 	hasLinks:   true,
@@ -3031,13 +2795,15 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 </div>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-core.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-core.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-view.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-view.js') ?>"></script>
 <script>
 (function() {
     // Deep-link hash format: #<tabId>[?key=val&key=val]
     //   #ev-tab-schedule                        -> Schedule tab, default (list) view
-    //   #ev-tab-schedule?view=grid              -> Schedule tab, grid view
-    //   #ev-tab-schedule?view=grid&day=20260718 -> grid view, that day pre-selected
-    // Only the tab is opened here; the schedule script (further down) reads
+    //   #ev-tab-schedule?view=board             -> Schedule tab, board view (old view=grid links too)
+    //   #ev-tab-schedule?view=board&day=20260718 -> board view, that day pre-selected
+    // Only the tab is opened here; EvBoardView.init (further down) reads
     // window.evHashParams to apply view/day once its DOM + helpers exist.
     var raw = location.hash.replace('#', '');
     if (!raw) return;
@@ -3733,6 +3499,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 					var schTab = document.querySelector('[data-tab="ev-tab-schedule"] .ev-tab-count');
 					if (schTab) schTab.textContent = Math.max(0, parseInt(schTab.textContent || '0') - 1);
 				}
+				if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
 			})
 			.catch(function() { btn.disabled = false; });
 		});
@@ -3938,7 +3705,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 })();
 </script>
 <style>
-/* ===========================================   Schedule Grid View (ev-grid-*)
+/* ===========================================   Schedule view toolbar (Board/List toggle, copy link)
    ================================================== */
 .ev-grid-view-toolbar {
 	display: flex;
@@ -4018,129 +3785,17 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	background:#4299e1; border-color:#4299e1; color:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.45);
 }
 
-.ev-grid-day { margin-bottom:24px; background:var(--ork-card-bg); border:1px solid var(--ork-border); border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
-.ev-grid-day-header {
-	padding:10px 14px; font-size:13px; font-weight:700; color:#2d3748;
-	background:var(--ork-bg-secondary); border-bottom:1px solid var(--ork-divider);
-	text-transform:uppercase; letter-spacing:.04em;
-}
-.ev-grid-scroller { overflow-x:auto; overflow-y:hidden; }
-.ev-grid-inner { display:block; min-width:100%; }
-
-.ev-grid-header-row {
-	display:grid;
-	grid-template-columns: 80px repeat(var(--ev-grid-cols, 1), minmax(160px, 1fr));
-	z-index:2;
-	background:var(--ork-card-bg);
-}
-.ev-grid-time-col-head { border-bottom:2px solid var(--ork-divider); background:var(--ork-card-bg); }
-.ev-grid-cat-head {
-	padding:8px 10px; font-size:11px; font-weight:700;
-	text-transform:uppercase; letter-spacing:.05em;
-	border-bottom:2px solid #cbd5e0; border-left:1px solid #edf2f7;
-	display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden;
-}
-.ev-grid-cat-label { flex:1; overflow:hidden; text-overflow:ellipsis; }
-.ev-grid-cat-count {
-	background:rgba(255,255,255,0.7); border:1px solid rgba(0,0,0,0.08);
-	color:#4a5568; font-size:10px; padding:1px 6px; border-radius:10px;
-}
-.ev-grid-body-row {
-	display:grid;
-	grid-template-columns: 80px repeat(var(--ev-grid-cols, 1), minmax(160px, 1fr));
-	position:relative;
-}
-.ev-grid-time-col { position:relative; background:var(--ork-bg-inset); border-right:1px solid var(--ork-divider); }
-.ev-grid-time-slot {
-	position:absolute; left:0; right:0; height:28px;
-	border-top:1px solid transparent;
-	pointer-events:none;
-}
-.ev-grid-time-hour { border-top-color:var(--ork-divider); }
-.ev-grid-time-half { border-top-color:#f1f3f5; }
-.ev-grid-time-lbl {
-	position:absolute; top:-7px; right:8px;
-	font-size:10px; font-weight:700; color:#718096;
-	font-variant:small-caps; letter-spacing:.03em;
-	background:var(--ork-bg-inset); padding:0 4px;
-}
-.ev-grid-col { position:relative; border-left:1px solid #edf2f7; }
-.ev-grid-block {
-	position:absolute;
-	/* border-box: top/height are computed server-side as exact minutes-to-pixels, so the
-	   borders and padding must sit inside that box. As content-box they were added to it,
-	   making every block 11px taller and 19px wider than its own time span — the bottom
-	   edge overshot its end time and the block spilled past the column. */
-	box-sizing:border-box;
-	border:1px solid rgba(0,0,0,0.06); border-left:4px solid #999;
-	border-radius:4px; padding:5px 7px 4px; overflow:hidden;
-	box-shadow:0 1px 2px rgba(0,0,0,0.08);
-	cursor:pointer; transition: transform .1s, box-shadow .15s;
-	font-size:11px; line-height:1.3; color:#2d3748;
-}
-.ev-grid-block:hover { box-shadow:0 3px 8px rgba(0,0,0,0.16); transform:translateY(-1px); z-index:3; }
-.ev-grid-block-title {
-	font-weight:700; font-size:11px; color:#1a202c;
-	white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.ev-grid-block-time {
-	font-size:10px; color:#718096; margin-top:1px;
-	white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.ev-grid-block-loc {
-	font-size:10px; color:#4a5568; margin-top:2px;
-	white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.ev-grid-block-loc i { font-size:9px; margin-right:2px; color:#a0aec0; }
-.ev-grid-block-leads { margin-top:3px; display:flex; flex-wrap:wrap; gap:3px; }
-.ev-grid-lead-chip {
-	background:rgba(255,255,255,0.65); border:1px solid rgba(0,0,0,0.07);
-	color:#4a5568; font-size:9px; padding:1px 5px; border-radius:8px;
-	white-space:nowrap;
-}
-.ev-grid-block-compact .ev-grid-block-time,
-.ev-grid-block-compact .ev-grid-block-loc,
-.ev-grid-block-compact .ev-grid-block-leads { display:none; }
-.ev-grid-block-compact .ev-grid-block-title { font-size:10px; line-height:1.25; }
-.ev-grid-block:focus-visible { outline:2px solid #4299e1; outline-offset:1px; }
-.ev-grid-popover-flip:before { top:auto; bottom:-6px; border-bottom:none; border-top:6px solid var(--ork-card-bg); }
-
-.ev-grid-now-line {
-	position:absolute; left:80px; right:0; height:2px;
-	background:#e53e3e; z-index:4; pointer-events:none;
-	box-shadow:0 0 4px rgba(229,62,62,0.5);
-}
-.ev-grid-now-dot {
-	position:absolute; width:10px; height:10px; border-radius:50%;
-	background:#e53e3e; left:66px; margin-top:-5px; z-index:5;
-	box-shadow:0 0 0 2px var(--ork-bg-inset);
-}
-
-/* Popover for non-editors */
-.ev-grid-popover {
-	position:absolute; z-index:9500; background:var(--ork-card-bg);
-	border:1px solid var(--ork-input-border); border-radius:8px;
-	box-shadow:var(--ork-shadow-dropdown);
-	padding:12px 14px; min-width:220px; max-width:320px;
-	font-size:12px; color:#2d3748;
-}
-.ev-grid-popover h5 { margin:0 0 6px; font-size:13px; color:#1a202c; font-weight:700;
-	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none; }
-.ev-grid-popover .ev-gp-row { margin-top:4px; color:#4a5568; font-size:11px; }
-.ev-grid-popover .ev-gp-row i { width:12px; color:#a0aec0; margin-right:4px; }
-
 /* Auto-linked URLs in description fields. --ork-link is defined for both themes,
    so this needs no separate html[data-theme="dark"] rule. Pasted URLs run long,
-   so allow them to break rather than forcing the table or popover to scroll. */
-.ev-sched-desc, .ev-grid-popover .ev-gp-desc { overflow-wrap:anywhere; }
-.ev-sched-desc a, .ev-grid-popover .ev-gp-desc a { color:var(--ork-link); text-decoration:underline; }
-.ev-sched-desc a:hover, .ev-grid-popover .ev-gp-desc a:hover { text-decoration:none; }
+   so allow them to break rather than forcing the table to scroll. */
+.ev-sched-desc { overflow-wrap:anywhere; }
+.ev-sched-desc a { color:var(--ork-link); text-decoration:underline; }
+.ev-sched-desc a:hover { text-decoration:none; }
 
 @media (max-width: 700px) {
-	#ev-schedule-grid-container { display:none !important; }
 	#ev-schedule-container      { display:block !important; }
 	/* Keep the toolbar (and its Add Schedule Item button) reachable; only hide
-	   the List/Grid toggle since the grid view is suppressed on mobile. */
+	   the Board/List toggle since phones show the list. */
 	.ev-grid-view-toolbar       { justify-content:flex-start; flex-wrap:wrap; }
 	.ev-grid-view-toggle        { display:none !important; }
 	.ev-grid-view-toolbar .ev-submit-btn { padding:9px 16px; min-height:40px; }
@@ -4252,322 +3907,8 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 }
 </style>
 <script>
-(function() {
-	var listEl = document.getElementById('ev-schedule-container');
-	var gridEl = document.getElementById('ev-schedule-grid-container');
-	if (!listEl || !gridEl) return;
-
-	var STORAGE_KEY = 'ev-sched-view-mode';
-	var btns = document.querySelectorAll('.ev-grid-view-btn');
-	var isMobile = function() { return window.matchMedia('(max-width: 700px)').matches; };
-
-	// desiredView = what the user/URL asked for; the resolved view can differ (mobile
-	// forces list because the grid isn't rendered below the breakpoint). We persist and
-	// deep-link the desired value but reflect the resolved one in the UI and shared hash.
-	var desiredView  = 'list';
-	var currentView  = 'list';
-	var currentDayKey = '';
-
-	function applyMode(mode, opts) {
-		opts = opts || {};
-		if (mode === 'grid' || mode === 'list') desiredView = mode;
-		var resolved = isMobile() ? 'list' : desiredView;
-		if (resolved !== 'grid') resolved = 'list';
-		if (resolved === 'grid') {
-			listEl.style.display = 'none';
-			gridEl.style.display = '';
-			updateNowLines();
-		} else {
-			listEl.style.display = '';
-			gridEl.style.display = 'none';
-		}
-		btns.forEach(function(b) {
-			var active = b.getAttribute('data-ev-view') === resolved;
-			b.classList.toggle('ev-grid-view-active', active);
-			b.setAttribute('aria-pressed', active ? 'true' : 'false');
-		});
-		currentView = resolved;
-		if (opts.persist === true) {
-			try { localStorage.setItem(STORAGE_KEY, desiredView); } catch(e) {}
-		}
-	}
-
-	// Reflect the on-screen schedule state in the URL hash so a copied link reopens this
-	// exact view. List is the implicit default, so only grid (and, for a multi-day event,
-	// the selected day) is encoded.
-	function scheduleTabActive() {
-		var panel = document.getElementById('ev-tab-schedule');
-		return !!(panel && panel.classList.contains('ev-tab-visible'));
-	}
-	window.evScheduleHashSuffix = function() {
-		if (currentView !== 'grid') return '';
-		var s = '?view=grid';
-		if (gridDays.length > 1 && currentDayKey) s += '&day=' + currentDayKey;
-		return s;
-	};
-	function writeScheduleHash() {
-		if (scheduleTabActive() && typeof window.evWriteHash === 'function') {
-			window.evWriteHash('ev-tab-schedule');
-		}
-	}
-
-	btns.forEach(function(b) {
-		b.addEventListener('click', function() {
-			applyMode(b.getAttribute('data-ev-view'), {persist:true});
-			writeScheduleHash();
-		});
-	});
-
-	// ---- Day pills (multi-day grids) ----
-	// The grid renders one .ev-grid-day per calendar day, stacked vertically. For a
-	// multi-day event that's an unwieldy scroll, so when there's more than one day we
-	// show a single day at a time and let the user switch via pills along the top.
-	var gridDays = [];
-	var gridTodayKey = (window.EvConfig && EvConfig.evGridTodayKey) || '';
-	var pillBar = null;
-	function selectGridDay(dayKey) {
-		currentDayKey = dayKey;
-		gridDays.forEach(function(day) {
-			day.style.display = (day.getAttribute('data-day-key') === dayKey) ? '' : 'none';
-		});
-		if (pillBar) {
-			pillBar.querySelectorAll('.ev-grid-day-pill').forEach(function(p) {
-				var active = p.getAttribute('data-day-key') === dayKey;
-				p.classList.toggle('ev-grid-day-pill-active', active);
-				p.setAttribute('aria-pressed', active ? 'true' : 'false');
-			});
-		}
-		updateNowLines();
-	}
-	// (Re)build the day pills from the CURRENT grid DOM. Runs on load and again after
-	// the grid is re-fetched following a schedule add/edit/delete, so gridDays/pillBar
-	// never hold stale nodes from a previous render.
-	function setupGridDays() {
-		var oldPills = gridEl.querySelector('.ev-grid-day-pills');
-		if (oldPills && oldPills.parentNode) oldPills.parentNode.removeChild(oldPills);
-		pillBar = null;
-		gridDays = Array.prototype.slice.call(gridEl.querySelectorAll('.ev-grid-day'));
-		if (gridDays.length > 1) {
-			var defaultDayKey = gridDays[0].getAttribute('data-day-key');
-			pillBar = document.createElement('div');
-			pillBar.className = 'ev-grid-day-pills';
-			gridDays.forEach(function(day) {
-				var dk = day.getAttribute('data-day-key');
-				var dateStr = day.getAttribute('data-date');
-				if (dk === gridTodayKey) defaultDayKey = dk; // prefer today if it's in range
-				var d = new Date(dateStr + 'T00:00:00');
-				var label = isNaN(d.getTime()) ? dateStr
-					: d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-				var pill = document.createElement('button');
-				pill.type = 'button';
-				pill.className = 'ev-grid-day-pill';
-				pill.setAttribute('data-day-key', dk);
-				pill.setAttribute('aria-pressed', 'false');
-				pill.textContent = label;
-				if (dk === gridTodayKey) {
-					var dot = document.createElement('span');
-					dot.className = 'ev-grid-day-pill-today';
-					dot.setAttribute('data-tip', 'Today');
-					pill.appendChild(dot);
-				}
-				pill.addEventListener('click', function() { selectGridDay(dk); writeScheduleHash(); });
-				pillBar.appendChild(pill);
-			});
-			gridEl.insertBefore(pillBar, gridEl.firstChild);
-			selectGridDay(defaultDayKey);
-		} else if (gridDays.length === 1) {
-			gridDays[0].style.display = '';
-		}
-	}
-	setupGridDays();
-
-	var initial = 'list';
-	try { initial = localStorage.getItem(STORAGE_KEY) || 'list'; } catch(e) {}
-	// A view/day in the URL hash wins over the stored preference, so a shared deep link
-	// opens as intended regardless of what the recipient last viewed.
-	var hp = window.evHashParams || {};
-	if (hp.view === 'grid' || hp.view === 'list') initial = hp.view;
-	applyMode(initial, {persist:false});
-	if (hp.day && gridDays.some(function(d){ return d.getAttribute('data-day-key') === hp.day; })) {
-		selectGridDay(hp.day);
-	}
-	window.addEventListener('resize', function() {
-		// Re-evaluate when crossing the mobile breakpoint; keep the user's desired view.
-		applyMode(desiredView, {persist:false});
-	});
-
-	// "Now" indicator
-	function updateNowLines() {
-		var todayKey = (window.EvConfig && EvConfig.evGridTodayKey) || '';
-		var nowSec = Math.floor(Date.now() / 1000);
-		document.querySelectorAll('.ev-grid-day').forEach(function(day) {
-			var dk    = day.getAttribute('data-day-key');
-			var gs    = parseInt(day.getAttribute('data-grid-start'), 10);
-			var ge    = parseInt(day.getAttribute('data-grid-end'), 10);
-			var line  = day.querySelector('.ev-grid-now-line');
-			var dot   = day.querySelector('.ev-grid-now-dot');
-			if (!line || !dot) return;
-			if (dk !== todayKey || nowSec < gs || nowSec > ge) {
-				line.style.display = 'none';
-				dot.style.display  = 'none';
-				return;
-			}
-			var offsetMin = (nowSec - gs) / 60;
-			var px = (offsetMin / 30) * 28;
-			line.style.top = px + 'px';
-			line.style.display = '';
-			dot.style.top  = px + 'px';
-			dot.style.display = '';
-		});
-	}
-	var evGridNowTimer = null;
-	function startNowTimer() {
-		if (evGridNowTimer !== null) return;
-		if (!document.querySelector('.ev-grid-day .ev-grid-now-line')) return;
-		updateNowLines();
-		evGridNowTimer = setInterval(updateNowLines, 60000);
-	}
-	function stopNowTimer() {
-		if (evGridNowTimer !== null) { clearInterval(evGridNowTimer); evGridNowTimer = null; }
-	}
-	updateNowLines();
-	startNowTimer();
-	document.addEventListener('visibilitychange', function() {
-		if (document.hidden) { stopNowTimer(); }
-		else { startNowTimer(); }
-	});
-	window.addEventListener('pagehide', stopNowTimer);
-
-	// Click handler — editors go through existing list row's edit button so the
-	// external revised.js closest('tr') lookup + meal-field patch both work.
-	// Non-editors get a lightweight popover with details (no alert/confirm).
-	var openPopover = null;
-	function closePopover() {
-		if (openPopover && openPopover.parentNode) openPopover.parentNode.removeChild(openPopover);
-		openPopover = null;
-	}
-	document.addEventListener('click', function(e) {
-		if (openPopover && !openPopover.contains(e.target) && !e.target.closest('.ev-grid-block')) {
-			closePopover();
-		}
-	});
-	document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePopover(); });
-	document.addEventListener('keydown', function(e) {
-		if (e.key !== 'Enter' && e.key !== ' ') return;
-		var blk = e.target && e.target.closest && e.target.closest('.ev-grid-block');
-		if (!blk) return;
-		if (e.key === ' ') e.preventDefault();
-		var sid = parseInt(blk.getAttribute('data-schedule-id'), 10);
-		if (!sid) return;
-		window.evGridBlockClick(sid, { stopPropagation: function(){}, currentTarget: blk });
-	});
-
-	window.evGridBlockClick = function(scheduleId, evt) {
-		if (evt) { evt.stopPropagation(); }
-		closePopover();
-		if (window.EvConfig && EvConfig.canManageSchedule) {
-			var row = document.getElementById('ev-schedule-row-' + scheduleId);
-			if (!row) return;
-			var editBtn = row.querySelector('.ev-edit-link');
-			if (editBtn) editBtn.click();
-			return;
-		}
-		// Non-editor popover
-		var row = document.getElementById('ev-schedule-row-' + scheduleId);
-		if (!row) return;
-		var title    = row.getAttribute('data-title')       || '';
-		var start    = row.getAttribute('data-start')       || '';
-		var end      = row.getAttribute('data-end')         || '';
-		var loc      = row.getAttribute('data-location')    || '';
-		var desc     = row.getAttribute('data-description') || '';
-		function fmt(s) { if (!s) return ''; var d = new Date(s); if (isNaN(d.getTime())) return s; return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); }
-		var timeStr = (start || end) ? (fmt(start) + (end ? ' – ' + fmt(end) : '')) : '';
-
-		var pop = document.createElement('div');
-		pop.className = 'ev-grid-popover';
-		var safe = function(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
-		// Mirror of ev_autolink() in PHP: escape the text, but turn bare http/https
-		// URLs into new-tab links. Matching on the raw string before escaping keeps
-		// '&' in query strings from being split across an '&amp;' entity.
-		var linkify = function(s) {
-			var out = '', re = /https?:\/\/[^\s<>"']+/gi, m, last = 0;
-			while ((m = re.exec(s)) !== null) {
-				var url = m[0], tail = '';
-				while (url) {
-					var ch = url.charAt(url.length - 1);
-					if ('.,;:!?'.indexOf(ch) !== -1) { tail = ch + tail; url = url.slice(0, -1); continue; }
-					if (ch === ')' && (url.split(')').length > url.split('(').length)) { tail = ch + tail; url = url.slice(0, -1); continue; }
-					break;
-				}
-				out += safe(s.slice(last, m.index));
-				if (url) { out += '<a href="' + safe(url).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">' + safe(url) + '</a>'; }
-				out += safe(tail);
-				last = m.index + m[0].length;
-			}
-			return out + safe(s.slice(last));
-		};
-		var html = '<h5>' + safe(title) + '</h5>';
-		if (timeStr) html += '<div class="ev-gp-row"><i class="fas fa-clock"></i>' + safe(timeStr) + '</div>';
-		if (loc)     html += '<div class="ev-gp-row"><i class="fas fa-map-marker-alt"></i>' + safe(loc) + '</div>';
-		if (desc)    html += '<div class="ev-gp-row ev-gp-desc" style="margin-top:8px;line-height:1.4">' + linkify(desc) + '</div>';
-		pop.innerHTML = html;
-		document.body.appendChild(pop);
-
-		// Position near the clicked block
-		var target = evt && evt.currentTarget ? evt.currentTarget : null;
-		var r = target ? target.getBoundingClientRect() : { left: 20, top: 60, right: 220, bottom: 100 };
-		var pr = pop.getBoundingClientRect();
-		var left = r.left + window.scrollX;
-		var top  = r.bottom + window.scrollY + 6;
-		if (left + pr.width > window.scrollX + document.documentElement.clientWidth - 10) {
-			left = window.scrollX + document.documentElement.clientWidth - pr.width - 10;
-		}
-		if (top + pr.height > window.scrollY + window.innerHeight - 10) {
-			top = r.top + window.scrollY - pr.height - 6;
-			pop.classList.add('ev-grid-popover-flip');
-		}
-		pop.style.left = left + 'px';
-		pop.style.top  = top  + 'px';
-		openPopover = pop;
-	};
-
-	// --- Grid ⇄ server resync -------------------------------------------------
-	// The grid is server-rendered; schedule add/edit/delete (handled in revised.js)
-	// only update the list DOM, so the grid used to go stale until a full reload.
-	// Re-fetch the page, swap in the freshly-rendered grid, and rebuild the day
-	// pills — keeping the server as the single source of truth for the layout math.
-	window.evReinitScheduleGrid = function() {
-		setupGridDays();
-		updateNowLines();
-		startNowTimer(); // self-guards; covers an empty→populated schedule
-	};
-	window.evRefreshScheduleGrid = function() {
-		fetch(window.location.href, {
-			headers: { 'X-Requested-With': 'XMLHttpRequest' },
-			credentials: 'same-origin'
-		})
-		.then(function(r) { return r.text(); })
-		.then(function(html) {
-			var doc = new DOMParser().parseFromString(html, 'text/html');
-			var fresh = doc.getElementById('ev-schedule-grid-container');
-			if (!fresh) return;
-			// Preserve the day the user is currently viewing, if it survives the swap.
-			var prevDayKey = null;
-			gridEl.querySelectorAll('.ev-grid-day').forEach(function(d) {
-				if (prevDayKey === null && d.style.display !== 'none') prevDayKey = d.getAttribute('data-day-key');
-			});
-			// Swap inner content only, so gridEl (and the view-toggle + now-timer
-			// wiring that closes over it) stays valid.
-			gridEl.innerHTML = fresh.innerHTML;
-			window.evReinitScheduleGrid();
-			if (prevDayKey) {
-				var still = gridEl.querySelector('.ev-grid-day[data-day-key="' + prevDayKey + '"]');
-				if (still) selectGridDay(prevDayKey);
-			}
-		})
-		.catch(function() { /* leave the grid as-is; the list is already correct */ });
-	};
-})();
+// The Schedule tab's Board/List switch, deep links and board refresh live in evb-view.js.
+if (window.EvBoardView) EvBoardView.init();
 </script>
 
 <?php endif; /* DraftBlocked */ ?>
