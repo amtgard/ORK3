@@ -119,6 +119,16 @@ final class OnlineAttendanceTest extends TestCase
         $this->assertSame(1, $this->fixture->fetchOnline($id));
     }
 
+    public function testSetAttendanceNullOrEmptyOnlineKeepsValue(): void
+    {
+        [$o, $p, $park] = $this->actors('keepnull');
+        $id = $this->add($o, $p, $park, ['Online' => 1]);
+        $this->set($o, $p, $park, $id, ['Online' => null]);
+        $this->assertSame(1, $this->fixture->fetchOnline($id));
+        $this->set($o, $p, $park, $id, ['Online' => '']);
+        $this->assertSame(1, $this->fixture->fetchOnline($id));
+    }
+
     public function testCreateParkLinkStoresOnline(): void
     {
         [$o, , $park] = $this->actors('lnk');

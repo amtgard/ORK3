@@ -240,8 +240,8 @@ class Attendance extends Ork3
         $this->attendance->credits = $request['Credits'];
         $this->attendance->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         $this->attendance->entered_at = date("Y-m-d H:i:s");
-        // Online: only touched when the caller sends the key; absent = unchanged.
-        if (array_key_exists('Online', $request)) {
+        // Online: only touched when the caller sends a value; absent, null or '' = unchanged.
+        if (isset($request['Online']) && $request['Online'] !== '') {
             $this->attendance->online = self::NormalizeOnline($request['Online']);
         }
         // Recompute date partitions when date changes.
