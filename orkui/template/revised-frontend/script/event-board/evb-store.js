@@ -385,6 +385,29 @@
             doUpdate(cid, diff, false);
         }
 
+        // Rows the server already holds (a server-side copy): added with their
+        // saved snapshots and nothing queued, as one undo step. Undo removes them
+        // through the normal remove path; redo then adds them again as new rows.
+        // A row with no server id, or one already present, is skipped.
+        function adoptRows(rows) {
+            var cids = [];
+            run(function () {
+                (rows || []).forEach(function (row) {
+                    if (!row || !isId(row.EventScheduleId)) return;
+                    var cid = 'i' + row.EventScheduleId;
+                    if (indexOf(cid) >= 0 || cids.indexOf(cid) >= 0) return;
+                    touch(cid, true);
+                    var c = clone(row);
+                    c.cid = cid;
+                    list.push(c);
+                    saved[cid] = clone(c);
+                    changed = true;
+                    cids.push(cid);
+                });
+            }, true);
+            return cids;
+        }
+
         // ---- public API ----
 
         function status() {
@@ -424,6 +447,7 @@
                 run(function () { doRemove(cid, undoable, !undoable); }, true);
             },
             batch: function (fn) { run(fn, true); },
+            adopt: adoptRows,
             undo: function () { return step(undoStack, redoStack, 'before', true); },
             redo: function () { return step(redoStack, undoStack, 'after', false); },
             canUndo: function () { return undoStack.length > 0; },

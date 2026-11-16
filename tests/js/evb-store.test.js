@@ -263,6 +263,34 @@ test('a rejected update restores the saved values; meal fields are sent only whe
   assert.deepEqual(s.items().map(i => i.cid), ['i9']);
   assert.ok(!s.canUndo());
 });
+test('adopt adds server rows without sending them and undoes as one step', async () => {
+  const f = fake();
+  const s = S.create({ items: [], send: f.send, saveMeal: true });
+  const cids = s.adopt([item('A', { EventScheduleId: 41 }), item('B', { EventScheduleId: 42 })]);
+  assert.deepEqual(cids, ['i41', 'i42']);
+  assert.equal(f.calls.length, 0);
+  assert.deepEqual(s.status(), { state: 'saved', pending: 0, reason: null });
+  s.undo(); await s.idle();
+  assert.equal(s.items().length, 0);
+  assert.deepEqual(f.calls.flat().map(o => [o.op, o.id]).sort(), [['remove', 41], ['remove', 42]]);
+});
+test('redo after undoing an adopt adds the rows again; known or id-less rows are not adopted', async () => {
+  const f = fake();
+  const s = S.create({ items: [item('Old', { EventScheduleId: 7 })], send: f.send, saveMeal: true });
+  const changes = []; s.on('change', () => changes.push(1));
+  assert.deepEqual(s.adopt([item('A', { EventScheduleId: 41 }), item('Dup', { EventScheduleId: 7 }), item('NoId')]), ['i41']);
+  assert.equal(changes.length, 1);
+  assert.equal(s.get('i41').Title, 'A');
+  assert.equal(s.get('i7').Title, 'Old');
+  assert.deepEqual(s.adopt([]), []);
+  s.undo(); await s.idle();
+  assert.equal(s.get('i41'), null);
+  assert.ok(s.redo()); await s.idle();
+  assert.equal(s.get('i41').Title, 'A');
+  assert.ok(s.get('i41').EventScheduleId > 41);
+  assert.deepEqual(f.calls.flat().map(o => o.op), ['remove', 'add']);
+  assert.equal(s.status().state, 'saved');
+});
 test('leads go out as MundaneId and Auto; the store keeps Persona and Auto', async () => {
   const f = fake(); f.hold();
   const s = S.create({ items: [], send: f.send, saveMeal: true });

@@ -948,7 +948,147 @@
         return rows.map(function (r) { return formatEntry(r.item, { withDay: true }); }).join('\n');
     }
 
+    // ---- Bulk text: many lines in, the schedule out as text, a skeleton, conflicts. ----
+
+    var MONTH_RE = '(?:' + MONTHS.map(function (m) { return m.slice(0, 3) + '(?:' + m.slice(3) + ')?'; }).join('|') + ')';
+    // A weekday name, optionally with a date after a comma ('Friday, November 20'),
+    // then nothing but punctuation.
+    var HEADING_RE = new RegExp('^([a-z]+)(?:,?\\s+' + MONTH_RE + '\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?)?[\\s:;,.!\\-–—]*$', 'i');
+    var MD_HEADING_RE = /^(\d{1,2}\/\d{1,2})\s*:?$/;
+
+    // The board day a whole line names as a heading, or null.
+    function headingDay(line, days) {
+        var m = HEADING_RE.exec(line);
+        if (m && weekdayOf(m[1]) >= 0) return resolveDayWord(m[1], days);
+        m = MD_HEADING_RE.exec(line);
+        return m ? resolveDayWord(m[1], days) : null;
+    }
+
+    // Lines of text to items, in order. Each item carries the day and the clock
+    // to the next line; a heading line sets the day and starts it afresh (9:00,
+    // the caller's default length). A line whose title has no letter or digit is
+    // reported in unread with its 1-based line number.
+    function parseLines(text, ctx) {
+        ctx = ctx || {};
+        var days = ctx.days || [];
+        var day = ctx.day || days[0] || null;
+        var baseDuration = ctx.lastDuration == null ? 60 : ctx.lastDuration;
+        var lastEnd = ctx.lastEnd || null, lastDuration = baseDuration;
+        var items = [], unread = [], unmatched = [];
+        String(text == null ? '' : text).split(/\r\n|\r|\n/).forEach(function (raw, n) {
+            var line = raw.trim();
+            if (!line) return;
+            var heading = headingDay(line, days.length ? days : (day ? [day] : []));
+            if (heading) {
+                if (!lastEnd || lastEnd.day !== heading) { lastEnd = null; lastDuration = baseDuration; }
+                day = heading;
+                return;
+            }
+            var r = parseEntry(line, { days: days, day: day, lastEnd: lastEnd, lastDuration: lastDuration,
+                staff: ctx.staff, canFeast: ctx.canFeast, locations: ctx.locations });
+            if (r.setDay) { day = r.setDay; return; }
+            if (!r.ok || !r.day || !/[\p{L}\p{N}]/u.test(r.title)) { unread.push({ line: n + 1, text: line }); return; }
+            r.unmatchedLeads.forEach(function (u) { if (unmatched.indexOf(u) < 0) unmatched.push(u); });
+            items.push({
+                Title: r.title,
+                StartTime: r.start,
+                EndTime: r.end,
+                Category: r.category,
+                SecondaryCategory: r.secondaryCategory,
+                Location: r.location,
+                Description: r.description,
+                Cost: r.cost,
+                Leads: r.leads.map(function (l) { return { MundaneId: l.MundaneId, Persona: l.Persona, Auto: false }; })
+            });
+            day = r.day;
+            lastEnd = { day: r.day, min: r.endMin };
+            lastDuration = r.endMin - r.startMin;
+        });
+        return { items: items, unread: unread, unmatchedLeads: unmatched };
+    }
+
+    // The items as text parseLines reads back: per board day in order, a
+    // 'Friday, November 20' heading and one formatEntry line per item by start.
+    function scheduleText(items) {
+        var byDay = {};
+        (items || []).forEach(function (it) {
+            var sp = span(it);
+            if (sp) (byDay[sp.day] = byDay[sp.day] || []).push({ item: it, start: sp.start });
+        });
+        return Object.keys(byDay).sort().map(function (d) {
+            var rows = byDay[d].sort(function (a, b) { return a.start - b.start; });
+            return [dayLabelLong(d)].concat(rows.map(function (r) { return formatEntry(r.item); })).join('\n');
+        }).join('\n\n');
+    }
+
+    // The usual bones of an event as lines for parseLines. Days are headed
+    // 'Fri:', or 'M/D:' when two of the event's days share a weekday.
+    function skeletonText(days) {
+        days = days || [];
+        var seen = {}, shared = days.some(function (d) {
+            var w = weekdayIndex(d);
+            if (seen[w]) return true;
+            seen[w] = true;
+            return false;
+        });
+        return days.map(function (d, i) {
+            var p = dayParts(d);
+            var lines = [(shared ? p.m + '/' + p.d : dayLabel(d).slice(0, 3)) + ':'];
+            if (i === 0) {
+                lines.push('12p Troll Opens', '6p Feast');
+                if (days.length === 1) lines.push('8p Court');
+            } else if (i < days.length - 1) {
+                lines.push('9a Troll Opens', '12p Lunch', '6p Feast', '8p Court');
+            } else {
+                lines.push('9a Troll Opens', '10a Clean Up', '12p Site Closes');
+            }
+            return lines.join('\n');
+        }).join('\n\n');
+    }
+
+    // Double bookings: for each pair of items whose times truly overlap (zero-length
+    // items never do), a message on both for each shared lead (by MundaneId) and
+    // for a shared location (ignoring case and surrounding space). Keyed by cid,
+    // or 'i' + EventScheduleId.
+    function conflicts(items) {
+        var rows = [];
+        (items || []).forEach(function (it) {
+            var key = it.cid || (it.EventScheduleId ? 'i' + it.EventScheduleId : null);
+            var sp = key && span(it);
+            if (!sp || sp.end <= sp.start) return;
+            var abs = absStart(sp);
+            rows.push({ key: key, item: it, start: abs, end: abs + (sp.end - sp.start),
+                loc: String(it.Location || '').trim() });
+        });
+        rows.sort(function (a, b) { return a.start - b.start; });
+        var out = {};
+        function note(row, msg) {
+            var list = out[row.key] = out[row.key] || [];
+            if (list.indexOf(msg) < 0) list.push(msg);
+        }
+        function clash(row, other) {
+            (row.item.Leads || []).forEach(function (l) {
+                if (!l || !(other.item.Leads || []).some(function (o) { return o && +o.MundaneId === +l.MundaneId; })) return;
+                note(row, l.Persona + ' is also on ' + other.item.Title);
+            });
+            if (row.loc && row.loc.toLowerCase() === other.loc.toLowerCase()) {
+                note(row, row.loc + ' is also booked for ' + other.item.Title);
+            }
+        }
+        for (var i = 0; i < rows.length; i++) {
+            for (var j = i + 1; j < rows.length && rows[j].start < rows[i].end; j++) {
+                clash(rows[i], rows[j]);
+                clash(rows[j], rows[i]);
+            }
+        }
+        return out;
+    }
+
     return {
+        parseLines: parseLines,
+        scheduleText: scheduleText,
+        skeletonText: skeletonText,
+        conflicts: conflicts,
         snap: snap,
         boardPos: boardPos,
         span: span,
