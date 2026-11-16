@@ -112,6 +112,16 @@ whole-weekend picture.
     leads who are not event staff.
 17. **A saved view choice is respected.** Board is the default only for someone who has never
     chosen.
+18. **Renaming in place changes the title only.** The first build let an existing item be
+    edited as a line of text (title, `at location`, `"description"`) and re-read it through
+    the grammar. Three review rounds showed that cannot be made lossless: a multi-line
+    description was flattened, and a location such as "Hall #2" could leak into the title.
+    The grammar is for creating items. On an existing item, Enter or a double-click renames
+    it, storing exactly what is typed; location, description and meal details are edited in
+    Details; the time by dragging or Details; the category by its key or menu.
+19. **"At" before a bare hour is a time.** "Court at 6" means 6pm, not a place called "6".
+20. **A session that expired mid-edit says so.** The mode bar tells a signed-out editor to
+    sign in in another tab and press Retry; nothing typed is lost.
 
 ## 5. Constraints
 
@@ -278,7 +288,7 @@ One parser serves the quick line, typing inside a block, and pasted lines.
 | Shift+Up / Shift+Down | Change the end by 15 minutes |
 | Left / Right | Move to the previous or next day |
 | `1`–`9`, `0` | Set the category |
-| Enter or double-click | Edit the item's text in place |
+| Enter or double-click | Rename the item in place (title only) |
 | Delete / Backspace | Remove (no confirm; Undo restores it) |
 | Cmd/Ctrl+D | Duplicate directly after |
 | Cmd/Ctrl+C, Cmd/Ctrl+V | Copy the selection; paste at the slot cursor |
@@ -287,9 +297,10 @@ One parser serves the quick line, typing inside a block, and pasted lines.
 | Drag the top or bottom edge | Resize |
 | Drag the corner handle down | Repeat the item at its length plus the gap to the previous item of the same category that day (30 minutes if none) |
 
-- Editing an item in place shows its title, `at location` and `"description"` as text, with
-  category and leads as chips. Its time is its position.
-- "Details" opens the existing modal for everything else (menu, dietary, allergens).
+- Renaming an item in place edits its title only, stored exactly as typed, with no grammar
+  applied (call 4.18). Its leads show as chips that can be removed, or added with `@`.
+- "Details" opens the existing modal for everything else on an existing item (location,
+  description, menu, dietary, allergens).
 - Changing an item's category replaces its auto-filled leads with the new category's leads.
   Leads picked by hand stay.
 - A day or time typed between midnight and 5am belongs to the named day's night (call 4.3).

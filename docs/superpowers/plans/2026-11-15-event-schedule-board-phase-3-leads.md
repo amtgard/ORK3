@@ -245,7 +245,8 @@ Behaviour:
 - As soon as the parsed category has category leads, they appear as `evb-chip-auto` chips. Removing one keeps it removed for this entry even if the category is re-parsed. Changing the category while typing swaps the auto chips.
 - On commit the item's `Leads` are the chips: `{MundaneId, Persona, Auto}`.
 - Setting a block's category (key, menu, or an in-place edit that changes it) applies `swapAutoLeads`.
-- Editing an item in place shows its current leads as chips.
+- Renaming an item in place edits the title only, stored exactly as typed with no grammar applied (design call 4.18, made after Phase 2's reviews): the rename box holds the stored title verbatim; Enter or clicking away saves it when it differs, trimmed; an empty box saves nothing; Esc restores it. The item's current leads show as chips beside it; a chip's × removes that lead, and typing `@` in the box adds one through the same suggestion list, without the `@query` text ever becoming part of the title. Nothing else about the item is touched by a rename. This replaces the Phase 2 code that re-parsed the edited line (`editedTitle`, `changedFields` and the prefill of location and description).
+- Every save keeps each lead's `Auto` flag: the store's wire format sends `Leads` as `[{MundaneId, Auto}]`, the page's embedded schedule carries `Auto`, and the schedule modal posts `Auto` back for leads it did not change. A lead the person adds by hand is `Auto: false`.
 - The schedule modal, in add mode: changing the primary category sets the lead list to that category's leads (marked auto) when the list has not been touched by hand; the posted `Leads` JSON carries `Auto` for them.
 - When staff change (`evOnStaffChanged`) or the store refreshes, later entries use the new staff list.
 
