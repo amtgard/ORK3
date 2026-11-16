@@ -133,6 +133,30 @@ final class EventPlanningFixture
     }
 
     /**
+     * A published event at the first park whose occurrence runs from 09:00 on
+     * $startDate (Y-m-d) to 16:00 two days later.
+     *
+     * @return array{event_id: int, detail_id: int, kingdom_id: int, park_id: int, mundane_id: int}
+     */
+    public function createPublishedEventOn(string $suffix, string $startDate): array
+    {
+        $kingdomId = $this->firstKingdomId();
+        $parkId = $this->firstParkId();
+        $ownerId = $this->insertMundane($suffix . '-owner', $parkId, $kingdomId);
+        $eventId = $this->insertEvent($kingdomId, $parkId, $ownerId, $suffix, 'published');
+        $endDate = (new \DateTimeImmutable($startDate))->modify('+2 days')->format('Y-m-d');
+        $detailId = $this->insertDetail($eventId, $startDate . ' 09:00:00', $endDate . ' 16:00:00');
+
+        return [
+            'event_id' => $eventId,
+            'detail_id' => $detailId,
+            'kingdom_id' => $kingdomId,
+            'park_id' => $parkId,
+            'mundane_id' => $ownerId,
+        ];
+    }
+
+    /**
      * @return array{event_id: int, detail_id: int}
      */
     public function createPastPublishedEventAtPark(int $parkId, int $kingdomId, string $suffix = 'past'): array
@@ -188,6 +212,21 @@ final class EventPlanningFixture
     {
         $start = date('Y-m-d H:i:s', strtotime('+7 days 10:00'));
         $end = date('Y-m-d H:i:s', strtotime('+7 days 11:00'));
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'event_schedule
+             (event_calendardetail_id, title, start_time, end_time, location, description, category)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([$detailId, $title, $start, $end, 'Main', self::MARKER, $category]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->scheduleIds[] = $id;
+
+        return $id;
+    }
+
+    /** A schedule item at explicit naive 'Y-m-d H:i:s' times. */
+    public function insertScheduleAt(int $detailId, string $title, string $category, string $start, string $end): int
+    {
         $stmt = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'event_schedule
              (event_calendardetail_id, title, start_time, end_time, location, description, category)

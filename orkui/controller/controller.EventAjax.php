@@ -705,6 +705,65 @@ class Controller_EventAjax extends Controller
         exit;
     }
 
+    // GET EventAjax/schedule_copy_sources/{eventId}/{detailId}: past occurrences whose
+    // schedule a schedule manager may copy into this one.
+    public function schedule_copy_sources($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        $params    = explode('/', $p ?? '');
+        $event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+
+        if (!valid_id($event_id) || !valid_id($detail_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+            exit;
+        }
+
+        $this->load_model('EventPlanning');
+        $r = $this->EventPlanning->schedule_copy_sources($this->session->token, $event_id, $detail_id);
+        $this->EventPlanning->emit_json($r);
+        echo json_encode(['status' => 0, 'sources' => $r['Sources'] ?? []]);
+        exit;
+    }
+
+    // POST EventAjax/schedule_copy_into/{eventId}/{detailId} with SourceDetailId: appends a
+    // copy of that occurrence's schedule, moved by whole days.
+    public function schedule_copy_into($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        $params    = explode('/', $p ?? '');
+        $event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+        $source_raw = (string)($_POST['SourceDetailId'] ?? '');
+        $source_id = preg_match('/^[1-9][0-9]{0,9}$/', $source_raw) ? (int)$source_raw : 0;
+
+        if (!valid_id($event_id) || !valid_id($detail_id) || !valid_id($source_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid request.']);
+            exit;
+        }
+
+        $this->load_model('EventPlanning');
+        $r = $this->EventPlanning->schedule_copy_into([
+            'Token' => $this->session->token,
+            'EventId' => $event_id,
+            'EventCalendarDetailId' => $detail_id,
+            'SourceDetailId' => $source_id,
+        ]);
+        $this->EventPlanning->emit_json($r);
+        echo json_encode(['status' => 0, 'schedule' => $r['Schedule'] ?? [], 'skippedFeast' => (int)($r['SkippedFeast'] ?? 0)]);
+        exit;
+    }
+
     public function heraldry($p = null)
     {
         header('Content-Type: application/json');

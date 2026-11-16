@@ -1723,6 +1723,224 @@ class EventPlanning extends Ork3
         ];
     }
 
+    /**
+     * Occurrences whose schedule a schedule manager may copy into this one: first the
+     * event's other occurrences (newest first), then the latest past occurrence of each
+     * event ListCopySourceEvents offers for this event's kingdom and park. Only
+     * occurrences with at least one schedule item; at most 25.
+     *
+     * @return array{Status: array, Sources?: list<array{EventId: int, EventCalendarDetailId: int, Name: string, StartDate: string, ItemCount: int, SameEvent: bool}>}
+     */
+    public function ListScheduleCopySources(array $request): array
+    {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+
+        if ($mundaneId <= 0) {
+            return ['Status' => BadToken()];
+        }
+        if (!valid_id($eventId) || !valid_id($detailId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+        if (!$this->staffScheduleCaps($mundaneId, $eventId, $detailId)['can_schedule']) {
+            return ['Status' => NoAuthorization()];
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+
+        return ['Status' => Success(), 'Sources' => $this->scheduleCopySources($eventId, $detailId)];
+    }
+
+    /**
+     * Appends a copy of another occurrence's schedule to this one, every item moved by
+     * the whole days between the two occurrences' start dates (clock times kept).
+     * Feast items are skipped, and counted, for a caller who cannot manage feast.
+     *
+     * @return array{Status: array, Schedule?: list<array<string, mixed>>, SkippedFeast?: int}
+     */
+    public function CopyScheduleInto(array $request): array
+    {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        $sourceId = $this->strictId($request['SourceDetailId'] ?? null);
+
+        if ($mundaneId <= 0) {
+            return ['Status' => BadToken()];
+        }
+        if (!valid_id($eventId) || !valid_id($detailId) || $sourceId === 0) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+        $caps = $this->staffScheduleCaps($mundaneId, $eventId, $detailId);
+        if (!$caps['can_schedule']) {
+            return ['Status' => NoAuthorization()];
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return ['Status' => InvalidParameter('Invalid parameters.')];
+        }
+        $allowed = array_column($this->scheduleCopySources($eventId, $detailId), 'EventCalendarDetailId');
+        if (!in_array($sourceId, $allowed, true)) {
+            return ['Status' => NoAuthorization()];
+        }
+
+        $sourceStart = $this->fetchDetailStart($sourceId);
+        $targetStart = $this->fetchDetailStart($detailId);
+        $shiftDays = ($sourceStart !== null && $targetStart !== null)
+            ? $this->calendarDaysBetween($sourceStart, $targetStart) : null;
+        if ($shiftDays === null) {
+            return ['Status' => InvalidParameter('The occurrence dates could not be read.')];
+        }
+
+        $skippedFeast = 0;
+        if (!$caps['can_feast']) {
+            $this->db->Clear();
+            $feastRow = $this->db->DataSet(
+                'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . "event_schedule
+                 WHERE event_calendardetail_id = " . $sourceId . "
+                   AND (category = 'Feast and Food' OR secondary_category = 'Feast and Food')"
+            );
+            $skippedFeast = ($feastRow && $feastRow->Next()) ? (int) $feastRow->c : 0;
+        }
+
+        $mod = ['schedule' => true, 'feast' => $caps['can_feast'], 'meals' => $caps['can_feast']];
+        $this->db->BeginTrans();
+        try {
+            $newIds = $this->copyScheduleModules($sourceId, $detailId, $mod, $shiftDays);
+        } catch (\RuntimeException $e) {
+            $this->db->RollbackTrans();
+            return ['Status' => ProcessingError('Could not copy the schedule.')];
+        } catch (\Throwable $e) {
+            $this->db->RollbackTrans();
+            throw $e;
+        }
+        if (!$this->db->CommitTrans()) {
+            return ['Status' => ProcessingError('Could not copy the schedule.')];
+        }
+
+        $byId = [];
+        foreach ($this->fetchScheduleList($detailId) as $row) {
+            $byId[$row['EventScheduleId']] = $row;
+        }
+        $schedule = [];
+        foreach ($newIds as $newId) {
+            if (isset($byId[$newId])) {
+                $schedule[] = $byId[$newId];
+            }
+        }
+
+        return ['Status' => Success(), 'Schedule' => $schedule, 'SkippedFeast' => $skippedFeast];
+    }
+
+    /**
+     * The copy sources for a target occurrence (see ListScheduleCopySources); no access check.
+     *
+     * @return list<array{EventId: int, EventCalendarDetailId: int, Name: string, StartDate: string, ItemCount: int, SameEvent: bool}>
+     */
+    private function scheduleCopySources(int $eventId, int $detailId): array
+    {
+        $limit = 25;
+        $this->db->Clear();
+        $eventRow = $this->db->DataSet(
+            'SELECT name, kingdom_id, park_id FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $eventId . ' LIMIT 1'
+        );
+        if (!$eventRow || !$eventRow->Next()) {
+            return [];
+        }
+        $eventName = (string) $eventRow->name;
+        $kingdomId = (int) $eventRow->kingdom_id;
+        $parkId = (int) $eventRow->park_id;
+
+        $sources = [];
+        $this->db->Clear();
+        $sameRs = $this->db->DataSet(
+            'SELECT cd.event_calendardetail_id, cd.event_start, COUNT(s.event_schedule_id) AS item_count
+             FROM ' . DB_PREFIX . 'event_calendardetail cd
+             JOIN ' . DB_PREFIX . 'event_schedule s ON s.event_calendardetail_id = cd.event_calendardetail_id
+             WHERE cd.event_id = ' . $eventId . ' AND cd.event_calendardetail_id != ' . $detailId . '
+             GROUP BY cd.event_calendardetail_id, cd.event_start
+             ORDER BY cd.event_start DESC, cd.event_calendardetail_id DESC
+             LIMIT ' . $limit
+        );
+        while ($sameRs && $sameRs->Next()) {
+            $sources[] = [
+                'EventId' => $eventId,
+                'EventCalendarDetailId' => (int) $sameRs->event_calendardetail_id,
+                'Name' => $eventName,
+                'StartDate' => substr((string) $sameRs->event_start, 0, 10),
+                'ItemCount' => (int) $sameRs->item_count,
+                'SameEvent' => true,
+            ];
+        }
+        if (count($sources) >= $limit) {
+            return $sources;
+        }
+
+        $offered = $this->ListCopySourceEvents([
+            'KingdomId' => $kingdomId,
+            'ParkId' => $parkId,
+            'ExcludeEventId' => $eventId,
+        ]);
+        $names = [];
+        foreach ($offered['Results'] ?? [] as $result) {
+            $names[(int) $result['eventId']] = (string) $result['name'];
+        }
+        if ($names === []) {
+            return $sources;
+        }
+
+        $this->db->Clear();
+        $latestRs = $this->db->DataSet(
+            'SELECT cd.event_id, cd.event_calendardetail_id, cd.event_start,
+                    (SELECT COUNT(*) FROM ' . DB_PREFIX . 'event_schedule s
+                     WHERE s.event_calendardetail_id = cd.event_calendardetail_id) AS item_count
+             FROM ' . DB_PREFIX . 'event_calendardetail cd
+             WHERE cd.event_id IN (' . implode(',', array_map('intval', array_keys($names))) . ')
+               AND cd.event_start < NOW()
+             ORDER BY cd.event_start DESC, cd.event_calendardetail_id DESC'
+        );
+        $latest = [];
+        while ($latestRs && $latestRs->Next()) {
+            $otherId = (int) $latestRs->event_id;
+            if (isset($latest[$otherId])) {
+                continue;
+            }
+            $latest[$otherId] = [
+                'EventId' => $otherId,
+                'EventCalendarDetailId' => (int) $latestRs->event_calendardetail_id,
+                'Name' => $names[$otherId],
+                'StartDate' => substr((string) $latestRs->event_start, 0, 10),
+                'ItemCount' => (int) $latestRs->item_count,
+                'SameEvent' => false,
+            ];
+        }
+        foreach (array_keys($names) as $otherId) {
+            $candidate = $latest[$otherId] ?? null;
+            if ($candidate === null || $candidate['ItemCount'] < 1) {
+                continue;
+            }
+            $sources[] = $candidate;
+            if (count($sources) >= $limit) {
+                break;
+            }
+        }
+
+        return $sources;
+    }
+
+    /** The occurrence's event_start as stored, or null when it does not exist. */
+    private function fetchDetailStart(int $detailId): ?string
+    {
+        $this->db->Clear();
+        $row = $this->db->DataSet(
+            'SELECT event_start FROM ' . DB_PREFIX . 'event_calendardetail
+             WHERE event_calendardetail_id = ' . $detailId . ' LIMIT 1'
+        );
+
+        return ($row && $row->Next()) ? (string) $row->event_start : null;
+    }
+
     public function CreateEventWithCopy($request)
     {
         $token = (string) ($request['Token'] ?? '');
@@ -1873,7 +2091,12 @@ class EventPlanning extends Ork3
         }
 
         if ($mod['schedule'] || $mod['feast']) {
-            $this->copyScheduleModules($srcDetailId, $newDetailId, $mod, $deltaSeconds);
+            try {
+                $this->copyScheduleModules($srcDetailId, $newDetailId, $mod, 0, $deltaSeconds);
+            } catch (\RuntimeException $e) {
+                $this->rollbackCopiedEvent($newEventId);
+                return ProcessingError('Failed to copy the schedule.');
+            }
         }
 
         if ($mod['staff']) {
@@ -2606,83 +2829,161 @@ class EventPlanning extends Ork3
         }
     }
 
-    private function copyScheduleModules(int $srcDetailId, int $newDetailId, array $mod, int $deltaSeconds): void
+    /**
+     * Copies the source occurrence's schedule items (and their eligible leads, keeping
+     * is_auto) onto $newDetailId. $mod['schedule'] / $mod['feast'] pick which items;
+     * $mod['meals'] (default true) copies menu, cost, dietary and allergens.
+     * With $deltaSeconds null every time moves by $shiftDays calendar days with its
+     * clock time kept; otherwise by $deltaSeconds seconds (CreateEventWithCopy).
+     *
+     * @return list<int> the new schedule ids, in source start order
+     * @throws \RuntimeException when a write fails
+     */
+    private function copyScheduleModules(int $srcDetailId, int $newDetailId, array $mod, int $shiftDays, ?int $deltaSeconds = null): array
     {
+        $copyMeals = $mod['meals'] ?? true;
         $this->db->Clear();
         $schedRs = $this->db->DataSet(
             'SELECT * FROM ' . DB_PREFIX . 'event_schedule
-             WHERE event_calendardetail_id = ' . $srcDetailId . ' ORDER BY start_time ASC'
+             WHERE event_calendardetail_id = ' . $srcDetailId . ' ORDER BY start_time ASC, event_schedule_id ASC'
         );
-        $srcSchedIds = [];
-        if ($schedRs) {
-            while ($schedRs->Next()) {
-                $cat = (string) $schedRs->category;
-                $secCat = (string) $schedRs->secondary_category;
-                $isFeast = ($cat === 'Feast and Food' || $secCat === 'Feast and Food');
-                $want = $isFeast ? $mod['feast'] : $mod['schedule'];
-                if (!$want) {
-                    continue;
-                }
-
-                $st = strtotime((string) $schedRs->start_time);
-                $et = strtotime((string) $schedRs->end_time);
-                if (!$st || !$et) {
-                    continue;
-                }
-
-                $menuSql = ($schedRs->menu !== null) ? "'" . $this->sq((string) $schedRs->menu) . "'" : 'NULL';
-                $costSql = ($schedRs->cost !== null && is_numeric($schedRs->cost))
-                    ? (string) round((float) $schedRs->cost, 2) : 'NULL';
-                $dietSql = ($schedRs->dietary !== null) ? "'" . $this->sq((string) $schedRs->dietary) . "'" : 'NULL';
-                $alleSql = ($schedRs->allergens !== null) ? "'" . $this->sq((string) $schedRs->allergens) . "'" : 'NULL';
-
-                $srcSchedId = (int) $schedRs->event_schedule_id;
-                $this->db->Clear();
-                $this->db->Execute(
-                    'INSERT INTO ' . DB_PREFIX . "event_schedule
-                     (event_calendardetail_id, title, start_time, end_time, location, description,
-                      category, secondary_category, menu, cost, dietary, allergens)
-                     VALUES (" . $newDetailId . ", '" . $this->sq((string) $schedRs->title) . "', '"
-                    . date('Y-m-d H:i:s', $st + $deltaSeconds) . "', '" . date('Y-m-d H:i:s', $et + $deltaSeconds)
-                    . "', '" . $this->sq((string) $schedRs->location) . "', '" . $this->sq((string) $schedRs->description)
-                    . "', '" . $this->sq($cat) . "', '" . $this->sq($secCat) . "', "
-                    . $menuSql . ', ' . $costSql . ', ' . $dietSql . ', ' . $alleSql . ')'
-                );
-                $this->db->Clear();
-                $nsRow = $this->db->DataSet(
-                    'SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule
-                     WHERE event_calendardetail_id = ' . $newDetailId . ' ORDER BY event_schedule_id DESC LIMIT 1'
-                );
-                $newSchedId = ($nsRow && $nsRow->Next()) ? (int) $nsRow->event_schedule_id : 0;
-                if ($newSchedId > 0) {
-                    $srcSchedIds[$srcSchedId] = $newSchedId;
-                }
-            }
+        $sourceRows = [];
+        while ($schedRs && $schedRs->Next()) {
+            $sourceRows[] = [
+                'id' => (int) $schedRs->event_schedule_id,
+                'title' => (string) $schedRs->title,
+                'start_time' => (string) $schedRs->start_time,
+                'end_time' => (string) $schedRs->end_time,
+                'location' => (string) $schedRs->location,
+                'description' => (string) $schedRs->description,
+                'category' => (string) $schedRs->category,
+                'secondary_category' => (string) $schedRs->secondary_category,
+                'menu' => $schedRs->menu,
+                'cost' => $schedRs->cost,
+                'dietary' => $schedRs->dietary,
+                'allergens' => $schedRs->allergens,
+            ];
         }
 
-        if (!empty($srcSchedIds)) {
+        $newIds = [];
+        $srcSchedIds = [];
+        foreach ($sourceRows as $row) {
+            $isFeast = ($row['category'] === 'Feast and Food' || $row['secondary_category'] === 'Feast and Food');
+            if (!($isFeast ? !empty($mod['feast']) : !empty($mod['schedule']))) {
+                continue;
+            }
+
+            if ($deltaSeconds === null) {
+                $start = $this->shiftNaiveDays($row['start_time'], $shiftDays);
+                $end = $this->shiftNaiveDays($row['end_time'], $shiftDays);
+            } else {
+                $st = strtotime($row['start_time']);
+                $et = strtotime($row['end_time']);
+                $start = $st ? date('Y-m-d H:i:s', $st + $deltaSeconds) : null;
+                $end = $et ? date('Y-m-d H:i:s', $et + $deltaSeconds) : null;
+            }
+            if ($start === null || $end === null) {
+                continue;
+            }
+
+            $values = [
+                'event_calendardetail_id' => $newDetailId,
+                'title' => $row['title'],
+                'start_time' => $start,
+                'end_time' => $end,
+                'location' => $row['location'],
+                'description' => $row['description'],
+                'category' => $row['category'],
+                'secondary_category' => $row['secondary_category'],
+            ];
+            if ($copyMeals) {
+                foreach (['menu', 'dietary', 'allergens'] as $column) {
+                    if ($row[$column] !== null) {
+                        $values[$column] = (string) $row[$column];
+                    }
+                }
+                if ($row['cost'] !== null && is_numeric($row['cost'])) {
+                    $values['cost'] = round((float) $row['cost'], 2);
+                }
+            }
+
+            $this->db->Clear();
+            foreach ($values as $column => $value) {
+                $this->db->$column = $value;
+            }
+            $columns = array_keys($values);
+            $ok = $this->db->ExecuteChecked(
+                'INSERT INTO ' . DB_PREFIX . 'event_schedule (' . implode(', ', $columns) . ')
+                 VALUES (:' . implode(', :', $columns) . ')'
+            );
+            $newSchedId = $ok ? (int) $this->db->GetLastInsertId() : 0;
+            if ($newSchedId <= 0) {
+                throw new \RuntimeException('Could not copy a schedule item.');
+            }
+            $newIds[] = $newSchedId;
+            $srcSchedIds[$row['id']] = $newSchedId;
+        }
+
+        if ($srcSchedIds !== []) {
             $srcKeys = implode(',', array_map('intval', array_keys($srcSchedIds)));
             $this->db->Clear();
             $leadsRs = $this->db->DataSet(
                 'SELECT event_schedule_id, mundane_id, is_auto FROM ' . DB_PREFIX . 'event_schedule_lead
                  WHERE event_schedule_id IN (' . $srcKeys . ')'
             );
-            if ($leadsRs) {
-                while ($leadsRs->Next()) {
-                    $newSid = $srcSchedIds[(int) $leadsRs->event_schedule_id] ?? 0;
-                    $mid = (int) $leadsRs->mundane_id;
-                    $isAuto = (int) $leadsRs->is_auto === 1 ? 1 : 0;
-                    if ($newSid <= 0 || !$this->isMundaneEligible($mid)) {
-                        continue;
-                    }
-                    $this->db->Clear();
-                    $this->db->Execute(
-                        'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
-                         VALUES (' . $newSid . ', ' . $mid . ', ' . $isAuto . ')'
-                    );
+            $leads = [];
+            while ($leadsRs && $leadsRs->Next()) {
+                $leads[] = [
+                    $srcSchedIds[(int) $leadsRs->event_schedule_id] ?? 0,
+                    (int) $leadsRs->mundane_id,
+                    (int) $leadsRs->is_auto === 1 ? 1 : 0,
+                ];
+            }
+            foreach ($leads as [$newSid, $mid, $isAuto]) {
+                if ($newSid <= 0 || !$this->isMundaneEligible($mid)) {
+                    continue;
+                }
+                $this->db->Clear();
+                if (!$this->db->ExecuteChecked(
+                    'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
+                     VALUES (' . $newSid . ', ' . $mid . ', ' . $isAuto . ')'
+                )) {
+                    throw new \RuntimeException('Could not copy a schedule lead.');
                 }
             }
         }
+
+        return $newIds;
+    }
+
+    /**
+     * A naive 'Y-m-d H:i:s' moved by whole calendar days with the clock time kept,
+     * or null when it does not parse. Pure date arithmetic, so clock changes do not apply.
+     */
+    private function shiftNaiveDays(string $naive, int $days): ?string
+    {
+        if (!preg_match('/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/', $naive, $m)) {
+            return null;
+        }
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $m[1], new \DateTimeZone('UTC'));
+        if ($date === false) {
+            return null;
+        }
+
+        return $date->modify(sprintf('%+d days', $days))->format('Y-m-d') . ' ' . $m[2];
+    }
+
+    /** Whole calendar days from the date part of $from to the date part of $to (naive datetimes). */
+    private function calendarDaysBetween(string $from, string $to): ?int
+    {
+        $utc = new \DateTimeZone('UTC');
+        $a = \DateTimeImmutable::createFromFormat('!Y-m-d', substr($from, 0, 10), $utc);
+        $b = \DateTimeImmutable::createFromFormat('!Y-m-d', substr($to, 0, 10), $utc);
+        if ($a === false || $b === false) {
+            return null;
+        }
+
+        return (int) $a->diff($b)->format('%r%a');
     }
 
     private function copyStaffModule(int $srcDetailId, int $newDetailId): void

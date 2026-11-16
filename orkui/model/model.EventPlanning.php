@@ -85,6 +85,21 @@ class Model_EventPlanning extends Model
         ]);
     }
 
+    public function schedule_copy_sources(string $token, int $eventId, int $detailId): array
+    {
+        return $this->_planning()->ListScheduleCopySources([
+            'Token' => $token,
+            'EventId' => $eventId,
+            'EventCalendarDetailId' => $detailId,
+        ]);
+    }
+
+    /** @param array{Token: string, EventId: int, EventCalendarDetailId: int, SourceDetailId: int} $request */
+    public function schedule_copy_into(array $request): array
+    {
+        return $this->_planning()->CopyScheduleInto($request);
+    }
+
     public function copy_source_list(int $kingdomId, int $parkId, string $query, int $excludeEventId = 0): array
     {
         return $this->_planning()->ListCopySourceEvents([

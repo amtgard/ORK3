@@ -845,4 +845,62 @@ final class EventPlanningTest extends TestCase
             $this->fixture->fetchScheduleLeads((int) $schedRow->event_schedule_id)
         );
     }
+
+    public function testCopyScheduleIntoAppendsAndKeepsClockTimesAcrossDst(): void
+    {
+        $src = $this->fixture->createPublishedEventOn('copy-src', '2026-10-30');   // before the US clock change on 2026-11-01
+        $dst = $this->fixture->createPublishedEventOn('copy-dst', '2026-11-06');
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $dst['park_id'], AUTH_CREATE, 'copy-admin');
+        $this->fixture->insertScheduleAt($src['detail_id'], 'Opening Court', 'Court', '2026-10-30 18:00:00', '2026-10-30 19:00:00');
+        $this->fixture->insertScheduleAt($src['detail_id'], 'Night Quest', 'Roleplay and Quests', '2026-10-31 23:30:00', '2026-11-01 00:30:00');
+        $existing = $this->fixture->insertScheduleAt($dst['detail_id'], 'Already Here', 'Other', '2026-11-06 09:00:00', '2026-11-06 10:00:00');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->planning->CopyScheduleInto(['Token' => $grantor['token'], 'EventId' => $dst['event_id'], 'EventCalendarDetailId' => $dst['detail_id'], 'SourceDetailId' => $src['detail_id']]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame(
+            [['Opening Court', '2026-11-06 18:00:00', '2026-11-06 19:00:00'], ['Night Quest', '2026-11-07 23:30:00', '2026-11-08 00:30:00']],
+            array_map(fn ($s) => [$s['Title'], $s['StartTime'], $s['EndTime']], $r['Schedule'])
+        );
+        $this->assertSame(3, $this->fixture->countSchedule($dst['detail_id']));
+        $this->assertSame('2026-11-06 09:00:00', $this->fixture->fetchScheduleRow($existing)['start_time']);
+        $this->assertSame(2, $this->fixture->countSchedule($src['detail_id']));
+    }
+
+    public function testCopyScheduleIntoSkipsFeastWithoutTheFeastCapabilityAndNeedsScheduleRights(): void
+    {
+        $src = $this->fixture->createPublishedEventOn('copy-feast-src', '2026-10-30');
+        $dst = $this->fixture->createPublishedEventOn('copy-feast-dst', '2026-11-06');
+        $this->fixture->insertScheduleAt($src['detail_id'], 'Feast', 'Feast and Food', '2026-10-30 17:00:00', '2026-10-30 18:00:00');
+        $this->fixture->insertScheduleAt($src['detail_id'], 'Mothman', 'Battlegame', '2026-10-30 12:00:00', '2026-10-30 12:45:00');
+        $sched = $this->fixture->createGrantorWithoutAuth('copy-sched');
+        $this->fixture->insertStaff($dst['detail_id'], $sched['mundane_id'], 'Sched', canSchedule: true);
+        $req = ['EventId' => $dst['event_id'], 'EventCalendarDetailId' => $dst['detail_id'], 'SourceDetailId' => $src['detail_id']];
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->planning->CopyScheduleInto($req + ['Token' => $sched['token']]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame(['Mothman'], array_column($r['Schedule'], 'Title'));
+        $this->assertSame(1, $r['SkippedFeast']);
+        $nobody = $this->fixture->createGrantorWithoutAuth('copy-nobody');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $denied = $this->planning->CopyScheduleInto($req + ['Token' => $nobody['token']]);
+        $this->assertNotSame(0, $denied['Status']['Status']);
+        $this->assertSame(1, $this->fixture->countSchedule($dst['detail_id']));
+    }
+
+    public function testScheduleCopySourcesListThisEventsOtherOccurrencesFirst(): void
+    {
+        $ctx = $this->fixture->createPublishedEventOn('copy-list', '2026-11-06');
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $ctx['park_id'], AUTH_CREATE, 'copy-list-admin');
+        $earlier = $this->fixture->createDetailOnEvent($ctx['event_id'], '2025-11-07 09:00:00', '2025-11-09 16:00:00');
+        $this->fixture->insertScheduleAt($earlier, 'Last Year', 'Court', '2025-11-07 18:00:00', '2025-11-07 19:00:00');
+        $empty = $this->fixture->createDetailOnEvent($ctx['event_id'], '2024-11-08 09:00:00', '2024-11-10 16:00:00');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->planning->ListScheduleCopySources(['Token' => $grantor['token'], 'EventId' => $ctx['event_id'], 'EventCalendarDetailId' => $ctx['detail_id']]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $first = $r['Sources'][0];
+        $this->assertSame([$earlier, true, 1, '2025-11-07'], [$first['EventCalendarDetailId'], $first['SameEvent'], $first['ItemCount'], $first['StartDate']]);
+        $ids = array_column($r['Sources'], 'EventCalendarDetailId');
+        $this->assertNotContains($empty, $ids);
+        $this->assertNotContains($ctx['detail_id'], $ids);
+    }
 }
