@@ -39,8 +39,10 @@
     }
 
     // One block for one segment. axisStart (minutes) sets its top; it defaults to
-    // 0 so the markup stays testable without a board.
-    function blockHtml(seg, catsByName, axisStart) {
+    // 0 so the markup stays testable without a board. opts.ghost draws the dashed
+    // preview of an item not yet added: not focusable and hidden from assistive tech.
+    function blockHtml(seg, catsByName, axisStart, opts) {
+        var ghost = !!(opts && opts.ghost);
         var item = seg.item || {};
         var cat = catName(item.Category, catsByName);
         var sec = item.SecondaryCategory && item.SecondaryCategory !== cat &&
@@ -59,6 +61,7 @@
         if (!seg.isLast) cls += ' evb-block-continues';
         if (!seg.isFirst) cls += ' evb-block-continued';
         if (sec) cls += ' evb-block-striped';
+        if (ghost) cls += ' evb-ghost';
 
         // A 1px inset top and bottom keeps back-to-back items reading as two blocks.
         var style = 'top:' + (top + 1).toFixed(1) + 'px;height:' + (height - 2).toFixed(1) + 'px;' +
@@ -66,8 +69,9 @@
             '--evb-fill:' + boldOf(cat, catsByName) + ';--evb-lines:' + lines + ';' +
             (sec ? '--evb-stripe:' + boldOf(sec, catsByName) + ';' : '');
 
-        var h = '<div class="' + cls + '" role="button" tabindex="0"' +
+        var h = '<div class="' + cls + '"' + (ghost ? ' aria-hidden="true"' : ' role="button" tabindex="0"') +
             ' data-id="' + esc(parseInt(item.EventScheduleId, 10) || 0) + '"' +
+            (item.cid && !ghost ? ' data-cid="' + esc(item.cid) + '"' : '') +
             ' data-day="' + esc(seg.day) + '"' +
             ' data-category="' + esc(cat) + '"' +
             (sec ? ' data-secondary-category="' + esc(sec) + '"' : '') +
@@ -198,6 +202,8 @@
         filter: null,
         day: null,         // the day chosen by pill or link; null is all days
         desiredView: 'list',
+        editing: false,    // Edit mode: the axis widens and blocks open no popover
+        ghosts: [],        // preview items drawn dashed among the real ones
         view: 'list',
         popover: null,     // { el, block, id } while a popover is open
         nowBase: 0,        // performance.now() when the page's serverNow was taken
@@ -267,8 +273,11 @@
 
     // The single day on show, or null for all days. A chosen day wins; phones
     // fall back to today's board day when it is on the board, else the first day.
+    // When one day shows, a ghost's day wins while it shows, so the preview is on screen.
     function resolvedDay() {
         if (!api.board || !api.board.days.length) return null;
+        var ghostDay = state.ghosts.length ? (C.segments(state.ghosts[0])[0] || {}).day : null;
+        if ((isPhone() || boardHasDay(state.day)) && boardHasDay(ghostDay)) return ghostDay;
         if (boardHasDay(state.day)) return state.day;
         if (!isPhone()) return null;
         var now = currentNow();
@@ -307,7 +316,14 @@
         if (!state.rootEl) return;
         closePopover(false);
         var c = cfg();
-        var board = C.buildBoard(state.items, { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '', editing: false });
+        var ghosts = state.ghosts;
+        var board = C.buildBoard(state.items.concat(ghosts), { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '', editing: state.editing });
+        // Re-rendering replaces the scroller; keep the same minute and day position in view.
+        var oldScroller = state.rootEl.querySelector('.evb-scroller');
+        var keep = oldScroller && api.board ? {
+            top: oldScroller.scrollTop + (api.board.axisStart - board.axisStart) * PX_PER_MIN,
+            left: oldScroller.scrollLeft
+        } : null;
         api.board = board;
         var bodyH = (board.axisEnd - board.axisStart) * PX_PER_MIN;
         var bodyStyle = 'height:' + bodyH.toFixed(1) + 'px';
@@ -328,14 +344,22 @@
             h += '<div class="evb-day" data-day="' + esc(d.day) + '" style="flex-grow:' + weight + ';min-width:' + (d.lanes * LANE_MIN_PX) + 'px">';
             h += '<div class="evb-head">' + esc(C.dayLabelLong(d.day)) + '</div>';
             h += '<div class="evb-day-body" data-day="' + esc(d.day) + '" style="' + bodyStyle + '">';
-            d.segs.forEach(function (sg) { h += blockHtml(sg, state.catsByName, board.axisStart); });
+            d.segs.forEach(function (sg) {
+                h += blockHtml(sg, state.catsByName, board.axisStart, { ghost: ghosts.indexOf(sg.item) >= 0 });
+            });
             h += '</div></div>';
         });
         h += '</div></div>';
         state.rootEl.innerHTML = h;
+        var scroller = state.rootEl.querySelector('.evb-scroller');
+        if (keep && scroller) {
+            scroller.scrollTop = Math.max(0, keep.top);
+            scroller.scrollLeft = keep.left;
+        }
         applyFilter();
         applyDay();
         renderNow();
+        revealGhost();
         state.renderCbs.forEach(function (fn) {
             try { fn(board); } catch (e) { if (win.console) win.console.error(e); }
         });
@@ -363,6 +387,36 @@
     function setItems(items) {
         state.items = Array.isArray(items) ? items : [];
         render();
+    }
+
+    // Edit mode: the axis widens to 7am-midnight and a click on a block opens no popover.
+    function setEditing(on) {
+        state.editing = !!on;
+        if (!state.editing) state.ghosts = [];
+        if (state.rootEl) state.rootEl.classList.toggle('evb-editing', state.editing);
+        render();
+    }
+
+    // Preview items, laid out with the real ones and drawn dashed; [] clears them.
+    // The board grows to take in a ghost's day or time while it shows.
+    function setGhosts(items) {
+        var next = Array.isArray(items) ? items.slice() : [];
+        if (!next.length && !state.ghosts.length) return;
+        state.ghosts = next;
+        render();
+    }
+
+    // Scroll the board's own frame (never the page) so the ghost is in view.
+    function revealGhost() {
+        var g = state.rootEl && state.rootEl.querySelector('.evb-ghost');
+        var scroller = g && g.offsetParent && state.rootEl.querySelector('.evb-scroller');
+        if (!scroller) return;
+        var sr = scroller.getBoundingClientRect(), gr = g.getBoundingClientRect();
+        var head = 34, gutter = 48, pad = 12; // the sticky day heads and hour gutter cover the frame's edges
+        if (gr.top < sr.top + head) scroller.scrollTop -= sr.top + head + pad - gr.top;
+        else if (gr.bottom > sr.bottom) scroller.scrollTop += Math.min(gr.bottom - sr.bottom + pad, gr.top - sr.top - head - pad);
+        if (gr.left < sr.left + gutter) scroller.scrollLeft -= sr.left + gutter + pad - gr.left;
+        else if (gr.right > sr.right) scroller.scrollLeft += Math.min(gr.right - sr.right + pad, gr.left - sr.left - gutter - pad);
     }
 
     function normaliseView(v) {
@@ -508,6 +562,8 @@
     // dropped, so a slow earlier fetch cannot overwrite a newer schedule.
     var refreshSeq = 0;
     function refreshFromServer() {
+        // In Edit mode the store owns the board, so it re-reads the schedule instead.
+        if (state.editing && win.EvBoardEdit && win.EvBoardEdit.refresh) { win.EvBoardEdit.refresh(); return; }
         var seq = ++refreshSeq;
         win.fetch(win.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
             .then(function (r) { return r.text(); })
@@ -518,7 +574,7 @@
                 if (!data) return;
                 var items = JSON.parse(data.textContent || '[]');
                 if (win.EvConfig) win.EvConfig.schedule = items;
-                setItems(items);
+                if (!state.editing) setItems(items);
             })
             .catch(function () { /* leave the board as it is; the list is already correct */ });
     }
@@ -558,10 +614,10 @@
             var pill = t.closest('.evb-day-pill');
             if (pill) { setDay(pill.getAttribute('data-day') || null); return; }
             var block = t.closest('.evb-block');
-            if (block) openPopover(block);
+            if (block && !state.editing) openPopover(block);
         });
         state.rootEl.addEventListener('keydown', function (e) {
-            if (e.key !== 'Enter' && e.key !== ' ') return;
+            if (state.editing || (e.key !== 'Enter' && e.key !== ' ')) return;
             var block = e.target.closest && e.target.closest('.evb-block');
             if (!block) return;
             e.preventDefault();
@@ -623,6 +679,9 @@
     api.init = init;
     api.render = render;
     api.setItems = setItems;
+    api.setEditing = setEditing;
+    api.isEditing = function () { return state.editing; };
+    api.setGhosts = setGhosts;
     api.getItems = function () { return state.items; };
     api.setView = setView;
     api.getView = getView;

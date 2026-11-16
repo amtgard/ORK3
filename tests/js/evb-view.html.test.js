@@ -92,3 +92,14 @@ test('the now line follows the server clock and the 5am board day', () => {
   assert.deepEqual(V.nowMinute('2026-11-22 01:30', 0), { day: '2026-11-21', min: 1530 });
   assert.deepEqual(V.nowMinute('2026-11-21 23:50', 20 * 60000), { day: '2026-11-21', min: 1450 });
 });
+test('a block carries its client id when it has one', () => {
+  const h = V.blockHtml(seg({ EventScheduleId: 0, cid: 'n3', Title: 'New', Category: 'Other', Leads: [] }), cats);
+  assert.match(h, /data-cid="n3"/);
+});
+test('a ghost block is marked, dashed and kept out of the tab order', () => {
+  const h = V.blockHtml(seg({ EventScheduleId: 0, Title: 'Preview', Category: 'Battlegame', Leads: [] }), cats, 0, { ghost: true });
+  assert.match(h, /class="evb-block[^"]*\bevb-ghost\b/);
+  assert.match(h, /aria-hidden="true"/);
+  assert.ok(!/tabindex="0"/.test(h));
+  assert.ok(!/data-cid=/.test(h));
+});

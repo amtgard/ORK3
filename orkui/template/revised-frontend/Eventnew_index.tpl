@@ -1173,6 +1173,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					</div>
 				</div>
 				<?php if ($canManageSchedule): ?>
+				<button type="button" class="ev-sched-copy-btn evb-edit-btn" data-tip="Type items straight onto the board">
+					<i class="fas fa-pencil-alt"></i> Edit schedule
+				</button>
 				<button type="button" class="ev-submit-btn" onclick="evOpenScheduleModal()">
 					<i class="fas fa-plus"></i> Add Schedule Item
 				</button>
@@ -1292,6 +1295,11 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<div id="evb-root" class="evb" style="display:none"></div>
 			<div class="ev-empty" id="ev-schedule-empty"<?= empty($scheduleList) ? '' : ' style="display:none"' ?>>
 				<i class="fas fa-clock" style="margin-right:6px"></i>No schedule items yet
+				<?php if ($canManageSchedule): ?>
+				<div class="evb-empty-actions">
+					<button type="button" class="ev-submit-btn evb-build-btn"><i class="fas fa-pencil-alt"></i> Build the schedule</button>
+				</div>
+				<?php endif; ?>
 			</div>
 
 			</div><!-- /.ev-tab-panel (schedule) -->
@@ -2811,6 +2819,11 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-core.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-core.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-view.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-view.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-image.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-image.js') ?>"></script>
+<?php if ($canManageSchedule): ?>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-store.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-store.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-entry.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-entry.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-edit.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-edit.js') ?>"></script>
+<?php endif; ?>
 <script>
 (function() {
     // Deep-link hash format: #<tabId>[?key=val&key=val]
@@ -3922,6 +3935,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 // The Schedule tab's Board/List switch, deep links and board refresh live in evb-view.js.
 if (window.EvBoardView) EvBoardView.init();
 if (window.EvBoardImage) EvBoardImage.init();
+if (window.EvBoardEdit) EvBoardEdit.init();
 </script>
 
 <?php endif; /* DraftBlocked */ ?>

@@ -731,6 +731,7 @@
     return {
         BOARD_DAY_START: BOARD_DAY_START,
         CATEGORY_NAMES: CATEGORY_NAMES,
+        CATEGORY_TAGS: CATEGORY_TAGS,
         resolveCategoryTag: resolveCategoryTag,
         guessCategory: guessCategory,
         parseEntry: parseEntry,

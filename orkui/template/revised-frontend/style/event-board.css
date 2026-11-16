@@ -177,6 +177,179 @@ html[data-theme="dark"] .evb-now::before { background: #fc8181; }
 /* In Board view the legend is the only category filter: hide the list's pills. */
 #ev-tab-schedule.evb-board-mode #ev-sched-filters { display: none !important; }
 
+/* ---- Edit mode (evb-edit.js, evb-entry.js) ---- */
+/* "Edit schedule" (toolbar; reuses .ev-sched-copy-btn) shows in Board view outside Edit mode. */
+#ev-tab-schedule .evb-edit-btn { display: none; }
+#ev-tab-schedule.evb-board-mode:not(.evb-edit-mode) .evb-edit-btn { display: inline-flex; }
+.evb-edit-btn[disabled] { opacity: 0.6; cursor: progress; }
+/* While editing, the board is the only view and the empty-state prompt has done its job. */
+#ev-tab-schedule.evb-edit-mode .ev-grid-view-toggle,
+#ev-tab-schedule.evb-edit-mode #ev-schedule-empty { display: none !important; }
+.evb-empty-actions { margin-top: 12px; }
+
+/* Mode bar + quick line + notice: one block that sticks (below the 48px fixed
+   site menu, #newmenu) while the page scrolls. */
+.evb-edit-head {
+    position: sticky; top: 48px; z-index: 6; margin-bottom: 10px;
+    background: var(--ork-card-bg);
+    border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: 0 4px 12px -6px rgba(15, 23, 42, 0.25);
+}
+html[data-theme="dark"] .evb-edit-head { box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.7); }
+/* .ev-tabs clips with overflow:hidden, which would make it the sticky head's
+   scroll container; clip still trims the corners without becoming one. */
+.ev-tabs:has(#ev-tab-schedule.evb-edit-mode) { overflow: clip; }
+.evb-modebar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+    padding: 8px 10px; border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg-secondary); border-radius: 8px 8px 0 0;
+}
+.evb-modebar-title { font-size: 13px; font-weight: 700; color: var(--ork-text); white-space: nowrap; }
+.evb-modebar-title i { margin-right: 4px; font-size: 12px; color: var(--ork-text-muted); }
+.evb-save { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ork-text-muted); white-space: nowrap; }
+.evb-save-dot { width: 8px; height: 8px; border-radius: 50%; background: #38a169; flex-shrink: 0; }
+.evb-save[data-state="saving"] .evb-save-dot { background: #d69e2e; animation: evb-pulse 1s ease-in-out infinite; }
+.evb-save[data-state="offline"] .evb-save-dot { background: #e53e3e; }
+.evb-save[data-state="offline"] .evb-save-state { color: var(--ork-alert-danger-text); font-weight: 600; }
+html[data-theme="dark"] .evb-save-dot { background: #68d391; }
+html[data-theme="dark"] .evb-save[data-state="saving"] .evb-save-dot { background: #f6e05e; }
+html[data-theme="dark"] .evb-save[data-state="offline"] .evb-save-dot { background: #fc8181; }
+html[data-theme="dark"] .evb-save[data-state="offline"] .evb-save-state { color: #feb2b2; }
+@keyframes evb-pulse { 50% { opacity: 0.35; } }
+.evb-modebar .evb-save-retry,
+.evb-notice .evb-notice-restore {
+    min-height: 0; padding: 0; border: none; background: none; box-shadow: none;
+    font-size: 12px; font-weight: 700; color: var(--ork-link); text-decoration: underline; cursor: pointer;
+}
+.evb-modebar .evb-save-retry[hidden] { display: none; }
+.evb-modebar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.evb-modebar .evb-modebar-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 0; height: 30px; padding: 0 10px; box-sizing: border-box;
+    border: 1px solid var(--ork-border); border-radius: 6px; box-shadow: none;
+    background: var(--ork-card-bg); color: var(--ork-text);
+    font-size: 12px; font-weight: 600; line-height: 1; cursor: pointer;
+}
+.evb-modebar .evb-modebar-btn:hover:not(:disabled) { border-color: var(--ork-text-muted); background: var(--ork-card-bg); color: var(--ork-text); }
+.evb-modebar .evb-modebar-btn:disabled { opacity: 0.45; cursor: default; }
+.evb-modebar .evb-modebar-btn i { font-size: 11px; }
+.evb-modebar .evb-help { width: 30px; padding: 0; font-size: 14px; font-weight: 700; }
+.evb-modebar .evb-help[aria-expanded="true"] { background: var(--ork-bg-secondary); border-color: var(--ork-text-muted); }
+.evb-modebar .evb-done { height: 30px; padding: 0 16px; line-height: 1; }
+.evb-help-wrap { position: relative; display: inline-flex; }
+
+.evb-help-pop {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: var(--z-dropdown, 300);
+    width: 360px; max-width: calc(100vw - 24px); box-sizing: border-box; padding: 12px 14px;
+    background: var(--ork-card-bg); color: var(--ork-text);
+    border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
+    font-size: 12px; line-height: 1.45;
+}
+.evb-help-pop[hidden] { display: none; }
+.evb-help-title { font-size: 12px; font-weight: 700; color: var(--ork-text); margin: 0 0 6px; }
+.evb-help-table + .evb-help-title { margin-top: 10px; }
+.evb-help-table { border-collapse: collapse; width: 100%; }
+.evb-help-table th, .evb-help-table td {
+    padding: 3px 0; border: none; background: none; vertical-align: top; text-align: left;
+    font-size: 12px; color: var(--ork-text);
+}
+.evb-help-table th { padding-right: 10px; white-space: nowrap; font-weight: 600; color: var(--ork-text-muted); }
+.evb-help-pop code, .evb-help-pop kbd {
+    display: inline-block; padding: 0 4px; border-radius: 4px;
+    background: var(--ork-bg-secondary); color: var(--ork-text);
+    font: 600 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.evb-help-pop kbd { border: 1px solid var(--ork-border); border-bottom-width: 2px; margin-right: 2px; }
+/* Dark: --ork-bg-secondary is the popover's own fill there. */
+html[data-theme="dark"] .evb-help-pop code, html[data-theme="dark"] .evb-help-pop kbd { background: #4a5568; }
+
+.evb-quickline { padding: 10px; }
+
+/* ---- The entry widget: input, chips and suggestion list ---- */
+.evb-entry-field { position: relative; }
+.evb-entry .evb-entry-input {
+    display: block; width: 100%; box-sizing: border-box; height: auto; min-height: 0; margin: 0;
+    padding: 10px 12px; border: 1px solid var(--ork-input-border); border-radius: 6px;
+    background: var(--ork-input-bg); color: var(--ork-text); box-shadow: none;
+    font-size: 16px; line-height: 1.35;
+}
+.evb-entry .evb-entry-input::placeholder { color: var(--ork-text-lighter); opacity: 1; }
+.evb-entry .evb-entry-input:focus {
+    outline: none; border-color: #4299e1; background: var(--ork-card-bg);
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+}
+.evb-entry-invalid .evb-entry-input { border-color: #e53e3e; animation: evb-shake 0.25s; }
+@keyframes evb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@media (prefers-reduced-motion: reduce) {
+    .evb-entry-invalid .evb-entry-input, .evb-save[data-state="saving"] .evb-save-dot { animation: none; }
+}
+/* The chip row keeps its height when empty, so the board does not jump on the first key. */
+.evb-entry-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 24px; margin-top: 8px; }
+.evb-chip {
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%; box-sizing: border-box;
+    height: 24px; padding: 0 9px; border: 1px solid var(--ork-border); border-radius: 999px;
+    background: var(--ork-bg-secondary); color: var(--ork-text);
+    font-size: 12px; font-weight: 600; line-height: 1;
+}
+.evb-chip > i { font-size: 10px; color: var(--ork-text-muted); flex-shrink: 0; }
+.evb-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evb-chip-description .evb-chip-label { max-width: 220px; }
+.evb-chip-category, .evb-chip-secondary { background: var(--evb-chip-fill); border-color: var(--evb-chip-fill); color: #fff; }
+.evb-chip-category > i, .evb-chip-secondary > i { color: #fff; opacity: 0.85; }
+/* A guess: the same chip, dimmer, with a dotted edge. */
+.evb-chip-guess { opacity: 0.62; border-style: dotted; border-color: var(--ork-text-muted); }
+.evb-chip-category.evb-chip-guess { border-color: var(--ork-text); }
+.evb-chip .evb-chip-x {
+    min-height: 0; margin: 0 -5px 0 1px; padding: 0 3px; border: none; background: none; box-shadow: none;
+    color: inherit; opacity: 0.6; font-size: 15px; line-height: 1; cursor: pointer;
+}
+.evb-chip .evb-chip-x:hover { opacity: 1; background: none; color: inherit; }
+
+.evb-entry-menu {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--z-dropdown, 300);
+    min-width: 240px; max-width: 100%; box-sizing: border-box; padding: 4px;
+    background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
+}
+.evb-entry-menu[hidden] { display: none; }
+.evb-entry-menu-head {
+    padding: 4px 8px 2px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--ork-text-muted);
+}
+.evb-entry-option {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+    font-size: 13px; color: var(--ork-text); cursor: pointer;
+}
+.evb-entry-option-active { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .evb-entry-option-active { background: #4a5568; }
+.evb-entry-option-tag { margin-left: auto; font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ork-text-muted); }
+
+/* ---- Notices (rejected saves) ---- */
+.evb-notice {
+    display: flex; align-items: flex-start; gap: 8px; margin: 0 10px 10px; padding: 8px 10px;
+    background: var(--ork-alert-danger-bg); color: var(--ork-alert-danger-text);
+    border: 1px solid var(--ork-alert-danger-border); border-radius: 6px;
+    font-size: 13px; line-height: 1.4;
+}
+.evb-notice[hidden] { display: none; }
+.evb-open-failed { margin: 0 0 10px; }
+.evb-notice-rows { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.evb-notice-row + .evb-notice-row { margin-top: 4px; }
+.evb-notice .evb-notice-restore { color: inherit; }
+.evb-notice .evb-notice-close {
+    min-height: 0; padding: 0 4px; border: none; background: none; box-shadow: none;
+    color: inherit; font-size: 18px; line-height: 1; cursor: pointer;
+}
+
+/* ---- The board in Edit mode ---- */
+.evb-editing .evb-block { cursor: default; }
+/* A ghost is the block as it will look, see-through, with a dashed white inner edge. */
+.evb-block.evb-ghost {
+    opacity: 0.55; z-index: 2; pointer-events: none;
+    outline: 2px dashed rgba(255, 255, 255, 0.95); outline-offset: -4px;
+}
+
 /* ---- Phones: one day at a time, the board scrolls inside its own frame ---- */
 @media (max-width: 700px) {
     .evb-day-pills .evb-day-pill-all { display: none; }
@@ -185,4 +358,13 @@ html[data-theme="dark"] .evb-now::before { background: #fc8181; }
     .evb-legend-chip { padding: 6px 10px; }
     /* The toolbar wraps from the left here, so the menu opens rightward. */
     .evb-share-menu { left: 0; right: auto; }
+    /* Edit mode: title and save state on one row, the buttons on the next. */
+    .evb-modebar { padding: 8px; }
+    .evb-modebar-actions { flex: 1 0 100%; margin-left: 0; }
+    .evb-modebar .evb-done { margin-left: auto; }
+    .evb-modebar .evb-modebar-btn, .evb-modebar .evb-done { height: 36px; }
+    .evb-modebar .evb-help { width: 36px; }
+    .evb-quickline { padding: 8px; }
+    .evb-entry-menu { min-width: 0; width: 100%; }
+    .evb-entry-option { padding: 9px 8px; }
 }

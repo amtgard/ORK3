@@ -9208,6 +9208,9 @@ $(document).ready(function() {
         if (_evEditSaveBtn) _evEditSaveBtn.disabled = true;
     };
     window.evCloseEditModal = function() {
+        // Escape anywhere on the page calls this; a closed modal has nothing to discard.
+        var editOverlay = document.getElementById('ev-edit-modal');
+        if (!editOverlay || !editOverlay.classList.contains('ev-modal-open')) return;
         if (_evEditSaveBtn && !_evEditSaveBtn.disabled) {
             pnConfirm({ title: 'Unsaved Changes', message: 'You have unsaved changes. Discard them?', confirmText: 'Discard', danger: true }, function() {
                 evRestoreEditForm();

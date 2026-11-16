@@ -302,3 +302,102 @@ test.describe('editor paths (phase 1)', () => {
     await expect(page.locator('.evb-block', { hasText: title })).toHaveCount(0);
   });
 });
+
+test.describe('editing', () => {
+  const EDIT_EVENT = process.env.ORK3_E2E_EDIT_EVENT ?? '';
+  const PREFIX = `E2E ${Date.now()}`;
+  const ready = !!(process.env.ORK3_E2E_USERNAME && process.env.ORK3_E2E_PASSWORD && EDIT_EVENT);
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    testInfo.skip(!ready, 'ORK3_E2E_USERNAME, ORK3_E2E_PASSWORD and ORK3_E2E_EDIT_EVENT are not all set');
+    await signIn(page);
+  });
+
+  // Removes every item this run created, through the batch endpoint.
+  test.afterAll(async ({ browser }) => {
+    if (!ready) return;
+    const page = await browser.newPage();
+    await signIn(page);
+    await openBoard(page, EDIT_EVENT);
+    const left = await page.evaluate(async prefix => {
+      const c = (window as any).EvConfig;
+      const base = c.uir + 'EventAjax/';
+      const path = c.eventId + '/' + c.detailId;
+      const opts = { credentials: 'same-origin' as RequestCredentials, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+      const list = await (await fetch(base + 'schedule_list/' + path, opts)).json();
+      const ops = (list.schedule || []).filter((it: any) => String(it.Title).startsWith(prefix))
+        .map((it: any) => ({ op: 'remove', id: it.EventScheduleId }));
+      if (!ops.length) return 0;
+      const fd = new FormData();
+      fd.append('Ops', JSON.stringify(ops));
+      const res = await (await fetch(base + 'schedule_batch/' + path, Object.assign({ method: 'POST', body: fd }, opts))).json();
+      return res.status === 0 ? 0 : ops.length;
+    }, PREFIX);
+    expect(left).toBe(0);
+    await page.close();
+  });
+
+  test('Edit schedule is offered to an editor and not to a signed-out viewer', async ({ page, browser }) => {
+    await openBoard(page, EDIT_EVENT);
+    await expect(page.locator('.evb-edit-btn')).toBeVisible();
+    const anon = await (await browser.newContext()).newPage();
+    await anon.goto(`index.php?Route=Event/detail/${EDIT_EVENT}#ev-tab-schedule?view=board`);
+    await expect(anon.locator('.evb-edit-btn')).toHaveCount(0);
+  });
+
+  test('the quick line previews, adds and persists an item', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await expect(line).toBeFocused();
+    await line.fill(`sat 9:30-10:15 bg: ${PREFIX} squatch at main field "Bring water"`);
+    await expect(page.locator('.evb-ghost')).toHaveCount(1);
+    await expect(page.locator('.evb-chip[data-part="category"]')).toContainText('Battlegame');
+    await expect(page.locator('.evb-chip[data-part="location"]')).toContainText('main field');
+    await line.press('Enter');
+    await expect(line).toHaveValue('');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    const block = page.locator('.evb-block', { hasText: `${PREFIX} squatch` });
+    await expect(block).toHaveAttribute('data-category', 'Battlegame');
+    await line.fill(`then 30m ${PREFIX} quest`);
+    await line.press('Enter');
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} quest` })).toContainText('10:15–10:45a');
+    await page.locator('.evb-done').click();
+    await expect(page.locator('.evb-modebar')).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} squatch` })).toHaveCount(1);
+    await page.locator('[data-ev-view="list"]').click();
+    await expect(page.locator('#ev-schedule-container')).toContainText(`${PREFIX} squatch`);
+  });
+
+  test('undo removes the last add and a category tag is suggested', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const line = page.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sat 2p ${PREFIX} undo me`);
+    await line.press('Enter');
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} undo me` })).toHaveCount(1);
+    await page.locator('.evb-undo').click();
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} undo me` })).toHaveCount(0);
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await line.fill('sat 3p #cl');
+    await expect(page.locator('.evb-entry-option').first()).toContainText('Class');
+    await line.press('Enter');
+    await expect(line).toHaveValue(/#class\s*$/);
+    await expect(page.locator('.evb-block', { hasText: '#cl' })).toHaveCount(0);
+  });
+
+  test('returning to the tab picks up changes made elsewhere', async ({ page, context }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const other = await context.newPage();
+    await openBoard(other, EDIT_EVENT);
+    await other.locator('.evb-edit-btn').click();
+    const line = other.locator('.evb-quickline .evb-entry-input');
+    await line.fill(`sun 4p ${PREFIX} elsewhere`);
+    await line.press('Enter');
+    await expect(other.locator('.evb-save-state')).toHaveText('All changes saved');
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} elsewhere` })).toHaveCount(1);
+  });
+});
