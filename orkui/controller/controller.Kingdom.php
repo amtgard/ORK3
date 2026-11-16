@@ -497,6 +497,10 @@ class Controller_Kingdom extends Controller
                 if (($cfg['Key'] ?? '') === 'IncludePrincipalityInStatistics' && !$hasChildPrinz) {
                     continue;
                 }
+                // CountOnlineAttendance only affects Voting Eligibility — hide it where there are no voting rules.
+                if (($cfg['Key'] ?? '') === 'CountOnlineAttendance' && empty($this->data['ShowVotingEligibleLink'])) {
+                    continue;
+                }
                 $adminConfig[] = $cfg;
             }
             $this->data['AdminConfig']     = $adminConfig;
