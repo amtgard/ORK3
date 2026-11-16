@@ -1231,13 +1231,13 @@ final class OnlineAttendanceReportsTest extends TestCase
             foreach ($this->report->ReleaseFeatureUtilization()['releases'] as $release) {
                 foreach ($release['features'] as $feature) {
                     foreach ($feature['kpis'] as $kpi) {
-                        if ($kpi['label'] === 'Online sign-ins (30 days)') {
+                        if ($kpi['label'] === 'Online check-ins recorded (30d)') {
                             return (int) $kpi['value'];
                         }
                     }
                 }
             }
-            $this->fail('Online sign-ins KPI missing.');
+            $this->fail('Online check-ins KPI missing.');
         };
         $before = $find();
         $p = $this->fixture->createPlayer($this->parkId, 'oar-util');

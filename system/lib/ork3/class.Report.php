@@ -7314,7 +7314,7 @@ class Report extends Ork3
                 $this->_rfuKpi('Self-reg links created', $selfregLinks, null, null, 'rows in self-registration link'),
                 $this->_rfuKpi('Self-reg links redeemed', $selfregUsed, $selfregLinks, $selfregConv, 'self-reg links that created a new player', null, null, 'of self-reg links were used'),
                 $this->_rfuKpi('Self-reg check-ins recorded (30d)', $attnSelfreg, null, null, "attendance in the last 30 days with entry_method 'self_reg'"),
-                $this->_rfuKpi('Online sign-ins (30 days)', $attnOnline, null, null, 'attendance in the last 30 days marked Online'),
+                $this->_rfuKpi('Online check-ins recorded (30d)', $attnOnline, null, null, 'attendance in the last 30 days marked Online'),
             ),
             'charts' => array(
                 $this->_rfuChartFromBreakdown('rfu-entry-method', 'pie', 'Attendance by entry method (last 30 days)', $entryBreak, 'Sign-ins'),
