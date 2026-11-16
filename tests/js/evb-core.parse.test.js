@@ -233,13 +233,22 @@ test('formatEntry writes leads and they read back for staff', () => {
   assert.equal(C.formatEntry(it), '9:30–10:15a #bg Mothman @Luna Honeybadger');
   assert.deepEqual(C.parseEntry(C.formatEntry(it), { days: DAYS, staff: STAFF }).leads.map(l => l.MundaneId), [2]);
 });
-test('four-digit 24-hour times', () => {
+test('four-digit 24-hour ranges; a lone four-digit number is never a time', () => {
   assert.deepEqual(pick(p('0900-1000 Archery'), ['startMin', 'endMin', 'title']), [540, 600, 'Archery']);
   assert.deepEqual(pick(p('0900–1000 Archery'), ['startMin', 'endMin', 'title']), [540, 600, 'Archery']);
-  assert.deepEqual(pick(p('sat 1330 Court'), ['day', 'startMin', 'title']), ['2026-11-21', 810, 'Court']);
-  assert.deepEqual(pick(p('2300-0100 Vigil'), ['startMin', 'endMin']), [1380, 1500]);
+  assert.deepEqual(pick(p('0900 - 1000 Archery'), ['startMin', 'endMin', 'title']), [540, 600, 'Archery']);
+  assert.deepEqual(pick(p('Archery 1330-1415'), ['startMin', 'endMin', 'title']), [810, 855, 'Archery']);
+  assert.deepEqual(pick(p('0030-0130 Night Watch'), ['day', 'startMin', 'endMin']), ['2026-11-21', 1470, 1530]);
+  assert.deepEqual(pick(p('2026 Kickoff 9a'), ['title', 'startMin']), ['2026 Kickoff', 540]);
+  let r = p('sat 1330 Court');
+  assert.deepEqual([r.day, r.title, r.given.time], ['2026-11-21', '1330 Court', false]);
+  assert.deepEqual(pick(p('2026-2027 Season Kickoff 9a'), ['title', 'startMin']), ['2026-2027 Season Kickoff', 540]);
+  r = p('2026-2027 Season Kickoff');  // 20:26 to 20:27 is under five minutes
+  assert.deepEqual([r.title, r.given.time], ['2026-2027 Season Kickoff', false]);
+  r = p('Points 1000-2000 Kickoff');   // mid-line, so not a time
+  assert.deepEqual([r.title, r.given.time], ['Points 1000-2000 Kickoff', false]);
+  r = p('2300-0100 Vigil');            // the end must be after the start
+  assert.equal(r.given.time, false);
   assert.deepEqual(pick(p('Class of 1999 reunion 5p'), ['title', 'startMin']), ['Class of 1999 reunion', 1020]);
   assert.deepEqual(pick(p('1984 Night 8p'), ['title', 'startMin']), ['1984 Night', 1200]);
-  const r = p('Room 1330 meeting');
-  assert.deepEqual([r.title, r.given.time], ['Room 1330 meeting', false]);
 });

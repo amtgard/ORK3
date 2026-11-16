@@ -154,6 +154,37 @@ test('items on a day outside the event are returned and listed', () => {
   assert.deepEqual(r.outside, [{ line: 2, text: '9a A', day: '2026-11-23' }]);
   assert.deepEqual(C.parseLines('Sat\n9a A', { days: DAYS }).outside, []);
 });
+test('more pasted forms', () => {
+  const one = line => {
+    const r = C.parseLines(line, { days: DAYS, day: '2026-11-20' });
+    assert.deepEqual(r.unread, [], line);
+    return r.items.map(i => [i.Title, i.StartTime]);
+  };
+  // 1. A separator after a leading day word.
+  for (const sep of ['-', '–', '—', ':']) assert.deepEqual(one('Saturday ' + sep + ' Lunch'), [['Lunch', '2026-11-21 09:00']], sep);
+  assert.deepEqual(one('Saturday: Lunch 12p'), [['Lunch', '2026-11-21 12:00']]);
+  // 2. A date after a leading day word is part of the day.
+  assert.deepEqual(one('Sat 11/21 9a Gate'), [['Gate', '2026-11-21 09:00']]);
+  assert.deepEqual(one('Saturday Nov 21 - 9a Gate'), [['Gate', '2026-11-21 09:00']]);
+  // 3. A date alone is a heading; a date leading a line gives the day.
+  for (const h of ['November 21', '11/21']) {
+    const r = C.parseLines(h + '\n9a X', { days: DAYS, day: '2026-11-20' });
+    assert.deepEqual([r.unread, r.items.map(i => [i.Title, i.StartTime])], [[], [['X', '2026-11-21 09:00']]], h);
+  }
+  assert.deepEqual(one('Nov 21 - 9a Gate'), [['Gate', '2026-11-21 09:00']]);
+  assert.deepEqual(one('11/22 10a Clean Up'), [['Clean Up', '2026-11-22 10:00']]);
+  // 4. Single emphasis around the whole line; '* ' is still a bullet.
+  assert.deepEqual(one('*9a Gate*'), [['Gate', '2026-11-20 09:00']]);
+  assert.deepEqual(one('_9a Gate_'), [['Gate', '2026-11-20 09:00']]);
+  assert.deepEqual(one('* 9a Gate*'), [['Gate*', '2026-11-20 09:00']]);
+  // 5. Dashes, dates and underscores inside a title stay.
+  assert.deepEqual(one('Arts - Sciences Social 2p'), [['Arts - Sciences Social', '2026-11-20 14:00']]);
+  assert.deepEqual(one('Sign-ups for 11/28 trip 3p'), [['Sign-ups for 11/28 trip', '2026-11-20 15:00']]);
+  assert.deepEqual(one('snake_case talk 4p'), [['snake_case talk', '2026-11-20 16:00']]);
+  assert.deepEqual(one('Mar 3-4 Sparring'), [['Mar 3-4 Sparring', '2026-11-20 09:00']]);
+  // The quick line is untouched: parseEntry still keeps the separator.
+  assert.equal(C.parseEntry('Saturday - Lunch', { days: DAYS }).title, '- Lunch');
+});
 test('conflicts compare locations ignoring the width of spaces', () => {
   const r = C.conflicts([
     { cid: 'a', Title: 'A', StartTime: '2026-11-21 10:00', EndTime: '2026-11-21 11:00', Location: 'Main  Field', Leads: [] },

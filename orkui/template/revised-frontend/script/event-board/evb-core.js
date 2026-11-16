@@ -511,10 +511,7 @@
     function rangeAt(toks, i) {
         if (!isWord(toks[i])) return null;
         var one = /^(.+?)[-\u2013](.+)$/.exec(toks[i].value), a, b, next;
-        if (one && readFourDigit(one[1]) && readFourDigit(one[2])) {
-            // '0900-1000': both sides four-digit 24-hour times.
-            a = readFourDigit(one[1]); b = readFourDigit(one[2]); next = i + 1;
-        } else if (one) {
+        if (one) {
             a = readSide(one[1]); b = readSide(one[2]); next = i + 1;
             if (a && b && !b.marked && isWord(toks[next]) && MARKER_WORDS.indexOf(toks[next].value.toLowerCase()) >= 0) {
                 b = readSide(one[2] + toks[next].value); next++;
@@ -533,6 +530,39 @@
         return r;
     }
 
+    // A four-digit 24-hour range at token i ('0900-1000', '0900 - 1000'), ending
+    // at least MIN_FOUR minutes after it starts and never past midnight:
+    // { start, end, next } or null. A lone four-digit number is never a time.
+    var MIN_FOUR = 5;
+    function fourRangeAt(toks, i) {
+        if (!isWord(toks[i])) return null;
+        var one = /^(\d{4})[-–](\d{4})$/.exec(toks[i].value), a, b, next;
+        if (one) {
+            a = readFourDigit(one[1]); b = readFourDigit(one[2]); next = i + 1;
+        } else {
+            a = readFourDigit(toks[i].value);
+            if (!a || !isWord(toks[i + 1]) || RANGE_JOINERS.indexOf(toks[i + 1].value.toLowerCase()) < 0 || !isWord(toks[i + 2])) return null;
+            b = readFourDigit(toks[i + 2].value); next = i + 3;
+        }
+        if (!a || !b || b.min < a.min + MIN_FOUR) return null;
+        var s = nightShift(a.min);
+        return { start: s, end: b.min + (s - a.min), next: next };
+    }
+
+    // Whether a token outside [from, to) holds a time with a colon or an am/pm
+    // marker ('9a', '3:15', '10-11p', '9 am').
+    function strongTimeElsewhere(toks, from, to) {
+        for (var k = 0; k < toks.length; k++) {
+            if (k >= from && k < to) { k = to - 1; continue; }
+            if (!isWord(toks[k])) continue;
+            var sa = sideAt(toks, k);
+            if (sa && sa.side.strong && /\d/.test(toks[k].value)) return true;
+            var parts = toks[k].value.split(/[-–]/);
+            if (parts.length === 2 && parts.some(function (p) { var sd = /\d/.test(p) && readSide(p); return sd && sd.strong; })) return true;
+        }
+        return false;
+    }
+
     function isAt(t) { return isWord(t) && t.value.toLowerCase() === 'at'; }
 
     // A bare hour from 1 to 12: no colon, no marker ('6' in 'Court at 6').
@@ -547,13 +577,16 @@
     // inBlock (typing inside a block, which already has a time): a lone noon or
     // midnight is a time only straight after 'at' ('Feast at noon', not 'Midnight Madness').
     function timeAt(toks, i, firstIdx, lastIdx, inBlock) {
+        // A four-digit range counts only at the start or end of the line, and
+        // only when no other time with a colon or marker is written ('2026-2027 Kickoff 9a').
+        var four = fourRangeAt(toks, i);
+        if (four && (i === firstIdx || four.next - 1 === lastIdx) && !strongTimeElsewhere(toks, i, four.next)) {
+            return { found: { start: four.start, end: four.end, length: null, then: false }, upto: four.next };
+        }
         var r = rangeAt(toks, i);
         if (r && (!r.bare || i === firstIdx || r.next - 1 === lastIdx)) {
             return { found: { start: r.start, end: r.end, length: null, then: false }, upto: r.next };
         }
-        // A lone four-digit time ('1330') only as the first word after the day.
-        var four = i === firstIdx ? readFourDigit(toks[i].value) : null;
-        if (four) return { found: { start: nightShift(four.min), end: null, length: null, then: false }, upto: i + 1 };
         var sa = sideAt(toks, i);
         if (sa && sa.side.strong) {
             var word = /^[a-z]+$/i.test(toks[i].value);
@@ -970,11 +1003,12 @@
     var DATE_RE = '(?:(\\d{1,2})/(\\d{1,2})(?:/\\d{2,4})?' +
         '|' + MONTH_RE + '\\.?\\s+(\\d{1,2})' + ORD + YEAR +
         '|(\\d{1,2})' + ORD + '\\s+' + MONTH_RE + '\\.?' + YEAR + ')';
-    // A weekday name, optionally with a date after a space, comma or dash
-    // ('Friday, November 20', 'SUNDAY 11/22', 'Saturday - Nov 21'), then
-    // nothing but punctuation.
-    var HEADING_RE = new RegExp('^([a-z]+)(?:[\\s,\\-–—]+' + DATE_RE + ')?[\\s:;,.!\\-–—]*$', 'i');
-    var MD_HEADING_RE = /^(\d{1,2}\/\d{1,2})\s*:?$/;
+    // A date ends at a space or punctuation, but not at a dash into a number ('Mar 3-4').
+    var DATE_AT = new RegExp('^' + DATE_RE + '(?![\\w/]|[\\-–]\\d)', 'i');
+    var PUNCT = '\\s:;,.!\\-–—';
+    var AFTER_WEEKDAY = new RegExp('^(?:$|[' + PUNCT + '])');
+    var BEFORE_DATE = /^[\s,\-–—]+/;
+    var LEAD_PUNCT = new RegExp('^[' + PUNCT + ']+');
 
     function monthNumber(name) {
         var k = name.slice(0, 3).toLowerCase();
@@ -982,29 +1016,48 @@
         return 0;
     }
 
-    // The board day a whole line names as a heading, or null. A written date
-    // decides the day; the weekday decides only when there is no date (or the
-    // date is not a real one).
-    function headingDay(line, days) {
-        var m = HEADING_RE.exec(line);
-        if (m && weekdayOf(m[1]) >= 0) {
-            var mo = m[2] ? +m[2] : m[4] ? monthNumber(m[4]) : m[7] ? monthNumber(m[7]) : 0;
-            var da = m[3] ? +m[3] : m[5] ? +m[5] : m[6] ? +m[6] : 0;
-            return (mo && resolveDayWord(mo + '/' + da, days)) || resolveDayWord(m[1], days);
+    // The day a line starts with: a weekday name, a date ('11/21', 'Nov 21',
+    // '21 November'), or a weekday then a date ('Sat 11/21', 'Saturday - Nov 21').
+    // Returns { day, rest } with the punctuation after the day dropped from rest,
+    // or null. A written date decides the day; the weekday decides only when there
+    // is no date (or the date is not a real one). An empty rest is a heading.
+    function leadingDay(line, days) {
+        var wd = /^[a-z]+/i.exec(line), word = null, date = null, rest = line, m;
+        if (wd && weekdayOf(wd[0]) >= 0 && AFTER_WEEKDAY.test(line.slice(wd[0].length))) {
+            word = wd[0];
+            rest = line.slice(word.length);
+            var sep = BEFORE_DATE.exec(rest);
+            if (sep && (m = DATE_AT.exec(rest.slice(sep[0].length)))) {
+                date = m;
+                rest = rest.slice(sep[0].length + m[0].length);
+            }
+        } else if ((m = DATE_AT.exec(line))) {
+            date = m;
+            rest = line.slice(m[0].length);
+        } else {
+            return null;
         }
-        m = MD_HEADING_RE.exec(line);
-        return m ? resolveDayWord(m[1], days) : null;
+        var day = null;
+        if (date) {
+            var mo = date[1] ? +date[1] : date[3] ? monthNumber(date[3]) : date[6] ? monthNumber(date[6]) : 0;
+            var da = date[2] ? +date[2] : date[4] ? +date[4] : date[5] ? +date[5] : 0;
+            day = mo && da ? resolveDayWord(mo + '/' + da, days) : null;
+        }
+        if (!day && word) day = resolveDayWord(word, days);
+        return day ? { day: day, rest: rest.replace(LEAD_PUNCT, '') } : null;
     }
 
     // Paste formatting off a line: markdown emphasis pairs, a '# ' heading mark,
-    // a leading bullet or list number. '#tag' (no space) stays. A line of only
-    // rule characters ('---', '***', '- - -') becomes empty.
+    // a leading bullet or list number, then single '*' or '_' wrapping the whole
+    // line. '#tag' (no space) and a mid-line '_' stay. A line of only rule
+    // characters ('---', '***', '- - -') becomes empty.
     function cleanLine(line) {
         var t = line.trim();
         if (/^[-*_=~•·–—\s]+$/.test(t)) return '';
         t = t.replace(/(\*\*|__)(.+?)\1/g, '$2').trim();
         t = t.replace(/^#{1,6}\s+/, '');
         t = t.replace(/^(?:[-*•·]|\d+[.)])\s+/, '');
+        t = t.replace(/^([*_])(?!\s)(.*\S)\1$/, '$2');
         return t.trim();
     }
 
@@ -1023,12 +1076,16 @@
         String(text == null ? '' : text).split(/\r\n|\r|\n/).forEach(function (raw, n) {
             var pasted = raw.trim(), line = cleanLine(raw);
             if (!line) return;
-            var heading = headingDay(line, days.length ? days : (day ? [day] : []));
-            if (heading) {
-                if (!lastEnd || lastEnd.day !== heading) { lastEnd = null; lastDuration = baseDuration; }
-                day = heading;
+            var lead = leadingDay(line, days.length ? days : (day ? [day] : []));
+            if (lead && !lead.rest) {
+                // A heading: only a day, perhaps with punctuation.
+                if (!lastEnd || lastEnd.day !== lead.day) { lastEnd = null; lastDuration = baseDuration; }
+                day = lead.day;
                 return;
             }
+            // A line led by a day: hand parseEntry that day as one 'M/D' word, the
+            // form it already reads as the item's day.
+            if (lead) line = +lead.day.slice(5, 7) + '/' + +lead.day.slice(8) + ' ' + lead.rest;
             var r = parseEntry(line, { days: days, day: day, lastEnd: lastEnd, lastDuration: lastDuration,
                 staff: ctx.staff, canFeast: ctx.canFeast, locations: ctx.locations });
             if (r.setDay) { day = r.setDay; return; }
