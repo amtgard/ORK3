@@ -2042,25 +2042,41 @@ test.describe('editing', () => {
     await line.fill('');
   });
 
-  test('Option with a character types at the slot cursor; Alt with an arrow does not move it', async ({ page }) => {
-    await openBoard(page, EDIT_EVENT);
-    await page.locator('.evb-edit-btn').click();
-    await expect(page.locator('.evb-modebar')).toBeVisible();
-    await page.locator('.evb-board').click({ position: { x: 4, y: 4 } });
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.evb-slot-cursor')).toHaveCount(1);
-    const key = (k: string) => page.evaluate(kk => {
-      const t = document.activeElement || document.body;
-      t.dispatchEvent(new KeyboardEvent('keydown', { key: kk, altKey: true, bubbles: true, cancelable: true }));
-    }, k);
+  // The platform is set before the board's scripts read it, so this holds on any machine.
+  test('Option with a character types at the cursor on a Mac only; Alt+letter elsewhere is the browser\'s', async ({ page, context }) => {
+    // Opens Edit mode with the slot cursor showing; alt(key) dispatches an Alt keydown
+    // and returns whether something default-prevented it.
+    const ready = async (p: Page, platform: string) => {
+      await p.addInitScript(pf => { Object.defineProperty(Navigator.prototype, 'platform', { get: () => pf, configurable: true }); }, platform);
+      await openBoard(p, EDIT_EVENT);
+      expect(await p.evaluate(() => navigator.platform)).toBe(platform);
+      await p.locator('.evb-edit-btn').click();
+      await expect(p.locator('.evb-modebar')).toBeVisible();
+      await p.locator('.evb-board').click({ position: { x: 4, y: 4 } });
+      await p.keyboard.press('Escape');
+      await expect(p.locator('.evb-slot-cursor')).toHaveCount(1);
+      return (k: string) => p.evaluate(kk => {
+        const e = new KeyboardEvent('keydown', { key: kk, altKey: true, bubbles: true, cancelable: true });
+        (document.activeElement || document.body).dispatchEvent(e);
+        return e.defaultPrevented;
+      }, k);
+    };
+
+    const altWin = await ready(page, 'Win32');
+    expect(await altWin('d')).toBe(false);
+    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
     const min = () => page.locator('.evb-slot-cursor').getAttribute('data-min');
     const at = await min();
-    await key('ArrowDown');
+    expect(await altWin('ArrowDown')).toBe(false);
     expect(await min()).toBe(at);
-    await key('é');
-    await expect(page.locator('.evb-block-editing .evb-entry-input')).toHaveValue('é');
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.evb-block-editing')).toHaveCount(0);
+
+    const mac = await context.newPage();
+    const altMac = await ready(mac, 'MacIntel');
+    expect(await altMac('å')).toBe(true);
+    await expect(mac.locator('.evb-block-editing .evb-entry-input')).toHaveValue('å');
+    await mac.keyboard.press('Escape');
+    await expect(mac.locator('.evb-block-editing')).toHaveCount(0);
+    await mac.close();
   });
 
   test('a server error says so, not that the server could not be reached', async ({ page }) => {

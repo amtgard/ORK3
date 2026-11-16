@@ -804,6 +804,8 @@
     api.enter = enter;
     api.exit = exit;
     api.isEditing = function () { return state.editing; };
+    // A Mac (navigator.platform), where Option with a key types a character.
+    api.isMac = function () { return IS_MAC; };
     api.entryContext = entryContext;
     api.refresh = refresh;
     api.onEnter = function (fn) { hooks.enter.push(fn); };
