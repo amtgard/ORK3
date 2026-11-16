@@ -242,7 +242,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				</div>
 			</div>
 			<?php if ($typeNote !== ''): ?>
-			<div class="cp-overview-note"><i class="fas fa-filter" aria-hidden="true"></i> <?= htmlspecialchars($typeNote) ?> Trend arrows are hidden.</div>
+			<div class="cp-overview-note"><i class="fas fa-filter" aria-hidden="true"></i> <?= htmlspecialchars($typeNote) ?> Active Parks always counts all sign-ins. Trend arrows are hidden.</div>
 			<?php endif; ?>
 			<div style="overflow-x:auto">
 				<table class="cp-kd-table" id="cp-kd-table">

@@ -552,7 +552,11 @@ final class OnlineAttendanceReportsTest extends TestCase
             $this->assertSame(2, $delta('in_person', $field), "$field in_person");
             $this->assertSame(1, $delta('online', $field), "$field online (the seeded online row)");
         }
-        $this->assertGreaterThanOrEqual(1, (int) $after['online']['Participation']);
+        // Active Parks never follows the type: the ORK makes no park status determination
+        // from online attendance, so it always counts all sign-ins.
+        $this->assertGreaterThanOrEqual(1, (int) $after['all']['Participation']);
+        $this->assertSame((int) $after['all']['Participation'], (int) $after['in_person']['Participation']);
+        $this->assertSame((int) $after['all']['Participation'], (int) $after['online']['Participation']);
     }
 
     /* ------------------------------------------------------------------ */

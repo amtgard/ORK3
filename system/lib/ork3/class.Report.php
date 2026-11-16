@@ -2854,7 +2854,7 @@ class Report extends Ork3
 										(select
 												kingdom_id, park_id
 											from " . DB_PREFIX . "attendance ap
-											where date > '" . date("Y-m-d", strtotime("-$request[ParkAttendanceWithin] week")) . "'" . Attendance::TypeClause($type, 'ap') . " group by date_week3, mundane_id) mundanesbyweek
+											where date > '" . date("Y-m-d", strtotime("-$request[ParkAttendanceWithin] week")) . "' group by date_week3, mundane_id) mundanesbyweek
 									group by kingdom_id, park_id) parkcount
 							group by kingdom_id) activeparks on activeparks.kingdom_id = k.kingdom_id
 					where active = 'Active'
