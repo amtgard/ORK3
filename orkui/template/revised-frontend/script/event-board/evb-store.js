@@ -388,14 +388,24 @@
         // Rows the server already holds (a server-side copy): added with their
         // saved snapshots and nothing queued, as one undo step. Undo removes them
         // through the normal remove path; redo then adds them again as new rows.
-        // A row with no server id, or one already present, is skipped.
+        // A row with no server id, or whose id any item already has, is skipped.
+        // The cid is 'i' + id unless that cid is still in use (an item restored
+        // under it, a queued op, a history step); then it gets a fresh 'n' cid.
+        function cidInUse(cid) {
+            function inStep(s) { return s.some(function (ch) { return ch.cid === cid; }); }
+            return indexOf(cid) >= 0 || !!saved[cid] || lastFor(cid) >= 0 ||
+                (inflight || []).some(function (e) { return e.cid === cid; }) ||
+                undoStack.some(inStep) || redoStack.some(inStep) || !!(recording && recording.map[cid]);
+        }
         function adoptRows(rows) {
             var cids = [];
             run(function () {
                 (rows || []).forEach(function (row) {
                     if (!row || !isId(row.EventScheduleId)) return;
-                    var cid = 'i' + row.EventScheduleId;
-                    if (indexOf(cid) >= 0 || cids.indexOf(cid) >= 0) return;
+                    var id = String(row.EventScheduleId);
+                    if (list.some(function (it) { return String(it.EventScheduleId) === id; })) return;
+                    var cid = 'i' + id;
+                    if (cidInUse(cid)) cid = 'n' + (++seq);
                     touch(cid, true);
                     var c = clone(row);
                     c.cid = cid;

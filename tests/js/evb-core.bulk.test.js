@@ -115,3 +115,49 @@ test('conflicts: touching ends, zero-length items and different leads are not co
   assert.deepEqual(r.n.sort(), ['Fire is also booked for Late', 'Seven is also on Late']);
   assert.deepEqual(r.m.sort(), ['Seven is also on Night', 'fire is also booked for Night']);
 });
+test('a long heading with a date reads back to that date when weekdays repeat', () => {
+  const days = []; for (let n = 0; n < 9; n++) days.push(C.addDays('2026-11-20', n));
+  const items = [
+    { Title: 'First Sat', Category: 'Other', StartTime: '2026-11-21 10:00', EndTime: '2026-11-21 11:00' },
+    { Title: 'Second Sat', Category: 'Other', StartTime: '2026-11-28 10:00', EndTime: '2026-11-28 11:00' },
+    { Title: 'Second Fri', Category: 'Other', StartTime: '2026-11-27 10:00', EndTime: '2026-11-27 11:00' },
+  ];
+  const back = C.parseLines(C.scheduleText(items), { days });
+  assert.deepEqual(back.items.map(i => [i.Title, i.StartTime]), [
+    ['First Sat', '2026-11-21 10:00'], ['Second Fri', '2026-11-27 10:00'], ['Second Sat', '2026-11-28 10:00'],
+  ]);
+  const three = C.parseLines('Friday, November 27\n9a X', { days: DAYS });
+  assert.equal(three.items[0].StartTime, '2026-11-27 09:00');
+});
+test('pasted formatting is cleaned up, not turned into items', () => {
+  const text = ['**Saturday**', '- 9a Gate', '• 10a Archery', '* 11a Lunch', '1. 1p Court', '2) 2p Class', '---',
+    'SUNDAY 11/22', '9a Clean Up', 'Saturday - Nov 21', '#bg 3p Mothman', '3 on 3 Tourney 4-5'].join('\n');
+  const r = C.parseLines(text, { days: DAYS });
+  assert.deepEqual(r.unread, []);
+  assert.deepEqual(r.items.map(i => [i.Title, i.StartTime]), [
+    ['Gate', '2026-11-21 09:00'], ['Archery', '2026-11-21 10:00'], ['Lunch', '2026-11-21 11:00'],
+    ['Court', '2026-11-21 13:00'], ['Class', '2026-11-21 14:00'], ['Clean Up', '2026-11-22 09:00'],
+    ['Mothman', '2026-11-21 15:00'], ['3 on 3 Tourney', '2026-11-21 16:00'],
+  ]);
+  assert.equal(r.items[6].Category, 'Battlegame');
+});
+test('more heading forms set the day and make no item; separators are skipped', () => {
+  const forms = ['SATURDAY 11/21', 'Saturday 21 November', 'Sat 11/21', 'Saturday, Nov 21st, 2026:', '## Saturday', '__Saturday__:'];
+  for (const h of forms) {
+    const r = C.parseLines(h + '\n- - -\n***\n9a X', { days: DAYS, day: '2026-11-20' });
+    assert.deepEqual([r.unread, r.items.map(i => [i.Title, i.StartTime])], [[], [['X', '2026-11-21 09:00']]], h);
+  }
+});
+test('items on a day outside the event are returned and listed', () => {
+  const r = C.parseLines('Monday\n9a A', { days: DAYS });
+  assert.deepEqual(r.items.map(i => i.StartTime), ['2026-11-23 09:00']);
+  assert.deepEqual(r.outside, [{ line: 2, text: '9a A', day: '2026-11-23' }]);
+  assert.deepEqual(C.parseLines('Sat\n9a A', { days: DAYS }).outside, []);
+});
+test('conflicts compare locations ignoring the width of spaces', () => {
+  const r = C.conflicts([
+    { cid: 'a', Title: 'A', StartTime: '2026-11-21 10:00', EndTime: '2026-11-21 11:00', Location: 'Main  Field', Leads: [] },
+    { cid: 'b', Title: 'B', StartTime: '2026-11-21 10:30', EndTime: '2026-11-21 11:30', Location: 'main field', Leads: [] },
+  ]);
+  assert.deepEqual(r, { a: ['Main  Field is also booked for B'], b: ['main field is also booked for A'] });
+});

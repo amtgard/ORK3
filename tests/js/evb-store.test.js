@@ -291,6 +291,23 @@ test('redo after undoing an adopt adds the rows again; known or id-less rows are
   assert.deepEqual(f.calls.flat().map(o => o.op), ['remove', 'add']);
   assert.equal(s.status().state, 'saved');
 });
+test('adopt skips a row whose server id an item already has, whatever its cid', async () => {
+  const f = fake();
+  const s = S.create({ items: [], send: f.send, saveMeal: true });
+  const a = s.add(item('A'));
+  await s.idle();
+  const id = s.get(a).EventScheduleId;
+  assert.deepEqual(s.adopt([item('A again', { EventScheduleId: id }), item('B', { EventScheduleId: 50 }), item('B twice', { EventScheduleId: '50' })]), ['i50']);
+  assert.deepEqual(s.items().map(i => i.Title), ['A', 'B']);
+  // An item restored under 'i7' with a new id keeps its cid; a later adopt of 7 gets a fresh cid.
+  const t = S.create({ items: [item('Old', { EventScheduleId: 7 })], send: f.send, saveMeal: true });
+  t.remove('i7'); t.undo(); await t.idle();
+  assert.notEqual(t.get('i7').EventScheduleId, 7);
+  const [cid] = t.adopt([item('Seven', { EventScheduleId: 7 })]);
+  assert.match(cid, /^n\d+$/);
+  assert.equal(t.get('i7').Title, 'Old');
+  assert.equal(t.get(cid).Title, 'Seven');
+});
 test('leads go out as MundaneId and Auto; the store keeps Persona and Auto', async () => {
   const f = fake(); f.hold();
   const s = S.create({ items: [], send: f.send, saveMeal: true });

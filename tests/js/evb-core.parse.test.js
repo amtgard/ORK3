@@ -233,3 +233,13 @@ test('formatEntry writes leads and they read back for staff', () => {
   assert.equal(C.formatEntry(it), '9:30–10:15a #bg Mothman @Luna Honeybadger');
   assert.deepEqual(C.parseEntry(C.formatEntry(it), { days: DAYS, staff: STAFF }).leads.map(l => l.MundaneId), [2]);
 });
+test('four-digit 24-hour times', () => {
+  assert.deepEqual(pick(p('0900-1000 Archery'), ['startMin', 'endMin', 'title']), [540, 600, 'Archery']);
+  assert.deepEqual(pick(p('0900–1000 Archery'), ['startMin', 'endMin', 'title']), [540, 600, 'Archery']);
+  assert.deepEqual(pick(p('sat 1330 Court'), ['day', 'startMin', 'title']), ['2026-11-21', 810, 'Court']);
+  assert.deepEqual(pick(p('2300-0100 Vigil'), ['startMin', 'endMin']), [1380, 1500]);
+  assert.deepEqual(pick(p('Class of 1999 reunion 5p'), ['title', 'startMin']), ['Class of 1999 reunion', 1020]);
+  assert.deepEqual(pick(p('1984 Night 8p'), ['title', 'startMin']), ['1984 Night', 1200]);
+  const r = p('Room 1330 meeting');
+  assert.deepEqual([r.title, r.given.time], ['Room 1330 meeting', false]);
+});

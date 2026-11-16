@@ -436,6 +436,14 @@
         return { h: h, mi: mi, marked: false, mk: null, strong: !!m[4] };
     }
 
+    // A four-digit 24-hour time ('0900', '1330') as a side, or null.
+    function readFourDigit(text) {
+        var m = /^([01]\d|2[0-3])([0-5]\d)$/.exec(text);
+        if (!m) return null;
+        var min = +m[1] * 60 + +m[2];
+        return { min: min, marked: true, mk: min < 720 ? 'a' : 'p', strong: true };
+    }
+
     function withMarker(side, mk) { return (side.h % 12 + (mk === 'p' ? 12 : 0)) * 60 + side.mi; }
 
     // Unmarked hours: 7 to 11 are morning, 12 and 1 to 6 afternoon.
@@ -503,7 +511,10 @@
     function rangeAt(toks, i) {
         if (!isWord(toks[i])) return null;
         var one = /^(.+?)[-\u2013](.+)$/.exec(toks[i].value), a, b, next;
-        if (one) {
+        if (one && readFourDigit(one[1]) && readFourDigit(one[2])) {
+            // '0900-1000': both sides four-digit 24-hour times.
+            a = readFourDigit(one[1]); b = readFourDigit(one[2]); next = i + 1;
+        } else if (one) {
             a = readSide(one[1]); b = readSide(one[2]); next = i + 1;
             if (a && b && !b.marked && isWord(toks[next]) && MARKER_WORDS.indexOf(toks[next].value.toLowerCase()) >= 0) {
                 b = readSide(one[2] + toks[next].value); next++;
@@ -540,6 +551,9 @@
         if (r && (!r.bare || i === firstIdx || r.next - 1 === lastIdx)) {
             return { found: { start: r.start, end: r.end, length: null, then: false }, upto: r.next };
         }
+        // A lone four-digit time ('1330') only as the first word after the day.
+        var four = i === firstIdx ? readFourDigit(toks[i].value) : null;
+        if (four) return { found: { start: nightShift(four.min), end: null, length: null, then: false }, upto: i + 1 };
         var sa = sideAt(toks, i);
         if (sa && sa.side.strong) {
             var word = /^[a-z]+$/i.test(toks[i].value);
@@ -950,33 +964,64 @@
 
     // ---- Bulk text: many lines in, the schedule out as text, a skeleton, conflicts. ----
 
-    var MONTH_RE = '(?:' + MONTHS.map(function (m) { return m.slice(0, 3) + '(?:' + m.slice(3) + ')?'; }).join('|') + ')';
-    // A weekday name, optionally with a date after a comma ('Friday, November 20'),
-    // then nothing but punctuation.
-    var HEADING_RE = new RegExp('^([a-z]+)(?:,?\\s+' + MONTH_RE + '\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?)?[\\s:;,.!\\-–—]*$', 'i');
+    var MONTH_RE = '(' + MONTHS.map(function (m) { return m.slice(0, 3) + '(?:' + m.slice(3) + ')?'; }).join('|') + ')';
+    var ORD = '(?:st|nd|rd|th)?', YEAR = '(?:,?\\s+\\d{4})?';
+    // A date after a weekday: 'M/D', 'November 20' or '20 November', each with an optional year.
+    var DATE_RE = '(?:(\\d{1,2})/(\\d{1,2})(?:/\\d{2,4})?' +
+        '|' + MONTH_RE + '\\.?\\s+(\\d{1,2})' + ORD + YEAR +
+        '|(\\d{1,2})' + ORD + '\\s+' + MONTH_RE + '\\.?' + YEAR + ')';
+    // A weekday name, optionally with a date after a space, comma or dash
+    // ('Friday, November 20', 'SUNDAY 11/22', 'Saturday - Nov 21'), then
+    // nothing but punctuation.
+    var HEADING_RE = new RegExp('^([a-z]+)(?:[\\s,\\-–—]+' + DATE_RE + ')?[\\s:;,.!\\-–—]*$', 'i');
     var MD_HEADING_RE = /^(\d{1,2}\/\d{1,2})\s*:?$/;
 
-    // The board day a whole line names as a heading, or null.
+    function monthNumber(name) {
+        var k = name.slice(0, 3).toLowerCase();
+        for (var i = 0; i < MONTHS.length; i++) if (MONTHS[i].slice(0, 3).toLowerCase() === k) return i + 1;
+        return 0;
+    }
+
+    // The board day a whole line names as a heading, or null. A written date
+    // decides the day; the weekday decides only when there is no date (or the
+    // date is not a real one).
     function headingDay(line, days) {
         var m = HEADING_RE.exec(line);
-        if (m && weekdayOf(m[1]) >= 0) return resolveDayWord(m[1], days);
+        if (m && weekdayOf(m[1]) >= 0) {
+            var mo = m[2] ? +m[2] : m[4] ? monthNumber(m[4]) : m[7] ? monthNumber(m[7]) : 0;
+            var da = m[3] ? +m[3] : m[5] ? +m[5] : m[6] ? +m[6] : 0;
+            return (mo && resolveDayWord(mo + '/' + da, days)) || resolveDayWord(m[1], days);
+        }
         m = MD_HEADING_RE.exec(line);
         return m ? resolveDayWord(m[1], days) : null;
+    }
+
+    // Paste formatting off a line: markdown emphasis pairs, a '# ' heading mark,
+    // a leading bullet or list number. '#tag' (no space) stays. A line of only
+    // rule characters ('---', '***', '- - -') becomes empty.
+    function cleanLine(line) {
+        var t = line.trim();
+        if (/^[-*_=~•·–—\s]+$/.test(t)) return '';
+        t = t.replace(/(\*\*|__)(.+?)\1/g, '$2').trim();
+        t = t.replace(/^#{1,6}\s+/, '');
+        t = t.replace(/^(?:[-*•·]|\d+[.)])\s+/, '');
+        return t.trim();
     }
 
     // Lines of text to items, in order. Each item carries the day and the clock
     // to the next line; a heading line sets the day and starts it afresh (9:00,
     // the caller's default length). A line whose title has no letter or digit is
-    // reported in unread with its 1-based line number.
+    // reported in unread with its 1-based line number; an item on a day outside
+    // ctx.days is still returned, and also listed in outside.
     function parseLines(text, ctx) {
         ctx = ctx || {};
         var days = ctx.days || [];
         var day = ctx.day || days[0] || null;
         var baseDuration = ctx.lastDuration == null ? 60 : ctx.lastDuration;
         var lastEnd = ctx.lastEnd || null, lastDuration = baseDuration;
-        var items = [], unread = [], unmatched = [];
+        var items = [], unread = [], unmatched = [], outside = [];
         String(text == null ? '' : text).split(/\r\n|\r|\n/).forEach(function (raw, n) {
-            var line = raw.trim();
+            var pasted = raw.trim(), line = cleanLine(raw);
             if (!line) return;
             var heading = headingDay(line, days.length ? days : (day ? [day] : []));
             if (heading) {
@@ -987,8 +1032,9 @@
             var r = parseEntry(line, { days: days, day: day, lastEnd: lastEnd, lastDuration: lastDuration,
                 staff: ctx.staff, canFeast: ctx.canFeast, locations: ctx.locations });
             if (r.setDay) { day = r.setDay; return; }
-            if (!r.ok || !r.day || !/[\p{L}\p{N}]/u.test(r.title)) { unread.push({ line: n + 1, text: line }); return; }
+            if (!r.ok || !r.day || !/[\p{L}\p{N}]/u.test(r.title)) { unread.push({ line: n + 1, text: pasted }); return; }
             r.unmatchedLeads.forEach(function (u) { if (unmatched.indexOf(u) < 0) unmatched.push(u); });
+            if (days.length && days.indexOf(r.day) < 0) outside.push({ line: n + 1, text: pasted, day: r.day });
             items.push({
                 Title: r.title,
                 StartTime: r.start,
@@ -1004,7 +1050,7 @@
             lastEnd = { day: r.day, min: r.endMin };
             lastDuration = r.endMin - r.startMin;
         });
-        return { items: items, unread: unread, unmatchedLeads: unmatched };
+        return { items: items, unread: unread, unmatchedLeads: unmatched, outside: outside };
     }
 
     // The items as text parseLines reads back: per board day in order, a
@@ -1048,7 +1094,7 @@
 
     // Double bookings: for each pair of items whose times truly overlap (zero-length
     // items never do), a message on both for each shared lead (by MundaneId) and
-    // for a shared location (ignoring case and surrounding space). Keyed by cid,
+    // for a shared location (ignoring case and the width of spaces). Keyed by cid,
     // or 'i' + EventScheduleId.
     function conflicts(items) {
         var rows = [];
@@ -1071,7 +1117,7 @@
                 if (!l || !(other.item.Leads || []).some(function (o) { return o && +o.MundaneId === +l.MundaneId; })) return;
                 note(row, l.Persona + ' is also on ' + other.item.Title);
             });
-            if (row.loc && row.loc.toLowerCase() === other.loc.toLowerCase()) {
+            if (row.loc && squash(row.loc) === squash(other.loc)) {
                 note(row, row.loc + ' is also booked for ' + other.item.Title);
             }
         }
