@@ -1298,6 +1298,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				<?php if ($canManageSchedule): ?>
 				<div class="evb-empty-actions">
 					<button type="button" class="ev-submit-btn evb-build-btn"><i class="fas fa-pencil-alt"></i> Build the schedule</button>
+					<button type="button" class="evb-past-btn"><i class="fas fa-history"></i> Start from a past event</button>
 				</div>
 				<?php endif; ?>
 			</div>
@@ -2846,6 +2847,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-select.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-select.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-drag.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-drag.js') ?>"></script>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-keys.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-keys.js') ?>"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/event-board/evb-bulk.js?v=<?= filemtime(__DIR__ . '/script/event-board/evb-bulk.js') ?>"></script>
 <?php endif; ?>
 <script>
 (function() {
@@ -3993,6 +3995,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 if (window.EvBoardView) EvBoardView.init();
 if (window.EvBoardImage) EvBoardImage.init();
 if (window.EvBoardEdit) EvBoardEdit.init();
+if (window.EvBoardBulk) EvBoardBulk.init();
 </script>
 
 <?php endif; /* DraftBlocked */ ?>

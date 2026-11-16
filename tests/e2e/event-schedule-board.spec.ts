@@ -1758,4 +1758,98 @@ test.describe('editing', () => {
     expect(await line.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, 'sat 9a something'.length]);
     await line.fill('');
   });
+
+  // ---- Phase 5: bulk paste, skeleton, start from a past event, conflicts ----
+  test('pasted lines preview as ghosts and are added in one undoable step', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const text = ['Sunday', `1p ${PREFIX} pasted one`, `then 30m ${PREFIX} pasted two`, '???', `3-4 class: ${PREFIX} pasted three @Nobody`].join('\n');
+    // Edit mode opens after the schedule is read.
+    await expect(page.locator('.evb-quickline .evb-entry-input')).toBeFocused();
+    await page.evaluate((t) => {
+      const dt = new DataTransfer(); dt.setData('text/plain', t);
+      document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    }, text);
+    await expect(page.locator('.evb-ghost')).toHaveCount(3);
+    await expect(page.locator('.evb-bulkbar')).toContainText('3 items ready');
+    await expect(page.locator('.evb-bulk-unread')).toContainText('Line 4: ???');
+    await expect(page.locator('.evb-bulk-leads')).toContainText('Nobody');
+    // Ghosts are dashed .evb-block elements too; nothing real is added yet. ('pasted', not
+    // 'paste': an earlier test leaves a 'paste guard' block.)
+    expect(await page.locator('.evb-block:not(.evb-ghost)', { hasText: `${PREFIX} pasted` }).count()).toBe(0);
+    await page.locator('.evb-bulk-add').click();
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} pasted` })).toHaveCount(3);
+    await expect(page.locator('.evb-ghost')).toHaveCount(0);
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await page.locator('.evb-undo').click();
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} pasted` })).toHaveCount(0);
+  });
+  test('the skeleton can be discarded; double-booked places are flagged', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await page.locator('.evb-more-btn').click();
+    await page.locator('[data-evb-more="skeleton"]').click();
+    expect(await page.locator('.evb-ghost').count()).toBeGreaterThan(5);
+    await page.locator('.evb-bulk-discard').click();
+    await expect(page.locator('.evb-ghost')).toHaveCount(0);
+    await addViaQuickLine(page, `sun 5-6p ${PREFIX} clash a at Hall`);
+    await addViaQuickLine(page, `sun 5:30-6:30p ${PREFIX} clash b at hall`);
+    const badge = page.locator('.evb-block', { hasText: `${PREFIX} clash a` }).locator('.evb-conflict');
+    await expect(badge).toHaveAttribute('data-tip', new RegExp(`Hall is also booked for ${PREFIX} clash b`));
+  });
+  test('a past schedule can be copied in and undone', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await page.locator('.evb-more-btn').click();
+    await page.locator('[data-evb-more="past-event"]').click();
+    await expect(page.locator('.evb-copy-dialog')).toBeVisible();
+    const sources = page.locator('.evb-copy-source');
+    // The list has loaded when it shows sources, or says there are none.
+    await expect(page.locator('.evb-copy-source, .evb-copy-none').first()).toBeVisible();
+    test.skip((await sources.count()) === 0, 'no past schedule in scope for the test event');
+    const before = await page.locator('.evb-block').count();
+    await sources.first().click();
+    // The notice only: '.evb-notice, .evb-modebar' would match two elements.
+    await expect(page.locator('.evb-edit-head .evb-notice')).toContainText(/Added \d+ items? from/);
+    expect(await page.locator('.evb-block').count()).toBeGreaterThan(before);
+    await page.locator('.evb-undo').click();
+    await expect(page.locator('.evb-block')).toHaveCount(before);
+  });
+  // The dialog's list and a refused copy, whatever past schedules the local
+  // database holds: both endpoints are answered here, so nothing is written.
+  test('the past-event dialog groups its sources and shows a refused copy', async ({ page }) => {
+    await page.route(/EventAjax\/schedule_copy_sources\//, route => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 0, sources: [
+        { EventId: 1, EventCalendarDetailId: 11, Name: 'Other <b>Fest</b>', StartDate: '2025-05-02', ItemCount: 4, SameEvent: false },
+        { EventId: 2, EventCalendarDetailId: 22, Name: 'This Event', StartDate: '2025-11-07', ItemCount: 1, SameEvent: true },
+      ] }),
+    }));
+    await page.route(/EventAjax\/schedule_copy_into\//, route => route.fulfill({
+      contentType: 'application/json', body: JSON.stringify({ status: 3, error: 'You may not copy from that event.' }),
+    }));
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    await page.locator('.evb-more-btn').click();
+    await expect(page.locator('.evb-more-btn')).toHaveAttribute('aria-expanded', 'true');
+    await page.locator('[data-evb-more="past-event"]').click();
+    const dialog = page.locator('.evb-copy-dialog');
+    await expect(dialog).toBeVisible();
+    const sources = dialog.locator('.evb-copy-source');
+    await expect(sources).toHaveCount(2);
+    // This event's own occurrences first; names are text, never markup.
+    await expect(sources.nth(0)).toContainText('This Event');
+    await expect(sources.nth(0)).toContainText('Nov 7, 2025 · 1 item');
+    await expect(sources.nth(1)).toContainText('Other <b>Fest</b>');
+    await expect(dialog.locator('.evb-copy-group').nth(0)).toHaveText('This event');
+    await expect(dialog.locator('.evb-copy-group').nth(1)).toHaveText('Other events here');
+    const before = await page.evaluate(() => (window as any).EvBoardEdit.store.items().length);
+    await sources.nth(1).click();
+    await expect(dialog.locator('.evb-copy-error')).toHaveText('You may not copy from that event.');
+    await expect(dialog).toBeVisible();
+    expect(await page.evaluate(() => (window as any).EvBoardEdit.store.items().length)).toBe(before);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator('.evb-more-btn')).toBeFocused();
+  });
 });

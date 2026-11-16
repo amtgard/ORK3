@@ -17,7 +17,8 @@
  * adds copies of them (EvBoardCore.pastePlan: same spacing) in one store.batch
  * and selects them: right after the selection's latest block when blocks are
  * selected, else at the slot cursor. Any other pasted text goes to the
- * onForeignPaste hook, and is left alone when there is none.
+ * onForeignPaste hook, and is left alone when there is none; so does a paste
+ * into the quick line (the hook takes only several lines; one line is typing).
  *
  * None of it acts while Done is leaving, a page modal is open, a text field has
  * focus, a pointer gesture is in progress or the board is not the view on
@@ -228,9 +229,17 @@
 
     // The one paste listener. Text copied from the board as blocks pastes those
     // blocks; any other text goes to the onForeignPaste hook, if there is one,
-    // and is left alone otherwise.
+    // and is left alone otherwise. A paste into the quick line goes to the hook
+    // too (it takes several lines, evb-bulk.js); otherwise it is the line's own.
     function onPaste(e) {
-        if (!keysFree(doc.activeElement) || !e.clipboardData || !Sel()) return;
+        if (!s.ctx || !e.clipboardData || !Sel()) return;
+        var ql = s.ctx.quickLine && s.ctx.quickLine.input;
+        if (ql && doc.activeElement === ql) {
+            if (!leaving() && !s.ctx.modalOpen() && foreignPaste &&
+                foreignPaste(e.clipboardData.getData('text/plain'), e) === true) e.preventDefault();
+            return;
+        }
+        if (!keysFree(doc.activeElement)) return;
         var text = e.clipboardData.getData('text/plain');
         if (s.copied && lines(text) === lines(s.copied.text)) {
             e.preventDefault();

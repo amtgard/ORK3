@@ -12,7 +12,8 @@
  *
  * Other Edit-mode surfaces (evb-type.js, evb-select.js) attach through three
  * hooks, each called with the same edit context {store, root, head, quickLine,
- * entryContext, add(parse, leads), getStaff, searchPlayers, addNotice, isLeaving,
+ * entryContext, add(parse, leads), getStaff, searchPlayers,
+ * addNotice(message, restoreText, restoreLeads, {tone: 'info'}), isLeaving,
  * isTextField, modalOpen, boardShown} (see editContext below):
  *   EvBoardEdit.onEnter(fn)      after Edit mode opens
  *   EvBoardEdit.onBeforeExit(fn) when Done is pressed, before anything else;
@@ -237,6 +238,13 @@
             '<table class="evb-help-table"><tbody>' +
             row(kbd('↑') + kbd('↓') + kbd('←') + kbd('→'), 'move the cursor (15 minutes, a day)') +
             row('Type', 'start an item at the cursor; ' + kbd('Enter') + ' opens it empty') +
+            '</tbody></table>' +
+            '<div class="evb-help-title">Many at once</div>' +
+            '<table class="evb-help-table"><tbody>' +
+            row('Paste', 'several lines (a post, last year’s notes) on the board or in the line: they show dashed until you press Add all') +
+            row(kbd('Esc'), 'discard that preview') +
+            row('More', 'a skeleton of the usual items, a past event’s schedule, or this schedule as text') +
+            row('<i class="fas fa-exclamation-triangle evb-help-warn" aria-label="Warning"></i>', 'on a block: a lead or a place booked twice at once') +
             '</tbody></table>';
     }
 
@@ -300,12 +308,13 @@
 
     // A row in the notice; restoreText adds a button that puts a rejected line
     // (with its hand-picked restoreLeads as chips) back in the quick line (used
-    // when the line held other text).
-    function addNotice(message, restoreText, restoreLeads) {
+    // when the line held other text). opts.tone 'info' is news, not a problem:
+    // the notice is drawn plain while it holds only such rows.
+    function addNotice(message, restoreText, restoreLeads, opts) {
         var box = q('.evb-notice');
         if (!box) return;
         var row = doc.createElement('div');
-        row.className = 'evb-notice-row';
+        row.className = 'evb-notice-row' + (opts && opts.tone === 'info' ? ' evb-notice-row-info' : '');
         row.appendChild(doc.createTextNode(message));
         if (restoreText) {
             var b = doc.createElement('button');
@@ -319,12 +328,18 @@
                 state.entry.focus();
                 row.parentNode.removeChild(row);
                 if (!box.querySelector('.evb-notice-row')) box.hidden = true;
+                noticeTone(box);
             });
             row.appendChild(doc.createTextNode(' '));
             row.appendChild(b);
         }
         box.querySelector('.evb-notice-rows').appendChild(row);
         box.hidden = false;
+        noticeTone(box);
+    }
+
+    function noticeTone(box) {
+        box.classList.toggle('evb-notice-info', !box.querySelector('.evb-notice-row:not(.evb-notice-row-info)'));
     }
 
     function clearNotice() {
@@ -386,8 +401,11 @@
         if (V().getDay() && V().getDay() !== day) V().setDay(day);
     }
 
+    // A bulk preview (evb-bulk.js) owns the ghosts while it shows.
+    function bulkOpen() { return !!(win.EvBoardBulk && win.EvBoardBulk.isOpen()); }
+
     function onParse(r) {
-        if (state.committing) return;
+        if (state.committing || bulkOpen()) return;
         V().setGhosts(r && r.ok ? [itemFrom(r, state.entry && state.entry.getLeads())] : []);
     }
 
@@ -560,7 +578,7 @@
     function panel() { return doc.getElementById('ev-tab-schedule'); }
 
     function setEditButtonsBusy(busy) {
-        doc.querySelectorAll('.evb-edit-btn, .evb-build-btn').forEach(function (b) {
+        doc.querySelectorAll('.evb-edit-btn, .evb-build-btn, .evb-past-btn').forEach(function (b) {
             b.disabled = busy;
             b.setAttribute('aria-busy', busy ? 'true' : 'false');
         });

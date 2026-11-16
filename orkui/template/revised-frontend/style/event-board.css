@@ -156,23 +156,23 @@ html[data-theme="dark"] .evb-now::before { background: #fc8181; }
 /* ---- "Share as image" (toolbar; the button reuses .ev-sched-copy-btn) ---- */
 .evb-share { position: relative; display: none; }
 #ev-tab-schedule.evb-board-mode .evb-share { display: inline-block; }
-.evb-share-menu {
+.evb-share-menu, .evb-more-menu {
     position: absolute; top: calc(100% + 6px); right: 0; z-index: var(--z-dropdown, 300);
     min-width: 190px; padding: 4px; box-sizing: border-box;
     background: var(--ork-card-bg); border: 1px solid var(--ork-border); border-radius: 8px;
     box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
 }
-.evb-share-menu[hidden] { display: none; }
-.evb-share-menu button {
+.evb-share-menu[hidden], .evb-more-menu[hidden] { display: none; }
+.evb-share-menu button, .evb-more-menu button {
     display: flex; align-items: center; gap: 8px; width: 100%; min-height: 0;
     padding: 8px 10px; border: none; border-radius: 6px; box-shadow: none;
     background: none; color: var(--ork-text); text-align: left;
     font-size: 13px; font-weight: 600; line-height: 1.3; cursor: pointer; white-space: nowrap;
 }
 .evb-share-menu button[hidden] { display: none; }
-.evb-share-menu button:hover,
-.evb-share-menu button:focus-visible { background: var(--ork-bg-secondary); color: var(--ork-text); }
-.evb-share-menu button i { width: 14px; font-size: 12px; text-align: center; color: var(--ork-text-muted); }
+.evb-share-menu button:hover, .evb-more-menu button:hover,
+.evb-share-menu button:focus-visible, .evb-more-menu button:focus-visible { background: var(--ork-bg-secondary); color: var(--ork-text); }
+.evb-share-menu button i, .evb-more-menu button i { width: 14px; font-size: 12px; text-align: center; color: var(--ork-text-muted); }
 
 /* In Board view the legend is the only category filter: hide the list's pills. */
 #ev-tab-schedule.evb-board-mode #ev-sched-filters { display: none !important; }
@@ -185,7 +185,15 @@ html[data-theme="dark"] .evb-now::before { background: #fc8181; }
 /* While editing, the board is the only view and the empty-state prompt has done its job. */
 #ev-tab-schedule.evb-edit-mode .ev-grid-view-toggle,
 #ev-tab-schedule.evb-edit-mode #ev-schedule-empty { display: none !important; }
-.evb-empty-actions { margin-top: 12px; }
+.evb-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+.evb-empty-actions .evb-past-btn {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 0; padding: 8px 14px;
+    border: 1px solid var(--ork-input-border); border-radius: 6px; box-shadow: none;
+    background: var(--ork-card-bg); color: var(--ork-text); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.evb-empty-actions .evb-past-btn:hover:not(:disabled) { border-color: var(--ork-text-muted); background: var(--ork-bg-secondary); color: var(--ork-text); }
+.evb-empty-actions .evb-past-btn:disabled { opacity: 0.5; cursor: default; }
+.evb-empty-actions .evb-past-btn i { color: var(--ork-text-muted); }
 
 /* Mode bar + quick line + notice: one block that sticks (below the 48px fixed
    site menu, #newmenu) while the page scrolls. */
@@ -359,6 +367,110 @@ html[data-theme="dark"] .evb-entry-option-active { background: #4a5568; }
     min-height: 0; padding: 0 4px; border: none; background: none; box-shadow: none;
     color: inherit; font-size: 18px; line-height: 1; cursor: pointer;
 }
+
+/* A notice that only brings news (a copy added, a preview discarded). */
+.evb-notice.evb-notice-info {
+    background: var(--ork-alert-info-bg, #ebf8ff); color: var(--ork-alert-info-text, #2c5282);
+    border-color: var(--ork-alert-info-border, #bee3f8);
+}
+html[data-theme="dark"] .evb-notice.evb-notice-info { background: rgba(66, 153, 225, 0.14); color: #bee3f8; border-color: rgba(144, 205, 244, 0.4); }
+.evb-help-warn { color: #b7791f; }
+html[data-theme="dark"] .evb-help-warn { color: #f6e05e; }
+
+/* ---- Bulk preview, More menu and the past-event dialog (evb-bulk.js) ---- */
+.evb-more-wrap { position: relative; display: inline-flex; }
+.evb-modebar .evb-more-btn[aria-expanded="true"] { background: var(--ork-bg-secondary); border-color: var(--ork-text-muted); }
+.evb-more-menu { min-width: 230px; }
+/* The bar under the mode bar, sticking with it, while pasted lines show as ghosts. */
+.evb-bulkbar {
+    margin: 0 10px 10px; padding: 8px 10px; border: 1px dashed #3182ce; border-radius: 6px;
+    background: rgba(66, 153, 225, 0.08); color: var(--ork-text); font-size: 13px; line-height: 1.4;
+    max-height: 40vh; overflow-y: auto;
+}
+.evb-bulkbar[hidden] { display: none; }
+html[data-theme="dark"] .evb-bulkbar { border-color: #63b3ed; background: rgba(99, 179, 237, 0.1); }
+.evb-bulk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.evb-bulk-count { margin-right: auto; font-weight: 700; }
+.evb-bulk-actions { display: inline-flex; gap: 8px; }
+.evb-bulkbar .ev-submit-btn { min-height: 0; height: 30px; padding: 0 14px; line-height: 1; }
+.evb-bulk-btn {
+    display: inline-flex; align-items: center; justify-content: center; min-height: 0; height: 30px; padding: 0 12px;
+    border: 1px solid var(--ork-border); border-radius: 6px; box-shadow: none;
+    background: var(--ork-card-bg); color: var(--ork-text); font-size: 12px; font-weight: 600; line-height: 1; cursor: pointer;
+}
+.evb-bulk-btn:hover:not(:disabled) { border-color: var(--ork-text-muted); background: var(--ork-card-bg); color: var(--ork-text); }
+.evb-bulk-note { margin-top: 6px; font-size: 12px; color: var(--ork-text-secondary, var(--ork-text-muted)); overflow-wrap: anywhere; }
+.evb-bulk-label { font-weight: 700; color: var(--ork-text-muted); }
+.evb-bulk-unread ul { margin: 2px 0 0; padding: 0 0 0 18px; }
+.evb-bulk-unread li { margin: 1px 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; }
+.evb-bulk-leads, .evb-bulk-outside { color: #975a16; }
+html[data-theme="dark"] .evb-bulk-leads, html[data-theme="dark"] .evb-bulk-outside { color: #f6e05e; }
+.evb-bulkbar .evb-bulk-more {
+    min-height: 0; padding: 0; border: none; background: none; box-shadow: none;
+    font-size: 12px; font-weight: 700; color: var(--ork-link); text-decoration: underline; cursor: pointer;
+}
+.evb-bulk-lock { min-height: 24px; margin-top: 8px; font-size: 12px; line-height: 24px; font-style: italic; color: var(--ork-text-muted); }
+.evb-entry-locked .evb-entry-chips { display: none; }
+.evb-entry .evb-entry-input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Dialogs: the page's modal overlay (.ev-modal-overlay), narrower. */
+.evb-dialog .evb-dialog-box { max-width: 520px; }
+.evb-dialog-intro { margin: 0 0 12px; font-size: 13px; color: var(--ork-text-secondary, var(--ork-text-muted)); }
+.evb-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.evb-paste-dialog .evb-paste-text {
+    display: block; width: 100%; box-sizing: border-box; min-height: 160px; margin: 0; padding: 8px 10px; resize: vertical;
+    border: 1px solid var(--ork-input-border); border-radius: 6px; background: var(--ork-input-bg); color: var(--ork-text);
+    font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.evb-paste-dialog .evb-paste-text:focus { outline: none; border-color: #4299e1; box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2); }
+.evb-paste-example { margin-top: 10px; font-size: 12px; }
+.evb-paste-example pre {
+    margin: 4px 0 0; padding: 6px 10px; border-radius: 6px; white-space: pre-wrap;
+    background: var(--ork-bg-secondary); color: var(--ork-text); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.evb-copy-group {
+    margin: 12px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ork-text-muted);
+}
+.evb-copy-group:first-child { margin-top: 0; }
+.evb-copy-sources { margin: 0; padding: 0; list-style: none; }
+.evb-copy-sources li + li { margin-top: 6px; }
+.evb-copy-dialog .evb-copy-source {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 0;
+    padding: 8px 12px; border: 1px solid var(--ork-border); border-radius: 6px; box-shadow: none;
+    background: var(--ork-card-bg); color: var(--ork-text); text-align: left; cursor: pointer;
+}
+.evb-copy-dialog .evb-copy-source:hover:not(:disabled),
+.evb-copy-dialog .evb-copy-source:focus-visible { border-color: #3182ce; background: var(--ork-bg-secondary); color: var(--ork-text); }
+.evb-copy-dialog .evb-copy-source:disabled { opacity: 0.6; cursor: default; }
+.evb-copy-dialog .evb-copy-source[aria-busy="true"] { opacity: 1; border-color: #3182ce; }
+.evb-copy-name { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.evb-copy-meta { font-size: 12px; color: var(--ork-text-muted); }
+.evb-copy-status, .evb-copy-none { margin: 0 0 8px; font-size: 13px; color: var(--ork-text-muted); }
+.evb-copy-error {
+    margin: 0 0 10px; padding: 8px 10px; border: 1px solid var(--ork-alert-danger-border); border-radius: 6px;
+    background: var(--ork-alert-danger-bg); color: var(--ork-alert-danger-text); font-size: 13px;
+}
+.evb-copy-error[hidden] { display: none; }
+
+/* A double booking: an amber warning in the block's top-right corner (Edit mode). */
+#evb-root .evb-block > .evb-conflict {
+    position: absolute; top: 3px; right: 3px; z-index: 1;
+    display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+    border-radius: 4px; background: #f6c343; color: #1a202c; font-size: 9px; line-height: 1;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); cursor: inherit;
+}
+#evb-root .evb-block-striped > .evb-conflict { right: 8px; }
+/* Its tip floats outside the block (evb-bulk.js), which clips its own overflow. */
+#evb-root .evb-block > .evb-conflict:hover::after { display: none; }
+#evb-root:not(.evb-editing) .evb-conflict { display: none; }
+.evb-has-conflict .evb-block-title { padding-right: 16px; }
+.evb-conflict-tip {
+    position: fixed; z-index: var(--z-dropdown, 300); max-width: 260px; padding: 6px 10px; border-radius: 4px;
+    background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4; pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18); overflow-wrap: anywhere;
+}
+.evb-conflict-tip[hidden] { display: none; }
+html[data-theme="dark"] .evb-conflict-tip { background: #f7fafc; color: #1a202c; }
 
 /* ---- The board in Edit mode ---- */
 /* A block can be picked up (evb-drag.js); its text is not for selecting. */
@@ -585,6 +697,8 @@ html[data-theme="dark"] .evb-row-error { color: #fc8181; }
     .evb-modebar .evb-done { margin-left: auto; }
     .evb-modebar .evb-modebar-btn, .evb-modebar .evb-done { height: 36px; }
     .evb-modebar .evb-help { width: 36px; }
+    .evb-more-menu { left: 0; right: auto; }
+    .evb-bulkbar .ev-submit-btn, .evb-bulk-btn { height: 36px; }
     .evb-quickline { padding: 8px; }
     .evb-entry-menu { min-width: 0; width: 100%; }
     .evb-entry-menu.evb-entry-menu-fixed,

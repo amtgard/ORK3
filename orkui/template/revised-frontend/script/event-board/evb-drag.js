@@ -193,7 +193,7 @@
     }
 
     // A copy of a block to draw a preview with: its lane and look, none of its
-    // identity, grips or handle.
+    // identity, grips, handle or conflict badge (evb-bulk.js).
     function ghostOf(block, cls) {
         var ghost = block.cloneNode(true);
         ['evb-selected', 'evb-dim', 'evb-drag-source', 'evb-block-continues', 'evb-block-continued'].forEach(function (c) {
@@ -202,7 +202,9 @@
         ghost.classList.add(cls);
         ['data-cid', 'role', 'tabindex', 'aria-pressed', 'aria-label'].forEach(function (a) { ghost.removeAttribute(a); });
         ghost.setAttribute('aria-hidden', 'true');
-        ghost.querySelectorAll('.evb-resize-top, .evb-resize-bottom, .evb-fill-handle').forEach(function (n) { n.parentNode.removeChild(n); });
+        ghost.classList.remove('evb-has-conflict');
+        ghost.removeAttribute('data-evb-label');
+        ghost.querySelectorAll('.evb-resize-top, .evb-resize-bottom, .evb-fill-handle, .evb-conflict').forEach(function (n) { n.parentNode.removeChild(n); });
         return ghost;
     }
 
