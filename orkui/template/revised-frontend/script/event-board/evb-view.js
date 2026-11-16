@@ -2,9 +2,10 @@
  * EvBoardView: renders the Event Schedule Board (all days side by side) into
  * #evb-root and owns the Schedule tab's Board/List view switch.
  *
- * Layout comes from EvBoardCore.buildBoard; this file only turns it into HTML.
- * blockHtml and esc are pure so node tests can load this file; everything that
- * touches the DOM runs only from init().
+ * Layout comes from EvBoardCore.buildBoard; this file turns it into HTML and
+ * adds the legend filter, day pills, details popover and "now" line.
+ * esc, blockHtml, autolink, popoverHtml and nowMinute are pure so node tests can
+ * load this file; everything that touches the DOM runs only from init().
  */
 (function (root, factory) {
     var isNode = typeof module === 'object' && module.exports;
@@ -59,7 +60,8 @@
         if (!seg.isFirst) cls += ' evb-block-continued';
         if (sec) cls += ' evb-block-striped';
 
-        var style = 'top:' + top.toFixed(1) + 'px;height:' + height.toFixed(1) + 'px;' +
+        // A 1px inset top and bottom keeps back-to-back items reading as two blocks.
+        var style = 'top:' + (top + 1).toFixed(1) + 'px;height:' + (height - 2).toFixed(1) + 'px;' +
             'left:calc(' + (+seg.left || 0).toFixed(3) + '% + 1px);width:calc(' + (+seg.width || 100).toFixed(3) + '% - 2px);' +
             '--evb-fill:' + boldOf(cat, catsByName) + ';--evb-lines:' + lines + ';' +
             (sec ? '--evb-stripe:' + boldOf(sec, catsByName) + ';' : '');
@@ -84,6 +86,108 @@
         return h + '</div>';
     }
 
+    // Escape text and link its http(s) URLs, as the list's ev_autolink does:
+    // trailing sentence punctuation and an unmatched ')' stay outside the link.
+    function autolink(text) {
+        var parts = String(text === null || text === undefined ? '' : text).split(/(https?:\/\/[^\s<>"'`]+)/i);
+        var out = '';
+        parts.forEach(function (part, i) {
+            if (i % 2 === 0) { out += esc(part); return; }
+            var tail = '';
+            while (part !== '') {
+                var last = part.charAt(part.length - 1);
+                var opens = (part.match(/\(/g) || []).length, closes = (part.match(/\)/g) || []).length;
+                if ('.,;:!?'.indexOf(last) !== -1 || (last === ')' && closes > opens)) {
+                    tail = last + tail;
+                    part = part.slice(0, -1);
+                    continue;
+                }
+                break;
+            }
+            if (part === '') { out += esc(tail); return; }
+            out += '<a href="' + esc(part) + '" target="_blank" rel="noopener noreferrer">' + esc(part) + '</a>' + esc(tail);
+        });
+        return out;
+    }
+
+    // The item's time for the popover: "Saturday · 5–6p", or with weekday names
+    // on both ends when it runs past its board day.
+    function popoverTime(item) {
+        var s = C.parseNaive(item.StartTime);
+        if (!s) return '';
+        var e = C.parseNaive(item.EndTime) || s;
+        var segs = C.segments(item);
+        if (segs.length > 1) {
+            return C.dayLabel(s.day) + ' ' + C.fmtTime(s.min) + ' – ' + C.dayLabel(e.day) + ' ' + C.fmtTime(e.min);
+        }
+        var seg = segs[0];
+        return C.dayLabel(seg.day) + ' · ' + C.fmtRange(seg.startMin, seg.endMin);
+    }
+
+    function costText(cost) {
+        if (cost === null || cost === undefined || String(cost).trim() === '') return '';
+        var n = Number(cost);
+        if (!isFinite(n)) return '';
+        return n === 0 ? 'Free' : '$' + n.toFixed(2);
+    }
+
+    // The details popover for one item. uir is the UI root for profile links;
+    // opts.canEdit adds an Edit button.
+    function popoverHtml(item, catsByName, uir, opts) {
+        opts = opts || {};
+        var cat = catName(item.Category, catsByName);
+        var sec = item.SecondaryCategory && item.SecondaryCategory !== cat &&
+            Object.prototype.hasOwnProperty.call(catsByName, item.SecondaryCategory) ? item.SecondaryCategory : '';
+        var id = parseInt(item.EventScheduleId, 10) || 0;
+        var isFeast = cat === 'Feast and Food' || sec === 'Feast and Food';
+
+        function catTag(name) {
+            return '<span class="evb-popover-cat"><span class="evb-legend-swatch" style="background:' +
+                esc(boldOf(name, catsByName)) + '"></span>' + esc(name) + '</span>';
+        }
+        function row(icon, label, html) {
+            return '<div class="evb-popover-row"><i class="fas ' + icon + '" aria-hidden="true"></i>' +
+                '<span class="evb-sr">' + esc(label) + ': </span><div>' + html + '</div></div>';
+        }
+
+        var h = '<div class="evb-popover-head">' +
+            '<div class="evb-popover-cats">' + catTag(cat) + (sec ? catTag(sec) : '') + '</div>' +
+            '<button type="button" class="evb-popover-close" aria-label="Close">&times;</button></div>';
+        h += '<div class="evb-popover-title">' + esc(item.Title || '') + '</div>';
+        h += row('fa-clock', 'Time', esc(popoverTime(item)));
+        if (item.Location) h += row('fa-map-marker-alt', 'Location', esc(item.Location));
+        if (item.Leads && item.Leads.length) {
+            h += row('fa-user', 'Led by', item.Leads.map(function (l) {
+                return '<a href="' + esc((uir || '') + 'Player/profile/' + (parseInt(l.MundaneId, 10) || 0)) + '">' + esc(l.Persona) + '</a>';
+            }).join(', '));
+        }
+        if (item.Description) h += '<div class="evb-popover-desc">' + autolink(item.Description) + '</div>';
+        if (isFeast) {
+            var meal = '';
+            if (String(item.Menu || '').trim() !== '') meal += row('fa-scroll', 'Menu', esc(item.Menu));
+            var cost = costText(item.Cost);
+            if (cost) meal += row('fa-tag', 'Cost', esc(cost));
+            if (item.Dietary) meal += row('fa-leaf', 'Dietary', esc(item.Dietary));
+            if (item.Allergens) meal += row('fa-exclamation-triangle', 'Allergens', esc(item.Allergens));
+            if (meal) h += '<div class="evb-popover-meal">' + meal + '</div>';
+        }
+        if (opts.canEdit) {
+            h += '<div class="evb-popover-actions"><button type="button" class="evb-popover-edit" data-id="' + id + '">' +
+                '<i class="fas fa-pencil-alt" aria-hidden="true"></i> Edit</button></div>';
+        }
+        return h;
+    }
+
+    // The board day and minute for the "now" line: the server's clock at page
+    // load plus the time elapsed since, measured from a 5am board day.
+    function nowMinute(serverNow, elapsedMs) {
+        var p = C.parseNaive(serverNow);
+        if (!p) return null;
+        var total = p.min + Math.floor((+elapsedMs || 0) / 60000);
+        var shift = Math.floor((total - C.BOARD_DAY_START) / 1440);
+        return { day: C.addDays(p.day, shift), min: total - shift * 1440 };
+    }
+
     // ---- DOM state (browser only) ----
     var state = {
         rootEl: null,
@@ -92,14 +196,20 @@
         cats: [],          // ordered category definitions
         catsByName: {},
         filter: null,
+        day: null,         // the day chosen by pill or link; null is all days
         desiredView: 'list',
         view: 'list',
+        popover: null,     // { el, block, id } while a popover is open
+        nowBase: 0,        // performance.now() when the page's serverNow was taken
         renderCbs: []
     };
     var api = {
         PX_PER_MIN: PX_PER_MIN,
         esc: esc,
         blockHtml: blockHtml,
+        autolink: autolink,
+        popoverHtml: popoverHtml,
+        nowMinute: nowMinute,
         board: null
     };
 
@@ -124,15 +234,80 @@
         return h + '</div>';
     }
 
+    function currentNow() {
+        var c = cfg();
+        if (!c.serverNow || !win.performance) return null;
+        return nowMinute(c.serverNow, win.performance.now() - state.nowBase);
+    }
+
+    // Day pills (only when the board has more than one day): "All days" plus one
+    // per day; phones hide "All days" and always show a single day.
+    function dayPillsHtml(board) {
+        if (board.days.length < 2) return '';
+        var now = currentNow();
+        var long = board.days.length > 7;
+        var h = '<div class="ev-grid-day-pills evb-day-pills" role="group" aria-label="Day shown">';
+        h += '<button type="button" class="ev-grid-day-pill evb-day-pill evb-day-pill-all" data-day="" aria-pressed="false">All days</button>';
+        board.days.forEach(function (d) {
+            h += '<button type="button" class="ev-grid-day-pill evb-day-pill" data-day="' + esc(d.day) + '" aria-pressed="false">' +
+                (now && now.day === d.day ? '<span class="ev-grid-day-pill-today" data-tip="Today"></span>' : '') +
+                esc(long ? C.dayLabelLong(d.day) : d.label) + '</button>';
+        });
+        return h + '</div>';
+    }
+
+    function boardHasDay(day) {
+        return !!(day && api.board && api.board.days.some(function (d) { return d.day === day; }));
+    }
+
+    // The single day on show, or null for all days. A chosen day wins; phones
+    // fall back to today's board day when it is on the board, else the first day.
+    function resolvedDay() {
+        if (!api.board || !api.board.days.length) return null;
+        if (boardHasDay(state.day)) return state.day;
+        if (!isPhone()) return null;
+        var now = currentNow();
+        return now && boardHasDay(now.day) ? now.day : api.board.days[0].day;
+    }
+
+    function applyDay() {
+        if (!state.rootEl) return;
+        var shown = resolvedDay();
+        state.rootEl.querySelectorAll('.evb-day').forEach(function (el) {
+            el.classList.toggle('evb-day-off', !!shown && el.getAttribute('data-day') !== shown);
+        });
+        state.rootEl.querySelectorAll('.evb-day-pill').forEach(function (p) {
+            var on = (p.getAttribute('data-day') || null) === shown;
+            p.classList.toggle('ev-grid-day-pill-active', on);
+            p.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+    }
+
+    // The "now" line across today's board day, when the minute is on the axis.
+    function renderNow() {
+        if (!state.rootEl || !api.board) return;
+        state.rootEl.querySelectorAll('.evb-now').forEach(function (el) { el.parentNode.removeChild(el); });
+        var now = currentNow();
+        if (!now || now.min < api.board.axisStart || now.min > api.board.axisEnd) return;
+        var body = state.rootEl.querySelector('.evb-day-body[data-day="' + now.day + '"]');
+        if (!body) return;
+        var line = win.document.createElement('div');
+        line.className = 'evb-now';
+        line.setAttribute('aria-hidden', 'true');
+        line.style.top = ((now.min - api.board.axisStart) * PX_PER_MIN).toFixed(1) + 'px';
+        body.appendChild(line);
+    }
+
     function render() {
         if (!state.rootEl) return;
+        closePopover(false);
         var c = cfg();
         var board = C.buildBoard(state.items, { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '', editing: false });
         api.board = board;
         var bodyH = (board.axisEnd - board.axisStart) * PX_PER_MIN;
         var bodyStyle = 'height:' + bodyH.toFixed(1) + 'px';
 
-        var h = legendHtml();
+        var h = legendHtml() + dayPillsHtml(board);
         h += '<div class="evb-scroller"><div class="evb-board">';
         h += '<div class="evb-gutter"><div class="evb-head"></div><div class="evb-gutter-body" style="' + bodyStyle + '">';
         for (var m = board.axisStart; m < board.axisEnd; m += 60) {
@@ -150,16 +325,21 @@
         h += '</div></div>';
         state.rootEl.innerHTML = h;
         applyFilter();
+        applyDay();
+        renderNow();
         state.renderCbs.forEach(function (fn) {
             try { fn(board); } catch (e) { if (win.console) win.console.error(e); }
         });
     }
 
+    // The legend dims every block whose primary and secondary category both differ
+    // from the chosen one.
     function applyFilter() {
         if (!state.rootEl) return;
         var f = state.filter;
         state.rootEl.querySelectorAll('.evb-block').forEach(function (b) {
-            b.classList.toggle('evb-dim', !!f && b.getAttribute('data-category') !== f);
+            var match = b.getAttribute('data-category') === f || b.getAttribute('data-secondary-category') === f;
+            b.classList.toggle('evb-dim', !!f && !match);
         });
         state.rootEl.querySelectorAll('.evb-legend-chip').forEach(function (chip) {
             chip.setAttribute('aria-pressed', chip.getAttribute('data-category') === f ? 'true' : 'false');
@@ -181,16 +361,18 @@
         return (v === 'board' || v === 'list') ? v : null;
     }
 
-    // desiredView is what the viewer or link asked for; phones still resolve to
-    // List here (the phone board arrives later). The desired value is persisted,
-    // the resolved one is shown and linked.
+    // In Board view the legend is the only category filter, so the tab panel's
+    // evb-board-mode class hides the list's filter pills (event-board.css).
     function setView(view, opts) {
         opts = opts || {};
         var v = normaliseView(view);
         if (v) state.desiredView = v;
-        var resolved = isPhone() ? 'list' : state.desiredView;
+        var resolved = state.desiredView;
+        if (resolved !== 'board') closePopover(false);
         if (state.rootEl) state.rootEl.style.display = resolved === 'board' ? '' : 'none';
         if (state.listEl) state.listEl.style.display = resolved === 'board' ? 'none' : '';
+        var panel = win.document.getElementById('ev-tab-schedule');
+        if (panel) panel.classList.toggle('evb-board-mode', resolved === 'board');
         win.document.querySelectorAll('.ev-grid-view-btn[data-ev-view]').forEach(function (b) {
             var active = b.getAttribute('data-ev-view') === resolved;
             b.classList.toggle('ev-grid-view-active', active);
@@ -213,13 +395,80 @@
         if (scheduleTabActive() && typeof win.evWriteHash === 'function') win.evWriteHash('ev-tab-schedule');
     }
 
-    // Managers open the edit modal by clicking a block, through the list row's own
+    // Show one day (YYYY-MM-DD) or, with null, all days; the link carries it.
+    function setDay(day) {
+        state.day = (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) ? day : null;
+        applyDay();
+        writeScheduleHash();
+    }
+
+    // Managers open the edit modal from the popover, through the list row's own
     // edit button so the modal's row lookup keeps working.
-    function openEditor(block) {
-        if (!cfg().canManageSchedule || !block) return;
-        var row = win.document.getElementById('ev-schedule-row-' + block.getAttribute('data-id'));
+    function openEditor(id) {
+        if (!cfg().canManageSchedule) return;
+        var row = win.document.getElementById('ev-schedule-row-' + id);
         var btn = row && row.querySelector('.ev-edit-link');
         if (btn) btn.click();
+    }
+
+    function findItem(id) {
+        for (var i = 0; i < state.items.length; i++) {
+            if (String(parseInt(state.items[i].EventScheduleId, 10)) === String(id)) return state.items[i];
+        }
+        return null;
+    }
+
+    function closePopover(restoreFocus) {
+        var p = state.popover;
+        if (!p) return;
+        state.popover = null;
+        if (p.el.parentNode) p.el.parentNode.removeChild(p.el);
+        if (restoreFocus && p.block && win.document.contains(p.block)) p.block.focus({ preventScroll: true });
+    }
+
+    // Below the block, flipped above it when it would leave the viewport, and
+    // kept 8px inside the viewport's edges.
+    function placePopover(el, block) {
+        var r = block.getBoundingClientRect();
+        var vw = win.document.documentElement.clientWidth, vh = win.innerHeight;
+        var w = el.offsetWidth, h = el.offsetHeight, gap = 6, edge = 8;
+        var top = r.bottom + gap;
+        if (top + h > vh - edge) {
+            top = r.top - h - gap >= edge ? r.top - h - gap : Math.max(edge, vh - h - edge);
+        }
+        el.style.left = Math.max(edge, Math.min(r.left, vw - w - edge)) + 'px';
+        el.style.top = top + 'px';
+    }
+
+    function openPopover(block) {
+        var id = block.getAttribute('data-id');
+        var again = state.popover && state.popover.block === block;
+        closePopover(false);
+        if (again) return; // a second click on the same block closes it
+        var item = findItem(id);
+        if (!item) return;
+        var c = cfg();
+        var el = win.document.createElement('div');
+        el.className = 'evb-popover';
+        el.setAttribute('role', 'dialog');
+        el.setAttribute('aria-label', item.Title || 'Schedule item');
+        el.setAttribute('tabindex', '-1');
+        el.innerHTML = popoverHtml(item, state.catsByName, c.uir || '', { canEdit: !!c.canManageSchedule });
+        el.addEventListener('click', function (e) {
+            var t = e.target.closest ? e.target : null;
+            if (!t) return;
+            if (t.closest('.evb-popover-close')) { closePopover(true); return; }
+            var edit = t.closest('.evb-popover-edit');
+            if (edit) {
+                closePopover(false);
+                openEditor(edit.getAttribute('data-id'));
+            }
+        });
+        win.document.body.appendChild(el);
+        placePopover(el, block);
+        var r = block.getBoundingClientRect();
+        state.popover = { el: el, block: block, top: r.top, left: r.left };
+        el.focus({ preventScroll: true });
     }
 
     // Re-fetch the page and take the fresh schedule from its JSON data script, so
@@ -248,6 +497,11 @@
         state.catsByName = {};
         state.cats.forEach(function (cat) { state.catsByName[cat.name] = cat; });
         state.items = Array.isArray(c.schedule) ? c.schedule : [];
+        state.nowBase = win.performance ? win.performance.now() : 0;
+        // A day in the link (YYYYMMDD) shows only that day until "All days" is chosen.
+        var hp = win.evHashParams || {};
+        var hd = /^(\d{4})(\d{2})(\d{2})$/.exec(hp.day || '');
+        if (hd) state.day = hd[1] + '-' + hd[2] + '-' + hd[3];
         render();
 
         doc.querySelectorAll('.ev-grid-view-btn[data-ev-view]').forEach(function (b) {
@@ -257,27 +511,67 @@
             });
         });
         state.rootEl.addEventListener('click', function (e) {
-            openEditor(e.target.closest && e.target.closest('.evb-block'));
+            var t = e.target.closest ? e.target : null;
+            if (!t) return;
+            var chip = t.closest('.evb-legend-chip');
+            if (chip) {
+                var cat = chip.getAttribute('data-category');
+                setFilter(state.filter === cat ? null : cat);
+                return;
+            }
+            var pill = t.closest('.evb-day-pill');
+            if (pill) { setDay(pill.getAttribute('data-day') || null); return; }
+            var block = t.closest('.evb-block');
+            if (block) openPopover(block);
         });
         state.rootEl.addEventListener('keydown', function (e) {
             if (e.key !== 'Enter' && e.key !== ' ') return;
             var block = e.target.closest && e.target.closest('.evb-block');
             if (!block) return;
-            if (e.key === ' ') e.preventDefault();
-            openEditor(block);
+            e.preventDefault();
+            openPopover(block);
         });
+        // The popover closes on an outside click (a click on another block opens
+        // that block's instead), on Esc, and when a scroll moves its block. Scroll
+        // events land a frame late, so one from just before the click (scrolling
+        // the block into view) leaves the block where it was and is ignored.
+        doc.addEventListener('click', function (e) {
+            var p = state.popover;
+            if (!p || !e.target.closest || p.el.contains(e.target) || e.target.closest('.evb-block')) return;
+            closePopover(false);
+        });
+        doc.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && state.popover) closePopover(true);
+        });
+        win.addEventListener('scroll', function () {
+            var p = state.popover;
+            if (!p) return;
+            var r = p.block.getBoundingClientRect();
+            if (Math.abs(r.top - p.top) > 1 || Math.abs(r.left - p.left) > 1) closePopover(false);
+        }, true);
 
         // A view in the link wins over the stored choice; with neither, Board for a
         // schedule with items on a wide screen, otherwise List.
         var initial = null;
         try { initial = normaliseView(win.localStorage.getItem(STORAGE_KEY)); } catch (e) { /* storage blocked */ }
-        var hp = win.evHashParams || {};
         if (normaliseView(hp.view)) initial = normaliseView(hp.view);
         if (!initial) initial = (state.items.length && !isPhone()) ? 'board' : 'list';
         setView(initial, { persist: false });
-        win.addEventListener('resize', function () { setView(null, { persist: false }); });
+        win.addEventListener('resize', function () {
+            closePopover(false);
+            setView(null, { persist: false });
+            applyDay();
+        });
 
-        win.evScheduleHashSuffix = function () { return state.view === 'board' ? '?view=board' : ''; };
+        // Keep the now line current while the board is on screen.
+        win.setInterval(function () {
+            if (state.view === 'board' && !doc.hidden) renderNow();
+        }, 60000);
+
+        win.evScheduleHashSuffix = function () {
+            if (state.view !== 'board') return '';
+            return '?view=board' + (boardHasDay(state.day) ? '&day=' + state.day.replace(/-/g, '') : '');
+        };
         win.evRefreshScheduleGrid = refreshFromServer;
     }
 
@@ -288,6 +582,8 @@
     api.setView = setView;
     api.getView = getView;
     api.setFilter = setFilter;
+    api.setDay = setDay;
+    api.getDay = resolvedDay;
     api.onRender = function (fn) { if (typeof fn === 'function') state.renderCbs.push(fn); };
     return api;
 });

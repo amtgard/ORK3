@@ -3758,7 +3758,7 @@ html[data-theme="dark"] .ev-grid-view-btn.ev-grid-view-active {
 	background: #4299e1; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.45);
 }
 
-/* Multi-day grid: day-selector pills (built in JS only when >1 day) */
+/* Schedule board: day-selector pills (built in evb-view.js only when >1 day) */
 .ev-grid-day-pills {
 	display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;
 }
@@ -3793,11 +3793,9 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 .ev-sched-desc a:hover { text-decoration:none; }
 
 @media (max-width: 700px) {
-	#ev-schedule-container      { display:block !important; }
-	/* Keep the toolbar (and its Add Schedule Item button) reachable; only hide
-	   the Board/List toggle since phones show the list. */
+	/* Keep the toolbar (Board/List toggle, Copy link, Add Schedule Item) reachable;
+	   phones get a one-day board (evb-view.js, event-board.css). */
 	.ev-grid-view-toolbar       { justify-content:flex-start; flex-wrap:wrap; }
-	.ev-grid-view-toggle        { display:none !important; }
 	.ev-grid-view-toolbar .ev-submit-btn { padding:9px 16px; min-height:40px; }
 	.ev-sched-pill { padding:8px 12px; min-height:36px; }
 }

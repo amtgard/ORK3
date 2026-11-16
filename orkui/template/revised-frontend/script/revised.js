@@ -10414,20 +10414,7 @@ $(document).ready(function() {
                 var secActive  = secPill  ? secPill.classList.contains('ev-sched-pill-active')  : false;
                 row.style.display = (primActive || secActive) ? '' : 'none';
             });
-            // The board shares these pills.
-            evApplyGridFilter();
-        };
-
-        // Board filter: the board dims all but one category, so narrowing the pills
-        // to a single active category focuses the board on it; any other mix clears it.
-        window.evApplyGridFilter = function() {
-            if (!window.EvBoardView) return;
-            var pills = document.querySelectorAll('#ev-sched-filters .ev-sched-pill');
-            var active = [];
-            pills.forEach(function(p) {
-                if (p.classList.contains('ev-sched-pill-active')) active.push(p.getAttribute('data-cat'));
-            });
-            EvBoardView.setFilter(pills.length > 1 && active.length === 1 ? active[0] : null);
+            // These pills filter the list only; the board's legend is its own filter.
         };
 
         window.evRemoveSchedule = function(btn, scheduleId) {

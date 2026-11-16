@@ -16,7 +16,11 @@
     background: var(--ork-card-bg); color: var(--ork-text);
     font-size: 12px; font-weight: 600; line-height: 1.3; cursor: pointer;
 }
-.evb-legend-chip[aria-pressed="true"] { border-color: var(--ork-text); }
+.evb-legend-chip:hover { border-color: var(--ork-text-muted); }
+.evb-legend-chip[aria-pressed="true"] {
+    border-color: var(--ork-text); background: var(--ork-bg-secondary);
+    box-shadow: inset 0 0 0 1px var(--ork-text);
+}
 .evb-legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 
 /* ---- Frame: one scroller, sticky day heads and sticky hour gutter ---- */
@@ -79,3 +83,76 @@
 
 html[data-theme="dark"] .evb-block { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
 html[data-theme="dark"] .evb-block-striped { box-shadow: inset -4px 0 0 var(--evb-stripe), 0 1px 2px rgba(0, 0, 0, 0.5); }
+
+/* ---- Day pills (.ev-grid-day-pill* in Eventnew_index.tpl) and day choice ---- */
+.evb-day-pills { margin-bottom: 10px; }
+.evb-day.evb-day-off { display: none; }
+
+/* ---- Now line ---- */
+.evb-now {
+    position: absolute; left: 0; right: 0; z-index: 1; height: 0;
+    border-top: 2px solid #e53e3e; pointer-events: none;
+}
+.evb-now::before {
+    content: ""; position: absolute; left: -4px; top: -5px;
+    width: 8px; height: 8px; border-radius: 50%; background: #e53e3e;
+}
+html[data-theme="dark"] .evb-now { border-top-color: #fc8181; }
+html[data-theme="dark"] .evb-now::before { background: #fc8181; }
+
+/* ---- Details popover (appended to <body>, positioned by evb-view.js) ---- */
+.evb-popover {
+    position: fixed; z-index: var(--z-dropdown, 300);
+    width: 320px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto;
+    box-sizing: border-box; padding: 12px 14px;
+    background: var(--ork-card-bg); color: var(--ork-text);
+    border: 1px solid var(--ork-border); border-radius: 8px;
+    box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
+    font-size: 13px; line-height: 1.45;
+}
+.evb-popover:focus { outline: none; }
+.evb-popover:focus-visible { outline: 2px solid var(--ork-text); outline-offset: 2px; }
+.evb-popover-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.evb-popover-cats { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.evb-popover-cat {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 700; color: var(--ork-text-muted);
+}
+.evb-popover .evb-popover-close {
+    margin: -6px -8px 0 0; padding: 2px 8px; min-height: 0;
+    background: none; border: none; box-shadow: none; cursor: pointer;
+    font-size: 20px; line-height: 1; color: var(--ork-text-muted);
+}
+.evb-popover .evb-popover-close:hover { color: var(--ork-text); background: none; }
+.evb-popover-title { margin: 4px 0 8px; font-size: 15px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.evb-popover-row { display: flex; gap: 8px; margin-top: 4px; overflow-wrap: anywhere; }
+.evb-popover-row > i { width: 14px; flex-shrink: 0; margin-top: 3px; font-size: 12px; text-align: center; color: var(--ork-text-muted); }
+.evb-popover-desc {
+    margin-top: 8px; white-space: pre-line; overflow-wrap: anywhere;
+}
+.evb-popover a { color: var(--ork-link); text-decoration: underline; }
+.evb-popover a:hover { text-decoration: none; }
+.evb-popover-meal { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--ork-border); }
+.evb-popover-actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+.evb-popover .evb-popover-edit {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 0;
+    padding: 5px 12px; border: 1px solid var(--ork-border); border-radius: 999px;
+    background: var(--ork-bg-secondary); color: var(--ork-text); box-shadow: none;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.evb-popover .evb-popover-edit:hover { border-color: var(--ork-text-muted); background: var(--ork-bg-secondary); color: var(--ork-text); }
+.evb-sr {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* In Board view the legend is the only category filter: hide the list's pills. */
+#ev-tab-schedule.evb-board-mode #ev-sched-filters { display: none !important; }
+
+/* ---- Phones: one day at a time, the board scrolls inside its own frame ---- */
+@media (max-width: 700px) {
+    .evb-day-pills .evb-day-pill-all { display: none; }
+    .evb-day-pills .ev-grid-day-pill { padding: 8px 14px; min-height: 36px; }
+    .evb-scroller { max-height: 75vh; }
+    .evb-legend-chip { padding: 6px 10px; }
+}
