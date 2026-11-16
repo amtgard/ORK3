@@ -200,11 +200,39 @@ final class EventPlanningFixture
         return $id;
     }
 
-    public function insertScheduleLead(int $scheduleId, int $mundaneId): void
+    public function insertScheduleLead(int $scheduleId, int $mundaneId, bool $isAuto = false): void
     {
         $this->pdo->prepare(
-            'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id) VALUES (?, ?)'
-        )->execute([$scheduleId, $mundaneId]);
+            'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
+             VALUES (?, ?, ?)'
+        )->execute([$scheduleId, $mundaneId, $isAuto ? 1 : 0]);
+    }
+
+    /** @return list<string> the staff row's lead categories, sorted by name */
+    public function fetchStaffCategories(int $staffId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT category FROM ' . DB_PREFIX . 'event_staff_category WHERE event_staff_id = ? ORDER BY category'
+        );
+        $stmt->execute([$staffId]);
+
+        return array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    /** @return list<array{mundane_id: int, is_auto: int}> ordered by mundane id */
+    public function fetchScheduleLeads(int $scheduleId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT mundane_id, is_auto FROM ' . DB_PREFIX . 'event_schedule_lead
+             WHERE event_schedule_id = ? ORDER BY mundane_id'
+        );
+        $stmt->execute([$scheduleId]);
+        $rows = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rows[] = ['mundane_id' => (int) $row['mundane_id'], 'is_auto' => (int) $row['is_auto']];
+        }
+
+        return $rows;
     }
 
     public function insertRsvp(int $detailId, int $mundaneId, string $status): void

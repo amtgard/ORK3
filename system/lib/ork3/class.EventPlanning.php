@@ -805,6 +805,12 @@ class EventPlanning extends Ork3
             ];
         }
 
+        $categories = $this->fetchStaffLeadCategories(array_column($staffList, 'EventStaffId'));
+        foreach ($staffList as &$staffRow) {
+            $staffRow['LeadCategories'] = $categories[$staffRow['EventStaffId']] ?? [];
+        }
+        unset($staffRow);
+
         return $staffList;
     }
 
@@ -850,7 +856,8 @@ class EventPlanning extends Ork3
             $slIds = implode(',', array_map('intval', array_column($scheduleList, 'EventScheduleId')));
             $this->db->Clear();
             $leadRows = $this->db->DataSet(
-                'SELECT sl.event_schedule_id AS EventScheduleId, m.mundane_id AS MundaneId, m.persona AS Persona
+                'SELECT sl.event_schedule_id AS EventScheduleId, m.mundane_id AS MundaneId, m.persona AS Persona,
+                        sl.is_auto AS IsAuto
                  FROM ' . DB_PREFIX . 'event_schedule_lead sl
                  JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = sl.mundane_id
                  WHERE sl.event_schedule_id IN (' . $slIds . ')
@@ -861,6 +868,7 @@ class EventPlanning extends Ork3
                 $leadsMap[(int) $leadRows->EventScheduleId][] = [
                     'MundaneId' => (int) $leadRows->MundaneId,
                     'Persona' => $leadRows->Persona,
+                    'Auto' => (bool) (int) $leadRows->IsAuto,
                 ];
             }
             foreach ($scheduleList as &$schItem) {
@@ -1135,7 +1143,7 @@ class EventPlanning extends Ork3
         if ($mundaneId <= 0) {
             return BadToken();
         }
-        if (!valid_id($eventId) || !valid_id($detailId)) {
+        if (!valid_id($eventId) || !valid_id($detailId) || !$this->detailBelongsToEvent($detailId, $eventId)) {
             return InvalidParameter('Invalid Event ID.');
         }
         if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'create')) {
@@ -1157,65 +1165,155 @@ class EventPlanning extends Ork3
             return InvalidParameter('A role is required.');
         }
 
+        // Absent means "leave them as they are" on an update and "none" on an add.
+        $leadCategories = array_key_exists('LeadCategories', $request)
+            ? $this->normalizeLeadCategories($request['LeadCategories'])
+            : null;
+
         $priorState = $this->fetchStaffPriorState($detailId, $staffIdIn, $targetMundane);
-        $roleSafe = $this->sq($roleName);
+        $isUpdate = $staffIdIn > 0 && $priorState;
+
+        $this->db->BeginTrans();
+        try {
+            [$error, $staff, $leadsAdded, $leadsRemoved] = $this->writeStaffRow(
+                $detailId,
+                $isUpdate ? $staffIdIn : 0,
+                $targetMundane,
+                $roleName,
+                [$canManage, $canAttendance, $canSchedule, $canFeast],
+                $leadCategories
+            );
+            if ($error !== null) {
+                $this->db->RollbackTrans();
+                return $error;
+            }
+        } catch (\Throwable $e) {
+            $this->db->RollbackTrans();
+            throw $e;
+        }
+        if (!$this->db->CommitTrans()) {
+            return ProcessingError('Could not save the staff member.');
+        }
+
+        return [
+            'Status' => Success(),
+            'PriorState' => $priorState,
+            'Staff' => [
+                'EventStaffId' => $staff['EventStaffId'],
+                'MundaneId' => $targetMundane,
+                'Persona' => $staff['Persona'],
+                'RoleName' => $roleName,
+                'CanManage' => $canManage,
+                'CanAttendance' => $canAttendance,
+                'CanSchedule' => $canSchedule,
+                'CanFeast' => $canFeast,
+                'LeadCategories' => $staff['LeadCategories'],
+            ],
+            'LeadsAdded' => $leadsAdded,
+            'LeadsRemoved' => $leadsRemoved,
+        ];
+    }
+
+    /**
+     * Inserts or updates one staff row and, when $leadCategories is not null,
+     * replaces its lead categories and applies the fill and removal rules.
+     * Runs inside AddEventStaff's transaction.
+     *
+     * @param array{0: int, 1: int, 2: int, 3: int} $caps manage, attendance, schedule, feast
+     * @param list<string>|null $leadCategories null leaves the stored categories as they are
+     * @return array{0: ?array, 1: array{EventStaffId: int, Persona: string, LeadCategories: list<string>}, 2: int, 3: int}
+     */
+    private function writeStaffRow(
+        int $detailId,
+        int $staffIdIn,
+        int $targetMundane,
+        string $roleName,
+        array $caps,
+        ?array $leadCategories
+    ): array {
+        [$canManage, $canAttendance, $canSchedule, $canFeast] = $caps;
+        $failed = [ProcessingError('Could not save the staff member.'), [], 0, 0];
 
         $this->db->Clear();
-        if ($staffIdIn > 0 && $priorState) {
-            $this->db->Execute(
-                'UPDATE ' . DB_PREFIX . 'event_staff
-                 SET role_name = \'' . $roleSafe . '\',
-                     can_manage = ' . $canManage . ',
-                     can_attendance = ' . $canAttendance . ',
-                     can_schedule = ' . $canSchedule . ',
-                     can_feast = ' . $canFeast . '
-                 WHERE event_staff_id = ' . $staffIdIn . '
-                   AND event_calendardetail_id = ' . $detailId
+        $this->db->role_name = $roleName;
+        $capsSql = 'can_manage = ' . $canManage . ', can_attendance = ' . $canAttendance
+            . ', can_schedule = ' . $canSchedule . ', can_feast = ' . $canFeast;
+        if ($staffIdIn > 0) {
+            $ok = $this->db->ExecuteChecked(
+                'UPDATE ' . DB_PREFIX . 'event_staff SET role_name = :role_name, ' . $capsSql . '
+                 WHERE event_staff_id = ' . $staffIdIn . ' AND event_calendardetail_id = ' . $detailId
             );
         } else {
-            $this->db->Execute(
+            $ok = $this->db->ExecuteChecked(
                 'INSERT INTO ' . DB_PREFIX . 'event_staff
                  (event_calendardetail_id, mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast)
-                 VALUES (' . $detailId . ', ' . $targetMundane . ', \'' . $roleSafe . '\', '
+                 VALUES (' . $detailId . ', ' . $targetMundane . ', :role_name, '
                 . $canManage . ', ' . $canAttendance . ', ' . $canSchedule . ', ' . $canFeast . ')
                  ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), can_manage = VALUES(can_manage),
                  can_attendance = VALUES(can_attendance), can_schedule = VALUES(can_schedule),
                  can_feast = VALUES(can_feast)'
             );
         }
-
-        $this->db->Clear();
-        if ($staffIdIn > 0) {
-            $idrow = $this->db->DataSet(
-                'SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s
-                 LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
-                 WHERE s.event_staff_id = ' . $staffIdIn . ' LIMIT 1'
-            );
-        } else {
-            $idrow = $this->db->DataSet(
-                'SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s
-                 LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
-                 WHERE s.event_calendardetail_id = ' . $detailId . ' AND s.mundane_id = ' . $targetMundane
-                . ' ORDER BY s.event_staff_id DESC LIMIT 1'
-            );
+        if (!$ok) {
+            return $failed;
         }
 
-        $staffId = ($idrow && $idrow->Next()) ? (int) $idrow->event_staff_id : 0;
-        $persona = ($idrow && isset($idrow->persona)) ? (string) $idrow->persona : '';
+        $this->db->Clear();
+        $idrow = $this->db->DataSet(
+            'SELECT s.event_staff_id, s.mundane_id, m.persona FROM ' . DB_PREFIX . 'event_staff s
+             LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
+             WHERE s.event_calendardetail_id = ' . $detailId
+            . ($staffIdIn > 0
+                ? ' AND s.event_staff_id = ' . $staffIdIn
+                : ' AND s.mundane_id = ' . $targetMundane . ' ORDER BY s.event_staff_id DESC')
+            . ' LIMIT 1'
+        );
+        if (!$idrow || !$idrow->Next()) {
+            return $failed;
+        }
+        $staffId = (int) $idrow->event_staff_id;
+        $staffMundane = (int) $idrow->mundane_id;
+        $persona = (string) ($idrow->persona ?? '');
+
+        $current = $this->fetchStaffLeadCategories([$staffId])[$staffId] ?? [];
+        $leadsAdded = 0;
+        $leadsRemoved = 0;
+        if ($leadCategories !== null) {
+            $added = array_values(array_diff($leadCategories, $current));
+            $dropped = array_values(array_diff($current, $leadCategories));
+            foreach ($dropped as $category) {
+                $this->db->Clear();
+                $this->db->category = $category;
+                if (!$this->db->ExecuteChecked(
+                    'DELETE FROM ' . DB_PREFIX . 'event_staff_category
+                     WHERE event_staff_id = ' . $staffId . ' AND category = :category'
+                )) {
+                    return $failed;
+                }
+            }
+            foreach ($added as $category) {
+                $this->db->Clear();
+                $this->db->category = $category;
+                if (!$this->db->ExecuteChecked(
+                    'INSERT IGNORE INTO ' . DB_PREFIX . 'event_staff_category (event_staff_id, category)
+                     VALUES (' . $staffId . ', :category)'
+                )) {
+                    return $failed;
+                }
+            }
+            $leadsRemoved = $this->removeAutoCategoryLeads($detailId, $staffMundane, $dropped, $staffId);
+            $leadsAdded = $leadsRemoved === null ? null : $this->fillCategoryLeads($detailId, $staffMundane, $added);
+            if ($leadsRemoved === null || $leadsAdded === null) {
+                return $failed;
+            }
+            $current = $leadCategories;
+        }
 
         return [
-            'Status' => Success(),
-            'PriorState' => $priorState,
-            'Staff' => [
-                'EventStaffId' => $staffId,
-                'MundaneId' => $targetMundane,
-                'Persona' => $persona,
-                'RoleName' => $roleName,
-                'CanManage' => $canManage,
-                'CanAttendance' => $canAttendance,
-                'CanSchedule' => $canSchedule,
-                'CanFeast' => $canFeast,
-            ],
+            null,
+            ['EventStaffId' => $staffId, 'Persona' => $persona, 'LeadCategories' => $current],
+            $leadsAdded,
+            $leadsRemoved,
         ];
     }
 
@@ -1232,22 +1330,197 @@ class EventPlanning extends Ork3
         if (!valid_id($eventId) || !valid_id($detailId) || !valid_id($staffId)) {
             return InvalidParameter('Invalid parameters.');
         }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return InvalidParameter('Invalid Event ID.');
+        }
         if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'create')) {
             return NoAuthorization();
         }
 
         $priorState = $this->fetchStaffPriorStateById($staffId, $detailId);
+        $leadsRemoved = 0;
 
-        $this->db->Clear();
-        $this->db->Execute(
-            'DELETE FROM ' . DB_PREFIX . 'event_staff
-             WHERE event_staff_id = ' . $staffId . ' AND event_calendardetail_id = ' . $detailId
-        );
+        $this->db->BeginTrans();
+        try {
+            if ($priorState !== null) {
+                $leadsRemoved = $this->removeAutoCategoryLeads(
+                    $detailId,
+                    $priorState['mundane_id'],
+                    $priorState['lead_categories'],
+                    $staffId
+                );
+            }
+            $ok = $leadsRemoved !== null;
+            if ($ok) {
+                // Its category rows go with it (ON DELETE CASCADE).
+                $this->db->Clear();
+                $ok = $this->db->ExecuteChecked(
+                    'DELETE FROM ' . DB_PREFIX . 'event_staff
+                     WHERE event_staff_id = ' . $staffId . ' AND event_calendardetail_id = ' . $detailId
+                );
+            }
+            if (!$ok) {
+                $this->db->RollbackTrans();
+                return ProcessingError('Could not remove the staff member.');
+            }
+        } catch (\Throwable $e) {
+            $this->db->RollbackTrans();
+            throw $e;
+        }
+        if (!$this->db->CommitTrans()) {
+            return ProcessingError('Could not remove the staff member.');
+        }
 
         return [
             'Status' => Success(),
             'PriorState' => $priorState,
+            'LeadsRemoved' => $leadsRemoved,
         ];
+    }
+
+    /**
+     * Category names from a request, keeping only known schedule categories,
+     * de-duplicated and in definition order.
+     *
+     * @return list<string>
+     */
+    private function normalizeLeadCategories(mixed $raw): array
+    {
+        $wanted = [];
+        foreach (is_array($raw) ? $raw : [] as $name) {
+            if (is_string($name)) {
+                $wanted[trim($name)] = true;
+            }
+        }
+
+        return array_values(array_filter(
+            array_keys(self::SCHEDULE_CATEGORIES),
+            static fn (string $category): bool => isset($wanted[$category])
+        ));
+    }
+
+    /**
+     * Lead categories of the given staff rows, each list in definition order.
+     *
+     * @param list<int> $staffIds
+     * @return array<int, list<string>>
+     */
+    private function fetchStaffLeadCategories(array $staffIds): array
+    {
+        $staffIds = array_values(array_filter(array_map('intval', $staffIds), 'valid_id'));
+        if ($staffIds === []) {
+            return [];
+        }
+        $this->db->Clear();
+        $rows = $this->db->DataSet(
+            'SELECT event_staff_id, category FROM ' . DB_PREFIX . 'event_staff_category
+             WHERE event_staff_id IN (' . implode(',', $staffIds) . ')'
+        );
+        $found = [];
+        while ($rows && $rows->Next()) {
+            $found[(int) $rows->event_staff_id][(string) $rows->category] = true;
+        }
+        $order = array_keys(self::SCHEDULE_CATEGORIES);
+        $out = [];
+        foreach ($found as $staffId => $set) {
+            $out[$staffId] = array_values(array_filter($order, static fn (string $c): bool => isset($set[$c])));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Fill rule: on every item of the occurrence whose primary category is one of
+     * $categories and which has no lead at all, adds $mundaneId as an auto-filled lead.
+     *
+     * @param list<string> $categories
+     * @return int|null rows inserted, or null when a write failed
+     */
+    private function fillCategoryLeads(int $detailId, int $mundaneId, array $categories): ?int
+    {
+        $added = 0;
+        foreach ($categories as $category) {
+            $this->db->Clear();
+            $this->db->category = $category;
+            $rows = $this->db->DataSet(
+                'SELECT s.event_schedule_id FROM ' . DB_PREFIX . 'event_schedule s
+                 WHERE s.event_calendardetail_id = ' . $detailId . ' AND s.category = :category
+                   AND NOT EXISTS (SELECT 1 FROM ' . DB_PREFIX . 'event_schedule_lead sl
+                                   WHERE sl.event_schedule_id = s.event_schedule_id)'
+            );
+            $scheduleIds = [];
+            while ($rows && $rows->Next()) {
+                $scheduleIds[] = (int) $rows->event_schedule_id;
+            }
+            foreach ($scheduleIds as $scheduleId) {
+                $this->db->Clear();
+                if (!$this->db->ExecuteChecked(
+                    'INSERT INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
+                     VALUES (' . $scheduleId . ', ' . $mundaneId . ', 1)'
+                )) {
+                    return null;
+                }
+                $added++;
+            }
+        }
+
+        return $added;
+    }
+
+    /**
+     * Removal rule: deletes $mundaneId's auto-filled leads on items of the occurrence
+     * whose primary category is one of $categories. A category the same person still
+     * leads through another staff row of this occurrence is left alone. Hand-picked
+     * leads (is_auto = 0) are never touched.
+     *
+     * @param list<string> $categories
+     * @return int|null rows deleted, or null when a write failed
+     */
+    private function removeAutoCategoryLeads(int $detailId, int $mundaneId, array $categories, int $staffId): ?int
+    {
+        if ($categories === []) {
+            return 0;
+        }
+        $this->db->Clear();
+        $others = $this->db->DataSet(
+            'SELECT event_staff_id FROM ' . DB_PREFIX . 'event_staff
+             WHERE event_calendardetail_id = ' . $detailId . ' AND mundane_id = ' . $mundaneId
+            . ' AND event_staff_id <> ' . $staffId
+        );
+        $otherIds = [];
+        while ($others && $others->Next()) {
+            $otherIds[] = (int) $others->event_staff_id;
+        }
+        $stillLed = array_merge([], ...array_values($this->fetchStaffLeadCategories($otherIds)));
+
+        $removed = 0;
+        foreach (array_diff($categories, $stillLed) as $category) {
+            $this->db->Clear();
+            $this->db->category = $category;
+            $rows = $this->db->DataSet(
+                'SELECT sl.event_schedule_lead_id FROM ' . DB_PREFIX . 'event_schedule_lead sl
+                 JOIN ' . DB_PREFIX . 'event_schedule s ON s.event_schedule_id = sl.event_schedule_id
+                 WHERE s.event_calendardetail_id = ' . $detailId . ' AND s.category = :category
+                   AND sl.mundane_id = ' . $mundaneId . ' AND sl.is_auto = 1'
+            );
+            $leadIds = [];
+            while ($rows && $rows->Next()) {
+                $leadIds[] = (int) $rows->event_schedule_lead_id;
+            }
+            if ($leadIds === []) {
+                continue;
+            }
+            $this->db->Clear();
+            if (!$this->db->ExecuteChecked(
+                'DELETE FROM ' . DB_PREFIX . 'event_schedule_lead
+                 WHERE event_schedule_lead_id IN (' . implode(',', $leadIds) . ')'
+            )) {
+                return null;
+            }
+            $removed += count($leadIds);
+        }
+
+        return $removed;
     }
 
     public function AddEventSchedule($request)
@@ -1779,12 +2052,13 @@ class EventPlanning extends Ork3
                 if (!valid_id($lmid)) {
                     continue;
                 }
+                $isAuto = $this->leadIsAuto($lead);
                 $this->db->Clear();
                 $this->db->Execute(
-                    'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id)
-                     VALUES (' . $scheduleId . ', ' . $lmid . ')'
+                    'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
+                     VALUES (' . $scheduleId . ', ' . $lmid . ', ' . (int) $isAuto . ')'
                 );
-                $leadsOut[] = ['MundaneId' => $lmid, 'Persona' => $lead['Persona'] ?? ''];
+                $leadsOut[] = ['MundaneId' => $lmid, 'Persona' => $lead['Persona'] ?? '', 'Auto' => $isAuto];
             }
         }
 
@@ -1824,8 +2098,11 @@ class EventPlanning extends Ork3
             }
             [$error, $scheduleId] = $this->insertScheduleItem($detailId, $op['item'], $canFeast);
         } elseif ($kind === 'update' || $kind === 'remove') {
-            $scheduleId = is_numeric($op['id'] ?? null) ? (int) $op['id'] : 0;
-            $stored = valid_id($scheduleId) ? $this->fetchScheduleTimesOnDetail($scheduleId, $detailId) : null;
+            $scheduleId = $this->strictId($op['id'] ?? null);
+            if ($scheduleId === 0) {
+                return [InvalidParameter('Invalid parameters.'), null];
+            }
+            $stored = $this->fetchScheduleTimesOnDetail($scheduleId, $detailId);
             if ($stored === null) {
                 return [InvalidParameter('Schedule item not found.'), null];
             }
@@ -1995,7 +2272,10 @@ class EventPlanning extends Ork3
         return $ok ? null : ProcessingError('Could not save the schedule.');
     }
 
-    /** Sets an item's leads to $leads (list of ['MundaneId' => int]); $clearFirst drops the old ones. */
+    /**
+     * Sets an item's leads to $leads (list of ['MundaneId' => int, 'Auto' => bool]);
+     * $clearFirst drops the old ones.
+     */
     private function replaceScheduleLeads(int $scheduleId, mixed $leads, bool $clearFirst): ?array
     {
         if (!is_array($leads)) {
@@ -2010,14 +2290,14 @@ class EventPlanning extends Ork3
             }
         }
         foreach ($leads as $lead) {
-            $leadId = (is_array($lead) && is_numeric($lead['MundaneId'] ?? null)) ? (int) $lead['MundaneId'] : 0;
-            if (!valid_id($leadId)) {
+            $leadId = is_array($lead) ? $this->strictId($lead['MundaneId'] ?? null) : 0;
+            if ($leadId === 0) {
                 continue;
             }
             $this->db->Clear();
             if (!$this->db->ExecuteChecked(
-                'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id)
-                 VALUES (' . $scheduleId . ', ' . $leadId . ')'
+                'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
+                 VALUES (' . $scheduleId . ', ' . $leadId . ', ' . (int) $this->leadIsAuto($lead) . ')'
             )) {
                 return ProcessingError('Could not save the schedule.');
             }
@@ -2100,6 +2380,28 @@ class EventPlanning extends Ork3
     }
 
     /** Trimmed string for a scalar request value; '' for anything else. */
+    /**
+     * A strictly positive integer id from request data, or 0. Digit strings are
+     * accepted; floats, exponents ("1e3"), decimals ("5.9") and signs are not.
+     */
+    private function strictId(mixed $value): int
+    {
+        if (is_int($value)) {
+            return valid_id($value) ? $value : 0;
+        }
+        if (is_string($value) && preg_match('/^[1-9][0-9]{0,9}$/', $value) && (int) $value <= 2147483647) {
+            return (int) $value;
+        }
+
+        return 0;
+    }
+
+    /** Whether a lead entry from a request is marked auto-filled. */
+    private function leadIsAuto(mixed $lead): bool
+    {
+        return is_array($lead) && !empty($lead['Auto']) && $lead['Auto'] !== 'false';
+    }
+
     private function scheduleText(mixed $value): string
     {
         return is_scalar($value) ? trim((string) $value) : '';
@@ -2218,15 +2520,18 @@ class EventPlanning extends Ork3
         if (!$priorRs || !$priorRs->Next()) {
             return null;
         }
-
-        return [
-            'event_staff_id' => (int) $priorRs->event_staff_id,
+        $staffId = (int) $priorRs->event_staff_id;
+        $prior = [
+            'event_staff_id' => $staffId,
             'role_name' => (string) $priorRs->role_name,
             'can_manage' => (int) $priorRs->can_manage,
             'can_attendance' => (int) $priorRs->can_attendance,
             'can_schedule' => (int) $priorRs->can_schedule,
             'can_feast' => (int) $priorRs->can_feast,
         ];
+        $prior['lead_categories'] = $this->fetchStaffLeadCategories([$staffId])[$staffId] ?? [];
+
+        return $prior;
     }
 
     private function fetchStaffPriorStateById(int $staffId, int $detailId): ?array
@@ -2240,8 +2545,7 @@ class EventPlanning extends Ork3
         if (!$priorRs || !$priorRs->Next()) {
             return null;
         }
-
-        return [
+        $prior = [
             'event_staff_id' => (int) $priorRs->event_staff_id,
             'mundane_id' => (int) $priorRs->mundane_id,
             'role_name' => (string) $priorRs->role_name,
@@ -2250,6 +2554,9 @@ class EventPlanning extends Ork3
             'can_schedule' => (int) $priorRs->can_schedule,
             'can_feast' => (int) $priorRs->can_feast,
         ];
+        $prior['lead_categories'] = $this->fetchStaffLeadCategories([$staffId])[$staffId] ?? [];
+
+        return $prior;
     }
 
     private function copyDetailFeesAndLinks(int $srcDetailId, int $newDetailId): void
@@ -2357,20 +2664,21 @@ class EventPlanning extends Ork3
             $srcKeys = implode(',', array_map('intval', array_keys($srcSchedIds)));
             $this->db->Clear();
             $leadsRs = $this->db->DataSet(
-                'SELECT event_schedule_id, mundane_id FROM ' . DB_PREFIX . 'event_schedule_lead
+                'SELECT event_schedule_id, mundane_id, is_auto FROM ' . DB_PREFIX . 'event_schedule_lead
                  WHERE event_schedule_id IN (' . $srcKeys . ')'
             );
             if ($leadsRs) {
                 while ($leadsRs->Next()) {
                     $newSid = $srcSchedIds[(int) $leadsRs->event_schedule_id] ?? 0;
                     $mid = (int) $leadsRs->mundane_id;
+                    $isAuto = (int) $leadsRs->is_auto === 1 ? 1 : 0;
                     if ($newSid <= 0 || !$this->isMundaneEligible($mid)) {
                         continue;
                     }
                     $this->db->Clear();
                     $this->db->Execute(
-                        'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id)
-                         VALUES (' . $newSid . ', ' . $mid . ')'
+                        'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
+                         VALUES (' . $newSid . ', ' . $mid . ', ' . $isAuto . ')'
                     );
                 }
             }
@@ -2381,12 +2689,13 @@ class EventPlanning extends Ork3
     {
         $this->db->Clear();
         $staffRs = $this->db->DataSet(
-            'SELECT mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast
+            'SELECT event_staff_id, mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast
              FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $srcDetailId
         );
         if ($staffRs) {
             while ($staffRs->Next()) {
                 $mid = (int) $staffRs->mundane_id;
+                $srcStaffId = (int) $staffRs->event_staff_id;
                 if (!$this->isMundaneEligible($mid)) {
                     continue;
                 }
@@ -2401,6 +2710,21 @@ class EventPlanning extends Ork3
                      can_attendance = VALUES(can_attendance), can_schedule = VALUES(can_schedule),
                      can_feast = VALUES(can_feast)'
                 );
+                $this->db->Clear();
+                $newStaff = $this->db->DataSet(
+                    'SELECT event_staff_id FROM ' . DB_PREFIX . 'event_staff
+                     WHERE event_calendardetail_id = ' . $newDetailId . ' AND mundane_id = ' . $mid
+                    . ' ORDER BY event_staff_id DESC LIMIT 1'
+                );
+                $newStaffId = ($newStaff && $newStaff->Next()) ? (int) $newStaff->event_staff_id : 0;
+                if ($newStaffId > 0) {
+                    $this->db->Clear();
+                    $this->db->Execute(
+                        'INSERT IGNORE INTO ' . DB_PREFIX . 'event_staff_category (event_staff_id, category)
+                         SELECT ' . $newStaffId . ', category FROM ' . DB_PREFIX . 'event_staff_category
+                         WHERE event_staff_id = ' . $srcStaffId
+                    );
+                }
             }
         }
     }

@@ -383,6 +383,15 @@ class Controller_EventAjax extends Controller
         $can_schedule   = (int)(bool)($_POST['CanSchedule']   ?? 0);
         $can_feast      = (int)(bool)($_POST['CanFeast']      ?? 0);
         $staff_id_in  = (int)($_POST['StaffId'] ?? 0);
+        // JSON array of category names; missing means "leave as they are".
+        $lead_categories = null;
+        if (isset($_POST['LeadCategories'])) {
+            $lead_categories = json_decode((string)$_POST['LeadCategories'], true);
+            if (!is_array($lead_categories)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid lead categories.']);
+                exit;
+            }
+        }
 
         if (!valid_id($mundane_id)) {
             echo json_encode(['status' => 1, 'error' => 'A player must be selected.']);
@@ -393,8 +402,7 @@ class Controller_EventAjax extends Controller
             exit;
         }
 
-        $this->load_model('EventPlanning');
-        $r = $this->EventPlanning->add_staff([
+        $request = [
             'Token' => $this->session->token,
             'EventId' => $event_id,
             'EventCalendarDetailId' => $detail_id,
@@ -405,7 +413,13 @@ class Controller_EventAjax extends Controller
             'CanAttendance' => $can_attendance,
             'CanSchedule' => $can_schedule,
             'CanFeast' => $can_feast,
-        ]);
+        ];
+        if ($lead_categories !== null) {
+            $request['LeadCategories'] = $lead_categories;
+        }
+
+        $this->load_model('EventPlanning');
+        $r = $this->EventPlanning->add_staff($request);
 
         $statusCode = is_array($r['Status'] ?? null) ? (int)($r['Status']['Status'] ?? 1) : (int)($r['Status'] ?? 1);
         if ($statusCode !== 0) {
@@ -436,9 +450,15 @@ class Controller_EventAjax extends Controller
                 'can_attendance' => $can_attendance,
                 'can_schedule'   => $can_schedule,
                 'can_feast'      => $can_feast,
+                'lead_categories' => $staff['LeadCategories'] ?? [],
             ]
         );
-        echo json_encode(['status' => 0, 'staff' => $staff]);
+        echo json_encode([
+            'status'       => 0,
+            'staff'        => $staff,
+            'leadsAdded'   => (int)($r['LeadsAdded'] ?? 0),
+            'leadsRemoved' => (int)($r['LeadsRemoved'] ?? 0),
+        ]);
         exit;
     }
 
@@ -485,16 +505,32 @@ class Controller_EventAjax extends Controller
                 null
             );
         }
-        echo json_encode(['status' => 0]);
+        echo json_encode(['status' => 0, 'leadsRemoved' => (int)($r['LeadsRemoved'] ?? 0)]);
         exit;
     }
 
+    // Leads = JSON list of {MundaneId, Persona?, Auto?}; Auto marks a lead filled in by a category lead.
     private function _decodeScheduleLeads(): array
     {
         $leadsJson = trim($_POST['Leads'] ?? '');
         $leadsIn = ($leadsJson !== '') ? json_decode($leadsJson, true) : [];
+        if (!is_array($leadsIn)) {
+            return [];
+        }
 
-        return is_array($leadsIn) ? $leadsIn : [];
+        $leads = [];
+        foreach ($leadsIn as $lead) {
+            if (!is_array($lead)) {
+                continue;
+            }
+            $leads[] = [
+                'MundaneId' => (int)($lead['MundaneId'] ?? 0),
+                'Persona'   => is_string($lead['Persona'] ?? null) ? $lead['Persona'] : '',
+                'Auto'      => !empty($lead['Auto']) ? 1 : 0,
+            ];
+        }
+
+        return $leads;
     }
 
     private function _scheduleRequestFromPost(int $eventId, int $detailId, int $scheduleId = 0): array

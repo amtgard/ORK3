@@ -519,6 +519,7 @@ final class EventPlanningTest extends TestCase
         $this->assertSame(0, $this->fixture->countSchedule($ctx['detail_id']));
         $tooMany = $this->batch($ctx, $token, array_fill(0, 201, $op));
         $this->assertNotSame(0, $tooMany['Status']['Status']);
+        $this->assertSame(-1, $tooMany['FailedIndex']);
         $this->assertSame(0, $this->fixture->countSchedule($ctx['detail_id']));
         $this->assertSame(0, $this->batch($ctx, $token, [])['Status']['Status']);
     }
@@ -593,5 +594,229 @@ final class EventPlanningTest extends TestCase
         $this->assertSame(0, $ok['Status']['Status']);
         $this->assertSame('Listed', $ok['ScheduleList'][0]['Title']);
         $this->assertIsArray($ok['StaffList']);
+    }
+
+    public function testBatchUpdateReplacesLeadsWhenSent(): void
+    {
+        [$ctx, $token] = $this->batchContext('batch-leads');
+        $d = $this->batchDay();
+        $first = $this->fixture->createPlayer('batch-leads-1');
+        $other = $this->fixture->createPlayer('batch-leads-2');
+        $id = (int) $this->batch($ctx, $token, [['op' => 'add', 'cid' => 'c1', 'item' => [
+            'Title' => 'Mothman', 'StartTime' => "$d 12:00", 'EndTime' => "$d 12:45", 'Leads' => [['MundaneId' => $first]],
+        ]]])['Results'][0]['id'];
+        $r = $this->batch($ctx, $token, [['op' => 'update', 'id' => $id, 'fields' => ['Leads' => [['MundaneId' => $other]]]]]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame([['mundane_id' => $other, 'is_auto' => 0]], $this->fixture->fetchScheduleLeads($id));
+        $r2 = $this->batch($ctx, $token, [['op' => 'update', 'id' => $id, 'fields' => ['Leads' => []]]]);
+        $this->assertSame(0, $r2['Status']['Status']);
+        $this->assertSame([], $this->fixture->fetchScheduleLeads($id));
+    }
+
+    public function testBatchRejectsAMalformedOp(): void
+    {
+        [$ctx, $token] = $this->batchContext('batch-malformed');
+        $d = $this->batchDay();
+        $add = static fn (string $cid): array => ['op' => 'add', 'cid' => $cid, 'item' => ['Title' => 'T ' . $cid, 'StartTime' => "$d 09:00", 'EndTime' => "$d 10:00"]];
+        $existing = (int) $this->batch($ctx, $token, [$add('c0')])['Results'][0]['id'];
+        $bad = [
+            ['op' => 'explode'],
+            ['op' => 'update', 'id' => $existing, 'fields' => 'nope'],
+            ['op' => 'update', 'id' => $existing . '.9', 'fields' => ['Title' => 'Coerced']],
+            ['op' => 'update', 'id' => '1e3', 'fields' => ['Title' => 'Coerced']],
+            ['op' => 'remove', 'id' => $existing . '.0'],
+        ];
+        foreach ($bad as $op) {
+            $r = $this->batch($ctx, $token, [$add('c1'), $op]);
+            $this->assertNotSame(0, $r['Status']['Status'], json_encode($op));
+            $this->assertSame(1, $r['FailedIndex'], json_encode($op));
+            $this->assertSame(1, $this->fixture->countSchedule($ctx['detail_id']), json_encode($op));
+        }
+        $this->assertSame('T c0', $this->fixture->fetchScheduleRow($existing)['title']);
+    }
+
+    /** Adds or edits a staff row through the domain and returns the response. */
+    private function saveStaff(array $ctx, string $token, int $mundaneId, array $leadCategories, int $staffId = 0): array
+    {
+        unset($_SESSION['is_authorized_mundane_id']);
+        return $this->planning->AddEventStaff([
+            'Token' => $token, 'EventId' => $ctx['event_id'], 'EventCalendarDetailId' => $ctx['detail_id'],
+            'MundaneId' => $mundaneId, 'RoleName' => 'Warcrat', 'CanManage' => 0, 'CanAttendance' => 0,
+            'CanSchedule' => 0, 'CanFeast' => 0, 'StaffId' => $staffId, 'LeadCategories' => $leadCategories,
+        ]);
+    }
+
+    public function testStaffLeadCategoriesAreSavedInDefinitionOrder(): void
+    {
+        [$ctx, $token] = $this->batchContext('lead-save');
+        $warcrat = $this->fixture->createPlayer('lead-save-p');
+        $r = $this->saveStaff($ctx, $token, $warcrat, ['Class', 'Jousting', 'Battlegame']);
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame(['Battlegame', 'Class'], $r['Staff']['LeadCategories']);
+        $staffId = (int) $r['Staff']['EventStaffId'];
+        $this->assertSame(['Battlegame', 'Class'], $this->fixture->fetchStaffCategories($staffId));
+        $r2 = $this->saveStaff($ctx, $token, $warcrat, ['Court'], $staffId);
+        $this->assertSame(['Court'], $this->fixture->fetchStaffCategories($staffId));
+        $this->assertSame(['Court'], $r2['Staff']['LeadCategories']);
+    }
+
+    public function testNewCategoryLeadFillsOnlyItemsWithNoLead(): void
+    {
+        [$ctx, $token] = $this->batchContext('lead-fill');
+        $warcrat = $this->fixture->createPlayer('lead-fill-w');
+        $other = $this->fixture->createPlayer('lead-fill-o');
+        $unled = $this->fixture->insertSchedule($ctx['detail_id'], 'Mothman', 'Battlegame');
+        $led = $this->fixture->insertSchedule($ctx['detail_id'], 'Jersey Devil', 'Battlegame');
+        $this->fixture->insertScheduleLead($led, $other);
+        $class = $this->fixture->insertSchedule($ctx['detail_id'], 'Naalbinding', 'Class');
+        $r = $this->saveStaff($ctx, $token, $warcrat, ['Battlegame']);
+        $this->assertSame(1, $r['LeadsAdded']);
+        $this->assertSame(0, $r['LeadsRemoved']);
+        $this->assertSame([['mundane_id' => $warcrat, 'is_auto' => 1]], $this->fixture->fetchScheduleLeads($unled));
+        $this->assertSame([['mundane_id' => $other, 'is_auto' => 0]], $this->fixture->fetchScheduleLeads($led));
+        $this->assertSame([], $this->fixture->fetchScheduleLeads($class));
+    }
+
+    public function testDroppingACategoryLeadRemovesOnlyAutoFilledLeads(): void
+    {
+        [$ctx, $token] = $this->batchContext('lead-drop');
+        $warcrat = $this->fixture->createPlayer('lead-drop-w');
+        $auto = $this->fixture->insertSchedule($ctx['detail_id'], 'Mothman', 'Battlegame');
+        $r = $this->saveStaff($ctx, $token, $warcrat, ['Battlegame']);
+        $staffId = (int) $r['Staff']['EventStaffId'];
+        $hand = $this->fixture->insertSchedule($ctx['detail_id'], 'Her Own Game', 'Battlegame');
+        $this->fixture->insertScheduleLead($hand, $warcrat);
+        $otherCat = $this->fixture->insertSchedule($ctx['detail_id'], 'Her Class', 'Class');
+        $this->fixture->insertScheduleLead($otherCat, $warcrat, true);
+        $r2 = $this->saveStaff($ctx, $token, $warcrat, [], $staffId);
+        $this->assertSame(1, $r2['LeadsRemoved']);
+        $this->assertSame([], $this->fixture->fetchScheduleLeads($auto));
+        $this->assertCount(1, $this->fixture->fetchScheduleLeads($hand));
+        $this->assertCount(1, $this->fixture->fetchScheduleLeads($otherCat));
+    }
+
+    public function testRemovingStaffAppliesTheRemovalRule(): void
+    {
+        [$ctx, $token] = $this->batchContext('lead-remove');
+        $warcrat = $this->fixture->createPlayer('lead-remove-w');
+        $auto = $this->fixture->insertSchedule($ctx['detail_id'], 'Mothman', 'Battlegame');
+        $staffId = (int) $this->saveStaff($ctx, $token, $warcrat, ['Battlegame'])['Staff']['EventStaffId'];
+        $hand = $this->fixture->insertSchedule($ctx['detail_id'], 'Her Own Game', 'Battlegame');
+        $this->fixture->insertScheduleLead($hand, $warcrat);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->planning->RemoveEventStaff(['Token' => $token, 'EventId' => $ctx['event_id'], 'EventCalendarDetailId' => $ctx['detail_id'], 'StaffId' => $staffId]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame(1, $r['LeadsRemoved']);
+        $this->assertSame([], $this->fixture->fetchScheduleLeads($auto));
+        $this->assertCount(1, $this->fixture->fetchScheduleLeads($hand));
+        $this->assertSame([], $this->fixture->fetchStaffCategories($staffId));
+    }
+
+    public function testLeadAutoFlagRoundTripsThroughBatchAndLists(): void
+    {
+        [$ctx, $token] = $this->batchContext('lead-auto');
+        $d = $this->batchDay();
+        $a = $this->fixture->createPlayer('lead-auto-a');
+        $b = $this->fixture->createPlayer('lead-auto-b');
+        $r = $this->batch($ctx, $token, [['op' => 'add', 'cid' => 'c1', 'item' => [
+            'Title' => 'Mothman', 'StartTime' => "$d 12:00", 'EndTime' => "$d 12:45", 'Category' => 'Battlegame',
+            'Leads' => [['MundaneId' => $a, 'Auto' => 1], ['MundaneId' => $b]],
+        ]]]);
+        $id = (int) $r['Results'][0]['id'];
+        $byId = array_column($r['Results'][0]['schedule']['Leads'], 'Auto', 'MundaneId');
+        $this->assertSame([$a => true, $b => false], $byId);
+        $this->batch($ctx, $token, [['op' => 'update', 'id' => $id, 'fields' => ['Leads' => [['MundaneId' => $a]]]]]);
+        $this->assertSame([['mundane_id' => $a, 'is_auto' => 0]], $this->fixture->fetchScheduleLeads($id));
+        unset($_SESSION['is_authorized_mundane_id']);
+        $list = $this->planning->GetScheduleForManage(['Token' => $token, 'EventId' => $ctx['event_id'], 'EventCalendarDetailId' => $ctx['detail_id']]);
+        $this->assertArrayHasKey('LeadCategories', $list['StaffList'][0] ?? ['LeadCategories' => []]);
+    }
+
+    public function testStaffChangesRejectAnOccurrenceOfAnotherEvent(): void
+    {
+        [$ctxA, $tokenA] = $this->batchContext('staff-own-a');
+        $ctxB = $this->fixture->createPublishedEvent('staff-own-b');
+        $theirs = $this->fixture->createPlayer('staff-own-theirs');
+        $staffB = $this->fixture->insertStaff($ctxB['detail_id'], $theirs, 'Theirs');
+        $planted = $this->fixture->createPlayer('staff-own-planted');
+        $mixed = ['Token' => $tokenA, 'EventId' => $ctxA['event_id'], 'EventCalendarDetailId' => $ctxB['detail_id']];
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $add = $this->planning->AddEventStaff($mixed + ['MundaneId' => $planted, 'RoleName' => 'Planted', 'LeadCategories' => ['Battlegame']]);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $edit = $this->planning->AddEventStaff($mixed + ['MundaneId' => $theirs, 'RoleName' => 'Hijacked', 'StaffId' => $staffB]);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $remove = $this->planning->RemoveEventStaff($mixed + ['StaffId' => $staffB]);
+
+        $code = static fn (array $r): int => is_array($r['Status']) ? $r['Status']['Status'] : $r['Status'];
+        $this->assertNotSame(0, $code($add));
+        $this->assertNotSame(0, $code($edit));
+        $this->assertNotSame(0, $code($remove));
+        $this->assertTrue($this->fixture->staffExists($staffB));
+        $this->assertSame('Theirs', $this->fixture->fetchStaffRow($staffB)['role_name']);
+        $this->assertSame([], $this->fixture->fetchStaffCategories($staffB));
+        global $DB;
+        $DB->Clear();
+        $count = $DB->DataSet(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int) $ctxB['detail_id']
+        );
+        $this->assertTrue($count && $count->Next());
+        $this->assertSame(1, (int) $count->c);
+    }
+
+    public function testCopyCarriesCategoryLeadsAndAutoFlags(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $kingdomId = $this->fixture->firstKingdomId();
+        $source = $this->fixture->createPastPublishedEventAtPark($parkId, $kingdomId, 'copy-leads-from');
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $parkId, AUTH_CREATE, 'copy-leads-create');
+        $warcrat = $this->fixture->createPlayer('copy-leads-w');
+        $this->fixture->insertSchedule($source['detail_id'], 'Mothman', 'Battlegame');
+        $saved = $this->saveStaff($source, $grantor['token'], $warcrat, ['Battlegame']);
+        $this->assertSame(1, $saved['LeadsAdded']);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->planning->CreateEventWithCopy([
+            'Token' => $grantor['token'],
+            'Name' => 'T04EVPL Copy Leads Target',
+            'KingdomId' => $kingdomId,
+            'ParkId' => $parkId,
+            'SourceEventId' => $source['event_id'],
+            'NewStart' => date('Y-m-d H:i:s', strtotime('+14 days')),
+            'NewEnd' => date('Y-m-d H:i:s', strtotime('+14 days +6 hours')),
+            'Modules' => ['staff' => true, 'schedule' => true],
+            'Status' => 'published',
+        ]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $newEventId = (int) $r['EventId'];
+        $this->fixture->trackEvent($newEventId);
+
+        global $DB;
+        $DB->Clear();
+        $detailRow = $DB->DataSet(
+            'SELECT event_calendardetail_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $newEventId . ' LIMIT 1'
+        );
+        $this->assertTrue($detailRow && $detailRow->Next());
+        $newDetailId = (int) $detailRow->event_calendardetail_id;
+        $this->fixture->trackDetail($newDetailId);
+
+        $DB->Clear();
+        $staffRow = $DB->DataSet(
+            'SELECT event_staff_id FROM ' . DB_PREFIX . 'event_staff
+             WHERE event_calendardetail_id = ' . $newDetailId . ' AND mundane_id = ' . $warcrat . ' LIMIT 1'
+        );
+        $this->assertTrue($staffRow && $staffRow->Next());
+        $this->assertSame(['Battlegame'], $this->fixture->fetchStaffCategories((int) $staffRow->event_staff_id));
+
+        $DB->Clear();
+        $schedRow = $DB->DataSet(
+            'SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule
+             WHERE event_calendardetail_id = ' . $newDetailId . " AND title = 'Mothman' LIMIT 1"
+        );
+        $this->assertTrue($schedRow && $schedRow->Next());
+        $this->assertSame(
+            [['mundane_id' => $warcrat, 'is_auto' => 1]],
+            $this->fixture->fetchScheduleLeads((int) $schedRow->event_schedule_id)
+        );
     }
 }
