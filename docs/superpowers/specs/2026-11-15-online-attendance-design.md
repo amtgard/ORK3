@@ -170,8 +170,8 @@ The suggestion only sets the default; the officer can always flip it.
 
 ### Badges on lists (PR 1)
 
-Rows with `online = 1` show a small "Online" badge (FA icon + label, `data-tip`
-"Signed in online") on: player attendance tab, per-date and per-event attendance lists,
+Rows with `online = 1` show a small wifi icon (icon only, no label; `data-tip` and
+`aria-label` "Signed in online") on: player attendance tab, per-date and per-event attendance lists,
 event occurrence attendee list, Live dashboard ticker. Lists keep counting all rows. CSV
 exports that list attendance rows gain an `Online` column (Yes/blank).
 

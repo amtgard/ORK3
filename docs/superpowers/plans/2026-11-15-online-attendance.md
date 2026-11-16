@@ -20,7 +20,7 @@
 - **Config read:** `(int)$configs['CountOnlineAttendance']['Value'] === 1`. Seed values JSON-quoted (`'"1"'`, `'"0"'`), `var_type='fixed'`, `user_setting=1`.
 - **Setting label/hint, verbatim:** label `Count Online Attendance`; hint `When off, sign-ins marked Online are not counted toward Voting Eligibility for this Kingdom. Class credits, active status, player records, other reports and attendance history are not affected.`
 - **Link tooltip copy, verbatim:** `Not for an online event? Disable this.`
-- **Badge:** label `Online`, FA icon `fa-solid fa-wifi`, `data-tip="Signed in online"`. Never `title=`.
+- **Badge (user-revised):** icon only — FA `fa-solid fa-wifi`, no text label, no pill/border; muted colour in both themes; `data-tip="Signed in online"` + `aria-label="Signed in online"`. Never `title=`.
 - **No native `confirm/alert/prompt`.** Dark mode for every new control via `html[data-theme="dark"]`. No horizontal scroll at 390px.
 - **Before editing a PHP file** run `awk '/^\t/{c++}END{print c+0}' <file>`. `class.Report.php` reports ~1369 tab lines — they are inside SQL string literals; edit in place, never reformat. Any other non-zero count: STOP and report.
 - **Never stage `system/lib/ork3/class.Authorization.php`.** Never `git add -A`/`git add .`; `git diff --cached --stat` before every commit. Never `git stash`.
