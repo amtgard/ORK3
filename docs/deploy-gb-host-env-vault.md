@@ -51,7 +51,7 @@ External toolkits (install on the host or as a sibling checkout on a laptop):
 | Green | `ork3-php8-app-green` | **19080** |
 | Blue | `ork3-php8-app-blue` | **29080** |
 
-**Database:** `ork3-php8-db` (and staging DB if used) stays on **`ork3-php8-net`**. It is **not** slot-swapped.
+**Database:** MariaDB stays on **`ork3-php8-net`** and is **not** slot-swapped. Dev **`gb deploy`** (via **`GB_HOOK_POST_COMMAND`**) starts **`ork3-php8-test-db`**, runs **`bin/ork-db deploy-sandbox`**, sets profile **`dev`** (sandbox / `ork_test`), and curls the UI — no separate ork-db step after deploy.
 
 **Blue-green behavior:** `generic-green-blue` with **`GB_NGINX_STRATEGY=color-symlink`** starts or refreshes the **inactive** slot, health-checks it, then points nginx at that slot. The **previous color keeps running**. Use **`gb revert`** to point nginx at the other slot again. This replaces the old `greenblue.sh` pattern that stopped the old container.
 
@@ -176,11 +176,15 @@ Edit **`.env`** for non-secrets only. Vault inject keys belong in the profile en
 
 ---
 
-## Phase 4 — Deploy and verify (local)
+## Phase 4 — Deploy (local, lights out)
+
+One command brings up web + mirror DB + sandbox DB, syncs/render secrets, builds the sandbox schema, points the app at **`ork_test`**, and seeds test logins (`megiddo` / `test-db-player`, `admin` / `password`):
 
 ```bash
 /path/to/generic-green-blue-deployment/bin/gb /full/path/to/ORK3 deploy
 ```
+
+Optional checks after deploy:
 
 Confirm the active slot has secrets mounted (replace container name with the slot nginx currently targets, or check both):
 

@@ -18,6 +18,8 @@ services:
       - ENVIRONMENT=DEV
       - HOST_ENV_SECRETS_DIR=/run/secrets
       - HOST_ENV_VAULT_RUNTIME_DIR=/run/host-env-vault
+      - ORK3_TEST_DB_HOST=ork3-php8-test-db
+      - ORK3_TEST_DB_PORT=3306
     container_name: ork3-php8-app
     hostname: ork3-php8-app
     networks:
@@ -49,3 +51,4 @@ volumes:
 networks:
   ork3-php8-net:
     name: ork3-php8-net
+    external: true

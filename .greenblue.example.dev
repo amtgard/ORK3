@@ -36,6 +36,8 @@ GB_APP_INSTALL="none"
 
 GB_HOOK_HEV_AFTER_RENDER="scripts/gb-hev-after-render.sh"
 GB_HOOK_PRE_DEPLOY="scripts/gb-pre-hev-sync.sh"
+# After dev stack is up: sandbox MariaDB, ork-db deploy-sandbox, profile dev, health check.
+GB_HOOK_POST_COMMAND="scripts/gb-dev-post-command.sh"
 
 # host-env-vault (local dev-shared tree). Override GB_HEV_VAULT_ROOT / GB_HEV_CONFIG if needed.
 # GB_HEV_VAULT_ROOT="/absolute/path/to/host-env-vault/Untitled"

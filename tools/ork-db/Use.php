@@ -70,7 +70,7 @@ final class UseProfile
                 'Profile:      ' . $profile,
                 'App target:   ' . $target,
                 'Profile file: ' . $profileFile . ($changed ? ' (updated)' : ' (unchanged)'),
-                'App:          restarted ork3app',
+                'App:          restarted ' . $this->runningAppContainerName(),
             ],
         ];
     }
@@ -104,8 +104,48 @@ final class UseProfile
         return self::PROFILE_PROD;
     }
 
+    private function runningAppContainerName(): string
+    {
+        foreach (['ork3-php8-app', 'ork3-php8-app-green', 'ork3-php8-app-blue'] as $name) {
+            if ($this->isDockerContainerRunning($name)) {
+                return $name;
+            }
+        }
+
+        return 'ork3app';
+    }
+
+    private function isDockerContainerRunning(string $name): bool
+    {
+        $command = ['docker', 'inspect', '-f', '{{.State.Running}}', $name];
+        $descriptorSpec = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = proc_open($command, $descriptorSpec, $pipes, $this->repoRoot);
+        if (!is_resource($process)) {
+            return false;
+        }
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        return trim((string) $stdout) === 'true';
+    }
+
     private function restartAppContainer(): void
     {
+        $container = $this->runningAppContainerName();
+        if ($container !== 'ork3app') {
+            $command = ['docker', 'restart', $container];
+            $this->runHostCommand($command, 'Failed to restart ' . $container);
+
+            return;
+        }
+
         $command = [
             'docker',
             'compose',
@@ -114,11 +154,18 @@ final class UseProfile
             'restart',
             'ork3app',
         ];
+        $this->runHostCommand($command, 'Failed to restart ork3app');
+    }
 
+    /**
+     * @param list<string> $command
+     */
+    private function runHostCommand(array $command, string $errorPrefix): void
+    {
         if ($this->processRunner !== null) {
             $exitCode = ($this->processRunner)($command);
             if ($exitCode !== 0) {
-                throw new \RuntimeException('Failed to restart ork3app container (exit ' . $exitCode . ')');
+                throw new \RuntimeException($errorPrefix . ' (exit ' . $exitCode . ')');
             }
 
             return;
@@ -132,7 +179,7 @@ final class UseProfile
 
         $process = proc_open($command, $descriptorSpec, $pipes, $this->repoRoot);
         if (!is_resource($process)) {
-            throw new \RuntimeException('Failed to start docker compose restart');
+            throw new \RuntimeException($errorPrefix . ': failed to start process');
         }
 
         fclose($pipes[0]);
@@ -143,9 +190,7 @@ final class UseProfile
 
         $exitCode = proc_close($process);
         if ($exitCode !== 0) {
-            throw new \RuntimeException(
-                'Failed to restart ork3app: ' . trim((string) $stderr . ' ' . (string) $stdout)
-            );
+            throw new \RuntimeException($errorPrefix . ': ' . trim((string) $stderr . ' ' . (string) $stdout));
         }
     }
 }

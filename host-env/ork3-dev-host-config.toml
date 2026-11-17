@@ -1,0 +1,12 @@
+# ORK3-only local vault config (shared dev-shared tree; catalog is ork-web only in secrets/catalog.json).
+# Point GB_HEV_CONFIG at this file in .greenblue when not using Denarius profiles.
+
+identity = "dev-shared/kek.age"
+state_dir = "dev-shared/state"
+runtime_dir = "dev-shared/run"
+
+[sync]
+source = "local"
+local_secrets_dir = "dev-shared/secrets"
+store_dir = "dev-shared/state/store"
+manifests_dir = "dev-shared/state/manifests"

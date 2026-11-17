@@ -2,7 +2,7 @@
 
 Design for the stacked milestones in [gb-host-env-vault-checklist.md](gb-host-env-vault-checklist.md).
 
-Stack base: `master` at `22981eb6` (`origin/master` as of 2026-11-11). This repo has no `main` branch. Do not stack on `stack/warrior-w01-schema`.
+Stack base: `master` at `c552e972` (`origin/master` as of 2026-11-17). Rebases onto current `master`; there is no `main` branch. Do not stack on `stack/warrior-w01-schema`.
 
 Reference apps (read, do not copy secrets):
 

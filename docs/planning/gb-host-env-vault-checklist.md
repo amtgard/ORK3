@@ -1,7 +1,7 @@
 # ORK3 gb + host-env-vault — orchestrator checklist
 
 **Design:** [gb-host-env-vault-plan.md](gb-host-env-vault-plan.md)  
-**Stack base:** `master` @ `22981eb6` (`origin/master`, 2026-11-11). This repo has no `main`.  
+**Stack base:** `master` @ `c552e972` (`origin/master`, 2026-11-17). This repo has no `main`. Rebased 2026-11-17 (six commits: sign-in link card, atlas rings, map embed).  
 **Resume from:** done  
 **Skill:** branch-orchestrator. Workers follow the development skill with the ORK3 gates in this file, not a Slim health test and not the host-env-vault Rust `gate.sh`.
 

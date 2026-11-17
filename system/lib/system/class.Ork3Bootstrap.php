@@ -174,11 +174,26 @@ final class Ork3BootstrapConfig
             define('IDP_CLIENT_ID', 'ork3_dev');
             define('IDP_CLIENT_SECRET', 'test-secret');
         } elseif ($isDev) {
-            define('DB_HOSTNAME', self::envNonEmpty('ORK3_DB_HOST', 'ork3-php8-db'));
-            define('DB_PORT', (int) self::envNonEmpty('DB_PORT', '3306'));
-            define('DB_USERNAME', self::envNonEmpty('ORK3_DB_USER', 'ork'));
-            define('DB_PASSWORD', self::envNonEmpty('ORK3_DB_PASSWORD', 'secret'));
-            define('DB_DATABASE', self::envNonEmpty('ORK3_DB_DATABASE', 'ork'));
+            $dbProfile = strtolower(self::envNonEmpty('ORK3_DB_PROFILE', 'prod'));
+            if ($dbProfile === 'dev') {
+                $testHost = self::envNonEmpty('ORK3_TEST_DB_HOST', 'ork3-php8-test-db');
+                $testPort = (int) self::envNonEmpty('ORK3_TEST_DB_PORT', '3306');
+                if (is_file('/.dockerenv') && in_array(strtolower($testHost), ['127.0.0.1', 'localhost'], true)) {
+                    $testHost = 'ork3-php8-test-db';
+                    $testPort = 3306;
+                }
+                define('DB_HOSTNAME', $testHost);
+                define('DB_PORT', $testPort);
+                define('DB_USERNAME', self::envNonEmpty('ORK3_DB_USER', 'ork'));
+                define('DB_PASSWORD', self::envNonEmpty('ORK3_DB_PASSWORD', 'secret'));
+                define('DB_DATABASE', 'ork_test');
+            } else {
+                define('DB_HOSTNAME', self::envNonEmpty('ORK3_DB_HOST', 'ork3-php8-db'));
+                define('DB_PORT', (int) self::envNonEmpty('DB_PORT', '3306'));
+                define('DB_USERNAME', self::envNonEmpty('ORK3_DB_USER', 'ork'));
+                define('DB_PASSWORD', self::envNonEmpty('ORK3_DB_PASSWORD', 'secret'));
+                define('DB_DATABASE', self::envNonEmpty('ORK3_DB_DATABASE', 'ork'));
+            }
             define('CACHE_HOST', 'ork-dev');
             define('LOGIN_TIMEOUT', 30 * 24 * 60 * 60);
             define('APP_STAGE', 'DEV');
@@ -250,6 +265,13 @@ final class Ork3BootstrapConfig
             $envFile = new EnvFile();
             $envFile->loadFromFile($dotEnv, true);
             self::mergeEnvFileTrace($envFile);
+        }
+
+        $dbProfileFile = $repoRoot . '/.ork3-db.local';
+        if (is_file($dbProfileFile)) {
+            $profileEnv = new EnvFile();
+            $profileEnv->loadFromFile($dbProfileFile, true);
+            self::mergeEnvFileTrace($profileEnv);
         }
 
         $secretsDir = self::env('HOST_ENV_SECRETS_DIR');
