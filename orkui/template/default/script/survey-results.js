@@ -32,7 +32,7 @@
    suppressed question or group is drawn as a statement, not a bar.
 
    Highcharts: orkui.js inlines Highcharts 3.0.7 and owns the
-   window.Highcharts global. Survey_results.tpl loads 11.4.8 inside a
+   window.Highcharts global. Survey_results.tpl loads 12.6.1 inside a
    sandbox that hides that global for the duration of the load and
    republishes the fresh copy as window.SvHighcharts, so this file must
    never touch window.Highcharts - that is still the 3.0.7 build.

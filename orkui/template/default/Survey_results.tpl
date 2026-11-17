@@ -348,6 +348,10 @@ $_svr_show_crosstab = $_svr_crosstab && $_svr_xt_targets >= 2;
 			<div class="svr-cards" id="svr-cards" aria-busy="false"></div>
 
 <?php if (!$_svr_shared) : ?>
+			<!-- Print only (survey-results.css): the responses table below is a
+			     horizontal scroller and cannot fit on paper, so it is dropped from
+			     the printout and the reader is sent to the exports. -->
+			<p class="svr-field-hint svr-print-note">Row-level responses are not included in the printout. Use Export CSV or Analysis CSV on the results page for the full response table.</p>
 			<div class="rp-table-area svr-rows-area">
 				<h2 class="svr-section-title"><i class="fas fa-table"></i> Responses</h2>
 				<p class="svr-field-hint" id="svr-rows-hint">Row-level data for the filtered responses. Select a row to read that whole response. Persona links appear only for respondents who shared their name; Q1, Q2&hellip; match the chart cards above.</p>
@@ -411,24 +415,33 @@ window.SvConfig = {
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <!--
 	orkui.js inlines Highcharts 3.0.7 and defines window.Highcharts before this
-	point. Highcharts 11 refuses to install over an existing global: it calls
+	point. Highcharts 11+ refuses to install over an existing global: it calls
 	win.Highcharts.error(16, true), which 3.0.7 does not implement, so the whole
-	11.x module aborts with an uncaught TypeError and the charts silently fall
-	back to the 12-year-old build. Hide the old global while 11.4.8 loads, hand
-	the fresh copy to survey-results.js as window.SvHighcharts, then put the
+	module aborts with an uncaught TypeError and the charts silently fall back
+	to the 12-year-old build. Hide the old global while 12.6.1 loads, hand the
+	fresh copy to survey-results.js as window.SvHighcharts, then put the
 	original back so nothing else on the page changes behaviour.
+
+	Why 12.6.1 and not 11.x: survey-results.js rebuilds every chart inside the
+	window's beforeprint handler. While Chrome's print dialog is up the page is
+	paused, and Highcharts 11's text parser calls new DOMParser() there, which
+	throws "The provided callback is no longer runnable" for every chart, so a
+	printout showed "This chart could not be drawn" on every card. 12.6.1 (and
+	13.1.0+) parse text without that call during print; the fallback that the
+	12.0-12.6.0 range used was itself CVE-2026-118244, so stay at or above
+	12.6.1 if this is ever changed.
 -->
 <script>
 window.__svPrevHighcharts = window.Highcharts;
 try { delete window.Highcharts; } catch (e) { window.Highcharts = undefined; }
 </script>
-<script src="https://code.highcharts.com/11.4.8/highcharts.js"></script>
+<script src="https://code.highcharts.com/12.6.1/highcharts.js"></script>
 <!--
-	The accessibility module must load while 11.4.8 still owns window.Highcharts
+	The accessibility module must load while 12.6.1 still owns window.Highcharts
 	(it installs onto that global). Without it every chart build logs a console
 	warning; with it the charts get keyboard navigation and screen-reader text.
 -->
-<script src="https://code.highcharts.com/11.4.8/modules/accessibility.js"></script>
+<script src="https://code.highcharts.com/12.6.1/modules/accessibility.js"></script>
 <script>
 window.SvHighcharts = window.Highcharts;
 if (window.__svPrevHighcharts) { window.Highcharts = window.__svPrevHighcharts; }

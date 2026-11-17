@@ -389,7 +389,9 @@ Press **Summary for sharing** at the top of the results page, then **Print**:
 - The page address changes to include the summary, so you can send that link to a co-officer and
   it opens straight into the summary view.
 
-Printing without Summary for sharing prints everything on the page, names included.
+Printing without Summary for sharing prints the charts, the written comments and the "Other"
+answers, names included. The responses table never prints: it is far too wide for paper, so
+the printout carries a note instead and the full table is in **Export CSV** or **Analysis CSV**.
 
 Keep the responses table, the individual-response view and exported spreadsheets off shared
 screens and out of group chats. They can carry players' names beside their answers, and

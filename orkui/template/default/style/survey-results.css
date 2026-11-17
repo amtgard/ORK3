@@ -835,6 +835,9 @@ html[data-theme="dark"] .svr-card .highcharts-data-label tspan {
 
 /* ── Print ───────────────────────────────────────────────── */
 
+/* Shown on paper only; see the @media print block. */
+.svr-print-note { display: none; }
+
 @media print {
     .rp-sidebar,
     .rp-header-actions,
@@ -842,11 +845,16 @@ html[data-theme="dark"] .svr-card .highcharts-data-label tspan {
     .svr-panel,
     .svr-csrf,
     .svr-xt-toggle,
-    .svr-rows-area .dataTables_paginate,
-    .svr-rows-area .dataTables_info { display: none !important; }
+    .svr-rows-area { display: none !important; }
+
+    /* The responses table (one column per question, ~3000px for a long
+       survey) is a horizontal scroller on screen and clips to the first few
+       questions on paper, so it never prints (2026-11-16). The print-only note
+       below the cards points at the CSV exports instead. */
+    .svr-print-note { display: block !important; }
 
     /* Summary for sharing (#5): charts and the caption only. */
-    .svr-summary-mode .svr-rows-area,
+    .svr-summary-mode .svr-print-note,
     .svr-summary-mode .svr-other,
     .svr-summary-mode .svr-textlist { display: none !important; }
     .svr-caption { border-color: #999; border-left-color: #000; background: #fff; }
@@ -893,7 +901,6 @@ html[data-theme="dark"] .svr-card .highcharts-data-label tspan {
         overflow  : visible !important;
     }
 
-    .svr-table-scroll { overflow: visible !important; }
     .svr-checklist { max-height: none !important; overflow: visible !important; }
 }
 
