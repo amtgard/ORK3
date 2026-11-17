@@ -33,6 +33,56 @@ class Controller
         return $message;
     }
 
+    /**
+     * Gate a page behind login. Logged in: returns true, carry on. Logged out:
+     * remembers $return_route so Login brings the visitor straight back, then
+     * either redirects to Login (no $preview, today's behaviour everywhere)
+     * or, with $preview, renders the LoginRequired template and returns false
+     * (the caller returns at once).
+     *
+     * A preview is what a page can say about itself to someone who is not
+     * logged in: a person deciding whether to log in, or a chat app's link
+     * crawler building an embed (those are never logged in, so without this
+     * every gated link embeds as the login page's generic card). The same
+     * render serves both, so there is no user-agent list to keep current.
+     *
+     * $preview is an array, or a callable returning one so the lookup only
+     * runs for logged-out visitors:
+     *   og      => array for ork_og_meta_tags() (title/description/url/image)
+     *   kicker  => small line above the heading, e.g. 'Park Sign-in'
+     *   heading => the thing itself, e.g. the park or event name
+     *   lines   => short plain-text lines under it (credits, time left, why
+     *              a link is unusable)
+     *   image   => heraldry/photo URL shown beside the heading, or ''
+     *   button  => label for the Log in button (default 'Log in to continue')
+     */
+    public function require_login($return_route, $preview = null)
+    {
+        if (isset($this->session->user_id) && (int)$this->session->user_id > 0) {
+            return true;
+        }
+        $this->session->location = ltrim((string)$return_route, '/');
+        if (is_callable($preview)) {
+            $preview = $preview();
+        }
+        if (!is_array($preview)) {
+            header('Location: ' . UIR . 'Login/login');
+            exit;
+        }
+        $this->data['og']         = is_array($preview['og'] ?? null) ? $preview['og'] : array();
+        $this->data['no_index']   = true;
+        $this->data['page_title'] = (string)($preview['og']['title'] ?? $preview['heading'] ?? 'Login required');
+        $this->data['preview']    = array(
+            'kicker'  => (string)($preview['kicker'] ?? ''),
+            'heading' => (string)($preview['heading'] ?? $this->data['page_title']),
+            'lines'   => array_values(array_filter(array_map('strval', (array)($preview['lines'] ?? [])), 'strlen')),
+            'image'   => (string)($preview['image'] ?? ''),
+            'button'  => (string)($preview['button'] ?? 'Log in to continue'),
+        );
+        $this->template = 'LoginRequired.tpl';
+        return false;
+    }
+
     public function __construct($method = null, $action = null)
     {
         $this->method = is_null($method) ? 'index' : $method;
