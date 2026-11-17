@@ -212,6 +212,8 @@ grep ORK_HEV_WEB_SECRETS .gb/runtime.env
 
 ### One-time
 
+Follow the checklist in **`.greenblue.example.prod`** (nginx `green`/`blue` site files, `ork3-php8-net`, `.env`, vault phase). Minimum copy:
+
 ```bash
 sudo git clone … /var/www/ork.amtgard.com
 cd /var/www/ork.amtgard.com
@@ -219,7 +221,9 @@ sudo cp .greenblue.example.prod .greenblue
 sudo cp .env.example .env
 ```
 
-Uncomment and set **`GB_HEV_CONFIG`**, **`GB_HEV_VAULT_ROOT`**, and **`GB_HEV_RENDER_ROOT`** in `.greenblue` when the host vault is configured.
+Uncomment and set **`GB_HEV_CONFIG`**, **`GB_HEV_VAULT_ROOT`**, and **`GB_HEV_RENDER_ROOT`** in `.greenblue` when the host vault is configured (or pass **`--hev-config`** on the `gb` command line). For **host-store** before SSM, uncomment the **`load-secrets-mode.sh`** source in `.greenblue` after `ork3-secrets-mode.sh host-store`.
+
+After deploy, **`GB_HOOK_POST_DEPLOY`** runs **`scripts/gb-prod-post-command.sh`**: verifies **`/run/secrets/secrets.env`** on the active slot and curls **`GB_HEALTH_PATH`** (default **`/orkui/`**).
 
 ### Routine deploy
 
