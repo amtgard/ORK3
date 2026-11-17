@@ -4,7 +4,7 @@
  * Click an empty time (or press and drag to choose a length) and an editing
  * block opens there with a compact EvBoardEntry in it. Enter adds the item and
  * opens the next block where it ended; Tab adds it and opens one alongside;
- * Esc (or Enter on an empty block) ends the run. Clicking elsewhere adds a
+ * Esc (or Enter, Tab or Shift+Tab on an empty block) ends the run. Clicking elsewhere adds a
  * valid entry and discards an empty one. On touch, a tap puts '<day> <time> '
  * in the quick line instead.
  *
@@ -28,6 +28,8 @@
  * Attached through EvBoardEdit.onEnter / onBeforeExit / onExit.
  *   EvBoardType.isOpen() -> bool   an editing block is open
  *   EvBoardType.isFresh() -> bool  a new block is open and nothing was typed in it
+ *   EvBoardType.hasText() -> bool  an editing block is open holding typed text
+ *                                  (a rename: only when it differs from the item)
  *   EvBoardType.editItem(cid, {onDone}) -> bool   rename an item in place;
  *                                  onDone({keyboard}) runs when its block closes
  *                                  (keyboard: closed with focus still in it)
@@ -360,8 +362,9 @@
         return true;
     }
 
-    // Add the block's item when it reads as one. Returns 'added', 'empty' or
-    // 'invalid' (text with no title), and leaves the block open.
+    // Add the block's item when it reads as one. Returns 'added', 'empty',
+    // 'invalid' (text with no title) or 'refused' (the store or Done refused it),
+    // and leaves the block open.
     function addCurrent() {
         if (!s.entry.getText().trim()) return 'empty';
         s.entry.settleQuery();
@@ -401,6 +404,14 @@
         else s.ctx.addNotice('The item you were typing on the board was not added yet.', line, leads);
     }
 
+    // An editing block is open holding typed text: a new block with any text in
+    // it, a rename whose title or leads differ from the item's.
+    function hasText() {
+        if (!s.open || !s.entry) return false;
+        if (!s.edit) return s.entry.getText().trim() !== '';
+        return s.entry.getText().trim() !== s.edit.text.trim() || leadsKey(s.entry.getLeads()) !== s.edit.leads;
+    }
+
     function menuOpen() { return s.entry.input.getAttribute('aria-expanded') === 'true'; }
 
     // Runs before the entry's own key handling (capture), unless its suggestion
@@ -419,9 +430,13 @@
             if (!retyping) s.ctx.quickLine.focus();
             return;
         }
-        if (e.key !== 'Enter' && !(e.key === 'Tab' && !e.shiftKey)) return;
+        if (e.key !== 'Enter' && e.key !== 'Tab') return;
         if (e.altKey || e.ctrlKey || e.metaKey) return;
+        // Shift+Tab in a block with text is left to the browser (the block is
+        // settled as focus leaves it, onBlur).
+        var backTab = e.key === 'Tab' && e.shiftKey;
         if (s.edit) {
+            if (backTab) return;
             // Retyping an item: Enter and Tab save it and close; nothing follows on.
             e.preventDefault();
             e.stopPropagation();
@@ -430,13 +445,16 @@
         }
         var text = s.entry.getText().trim();
         if (!text) {
-            if (e.key === 'Tab') return; // focus moves on and the empty block closes
+            // An empty block: Enter, Tab and Shift+Tab end the run as Esc does (the
+            // block's layer is outside the board's tab order, so letting Tab
+            // through would send focus to the top of the page).
             e.preventDefault();
             e.stopPropagation();
             closeBlock();
             s.ctx.quickLine.focus();
             return;
         }
+        if (backTab) return;
         e.preventDefault();
         e.stopPropagation();
         s.entry.settleQuery();
@@ -444,7 +462,8 @@
         if (!r || !r.ok) { shake(); return; }
         var len = r.endMin - r.startMin;
         if (len <= 0) len = Math.max(s.open.end - s.open.start, STEP);
-        s.ctx.add(r, s.entry.getLeads());
+        // Refused (the notice says why): the block keeps its text to be fixed.
+        if (s.ctx.add(r, s.entry.getLeads()) == null) { shake(); return; }
         // Enter: the next block starts where this one ended; Tab: alongside it.
         var start = e.key === 'Enter' ? r.endMin : r.startMin;
         openBlock(r.day, start, start + len, { reveal: e.key === 'Enter' });
@@ -589,7 +608,9 @@
         if (!s.open) return true;
         if (settle()) return true;
         s.entry.focus();
-        ctx.addNotice('The block you are typing has no title yet. Add one and press Enter, or press Esc to drop it, then Done.');
+        // A refused add has its own notice already.
+        var r = s.entry.result();
+        if (!(r && r.ok)) ctx.addNotice('The block you are typing has no title yet. Add one and press Enter, or press Esc to drop it, then Done.');
         return false;
     }
 
@@ -619,6 +640,7 @@
     return {
         isOpen: function () { return !!s.open; },
         isFresh: function () { return !!s.open && !s.edit && !s.typed; },
+        hasText: hasText,
         editItem: editItem,
         openAt: openAt
     };

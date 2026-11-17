@@ -16,7 +16,8 @@
  * event, and remembers the items and that text. A paste of exactly that text
  * adds copies of them (EvBoardCore.pastePlan: same spacing) in one store.batch
  * and selects them: right after the selection's latest block when blocks are
- * selected, else at the slot cursor. Any other pasted text goes to the
+ * selected, else at the slot cursor, moved back as far as needed to stay on
+ * the board's days (nothing when they cannot). Any other pasted text goes to the
  * onForeignPaste hook, and is left alone when there is none; so does a paste
  * into the quick line (the hook takes only several lines; one line is typing).
  *
@@ -220,14 +221,20 @@
         return best ? { day: best.day, min: best.min } : current();
     }
 
-    // The blocks copied here, pasted in one step and selected.
+    // The blocks copied here, pasted in one step and selected. They stay on the
+    // board's days (EvBoardCore.boardRange): placed only as far from the copied
+    // items as all of them fit, and not at all when there is no room.
     function pasteBlocks() {
         var at = pasteAt(), store = s.ctx.store, added = [];
-        var plan = at ? C.pastePlan(s.copied.items, at.day, at.min) : [];
+        var range = C.boardRange(V().board.days.map(function (d) { return d.day; }));
+        var plan = at ? C.pastePlan(s.copied.items, at.day, at.min, range) : [];
         if (!plan.length) return;
         store.batch(function () {
             plan.forEach(function (it) { added.push(store.add(Sel().copyItem(it, it))); });
         });
+        // A copy the store refused has no cid (its notice says why).
+        added = added.filter(Boolean);
+        if (!added.length) return;
         Sel().select(added);
         Sel().revealItem(added[0]);
     }

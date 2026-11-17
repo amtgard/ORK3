@@ -23,19 +23,8 @@
     var ME = document.currentScript;
     var STYLE_ID = 'ork-sched-styles';
 
-    // Left-accent colour per schedule category, matching the ORK event page.
-    var CAT_COLORS = {
-        'Administrative':    '#546e7a',
-        'Tournament':        '#b8860b',
-        'Battlegame':        '#c0392b',
-        'Arts and Sciences': '#7b1fa2',
-        'Class':             '#1565c0',
-        'Feast and Food':    '#e65100',
-        'Court':             '#4e342e',
-        'Meeting':           '#276749',
-        'Roleplay and Quests': '#c2185b',
-        'Other':             '#757575'
-    };
+    // Left accent for a category the response gives no colour for.
+    var UNKNOWN_CAT_COLOR = '#616161';
 
     function esc(s) {
         return String(s == null ? '' : s)
@@ -88,8 +77,14 @@
         (document.head || document.documentElement).appendChild(el);
     }
 
-    function renderItem(item) {
-        var accent = CAT_COLORS[item.category] || '#cbd5e0';
+    // A colour from the response's category_colors, used only if it is a plain #hex.
+    function accentFor(colors, category) {
+        var c = colors && Object.prototype.hasOwnProperty.call(colors, category) ? colors[category] : '';
+        return /^#[0-9a-f]{3,8}$/i.test(String(c)) ? c : UNKNOWN_CAT_COLOR;
+    }
+
+    function renderItem(item, colors) {
+        var accent = accentFor(colors, item.category);
         var parts = [];
         parts.push('<li class="ork-sched-item" style="border-left-color:' + accent + '">');
         parts.push('<span class="ork-sched-time">' + esc(item.time_label) + '</span>');
@@ -122,7 +117,7 @@
                     html.push('<div class="ork-sched-day-label">' + esc(day.day_label) + '</div>');
                 }
                 html.push('<ul class="ork-sched-list">');
-                day.items.forEach(function (it) { html.push(renderItem(it)); });
+                day.items.forEach(function (it) { html.push(renderItem(it, data.category_colors)); });
                 html.push('</ul></div>');
             });
         }

@@ -8,7 +8,16 @@
  *   EvBoardEdit.enter() / exit() -> Promise / isEditing()
  *   EvBoardEdit.store            the store while editing, else null
  *   EvBoardEdit.entryContext(overrides) -> parseEntry ctx built from the store
- *   EvBoardEdit.refresh()        re-read the schedule when nothing is unsaved
+ *   EvBoardEdit.refresh(opts) -> Promise
+ *                                re-read the schedule when nothing is unsaved and
+ *                                merge it (store.sync; Undo survives); {own: true}
+ *                                for the person's own save, which needs no notice
+ *   EvBoardEdit.noteSaved(row)   the Details form saved this row: the store takes
+ *                                it now (store.syncRow); nothing when not editing
+ *
+ * While editing, the schedule is re-read on window focus, when the page becomes
+ * visible and every minute (only when everything is saved), and leaving the page
+ * asks first while anything is unsaved or typed.
  *
  * Other Edit-mode surfaces (evb-type.js, evb-select.js) attach through three
  * hooks, each called with the same edit context {store, root, head, quickLine,
@@ -45,8 +54,17 @@
         refreshSeq: 0,
         committing: false,
         refreshOwed: false, // a refresh asked for while changes were unsaved
+        owedOwn: false,     // ...and every such ask was the person's own save
+        reading: 0,         // the refreshSeq of the read on its way, 0 when none
+        readingOwn: false,
+        readDone: null,     // the promise of the latest read: a read it replaced resolves with it
+        owedWaiters: [],    // resolvers of refreshes deferred while changes were unsaved
+        updated: null,      // {row, n}: the "Schedule updated" notice row and its count
+        pollTimer: 0,
+        facts: null,        // what entryContext derives from the items, cached
         unloadBound: false
     };
+    var POLL_MS = 60000;
     var api = { store: null };
     var hooks = { enter: [], beforeExit: [], exit: [] };
 
@@ -64,9 +82,11 @@
     // A non-2xx answer or a body that is not JSON rejects, and the store goes
     // offline: a reply with an error status is the server's problem ('server'),
     // a request that got no reply at all rejects as fetch does ('network').
-    function send(ops) {
+    // The token makes a resent request apply once.
+    function send(ops, token) {
         var fd = new win.FormData();
         fd.append('Ops', JSON.stringify(ops));
+        if (token) fd.append('BatchToken', token);
         return win.fetch(endpoint('schedule_batch'), { method: 'POST', body: fd, headers: XHR, credentials: 'same-origin' })
             .then(function (r) {
                 if (!r.ok) {
@@ -83,8 +103,23 @@
             });
     }
 
+    // Resolves to {schedule, staff}: the staff in the page's EvConfig.staffList
+    // shape, or null when the reply has none. The caller decides whether the read
+    // is still current before it takes the staff (takeStaff). A read with no
+    // answer in READ_MS is abandoned (aborted where the browser can) and rejects.
+    var READ_MS = 30000;
     function fetchList() {
-        return win.fetch(endpoint('schedule_list'), { headers: XHR, credentials: 'same-origin' })
+        var ctl = typeof win.AbortController === 'function' ? new win.AbortController() : null;
+        var timer = 0;
+        var limit = new Promise(function (resolve, reject) {
+            timer = win.setTimeout(function () {
+                if (ctl) { try { ctl.abort(); } catch (e) { /* the limit still rejects */ } }
+                reject(new Error('no answer'));
+            }, READ_MS);
+        });
+        var init = { headers: XHR, credentials: 'same-origin' };
+        if (ctl) init.signal = ctl.signal;
+        var read = win.fetch(endpoint('schedule_list'), init)
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
@@ -93,8 +128,28 @@
                 if (!data || data.status !== 0 || !Array.isArray(data.schedule)) {
                     throw new Error((data && data.error) || 'The schedule could not be read');
                 }
-                return data.schedule;
+                var staff = Array.isArray(data.staff) ? data.staff.map(function (s) {
+                    return {
+                        MundaneId: +s.MundaneId || 0,
+                        Persona: String(s.Persona || ''),
+                        RoleName: String(s.RoleName || ''),
+                        LeadCategories: Array.isArray(s.LeadCategories) ? s.LeadCategories.slice() : []
+                    };
+                }) : null;
+                return { schedule: data.schedule, staff: staff };
             });
+        return Promise.race([read, limit]).then(function (v) {
+            win.clearTimeout(timer);
+            return v;
+        }, function (err) {
+            win.clearTimeout(timer);
+            throw err;
+        });
+    }
+
+    // The staff come with the schedule: category-lead previews use the current list.
+    function takeStaff(staff) {
+        if (staff && win.EvConfig) win.EvConfig.staffList = staff;
     }
 
     // The schedule modal's lead search (revised.js, beside evSchedLeads), same
@@ -168,20 +223,41 @@
             .map(function (o) { return o.name; });
     }
 
+    // The items, their board days and their locations, read again only when the
+    // items change (the store's version, or the view's list when not editing):
+    // the quick line asks for its context on every keystroke.
+    function boardFacts() {
+        var c = cfg(), store = state.store;
+        var es = c.eventStart || '', ee = c.eventEnd || '';
+        var ver = store && typeof store.version === 'function' ? store.version() : null;
+        var src = store ? null : V().getItems();
+        var f = state.facts;
+        if (f && f.store === store && f.es === es && f.ee === ee &&
+            (store ? ver !== null && f.ver === ver : f.src === src)) return f;
+        var items = store ? store.items() : (src || []);
+        state.facts = f = {
+            store: store, ver: ver, src: src, es: es, ee: ee, items: items,
+            days: C.buildBoard(items, { eventStart: es, eventEnd: ee }).days.map(function (d) { return d.day; }),
+            eventDays: C.eventDays(es, ee),
+            locations: locationsOf(items)
+        };
+        return f;
+    }
+
     function entryContext(overrides) {
         var c = cfg();
-        var items = state.store ? state.store.items() : (V().getItems() || []);
-        var days = C.buildBoard(items, { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '' })
-            .days.map(function (d) { return d.day; });
+        var f = boardFacts(), items = f.items, days = f.days.slice();
         var last = lastAdded(items), t = last && timing(last);
         var day = state.day && days.indexOf(state.day) >= 0 ? state.day : (days[0] || null);
         var ctx = {
             days: days,
+            // The event's own days: a weekday it does not have reads as the nearest, outside it.
+            eventDays: f.eventDays.slice(),
             day: day,
             // After switching days ('sun' alone) an untimed line starts that day fresh.
             lastEnd: t && t.day === day ? { day: t.day, min: t.end } : null,
             lastDuration: t && t.end > t.start ? t.end - t.start : 60,
-            locations: locationsOf(items),
+            locations: f.locations.slice(),
             canFeast: !!c.canManageFeast
         };
         return Object.assign(ctx, overrides || {});
@@ -236,6 +312,7 @@
             row(kbd('↑') + kbd('↓'), 'move the selected item 15 minutes (with ' + kbd('Alt') + ', 5)') +
             row(kbd('Shift ↑') + kbd('Shift ↓'), 'move only its end') +
             row(kbd('←') + kbd('→'), 'move it a day') +
+            row(kbd('Shift Enter'), 'open the selected item’s Details (location, leads, description)') +
             row(kbd('Shift') + ' click', 'add a block to the selection, or take it out') +
             row(kbd(MOD + ' A'), 'select every block') +
             row(kbd(MOD + ' D'), 'duplicate the selection just after it') +
@@ -289,16 +366,21 @@
         protocol: 'The server sent an unexpected reply.'
     };
 
+    // A request the server refused as a whole names its reason in status.message.
+    function offlineText(status) {
+        var msg = status.reason === 'server' && typeof status.message === 'string' ? status.message.trim() : '';
+        if (!msg) return OFFLINE_TEXT[status.reason] || OFFLINE_TEXT.network;
+        if (!/[.!?]$/.test(msg)) msg += '.';
+        return 'The server had a problem: ' + msg + ' Press Retry in a moment.';
+    }
+
     function showStatus() {
         if (!state.store || !state.head) return;
         var status = state.store.status(), st = status.state;
         q('.evb-save').setAttribute('data-state', st);
-        q('.evb-save-state').textContent = st === 'offline'
-            ? OFFLINE_TEXT[status.reason] || OFFLINE_TEXT.network : SAVE_TEXT[st];
+        q('.evb-save-state').textContent = st === 'offline' ? offlineText(status) : SAVE_TEXT[st];
         q('.evb-save-retry').hidden = st !== 'offline';
-        // Leaving the page asks first only while something is unsaved.
-        guardUnload(st !== 'saved');
-        if (st === 'saved' && state.refreshOwed) refresh();
+        if (st === 'saved' && state.refreshOwed) refresh({ own: state.owedOwn });
     }
 
     function guardUnload(on) {
@@ -347,6 +429,20 @@
         box.querySelector('.evb-notice-rows').appendChild(row);
         box.hidden = false;
         noticeTone(box);
+        return row;
+    }
+
+    // "Schedule updated" is one row at most: a later re-read that finds changes
+    // replaces it, with the count of both while the earlier one is still showing.
+    function noticeUpdated(n) {
+        var rows = q('.evb-notice-rows'), prev = state.updated;
+        if (prev && rows && prev.row.parentNode === rows) {
+            n += prev.n;
+            rows.removeChild(prev.row);
+        }
+        var row = addNotice('Schedule updated: ' + n + (n === 1 ? ' change' : ' changes') + ' made by someone else.',
+            null, null, { tone: 'info' });
+        state.updated = row ? { row: row, n: n } : null;
     }
 
     function noticeTone(box) {
@@ -398,7 +494,38 @@
                 restore = text;
             }
         }
-        addNotice('Couldn’t save “' + title + '”: ' + msg + '. It was undone.', restore, leads);
+        // When the store undid later additions too, one sentence covers them all.
+        var more = Number(r.dropped) > 0 ? Math.floor(Number(r.dropped)) : 0;
+        if (more) {
+            addNotice('Couldn’t save “' + title + '” or ' + more + ' more: ' + msg + '. They were undone.', restore, leads);
+        } else {
+            addNotice('Couldn’t save “' + title + '”: ' + msg + '. It was undone.', restore, leads);
+        }
+    }
+
+    // The store's safety net refused a change (see normalize): it was not made.
+    // One row per message while it shows (a group gesture may be refused for each item).
+    function onRefused(r) {
+        var msg = String((r && r.message) || '').trim();
+        var rows = q('.evb-notice-rows');
+        if (!msg || !rows) return;
+        if (Array.prototype.some.call(rows.children, function (row) { return row.textContent === msg; })) return;
+        addNotice(msg);
+    }
+
+    // The server's limits on an item's times, checked before anything is applied
+    // or sent (EvBoardCore.timesRefusal against the event's hardWindow).
+    function normalize(next, prev) {
+        var msg = C.timesRefusal(next, prev, C.hardWindow(cfg().eventStart, cfg().eventEnd));
+        return msg ? { refuse: msg } : { item: next };
+    }
+
+    // Someone else deleted an item this person changed, or changed it first.
+    function onSuperseded(r) {
+        var title = r.title || 'An item';
+        addNotice(r.kind === 'gone'
+            ? '"' + title + '" was removed by someone else.'
+            : '"' + title + '" was changed by someone else. Their version is shown; your change was not applied.');
     }
 
     // ---- the quick line ----
@@ -421,21 +548,28 @@
     }
 
     // Add a valid parse as an item with the given leads; the quick line's day and
-    // "then" follow it. Null once Done is leaving: the store is about to go.
+    // "then" follow it. Null once Done is leaving (the store is about to go) or
+    // when the store refused it (its notice says why). An item on a day outside
+    // the event's dates is added, and the notice says so.
     function addParsed(r, leads) {
         if (state.leaving) return null;
         var cid;
         state.committing = true;
         try {
             cid = state.store.add(itemFrom(r, leads));
-            state.recent.push({ cid: cid, id: 0 });
+            if (cid) state.recent.push({ cid: cid, id: 0 });
         } finally {
             state.committing = false;
         }
+        if (!cid) return null;
         setDefaultDay(r.day);
+        if (r.outside && r.day) {
+            addNotice('"' + r.title + '" is on ' + C.dayDateLabel(r.day) + ', outside the event\'s dates.');
+        }
         return cid;
     }
 
+    // False keeps the line (a refused add stays to be fixed).
     function onCommit(r) {
         if (state.leaving) return false;
         if (!r.ok) {
@@ -444,7 +578,10 @@
             return true;
         }
         V().setGhosts([]);
-        addParsed(r, state.entry.getLeads());
+        if (!addParsed(r, state.entry.getLeads())) {
+            onParse(r);
+            return false;
+        }
         return true;
     }
 
@@ -540,10 +677,18 @@
         if (wrap && !wrap.contains(e.target)) setHelp(false);
     }
 
+    // Bound for as long as Edit mode is on. It asks while anything would be lost:
+    // unsaved changes, text in the quick line or in a block being typed, or a
+    // refused line still waiting behind "Put it back in the line".
     function onBeforeUnload(e) {
         if (!state.store) return undefined;
         var st = state.store.status();
-        if (st.pending > 0 || st.state === 'offline') {
+        var box = q('.evb-notice');
+        var ask = st.pending > 0 || st.state === 'offline' ||
+            !!(state.entry && state.entry.getText().trim()) ||
+            !!(win.EvBoardType && win.EvBoardType.hasText && win.EvBoardType.hasText()) ||
+            !!(box && !box.hidden && box.querySelector('.evb-notice-restore'));
+        if (ask) {
             e.preventDefault();
             e.returnValue = '';
             return '';
@@ -553,36 +698,72 @@
 
     // ---- refresh ----
 
-    function canon(items) {
-        var t16 = function (s) { return String(s || '').replace('T', ' ').slice(0, 16); };
-        var num = function (v) { return v == null || v === '' ? '' : (isFinite(+v) ? (+v).toFixed(2) : String(v)); };
-        return JSON.stringify(items.map(function (it) {
-            return [+it.EventScheduleId, it.Title || '', t16(it.StartTime), t16(it.EndTime), it.Location || '',
-                it.Description || '', it.Category || '', it.SecondaryCategory || '',
-                (it.Leads || []).map(function (l) { return +l.MundaneId + (l.Auto ? 'a' : ''); }).sort(),
-                it.Menu || '', num(it.Cost), it.Dietary || '', it.Allergens || ''];
-        }).sort(function (a, b) { return a[0] - b[0]; }));
-    }
-
-    // Re-read the schedule when everything here is saved, and take it if it differs
-    // (which also clears Undo). A change made meanwhile wins over the answer, and
-    // the read is made again once that change is saved (the schedule modal writes
-    // through its own endpoints, and its change must still reach the board).
-    // Asked for while changes are unsaved, it runs as soon as they are saved.
-    function refresh() {
-        if (!state.editing || !state.store) return;
-        if (state.store.status().state !== 'saved') { state.refreshOwed = true; return; }
+    // Re-read the schedule when everything here is saved and merge it into the
+    // store (store.sync: Undo, Redo, cids and so the selection all survive). A
+    // change made meanwhile wins over the answer, and the read is made again once
+    // that change is saved (the schedule modal writes through its own endpoints,
+    // and its change must still reach the board). Asked for while changes are
+    // unsaved, it runs as soon as they are saved. Resolves once the board shows
+    // the merge: a read replaced by a later one resolves with the later one, and
+    // a deferred one once it has run; at once when it does not refresh (Edit mode
+    // off or ended). opts.own: the person's own save (the Details form), so the
+    // merge is not news from someone else.
+    function refresh(opts) {
+        var own = !!(opts && opts.own === true);
+        if (!state.editing || !state.store) return Promise.resolve();
+        if (state.store.status().state !== 'saved') {
+            state.owedOwn = state.refreshOwed ? state.owedOwn && own : own;
+            state.refreshOwed = true;
+            return new Promise(function (res) { state.owedWaiters.push(res); });
+        }
         state.refreshOwed = false;
-        var seq = ++state.refreshSeq, at = state.changeSeq;
-        fetchList().then(function (items) {
-            if (!state.editing || seq !== state.refreshSeq) return;
-            if (at !== state.changeSeq) { refresh(); return; }
-            if (canon(items) === canon(state.store.items())) return;
-            state.store.reset(items);
-        }, function () { /* keep what is here; the next focus tries again */ });
+        state.owedOwn = false;
+        // A read this one replaces passes on its own-ness: the person's own save is never news.
+        if (state.reading && state.readingOwn) own = true;
+        var seq = ++state.refreshSeq, at = state.changeSeq, store = state.store;
+        state.reading = seq;
+        state.readingOwn = own;
+        var ended = function () { if (state.reading === seq) state.reading = 0; };
+        var replaced = function () { return state.editing && state.store === store && seq !== state.refreshSeq; };
+        var p = fetchList().then(function (read) {
+            if (replaced()) return state.readDone;
+            if (!state.editing || state.store !== store) return undefined;
+            ended();
+            if (at !== state.changeSeq) return refresh({ own: own });
+            // Only a read that is still current may set the staff: a late one would bring back an old list.
+            takeStaff(read.staff);
+            // The change event this fires re-renders the board before sync returns.
+            var n = store.sync(read.schedule);
+            var total = n.added + n.changed + n.removed;
+            if (total && !own) noticeUpdated(total);
+            return undefined;
+        }, function () {
+            if (replaced()) return state.readDone;
+            ended(); // keep what is here; the next re-read tries again
+            return undefined;
+        });
+        state.readDone = p;
+        settleOwed(p);
+        return p;
     }
 
-    function onFocus() { refresh(); }
+    // Refreshes deferred while changes were unsaved resolve with the read that ran
+    // for them, or at once (undefined) when Edit mode ends first.
+    function settleOwed(p) {
+        state.owedWaiters.splice(0).forEach(function (res) { res(p); });
+    }
+
+    // The automatic re-reads (focus, the page shown again, every minute): only
+    // while editing, on a visible page, with nothing queued, in flight or offline.
+    function autoRefresh() {
+        if (!state.editing || !state.store || state.leaving || state.exiting || state.reading) return;
+        if (doc.visibilityState === 'hidden') return;
+        if (state.store.status().state !== 'saved') return;
+        refresh();
+    }
+
+    function onFocus() { autoRefresh(); }
+    function onVisibility() { if (doc.visibilityState === 'visible') autoRefresh(); }
 
     // ---- enter and exit ----
 
@@ -596,11 +777,18 @@
     }
 
     function mount(items) {
-        var store = win.EvBoardStore.create({ items: items, send: send, saveMeal: !!cfg().canManageFeast });
+        var max = cfg().scheduleBatchMax;
+        var store = win.EvBoardStore.create({
+            items: items, send: send, saveMeal: !!cfg().canManageFeast, normalize: normalize,
+            maxOps: typeof max === 'number' && max > 0 && max % 1 === 0 ? max : undefined
+        });
         state.store = api.store = store;
         state.recent = [];
         state.editing = true;
         state.refreshOwed = false;
+        state.owedOwn = false;
+        state.reading = 0;
+        state.facts = null;
 
         var head = doc.createElement('div');
         head.className = 'evb-edit-head';
@@ -622,7 +810,9 @@
         state.offs = [
             store.on('change', onChange),
             store.on('status', showStatus),
-            store.on('rejected', onRejected)
+            store.on('rejected', onRejected),
+            store.on('superseded', onSuperseded),
+            store.on('refused', onRefused)
         ];
 
         // Undo and Redo keep focus where it was (usually the quick line).
@@ -651,6 +841,9 @@
         doc.addEventListener('keydown', onKeyDown);
         doc.addEventListener('click', onDocClick);
         win.addEventListener('focus', onFocus);
+        doc.addEventListener('visibilitychange', onVisibility);
+        state.pollTimer = win.setInterval(autoRefresh, POLL_MS);
+        guardUnload(true);
         state.entry.focus();
         runHooks(hooks.enter);
     }
@@ -662,8 +855,15 @@
         doc.removeEventListener('keydown', onKeyDown);
         doc.removeEventListener('click', onDocClick);
         win.removeEventListener('focus', onFocus);
+        doc.removeEventListener('visibilitychange', onVisibility);
+        if (state.pollTimer) { win.clearInterval(state.pollTimer); state.pollTimer = 0; }
         guardUnload(false);
         state.refreshOwed = false;
+        state.owedOwn = false;
+        state.reading = 0;
+        state.readDone = null;
+        state.updated = null;
+        state.facts = null;
         if (state.entry) state.entry.destroy();
         if (state.head && state.head.parentNode) state.head.parentNode.removeChild(state.head);
         state.entry = state.head = null;
@@ -671,6 +871,7 @@
         state.editing = false;
         panel().classList.remove('evb-edit-mode');
         V().setEditing(false);
+        settleOwed(undefined); // a refresh deferred until saved will not run now
     }
 
     function enter() {
@@ -679,10 +880,11 @@
         setEditButtonsBusy(true);
         var failed = doc.querySelector('.evb-open-failed');
         if (failed) failed.parentNode.removeChild(failed);
-        return fetchList().then(function (items) {
+        return fetchList().then(function (read) {
             state.opening = false;
             setEditButtonsBusy(false);
-            mount(items);
+            takeStaff(read.staff);
+            mount(read.schedule);
         }, function (err) {
             state.opening = false;
             setEditButtonsBusy(false);
@@ -735,8 +937,11 @@
                 addNotice('The line has no title yet. Add one and press Enter, or press Esc to clear it, then Done.');
                 state.entry.focus();
                 return Promise.resolve();
+            } else if (!onCommit(r)) {
+                // Refused (its notice says why): the line stays to be fixed.
+                state.entry.focus();
+                return Promise.resolve();
             } else {
-                onCommit(r);
                 state.entry.clear();
             }
         }
@@ -788,8 +993,15 @@
                 if (state.entry && state.entry.getText().trim()) state.entry.reparse();
             });
         }
+        // From the List view it opens the board first, as Build the schedule does.
         doc.querySelectorAll('.evb-edit-btn').forEach(function (b) {
-            b.addEventListener('click', function () { enter(); });
+            b.addEventListener('click', function () {
+                if (V().getView() !== 'board') {
+                    V().setView('board', { persist: true });
+                    if (typeof win.evWriteHash === 'function') win.evWriteHash('ev-tab-schedule');
+                }
+                enter();
+            });
         });
         doc.querySelectorAll('.evb-build-btn').forEach(function (b) {
             b.addEventListener('click', function () {
@@ -808,6 +1020,12 @@
     api.isMac = function () { return IS_MAC; };
     api.entryContext = entryContext;
     api.refresh = refresh;
+    // The Details form saved this row (its reply's schedule): the store takes it at
+    // once, so an edit made before the next read sends this row's Modified as `seen`.
+    api.noteSaved = function (row) {
+        if (!state.editing || !state.store || !row || typeof row !== 'object') return;
+        state.store.syncRow(row);
+    };
     api.onEnter = function (fn) { hooks.enter.push(fn); };
     api.onBeforeExit = function (fn) { hooks.beforeExit.push(fn); };
     api.onExit = function (fn) { hooks.exit.push(fn); };

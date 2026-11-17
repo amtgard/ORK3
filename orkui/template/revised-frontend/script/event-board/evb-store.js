@@ -9,13 +9,37 @@
  * copy of the item (absent for an add the server has not confirmed); a
  * rejected change reverts to it.
  *
- * status() -> {state: 'saved'|'saving'|'offline', pending, reason}; reason says
- * why the store is offline ('network', 'server', 'signed-out', 'forbidden', 'protocol')
- * and is null otherwise. Offline keeps every change; retry() sends them again.
+ * status() -> {state: 'saved'|'saving'|'offline', pending, reason, message?}; reason
+ * says why the store is offline ('network', 'server', 'signed-out', 'forbidden', 'protocol')
+ * and is null otherwise; message, present only when the server refused a request as a
+ * whole with a text, is that text. Offline keeps every change; retry() sends them again.
  *
  * Undo steps are lists of {cid, before, after} snapshots (null = absent).
  * Undoing a remove therefore brings the item back as a new add under the same
  * cid; the remove still reaches the server.
+ *
+ * Every request carries a token: send(wireOps, token). A request whose fate is
+ * unknown (no reply, a server error, an unexpected reply) is held whole: its
+ * entries stay in flight, nothing joins it, and retry() sends the same ops with
+ * the same token again before anything else, so the server applies it once.
+ * opts: {items, send, saveMeal, token: () => string, maxOps: ops per request}.
+ *
+ * An update carries `seen` (the saved copy's Modified). A result row with
+ * `gone` (the row was deleted) or `conflict` (someone else changed it first; the
+ * row is theirs) drops the item's queued work and history and fires
+ * 'superseded' {kind: 'gone'|'conflict', cid, title}. sync(serverItems) merges a
+ * fresh read of the schedule and returns {added, changed, removed}. syncRow(row)
+ * merges one row saved elsewhere (the Details form) the same way, except that its
+ * saved copy takes the row even while the item has work pending. pendingFor(cid)
+ * says whether the item has a change queued or in flight.
+ *
+ * opts.normalize(next, prev), optional: called for every add and update before
+ * it is applied or queued (never for undo, redo, adopt or sync, which only bring
+ * back or take in states that were valid), with copies of the item as it would
+ * be and as it was (null for an add). It returns {item} (the item to apply,
+ * possibly adjusted) or {refuse: message}. A refused call changes nothing and
+ * queues nothing: add returns null instead of a cid, update returns false (true
+ * otherwise), and 'refused' {message, item} fires once the outer call ends.
  */
 (function (root, factory) {
     if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -25,14 +49,42 @@
 
     var WIRE_FIELDS = ['Title', 'StartTime', 'EndTime', 'Location', 'Description', 'Category', 'SecondaryCategory', 'Leads'];
     var MEAL_FIELDS = ['Menu', 'Cost', 'Dietary', 'Allergens'];
-    var MAX_OPS = 200; // ops per request
+    var MAX_OPS = 200; // ops per request, unless opts.maxOps says otherwise
 
     function clone(v) { return v == null ? null : JSON.parse(JSON.stringify(v)); }
     function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 
+    // A request token: 22 characters of [A-Za-z0-9_-] (132 random bits).
+    var TOKEN_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    function newToken() {
+        var n = 22, bytes = null, out = '';
+        var c = typeof crypto !== 'undefined' ? crypto : null;
+        try {
+            if (c && typeof c.getRandomValues === 'function') { bytes = new Uint8Array(n); c.getRandomValues(bytes); }
+        } catch (e) { bytes = null; }
+        for (var i = 0; i < n; i++) out += TOKEN_CHARS.charAt((bytes ? bytes[i] : Math.floor(Math.random() * 256)) & 63);
+        return out;
+    }
+
+    // What a person sees of an item, for counting what a re-read changed.
+    function contentKey(it) {
+        var t16 = function (s) { return String(s || '').replace('T', ' ').slice(0, 16); };
+        var num = function (v) { return v == null || v === '' ? '' : (isFinite(+v) ? (+v).toFixed(2) : String(v)); };
+        return JSON.stringify([it.Title || '', t16(it.StartTime), t16(it.EndTime), it.Location || '',
+            it.Description || '', it.Category || '', it.SecondaryCategory || '',
+            (it.Leads || []).map(function (l) {
+                var o = l && typeof l === 'object';
+                return +(o ? l.MundaneId : l) + (o && l.Auto && l.Auto !== '0' ? 'a' : '');
+            }).sort(),
+            it.Menu || '', num(it.Cost), it.Dietary || '', it.Allergens || '']);
+    }
+
     function create(opts) {
         var send = opts.send;
         var fields = WIRE_FIELDS.concat(opts.saveMeal ? MEAL_FIELDS : []);
+        var makeToken = typeof opts.token === 'function' ? opts.token : newToken;
+        var normalize = typeof opts.normalize === 'function' ? opts.normalize : null;
+        var maxOps = typeof opts.maxOps === 'number' && opts.maxOps > 0 && opts.maxOps % 1 === 0 ? opts.maxOps : MAX_OPS;
 
         var list = [];      // local items, in order
         var saved = {};     // cid -> last server-confirmed copy
@@ -40,20 +92,29 @@
         var undoStack = [], redoStack = [];
 
         var queue = [];     // unsent entries: {op, cid, fields?, item?}
-        var inflight = null; // entries of the request in flight
+        var inflight = null; // entries of the request in flight (or held)
+        // The request in flight, or held after an unknown outcome:
+        // {sent: entries, wire: ops, token, uncertain: an earlier send of it may have been saved}.
+        var current = null;
         var offline = false;
         // Why the store is offline: 'network' (no reply), 'server' (a reply with an
         // error status), 'signed-out', 'forbidden' or 'protocol'.
         var offlineReason = null;
+        // With 'server': the text of a reply that refused the request as a whole, or null.
+        var offlineMessage = null;
 
-        var listeners = { change: [], status: [], rejected: [] };
+        var listeners = { change: [], status: [], rejected: [], superseded: [], refused: [] };
         var waiters = [];
 
         // Outer-operation bookkeeping: events fire only when the outermost call ends.
-        var depth = 0, recording = null, changed = false, rejections = [];
+        var depth = 0, recording = null, changed = false, rejections = [], supersessions = [], refusals = [];
         var lastStatus = null, pumpScheduled = false;
+        // Counts every change to the items, so a caller can cache what it derives from them.
+        var version = 0;
+        function dirty() { changed = true; version++; }
 
         function load(items) {
+            version++;
             list = []; saved = {};
             (items || []).forEach(function (it) {
                 var c = clone(it);
@@ -96,11 +157,15 @@
             if (step && !step.discard) commitStep(step);
             var didChange = changed; changed = false;
             var rej = rejections; rejections = [];
+            var sup = supersessions; supersessions = [];
+            var ref = refusals; refusals = [];
             // A listener may call back into the store; each such call finishes on its own,
             // so status and idleness are read only after these listeners have run.
             if (didChange) emit('change');
             rej.forEach(function (r) { emit('rejected', r); });
-            var st = status(), stKey = st.state + ':' + st.pending + ':' + st.reason;
+            sup.forEach(function (r) { emit('superseded', r); });
+            ref.forEach(function (r) { emit('refused', r); });
+            var st = status(), stKey = st.state + ':' + st.pending + ':' + st.reason + ':' + (st.message || '');
             if (stKey !== lastStatus) { lastStatus = stKey; emit('status', st); }
             if (depth === 0 && isIdle()) waiters.splice(0).forEach(function (r) { r(); });
         }
@@ -188,21 +253,29 @@
             if (!isId(id)) return WAIT;
             if (e.op === 'remove') return { op: 'remove', id: id };
             e.sent = f;
-            return { op: 'update', id: id, fields: f };
+            var w = { op: 'update', id: id, fields: f };
+            // The server's Modified as last confirmed here: a newer one means someone else saved first.
+            var seen = saved[e.cid].Modified;
+            if (typeof seen === 'string' && seen) w.seen = seen;
+            return w;
         }
 
         // A positive integer id (a digit string from a PHP row counts too).
         function isId(v) { return (typeof v === 'number' || typeof v === 'string') && /^[1-9]\d*$/.test(String(v)); }
 
         // A success response must hold one row per op sent, and give every add an id.
+        // An update or remove row may say the item is gone; an update row may say it
+        // was in conflict, and then carries the server's current row.
         function wellFormed(sent, results) {
             if (!Array.isArray(results) || results.length !== sent.length) return false;
             return sent.every(function (e, i) {
                 var r = results[i];
                 if (!r || typeof r !== 'object') return false;
-                if (e.op === 'add') return isId(r.id || (r.schedule && r.schedule.EventScheduleId));
+                if (e.op === 'add') return !r.gone && !r.conflict && isId(r.id || (r.schedule && r.schedule.EventScheduleId));
                 // An update or remove row that names an id must name a real one.
                 var rowId = r.schedule && typeof r.schedule === 'object' ? r.schedule.EventScheduleId : undefined;
+                if (r.gone && r.conflict) return false;
+                if (r.conflict && (e.op !== 'update' || !isId(rowId))) return false;
                 return (r.id === undefined || isId(r.id)) && (rowId === undefined || isId(rowId));
             });
         }
@@ -210,52 +283,76 @@
         function pump() {
             if (inflight || offline) return;
             var sent = [], wire = [], waiting = [];
-            while (queue.length && wire.length < MAX_OPS) {
+            while (queue.length && wire.length < maxOps) {
                 var e = queue.shift(), w = toWire(e);
                 if (w === WAIT) waiting.push(e);
                 else if (w) { sent.push(e); wire.push(w); }
             }
             queue = waiting.concat(queue);
             if (!wire.length) return;
-            inflight = sent;
+            dispatch({ sent: sent, wire: wire, token: String(makeToken()), uncertain: false });
+        }
+
+        // Send a request (a new one, or a held one again exactly as it was).
+        function dispatch(b) {
+            current = b;
+            inflight = b.sent;
             var p;
-            try { p = Promise.resolve(send(wire)); } catch (err) { p = Promise.reject(err); }
-            p.then(function (res) { run(function () { settle(sent, res); }, false); },
+            try { p = Promise.resolve(send(clone(b.wire), b.token)); } catch (err) { p = Promise.reject(err); }
+            p.then(function (res) { run(function () { settle(b, res); }, false); },
                 function (err) {
                     // send may say why it failed (err.reason); otherwise the server was not reached.
                     var why = err && REASONS.indexOf(err.reason) >= 0 ? err.reason : 'network';
-                    run(function () { goOffline(sent, why); }, false);
+                    run(function () { goOffline(b, why); }, false);
                 });
         }
 
         var REASONS = ['network', 'server', 'signed-out', 'forbidden', 'protocol'];
+        // The outcomes that leave it unknown whether the server saved the request.
+        var UNKNOWN = ['network', 'server', 'protocol'];
 
-        function goOffline(sent, reason) {
-            inflight = null;
+        function done() { current = null; inflight = null; }
+
+        // Offline. A request that may have been saved is held whole (same ops, same
+        // token, its entries still in flight) for retry() to send again first. One the
+        // server certainly did not apply goes back to the head of the queue, unless an
+        // earlier send of it may have been saved (a refusal now says nothing about then).
+        function goOffline(b, reason, message) {
             offline = true;
             offlineReason = reason || 'protocol';
-            requeue(sent);
+            offlineMessage = offlineReason === 'server' && message ? message : null;
+            if (UNKNOWN.indexOf(offlineReason) >= 0) b.uncertain = true;
+            if (b.uncertain) return;
+            done();
+            requeue(b.sent);
         }
 
-        function settle(sent, res) {
-            if (!res || typeof res !== 'object') return goOffline(sent, 'protocol');
+        function settle(b, res) {
+            var sent = b.sent;
+            // A reply is an object with a whole-number status; anything else is not one.
+            if (!res || typeof res !== 'object' || Array.isArray(res) ||
+                typeof res.status !== 'number' || res.status % 1 !== 0) return goOffline(b, 'protocol');
             var fi = res.failedIndex;
             var validIndex = typeof fi === 'number' && fi % 1 === 0 && fi >= 0 && fi < sent.length;
             if (res.status === 0) {
                 // A malformed success is a protocol failure: keep everything and go offline.
-                if (!wellFormed(sent, res.results)) return goOffline(sent, 'protocol');
-                inflight = null;
+                if (!wellFormed(sent, res.results)) return goOffline(b, 'protocol');
+                done();
                 applyResults(sent, res.results);
             } else if ((res.status === 1 || res.status === 3) && validIndex) {
-                inflight = null;
+                // The server looks a token up before it applies anything, so a refused op
+                // means no send of this request was saved.
+                done();
                 reject(sent, fi, res.error);
             } else if (res.status === 5) {
-                return goOffline(sent, 'signed-out');
+                return goOffline(b, 'signed-out');
             } else if (res.status === 3) {
                 // Refused as a whole, not for one op: the permission is gone.
-                return goOffline(sent, 'forbidden');
+                return goOffline(b, 'forbidden');
             } else {
-                return goOffline(sent, 'protocol');
+                // Failed as a whole, for no one op (a failed save, a refused token): the
+                // server's problem. Its text is kept for the person; the request is held.
+                return goOffline(b, 'server', typeof res.error === 'string' ? res.error.trim() : '');
             }
             pump();
         }
@@ -265,17 +362,40 @@
             var i = indexOf(cid);
             if (i < 0 || lastFor(cid) >= 0) return;
             var next = clone(saved[cid]);
-            if (!same(next, list[i])) { list[i] = next; changed = true; }
+            if (!same(next, list[i])) { list[i] = next; dirty(); }
+        }
+
+        // Someone else deleted the item (gone) or changed it first (conflict, row =
+        // their version): it takes the server's state, its queued work and its
+        // history go, and the person is told.
+        function supersede(cid, kind, row) {
+            var local = find(cid), i = indexOf(cid);
+            var title = String((local && local.Title) || (saved[cid] && saved[cid].Title) || (row && row.Title) || '');
+            queue = queue.filter(function (x) { return x.cid !== cid; });
+            if (kind === 'gone') {
+                delete saved[cid];
+                if (i >= 0) list.splice(i, 1);
+            } else {
+                saved[cid] = Object.assign(clone(row), { cid: cid });
+                if (i >= 0) list[i] = clone(saved[cid]); else list.push(clone(saved[cid]));
+            }
+            dirty();
+            dropHistory(cid);
+            supersessions.push({ kind: kind, cid: cid, title: title });
         }
 
         function applyResults(sent, results) {
             sent.forEach(function (e, i) {
                 var r = results[i], row = r.schedule || {}, local;
+                if (e.op === 'update' && (r.gone || r.conflict)) {
+                    supersede(e.cid, r.gone ? 'gone' : 'conflict', r.schedule);
+                    return;
+                }
                 if (e.op === 'add') {
                     var id = r.id || row.EventScheduleId;
                     saved[e.cid] = Object.assign({}, e.snap, row, { EventScheduleId: id, cid: e.cid });
                     local = find(e.cid);
-                    if (local && local.EventScheduleId !== id) { local.EventScheduleId = id; changed = true; }
+                    if (local && local.EventScheduleId !== id) { local.EventScheduleId = id; dirty(); }
                     adopt(e.cid);
                 } else if (e.op === 'update') {
                     saved[e.cid] = Object.assign({}, saved[e.cid], e.sent, row, { cid: e.cid });
@@ -284,9 +404,9 @@
                         // Keep the local copy's later edits; take only the server's view of what was sent.
                         if (lastFor(e.cid) < 0) {
                             var merged = Object.assign({}, local, row, { cid: e.cid });
-                            if (!same(merged, local)) { list[indexOf(e.cid)] = merged; changed = true; }
+                            if (!same(merged, local)) { list[indexOf(e.cid)] = merged; dirty(); }
                         } else if (row.EventScheduleId && local.EventScheduleId !== row.EventScheduleId) {
-                            local.EventScheduleId = row.EventScheduleId; changed = true;
+                            local.EventScheduleId = row.EventScheduleId; dirty();
                         }
                     }
                 } else {
@@ -295,10 +415,14 @@
             });
         }
 
-        function reject(sent, fi, message) {
-            var e = sent[fi], cid = e.cid, local = find(cid);
+        // The server's ceiling refusal ('A schedule can hold at most N items.').
+        var CEILING_MESSAGE = /^A schedule can hold at most \d+ items\.?$/;
+
+        // Puts one refused item back as the server last confirmed it (or removes it) and
+        // forgets what is queued for it. Returns what it was last locally.
+        function undoLocal(cid, e) {
+            var local = find(cid);
             var lastHad = clone(local) || clone(e.item) || clone(e.snap) || clone(saved[cid]);
-            var rest = sent.filter(function (x) { return x.cid !== cid; });
             queue = queue.filter(function (x) { return x.cid !== cid; });
             var i = indexOf(cid);
             if (saved[cid]) {
@@ -306,10 +430,29 @@
             } else if (i >= 0) {
                 list.splice(i, 1);
             }
-            changed = true;
             dropHistory(cid);
+            return lastHad;
+        }
+
+        function reject(sent, fi, message) {
+            var e = sent[fi], cid = e.cid;
+            var dropped = [];
+            // Over the ceiling, every later add of this send is over it too, unless an
+            // op after the refused one frees room: drop them all now, with one notice,
+            // rather than one round trip and notice each.
+            if (e.op === 'add' && CEILING_MESSAGE.test(String(message || '').trim()) &&
+                !sent.slice(fi + 1).some(function (x) { return x.op === 'remove'; })) {
+                dropped = sent.slice(fi + 1).filter(function (x) { return x.op === 'add'; });
+            }
+            var gone = {};
+            gone[cid] = true;
+            dropped.forEach(function (x) { gone[x.cid] = true; });
+            var rest = sent.filter(function (x) { return !gone[x.cid]; });
+            var lastHad = undoLocal(cid, e);
+            dropped.forEach(function (x) { undoLocal(x.cid, x); });
+            dirty();
             requeue(rest);
-            rejections.push({ kind: e.op, cid: cid, item: lastHad, message: message || '' });
+            rejections.push({ kind: e.op, cid: cid, item: lastHad, message: message || '', dropped: dropped.length });
         }
 
         // History stacks are only ever changed in place, so a caller holding them
@@ -347,7 +490,7 @@
             c.cid = cid;
             c.EventScheduleId = 0;
             list.push(c);
-            changed = true;
+            dirty();
             enqueue({ op: 'add', cid: cid });
         }
 
@@ -360,7 +503,7 @@
             if (!Object.keys(f).length) return;
             touch(cid, rec);
             Object.assign(local, f);
-            changed = true;
+            dirty();
             enqueue({ op: 'update', cid: cid, fields: f });
         }
 
@@ -372,7 +515,7 @@
             touch(cid, rec);
             if (forget) forgetItem(cid);
             var snap = list.splice(i, 1)[0];
-            changed = true;
+            dirty();
             enqueue({ op: 'remove', cid: cid, item: snap });
         }
 
@@ -383,7 +526,8 @@
             if (!local) { doAdd(target, cid, false); return; }
             var diff = {};
             Object.keys(target).forEach(function (k) {
-                if (k === 'cid' || k === 'EventScheduleId') return;
+                // Modified is the server's: an undo never takes it back.
+                if (k === 'cid' || k === 'EventScheduleId' || k === 'Modified') return;
                 if (!same(target[k], local[k])) diff[k] = clone(target[k]);
             });
             doUpdate(cid, diff, false);
@@ -415,22 +559,159 @@
                     c.cid = cid;
                     list.push(c);
                     saved[cid] = clone(c);
-                    changed = true;
+                    dirty();
                     cids.push(cid);
                 });
             }, true);
             return cids;
         }
 
+        function pendingFor(cid) {
+            return lastFor(cid) >= 0 || (inflight || []).some(function (e) { return e.cid === cid; });
+        }
+
+        // opts.normalize on an add (prev null) or an update: {item} to apply, or
+        // {refuse} (recorded for the 'refused' event). A normalize that throws, or
+        // answers neither, lets the item through as it is.
+        function vet(next, prev) {
+            if (!normalize) return { item: next };
+            var r = null;
+            try { r = normalize(clone(next), clone(prev)); } catch (e) { setTimeout(function () { throw e; }, 0); }
+            if (r && typeof r === 'object' && r.refuse != null && r.refuse !== false) {
+                refusals.push({ message: String(r.refuse), item: clone(next) });
+                return { refuse: String(r.refuse) };
+            }
+            return { item: r && r.item && typeof r.item === 'object' ? r.item : next };
+        }
+
+        function publicAdd(item, rec) {
+            var v = vet(clone(item) || {}, null);
+            if (v.refuse != null) return null;
+            var cid = 'n' + (++seq);
+            doAdd(v.item, cid, rec);
+            return cid;
+        }
+
+        // The fields asked for, as normalize left them, and any other field it changed.
+        function publicUpdate(cid, f, rec) {
+            var local = find(cid);
+            if (!local || !normalize) { doUpdate(cid, f, rec); return true; }
+            var asked = clone(f) || {};
+            delete asked.cid;
+            delete asked.EventScheduleId;
+            if (!Object.keys(asked).length) return true;
+            var next = Object.assign(clone(local), asked);
+            var v = vet(next, local);
+            if (v.refuse != null) return false;
+            var out = {};
+            Object.keys(asked).forEach(function (k) { out[k] = v.item[k]; });
+            Object.keys(v.item).forEach(function (k) {
+                if (k !== 'cid' && k !== 'EventScheduleId' && !same(v.item[k], next[k])) out[k] = v.item[k];
+            });
+            doUpdate(cid, out, rec);
+            return true;
+        }
+
+        // Merge a fresh read of the schedule. An item with nothing queued or in flight
+        // takes the server's row; one with pending work keeps its local state. A row
+        // the store does not know is added (not while an add is in flight: the row
+        // may be that add). A saved item the server no longer has, with no pending
+        // work, is removed, and its changes leave every undo and redo step; so do the
+        // changes of an item whose content the read changed. All other history stays.
+        // Returns {added, changed, removed}; one change event at most.
+        function sync(serverItems) {
+            var counts = { added: 0, changed: 0, removed: 0 };
+            run(function () {
+                var rows = {}, order = [], known = {};
+                (serverItems || []).forEach(function (row) {
+                    if (!row || !isId(row.EventScheduleId)) return;
+                    var id = String(row.EventScheduleId);
+                    if (!rows[id]) { rows[id] = row; order.push(id); }
+                });
+                Object.keys(saved).forEach(function (cid) {
+                    var id = String(saved[cid].EventScheduleId);
+                    known[id] = true;
+                    if (pendingFor(cid)) return;
+                    var i = indexOf(cid);
+                    if (!rows[id]) {
+                        delete saved[cid];
+                        if (i >= 0) { list.splice(i, 1); counts.removed++; dirty(); }
+                        // Its changes leave every step (a step left empty goes). Dropping whole
+                        // steps would let an older step's snapshot undo later changes to others.
+                        dropHistory(cid);
+                        return;
+                    }
+                    mergeRow(cid, rows[id], counts);
+                });
+                var addOut = (inflight || []).some(function (e) { return e.op === 'add'; });
+                order.forEach(function (id) {
+                    if (known[id] || addOut) return;
+                    if (list.some(function (it) { return String(it.EventScheduleId) === id; })) return;
+                    var cid = 'i' + id;
+                    if (cidInUse(cid)) cid = 'n' + (++seq);
+                    var c = Object.assign(clone(rows[id]), { cid: cid });
+                    list.push(c);
+                    saved[cid] = clone(c);
+                    counts.added++;
+                    dirty();
+                });
+            }, false);
+            return counts;
+        }
+
+        // One known item with nothing pending takes the server's row (callers wrap it in run).
+        function mergeRow(cid, row, counts) {
+            var i = indexOf(cid);
+            var next = Object.assign(clone(row), { cid: cid });
+            saved[cid] = clone(next);
+            if (i < 0) { list.push(next); counts.added++; dirty(); return; }
+            if (same(next, list[i])) return;
+            if (contentKey(next) !== contentKey(list[i])) {
+                counts.changed++;
+                // Someone else changed it: an undo or redo snapshot of it would put
+                // their change back without a conflict (seen is now theirs), so the
+                // item's changes leave every step, as on a conflict.
+                dropHistory(cid);
+            }
+            list[i] = next;
+            dirty();
+        }
+
+        // A row the server saved outside this store (the Details form). The saved copy
+        // takes it at once, so the next update's `seen` is this row's Modified; the
+        // board copy takes it, by sync's rule, only when nothing is pending for the
+        // item. A row the store does not know is left for the next read.
+        function syncRow(row) {
+            var counts = { added: 0, changed: 0, removed: 0 };
+            if (!row || typeof row !== 'object' || !isId(row.EventScheduleId)) return counts;
+            var id = String(row.EventScheduleId);
+            run(function () {
+                var cid = null;
+                Object.keys(saved).forEach(function (c) { if (String(saved[c].EventScheduleId) === id) cid = c; });
+                if (!cid) return;
+                if (pendingFor(cid)) {
+                    // Content that really changed leaves every undo and redo step, as in
+                    // mergeRow: seen is now this row's, so an older snapshot would revert it.
+                    if (contentKey(row) !== contentKey(saved[cid])) dropHistory(cid);
+                    saved[cid] = Object.assign(clone(row), { cid: cid });
+                    return;
+                }
+                mergeRow(cid, row, counts);
+            }, false);
+            return counts;
+        }
+
         // ---- public API ----
 
         function status() {
             var pending = queue.length + (inflight ? inflight.length : 0);
-            return {
+            var st = {
                 state: offline ? 'offline' : (pending ? 'saving' : 'saved'),
                 pending: pending,
                 reason: offline ? offlineReason : null
             };
+            if (offline && offlineMessage) st.message = offlineMessage;
+            return st;
         }
 
         function step(from, to, key, reverse) {
@@ -448,13 +729,17 @@
         return {
             items: function () { return list.map(clone); },
             get: function (cid) { return clone(find(cid)); },
+            // -> the new item's cid, or null when opts.normalize refused it.
             add: function (item, o) {
-                var cid = 'n' + (++seq);
-                run(function () { doAdd(item, cid, !o || o.undoable !== false); }, true);
+                var cid = null;
+                run(function () { cid = publicAdd(item, !o || o.undoable !== false); }, true);
                 return cid;
             },
+            // -> false when opts.normalize refused it, else true.
             update: function (cid, f, o) {
-                run(function () { doUpdate(cid, f, !o || o.undoable !== false); }, true);
+                var ok = true;
+                run(function () { ok = publicUpdate(cid, f, !o || o.undoable !== false); }, true);
+                return ok;
             },
             remove: function (cid, o) {
                 var undoable = !o || o.undoable !== false;
@@ -467,8 +752,13 @@
             canUndo: function () { return undoStack.length > 0; },
             canRedo: function () { return redoStack.length > 0; },
             status: status,
+            // A held request goes again first, unchanged; the queue follows once it settles.
             retry: function () {
-                run(function () { offline = false; offlineReason = null; pump(); }, false);
+                run(function () {
+                    var was = offline;
+                    offline = false; offlineReason = null; offlineMessage = null;
+                    if (current) { if (was) dispatch(current); } else pump();
+                }, false);
             },
             idle: function () {
                 if (isIdle()) return Promise.resolve();
@@ -479,10 +769,15 @@
                 run(function () {
                     load(serverItems);
                     undoStack.length = 0; redoStack.length = 0;
-                    changed = true;
+                    dirty();
                 }, false);
                 return true;
             },
+            sync: sync,
+            syncRow: syncRow,
+            pendingFor: function (cid) { return pendingFor(cid); },
+            // Goes up with every change to the items.
+            version: function () { return version; },
             on: function (type, fn) {
                 if (!listeners[type]) throw new Error('Unknown event: ' + type);
                 listeners[type].push(fn);
@@ -494,5 +789,5 @@
         };
     }
 
-    return { create: create };
+    return { create: create, token: newToken };
 });

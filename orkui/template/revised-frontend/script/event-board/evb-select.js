@@ -7,16 +7,22 @@
  * it out; Cmd/Ctrl+A selects every block. With blocks selected and no text
  * field or page modal in the way: Delete or Backspace removes them, 1-9 and 0
  * set their category by the category's key, Cmd/Ctrl+D duplicates them, Enter
- * retypes a single one in place (EvBoardType.editItem), Esc clears the
- * selection. Those keys are ignored on a button or link other than a block.
+ * retypes a single one in place (EvBoardType.editItem), Shift+Enter opens its
+ * Details, Esc clears the selection. Those keys are ignored on a button or link
+ * other than a block.
  * A small toolbar floats over a single selected block: Rename, Duplicate,
  * Category (the ten categories), Details (the full schedule form) and Delete;
  * with more than one selected, a badge ("3 selected") with one Delete button
- * takes its place.
+ * takes its place. Tab on a selected block goes to the toolbar's first tool,
+ * Tab past its last goes on as Tab from the block would, Shift+Tab from its
+ * first returns to the block. When the Details form closes (saved or not), its
+ * item is selected and focused again (the quick line, when it is gone).
  *
  * The arrow keys nudge the selection: Up and Down move it 15 minutes, Shift
  * with them moves only its end, Left and Right move it a day; Alt makes the
- * step 5 minutes. Nudged times are not snapped. Every group action is one
+ * step 5 minutes. Nudged times are not snapped, and a nudge or a duplicate
+ * never takes an item off the board's days (EvBoardCore.boardRange: it goes
+ * only as far as fits, or not at all). Every group action is one
  * store.batch (one save, one undo step). A single selected block carries resize
  * grips (.evb-resize-top on its first segment, .evb-resize-bottom on its last)
  * and the fill handle (.evb-fill-handle, bottom right of its last), which
@@ -55,6 +61,9 @@
         sel: [],        // the selected items: [{cid, id}] (id: the server id, to find it again after a refresh renames cids)
         anchor: null,   // the cid last clicked or added, where the badge sits
         focusEl: null,  // the block that last had keyboard focus, while focus is on a block
+        tabFrom: null,  // {el, cid} the block Tab moved focus from into the toolbar or badge
+        details: null,  // {cid, id} the item the Details form was opened for, while it is open
+        modalObs: null, // watches the schedule form's display for its closing
         listeners: [],
         offs: []
     };
@@ -169,10 +178,18 @@
         if (el === s.bar) placeMenu();
     }
 
+    // A tool that had keyboard focus hands it to the selected block on screen,
+    // else to the quick line, not to the page. Not while typing has started
+    // (Rename from the keyboard): the block editor is about to take focus.
     function hideEl(el) {
         if (!el) return;
+        var had = !el.hidden && el.contains(doc.activeElement);
         el.hidden = true;
         if (el === s.bar) setMenu(false);
+        if (!had || !s.ctx || typing()) return;
+        var b = s.sel.length ? shownBlock() : null;
+        if (b) b.focus({ preventScroll: true });
+        else if (s.ctx.quickLine) s.ctx.quickLine.focus();
     }
 
     function hideBars() {
@@ -245,6 +262,8 @@
             b.setAttribute('aria-pressed', on ? 'true' : 'false');
             grips(b, !!single && cid === single);
         });
+        // A selected block stays reachable while the legend filter dims it.
+        if (V() && V().applyFilter) V().applyFilter();
         if (single) {
             syncToolbar(s.ctx.store.get(single));
             hideEl(s.badge);
@@ -278,7 +297,11 @@
                 el = doc.createElement('div');
                 el.className = g[0];
                 el.setAttribute('aria-hidden', 'true');
-                if (g[0] === 'evb-fill-handle') el.setAttribute('data-tip', 'Drag to repeat');
+                // A rail is too narrow for the tip, which opens inside the block: its
+                // tip floats outside instead (evb-bulk.js, as a conflict badge's).
+                if (g[0] === 'evb-fill-handle') {
+                    el.setAttribute(b.classList.contains('evb-block-rail') ? 'data-evb-tip' : 'data-tip', 'Drag to repeat');
+                }
                 b.appendChild(el);
             } else if (!(on && g[1]) && el) {
                 b.removeChild(el);
@@ -342,34 +365,44 @@
 
     // ---- nudging with the arrow keys ----
 
+    // Where gestures keep items: the days the board shows (EvBoardCore.boardRange).
+    function range() {
+        var b = V().board;
+        return C().boardRange(((b && b.days) || []).map(function (d) { return d.day; }));
+    }
+
+    function sameTimes(item, t) {
+        return String(item.StartTime).slice(0, 16) === t.StartTime && String(item.EndTime).slice(0, 16) === t.EndTime;
+    }
+
     // Up/Down move the selection by step minutes, Shift+Up/Down move only its
     // end (never under 5 minutes long), Left/Right move it a day. One undo step.
+    // One item or many, the selection stays on the board's days: a move that
+    // would leave them is shortened to what fits (a day move is all or nothing),
+    // and with no room left nothing happens.
     function nudge(key, shift, step) {
         var store = s.ctx.store, Co = C();
         var dir = (key === 'ArrowUp' || key === 'ArrowLeft') ? -1 : 1;
         var list = cids().filter(function (c) { return !!store.get(c); });
         if (!list.length || leaving()) return;
         var sideways = key === 'ArrowLeft' || key === 'ArrowRight';
-        var dMin = sideways ? 0 : dir * step, dDays = sideways ? dir : 0;
-        // A group moves together, only as far as all of it stays on the axis and
-        // the board's days (a single block may still step onto a new day).
-        if (list.length > 1 && !shift) {
-            var b = V().board, days = b.days.map(function (d) { return d.day; });
-            var lim = Co.groupShiftLimit(list.map(function (c) { return store.get(c); }), dMin, dDays, {
-                minStart: Math.max(b.axisStart, Co.BOARD_DAY_START), maxEnd: Math.min(b.axisEnd, Co.BOARD_DAY_END),
-                firstDay: days[0], lastDay: days[days.length - 1]
-            });
+        var dMin = sideways ? 0 : dir * step, dDays = sideways ? dir : 0, r = range();
+        if (!shift || sideways) {
+            var lim = Co.groupShiftLimit(list.map(function (c) { return store.get(c); }), dMin, dDays, { range: r });
             dMin = lim.dMin;
             dDays = lim.dDays;
             if (!dMin && !dDays) return;
         }
+        var moves = [];
+        list.forEach(function (cid) {
+            var item = store.get(cid), t;
+            if (shift && !sideways) t = Co.resizeTimes(item, 'end', Co.span(item).end + dir * step, r);
+            else t = Co.shiftTimes(item, dMin, dDays);
+            if (!sameTimes(item, t)) moves.push({ cid: cid, t: t });
+        });
+        if (!moves.length) return;
         store.batch(function () {
-            list.forEach(function (cid) {
-                var item = store.get(cid), t;
-                if (shift && !sideways) t = Co.resizeTimes(item, 'end', Co.span(item).end + dir * step);
-                else t = Co.shiftTimes(item, dMin, dDays);
-                store.update(cid, { StartTime: t.StartTime, EndTime: t.EndTime });
-            });
+            moves.forEach(function (m) { store.update(m.cid, { StartTime: m.t.StartTime, EndTime: m.t.EndTime }); });
         });
         // The axis grows to take the items in; keep the anchor on screen.
         revealItem(anchorCid());
@@ -453,18 +486,24 @@
         return Object.assign({}, item, { EndTime: C().toNaive(sp.day, sp.start + 5) });
     }
 
-    // A copy of every selected item starting where it ends; the copies become the selection.
+    // A copy of every selected item starting where it ends; the copies become the
+    // selection. A copy that would leave the board's days moves only as far as
+    // fits; when one has no room at all, nothing is copied.
     function duplicate() {
         var store = s.ctx.store;
         var items = cids().map(function (c) { return store.get(c); }).filter(Boolean);
         if (!items.length || leaving()) return;
         setMenu(false);
+        var r = range();
+        var plan = items.map(function (item) { return { item: item, t: C().duplicateTimes(atLeastFive(item), r) }; });
+        if (plan.some(function (p) { return !p.t; })) return;
         var added = [];
         store.batch(function () {
-            items.forEach(function (item) {
-                added.push(store.add(copyItem(item, C().duplicateTimes(atLeastFive(item)))));
-            });
+            plan.forEach(function (p) { added.push(store.add(copyItem(p.item, p.t))); });
         });
+        // A copy the store refused has no cid (its notice says why).
+        added = added.filter(Boolean);
+        if (!added.length) return;
         setSel(added, added[0]);
         revealItem(added[0]);
     }
@@ -481,21 +520,84 @@
 
     var STILL_SAVING = 'Still saving. Try Details again in a moment.';
 
-    // The full form, once the item has a server id. An add still saving is waited
-    // for, and the form opens only if that item is still the selection; a store
-    // that cannot save says so instead.
+    // The full form, once the item has a server id and nothing of it is still
+    // saving (the form posts the item's Modified as Seen, so it must open with the
+    // version the item's own changes leave). An add or change still saving is
+    // waited for, and the form opens only if that item is still the selection; a
+    // store that cannot save says so instead.
     function details() {
         var cid = one(), ctx = s.ctx, store = ctx.store;
         if (!cid || leaving() || typeof win.evOpenScheduleModalForItem !== 'function') return;
         setMenu(false);
+        var busy = function () { return typeof store.pendingFor === 'function' && store.pendingFor(cid); };
         var item = store.get(cid);
-        if (item && +item.EventScheduleId) { win.evOpenScheduleModalForItem(item); return; }
+        if (item && +item.EventScheduleId && !busy()) { openDetails(item); return; }
         if (store.status().state === 'offline') { ctx.addNotice(STILL_SAVING); return; }
         store.idle().then(function () {
             if (s.ctx !== ctx || one() !== cid || leaving()) return;
             var now = store.get(cid);
-            if (now && +now.EventScheduleId) win.evOpenScheduleModalForItem(now);
+            if (now && +now.EventScheduleId && !busy() && store.status().state !== 'offline') openDetails(now);
             else if (now) ctx.addNotice(STILL_SAVING);
+        });
+    }
+
+    // ---- focus after the Details form ----
+
+    function scheduleModal() { return doc.getElementById('ev-schedule-modal'); }
+    function modalShown(m) { return !!m && m.style.display !== 'none' && m.style.display !== ''; }
+
+    // Open the form for an item and watch for it closing (revised.js closes it by
+    // setting the overlay's display to none, after a save or a cancel).
+    function openDetails(item) {
+        win.evOpenScheduleModalForItem(item);
+        var m = scheduleModal();
+        if (!modalShown(m) || !win.MutationObserver) return;
+        s.details = { cid: item.cid, id: +item.EventScheduleId || 0 };
+        if (s.modalObs) s.modalObs.disconnect();
+        s.modalObs = new win.MutationObserver(function () {
+            if (modalShown(m) || !s.details) return;
+            // A save leaves its Save button disabled until its request settles; the
+            // form closes while it still is.
+            var saved = !!m.querySelector('.ev-sched-save-any:disabled');
+            var d = s.details;
+            s.details = null;
+            s.modalObs.disconnect();
+            s.modalObs = null;
+            // After this key press or click is done (an Esc that closed the form
+            // must not then clear the selection it gives back).
+            win.setTimeout(function () { afterDetails(d, saved); }, 0);
+        });
+        s.modalObs.observe(m, { attributes: true, attributeFilter: ['style'] });
+    }
+
+    // Select and focus the item the form was for. Its block may be drawn again (a
+    // refresh renames cids): apply() finds it by its server id. False when it is gone.
+    function restoreTo(d) {
+        if (!s.ctx || leaving() || typing()) return true;
+        setSel([d.cid]);
+        if (!one() && d.id) {
+            s.sel = [{ cid: d.cid, id: d.id }];
+            apply();
+        }
+        var b = one() && shownBlockOf(one());
+        if (b) b.focus({ preventScroll: true });
+        return !!one();
+    }
+
+    // Once the form has closed: the block straight away, and after a save again
+    // once the board has synced and rendered; an item no longer there hands focus
+    // to the quick line.
+    function afterDetails(d, saved) {
+        var ctx = s.ctx;
+        if (!ctx || leaving() || ctx.modalOpen()) return;
+        if (!restoreTo(d) && ctx.quickLine) ctx.quickLine.focus();
+        if (!saved || !win.EvBoardEdit || typeof win.EvBoardEdit.refresh !== 'function') return;
+        Promise.resolve(win.EvBoardEdit.refresh({ own: true })).then(function () {
+            if (s.ctx !== ctx || leaving() || ctx.modalOpen() || typing()) return;
+            // Only when the render dropped focus; anywhere else, it has moved on.
+            var a = doc.activeElement;
+            if (a && a !== doc.body) return;
+            if (!restoreTo(d) && ctx.quickLine) ctx.quickLine.focus();
         });
     }
 
@@ -629,9 +731,77 @@
             setCategory(def.name);
             return;
         }
+        // Enter retypes the single selected item; Shift+Enter opens its Details.
         if (e.key === 'Enter' && one()) {
             e.preventDefault();
-            rename();
+            if (e.shiftKey) details();
+            else rename();
+        }
+    }
+
+    // ---- Tab through the toolbar ----
+
+    // The toolbar (one selected) or the badge (several), while it shows.
+    function shownBar() {
+        var bar = one() ? s.bar : (s.sel.length ? s.badge : null);
+        return bar && !bar.hidden ? bar : null;
+    }
+
+    // Its buttons Tab reaches, in order (the category menu's while it is open).
+    function tools(bar) {
+        return Array.prototype.filter.call(bar.querySelectorAll('button'), function (b) {
+            return !b.disabled && b.getClientRects().length > 0;
+        });
+    }
+
+    var TABBABLE = 'a[href], area[href], button, input, select, textarea, iframe, summary, [contenteditable="true"], [tabindex]';
+
+    // Where Tab goes from a block when the toolbar is not in the way: the next
+    // element in the tab order after it (the toolbar's layer left out).
+    function nextTabbable(from) {
+        var all = doc.querySelectorAll(TABBABLE);
+        for (var i = 0; i < all.length; i++) {
+            var el = all[i];
+            if (!(from.compareDocumentPosition(el) & 4) || from.contains(el) || s.layer.contains(el)) continue;
+            if (el.tabIndex < 0 || el.disabled || (el.type === 'hidden') || !el.getClientRects().length) continue;
+            if (win.getComputedStyle(el).visibility === 'hidden') continue;
+            return el;
+        }
+        return null;
+    }
+
+    // Tab on a selected block goes to its toolbar's first tool (the selection
+    // stays); Shift+Tab from a block is left as it was.
+    function onBlockTab(e) {
+        if (e.key !== 'Tab' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented) return;
+        var b = blockAt(e.target);
+        if (!b || e.target !== b || !isSel(b.getAttribute('data-cid')) || !keysFree(e)) return;
+        var bar = shownBar(), list = bar ? tools(bar) : [];
+        if (!list.length) return;
+        e.preventDefault();
+        s.tabFrom = { el: b, cid: b.getAttribute('data-cid') };
+        list[0].focus({ preventScroll: true });
+    }
+
+    // In the toolbar: Shift+Tab on the first tool goes back to the block, Tab on
+    // the last goes where Tab from the block would have gone; between, as usual.
+    function onBarTab(e) {
+        if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey || e.defaultPrevented) return;
+        var list = tools(e.currentTarget), i = list.indexOf(doc.activeElement);
+        if (i < 0) return;
+        // The block Tab came from, while it is still selected (a render replaces it,
+        // a Duplicate selects the copy instead): else the selection's own block.
+        var t = s.tabFrom && isSel(s.tabFrom.cid) ? s.tabFrom : null;
+        var from = (t && doc.contains(t.el) && t.el) || (t && shownBlockOf(t.cid)) || shownBlock();
+        if (!from) return;
+        if (e.shiftKey && i === 0) {
+            e.preventDefault();
+            from.focus({ preventScroll: true });
+        } else if (!e.shiftKey && i === list.length - 1) {
+            var next = nextTabbable(from);
+            if (!next) return;
+            e.preventDefault();
+            next.focus();
         }
     }
 
@@ -659,6 +829,9 @@
         on(s.rootEl, 'focusin', onFocusIn);
         on(s.rootEl, 'focusout', onFocusOut);
         on(s.rootEl, 'dblclick', onDblClick);
+        on(s.rootEl, 'keydown', onBlockTab);
+        on(s.bar, 'keydown', onBarTab);
+        on(s.badge, 'keydown', onBarTab);
         on(doc, 'click', onDocClick);
         on(doc, 'keydown', onKeyDown);
         on(doc, 'scroll', onScroll, true);
@@ -675,9 +848,11 @@
             s.rootEl.querySelectorAll('.evb-selected').forEach(function (b) { b.classList.remove('evb-selected'); });
             s.rootEl.querySelectorAll('.evb-block[aria-pressed]').forEach(function (b) { b.removeAttribute('aria-pressed'); });
             s.rootEl.querySelectorAll('.evb-resize-top, .evb-resize-bottom, .evb-fill-handle').forEach(function (g) { g.parentNode.removeChild(g); });
+            if (V() && V().applyFilter) V().applyFilter();
         }
         if (s.layer && s.layer.parentNode) s.layer.parentNode.removeChild(s.layer);
-        s.ctx = s.layer = s.bar = s.badge = s.menu = s.rootEl = s.focusEl = null;
+        if (s.modalObs) s.modalObs.disconnect();
+        s.ctx = s.layer = s.bar = s.badge = s.menu = s.rootEl = s.focusEl = s.tabFrom = s.details = s.modalObs = null;
         s.sel = [];
         s.anchor = null;
     }

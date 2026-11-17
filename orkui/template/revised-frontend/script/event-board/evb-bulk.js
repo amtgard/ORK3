@@ -52,6 +52,7 @@
         flashTimer: 0,
         copySeq: 0,
         copying: false,     // a copy is on its way: the dialog stays open
+        copyToken: null,    // {source, token} of a copy whose outcome is unknown, for its retry
         conflictItems: null, // the board items the conflict map was read from
         conflictMap: {},
         offs: []
@@ -370,6 +371,7 @@
         if (!ov) return;
         s.dialog = null;
         s.copySeq++;
+        s.copyToken = null;
         if (ov.parentNode) ov.parentNode.removeChild(ov);
         var back = s.dialogReturn;
         s.dialogReturn = null;
@@ -523,17 +525,31 @@
         btn.setAttribute('aria-busy', 'true');
         meta.textContent = 'Copying…';
         showCopyError('');
+        // One token per press of Copy. A press again for the same source after a copy
+        // whose outcome is unknown (no reply, a server error, an unexpected reply)
+        // reuses it, so a copy the server did make is not made twice.
+        var source = btn.getAttribute('data-detail-id');
+        if (!s.copyToken || s.copyToken.source !== source) s.copyToken = { source: source, token: win.EvBoardStore.token() };
+        var attempt = s.copyToken;
         var fd = new win.FormData();
-        fd.append('SourceDetailId', btn.getAttribute('data-detail-id'));
+        fd.append('SourceDetailId', source);
+        fd.append('RequestToken', attempt.token);
         win.fetch(endpoint('schedule_copy_into'), { method: 'POST', body: fd, headers: XHR, credentials: 'same-origin' })
             .then(function (r) {
                 if (!r.ok) throw new Error('The schedule could not be copied (HTTP ' + r.status + ').');
                 return readJson(r);
             })
             .then(function (data) {
-                if (!data || data.status !== 0 || !Array.isArray(data.schedule)) {
-                    throw new Error((data && data.error) || 'The schedule could not be copied.');
+                if (data && typeof data.status === 'number' && data.status !== 0) {
+                    // Refused: nothing was copied, so the next press starts afresh. A reply
+                    // with no numeric status is unexpected: its outcome is unknown, so the
+                    // token is kept for the next press.
+                    var refused = new Error(data.error || 'The schedule could not be copied.');
+                    refused.refused = true;
+                    throw refused;
                 }
+                if (!data || data.status !== 0 || !Array.isArray(data.schedule)) throw new Error('The schedule could not be copied.');
+                if (s.copyToken === attempt) s.copyToken = null;
                 s.copying = false;
                 if (s.dialog === dialog) closeDialog(true);
                 // The rows are saved, so they are always taken while this Edit mode
@@ -551,6 +567,7 @@
             })
             .catch(function (err) {
                 s.copying = false;
+                if (err && err.refused && s.copyToken === attempt) s.copyToken = null;
                 if (s.dialog !== dialog) return;
                 closeBtn.disabled = false;
                 buttons.forEach(function (b) { b.disabled = false; });
@@ -584,8 +601,16 @@
         rootEl.querySelectorAll('.evb-block[data-cid]').forEach(function (b) {
             var msgs = map[b.getAttribute('data-cid')];
             var badge = b.querySelector(':scope > .evb-conflict');
+            // The base is whatever label the view rendered (title, category, time, place,
+            // leads...), never rebuilt here. It is remembered in data-evb-label; a label
+            // that is neither that base nor the one this code set was rendered anew
+            // (or changed in place) and becomes the base.
+            var label = b.getAttribute('aria-label') || '';
             var base = b.getAttribute('data-evb-label');
-            if (base == null) { base = b.getAttribute('aria-label') || ''; b.setAttribute('data-evb-label', base); }
+            if (base == null || (label !== base && label !== b.evbConflictLabel)) {
+                base = label;
+                b.setAttribute('data-evb-label', base);
+            }
             if (!msgs || !msgs.length) {
                 if (badge) b.removeChild(badge);
                 b.classList.remove('evb-has-conflict');
@@ -604,11 +629,15 @@
             badge.setAttribute('data-tip', text);
             badge.setAttribute('aria-label', 'Conflict: ' + text);
             b.classList.add('evb-has-conflict');
-            b.setAttribute('aria-label', base + '. Conflict: ' + text);
+            // Added to the end of the view's label; its own closing stop is not doubled.
+            var stem = base.replace(/[\s.]+$/, '');
+            b.evbConflictLabel = (stem ? stem + '. ' : '') + 'Conflict: ' + text;
+            b.setAttribute('aria-label', b.evbConflictLabel);
         });
     }
 
-    // The block clips its own overflow, so the badge's tip floats outside it.
+    // The block clips its own overflow, so the badge's tip floats outside it; so
+    // does a rail's fill handle's (data-evb-tip, set by evb-select.js).
     function showTip(badge) {
         if (!s.tip) {
             s.tip = doc.createElement('div');
@@ -616,7 +645,7 @@
             s.tip.setAttribute('role', 'tooltip');
             doc.body.appendChild(s.tip);
         }
-        s.tip.textContent = badge.getAttribute('data-tip') || '';
+        s.tip.textContent = badge.getAttribute('data-tip') || badge.getAttribute('data-evb-tip') || '';
         s.tip.hidden = false;
         var r = badge.getBoundingClientRect(), w = s.tip.offsetWidth, h = s.tip.offsetHeight;
         var vw = win.innerWidth || doc.documentElement.clientWidth, vh = win.innerHeight || doc.documentElement.clientHeight;
@@ -630,8 +659,8 @@
     function hideTip() { if (s.tip) s.tip.hidden = true; }
 
     function onRootOver(e) {
-        var b = e.target.closest && e.target.closest('.evb-conflict');
-        if (b) showTip(b); else hideTip();
+        var b = e.target.closest && e.target.closest('.evb-conflict, .evb-fill-handle[data-evb-tip]');
+        if (b && !(win.EvBoardDrag && win.EvBoardDrag.isActive())) showTip(b); else hideTip();
     }
 
     // ---- keys ----
@@ -691,6 +720,8 @@
         if (ctx.root) {
             on(ctx.root, 'mouseover', onRootOver);
             on(ctx.root, 'mouseleave', hideTip);
+            // A press (a repeat starting from the handle) puts the tip away.
+            on(ctx.root, 'pointerdown', hideTip);
         }
         on(win, 'scroll', hideTip, true);
         drawConflicts();

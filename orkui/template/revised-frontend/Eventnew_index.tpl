@@ -220,6 +220,9 @@
 	$canManageAttendance = $CanManageAttendance ?? false;
 	$canManageSchedule   = $CanManageSchedule ?? false;
 	$canManageFeast      = $CanManageFeast ?? false;
+	// Can manage the feast but not the schedule: the schedule form opens for feast
+	// items only (Feast and Food as primary or secondary), with the categories locked.
+	$evFeastOnly         = $canManageFeast && !$canManageSchedule;
 	$canManageStaff = $canManage || $canManageAttendance;
 	$canDelete           = ($attendeeCount === 0 && $rsvpCount === 0);
 
@@ -1229,7 +1232,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 						<col style="width:15%">
 						<col style="width:18%">
 						<col>
-						<?php if ($canManageSchedule): ?><col style="width:56px"><?php endif; ?>
+						<?php if ($canManageSchedule || $canManageFeast): ?><col style="width:56px"><?php endif; ?>
 					</colgroup>
 					<thead>
 						<tr>
@@ -1239,7 +1242,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							<th>Location</th>
 							<th>Lead(s)</th>
 							<th>Description</th>
-							<?php if ($canManageSchedule): ?><th class="ev-del-cell"></th><?php endif; ?>
+							<?php if ($canManageSchedule || $canManageFeast): ?><th class="ev-del-cell"></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody id="ev-schedule-tbody-<?= $dayKey ?>">
@@ -1254,8 +1257,11 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							// times — on a spanning slice the end cell is a bare arrow, not a time.
 							$evSeg = ($item['_IsFirstDay'] && $item['_IsLastDay']) ? 'single'
 								: ($item['_IsFirstDay'] ? 'first' : ($item['_IsLastDay'] ? 'last' : 'mid'));
+							// A feast editor changes and removes feast items only; other rows stay read-only.
+							$evRowEditable = $canManageSchedule
+								|| ($canManageFeast && ($evCat === 'Feast and Food' || $evSecCat === 'Feast and Food'));
 						?>
-						<tr <?php if ($item['_IsFirstDay']): ?>id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" <?php endif; ?>data-seg="<?= $evSeg ?>" data-schedule-id="<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" data-menu="<?= htmlspecialchars($item['Menu'] ?? '', ENT_QUOTES) ?>" data-cost="<?= htmlspecialchars((string)($item['Cost'] ?? ''), ENT_QUOTES) ?>" data-dietary="<?= htmlspecialchars($item['Dietary'] ?? '', ENT_QUOTES) ?>" data-allergens="<?= htmlspecialchars($item['Allergens'] ?? '', ENT_QUOTES) ?>" style="--evb-soft:<?= $evCatCfg['bg'] ?>;--evb-soft-dark:<?= $evCatCfg['bgDark'] ?>">
+						<tr <?php if ($item['_IsFirstDay']): ?>id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" <?php endif; ?>data-seg="<?= $evSeg ?>" data-schedule-id="<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" data-menu="<?= htmlspecialchars($item['Menu'] ?? '', ENT_QUOTES) ?>" data-cost="<?= htmlspecialchars((string)($item['Cost'] ?? ''), ENT_QUOTES) ?>" data-dietary="<?= htmlspecialchars($item['Dietary'] ?? '', ENT_QUOTES) ?>" data-allergens="<?= htmlspecialchars($item['Allergens'] ?? '', ENT_QUOTES) ?>" data-modified="<?= htmlspecialchars((string)($item['Modified'] ?? ''), ENT_QUOTES) ?>" style="--evb-soft:<?= $evCatCfg['bg'] ?>;--evb-soft-dark:<?= $evCatCfg['bgDark'] ?>">
 							<td style="white-space:nowrap"><?= $item['_IsFirstDay'] ? date('g:ia', $item['_SegStart']) : '(cont.)' ?></td>
 							<td style="white-space:nowrap"><?php
 								if (!$item['_IsLastDay']) {
@@ -1272,7 +1278,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							<td><?= htmlspecialchars($item['Location']) ?></td>
 							<td><?php foreach ($item['Leads'] ?? [] as $li => $lead) { if ($li > 0) echo ', '; echo '<a href="' . UIR . 'Player/profile/' . (int)$lead['MundaneId'] . '">' . htmlspecialchars($lead['Persona']) . '</a>'; } ?></td>
 							<td class="ev-sched-desc"><?= ev_autolink($item['Description']) ?></td>
-							<?php if ($canManageSchedule): ?>
+							<?php if ($evRowEditable): ?>
 							<td class="ev-del-cell">
 								<button class="ev-edit-link" data-tip="Edit" onclick="evOpenScheduleEditModal(<?= (int)$item['EventScheduleId'] ?>, this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0">
 									<i class="fas fa-pencil-alt"></i>
@@ -1283,7 +1289,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 									&times;
 								</button>
 							</td>
-							<?php endif; ?>
+							<?php elseif ($canManageFeast): ?><td class="ev-del-cell"></td><?php endif; ?>
 						</tr>
 						<?php endforeach; ?>
 					</tbody>
@@ -1335,7 +1341,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							<?php endif; ?>
 							<?php if ($canManageFeast || $canManageSchedule): ?>
 							<button class="ev-edit-btn" data-tip="Edit feast item"
-								onclick='evOpenFeastEditModal(<?= htmlspecialchars(json_encode(["EventScheduleId"=>(int)$meal["EventScheduleId"],"Title"=>$meal["Title"],"StartTime"=>$meal["StartTime"]??"","EndTime"=>$meal["EndTime"]??"","Location"=>$meal["Location"]??"","Description"=>$meal["Description"]??"","Category"=>$meal["Category"]??"","SecondaryCategory"=>$meal["SecondaryCategory"]??"","Leads"=>$meal["Leads"]??[],"Menu"=>$meal["Menu"]??"","Cost"=>$meal["Cost"],"Dietary"=>$meal["Dietary"]??"","Allergens"=>$meal["Allergens"]??""]), ENT_QUOTES) ?>)'>
+								onclick='evOpenFeastEditModal(<?= htmlspecialchars(json_encode(["EventScheduleId"=>(int)$meal["EventScheduleId"],"Title"=>$meal["Title"],"StartTime"=>$meal["StartTime"]??"","EndTime"=>$meal["EndTime"]??"","Location"=>$meal["Location"]??"","Description"=>$meal["Description"]??"","Category"=>$meal["Category"]??"","SecondaryCategory"=>$meal["SecondaryCategory"]??"","Leads"=>$meal["Leads"]??[],"Menu"=>$meal["Menu"]??"","Cost"=>$meal["Cost"],"Dietary"=>$meal["Dietary"]??"","Allergens"=>$meal["Allergens"]??"","Modified"=>(string)($meal["Modified"]??"")]), ENT_QUOTES) ?>)'>
 								<i class="fas fa-pencil-alt"></i></button>
 							<button class="ev-del-link" data-tip="Remove feast item" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0;line-height:1"
 								onclick="evRemoveFeastCard(this, <?= (int)$meal['EventScheduleId'] ?>)">&times;</button>
@@ -2323,6 +2329,7 @@ $evbSchedule = array_map(function ($it) {
 		'Cost'              => $it['Cost'] ?? null,
 		'Dietary'           => (string)($it['Dietary'] ?? ''),
 		'Allergens'         => (string)($it['Allergens'] ?? ''),
+		'Modified'          => (string)($it['Modified'] ?? ''),
 	];
 }, $scheduleList);
 ?>
@@ -2333,7 +2340,8 @@ var EvConfig = {
 	httpService:'<?= HTTP_SERVICE ?>',
 	canManage:         <?= !empty($canManage) ? 'true' : 'false' ?>,
 	canManageSchedule: <?= !empty($canManageSchedule) ? 'true' : 'false' ?>,
-	// Ordered [{name, key, icon, color, bg, colorDark, bgDark, bold}] from EventPlanning::ScheduleCategories.
+	// Ordered [{name, key, icon, color, bg, colorDark, bgDark, bold, tag, aliases, keywords, keywordRank}]
+	// from EventPlanning::ScheduleCategories (every key passes through).
 	scheduleCategories: <?= json_encode(array_map(
 		function ($name, $def) { return ['name' => $name] + $def; },
 		array_keys($evSchedCategories),
@@ -2346,23 +2354,25 @@ var EvConfig = {
 	isPastEvent:       <?= !empty($isPastEvent) ? 'true' : 'false' ?>,
 	eventId:    <?= $eventId ?>,
 	detailId:   <?= $detailId ?>,
-	eventName:  <?= json_encode($info['Name'] ?? 'Event', JSON_INVALID_UTF8_SUBSTITUTE) ?>,
+	eventName:  <?= json_encode($info['Name'] ?? 'Event', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
 	eventDate:  <?= json_encode($eventStart ? date('Y-m-d', strtotime($eventStart)) : '') ?>,
 	// For the board image's subtitle: the hero's date range, and the host park or else "City, Province".
-	eventDateLabel: <?= json_encode($dateBadgeText, JSON_HEX_TAG | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
-	eventPlace: <?= json_encode(trim((string)($AtParkName ?? '')) !== '' ? trim((string)$AtParkName) : implode(', ', array_filter([trim($city), trim($province)])), JSON_HEX_TAG | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
+	eventDateLabel: <?= json_encode($dateBadgeText, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
+	eventPlace: <?= json_encode(trim((string)($AtParkName ?? '')) !== '' ? trim((string)$AtParkName) : implode(', ', array_filter([trim($city), trim($province)])), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
 	parkId:     <?= (int)($atParkId ?: $parkId) ?>,
 	kingdomId:  <?= (int)$kingdomId ?>,
 	eventStart: '<?= $eventStart ? date('Y-m-d\TH:i', strtotime($eventStart)) : '' ?>',
 	eventEnd:   '<?= $eventEnd   ? date('Y-m-d\TH:i', strtotime($eventEnd))   : '' ?>',
-	// The schedule as emitted in #evb-schedule-data (naive local datetimes), and the server's clock.
+	// The schedule as emitted in #evb-schedule-data (naive local datetimes). The board's
+	// now line reads the device's wall clock (evb-view.js), not the server's.
 	schedule:   (function() { try { return JSON.parse(document.getElementById('evb-schedule-data').textContent); } catch (e) { return []; } })(),
-	serverNow:  <?= json_encode(date('Y-m-d H:i')) ?>,
-	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona'], 'RoleName' => $s['RoleName'] ?? '', 'LeadCategories' => array_values($s['LeadCategories'] ?? [])]; }, $StaffList ?? []), JSON_INVALID_UTF8_SUBSTITUTE) ?>,
+	// Most operations one schedule batch may carry.
+	scheduleBatchMax: <?= (int)($ScheduleBatchMax ?? 200) ?>,
+	staffList:  <?= json_encode(array_map(function($s) { return ['MundaneId' => (int)$s['MundaneId'], 'Persona' => $s['Persona'], 'RoleName' => $s['RoleName'] ?? '', 'LeadCategories' => array_values($s['LeadCategories'] ?? [])]; }, $StaffList ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
 	hasFees:    true,
-	fees:       <?= json_encode(array_map(function($f) { return ['AdmissionType' => $f['AdmissionType'], 'Cost' => (float)$f['Cost']]; }, $eventFees), JSON_INVALID_UTF8_SUBSTITUTE) ?>,
+	fees:       <?= json_encode(array_map(function($f) { return ['AdmissionType' => $f['AdmissionType'], 'Cost' => (float)$f['Cost']]; }, $eventFees), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
 	hasLinks:   true,
-	links:      <?= json_encode(array_map(function($l) { return ['Title' => $l['Title'], 'Url' => $l['Url'], 'Icon' => $l['Icon']]; }, $ExternalLinks ?? []), JSON_INVALID_UTF8_SUBSTITUTE) ?>,
+	links:      <?= json_encode(array_map(function($l) { return ['Title' => $l['Title'], 'Url' => $l['Url'], 'Icon' => $l['Icon']]; }, $ExternalLinks ?? []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>,
 	linksListId:'ev-links-list',
 	hasBanner:       <?= $hasBanner ? 'true' : 'false' ?>,
 	bannerShowLogo:  <?= $bannerShowLogo ? 'true' : 'false' ?>,
@@ -2676,8 +2686,8 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 }
 </style>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<?php if ($canManageSchedule): ?>
-<!-- Schedule Modal -->
+<?php if ($canManageSchedule || $canManageFeast): ?>
+<!-- Schedule Modal (a feast editor's too: feast items only, categories locked) -->
 <div class="ev-modal-overlay" id="ev-schedule-modal">
 	<div class="ev-modal">
 		<div class="ev-modal-header">
@@ -2688,7 +2698,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 			<div class="ev-modal-row">
 				<div class="ev-modal-field">
 					<label>Primary Category <span style="cursor:help;color:#a0aec0;font-size:11px;border-bottom:1px dotted #a0aec0" data-tip="The primary category will determine schedule color coding.">(?)</span></label>
-					<select id="ev-sched-category" style="width:100%">
+					<select id="ev-sched-category" style="width:100%"<?= $evFeastOnly ? ' disabled aria-describedby="ev-sched-cat-locked"' : '' ?>>
 						<?php foreach ($evSchedCategories as $evCatName => $evCatDef): ?>
 						<option value="<?= htmlspecialchars($evCatName, ENT_QUOTES) ?>"><?= htmlspecialchars($evCatName) ?></option>
 						<?php endforeach; ?>
@@ -2696,7 +2706,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 				</div>
 				<div class="ev-modal-field">
 					<label>Secondary Category <span style="font-size:11px;font-weight:400;color:#a0aec0">(optional)</span></label>
-					<select id="ev-sched-secondary-category" style="width:100%">
+					<select id="ev-sched-secondary-category" style="width:100%"<?= $evFeastOnly ? ' disabled aria-describedby="ev-sched-cat-locked"' : '' ?>>
 						<option value="">— None —</option>
 						<?php foreach ($evSchedCategories as $evCatName => $evCatDef): ?>
 						<option value="<?= htmlspecialchars($evCatName, ENT_QUOTES) ?>"><?= htmlspecialchars($evCatName) ?></option>
@@ -2704,10 +2714,13 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 					</select>
 				</div>
 			</div>
+			<?php if ($evFeastOnly): ?>
+			<div id="ev-sched-cat-locked" class="evb-cat-hint">You can edit feast items only, so the categories are locked.</div>
+			<?php endif; ?>
 			<div class="ev-modal-row">
 				<div class="ev-modal-field ev-field-full">
 					<label>Title <span style="color:#e53e3e">*</span></label>
-					<input type="text" id="ev-sched-title" placeholder="Evening Feast, Battlegame, etc." autocomplete="off" style="width:100%">
+					<input type="text" id="ev-sched-title" maxlength="255" placeholder="Evening Feast, Battlegame, etc." autocomplete="off" style="width:100%">
 				</div>
 			</div>
 			<div class="ev-modal-row">
@@ -2723,7 +2736,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 			<div class="ev-modal-row">
 				<div class="ev-modal-field ev-field-full">
 					<label>Location</label>
-					<input type="text" id="ev-sched-location" placeholder="Main field, Feast hall, etc." autocomplete="off" style="width:100%">
+					<input type="text" id="ev-sched-location" maxlength="255" placeholder="Main field, Feast hall, etc." autocomplete="off" style="width:100%">
 				</div>
 			</div>
 			<div class="ev-modal-row">
@@ -2748,7 +2761,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 			<div class="ev-modal-row">
 				<div class="ev-modal-field ev-field-full">
 					<label>Description <span style="font-size:11px;color:#718096;font-weight:400">(shown on the Schedule tab)</span></label>
-					<textarea id="ev-sched-description" rows="3" placeholder="Optional details..." style="width:100%;resize:vertical"></textarea>
+					<textarea id="ev-sched-description" rows="3" maxlength="4000" placeholder="Optional details..." style="width:100%;resize:vertical"></textarea>
 				</div>
 			</div>
 			<!-- Meal details panel (shown when category or secondary category is Feast and Food) -->
@@ -2763,7 +2776,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 				<div class="ev-modal-row">
 					<div class="ev-modal-field ev-field-full">
 						<label>Menu <span style="font-size:11px;color:#718096;font-weight:400">(optional &mdash; shown on the Feast tab)</span></label>
-						<textarea id="ev-sched-meal-menu" rows="3" placeholder="List dishes, courses, dietary notes..." style="width:100%;resize:vertical"></textarea>
+						<textarea id="ev-sched-meal-menu" rows="3" maxlength="4000" placeholder="List dishes, courses, dietary notes..." style="width:100%;resize:vertical"></textarea>
 					</div>
 				</div>
 				<div class="ev-modal-row">
@@ -2804,6 +2817,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 			<button class="ev-btn ev-btn-outline" type="button" onclick="evCloseScheduleModal()" style="margin-right:auto">Close</button>
 			<input type="hidden" id="ev-sched-mode" value="add">
 			<input type="hidden" id="ev-sched-id" value="">
+			<input type="hidden" id="ev-sched-seen" value="">
 			<button class="ev-submit-btn ev-sched-save-any ev-sched-save-secondary" type="button" id="ev-sched-save-similar-btn" onclick="evSubmitSchedule('similar')">
 				<i class="fas fa-copy"></i> <span>Save and Create Similar</span>
 			</button>
@@ -3445,6 +3459,9 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		if (!modeEl || !idEl || !titleEl || !catEl || !startEl || !endEl) return;
 		modeEl.value  = 'edit';
 		idEl.value    = meal.EventScheduleId;
+		// The item's version as the card has it, posted as Seen (none when the card has none).
+		var seenEl = document.getElementById('ev-sched-seen');
+		if (seenEl) seenEl.value = meal.Modified || '';
 		if (titleLbl) titleLbl.textContent = 'Edit Schedule Item';
 		if (saveLbl)  saveLbl.textContent  = 'Save Changes';
 		titleEl.value  = meal.Title || '';
@@ -3499,7 +3516,9 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			'data-leads': JSON.stringify(item.Leads || []),
 			'data-menu': item.Menu || '',
 			'data-dietary': item.Dietary || '',
-			'data-allergens': item.Allergens || ''
+			'data-allergens': item.Allergens || '',
+			// Posted as Seen: an item with no Modified posts none.
+			'data-modified': item.Modified || ''
 		};
 		if (item.Cost !== null && item.Cost !== undefined && item.Cost !== '') attrs['data-cost'] = String(item.Cost);
 		Object.keys(attrs).forEach(function(k) { row.setAttribute(k, attrs[k]); });
@@ -3551,10 +3570,27 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		}
 	};
 
+	// A refused or failed remove says so on the card, under its header.
+	function evFeastCardError(scheduleId, message) {
+		var card = document.getElementById('ev-meal-card-' + scheduleId);
+		if (!card) return;
+		var el = card.querySelector('.evb-row-error');
+		if (!el) {
+			el = document.createElement('div');
+			el.className = 'evb-row-error';
+			el.setAttribute('role', 'alert');
+			el.style.padding = '0 14px';
+			var head = card.querySelector('.ev-meal-card-header');
+			if (head) head.insertAdjacentElement('afterend', el); else card.appendChild(el);
+		}
+		el.textContent = message;
+	}
 	// Remove a feast card and hit remove_schedule endpoint
 	window.evRemoveFeastCard = function(btn, scheduleId) {
 		pnConfirm({ title: 'Remove Feast Item?', message: 'Remove this feast item from the event?', confirmText: 'Remove', danger: true }, function() {
 			btn.disabled = true;
+			var oldErr = btn.closest('.ev-meal-card') && btn.closest('.ev-meal-card').querySelector('.evb-row-error');
+			if (oldErr) oldErr.remove();
 			var fd = new FormData();
 			fd.append('ScheduleId', scheduleId);
 			fetch(EvConfig.uir + 'EventAjax/remove_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId, {
@@ -3563,7 +3599,11 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			})
 			.then(function(r) { return r.json(); })
 			.then(function(data) {
-				if (data.status !== 0) { btn.disabled = false; return; }
+				if (data.status !== 0) {
+					btn.disabled = false;
+					evFeastCardError(scheduleId, data.error || 'Could not remove feast item.');
+					return;
+				}
 				var card = document.getElementById('ev-meal-card-' + scheduleId);
 				if (card) card.remove();
 				var tab = document.querySelector('[data-tab="ev-tab-feast"] .ev-tab-count');
@@ -3573,21 +3613,32 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 					var empty = document.getElementById('ev-meal-empty');
 					if (empty) empty.style.display = '';
 				}
-				// Also remove the corresponding schedule row if visible
-				var schedRow = document.getElementById('ev-schedule-row-' + scheduleId);
-				if (schedRow) {
-					var daySection = schedRow.closest('.ev-sched-day-section');
-					schedRow.remove();
-					if (daySection) {
-						var tbody = daySection.querySelector('tbody');
-						if (tbody && tbody.querySelectorAll('tr').length === 0) daySection.remove();
-					}
+				// Also remove the item's schedule rows: a multi-day item has one per day it covers.
+				var schedRows = document.querySelectorAll('#ev-schedule-container tr[data-schedule-id="' + scheduleId + '"]');
+				if (schedRows.length) {
+					schedRows.forEach(function(schedRow) {
+						var daySection = schedRow.closest('.ev-sched-day-section');
+						schedRow.remove();
+						if (daySection) {
+							var tbody = daySection.querySelector('tbody');
+							if (tbody && tbody.querySelectorAll('tr').length === 0) daySection.remove();
+						}
+					});
 					var schTab = document.querySelector('[data-tab="ev-tab-schedule"] .ev-tab-count');
 					if (schTab) schTab.textContent = Math.max(0, parseInt(schTab.textContent || '0') - 1);
+					var schContainer = document.getElementById('ev-schedule-container');
+					if (schContainer && !schContainer.querySelector('.ev-sched-day-section')) {
+						var schEmpty = document.getElementById('ev-schedule-empty');
+						if (schEmpty) schEmpty.style.display = '';
+					}
+					if (typeof window.evBuildScheduleFilters === 'function') window.evBuildScheduleFilters();
 				}
 				if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
 			})
-			.catch(function() { btn.disabled = false; });
+			.catch(function(err) {
+				btn.disabled = false;
+				evFeastCardError(scheduleId, 'Request failed: ' + err.message);
+			});
 		});
 	};
 
@@ -3669,7 +3720,9 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			EventScheduleId: sid, Title: s.Title || '', StartTime: s.StartTime || '', EndTime: s.EndTime || '',
 			Location: s.Location || '', Description: s.Description || '', Category: s.Category || '',
 			SecondaryCategory: s.SecondaryCategory || '', Leads: s.Leads || [], Menu: s.Menu || '',
-			Cost: (s.Cost === undefined ? null : s.Cost), Dietary: s.Dietary || '', Allergens: s.Allergens || ''
+			Cost: (s.Cost === undefined ? null : s.Cost), Dietary: s.Dietary || '', Allergens: s.Allergens || '',
+			// The saved version: the card's next save is checked against this one, not the one before.
+			Modified: s.Modified || ''
 		};
 		var editBtn = card.querySelector('.ev-edit-btn');
 		if (editBtn) editBtn.addEventListener('click', function() { window.evOpenFeastEditModal(mealPayload); });
@@ -3682,6 +3735,15 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 	var _origEvOpenScheduleModal = window.evOpenScheduleModal;
 	window.evOpenScheduleModal = function() {
 		if (_origEvOpenScheduleModal) _origEvOpenScheduleModal();
+		// A feast editor's categories are locked (disabled in the markup); what they
+		// add is a feast item. The locked selects' values are still read and posted.
+		if (EvConfig.canManageFeast && !EvConfig.canManageSchedule) {
+			var cat = document.getElementById('ev-sched-category');
+			var secCat = document.getElementById('ev-sched-secondary-category');
+			if (cat) cat.value = 'Feast and Food';
+			if (secCat) secCat.value = '';
+			if (window.evSchedApplyCategoryLeads) window.evSchedApplyCategoryLeads();
+		}
 		evSchedClearMealFields();
 		evSchedToggleMealPanel();
 	};
@@ -3707,7 +3769,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 
 	// Flatpickr on schedule modal start/end — 5-minute increments, visible up/down carats.
 	// Wrappers sync the picker display with values the base open-modal code assigns to .value.
-	if (EvConfig.canManageSchedule && typeof flatpickr === 'function' && document.getElementById('ev-sched-start')) {
+	if ((EvConfig.canManageSchedule || EvConfig.canManageFeast) && typeof flatpickr === 'function' && document.getElementById('ev-sched-start')) {
 		var _schedFpOpts = {
 			enableTime:      true,
 			dateFormat:      'Y-m-d\\TH:i',
@@ -3877,6 +3939,8 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 .ev-sched-desc { overflow-wrap:anywhere; }
 .ev-sched-desc a { color:var(--ork-link); text-decoration:underline; }
 .ev-sched-desc a:hover { text-decoration:none; }
+/* A feast editor's locked categories: the dark theme's selects otherwise look editable. */
+html[data-theme="dark"] #ev-schedule-modal select:disabled { opacity:.6; cursor:not-allowed; }
 
 @media (max-width: 700px) {
 	/* Keep the toolbar (Board/List toggle, Copy link, Add Schedule Item) reachable;
@@ -3992,6 +4056,10 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 </style>
 <script>
 // The Schedule tab's Board/List switch, deep links and board refresh live in evb-view.js.
+// The parser and the board use the server's categories (tags, aliases, keywords).
+if (window.EvBoardCore && window.EvBoardCore.setCategories && window.EvConfig && Array.isArray(EvConfig.scheduleCategories)) {
+	EvBoardCore.setCategories(EvConfig.scheduleCategories);
+}
 if (window.EvBoardView) EvBoardView.init();
 if (window.EvBoardImage) EvBoardImage.init();
 if (window.EvBoardEdit) EvBoardEdit.init();

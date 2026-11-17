@@ -4,8 +4,8 @@
  *
  * The picture is laid out from the board model (EvBoardCore.buildBoard, kept
  * as EvBoardView.board), never from the DOM, with the Canvas 2D API. User text
- * is drawn as text. wrapLines and fileName are pure so node tests can load this
- * file; everything that touches the DOM or a canvas runs only when called.
+ * is drawn as text. wrapLines, fitText, oneLine, dayLaneWidth, columnLayout, dayChoices, pictureDay,
+ * midnightMarks and fileName are pure so node tests can load this file; everything that touches the DOM or a canvas runs only when called.
  */
 (function (root, factory) {
     var isNode = typeof module === 'object' && module.exports;
@@ -30,6 +30,8 @@
     var GREY = '#4a5568';
     var MUTED = '#718096';
     var HOUR_LINE = '#e2e8f0';
+    var HALF_LINE = '#f1f5f9';  // half-hour lines, fainter than the hour lines
+    var MIDNIGHT_LINE = '#a0aec0';
     var DAY_LINE = '#cbd5e0';
     var HEAD_BG = '#f7fafc';
 
@@ -59,6 +61,99 @@
         var last = Array.from(out[maxLines - 1]);
         while (last.length && measure(last.join('').replace(/\s+$/, '') + ELLIPSIS) > maxWidth) last.pop();
         out[maxLines - 1] = last.join('').replace(/\s+$/, '') + ELLIPSIS;
+        return out;
+    }
+
+    // text cut to fit maxWidth character by character, ending with an ellipsis
+    // when cut; '' when not even one character and the ellipsis fit.
+    function fitText(measure, text, maxWidth) {
+        var s = String(text === null || text === undefined ? '' : text).replace(/\s+/g, ' ').trim();
+        if (!s || measure(s) <= maxWidth) return s;
+        var chars = Array.from(s);
+        while (chars.length) {
+            chars.pop();
+            var cut = chars.join('').replace(/\s+$/, '');
+            if (cut && measure(cut + ELLIPSIS) <= maxWidth) return cut + ELLIPSIS;
+        }
+        return '';
+    }
+
+    // The one-line block (30 minutes or less): the time always comes first and
+    // the title gets what is left, cut with an ellipsis. measureTime and
+    // measureTitle measure in the two fonts. Returns {time, title, titleX}.
+    var ONE_LINE_GAP = 6;
+    function oneLine(measureTime, measureTitle, time, title, maxWidth) {
+        var t = fitText(measureTime, time, maxWidth);
+        var titleX = t ? measureTime(t) + ONE_LINE_GAP : 0;
+        return { time: t, title: fitText(measureTitle, title, maxWidth - titleX), titleX: titleX };
+    }
+
+    // Lane width for a one-day picture: the day's board area about DAY_TARGET_W
+    // wide, never narrower than the all-days lane nor wider than DAY_LANE_MAX.
+    var DAY_TARGET_W = 1080;
+    var DAY_LANE_MAX = 360;
+    function dayLaneWidth(lanes) {
+        var n = Math.max(1, parseInt(lanes, 10) || 1);
+        return Math.min(DAY_LANE_MAX, Math.max(LANE_W, Math.round(DAY_TARGET_W / n)));
+    }
+
+    // A day column (a buildBoard day) laid out at laneW per lane, its lanes
+    // widened by grow (default 1): rails (day.rails, ongoing items) RAIL_W wide
+    // at its left with RAIL_GAP after each, the lanes in the width after them.
+    // -> { width, railW, lanesW, rails: [{seg, x, w}], blocks: [{seg, x, w}] },
+    // x from the column's left edge, with the board's 1px inset at the sides.
+    var RAIL_W = 22;
+    var RAIL_GAP = 2;
+    function columnLayout(d, laneW, grow) {
+        var rails = d.rails || [];
+        var railW = rails.length * (RAIL_W + RAIL_GAP);
+        var lanesW = Math.max(d.lanes || 1, 1) * laneW * (grow || 1);
+        return {
+            width: railW + lanesW,
+            railW: railW,
+            lanesW: lanesW,
+            rails: rails.map(function (sg, i) {
+                var at = typeof sg.rail === 'number' ? sg.rail : i;
+                return { seg: sg, x: 1 + at * (RAIL_W + RAIL_GAP), w: RAIL_W };
+            }),
+            blocks: (d.segs || []).map(function (sg) {
+                return { seg: sg, x: railW + (+sg.left || 0) / 100 * lanesW + 1, w: (+sg.width || 100) / 100 * lanesW - 2 };
+            })
+        };
+    }
+
+    // The "Which days" options for the board's days ('YYYY-MM-DD'): All days
+    // then one per day, named the way the board's day pills are (the long
+    // label past 7 days, so repeated weekdays differ). [] for 0 or 1 day.
+    function dayChoices(days) {
+        var list = days || [];
+        if (list.length < 2) return [];
+        return [{ day: null, label: 'All days' }].concat(list.map(function (day) {
+            return { day: day, label: list.length > 7 ? C.dayLabelLong(day) : C.dayLabel(day) };
+        }));
+    }
+
+    // The day to draw: a one-day board is always drawn as its day (wider
+    // lanes); otherwise the chosen day while the board still has it, else
+    // null (all days).
+    function pictureDay(days, chosen) {
+        var list = days || [];
+        if (list.length === 1) return list[0];
+        return chosen && list.indexOf(chosen) !== -1 ? chosen : null;
+    }
+
+    // The day columns that reach midnight (board minute 1440 or later) and the
+    // calendar day that begins there: [{index, day}], e.g. day 'Sunday'.
+    var MIDNIGHT = 1440;
+    function midnightMarks(days) {
+        var out = [];
+        (days || []).forEach(function (d, i) {
+            var late = (d.segs || []).concat(d.rails || []).some(function (s) {
+                return s.endMin > MIDNIGHT || s.startMin >= MIDNIGHT;
+            });
+            var info = late ? C.lateNight(d.day, MIDNIGHT) : null;
+            if (info) out.push({ index: i, day: info.day });
+        });
         return out;
     }
 
@@ -138,14 +233,17 @@
         ctx.textBaseline = 'alphabetic';
 
         if (avail < 30) {
-            // Too short for two lines: title then time on one line, centred.
+            // Too short for two lines: the time, then the title shortened to
+            // the room left, on one line, centred.
             var base = y + h / 2 + 4.5;
-            ctx.font = font(13, true);
-            var t = wrapLines(measure, title, innerW, 1)[0] || '';
-            ctx.fillText(t, tx, base);
-            var used = measure(t);
+            var line = oneLine(function (s) { ctx.font = font(11, false); return measure(s); },
+                function (s) { ctx.font = font(13, true); return measure(s); }, time, title, innerW);
             ctx.font = font(11, false);
-            if (used + 8 + measure(time) <= innerW) ctx.fillText(time, tx + used + 8, base);
+            ctx.fillText(line.time, tx, base);
+            if (line.title) {
+                ctx.font = font(13, true);
+                ctx.fillText(line.title, tx + line.titleX, base);
+            }
             ctx.restore();
             return;
         }
@@ -162,6 +260,36 @@
         cy += 14;
         if (item.Location && y + h - padTop - cy >= 14) {
             ctx.fillText(wrapLines(measure, item.Location, innerW, 1)[0] || '', tx, cy + 11);
+        }
+        ctx.restore();
+    }
+
+    // One rail (an ongoing item): the fill, a secondary-category stripe, and the
+    // title running down it (turned a quarter clockwise, as the board's
+    // vertical text), cut with an ellipsis to the rail's length.
+    function drawRail(ctx, font, seg, x, y, w, h, byName) {
+        var item = seg.item || {};
+        var cat = catName(item.Category, byName);
+        var sec = item.SecondaryCategory && item.SecondaryCategory !== cat &&
+            Object.prototype.hasOwnProperty.call(byName, item.SecondaryCategory) ? item.SecondaryCategory : '';
+        ctx.save();
+        roundRect(ctx, x, y, w, h, 4, !seg.isFirst, !seg.isLast);
+        ctx.fillStyle = boldOf(cat, byName);
+        ctx.fill();
+        ctx.clip();
+        if (sec) {
+            ctx.fillStyle = boldOf(sec, byName);
+            ctx.fillRect(x + w - 3, y, 3, h);
+        }
+        var pad = 6;
+        ctx.font = font(12, true);
+        var text = fitText(function (s) { return ctx.measureText(s).width; }, item.Title || '', h - pad * 2);
+        if (text) {
+            ctx.translate(x + (sec ? (w - 3) / 2 : w / 2), y + pad);
+            ctx.rotate(Math.PI / 2);
+            ctx.fillStyle = '#fff';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 0, 0);
         }
         ctx.restore();
     }
@@ -183,12 +311,14 @@
         var allDays = (board && board.days) || [];
         var days = opts.day ? allDays.filter(function (d) { return d.day === opts.day; }) : allDays;
         if (!days.length) days = allDays;
+        // One day drawn alone gets wider lanes, so it reads on a phone.
+        var laneW = (opts.day && days.length === 1 && days[0].day === opts.day) ? dayLaneWidth(days[0].lanes) : LANE_W;
 
         // The time axis: the board's own, or tightened to the one day drawn; it
         // always reaches the bottom of the lowest block.
         var axisStart = board ? board.axisStart : 540, axisEnd = board ? board.axisEnd : 1080;
         var segs = [];
-        days.forEach(function (d) { segs = segs.concat(d.segs); });
+        days.forEach(function (d) { segs = segs.concat(d.segs, d.rails || []); });
         if (opts.day && segs.length) {
             axisStart = Math.floor(Math.min.apply(null, segs.map(function (s) { return s.startMin; })) / 60) * 60;
             axisEnd = 0;
@@ -210,19 +340,23 @@
         var ctx = canvas.getContext('2d');
         var measure = function (s) { return ctx.measureText(s).width; };
 
-        // Widths: lanes set each day's width; a long title or address may widen
-        // a narrow board, and the extra is shared out between the days.
-        var dayWs = days.map(function (d) { return Math.max(d.lanes, 1) * LANE_W; });
-        var gridW = GUTTER + dayWs.reduce(function (a, b) { return a + b; }, 0);
+        // Widths: lanes and rails set each day's width; a long title or address
+        // may widen a narrow board, and the extra is shared out between the
+        // days' lanes (rails keep their width).
+        var cols = days.map(function (d) { return columnLayout(d, laneW); });
+        var sum = function (list, key) { return list.reduce(function (a, c) { return a + c[key]; }, 0); };
+        var gridW = GUTTER + sum(cols, 'width');
         ctx.font = font(24, true);
         var want = measure(meta.title || '');
         ctx.font = font(11, false);
         want = Math.max(want, measure(meta.url || ''));
         var contentW = Math.max(gridW, Math.min(Math.ceil(want), MAX_HEAD_W));
         if (contentW > gridW) {
-            var grow = (contentW - GUTTER) / (gridW - GUTTER);
-            dayWs = dayWs.map(function (w) { return w * grow; });
+            var railsW = sum(cols, 'railW');
+            var grow = (contentW - GUTTER - railsW) / (gridW - GUTTER - railsW);
+            cols = days.map(function (d) { return columnLayout(d, laneW, grow); });
         }
+        var dayWs = cols.map(function (c) { return c.width; });
 
         // Header and legend lines, measured before the canvas is sized.
         ctx.font = font(24, true);
@@ -291,8 +425,12 @@
         var left = PAD, gridRight = PAD + contentW, gridBottom = bodyTop + bodyH;
         ctx.fillStyle = HEAD_BG;
         ctx.fillRect(left + GUTTER, gridTop, contentW - GUTTER, DAY_HEAD);
+        ctx.fillStyle = HALF_LINE;
+        for (var m = axisStart + 30; m < axisEnd; m += 60) {
+            ctx.fillRect(left + GUTTER, Math.round(bodyTop + (m - axisStart) * PX_PER_MIN), contentW - GUTTER, 1);
+        }
         ctx.fillStyle = HOUR_LINE;
-        for (var m = axisStart; m <= axisEnd; m += 60) {
+        for (m = axisStart; m <= axisEnd; m += 60) {
             ctx.fillRect(left + GUTTER, Math.round(bodyTop + (m - axisStart) * PX_PER_MIN), contentW - GUTTER, 1);
         }
         ctx.font = font(11, true);
@@ -318,15 +456,55 @@
             ctx.fillText(label, dayXs[i] + 8, gridTop + 22);
         });
 
-        // Blocks, with the board's 1px inset top and bottom and at the sides.
-        days.forEach(function (d, i) {
-            d.segs.forEach(function (sg) {
-                var bx = dayXs[i] + (+sg.left || 0) / 100 * dayWs[i] + 1;
-                var bw = (+sg.width || 100) / 100 * dayWs[i] - 2;
-                var by = bodyTop + (sg.startMin - axisStart) * PX_PER_MIN + 1;
-                var bh = Math.max(sg.endMin - sg.startMin, MIN_BLOCK_MIN) * PX_PER_MIN - 2;
-                drawBlock(ctx, font, sg, bx, by, bw, bh, byName);
+        // Midnight: a dashed line under the blocks in each column that runs
+        // past it; its label (the calendar day that begins there) goes on top.
+        var marks = (MIDNIGHT >= axisStart && MIDNIGHT <= axisEnd) ? midnightMarks(days) : [];
+        var midY = Math.round(bodyTop + (MIDNIGHT - axisStart) * PX_PER_MIN) + 0.5;
+        if (marks.length) {
+            ctx.save();
+            ctx.strokeStyle = MIDNIGHT_LINE;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 4]);
+            marks.forEach(function (mk) {
+                ctx.beginPath();
+                ctx.moveTo(dayXs[mk.index] + 1, midY);
+                ctx.lineTo(dayXs[mk.index] + dayWs[mk.index] - 1, midY);
+                ctx.stroke();
             });
+            ctx.restore();
+        }
+
+        // Rails and blocks, with the board's 1px inset top and bottom and at the sides.
+        cols.forEach(function (col, i) {
+            var place = function (draw) {
+                return function (b) {
+                    var sg = b.seg;
+                    var by = bodyTop + (sg.startMin - axisStart) * PX_PER_MIN + 1;
+                    var bh = Math.max(sg.endMin - sg.startMin, MIN_BLOCK_MIN) * PX_PER_MIN - 2;
+                    draw(ctx, font, sg, dayXs[i] + b.x, by, b.w, bh, byName);
+                };
+            };
+            col.rails.forEach(place(drawRail));
+            col.blocks.forEach(place(drawBlock));
+        });
+
+        // Midnight labels: a small tag at the column's right edge, just above
+        // the line (just below it when the line is the top of the grid).
+        ctx.font = font(10, true);
+        marks.forEach(function (mk) {
+            var text = fitText(measure, mk.day, dayWs[mk.index] - 12);
+            if (!text) return;
+            var tw = Math.ceil(measure(text)) + 8, th = 14;
+            var tx = dayXs[mk.index] + dayWs[mk.index] - 3 - tw;
+            var ty = midY - th - 1 < bodyTop ? midY + 1 : midY - th - 1;
+            ctx.fillStyle = HEAD_BG;
+            roundRect(ctx, tx, ty, tw, th, 3);
+            ctx.fill();
+            ctx.strokeStyle = MIDNIGHT_LINE;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.fillStyle = GREY;
+            ctx.fillText(text, tx + 4, ty + 10.5);
         });
 
         // Footer: the event's address on the ORK
@@ -433,12 +611,79 @@
         }
         function tooLarge() { flash('<i class="fas fa-exclamation-circle"></i> Image too large'); }
 
+        // "Which days": All days or one board day; Download PNG and Copy image
+        // both draw the choice. The old "Download this day" entry is replaced.
+        var chosen = null;
+        var oldDay = menu.querySelector('[data-evb-share="download-day"]');
+        if (oldDay) oldDay.parentNode.removeChild(oldDay);
+        var group = doc.createElement('div');
+        group.className = 'evb-share-days';
+        group.setAttribute('role', 'radiogroup');
+        group.setAttribute('aria-label', 'Which days');
+        group.hidden = true;
+        menu.insertBefore(group, menu.firstChild);
+
+        function radios() { return Array.prototype.slice.call(group.querySelectorAll('[role="radio"]')); }
+
+        function choose(value) {
+            chosen = value || null;
+            radios().forEach(function (r) {
+                var on = (r.getAttribute('data-evb-day') || null) === chosen;
+                r.setAttribute('aria-checked', on ? 'true' : 'false');
+                r.tabIndex = on ? 0 : -1;
+                var icon = r.querySelector('i');
+                if (icon) icon.className = on ? 'fas fa-dot-circle' : 'far fa-circle';
+            });
+        }
+
+        // Rebuilt on each open from the saved items' days; starts on the board's
+        // selected day pill, else All days.
+        function buildChoice() {
+            var days = (modelFor(view).days || []).map(function (d) { return d.day; });
+            var options = dayChoices(days);
+            group.innerHTML = '';
+            group.hidden = !options.length;
+            if (group.hidden) { chosen = null; return; }
+            options.forEach(function (o) {
+                var r = doc.createElement('button');
+                r.type = 'button';
+                r.setAttribute('role', 'radio');
+                if (o.day) r.setAttribute('data-evb-day', o.day);
+                r.innerHTML = '<i class="far fa-circle" aria-hidden="true"></i> ';
+                r.appendChild(doc.createTextNode(o.label));
+                group.appendChild(r);
+            });
+            var shown = view.getDay();
+            choose(shown && days.indexOf(shown) !== -1 ? shown : null);
+        }
+
+        group.addEventListener('click', function (e) {
+            var r = e.target.closest && e.target.closest('[role="radio"]');
+            if (!r) return;
+            choose(r.getAttribute('data-evb-day'));
+            r.focus();
+        });
+        // Arrow keys move the choice within the group (one tab stop).
+        group.addEventListener('keydown', function (e) {
+            var list = radios();
+            var i = list.indexOf(doc.activeElement);
+            if (i === -1) return;
+            var n = list.length, to = -1;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') to = (i + 1) % n;
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') to = (i - 1 + n) % n;
+            else if (e.key === 'Home') to = 0;
+            else if (e.key === 'End') to = n - 1;
+            if (to === -1) return;
+            e.preventDefault();
+            choose(list[to].getAttribute('data-evb-day'));
+            list[to].focus();
+        });
+
         function setOpen(open) {
             if (open) {
-                var dayItem = menu.querySelector('[data-evb-share="download-day"]');
                 var copyItem = menu.querySelector('[data-evb-share="copy"]');
-                if (dayItem) dayItem.hidden = !view.getDay();
                 if (copyItem) copyItem.hidden = typeof win.ClipboardItem !== 'function';
+                buildChoice();
             }
             menu.hidden = !open;
             btn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -446,11 +691,17 @@
 
         function act(kind) {
             if (!view.board) return;
-            var day = kind === 'download-day' ? view.getDay() : null;
+            var model = modelFor(view);
+            var days = (model.days || []).map(function (d) { return d.day; });
+            // A day the board no longer has (a refresh while the menu was open)
+            // counts as All days. A one-day event is drawn as its day but still
+            // titled and named as the whole event.
+            var drawn = pictureDay(days, chosen);
+            var day = days.length > 1 ? drawn : null;
             var meta = metaFor(day);
             var canvas;
             try {
-                canvas = render(modelFor(view), meta, { scale: 2, day: day });
+                canvas = render(model, meta, { scale: 2, day: drawn });
             } catch (e) {
                 if (win.console) win.console.error(e);
                 return;
@@ -494,6 +745,13 @@
 
     return {
         wrapLines: wrapLines,
+        fitText: fitText,
+        oneLine: oneLine,
+        dayLaneWidth: dayLaneWidth,
+        columnLayout: columnLayout,
+        dayChoices: dayChoices,
+        pictureDay: pictureDay,
+        midnightMarks: midnightMarks,
         fileName: fileName,
         fitScale: fitScale,
         modelFor: modelFor,

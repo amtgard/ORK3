@@ -10128,6 +10128,7 @@ $(document).ready(function() {
             if (!modal) return;
             gid('ev-sched-mode').value         = 'add';
             gid('ev-sched-id').value           = '';
+            if (gid('ev-sched-seen')) gid('ev-sched-seen').value = '';
             gid('ev-sched-modal-title').textContent = 'Add Schedule Item';
             gid('ev-sched-save-label').textContent  = 'Save and Close';
             if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('add');
@@ -10257,6 +10258,9 @@ $(document).ready(function() {
             var row = btn.closest('tr');
             gid('ev-sched-mode').value         = 'edit';
             gid('ev-sched-id').value           = scheduleId;
+            // The item's version as this page has it: the save sends it as Seen, and the
+            // server refuses the save if someone else has changed the item since.
+            if (gid('ev-sched-seen')) gid('ev-sched-seen').value = row.getAttribute('data-modified') || '';
             gid('ev-sched-modal-title').textContent = 'Edit Schedule Item';
             gid('ev-sched-save-label').textContent  = 'Save Changes';
             if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('edit');
@@ -10286,6 +10290,35 @@ $(document).ready(function() {
             document.body.style.overflow = 'hidden';
             setTimeout(function() { gid('ev-sched-title').focus(); }, 50);
         };
+
+        // The legacy update's refusal of a stale Seen (EventPlanning's
+        // SCHEDULE_CHANGED_ELSEWHERE). Its reply has no status or code of its own
+        // (status 1, like any invalid parameter), so it is known by this text, kept here only.
+        var EV_SCHED_CHANGED_ELSEWHERE = 'Someone else changed this item. Close this form and open it again to see their version.';
+
+        // After that refusal, re-read the page's copy in the background while the form
+        // stays open, so the item is current when the person closes and reopens it.
+        // In Edit mode the store re-reads the schedule (and says the schedule was
+        // updated); otherwise the list rows, feast cards and board take a fresh page,
+        // as leaving Edit mode does. If the read fails, everything stays as it is.
+        function evRereadAfterChangedElsewhere() {
+            var edit = window.EvBoardEdit, view = window.EvBoardView;
+            var editing = function() { return !!(edit && typeof edit.isEditing === 'function' && edit.isEditing()); };
+            if (editing()) {
+                if (typeof edit.refresh === 'function') edit.refresh();
+                return;
+            }
+            if (!view || typeof view.swapFromPage !== 'function') return;
+            fetch(location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+                .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+                .then(function(html) {
+                    // Edit mode opened meanwhile: its store read the schedule itself and owns the board.
+                    if (editing()) return;
+                    var items = view.swapFromPage(html);
+                    if (items && typeof view.setItems === 'function') view.setItems(items);
+                })
+                .catch(function() { /* the page stays as it is */ });
+        }
 
         window.evSubmitSchedule = function(postAction) {
             postAction = postAction || 'close';
@@ -10343,6 +10376,8 @@ $(document).ready(function() {
                 ? EvConfig.uir + 'EventAjax/update_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId
                 : EvConfig.uir + 'EventAjax/add_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId;
             if (isEdit) fd.append('ScheduleId', schedId);
+            var seenEl = gid('ev-sched-seen');
+            if (isEdit && seenEl && seenEl.value) fd.append('Seen', seenEl.value);
 
             fetch(url, {
                 method: 'POST', body: fd,
@@ -10373,17 +10408,30 @@ $(document).ready(function() {
                         '<button class="ev-edit-link" data-tip="Edit" onclick="evOpenScheduleEditModal(' + s.EventScheduleId + ',this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
                         '<button class="ev-del-link" data-tip="Remove" onclick="evRemoveSchedule(this,' + s.EventScheduleId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
                         '</td>';
+                    // The form, if it stays open, now holds the saved version.
+                    if (seenEl) seenEl.value = s.Modified || '';
                     if (isEdit) {
+                        // Every row of the item (a multi-day item has one per day it covers)
+                        // opens the form with what was just saved, its version included, so
+                        // a second save from any of them is not refused as someone else's change.
+                        var sid = parseInt(s.EventScheduleId, 10) || 0;
+                        document.querySelectorAll('tr[data-schedule-id="' + sid + '"]').forEach(function(r) {
+                            r.setAttribute('data-title',       s.Title);
+                            r.setAttribute('data-start',       (s.StartTime || '').replace(' ', 'T').substring(0, 16));
+                            r.setAttribute('data-end',         (s.EndTime || '').replace(' ', 'T').substring(0, 16));
+                            r.setAttribute('data-location',    s.Location);
+                            r.setAttribute('data-description', s.Description);
+                            r.setAttribute('data-category',           s.Category);
+                            r.setAttribute('data-secondary-category', s.SecondaryCategory || '');
+                            r.setAttribute('data-leads',              JSON.stringify(s.Leads || []));
+                            r.setAttribute('data-menu',      s.Menu == null ? '' : String(s.Menu));
+                            r.setAttribute('data-cost',      s.Cost == null ? '' : String(s.Cost));
+                            r.setAttribute('data-dietary',   s.Dietary == null ? '' : String(s.Dietary));
+                            r.setAttribute('data-allergens', s.Allergens == null ? '' : String(s.Allergens));
+                            r.setAttribute('data-modified',           s.Modified || '');
+                        });
                         var row = gid('ev-schedule-row-' + s.EventScheduleId);
                         if (row) {
-                            row.setAttribute('data-title',       s.Title);
-                            row.setAttribute('data-start',       (s.StartTime || '').replace(' ', 'T').substring(0, 16));
-                            row.setAttribute('data-end',         (s.EndTime || '').replace(' ', 'T').substring(0, 16));
-                            row.setAttribute('data-location',    s.Location);
-                            row.setAttribute('data-description', s.Description);
-                            row.setAttribute('data-category',           s.Category);
-                            row.setAttribute('data-secondary-category', s.SecondaryCategory || '');
-                            row.setAttribute('data-leads',              JSON.stringify(s.Leads || []));
                             row.style.setProperty('--evb-soft', catCfg.bg);
                             row.style.setProperty('--evb-soft-dark', catCfg.bgDark);
                             row.cells[0].innerHTML = startCell;
@@ -10405,6 +10453,12 @@ $(document).ready(function() {
                             ' data-category="' + escHtmlSch(s.Category) + '"' +
                             ' data-secondary-category="' + escHtmlSch(s.SecondaryCategory || '') + '"' +
                             ' data-leads="' + JSON.stringify(s.Leads || []).replace(/"/g,'&quot;') + '"' +
+                            // The meal fields too, so the row's own edit button opens the form with them.
+                            ' data-menu="'      + escHtmlSch(s.Menu == null ? '' : s.Menu) + '"' +
+                            ' data-cost="'      + escHtmlSch(s.Cost == null ? '' : s.Cost) + '"' +
+                            ' data-dietary="'   + escHtmlSch(s.Dietary == null ? '' : s.Dietary) + '"' +
+                            ' data-allergens="' + escHtmlSch(s.Allergens == null ? '' : s.Allergens) + '"' +
+                            ' data-modified="' + escHtmlSch(s.Modified || '') + '"' +
                             ' style="--evb-soft:' + catCfg.bg + ';--evb-soft-dark:' + catCfg.bgDark + '">' +
                             '<td style="white-space:nowrap">' + startCell + '</td>' +
                             '<td style="white-space:nowrap">' + endCell + '</td>' +
@@ -10420,8 +10474,10 @@ $(document).ready(function() {
                             // Build a new day section and insert in chronological order
                             var dateStr = s.StartTime.substring(0, 10);
                             var dayLabel = evFmtDayHeader(dateStr);
-                            var delTh = EvConfig.canManageSchedule ? '<th class="ev-del-cell"></th>' : '';
-                            var delCol = EvConfig.canManageSchedule ? '<col style="width:56px">' : '';
+                            // The actions column, as the page renders it (a feast editor's too).
+                            var hasActions = EvConfig.canManageSchedule || EvConfig.canManageFeast;
+                            var delTh = hasActions ? '<th class="ev-del-cell"></th>' : '';
+                            var delCol = hasActions ? '<col style="width:56px">' : '';
                             var newSection = '<div class="ev-sched-day-section" data-date="' + dateStr + '">' +
                                 '<div class="ev-sched-day-header">' + dayLabel + '</div>' +
                                 '<table class="ev-table ev-sched-table" id="ev-schedule-table-' + dateKey + '">' +
@@ -10458,11 +10514,16 @@ $(document).ready(function() {
                         });
                         evBuildScheduleFilters();
                     }
+                    // In Edit mode the board's store takes the saved row now, so an edit made
+                    // before the re-read below is checked against this save, not the one before.
+                    if (window.EvBoardEdit && typeof window.EvBoardEdit.noteSaved === 'function') window.EvBoardEdit.noteSaved(s);
                     // Keep the board in sync with this list mutation.
                     if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
                     errEl.style.display = 'block';
+                    // Their version is fetched now, so reopening the form shows it and can save.
+                    if (isEdit && data.error === EV_SCHED_CHANGED_ELSEWHERE) evRereadAfterChangedElsewhere();
                 }
             })
             .catch(function(err) {
@@ -10605,6 +10666,11 @@ $(document).ready(function() {
                         }
                     });
                     evBuildScheduleFilters();
+                    // A feast item's card goes too (evSyncFeastCard drops the card of an
+                    // item that is no longer a feast item).
+                    if (typeof window.evSyncFeastCard === 'function') {
+                        window.evSyncFeastCard({ EventScheduleId: scheduleId, Category: '', SecondaryCategory: '' });
+                    }
                     // Keep the board in sync with this removal.
                     if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {

@@ -38,17 +38,17 @@ html[data-theme="dark"] .evb-legend-swatch { box-shadow: 0 0 0 1px rgba(255, 255
 }
 .evb-board { display: flex; width: max-content; min-width: 100%; }
 .evb-head {
-    position: sticky; top: 0; z-index: 2;
+    position: sticky; top: 0; z-index: 3;
     height: 34px; box-sizing: border-box; padding: 9px 8px;
     font-size: 12px; font-weight: 700; line-height: 16px; color: var(--ork-text);
     background: var(--ork-bg-secondary); border-bottom: 1px solid var(--ork-border);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .evb-gutter {
-    flex: 0 0 48px; position: sticky; left: 0; z-index: 3;
+    flex: 0 0 48px; position: sticky; left: 0; z-index: 4;
     background: var(--ork-card-bg); border-right: 1px solid var(--ork-border);
 }
-.evb-gutter .evb-head { z-index: 4; }
+.evb-gutter .evb-head { z-index: 5; }
 .evb-gutter-body { position: relative; }
 .evb-tick {
     position: absolute; right: 6px; margin-top: 2px;
@@ -91,6 +91,41 @@ html[data-theme="dark"] .evb-legend-swatch { box-shadow: 0 0 0 1px rgba(255, 255
 html[data-theme="dark"] .evb-block { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
 html[data-theme="dark"] .evb-block-striped { box-shadow: inset -4px 0 0 var(--evb-stripe), 0 1px 2px rgba(0, 0, 0, 0.5); }
 
+/* An ongoing item (Troll, Tavern: EvBoardCore.isOngoing) is a 22px rail at the
+   day's left edge; its title runs down it, cut with an ellipsis. Left, width,
+   top and height are set inline by evb-view.js. */
+/* A long rail scrolls past the top of the board's frame (.evb-scroller), so its
+   title sticks to the top of the rail's visible part: below the sticky day heads
+   (34px, HEAD_PX in evb-view.js) and the rail's 5px padding. overflow: clip clips
+   like hidden without making the rail a scroll container, which would hold the
+   title. --evb-rail-vis (evb-view.js) is the rail's visible height, so the title
+   ends in an ellipsis where the visible part does. */
+.evb-block.evb-block-rail { padding: 5px 0; border-radius: 4px; overflow: clip; }
+.evb-block-rail.evb-block-striped { padding-right: 0; box-shadow: inset -3px 0 0 var(--evb-stripe), 0 1px 2px rgba(0, 0, 0, 0.18); }
+html[data-theme="dark"] .evb-block-rail.evb-block-striped { box-shadow: inset -3px 0 0 var(--evb-stripe), 0 1px 2px rgba(0, 0, 0, 0.5); }
+.evb-block-rail .evb-block-title {
+    display: block; box-sizing: border-box; width: 100%;
+    height: max-content; max-height: min(100%, calc(var(--evb-rail-vis, 100vh) - 10px));
+    position: sticky; top: 39px;
+    writing-mode: vertical-rl; line-height: 22px; text-align: start;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    -webkit-line-clamp: none; line-clamp: none;
+}
+.evb-block-rail.evb-block-striped .evb-block-title { width: calc(100% - 3px); line-height: 19px; }
+/* Its focus ring sits close, so a neighbouring rail does not hide it. */
+.evb-block-rail:focus-visible { outline-offset: 1px; }
+/* The conflict badge (Edit mode) sits at the rail's top, the title below it; both
+   stick, the badge first, so the title never covers it or leaves it behind. */
+.evb-has-conflict.evb-block-rail { display: flex; flex-direction: column; }
+.evb-has-conflict.evb-block-rail .evb-block-title {
+    flex: none; padding-right: 0; padding-top: 3px; top: 56px;
+    max-height: min(calc(100% - 17px), calc(var(--evb-rail-vis, 100vh) - 27px));
+}
+#evb-root .evb-block.evb-block-rail > .evb-conflict,
+#evb-root .evb-block.evb-block-rail.evb-block-striped > .evb-conflict {
+    position: sticky; top: 40px; right: auto; order: -1; flex: none; margin: 1px 0 0 3px;
+}
+
 /* ---- Day pills (.ev-grid-day-pill* in Eventnew_index.tpl) and day choice ---- */
 .evb-day-pills { margin-bottom: 10px; }
 .evb-day.evb-day-off { display: none; }
@@ -98,14 +133,56 @@ html[data-theme="dark"] .evb-block-striped { box-shadow: inset -4px 0 0 var(--ev
 /* ---- Now line ---- */
 .evb-now {
     position: absolute; left: 0; right: 0; z-index: 1; height: 0;
-    border-top: 2px solid #e53e3e; pointer-events: none;
+    border-top: 2px solid var(--ork-red-danger); pointer-events: none;
 }
 .evb-now::before {
     content: ""; position: absolute; left: -4px; top: -5px;
-    width: 8px; height: 8px; border-radius: 50%; background: #e53e3e;
+    width: 8px; height: 8px; border-radius: 50%; background: var(--ork-red-danger);
 }
 html[data-theme="dark"] .evb-now { border-top-color: #fc8181; }
 html[data-theme="dark"] .evb-now::before { background: #fc8181; }
+
+/* ---- "Now and next" (div.evb-nownext, built by evb-view.js above both views) ----
+   Two labelled groups of buttons; each opens the item's popover. Hidden in Edit mode. */
+.evb-nownext {
+    display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; padding: 8px 10px;
+    background: var(--ork-card-bg); color: var(--ork-text);
+    border: 1px solid var(--ork-border); border-radius: 8px;
+}
+.evb-nownext[hidden], #ev-tab-schedule.evb-edit-mode .evb-nownext { display: none; }
+.evb-nownext-group { display: flex; align-items: flex-start; gap: 8px; min-width: 0; max-width: 100%; }
+.evb-nownext-label {
+    flex-shrink: 0; min-width: 34px; padding-top: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ork-text-muted);
+}
+/* "Now" carries the board's now-line red as a dot; the words stay in the text colour. */
+.evb-nownext-now .evb-nownext-label { color: var(--ork-text); }
+.evb-nownext-now .evb-nownext-label::before {
+    content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 5px 1px 0; border-radius: 50%;
+    background: var(--ork-red-danger); vertical-align: middle;
+}
+html[data-theme="dark"] .evb-nownext-now .evb-nownext-label::before { background: #fc8181; }
+.evb-nownext-list { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.evb-nownext-list > li { min-width: 0; max-width: 100%; margin: 0; }
+.evb-nownext .evb-nownext-item {
+    display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; max-width: 100%; min-height: 0;
+    box-sizing: border-box; margin: 0; padding: 4px 10px; text-align: left;
+    border: 1px solid var(--ork-border); border-radius: 999px; box-shadow: none;
+    background: var(--ork-bg-secondary); color: var(--ork-text);
+    font-size: 12px; font-weight: 400; line-height: 1.35; cursor: pointer;
+}
+.evb-nownext .evb-nownext-item:hover { border-color: var(--ork-text-muted); background: var(--ork-bg-secondary); color: var(--ork-text); }
+.evb-nownext .evb-nownext-item:focus-visible { outline: 2px solid var(--ork-text); outline-offset: 2px; }
+.evb-nownext-title { font-weight: 700; overflow-wrap: anywhere; }
+.evb-nownext-when { color: var(--ork-text-muted); white-space: nowrap; }
+.evb-nownext-loc { color: var(--ork-text-muted); overflow-wrap: anywhere; }
+.evb-nownext-loc i { font-size: 10px; }
+.evb-nownext-more { align-self: center; font-size: 12px; color: var(--ork-text-muted); }
+/* Dark: --ork-bg-secondary is the card's own fill there. */
+html[data-theme="dark"] .evb-nownext .evb-nownext-item,
+html[data-theme="dark"] .evb-nownext .evb-nownext-item:hover { background: #4a5568; }
+html[data-theme="dark"] .evb-nownext .evb-nownext-when,
+html[data-theme="dark"] .evb-nownext .evb-nownext-loc { color: #e2e8f0; }
 
 /* ---- Details popover (appended to <body>, positioned by evb-view.js) ---- */
 .evb-popover {
@@ -173,18 +250,29 @@ html[data-theme="dark"] .evb-now::before { background: #fc8181; }
 .evb-share-menu button:hover, .evb-more-menu button:hover,
 .evb-share-menu button:focus-visible, .evb-more-menu button:focus-visible { background: var(--ork-bg-secondary); color: var(--ork-text); }
 .evb-share-menu button i, .evb-more-menu button i { width: 14px; font-size: 12px; text-align: center; color: var(--ork-text-muted); }
+/* Share menu: the "Which days" radio group (div.evb-share-days of
+   button[role="radio"], built by evb-image.js). Checked = filled dot icon,
+   bold text and a fill; focus = a ring. Every token swaps in dark mode. */
+.evb-share-days { padding-bottom: 4px; margin-bottom: 4px; border-bottom: 1px solid var(--ork-border); }
+.evb-share-menu .evb-share-days button { font-weight: 400; }
+.evb-share-menu .evb-share-days button[aria-checked="true"] { font-weight: 700; background: var(--ork-bg-secondary); }
+.evb-share-menu .evb-share-days button[aria-checked="true"] i { color: var(--ork-link); }
+.evb-share-menu .evb-share-days button:focus-visible { outline: 2px solid var(--ork-link); outline-offset: -2px; }
+html[data-theme="dark"] .evb-share-menu .evb-share-days button[aria-checked="true"] { background: #4a5568; }
 
 /* In Board view the legend is the only category filter: hide the list's pills. */
 #ev-tab-schedule.evb-board-mode #ev-sched-filters { display: none !important; }
 
 /* ---- Edit mode (evb-edit.js, evb-entry.js) ---- */
-/* "Edit schedule" (toolbar; reuses .ev-sched-copy-btn) shows in Board view outside Edit mode. */
+/* "Edit schedule" (toolbar; reuses .ev-sched-copy-btn) shows in both views outside Edit mode. */
 #ev-tab-schedule .evb-edit-btn { display: none; }
-#ev-tab-schedule.evb-board-mode:not(.evb-edit-mode) .evb-edit-btn { display: inline-flex; }
+#ev-tab-schedule:not(.evb-edit-mode) .evb-edit-btn { display: inline-flex; }
 .evb-edit-btn[disabled] { opacity: 0.6; cursor: progress; }
 /* While editing, the board is the only view and the empty-state prompt has done its job. */
 #ev-tab-schedule.evb-edit-mode .ev-grid-view-toggle,
-#ev-tab-schedule.evb-edit-mode #ev-schedule-empty { display: none !important; }
+#ev-tab-schedule.evb-edit-mode #ev-schedule-empty,
+/* "Add Schedule Item" (the form) is the button after "Edit schedule" in the toolbar. */
+#ev-tab-schedule.evb-edit-mode .evb-edit-btn ~ .ev-submit-btn { display: none !important; }
 .evb-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
 .evb-empty-actions .evb-past-btn {
     display: inline-flex; align-items: center; gap: 6px; min-height: 0; padding: 8px 14px;
@@ -217,7 +305,7 @@ html[data-theme="dark"] .evb-edit-head { box-shadow: 0 4px 12px -6px rgba(0, 0, 
 .evb-save { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ork-text-muted); white-space: nowrap; }
 .evb-save-dot { width: 8px; height: 8px; border-radius: 50%; background: #38a169; flex-shrink: 0; }
 .evb-save[data-state="saving"] .evb-save-dot { background: #d69e2e; animation: evb-pulse 1s ease-in-out infinite; }
-.evb-save[data-state="offline"] .evb-save-dot { background: #e53e3e; }
+.evb-save[data-state="offline"] .evb-save-dot { background: var(--ork-red-danger); }
 .evb-save[data-state="offline"] .evb-save-state { color: var(--ork-alert-danger-text); font-weight: 600; }
 html[data-theme="dark"] .evb-save-dot { background: #68d391; }
 html[data-theme="dark"] .evb-save[data-state="saving"] .evb-save-dot { background: #f6e05e; }
@@ -287,8 +375,13 @@ html[data-theme="dark"] .evb-help-pop code, html[data-theme="dark"] .evb-help-po
     outline: none; border-color: #4299e1; background: var(--ork-card-bg);
     box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
 }
-.evb-entry-invalid .evb-entry-input { border-color: #e53e3e; animation: evb-shake 0.25s; }
+.evb-entry-invalid .evb-entry-input { border-color: var(--ork-red-danger); animation: evb-shake 0.25s; }
+.evb-entry-invalid .evb-entry-input:focus { border-color: var(--ork-red-danger); }
 @keyframes evb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+/* The site's dark input/textarea rule carries an id, so the board entry states need it too; the paste dialog sits outside #theme_container, so its rule does not. */
+html[data-theme="dark"] #theme_container .evb-entry .evb-entry-input:focus { border-color: #63b3ed; background-color: var(--ork-card-bg); }
+html[data-theme="dark"] #theme_container .evb-entry-invalid .evb-entry-input, html[data-theme="dark"] #theme_container .evb-entry-invalid .evb-entry-input:focus { border-color: #fc8181; }
+html[data-theme="dark"] .evb-paste-dialog .evb-paste-text:focus { border-color: #63b3ed; }
 @media (prefers-reduced-motion: reduce) {
     .evb-entry-invalid .evb-entry-input, .evb-save[data-state="saving"] .evb-save-dot { animation: none; }
 }
@@ -331,8 +424,8 @@ html[data-theme="dark"] .evb-chip .evb-chip-x:focus-visible { outline-color: #63
     display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
     font-size: 13px; color: var(--ork-text); cursor: pointer;
 }
-.evb-entry-option-active { background: var(--ork-bg-secondary); }
-html[data-theme="dark"] .evb-entry-option-active { background: #4a5568; }
+.evb-entry-option:hover, .evb-entry-option-active { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .evb-entry-option:hover, html[data-theme="dark"] .evb-entry-option-active { background: #4a5568; }
 .evb-entry-option-tag { margin-left: auto; font: 600 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ork-text-muted); }
 
 /* Leads: '@' suggestions (fixed, so the board's scrolling frame cannot clip them) and chips. */
@@ -501,7 +594,7 @@ html[data-theme="dark"] .evb-slot-hover-drag { background: rgba(99, 179, 237, 0.
 /* The board lays the block being typed out as an invisible placeholder ... */
 .evb-block.evb-placeholder { visibility: hidden; }
 /* ... and the real block sits over it in a layer outside the re-rendered board,
-   under the sticky day heads and hour gutter (z-index 2 and up). */
+   under the sticky day heads and hour gutter (z-index 3 and up). */
 .evb-type-layer { position: relative; z-index: 1; height: 0; }
 .evb-type-block[hidden] { display: none; }
 .evb-type-layer .evb-block.evb-block-editing,
@@ -535,7 +628,9 @@ html[data-theme="dark"] .evb-type-pop .evb-chip { box-shadow: 0 2px 6px rgba(0, 
 .evb-type-pop .evb-entry-menu { position: static; margin-top: 4px; }
 
 /* ---- Selecting blocks (evb-select.js) ---- */
-/* A white inner ring and an outer ring in the focus colour, over its neighbours. */
+/* A white inner ring and an outer ring in the focus colour, over its neighbours
+   but under the sticky day heads (z-index 3), so a rail scrolled up beneath a
+   head does not draw its frame over it. */
 .evb-editing .evb-block.evb-selected,
 .evb-editing .evb-block.evb-selected:hover {
     z-index: 2;
@@ -571,7 +666,7 @@ html[data-theme="dark"] .evb-editing .evb-block.evb-selected.evb-block-striped {
 }
 :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:hover,
 :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool[aria-expanded="true"] { background: var(--ork-bg-secondary); color: var(--ork-text); }
-:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool-danger:hover { color: #e53e3e; }
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool-danger:hover { color: var(--ork-red-danger); }
 :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:focus-visible { outline: 2px solid #4299e1; outline-offset: 0; }
 .evb-tool-swatch { width: 14px; height: 14px; border-radius: 4px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15); }
 html[data-theme="dark"] :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:hover,

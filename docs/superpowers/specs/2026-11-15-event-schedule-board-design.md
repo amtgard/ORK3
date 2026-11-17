@@ -70,9 +70,8 @@ whole-weekend picture.
    owner said "no versioning" and gave the reason as not being in click-to-change mode all the
    time. The save layer is a queue, so holding changes until a Publish press could be added
    later without reworking the editor.
-2. **Board editing needs "Can manage schedule".** Feast-only staff keep today's modal flow
-   from the Feast tab. Today's rule lets them add feast items and edit only title
-   and meal fields; mirroring that on a drag surface is not worth its complexity.
+2. **Board editing needs "Can manage schedule".** Feast-only staff use the schedule form,
+   not the board (see call 45 for what they may change).
 3. **A board day runs 5:00am to 5:00am.** A 12:30am Night Quest belongs to the previous
    evening's column, as people think of it. Typing `sat 12:30a night quest` therefore means
    Saturday night, stored as Sunday 00:30. The List and the public embed keep grouping by
@@ -145,8 +144,118 @@ whole-weekend picture.
     days outside the event are added but called out; unreadable lines are listed, never
     guessed.
 
+Calls made while fixing the review of 2026-11-16 (each replaces anything above it conflicts
+with):
+
+29. **A save that may have reached the server is resent exactly.** Every batch carries a
+    token; the server remembers a token for a day and answers a repeat with the first
+    result, applying nothing. The same holds for a copy from a past event. A lost reply can
+    no longer duplicate items.
+30. **When two organisers change the same item, the first save wins and the second person is
+    told.** Each item carries the time it last changed; an update based on an older version
+    is not applied, the board shows the other person's version, and a notice says so. An
+    item someone else deleted disappears with a notice. The alternative, last write wins in
+    silence, is what the review objected to.
+31. **The board re-reads the schedule** on returning to the tab and every minute while
+    nothing is unsaved, and merges what it finds; undo history survives except for items
+    someone else changed.
+32. **The server owns the lead rule.** An add without leads gets its category's leads; a
+    category change without leads swaps the automatic ones; a lead is only stored as
+    automatic when that person really leads that category on this occurrence. The board
+    still sends the leads it previewed.
+33. **A lead must be an eligible player**, except one already on the item (an old lead who
+    has since gone inactive must not make an unrelated edit fail). At most 20 leads an item.
+34. **Unmarked evening times.** With `night`, `evening`, `dinner`, `supper`, `feast`,
+    `bardic`, `midnight` or `revel` in the title, an unmarked 7 to 11 is pm; with `court`,
+    only 7 and 8 are (Sunday-morning court is common); `tavern` is not an evening word
+    ("Tavern Opens" at 9am is normal); `breakfast`, `morning`, `brunch` and `lunch` block
+    it. In a pasted list, time order decides instead: a time that would fall before the
+    previous line's moves to the evening only when the previous line is in the afternoon
+    (or the title has an evening word), and past midnight only when the previous line is
+    6pm or later. A blank line or heading starts the order afresh. A first version of this
+    rule put 27 of the reference sheet's 42 items at the wrong time; the sheet is now a test.
+35. **A trailing bare number is never a time** ("Court 7", "Round 2"). In a pasted list a
+    bare hour that LEADS a line is its time ("9 Gate opens"); the cost is that a pasted
+    "5 pumpkins" becomes "pumpkins" at 5pm.
+36. **The server refuses times more than seven days outside the event**, loosely on purpose
+    (the board allows items a little outside), and refuses over-long text with a message
+    naming the field. An occurrence whose end date is missing or before its start is
+    measured from its start date.
+37. **The "now" line follows the device's clock**, not the server's: the server is in one
+    time zone and events are not.
+38. **After midnight, labels name the real day**: "Sunday 1-2a (Saturday night)" in the
+    popover and the screen-reader label, and a dashed "Sunday" marker in the picture. The
+    item stays in Saturday's column.
+39. **The share menu has a day choice** (All days, then each day) that both Download and
+    Copy follow; a one-day picture uses wider lanes so it is readable on a phone.
+40. **Shift+Enter opens Details** for the selected item, and Tab from a selected item goes
+    to its toolbar.
+41. **Schedule saves and staff saves run at READ COMMITTED** and lock the item before its
+    leads, so two saves wait for each other instead of overwriting or failing.
+42. **The Details form takes part in the same check.** It posts the version it opened with;
+    if the item changed since, nothing is saved, the form says "Someone else changed this
+    item. Close this form and open it again to see their version.", and the page re-reads
+    in the background so reopening shows the other person's version. This applies in the
+    list view too. Details waits for the item's own pending save before it opens.
+43. **A category lead may always lead items in their category**, even if their player
+    record has since gone inactive or been suspended (staff management chose them); the
+    eligibility check (call 33) applies to everyone else.
+44. **A failure that is not about the content of a change offers Retry** instead of undoing
+    the change, and a save refused as a whole shows the server's reason.
+
+Calls made for the enhancements the owner chose on 2026-11-16 (review items 6, 18, 20, 30,
+31, 34 and 36, and the owner's instruction "if they can edit feast, they can edit feast
+blocks"):
+
+45. **Feast editors edit feast items in full.** Someone who can manage the feast but not the
+    schedule may add a feast item, change every field of one (times, place, description,
+    leads, meals), and remove one, through the schedule form, which they can now open from
+    the Feast tab, from feast rows in the list, and from an `Edit` button in a feast item's
+    popover. "Feast item" means primary or secondary category Feast and Food, judged on the
+    item as stored, under its row lock; the item must stay a feast item, so the form locks
+    the category for them. They do not get the board's Edit mode. This closed a hole: the
+    old check trusted the category in the request, so a feast-only person could retitle
+    any item by posting Feast and Food.
+46. **One writer.** The schedule form's save is a thin wrapper over the board's op writer
+    (review item 34): it keeps the form's own permission checks, builds one change and runs
+    it through the same code, so the form now follows the board's content rules (strict
+    times, the event window, end not before start, text limits). The form already posts the
+    strict time format, so no real submission is newly refused, except text past the limits,
+    which the form's fields now stop at.
+47. **At most 500 items a schedule** (review item 30), checked on the board, the form and
+    past-event copy. The limit is not locked against two saves arriving together, so it can
+    be passed by a few items in a race.
+48. **Long Administrative and Feast items are rails** (review item 36): an item whose primary
+    category is Administrative or Feast and Food and that lasts four hours or more is drawn
+    as a narrow labelled strip down the left of its day, outside the lanes, on the board and
+    in the picture. There is no per-item switch; a four-hour "Feast prep" is a rail too.
+49. **"Now and next"** (review item 18): during the event, above both the list and the
+    board, a strip of what is on now (up to four) and what starts next that day (up to
+    three). Never in Edit mode.
+50. **One bounds rule** (review item 6): a gesture never leaves the days the board shows or
+    creates a new day; a move with no room does nothing. The store refuses a time outside
+    the server's window, or an end before a start, at once. A weekday the event does not
+    have means the nearest such date (`thu` on a Friday-to-Sunday event is the Thursday
+    before), and the person is told it is outside the event's dates.
+51. **"Edit schedule" shows in the list view too** (review item 20) and switches to the board.
+52. **Fewer queries** (review item 31): a save costs two statements per item plus a fixed
+    22, down from about six per item.
+
 Left for the owner to decide or try by hand:
 
+- The new migration (`2026-11-16-event-schedule-batch-tokens.sql`) must run BEFORE this
+  code is deployed: the board sends a token with every save and the server needs the new
+  table to accept it, so until the migration runs nothing saves from the board.
+- The pre-commit hook now runs the JavaScript unit tests when board scripts or `tests/js/`
+  are staged (skipping with a note below Node 21). It affects every contributor.
+- Feast-only behaviour is covered by server tests and by a one-off browser check, not by
+  the browser suite: the suite's test account cannot safely demote itself.
+- Production's binary-log setting must be checked before release: with binary logging on
+  and `binlog_format=STATEMENT`, MariaDB refuses writes made at READ COMMITTED (call 41) and
+  every schedule save would fail. MIXED, the default, is fine.
+- A save of several items in descending id order can still deadlock against a staff lead
+  change made at the same moment; the loser gets an error and their edit is reverted. The
+  fix is for a batch to take its row locks in id order before its first change.
 - `EventAjax` has no CSRF token on any endpoint, old or new; the new batch endpoint can
   remove up to 200 items in one request. Adding a token is a separate change to that
   controller as a whole.
@@ -230,8 +339,9 @@ direct entry to go deeper (edit mode, `@` leads, quoted descriptions).
 
 ### 7.2 Share as image
 
-"Share as image" offers **Download PNG** and, where the browser allows, **Copy image**, for
-all days or the day in view. The image is drawn directly onto a canvas from the same layout
+"Share as image" offers a choice of **All days** or one day, then **Download PNG** and,
+where the browser allows, **Copy image**, both for that choice (it starts on the day in
+view). A one-day picture uses wider lanes. The image is drawn directly onto a canvas from the same layout
 data (not a screenshot of the page): event name, date range, location, the board, the
 legend, and the event's ORK address. It always uses a white background and is drawn at 2x.
 
@@ -412,8 +522,10 @@ Added to `EvConfig`:
   `Menu`, `Cost`, `Dietary`, `Allergens`).
 - `scheduleCategories`: the ordered category definitions (8.3).
 - `staffList` entries gain `RoleName` and `LeadCategories`.
-- `serverNow`: the server's wall-clock time as a naive string, for the "now" line. The
-  browser adds the minutes elapsed since page load; it never uses its own zone.
+- The "now" line reads the device's own wall clock (call 37); the page no longer sends the
+  server's time. This is the one place the board reads a clock in the browser's zone.
+- `scheduleBatchMax`: the most changes one save may carry, from the server's constant.
+- Every schedule row carries `Modified`, the time it last changed (call 30).
 - Each lead in an item's `Leads` gains `Auto` (true when auto-filled from a category lead).
 
 In the browser an item's times are kept as `'YYYY-MM-DD HH:MM'` strings. `evb-core` converts

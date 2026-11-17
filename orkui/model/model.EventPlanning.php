@@ -70,7 +70,7 @@ class Model_EventPlanning extends Model
         ]);
     }
 
-    /** @param array{Token: string, EventId: int, EventCalendarDetailId: int, Ops: array} $request */
+    /** @param array{Token: string, EventId: int, EventCalendarDetailId: int, Ops: array, BatchToken?: string} $request */
     public function schedule_batch(array $request): array
     {
         return $this->_planning()->ApplyScheduleOps($request);
@@ -94,7 +94,7 @@ class Model_EventPlanning extends Model
         ]);
     }
 
-    /** @param array{Token: string, EventId: int, EventCalendarDetailId: int, SourceDetailId: int} $request */
+    /** @param array{Token: string, EventId: int, EventCalendarDetailId: int, SourceDetailId: int, RequestToken?: string} $request */
     public function schedule_copy_into(array $request): array
     {
         return $this->_planning()->CopyScheduleInto($request);

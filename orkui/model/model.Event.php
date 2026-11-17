@@ -324,6 +324,13 @@ class Model_Event extends Model
         return $this->_eventApiOk($r) ? ($r['Categories'] ?? []) : [];
     }
 
+    /** Most changes one schedule batch may carry. */
+    public function schedule_batch_max(): int
+    {
+        $r = $this->_planning()->GetScheduleBatchMax();
+        return $this->_eventApiOk($r) ? (int) ($r['BatchMaxOps'] ?? 0) : 0;
+    }
+
     /**
      * Public schedule embed: published event + occurrence + schedule list (RB-N).
      * On failure returns ['ok' => false, 'error' => string, 'http' => int].

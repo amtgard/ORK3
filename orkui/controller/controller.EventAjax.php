@@ -510,6 +510,7 @@ class Controller_EventAjax extends Controller
     }
 
     // Leads = JSON list of {MundaneId, Persona?, Auto?}; Auto marks a lead filled in by a category lead.
+    // Each person once (the first entry wins); the domain enforces the lead rules.
     private function _decodeScheduleLeads(): array
     {
         $leadsJson = trim($_POST['Leads'] ?? '');
@@ -519,12 +520,18 @@ class Controller_EventAjax extends Controller
         }
 
         $leads = [];
+        $seen = [];
         foreach ($leadsIn as $lead) {
             if (!is_array($lead)) {
                 continue;
             }
+            $mundaneId = (int)($lead['MundaneId'] ?? 0);
+            if (isset($seen[$mundaneId])) {
+                continue;
+            }
+            $seen[$mundaneId] = true;
             $leads[] = [
-                'MundaneId' => (int)($lead['MundaneId'] ?? 0),
+                'MundaneId' => $mundaneId,
                 'Persona'   => is_string($lead['Persona'] ?? null) ? $lead['Persona'] : '',
                 'Auto'      => !empty($lead['Auto']) ? 1 : 0,
             ];
@@ -535,7 +542,7 @@ class Controller_EventAjax extends Controller
 
     private function _scheduleRequestFromPost(int $eventId, int $detailId, int $scheduleId = 0): array
     {
-        return [
+        $request = [
             'Token' => $this->session->token,
             'EventId' => $eventId,
             'EventCalendarDetailId' => $detailId,
@@ -551,8 +558,13 @@ class Controller_EventAjax extends Controller
             'Cost' => trim($_POST['Cost'] ?? ''),
             'Dietary' => trim($_POST['Dietary'] ?? ''),
             'Allergens' => trim($_POST['Allergens'] ?? ''),
-            'Leads' => $this->_decodeScheduleLeads(),
         ];
+        // No Leads field: the domain applies the category-lead rules instead of clearing them.
+        if (isset($_POST['Leads'])) {
+            $request['Leads'] = $this->_decodeScheduleLeads();
+        }
+
+        return $request;
     }
 
     public function add_schedule($p = null)
@@ -629,7 +641,13 @@ class Controller_EventAjax extends Controller
         }
 
         $this->load_model('EventPlanning');
-        $r = $this->EventPlanning->update_schedule($this->_scheduleRequestFromPost($event_id, $detail_id, $schedule_id));
+        $request = $this->_scheduleRequestFromPost($event_id, $detail_id, $schedule_id);
+        // Seen: the item's Modified when the form opened. Only when posted: without it
+        // the save is not checked against changes made since.
+        if (isset($_POST['Seen'])) {
+            $request['Seen'] = is_string($_POST['Seen']) ? trim($_POST['Seen']) : '';
+        }
+        $r = $this->EventPlanning->update_schedule($request);
         $statusCode = is_array($r['Status'] ?? null) ? (int)($r['Status']['Status'] ?? 1) : (int)($r['Status'] ?? 1);
         if ($statusCode !== 0) {
             $this->EventPlanning->emit_json($r);
@@ -639,7 +657,8 @@ class Controller_EventAjax extends Controller
     }
 
     // POST EventAjax/schedule_batch/{eventId}/{detailId} with Ops = JSON list of
-    // add/update/remove changes; all are applied or none are.
+    // add/update/remove changes; all are applied or none are. An optional BatchToken
+    // makes a repeat of the same request answer with the first one's results.
     public function schedule_batch($p = null)
     {
         header('Content-Type: application/json');
@@ -663,13 +682,18 @@ class Controller_EventAjax extends Controller
             exit;
         }
 
-        $this->load_model('EventPlanning');
-        $r = $this->EventPlanning->schedule_batch([
+        $request = [
             'Token' => $this->session->token,
             'EventId' => $event_id,
             'EventCalendarDetailId' => $detail_id,
             'Ops' => $ops,
-        ]);
+        ];
+        if (isset($_POST['BatchToken'])) {
+            $request['BatchToken'] = is_string($_POST['BatchToken']) ? $_POST['BatchToken'] : '';
+        }
+
+        $this->load_model('EventPlanning');
+        $r = $this->EventPlanning->schedule_batch($request);
         $error = $this->EventPlanning->json_error($r);
         if ($error !== null) {
             $error['failedIndex'] = (int)($r['FailedIndex'] ?? -1);
@@ -732,7 +756,8 @@ class Controller_EventAjax extends Controller
     }
 
     // POST EventAjax/schedule_copy_into/{eventId}/{detailId} with SourceDetailId: appends a
-    // copy of that occurrence's schedule, moved by whole days.
+    // copy of that occurrence's schedule, moved by whole days. An optional RequestToken
+    // makes a repeat of the same request answer with the first one's copy.
     public function schedule_copy_into($p = null)
     {
         header('Content-Type: application/json');
@@ -752,13 +777,18 @@ class Controller_EventAjax extends Controller
             exit;
         }
 
-        $this->load_model('EventPlanning');
-        $r = $this->EventPlanning->schedule_copy_into([
+        $request = [
             'Token' => $this->session->token,
             'EventId' => $event_id,
             'EventCalendarDetailId' => $detail_id,
             'SourceDetailId' => $source_id,
-        ]);
+        ];
+        if (isset($_POST['RequestToken'])) {
+            $request['RequestToken'] = is_string($_POST['RequestToken']) ? $_POST['RequestToken'] : '';
+        }
+
+        $this->load_model('EventPlanning');
+        $r = $this->EventPlanning->schedule_copy_into($request);
         $this->EventPlanning->emit_json($r);
         echo json_encode(['status' => 0, 'schedule' => $r['Schedule'] ?? [], 'skippedFeast' => (int)($r['SkippedFeast'] ?? 0)]);
         exit;

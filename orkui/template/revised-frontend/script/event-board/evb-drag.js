@@ -30,7 +30,11 @@
  *
  * Every gesture ends in one store.batch (one save, one undo step): a move or a
  * resize sends only StartTime and EndTime, and one that ends where it began
- * changes nothing; a repeat adds its copies.
+ * changes nothing; a repeat adds its copies. A move or resize keeps every item
+ * it moves on the board's days (EvBoardCore.boardRange, by groupShiftLimit and
+ * resizeTimes, for one item as for many): it goes only as far as fits, and with
+ * no room it changes nothing. A repeat stays on the item's own board day. A
+ * rail's preview is a rail while its new times keep it ongoing, else a block.
  *
  *   EvBoardDrag.attach(rootEl, api)   api = {store, getSelection, select, isEditing,
  *                                            copyItem(item, times), atLeastFive(item)}
@@ -81,13 +85,9 @@
         return clamp(min, Math.max(b.axisStart, C.BOARD_DAY_START), Math.min(b.axisEnd, C.BOARD_DAY_END));
     }
 
-    // Where a group may go: the axis (within the board day) and the board's days.
-    function boardBounds() {
-        var b = V().board, days = b.days.map(function (d) { return d.day; });
-        return {
-            minStart: Math.max(b.axisStart, C.BOARD_DAY_START), maxEnd: Math.min(b.axisEnd, C.BOARD_DAY_END),
-            firstDay: days[0], lastDay: days[days.length - 1]
-        };
+    // Where gestures keep items: the days the board shows (EvBoardCore.boardRange).
+    function boardRange() {
+        return C.boardRange(V().board.days.map(function (d) { return d.day; }));
     }
 
     // The shown day column at a viewport x, inside the frame's width (not under
@@ -186,6 +186,8 @@
         s.rootEl.classList.add('evb-dragging');
         s.rootEl.classList.toggle('evb-dragging-resize', g.mode === 'start' || g.mode === 'end');
         s.rootEl.classList.toggle('evb-dragging-fill', g.mode === 'fill');
+        g.rail = g.proto.classList.contains('evb-block-rail');
+        g.across = { left: g.proto.style.left, width: g.proto.style.width };
         s.ghost = ghostOf(g.proto, g.mode === 'fill' ? 'evb-fill-ghost' : 'evb-drag-ghost');
         g.proto = null;
         if (g.mode === 'fill') g.dayItems = dayItems(g.sp.day);
@@ -205,7 +207,42 @@
         ghost.classList.remove('evb-has-conflict');
         ghost.removeAttribute('data-evb-label');
         ghost.querySelectorAll('.evb-resize-top, .evb-resize-bottom, .evb-fill-handle, .evb-conflict').forEach(function (n) { n.parentNode.removeChild(n); });
+        // A rail has no time line: the ghost gets one for when it is drawn in the
+        // lanes, and keeps its title to show the time in while it is a rail.
+        var title = ghost.querySelector('.evb-block-title');
+        if (title) { ghost.evbTitle = title.textContent; ghost.evbTitleHtml = title.innerHTML; }
+        if (!ghost.querySelector('.evb-block-meta')) {
+            var meta = doc.createElement('div');
+            meta.className = 'evb-block-meta';
+            ghost.appendChild(meta);
+        }
         return ghost;
+    }
+
+    // A move or resize preview takes the shape the item will have where it is
+    // dropped: a rail when its new times keep it ongoing (EvBoardCore.isOngoing),
+    // else a block in the lanes. A rail stays in its own rail on a day it is
+    // already on, and on another day goes beside that day's rails, never on one.
+    function shapeGhost(el, g) {
+        var rail = C.isOngoing(Object.assign({}, g.item, g.times));
+        el.classList.toggle('evb-block-rail', rail);
+        if (rail) {
+            var own = null, count = 0;
+            V().board.days.forEach(function (d) {
+                if (d.day !== g.day) return;
+                count = d.railCount || 0;
+                (d.rails || []).forEach(function (sg) { if (sg.item && sg.item.cid === g.cid && own === null) own = sg.rail; });
+            });
+            el.style.left = (1 + V().railWidth(own !== null ? own : count)) + 'px';
+            el.style.width = V().RAIL_PX + 'px';
+        } else if (g.rail) {
+            // Out of the rails: the width the lanes have.
+            el.style.left = 'calc(var(--evb-rail-w, 0px) + 1px)';
+            el.style.width = 'calc(100% - var(--evb-rail-w, 0px) - 2px)';
+        } else {
+            el.style.left = g.across.left;
+            el.style.width = g.across.width;
+        }
     }
 
     // The items whose start is on a board day.
@@ -222,8 +259,13 @@
         var px = V().PX_PER_MIN;
         el.style.top = ((sp.start - V().board.axisStart) * px + 1).toFixed(1) + 'px';
         el.style.height = (Math.max(sp.end - sp.start, 15) * px - 2).toFixed(1) + 'px';
+        var range = C.fmtRange(sp.start, sp.end);
         var meta = el.querySelector('.evb-block-meta');
-        if (meta) meta.textContent = C.fmtRange(sp.start, sp.end);
+        if (meta) meta.textContent = range;
+        // A rail has no room for a time line: the time leads its title, running down it.
+        var title = el.evbTitle != null && el.querySelector('.evb-block-title');
+        if (title && el.classList.contains('evb-block-rail')) title.textContent = range + ' ' + el.evbTitle;
+        else if (title && title.innerHTML !== el.evbTitleHtml) title.innerHTML = el.evbTitleHtml;
         if (el.parentNode !== body) body.appendChild(el);
     }
 
@@ -245,26 +287,21 @@
             // day, whichever segment was pressed); its start stays on the axis: not
             // above the first row, not past the last.
             g.times = C.dragTarget(g.item, g.pressDay, col.getAttribute('data-day'),
-                onAxis(minuteAt(col, g.y)) - g.pressMin, step, {
-                    min: Math.max(b.axisStart, C.BOARD_DAY_START),
-                    max: Math.min(b.axisEnd - ROW, C.BOARD_DAY_END)
-                });
-            // A group moves together, only as far as all of it stays on the axis and the board's days.
-            if (g.group.length > 1) {
-                var to = C.span(g.times), store = s.api.store;
-                var lim = C.groupShiftLimit(g.group.map(function (c) { return store.get(c); }).filter(Boolean),
-                    to.start - sp.start, C.diffDays(sp.day, to.day), boardBounds());
-                g.times = C.shiftTimes(g.item, lim.dMin, lim.dDays);
-            }
+                onAxis(minuteAt(col, g.y)) - g.pressMin, step, { min: b.axisStart, max: b.axisEnd - ROW });
+            // One item or a group, it moves only as far as all of it stays on the board's days.
+            var to = C.span(g.times), store = s.api.store;
+            var moved = g.group.length > 1 ? g.group.map(function (c) { return store.get(c); }).filter(Boolean) : [g.item];
+            var lim = C.groupShiftLimit(moved, to.start - sp.start, C.diffDays(sp.day, to.day), { range: boardRange() });
+            g.times = C.shiftTimes(g.item, lim.dMin, lim.dDays);
         } else {
             // The edge follows the pointer in its own day's column, whichever column the pointer is over.
             var body = bodyFor(g.pressDay);
             if (!body) return;
             var off = C.diffDays(sp.day, g.pressDay) * C.DAY_MIN;
             var edge = g.mode === 'start' ? sp.start : sp.end;
-            var to = snapped(edge, onAxis(minuteAt(body, g.y)) - g.pressMin, step);
-            to = off + onAxis(to - off);
-            g.times = C.resizeTimes(g.item, g.mode, to);
+            var at = snapped(edge, onAxis(minuteAt(body, g.y)) - g.pressMin, step);
+            at = off + onAxis(at - off);
+            g.times = C.resizeTimes(g.item, g.mode, at, boardRange());
         }
         g.day = C.boardPos(g.times.StartTime).day;
         draw();
@@ -293,7 +330,11 @@
             if (el.parentNode) el.parentNode.removeChild(el);
         }
         for (var i = 0; i < n; i++) {
-            if (!s.fills[i]) s.fills[i] = s.ghost.cloneNode(true);
+            if (!s.fills[i]) {
+                s.fills[i] = s.ghost.cloneNode(true);
+                s.fills[i].evbTitle = s.ghost.evbTitle;
+                s.fills[i].evbTitleHtml = s.ghost.evbTitleHtml;
+            }
             placeGhost(s.fills[i], body, g.slots[i]);
         }
     }
@@ -315,6 +356,7 @@
             if (s.ghost.parentNode) s.ghost.parentNode.removeChild(s.ghost);
             return;
         }
+        shapeGhost(s.ghost, g);
         placeGhost(s.ghost, body, g.times);
     }
 
@@ -389,7 +431,9 @@
         store.batch(function () {
             g.slots.forEach(function (t) { added.push(store.add(s.api.copyItem(item, t))); });
         });
-        s.api.select(added);
+        // A copy the store refused has no cid (its notice says why).
+        added = added.filter(Boolean);
+        if (added.length) s.api.select(added);
     }
 
     // One store.batch: the pressed item to its new times and, for a move, every

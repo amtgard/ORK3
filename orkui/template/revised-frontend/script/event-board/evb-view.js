@@ -3,8 +3,10 @@
  * #evb-root and owns the Schedule tab's Board/List view switch.
  *
  * Layout comes from EvBoardCore.buildBoard; this file turns it into HTML and
- * adds the legend filter, day pills, details popover and "now" line.
- * esc, blockHtml, autolink, popoverHtml and nowMinute are pure so node tests can
+ * adds the legend filter, day pills, details popover, "now" line and the
+ * "now and next" strip above both views.
+ * esc, blockHtml, railWidth, autolink, popoverHtml, nowNextHtml, nowMinute, nowLine,
+ * openingDay, filterStatus, keptFilter and filterAccess are pure so node tests can
  * load this file; everything that touches the DOM runs only from init().
  */
 (function (root, factory) {
@@ -20,6 +22,8 @@
     var MIN_BLOCK_MIN = 15;  // shorter items still draw this tall
     var TALL_MIN = 90;       // blocks this long show location and leads
     var LANE_MIN_PX = 110;   // narrowest a lane may get before the board scrolls
+    var RAIL_PX = 22;        // an ongoing item's rail (EvBoardCore.isOngoing) at the left of its day
+    var RAIL_GAP = 2;        // between rails, and between the last rail and the lanes
     var HEAD_PX = 34;        // the sticky day heads (.evb-head) cover the top of the frame
     var GUTTER_PX = 48;      // the sticky hour gutter (.evb-gutter) covers its left edge
     var STORAGE_KEY = 'ev-sched-view-mode';
@@ -35,6 +39,29 @@
         return (name && Object.prototype.hasOwnProperty.call(catsByName, name)) ? name : 'Other';
     }
 
+    // "A", "A and B", "A, B and C".
+    function andList(names) {
+        if (names.length < 2) return names.join('');
+        return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+    }
+
+    // A segment's day and time for a label: "Saturday 9–10a", or for one that
+    // starts after midnight "Sunday 1–2a (Saturday night)". sep goes between day and time.
+    function dayTime(day, startMin, time, sep) {
+        var late = C.lateNight(day, startMin);
+        return late ? late.day + sep + time + ' (' + late.night + ')' : C.dayLabel(day) + sep + time;
+    }
+
+    // What a screen reader hears for a block:
+    // "Title, Category[ and Secondary], Day time[, at Location][, led by A and B]".
+    function blockLabel(item, cat, sec, day, startMin, time) {
+        var leads = (item.Leads || []).map(function (l) { return String((l && l.Persona) || '').trim(); })
+            .filter(function (n) { return n !== ''; });
+        var loc = String(item.Location || '').trim();
+        return (item.Title || '') + ', ' + cat + (sec ? ' and ' + sec : '') + ', ' + dayTime(day, startMin, time, ' ') +
+            (loc ? ', at ' + loc : '') + (leads.length ? ', led by ' + andList(leads) : '');
+    }
+
     function boldOf(name, catsByName) {
         var def = catsByName[name] || catsByName.Other;
         return (def && def.bold) || '#616161';
@@ -47,11 +74,30 @@
         return axisStart + steps * step;
     }
 
+    // The width the rails take at the left of a day column (px): each rail and
+    // the gap after it. 0 with no rails.
+    function railWidth(count) {
+        var n = Math.max(0, parseInt(count, 10) || 0);
+        return n * (RAIL_PX + RAIL_GAP);
+    }
+
+    // How much of a rail shows (px): top and height are the rail's in its day body;
+    // viewTop is the body offset at the bottom edge of the sticky day heads and
+    // viewHeight how much of the body shows below them. 0 when none of it shows.
+    function railVisible(top, height, viewTop, viewHeight) {
+        var v = Math.min(top + height, viewTop + viewHeight) - Math.max(top, viewTop);
+        return v > 0 ? Math.round(v) : 0;
+    }
+
     // One block for one segment. axisStart (minutes) sets its top; it defaults to
     // 0 so the markup stays testable without a board. opts.ghost draws the dashed
     // preview of an item not yet added: not focusable and hidden from assistive tech.
     // opts.placeholder holds the place of the block being typed (evb-type.js
     // draws the real one over it): laid out like an item, but invisible.
+    // A segment with a rail index (buildBoard's day.rails) is drawn as a rail:
+    // RAIL_PX wide at the column's left edge, its title running down it. Every
+    // other block is laid out in the width left of its day body after the rails
+    // (--evb-rail-w on the day body).
     function blockHtml(seg, catsByName, axisStart, opts) {
         var placeholder = !!(opts && opts.placeholder);
         var ghost = !!(opts && opts.ghost) || placeholder;
@@ -69,7 +115,9 @@
         // Title lines that fit above the time line (6px padding, 13px meta line, 15px per title line).
         var lines = Math.max(1, Math.floor((height - 6 - 13) / 15));
 
+        var rail = typeof seg.rail === 'number' && seg.rail >= 0;
         var cls = 'evb-block';
+        if (rail) cls += ' evb-block-rail';
         if (!seg.isLast) cls += ' evb-block-continues';
         if (!seg.isFirst) cls += ' evb-block-continued';
         if (sec) cls += ' evb-block-striped';
@@ -77,19 +125,28 @@
         else if (ghost) cls += ' evb-ghost';
 
         // A 1px inset top and bottom keeps back-to-back items reading as two blocks.
-        var style = 'top:' + (top + 1).toFixed(1) + 'px;height:' + (height - 2).toFixed(1) + 'px;' +
-            'left:calc(' + (+seg.left || 0).toFixed(3) + '% + 1px);width:calc(' + (+seg.width || 100).toFixed(3) + '% - 2px);' +
+        var lanesW = '(100% - var(--evb-rail-w, 0px))';
+        var across = rail
+            ? 'left:' + (1 + railWidth(seg.rail)) + 'px;width:' + RAIL_PX + 'px;'
+            : 'left:calc(var(--evb-rail-w, 0px) + ' + lanesW + ' * ' + ((+seg.left || 0) / 100).toFixed(5) + ' + 1px);' +
+                'width:calc(' + lanesW + ' * ' + ((+seg.width || 100) / 100).toFixed(5) + ' - 2px);';
+        var style = 'top:' + (top + 1).toFixed(1) + 'px;height:' + (height - 2).toFixed(1) + 'px;' + across +
             '--evb-fill:' + boldOf(cat, catsByName) + ';--evb-lines:' + lines + ';' +
             (sec ? '--evb-stripe:' + boldOf(sec, catsByName) + ';' : '');
 
+        var label = esc(blockLabel(item, cat, sec, seg.day, seg.startMin, time));
         var h = '<div class="' + cls + '"' + (ghost ? ' aria-hidden="true"' : ' role="button" tabindex="0"') +
             ' data-id="' + esc(parseInt(item.EventScheduleId, 10) || 0) + '"' +
             (item.cid && !ghost ? ' data-cid="' + esc(item.cid) + '"' : '') +
             ' data-day="' + esc(seg.day) + '"' +
             ' data-category="' + esc(cat) + '"' +
             (sec ? ' data-secondary-category="' + esc(sec) + '"' : '') +
-            ' aria-label="' + esc((item.Title || '') + ', ' + C.dayLabel(seg.day) + ' ' + time) + '"' +
+            ' aria-label="' + label + '"' +
+            // The label without conflict notes; evb-bulk.js appends those to it.
+            (ghost ? '' : ' data-evb-label="' + label + '"') +
             ' style="' + esc(style) + '">';
+        // A rail shows only its title, running down it (the label has the rest).
+        if (rail) return h + '<div class="evb-block-title">' + esc(item.Title || '') + '</div></div>';
         h += '<div class="evb-block-title">' + esc(item.Title || '') +
             (hasMenu ? ' <i class="fas fa-scroll evb-block-menu" data-tip="Has menu"></i>' : '') + '</div>';
         h += '<div class="evb-block-meta">' + esc(time) + '</div>';
@@ -127,8 +184,9 @@
         return out;
     }
 
-    // The item's time for the popover: "Saturday · 5–6p", or with weekday names
-    // on both ends when it runs past its board day.
+    // The item's time for the popover: "Saturday · 5–6p" ("Sunday · 1–2a (Saturday
+    // night)" after midnight), or with weekday names on both ends when it runs past
+    // its board day.
     function popoverTime(item) {
         var s = C.parseNaive(item.StartTime);
         if (!s) return '';
@@ -138,7 +196,7 @@
             return C.dayLabel(s.day) + ' ' + C.fmtTime(s.min) + ' – ' + C.dayLabel(e.day) + ' ' + C.fmtTime(e.min);
         }
         var seg = segs[0];
-        return C.dayLabel(seg.day) + ' · ' + C.fmtRange(seg.startMin, seg.endMin);
+        return dayTime(seg.day, seg.startMin, C.fmtRange(seg.startMin, seg.endMin), ' · ');
     }
 
     function costText(cost) {
@@ -195,14 +253,132 @@
         return h;
     }
 
-    // The board day and minute for the "now" line: the server's clock at page
-    // load plus the time elapsed since, measured from a 5am board day.
-    function nowMinute(serverNow, elapsedMs) {
-        var p = C.parseNaive(serverNow);
+    // Whether the popover offers Edit: to a schedule manager on every item, and to
+    // a feast editor (can manage the feast, not the schedule) on a feast item, one
+    // with Feast and Food as its primary or secondary category.
+    function popoverCanEdit(item, config) {
+        config = config || {};
+        if (config.canManageSchedule) return true;
+        if (!config.canManageFeast || !item) return false;
+        return item.Category === 'Feast and Food' || item.SecondaryCategory === 'Feast and Food';
+    }
+
+    // An entry's time in the "now and next" strip: 'until 3p' for an item on now,
+    // 'at 3p' for one next. An end on another board day than nowDay names the
+    // calendar day it falls on ('until Sunday 9a').
+    function nowNextWhen(entry, isNow, nowDay) {
+        if (!isNow) return 'at ' + C.fmtTime(entry.start.min);
+        var e = entry.end;
+        var real = C.parseNaive(C.toNaive(e.day, e.min)).day;
+        return 'until ' + (e.day !== nowDay ? C.dayLabel(real) + ' ' : '') + C.fmtTime(e.min);
+    }
+
+    // The "now and next" strip's markup for an EvBoardCore.nowNext result: two
+    // labelled lists of buttons (data-id: the item), '' when there is nothing to
+    // show. A button shows a swatch in the category's colour, the title, the
+    // time and the location; its label names the category too.
+    function nowNextHtml(r, catsByName) {
+        if (!r || (!r.now.length && !r.next.length)) return '';
+        function entryHtml(en, isNow) {
+            var item = en.item || {};
+            var cat = catName(item.Category, catsByName);
+            var sec = item.SecondaryCategory && item.SecondaryCategory !== cat &&
+                Object.prototype.hasOwnProperty.call(catsByName, item.SecondaryCategory) ? item.SecondaryCategory : '';
+            var when = nowNextWhen(en, isNow, r.day);
+            var loc = String(item.Location || '').trim();
+            var label = (item.Title || '') + ', ' + cat + (sec ? ' and ' + sec : '') + ', ' + when + (loc ? ', at ' + loc : '');
+            return '<li><button type="button" class="evb-nownext-item" data-id="' + esc(parseInt(item.EventScheduleId, 10) || 0) + '"' +
+                ' data-category="' + esc(cat) + '" aria-label="' + esc(label) + '">' +
+                '<span class="evb-legend-swatch" aria-hidden="true" style="background:' + esc(boldOf(cat, catsByName)) + '"></span>' +
+                '<span class="evb-nownext-title">' + esc(item.Title || '') + '</span>' +
+                '<span class="evb-nownext-when">' + esc(when) + '</span>' +
+                (loc ? '<span class="evb-nownext-loc"><i class="fas fa-map-marker-alt" aria-hidden="true"></i> ' + esc(loc) + '</span>' : '') +
+                '</button></li>';
+        }
+        function group(key, name, list, isNow, more) {
+            if (!list.length) return '';
+            return '<div class="evb-nownext-group evb-nownext-' + key + '" role="group" aria-labelledby="evb-nownext-' + key + '-label">' +
+                '<span class="evb-nownext-label" id="evb-nownext-' + key + '-label">' + name + '</span>' +
+                '<ul class="evb-nownext-list">' + list.map(function (en) { return entryHtml(en, isNow); }).join('') +
+                (more ? '<li class="evb-nownext-more">+' + more + ' more</li>' : '') + '</ul></div>';
+        }
+        return group('now', 'Now', r.now, true, r.more) + group('next', 'Next', r.next, false, 0);
+    }
+
+    // The board day and minute of a naive 'YYYY-MM-DD HH:MM' clock reading plus
+    // elapsedMs, measured from a 5am board day.
+    function nowMinute(clock, elapsedMs) {
+        var p = C.parseNaive(clock);
         if (!p) return null;
         var total = p.min + Math.floor((+elapsedMs || 0) / 60000);
         var shift = Math.floor((total - C.BOARD_DAY_START) / 1440);
         return { day: C.addDays(p.day, shift), min: total - shift * 1440 };
+    }
+
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+    // The device's wall clock as a naive 'YYYY-MM-DD HH:MM'. The one place the
+    // view reads a Date in the browser's zone: the device's wall clock is the
+    // attendee's local time, which is what the event's naive times mean.
+    function deviceClock() {
+        var d = new Date();
+        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' +
+            pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    }
+    var clockFn = deviceClock;
+
+    // The clock's naive reading, or null.
+    function clockNow() {
+        try { return clockFn(); } catch (e) { return null; }
+    }
+
+    // The board day and minute now, or null when the clock gives nothing usable.
+    function currentNow() {
+        return nowMinute(clockNow(), 0);
+    }
+
+    // Where the now line goes on a board ({days, axisStart, axisEnd}): its day and
+    // its offset in px from the axis start, or null when now is off the board.
+    function nowLine(board, now) {
+        if (!board || !now || !board.days) return null;
+        if (now.min < board.axisStart || now.min > board.axisEnd) return null;
+        if (!board.days.some(function (d) { return d.day === now.day; })) return null;
+        return { day: now.day, min: now.min, top: (now.min - board.axisStart) * PX_PER_MIN };
+    }
+
+    // The day a phone opens on: today's board day when it is on the board, else the first.
+    function openingDay(board, now) {
+        if (!board || !board.days || !board.days.length) return null;
+        var has = now && board.days.some(function (d) { return d.day === now.day; });
+        return has ? now.day : board.days[0].day;
+    }
+
+    // The legend filter's announcement: "Showing 6 Battlegame items", or with no
+    // filter "Showing all items". An item counts once, by primary or secondary.
+    function filterStatus(items, catsByName, filter) {
+        if (!filter) return 'Showing all items';
+        var n = 0;
+        (items || []).forEach(function (it) {
+            if (catName(it.Category, catsByName) === filter || (it.SecondaryCategory === filter && catsByName[filter])) n++;
+        });
+        return 'Showing ' + n + ' ' + filter + ' item' + (n === 1 ? '' : 's');
+    }
+
+    // After a render: a filter on a category no item uses any more has no chip
+    // to clear it, so it is dropped and the status region says so.
+    // present: {categoryName: true}. -> { filter, status } (status null: leave it).
+    function keptFilter(filter, present) {
+        if (filter && !(present || {})[filter]) return { filter: null, status: filterStatus([], {}, null) };
+        return { filter: filter || null, status: null };
+    }
+
+    // What the legend filter does to a real block's reachability: 'hide' (out
+    // of the tab order, aria-hidden), 'show' (undo the filter's own hiding) or
+    // null (leave it). keep: the block is selected or has focus, so it stays
+    // reachable even when it does not match.
+    function filterAccess(dim, keep, hidden) {
+        if (dim && !keep) return 'hide';
+        return hidden ? 'show' : null;
     }
 
     // ---- DOM state (browser only) ----
@@ -217,10 +393,14 @@
         desiredView: 'list',
         editing: false,    // Edit mode: the axis widens and blocks open no popover
         ghosts: [],        // preview items drawn dashed among the real ones
+        ghostKey: '',      // drawKey of the ghosts drawn now
         placeholder: null, // the item being typed on the board (evb-type.js), or null
+        placeholderKey: '',
         view: 'list',
         popover: null,     // { el, block, id } while a popover is open
-        nowBase: 0,        // performance.now() when the page's serverNow was taken
+        statusEl: null,    // polite status region for the legend filter
+        stripEl: null,     // the "now and next" strip above both views
+        stripHtml: '',
         renderCbs: []
     };
     var api = {
@@ -228,11 +408,22 @@
         HEAD_PX: HEAD_PX,
         GUTTER_PX: GUTTER_PX,
         esc: esc,
+        RAIL_PX: RAIL_PX,
         blockHtml: blockHtml,
+        railWidth: railWidth,
+        railVisible: railVisible,
+        nowNextHtml: nowNextHtml,
         slotAt: slotAt,
         autolink: autolink,
         popoverHtml: popoverHtml,
+        popoverCanEdit: popoverCanEdit,
         nowMinute: nowMinute,
+        currentNow: currentNow,
+        nowLine: nowLine,
+        openingDay: openingDay,
+        filterStatus: filterStatus,
+        keptFilter: keptFilter,
+        filterAccess: filterAccess,
         board: null
     };
 
@@ -262,12 +453,6 @@
                 (c.key != null ? '<span class="evb-legend-key" aria-hidden="true">' + esc(c.key) + '</span>' : '') + '</button>';
         });
         return h + '</div>';
-    }
-
-    function currentNow() {
-        var c = cfg();
-        if (!c.serverNow || !win.performance) return null;
-        return nowMinute(c.serverNow, win.performance.now() - state.nowBase);
     }
 
     // Day pills (only when the board has more than one day): "All days" plus one
@@ -302,8 +487,7 @@
         if ((isPhone() || boardHasDay(state.day)) && boardHasDay(ghostDay)) return ghostDay;
         if (boardHasDay(state.day)) return state.day;
         if (!isPhone()) return null;
-        var now = currentNow();
-        return now && boardHasDay(now.day) ? now.day : api.board.days[0].day;
+        return openingDay(api.board, currentNow());
     }
 
     function applyDay() {
@@ -323,15 +507,69 @@
     function renderNow() {
         if (!state.rootEl || !api.board) return;
         state.rootEl.querySelectorAll('.evb-now').forEach(function (el) { el.parentNode.removeChild(el); });
-        var now = currentNow();
-        if (!now || now.min < api.board.axisStart || now.min > api.board.axisEnd) return;
-        var body = state.rootEl.querySelector('.evb-day-body[data-day="' + now.day + '"]');
+        var pos = nowLine(api.board, currentNow());
+        if (!pos) return;
+        var body = state.rootEl.querySelector('.evb-day-body[data-day="' + pos.day + '"]');
         if (!body) return;
         var line = win.document.createElement('div');
         line.className = 'evb-now';
         line.setAttribute('aria-hidden', 'true');
-        line.style.top = ((now.min - api.board.axisStart) * PX_PER_MIN).toFixed(1) + 'px';
+        line.style.top = pos.top.toFixed(1) + 'px';
         body.appendChild(line);
+    }
+
+    // The "now and next" strip, in view mode only; hidden when there is nothing
+    // on or next, or now is outside the event. Unchanged markup is left alone,
+    // so an open popover and focus survive the minute timer.
+    function renderStrip() {
+        var el = state.stripEl;
+        if (!el) return;
+        var c = cfg();
+        var r = state.editing ? null : C.nowNext(state.items, clockNow(), c.eventStart || '', c.eventEnd || '');
+        var html = nowNextHtml(r, state.catsByName);
+        if (html === state.stripHtml) return;
+        var doc = win.document;
+        var focusedId = el.contains(doc.activeElement) ? doc.activeElement.getAttribute('data-id') : null;
+        if (state.popover && el.contains(state.popover.block)) closePopover(false);
+        state.stripHtml = html;
+        el.innerHTML = html;
+        el.hidden = !html;
+        if (focusedId === null) return;
+        var again = el.querySelector('.evb-nownext-item[data-id="' + focusedId + '"]') || el.querySelector('.evb-nownext-item');
+        if (again) again.focus({ preventScroll: true });
+    }
+
+    // Each rail's visible height in the board's frame, as --evb-rail-vis: its title
+    // sticks to the top of that part and ends in an ellipsis with it (event-board.css).
+    // The day bodies start under the day heads, so a body offset equals scrollTop
+    // at the heads' bottom edge.
+    var railFitQueued = false;
+    var railObserver = null;
+    function fitRailTitles() {
+        railFitQueued = false;
+        var scroller = state.rootEl && state.rootEl.querySelector('.evb-scroller');
+        if (!scroller || !scroller.clientHeight) return; // the board is not on screen
+        var viewTop = scroller.scrollTop, viewHeight = scroller.clientHeight - HEAD_PX;
+        state.rootEl.querySelectorAll('.evb-day-body > .evb-block-rail').forEach(function (r) {
+            var vis = railVisible(parseFloat(r.style.top) || 0, parseFloat(r.style.height) || 0, viewTop, viewHeight) + 'px';
+            if (r.style.getPropertyValue('--evb-rail-vis') !== vis) r.style.setProperty('--evb-rail-vis', vis);
+        });
+    }
+    function queueRailFit() {
+        if (railFitQueued) return;
+        railFitQueued = true;
+        (win.requestAnimationFrame || win.setTimeout)(fitRailTitles);
+    }
+    function watchRails(scroller) {
+        if (railObserver) { railObserver.disconnect(); railObserver = null; }
+        if (!scroller) return;
+        scroller.addEventListener('scroll', queueRailFit, { passive: true });
+        // The frame's size changes when the board is shown, the view or day changes, or the window resizes.
+        if (win.ResizeObserver) {
+            railObserver = new win.ResizeObserver(queueRailFit);
+            railObserver.observe(scroller);
+        }
+        fitRailTitles();
     }
 
     function render() {
@@ -342,7 +580,9 @@
         var ph = state.editing ? state.placeholder : null;
         // A placeholder with a cid stands in for that item (it is being retyped in place).
         var items = ph && ph.cid ? state.items.filter(function (it) { return it.cid !== ph.cid; }) : state.items;
-        var board = C.buildBoard(items.concat(ghosts, ph ? [ph] : []), { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '', editing: state.editing });
+        // The block being typed stays in a lane even when its times make it ongoing.
+        var board = C.buildBoard(items.concat(ghosts, ph ? [ph] : []), { eventStart: c.eventStart || '', eventEnd: c.eventEnd || '',
+            editing: state.editing, notRail: ph });
         // Re-rendering replaces the scroller; keep the same minute and day position in view.
         var oldScroller = state.rootEl.querySelector('.evb-scroller');
         var keep = oldScroller && api.board ? {
@@ -355,7 +595,9 @@
 
         var present = presentCategories();
         // A filter on a category no item uses any more has no chip to clear it.
-        if (state.filter && !present[state.filter]) state.filter = null;
+        var kept = keptFilter(state.filter, present);
+        state.filter = kept.filter;
+        if (kept.status !== null && state.statusEl) state.statusEl.textContent = kept.status;
 
         var h = legendHtml(present) + dayPillsHtml(board);
         h += '<div class="evb-scroller"><div class="evb-board">';
@@ -365,11 +607,13 @@
         }
         h += '</div></div>';
         board.days.forEach(function (d) {
-            var weight = Math.max(d.lanes, 1.4);
-            h += '<div class="evb-day" data-day="' + esc(d.day) + '" style="flex-grow:' + weight + ';min-width:' + (d.lanes * LANE_MIN_PX) + 'px">';
+            // Rails add their own width; the lanes share what is left.
+            var railW = railWidth(d.railCount);
+            var weight = Math.max(d.lanes, 1.4) + railW / LANE_MIN_PX;
+            h += '<div class="evb-day" data-day="' + esc(d.day) + '" style="flex-grow:' + weight.toFixed(3) + ';min-width:' + (d.lanes * LANE_MIN_PX + railW) + 'px">';
             h += '<div class="evb-head">' + esc(C.dayLabelLong(d.day)) + '</div>';
-            h += '<div class="evb-day-body" data-day="' + esc(d.day) + '" style="' + bodyStyle + '">';
-            d.segs.forEach(function (sg) {
+            h += '<div class="evb-day-body" data-day="' + esc(d.day) + '" style="' + bodyStyle + ';--evb-rail-w:' + railW + 'px">';
+            (d.rails || []).concat(d.segs).forEach(function (sg) {
                 h += blockHtml(sg, state.catsByName, board.axisStart,
                     { ghost: ghosts.indexOf(sg.item) >= 0, placeholder: sg.item === ph });
             });
@@ -382,9 +626,11 @@
             scroller.scrollTop = Math.max(0, keep.top);
             scroller.scrollLeft = keep.left;
         }
+        watchRails(scroller);
         applyFilter();
         applyDay();
         renderNow();
+        renderStrip();
         reveal(state.rootEl.querySelector('.evb-ghost'));
         state.renderCbs.forEach(function (fn) {
             try { fn(board); } catch (e) { if (win.console) win.console.error(e); }
@@ -392,13 +638,28 @@
     }
 
     // The legend dims every block whose primary and secondary category both differ
-    // from the chosen one.
-    function applyFilter() {
+    // from the chosen one, and takes those out of the tab order and away from
+    // assistive tech while the filter is on (ghosts and the placeholder stay hidden).
+    // A selected block (Edit mode) or the focused one stays reachable, only dimmed.
+    // focused: the element that has or is getting focus (default: the active one).
+    function applyFilter(focused) {
         if (!state.rootEl) return;
         var f = state.filter;
+        var active = focused === undefined ? win.document.activeElement : focused;
         state.rootEl.querySelectorAll('.evb-block').forEach(function (b) {
             var match = b.getAttribute('data-category') === f || b.getAttribute('data-secondary-category') === f;
-            b.classList.toggle('evb-dim', !!f && !match);
+            var dim = !!f && !match;
+            b.classList.toggle('evb-dim', dim);
+            if (b.getAttribute('role') !== 'button') return; // ghosts, the placeholder, drag previews
+            var keep = b.classList.contains('evb-selected') || b === active;
+            var act = filterAccess(dim, keep, b.getAttribute('aria-hidden') === 'true');
+            if (act === 'hide') {
+                b.setAttribute('tabindex', '-1');
+                b.setAttribute('aria-hidden', 'true');
+            } else if (act === 'show') {
+                b.setAttribute('tabindex', '0');
+                b.removeAttribute('aria-hidden');
+            }
         });
         state.rootEl.querySelectorAll('.evb-legend-chip').forEach(function (chip) {
             chip.setAttribute('aria-pressed', chip.getAttribute('data-category') === f ? 'true' : 'false');
@@ -408,6 +669,7 @@
     function setFilter(category) {
         state.filter = category || null;
         applyFilter();
+        if (state.statusEl) state.statusEl.textContent = filterStatus(state.items, state.catsByName, state.filter);
     }
 
     function setItems(items) {
@@ -418,17 +680,29 @@
     // Edit mode: the axis widens to 7am-midnight and a click on a block opens no popover.
     function setEditing(on) {
         state.editing = !!on;
-        if (!state.editing) { state.ghosts = []; state.placeholder = null; }
+        if (!state.editing) { state.ghosts = []; state.ghostKey = ''; state.placeholder = null; state.placeholderKey = ''; }
         if (state.rootEl) state.rootEl.classList.toggle('evb-editing', state.editing);
         render();
     }
 
+    // A cheap key of the fields a ghost or the placeholder draws from: two lists
+    // with the same key draw the same board.
+    function drawKey(it) {
+        if (!it) return '';
+        return [it.cid || '', it.EventScheduleId || 0, it.StartTime || '', it.EndTime || '', it.Category || '',
+            it.SecondaryCategory || '', it.Title || '', it.Location || '', it.Menu || '',
+            (it.Leads || []).map(function (l) { return (l && l.Persona) || ''; }).join(',')].join('\u0001');
+    }
+
     // Preview items, laid out with the real ones and drawn dashed; [] clears them.
-    // The board grows to take in a ghost's day or time while it shows.
+    // The board grows to take in a ghost's day or time while it shows. A list
+    // that draws the same as the one on screen changes nothing.
     function setGhosts(items) {
         var next = Array.isArray(items) ? items.slice() : [];
-        if (!next.length && !state.ghosts.length) return;
+        var key = next.map(drawKey).join('\u0002');
+        if (key === state.ghostKey && next.length === state.ghosts.length) return;
         state.ghosts = next;
+        state.ghostKey = key;
         render();
     }
 
@@ -436,8 +710,11 @@
     // out among the real ones as an invisible .evb-placeholder; null removes it.
     // With a cid it takes the place of that item, which is not drawn meanwhile.
     function setPlaceholder(item) {
+        var key = drawKey(item);
         if (!item && !state.placeholder) return;
+        if (item && state.placeholder && key === state.placeholderKey) return;
         state.placeholder = item || null;
+        state.placeholderKey = key;
         render();
     }
 
@@ -500,13 +777,21 @@
         writeScheduleHash();
     }
 
-    // Managers open the edit modal from the popover, through the list row's own
-    // edit button so the modal's row lookup keeps working.
+    // Everyone opens the edit modal from the popover through the list row's own edit
+    // button, so the modal reads the row the page last updated (Modified included)
+    // and its row lookup keeps working; the button needs no visible list view. Only
+    // a feast editor's item with no such row (not yet on the page) is opened from the
+    // board's own copy of the item.
     function openEditor(id) {
-        if (!cfg().canManageSchedule) return;
+        var c = cfg();
         var row = win.document.getElementById('ev-schedule-row-' + id);
         var btn = row && row.querySelector('.ev-edit-link');
-        if (btn) btn.click();
+        if (btn) { btn.click(); return; }
+        if (c.canManageSchedule) return;
+        var item = findItem(id);
+        if (item && popoverCanEdit(item, c) && typeof win.evOpenScheduleModalForItem === 'function') {
+            win.evOpenScheduleModalForItem(item);
+        }
     }
 
     function findItem(id) {
@@ -553,7 +838,7 @@
         el.setAttribute('role', 'dialog');
         el.setAttribute('aria-label', item.Title || 'Schedule item');
         el.setAttribute('tabindex', '-1');
-        el.innerHTML = popoverHtml(item, state.catsByName, c.uir || '', { canEdit: !!c.canManageSchedule });
+        el.innerHTML = popoverHtml(item, state.catsByName, c.uir || '', { canEdit: popoverCanEdit(item, c) });
         el.addEventListener('click', function (e) {
             var t = e.target.closest ? e.target : null;
             if (!t) return;
@@ -633,7 +918,8 @@
                 if (seq !== refreshSeq) return;
                 var items = swapFromPage(html);
                 if (!items) return;
-                if (state.editing) { if (win.EvBoardEdit && win.EvBoardEdit.refresh) win.EvBoardEdit.refresh(); }
+                // The person's own staff change: the store merges without a "changed by someone else" notice.
+                if (state.editing) { if (win.EvBoardEdit && win.EvBoardEdit.refresh) win.EvBoardEdit.refresh({ own: true }); }
                 else setItems(items);
             })
             .catch(function () { /* the page stays as it is */ });
@@ -641,7 +927,9 @@
 
     function refreshFromServer() {
         // In Edit mode the store owns the board, so it re-reads the schedule instead.
-        if (state.editing && win.EvBoardEdit && win.EvBoardEdit.refresh) { win.EvBoardEdit.refresh(); return; }
+        // Only the person's own save through the schedule form comes here, so the
+        // store merges it without a "changed by someone else" notice.
+        if (state.editing && win.EvBoardEdit && win.EvBoardEdit.refresh) { win.EvBoardEdit.refresh({ own: true }); return; }
         var seq = ++refreshSeq;
         win.fetch(win.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
             .then(function (r) { return r.text(); })
@@ -667,7 +955,26 @@
         state.catsByName = {};
         state.cats.forEach(function (cat) { state.catsByName[cat.name] = cat; });
         state.items = Array.isArray(c.schedule) ? c.schedule : [];
-        state.nowBase = win.performance ? win.performance.now() : 0;
+        // The legend filter is announced here (outside #evb-root, which each render replaces).
+        state.statusEl = doc.createElement('div');
+        state.statusEl.className = 'evb-sr';
+        state.statusEl.setAttribute('role', 'status');
+        state.statusEl.setAttribute('aria-live', 'polite');
+        state.rootEl.parentNode.insertBefore(state.statusEl, state.rootEl);
+        // "Now and next" sits above both views: before the list's filter pills
+        // (which come before the list and the board).
+        state.stripEl = doc.createElement('div');
+        state.stripEl.className = 'evb-nownext';
+        state.stripEl.setAttribute('role', 'region');
+        state.stripEl.setAttribute('aria-label', 'Happening now and next');
+        state.stripEl.hidden = true;
+        var stripAt = doc.getElementById('ev-sched-filters') || state.listEl;
+        stripAt.parentNode.insertBefore(state.stripEl, stripAt);
+        // An entry opens its item's popover, anchored to the entry.
+        state.stripEl.addEventListener('click', function (e) {
+            var entry = e.target.closest && e.target.closest('.evb-nownext-item');
+            if (entry && !state.editing) openPopover(entry);
+        });
         // A day in the link (YYYYMMDD) shows only that day until "All days" is chosen.
         var hp = win.evHashParams || {};
         var hd = /^(\d{4})(\d{2})(\d{2})$/.exec(hp.day || '');
@@ -680,6 +987,10 @@
                 writeScheduleHash();
             });
         });
+        // A dimmed block that takes focus (a click, or the selection moving to it)
+        // stays reachable while it has it.
+        state.rootEl.addEventListener('focusin', function (e) { if (state.filter) applyFilter(e.target); });
+        state.rootEl.addEventListener('focusout', function (e) { if (state.filter) applyFilter(e.relatedTarget || null); });
         state.rootEl.addEventListener('click', function (e) {
             var t = e.target.closest ? e.target : null;
             if (!t) return;
@@ -707,7 +1018,7 @@
         // the block into view) leaves the block where it was and is ignored.
         doc.addEventListener('click', function (e) {
             var p = state.popover;
-            if (!p || !e.target.closest || p.el.contains(e.target) || e.target.closest('.evb-block')) return;
+            if (!p || !e.target.closest || p.el.contains(e.target) || e.target.closest('.evb-block, .evb-nownext-item')) return;
             closePopover(false);
         });
         doc.addEventListener('keydown', function (e) {
@@ -738,13 +1049,16 @@
             applyDay();
         });
 
-        // Keep the now line current while the board is on screen.
+        // Keep the now line (while the board is on screen) and the "now and
+        // next" strip (in either view) current.
         win.setInterval(function () {
-            if (state.view === 'board' && !doc.hidden) renderNow();
+            if (doc.hidden) return;
+            renderStrip();
+            if (state.view === 'board') renderNow();
         }, 60000);
         // The interval skips hidden tabs, so catch up as soon as the tab is back.
         doc.addEventListener('visibilitychange', function () {
-            if (!doc.hidden) renderNow();
+            if (!doc.hidden) { renderNow(); renderStrip(); }
         });
 
         win.evScheduleHashSuffix = function () {
@@ -770,8 +1084,14 @@
     api.setView = setView;
     api.getView = getView;
     api.setFilter = setFilter;
+    api.applyFilter = function () { applyFilter(); };
     api.setDay = setDay;
     api.getDay = resolvedDay;
+    // fn returns a naive 'YYYY-MM-DD HH:MM' for "now"; null restores the device clock.
+    api.setClock = function (fn) {
+        clockFn = typeof fn === 'function' ? fn : deviceClock;
+        if (state.rootEl && api.board) { applyDay(); renderNow(); renderStrip(); }
+    };
     api.onRender = function (fn) { if (typeof fn === 'function') state.renderCbs.push(fn); };
     return api;
 });

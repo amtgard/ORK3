@@ -91,7 +91,7 @@ test('batch is one undo step; a new change clears redo; undoable:false records n
   assert.ok(!s.canUndo());
   await s.idle();
 });
-test('when the server cannot be reached nothing is lost and retry sends once, in order', async () => {
+test('when the server cannot be reached nothing is lost and retry sends the held request first, then the rest', async () => {
   const f = fake(); f.failWith('network');
   const s = S.create({ items: [], send: f.send, saveMeal: true });
   const a = s.add(item('A'));
@@ -100,7 +100,7 @@ test('when the server cannot be reached nothing is lost and retry sends once, in
   const b = s.add(item('B'));
   assert.equal(s.items().length, 2);
   s.retry(); await s.idle();
-  assert.deepEqual(f.calls[f.calls.length - 1].map(o => o.item.Title), ['A', 'B']);
+  assert.deepEqual(f.calls.map(c => c.map(o => o.item.Title)), [['A'], ['A'], ['B']]);
   assert.ok(s.get(a).EventScheduleId > 0 && s.get(b).EventScheduleId > 0);
   assert.equal(s.status().state, 'saved');
 });
@@ -234,7 +234,8 @@ test('an offline store says why: network, signed out, forbidden or an unexpected
     ['network', 'network'],
     [{ status: 5, error: 'Not logged in' }, 'signed-out'],
     [{ status: 3, error: 'Not authorized.', failedIndex: -1 }, 'forbidden'],
-    [{ status: 7, error: '?' }, 'protocol'],
+    // A well-formed reply with any other error status is now 'server' (evb-store.batch.test.js).
+    ['not a reply', 'protocol'],
   ];
   for (const [answer, reason] of cases) {
     const f = fake(); f.failWith(answer);

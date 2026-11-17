@@ -63,3 +63,13 @@ test('an item with an absurd end date is capped at 31 segments', () => {
   assert.equal(s.length, 31);
   assert.equal(s[30].isLast, false);
 });
+test('lateNight names the calendar day and the night of an after-midnight segment', () => {
+  assert.equal(C.lateNight('2026-11-21', 1439), null);
+  assert.equal(C.lateNight('2026-11-21', 600), null);
+  assert.deepEqual(C.lateNight('2026-11-21', 1440), { day: 'Sunday', dayISO: '2026-11-22', night: 'Saturday night' });
+  assert.deepEqual(C.lateNight('2026-11-21', 1500), { day: 'Sunday', dayISO: '2026-11-22', night: 'Saturday night' });
+  // Across a month end and a year end.
+  assert.deepEqual(C.lateNight('2026-11-30', 1500), { day: 'Tuesday', dayISO: '2026-12-01', night: 'Monday night' });
+  assert.deepEqual(C.lateNight('2026-12-31', 1440), { day: 'Friday', dayISO: '2027-01-01', night: 'Thursday night' });
+  assert.equal(C.lateNight('2026-12-31', 1439), null);
+});

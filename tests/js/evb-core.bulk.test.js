@@ -195,3 +195,18 @@ test('conflicts compare locations ignoring the width of spaces', () => {
   ]);
   assert.deepEqual(r, { a: ['Main  Field is also booked for B'], b: ['main field is also booked for A'] });
 });
+test('an after-midnight item stays in its board day’s group and round-trips', () => {
+  const items = [
+    { Title: 'Court', Category: 'Court', StartTime: '2026-11-21 19:00', EndTime: '2026-11-21 21:00' },
+    { Title: 'Midnight Ditch', Category: 'Battlegame', StartTime: '2026-11-22 00:30', EndTime: '2026-11-22 02:00' },
+    { Title: 'Tavern Closes', Category: 'Administrative', StartTime: '2026-11-22 12:15', EndTime: '2026-11-22 12:45' },
+  ];
+  const text = C.scheduleText(items);
+  assert.equal(text, 'Saturday, November 21\n7–9p Court\n12:30–2a Midnight Ditch\n\nSunday, November 22\n12:15–12:45p #admin Tavern Closes');
+  const sp = C.span(items[1]);
+  assert.deepEqual(C.lateNight(sp.day, sp.start), { day: 'Sunday', dayISO: '2026-11-22', night: 'Saturday night' });
+  const back = C.parseLines(text, { days: DAYS });
+  assert.deepEqual(back.unread, []);
+  assert.deepEqual(back.items.map(i => [i.Title, i.StartTime, i.EndTime, i.Category]),
+    items.map(i => [i.Title, i.StartTime, i.EndTime, i.Category]));
+});

@@ -280,6 +280,138 @@ final class EventPlanningFixture
         return $rows;
     }
 
+    /** The item's `modified` as 'Y-m-d H:i:s' (the Modified the schedule rows carry). */
+    public function fetchScheduleModified(int $scheduleId): string
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT DATE_FORMAT(modified, '%Y-%m-%d %H:%i:%s') FROM " . DB_PREFIX . 'event_schedule WHERE event_schedule_id = ?'
+        );
+        $stmt->execute([$scheduleId]);
+
+        return (string) $stmt->fetchColumn();
+    }
+
+    /** Deletes a schedule item behind the domain's back (another organiser's removal). */
+    public function deleteSchedule(int $scheduleId): void
+    {
+        $this->pdo->prepare('DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ?')->execute([$scheduleId]);
+        $this->pdo->prepare('DELETE FROM ' . DB_PREFIX . 'event_schedule WHERE event_schedule_id = ?')->execute([$scheduleId]);
+    }
+
+    /** Sets an occurrence's raw event_end (old occurrences carry zero dates and ends before their starts). */
+    public function setDetailEnd(int $detailId, string $end): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'event_calendardetail SET event_end = ? WHERE event_calendardetail_id = ?')
+            ->execute([$end, $detailId]);
+    }
+
+    /**
+     * Another organiser's save, made on a second connection while the domain works.
+     * Runs $statements in an open transaction, so their row locks are held, then
+     * (without blocking this process) commits as soon as another connection of this
+     * user is running a locking read (FOR UPDATE) of the schedule, that is, waiting
+     * for those locks. No timing is involved: the commit follows the observed wait.
+     * It gives up waiting after 10 seconds and commits anyway, so code that never
+     * waits fails its assertions instead of hanging. Finish with endConcurrentWrite().
+     *
+     * $waitingFor is the LIKE pattern of the other connection's statement to wait for
+     * (by default a locking read of the schedule); $afterWait runs once that statement
+     * is seen, before the commit, so this connection can go on to lock more rows the
+     * way a real save would.
+     *
+     * @param list<string> $statements
+     * @param list<string> $afterWait
+     */
+    public function beginConcurrentWrite(array $statements, ?string $waitingFor = null, array $afterWait = []): \mysqli
+    {
+        $other = new \mysqli(DB_HOSTNAME, DB_USERNAME, DB_PASSWORD, DB_DATABASE, DB_PORT);
+        $other->query('START TRANSACTION');
+        foreach ($statements as $sql) {
+            $other->query($sql);
+        }
+        $pattern = $other->real_escape_string($waitingFor ?? '%' . DB_PREFIX . 'event_schedule%FOR UPDATE%');
+        $then = implode('', array_map(static fn (string $sql): string => $sql . ";\n", $afterWait));
+        $other->query(
+            "BEGIN NOT ATOMIC
+               DECLARE waiting INT DEFAULT 0;
+               DECLARE give_up DATETIME(6) DEFAULT SYSDATE(6) + INTERVAL 10 SECOND;
+               WHILE waiting = 0 AND SYSDATE(6) < give_up DO
+                 SELECT COUNT(*) INTO waiting FROM information_schema.PROCESSLIST
+                  WHERE ID <> CONNECTION_ID() AND DB = DATABASE() AND INFO LIKE '" . $pattern . "';
+               END WHILE;
+               " . $then . "COMMIT;
+             END",
+            MYSQLI_ASYNC
+        );
+
+        return $other;
+    }
+
+    /**
+     * Waits for beginConcurrentWrite()'s commit to finish and closes its connection.
+     * Returns that connection's error (a deadlock, say), or null when it committed.
+     */
+    public function endConcurrentWrite(\mysqli $other): ?string
+    {
+        try {
+            $ok = $other->reap_async_query();
+            $error = ($ok === false || $other->errno !== 0) ? $other->errno . ' ' . $other->error : null;
+        } catch (\mysqli_sql_exception $e) {
+            $error = $e->getCode() . ' ' . $e->getMessage();
+        }
+        $other->close();
+
+        return $error;
+    }
+
+    /**
+     * A second connection that holds row locks: $statements run in an open
+     * transaction that stays open until releaseRowLocks().
+     *
+     * @param list<string> $statements
+     */
+    public function holdRowLocks(array $statements): \mysqli
+    {
+        $other = new \mysqli(DB_HOSTNAME, DB_USERNAME, DB_PASSWORD, DB_DATABASE, DB_PORT);
+        $other->query('START TRANSACTION');
+        foreach ($statements as $sql) {
+            $other->query($sql);
+        }
+
+        return $other;
+    }
+
+    /** Rolls back holdRowLocks()'s transaction and closes its connection. */
+    public function releaseRowLocks(\mysqli $other): void
+    {
+        $other->query('ROLLBACK');
+        $other->close();
+    }
+
+    public function setPlayerActive(int $mundaneId, bool $active): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET active = ? WHERE mundane_id = ?')
+            ->execute([$active ? 1 : 0, $mundaneId]);
+    }
+
+    /** Suspends a player with no end date, or lifts the suspension. */
+    public function setPlayerSuspended(int $mundaneId, bool $suspended): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET suspended = ?, suspended_until = NULL WHERE mundane_id = ?')
+            ->execute([$suspended ? 1 : 0, $mundaneId]);
+    }
+
+    /** Stored request tokens of the occurrence (ork_event_schedule_batch rows). */
+    public function countScheduleRequestTokens(int $detailId): int
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'event_schedule_batch WHERE event_calendardetail_id = ?'
+        );
+        $stmt->execute([$detailId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
     public function insertRsvp(int $detailId, int $mundaneId, string $status): void
     {
         $this->pdo->prepare(
@@ -535,6 +667,7 @@ final class EventPlanningFixture
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_rsvp WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ' . (int) $id);
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_schedule_batch WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int) $id);
         }
 
