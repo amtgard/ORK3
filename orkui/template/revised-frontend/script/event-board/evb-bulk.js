@@ -637,7 +637,7 @@
     }
 
     // The block clips its own overflow, so the badge's tip floats outside it; so
-    // does a rail's fill handle's (data-evb-tip, set by evb-select.js).
+    // does every fill handle's (data-evb-tip, set by evb-select.js).
     function showTip(badge) {
         if (!s.tip) {
             s.tip = doc.createElement('div');

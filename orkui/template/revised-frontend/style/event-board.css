@@ -171,7 +171,6 @@ html[data-theme="dark"] .evb-nownext-now .evb-nownext-label::before { background
     background: var(--ork-bg-secondary); color: var(--ork-text);
     font-size: 12px; font-weight: 400; line-height: 1.35; cursor: pointer;
 }
-.evb-nownext .evb-nownext-item:hover { border-color: var(--ork-text-muted); background: var(--ork-bg-secondary); color: var(--ork-text); }
 .evb-nownext .evb-nownext-item:focus-visible { outline: 2px solid var(--ork-text); outline-offset: 2px; }
 .evb-nownext-title { font-weight: 700; overflow-wrap: anywhere; }
 .evb-nownext-when { color: var(--ork-text-muted); white-space: nowrap; }
@@ -180,7 +179,10 @@ html[data-theme="dark"] .evb-nownext-now .evb-nownext-label::before { background
 .evb-nownext-more { align-self: center; font-size: 12px; color: var(--ork-text-muted); }
 /* Dark: --ork-bg-secondary is the card's own fill there. */
 html[data-theme="dark"] .evb-nownext .evb-nownext-item,
-html[data-theme="dark"] .evb-nownext .evb-nownext-item:hover { background: #4a5568; }
+html[data-theme="dark"] .evb-nownext .evb-nownext-item:hover,
+html[data-theme="dark"] .evb-popover .evb-popover-edit,
+html[data-theme="dark"] .evb-popover .evb-popover-edit:hover,
+html[data-theme="dark"] .evb-empty-actions .evb-past-btn:hover:not(:disabled) { background: #4a5568; }
 html[data-theme="dark"] .evb-nownext .evb-nownext-when,
 html[data-theme="dark"] .evb-nownext .evb-nownext-loc { color: #e2e8f0; }
 
@@ -224,7 +226,6 @@ html[data-theme="dark"] .evb-nownext .evb-nownext-loc { color: #e2e8f0; }
     background: var(--ork-bg-secondary); color: var(--ork-text); box-shadow: none;
     font-size: 12px; font-weight: 600; cursor: pointer;
 }
-.evb-popover .evb-popover-edit:hover { border-color: var(--ork-text-muted); background: var(--ork-bg-secondary); color: var(--ork-text); }
 .evb-sr {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
@@ -279,6 +280,8 @@ html[data-theme="dark"] .evb-share-menu .evb-share-days button[aria-checked="tru
     border: 1px solid var(--ork-input-border); border-radius: 6px; box-shadow: none;
     background: var(--ork-card-bg); color: var(--ork-text); font-size: 13px; font-weight: 600; cursor: pointer;
 }
+.evb-nownext .evb-nownext-item:hover,
+.evb-popover .evb-popover-edit:hover,
 .evb-empty-actions .evb-past-btn:hover:not(:disabled) { border-color: var(--ork-text-muted); background: var(--ork-bg-secondary); color: var(--ork-text); }
 .evb-empty-actions .evb-past-btn:disabled { opacity: 0.5; cursor: default; }
 .evb-empty-actions .evb-past-btn i { color: var(--ork-text-muted); }
@@ -737,11 +740,8 @@ html[data-theme="dark"] .evb-block.evb-drag-ghost.evb-block-striped { box-shadow
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
 }
 html[data-theme="dark"] .evb-fill-handle { background: #63b3ed; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
-/* The site's generic [data-tip] rules (revised.css) make it position: relative
-   and open the tip above it, where the block's own edge would clip it: keep it
-   in the corner and open the tip to its left, inside the block. */
-#evb-root .evb-block > .evb-fill-handle { position: absolute; }
-#evb-root .evb-block > .evb-fill-handle:hover::after { left: auto; right: calc(100% + 4px); bottom: -2px; transform: none; }
+/* Its "Drag to repeat" tip is data-evb-tip, floated outside the block by
+   evb-bulk.js (the block clips its own overflow), not the site's [data-tip]. */
 .evb-dragging-fill, .evb-dragging-fill * { cursor: nwse-resize !important; }
 /* The copies a repeat would add: the item's look, faded and dashed. */
 .evb-block.evb-fill-ghost,

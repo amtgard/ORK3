@@ -297,10 +297,10 @@
                 el = doc.createElement('div');
                 el.className = g[0];
                 el.setAttribute('aria-hidden', 'true');
-                // A rail is too narrow for the tip, which opens inside the block: its
-                // tip floats outside instead (evb-bulk.js, as a conflict badge's).
+                // The block clips an in-block tip (short or narrow blocks): the tip
+                // floats outside instead (evb-bulk.js, as a conflict badge's).
                 if (g[0] === 'evb-fill-handle') {
-                    el.setAttribute(b.classList.contains('evb-block-rail') ? 'data-evb-tip' : 'data-tip', 'Drag to repeat');
+                    el.setAttribute('data-evb-tip', 'Drag to repeat');
                 }
                 b.appendChild(el);
             } else if (!(on && g[1]) && el) {
