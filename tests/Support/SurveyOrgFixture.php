@@ -34,12 +34,13 @@ trait SurveyOrgFixture
         $p = DB_PREFIX;
         foreach ($this->fx['survey'] as $sid) {
             $sid = (int) $sid;
-            foreach ($this->pdo->query("SELECT event_id FROM {$p}survey_credit WHERE survey_id = {$sid} AND event_id IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN) as $eid) {
-                $this->pdo->exec("DELETE FROM {$p}attendance WHERE event_id = " . (int) $eid);
-                $this->pdo->exec("DELETE FROM {$p}event_calendardetail WHERE event_id = " . (int) $eid);
-                $this->pdo->exec("DELETE FROM {$p}event WHERE event_id = " . (int) $eid);
+            // The survey's bonus-credit category and everything hanging off it.
+            foreach ($this->pdo->query("SELECT category_id FROM {$p}bonus_credit_category WHERE source_type = 'survey' AND source_id = {$sid}")->fetchAll(PDO::FETCH_COLUMN) as $cid) {
+                $this->pdo->exec("DELETE FROM {$p}bonus_credit WHERE category_id = " . (int) $cid);
+                $this->pdo->exec("DELETE FROM {$p}bonus_credit_adoption WHERE category_id = " . (int) $cid);
+                $this->pdo->exec("DELETE FROM {$p}bonus_credit_granter WHERE category_id = " . (int) $cid);
+                $this->pdo->exec("DELETE FROM {$p}bonus_credit_category WHERE category_id = " . (int) $cid);
             }
-            $this->pdo->exec("DELETE FROM {$p}attendance WHERE note = 'Survey #{$sid}'");
             $this->pdo->exec("DELETE FROM {$p}survey_credit_grant WHERE survey_id = {$sid}");
             $this->pdo->exec("DELETE FROM {$p}survey_credit WHERE survey_id = {$sid}");
             $this->pdo->exec("DELETE a FROM {$p}survey_answer a JOIN {$p}survey_response r ON r.response_id = a.response_id WHERE r.survey_id = {$sid}");
@@ -51,15 +52,19 @@ trait SurveyOrgFixture
             $this->pdo->exec("DELETE FROM {$p}survey_page WHERE survey_id = {$sid}");
             $this->pdo->exec("DELETE FROM {$p}survey WHERE survey_id = {$sid}");
         }
-        // Generated credit events no config links any more (a regression's
-        // orphans) would otherwise outlive the fixture kingdoms.
+        // Bonus-credit rows the fixture kingdoms own (a test's hand-made
+        // categories, accept-outside settings) would otherwise outlive them.
         foreach ($this->fx['kingdom'] as $kid) {
-            foreach ($this->pdo->query("SELECT event_id FROM {$p}event WHERE kingdom_id = " . (int) $kid
-                . " AND name LIKE 'Survey Credit - T11SHARE%'")->fetchAll(PDO::FETCH_COLUMN) as $eid) {
-                $this->pdo->exec("DELETE FROM {$p}attendance WHERE event_id = " . (int) $eid);
-                $this->pdo->exec("DELETE FROM {$p}event_calendardetail WHERE event_id = " . (int) $eid);
-                $this->pdo->exec("DELETE FROM {$p}event WHERE event_id = " . (int) $eid);
+            foreach ($this->pdo->query("SELECT category_id FROM {$p}bonus_credit_category WHERE scope_type = 'kingdom' AND scope_id = " . (int) $kid)->fetchAll(PDO::FETCH_COLUMN) as $cid) {
+                $this->pdo->exec("DELETE FROM {$p}bonus_credit WHERE category_id = " . (int) $cid);
+                $this->pdo->exec("DELETE FROM {$p}bonus_credit_granter WHERE category_id = " . (int) $cid);
+                $this->pdo->exec("DELETE FROM {$p}bonus_credit_category WHERE category_id = " . (int) $cid);
             }
+            $this->pdo->exec("DELETE FROM {$p}bonus_credit_adoption WHERE kingdom_id = " . (int) $kid);
+            $this->pdo->exec("DELETE FROM {$p}bonus_credit_kingdom_setting WHERE kingdom_id = " . (int) $kid);
+        }
+        foreach ($this->fx['mundane'] as $id) {
+            $this->pdo->exec("DELETE FROM {$p}bonus_credit WHERE mundane_id = " . (int) $id);
         }
         foreach ($this->fx['auth'] as $id) {
             $this->pdo->exec("DELETE FROM {$p}authorization WHERE authorization_id = " . (int) $id);

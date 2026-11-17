@@ -419,9 +419,14 @@ class Model_Survey extends Model
         return $this->_credit()->status($uid, $surveyId, $grantor);
     }
 
-    public function credit_enable(int $uid, int $surveyId, ?array $grantor, string $mode, bool $confirm): array
+    public function credit_enable(int $uid, int $surveyId, ?array $grantor): array
     {
-        return $this->_credit()->enable($uid, $surveyId, $grantor, $mode, $confirm);
+        return $this->_credit()->enable($uid, $surveyId, $grantor);
+    }
+
+    public function credit_disable(int $uid, int $surveyId, ?array $grantor): array
+    {
+        return $this->_credit()->disable($uid, $surveyId, $grantor);
     }
 
     public function credit_reconcile(int $uid, int $surveyId, ?array $grantor): array

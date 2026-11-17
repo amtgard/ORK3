@@ -169,7 +169,7 @@ their own park's surveys.
 Surveys you didn't create show up alongside your own, with fewer actions: no Build, Preview,
 Clone, or Archive, since you don't own the structure. You can still **Take** an open one, and
 you'll see **Results** on it when its owner has shared them with you (see the next section) or
-**Credits** when it offers an attendance credit. A shared row's response count shows as **—**
+**Credits** when it offers a bonus credit. A shared row's response count shows as **—**
 unless the owner shared results with everyone, since you can't see counts you weren't given
 access to.
 
@@ -212,52 +212,52 @@ managers.
 
 ---
 
-## Attendance credits
+## Bonus credits
 
-A survey can post an automatic attendance credit to everyone who answers it and chooses to link
-their answers to their profile.
+A survey can give everyone who answers it and links their answers to their profile a **bonus
+credit**: one class credit toward their levels, dated the day they answered. It is not attendance.
+It counts for class levels only — not toward park or Kingdom attendance, not toward voting
+eligibility — and it never creates an event.
 
 **Who can turn it on.** The survey's own officers, and officers of any kingdom or park the survey
-reaches — for an Amtgard-wide survey, any kingdom or park in its audience; for a kingdom survey,
-the kingdom, its principalities, or any park in them; for a park survey, that park only. Each
-eligible org can turn on its own credit from the **Credits** action on the survey list, or the
-survey's own officers from the **Attendance credit** card in the builder.
+reaches — for an Amtgard-wide survey, any kingdom in its audience (a park may follow once its
+Kingdom has); for a kingdom survey, the kingdom, its principalities, or any park in them; for a park
+survey, that park only. Each org switches its own credit on from the **Credits** action on the
+survey list, or the survey's own officers from the **Bonus credit** card in the builder.
 
-**The two modes.**
+**The category.** The first time any org switches credit on, the ORK creates a bonus-credit
+category for the survey, named **Survey Bonus – {survey title}**, worth 1 credit per player. A
+kingdom or park survey's category belongs to the owning Kingdom; an Amtgard-wide survey's is
+Amtgard-wide, and a Kingdom switching credit on adopts it. The category appears under **Bonus
+Credits** on the Kingdom page like any other, grouped with other survey credits, so officers can
+also grant or remove it by hand. It follows the survey's title if that changes, and is archived
+when the survey is archived.
 
-- **At the player's home park, on the day they took the survey.** Credits use each respondent's
-  home park at the time they answered and the date they submitted.
-- **At a new event**, created automatically and named after the survey, on the day the survey
-  first opened (or the day it opens, if it hasn't yet). Credits use that event's date and park.
+**Who is covered.** A park's switch covers its own members. A kingdom's switch covers the kingdom
+and its principalities. The survey owner's switch covers everyone who answered, visitors included —
+a visitor's own Kingdom decides whether another Kingdom's credit may reach them (**Bonus Credits →
+Settings**, on by default).
 
 **Only Any ORK Data earns a credit.** A respondent who chooses My Kingdom and How Long I've Been
 Playing or Anonymous Only is never credited, because there's no profile to attach it to. The
-consent screen always tells them before they choose: *"This survey gives an attendance credit…"*
-when a credit covers them, or *"This survey may later give an attendance credit…"* when none does
-yet. A credit is public, so only respondents who were shown one of those lines are ever credited.
+consent screen always tells them before they choose: *"This survey gives a bonus credit…"* when a
+credit covers them, or *"This survey may later give a bonus credit…"* when none does yet. A credit
+is dated and visible on the profile, so only respondents who were shown one of those lines are ever
+credited.
 
-**One credit per player per survey.** If more than one org turns credits on for the same survey —
+**One credit per player per survey.** If more than one org switches credit on for the same survey —
 say, a kingdom and one of its parks — a player only ever gets one credit for it. Whichever org
-turned its credit on first covers that player, even if a later org's credit would have covered
-them too.
+switched on first covers that player. A credit an officer removes is not given again.
 
-**It can't be turned off.** Once an org turns its credit on, that's permanent: no disabling it,
-no switching modes, no deleting the config. It isn't retroactive to anyone the survey already
-credited under an earlier config, either.
+**It can be turned off.** Switching off stops credit for responses submitted after that moment.
+Anyone who answered while it was on still gets theirs, even if it posts later. Credits already given
+stay; an officer can remove them one at a time under Bonus Credits.
 
-**Credits post automatically**, both for people who already answered when the credit turns on and
+**Credits post automatically**, both for people who already answered when the switch goes on and
 for everyone who answers afterward. The one exception: someone who chose Any ORK Data before the
 consent screen said anything about credits never gets one, and the Credits panel tells you how
-many that is before you turn a credit on. An individual credit, once posted, is an ordinary attendance
-entry — an officer can edit or delete it the same way they would any other attendance credit.
-
-**Known effects to keep in mind:**
-
-- A survey credit still only counts as one attendance for the day, the same as any other
-  attendance entry — it doesn't stack with a park sign-in on the same day.
-- Survey credits count toward a player's park attendance the same as any other credit.
-- A survey credit is public on the player's attendance record, the same as any other credit —
-  it isn't hidden the way the survey's own answers are.
+many that is before you switch on. A banned or suspended player's credit waits until the sanction
+lifts.
 
 ---
 
@@ -409,8 +409,8 @@ any answers still in progress. Everyone can then take the survey again.
 - A confirmation window says how many responses will be deleted. The **Clear results** button
   stays greyed out for a 5-second countdown before you can press it.
 - This can't be undone. Export the spreadsheet first if you might need the answers later.
-- **Attendance credits already posted stay in place.** A player who retakes the survey doesn't
-  earn a second credit.
+- **Bonus credits already given stay in place.** A player who retakes the survey doesn't earn a
+  second credit.
 - The questions stay locked if the survey has been opened before, and the survey keeps its open
   or closed status.
 - The clear is recorded in the activity log with the number of responses deleted.

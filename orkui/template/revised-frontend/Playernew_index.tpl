@@ -7783,8 +7783,6 @@ $(function() {
 							byCell = '<em title="Player signed in via PM-issued QR / link" style="color:var(--ork-text-muted)">Self via Sign-in Link</em>';
 						} else if (d.EntryMethod === 'self_reg') {
 							byCell = '<em title="Awarded on account creation" style="color:var(--ork-text-muted)">Self-registration</em>';
-						} else if (d.EntryMethod === 'survey') {
-							byCell = '<em style="color:var(--ork-text-muted)">Survey credit</em>';
 						} else if (parseInt(d.EnteredById) > 0 && d.EnteredBy) {
 							byCell = '<a href="' + uir + 'Player/profile/' + parseInt(d.EnteredById) + '">' + esc(d.EnteredBy) + '</a>';
 						} else {

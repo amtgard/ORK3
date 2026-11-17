@@ -390,8 +390,7 @@ class SurveyResponse
         $r = $this->db->DataSet(
             'SELECT 1 AS ok FROM ' . DB_PREFIX . 'attendance a
              WHERE a.mundane_id = ' . (int) $uid . '
-               AND a.date >= \'' . self::monthsAgoDate($months) . '\'
-               AND a.entry_method <> \'survey\'' // a survey credit is not attendance (sharing spec §3.5)
+               AND a.date >= \'' . self::monthsAgoDate($months) . '\''
                . self::attendanceScopeSql($surveyRow, 'a') . ' LIMIT 1'
         );
         return (bool) ($r && $r->Next());
@@ -503,8 +502,7 @@ class SurveyResponse
         if ($recentMonths > 0) {
             $where[] = 'EXISTS (SELECT 1 FROM ' . DB_PREFIX . 'attendance ar
                                 WHERE ar.mundane_id = m.mundane_id
-                                  AND ar.date >= \'' . self::monthsAgoDate($recentMonths) . '\'
-                                  AND ar.entry_method <> \'survey\'' // a survey credit is not attendance (sharing spec §3.5)
+                                  AND ar.date >= \'' . self::monthsAgoDate($recentMonths) . '\''
                                   . self::attendanceScopeSql($surveyRow, 'ar') . ')';
         }
 
@@ -1233,11 +1231,11 @@ class SurveyResponse
      * reason above all: a participation row without a stored response would lock
      * a player out of a survey they never actually finished.
      *
-     * $creditNotice: the runner showed an attendance-credit line on the data
-     * gate before the respondent chose (sharing spec D1). It is stored only on
-     * a non-test Any ORK Data row, and only such a row is ever credited: a
-     * respondent who was never told a credit goes on their public attendance
-     * record is never given one, live or by a later backfill.
+     * $creditNotice: the runner showed a bonus-credit line on the data gate
+     * before the respondent chose (sharing spec D1). It is stored only on a
+     * non-test Any ORK Data row, and only such a row is ever credited: a
+     * respondent who was never told a dated credit goes on their record is
+     * never given one, live or by a later backfill.
      *
      * @param  array<int|string, mixed> $answers
      * @return array<string, mixed> QualTest-style envelope; +ResponseId, Consent, ThanksHtml
@@ -1421,11 +1419,11 @@ class SurveyResponse
         $this->db->Clear();
         error_clear_last();
         if (!$this->exec('COMMIT')) {
-            // Nothing was stored, so no attendance credit either.
+            // Nothing was stored, so no bonus credit either.
             return $this->rollback('Your answers could not be saved.', 'commit', $surveyId, $uid);
         }
 
-        // Attendance credit (sharing spec §3.5): after the commit, so a credit
+        // Bonus credit (sharing spec §3.5): after the commit, so a credit
         // problem can never cost the player their response. Only Any ORK Data
         // chosen after a credit line earns one (D1).
         $credit = 'none';

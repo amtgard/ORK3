@@ -85,7 +85,7 @@
     var sel       = 0;      // selected question_id, 0 = nothing selected
     var scopes    = null;   // SurveyAjax/scopes, lazy
     var managerLabel = '';  // SurveyAjax/scopes manager_label: who manages this survey
-    var creditOn  = false;  // the owner's attendance credit is on (credit_status mine.config_id)
+    var creditOn  = false;  // the owner's bonus credit is on (credit_status mine.enabled)
     var pending   = {};     // debounce buckets, keyed
     var optBusy   = {};     // option_set key -> { again }: its save is on the wire
     var inflight  = 0;     // every request on the wire
@@ -120,8 +120,8 @@
         fullOrk: 'Link my answers to my ORK profile. The ORK administrators who run this survey, now and in future administrations, will see my name beside my answers, including in exported spreadsheets.',
         partial: 'Record only my kingdom and a years-played range, such as 3–5 years. No name, no profile link.',
         anon:    'Record nothing about me.',
-        credit:  'This survey gives an attendance credit, which will appear on your public attendance record. It is only given when you choose Any ORK Data.',
-        creditMaybe: 'This survey may later give an attendance credit, which would appear on your public attendance record. It is only given when you choose Any ORK Data.'
+        credit:  'This survey gives a bonus credit toward your class levels, which will appear on your ORK profile. It is only given when you choose Any ORK Data.',
+        creditMaybe: 'This survey may later give a bonus credit toward your class levels, which would appear on your ORK profile. It is only given when you choose Any ORK Data.'
     };
 
     /* ------------------------------------------------------------- catalogue */
@@ -2609,13 +2609,13 @@
         }
         html += section('privacy', 'Privacy', 'fa-user-shield', body);
 
-        /* Attendance credit (sharing-and-credits spec §3.6). The card only opens
+        /* Bonus credit (sharing-and-credits spec §3.6). The card only opens
            the shared modal; the owner acts for its own org, and an ORK survey's
            owner just reads what kingdoms and parks have turned on. */
-        body  = '<p class="svb-hint">Give respondents who choose Any ORK Data an attendance credit — at their home park, or at a generated “Survey Credit” event. Once on, it can’t be turned off.</p>';
+        body  = '<p class="svb-hint">Give respondents who choose Any ORK Data a bonus credit toward their class levels, dated the day they answer. It counts for levels only — not attendance or voting — and can be turned off later.</p>';
         body += '<button type="button" class="sv-btn" id="svb-credit-open"><i class="fas fa-award" aria-hidden="true"></i> ' +
                 '<span id="svb-credit-label">' + esc(creditButtonLabel()) + '</span></button>';
-        html += section('credit', 'Attendance credit', 'fa-award', body);
+        html += section('credit', 'Bonus credit', 'fa-award', body);
 
         /* Promotion */
         body  = checkRow('Promote with a site banner', truthy(s.show_banner), 'data-sv-field="ShowBanner"', false,
@@ -5112,7 +5112,7 @@
         }
     }
 
-    /* ------------------------------------------------- attendance credit card */
+    /* ------------------------------------------------------ bonus credit card */
 
     /** The survey's owner acts for its own org; an ORK survey's owner only reads. */
     function creditGrantor() {
@@ -5120,10 +5120,10 @@
         return s.scope_type === 'ork' ? '' : (s.scope_type === 'kingdom' ? 'Kingdom/' : 'Park/') + s.scope_id;
     }
 
-    /** The card button says whether the owner's credit is already on (creditOn, from credit_status). */
+    /** The card button says whether the owner's credit is on (creditOn, from credit_status). */
     function creditButtonLabel() {
         if ((S.survey || {}).scope_type === 'ork') { return 'See credits'; }
-        return creditOn ? 'View attendance credit' : 'Set up attendance credit';
+        return creditOn ? 'Bonus credit is on' : 'Set up bonus credit';
     }
 
     /** Ask the server once on load, and again whenever the modal changes something. */
@@ -5132,7 +5132,7 @@
         window.SvCredit.status(SURVEY_ID, creditGrantor()).then(function (c) {
             var label;
             if (!c) { return; }
-            creditOn = !!(c.mine && c.mine.config_id);
+            creditOn = !!(c.mine && c.mine.enabled);
             label = $('svb-credit-label');
             if (label) { label.textContent = creditButtonLabel(); }
         });
@@ -5151,11 +5151,11 @@
                 surveyId: SURVEY_ID,
                 grantor: creditGrantor(),
                 title: S.survey.title,
-                // Called only once this org's credit is on (survey-credit.js), and
+                // Called when this org's credit is switched on or off (survey-credit.js);
                 // the modal re-reads credit_status itself, so no second fetch here.
-                onChange: function () {
+                onChange: function (on) {
                     var label = $('svb-credit-label');
-                    creditOn = true;
+                    creditOn = !!on;
                     if (label) { label.textContent = creditButtonLabel(); }
                 }
             });

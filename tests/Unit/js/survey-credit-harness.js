@@ -7,7 +7,8 @@
 
   scenario "reconcile": credit_status reports pending credits and
   credit_reconcile posts one (another org's owed credit).
-  scenario "enable": the viewer turns credits on.
+  scenario "enable": the viewer switches credit on.
+  scenario "disable": the viewer's credit is on and they switch it off.
 */
 'use strict';
 
@@ -34,7 +35,7 @@ function el(id) {
     };
 }
 var els = { 'sv-credit-overlay': el('sv-credit-overlay'), 'sv-credit-body': el('sv-credit-body'),
-    'sv-credit-enable': el('sv-credit-enable'), 'sv-credit-close': el('sv-credit-close') };
+    'sv-credit-enable': el('sv-credit-enable'), 'sv-credit-disable': el('sv-credit-disable'), 'sv-credit-close': el('sv-credit-close') };
 var listeners = {};
 var document = {
     activeElement: null,
@@ -43,20 +44,23 @@ var document = {
     removeEventListener: function () {}
 };
 
-function status(pending, on) {
+var enabled = scenario === 'disable';
+function status(pending) {
     return { status: 0, credit: {
-        survey_title: 'S', survey_status: 'open', event_name: 'Survey Credit - S', start_date: '2026-09-01',
-        gate_enabled: true, configs: [], pending: pending,
-        mine: { grantor_type: 'kingdom', grantor_id: 1, name: 'K', config_id: on ? 9 : null, can_enable: !on,
-            blocked_reason: '', covered_by: null, preview: on ? null : { home_park: { eligible_now: 0, no_home_park: 0 }, event: { eligible_now: 0, no_home_park: 0 } } }
+        survey_title: 'S', survey_status: 'open', gate_enabled: true,
+        category: enabled ? { category_id: 5, name: 'Survey Bonus - S', scope_type: 'kingdom', scope_name: 'K', archived: false } : null,
+        category_name: 'Survey Bonus - S', configs: [], pending: pending, held: 0,
+        mine: { grantor_type: 'kingdom', grantor_id: 1, name: 'K', config_id: enabled ? 9 : null, enabled: enabled,
+            can_enable: !enabled, can_disable: enabled, blocked_reason: '', covered_by: null,
+            preview: enabled ? null : { eligible_now: 0, no_notice: 0 } }
     } };
 }
-var enabled = false;
 function answer(action) {
     calls.push(action);
-    if (action === 'credit_status') { return status(scenario === 'reconcile' && calls.length === 1 ? 1 : 0, enabled); }
-    if (action === 'credit_reconcile') { return { status: 0, granted: 1, skipped_no_park: 0, pending: 0 }; }
-    if (action === 'credit_enable') { enabled = true; return { status: 0, granted: 0, skipped_no_park: 0, pending: 0 }; }
+    if (action === 'credit_status') { return status(scenario === 'reconcile' && calls.length === 1 ? 1 : 0); }
+    if (action === 'credit_reconcile') { return { status: 0, granted: 1, skipped: 0, pending: 0, remaining: 0 }; }
+    if (action === 'credit_enable') { enabled = true; return { status: 0, credit_id: 9, granted: 0, skipped: 0, pending: 0, remaining: 0, already: false }; }
+    if (action === 'credit_disable') { enabled = false; return { status: 0, credit_id: 9 }; }
     return { status: 1, error: 'unexpected ' + action };
 }
 
@@ -75,22 +79,22 @@ sandbox.window.document = document;
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(process.env.SV_CREDIT_JS || path.join(__dirname, '../../../orkui/template/default/script/survey-credit.js'), 'utf8'), sandbox);
 
-var changes = 0;
-sandbox.window.SvCredit.open({ surveyId: 1, grantor: 'Kingdom/1', title: 'S', onChange: function () { changes++; } });
+var changes = [];
+sandbox.window.SvCredit.open({ surveyId: 1, grantor: 'Kingdom/1', title: 'S', onChange: function (on) { changes.push(on); } });
 
 function settle(n) { return n ? new Promise(function (r) { setImmediate(r); }).then(function () { return settle(n - 1); }) : Promise.resolve(); }
 
+function press(id) {
+    var target = { closest: function (s) { return s === '#' + id ? {} : null; } };
+    els['sv-credit-overlay'].classList.add('sv-open');
+    listeners.click.forEach(function (fn) { fn({ target: target, preventDefault: function () {} }); });
+}
+
 settle(20).then(function () {
-    if (scenario === 'enable') {
-        // Pick a mode and tick the acknowledgement, then press Turn on credits.
-        els['sv-credit-body'].querySelector = function (sel) { return sel.indexOf('sv-credit-mode') !== -1 ? { value: 'home_park' } : null; };
-        els['sv-credit-ack'] = el('sv-credit-ack');
-        els['sv-credit-ack'].checked = true;
-        var target = { closest: function (s) { return s === '#sv-credit-enable' ? {} : null; } };
-        els['sv-credit-overlay'].classList.add('sv-open');
-        listeners.click.forEach(function (fn) { fn({ target: target, preventDefault: function () {} }); });
-    }
+    if (scenario === 'enable') { press('sv-credit-enable'); }
+    if (scenario === 'disable') { press('sv-credit-disable'); }
     return settle(20);
 }).then(function () {
-    process.stdout.write(JSON.stringify({ calls: calls, onChange: changes }) + '\n');
+    process.stdout.write(JSON.stringify({ calls: calls, onChange: changes.length, on: changes,
+        enableHidden: els['sv-credit-enable'].hidden, disableHidden: els['sv-credit-disable'].hidden }) + '\n');
 });

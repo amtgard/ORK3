@@ -589,18 +589,19 @@ final class SurveyTest extends TestCase
         $this->assertSame(0, $draft['Status'], (string) ($draft['Error'] ?? ''));
         $this->pdo->exec("INSERT IGNORE INTO {$p}survey_start (survey_id, mundane_id) VALUES ({$sid}, " . $this->editorId . ')');
 
-        // One credit already posted to p1: a config, its attendance row and the ledger row.
-        $this->pdo->exec("INSERT INTO {$p}survey_credit (survey_id, grantor_type, grantor_id, mode, enabled_by, enabled_at)
-                          VALUES ({$sid}, 'park', " . $this->parkId . ", 'home_park', " . $this->officerId . ', NOW())');
+        // One credit already posted to p1: a switch, the survey's category, its bonus credit and the ledger row.
+        $this->pdo->exec("INSERT INTO {$p}survey_credit (survey_id, grantor_type, grantor_id, enabled_by, enabled_at)
+                          VALUES ({$sid}, 'park', " . $this->parkId . ', ' . $this->officerId . ', NOW())');
         $creditId = (int) $this->pdo->lastInsertId();
-        $st = $this->pdo->prepare("INSERT INTO {$p}attendance
-            (mundane_id, class_id, date, date_year, date_month, date_week3, date_week6, park_id, kingdom_id,
-             event_id, event_calendardetail_id, credits, persona, flavor, note, by_whom_id, entry_method, entered_at)
-            VALUES (?, 6, CURDATE(), YEAR(CURDATE()), MONTH(CURDATE()), 1, 1, ?, ?, 0, 0, 1, '', '', ?, ?, 'survey', NOW())");
-        $st->execute([$this->players['p1'], $this->parkId, $this->kingdomId, 'Survey #' . $sid, $this->officerId]);
-        $attendanceId = (int) $this->pdo->lastInsertId();
-        $this->pdo->exec("INSERT INTO {$p}survey_credit_grant (survey_id, mundane_id, credit_id, attendance_id)
-                          VALUES ({$sid}, " . $this->players['p1'] . ", {$creditId}, {$attendanceId})");
+        $this->pdo->exec("INSERT INTO {$p}bonus_credit_category (scope_type, scope_id, name, description, default_credits, repeatable, source_type, source_id, created_by, created_at)
+                          VALUES ('kingdom', " . $this->kingdomId . ", 'Survey Bonus - T11 clear {$sid}', '', 1.00, 0, 'survey', {$sid}, " . $this->officerId . ', NOW())');
+        $categoryId = (int) $this->pdo->lastInsertId();
+        $this->pdo->exec("UPDATE {$p}survey SET bonus_category_id = {$categoryId} WHERE survey_id = {$sid}");
+        $this->pdo->exec("INSERT INTO {$p}bonus_credit (mundane_id, class_id, credits, credit_date, category_id, note, granted_by, granted_at)
+                          VALUES (" . $this->players['p1'] . ", 6, 1.00, CURDATE(), {$categoryId}, 'Survey #{$sid}', " . $this->officerId . ', NOW())');
+        $bonusId = (int) $this->pdo->lastInsertId();
+        $this->pdo->exec("INSERT INTO {$p}survey_credit_grant (survey_id, mundane_id, credit_id, bonus_credit_id)
+                          VALUES ({$sid}, " . $this->players['p1'] . ", {$creditId}, {$bonusId})");
 
         $count = fn (string $table): int => (int) $this->pdo->query("SELECT COUNT(*) FROM {$p}{$table} WHERE survey_id = {$sid}")->fetchColumn();
         $this->assertSame(4, $count('survey_response'));
@@ -637,7 +638,7 @@ final class SurveyTest extends TestCase
         // Posted credits stay, so a retake cannot earn a second one.
         $this->assertSame(1, $count('survey_credit'));
         $this->assertSame(1, $count('survey_credit_grant'));
-        $this->assertSame(1, (int) $this->pdo->query("SELECT COUNT(*) FROM {$p}attendance WHERE attendance_id = {$attendanceId}")->fetchColumn());
+        $this->assertSame(1, (int) $this->pdo->query("SELECT COUNT(*) FROM {$p}bonus_credit WHERE bonus_credit_id = {$bonusId} AND revoked_at IS NULL")->fetchColumn());
 
         // Audit row with the number cleared, and a report that no longer counts anyone.
         $act = $this->pdo->query("SELECT detail FROM {$p}survey_activity WHERE survey_id = {$sid} AND action = 'clear_results'")->fetchAll(PDO::FETCH_COLUMN);

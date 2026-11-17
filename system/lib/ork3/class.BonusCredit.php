@@ -896,6 +896,210 @@ class BonusCredit
         return $rows[0] ?? null;
     }
 
+    // -----------------------------------------------------------------------
+    // Source-owned categories (a survey's credit)
+    // -----------------------------------------------------------------------
+
+    /**
+     * The category an automated source owns at a scope, created if missing.
+     * NO AUTHORITY CHECK: the caller has already decided the source may credit
+     * (SurveyCredit checks the officer who switched the survey's credit on,
+     * who arrives as $uid and is recorded as created_by). Only the SYSTEM makes
+     * these: a park officer may turn a survey's credit on without holding the
+     * kingdom CREATE that createCategory() demands.
+     *
+     * $name is the wanted name; when another category of this scope already
+     * holds it (live or archived: the unique key spans both), $altName is used
+     * instead, and if that is taken too the call fails. 1 credit, once per
+     * player: the source's own ledger decides "once", this is the backstop.
+     *
+     * @return array{Status:int, Error?:string, CategoryId?:int, Created?:bool}
+     */
+    public function ensureSourceCategory(int $uid, string $scopeType, int $scopeId, string $sourceType, int $sourceId, string $name, string $altName, string $description = ''): array
+    {
+        if ($scopeType === 'ork') {
+            $scopeId = 0;
+        } elseif ($scopeType !== 'kingdom' || !valid_id($scopeId)) {
+            return $this->fail('A source credit belongs to a Kingdom or to Amtgard.');
+        }
+        if ($sourceType === self::SOURCE_MANUAL || !preg_match('/^[a-z][a-z0-9_]*$/', $sourceType) || strlen($sourceType) > 20 || $sourceId <= 0) {
+            return $this->fail('Bad credit source.');
+        }
+        if (!$this->orgExists($scopeType, $scopeId)) {
+            return $this->fail('That Kingdom does not exist.');
+        }
+        $have = $this->categoryForSource($scopeType, $scopeId, $sourceType, $sourceId);
+        if ($have !== null) {
+            return ['Status' => 0, 'CategoryId' => (int) $have['CategoryId'], 'Created' => false];
+        }
+        $picked = null;
+        foreach ([$name, $altName] as $candidate) {
+            $candidate = trim(preg_replace('/\s+/', ' ', (string) $candidate));
+            if ($candidate === '' || mb_strlen($candidate) > 100) {
+                continue;
+            }
+            if (!$this->nameTaken($scopeType, $scopeId, $candidate)) {
+                $picked = $candidate;
+                break;
+            }
+        }
+        if ($picked === null) {
+            return $this->fail('Could not find a free name for the credit.');
+        }
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'bonus_credit_category
+             (scope_type, scope_id, name, description, default_credits, repeatable, source_type, source_id, created_by, created_at)
+             VALUES (\'' . $scopeType . '\', ' . $scopeId . ', \'' . $this->esc($picked) . '\', \'' . $this->esc(mb_substr(trim($description), 0, 500)) . '\',
+                     1.00, 0, \'' . $this->esc($sourceType) . '\', ' . $sourceId . ', ' . max(0, $uid) . ', NOW())'
+        );
+        $id = $ok ? $this->lastInsertId() : 0;
+        if ($id <= 0) {
+            // A concurrent enable may have won the unique source lookup race: use its row.
+            $have = $this->categoryForSource($scopeType, $scopeId, $sourceType, $sourceId);
+            if ($have !== null) {
+                return ['Status' => 0, 'CategoryId' => (int) $have['CategoryId'], 'Created' => false];
+            }
+            return $this->fail('Could not save the credit.');
+        }
+        $this->audit('createSourceCategory', ['Name' => $picked, 'ScopeId' => $scopeId, 'SourceType' => $sourceType, 'SourceId' => $sourceId, 'by_whom_id' => $uid], 'Kingdom', $scopeId, null, $this->category($id));
+        return ['Status' => 0, 'CategoryId' => $id, 'Created' => true];
+    }
+
+    /**
+     * Rename a source's categories (every scope) after the source itself was
+     * renamed. $name, then $altName on a clash, as ensureSourceCategory(). A
+     * category already holding one of them is left alone. Never fails loudly:
+     * a name that cannot be placed keeps the old one.
+     *
+     * @return int categories renamed
+     */
+    public function renameSourceCategories(string $sourceType, int $sourceId, string $name, string $altName): int
+    {
+        $n = 0;
+        foreach ($this->sourceCategories($sourceType, $sourceId) as $c) {
+            foreach ([$name, $altName] as $candidate) {
+                $candidate = trim(preg_replace('/\s+/', ' ', (string) $candidate));
+                if ($candidate === '' || mb_strlen($candidate) > 100) {
+                    continue;
+                }
+                if ($candidate === $c['Name']) {
+                    break;
+                }
+                if ($this->nameTaken($c['ScopeType'], $c['ScopeId'], $candidate)) {
+                    continue;
+                }
+                $this->db->Clear();
+                if ($this->db->ExecuteChecked('UPDATE ' . DB_PREFIX . 'bonus_credit_category SET name = \'' . $this->esc($candidate) . '\'
+                                               WHERE category_id = ' . (int) $c['CategoryId'])) {
+                    $n++;
+                    $this->audit('renameSourceCategory', ['CategoryId' => $c['CategoryId'], 'Name' => $candidate], 'Kingdom', (int) $c['ScopeId'], $c, $this->category((int) $c['CategoryId']));
+                }
+                break;
+            }
+        }
+        return $n;
+    }
+
+    /**
+     * Archive a source's categories (the source closed for good). Credits
+     * already granted stay; nothing new can be granted against them by hand.
+     * Audited as the system, with the acting officer in the parameters.
+     */
+    public function archiveSourceCategories(int $uid, string $sourceType, int $sourceId): int
+    {
+        $n = 0;
+        foreach ($this->sourceCategories($sourceType, $sourceId) as $c) {
+            if ($c['ArchivedAt'] !== null) {
+                continue;
+            }
+            $this->db->Clear();
+            if ($this->db->ExecuteChecked('UPDATE ' . DB_PREFIX . 'bonus_credit_category SET archived_by = ' . max(0, $uid) . ', archived_at = NOW()
+                                           WHERE category_id = ' . (int) $c['CategoryId'] . ' AND archived_at IS NULL')) {
+                $n++;
+                $this->audit('archiveSourceCategory', ['CategoryId' => $c['CategoryId'], 'by_whom_id' => $uid], 'Kingdom', (int) $c['ScopeId'], $c, $this->category((int) $c['CategoryId']));
+            }
+        }
+        return $n;
+    }
+
+    /**
+     * Delete a source's categories that were never granted (the source was
+     * deleted as a draft). One that holds a credit, live or revoked, is kept
+     * and archived instead: the credit's history must keep pointing somewhere.
+     *
+     * @return array{deleted:int, archived:int}
+     */
+    public function deleteSourceCategories(int $uid, string $sourceType, int $sourceId): array
+    {
+        $out = ['deleted' => 0, 'archived' => 0];
+        foreach ($this->sourceCategories($sourceType, $sourceId) as $c) {
+            $this->db->Clear();
+            $rs  = $this->db->DataSet('SELECT COUNT(*) AS n FROM ' . DB_PREFIX . 'bonus_credit WHERE category_id = ' . (int) $c['CategoryId']);
+            $any = $rs && $rs->Next() ? (int) $rs->n : 1;
+            $this->db->Clear();
+            if ($any > 0) {
+                if ($c['ArchivedAt'] === null && $this->db->ExecuteChecked('UPDATE ' . DB_PREFIX . 'bonus_credit_category SET archived_by = ' . max(0, $uid) . ', archived_at = NOW()
+                                                                            WHERE category_id = ' . (int) $c['CategoryId'])) {
+                    $out['archived']++;
+                }
+                continue;
+            }
+            $this->db->Clear();
+            $this->db->ExecuteChecked('DELETE FROM ' . DB_PREFIX . 'bonus_credit_adoption WHERE category_id = ' . (int) $c['CategoryId']);
+            $this->db->Clear();
+            $this->db->ExecuteChecked('DELETE FROM ' . DB_PREFIX . 'bonus_credit_granter WHERE category_id = ' . (int) $c['CategoryId']);
+            $this->db->Clear();
+            if ($this->db->ExecuteChecked('DELETE FROM ' . DB_PREFIX . 'bonus_credit_category WHERE category_id = ' . (int) $c['CategoryId'])) {
+                $out['deleted']++;
+                $this->audit('deleteSourceCategory', ['CategoryId' => $c['CategoryId'], 'by_whom_id' => $uid], 'Kingdom', (int) $c['ScopeId'], $c, null);
+            }
+        }
+        return $out;
+    }
+
+    /** Every category (any scope, archived included) an automated source owns. */
+    public function sourceCategories(string $sourceType, int $sourceId): array
+    {
+        if ($sourceId <= 0 || !preg_match('/^[a-z][a-z0-9_]*$/', $sourceType)) {
+            return [];
+        }
+        return $this->categoryRows('r.source_type = \'' . $this->esc($sourceType) . '\' AND r.source_id = ' . (int) $sourceId);
+    }
+
+    /** Adopt an Amtgard-wide source category for a kingdom on the SYSTEM's behalf (no authority check; the caller made it). */
+    public function adoptForSource(int $uid, int $categoryId, int $kingdomId): bool
+    {
+        $category = $this->category($categoryId);
+        if ($category === null || $category['ScopeType'] !== 'ork' || $category['ArchivedAt'] !== null || !valid_id($kingdomId)) {
+            return false;
+        }
+        $row = $this->adoptionRow($categoryId, $kingdomId);
+        if ($row !== null && $row['WithdrawnAt'] === null) {
+            return true;
+        }
+        $this->db->Clear();
+        $ok = $row === null
+            ? $this->db->ExecuteChecked('INSERT INTO ' . DB_PREFIX . 'bonus_credit_adoption (category_id, kingdom_id, adopted_by, adopted_at)
+                                         VALUES (' . (int) $categoryId . ', ' . (int) $kingdomId . ', ' . max(0, $uid) . ', NOW())')
+            : $this->db->ExecuteChecked('UPDATE ' . DB_PREFIX . 'bonus_credit_adoption
+                                         SET adopted_by = ' . max(0, $uid) . ', adopted_at = NOW(), withdrawn_by = NULL, withdrawn_at = NULL
+                                         WHERE category_id = ' . (int) $categoryId . ' AND kingdom_id = ' . (int) $kingdomId);
+        if ($ok !== false) {
+            $this->audit('adoptForSource', ['CategoryId' => $categoryId, 'KingdomId' => $kingdomId, 'by_whom_id' => $uid], 'Kingdom', $kingdomId, $row, $this->adoptionRow($categoryId, $kingdomId));
+        }
+        return $ok !== false;
+    }
+
+    /** Does a live or archived category of this scope already hold the name? */
+    private function nameTaken(string $scopeType, int $scopeId, string $name): bool
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT 1 AS ok FROM ' . DB_PREFIX . 'bonus_credit_category
+                                  WHERE scope_type = \'' . $scopeType . '\' AND scope_id = ' . (int) $scopeId . ' AND name = \'' . $this->esc($name) . '\' LIMIT 1');
+        return $rs && $rs->Next();
+    }
+
     /**
      * Create a category. $r keys: ScopeType, ScopeId, Name, Description,
      * DefaultCredits (default 1), Repeatable (default 0), SourceType (default
@@ -1161,6 +1365,84 @@ class BonusCredit
         $this->audit('grant', ['MundaneId' => $mundaneId, 'CategoryId' => $categoryId, 'ClassId' => $classId, 'Credits' => $credits, 'by_whom_id' => $uid], 'Player', $mundaneId, null, $credit);
         return ['Status' => 0, 'BonusCreditId' => $id, 'Credit' => $credit,
                 'Remaining' => $category['Repeatable'] ? null : round(max(0, $allowance - $held - $credits), 2)];
+    }
+
+    /**
+     * Grant one credit on an automated source's behalf (a survey, through
+     * SurveyCredit). NO AUTHORITY CHECK: the caller has already decided the
+     * credit is owed and names the officer who switched it on as GrantedBy.
+     * Only the Kingdom-level rules that an officer could not have waived are
+     * applied here: the category must be live, a kingdom credit reaches a
+     * player outside its kingdom family only when the player's own kingdom
+     * accepts outside credits, and an Amtgard-wide credit only reaches a
+     * kingdom that adopted it. Once-only categories refuse a second grant.
+     *
+     * $r keys: CategoryId, MundaneId, ClassId, Date (Y-m-d, the day earned;
+     * today when missing), GrantedBy, Note. Opens no transaction: the caller's
+     * covers it. The class-level cache is busted here, and the caller busts it
+     * again after its COMMIT (a read in between could re-cache the old state).
+     *
+     * Reason codes let the caller tell "not owed" from "failed": outside
+     * (kingdom declines outside credits), unadopted, archived, already,
+     * player, class, date, db.
+     *
+     * @return array{Status:int, Error?:string, Reason?:string, BonusCreditId?:int}
+     */
+    public function grantFromSource(array $r): array
+    {
+        $mundaneId  = (int) ($r['MundaneId'] ?? 0);
+        $classId    = (int) ($r['ClassId'] ?? 0);
+        $categoryId = (int) ($r['CategoryId'] ?? 0);
+        $grantedBy  = (int) ($r['GrantedBy'] ?? 0);
+        $note       = mb_substr(trim((string) ($r['Note'] ?? '')), 0, 200);
+        $date       = self::normalizeDate(trim((string) ($r['Date'] ?? date('Y-m-d'))));
+
+        $category = $this->category($categoryId);
+        if ($category === null) {
+            return $this->fail('Credit category not found.') + ['Reason' => 'category'];
+        }
+        if ($category['ArchivedAt'] !== null) {
+            return $this->fail('That credit is no longer offered.') + ['Reason' => 'archived'];
+        }
+        $player = $this->playerRow($mundaneId);
+        if ($player === null || (int) $player['kingdom_id'] <= 0) {
+            return $this->fail('The player has no home Kingdom.') + ['Reason' => 'player'];
+        }
+        if ($category['ScopeType'] === 'ork') {
+            if (!$this->isAdoptedIn($categoryId, $this->kingdomAncestry((int) $player['kingdom_id']))) {
+                return $this->fail('The player\'s Kingdom has not adopted this Amtgard-wide credit.') + ['Reason' => 'unadopted'];
+            }
+        } elseif (!self::covers('kingdom', (int) $category['ScopeId'], $player, $this->kingdomFamily((int) $category['ScopeId']))
+            && !$this->acceptsOutsideCredits((int) $player['kingdom_id'])) {
+            return $this->fail('The player\'s Kingdom does not accept bonus credits from other Kingdoms.') + ['Reason' => 'outside'];
+        }
+        if (!$this->classActive($classId)) {
+            return $this->fail('Choose an active class for the credit.') + ['Reason' => 'class'];
+        }
+        if ($date === null) {
+            return $this->fail('That date is not usable.') + ['Reason' => 'date'];
+        }
+        $allowance = self::normalizeCredits($category['DefaultCredits']) ?? 1.0;
+        if (!$category['Repeatable'] && $this->liveForCategory($categoryId, $mundaneId) >= $allowance - 0.0001) {
+            return $this->fail('The player already holds this credit.') + ['Reason' => 'already'];
+        }
+        $credits = min($allowance, 1.0);
+
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'bonus_credit
+             (mundane_id, class_id, credits, credit_date, category_id, note, granted_by, granted_at)
+             VALUES (' . $mundaneId . ', ' . $classId . ', ' . number_format($credits, 2, '.', '') . ', \'' . $date . '\',
+                     ' . $categoryId . ', \'' . $this->esc($note) . '\', ' . max(0, $grantedBy) . ', NOW())'
+        );
+        $id = $ok ? $this->lastInsertId() : 0;
+        if ($id <= 0) {
+            return $this->fail('Could not save the credit.') + ['Reason' => 'db'];
+        }
+        $this->bust($mundaneId);
+        $this->audit('grantFromSource', ['MundaneId' => $mundaneId, 'CategoryId' => $categoryId, 'ClassId' => $classId, 'Credits' => $credits,
+                                         'SourceType' => $category['SourceType'], 'SourceId' => $category['SourceId'], 'by_whom_id' => $grantedBy], 'Player', $mundaneId, null, $this->credit($id));
+        return ['Status' => 0, 'BonusCreditId' => $id];
     }
 
     /**

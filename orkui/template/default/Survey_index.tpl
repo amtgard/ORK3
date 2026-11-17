@@ -142,7 +142,7 @@ html[data-theme="dark"] #theme_container .rp-table-area table.dataTable tbody .s
 
 /* ---- New Survey modal fields ----
    The modal shell itself (.sv-overlay / .sv-modal*) is shared with the
-   builder's Attendance credit panel and lives in survey.css. */
+   builder's Bonus credit panel and lives in survey.css. */
 .sv-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
 .sv-field label { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--sv-text-body); }
 
@@ -558,8 +558,8 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 	   CreditChip). The tip says which. */
 	$_cov      = (string)($_row['CreditCoveredBy'] ?? '');
 	$_cred_on  = !empty($_row['CreditShownOn']);
-	$_cred_tip = !empty($_row['CreditOn']) ? 'Attendance credit is on'
-		: ($_cov !== '' ? 'Attendance credit is on: your players are covered by ' . $_cov . '’s credit' : 'Attendance credit');
+	$_cred_tip = !empty($_row['CreditOn']) ? 'Bonus credit is on'
+		: ($_cov !== '' ? 'Bonus credit is on: your players are covered by ' . $_cov . '’s credit' : 'Bonus credit');
 ?>
 									<button type="button" class="sv-row-btn<?=$_cred_on ? ' sv-row-btn-on' : ''?>" data-sv-credit="<?=$_sid?>"
 									        data-sv-grantor="<?=htmlspecialchars((string)$_row['CreditGrantor'])?>" data-sv-title="<?=htmlspecialchars((string)$_row['title'])?>"
@@ -936,7 +936,7 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 		}
 	});
 
-	// ----- Attendance credit -----
+	// ----- Bonus credit -----
 	document.addEventListener('click', function (e) {
 		var b = e.target.closest('[data-sv-credit]');
 		if (!b || !window.SvCredit) { return; }
@@ -944,13 +944,13 @@ html[data-theme="dark"] #theme_container .sv-list-section-title {
 			surveyId: parseInt(b.getAttribute('data-sv-credit'), 10),
 			grantor: b.getAttribute('data-sv-grantor') || '',
 			title: b.getAttribute('data-sv-title') || '',
-			// Called only after this org's credit is turned on (survey-credit.js).
-			onChange: function () {
-				b.classList.add('sv-row-btn-on');
-				b.setAttribute('data-tip', 'Attendance credit is on');
+			// Called when this org's credit is switched on or off (survey-credit.js).
+			onChange: function (on) {
 				var ic = b.querySelector('i');
-				if (ic) { ic.className = 'fas fa-circle-check'; }
-				b.setAttribute('aria-label', 'Credits (on)');
+				b.classList.toggle('sv-row-btn-on', !!on);
+				b.setAttribute('data-tip', on ? 'Bonus credit is on' : 'Bonus credit');
+				if (ic) { ic.className = on ? 'fas fa-circle-check' : 'fas fa-award'; }
+				b.setAttribute('aria-label', on ? 'Credits (on)' : 'Credits (off)');
 			}
 		});
 	});

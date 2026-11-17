@@ -387,16 +387,13 @@ final class SurveyPureTest extends TestCase
 
     // ------------------------------------------ event audience picker (#7)
 
-    public function testEventPickerExcludesCreditPlaceholdersAndUsesThePhpClock(): void
+    public function testEventPickerUsesThePhpClock(): void
     {
         $m   = new ReflectionMethod(Survey::class, 'eventOccurrenceSql');
         $sql = $m->invoke($this->survey(), ['scope_type' => 'park', 'scope_id' => 9], '', true);
 
-        $prefix = SurveyCredit::EVENT_PREFIX;
-        $this->assertStringContainsString(
-            "LEFT(e.name, " . mb_strlen($prefix) . ") <> '" . str_replace("'", "''", $prefix) . "'",
-            $sql
-        );
+        // Survey credits are bonus credits now: no placeholder events exist to exclude.
+        $this->assertStringNotContainsString('LEFT(e.name', $sql);
         $this->assertStringNotContainsString('NOW()', $sql);
         $this->assertMatchesRegularExpression("/BETWEEN '\\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d' - INTERVAL 12 MONTH/", $sql);
     }

@@ -88,14 +88,14 @@
     var GATE_NOTE = 'At the end you\'ll choose whether your answers are linked to your profile, ' +
         'kept to your kingdom and years played, or fully anonymous.';
     // Fixed copy — spec §3.7. Do not reword.
-    var CREDIT_NOTE = 'This survey gives an attendance credit, which will appear on your public attendance record. ' +
+    var CREDIT_NOTE = 'This survey gives a bonus credit toward your class levels, which will appear on your ORK profile. ' +
         'It is only given when you choose ';
     // Every other data gate: a kingdom or park may turn credits on after this
     // respondent answers, and a backfill then credits only those who were told
     // (spec D1), so the gate always says one or the other.
-    var CREDIT_MAYBE = 'This survey may later give an attendance credit, which would appear on your public attendance record. ' +
+    var CREDIT_MAYBE = 'This survey may later give a bonus credit toward your class levels, which would appear on your ORK profile. ' +
         'It is only given when you choose ';
-    var CREDIT_CHIP = 'Earns an attendance credit';
+    var CREDIT_CHIP = 'Earns a bonus credit';
 
     /** The three consent options, with the full option naming who runs the survey. */
     function consentOptions(s) {
@@ -935,9 +935,9 @@
         }
         out += '<div class="sv-intro">' + (html ? safe(html) : '<p>Your response has been recorded.</p>') + '</div>';
         if (credit === 'granted') {
-            out += '<p class="sv-credit-note"><i class="fas fa-award" aria-hidden="true"></i><span>Your attendance credit has been added.</span></p>';
+            out += '<p class="sv-credit-note"><i class="fas fa-award" aria-hidden="true"></i><span>Your bonus credit has been added.</span></p>';
         } else if (credit === 'pending') {
-            out += '<p class="sv-credit-note"><i class="fas fa-award" aria-hidden="true"></i><span>Your attendance credit will be added shortly.</span></p>';
+            out += '<p class="sv-credit-note"><i class="fas fa-award" aria-hidden="true"></i><span>Your bonus credit will be added shortly.</span></p>';
         }
         out += '</section>';
         out += homeActionHtml();

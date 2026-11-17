@@ -783,7 +783,7 @@ class Controller_SurveyAjax extends Controller
     }
 
     // =========================================================================
-    // Attendance credits (sharing-and-credits spec §3, §5)
+    // Bonus credits (sharing-and-credits spec §3, §5)
     // =========================================================================
 
     public function credit_status($p = null)
@@ -800,13 +800,7 @@ class Controller_SurveyAjax extends Controller
     public function credit_enable($p = null)
     {
         $uid = $this->requireLogin();
-        $r   = $this->Survey->credit_enable(
-            $uid,
-            (int) ($_POST['SurveyId'] ?? 0),
-            $this->orgParam($_POST['Grantor'] ?? ''),
-            (string) ($_POST['Mode'] ?? ''),
-            $this->truthy($_POST['Confirm'] ?? 0)
-        );
+        $r   = $this->Survey->credit_enable($uid, (int) ($_POST['SurveyId'] ?? 0), $this->orgParam($_POST['Grantor'] ?? ''));
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
         }
@@ -814,8 +808,20 @@ class Controller_SurveyAjax extends Controller
         // keep offering the survey as it was before this change.
         $this->bust_survey_banner_cache();
         $this->jsonOut(['status' => 0, 'credit_id' => $r['CreditId'], 'granted' => $r['Granted'],
-                        'skipped_no_park' => $r['SkippedNoPark'], 'pending' => $r['Pending'],
+                        'skipped' => $r['Skipped'], 'pending' => $r['Pending'],
                         'remaining' => $r['Remaining'], 'already' => $r['Already']]);
+    }
+
+    /** Switch this org's credit off: later responses earn nothing from it; credits already given stay. */
+    public function credit_disable($p = null)
+    {
+        $uid = $this->requireLogin();
+        $r   = $this->Survey->credit_disable($uid, (int) ($_POST['SurveyId'] ?? 0), $this->orgParam($_POST['Grantor'] ?? ''));
+        if ((int) $r['Status'] !== 0) {
+            $this->envelopeFail($r);
+        }
+        $this->bust_survey_banner_cache();
+        $this->jsonOut(['status' => 0, 'credit_id' => $r['CreditId']]);
     }
 
     public function credit_reconcile($p = null)
@@ -825,7 +831,7 @@ class Controller_SurveyAjax extends Controller
         if ((int) $r['Status'] !== 0) {
             $this->envelopeFail($r);
         }
-        $this->jsonOut(['status' => 0, 'granted' => $r['Granted'], 'skipped_no_park' => $r['SkippedNoPark'], 'pending' => $r['Pending'],
+        $this->jsonOut(['status' => 0, 'granted' => $r['Granted'], 'skipped' => $r['Skipped'], 'pending' => $r['Pending'],
                         'remaining' => $r['Remaining']]);
     }
 }

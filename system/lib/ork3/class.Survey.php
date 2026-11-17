@@ -889,11 +889,11 @@ class Survey
         }
         $surveyId = (int) $survey['survey_id'];
 
-        // A credit config promises a credit to respondents who choose Any ORK
+        // A credit switch promises a credit to respondents who choose Any ORK
         // Data; without the gate nobody can (sharing spec §3.5).
         if (array_key_exists('DataGateEnabled', $fields) && !$this->truthy($fields['DataGateEnabled'])
             && (new SurveyCredit())->hasConfigs($surveyId)) {
-            return $this->fail('This survey gives attendance credits, which need respondents to be able to choose Any ORK Data.');
+            return $this->fail('This survey gives bonus credits, which need respondents to be able to choose Any ORK Data.');
         }
 
         $sets = [];
@@ -1072,10 +1072,10 @@ class Survey
             $this->purgeDrafts($surveyId);
         }
 
-        // open_at feeds the credit event's date (SurveyCredit::startDate): an
-        // event made while it was weeks out must follow it when it moves.
-        if ($sets && array_key_exists('OpenAt', $fields)) {
-            (new SurveyCredit())->onStartChanged($surveyId);
+        // The survey's bonus-credit category is named after it ("Survey Bonus -
+        // {title}"), so a renamed survey renames its credit.
+        if ($sets && array_key_exists('Title', $fields)) {
+            (new SurveyCredit())->onTitleChanged($surveyId);
         }
 
         return $this->ok(['Survey' => self::withInstants($this->getRow($surveyId))]);
@@ -1120,7 +1120,7 @@ class Survey
         }
         // A credit config names the current org as its grantor (sharing spec §3).
         if ((new SurveyCredit())->hasConfigs((int) $survey['survey_id'])) {
-            return $this->fail('This survey has an attendance credit set up for its current org. Remove that before moving it.');
+            return $this->fail('This survey has a bonus credit set up for its current org. Turn that off before moving it.');
         }
 
         $sets[] = 'scope_type = \'' . $type . '\'';
@@ -1188,9 +1188,9 @@ class Survey
 
         $sets = ['status = \'' . $status . '\''];
         // PHP's clock, never SQL NOW(): the DB server runs its own zone (UTC in
-        // the shipped stack) and opened_at becomes the credit event's date and
-        // attendance date (SurveyCredit::startDate), so a US-evening open would
-        // otherwise land on the next day. Same rule as SurveyResponse::nowStamp().
+        // the shipped stack) and these stamps are compared with response times
+        // written from PHP's clock, so a US-evening open would otherwise land
+        // on the next day. Same rule as SurveyResponse::nowStamp().
         $now = date('Y-m-d H:i:s');
 
         if ($status === 'open') {
@@ -1229,8 +1229,12 @@ class Survey
             $this->purgeDrafts($surveyId);
         } else {
             $this->purgeStaleDrafts($surveyId);
-            // Event-mode credit configs get their event once a start date exists (§3.4).
-            (new SurveyCredit())->onOpened($surveyId);
+        }
+        if ($status === 'archived') {
+            // Nothing more can be answered, so nothing more can be earned: the
+            // survey's bonus-credit category is archived with it (credits
+            // already given stay on players' records).
+            (new SurveyCredit())->onArchived($this->actor, $surveyId);
         }
 
         return $this->ok(['Survey' => self::withInstants($this->getRow($surveyId))]);
@@ -1460,19 +1464,15 @@ class Survey
         }
 
         $images = $this->fetchAll('SELECT * FROM ' . DB_PREFIX . 'survey_image WHERE survey_id = ' . $surveyId);
-        // The owner may set up credits on a draft (sharing spec §3.2). Their
-        // configs, and the "Survey Credit" events made for them, go with it:
-        // left behind, the config stays in the sweep's work list for ever and
-        // the published event links to a survey that no longer exists.
-        $creditEvents = array_map('intval', array_column($this->fetchAll(
-            'SELECT event_id FROM ' . DB_PREFIX . 'survey_credit WHERE survey_id = ' . $surveyId . ' AND event_id > 0'
-        ), 'event_id'));
 
         // The activity log is deliberately NOT deleted: it is the record that
         // this survey existed and who removed it.
         $statements = [
             'START TRANSACTION',
-            // No grants can exist (no non-test responses), but never leave one pointing nowhere.
+            // The owner may switch credit on for a draft (sharing spec §3.2):
+            // its switches go with it, or the sweep keeps the survey in its work
+            // list for ever. No grants can exist (no non-test responses), but
+            // never leave one pointing nowhere.
             'DELETE FROM ' . DB_PREFIX . 'survey_credit_grant WHERE survey_id = ' . $surveyId,
             'DELETE FROM ' . DB_PREFIX . 'survey_credit WHERE survey_id = ' . $surveyId,
             // Only test rows can be left (the guard above refused real ones); they
@@ -1498,25 +1498,13 @@ class Survey
                 return $this->abort('Could not delete the survey.');
             }
         }
-        // Inside the transaction (delete_system_event opens none). One that
-        // somebody has since entered attendance on is an ordinary event now,
-        // and stays.
-        $deletedEvents = [];
-        foreach ($creditEvents as $eventId) {
-            $del = Ork3::$Lib->eventplanning->delete_system_event($eventId);
-            if ((int) ($del['Status'] ?? 1) !== 0) {
-                error_log('Survey::delete(' . $surveyId . '): credit event ' . $eventId . ' left in place: ' . (string) ($del['Error'] ?? ''));
-            }
-            $deletedEvents[$eventId] = (array) ($del['CacheKeys'] ?? []);
-        }
         if (!$this->exec('COMMIT')) {
             return $this->abort('Could not delete the survey.');
         }
-        // Again after the COMMIT: a read between delete_system_event's own bust
-        // and the commit could have re-cached the events.
-        foreach ($deletedEvents as $eventId => $keys) {
-            Ork3::$Lib->eventplanning->bust_deleted_system_event((int) $eventId, $keys);
-        }
+        // After the COMMIT: the survey's bonus-credit category, if the owner
+        // ever switched credit on. It never granted (no non-test responses), so
+        // it goes; a category that somehow did is archived instead.
+        (new SurveyCredit())->onDeleted($this->actor, $surveyId);
 
         // This survey's rows are gone now, so any markdown still naming one of
         // its files belongs to another survey (a clone made before clones
@@ -3404,8 +3392,6 @@ class Survey
                 FROM ' . DB_PREFIX . 'event_calendardetail cd
                 JOIN ' . DB_PREFIX . 'event e ON e.event_id = cd.event_id
                 WHERE e.status = \'published\' AND ' . $scope
-            // The placeholder events event-mode credits create are not events anyone attended.
-            . ' AND LEFT(e.name, ' . mb_strlen(SurveyCredit::EVENT_PREFIX) . ') <> \'' . $this->esc(SurveyCredit::EVENT_PREFIX) . '\''
             . ($extraWhere !== '' ? ' AND ' . $extraWhere : '')
             . ($window ? ' AND cd.event_start BETWEEN ' . self::nowSql() . ' - INTERVAL 12 MONTH AND ' . self::nowSql() . ' + INTERVAL 6 MONTH' : '')
             . ' ORDER BY cd.event_start DESC, cd.event_calendardetail_id DESC LIMIT 100';

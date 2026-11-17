@@ -383,7 +383,7 @@ $_svr_show_crosstab = $_svr_crosstab && $_svr_xt_targets >= 2;
 			<div class="sv-modal-body" id="svr-clear-body">
 				<p id="svr-clear-count">Counting responses&hellip;</p>
 				<p>This cannot be undone. Answers, completion records and in-progress drafts are deleted, and everyone can take the survey again.</p>
-				<p>Attendance credits already posted stay in place; retaking does not earn a second credit.</p>
+				<p>Bonus credits already given stay in place; retaking does not earn a second credit.</p>
 				<div class="sv-modal-error" id="svr-clear-error" role="alert"></div>
 			</div>
 			<div class="sv-modal-footer">
