@@ -984,12 +984,52 @@ $(document).ready(function() {
     });
 
     // ---- Ladder tile → filter awards ----
-    $('.pn-ladder-item[data-ladname]').on('click', function() {
-        var name = $(this).data('ladname');
-        pnActivateTab('awards');
-        if ($.fn.DataTable && $.fn.DataTable.isDataTable('#pn-awards-table')) {
-            $('#pn-awards-table').DataTable().search(name).draw();
+    // Filters to the exact award rows the tile counted (by award row id), not a
+    // text search: "Dragon" must not match a Garber whose note says Dragonmaster,
+    // and "Rose" must not match every award given by Queen Rose. The search box
+    // stays free and narrows within the tile's rows.
+    var pnAwardTileFilter = null; // { ids: {awardsId: true}, $tile } while active
+    if ($.fn.dataTable) {
+        $.fn.dataTable.ext.search.push(function(settings, data, dataIndex, rowData, counter) {
+            if (!pnAwardTileFilter || settings.nTable.id !== 'pn-awards-table') return true;
+            var node = settings.aoData[dataIndex] && settings.aoData[dataIndex].nTr;
+            return !!(node && pnAwardTileFilter.ids[node.getAttribute('data-awards-id')]);
+        });
+    }
+    function pnSetAwardTileFilter($tile) {
+        if (!$.fn.DataTable || !$.fn.DataTable.isDataTable('#pn-awards-table')) return;
+        $('.pn-ladder-item[aria-pressed="true"]').attr('aria-pressed', 'false');
+        var $bar = $('#pn-award-filter');
+        if ($tile) {
+            var ids = {};
+            String($tile.attr('data-awards-ids') || '').split(',').forEach(function(id) {
+                if (id) ids[id] = true;
+            });
+            pnAwardTileFilter = { ids: ids, $tile: $tile };
+            $tile.attr('aria-pressed', 'true');
+            $bar.find('.pn-award-filter-name').text($tile.attr('data-ladname') || '');
+            $bar.prop('hidden', false);
+        } else {
+            pnAwardTileFilter = null;
+            $bar.prop('hidden', true);
         }
+        $('#pn-awards-table').DataTable().draw();
+    }
+    $('.pn-ladder-item[data-awards-ids]').on('click', function() {
+        var $tile = $(this);
+        pnActivateTab('awards');
+        var isActive = pnAwardTileFilter && pnAwardTileFilter.$tile.is($tile);
+        pnSetAwardTileFilter(isActive ? null : $tile);
+    }).on('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            $(this).trigger('click');
+        }
+    });
+    $('#pn-award-filter .pn-award-filter-clear').on('click', function() {
+        var $tile = pnAwardTileFilter && pnAwardTileFilter.$tile;
+        pnSetAwardTileFilter(null);
+        if ($tile) $tile.trigger('focus');
     });
 
     // ---- Class Level Calculation (thresholds from ClassLevel via PnConfig) ----
@@ -2277,7 +2317,10 @@ if (PnConfig.recError) {
         if (gid('pn-award-select')) awInitPicker(gid('pn-award-select'));
 
         // ---- Award Select Change ----
-        var pnNoBadgeAwards = ['griffon', 'griffin', 'hydra', 'jovious', 'jovius', 'mask', 'zodiac', 'walker'];
+        // Ladders that get no "Ladder Award" badge, by award id (not by name, which
+        // kingdoms rename): Jovius 28, Mask 29, Zodiac 30, Walker of the Middle 31,
+        // Hydra 32, Griffin 33.
+        var pnNoBadgeAwardIds = [28, 29, 30, 31, 32, 33];
         gid('pn-award-select').addEventListener('change', function() {
             var opt      = this.options[this.selectedIndex];
             var isLadder = (opt.getAttribute('data-is-ladder') == '1');
@@ -2285,8 +2328,7 @@ if (PnConfig.recError) {
             var isCustomAward = opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award';
             var isCustomTitle = opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title';
             var needsCustomName = isCustomAward || isCustomTitle;
-            var optName  = opt.text.toLowerCase();
-            var showBadge = isLadder && !pnNoBadgeAwards.some(function(n) { return optName.indexOf(n) !== -1; });
+            var showBadge = isLadder && pnNoBadgeAwardIds.indexOf(awardId) === -1;
 
             gid('pn-award-custom-row').style.display  = needsCustomName ? '' : 'none';
             var labelEl = gid('pn-award-custom-label');
@@ -13030,6 +13072,35 @@ function setupPronounPicker(cfg) {
         gid('pn-edit-rank-val') && (gid('pn-edit-rank-val').value = currentRank || '');
     }
 
+    /* Match by identity, never by a substring of the name ("Rose" is also in
+       "Master Rose"; one kingdom lists two different "Walker of the Middle"s).
+       In order: the row's own kingdom award; an option for the same award (the
+       dropdown lists the EDITOR's kingdom, which may not be the player's), with
+       an exact name breaking ties; an exact name. Otherwise nothing, and the
+       editor picks. */
+    function pnFindReconcileOption(select, data) {
+        var opts = [];
+        for (var i = 0; i < select.options.length; i++) {
+            if (select.options[i].value) opts.push(select.options[i]);
+        }
+        /* strip parenthetical suffix e.g. "Warrior (2nd)" → "Warrior" */
+        var name = (data.displayName || data.Name || '').replace(/\s*\(.*\)/, '').trim().toLowerCase();
+        var sameName = function(o) { return name !== '' && o.textContent.trim().toLowerCase() === name; };
+        var kaid = parseInt(data.KingdomAwardId, 10) || 0;
+        var aid  = parseInt(data.AwardId, 10) || 0;
+        var j;
+        if (kaid) {
+            for (j = 0; j < opts.length; j++) if (parseInt(opts[j].value, 10) === kaid) return opts[j];
+        }
+        if (aid) {
+            var sameAward = opts.filter(function(o) { return parseInt(o.getAttribute('data-award-id'), 10) === aid; });
+            for (j = 0; j < sameAward.length; j++) if (sameName(sameAward[j])) return sameAward[j];
+            if (sameAward.length) return sameAward[0];
+        }
+        for (j = 0; j < opts.length; j++) if (sameName(opts[j])) return opts[j];
+        return null;
+    }
+
     window.pnOpenAwardEditModal = function(awardsId, data) {
         console.log('[EditAward] Opening modal — awardsId:', awardsId, 'data:', data);
         currentAwardsId = awardsId;
@@ -13052,19 +13123,10 @@ function setupPronounPicker(cfg) {
         if (rcRankPills) { rcRankPills.innerHTML = ''; }
         if (rcRankVal)   { rcRankVal.value = ''; }
 
-        /* auto-match historical award name to reconcile dropdown */
+        /* pre-select the reconcile target for a historical award */
         if (currentAwardIsHistorical && rcSelect) {
-            /* strip parenthetical suffix e.g. "Warrior (2nd)" → "Warrior" */
-            var histName = (data.displayName || data.Name || '').replace(/\s*\(.*\)/, '').trim();
-            if (histName) {
-                var histLower = histName.toLowerCase();
-                for (var _i = 0; _i < rcSelect.options.length; _i++) {
-                    if (rcSelect.options[_i].textContent.toLowerCase().indexOf(histLower) !== -1) {
-                        rcSelect.value = rcSelect.options[_i].value;
-                        break;
-                    }
-                }
-            }
+            var rcPick = pnFindReconcileOption(rcSelect, data);
+            if (rcPick) rcSelect.value = rcPick.value;
         }
 
         var nameEl = gid('pn-edit-award-name');
