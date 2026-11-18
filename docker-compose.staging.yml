@@ -1,6 +1,6 @@
 # Staging ORK stack for the shared AWS "applications" instance.
 #
-# Deliberately dev-shaped (ENVIRONMENT=DEV -> config.dev.php): bind-mounted
+# Deliberately dev-shaped (ENVIRONMENT=DEV -> config/bootstrap.php): bind-mounted
 # repo so deploys are `git pull` + restart-when-needed, seed data restored by
 # hand, migrations applied by hand — the same ritual as a local checkout.
 #

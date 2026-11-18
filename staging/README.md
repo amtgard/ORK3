@@ -1,6 +1,6 @@
 # Staging ORK on the "applications" instance
 
-A dev-flavored ORK (`ENVIRONMENT=DEV` → `config.dev.php`) on the shared AWS
+A dev-flavored ORK (`ENVIRONMENT=DEV` → `config/bootstrap.php` + `.env` / `.stage.env`) on the shared AWS
 `applications` box (t4g.medium arm64, Ubuntu 22.04 — same Graviton arch as the
 prod ORK host), living beside the wiki/play/go/idp stacks without touching
 them. Public name: **https://staging.amtgard.com** (single-level on purpose —
@@ -27,8 +27,8 @@ cd /var/www/staging.amtgard.com
 git checkout master        # staging tracks master unless testing a branch
 
 # Secrets file (never committed). MARIADB_* configure the db container;
-# ORK3_DB_* point the app at it (config.dev.php reads them, falling back to
-# the local-dev defaults when unset).
+# ORK3_DB_* point the app at it (bootstrap reads them from the environment,
+# with the same fallbacks as local dev when unset).
 cat > .stage.env <<'EOF'
 MARIADB_DATABASE=ork
 MARIADB_USER=ork

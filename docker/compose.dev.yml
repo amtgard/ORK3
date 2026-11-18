@@ -1,0 +1,54 @@
+# Dev overlay: bind-mounted source, shared DB on ork3-php8-net (not slot-swapped).
+name: ork3-php8
+
+services:
+  ork3app:
+    build:
+      context: ./
+      dockerfile: Dockerfile.dev
+    ports:
+      - "19080:80"
+    volumes:
+      - .:/var/www/ork.amtgard.com
+      - ${ORK_HEV_WEB_SECRETS:-./.local/empty-secrets}:/run/secrets:ro
+      - ${HOST_ENV_VAULT_RUNTIME_DIR:-./.local/empty-runtime}:/run/host-env-vault:ro
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=DEV
+      - HOST_ENV_SECRETS_DIR=/run/secrets
+      - HOST_ENV_VAULT_RUNTIME_DIR=/run/host-env-vault
+      - ORK3_TEST_DB_HOST=ork3-php8-test-db
+      - ORK3_TEST_DB_PORT=3306
+    container_name: ork3-php8-app
+    hostname: ork3-php8-app
+    networks:
+      - ork3-php8-net
+    depends_on:
+      - ork3db
+
+  ork3db:
+    image: mariadb:latest
+    restart: always
+    environment:
+      MARIADB_DATABASE: ork
+      MARIADB_USER: ork
+      MARIADB_PASSWORD: secret
+      MARIADB_ROOT_PASSWORD: root
+    ports:
+      - "19306:3306"
+    expose:
+      - "3306"
+    volumes:
+      - data-db:/var/lib/mysql
+    container_name: ork3-php8-db
+    networks:
+      - ork3-php8-net
+
+volumes:
+  data-db: {}
+
+networks:
+  ork3-php8-net:
+    name: ork3-php8-net
+    external: true

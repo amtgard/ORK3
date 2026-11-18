@@ -1,0 +1,35 @@
+{
+    "$schema": "../../vendor/infection/infection/resources/schema.json",
+    "timeout": 120,
+    "source": {
+        "directories": [
+            "tools/ork-db/lib"
+        ],
+        "excludes": [
+            "IdNamespace.php",
+            "Json5.php",
+            "LastRender.php",
+            "MigrationClassifier.php",
+            "SchemaIntrospection.php",
+            "TierRefusalException.php",
+            "ValidationException.php",
+            "Wiring.php"
+        ]
+    },
+    "logs": {
+        "text": "build/infection-hev-h5.log",
+        "summary": "build/infection-hev-h5-summary.log"
+    },
+    "mutators": {
+        "@default": true
+    },
+    "minMsi": 80,
+    "minCoveredMsi": 80,
+    "testFramework": "phpunit",
+    "bootstrap": "tests/Unit/OrkDb/bootstrap.php",
+    "phpUnit": {
+        "configDir": ".",
+        "customPath": "phpunit.hev-h5.xml.dist"
+    },
+    "tmpDir": "build/infection-hev-h5"
+}

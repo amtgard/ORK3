@@ -1,0 +1,6 @@
+services:
+  ork3app:
+    ports:
+      - "29080:80"
+    container_name: ork3-php8-app-blue
+    hostname: ork3-php8-app-blue

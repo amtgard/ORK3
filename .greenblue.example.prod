@@ -1,0 +1,79 @@
+# Production blue-green for ORK3 (host nginx color-symlink). Copy to .greenblue (do not commit).
+#
+# One-time on the host (before first gb deploy):
+#   1. Clone ORK3 to /var/www/ork.amtgard.com (or your install root).
+#   2. Copy .env.example → .env — set DB_HOSTNAME, ORK3_DB_*, APP_STAGE=PROD (no inject secrets in .env when using vault).
+#   3. Install gb: /var/gb/generic-green-blue-deployment/bin/gb
+#   4. host-env-vault on the server (Phase D) OR host-store (Phase C) — see docs/deploy-gb-host-env-vault.md
+#   5. Nginx must have /etc/nginx/sites-available/green and .../blue pointing at slots 19080 / 29080
+#      (same layout as legacy greenblue.sh / sites-available/$COLOR).
+#   6. Docker network ork3-php8-net exists; MariaDB is external to compose (not slot-swapped).
+#   7. cp .greenblue.example.prod .greenblue — uncomment and set GB_HEV_* below.
+#
+# Deploy / revert:
+#   sudo /var/gb/generic-green-blue-deployment/bin/gb /var/www/ork.amtgard.com deploy
+#   sudo /var/gb/generic-green-blue-deployment/bin/gb /var/www/ork.amtgard.com revert
+#
+# With SSM / system vault config:
+#   sudo /var/gb/generic-green-blue-deployment/bin/gb \
+#     --hev-config /etc/host-env-vault/config.toml \
+#     /var/www/ork.amtgard.com deploy
+
+GB_MODE="prod"
+
+GB_PROJECT_NAME="ork3"
+GB_CONTAINER_APP_DIR="/var/www/ork.amtgard.com"
+GB_COMPOSE_SERVICE="ork3app"
+
+GB_LEGACY_CONTAINER="ork3-php8-app"
+GB_BLUE_CONTAINER="ork3-php8-app-blue"
+GB_GREEN_CONTAINER="ork3-php8-app-green"
+GB_BLUE_PORT="29080"
+GB_GREEN_PORT="19080"
+
+GB_WEB_COMPOSE_PROJECT="ork3-php8"
+GB_WEB_COMPOSE_BASE="docker/compose.prod.yml"
+GB_WEB_COMPOSE_SLOT="docker/compose.%slot%.yml"
+GB_WEB_COMPOSE_DEV="docker/compose.dev.yml"
+GB_SHARED_NETWORK="ork3-php8-net"
+GB_STATE_DIR="/var/lib/ork3-greenblue"
+
+GB_NGINX_STRATEGY="color-symlink"
+GB_NGINX_SITES_AVAILABLE_DIR="/etc/nginx/sites-available"
+GB_NGINX_SITES_ENABLED_DEFAULT="/etc/nginx/sites-enabled/default"
+
+GB_DEV_STACKS="web"
+GB_DEPLOY_STACKS="web"
+
+GB_APP_INSTALL="none"
+
+# gb health-check hits this path on the inactive slot before nginx flip
+GB_HEALTH_PATH="/orkui/"
+
+GB_HOOK_HEV_AFTER_RENDER="scripts/gb-hev-after-render.sh"
+GB_HOOK_PRE_DEPLOY="scripts/gb-pre-hev-sync.sh"
+GB_HOOK_POST_DEPLOY="scripts/gb-prod-post-command.sh"
+
+# --- host-env-vault (production) ---
+# Phase D (SSM): uncomment and set to the server vault install; omit GB_HEV_SYNC_SOURCE (defaults to SSM).
+# GB_HEV_CONFIG="/etc/host-env-vault/config.toml"
+# GB_HEV_VAULT_ROOT="/var/lib/host-env-vault"
+# GB_HEV_RENDER_ROOT="/var/lib/host-env-vault/run"
+
+# Phase C (host-store, pre-SSM): after migrate-ork3-secrets-to-host-store.sh, write host-store into
+# .gb/secrets-mode on the server and source load-secrets-mode below (do not commit .gb/).
+# GB_HEV_CONFIG="/etc/host-env-vault/config.toml"
+# shellcheck source=host-env/load-secrets-mode.sh disable=SC1091
+# source "${GB_ROOT}/host-env/load-secrets-mode.sh"
+
+# Phase A/B escape hatch (no vault mounts): on the server run ork3-secrets-mode.sh plaintext and source load-secrets-mode.
+# Inject secrets then live only in .env (not recommended on production long-term).
+
+GB_HEV_PROFILES="ork-web"
+GB_HEV_SYNC_ON_DEV_UP="0"
+GB_HEV_RENDER_ON_DEV_UP="0"
+GB_HEV_SYNC_ON_DEPLOY="1"
+GB_HEV_RENDER_ON_DEPLOY="1"
+# GB_HEV_SYNC_STRICT="1"
+
+GB_HEV_MOUNT_MAP="ork-web:ORK_HEV_WEB_SECRETS"

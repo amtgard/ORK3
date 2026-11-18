@@ -6,13 +6,32 @@ declare(strict_types=1);
  * Shared bootstrap for ORK3 backend unit and integration tests.
  *
  * Loads the full ORK3 runtime via startup.php with ENVIRONMENT=TEST
- * (config.test.php). See docs/megiddo/refactor/06-test-framework.md.
+ * (config/bootstrap.php). See docs/megiddo/refactor/06-test-framework.md.
  */
 
 define('ORK3_ROOT', dirname(__DIR__));
 $_SERVER['HTTP_HOST'] ??= 'localhost';
 
 putenv('ENVIRONMENT=TEST');
+$_ENV['ENVIRONMENT'] = 'TEST';
+$_SERVER['ENVIRONMENT'] = 'TEST';
+
+if (ork3_bootstrap_env_unset('ORK3_TEST_DB_HOST')) {
+    putenv('ORK3_TEST_DB_HOST=127.0.0.1');
+    $_ENV['ORK3_TEST_DB_HOST'] = '127.0.0.1';
+    $_SERVER['ORK3_TEST_DB_HOST'] = '127.0.0.1';
+}
+if (ork3_bootstrap_env_unset('ORK3_TEST_DB_PORT')) {
+    putenv('ORK3_TEST_DB_PORT=19307');
+    $_ENV['ORK3_TEST_DB_PORT'] = '19307';
+    $_SERVER['ORK3_TEST_DB_PORT'] = '19307';
+}
+
+function ork3_bootstrap_env_unset(string $key): bool
+{
+    $value = getenv($key);
+    return $value === false || $value === '';
+}
 
 // Legacy ORK3 emits many dynamic-property deprecations on PHP 8.2+ during startup.
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);

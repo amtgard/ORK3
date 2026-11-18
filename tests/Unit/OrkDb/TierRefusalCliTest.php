@@ -12,6 +12,15 @@ use PHPUnit\Framework\TestCase;
 
 final class TierRefusalCliTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        putenv('DB_HOSTNAME');
+        putenv('ORK3_DB_HOST');
+        putenv('ORK3_TEST_DB_HOST');
+        putenv('APP_STAGE');
+        putenv('ENVIRONMENT');
+    }
+
     public function testExtractRefusesWhenProductionTierDetected(): void
     {
         $tier = $this->productionTier();
@@ -52,24 +61,16 @@ final class TierRefusalCliTest extends TestCase
 
     public function testUseDevRefusesWhenProductionTierDetected(): void
     {
-        $tempRoot = sys_get_temp_dir() . '/ork-db-use-tier-' . uniqid('', true);
-        mkdir($tempRoot);
-        file_put_contents(
-            $tempRoot . '/config.dev.php',
-            "<?php\ndefine('DB_HOSTNAME', 'mysql.amtgard.com');\n"
-        );
+        putenv('DB_HOSTNAME=mysql.amtgard.com');
 
         $tier = new DeploymentTier(
             new Wiring(ORK3_ROOT . '/tools/ork-db'),
-            $tempRoot,
+            ORK3_ROOT,
             static fn (): bool => true
         );
 
         $this->expectException(TierRefusalException::class);
         $tier->refuseDataCommands('use dev');
-
-        unlink($tempRoot . '/config.dev.php');
-        rmdir($tempRoot);
     }
 
     private function productionTier(): DeploymentTier

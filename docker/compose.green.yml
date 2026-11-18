@@ -1,0 +1,6 @@
+services:
+  ork3app:
+    ports:
+      - "19080:80"
+    container_name: ork3-php8-app-green
+    hostname: ork3-php8-app-green

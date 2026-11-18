@@ -1,0 +1,24 @@
+{
+  "profiles": [
+    {
+      "name": "ork-web",
+      "inject": [
+        "DB_PASSWORD",
+        "IDP_CLIENT_SECRET",
+        "IDP_API_KEY",
+        "SENDGRID_API_KEY",
+        "GOOGLE_MAPS_API_KEY",
+        "GOOGLE_MAPS_ACCESS_API_KEY",
+        "BEHOLD_KEY",
+        "CF_API_TOKEN",
+        "CARTO_API_KEY",
+        "AMAZON_SES_USERNAME",
+        "AMAZON_SES_PASSWORD"
+      ],
+      "runtime": [],
+      "inject_files": ["ga4-sa.json"],
+      "runtime_files": [],
+      "socket": false
+    }
+  ]
+}
