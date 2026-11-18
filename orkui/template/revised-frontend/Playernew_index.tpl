@@ -2209,7 +2209,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<?php foreach ($LadderProgress as $lp): ?>
 								<?php $maxRank = (int)($lp['MaxRank'] ?? 10); ?>
 								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
-								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
+								<div class="pn-ladder-item" role="button" tabindex="0" aria-pressed="false" aria-controls="pn-awards-table"
+								     title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>"
+								     data-ladname="<?= htmlspecialchars($lp['Name']) ?>"
+								     data-awards-ids="<?= htmlspecialchars(implode(',', array_map('intval', $lp['AwardsIds'] ?? []))) ?>">
 									<div class="pn-ladder-header">
 										<span class="pn-ladder-name"><?= htmlspecialchars($lp['Short']) ?></span>
 										<span style="display:flex;align-items:center;gap:4px;flex-shrink:0">
@@ -2237,6 +2240,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 				<?php if (count($filteredAwards) === 0): ?>
 					<div class="pn-empty">No awards recorded</div>
 				<?php else: ?>
+				<div class="pn-award-filter" id="pn-award-filter" hidden>
+					<span>Showing <strong class="pn-award-filter-name"></strong></span>
+					<button type="button" class="pn-award-filter-clear" aria-label="Show all awards"><i class="fas fa-times"></i> Show all</button>
+				</div>
 				<table class="pn-table display" id="pn-awards-table">
 					<thead>
 						<tr>
@@ -2252,7 +2259,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					</thead>
 					<tbody>
 						<?php foreach ($filteredAwards as $detail): ?>
-							<tr>
+							<tr data-awards-id="<?= (int)$detail['AwardsId'] ?>">
 								<td class="pn-col-nowrap">
 									<?php $displayName = trimlen($detail['CustomAwardName']) > 0 ? $detail['CustomAwardName'] : $detail['KingdomAwardName']; ?>
 									<?= htmlspecialchars($displayName) ?>
