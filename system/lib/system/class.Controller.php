@@ -124,6 +124,7 @@ class Controller
             'Controller_PlayerAjax',
             'Controller_AdminAjax',
             'Controller_WnAjax',
+            'Controller_TourAjax',
         ]);
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
             $_uid_check = (int)$this->session->user_id;
@@ -153,6 +154,7 @@ class Controller
         $this->data['ViewerDyslexiaFonts'] = 0;
         $this->data['ShowWhatsNew']        = false;
         $this->data['WhatsNewRelease']     = null;
+        $this->data['TourProgress']        = [];
         if ($_uid > 0) {
             $this->load_model('Player');
             $prefs = $this->Player->get_viewer_preferences($_uid);
@@ -169,6 +171,8 @@ class Controller
             if ($this->data['WhatsNewRelease'] !== null) {
                 $this->data['ShowWhatsNew'] = !$this->Player->get_whats_new_seen($_uid, WHATS_NEW_VERSION);
             }
+            // OrkTour progress (tour id => {v, status, at}); default.theme hands it to ork-tour.js
+            $this->data['TourProgress'] = $this->Player->get_tour_progress($_uid);
         }
 
         $this->data[ 'controller_title' ] = get_class($this);

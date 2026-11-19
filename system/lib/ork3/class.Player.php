@@ -2505,6 +2505,23 @@ class Player extends Ork3
             $this->db->query($sql);
             $sql = "UPDATE " . DB_PREFIX . "whats_new_seen SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
             $this->db->query($sql);
+            // tour_progress: unique key on (mundane_id, tour_id). Where both players have a
+            // row for a tour, keep the higher version (ties: the more recent save) and drop
+            // the other, then move the source's remaining rows.
+            $_tp_from = (int)$fromMundane['id'];
+            $_tp_to   = (int)$toMundane['id'];
+            $this->db->Clear();
+            $sql = "DELETE s FROM " . DB_PREFIX . "tour_progress s
+					JOIN " . DB_PREFIX . "tour_progress d ON d.tour_id = s.tour_id AND d.mundane_id = $_tp_to
+					WHERE s.mundane_id = $_tp_from
+					AND (d.version > s.version OR (d.version = s.version AND d.updated_at >= s.updated_at))";
+            $this->db->query($sql);
+            $sql = "DELETE d FROM " . DB_PREFIX . "tour_progress d
+					JOIN " . DB_PREFIX . "tour_progress s ON s.tour_id = d.tour_id AND s.mundane_id = $_tp_from
+					WHERE d.mundane_id = $_tp_to";
+            $this->db->query($sql);
+            $sql = "UPDATE " . DB_PREFIX . "tour_progress SET mundane_id = $_tp_to WHERE mundane_id = $_tp_from";
+            $this->db->query($sql);
             // Simple transfers
             $sql = "UPDATE " . DB_PREFIX . "recommendations SET mundane_id = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
             $this->db->query($sql);
@@ -5576,6 +5593,99 @@ class Player extends Ork3
         );
 
         return (bool) ($rs && $rs->Next());
+    }
+
+    /** Tour ids: lower-case slug, 1-64 chars (matches ork_tour_progress.tour_id). */
+    public const TOUR_ID_PATTERN = '/^[a-z0-9][a-z0-9_-]{0,63}$/';
+
+    /** @var list<string> the ork_tour_progress.status ENUM */
+    public const TOUR_STATUSES = ['completed', 'dismissed'];
+
+    /**
+     * Record that a person finished ('completed') or turned down ('dismissed') an
+     * OrkTour. One row per person per tour: a later save replaces the earlier one.
+     *
+     * Token-free on purpose (the caller is the person's own session), so the name
+     * carries an underscore to keep it off the public JSON service.
+     *
+     * @param mixed $version  int >= 1, or a digit string
+     * @param mixed $lastStep int >= 0, or a digit string
+     */
+    public function save_tour_progress(int $mundaneId, string $tourId, $version, string $status, $lastStep): array
+    {
+        if (!valid_id($mundaneId)) {
+            return InvalidParameter('MundaneId is required.');
+        }
+        if (preg_match(self::TOUR_ID_PATTERN, $tourId) !== 1) {
+            return InvalidParameter('Invalid tour id.');
+        }
+        $version = self::tour_int($version, 1);
+        if ($version === null) {
+            return InvalidParameter('Invalid version.');
+        }
+        if (!in_array($status, self::TOUR_STATUSES, true)) {
+            return InvalidParameter('Invalid status.');
+        }
+        $lastStep = self::tour_int($lastStep, 0);
+        if ($lastStep === null) {
+            return InvalidParameter('Invalid last step.');
+        }
+
+        // Every value is validated above (int, slug regex, whitelist), so it is safe
+        // to inline. updated_at is set explicitly: ON UPDATE CURRENT_TIMESTAMP only
+        // fires when some other column changes, and a repeat save should still count.
+        $this->db->Clear();
+        $ok = $this->db->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'tour_progress (mundane_id, tour_id, version, status, last_step) VALUES ('
+            . (int) $mundaneId . ", '" . $tourId . "', " . $version . ", '" . $status . "', " . $lastStep . ')'
+            . ' ON DUPLICATE KEY UPDATE version = VALUES(version), status = VALUES(status),'
+            . ' last_step = VALUES(last_step), updated_at = CURRENT_TIMESTAMP'
+        );
+        if (!$ok) {
+            return ProcessingError('Could not save tour progress.');
+        }
+
+        return Success();
+    }
+
+    /**
+     * Every tour this person has finished or turned down, keyed by tour id:
+     * ['new-player' => ['v' => 1, 'status' => 'completed', 'at' => '2026-11-05']].
+     * Empty when there are none (or the id is not valid).
+     *
+     * @return array<string, array{v: int, status: string, at: string}>
+     */
+    public function get_tour_progress(int $mundaneId): array
+    {
+        if (!valid_id($mundaneId)) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT tour_id, version, status, DATE(updated_at) AS at FROM ' . DB_PREFIX . 'tour_progress'
+            . ' WHERE mundane_id = ' . (int) $mundaneId
+        );
+        $out = [];
+        while ($rs && $rs->Next()) {
+            $out[(string) $rs->tour_id] = [
+                'v' => (int) $rs->version,
+                'status' => (string) $rs->status,
+                'at' => (string) $rs->at,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Strict int parse for tour fields: an int or a digit string, >= $min; else null. */
+    private static function tour_int($value, int $min): ?int
+    {
+        if (is_string($value)) {
+            $value = trim($value);
+        }
+        $n = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => $min, 'max_range' => 2147483647]]);
+
+        return $n === false ? null : $n;
     }
 
     /**
