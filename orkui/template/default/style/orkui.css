@@ -2465,3 +2465,24 @@ html[data-theme="dark"] .rp-stats-filter-notice {
     vertical-align: middle;
     margin-left: 4px;
 }
+
+/* Legend (In Memoriam) pill: shown beside a deceased player in pickers and search. The only
+   definition; on the profile hero .pn-badge in revised.css sets its size. */
+.legend-pill {
+    display: inline-block;
+    padding: 0 6px;
+    border: 1px solid #c9a86a;
+    border-radius: 10px;
+    background: #f3e6cf;
+    color: #6b4a1f;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 16px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+html[data-theme="dark"] .legend-pill {
+    background: #3a2e1c;
+    color: #e3c58a;
+    border-color: #8a6a35;
+}

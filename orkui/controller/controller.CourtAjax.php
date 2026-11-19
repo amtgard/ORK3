@@ -231,7 +231,7 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'This court could not be updated. A completed court cannot be edited.']);
         }
 
-        $this->jsonOut(['status' => 0]);
+        $this->jsonOut(['status' => 0, 'heldBeforeToday' => !empty($this->Court->get_court_detail($court_id)['HeldBeforeToday'])]);
     }
 
     // -----------------------------------------------------------------------

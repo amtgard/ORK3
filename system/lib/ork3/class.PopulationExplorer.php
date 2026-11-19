@@ -147,6 +147,7 @@ class PopulationExplorer extends Ork3
             'dues_through'          => $this->_crit('Dues paid through', 'Status', 'date', ['nullable' => true, 'neg_note' => 'Players with no dues paid to this scope are not matched.', 'note' => 'Latest dues date paid to this scope. Lifetime dues count as paid through 9999-12-31 and show as "Lifetime".']),
             'waivered'              => $this->_crit('Waivered', 'Status', 'bool'),
             'active'                => $this->_crit('Active', 'Status', 'bool'),
+            'legend'                => $this->_crit('Legend (In Memoriam)', 'Status', 'bool', ['note' => 'Legends are left out of every report unless a rule here asks for them.']),
             // restricted: officers of the scope only (spec §3.3). Hidden from everyone
             // else by PublicCriteria and rejected for them by NormalizeTree.
             'suspended'             => $this->_crit('Suspended', 'Status', 'bool', ['restricted' => true]),
@@ -934,6 +935,8 @@ class PopulationExplorer extends Ork3
                     return 'm.waivered = ' . ((int)$v === 1 ? 1 : 0);
                 case 'active':
                     return 'm.active = ' . ((int)$v === 1 ? 1 : 0);
+                case 'legend':
+                    return 'm.is_legend = ' . ((int)$v === 1 ? 1 : 0);
                 case 'suspended':
                     return 'm.suspended = ' . ((int)$v === 1 ? 1 : 0);
                 case 'banned':
@@ -1041,6 +1044,19 @@ class PopulationExplorer extends Ork3
     private const COST_PROBE = 1;     // one index probe / one index entry
     private const COST_AGGREGATE = 2; // reads all of the player's rows in an index, or several probes
 
+    private function _treeUsesCriterion(array $node, string $criterion): bool
+    {
+        if (isset($node['children'])) {
+            foreach ($node['children'] as $child) {
+                if ($this->_treeUsesCriterion($child, $criterion)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return ($node['c'] ?? '') === $criterion;
+    }
+
     private function _leafCost(array $leaf, array $registry): int
     {
         $c = $leaf['c'] ?? '';
@@ -1053,6 +1069,7 @@ class PopulationExplorer extends Ork3
             case 'home_park':
             case 'waivered':
             case 'active':
+            case 'legend':
             case 'suspended':
             case 'banned':
             case 'reeve_qualified':
@@ -1572,6 +1589,11 @@ class PopulationExplorer extends Ork3
             return ['Status' => InvalidParameter('That park could not be found in a kingdom, so it cannot be reported on.')];
         }
         list($scopeSql, $duesScope) = $clauses;
+        // A Legend is not a current player, so the scope leaves them out unless the filter
+        // has a Legend rule of its own. The scope total ("% of scope") follows the same rule.
+        if (!$this->_treeUsesCriterion($norm['tree'], 'legend')) {
+            $scopeSql .= ' AND m.is_legend = 0'; // the scope clauses are plain AND chains, so appending is safe
+        }
         $ctx = ['duesScope' => $duesScope, 'ladders' => $known['ladders'] ?? []];
         if (isset($known['peerage']) && is_array($known['peerage'])) {
             $ctx['peerageIds'] = $known['peerage']; // peerage criteria and columns probe these ids

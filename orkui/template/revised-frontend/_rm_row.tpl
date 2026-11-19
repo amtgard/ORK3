@@ -51,6 +51,8 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl';
             // Retirement is a property of the recipient; the Grant and Add-to-Court
             // modals read this payload, so the flag has to reach them too.
             'IsRetired'      => !empty($group['IsRetired']),
+            // A Legend is also inactive, but the modals word it differently (a posthumous honor).
+            'IsLegend'       => !empty($group['IsLegend']),
             // The Grant modal gates its rank pills on this. It must be the real
             // ladder flag, not Rank > 0 -- see $isLad above.
             'IsLadder'       => $isLad,
@@ -97,7 +99,7 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl';
           <?php if (!empty($group['PassedToLocal'])) { ?><span class="rm-badge rm-badge-passlocal" data-tip="Passed to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php } ?>
           <?= ork_monarchy_only_badge((int)($group['MonarchyOnlyLevel'] ?? 0)) ?>
           <?php if ($elig === 'below') { ?><span class="rm-badge rm-badge-below">below rec.</span><?php } ?>
-          <?php if (!empty($group['IsRetired'])) { ?><span class="rm-badge rm-badge-retired" data-tip="This recipient is retired or deceased in the ORK. Memorial honors are legitimate &mdash; just confirm before granting or staging this on a live court.">retired</span><?php } ?>
+          <?php if (!empty($group['IsLegend'])) { ?><span class="legend-pill" data-tip="This recipient is a Legend of Amtgard. An honor granted now would be posthumous &mdash; just confirm before granting or staging it on a live court.">Legend</span><?php } elseif (!empty($group['IsRetired'])) { ?><span class="rm-badge rm-badge-retired" data-tip="This recipient is retired or deceased in the ORK. Memorial honors are legitimate &mdash; just confirm before granting or staging this on a live court.">retired</span><?php } ?>
           <?php if ($dismissed) {
               // Keep the badge the size of its siblings and put the provenance in the
               // tooltip — who retired it and when is detail, not a label.

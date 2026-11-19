@@ -111,6 +111,7 @@
     "2026-10-04-qual-report-comment.sql": { "class": "S", "render": "full", "notes": "Free-text comment on a qual question report; ADD COLUMN IF NOT EXISTS, idempotent" },
     "2026-10-14-bonus-credits.sql": { "class": "S", "render": "full", "notes": "Non-attendance class credits (ork_bonus_credit ledger); CREATE TABLE IF NOT EXISTS, idempotent" },
     "2026-10-15-recommendation-monarchy-only.sql": { "class": "S", "render": "full", "notes": "Monarchy Only visibility level on recommendations; ADD COLUMN/INDEX IF NOT EXISTS, idempotent" },
-    "2026-10-27-bonus-credit-accept-outside.sql": { "class": "S", "render": "full", "notes": "Per-kingdom yes/no: may other kingdoms' bonus credits reach its players; CREATE TABLE IF NOT EXISTS, idempotent" }
+    "2026-10-27-bonus-credit-accept-outside.sql": { "class": "S", "render": "full", "notes": "Per-kingdom yes/no: may other kingdoms' bonus credits reach its players; CREATE TABLE IF NOT EXISTS, idempotent" },
+    "2026-10-30-legend-status.sql": { "class": "S", "render": "full", "notes": "Legend (deceased player) status: ork_mundane.is_legend/legend_year, ork_legend_log audit snapshots, ork_legend_memory wall; ADD COLUMN/INDEX and CREATE TABLE IF NOT EXISTS, idempotent" }
   }
 }

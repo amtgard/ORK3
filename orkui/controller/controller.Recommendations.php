@@ -415,7 +415,7 @@ class Controller_Recommendations extends Controller
         fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM so Excel reads accented personas correctly
         fputcsv($out, [
             'Recipient', 'Park', 'Award', 'Rank', 'Recommended By', 'Date', 'Age (days)',
-            'Support', 'Already Has', 'Retired', 'Snoozed', 'Passed To Local', 'Monarchy Only', 'On Court', 'Reason',
+            'Support', 'Already Has', 'Retired', 'Legend', 'Snoozed', 'Passed To Local', 'Monarchy Only', 'On Court', 'Reason',
         ]);
 
         // Headers, BOM and the header row are already on the wire, so a failure
@@ -508,6 +508,9 @@ class Controller_Recommendations extends Controller
                 // Retired/deceased recipients rejoin the pending list looking identical
                 // to active ones; the flag is computed upstream, so surface it here too.
                 !empty($g['IsRetired']) ? 'Yes' : 'No',
+                // A Legend is also inactive, so Retired reads Yes for them too; this column
+                // says which kind of inactive it is.
+                !empty($g['IsLegend']) ? 'Yes' : 'No',
                 !empty($g['IsSnoozed']) ? 'Yes' : 'No',
                 !empty($g['PassedToLocal']) ? 'Yes' : 'No',
                 // The file leaves the ORK, so mark officer-only clusters plainly: the

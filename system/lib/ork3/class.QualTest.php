@@ -173,7 +173,7 @@ class QualTest
     {
         $kingdom_id = (int)$kingdom_id;
         $mundane_id = (int)$mundane_id;
-        if (!$kingdom_id || !$mundane_id) {
+        if (!$kingdom_id || !$mundane_id || Legend::isLegend($mundane_id)) {
             return false;
         }
         $this->db->Clear();
@@ -896,6 +896,9 @@ class QualTest
         $kingdom_id    = (int)$kingdom_id;
         $test_type     = $this->sanitizeType($test_type);
         $score_percent = (int)$score_percent;
+        if (Legend::isLegend($player_id)) {
+            return null;
+        }
 
         // Stamp the SET as well as the version — see recordAttempt() for why.
         // The SET's label WINS over whatever the caller passed in (the kingdom-config copy).
@@ -984,6 +987,9 @@ class QualTest
         $score_percent = (int)$score_percent;
         $pass_percent  = (int)$pass_percent;
         $passed        = $passed ? 1 : 0;
+        if (Legend::isLegend($player_id)) {
+            return 0;
+        }
 
         // Stamp WHICH SET was sat, not just the rules version: a new GMR may publish a
         // fresh bank under an UNCHANGED rules_version, so the version label alone cannot

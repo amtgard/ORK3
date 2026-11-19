@@ -1949,7 +1949,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 						<tbody>
 							<?php foreach ($rsvpList as $attendee): ?>
 							<tr>
-								<td><a href="<?= UIR ?>Player/profile/<?= $attendee['MundaneId'] ?>"><?= htmlspecialchars($attendee['Persona']) ?></a></td>
+								<td><a href="<?= UIR ?>Player/profile/<?= $attendee['MundaneId'] ?>"><?= htmlspecialchars($attendee['Persona']) ?></a><?php if (!empty($attendee['IsLegend'])): ?> <span class="legend-pill">Legend</span><?php endif; ?></td>
 								<td style="white-space:nowrap"><?php if (!empty($attendee['KingdomId']) && !empty($attendee['KingdomAbbr'])): ?><a href="<?= UIR ?>Kingdom/profile/<?= (int)$attendee['KingdomId'] ?>" target="_blank" rel="noopener"><?= htmlspecialchars($attendee['KingdomAbbr']) ?></a><?php else: ?><?= htmlspecialchars($attendee['KingdomAbbr'] ?? '') ?><?php endif; ?></td>
 								<td style="white-space:nowrap"><?php if (!empty($attendee['ParkId']) && !empty($attendee['ParkAbbr'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$attendee['ParkId'] ?>" target="_blank" rel="noopener"><?= htmlspecialchars($attendee['ParkAbbr']) ?></a><?php else: ?><?= htmlspecialchars($attendee['ParkAbbr'] ?? '') ?><?php endif; ?></td>
 								<td style="white-space:nowrap">
@@ -1968,6 +1968,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 								</td>
 								<?php if ($canManageAttendance): ?>
 								<td style="text-align:right;white-space:nowrap">
+									<?php if (empty($attendee['IsLegend'])): ?>
 									<?php if (!isset($checkedInIds[$attendee['MundaneId']]) && $checkinOpen && !empty($attendee['LastClassId'])): ?>
 									<button class="ev-checkin-btn ev-checkin-as-btn" type="button"
 										data-mundane="<?= (int)$attendee['MundaneId'] ?>"
@@ -1983,6 +1984,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 										<?php else: ?>disabled<?php endif; ?>>
 										<i class="fas fa-user-check"></i> <?= isset($checkedInIds[$attendee['MundaneId']]) ? 'Checked In' : '<span class="ev-checkin-label">Check-in </span>as...' ?>
 									</button>
+									<?php endif; ?>
 									<button class="ev-rsvp-del-btn" type="button"
 										onclick="evDeleteRsvp(this, <?= (int)$attendee['MundaneId'] ?>)" data-tip="Remove RSVP">
 										<i class="fas fa-times"></i>

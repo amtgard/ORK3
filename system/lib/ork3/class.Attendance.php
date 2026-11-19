@@ -79,6 +79,11 @@ class Attendance extends Ork3
             return InvalidParameter();
         }
 
+        // Refused for everyone, ORK admins included: undo is the way back for an exception.
+        if (Legend::isLegend((int)$request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
+
         $this->attendance->clear();
         $this->attendance->park_id = 0;
         $this->attendance->kingdom_id = 0;
@@ -180,6 +185,17 @@ class Attendance extends Ork3
         $this->attendance->attendance_id = $request['AttendanceId'];
         if (!valid_id($request['AttendanceId']) || !$this->attendance->find()) {
             return InvalidParameter();
+        }
+
+        // A Legend's own rows are corrected by kingdom officers and ORK admins only.
+        if (Legend::blocksEdit((int)Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int)$this->attendance->mundane_id)) {
+            return NoAuthorization(Legend::REFUSED);
+        }
+
+        // A row may not be reassigned to a Legend.
+        $newOwner = (int)($request['MundaneId'] ?? 0);
+        if ($newOwner !== (int)$this->attendance->mundane_id && Legend::isLegend($newOwner)) {
+            return NoAuthorization(Legend::REFUSED);
         }
 
         $attendance = new stdClass();
@@ -335,6 +351,11 @@ class Attendance extends Ork3
         $this->attendance->attendance_id = $request['AttendanceId'];
         if (!valid_id($request['AttendanceId']) || !$this->attendance->find()) {
             return InvalidParameter();
+        }
+
+        // A Legend's own rows are corrected by kingdom officers and ORK admins only.
+        if (Legend::blocksEdit((int)Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int)$this->attendance->mundane_id)) {
+            return NoAuthorization(Legend::REFUSED);
         }
 
         $attendance = new stdClass();
@@ -678,6 +699,9 @@ class Attendance extends Ork3
         if (!valid_id($mundane_id)) {
             return NoAuthorization('Must be logged in.');
         }
+        if (Legend::isLegend((int)$mundane_id)) {
+            return NoAuthorization(Legend::REFUSED);
+        }
 
         $token = preg_replace('/[^a-f0-9]/', '', (string)($request['LinkToken'] ?? ''));
         if (strlen($token) !== 48) {
@@ -866,6 +890,9 @@ class Attendance extends Ork3
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         if (!valid_id($mundane_id)) {
             return NoAuthorization('Must be logged in.');
+        }
+        if (Legend::isLegend((int)$mundane_id)) {
+            return NoAuthorization(Legend::REFUSED);
         }
 
         $attendance_id = (int)($request['AttendanceId'] ?? 0);

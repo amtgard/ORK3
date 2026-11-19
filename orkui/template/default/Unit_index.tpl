@@ -715,7 +715,8 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 							style="color:var(--ork-link);text-decoration:none;font-weight:500;">
 							<?=htmlspecialchars($_persona)?>
 						</a>
-						<?php if (!$_is_active && !empty($_last_signin)): ?>
+						<?php if (!empty($_m['IsLegend'])): ?><span class="legend-pill">Legend</span><?php endif; ?>
+						<?php if (!$_is_active && !empty($_last_signin) && empty($_m['IsLegend'])): ?>
 						<span style="font-size:10px;color:var(--ork-text-lighter);margin-left:4px;">(inactive)</span>
 						<?php endif; ?>
 					</td>
@@ -746,6 +747,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 					</td>
 <?php if ($_can_edit): ?>
 					<td style="white-space:nowrap;">
+<?php if (empty($_m['IsLegend'])): ?>
 						<form method="post" action="<?=htmlspecialchars($_base_url)?>" id="un-retire-form-<?=$_um_id?>" style="display:none">
 							<input type="hidden" name="Action" value="retire_member">
 							<input type="hidden" name="UnitMundaneId" value="<?=$_um_id?>">
@@ -754,12 +756,14 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 							<input type="hidden" name="Action" value="remove_member">
 							<input type="hidden" name="UnitMundaneId" value="<?=$_um_id?>">
 						</form>
+<?php endif; ?>
 						<div class="un-action-btns">
 							<button class="pn-btn pn-btn-ghost pn-btn-sm"
 								onclick="unOpenEditMember(<?=$_um_id?>, '<?=$_role_esc?>', '<?=$_title_esc?>')"
 								data-tip="Edit role / title">
 								<i class="fas fa-pen"></i>
 							</button>
+<?php if (empty($_m['IsLegend'])): ?>
 							<button class="pn-btn pn-btn-ghost pn-btn-sm"
 								onclick="pnConfirm({title:'Retire Member',message:'Retire <?=$_persona_js?> from the unit?',confirmText:'Retire',danger:true},function(){document.getElementById('un-retire-form-<?=$_um_id?>').submit()})"
 								data-tip="Retire member" style="color:#c05621;">
@@ -770,6 +774,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 								data-tip="Remove member" style="color:#e53e3e;">
 								<i class="fas fa-times"></i>
 							</button>
+<?php endif; ?>
 						</div>
 					</td>
 <?php endif; ?>

@@ -655,6 +655,10 @@ class Player extends Ork3
 
     public function AddOneShotFaceImage($request)
     {
+        // Never post a Legend's face to the third-party matcher.
+        if (Legend::isLegend((int)$request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         $mundane = $this->player_info($request['MundaneId']);
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE) || $requester_id == $request['MundaneId']) {
@@ -715,10 +719,12 @@ class Player extends Ork3
             }
         }
 
+        // A Legend never matches: attendance can't be added for them.
+        $found = $this->without_legends($found);
         $playersfound = $this->hydrated_players($found);
 
         foreach ($result->result->hits as $k => $face) {
-            $player = is_null($face) ? array('id' => 0) : $playersfound[$face[0]];
+            $player = (is_null($face) || !isset($playersfound[$face[0]])) ? array('id' => 0) : $playersfound[$face[0]];
             $facedetails[] = [ $player, $result->result->locations[$k] ];
         }
 
@@ -749,6 +755,9 @@ class Player extends Ork3
 
     public function AddNote($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         $thePlayer = $this->player_info($request['MundaneId']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
@@ -790,6 +799,9 @@ class Player extends Ork3
             $this->notes->mundane_id = $request['MundaneId'];
             if ($this->notes->find()) {
                 $thePlayer = $this->player_info($this->notes->mundane_id);
+                if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $this->notes->mundane_id)) {
+                    return NoAuthorization(Legend::REFUSED);
+                }
 
                 // Officer-only: see AddNote.
                 if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
@@ -827,6 +839,9 @@ class Player extends Ork3
             return InvalidParameter('Cannot find Note.');
         }
         $thePlayer = $this->player_info($this->notes->mundane_id);
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $this->notes->mundane_id)) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         // Officer-only: see AddNote.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
             && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
@@ -847,6 +862,9 @@ class Player extends Ork3
 
     public function ClearNotes($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         if (!valid_id($request['MundaneId'])) {
             return InvalidParameter('Invalid player ID.');
         }
@@ -892,6 +910,9 @@ class Player extends Ork3
 
     public function SetPlayerReconciledCredits($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
 
         $thePlayer = $this->player_info($request['MundaneId']);
 
@@ -1021,6 +1042,8 @@ class Player extends Ork3
                     'Image' => $this->resolve_player_image_url($this->mundane->mundane_id, $this->mundane->modified),
                     'PenaltyBox' => $this->mundane->penalty_box,
                     'Active' => $this->mundane->active,
+                    'IsLegend' => (int)$this->mundane->is_legend,
+                    'LegendYear' => (int)$this->mundane->legend_year,
                     'PasswordExpires' => $this->mundane->password_expires,
                     //'ParkMemberSince' => date('d/m/Y', strtotime($this->mundane->park_member_since))
                     'ParkMemberSince' => $this->mundane->park_member_since,
@@ -2246,6 +2269,14 @@ class Player extends Ork3
     }
 
 
+    /** @return list<int> the ids that are not Legends */
+    public function without_legends($ids)
+    {
+        return array_values(array_filter($ids, function ($id) {
+            return !Legend::isLegend((int)$id);
+        }));
+    }
+
     public function hydrated_players($ids)
     {
         $sql = "select k.name as kingdom, k.kingdom_id, p.name as park, p.park_id, m.mundane_id, m.persona 
@@ -2398,6 +2429,18 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
+        // A Legend can't be lost in a merge: refuse before anything changes.
+        // Two Legends merge only for someone who may manage both records.
+        $_fromLegend = Legend::isLegend((int)$fromMundane['id']);
+        $_toLegend   = Legend::isLegend((int)$toMundane['id']);
+        if ($_fromLegend !== $_toLegend) {
+            return NoAuthorization(Legend::REFUSED);
+        }
+        if ($_fromLegend && !(Legend::mayManage((int)$mundane_id, (int)$fromMundane['id'])
+                && Legend::mayManage((int)$mundane_id, (int)$toMundane['id']))) {
+            return NoAuthorization(Legend::REFUSED);
+        }
+
         if (
             (($toMundane['KingdomId'] != $fromMundane['KingdomId'])
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT))
@@ -2422,6 +2465,27 @@ class Player extends Ork3
                 'from' => $from_player['Player'],
                 'to'   => $to_player['Player'],
             ];
+
+            // Memories and audit rows follow the survivor. Done first, and checked: if
+            // one write fails, stop before anything else changes or the source row goes.
+            $_lf = (int)$fromMundane['id'];
+            $_lt = (int)$toMundane['id'];
+            // Not only for a Legend: a player whose status was undone still has hidden memories
+            // and log rows, and the source row is about to go. The survivor keeps its own year.
+            // Re-homed log rows are wrapped as an object so Legend::undo, which reads only
+            // list-shaped convert rows, never takes the source's snapshot.
+            $_rehome = [
+                // Memories the merged-away player wrote on any wall now credit the survivor.
+                'UPDATE ' . DB_PREFIX . 'legend_memory SET author_id = ' . $_lt . ' WHERE author_id = ' . $_lf,
+                'UPDATE ' . DB_PREFIX . 'legend_memory SET mundane_id = ' . $_lt . ' WHERE mundane_id = ' . $_lf,
+                'UPDATE ' . DB_PREFIX . 'legend_log SET mundane_id = ' . $_lt . ", cleared_json = CONCAT('{\"mergedFrom\":" . $_lf . ",\"cleared\":', cleared_json, '}') WHERE mundane_id = " . $_lf,
+            ];
+            foreach ($_rehome as $_q) {
+                $this->db->Clear();
+                if (!$this->db->ExecuteChecked($_q)) {
+                    return ProcessingError('The merge was stopped before the player was removed: memories could not be moved.');
+                }
+            }
 
             $sql = "DELETE FROM
 						" . DB_PREFIX . "attendance
@@ -2582,6 +2646,10 @@ class Player extends Ork3
         }
 
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+        // A Legend moves only by an ORK admin, whatever park authority the caller holds.
+        if (!Legend::mayMove((int)$mundane_id, (int)$request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         // Park-level authority over EITHER end is enough to move a player. The
         // OR is deliberate and the source comments say so: recruitment normally
         // means the destination park's officer pulls a player in, and a park
@@ -2828,6 +2896,29 @@ class Player extends Ork3
         logtrace("UpdatePlayer()", $request);
         $mundane = $this->player_info($request['MundaneId']);
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+
+        // A Legend: only a kingdom officer or ORK admin may edit, and nobody may
+        // change the login fields or Active (the account is closed for good).
+        if (Legend::isLegend((int)$request['MundaneId'])) {
+            if (Legend::blocksEdit((int)$requester_id, (int)$request['MundaneId'])) {
+                return NoAuthorization(Legend::REFUSED);
+            }
+            $this->mundane->clear();
+            $this->mundane->mundane_id = $request['MundaneId'];
+            if ($this->mundane->find()) {
+                $_legendUser   = (string)$this->mundane->username;
+                $_legendEmail  = (string)$this->mundane->email;
+                $_legendActive = (int)$this->mundane->active;
+                // Trimmed on both sides: the browser trims a stored value with stray whitespace,
+                // and that isn't a change the officer made.
+                if ((!is_null($request['UserName']) && trim((string)$request['UserName']) !== trim($_legendUser))
+                    || (!is_null($request['Email']) && trim((string)$request['Email']) !== trim($_legendEmail))
+                    || trimlen($request['Password']) > 0
+                    || (!is_null($request['Active']) && ($request['Active'] ? 1 : 0) !== $_legendActive)) {
+                    return NoAuthorization(Legend::REFUSED);
+                }
+            }
+        }
 
         if ($request['RemoveDues'] === "Revoke Dues") {
             // No way to reliably gap revoke for the Dues transition. mORK will need to update their code
@@ -3080,6 +3171,9 @@ class Player extends Ork3
 
     public function RemoveHeraldry($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         logtrace("RemoveHeraldry", $request);
         $mundane = $this->player_info($request['MundaneId']);
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
@@ -3092,6 +3186,9 @@ class Player extends Ork3
 
     public function SetHeraldry($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         logtrace("SetHeraldry", $request);
         $mundane = $this->player_info($request['MundaneId']);
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
@@ -3142,6 +3239,9 @@ class Player extends Ork3
     // passes).
     public function set_image($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         logtrace("set_image", $request);
         $request = $this->media_fetch('Image', $request);
 
@@ -3214,6 +3314,9 @@ class Player extends Ork3
 
     public function set_waiver($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         logtrace("set_waiver()", $request);
         $mundane = $this->player_info($request['MundaneId']);
 
@@ -3280,6 +3383,9 @@ class Player extends Ork3
 
     public function SetRestriction($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         $mundane = $this->player_info($request['MundaneId']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
@@ -3300,6 +3406,9 @@ class Player extends Ork3
 
     public function RemoveImage($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         logtrace("RemoveImage", $request);
         $mundane = $this->player_info($request['MundaneId']);
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
@@ -3329,6 +3438,9 @@ class Player extends Ork3
 
     public function SetImage($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         logtrace("SetImage", $request);
         $mundane = $this->player_info($request['MundaneId']);
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
@@ -3354,6 +3466,9 @@ class Player extends Ork3
 
     public function SetWaiver($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         logtrace("SetWaiver", $request);
         $mundane = $this->player_info($request['MundaneId']);
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
@@ -3498,7 +3613,7 @@ class Player extends Ork3
         $cleared = array();
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            "SELECT mundane_id FROM " . DB_PREFIX . "mundane WHERE " . $scope_col . " = " . $scope_id . " AND waivered = 1"
+            "SELECT mundane_id FROM " . DB_PREFIX . "mundane WHERE " . $scope_col . " = " . $scope_id . " AND waivered = 1 AND is_legend = 0"
         );
         if ($rs) {
             while ($rs->Next()) {
@@ -3506,7 +3621,7 @@ class Player extends Ork3
             }
         }
         $this->db->Clear();
-        $this->db->query("UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE " . $scope_col . " = " . $scope_id);
+        $this->db->query("UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE " . $scope_col . " = " . $scope_id . " AND is_legend = 0");
 
         Ork3::$Lib->dangeraudit->audit(
             __CLASS__ . '::' . __FUNCTION__,
@@ -3653,6 +3768,9 @@ class Player extends Ork3
 
     public function RevokeAllAwards($request)
     {
+        if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
+        }
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
         $awards = new yapo($this->db, DB_PREFIX . 'awards');
         $awards->clear();
@@ -3694,6 +3812,9 @@ class Player extends Ork3
         $awards->awards_id = $request['AwardsId'];
         if (valid_id($request['AwardsId']) && $awards->find() && $mundane_id > 0) {
             $mundane = $this->player_info($awards->mundane_id);
+            if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $awards->mundane_id)) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             if (valid_id($mundane_id)
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
 
@@ -3720,6 +3841,9 @@ class Player extends Ork3
                 return InvalidParameter('That award is not currently revoked.');
             }
             $recipient = $this->player_info($awards->stripped_from);
+            if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $awards->stripped_from)) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_CREATE)) {
                 return NoAuthorization();
             }
@@ -3760,6 +3884,9 @@ class Player extends Ork3
         $awards->awards_id = $request['AwardsId'];
         if (valid_id($request['AwardsId']) && $awards->find()) {
             $mundane = $this->player_info($awards->mundane_id);
+            if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $awards->mundane_id)) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             if (valid_id($mundane_id)
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
                 if (valid_id($request['ParkId'])) {
@@ -3871,6 +3998,9 @@ class Player extends Ork3
         $found = valid_id($request['AwardsId']) && $awards->find();
         if ($found) {
             $mundane = $this->player_info($awards->mundane_id);
+            if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $awards->mundane_id)) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             $hasAuth = valid_id($mundane_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT);
             if ($hasAuth) {
 
@@ -3977,6 +4107,9 @@ class Player extends Ork3
         $awards->awards_id = $request['AwardsId'];
         if (valid_id($request['AwardsId']) && $awards->find()) {
             $mundane = $this->player_info($awards->mundane_id);
+            if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $awards->mundane_id)) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             if (valid_id($mundane_id)
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
 
@@ -3999,6 +4132,9 @@ class Player extends Ork3
         }
         if (!valid_id($request['MundaneId'] ?? 0)) {
             return InvalidParameter('A player must be selected.');
+        }
+        if (Legend::isLegend((int)$request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
         }
 
         // Authorize against the target player's OWN park, never the ParkId that
@@ -4126,6 +4262,9 @@ class Player extends Ork3
         $dues->dues_id = $request['DuesId'];
         if (valid_id($request['DuesId']) && $dues->find()) {
             $mundane = $this->player_info($dues->mundane_id);
+            if (Legend::blocksEdit((int) Ork3::$Lib->authorization->IsAuthorized($request['Token']), (int) $dues->mundane_id)) {
+                return NoAuthorization(Legend::REFUSED);
+            }
             if (valid_id($mundane_id)
                 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
                 $prior_state = [
@@ -4161,6 +4300,10 @@ class Player extends Ork3
         $this->mundane->mundane_id = $request['MundaneId'];
         if (!$this->mundane->find()) {
             return InvalidParameter();
+        }
+        // Only the profile page (FromProfile) may recommend a Legend: it is how friends honor them.
+        if (empty($request['FromProfile']) && Legend::isLegend((int)$request['MundaneId'])) {
+            return NoAuthorization(Legend::REFUSED);
         }
         $recipient = array( 'KingdomId' => $this->mundane->kingdom_id, 'ParkId' => $this->mundane->park_id );
 

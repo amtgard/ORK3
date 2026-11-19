@@ -70,12 +70,13 @@
 						type: 'all',
 						search: request.term,
 						park_id: park_id.length>0?park_id:null,
+						IncludeLegend: 1,
 						limit: 6
 					},
 					function( data ) {
 						var suggestions = [];
 						$.each(data, function(i, val) {
-    						suggestions.push({label: ((val.Persona!=null||val.Persona.length>0)?val.Persona:"<i>No Persona</i>") + " (" + val.KAbbr + ":" + val.PAbbr + ")", value: val.MundaneId });
+    						suggestions.push({label: ((val.Persona!=null||val.Persona.length>0)?val.Persona:"<i>No Persona</i>") + " (" + val.KAbbr + ":" + val.PAbbr + ")" + (val.Legend ? " [Legend]" : ""), value: val.MundaneId });
 						});
 						response(suggestions);
 					}
@@ -101,12 +102,13 @@
 						type: 'all',
 						search: request.term,
 						park_id: park_id.length>0?park_id:null,
+						IncludeLegend: 1,
 						limit: 6
 					},
 					function( data ) {
 						var suggestions = [];
 						$.each(data, function(i, val) {
-    						suggestions.push({label: ((val.Persona!=null||val.Persona.length>0)?val.Persona:"<i>No Persona</i>") + " (" + val.KAbbr + ":" + val.PAbbr + ")", value: val.MundaneId });
+    						suggestions.push({label: ((val.Persona!=null||val.Persona.length>0)?val.Persona:"<i>No Persona</i>") + " (" + val.KAbbr + ":" + val.PAbbr + ")" + (val.Legend ? " [Legend]" : ""), value: val.MundaneId });
 						});
 						response(suggestions);
 					}

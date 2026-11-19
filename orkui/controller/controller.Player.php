@@ -38,8 +38,8 @@ class Controller_Player extends Controller
             unset($this->data['menu']['kingdom']);
             unset($this->data['menu']['park']);
         }
-        $this->data['menu']['player'] = array( 'url' => UIR."Player/$call/$id", 'display' => $this->data['Player']['Persona'] );
-        $this->data['page_title'] = $this->data['Player']['Persona'];
+        $this->data['menu']['player'] = array( 'url' => UIR."Player/$call/$id", 'display' => htmlspecialchars((string)($this->data['Player']['Persona'] ?? ''), ENT_QUOTES) );
+        $this->data['page_title'] = htmlspecialchars((string)($this->data['Player']['Persona'] ?? ''), ENT_QUOTES);
 
     }
 
@@ -55,6 +55,12 @@ class Controller_Player extends Controller
 
         $params = explode('/', $id);
         $id = $params[0];
+        // The legacy page is for a living player; a Legend's page is the memorial.
+        $this->load_model('Legend');
+        if ($this->Legend->is_legend((int)$id)) {
+            header('Location: ' . UIR . 'Player/profile/' . (int)$id);
+            exit;
+        }
         $action = '';
         $roastbeef = '';
         if (count($params) > 1) {
@@ -176,7 +182,8 @@ class Controller_Player extends Controller
                                 'Rank' => $this->request->Player_index->Rank,
                                 'GivenById' => $this->request->Player_index->MundaneId,
                                 'Reason' => $this->request->Player_index->Reason,
-                                'MonarchyOnly' => !empty($this->request->Player_index->MonarchyOnly) ? 1 : 0
+                                'MonarchyOnly' => !empty($this->request->Player_index->MonarchyOnly) ? 1 : 0,
+                                'FromProfile' => 1
                             ));
                         break;
                     case 'deleterecommendation':
@@ -235,8 +242,11 @@ class Controller_Player extends Controller
         $this->data['Dues'] = $this->Player->get_dues($id, 1, true);
         $this->data['AllDues'] = $this->Player->get_dues($id, 0, false);
         $this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1 ));
-        $this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
-        $canEdit    = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+        $this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => htmlspecialchars((string)($this->data['Player']['Persona'] ?? ''), ENT_QUOTES) );
+        // A Legend is editable by kingdom officers and ORK admins only (Legend::blocksEdit).
+        $this->load_model('Legend');
+        $canEdit    = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT)
+            && !$this->Legend->blocks_edit($uid, (int)$id);
         $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, AUTH_EDIT);
         if ($canEdit) {
             $this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
@@ -380,6 +390,7 @@ class Controller_Player extends Controller
                             'Reason'         => $this->request->Player_profile->Reason,
                             'Anonymous'      => !empty($this->request->Player_profile->Anonymous) ? 1 : 0,
                             'MonarchyOnly'   => !empty($this->request->Player_profile->MonarchyOnly) ? 1 : 0,
+                            'FromProfile'    => 1,
                         ]);
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 0) {
@@ -454,20 +465,42 @@ class Controller_Player extends Controller
         $this->data['Dues']          = $this->Player->get_dues($id, 1, true);
         $this->data['AllDues']       = [];  // loaded via AJAX when dues modal opens
         $this->data['Units']         = $this->Unit->get_unit_list(['MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1]);
-        $canEdit    = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+        // A Legend is editable by kingdom officers and ORK admins only (Legend::blocksEdit);
+        // a park officer keeps what they could read, so canViewAdmin is separate.
+        $this->load_model('Legend');
         $playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
         $playerKingdomId = (int)($this->data['Player']['KingdomId'] ?? 0);
-        $this->data['canEditAdmin'] = $canEdit;
+        $legendView = $this->Legend->profile_view($uid, (int)$id, $playerParkId);
+        $canEdit    = $legendView['CanEditAdmin'];
+        $canView    = $legendView['CanViewAdmin'];
+        if ($legendView['IsLegend'] && !$canEdit) {
+            unset($this->data['menu']['admin']);
+        }
+        $this->data['canEditAdmin']    = $canEdit;
+        $this->data['canViewAdmin']    = $canView;
+        $this->data['canEditAwards']   = $legendView['CanEditAwards'];
+        $this->data['IsLegend']        = $legendView['IsLegend'];
+        $this->data['LegendYear']      = (int)($this->data['Player']['LegendYear'] ?? 0);
+        $this->data['CanManageLegend'] = $legendView['CanManageLegend'];
+        $this->data['LegendMarkedBy']  = $legendView['MarkedBy'];
+        $this->data['LegendMarkedOn']  = $legendView['MarkedOn'];
+        $this->data['Memories']        = $legendView['Memories'];
+        $this->data['MemoryCount']     = $legendView['MemoryCount'];
+        $this->data['RemovedMemories'] = $legendView['RemovedMemories'];
+        $this->data['LegendMinYear']        = $legendView['MinYear'];
+        $this->data['LegendMaxMemoryChars'] = $legendView['MaxMemoryChars'];
+        // Who a memory will be credited to, shown on the Share a Memory form.
+        $this->data['ViewerPersona']   = ($legendView['IsLegend'] && $uid > 0) ? (string)($this->Player->fetch_player($uid)['Persona'] ?? '') : '';
         $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, AUTH_CREATE);
-        $this->data['pnCanManageBanner'] = ($uid === (int)$id)
+        $this->data['pnCanManageBanner'] = !$this->Legend->blocks_edit($uid, (int)$id) && (($uid === (int)$id)
             || $canEdit
             || ($playerKingdomId > 0 && $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_EDIT))
-            || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN));
+            || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)));
         $this->data['canManageAwards'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
         $this->data['CanMonarchyOnlyRec'] = $uid > 0 && $this->Player->monarchy_only_level($uid, $playerKingdomId, $playerParkId) > 0;
         $knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
-        $this->data['ShowRecsTab']          = $recsPublic || $canEdit;
+        $this->data['ShowRecsTab']          = $recsPublic || $canView;
         $this->data['ShowRecsTabLoggedIn']  = $uid > 0;
         $this->data['AwardRecommendations'] = [];  // loaded via AJAX on Recommendations tab click
 
@@ -477,7 +510,7 @@ class Controller_Player extends Controller
 
         $this->data['RevokedAwards'] = [];
         $this->data['RevokedTitles'] = [];
-        if ($canEdit) {
+        if ($canView) {
             $revoked = $this->Player->get_revoked_awards($id);
             $this->data['RevokedAwards'] = $revoked['RevokedAwards'] ?? [];
             $this->data['RevokedTitles'] = $revoked['RevokedTitles'] ?? [];
@@ -530,7 +563,8 @@ class Controller_Player extends Controller
 
         $this->data['UpcomingRsvps']   = $this->Event->get_upcoming_rsvps((int)$id);
         $this->data['KingdomEvents']   = ($uid === (int)$id) ? $this->Event->get_kingdom_upcoming_events((int)$this->session->kingdom_id, (int)$id) : [];
-        $this->data['IsOwnProfile']    = $uid === (int)$id;
+        // A Legend has no login, so there is no "own" view of the memorial (and no My Amtgard tab).
+        $this->data['IsOwnProfile']    = $uid === (int)$id && !$legendView['IsLegend'];
         $this->data['Player']['ParkName'] = $this->session->park_name;
 
         // Bonus credits (class credits that are not attendance): listed on the
@@ -541,6 +575,9 @@ class Controller_Player extends Controller
         $this->load_model('BonusCredit');
         $__bcPark = (int)($this->data['Details']['ParkId'] ?? $this->data['Player']['ParkId'] ?? 0);
         $this->data['CanRevokeBonus'] = $uid > 0 && $__bcPark > 0 && $this->BonusCredit->can_grant($uid, $__bcPark);
+        // BonusCredit's own Legend gates: blocksEdit on revoke, isLegend on change.
+        $this->data['BonusRevokeBlocked'] = $this->Legend->blocks_edit($uid, (int)$id);
+        $this->data['BonusEditable']      = !$legendView['IsLegend'];
         $this->data['BonusCredits']   = $this->BonusCredit->for_player((int)$id);
         $this->data['ViewerId']       = (int)$uid;
         // The class picker for editing a credit's class in place.
@@ -672,7 +709,8 @@ class Controller_Player extends Controller
         $this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 
         $playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
-        $canEditAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_EDIT);
+        $this->load_model('Legend');
+        $canEditAdmin = $this->Legend->can_edit_admin($uid, (int)$id, $playerParkId);
         $isOwnProfile = $uid === $id;
         if (!$canEditAdmin && !$isOwnProfile) {
             header('Location: ' . UIR . "Player/profile/$id");
@@ -684,7 +722,8 @@ class Controller_Player extends Controller
         // checks AUTH_CREATE over either end. canEditAdmin is AUTH_EDIT and is
         // too loose to gate the Move Player modal with.
         $this->data['canMovePlayer'] = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
+            && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE)
+            && $this->Legend->may_move($uid, (int)$id);
 
         $this->load_model('Kingdom');
         $preloadOfficers = [];
