@@ -21,7 +21,7 @@
 		</div>
 		<div>
 			<span></span>
-			<span><input type='submit' value='Edit <?=$IsPrinz?'Principality':'Kingdom' ?>' name='EditKingdom' /></span>
+			<span><input type='submit' value='Edit <?=$IsPrinz?($OrgUnitLabel ?? 'Principality'):'Kingdom' ?>' name='EditKingdom' /></span>
 		</div>
 	</form>
 </div>
@@ -83,6 +83,15 @@
 							<option value='0'<?= $config['Value'] == 0 ? ' selected' : '' ?>>No</option>
 							<option value='1'<?= $config['Value'] == 1 ? ' selected' : '' ?>>Yes</option>
 						</select>
+<?php     	elseif ($config['Key'] === 'OrgUnitTerm' && !empty($OrgUnitTerms) && is_array($OrgUnitTerms)): ?>
+<?php
+	$_out_val = isset($OrgUnitTerms[(string)$config['Value']]) ? (string)$config['Value'] : 'principality';
+?>
+						<select name='Config[<?=$config['ConfigurationId'] ?>]'>
+<?php				foreach ($OrgUnitTerms as $_out_key => $_out_term) : ?>
+							<option value='<?=htmlspecialchars($_out_key) ?>'<?= $_out_key === $_out_val ? ' selected' : '' ?>><?=htmlspecialchars($_out_term['singular']) ?></option>
+<?php				endforeach; ?>
+						</select>
 <?php     	else : ?>
 						<input type='text' class='' name='Config[<?=$config['ConfigurationId'] ?>]' value='<?=$config['Value'] ?>' />
 <?php 		endif; ?>
@@ -107,7 +116,7 @@
 				<tr>
 					<th>Park Title</th>
 					<th>Park Class</th>
-					<th>Principality</th>
+					<th><?= htmlspecialchars($OrgUnitLabel ?? "Principality") ?></th>
 					<th>Minimum</th>
 					<th>Cutoff</th>
 					<th>Term</th>

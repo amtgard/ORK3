@@ -139,7 +139,7 @@ foreach ($_od_rows as $_r) {
 		<div style="font-size:15px;font-weight:700;color:var(--rp-text);margin:0 0 8px;display:flex;align-items:center;gap:8px;">
 			<i class="fas fa-shield-alt" style="color:var(--rp-accent);"></i>
 			<a href="<?=UIR?>Kingdom/profile/<?=(int)$_pr['KingdomId']?>" style="color:inherit;text-decoration:none;"><?=htmlspecialchars($_pr['Name'])?></a>
-			<span style="font-size:11px;font-weight:600;color:var(--rp-text-muted);text-transform:uppercase;letter-spacing:.05em;">Principality</span>
+			<span style="font-size:11px;font-weight:600;color:var(--rp-text-muted);text-transform:uppercase;letter-spacing:.05em;"><?= htmlspecialchars($_pr['OrgUnitLabel'] ?? 'Principality') ?></span>
 		</div>
 		<table class="dataTable" style="width:100%">
 			<thead><tr><th>Park</th><th>Monarch</th><th>Regent</th><th>Prime Minister</th><th>Champion</th><th>GMR</th></tr></thead>
@@ -168,7 +168,7 @@ foreach ($_od_rows as $_r) {
 (function () {
 	if (!$('#od-table').length) return;
 
-	var odSkipWords = /^(the|kingdom|empire|freehold|principality|of)\s+/i;
+	var odSkipWords = /^(the|kingdom|empire|freehold|grand\s+duchy|duchy|principality|of)\s+/i;
 	function odSortKey(name) {
 		var s = name.trim(), prev;
 		do { prev = s; s = s.replace(odSkipWords, ''); } while (s !== prev);
