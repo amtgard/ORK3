@@ -58,6 +58,8 @@ class Controller_PlayerAjax extends Controller
             $waivered      = (int)($_POST['Waivered']     ?? 0);
             $pronounId     = (int)($_POST['PronounId']    ?? 0);
             $pronounCustom = trim($_POST['PronounCustom'] ?? '');
+            // "How did you find us?" — optional; the lib normalizes to a known code or ''.
+            $recruitmentSource = is_string($_POST['RecruitmentSource'] ?? null) ? $_POST['RecruitmentSource'] : '';
 
             if (!strlen($persona)) {
                 echo json_encode(['status' => 1, 'error' => 'Persona is required.']);
@@ -88,6 +90,7 @@ class Controller_PlayerAjax extends Controller
                 'IsActive'      => 1,
                 'PronounId'     => $pronounId > 0 ? $pronounId : null,
                 'PronounCustom' => strlen($pronounCustom) ? $pronounCustom : null,
+                'RecruitmentSource' => $recruitmentSource,
             ];
 
             if (!empty($_FILES['Waiver']['tmp_name']) && is_uploaded_file($_FILES['Waiver']['tmp_name'])) {

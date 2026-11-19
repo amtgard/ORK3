@@ -63,6 +63,8 @@ class Controller_SelfReg extends Controller
             $userName  = trim($_POST['UserName']   ?? '');
             $password  = $_POST['Password']        ?? '';
             $confirm   = $_POST['ConfirmPassword'] ?? '';
+            // "How did you find us?" — optional; Player::SelfRegister normalizes it.
+            $recruitmentSource = is_string($_POST['RecruitmentSource'] ?? null) ? trim($_POST['RecruitmentSource']) : '';
 
             // Client-side validations repeated server-side
             if (!strlen($persona)) {
@@ -88,6 +90,7 @@ class Controller_SelfReg extends Controller
                     'Email'        => $email,
                     'UserName'     => $userName,
                     'Password'     => $password,
+                    'RecruitmentSource' => $recruitmentSource,
                 ]);
 
                 if ($r['Status'] == 0) {
@@ -118,6 +121,7 @@ class Controller_SelfReg extends Controller
                 'Surname'   => $surname,
                 'Email'     => $email,
                 'UserName'  => $userName,
+                'RecruitmentSource' => $recruitmentSource,
             ];
         }
 
@@ -125,6 +129,7 @@ class Controller_SelfReg extends Controller
         $this->data['park_name']   = $park_name;
         $this->data['link']        = $link;
         $this->data['ttl_seconds'] = $ttl_seconds;
+        $this->data['RecruitmentSourceField'] = $this->Player->recruitment_source_field('self');
     }
 
     // Live username-availability check used by the SelfReg form. The selfreg

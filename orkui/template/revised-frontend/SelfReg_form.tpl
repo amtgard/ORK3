@@ -109,7 +109,8 @@
 }
 .sr-field input[type=text],
 .sr-field input[type=email],
-.sr-field input[type=password] {
+.sr-field input[type=password],
+.sr-field select {
 	width: 100%;
 	padding: 10px 12px;
 	border: 1px solid var(--ork-input-border);
@@ -119,7 +120,8 @@
 	box-sizing: border-box;
 	transition: border-color 0.15s;
 }
-.sr-field input:focus {
+.sr-field input:focus,
+.sr-field select:focus {
 	background: var(--ork-card-bg);
 	border-color: #276749;
 	outline: none;
@@ -127,7 +129,7 @@
 }
 .sr-field-hint {
 	font-size: 11px;
-	color: #a0aec0;
+	color: var(--ork-text-muted, #718096);
 	margin-top: 4px;
 }
 .sr-field-row {
@@ -237,16 +239,17 @@ html[data-theme="dark"] .sr-field label { color: var(--ork-text-muted, #a0aec0);
 html[data-theme="dark"] .sr-field label .sr-req { color: #fc8181; }
 html[data-theme="dark"] .sr-field input[type=text],
 html[data-theme="dark"] .sr-field input[type=email],
-html[data-theme="dark"] .sr-field input[type=password] {
+html[data-theme="dark"] .sr-field input[type=password],
+html[data-theme="dark"] .sr-field select {
 	background: var(--ork-input-bg, #374151);
 	border-color: var(--ork-input-border, #4a5568);
 	color: var(--ork-text, #e2e8f0);
 }
-html[data-theme="dark"] .sr-field input:focus {
+html[data-theme="dark"] .sr-field input:focus,
+html[data-theme="dark"] .sr-field select:focus {
 	border-color: #38a169;
 	box-shadow: 0 0 0 3px rgba(56,161,105,0.2);
 }
-html[data-theme="dark"] .sr-field-hint { color: var(--ork-text-lighter, #718096); }
 html[data-theme="dark"] .sr-btn-primary { background: #38a169; color: #fff; }
 html[data-theme="dark"] .sr-btn-primary:hover:not(:disabled) { background: #48bb78; }
 html[data-theme="dark"] .sr-btn-primary:disabled { background: var(--ork-bg-tertiary, #4a5568); color: var(--ork-text-muted, #a0aec0); }
@@ -272,13 +275,15 @@ html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert
 	html:not([data-theme="light"]) .sr-field label .sr-req { color: #fc8181; }
 	html:not([data-theme="light"]) .sr-field input[type=text],
 	html:not([data-theme="light"]) .sr-field input[type=email],
-	html:not([data-theme="light"]) .sr-field input[type=password] {
+	html:not([data-theme="light"]) .sr-field input[type=password],
+	html:not([data-theme="light"]) .sr-field select {
 		background: #374151; border-color: #4a5568; color: #e2e8f0;
 	}
-	html:not([data-theme="light"]) .sr-field input:focus {
+	html:not([data-theme="light"]) .sr-field input:focus,
+	html:not([data-theme="light"]) .sr-field select:focus {
 		border-color: #38a169; box-shadow: 0 0 0 3px rgba(56,161,105,0.2);
 	}
-	html:not([data-theme="light"]) .sr-field-hint { color: #718096; }
+	html:not([data-theme="light"]) .sr-field-hint { color: #a0aec0; }
 	html:not([data-theme="light"]) .sr-btn-primary:hover:not(:disabled) { background: #48bb78; }
 	html:not([data-theme="light"]) .sr-btn-primary:disabled { background: #4a5568; color: #a0aec0; }
 	html:not([data-theme="light"]) .sr-expired-wrap i { color: #fc8181; }
@@ -411,6 +416,10 @@ html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert
 			</div>
 			<!-- A15: Inline password mismatch error -->
 			<div class="sr-inline-error" id="sr-pw-error" role="alert">Passwords do not match.</div>
+			<?php if (!empty($RecruitmentSourceField)): ?>
+			<?php include_once __DIR__ . '/_recruitment_source_select.tpl'; ?>
+			<?= ork_recruitment_source_select($RecruitmentSourceField, ['id' => 'sr-recruitment', 'name' => 'RecruitmentSource', 'selected' => $form['RecruitmentSource'] ?? '', 'wrap_class' => 'sr-field', 'hint_class' => 'sr-field-hint']) ?>
+			<?php endif; ?>
 			<button type="submit" class="sr-btn-primary" id="sr-submit-btn">
 				<i class="fas fa-user-plus"></i> Create Account &amp; Join
 			</button>
