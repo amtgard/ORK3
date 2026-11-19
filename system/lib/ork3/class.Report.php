@@ -18,8 +18,10 @@ class Report extends Ork3
      * rule are not served for the rest of their TTL. Player::bust_player_award_recs_cache
      * reads this constant, so the bust keys can never drift out of step with the reads.
      * v4: the row shape gained monarchy_only, and the badge count became public-only.
+     * v5: "already has" stopped matching on shared award_ids and learned
+     *     cross-kingdom ladder equivalents (Award::pseudoLadderEquivalenceGroups).
      */
-    public const REC_CACHE_VERSION = 4;
+    public const REC_CACHE_VERSION = 5;
 
     /**
      * Ladder-terminal masterhoods that ork_award.peerage still records as 'None'.
@@ -765,6 +767,15 @@ class Report extends Ork3
             $idClause = empty($ids) ? ' AND 1=0 ' : ' AND recs.recommendations_id IN (' . implode(',', $ids) . ') ';
         }
 
+        // award_id ties a rec to a held award only when it names one specific award:
+        // 0, Custom Award and Custom Title are shared by many unrelated kingdom awards,
+        // and matching on them read one kingdom's custom title as "already has" another.
+        // Kingdom-original ladders on those ids are tied by their equivalence group
+        // instead (one award under several kingdoms' names).
+        $sharedAwardIds = implode(',', Ork3::$Lib->award->sharedAwardIds());
+        $eqHeldAtRank = Ork3::$Lib->award->sqlPseudoLadderEquivalentHeld('subeq', 'ka', 'COALESCE(recs.rank, 0)');
+        $eqHeldAny = Ork3::$Lib->award->sqlPseudoLadderEquivalentHeld('subeq2', 'ka');
+
         $sql = "select
 			a.peerage, ifnull(ka.name, a.name) as award_name,
 			a.is_ladder as a_is_ladder,
@@ -800,14 +811,17 @@ class Report extends Ork3
 			ka.is_ladder as ka_is_ladder,
 			ka.kingdomaward_id as ka_kaward_id,
 			(SELECT COUNT(suboa.awards_id) FROM " . DB_PREFIX . "awards suboa WHERE suboa.mundane_id = recs.mundane_id AND suboa.kingdomaward_id = ka.kingdomaward_id AND suboa.rank >= COALESCE(recs.rank, 0)) as kacount,
-			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND suboa2.rank >= COALESCE(recs.rank, 0)) as awcount,
+			(SELECT COUNT(suboa2.awards_id) FROM " . DB_PREFIX . "awards suboa2 WHERE suboa2.mundane_id = recs.mundane_id AND suboa2.award_id = recs.award_id AND recs.award_id NOT IN ($sharedAwardIds) AND suboa2.rank >= COALESCE(recs.rank, 0)) as awcount,
+			(SELECT COUNT(subeq.awards_id) FROM " . DB_PREFIX . "awards subeq WHERE subeq.mundane_id = recs.mundane_id AND $eqHeldAtRank) as eqcount,
 			COALESCE(
+				(SELECT MAX(subeq2.rank) FROM " . DB_PREFIX . "awards subeq2 WHERE subeq2.mundane_id = recs.mundane_id AND $eqHeldAny),
 				(SELECT MAX(subr.rank) FROM " . DB_PREFIX . "awards subr WHERE subr.mundane_id = recs.mundane_id AND subr.kingdomaward_id = ka.kingdomaward_id),
-				(SELECT MAX(subr2.rank) FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id)
+				(SELECT MAX(subr2.rank) FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id AND recs.award_id NOT IN ($sharedAwardIds))
 			) as player_ka_rank,
 			COALESCE(
+				(SELECT subeq2.date FROM " . DB_PREFIX . "awards subeq2 WHERE subeq2.mundane_id = recs.mundane_id AND $eqHeldAny ORDER BY subeq2.rank DESC, subeq2.date DESC LIMIT 1),
 				(SELECT subr.date FROM " . DB_PREFIX . "awards subr WHERE subr.mundane_id = recs.mundane_id AND subr.kingdomaward_id = ka.kingdomaward_id ORDER BY subr.rank DESC, subr.date DESC LIMIT 1),
-				(SELECT subr2.date FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id ORDER BY subr2.rank DESC, subr2.date DESC LIMIT 1)
+				(SELECT subr2.date FROM " . DB_PREFIX . "awards subr2 WHERE subr2.mundane_id = recs.mundane_id AND subr2.award_id = recs.award_id AND recs.award_id NOT IN ($sharedAwardIds) ORDER BY subr2.rank DESC, subr2.date DESC LIMIT 1)
 			) as player_ka_date
 			FROM " . DB_PREFIX . "recommendations recs			
 			LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = recs.kingdomaward_id
@@ -864,6 +878,7 @@ class Report extends Ork3
                     'kingdom_name'       => $r->kingdom_name,
                     'kacount'            => (int)$r->kacount,
                     'awcount'            => (int)$r->awcount,
+                    'eqcount'            => (int)$r->eqcount,
                     'player_ka_rank'     => (int)$r->player_ka_rank,
                     'player_ka_date'     => $r->player_ka_date,
                     'a_is_ladder'        => (int)$r->a_is_ladder,
@@ -956,7 +971,7 @@ class Report extends Ork3
                 // rank is chosen the question is undecidable, so answer no, which is
                 // also what these recs did before their award was recognised as a ladder.
                 $rankUnset   = ($effIsLadder === 1 && (int)$row->rank === 0);
-                $alreadyHas = ($isCustom || $rankUnset) ? false : ($row->kacount > 0 || $row->awcount > 0);
+                $alreadyHas = ($isCustom || $rankUnset) ? false : ($row->kacount > 0 || $row->awcount > 0 || $row->eqcount > 0);
                 $coveredByMaster = false;
                 if (!$isCustom && !$alreadyHas && isset($ladderMap[$recAwardId])) {
                     foreach ((array)$ladderMap[$recAwardId]['MasterAwardIds'] as $mAid) {
@@ -1154,7 +1169,8 @@ class Report extends Ork3
                 . " WHERE lmx.la = IF(IFNULL(ka.award_id,0)=0, recs.award_id, ka.award_id))"
             : '0';
         $alreadyExpr = "((SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa WHERE oa.mundane_id = recs.mundane_id AND oa.kingdomaward_id = ka.kingdomaward_id AND oa.rank >= COALESCE(recs.rank,0)) > 0"
-            . " OR (SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa2 WHERE oa2.mundane_id = recs.mundane_id AND oa2.award_id = recs.award_id AND oa2.rank >= COALESCE(recs.rank,0)) > 0"
+            . " OR (SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa2 WHERE oa2.mundane_id = recs.mundane_id AND oa2.award_id = recs.award_id AND recs.award_id NOT IN (" . implode(',', Ork3::$Lib->award->sharedAwardIds()) . ") AND oa2.rank >= COALESCE(recs.rank,0)) > 0"
+            . " OR EXISTS (SELECT 1 FROM " . DB_PREFIX . "awards oa3 WHERE oa3.mundane_id = recs.mundane_id AND " . Ork3::$Lib->award->sqlPseudoLadderEquivalentHeld('oa3', 'ka', 'COALESCE(recs.rank,0)') . ")"
             . " OR " . $masterCoverExpr . ")";
         // Must stay the exact SQL twin of the $isCustom test in PlayerAwardRecommendations
         // (per-kingdom title override folded in), or the count/paging prefilter and the PHP
