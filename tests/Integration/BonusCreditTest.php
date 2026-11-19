@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../Support/RbacRoleFixture.php';
+
 use PHPUnit\Framework\TestCase;
 
 /** In-memory ghettocache, so a grant's cache bust is observable without memcached. */
@@ -51,6 +53,7 @@ final class BonusCreditTest extends TestCase
     private array $categoryIds = [];
     /** @var int[] kingdoms whose accept-outside setting a test touched */
     private array $settingKingdoms = [];
+    private ?RbacRoleFixture $rbac = null;
 
     protected function setUp(): void
     {
@@ -98,6 +101,9 @@ final class BonusCreditTest extends TestCase
             if ($this->settingKingdoms) {
                 $pdo->exec('DELETE FROM ' . DB_PREFIX . 'bonus_credit_kingdom_setting WHERE kingdom_id IN (' . implode(',', $this->settingKingdoms) . ')');
             }
+            if ($this->rbac !== null) {
+                $this->rbac->cleanup();
+            }
             $this->fixture->cleanup();
         }
         if (isset($this->originalCache)) {
@@ -143,6 +149,24 @@ final class BonusCreditTest extends TestCase
         $this->mundaneIds[] = $uid;
         $this->pdo()->prepare('INSERT INTO ' . DB_PREFIX . 'authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role) VALUES (?, 0, 0, 0, 0, ?)')
             ->execute([$uid, AUTH_ADMIN]);
+        return $uid;
+    }
+
+    /**
+     * A player with NO ork_authorization row, holding a throwaway role that carries only
+     * $key, assigned at $scope. Whatever they can do, RBAC alone let them.
+     *
+     * @param array{kingdom_id?: int, park_id?: int} $scope  empty for a global assignment
+     */
+    private function roleHolder(string $key, string $roleScope, array $scope, string $suffix): int
+    {
+        if ($this->rbac === null) {
+            $this->rbac = new RbacRoleFixture($this->pdo(), 'T12BCRBAC', $this->kingdom);
+        }
+        $uid = $this->playerAt($this->park, $suffix);
+        $roleId = $this->rbac->seedRoleWith($key, $roleScope, $roleScope === 'global' ? 0 : $this->kingdom);
+        $this->rbac->assignRole($uid, $roleId, $scope);
+        $this->assertSame(0, (int) $this->pdo()->query('SELECT COUNT(*) FROM ' . DB_PREFIX . 'authorization WHERE mundane_id = ' . $uid)->fetchColumn());
         return $uid;
     }
 
@@ -698,5 +722,93 @@ final class BonusCreditTest extends TestCase
         $this->assertNotNull($gone[0]['RevokedAt']);
 
         $this->assertSame(1, $this->bonus->revoke($kOfficer, 999999999)['Status']);
+    }
+
+    public function testGlobalBonusCreditRoleRunsAmtgardWideCreditsWithoutAnAdminRow(): void
+    {
+        $holder = $this->roleHolder('global.bonus_credit.manage', 'global', [], 'bc-rbac-global');
+        $nobody = $this->playerAt($this->park, 'bc-rbac-nobody');
+
+        $this->assertTrue($this->bonus->isOrkAdmin($holder));
+        $this->assertFalse($this->bonus->isOrkAdmin($nobody));
+        $this->assertTrue($this->bonus->canDefine($holder, 'ork', 0));
+        // Amtgard-wide only: it is not a kingdom key.
+        $this->assertFalse($this->bonus->canDefine($holder, 'kingdom', $this->kingdom));
+
+        $r = $this->bonus->createCategory($holder, ['ScopeType' => 'ork', 'ScopeId' => 0, 'Name' => 'T12BC RBAC census']);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $this->categoryIds[] = $census = (int) $r['CategoryId'];
+        $this->assertSame(3, $this->bonus->createCategory($nobody, ['ScopeType' => 'ork', 'ScopeId' => 0, 'Name' => 'T12BC nope'])['Status']);
+        // Adopting on a kingdom's behalf is part of running the credit.
+        $this->assertSame(0, $this->bonus->adopt($holder, $census, $this->kingdom)['Status']);
+        $this->assertSame(0, $this->bonus->archiveCategory($holder, $census)['Status']);
+    }
+
+    public function testKingdomDefineRoleDefinesAppointsAndSetsOutsideCreditsWithoutAnAuthorizationRow(): void
+    {
+        $this->settingKingdoms = [$this->kingdom];
+        $holder  = $this->roleHolder('kingdom.bonus_credit.define', 'kingdom', ['kingdom_id' => $this->kingdom], 'bc-rbac-define');
+        $granter = $this->playerAt($this->park, 'bc-rbac-granter');
+
+        $this->assertTrue($this->bonus->canAppoint($holder, $this->kingdom));
+        $this->assertTrue($this->bonus->canDefine($holder, 'kingdom', $this->kingdom));
+        $this->assertFalse($this->bonus->canAppoint($holder, $this->otherKingdom), 'scoped to its own kingdom');
+
+        $purple = $this->category($holder, $this->kingdom, 'RBAC purple');
+        $this->assertSame(3, $this->bonus->createCategory($holder, ['ScopeType' => 'kingdom', 'ScopeId' => $this->otherKingdom, 'Name' => 'T12BC nope'])['Status']);
+        $this->assertSame(0, $this->bonus->addGranter($holder, $this->kingdom, $granter, $purple['CategoryId'])['Status']);
+        $this->assertTrue($this->bonus->isGranter($granter, $this->kingdom, $purple['CategoryId']));
+        $this->assertSame(0, $this->bonus->setAcceptsOutside($holder, $this->kingdom, false)['Status']);
+        $this->assertFalse($this->bonus->acceptsOutsideCredits($this->kingdom));
+        $this->assertSame(0, $this->bonus->archiveCategory($holder, $purple['CategoryId'])['Status']);
+    }
+
+    public function testKingdomGrantRoleHandsOutCreditsAcrossTheKingdomButDoesNotDefineThem(): void
+    {
+        $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');
+        $holder   = $this->roleHolder('kingdom.bonus_credit.grant', 'kingdom', ['kingdom_id' => $this->kingdom], 'bc-rbac-kgrant');
+        $purple   = $this->category($kOfficer, $this->kingdom, 'RBAC purple', ['Repeatable' => 1]);
+        $player   = $this->playerAt($this->park, 'bc-rbac-player');
+
+        $this->assertTrue($this->bonus->canGrantInKingdom($holder, $this->kingdom));
+        $this->assertFalse($this->bonus->canGrantInKingdom($holder, $this->otherKingdom));
+        // The kingdom key reaches the kingdom's parks too, as kingdom EDIT does.
+        $this->assertTrue($this->bonus->canGrant($holder, $this->park));
+        $this->assertFalse($this->bonus->canGrant($holder, $this->otherPark));
+        $this->assertFalse($this->bonus->canAppoint($holder, $this->kingdom), 'granting is not defining');
+        $this->assertSame(3, $this->bonus->createCategory($holder, ['ScopeType' => 'kingdom', 'ScopeId' => $this->kingdom, 'Name' => 'T12BC nope'])['Status']);
+
+        $this->assertContains('T12BC RBAC purple', array_column($this->bonus->grantableCategoriesInKingdom($holder, $this->kingdom), 'Name'));
+        $r = $this->grant($holder, $player, $purple['CategoryId'], ['HostType' => 'kingdom', 'HostId' => $this->kingdom]);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        $r = $this->grant($holder, $player, $purple['CategoryId'], ['HostType' => 'park', 'HostId' => $this->park]);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        // And may remove one somebody else gave, which is not the giver's own-undo path.
+        $theirs = (int) $this->grant($kOfficer, $player, $purple['CategoryId'])['BonusCreditId'];
+        $this->assertGreaterThan(0, $theirs);
+        $this->assertSame(0, $this->bonus->revoke($holder, $theirs)['Status']);
+    }
+
+    public function testParkGrantRoleHandsOutCreditsAtItsParkOnly(): void
+    {
+        $kOfficer = $this->kingdomOfficer($this->kingdom, $this->park, 'bc-king');
+        $holder   = $this->roleHolder('park.bonus_credit.grant', 'park', ['park_id' => $this->park], 'bc-rbac-pgrant');
+        $purple   = $this->category($kOfficer, $this->kingdom, 'RBAC purple');
+        $player   = $this->playerAt($this->park, 'bc-rbac-player');
+
+        $this->assertTrue($this->bonus->canGrant($holder, $this->park));
+        $this->assertFalse($this->bonus->canGrantInKingdom($holder, $this->kingdom), 'a park grant is not a kingdom grant');
+        if ($this->siblingPark > 0) {
+            $this->assertFalse($this->bonus->canGrant($holder, $this->siblingPark));
+        }
+        $this->assertContains('T12BC RBAC purple', array_column($this->bonus->grantableCategoriesForPark($holder, $this->park), 'Name'));
+
+        $r = $this->grant($holder, $player, $purple['CategoryId'], ['HostType' => 'park', 'HostId' => $this->park]);
+        $this->assertSame(0, $r['Status'], (string) ($r['Error'] ?? ''));
+        // Removing a credit at their park is the same power, even one the kingdom gave.
+        $this->assertSame(0, $this->bonus->revoke($kOfficer, (int) $r['BonusCreditId'])['Status']);
+        $theirs = (int) $this->grant($kOfficer, $player, $purple['CategoryId'])['BonusCreditId'];
+        $this->assertGreaterThan(0, $theirs);
+        $this->assertSame(0, $this->bonus->revoke($holder, $theirs)['Status']);
     }
 }

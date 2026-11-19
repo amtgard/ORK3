@@ -1,0 +1,4054 @@
+<?php
+
+/***
+ * OfficerPosition
+ *
+ * DB layer for the officer position registry (ork_officer_position) and
+ * occupancy-enforced officer writes (ork_officer). Replaces the five hardcoded
+ * ENUM officer roles with a kingdom-extensible, alias-able, RBAC-bound registry.
+ *
+ * Auto-loaded by startup.php as Ork3::$Lib->officerposition.
+ *
+ * Project rules honored:
+ *   - $DB->Clear() before every raw Execute/DataSet (stale PDO binding guard).
+ *   - DisplayTitle resolution uses IF(alias != '', alias, title), NEVER COALESCE
+ *     (a cleared yapo alias is '' not NULL; COALESCE('',...) returns '').
+ *   - Crown occupancy is per-seat, not per-person: the ORK imposes no limit on
+ *     how many offices a person holds. Single-occupant-per-scope is enforced at
+ *     the app layer because ork_officer is MyISAM (no transactions, no partial
+ *     unique indexes); the SELECT-then-write is serialized per office with
+ *     GET_LOCK('officer_assign_<kingdom_id>_<park_id>_<position_id>', timeout) /
+ *     RELEASE_LOCK in finally.
+ ***/
+
+class OfficerPosition extends Ork3
+{
+    public const CROWN_LOCK_TIMEOUT = 5; // seconds for GET_LOCK on crown assignment
+
+    /**
+     * Kingdom-scope permissions an officer position may never carry, on top of the
+     * global-scope filter in ValidatePermissionKeys(). Role-definition authority in an
+     * office can rewrite its way to anything.
+     *
+     * The read endpoint that offers the builder checkboxes (OfficerAdminAjax::
+     * actionPermissions) MUST filter on this same list: a key that is offered but
+     * rejected on save locks every later edit of any position whose role already
+     * carries it.
+     */
+    public const EXCLUDED_PERMISSION_KEYS = ['kingdom.role.manage', 'kingdom.role.grant'];
+
+    /**
+     * The DisplayTitle resolution rule, as a SQL expression.
+     *
+     * A position's shown title is: the kingdom's alias if the row is a shared
+     * system position (kingdom_id = 0), else the row's own title_alias, else its
+     * title. This was written out at seven call sites across four files, in two
+     * different column-alias conventions -- so the "NEVER COALESCE" rule in this
+     * file's header had to hold in seven places at once, and adding a tier (a
+     * park-level alias, say) meant finding SQL fragments no grep relates.
+     *
+     * @param string $pos    Table alias for officer_position
+     * @param string $alias  Table alias for officer_position_alias
+     * @return string  SQL expression; caller supplies its own `AS <name>`
+     */
+    public static function display_title_sql($pos = 'p', $alias = 'a')
+    {
+        return 'IF(' . $pos . '.kingdom_id = 0,'
+            . ' IF(' . $alias . '.title_alias IS NOT NULL AND ' . $alias . ".title_alias != '', "
+            . $alias . '.title_alias, ' . $pos . '.title),'
+            . ' IF(' . $pos . ".title_alias != '', " . $pos . '.title_alias, ' . $pos . '.title))';
+    }
+
+    /**
+     * The permission key for an officer action in a given scope.
+     *
+     * The key is scoped as well as the scope argument. checkPermissionOrAuthority()
+     * maps 'park' to AUTH_PARK, so passing scope='park' with a kingdom.* key looks
+     * up a kingdom permission against a park id and simply fails. PermissionRegistry
+     * deliberately defines NO park mirror for the position family (park.officer.position.manage
+     * does not exist and must not be re-added -- see the NOTE above the Park-Scoped block in
+     * class.PermissionRegistry.php); the occupancy keys are the only ones with a park twin.
+     *
+     * @param string $action one of set|vacate|position|history
+     * @param int    $park_id 0 for kingdom scope, otherwise park scope
+     */
+    public static function PermissionKeyFor($action, $park_id)
+    {
+        // [kingdom key, park key], spelled out in full rather than composed from a
+        // scope prefix: RbacRegistryParityTest finds a key's enforcing call site by
+        // its literal text, and this is the only gate for the history family.
+        $map = [
+            'set'      => ['kingdom.officer.set', 'park.officer.set'],
+            'vacate'   => ['kingdom.officer.vacate', 'park.officer.vacate'],
+            'position' => ['kingdom.officer.position.manage', 'kingdom.officer.position.manage'],
+            'history'  => ['kingdom.officer_history.manage', 'park.officer_history.manage'],
+        ];
+        if (!isset($map[$action])) {
+            throw new InvalidArgumentException('Unknown officer action: ' . $action);
+        }
+
+        // The 'position' family is KINGDOM-scoped no matter what ParkId is supplied.
+        // ork_officer_position is a per-kingdom registry whose rows are shared by every
+        // park in that kingdom, and RetirePosition vacates every holder of a position
+        // ACROSS EVERY SCOPE -- so a park-scoped key here would let one park's officer
+        // strip officers from every other park. OfficerAdminAjax already forced the
+        // kingdom key for the browser path; this closes the same hole for the JSON
+        // service, which exposes OfficerPosition directly. There is deliberately no
+        // park.officer.position.manage in PermissionRegistry any more.
+        //
+        // Occupancy (set / vacate / history) is genuinely per-scope and still resolves
+        // to the park key when a ParkId is present.
+        if ($action === 'position') {
+            return $map[$action][0];
+        }
+
+        return $map[$action][((int) $park_id > 0) ? 1 : 0];
+    }
+
+    /**
+     * Shared gate for the position family (create / edit / reorder / retire / reinstate).
+     *
+     * Resolves the owning kingdom FIRST -- from the park when one is named, never from
+     * the request's own KingdomId, exactly as TransitionOfficer does -- and only then
+     * authorizes, at kingdom scope. Order matters: gating before the derivation is what
+     * let a park-scoped grant reach a kingdom-wide registry.
+     *
+     * @param int    $actor_id     Proven actor from the caller's token check
+     * @param array  $request      Needs KingdomId and/or ParkId
+     * @param string $legacy_role  AUTH_CREATE or AUTH_EDIT for the legacy arm
+     * @return array  [int kingdom_id, array|null denial] -- on refusal the kingdom id is
+     *                0 and the second element is the response to return verbatim.
+     */
+    private function authorizePositionFamily($actor_id, $request, $legacy_role)
+    {
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return [0, InvalidParameter(null, 'Park not found.')];
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+        }
+
+        if (!valid_id($kingdom_id)) {
+            return [0, InvalidParameter(null, 'A kingdom or park is required.')];
+        }
+
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('position', 0),
+            'kingdom',
+            $kingdom_id,
+            $legacy_role
+        )) {
+            return [0, NoAuthorization()];
+        }
+
+        return [$kingdom_id, null];
+    }
+
+    /**
+     * The effective sort_order resolution rule, as a SQL expression.
+     *
+     * Sibling to display_title_sql() and written for the same reason. The Core Five
+     * are SHARED rows (kingdom_id = 0) that every kingdom reads: on the dev mirror,
+     * 37 kingdoms and exactly one of them owns a non-system position at all. So a
+     * kingdom reordering "its" crown officers is, for 36 of 37 kingdoms, reordering
+     * rows the whole game shares. Writing officer_position.sort_order there would be
+     * globally destructive; refusing to write it would make the feature a no-op for
+     * almost everyone.
+     *
+     * A kingdom's own row always uses its own value. A shared row prefers this
+     * kingdom's override in officer_position_alias, falling back to the shared value
+     * when the kingdom has expressed no opinion (sort_order IS NULL).
+     *
+     * IFNULL, not IF(... != ''), is correct here where display_title_sql needs the
+     * opposite: sort_order is a nullable INT whose NULL genuinely means "unset",
+     * while title_alias is NOT NULL DEFAULT '' where '' means "unset".
+     *
+     * @param string $pos    Table alias for officer_position
+     * @param string $alias  Table alias for officer_position_alias
+     * @return string  SQL expression; caller supplies its own `AS <name>`
+     */
+    public static function sort_order_sql($pos = 'p', $alias = 'a')
+    {
+        return 'IF(' . $pos . '.kingdom_id = 0,'
+            . ' IFNULL(' . $alias . '.sort_order, ' . $pos . '.sort_order),'
+            . ' ' . $pos . '.sort_order)';
+    }
+
+    // ================================================================
+    // REGISTRY READS
+    // ================================================================
+
+    /**
+     * Return the position registry visible to a kingdom: the shared system
+     * Core-Five (kingdom_id=0) plus this kingdom's own custom rows, with
+     * DisplayTitle resolved (alias table for system rows; own title_alias for
+     * custom rows). Ordered by classification, sort_order.
+     *
+     * @param int         $kingdom_id
+     * @param bool        $include_retired
+     * @param string|null $classification  'crown'|'supporting'|null (all)
+     * @return array  Rows with DisplayTitle + CanonicalKey
+     */
+    public function GetPositions($kingdom_id, $include_retired = false, $classification = null)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+
+        $sql = "SELECT p.*,
+    			" . self::display_title_sql('p', 'a') . " AS DisplayTitle,
+    			" . self::sort_order_sql('p', 'a') . " AS EffectiveSortOrder
+    		FROM " . DB_PREFIX . "officer_position p
+    		LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+    		  ON a.kingdom_id = :kingdom_id AND a.canonical_key = p.canonical_key
+    		WHERE (p.kingdom_id = 0 OR p.kingdom_id = :kingdom_id2)";
+        if (!$include_retired) {
+            $sql .= " AND p.retired_at IS NULL";
+        }
+        if ($classification !== null) {
+            $sql .= " AND p.classification = :classification";
+        }
+        $sql .= " ORDER BY p.classification, " . self::sort_order_sql('p', 'a');
+
+        $DB->Clear();
+        $DB->kingdom_id = $kingdom_id;
+        $DB->kingdom_id2 = $kingdom_id;
+        if ($classification !== null) {
+            $DB->classification = $classification;
+        }
+        $r = $DB->DataSet($sql);
+
+        $positions = [];
+        if ($r !== false && $r->size() > 0) {
+            while ($r->Next()) {
+                $positions[] = $this->RowToArray($r);
+            }
+        }
+        return $positions;
+    }
+
+    /**
+     * Single registry row + resolved DisplayTitle + rbac_role_id + permission summary.
+     *
+     * @param int $position_id
+     * @return array|false
+     */
+    private function GetPosition($position_id, $kingdom_id = 0)
+    {
+        global $DB;
+        $position_id = (int) $position_id;
+        $kingdom_id = (int) $kingdom_id;
+        if ($position_id <= 0) {
+            return false;
+        }
+
+        $DB->Clear();
+        $DB->pid = $position_id;
+        $DB->gp_kid = $kingdom_id;
+        $r = $DB->DataSet(
+            "SELECT p.*,
+    			" . self::display_title_sql('p', 'a') . " AS DisplayTitle,
+    			" . self::sort_order_sql('p', 'a') . " AS EffectiveSortOrder
+    		FROM " . DB_PREFIX . "officer_position p
+    		LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+    		  ON a.kingdom_id = :gp_kid AND a.canonical_key = p.canonical_key
+    		WHERE p.position_id = :pid LIMIT 1"
+        );
+        if ($r === false || $r->size() == 0 || !$r->Next()) {
+            return false;
+        }
+        $row = $this->RowToArray($r);
+
+        // Permission summary for the bound role.
+        $row['Permissions'] = [];
+        $rbac_role_id = (int) $row['RbacRoleId'];
+        if ($rbac_role_id > 0) {
+            $DB->Clear();
+            $DB->rid = $rbac_role_id;
+            $pr = $DB->DataSet(
+                "SELECT pm.`key` AS perm_key
+    			 FROM " . DB_PREFIX . "role_permission rp
+    			 JOIN " . DB_PREFIX . "permission pm ON pm.permission_id = rp.permission_id
+    			 WHERE rp.role_id = :rid
+    			 ORDER BY pm.`key`"
+            );
+            if ($pr !== false && $pr->size() > 0) {
+                while ($pr->Next()) {
+                    $row['Permissions'][] = $pr->perm_key;
+                }
+            }
+        }
+        return $row;
+    }
+
+    /**
+     * Normalize a DataSet registry row into an associative array in the
+     * contracted PascalCase shape (PositionId, CanonicalKey, DisplayTitle, ...).
+     *
+     * PascalCase-only: every consumer of GetPositions/GetPosition/get_officers_for_display
+     * output (controller.OfficerAdminAjax, _manage_officers.tpl via the JSON envelope,
+     * and the write methods in this class) reads the PascalCase keys. Kingdom/Park
+     * only call ResolvePositionId/ResolveCanonicalKey (scalar returns, not RowToArray),
+     * so no external snake_case consumer exists.
+     */
+    private function RowToArray($r)
+    {
+        return [
+            'PositionId'    => (int) $r->position_id,
+            'KingdomId'     => (int) $r->kingdom_id,
+            'CanonicalKey'  => $r->canonical_key,
+            'Title'         => $r->title,
+            'TitleAlias'    => $r->title_alias,
+            'DisplayTitle'  => $r->DisplayTitle,
+            'Classification' => $r->classification,
+            'IsPinned'      => (int) $r->is_pinned,
+            'IsSystem'      => (int) $r->is_system,
+            'RbacRoleId'    => (int) $r->rbac_role_id,
+            'HasAuthRole'   => (int) $r->has_auth_role,
+            // EFFECTIVE order: the acting kingdom's override for a shared row, else the
+            // row's own value. Both queries feeding RowToArray select it; the fallback
+            // covers a future caller that forgets the column rather than emitting null.
+            'SortOrder'     => isset($r->EffectiveSortOrder) ? (int) $r->EffectiveSortOrder : (int) $r->sort_order,
+            'ParentPositionId'   => ($r->parent_position_id === null || $r->parent_position_id === '') ? null : (int) $r->parent_position_id,
+            'HideWhenVacant'     => (int) $r->hide_when_vacant,
+            'RetiredAt'     => $r->retired_at,
+        ];
+    }
+
+    // ================================================================
+    // RESOLUTION HELPERS (used by Kingdom::SetOfficer / Park::SetOfficer)
+    // ================================================================
+
+    /**
+     * Resolve a position_id for a kingdom from either a canonical key or a
+     * legacy display string (e.g. 'Prime Minister'). System Core-Five rows are
+     * shared (kingdom_id=0); kingdom-custom positions are matched by canonical
+     * key within the kingdom. Returns 0 when no match.
+     *
+     * @param int    $kingdom_id
+     * @param string $roleOrKey
+     * @return int
+     */
+    public function ResolvePositionId($kingdom_id, $roleOrKey)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $key = $this->NormalizeToCanonicalKey($roleOrKey);
+
+        $DB->Clear();
+        $DB->rp_key = $key;
+        $DB->rp_kid = $kingdom_id;
+        $r = $DB->DataSet(
+            "SELECT position_id FROM " . DB_PREFIX . "officer_position
+    		 WHERE canonical_key = :rp_key AND (kingdom_id = 0 OR kingdom_id = :rp_kid)
+    		 ORDER BY kingdom_id DESC LIMIT 1"
+        );
+        if ($r !== false && $r->size() > 0 && $r->Next()) {
+            return (int) $r->position_id;
+        }
+        return 0;
+    }
+
+    /**
+     * Resolve the canonical key for a kingdom from a canonical key or display
+     * string. Falls back to the normalized input if no registry row matches.
+     *
+     * @param int    $kingdom_id
+     * @param string $roleOrKey
+     * @return string
+     */
+    public function ResolveCanonicalKey($kingdom_id, $roleOrKey)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $key = $this->NormalizeToCanonicalKey($roleOrKey);
+
+        $DB->Clear();
+        $DB->rc_key = $key;
+        $DB->rc_kid = $kingdom_id;
+        $r = $DB->DataSet(
+            "SELECT canonical_key FROM " . DB_PREFIX . "officer_position
+    		 WHERE canonical_key = :rc_key AND (kingdom_id = 0 OR kingdom_id = :rc_kid)
+    		 ORDER BY kingdom_id DESC LIMIT 1"
+        );
+        if ($r !== false && $r->size() > 0 && $r->Next()) {
+            return $r->canonical_key;
+        }
+        return $key;
+    }
+
+    /**
+     * Map a legacy display string to its canonical key; pass through anything
+     * that already looks like a canonical key (lowercase/underscore slug).
+     */
+    private function NormalizeToCanonicalKey($roleOrKey)
+    {
+        // PermissionRegistry owns the Core Five display-name -> key map and returns
+        // null for anything outside it, which is exactly the kingdom-custom case:
+        // fall through to the slug. Keeping a second copy of that map here meant
+        // adding a sixth core office required editing two files that no grep relates.
+        return PermissionRegistry::CanonicalOfficerRole($roleOrKey) ?? $this->Slugify($roleOrKey);
+    }
+
+    /**
+     * Slugify a title into a canonical key (lowercase, underscores, alnum).
+     */
+    private function Slugify($value)
+    {
+        $value = strtolower(trim((string) $value));
+        $value = preg_replace('/[^a-z0-9]+/', '_', $value);
+        $value = trim($value, '_');
+        return $value;
+    }
+
+    // ================================================================
+    // REGISTRY WRITES
+    // ================================================================
+
+    /**
+     * The sort_order that puts a row at the END of a sibling group, as $kingdom_id
+     * sees that group: MAX(effective sort_order) + 10.
+     *
+     * Shared by the two ways a row ARRIVES in a group -- CreatePosition() (a brand
+     * new position) and ReinstatePosition() (a retired one coming back). Both mean
+     * "this row has no place in the group yet, put it at the end", and both have to
+     * measure the group the same way or the two paths disagree about where the end
+     * is.
+     *
+     * MEASURED AGAINST THE EFFECTIVE ORDER, not the raw column. The Core Five are
+     * SHARED rows (kingdom_id = 0) whose per-kingdom order lives in
+     * officer_position_alias, so a kingdom that had dragged them down would get its
+     * arrival wedged into the middle of the list it actually sees.
+     *
+     * SCOPED TO THE SIBLING GROUP, not to classification. sort_order orders
+     * siblings, and Manage Officers renders crown and supporting as ONE list, so a
+     * classification-scoped MAX draws from the wrong sequence: a kingdom whose only
+     * supporting offices are nested children (10/20/30 within their parent) would
+     * hand its first TOP-LEVEL supporting office 40 -- colliding with a crown office
+     * already at 40, the tie then broken arbitrarily by role name.
+     *
+     * An EMPTY group yields 10 (MAX over no rows is NULL, and (int) NULL + 10 = 10),
+     * which is the same base ReorderSiblings() renumbers from. The literal 100 is
+     * reached only when the query itself fails.
+     *
+     * @param int      $kingdom_id           Kingdom whose effective order is measured.
+     * @param int|null $parent_position_id   0/''/null = the top-level group.
+     * @param int      $exclude_position_id  A row to leave out of the measurement --
+     *                                       the row being placed, when it is already
+     *                                       in the group. Without it a row retired at
+     *                                       the group's own maximum would measure
+     *                                       against itself and drift further out on
+     *                                       every retire/reinstate cycle.
+     * @return int
+     */
+    private function NextSortOrderInGroup($kingdom_id, $parent_position_id, $exclude_position_id = 0)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $exclude_position_id = (int) $exclude_position_id;
+
+        // parent_position_id is interpolated, not bound: it is NULL-or-int and yapo
+        // drops nulls from bindings. The non-null branch is (int)-cast, as is the
+        // exclusion -- mysql_real_escape_string() is a no-op shim in this codebase.
+        $parentScope = ($parent_position_id === null || $parent_position_id === '' || (int) $parent_position_id === 0)
+            ? 'p.parent_position_id IS NULL'
+            : 'p.parent_position_id = ' . (int) $parent_position_id;
+        $excludeScope = $exclude_position_id > 0
+            ? ' AND p.position_id != ' . $exclude_position_id
+            : '';
+
+        $DB->Clear();
+        $DB->so_kid = $kingdom_id;
+        $DB->so_kid2 = $kingdom_id;
+        $mx = $DB->DataSet(
+            "SELECT MAX(" . self::sort_order_sql('p', 'a') . ") AS mx
+    		 FROM " . DB_PREFIX . "officer_position p
+    		 LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+    		   ON a.kingdom_id = :so_kid AND a.canonical_key = p.canonical_key
+    		 WHERE (p.kingdom_id = 0 OR p.kingdom_id = :so_kid2) AND " . $parentScope . $excludeScope
+        );
+        $sort_order = 100;
+        if ($mx !== false && $mx->size() > 0 && $mx->Next()) {
+            $sort_order = ((int) $mx->mx) + 10;
+        }
+        return $sort_order;
+    }
+
+    /**
+     * Token-gated entry point for createPositionInternal(). Gated on
+     * authorizePositionFamily(), legacy role AUTH_CREATE -- the
+     * role this action's HasAuthority() branch already used before this method
+     * authorized anything at all.
+     *
+     * @param array $request Token, KingdomId, ParkId, CanonicalKey, Title,
+     *                        Classification, RbacChoice, ParentPositionId, HideWhenVacant
+     * @return array
+     */
+    public function CreatePosition($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        [$kingdom_id, $denial] = $this->authorizePositionFamily($actor_id, $request, AUTH_CREATE);
+        if ($denial !== null) {
+            return $denial;
+        }
+
+        $r = $this->createPositionInternal(
+            $kingdom_id,
+            (string) ($request['CanonicalKey'] ?? ''),
+            (string) ($request['Title'] ?? ''),
+            (string) ($request['Classification'] ?? ''),
+            $request['RbacChoice'] ?? null,
+            $actor_id,
+            array_key_exists('ParentPositionId', $request) ? $request['ParentPositionId'] : null,
+            (int) ($request['HideWhenVacant'] ?? 0)
+        );
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                'Kingdom',
+                $kingdom_id,
+                null,
+                ['PositionId' => (int) ($r['Detail'] ?? 0)]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
+     * Create a new kingdom-custom position.
+     *
+     * @param int    $kingdom_id
+     * @param string $canonical_key  (slugified/validated; '' = derive from title)
+     * @param string $title
+     * @param string $classification 'crown'|'supporting'
+     * @param array  $rbac_choice    ['mode'=>'existing','role_id'=>N]
+     *                               | ['mode'=>'custom','permission_keys'=>[...]]
+     * @param int    $creator_id
+     * @return array  Success(position_id) | error
+     */
+    private function createPositionInternal($kingdom_id, $canonical_key, $title, $classification, $rbac_choice, $creator_id = 0, $parent_position_id = null, $hide_when_vacant = 0)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $title = trim((string) $title);
+        $creator_id = (int) $creator_id;
+
+        if ($kingdom_id <= 0) {
+            return InvalidParameter(null, 'A valid kingdom is required to create a position.');
+        }
+        if ($title === '') {
+            return InvalidParameter(null, 'A position title is required.');
+        }
+        if ($classification !== 'crown' && $classification !== 'supporting') {
+            return InvalidParameter(null, 'Classification must be crown or supporting.');
+        }
+
+        $slug = (trim((string) $canonical_key) !== '') ? $this->Slugify($canonical_key) : $this->Slugify($title);
+        if ($slug === '') {
+            return InvalidParameter(null, 'Could not derive a canonical key for this position.');
+        }
+
+        // Uniqueness within (kingdom_id, canonical_key). The shared system rows
+        // live at kingdom_id=0, so reject any collision with them too.
+        $DB->Clear();
+        $DB->u_kid = $kingdom_id;
+        $DB->u_key = $slug;
+        $exists = $DB->DataSet(
+            "SELECT position_id FROM " . DB_PREFIX . "officer_position
+    		 WHERE canonical_key = :u_key AND (kingdom_id = 0 OR kingdom_id = :u_kid) LIMIT 1"
+        );
+        if ($exists !== false && $exists->size() > 0) {
+            return InvalidParameter(null, 'A position with this key already exists for this kingdom.');
+        }
+
+        // Resolve the RBAC role binding.
+        $rbac_role_id = 0;
+        $created_custom_role_id = 0; // C1: set when CreateRole runs in custom mode
+        if (is_array($rbac_choice) && isset($rbac_choice['mode']) && $rbac_choice['mode'] === 'custom') {
+            $permission_keys = isset($rbac_choice['permission_keys']) ? $rbac_choice['permission_keys'] : [];
+            $keys_err = $this->ValidatePermissionKeys($permission_keys);
+            if ($keys_err !== true) {
+                return $keys_err;
+            }
+            if (!isset(Ork3::$Lib->rbacservice)) {
+                return ProcessingError('RBAC service unavailable; cannot create custom role.');
+            }
+            $res = Ork3::$Lib->rbacservice->create_role_internal(
+                $creator_id,
+                $kingdom_id,
+                'officer:' . $slug,
+                $title,
+                '',
+                'kingdom',
+                $permission_keys
+            );
+            if (!isset($res['Status']) || $res['Status'] != 0) {
+                return $res;
+            }
+            $rbac_role_id = (int) $res['Detail'];
+            // C1: remember that THIS call created the role, so we can roll it back if
+            // the position INSERT below fails (avoid orphaning a custom role).
+            $created_custom_role_id = $rbac_role_id;
+        } elseif (is_array($rbac_choice) && isset($rbac_choice['mode']) && $rbac_choice['mode'] === 'existing') {
+            $rbac_role_id = isset($rbac_choice['role_id']) ? (int) $rbac_choice['role_id'] : 0;
+            if ($rbac_role_id > 0) {
+                $bind_err = $this->ValidateRoleBinding($rbac_role_id, $kingdom_id, $creator_id);
+                if ($bind_err !== true) {
+                    return $bind_err;
+                }
+            }
+        }
+        // 'none' mode: rbac_role_id stays 0 (the holder gets no extra access). A 0
+        // binding is valid only for explicit 'none'; otherwise a binding is required.
+        $rbac_mode = (is_array($rbac_choice) && isset($rbac_choice['mode'])) ? $rbac_choice['mode'] : '';
+        if ($rbac_mode !== 'none' && $rbac_role_id <= 0) {
+            return InvalidParameter(null, 'A valid RBAC role binding is required.');
+        }
+
+        // hide_when_vacant applies to NON-Crown only; force 0 for crown.
+        $hide_when_vacant = ($classification === 'crown') ? 0 : (((int) $hide_when_vacant) ? 1 : 0);
+
+        // parent_position_id ("Reports To"). 0/''/null = top-level (NULL stored).
+        $parent_position_id = ($parent_position_id === null || $parent_position_id === '' || (int) $parent_position_id === 0)
+            ? null : (int) $parent_position_id;
+        if ($parent_position_id !== null) {
+            $perr = $this->ValidateParent(0, $kingdom_id, $parent_position_id);
+            if ($perr !== true) {
+                return $perr;
+            }
+        }
+
+        // sort_order = end of the sibling group. See NextSortOrderInGroup().
+        $sort_order = $this->NextSortOrderInGroup($kingdom_id, $parent_position_id);
+
+        $DB->Clear();
+        $DB->c_kid = $kingdom_id;
+        $DB->c_key = $slug;
+        $DB->c_title = $title;
+        $DB->c_cls = $classification;
+        $DB->c_rid = $rbac_role_id;
+        $DB->c_so = $sort_order;
+        $DB->c_cb = $creator_id;
+        $DB->c_hwv = $hide_when_vacant;
+        // parent_position_id is NULL-or-int; bind as a literal so NULL is stored as NULL.
+        $parent_sql = ($parent_position_id === null) ? 'NULL' : (int) $parent_position_id;
+        $DB->Execute(
+            "INSERT INTO " . DB_PREFIX . "officer_position
+    		 (kingdom_id, canonical_key, title, title_alias, classification, is_pinned, is_system, rbac_role_id, has_auth_role, sort_order, parent_position_id, hide_when_vacant, retired_at, created_by, created_at)
+    		 VALUES (:c_kid, :c_key, :c_title, '', :c_cls, 0, 0, :c_rid, 0, :c_so, " . $parent_sql . ", :c_hwv, NULL, :c_cb, NOW())"
+        );
+
+        // Prefer the driver's last-insert-id accessor over a SELECT-after-INSERT.
+        $position_id = (int) $DB->GetLastInsertId();
+        if ($position_id <= 0) {
+            // Fallback: UNIQUE(kingdom_id, canonical_key) makes this lookup safe.
+            $position_id = $this->ResolvePositionId($kingdom_id, $slug);
+        }
+
+        // C1: the INSERT failed (no usable position_id). If THIS call created a
+        // custom role, roll it back so it is not orphaned, and never return Success(0).
+        if ($position_id <= 0) {
+            if ($created_custom_role_id > 0) {
+                $DB->Clear();
+                $DB->orphan_rid = $created_custom_role_id;
+                $DB->orphan_kid = $kingdom_id;
+                $DB->Execute(
+                    "DELETE FROM " . DB_PREFIX . "role
+    				 WHERE role_id = :orphan_rid AND kingdom_id = :orphan_kid AND is_system = 0"
+                );
+            }
+            return ProcessingError('The position could not be created. Please try again.');
+        }
+
+        return Success($position_id);
+    }
+
+    /**
+     * Token-gated entry point for editPositionInternal(). Gated on
+     * authorizePositionFamily(), legacy role AUTH_EDIT. changed_by
+     * / editor_id are forced to the token-resolved actor, never taken from the
+     * request's Fields -- a caller-supplied actor id is exactly the bug this
+     * conversion closes.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId, Fields (see
+     *                        editPositionInternal()'s $fields docblock)
+     * @return array
+     */
+    public function EditPosition($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        [$kingdom_id, $denial] = $this->authorizePositionFamily($actor_id, $request, AUTH_EDIT);
+        if ($denial !== null) {
+            return $denial;
+        }
+
+        $fields = is_array($request['Fields'] ?? null) ? $request['Fields'] : [];
+        $fields['changed_by'] = $actor_id;
+        $fields['editor_id']  = $actor_id;
+
+        $r = $this->editPositionInternal((int) ($request['PositionId'] ?? 0), $fields, $kingdom_id);
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                'Kingdom',
+                $kingdom_id,
+                null,
+                ['PositionId' => (int) ($request['PositionId'] ?? 0)]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
+     * Edit a position. title / title_alias / sort_order always editable.
+     * For non-pinned positions, classification + rbac binding are also editable;
+     * a binding change triggers §4.4 reconciliation for all live occupants.
+     *
+     * @param int   $position_id
+     * @param array $fields  title, title_alias, sort_order, classification,
+     *                       rbac_role_id, permission_keys, changed_by, editor_id
+     * @return array
+     */
+    private function editPositionInternal($position_id, $fields, $acting_kingdom_id = 0)
+    {
+        global $DB;
+        $position_id = (int) $position_id;
+        $acting_kingdom_id = (int) $acting_kingdom_id;
+        $position = $this->GetPosition($position_id);
+        if ($position === false) {
+            return InvalidParameter(null, 'Position not found.');
+        }
+        $is_pinned = (int) $position['IsPinned'];
+        $is_system = (int) $position['IsSystem'];
+        $pos_kingdom_id = (int) $position['KingdomId'];
+        $canonical_key  = $position['CanonicalKey'];
+        $changed_by = isset($fields['changed_by']) ? (int) $fields['changed_by'] : 0;
+        $editor_id  = isset($fields['editor_id']) ? (int) $fields['editor_id'] : $changed_by;
+
+        // S1: kingdom-ownership guard. Allow shared system rows (kingdom_id=0) and
+        // the acting kingdom's own rows; reject a different kingdom's custom row.
+        if ($pos_kingdom_id !== 0 && $acting_kingdom_id > 0 && $pos_kingdom_id !== $acting_kingdom_id) {
+            return NoAuthorization('Position does not belong to this kingdom.');
+        }
+
+        // Reject pinned/system classification + RBAC edits server-side. Title alias
+        // (via the alias table for system rows) and sort_order remain allowed.
+        if ($is_pinned || $is_system) {
+            if (isset($fields['classification']) && $fields['classification'] !== $position['Classification']) {
+                return NoAuthorization('Pinned/system positions cannot be reclassified.');
+            }
+            if ((isset($fields['rbac_role_id']) && (int) $fields['rbac_role_id'] !== (int) $position['RbacRoleId'])
+                || isset($fields['permission_keys'])) {
+                return NoAuthorization('Pinned/system positions cannot have their RBAC binding changed.');
+            }
+            // S1b: the Core-Five system rows are SHARED (kingdom_id=0) across every
+            // kingdom, so a reparent by one kingdom's admin would corrupt the
+            // Reports-To hierarchy (and its hide-when-vacant cascade) for all of them.
+            if (array_key_exists('parent_position_id', $fields)) {
+                $raw_parent = $fields['parent_position_id'];
+                $req_parent = ($raw_parent === null || $raw_parent === '' || (int) $raw_parent === 0) ? null : (int) $raw_parent;
+                $cur_parent = ($position['ParentPositionId'] === null) ? null : (int) $position['ParentPositionId'];
+                if ($req_parent !== $cur_parent) {
+                    return NoAuthorization('Pinned/system positions cannot be reparented.');
+                }
+            }
+        }
+
+        // title_alias routing differs by row type:
+        //   - SYSTEM row (kingdom_id=0): per-kingdom alias lives in the alias table,
+        //     keyed on ($acting_kingdom_id, canonical_key). NEVER mutate the shared row.
+        //   - CUSTOM row (kingdom_id>0): alias lives on the row's own title_alias column.
+        if (array_key_exists('title_alias', $fields) && $pos_kingdom_id === 0) {
+            if ($acting_kingdom_id <= 0) {
+                return InvalidParameter(null, 'A valid kingdom is required to alias a system position.');
+            }
+            $alias = trim((string) $fields['title_alias']);
+            if ($alias !== '') {
+                $DB->Clear();
+                $DB->al_kid = $acting_kingdom_id;
+                $DB->al_key = $canonical_key;
+                $DB->al_alias = $alias;
+                $DB->Execute(
+                    "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, title_alias)
+    				 VALUES (:al_kid, :al_key, :al_alias)
+    				 ON DUPLICATE KEY UPDATE title_alias = VALUES(title_alias)"
+                );
+            } else {
+                // uq_kingdom_canonical means the title alias and the per-kingdom sort
+                // override share ONE row. The old unconditional DELETE here would have
+                // silently reset a kingdom's officer order every time it cleared a
+                // custom title. Blank the title, then drop the row only if it now
+                // carries nothing at all.
+                $DB->Clear();
+                $DB->ad_kid = $acting_kingdom_id;
+                $DB->ad_key = $canonical_key;
+                $DB->Execute(
+                    "UPDATE " . DB_PREFIX . "officer_position_alias
+    				 SET title_alias = ''
+    				 WHERE kingdom_id = :ad_kid AND canonical_key = :ad_key"
+                );
+                $DB->Clear();
+                $DB->adx_kid = $acting_kingdom_id;
+                $DB->adx_key = $canonical_key;
+                $DB->Execute(
+                    "DELETE FROM " . DB_PREFIX . "officer_position_alias
+    				 WHERE kingdom_id = :adx_kid AND canonical_key = :adx_key
+    				   AND title_alias = '' AND sort_order IS NULL"
+                );
+            }
+        }
+
+        // sort_order routing mirrors title_alias routing above, and for the same
+        // reason: a SHARED system row (kingdom_id = 0) is read by every kingdom, so
+        // one kingdom's ordering opinion belongs in ITS alias row, never on the shared
+        // row. A kingdom-owned row keeps its order on the row itself. Done HERE, before
+        // the UPDATE bindings are set, because this Execute runs its own $DB->Clear().
+        $apply_sort_on_row = array_key_exists('sort_order', $fields);
+        if ($apply_sort_on_row && $pos_kingdom_id === 0) {
+            if ($acting_kingdom_id <= 0) {
+                return InvalidParameter(null, 'A valid kingdom is required to reorder a system position.');
+            }
+            $DB->Clear();
+            $DB->eps_kid = $acting_kingdom_id;
+            $DB->eps_key = $canonical_key;
+            $DB->eps_val = (int) $fields['sort_order'];
+            $DB->Execute(
+                "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, sort_order)
+    			 VALUES (:eps_kid, :eps_key, :eps_val)
+    			 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
+            );
+            $apply_sort_on_row = false;
+        }
+
+        // Resolve + validate parent BEFORE binding UPDATE params: ValidateParent
+        // runs its own DataSets ($DB->Clear()), which would wipe the UPDATE bindings
+        // set below if interleaved (stale-PDO-binding guard).
+        $apply_parent = false;
+        $new_parent = null;
+        if (array_key_exists('parent_position_id', $fields)) {
+            $apply_parent = true;
+            $raw = $fields['parent_position_id'];
+            $new_parent = ($raw === null || $raw === '' || (int) $raw === 0) ? null : (int) $raw;
+            if ($new_parent !== null) {
+                $perr = $this->ValidateParent($position_id, $pos_kingdom_id, $new_parent);
+                if ($perr !== true) {
+                    return $perr;
+                }
+            }
+        }
+
+        // S2: resolve + validate an existing-role rebind BEFORE binding the UPDATE
+        // params. The role-lookup DataSet runs its own $DB->Clear(), which would wipe
+        // the UPDATE bindings if interleaved (stale-PDO-binding guard). Only applies
+        // to non-pinned positions changing to a different role.
+        $rebind_to_role_id = 0;
+        if (!$is_pinned && isset($fields['rbac_role_id']) && (int) $fields['rbac_role_id'] > 0
+            && (int) $fields['rbac_role_id'] !== (int) $position['RbacRoleId']) {
+            $candidate = (int) $fields['rbac_role_id'];
+            $bind_err = $this->ValidateRoleBinding($candidate, $acting_kingdom_id, $editor_id);
+            if ($bind_err !== true) {
+                return $bind_err;
+            }
+            $rebind_to_role_id = $candidate;
+        }
+
+        // Same scope filter the create path applies, checked here (before any write) so a
+        // rejected key cannot leave a half-applied edit behind.
+        if (!$is_pinned && isset($fields['permission_keys']) && is_array($fields['permission_keys'])) {
+            $keys_err = $this->ValidatePermissionKeys($fields['permission_keys']);
+            if ($keys_err !== true) {
+                return $keys_err;
+            }
+        }
+
+        // Rebinding to None (rbac_role_id explicitly 0): the holder gets no extra
+        // access. Only for non-pinned positions whose current binding is non-zero.
+        // No DB lookup needed (0 is always valid), so no stale-binding concern.
+        $rebind_to_none = (!$is_pinned && isset($fields['rbac_role_id']) && (int) $fields['rbac_role_id'] === 0
+            && (int) $position['RbacRoleId'] !== 0);
+
+        // title / title_alias(custom only) / sort_order — written on the row itself.
+        $sets = [];
+        $DB->Clear();
+        $DB->ep_pid = $position_id;
+        if (array_key_exists('title', $fields)) {
+            $DB->ep_title = trim((string) $fields['title']);
+            $sets[] = "title = :ep_title";
+        }
+        if (array_key_exists('title_alias', $fields) && $pos_kingdom_id > 0) {
+            // Custom-row alias on its own column. '' clears; never null (yapo/SQL semantics).
+            $DB->ep_alias = (string) $fields['title_alias'];
+            $sets[] = "title_alias = :ep_alias";
+        }
+        if ($apply_sort_on_row) {
+            $DB->ep_so = (int) $fields['sort_order'];
+            $sets[] = "sort_order = :ep_so";
+        }
+
+        // parent_position_id was validated above (before the UPDATE bindings). It is
+        // written as a SQL literal (sanitized int / NULL), so no binding is needed.
+        if ($apply_parent) {
+            $sets[] = ($new_parent === null) ? "parent_position_id = NULL" : "parent_position_id = " . (int) $new_parent;
+        }
+
+        // hide_when_vacant: applies to NON-Crown only. Force 0 for crown/pinned/system.
+        if (array_key_exists('hide_when_vacant', $fields)) {
+            // Use the incoming classification if it is being changed in this same edit,
+            // otherwise the current stored classification.
+            $eff_cls = (!$is_pinned && array_key_exists('classification', $fields)
+                && ($fields['classification'] === 'crown' || $fields['classification'] === 'supporting'))
+                ? $fields['classification'] : $position['Classification'];
+            $hide = ($eff_cls === 'crown' || $is_pinned || $is_system) ? 0 : (((int) $fields['hide_when_vacant']) ? 1 : 0);
+            $DB->ep_hwv = $hide;
+            $sets[] = "hide_when_vacant = :ep_hwv";
+        }
+
+        $old_rbac_role_id = (int) $position['RbacRoleId'];
+        $new_rbac_role_id = $old_rbac_role_id;
+
+        if (!$is_pinned) {
+            if (array_key_exists('classification', $fields)
+                && ($fields['classification'] === 'crown' || $fields['classification'] === 'supporting')) {
+                $DB->ep_cls = $fields['classification'];
+                $sets[] = "classification = :ep_cls";
+            }
+
+            // Rebinding to a different existing role (validated up-front into
+            // $rebind_to_role_id before the UPDATE bindings were set).
+            if ($rebind_to_role_id > 0) {
+                $new_rbac_role_id = $rebind_to_role_id;
+                $DB->ep_rid = $new_rbac_role_id;
+                $sets[] = "rbac_role_id = :ep_rid";
+            } elseif ($rebind_to_none) {
+                // None: store 0 so the holder gets no extra access. Reconciliation
+                // below revokes the old role from all live occupants.
+                $new_rbac_role_id = 0;
+                $sets[] = "rbac_role_id = 0";
+            }
+        }
+
+        if (count($sets) > 0) {
+            // ExecuteChecked, not Execute: Execute() cannot report failure (PDO runs in
+            // ERRMODE_WARNING and handle_errors() only retries a dropped connection), so a
+            // rejected UPDATE would otherwise return Success() with the row unchanged --
+            // and the §4.4 reconciliation below would then rewrite occupants' effective
+            // permissions to match a binding the row never actually took.
+            if (!$DB->ExecuteChecked(
+                "UPDATE " . DB_PREFIX . "officer_position SET " . implode(', ', $sets) . " WHERE position_id = :ep_pid"
+            )) {
+                return ProcessingError(null, 'The position could not be updated. Please try again.');
+            }
+        }
+
+        // Custom-permission upsert on the bound role. Runs AFTER the UPDATE, never
+        // before it: edit_role_internal() issues its own $DB->Clear() plus yapo
+        // find()/save() on the same global $DB, which would wipe the :ep_* bindings
+        // set above and leave the UPDATE executing against an empty Data array
+        // (stale-PDO-binding guard, same rule ValidateParent and the role-rebind
+        // lookup follow). After the UPDATE also means a rejected row edit cannot
+        // leave rewritten role permissions behind.
+        if (!$is_pinned && isset($fields['permission_keys']) && is_array($fields['permission_keys'])
+            && isset(Ork3::$Lib->rbacservice) && $old_rbac_role_id > 0) {
+            Ork3::$Lib->rbacservice->edit_role_internal($editor_id, $old_rbac_role_id, $fields['permission_keys']);
+        }
+
+        // §4.4 reconciliation: if the binding changed, revoke old role / grant new
+        // for every live occupant of this position.
+        if ($new_rbac_role_id !== $old_rbac_role_id) {
+            $this->ReconcileRoleBinding($position_id, $old_rbac_role_id, $new_rbac_role_id, $changed_by);
+        }
+
+        return Success($position_id);
+    }
+
+    /** Hard cap on one reorder batch; a sibling group this large is a malformed request. */
+    public const REORDER_MAX_BATCH = 500;
+
+    /**
+     * Token-gated entry point for reorderSiblingsInternal(). Named ReorderPositions
+     * (not ReorderSiblings) to match the controller's existing 'reorderpositions'
+     * action name. Gated on authorizePositionFamily(), legacy role
+     * AUTH_EDIT.
+     *
+     * @param array $request Token, KingdomId, ParkId, ParentPositionId, OrderedPositionIds
+     * @return array
+     */
+    public function ReorderPositions($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        [$kingdom_id, $denial] = $this->authorizePositionFamily($actor_id, $request, AUTH_EDIT);
+        if ($denial !== null) {
+            return $denial;
+        }
+
+        $ordered_ids = $request['OrderedPositionIds'] ?? [];
+        $r = $this->reorderSiblingsInternal(
+            $kingdom_id,
+            array_key_exists('ParentPositionId', $request) ? $request['ParentPositionId'] : null,
+            is_array($ordered_ids) ? $ordered_ids : [],
+            $actor_id
+        );
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                'Kingdom',
+                $kingdom_id,
+                null,
+                ['OrderedPositionIds' => $r['Detail'] ?? null]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
+     * Renumber one sibling group's sort_order in a single atomic call.
+     *
+     * Reordering used to mean one EditPosition() per row, each writing a single
+     * sort_order. N sequential writes can fail halfway, and there is no way to tell
+     * from the outside how far the list got -- the group is simply left scrambled.
+     * This renumbers the whole group 10, 20, 30, ... in one statement inside one
+     * transaction.
+     *
+     * Renumbering (rather than swapping two values) is deliberate: rows created
+     * before the sort_order convention existed, or seeded by a migration, routinely
+     * share an identical sort_order, and a swap of two equal values is a no-op that
+     * looks like a successful reorder.
+     *
+     * WHERE THE NEW ORDER IS STORED depends on who owns the row. A kingdom-owned row
+     * keeps its order in officer_position.sort_order. A SHARED system row
+     * (kingdom_id = 0) is read by all 37 kingdoms, so the acting kingdom's order goes
+     * into its own officer_position_alias row instead -- the same table that already
+     * holds its custom TITLE for that shared position. Reads resolve the two through
+     * sort_order_sql(), so a group mixing both kinds renumbers coherently.
+     *
+     * VALIDATION RUNS TO COMPLETION BEFORE ANY WRITE. The group is identified by
+     * ($kingdom_id, $parent_position_id), so an id that is not really in that group
+     * must be refused: otherwise a caller could reparent a position, or write to
+     * another kingdom's row, just by listing it under the wrong group. Visibility
+     * matches GetPositions() -- shared system rows (kingdom_id = 0) plus the
+     * kingdom's own rows -- so this endpoint is neither looser nor tighter than the
+     * per-row EditPosition() path it replaces.
+     *
+     * Ids that belong to the group but are NOT listed keep their existing
+     * sort_order; only the listed rows are renumbered. Retired rows are eligible
+     * (they still occupy a slot in the tree the UI draws).
+     *
+     * @param int      $kingdom_id           Acting kingdom; required (> 0).
+     * @param int|null $parent_position_id   0/''/null = the top-level group (parent IS NULL).
+     * @param array    $ordered_position_ids Position ids, first = topmost.
+     * @param int      $acting_uid           Actor, for future auditing; not written today.
+     * @return array  Success(list of ids in applied order) | InvalidParameter | NoAuthorization | ProcessingError
+     */
+    private function reorderSiblingsInternal($kingdom_id, $parent_position_id, array $ordered_position_ids, $acting_uid = 0)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+
+        if ($kingdom_id <= 0) {
+            return InvalidParameter(null, 'A valid kingdom is required to reorder positions.');
+        }
+
+        // 0 / '' / null all mean "the top-level group" (parent_position_id IS NULL).
+        $parent_position_id = ($parent_position_id === null || $parent_position_id === ''
+            || (int) $parent_position_id === 0) ? null : (int) $parent_position_id;
+
+        // mysql_real_escape_string() is a no-op shim in this codebase, so every id
+        // that reaches SQL below is (int)-cast here and never re-read from input.
+        $ids = [];
+        foreach ($ordered_position_ids as $raw) {
+            $pid = (int) $raw;
+            if ($pid <= 0) {
+                continue;
+            }
+            if (in_array($pid, $ids, true)) {
+                // A repeated id would give one row two positions in the order; the
+                // CASE below would silently pick one. Refuse instead.
+                return InvalidParameter(null, 'The same position was listed more than once.');
+            }
+            $ids[] = $pid;
+        }
+        if (count($ids) === 0) {
+            return InvalidParameter(null, 'No positions were supplied to reorder.');
+        }
+        if (count($ids) > self::REORDER_MAX_BATCH) {
+            return InvalidParameter(null, 'Too many positions were supplied to reorder at once.');
+        }
+
+        $DB->BeginTrans();
+
+        // Load every listed row once, inside the transaction, so validation reads the
+        // same snapshot the UPDATE writes.
+        $DB->Clear();
+        $r = $DB->DataSet(
+            "SELECT position_id, kingdom_id, parent_position_id, canonical_key
+    		 FROM " . DB_PREFIX . "officer_position
+    		 WHERE position_id IN (" . implode(', ', $ids) . ")"
+        );
+        $found = [];
+        if ($r !== false && $r->size() > 0) {
+            while ($r->Next()) {
+                $next = $r->parent_position_id;
+                $found[ (int) $r->position_id ] = [
+                    'kingdom_id'    => (int) $r->kingdom_id,
+                    'canonical_key' => (string) $r->canonical_key,
+                    'parent'        => ($next === null || $next === '') ? null : (int) $next,
+                ];
+            }
+        }
+
+        $failure = null;
+        foreach ($ids as $pid) {
+            if (!isset($found[ $pid ])) {
+                $failure = InvalidParameter(null, 'One of the positions to reorder no longer exists.');
+                break;
+            }
+            // Visibility, mirroring GetPositions(): shared system rows (kingdom_id 0)
+            // plus this kingdom's own rows. Anything else is another kingdom's row.
+            if ($found[ $pid ]['kingdom_id'] !== 0 && $found[ $pid ]['kingdom_id'] !== $kingdom_id) {
+                $failure = NoAuthorization('One of the positions does not belong to this kingdom.');
+                break;
+            }
+            // Group membership. Without this the endpoint is a reparent primitive:
+            // listing a top-level position under a parent id would move it there.
+            if ($found[ $pid ]['parent'] !== $parent_position_id) {
+                $failure = InvalidParameter(null, 'One of the positions is not in the group being reordered.');
+                break;
+            }
+        }
+        if ($failure !== null) {
+            $DB->RollbackTrans();
+            return $failure;
+        }
+
+        // The write splits by ownership. A kingdom-owned row's order lives on the row.
+        // A SHARED row (kingdom_id = 0) is read by every kingdom, so this kingdom's
+        // order goes into ITS officer_position_alias row instead -- otherwise one
+        // kingdom's drag would reorder the officer list for the entire game. A group
+        // can legitimately hold both kinds, so the two writes are siblings inside the
+        // one transaction and the renumbering runs across the whole group first.
+        $owned_cases = [];
+        $owned_ids   = [];
+        $shared      = [];
+        $sort_order  = 0;
+        foreach ($ids as $pid) {
+            $sort_order += 10;
+            if ($found[ $pid ]['kingdom_id'] === 0) {
+                $shared[] = ['key' => $found[ $pid ]['canonical_key'], 'so' => $sort_order];
+            } else {
+                $owned_ids[]   = (int) $pid;
+                $owned_cases[] = "WHEN " . (int) $pid . " THEN " . (int) $sort_order;
+            }
+        }
+
+        // Kingdom-owned rows: one CASE statement, all-integer literals.
+        if (count($owned_ids) > 0) {
+            $DB->Clear();
+            if (!$DB->ExecuteChecked(
+                "UPDATE " . DB_PREFIX . "officer_position
+    			 SET sort_order = CASE position_id " . implode(' ', $owned_cases) . " ELSE sort_order END
+    			 WHERE position_id IN (" . implode(', ', $owned_ids) . ")"
+            )) {
+                $DB->RollbackTrans();
+                return ProcessingError('The positions could not be reordered. Please try again.');
+            }
+        }
+
+        // Shared rows: one multi-row upsert against uq_kingdom_canonical. Only
+        // sort_order is in the UPDATE clause, so a kingdom's custom title_alias on the
+        // same row survives a drag untouched (and a brand-new row takes the column's
+        // NOT NULL DEFAULT ''). canonical_key is bound, never interpolated --
+        // mysql_real_escape_string() is a no-op shim in this codebase.
+        if (count($shared) > 0) {
+            $DB->Clear();
+            $tuples = [];
+            $n = 0;
+            foreach ($shared as $row) {
+                $param = 'rs_key' . $n;
+                $DB->$param = $row['key'];
+                $tuples[] = "(" . $kingdom_id . ", :" . $param . ", " . (int) $row['so'] . ")";
+                $n++;
+            }
+            if (!$DB->ExecuteChecked(
+                "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, sort_order)
+    			 VALUES " . implode(', ', $tuples) . "
+    			 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
+            )) {
+                $DB->RollbackTrans();
+                return ProcessingError('The positions could not be reordered. Please try again.');
+            }
+        }
+
+        if (!$DB->CommitTrans()) {
+            return ProcessingError('The positions could not be reordered. Please try again.');
+        }
+
+        return Success($ids);
+    }
+
+    /**
+     * Validate the custom permission set an office may carry.
+     *
+     * The read endpoint that feeds the builder (OfficerAdminAjax::actionPermissions)
+     * already strips global-scope keys, but nothing enforced that on the write side, so
+     * a hand-rolled POST -- or the JSON service, which reaches these methods with no
+     * builder at all -- could put an installation-operator permission on a kingdom
+     * office. Role-definition authority is excluded on top of that: an office that can
+     * rewrite roles can rewrite its way to anything, which is a delegation the kingdom
+     * console never intends to make through the officer builder.
+     *
+     * Escalation (the actor must already hold every key) is still enforced by
+     * RBACService::create_role_internal()/edit_role_internal(); this is the scope filter
+     * those two do not apply.
+     *
+     * @return true on success, or an error response array.
+     */
+    private function ValidatePermissionKeys($permission_keys)
+    {
+        $rejected = [];
+        foreach ((array) $permission_keys as $key) {
+            $key = (string) $key;
+            if (in_array($key, self::EXCLUDED_PERMISSION_KEYS, true)) {
+                $rejected[] = $key;
+                continue;
+            }
+            $def = PermissionRegistry::Get($key);
+            if ($def !== null && (string) ($def[2] ?? '') === 'global') {
+                $rejected[] = $key;
+            }
+        }
+        if (count($rejected) > 0) {
+            return NoAuthorization(null, 'These permissions cannot be granted through an officer position: ' . implode(', ', $rejected));
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate binding a position to an EXISTING role by id (create's 'existing' mode
+     * and edit's rebind).
+     *   - Role must exist.
+     *   - Role's kingdom_id must be 0 (system) OR == the acting kingdom — never a
+     *     foreign kingdom's custom role.
+     *   - The actor must clear RBACService's escalation check for that role at kingdom
+     *     scope. Binding is a deferred grant: whoever is seated in this office receives
+     *     every permission in the role, so kingdom.officer.position.manage alone must not
+     *     be able to point an office at the system `monarch` role (kingdom_id=0, which
+     *     passes the ownership test trivially) and mint Monarch-equivalent power.
+     *
+     * @return true on success, or an error response array.
+     */
+    private function ValidateRoleBinding($role_id, $acting_kingdom_id, $actor_id)
+    {
+        global $DB;
+        $role_id = (int) $role_id;
+        $acting_kingdom_id = (int) $acting_kingdom_id;
+        $actor_id = (int) $actor_id;
+
+        $DB->Clear();
+        $DB->vr_rid = $role_id;
+        $vr = $DB->DataSet(
+            "SELECT kingdom_id FROM " . DB_PREFIX . "role WHERE role_id = :vr_rid LIMIT 1"
+        );
+        if ($vr === false || $vr->size() == 0 || !$vr->Next()) {
+            return InvalidParameter(null, 'The selected role does not exist.');
+        }
+
+        // Fail CLOSED on an unresolved kingdom or an absent RBAC service: both the
+        // ownership test and the escalation test below are meaningless without them, and
+        // this guard exists precisely to hold for callers added later.
+        // createPositionInternal() treats a missing rbacservice the same way.
+        if ($acting_kingdom_id <= 0) {
+            return NoAuthorization(null, 'The kingdom for this position could not be determined; the role cannot be bound.');
+        }
+        if (!isset(Ork3::$Lib->rbacservice)) {
+            return ProcessingError(null, 'RBAC service unavailable; cannot bind a role to this position.');
+        }
+
+        $role_kingdom_id = (int) $vr->kingdom_id;
+        if ($role_kingdom_id !== 0 && $role_kingdom_id !== $acting_kingdom_id) {
+            return NoAuthorization(null, 'Role does not belong to this kingdom.');
+        }
+
+        $missing = Ork3::$Lib->rbacservice->MissingRolePermissions(
+            $actor_id,
+            $role_id,
+            'kingdom',
+            $acting_kingdom_id
+        );
+        if (count($missing) > 0) {
+            return NoAuthorization(null, 'Escalation prevented: you lack permissions: ' . implode(', ', $missing));
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate a proposed parent ("Reports To") for a position.
+     *   - Parent must exist.
+     *   - Parent's kingdom_id must be 0 (system) OR == the position's kingdom.
+     *   - Parent must not equal the position itself (self-parent).
+     *   - Parent chain must not loop back through this position (cycle).
+     *
+     * $position_id is 0 on CreatePosition (no row yet) — only the scope check and
+     * cycle walk (which is a no-op for an id that does not yet exist) apply.
+     *
+     * @return true on success, or an error response array.
+     */
+    private function ValidateParent($position_id, $pos_kingdom_id, $proposed_parent_id)
+    {
+        global $DB;
+        $position_id = (int) $position_id;
+        $pos_kingdom_id = (int) $pos_kingdom_id;
+        $proposed_parent_id = (int) $proposed_parent_id;
+
+        if ($position_id > 0 && $proposed_parent_id === $position_id) {
+            return InvalidParameter(null, 'A position cannot report to itself.');
+        }
+
+        $DB->Clear();
+        $DB->vp_pid = $proposed_parent_id;
+        $r = $DB->DataSet(
+            "SELECT position_id, kingdom_id FROM " . DB_PREFIX . "officer_position
+    		 WHERE position_id = :vp_pid LIMIT 1"
+        );
+        if ($r === false || $r->size() == 0 || !$r->Next()) {
+            return InvalidParameter(null, 'The selected parent position does not exist.');
+        }
+        $parent_kingdom_id = (int) $r->kingdom_id;
+        if ($parent_kingdom_id !== 0 && $parent_kingdom_id !== $pos_kingdom_id) {
+            return InvalidParameter(null, 'A position can only report to a system position or one in the same kingdom.');
+        }
+
+        if ($position_id > 0 && $this->WouldCreateCycle($position_id, $proposed_parent_id, $pos_kingdom_id)) {
+            return InvalidParameter(null, 'A position cannot report to its own descendant.');
+        }
+
+        return true;
+    }
+
+    /**
+     * Walk the parent chain upward from $proposed_parent_id. If we ever reach
+     * $position_id, assigning that parent would form a cycle.
+     *
+     * P1: load the kingdom's parent map (shared system rows + this kingdom's rows)
+     * in ONE query, then walk the chain in PHP with a visited-set guard, instead of
+     * issuing one query per ancestor hop.
+     */
+    private function WouldCreateCycle($position_id, $proposed_parent_id, $pos_kingdom_id = 0)
+    {
+        global $DB;
+        $position_id = (int) $position_id;
+        $pos_kingdom_id = (int) $pos_kingdom_id;
+
+        // Build position_id => parent_position_id for the visible scope in one query.
+        $DB->Clear();
+        $DB->wc_kid = $pos_kingdom_id;
+        $r = $DB->DataSet(
+            "SELECT position_id, parent_position_id FROM " . DB_PREFIX . "officer_position
+    		 WHERE kingdom_id = 0 OR kingdom_id = :wc_kid"
+        );
+        $parent_of = [];
+        if ($r !== false && $r->size() > 0) {
+            while ($r->Next()) {
+                $next = $r->parent_position_id;
+                $parent_of[ (int) $r->position_id ] = ($next === null || $next === '') ? 0 : (int) $next;
+            }
+        }
+
+        $cursor = (int) $proposed_parent_id;
+        $visited = [];
+        while ($cursor > 0) {
+            if ($cursor === $position_id) {
+                return true;
+            }
+            if (isset($visited[ $cursor ])) {
+                // Pre-existing cycle in the data, or an id outside the loaded scope:
+                // stop walking. Not a NEW cycle through $position_id.
+                return false;
+            }
+            $visited[ $cursor ] = true;
+            if (!isset($parent_of[ $cursor ])) {
+                return false;
+            }
+            $cursor = $parent_of[ $cursor ];
+        }
+        return false;
+    }
+
+    /**
+     * §4.4 helper: rebind every live occupant's ork_user_role from the old role
+     * to the new role for this position's scopes.
+     */
+    private function ReconcileRoleBinding($position_id, $old_rbac_role_id, $new_rbac_role_id, $changed_by)
+    {
+        global $DB;
+        $position_id = (int) $position_id;
+        $changed_by = (int) $changed_by;
+
+        $DB->Clear();
+        $DB->rcb_pid = $position_id;
+        $occ = $DB->DataSet(
+            "SELECT mundane_id, kingdom_id, park_id FROM " . DB_PREFIX . "officer
+    		 WHERE position_id = :rcb_pid AND mundane_id > 0"
+        );
+        if ($occ === false || $occ->size() == 0) {
+            return;
+        }
+        $rows = [];
+        while ($occ->Next()) {
+            $rows[] = [
+                'mundane_id' => (int) $occ->mundane_id,
+                'kingdom_id' => (int) $occ->kingdom_id,
+                'park_id'    => (int) $occ->park_id,
+            ];
+        }
+
+        $old_rbac_role_id = (int) $old_rbac_role_id;
+        $new_rbac_role_id = (int) $new_rbac_role_id;
+
+        // The revoke and the grant are one atomic unit: a failure between them would
+        // strand occupants with NEITHER the old nor the new role. Same
+        // BeginTrans/ExecuteChecked/CommitTrans/RollbackTrans pattern as
+        // Unit::MergeUnits and Park::MergeParks (transactions live on YapoMysql).
+        $DB->BeginTrans();
+        try {
+            // P2: one batched DELETE for the old role across all occupants, scoped by the
+            // occupants' (mundane_id, kingdom_id, park_id) tuples. Integer-cast every id.
+            if ($old_rbac_role_id > 0) {
+                $tuples = [];
+                foreach ($rows as $row) {
+                    $tuples[] = "(" . (int) $row['mundane_id'] . ", " . (int) $row['kingdom_id'] . ", " . (int) $row['park_id'] . ")";
+                }
+                $DB->Clear();
+                if (!$DB->ExecuteChecked(
+                    "DELETE FROM " . DB_PREFIX . "user_role
+    				 WHERE role_id = " . $old_rbac_role_id . "
+    				   AND (mundane_id, kingdom_id, park_id) IN (" . implode(', ', $tuples) . ")"
+                )) {
+                    throw new Exception('officer role revoke failed');
+                }
+            }
+
+            // P2: one batched multi-row INSERT IGNORE for the new role grant.
+            if ($new_rbac_role_id > 0) {
+                $granted_by_sql = ($changed_by > 0) ? $changed_by : 'NULL';
+                $values = [];
+                foreach ($rows as $row) {
+                    $values[] = "(" . (int) $row['mundane_id'] . ", " . $new_rbac_role_id . ", " . (int) $row['kingdom_id'] . ", " . (int) $row['park_id'] . ", 0, 0, " . $granted_by_sql . ", NULL)";
+                }
+                $DB->Clear();
+                if (!$DB->ExecuteChecked(
+                    "INSERT IGNORE INTO " . DB_PREFIX . "user_role
+    				 (mundane_id, role_id, kingdom_id, park_id, event_id, unit_id, granted_by, expires_at)
+    				 VALUES " . implode(', ', $values)
+                )) {
+                    throw new Exception('officer role grant failed');
+                }
+            }
+            $DB->CommitTrans();
+        } catch (Exception $e) {
+            $DB->RollbackTrans();
+            return;
+        }
+
+        // Per-occupant cache invalidation stays a loop (Memcache, not DB).
+        if (isset(Ork3::$Lib->rbacservice)) {
+            foreach ($rows as $row) {
+                Ork3::$Lib->rbacservice->InvalidateUserCache((int) $row['mundane_id']);
+            }
+        }
+    }
+
+    /**
+     * Token-gated entry point for retirePositionInternal(). Gated on
+     * authorizePositionFamily(), legacy role AUTH_EDIT.
+     *
+     * retirePositionInternal() calls the private vacateOfficerByPosition() path
+     * to clear the position across EVERY park and the kingdom at once -- retire
+     * is cross-scope even though single-occupant enforcement (one-seat) is
+     * per-scope. That fan-out stays inside the internal method; nothing here
+     * changes it.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId
+     * @return array
+     */
+    public function RetirePosition($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        [$kingdom_id, $denial] = $this->authorizePositionFamily($actor_id, $request, AUTH_EDIT);
+        if ($denial !== null) {
+            return $denial;
+        }
+
+        $r = $this->retirePositionInternal((int) ($request['PositionId'] ?? 0), $actor_id, $kingdom_id);
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                'Kingdom',
+                $kingdom_id,
+                null,
+                ['PositionId' => (int) ($request['PositionId'] ?? 0), 'Vacated' => $r['Detail'] ?? []]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
+     * Retire a position: reject pinned/system; auto-vacate all live occupants
+     * (closing terms + revoking ork_user_role); set retired_at=NOW(). Returns
+     * Success() with the list of vacated occupants in Detail.
+     *
+     * @param int $position_id
+     * @param int $changed_by
+     * @return array
+     */
+    private function retirePositionInternal($position_id, $changed_by, $acting_kingdom_id = 0)
+    {
+        global $DB;
+        $position_id = (int) $position_id;
+        $changed_by = (int) $changed_by;
+        $acting_kingdom_id = (int) $acting_kingdom_id;
+
+        $position = $this->GetPosition($position_id);
+        if ($position === false) {
+            return InvalidParameter(null, 'Position not found.');
+        }
+        // S1: kingdom-ownership guard (system kingdom_id=0 rows are shared; the
+        // is_pinned/is_system check below blocks retiring shared system rows anyway).
+        if ((int) $position['KingdomId'] !== 0 && $acting_kingdom_id > 0 && (int) $position['KingdomId'] !== $acting_kingdom_id) {
+            return NoAuthorization('Position does not belong to this kingdom.');
+        }
+        if ((int) $position['IsPinned'] || (int) $position['IsSystem']) {
+            return NoAuthorization('System/pinned positions cannot be retired.');
+        }
+
+        // Collect live occupants for the warning/audit.
+        $DB->Clear();
+        $DB->rt_pid = $position_id;
+        $occ = $DB->DataSet(
+            "SELECT mundane_id, kingdom_id, park_id FROM " . DB_PREFIX . "officer
+    		 WHERE position_id = :rt_pid AND mundane_id > 0"
+        );
+        $vacated = [];
+        if ($occ !== false && $occ->size() > 0) {
+            while ($occ->Next()) {
+                $vacated[] = [
+                    'MundaneId' => (int) $occ->mundane_id,
+                    'KingdomId' => (int) $occ->kingdom_id,
+                    'ParkId'    => (int) $occ->park_id,
+                ];
+            }
+        }
+
+        foreach ($vacated as $v) {
+            $this->vacateOfficerByPosition($v['KingdomId'], $v['ParkId'], $position_id, $changed_by);
+        }
+
+        $DB->Clear();
+        $DB->rtu_pid = $position_id;
+        $DB->Execute(
+            "UPDATE " . DB_PREFIX . "officer_position SET retired_at = NOW() WHERE position_id = :rtu_pid"
+        );
+
+        return Success($vacated);
+    }
+
+    /**
+     * Token-gated entry point for reinstatePositionInternal(). Gated on
+     * authorizePositionFamily(), legacy role AUTH_EDIT.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId
+     * @return array
+     */
+    public function ReinstatePosition($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        [$kingdom_id, $denial] = $this->authorizePositionFamily($actor_id, $request, AUTH_EDIT);
+        if ($denial !== null) {
+            return $denial;
+        }
+
+        $r = $this->reinstatePositionInternal((int) ($request['PositionId'] ?? 0), $kingdom_id);
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                'Kingdom',
+                $kingdom_id,
+                null,
+                ['PositionId' => (int) ($request['PositionId'] ?? 0)]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
+     * Reinstate a retired position. Classification is the unchanged column value
+     * (retire never touched it), so no snapshot restore is needed.
+     *
+     * PLACEMENT. Retire sets only retired_at and never touches sort_order, and the
+     * UI never lists retired siblings -- so ReorderSiblings() renumbers the group
+     * WITHOUT the retired row, and its stale value drifts to mean nothing. A row
+     * retired at 15 out of 10/15/20/30 comes back into a group renumbered to
+     * 10/20/30 still holding 15, and reappears wedged between the first and second
+     * live siblings at a slot nobody chose. Reinstate therefore assigns a fresh
+     * sort_order at the END of the row's CURRENT sibling group -- positionally, a
+     * reinstated position is a new arrival -- using the same measurement
+     * CreatePosition makes (NextSortOrderInGroup()), so the two arrival paths agree
+     * on where the end is.
+     *
+     * WHERE that placement is written depends on who owns the row, exactly as in
+     * ReorderSiblings(). A kingdom-owned row keeps its order on the row. A SHARED
+     * row (kingdom_id = 0) is read by every kingdom in the game, so writing
+     * officer_position.sort_order would re-order the officer list for all of them
+     * on one kingdom's reinstate; the acting kingdom's placement goes into its own
+     * officer_position_alias row instead. Only sort_order is in that upsert's UPDATE
+     * clause, so a kingdom's custom title_alias on the same row survives untouched.
+     *
+     * With NO acting kingdom (0) and a shared row there is no list to place it into
+     * and the only reachable column is the shared one, so the order is deliberately
+     * left alone and reinstate does nothing but clear retired_at. Guessing a
+     * placement there would mean writing the globally-shared column.
+     *
+     * @param int $position_id
+     * @param int $acting_kingdom_id
+     * @return array
+     */
+    private function reinstatePositionInternal($position_id, $acting_kingdom_id = 0)
+    {
+        global $DB;
+        $position_id = (int) $position_id;
+        $acting_kingdom_id = (int) $acting_kingdom_id;
+        $position = $this->GetPosition($position_id);
+        if ($position === false) {
+            return InvalidParameter(null, 'Position not found.');
+        }
+        // S1: kingdom-ownership guard (system kingdom_id=0 rows are shared).
+        if ((int) $position['KingdomId'] !== 0 && $acting_kingdom_id > 0 && (int) $position['KingdomId'] !== $acting_kingdom_id) {
+            return NoAuthorization('Position does not belong to this kingdom.');
+        }
+
+        $owner_kingdom_id = (int) $position['KingdomId'];
+        // Whose order is being measured. An owned row has exactly one candidate --
+        // its own kingdom (the guard above already proved acting == owner whenever
+        // acting is known). A shared row has no order of its own worth measuring,
+        // since every kingdom sees a different effective one, so it is the ACTING
+        // kingdom's list the row is being placed back into.
+        $measure_kingdom_id = $owner_kingdom_id > 0 ? $owner_kingdom_id : $acting_kingdom_id;
+
+        // Two writes in the shared case (alias upsert + the row's retired_at), so
+        // they commit or roll back together rather than leaving a placement behind
+        // for a position that is still retired.
+        $DB->BeginTrans();
+
+        $set_sort = '';
+        if ($measure_kingdom_id > 0) {
+            $sort_order = $this->NextSortOrderInGroup(
+                $measure_kingdom_id,
+                $position['ParentPositionId'],
+                $position_id
+            );
+            if ($owner_kingdom_id > 0) {
+                // Integer from NextSortOrderInGroup(); (int)-cast at the interpolation
+                // site rather than bound, so it sits alongside :ri_pid below.
+                $set_sort = 'sort_order = ' . (int) $sort_order . ', ';
+            } else {
+                $DB->Clear();
+                $DB->ri_key = $position['CanonicalKey'];
+                if (!$DB->ExecuteChecked(
+                    "INSERT INTO " . DB_PREFIX . "officer_position_alias (kingdom_id, canonical_key, sort_order)
+    				 VALUES (" . (int) $measure_kingdom_id . ", :ri_key, " . (int) $sort_order . ")
+    				 ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)"
+                )) {
+                    $DB->RollbackTrans();
+                    return ProcessingError('The position could not be reinstated. Please try again.');
+                }
+            }
+        }
+
+        $DB->Clear();
+        $DB->ri_pid = $position_id;
+        if (!$DB->ExecuteChecked(
+            "UPDATE " . DB_PREFIX . "officer_position
+    		 SET " . $set_sort . "retired_at = NULL
+    		 WHERE position_id = :ri_pid"
+        )) {
+            $DB->RollbackTrans();
+            return ProcessingError('The position could not be reinstated. Please try again.');
+        }
+
+        if (!$DB->CommitTrans()) {
+            return ProcessingError('The position could not be reinstated. Please try again.');
+        }
+        return Success($position_id);
+    }
+
+    // ================================================================
+    // OCCUPANCY-ENFORCED OFFICER WRITES
+    // ================================================================
+
+    /**
+     * Grouped officer display for a scope: ['crown'=>[...], 'supporting'=>[...]].
+     * Each entry carries CanonicalKey, DisplayTitle, occupant info, and term line.
+     * Retired positions filtered out unless requested.
+     *
+     * Underscored deliberately, NOT PascalCase: this method returns GivenName/Surname
+     * unblanked for every caller, with no privacy parameter at all. It must never be
+     * reachable from the JSON dispatcher (JsonServer::validate_method whitelists a
+     * class, not a method, and only an underscore or __construct is unreachable).
+     * The public-facing equivalent, Kingdom::build_officer_rows() (itself underscored --
+     * it was found dispatcher-reachable as buildOfficerRows() on the registered
+     * Kingdom class, with no method whitelist to stop it -- see its own docblock),
+     * takes an explicit $is_authorized flag and blanks GivenName/Surname to "" for
+     * anyone who isn't an authorized, identified requester -- this method has no such
+     * gate, and adding one here would change the admin console's data shape, which is
+     * a separate decision.
+     * Stays public because it's called across a class boundary from the model/controller
+     * layer (controller.OfficerAdminAjax.php), so private is not available.
+     *
+     * @param int  $kingdom_id
+     * @param int  $park_id
+     * @param bool $include_retired
+     * @return array
+     */
+    public function get_officers_for_display($kingdom_id, $park_id, $include_retired = false)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $park_id = (int) $park_id;
+
+        $sql = "SELECT o.officer_id, o.mundane_id, o.position_id, o.role,
+    			p.canonical_key, p.classification, p.sort_order,
+    			p.parent_position_id, p.hide_when_vacant,
+    			" . self::display_title_sql('p', 'a') . " AS DisplayTitle,
+    			m.persona, m.given_name, m.surname, m.username
+    		FROM " . DB_PREFIX . "officer o
+    		JOIN " . DB_PREFIX . "officer_position p ON p.position_id = o.position_id
+    		LEFT JOIN " . DB_PREFIX . "officer_position_alias a
+    		  ON a.kingdom_id = :kid AND a.canonical_key = p.canonical_key
+    		LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = o.mundane_id
+    		WHERE o.kingdom_id = :kid2 AND o.park_id = :pid";
+        if (!$include_retired) {
+            $sql .= " AND p.retired_at IS NULL";
+        }
+        $sql .= " ORDER BY p.classification, " . self::sort_order_sql('p', 'a') . ", o.officer_id ASC";
+
+        $DB->Clear();
+        $DB->kid = $kingdom_id;
+        $DB->kid2 = $kingdom_id;
+        $DB->pid = $park_id;
+        $r = $DB->DataSet($sql);
+
+        $out = [ 'crown' => [], 'supporting' => [] ];
+        if ($r !== false && $r->size() > 0) {
+            while ($r->Next()) {
+                $group = ($r->classification === 'supporting') ? 'supporting' : 'crown';
+                $out[ $group ][] = [
+                    'OfficerId'    => (int) $r->officer_id,
+                    'PositionId'   => (int) $r->position_id,
+                    'CanonicalKey' => $r->canonical_key,
+                    'DisplayTitle' => $r->DisplayTitle,
+                    'ParentPositionId' => ($r->parent_position_id === null || $r->parent_position_id === '') ? null : (int) $r->parent_position_id,
+                    'HideWhenVacant'   => (int) $r->hide_when_vacant,
+                    'MundaneId'    => (int) $r->mundane_id,
+                    'Persona'      => $r->persona,
+                    'GivenName'    => $r->given_name,
+                    'Surname'      => $r->surname,
+                    'UserName'     => $r->username,
+                ];
+            }
+        }
+        return $out;
+    }
+
+    // ================================================================
+    // OFFICER ROLLS (history reader)
+    // ================================================================
+
+    /**
+     * The holder and season-span keys of one ork_officer_history row, shared by
+     * Kingdom::GetOfficerHistory() and Park::GetOfficerHistory() so both scopes
+     * emit them identically. PeriodLabel comes from OfficerTermPeriod, the one
+     * implementation of the season rules.
+     *
+     * Underscore name: no token, and the JSON service must not reach it.
+     *
+     * @param array $row raw columns: holder_name, is_current, start_season, start_year,
+     *                   start_date, end_season, end_year, end_date, start_ordinal, end_ordinal
+     * @return array HolderName, StartSeason, StartYear, EndSeason, EndYear, PeriodLabel,
+     *               StartLabel, EndLabel (each end alone; null when unknown),
+     *               StartOrdinal, EndOrdinal (the stored ordinals: the term's meaning
+     *               and the rolls sort key; null when unknown)
+     */
+    public static function history_term_fields(array $row)
+    {
+        $season = function ($v) {
+            return ($v === null || $v === '') ? null : (string) $v;
+        };
+        $year = function ($v) {
+            return ($v === null || $v === '') ? null : (int) $v;
+        };
+        $span = [
+            'StartSeason' => $season($row['start_season'] ?? null),
+            'StartYear'   => $year($row['start_year'] ?? null),
+            'StartDate'   => $row['start_date'] ?? null,
+            'EndSeason'   => $season($row['end_season'] ?? null),
+            'EndYear'     => $year($row['end_year'] ?? null),
+            'EndDate'     => $row['end_date'] ?? null,
+            // Stored once when each side was saved, never re-resolved from the
+            // columns: closing a term must not move its start.
+            'StartOrdinal' => $year($row['start_ordinal'] ?? null),
+            'EndOrdinal'   => $year($row['end_ordinal'] ?? null),
+        ];
+        $ord = OfficerTermPeriod::ordinals($span);
+        return [
+            'HolderName'   => (string) ($row['holder_name'] ?? ''),
+            'StartSeason'  => $span['StartSeason'],
+            'StartYear'    => $span['StartYear'],
+            'EndSeason'    => $span['EndSeason'],
+            'EndYear'      => $span['EndYear'],
+            'PeriodLabel'  => OfficerTermPeriod::label($span, (int) ($row['is_current'] ?? 0) === 1),
+            'StartLabel'   => OfficerTermPeriod::sideLabel($span, 'Start'),
+            'EndLabel'     => OfficerTermPeriod::sideLabel($span, 'End'),
+            'StartOrdinal' => $ord['start'],
+            'EndOrdinal'   => $ord['end'],
+        ];
+    }
+
+    /** Whether the park (or, for a kingdom's rolls, the kingdom) or its kingdom is Retired. */
+    private function org_is_retired(int $kingdom_id, int $park_id): bool
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->or_kid = $kingdom_id;
+        $DB->or_pid = $park_id;
+        $r = $DB->DataSet(
+            "SELECT 1 AS retired FROM " . DB_PREFIX . "kingdom k
+              WHERE k.kingdom_id = :or_kid AND k.active = 'Retired'
+             UNION ALL
+             SELECT 1 FROM " . DB_PREFIX . "park p
+              WHERE p.park_id = :or_pid AND p.park_id > 0 AND p.active = 'Retired'
+             LIMIT 1"
+        );
+        return $r !== false && $r->size() > 0;
+    }
+
+    /**
+     * The officer rolls of one org: one section per office, terms newest first,
+     * with gaps and overlaps flagged against coverage (flag_rolls_terms). The one reader
+     * behind the public rolls report and the edit ledgers.
+     *
+     * Sections: every active registry office in Manage Officers order
+     * (GetPositions: classification, then sort_order_sql), then any office seen
+     * only in history -- a retired position, a position no longer in the
+     * registry, or position_id = 0 rows grouped by role -- titled by its newest
+     * row's display_label.
+     *
+     * A seated officer (ork_officer.mundane_id > 0) with no is_current row for
+     * that seat (office + holder) still shows as a current holder: a Synthetic
+     * term with OfficerHistoryId 0 and no period. The officer-history-rolls
+     * migration opens a row for every such seat, so this is a fallback only.
+     *
+     * Public data, no token; the underscore name keeps it off the JSON service.
+     * For a park, the kingdom is derived from the park, never taken from the caller.
+     *
+     * $only_key ('position:N' or 'role:X') limits the answer to that one office,
+     * for the ledger to redraw a section after a write without the whole org;
+     * the section is built exactly as in the full read. An unknown key gives no
+     * Offices.
+     *
+     * @return array ['Offices' => [ [Key, PositionId, Title, Classification, Retired,
+     *               TermCount, GapCount, OverlapCount, Terms] ]]
+     */
+    public function rolls_for_org(int $kingdom_id, int $park_id, ?string $only_key = null): array
+    {
+        if ($park_id > 0) {
+            $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+            if ($park_kingdom_id === false) {
+                return ['Offices' => []];
+            }
+            $kingdom_id = (int) $park_kingdom_id;
+            $history = Ork3::$Lib->park->GetOfficerHistory(['ParkId' => $park_id]);
+        } else {
+            $park_id = 0;
+            if (!valid_id($kingdom_id)) {
+                return ['Offices' => []];
+            }
+            $history = Ork3::$Lib->kingdom->GetOfficerHistory(['KingdomId' => $kingdom_id]);
+        }
+        $positions = $this->GetPositions($kingdom_id, true);
+        $seats = $this->get_officers_for_display($kingdom_id, $park_id, true);
+
+        // Registry sections first, in order; retired positions are held back and
+        // only get a section if they have terms.
+        $sections = [];
+        $retired = [];
+        foreach ($positions as $pos) {
+            $pid = (int) $pos['PositionId'];
+            $key = 'position:' . $pid;
+            $meta = [
+                'PositionId'     => $pid,
+                'Title'          => (string) $pos['DisplayTitle'],
+                'Classification' => $pos['Classification'],
+            ];
+            if ($pos['RetiredAt'] !== null && $pos['RetiredAt'] !== '') {
+                $retired[$key] = $meta;
+                continue;
+            }
+            $sections[$key] = $meta + ['Retired' => false, 'Terms' => [], 'Labels' => []];
+        }
+
+        $extra = [];
+        foreach (($history['History'] ?? []) as $row) {
+            $pid = (int) $row['PositionId'];
+            $key = $pid > 0 ? 'position:' . $pid : 'role:' . $row['Role'];
+            if ($only_key !== null && $key !== $only_key) {
+                continue;
+            }
+            if (!isset($sections[$key]) && !isset($extra[$key])) {
+                $extra[$key] = [
+                    'PositionId'     => $pid,
+                    'Title'          => $retired[$key]['Title'] ?? '',
+                    'Classification' => $retired[$key]['Classification'] ?? $row['Classification'],
+                    'Retired'        => true,
+                    'Terms'          => [],
+                    'Labels'         => [],
+                ];
+            }
+            $term = $this->rollsTerm($row);
+            if (isset($sections[$key])) {
+                $sections[$key]['Terms'][] = $term;
+                $sections[$key]['Labels'][$term['OfficerHistoryId']] = $row['DisplayLabel'] !== '' ? $row['DisplayLabel'] : $row['Role'];
+            } else {
+                $extra[$key]['Terms'][] = $term;
+                $extra[$key]['Labels'][$term['OfficerHistoryId']] = $row['DisplayLabel'] !== '' ? $row['DisplayLabel'] : $row['Role'];
+            }
+        }
+
+        // Seated officers whose office has no current history row. A retired org
+        // has no current officers (its marks are cleared on retire and by the
+        // officer-history-rolls migration), so nothing is synthesized there.
+        $seated = $this->org_is_retired($kingdom_id, $park_id)
+            ? []
+            : array_merge($seats['crown'] ?? [], $seats['supporting'] ?? []);
+        foreach ($seated as $seat) {
+            if ((int) $seat['MundaneId'] <= 0) {
+                continue;
+            }
+            $key = 'position:' . (int) $seat['PositionId'];
+            if ($only_key !== null && $key !== $only_key) {
+                continue;
+            }
+            if (isset($sections[$key])) {
+                $target = &$sections[$key];
+            } else {
+                if (!isset($extra[$key])) {
+                    $extra[$key] = [
+                        'PositionId'     => (int) $seat['PositionId'],
+                        'Title'          => (string) $seat['DisplayTitle'],
+                        'Classification' => $retired[$key]['Classification'] ?? null,
+                        'Retired'        => true,
+                        'Terms'          => [],
+                        'Labels'         => [],
+                    ];
+                }
+                $target = &$extra[$key];
+            }
+            // Current is per seat: a supporting office may have several holders.
+            $hasCurrent = false;
+            foreach ($target['Terms'] as $t) {
+                if ($t['IsCurrent'] && $t['MundaneId'] === (int) $seat['MundaneId']) {
+                    $hasCurrent = true;
+                    break;
+                }
+            }
+            if (!$hasCurrent) {
+                $target['Terms'][] = $this->rollsTerm([
+                    'OfficerHistoryId' => 0,
+                    'MundaneId'        => (int) $seat['MundaneId'],
+                    'Persona'          => (string) ($seat['Persona'] ?? ''),
+                    'HolderName'       => '',
+                    'IsCurrent'        => true,
+                    'StartSeason'      => null, 'StartYear' => null, 'StartDate' => null,
+                    'EndSeason'        => null, 'EndYear' => null, 'EndDate' => null,
+                    'StartOrdinal'     => null, 'EndOrdinal' => null,
+                    'PeriodLabel'      => OfficerTermPeriod::label([], true),
+                    'Notes'            => '',
+                ], true);
+            }
+            unset($target);
+        }
+
+        // History-only sections: retired registry offices in registry order, then
+        // the rest by title.
+        $tail = [];
+        foreach ($retired as $key => $meta) {
+            if (isset($extra[$key])) {
+                $tail[$key] = $extra[$key];
+                unset($extra[$key]);
+            }
+        }
+        if ($only_key !== null) {
+            $sections = array_intersect_key($sections, [$only_key => true]);
+            $tail = array_intersect_key($tail, [$only_key => true]);
+            $extra = array_intersect_key($extra, [$only_key => true]);
+        }
+        $offices = [];
+        $finish = function (array $section, $key, $titleFromNewest) {
+            usort($section['Terms'], [self::class, 'compare_rolls_terms']);
+            if ($titleFromNewest) {
+                foreach ($section['Terms'] as $t) {
+                    if (!$t['Synthetic'] && isset($section['Labels'][$t['OfficerHistoryId']])) {
+                        $section['Title'] = (string) $section['Labels'][$t['OfficerHistoryId']];
+                        break;
+                    }
+                }
+            }
+            $flags = self::flag_rolls_terms($section['Terms'], $section['Classification'] === 'supporting');
+            return [
+                'Key'            => (string) $key,
+                'PositionId'     => (int) $section['PositionId'],
+                'Title'          => (string) $section['Title'],
+                'Classification' => $section['Classification'],
+                'Retired'        => (bool) $section['Retired'],
+                'TermCount'      => count($flags['Terms']),
+                'GapCount'       => $flags['GapCount'],
+                'OverlapCount'   => $flags['OverlapCount'],
+                'Terms'          => $flags['Terms'],
+            ];
+        };
+        foreach ($sections as $key => $section) {
+            $offices[] = $finish($section, $key, false);
+        }
+        foreach ($tail as $key => $section) {
+            $offices[] = $finish($section, $key, true);
+        }
+        $restOut = [];
+        foreach ($extra as $key => $section) {
+            $restOut[] = $finish($section, $key, true);
+        }
+        usort($restOut, function ($a, $b) {
+            return strcasecmp($a['Title'], $b['Title']) ?: strcmp($a['Key'], $b['Key']);
+        });
+
+        return ['Offices' => array_merge($offices, $restOut)];
+    }
+
+    /**
+     * Each holder's latest term per office in one org: "mundane_id|role" => the
+     * GetOfficerHistory row that sorts first under compare_rolls_terms (current
+     * beats past, then the rolls key), so Manage Officers and the rolls agree on
+     * which term is a holder's latest. One history read for the whole org.
+     *
+     * Public data, no token; the underscore name keeps it off the JSON service.
+     *
+     * @return array "mundane_id|role" => GetOfficerHistory row
+     */
+    public function latest_term_by_holder(int $kingdom_id, int $park_id): array
+    {
+        if ($park_id > 0) {
+            $history = Ork3::$Lib->park->GetOfficerHistory(['ParkId' => $park_id]);
+        } else {
+            if (!valid_id($kingdom_id)) {
+                return [];
+            }
+            $history = Ork3::$Lib->kingdom->GetOfficerHistory(['KingdomId' => $kingdom_id]);
+        }
+        $out = [];
+        foreach (($history['History'] ?? []) as $row) {
+            $mundane_id = (int) ($row['MundaneId'] ?? 0);
+            $role = trim((string) ($row['Role'] ?? ''));
+            if ($mundane_id <= 0 || $role === '') {
+                continue;
+            }
+            $key = $mundane_id . '|' . $role;
+            if (!isset($out[$key]) || self::compare_rolls_terms($row, $out[$key]) < 0) {
+                $out[$key] = $row;
+            }
+        }
+        return $out;
+    }
+
+    /** One rolls Term from a GetOfficerHistory row (or a synthetic seat row). */
+    private function rollsTerm(array $row, bool $synthetic = false): array
+    {
+        $span = [
+            'StartSeason' => $row['StartSeason'], 'StartYear' => $row['StartYear'], 'StartDate' => $row['StartDate'],
+            'EndSeason'   => $row['EndSeason'], 'EndYear' => $row['EndYear'], 'EndDate' => $row['EndDate'],
+            'StartOrdinal' => $row['StartOrdinal'], 'EndOrdinal' => $row['EndOrdinal'],
+        ];
+        $ord = OfficerTermPeriod::ordinals($span);
+        $current = (bool) $row['IsCurrent'];
+        $mundane_id = (int) $row['MundaneId'];
+        return [
+            'OfficerHistoryId' => (int) $row['OfficerHistoryId'],
+            'MundaneId'        => $mundane_id,
+            'Persona'          => $mundane_id > 0 ? (string) ($row['Persona'] ?? '') : '',
+            'HolderName'       => (string) ($row['HolderName'] ?? ''),
+            'IsCurrent'        => $current,
+            'StartSeason'      => $row['StartSeason'],
+            'StartYear'        => $row['StartYear'],
+            'EndSeason'        => $row['EndSeason'],
+            'EndYear'          => $row['EndYear'],
+            'StartDate'        => $row['StartDate'],
+            'EndDate'          => $row['EndDate'],
+            'PeriodLabel'      => (string) $row['PeriodLabel'],
+            // PeriodLabel without a current term's "– present" (the pages draw a pill),
+            // and the period as the ledger's Season field shows it for editing.
+            'PeriodLabelBase'  => OfficerTermPeriod::labelBase($span, $current),
+            'PeriodText'       => OfficerTermPeriod::editText($span, $current),
+            // Each end alone (null when unknown), for the public report's wording.
+            'StartLabel'       => OfficerTermPeriod::sideLabel($span, 'Start'),
+            'EndLabel'         => OfficerTermPeriod::sideLabel($span, 'End'),
+            'Note'             => (string) ($row['Notes'] ?? ''),
+            'StartOrdinal'     => $ord['start'],
+            'EndOrdinal'       => $ord['end'],
+            'FlagAfter'        => null,
+            'Synthetic'        => $synthetic,
+        ];
+    }
+
+    /**
+     * The rolls sort key, newest first: current terms on top, then later starts,
+     * unknown starts last. Shared by the rolls reader and latest_term_by_holder;
+     * GetOfficerHistory sorts the same key in SQL (ROLLS_ORDER_SQL), so every
+     * officer-history surface orders terms alike.
+     */
+    public static function compare_rolls_terms(array $a, array $b): int
+    {
+        if ($a['IsCurrent'] !== $b['IsCurrent']) {
+            return $a['IsCurrent'] ? -1 : 1;
+        }
+        $as = $a['StartOrdinal'];
+        $bs = $b['StartOrdinal'];
+        if (($as === null) !== ($bs === null)) {
+            return $as === null ? 1 : -1;
+        }
+        if ($as !== $bs) {
+            return $bs <=> $as;
+        }
+        // Same season: a later exact start date is newer, and a dated start sorts
+        // above a season-only one (SQL's start_date DESC, NULLs last).
+        $ad = (string) ($a['StartDate'] ?? '');
+        $bd = (string) ($b['StartDate'] ?? '');
+        if ($ad !== $bd) {
+            if ($ad === '' || $bd === '') {
+                return $ad === '' ? 1 : -1;
+            }
+            return strcmp($bd, $ad);
+        }
+        $ae = $a['EndOrdinal'];
+        $be = $b['EndOrdinal'];
+        if (($ae === null) !== ($be === null)) {
+            return $ae === null ? 1 : -1;
+        }
+        if ($ae !== $be) {
+            return $be <=> $ae;
+        }
+        return $b['OfficerHistoryId'] <=> $a['OfficerHistoryId'];
+    }
+
+    /**
+     * Gap and overlap flags for one office's terms, found against COVERAGE, not
+     * between neighbours: walking the terms oldest to newest, coverage is the
+     * furthest EndOrdinal reached so far.
+     *
+     *  - Gap: a term starts 2 or more seasons beyond coverage (one whole season
+     *    missing). The flag sits on that term, so in the newest-first ledger it
+     *    is drawn between that term and the older ones.
+     *  - Overlap (single-holder offices only): a term starts before coverage
+     *    ends and runs past it (a current term runs through the present, so
+     *    it overlaps when it starts inside coverage). A term wholly inside
+     *    coverage is an acting / nested term and is not flagged; a shared
+     *    handoff season (Fall to Fall) is not an overlap. The label names the
+     *    holder whose term reached furthest, by their recorded name.
+     *  - Multi-holder (supporting) offices: co-holders overlap by design, so no
+     *    overlaps; gaps are found against the union of their terms.
+     *  - Terms are walked in start order (unknown starts first), so a current
+     *    term, which the rolls order puts on top, is placed by its start. A
+     *    current term with a known start covers through the present.
+     *  - An unknown start cannot be placed: the term is not flagged, but its
+     *    known end still counts as coverage (a current one with an unknown
+     *    start covers nothing). An unknown end on a past term leaves coverage
+     *    unknown, so the next start raises no gap; coverage then resumes from
+     *    that term's start.
+     *
+     * Public data, no token; the underscore name keeps it off the JSON service.
+     *
+     * @param array $terms rolls Terms in the rolls order (newest first)
+     * @return array ['Terms' => the same terms with FlagAfter set, 'GapCount', 'OverlapCount']
+     */
+    public static function flag_rolls_terms(array $terms, bool $multi_holder): array
+    {
+        $gaps = 0;
+        $overlaps = 0;
+        $reach = null;        // furthest known end so far
+        $reachTerm = null;    // the term that reached it
+        $open = false;        // the last placed term's end is unknown
+        // Walk in start order, not the rolls order (which puts current terms
+        // first): unknown starts first, then start ascending; equal starts in
+        // reverse rolls order (index descending).
+        $order = array_keys($terms);
+        usort($order, function ($a, $b) use ($terms) {
+            $sa = $terms[$a]['StartOrdinal'];
+            $sb = $terms[$b]['StartOrdinal'];
+            if (($sa === null) !== ($sb === null)) {
+                return $sa === null ? -1 : 1;
+            }
+            if ($sa !== $sb) {
+                return $sa <=> $sb;
+            }
+            return $b <=> $a;
+        });
+        foreach ($order as $i) {
+            $t = $terms[$i];
+            $terms[$i]['FlagAfter'] = null;
+            $start = $t['StartOrdinal'];
+            $end = $t['EndOrdinal'];
+            if ($start === null) {
+                // Raw end only: a current row with an unknown start (the
+                // migration's seat row) must not cover the whole office.
+                if ($end !== null && ($reach === null || $end > $reach)) {
+                    $reach = $end;
+                    $reachTerm = $t;
+                }
+                continue;
+            }
+            // A current term covers through the present.
+            if (!empty($t['IsCurrent'])) {
+                $end = PHP_INT_MAX;
+            }
+            $flag = null;
+            if (!$open && $reach !== null && $start - $reach >= 2) {
+                $span = OfficerTermPeriod::spanLabel($reach + 1, $start - 1);
+                $flag = ['Type' => 'gap', 'Label' => 'Gap: ' . $span, 'Span' => $span];
+                $gaps++;
+            } elseif (!$multi_holder && $reach !== null && $start < $reach && ($end === null || $end > $reach)) {
+                $holder = self::rolls_holder_name($reachTerm);
+                $flag = ['Type' => 'overlap', 'Label' => 'Overlap with ' . ($holder !== '' ? $holder : 'an unknown holder')];
+                $overlaps++;
+            }
+            $terms[$i]['FlagAfter'] = $flag;
+            if ($end === null) {
+                $open = true;
+                if ($reach === null || $start > $reach) {
+                    $reach = $start;
+                    $reachTerm = $t;
+                }
+            } else {
+                $open = false;
+                if ($reach === null || $end > $reach) {
+                    $reach = $end;
+                    $reachTerm = $t;
+                }
+            }
+        }
+        return ['Terms' => $terms, 'GapCount' => $gaps, 'OverlapCount' => $overlaps];
+    }
+
+    /**
+     * A rolls term's holder as named on the page: the recorded name (holder_name)
+     * when there is one, else the linked persona. '' when neither is known.
+     */
+    public static function rolls_holder_name(?array $term): string
+    {
+        if ($term === null) {
+            return '';
+        }
+        $recorded = trim((string) ($term['HolderName'] ?? ''));
+        if ($recorded !== '') {
+            return $recorded;
+        }
+        return (int) ($term['MundaneId'] ?? 0) > 0 ? trim((string) ($term['Persona'] ?? '')) : '';
+    }
+
+    /**
+     * Resolve the kingdom a scoped officer write actually acts in.
+     *
+     * SINGLE SOURCE OF TRUTH for the four gated entry points below
+     * (TransitionOfficer, SetOccupant, VacateOfficer, VacateOffice). On a
+     * park-scoped call the actor was authorized against the PARK, so the
+     * caller-supplied KingdomId is still unverified: derive it from the park
+     * (as class.Park.php GetParkKingdomId does) rather than trust the request,
+     * so a park-scoped caller cannot name a foreign kingdom, and a caller that
+     * simply omits KingdomId does not fail the membership check. A
+     * kingdom-scoped call ($park_id <= 0) keeps the id it was gated on.
+     *
+     * @param int $kingdom_id Caller-supplied kingdom id (used only when $park_id <= 0)
+     * @param int $park_id    Park the caller was authorized against, or 0
+     * @return int|array The kingdom id to act in, or an error response to return as-is
+     */
+    private function resolveActingKingdomId($kingdom_id, $park_id)
+    {
+        if ($park_id <= 0) {
+            return (int) $kingdom_id;
+        }
+        $park_kingdom_id = Ork3::$Lib->park->GetParkKingdomId($park_id);
+        if ($park_kingdom_id === false) {
+            return InvalidParameter(null, 'Park not found.');
+        }
+        return (int) $park_kingdom_id;
+    }
+
+    /**
+     * Whether $uid may write officer history for a kingdom ($park_id 0) or a park.
+     * The one history-write gate: AddHistoryTerm, EditHistoryTerm and
+     * DeleteHistoryTerm authorize through it, and UI edit affordances read it,
+     * so the key (PermissionKeyFor('history')), scope and legacy role (AUTH_EDIT)
+     * cannot drift between them.
+     *
+     * No token; the underscore name keeps it off the JSON service.
+     */
+    public function can_edit_history_for(int $uid, int $kingdom_id, int $park_id): bool
+    {
+        if ($uid <= 0) {
+            return false;
+        }
+        $scope    = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id = ($park_id > 0) ? $park_id : $kingdom_id;
+        return (bool) Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $uid,
+            self::PermissionKeyFor('history', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        );
+    }
+
+    /**
+     * Move an office from one holder to another as a single recorded transition.
+     *
+     * This is the API shape every other write in the application uses
+     * (compare Player::AddAward): a $request array carrying a Token, the actor
+     * resolved from that token rather than asserted by the caller, the permission
+     * gate inside the domain, and a dangeraudit row. It is the only officer write
+     * that can express a backdated end date or a note, because Common::set_officer's
+     * record_officer_history stamps today and has nowhere to put one.
+     *
+     * A park-scoped call's KingdomId is never trusted: it is derived from the
+     * park (matching Park::SetOfficer / GetParkKingdomId) so a park-scoped actor
+     * cannot smuggle a foreign kingdom into the ownership guard, the membership
+     * check, or the kingdom_id column written to ork_officer/ork_officer_history.
+     *
+     * The read-modify-write below -- read the current holder, close their term,
+     * move the seat, open the new term -- is serialized under the same
+     * 'officer_assign_<kingdom>_<park>_<position>' GET_LOCK SetOfficerByPosition
+     * takes, and for the same reason: two admins transitioning one office
+     * concurrently must not both read the same outgoing holder and both open a
+     * term, which would leave two current (is_current = 1) rows on one seat. MySQL
+     * GET_LOCK is re-entrant per session and Common::set_officer does not take
+     * this lock itself, so holding it across the whole span is safe.
+     *
+     * ork_officer is MyISAM -- no transactions -- so the order is fixed: close
+     * the outgoing term, then move the seat, then open the incoming term, and
+     * each step's outcome is checked before the next runs. A failure part-way
+     * leaves a closed term and either a visibly vacant office or an unchanged
+     * one -- self-consistent and re-runnable, never a seated officer with no
+     * term or a silently-unmoved seat reported as Success().
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId, MundaneId (incoming),
+     *                        OutgoingEndDate?, OutgoingStartDate?, TermStart?, Note?
+     * @return array
+     */
+    public function TransitionOfficer($request)
+    {
+        global $DB;
+
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id  = (int) ($request['KingdomId'] ?? 0);
+        $park_id     = (int) ($request['ParkId'] ?? 0);
+        $position_id = (int) ($request['PositionId'] ?? 0);
+        $incoming_id = (int) ($request['MundaneId'] ?? 0);
+
+        $scope     = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id  = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('set', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // The gate above authorized this actor against the PARK (scope_id =
+        // $park_id); $kingdom_id itself is still caller-supplied and unverified.
+        $kingdom_id = $this->resolveActingKingdomId($kingdom_id, $park_id);
+        if (is_array($kingdom_id)) {
+            return $kingdom_id;
+        }
+
+        if (!valid_id($position_id)) {
+            return InvalidParameter(null, 'A valid position is required.');
+        }
+        if (!valid_id($incoming_id)) {
+            return InvalidParameter(null, 'A valid member is required.');
+        }
+
+        $position = $this->GetPosition($position_id, $kingdom_id);
+        if ($position === false) {
+            return InvalidParameter(null, 'Position not found.');
+        }
+        if ((int) $position['KingdomId'] !== 0 && $kingdom_id > 0
+            && (int) $position['KingdomId'] !== $kingdom_id) {
+            return NoAuthorization(null, 'Position does not belong to this kingdom.');
+        }
+        if ($position['RetiredAt'] !== null) {
+            return InvalidParameter(null, 'Cannot assign an occupant to a retired position.');
+        }
+
+        $today   = date('Y-m-d');
+        $end     = $this->normalizeDate($request['OutgoingEndDate'] ?? '', $today);
+        $start   = $this->normalizeDate($request['TermStart'] ?? '', $end);
+        $backfill_start = $this->normalizeDate($request['OutgoingStartDate'] ?? '', '');
+        // mb_substr, not substr: Note is free text and a byte-based cut can slice
+        // a multi-byte character in half, leaving invalid UTF-8 in the column.
+        $note    = mb_substr(trim((string) ($request['Note'] ?? '')), 0, 500);
+
+        if ($end === false || $start === false || $backfill_start === false) {
+            return InvalidParameter(null, 'Dates must be in YYYY-MM-DD form.');
+        }
+        if ($end > $today) {
+            return InvalidParameter(null, 'A term cannot end in the future.');
+        }
+
+        // The incoming officer must belong to the org, matching the rule the legacy
+        // path has always applied (Kingdom::SetOfficer, class.Kingdom.php:1348).
+        $incoming = Ork3::$Lib->player->player_info($incoming_id);
+        if (!is_array($incoming) || (int) ($incoming['KingdomId'] ?? 0) !== $kingdom_id) {
+            return InvalidParameter(null, 'The new officer must be a member of this kingdom.');
+        }
+
+        $canonical_key = $position['CanonicalKey'];
+
+        // Single-occupant-per-office, unconditionally, same as
+        // SetOfficerByPosition's crown branch and regardless of Classification.
+        // Common::set_officer -- which this method delegates the seat move to --
+        // is itself single-slot no matter what the position is classified as, so
+        // forking on Classification here would not change how the seat is
+        // written, only whether a term-closing bookkeeping step runs against a
+        // holder that set_officer will overwrite either way. currentHolder()'s
+        // ORDER BY (below) still pins which holder is treated as outgoing if a
+        // position ever does carry more than one occupant row.
+        $lock_name = 'officer_assign_' . $kingdom_id . '_' . $park_id . '_' . $position_id;
+        $locked = false;
+        try {
+            $DB->Clear();
+            $DB->lk = $lock_name;
+            $DB->lt = self::CROWN_LOCK_TIMEOUT;
+            $lr = $DB->DataSet('SELECT GET_LOCK(:lk, :lt) AS got');
+            if ($lr === false || $lr->size() == 0 || !$lr->Next() || (int) $lr->got !== 1) {
+                return ProcessingError('Could not acquire the officer assignment lock; please retry.');
+            }
+            $locked = true;
+
+            $outgoing = $this->currentHolder($kingdom_id, $park_id, $position_id);
+            if ($outgoing > 0) {
+                // Only meaningful when there IS an outgoing holder -- filling a
+                // VACANT office has no outgoing term for an incoming TermStart to
+                // conflict with, and $end defaults to today when no outgoing
+                // holder ever sent an OutgoingEndDate, which would otherwise
+                // reject any backdated TermStart on a vacant office.
+                if ($start < $end) {
+                    return InvalidParameter(null, 'The incoming term cannot start before the outgoing term ends.');
+                }
+                $open_start = $this->openTermStart($kingdom_id, $park_id, $position_id, $canonical_key, $outgoing);
+                if ($open_start !== null && $open_start !== '' && $end < $open_start) {
+                    return InvalidParameter(null, 'A term cannot end before it began.');
+                }
+                if (!$this->closeTermAt($kingdom_id, $park_id, $position_id, $canonical_key, $outgoing, $end, $backfill_start)) {
+                    return ProcessingError(null, 'Could not close the outgoing term.');
+                }
+            }
+
+            // Move the seat, suppressing set_officer's own history write -- this method
+            // owns the term, with dates and a note that record_officer_history cannot carry.
+            $c = new Common();
+            $this->EnsureCrownSlot($kingdom_id, $park_id, $position_id, $canonical_key);
+            $c->set_officer(
+                $kingdom_id,
+                $park_id,
+                $incoming_id,
+                $canonical_key,
+                0,
+                $actor_id,
+                $position_id,
+                $position['DisplayTitle'],
+                true
+            );
+
+            // set_officer() returns void and silently no-ops when a has_auth_role
+            // position's ork_authorization row is missing -- exactly the shape
+            // EnsureCrownSlot's vacant placeholder leaves (authorization_id = 0),
+            // and exactly the has_auth_role=1 shape of the Core Five this feature
+            // exists for. Re-read the seat rather than trust the call above did
+            // anything, so a no-op reassignment is reported as a failure instead
+            // of a Success() that closed the outgoing term but left them seated.
+            if ($this->currentHolder($kingdom_id, $park_id, $position_id) !== $incoming_id) {
+                return ProcessingError(null, 'The office could not be reassigned.');
+            }
+
+            if (!$this->openTerm(
+                $kingdom_id,
+                $park_id,
+                $position_id,
+                $canonical_key,
+                $incoming_id,
+                $actor_id,
+                $start,
+                $note,
+                $position['DisplayTitle']
+            )) {
+                return ProcessingError(null, 'The office was reassigned, but the new term could not be recorded.');
+            }
+        } finally {
+            if ($locked) {
+                $DB->Clear();
+                $DB->rk = $lock_name;
+                $DB->Execute('SELECT RELEASE_LOCK(:rk)');
+            }
+        }
+
+        $safe = $request;
+        unset($safe['Token']);
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $safe,
+            ($park_id > 0) ? 'Park' : 'Kingdom',
+            $scope_id,
+            ['MundaneId' => $outgoing, 'PositionId' => $position_id, 'EndDate' => $end],
+            ['MundaneId' => $incoming_id, 'PositionId' => $position_id, 'StartDate' => $start]
+        );
+
+        return Success();
+    }
+
+    /** '' -> $default; a valid Y-m-d -> itself; anything else -> false. */
+    private function normalizeDate($value, $default)
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return $default;
+        }
+        $d = DateTime::createFromFormat('Y-m-d', $value);
+        if ($d === false || $d->format('Y-m-d') !== $value) {
+            return false;
+        }
+        return $value;
+    }
+
+    /**
+     * The seat occupant of record for an office. ORDER BY officer_id makes the
+     * choice deterministic if a position ever carries more than one ork_officer
+     * row (it should not, for a seat this method treats as single-occupant, but
+     * an unordered LIMIT 1 would otherwise let a concurrent write flip which row
+     * "currentHolder" means between the read here and the term-closing read
+     * that follows it).
+     */
+    private function currentHolder($kingdom_id, $park_id, $position_id)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->ch_kid = (int) $kingdom_id;
+        $DB->ch_pid = (int) $park_id;
+        $DB->ch_pos = (int) $position_id;
+        $r = $DB->DataSet(
+            'SELECT mundane_id FROM ' . DB_PREFIX . 'officer
+             WHERE kingdom_id = :ch_kid AND park_id = :ch_pid
+               AND position_id = :ch_pos AND mundane_id > 0
+             ORDER BY officer_id LIMIT 1'
+        );
+        return ($r !== false && $r->size() > 0 && $r->Next()) ? (int) $r->mundane_id : 0;
+    }
+
+    /**
+     * position_id OR (position_id = 0 AND role match): the same legacy-row
+     * pattern CloseOfficerHistoryTerm uses. Migration 2026-08-25-04 only
+     * backfilled position_id for the kingdom_id=0 Core Five, so a custom
+     * position's pre-existing history rows still carry position_id = 0 and are
+     * identified by canonical key alone.
+     */
+    private function openTermStart($kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->os_kid = (int) $kingdom_id;
+        $DB->os_pid = (int) $park_id;
+        $DB->os_pos = (int) $position_id;
+        $DB->os_role = $canonical_key;
+        $DB->os_mid = (int) $mundane_id;
+        $r = $DB->DataSet(
+            'SELECT start_date FROM ' . DB_PREFIX . 'officer_history
+             WHERE ' . self::history_org_sql('os_kid', 'os_pid') . '
+               AND ( position_id = :os_pos OR ( position_id = 0 AND role = :os_role ) )
+               AND mundane_id = :os_mid AND is_current = 1
+             ORDER BY officer_history_id DESC LIMIT 1'
+        );
+        return ($r !== false && $r->size() > 0 && $r->Next()) ? $r->start_date : null;
+    }
+
+    /**
+     * Close the open term at $end. $backfill_start fills a NULL start_date only --
+     * a start date already on the row is never overwritten by a transition.
+     * Matches openTermStart()'s legacy position_id=0 fallback. Returns false on
+     * a genuine statement failure (ExecuteChecked) so the caller can abort
+     * before opening a second term against a close that never happened.
+     */
+    private function closeTermAt($kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $end, $backfill_start)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->ct_end = $end;
+        $DB->ct_kid = (int) $kingdom_id;
+        $DB->ct_pid = (int) $park_id;
+        $DB->ct_pos = (int) $position_id;
+        $DB->ct_role = $canonical_key;
+        $DB->ct_mid = (int) $mundane_id;
+        $DB->ct_eord = OfficerTermPeriod::ordinal(null, null, $end, 'end', null);
+        $start_sql = '';
+        if ($backfill_start !== '') {
+            // start_ordinal before start_date: MariaDB assigns left to right, so
+            // both IFs test the row's start_date as it was. The stored start is
+            // otherwise never touched by a close.
+            $DB->ct_start = $backfill_start;
+            $DB->ct_sord = OfficerTermPeriod::ordinal(null, null, $backfill_start, 'start', null);
+            $start_sql = ', start_ordinal = IF(start_date IS NULL, :ct_sord, start_ordinal)'
+                . ', start_date = IF(start_date IS NULL, :ct_start, start_date)';
+        }
+        return $DB->ExecuteChecked(
+            'UPDATE ' . DB_PREFIX . 'officer_history
+             SET end_date = :ct_end, end_ordinal = :ct_eord, is_current = 0' . $start_sql . '
+             WHERE ' . self::history_org_sql('ct_kid', 'ct_pid') . '
+               AND ( position_id = :ct_pos OR ( position_id = 0 AND role = :ct_role ) )
+               AND mundane_id = :ct_mid
+               AND is_current = 1'
+        );
+    }
+
+    /** Returns false on a genuine statement failure (ExecuteChecked). */
+    private function openTerm($kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $actor_id, $start, $note, $display_label)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->ot_kid = (int) $kingdom_id;
+        $DB->ot_pid = (int) $park_id;
+        $DB->ot_mid = (int) $mundane_id;
+        $DB->ot_role = $canonical_key;
+        $DB->ot_pos = (int) $position_id;
+        $DB->ot_label = ($display_label !== '') ? $display_label : $canonical_key;
+        $DB->ot_start = $start;
+        $DB->ot_sord = OfficerTermPeriod::ordinal(null, null, $start, 'start', null);
+        $DB->ot_cb = ($actor_id > 0 ? $actor_id : null);
+        $DB->ot_notes = $note;
+        // end_date is a SQL literal NULL, not a bound param -- kept intentionally
+        // even though a review of YapoMysql::Execute()/ExecuteChecked() confirmed
+        // a bound PHP null on this raw path IS honoured (the null-drop is a
+        // YapoSave/ORM behaviour, not this path's); the literal reads clearer
+        // regardless of which path drops it.
+        return $DB->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'officer_history
+             (kingdom_id, park_id, mundane_id, role, position_id, display_label,
+              start_date, start_ordinal, end_date, end_ordinal, is_current, changed_by, notes, created_at)
+             VALUES (:ot_kid, :ot_pid, :ot_mid, :ot_role, :ot_pos, :ot_label,
+                     :ot_start, :ot_sord, NULL, NULL, 1, :ot_cb, :ot_notes, NOW())'
+        );
+    }
+
+    /**
+     * Token-gated entry point for setOfficerByPosition(). Mirrors
+     * TransitionOfficer's gate-then-delegate shape: IsAuthorized first (so
+     * DangerAudit's $_SESSION read is populated), then
+     * checkPermissionOrAuthority against the scope the caller is acting in.
+     *
+     * $kingdom_id is never trusted as-is when $park_id > 0 -- a park-scoped
+     * actor is authorized against the park, not the kingdom, so the kingdom_id
+     * that drives GetPosition's ownership guard and the kingdom_id column
+     * written to ork_officer/ork_officer_history must be derived from the
+     * park (same rule TransitionOfficer applies), not taken from the request.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId, MundaneId, TermStart, TermEnd, Note
+     * @return array
+     */
+    public function SetOccupant($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('set', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // Derive from the park rather than trust the request -- see
+        // resolveActingKingdomId().
+        $kingdom_id = $this->resolveActingKingdomId($kingdom_id, $park_id);
+        if (is_array($kingdom_id)) {
+            return $kingdom_id;
+        }
+
+        $r = $this->setOfficerByPosition(
+            $kingdom_id,
+            $park_id,
+            (int) ($request['PositionId'] ?? 0),
+            (int) ($request['MundaneId'] ?? 0),
+            (string) ($request['TermStart'] ?? ''),
+            (string) ($request['TermEnd'] ?? ''),
+            (string) ($request['Note'] ?? ''),
+            $actor_id
+        );
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                ($park_id > 0) ? 'Park' : 'Kingdom',
+                $scope_id,
+                null,
+                ['MundaneId' => (int) ($request['MundaneId'] ?? 0)]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
+     * Token-gated entry point for vacateOfficerByPosition(), restricted to the
+     * single-holder path -- a MundaneId is REQUIRED here. The all-holders
+     * ("Vacate All") behaviour stays reachable only through
+     * vacateOfficerByPosition() directly, which RetirePosition uses to clear
+     * a position across every park and the kingdom at once when the position
+     * itself is retired; that is a different operation from removing one
+     * person from one seat and is not exposed through this method.
+     *
+     * Gated on PermissionKeyFor('vacate', ...), NOT 'set' -- the console's
+     * existing bug mapped every vacate action to kingdom.officer.set, which
+     * meant kingdom.officer.vacate / park.officer.vacate existed and were
+     * checked by nothing.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId, MundaneId
+     * @return array
+     */
+    public function VacateOfficer($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('vacate', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // Derive from the park rather than trust the request -- see
+        // resolveActingKingdomId().
+        $kingdom_id = $this->resolveActingKingdomId($kingdom_id, $park_id);
+        if (is_array($kingdom_id)) {
+            return $kingdom_id;
+        }
+
+        $mundane_id = (int) ($request['MundaneId'] ?? 0);
+        if (!valid_id($mundane_id)) {
+            return InvalidParameter(null, 'A valid member is required to remove an officer.');
+        }
+
+        $r = $this->vacateOfficerByPosition($kingdom_id, $park_id, (int) ($request['PositionId'] ?? 0), $actor_id, $mundane_id);
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                ($park_id > 0) ? 'Park' : 'Kingdom',
+                $scope_id,
+                ['MundaneId' => $mundane_id],
+                ['MundaneId' => 0]
+            );
+        }
+
+        return $r;
+    }
+
+    /**
+     * Vacate whoever currently holds this office in THIS scope -- the
+     * "Vacate" button rendered for every crown office in the console
+     * (revised-frontend/partials/_manage_officers.tpl), which never carries a
+     * MundaneId because scope is determined by the ROUTE, not by a payload
+     * field. A stray or dropped MundaneId must never silently widen a
+     * one-person removal into clearing the office, so this is a SEPARATE verb
+     * from VacateOfficer rather than VacateOfficer accepting an absent id:
+     * two explicit verbs keep that safety property; one lenient verb would
+     * not.
+     *
+     * Delegates to vacateOfficerByPosition() with $mundane_id omitted, the
+     * same all-holders branch RetirePosition uses internally.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId
+     * @return array
+     */
+    public function VacateOffice($request)
+    {
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id = (int) ($request['KingdomId'] ?? 0);
+        $park_id    = (int) ($request['ParkId'] ?? 0);
+        $scope      = ($park_id > 0) ? 'park' : 'kingdom';
+        $scope_id   = ($park_id > 0) ? $park_id : $kingdom_id;
+        if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority(
+            $actor_id,
+            self::PermissionKeyFor('vacate', $park_id),
+            $scope,
+            $scope_id,
+            AUTH_EDIT
+        )) {
+            return NoAuthorization();
+        }
+
+        // Derive from the park rather than trust the request -- see
+        // resolveActingKingdomId().
+        $kingdom_id = $this->resolveActingKingdomId($kingdom_id, $park_id);
+        if (is_array($kingdom_id)) {
+            return $kingdom_id;
+        }
+
+        $r = $this->vacateOfficerByPosition($kingdom_id, $park_id, (int) ($request['PositionId'] ?? 0), $actor_id);
+
+        if (is_array($r) && (int) ($r['Status'] ?? 1) === 0) {
+            $safe = $request;
+            unset($safe['Token']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $safe,
+                ($park_id > 0) ? 'Park' : 'Kingdom',
+                $scope_id,
+                null,
+                ['MundaneId' => 0]
+            );
+        }
+
+        return $r;
+    }
+
+    // ================================================================
+    // HISTORY TERM WRITES (public-profile roll editing, gated)
+    //
+    // The public Kingdom/Park profile modal currently writes these rows
+    // through KingdomAjax|ParkAjax/{add,edit,delete}officerhistory, unchecked
+    // by any permission. A later plan removes those and moves editing into
+    // the admin area; these three give that capability a gated domain home
+    // first, on PermissionKeyFor('history', $park_id) -- the
+    // kingdom.officer_history.manage / park.officer_history.manage keys
+    // PermissionRegistry already defines and, until now, nothing checked.
+    // ================================================================
+
+    /**
+     * The officer_history row's own kingdom_id/park_id (and every other
+     * column), by id. EditHistoryTerm/DeleteHistoryTerm gate authorization
+     * against THESE values, never the caller-supplied KingdomId/ParkId --
+     * see EditHistoryTerm's docblock for why that distinction matters.
+     *
+     * @return array|false
+     */
+    private function getHistoryRow($history_id)
+    {
+        global $DB;
+        $history_id = (int) $history_id;
+        if ($history_id <= 0) {
+            return false;
+        }
+        $DB->Clear();
+        $DB->gh_id = $history_id;
+        $r = $DB->DataSet(
+            'SELECT officer_history_id, kingdom_id, park_id, mundane_id, holder_name, role, position_id,
+    				display_label, start_date, end_date, start_season, start_year, end_season, end_year,
+    				start_ordinal, end_ordinal, is_current, changed_by, notes, created_at
+    			 FROM ' . DB_PREFIX . 'officer_history
+    			 WHERE officer_history_id = :gh_id LIMIT 1'
+        );
+        if ($r === false || $r->size() == 0 || !$r->Next()) {
+            return false;
+        }
+        return [
+            'officer_history_id' => (int) $r->officer_history_id,
+            'kingdom_id'    => (int) $r->kingdom_id,
+            'park_id'       => (int) $r->park_id,
+            'mundane_id'    => (int) $r->mundane_id,
+            'holder_name'   => (string) ($r->holder_name ?? ''),
+            'role'          => $r->role,
+            'position_id'   => (int) $r->position_id,
+            'display_label' => $r->display_label,
+            'start_date'    => $r->start_date,
+            'end_date'      => $r->end_date,
+            'start_season'  => self::nullIfBlank($r->start_season),
+            'start_year'    => self::nullIfBlank($r->start_year) === null ? null : (int) $r->start_year,
+            'end_season'    => self::nullIfBlank($r->end_season),
+            'end_year'      => self::nullIfBlank($r->end_year) === null ? null : (int) $r->end_year,
+            'start_ordinal' => self::nullIfBlank($r->start_ordinal) === null ? null : (int) $r->start_ordinal,
+            'end_ordinal'   => self::nullIfBlank($r->end_ordinal) === null ? null : (int) $r->end_ordinal,
+            'is_current'    => (int) $r->is_current,
+            'changed_by'    => $r->changed_by,
+            'notes'         => $r->notes,
+            'created_at'    => $r->created_at,
+        ];
+    }
+
+    /** The span columns historyTermColumns() resolves, written by Add and Edit alike. */
+    private const HISTORY_SPAN_COLUMNS = [
+        'start_date', 'end_date', 'start_season', 'start_year', 'end_season', 'end_year',
+        'start_ordinal', 'end_ordinal',
+    ];
+
+    /**
+     * GetOfficerHistory's ORDER BY: the rolls sort key (compare_rolls_terms) on
+     * the stored ordinals. Alias "oh".
+     */
+    public const ROLLS_ORDER_SQL = 'oh.is_current DESC, oh.start_ordinal DESC, oh.start_date DESC,
+		                oh.end_ordinal DESC, oh.officer_history_id DESC';
+
+    /**
+     * The WHERE fragment that finds one org's ork_officer_history rows, for the
+     * close paths. park_id is globally unique, so a park's rows are matched by
+     * park alone: a row still filed under the park's previous kingdom (a
+     * transfer before TransferPark moved history) closes all the same. A
+     * kingdom's own rows (park_id = 0) still need the kingdom.
+     *
+     * Token-free and public for Common::record_officer_history; the underscore
+     * keeps it off the JSON service.
+     *
+     * @param string $kingdomParam bound parameter name for the kingdom, no colon
+     * @param string $parkParam    bound parameter name for the park, no colon
+     */
+    public static function history_org_sql($kingdomParam, $parkParam)
+    {
+        return 'park_id = :' . $parkParam . ' AND (park_id > 0 OR kingdom_id = :' . $kingdomParam . ')';
+    }
+
+    /**
+     * The UPDATE that re-marks current rows when a retired park or kingdom is
+     * restored (RetirePark/RetireKingdom cleared them, ends left unknown). Row h
+     * becomes current when: it is not current and all four end columns are
+     * NULL; its holder still sits in the matching ork_officer seat (the
+     * migration's step-1 seat predicate, without its ledger-row filters); that
+     * seat has no current row; and no newer all-null-end row exists for the
+     * same seat and holder (the newest wins, as in the migration's step 2:
+     * latest start_date, an unknown start earliest, then highest id). A park or
+     * kingdom still Retired is skipped (a retired park inside a restored kingdom,
+     * or a park restored inside a retired kingdom).
+     *
+     * Token-free and public for Park/Kingdom; the underscore keeps it off the
+     * JSON service. $scopeWhere is a trusted SQL fragment on alias h whose
+     * parameters the caller binds.
+     */
+    public static function remark_current_history_sql($scopeWhere)
+    {
+        $seat = function ($t) {
+            return "((o.position_id > 0 AND $t.position_id = o.position_id)
+                     OR ($t.position_id = 0 AND $t.role = o.role))";
+        };
+        $sameSeat = function ($t) use ($seat) {
+            return "$t.kingdom_id = h.kingdom_id AND $t.park_id = h.park_id
+                AND $t.mundane_id = h.mundane_id AND $t.officer_history_id <> h.officer_history_id
+                AND " . $seat($t);
+        };
+        $noEnd = function ($t) {
+            return "$t.end_date IS NULL AND $t.end_season IS NULL AND $t.end_year IS NULL AND $t.end_ordinal IS NULL";
+        };
+        return 'UPDATE ' . DB_PREFIX . 'officer_history h
+            JOIN ' . DB_PREFIX . 'officer o
+              ON o.kingdom_id = h.kingdom_id AND o.park_id = h.park_id
+             AND o.mundane_id = h.mundane_id AND o.mundane_id > 0
+             AND ((h.position_id > 0 AND o.position_id = h.position_id)
+                  OR (h.position_id = 0 AND o.role = h.role))
+            LEFT JOIN ' . DB_PREFIX . 'officer_history c
+              ON ' . $sameSeat('c') . ' AND c.is_current = 1
+            LEFT JOIN ' . DB_PREFIX . 'officer_history n
+              ON ' . $sameSeat('n') . ' AND n.is_current = 0 AND ' . $noEnd('n') . "
+             AND (COALESCE(n.start_date, '1000-01-01') > COALESCE(h.start_date, '1000-01-01')
+                  OR (COALESCE(n.start_date, '1000-01-01') = COALESCE(h.start_date, '1000-01-01')
+                      AND n.officer_history_id > h.officer_history_id))
+             SET h.is_current = 1
+           WHERE (" . $scopeWhere . ')
+             AND h.is_current = 0 AND ' . $noEnd('h') . '
+             AND c.officer_history_id IS NULL
+             AND n.officer_history_id IS NULL
+             AND NOT EXISTS (SELECT 1 FROM ' . DB_PREFIX . "park rp
+                              WHERE rp.park_id = h.park_id AND h.park_id > 0 AND rp.active = 'Retired')
+             AND NOT EXISTS (SELECT 1 FROM " . DB_PREFIX . "kingdom rk
+                              WHERE rk.kingdom_id = h.kingdom_id AND rk.active = 'Retired')";
+    }
+
+    /** Refusal for any history write that would touch a current term's holder or end. */
+    private const ERR_CURRENT_MANAGED = 'The current term is managed from Manage Officers.';
+
+    private static function nullIfBlank($v)
+    {
+        return ($v === null || $v === '') ? null : $v;
+    }
+
+    /** A stored date, or null for blank and the legacy zero date. */
+    private static function dateOrNull($v)
+    {
+        return ($v === null || $v === '' || $v === '0000-00-00') ? null : (string) $v;
+    }
+
+    /**
+     * Bind $value as :$param, or return the SQL literal NULL. Yapo drops a
+     * bound PHP null from INSERT/UPDATE (see openTerm()'s docblock), so a
+     * null column value must be written as a literal, never bound.
+     */
+    private static function bindOrNull($DB, $param, $value)
+    {
+        if ($value === null) {
+            return 'NULL';
+        }
+        $DB->{$param} = $value;
+        return ':' . $param;
+    }
+
+    /**
+     * Resolve the holder and span of an Add ($row === null) or Edit into
+     * column values, applying the history write rules:
+     *
+     *  - Holder: MundaneId > 0, or a trimmed HolderName of 1-120 characters.
+     *    holder_name is the name of record: linking a plain-text holder (or
+     *    relinking it) keeps it, and a linked Add may carry one (the ledger
+     *    sends the picked persona). Readers show it, linked, beside the live
+     *    persona.
+     *  - Period (OfficerTermPeriod::parse) fills the season columns. An exact
+     *    StartDate/EndDate sent alongside is stored too; exact wins for
+     *    ordering. On Edit, a Period that is sent redefines the span, so a
+     *    date key not sent with it is cleared; with no Period, each date key
+     *    keeps array_key_exists semantics (absent = untouched, '' = cleared).
+     *  - start_ordinal / end_ordinal are the term's meaning, fixed here: a side
+     *    set by this write takes its ordinal from the exact date, else from the
+     *    parsed Period; a side left alone keeps its stored ordinal. Nothing
+     *    re-resolves a stored season later (closing a term never moves its start).
+     *  - On a current row ($row['is_current']) a single-season Period ("Spring
+     *    24") sets the start only; the end is never touched from here.
+     *  - Neither end may resolve past currentOrdinal() or an exact date past
+     *    today, and the end may not precede the start.
+     *
+     * @return array column values, or ['__error' => response]
+     */
+    private function historyTermColumns(array $request, $row)
+    {
+        $isEdit = is_array($row);
+        $base = $isEdit ? $row : [
+            'mundane_id' => 0, 'holder_name' => '',
+            'start_season' => null, 'start_year' => null, 'start_date' => null,
+            'end_season' => null, 'end_year' => null, 'end_date' => null,
+            'start_ordinal' => null, 'end_ordinal' => null,
+            'is_current' => 0,
+        ];
+        $has = function ($k) use ($request) {
+            return array_key_exists($k, $request);
+        };
+
+        // Holder.
+        $mundane_id = $has('MundaneId') ? (int) $request['MundaneId'] : (int) $base['mundane_id'];
+        $holder_name = $has('HolderName') ? trim((string) $request['HolderName']) : (string) $base['holder_name'];
+        if ($mundane_id < 0) {
+            return ['__error' => InvalidParameter(null, 'A valid member is required.')];
+        }
+        if ($mundane_id > 0) {
+            // Linking keeps holder_name: it is the name the term was recorded
+            // under, shown beside the live persona ("now known as").
+            if ($mundane_id !== (int) $base['mundane_id'] && !$this->mundaneExists($mundane_id)) {
+                return ['__error' => InvalidParameter(null, 'A valid member is required.')];
+            }
+        } elseif ($holder_name === '') {
+            return ['__error' => InvalidParameter(null, 'A holder is required: choose a member or enter a name.')];
+        }
+        if (mb_strlen($holder_name) > 120) {
+            return ['__error' => InvalidParameter(null, 'Holder names are at most 120 characters.')];
+        }
+
+        // Span.
+        $cols = [
+            'start_season' => $base['start_season'], 'start_year' => $base['start_year'],
+            'end_season' => $base['end_season'], 'end_year' => $base['end_year'],
+            'start_date' => self::dateOrNull($base['start_date']),
+            'end_date' => self::dateOrNull($base['end_date']),
+        ];
+        // Each side's season meaning, before exact dates: a side with no date keeps
+        // its stored ordinal; a dated side's season (the date wins while it is
+        // there) is read from its columns, for when the date is cleared.
+        $baseOrd = OfficerTermPeriod::ordinals(self::storedSpan($base));
+        $baseSeasons = OfficerTermPeriod::resolve([
+            'StartSeason' => $base['start_season'], 'StartYear' => $base['start_year'], 'StartDate' => null,
+            'EndSeason' => $base['end_season'], 'EndYear' => $base['end_year'], 'EndDate' => null,
+        ]);
+        $seasonOrd = [
+            'start' => $cols['start_date'] === null ? $baseOrd['start'] : $baseSeasons['start'],
+            'end'   => $cols['end_date'] === null ? $baseOrd['end'] : $baseSeasons['end'],
+        ];
+        $periodSent = $has('Period');
+        if ($periodSent) {
+            $text = trim((string) $request['Period']);
+            $cols['start_season'] = $cols['start_year'] = null;
+            $cols['start_date'] = null;
+            $seasonOrd['start'] = null;
+            // The dash inside a two-year winter ("Winter 2022–23") is not a span.
+            $startOnly = $isEdit && (int) $base['is_current'] === 1 && !OfficerTermPeriod::isSpan($text);
+            if (!$startOnly) {
+                $cols['end_season'] = $cols['end_year'] = null;
+                $cols['end_date'] = null;
+                $seasonOrd['end'] = null;
+            }
+            if ($text !== '') {
+                $p = OfficerTermPeriod::parse($text);
+                if (is_string($p)) {
+                    return ['__error' => InvalidParameter(null, $p)];
+                }
+                $cols['start_season'] = $p['start']['season'];
+                $cols['start_year'] = (int) $p['start']['year'];
+                $seasonOrd['start'] = $p['start']['ordinal'];
+                if (!$startOnly && $p['end'] !== null) {
+                    $cols['end_season'] = $p['end']['season'];
+                    $cols['end_year'] = (int) $p['end']['year'];
+                    $seasonOrd['end'] = $p['end']['ordinal'];
+                }
+            }
+        }
+        foreach (['start' => 'StartDate', 'end' => 'EndDate'] as $side => $key) {
+            if ($has($key)) {
+                $d = $this->normalizeDate($request[$key], '');
+                if ($d === false) {
+                    return ['__error' => InvalidParameter(null, 'Dates must be in YYYY-MM-DD form.')];
+                }
+                $cols[$side . '_date'] = ($d === '') ? null : $d;
+            }
+        }
+
+        // A current term's holder and end belong to Manage Officers.
+        if ($isEdit && (int) $base['is_current'] === 1) {
+            if ($mundane_id !== (int) $base['mundane_id']
+                || $holder_name !== (string) $base['holder_name']
+                || $cols['end_season'] !== $base['end_season']
+                || $cols['end_year'] !== $base['end_year']
+                || $cols['end_date'] !== self::dateOrNull($base['end_date'])) {
+                return ['__error' => InvalidParameter(null, self::ERR_CURRENT_MANAGED)];
+            }
+        }
+
+        // An exact date wins for its side; otherwise the season meaning above.
+        $ord = [];
+        foreach (['start', 'end'] as $side) {
+            $ord[$side] = $cols[$side . '_date'] !== null
+                ? OfficerTermPeriod::ordinal(null, null, $cols[$side . '_date'], $side, null)
+                : $seasonOrd[$side];
+        }
+        if (!$isEdit && $ord['start'] === null) {
+            return ['__error' => InvalidParameter(null, 'A term needs a start: enter a period or a start date.')];
+        }
+        // An edit may not take away a start the row had (clearing its only start
+        // date, say); a row recorded with no start (end only) may still be edited.
+        if ($isEdit && $ord['start'] === null && $baseOrd['start'] !== null) {
+            return ['__error' => InvalidParameter(null, 'A term needs a start.')];
+        }
+        if (($cols['start_date'] !== null && $cols['start_date'] > date('Y-m-d'))
+            || ($ord['start'] !== null && $ord['start'] > OfficerTermPeriod::currentOrdinal())) {
+            return ['__error' => InvalidParameter(null, 'A term cannot start in the future.')];
+        }
+        if (($cols['end_date'] !== null && $cols['end_date'] > date('Y-m-d'))
+            || ($ord['end'] !== null && $ord['end'] > OfficerTermPeriod::currentOrdinal())) {
+            return ['__error' => InvalidParameter(null, 'A term cannot end in the future.')];
+        }
+        $endsBefore = ($cols['start_date'] !== null && $cols['end_date'] !== null)
+            ? $cols['end_date'] < $cols['start_date']
+            : ($ord['start'] !== null && $ord['end'] !== null && $ord['end'] < $ord['start']);
+        if ($endsBefore) {
+            return ['__error' => InvalidParameter(null, 'A term cannot end before it began.')];
+        }
+
+        return ['mundane_id' => $mundane_id, 'holder_name' => $holder_name] + $cols
+            + ['start_ordinal' => $ord['start'], 'end_ordinal' => $ord['end']];
+    }
+
+    /**
+     * A history row's span for OfficerTermPeriod::ordinals(): its columns plus
+     * each stored ordinal. A side with no stored ordinal (a row written outside
+     * the app's write paths) is left to resolve from its columns, so the next
+     * save stamps it.
+     */
+    private static function storedSpan(array $row)
+    {
+        $span = [
+            'StartSeason' => $row['start_season'], 'StartYear' => $row['start_year'],
+            'StartDate' => self::dateOrNull($row['start_date']),
+            'EndSeason' => $row['end_season'], 'EndYear' => $row['end_year'],
+            'EndDate' => self::dateOrNull($row['end_date']),
+        ];
+        foreach (['start' => 'StartOrdinal', 'end' => 'EndOrdinal'] as $side => $key) {
+            if (($row[$side . '_ordinal'] ?? null) !== null) {
+                $span[$key] = (int) $row[$side . '_ordinal'];
+            }
+        }
+        return $span;
+    }
+
+    private function mundaneExists($mundane_id)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->me_id = (int) $mundane_id;
+        $r = $DB->DataSet('SELECT mundane_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = :me_id LIMIT 1');
+        return ($r !== false && $r->size() > 0);
+    }
+
+    /** The holder/span fields of a row, in the audit vocabulary. */
+    private static function historyAuditState($history_id, array $cols, $notes)
+    {
+        return [
+            'OfficerHistoryId' => (int) $history_id,
+            'MundaneId' => (int) $cols['mundane_id'],
+            'HolderName' => (string) $cols['holder_name'],
+            'StartSeason' => $cols['start_season'], 'StartYear' => $cols['start_year'],
+            'StartDate' => self::dateOrNull($cols['start_date']),
+            'EndSeason' => $cols['end_season'], 'EndYear' => $cols['end_year'],
+            'EndDate' => self::dateOrNull($cols['end_date']),
+            'Notes' => $notes,
+        ];
+    }
+
+    /**
+     * Add a new officer_history term directly, independent of any live seat
+     * change. Gated on PermissionKeyFor('history', $park_id).
+     *
+     * A park-scoped call's KingdomId is never trusted: derived from the park
+     * (matching TransitionOfficer / SetOccupant / Park::SetOfficer), so a
+     * park-scoped actor cannot smuggle a foreign kingdom into the column
+     * written to ork_officer_history.
+     *
+     * @param array $request Token, KingdomId, ParkId, PositionId, MundaneId? (0 allowed),
+     *                        HolderName?, Period?, StartDate?, EndDate?, Note?
+     *                        -- see historyTermColumns() for the rules.
+     * @return array
+     */
+    public function AddHistoryTerm($request)
+    {
+        global $DB;
+
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $kingdom_id  = (int) ($request['KingdomId'] ?? 0);
+        $park_id     = (int) ($request['ParkId'] ?? 0);
+        $position_id = (int) ($request['PositionId'] ?? 0);
+
+        if (!$this->can_edit_history_for((int) $actor_id, $kingdom_id, $park_id)) {
+            return NoAuthorization();
+        }
+
+        // Derive from the park rather than trust the request -- see
+        // resolveActingKingdomId().
+        $kingdom_id = $this->resolveActingKingdomId($kingdom_id, $park_id);
+        if (is_array($kingdom_id)) {
+            return $kingdom_id;
+        }
+
+        if (!valid_id($position_id)) {
+            return InvalidParameter(null, 'A valid position is required.');
+        }
+        $position = $this->GetPosition($position_id, $kingdom_id);
+        if ($position === false) {
+            return InvalidParameter(null, 'Position not found.');
+        }
+        if ((int) $position['KingdomId'] !== 0 && $kingdom_id > 0
+            && (int) $position['KingdomId'] !== $kingdom_id) {
+            return NoAuthorization(null, 'Position does not belong to this kingdom.');
+        }
+
+        // Holder, period and date rules: historyTermColumns(). Add never
+        // creates a current row -- a blank end means "end unknown", and
+        // current terms are opened only by Manage Officers' seat changes.
+        $cols = $this->historyTermColumns($request, null);
+        if (isset($cols['__error'])) {
+            return $cols['__error'];
+        }
+        $mundane_id = $cols['mundane_id'];
+        // mb_substr, not substr: Note is free text and a byte-based cut can slice
+        // a multi-byte character in half, leaving invalid UTF-8 in the column.
+        $note = mb_substr(trim((string) ($request['Note'] ?? '')), 0, 500);
+
+        $DB->Clear();
+        $DB->ah_kid    = $kingdom_id;
+        $DB->ah_pid    = $park_id;
+        $DB->ah_mid    = $mundane_id;
+        $DB->ah_holder = $cols['holder_name'];
+        $DB->ah_role   = $position['CanonicalKey'];
+        $DB->ah_pos    = $position_id;
+        $DB->ah_label  = ($position['DisplayTitle'] !== '') ? $position['DisplayTitle'] : $position['CanonicalKey'];
+        $DB->ah_cb     = $actor_id;
+        $DB->ah_notes  = $note;
+        $vals = [];
+        foreach (self::HISTORY_SPAN_COLUMNS as $c) {
+            $vals[$c] = self::bindOrNull($DB, 'ah_' . $c, $cols[$c]);
+        }
+        $ok = $DB->ExecuteChecked(
+            'INSERT INTO ' . DB_PREFIX . 'officer_history
+    			 (kingdom_id, park_id, mundane_id, holder_name, role, position_id, display_label,
+    			  ' . implode(', ', self::HISTORY_SPAN_COLUMNS) . ', is_current,
+    			  changed_by, notes, created_at)
+    			 VALUES (:ah_kid, :ah_pid, :ah_mid, :ah_holder, :ah_role, :ah_pos, :ah_label,
+    			         ' . implode(', ', $vals) . ', 0,
+    			         :ah_cb, :ah_notes, NOW())'
+        );
+        if (!$ok) {
+            return ProcessingError('The history term could not be recorded.');
+        }
+        $history_id = (int) $DB->GetLastInsertId();
+
+        $safe = $request;
+        unset($safe['Token']);
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $safe,
+            ($park_id > 0) ? 'Park' : 'Kingdom',
+            ($park_id > 0) ? (int) $park_id : (int) $kingdom_id,
+            null,
+            ['PositionId' => $position_id] + self::historyAuditState($history_id, $cols, $note)
+        );
+
+        return Success($history_id);
+    }
+
+    /**
+     * Edit the dates/note on an existing officer_history row.
+     *
+     * THE GATE IS ON THE ROW'S OWN SCOPE, NEVER THE REQUEST'S. The row is
+     * read by OfficerHistoryId first, and its kingdom_id/park_id -- not the
+     * caller-supplied KingdomId/ParkId -- decide which permission this actor
+     * is checked against. Gating on the request's claim would let anyone who
+     * administers ANY kingdom edit another kingdom's rolls simply by naming
+     * their own kingdom in the request while pointing OfficerHistoryId at a
+     * row that belongs to someone else.
+     *
+     * Every field uses array_key_exists semantics: absent = untouched. See
+     * historyTermColumns() for the holder/period/date rules. A current row
+     * (is_current = 1) may change only its start and note; its holder and
+     * end are owned by Manage Officers.
+     *
+     * ExpectCurrent (truthy): the caller read this row as the seat's open term
+     * (Manage Officers' Set-it dialog, from the list snapshot). If it has been
+     * closed since -- the seat was reseated or vacated -- the edit is refused,
+     * because a Period on a past row replaces both of its ends.
+     *
+     * @param array $request Token, OfficerHistoryId, MundaneId?, HolderName?, Period?,
+     *                        StartDate?, EndDate?, Note?, ExpectCurrent?
+     * @return array
+     */
+    public function EditHistoryTerm($request)
+    {
+        global $DB;
+
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $history_id = (int) ($request['OfficerHistoryId'] ?? 0);
+        $row = $this->getHistoryRow($history_id);
+        if ($row === false) {
+            // Deliberately the SAME response an unauthorized caller gets. The row has
+            // to be read before the gate (its own kingdom_id/park_id pick the
+            // permission key), so a distinct 'not found' would let any authenticated
+            // caller enumerate valid OfficerHistoryId values in kingdoms and parks
+            // they administer nothing in.
+            return NoAuthorization();
+        }
+
+        $kingdom_id = $row['kingdom_id'];
+        $park_id    = $row['park_id'];
+        if (!$this->can_edit_history_for((int) $actor_id, (int) $kingdom_id, (int) $park_id)) {
+            return NoAuthorization();
+        }
+        if (!empty($request['ExpectCurrent']) && (int) $row['is_current'] !== 1) {
+            return InvalidParameter(null, 'This term has ended since the list loaded. Refresh Manage Officers and try again.');
+        }
+
+        // No edit can make a row current: a current row may change only its
+        // start and note (historyTermColumns refuses holder/end changes), and
+        // a past row keeps is_current = 0 whatever its end becomes.
+        $cols = $this->historyTermColumns($request, $row);
+        if (isset($cols['__error'])) {
+            return $cols['__error'];
+        }
+        $note = array_key_exists('Note', $request)
+            ? mb_substr(trim((string) $request['Note']), 0, 500)
+            : (string) $row['notes'];
+
+        $DB->Clear();
+        $DB->eh_id     = $history_id;
+        $DB->eh_notes  = $note;
+        $DB->eh_mid    = $cols['mundane_id'];
+        $DB->eh_holder = $cols['holder_name'];
+        $set = [];
+        foreach (self::HISTORY_SPAN_COLUMNS as $c) {
+            $set[] = $c . ' = ' . self::bindOrNull($DB, 'eh_' . $c, $cols[$c]);
+        }
+        $ok = $DB->ExecuteChecked(
+            'UPDATE ' . DB_PREFIX . 'officer_history
+    			 SET mundane_id = :eh_mid, holder_name = :eh_holder, ' . implode(', ', $set) . ', notes = :eh_notes
+    			 WHERE officer_history_id = :eh_id'
+        );
+        if (!$ok) {
+            return ProcessingError('The history term could not be updated.');
+        }
+
+        $safe = $request;
+        unset($safe['Token']);
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $safe,
+            ($park_id > 0) ? 'Park' : 'Kingdom',
+            ($park_id > 0) ? (int) $park_id : (int) $kingdom_id,
+            self::historyAuditState($history_id, $row, $row['notes']),
+            self::historyAuditState($history_id, $cols, $note)
+        );
+
+        return Success();
+    }
+
+    /**
+     * Delete an officer_history row outright.
+     *
+     * Same row-scoped gate as EditHistoryTerm -- see its docblock. A current
+     * row is refused: Manage Officers owns it. Audits the
+     * FULL deleted row as $prior_state; a delete has no other way to recover
+     * what was removed.
+     *
+     * @param array $request Token, KingdomId, ParkId, OfficerHistoryId
+     * @return array
+     */
+    public function DeleteHistoryTerm($request)
+    {
+        global $DB;
+
+        if (($actor_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '')) == 0) {
+            return NoAuthorization();
+        }
+
+        $history_id = (int) ($request['OfficerHistoryId'] ?? 0);
+        $row = $this->getHistoryRow($history_id);
+        if ($row === false) {
+            // Deliberately the SAME response an unauthorized caller gets. The row has
+            // to be read before the gate (its own kingdom_id/park_id pick the
+            // permission key), so a distinct 'not found' would let any authenticated
+            // caller enumerate valid OfficerHistoryId values in kingdoms and parks
+            // they administer nothing in.
+            return NoAuthorization();
+        }
+
+        $kingdom_id = $row['kingdom_id'];
+        $park_id    = $row['park_id'];
+        if (!$this->can_edit_history_for((int) $actor_id, (int) $kingdom_id, (int) $park_id)) {
+            return NoAuthorization();
+        }
+        // After the gate, so the refusal is no oracle for unauthorized callers.
+        if ((int) $row['is_current'] === 1) {
+            return InvalidParameter(null, self::ERR_CURRENT_MANAGED);
+        }
+
+        $DB->Clear();
+        $DB->dh_id = $history_id;
+        $ok = $DB->ExecuteChecked(
+            'DELETE FROM ' . DB_PREFIX . 'officer_history WHERE officer_history_id = :dh_id'
+        );
+        if (!$ok) {
+            return ProcessingError('The history term could not be deleted.');
+        }
+
+        $safe = $request;
+        unset($safe['Token']);
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $safe,
+            ($park_id > 0) ? 'Park' : 'Kingdom',
+            ($park_id > 0) ? (int) $park_id : (int) $kingdom_id,
+            $row,
+            null
+        );
+
+        return Success();
+    }
+
+    /**
+     * Set an officer occupant by position, enforcing §3.4 occupancy rules.
+     * Occupancy is per-seat, not per-person: the ORK imposes no limit on how
+     * many offices a person holds, so Crown here means single-occupant-per-scope
+     * (vacate existing, then write) under a GET_LOCK on the seat being written.
+     * Supporting: unrestricted, multi-occupant.
+     *
+     * @param int    $kingdom_id
+     * @param int    $park_id
+     * @param int    $position_id
+     * @param int    $mundane_id
+     * @param string $term_start  (unused placeholder for term metadata)
+     * @param string $term_end    (unused placeholder for term metadata)
+     * @param string $note        (unused placeholder for note metadata)
+     * @param int    $changed_by
+     * @return array
+     */
+    private function setOfficerByPosition($kingdom_id, $park_id, $position_id, $mundane_id, $term_start, $term_end, $note, $changed_by)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $park_id = (int) $park_id;
+        $position_id = (int) $position_id;
+        $mundane_id = (int) $mundane_id;
+        $changed_by = (int) $changed_by;
+
+        $position = $this->GetPosition($position_id, $kingdom_id);
+        if ($position === false) {
+            return InvalidParameter(null, 'Position not found.');
+        }
+        // S1: kingdom-ownership guard (system kingdom_id=0 rows are shared; each
+        // kingdom legitimately fills its own occupant). Reject a foreign kingdom row.
+        if ((int) $position['KingdomId'] !== 0 && $kingdom_id > 0 && (int) $position['KingdomId'] !== $kingdom_id) {
+            return NoAuthorization('Position does not belong to this kingdom.');
+        }
+        if ($position['RetiredAt'] !== null) {
+            return InvalidParameter(null, 'Cannot assign an occupant to a retired position.');
+        }
+        if ($mundane_id <= 0) {
+            return InvalidParameter(null, 'A valid member is required.');
+        }
+        $canonical_key = $position['CanonicalKey'];
+        $classification = $position['Classification'];
+
+        if ($classification !== 'crown') {
+            // Same future-end-date rule TransitionOfficer/AddHistoryTerm/
+            // EditHistoryTerm already enforce. InsertOfficerRow -- reached from
+            // here, SetOccupant's live-console assignment path -- writes
+            // $term_end with no validation of its own; without this check a
+            // caller can record a projected term end that never closes, the
+            // exact shape the 2026-08-29 backfill migration had to repair.
+            $end_check = $this->normalizeDate($term_end, '');
+            if ($end_check === false) {
+                return InvalidParameter(null, 'Dates must be in YYYY-MM-DD form.');
+            }
+            if ($end_check !== '' && $end_check > date('Y-m-d')) {
+                return InvalidParameter(null, 'A term cannot end in the future.');
+            }
+
+            // Supporting: no lock, single-occupant-per-scope like crown (see
+            // InsertOfficerRow). Propagate its result -- a refusal must reach
+            // the API response, not be swallowed here.
+            return $this->InsertOfficerRow($kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by, $term_start, $term_end, $position['DisplayTitle']);
+        }
+
+        // Serialize on the OFFICE being written, not the person. The old key
+        // ('crown_assign_' . $mundane_id) existed only to serialize a cross-scope
+        // uniqueness query that no longer exists; it never guarded the race a
+        // transition actually has, which is two admins writing the same seat.
+        $lock_name = 'officer_assign_' . $kingdom_id . '_' . $park_id . '_' . $position_id;
+        $locked = false;
+        try {
+            $DB->Clear();
+            $DB->lk = $lock_name;
+            $DB->lt = self::CROWN_LOCK_TIMEOUT;
+            $lr = $DB->DataSet("SELECT GET_LOCK(:lk, :lt) AS got");
+            if ($lr === false || $lr->size() == 0 || !$lr->Next() || (int) $lr->got !== 1) {
+                return ProcessingError('Could not acquire the crown assignment lock; please retry.');
+            }
+            $locked = true;
+
+            // Single-occupant-per-scope: set_officer find() keyed on position_id
+            // replaces the occupant of the single crown row in place. For custom
+            // crown positions no seeded slot exists yet, so ensure one is present
+            // (vacant placeholder) before delegating, so find() succeeds.
+            $this->EnsureCrownSlot($kingdom_id, $park_id, $position_id, $canonical_key);
+            $c = new Common();
+            $c->set_officer($kingdom_id, $park_id, $mundane_id, $canonical_key, 0, $changed_by, $position_id, $position['DisplayTitle']);
+
+            // set_officer() returns void and silently no-ops when a has_auth_role
+            // position's ork_authorization row is missing -- exactly the shape
+            // EnsureCrownSlot's vacant placeholder leaves (authorization_id = 0).
+            // Re-read the seat rather than trust the call above did anything, so
+            // a no-op reassignment is reported as a failure instead of a
+            // Success() that left the seat unmoved. Mirrors TransitionOfficer's
+            // post-write currentHolder() verification.
+            if ($this->currentHolder($kingdom_id, $park_id, $position_id) !== $mundane_id) {
+                return ProcessingError(null, 'The office could not be reassigned.');
+            }
+
+            return Success();
+        } finally {
+            if ($locked) {
+                $DB->Clear();
+                $DB->rk = $lock_name;
+                $DB->Execute("SELECT RELEASE_LOCK(:rk)");
+            }
+        }
+    }
+
+    /**
+     * Vacate a holder of a position+scope. Vacating ENDS THE TERM -- the officer's
+     * ork_officer_history record is stamped with today's end_date so the kingdom's
+     * officer history keeps who served and when; history is never deleted. The
+     * synced ork_user_role is revoked for whoever is vacated.
+     *
+     * $mundane_id targets a SINGLE holder (the only sane behaviour for a supporting
+     * position with several deputies). Omitting it -- or passing 0 -- is the
+     * explicit "Vacate All" case and affects every holder of the position in this
+     * scope. Callers that mean one person MUST pass the id.
+     *
+     * Occupancy representation stays consistent with the crown convention that the
+     * rest of the system reads: an office with nobody in it keeps exactly one
+     * ork_officer row with mundane_id = 0. Crown reaches that via
+     * Common::set_officer(0). Supporting is multi-occupant, so a surplus holder's
+     * row is removed, but the LAST holder's row is blanked to mundane_id = 0 rather
+     * than deleted -- that keeps the office visible as vacant (hide_when_vacant
+     * still applies) and, more importantly, keeps officer_id/authorization_id
+     * instead of re-creating the row with authorization_id = 0.
+     *
+     * ork_officer is MyISAM -- no transactions -- so writes are ordered
+     * history-close -> officer row -> RBAC revoke. A failure part-way can leave a
+     * closed term with a role still granted (visible and re-runnable), never a
+     * revoked role with an open term claiming the person is still serving.
+     *
+     * @param int $kingdom_id
+     * @param int $park_id
+     * @param int $position_id
+     * @param int $changed_by
+     * @param int $mundane_id  Optional single holder to vacate; 0/omitted = all holders.
+     * @return array
+     */
+    private function vacateOfficerByPosition($kingdom_id, $park_id, $position_id, $changed_by, $mundane_id = 0)
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $park_id = (int) $park_id;
+        $position_id = (int) $position_id;
+        $changed_by = (int) $changed_by;
+        $mundane_id = (int) $mundane_id;
+        if ($mundane_id < 0) {
+            $mundane_id = 0;
+        }
+
+        $position = $this->GetPosition($position_id, $kingdom_id);
+        if ($position === false) {
+            return InvalidParameter(null, 'Position not found.');
+        }
+        // S1: kingdom-ownership guard (system kingdom_id=0 rows are shared).
+        if ((int) $position['KingdomId'] !== 0 && $kingdom_id > 0 && (int) $position['KingdomId'] !== $kingdom_id) {
+            return NoAuthorization('Position does not belong to this kingdom.');
+        }
+        $canonical_key = $position['CanonicalKey'];
+        $classification = $position['Classification'];
+        $display_label = isset($position['DisplayTitle']) ? (string) $position['DisplayTitle'] : '';
+
+        if ($classification === 'supporting') {
+            // Supporting positions can have multiple occupants. Read every occupied
+            // row for the scope up front (never re-query this handle inside a
+            // ->Next() walk) so we know both who is targeted and how many holders
+            // remain -- the last one is blanked rather than deleted.
+            $DB->Clear();
+            $DB->vs_kid = $kingdom_id;
+            $DB->vs_pid = $park_id;
+            $DB->vs_pos = $position_id;
+            $rows = $DB->DataSet(
+                "SELECT officer_id, mundane_id, modified FROM " . DB_PREFIX . "officer
+    			 WHERE kingdom_id = :vs_kid AND park_id = :vs_pid AND position_id = :vs_pos
+    			   AND mundane_id > 0
+    			 ORDER BY officer_id"
+            );
+            $occupied = [];
+            if ($rows !== false && $rows->size() > 0) {
+                while ($rows->Next()) {
+                    $occupied[] = [
+                        'officer_id' => (int) $rows->officer_id,
+                        'mundane_id' => (int) $rows->mundane_id,
+                        'modified'   => (string) $rows->modified,
+                    ];
+                }
+            }
+            $targets = [];
+            foreach ($occupied as $row) {
+                if ($mundane_id === 0 || $row['mundane_id'] === $mundane_id) {
+                    $targets[] = $row;
+                }
+            }
+            if (count($targets) === 0) {
+                if ($mundane_id > 0) {
+                    return InvalidParameter(null, 'That member does not currently hold this position.');
+                }
+                return Success(); // Vacate All on an already-empty office: no-op.
+            }
+
+            $remaining = count($occupied);
+            $handled = [];
+            foreach ($targets as $row) {
+                $mid = $row['mundane_id'];
+
+                // 1. End the term FIRST so a later failure can never leave a revoked
+                //    role sitting behind an open (still-serving) history record.
+                //    Guarded per person: a duplicate occupancy row must not backfill
+                //    a second closed history record.
+                if (!isset($handled[$mid])) {
+                    $this->CloseOfficerHistoryTerm(
+                        $kingdom_id,
+                        $park_id,
+                        $position_id,
+                        $canonical_key,
+                        $mid,
+                        $changed_by,
+                        $display_label,
+                        $row['modified']
+                    );
+                }
+
+                // 2. Free the occupancy row. Targeting officer_id is what keeps a
+                //    six-deputy office from being emptied by one click. The final
+                //    holder's row is blanked to mundane_id = 0 (the crown "vacant"
+                //    convention) instead of deleted, preserving officer_id and any
+                //    authorization_id binding.
+                $DB->Clear();
+                $DB->vd_oid = $row['officer_id'];
+                if ($remaining > 1) {
+                    $DB->Execute(
+                        "DELETE FROM " . DB_PREFIX . "officer WHERE officer_id = :vd_oid"
+                    );
+                } else {
+                    $DB->Execute(
+                        "UPDATE " . DB_PREFIX . "officer
+    					 SET mundane_id = 0, modified = NOW()
+    					 WHERE officer_id = :vd_oid"
+                    );
+                }
+                $remaining--;
+
+                // 3. Revoke the synced RBAC role for this holder.
+                if (!isset($handled[$mid]) && isset(Ork3::$Lib->rbacservice)) {
+                    try {
+                        Ork3::$Lib->rbacservice->sync_officer_role_by_position_id($mid, 0, $position_id, $kingdom_id, $park_id, $changed_by);
+                    } catch (Exception $e) {
+                        logtrace('RBAC vacate supporting failed', $e->getMessage());
+                    }
+                }
+                $handled[$mid] = true;
+            }
+            return Success();
+        }
+
+        // Crown is single-slot: reject a single-holder request aimed at somebody who
+        // is not the sitting officer rather than silently vacating whoever is.
+        if ($mundane_id > 0) {
+            $DB->Clear();
+            $DB->vc_kid = $kingdom_id;
+            $DB->vc_pid = $park_id;
+            $DB->vc_pos = $position_id;
+            $DB->vc_mid = $mundane_id;
+            $cur = $DB->DataSet(
+                "SELECT officer_id FROM " . DB_PREFIX . "officer
+    			 WHERE kingdom_id = :vc_kid AND park_id = :vc_pid
+    			   AND position_id = :vc_pos AND mundane_id = :vc_mid LIMIT 1"
+            );
+            if ($cur === false || $cur->size() == 0) {
+                return InvalidParameter(null, 'That member does not currently hold this position.');
+            }
+        }
+
+        // Crown: close the term + revoke role (mundane_id = 0 means vacate),
+        // leaving a vacant placeholder row. set_officer() closes the open history
+        // term via record_officer_history before the RBAC sync runs.
+        $c = new Common();
+        $c->set_officer($kingdom_id, $park_id, 0, $canonical_key, 0, $changed_by, $position_id, $display_label);
+        return Success();
+    }
+
+    // ================================================================
+    // LOW-LEVEL OFFICER ROW WRITES (occupancy support)
+    // ================================================================
+
+    /**
+     * Ensure a single ork_officer slot exists for a crown position+scope so the
+     * single-slot Common::set_officer find() succeeds. Inserts a vacant
+     * (mundane_id=0) placeholder only when no row exists for this position+scope.
+     */
+    private function EnsureCrownSlot($kingdom_id, $park_id, $position_id, $canonical_key)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->ec_kid = (int) $kingdom_id;
+        $DB->ec_pid = (int) $park_id;
+        $DB->ec_pos = (int) $position_id;
+        $ex = $DB->DataSet(
+            "SELECT officer_id FROM " . DB_PREFIX . "officer
+    		 WHERE kingdom_id = :ec_kid AND park_id = :ec_pid AND position_id = :ec_pos LIMIT 1"
+        );
+        if ($ex !== false && $ex->size() > 0) {
+            return;
+        }
+        $DB->Clear();
+        $DB->ic_kid = (int) $kingdom_id;
+        $DB->ic_pid = (int) $park_id;
+        $DB->ic_pos = (int) $position_id;
+        $DB->ic_role = $canonical_key;
+        $DB->Execute(
+            "INSERT INTO " . DB_PREFIX . "officer
+    		 (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
+    		 VALUES (:ic_kid, :ic_pid, 0, :ic_role, 0, 0, :ic_pos, NOW())"
+        );
+    }
+
+    /**
+     * End one holder's ork_officer_history term for a position+scope.
+     *
+     * The vacate path for a multi-occupant supporting position: it closes this
+     * holder's term only (a mundane_id filter, as Common::record_officer_history
+     * now also uses), and backfills a completed term when there is none.
+     *
+     * When the holder has no open term -- appointed before officer history existed,
+     * or by a legacy path that never opened one -- a completed record is written
+     * instead, so vacating always leaves history showing that the person served and
+     * when the service ended rather than erasing them.
+     *
+     * @param int    $kingdom_id
+     * @param int    $park_id
+     * @param int    $position_id
+     * @param string $canonical_key
+     * @param int    $mundane_id
+     * @param int    $changed_by
+     * @param string $display_label Snapshot title for a backfilled record.
+     * @param string $held_since    ork_officer.modified, the best available start
+     *                              date when a record has to be backfilled.
+     * @return void
+     */
+    private function CloseOfficerHistoryTerm($kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by, $display_label = '', $held_since = '')
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $park_id = (int) $park_id;
+        $position_id = (int) $position_id;
+        $mundane_id = (int) $mundane_id;
+        $changed_by = (int) $changed_by;
+        if ($mundane_id <= 0) {
+            return;
+        }
+        $today = date('Y-m-d');
+
+        // Legacy rows written before position_id existed carry position_id = 0 and
+        // identify the office by canonical key alone; match those too.
+        $match = self::history_org_sql('ch_kid', 'ch_pid') . " AND mundane_id = :ch_mid
+    		   AND ( position_id = :ch_pos OR ( position_id = 0 AND role = :ch_role ) )
+    		   AND is_current = 1";
+
+        $DB->Clear();
+        $DB->ch_kid = $kingdom_id;
+        $DB->ch_pid = $park_id;
+        $DB->ch_mid = $mundane_id;
+        $DB->ch_pos = $position_id;
+        $DB->ch_role = $canonical_key;
+        $open = $DB->DataSet(
+            "SELECT officer_history_id FROM " . DB_PREFIX . "officer_history
+    		 WHERE " . $match . " LIMIT 1"
+        );
+
+        if ($open !== false && $open->size() > 0) {
+            // Execute() reports no row count, so the SELECT above is what tells us an
+            // open term exists; close it with today's date.
+            $DB->Clear();
+            $DB->ch_end = $today;
+            $DB->ch_eord = OfficerTermPeriod::ordinal(null, null, $today, 'end', null);
+            $DB->ch_kid = $kingdom_id;
+            $DB->ch_pid = $park_id;
+            $DB->ch_mid = $mundane_id;
+            $DB->ch_pos = $position_id;
+            $DB->ch_role = $canonical_key;
+            $DB->Execute(
+                "UPDATE " . DB_PREFIX . "officer_history
+    			 SET end_date = :ch_end, end_ordinal = :ch_eord, is_current = 0
+    			 WHERE " . $match
+            );
+            return;
+        }
+
+        // No open term: backfill a completed one so the service is still recorded.
+        $start = substr(trim((string) $held_since), 0, 10);
+        if ($start === '' || $start === '0000-00-00' || $start > $today) {
+            $start = $today;
+        }
+        $label = (trim((string) $display_label) !== '') ? (string) $display_label : $canonical_key;
+        $DB->Clear();
+        $DB->cb_kid = $kingdom_id;
+        $DB->cb_pid = $park_id;
+        $DB->cb_mid = $mundane_id;
+        $DB->cb_role = $canonical_key;
+        $DB->cb_pos = $position_id;
+        $DB->cb_label = $label;
+        $DB->cb_start = $start;
+        $DB->cb_sord = OfficerTermPeriod::ordinal(null, null, $start, 'start', null);
+        $DB->cb_end = $today;
+        $DB->cb_eord = OfficerTermPeriod::ordinal(null, null, $today, 'end', null);
+        $DB->cb_cb = ($changed_by > 0 ? $changed_by : null);
+        $DB->Execute(
+            "INSERT INTO " . DB_PREFIX . "officer_history
+    		 (kingdom_id, park_id, mundane_id, role, position_id, display_label,
+    		  start_date, start_ordinal, end_date, end_ordinal, changed_by, created_at)
+    		 VALUES (:cb_kid, :cb_pid, :cb_mid, :cb_role, :cb_pos, :cb_label,
+    		         :cb_start, :cb_sord, :cb_end, :cb_eord, :cb_cb, NOW())"
+        );
+    }
+
+    /**
+     * Insert a fresh ork_officer row for a multi-occupant (supporting) position,
+     * record history, and sync the RBAC role. Skips a duplicate active occupant.
+     */
+    private function InsertOfficerRow($kingdom_id, $park_id, $position_id, $canonical_key, $mundane_id, $changed_by, $term_start = '', $term_end = '', $display_label = '')
+    {
+        global $DB;
+        $kingdom_id = (int) $kingdom_id;
+        $park_id = (int) $park_id;
+        $position_id = (int) $position_id;
+        $mundane_id = (int) $mundane_id;
+        $changed_by = (int) $changed_by;
+
+        // One seat per office. A kingdom that wants two deputies creates two
+        // offices. This is the mirror of the removed crown rule, not a survivor of
+        // it: the constraint is on the seat, never on the person -- a person may
+        // hold any number of offices, at any number of levels.
+        $DB->Clear();
+        $DB->io_kid = $kingdom_id;
+        $DB->io_pid = $park_id;
+        $DB->io_pos = $position_id;
+        $held = $DB->DataSet(
+            "SELECT mundane_id FROM " . DB_PREFIX . "officer
+    		 WHERE kingdom_id = :io_kid AND park_id = :io_pid AND position_id = :io_pos AND mundane_id > 0 LIMIT 1"
+        );
+        if ($held !== false && $held->size() > 0 && $held->Next()) {
+            if ((int) $held->mundane_id === $mundane_id) {
+                return Success();   // idempotent: already seated
+            }
+            return InvalidParameter(null, 'This office already has a holder. Transition it instead.');
+        }
+
+        $DB->Clear();
+        $DB->ins_kid = $kingdom_id;
+        $DB->ins_pid = $park_id;
+        $DB->ins_mid = $mundane_id;
+        $DB->ins_role = $canonical_key;
+        $DB->ins_pos = $position_id;
+        $DB->Execute(
+            "INSERT INTO " . DB_PREFIX . "officer
+    		 (kingdom_id, park_id, mundane_id, role, system, authorization_id, position_id, modified)
+    		 VALUES (:ins_kid, :ins_pid, :ins_mid, :ins_role, 0, 0, :ins_pos, NOW())"
+        );
+
+        // Open an ork_officer_history term for this supporting appointment so the
+        // grant is audit-visible (matches Common::record_officer_history columns;
+        // record_officer_history is private, so write the open term directly here).
+        $start = (trim((string) $term_start) !== '') ? (string) $term_start : date('Y-m-d');
+        $has_end = (trim((string) $term_end) !== '');
+        $label = (trim((string) $display_label) !== '') ? (string) $display_label : $canonical_key;
+        $DB->Clear();
+        $DB->ih_kid = $kingdom_id;
+        $DB->ih_pid = $park_id;
+        $DB->ih_mid = $mundane_id;
+        $DB->ih_role = $canonical_key;
+        $DB->ih_pos = $position_id;
+        $DB->ih_label = $label;
+        $DB->ih_start = $start;
+        $DB->ih_sord = OfficerTermPeriod::ordinal(null, null, $start, 'start', null);
+        $DB->ih_cb = ($changed_by > 0 ? $changed_by : null);
+        // C2: end_date is written as a SQL literal so an open term truly stores NULL.
+        // Binding a PHP null can be skipped by the DB layer (yapo/null-skip rule),
+        // leaving a stale value; mirror the parent_position_id = NULL literal pattern.
+        if ($has_end) {
+            $DB->ih_end = (string) $term_end;
+            $DB->ih_eord = OfficerTermPeriod::ordinal(null, null, (string) $term_end, 'end', null);
+            $end_sql = ':ih_end, :ih_eord';
+        } else {
+            $end_sql = 'NULL, NULL';
+        }
+        $DB->Execute(
+            "INSERT INTO " . DB_PREFIX . "officer_history
+    		 (kingdom_id, park_id, mundane_id, role, position_id, display_label,
+    		  start_date, start_ordinal, end_date, end_ordinal, is_current, changed_by, created_at)
+    		 VALUES (:ih_kid, :ih_pid, :ih_mid, :ih_role, :ih_pos, :ih_label,
+    		         :ih_start, :ih_sord, " . $end_sql . ", " . ($has_end ? '0' : '1') . ", :ih_cb, NOW())"
+        );
+
+        // RBAC grant via the shared service.
+        if (isset(Ork3::$Lib->rbacservice)) {
+            try {
+                Ork3::$Lib->rbacservice->sync_officer_role_by_position_id(0, $mundane_id, $position_id, $kingdom_id, $park_id, $changed_by);
+            } catch (Exception $e) {
+                logtrace('RBAC supporting grant failed', $e->getMessage());
+            }
+        }
+
+        return Success();
+    }
+}

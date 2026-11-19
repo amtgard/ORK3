@@ -88,7 +88,61 @@ final class SchemaIntrospection
         $ddl = preg_replace('/ NOT NULL DEFAULT 0(?=[,\n])/', ' NOT NULL', $ddl) ?? $ddl;
         $ddl = preg_replace('/\s+ENGINE=\w+/', ' ENGINE=InnoDB', $ddl) ?? $ddl;
 
-        return trim($ddl);
+        return self::sortCreateTableMembers(trim($ddl));
+    }
+
+    /**
+     * Sort the column and key lines of a CREATE TABLE so member ORDER stops counting as
+     * schema drift.
+     *
+     * Where a column sits in the row is not part of the schema contract here: every query
+     * in this codebase names its columns, and yapo builds INSERT/UPDATE from associative
+     * arrays. But it IS what SHOW CREATE TABLE prints, so a column that prod acquired via
+     * `ALTER ... ADD COLUMN x AFTER y` and the repo appends at the end of its migration
+     * produce byte-different DDL for structurally identical tables. Before this,
+     * schema-diff reported ork_officer and ork_kingdomaward as differing when the only
+     * difference was where `position_id` / `is_ladder` / `max_level` / `disabled` were
+     * printed — noise that hid the differences that do matter (a column present on one
+     * side and absent on the other, or the same column with a different type).
+     *
+     * Deliberately conservative: anything that is not a plain single-line-member
+     * `CREATE TABLE ... ( ... ) tail` — a view, a CHECK constraint spanning lines, an
+     * unexpected shape — is returned untouched rather than reassembled by guesswork.
+     */
+    private static function sortCreateTableMembers(string $ddl): string
+    {
+        $lines = explode("\n", $ddl);
+        if (count($lines) < 3 || !str_starts_with(ltrim($lines[0]), 'CREATE TABLE')) {
+            return $ddl;
+        }
+
+        $tailIndex = null;
+        for ($i = count($lines) - 1; $i > 0; $i--) {
+            if (str_starts_with(ltrim($lines[$i]), ')')) {
+                $tailIndex = $i;
+                break;
+            }
+        }
+
+        if ($tailIndex === null || $tailIndex < 2) {
+            return $ddl;
+        }
+
+        $members = [];
+        for ($i = 1; $i < $tailIndex; $i++) {
+            $member = rtrim(rtrim($lines[$i]), ',');
+            if (trim($member) === '') {
+                return $ddl;
+            }
+            $members[] = $member;
+        }
+
+        sort($members, SORT_STRING);
+
+        $head = array_slice($lines, 0, 1);
+        $tail = array_slice($lines, $tailIndex);
+
+        return implode("\n", array_merge($head, [implode(",\n", $members)], $tail));
     }
 
     public static function hashFileContents(string $path): string

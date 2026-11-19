@@ -301,6 +301,15 @@ class Banner extends Ork3
         };
     }
 
+    /**
+     * Who may set, configure, or remove a banner.
+     *
+     * Banners are a display asset in exactly the way heraldry is, so they follow the
+     * heraldry permissions' shape: one key per entity type, and set/remove/configure all
+     * take the same one. Before this, every branch was a bare HasAuthority() call, which
+     * meant the whole banner feature sat outside RBAC -- no role could be given it, and
+     * a Heraldry Manager who could change a park's device could not change its banner.
+     */
     private function canEditBanner(int $mundaneId, string $type, int $id): bool
     {
         switch ($type) {
@@ -318,17 +327,20 @@ class Banner extends Ork3
                 $parkId = (int)$info->park_id;
                 $kingdomId = (int)$info->kingdom_id;
 
-                return ($parkId > 0 && (bool)Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_PARK, $parkId, AUTH_EDIT))
-                    || ($kingdomId > 0 && (bool)Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_KINGDOM, $kingdomId, AUTH_EDIT))
+                // A player's own banner is theirs (handled above); an officer editing
+                // someone else's is the same act as editing their heraldry, so it takes
+                // the same permission rather than a bare park/kingdom authority row.
+                return ($parkId > 0 && (bool)Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'player.heraldry.manage', 'park', $parkId, AUTH_EDIT))
+                    || ($kingdomId > 0 && (bool)Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'player.heraldry.manage', 'kingdom', $kingdomId, AUTH_EDIT))
                     || (bool)Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_ADMIN, 0, AUTH_ADMIN);
             case 'Park':
-                return (bool)Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_PARK, $id, AUTH_EDIT);
+                return (bool)Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'park.banner.manage', 'park', $id, AUTH_EDIT);
             case 'Kingdom':
-                return (bool)Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_KINGDOM, $id, AUTH_EDIT);
+                return (bool)Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'kingdom.banner.manage', 'kingdom', $id, AUTH_EDIT);
             case 'Unit':
-                return (bool)Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_UNIT, $id, AUTH_EDIT);
+                return (bool)Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'unit.banner.manage', 'unit', $id, AUTH_EDIT);
             case 'Event':
-                if ((bool)Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $id, AUTH_EDIT)) {
+                if ((bool)Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundaneId, 'event.banner.manage', 'event', $id, AUTH_EDIT)) {
                     return true;
                 }
 

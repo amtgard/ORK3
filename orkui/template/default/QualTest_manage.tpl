@@ -353,12 +353,23 @@ html[data-theme="dark"] .qt-tooltip-icon:focus-visible { outline-color: #63b3ed;
 				<?php if (empty($cfg['Configured'])): ?>
 				<div class="qt-unsaved-warning">
 					<i class="fas fa-exclamation-triangle"></i>
+					<?php if (!empty($CanConfig)): ?>
 					<span>
 						<strong>Never saved.</strong> The values below are <em>defaults</em>, not settings anyone chose &mdash;
 						nothing is stored for this test. It still runs on them<?php if ($type === 'reeve'): ?>, and the kingdom
 						is <strong>not</strong> opted in to the Global Question Library<?php endif; ?>.
 						Press <strong>Save</strong> below to make these settings explicit.
 					</span>
+					<?php else: ?>
+					<?php // Read-only (questions-only) view: the settings form is gated away, so this
+					      // must not tell the reader to press a Save button that is not on the page. ?>
+					<span>
+						<strong>Never saved.</strong> Nothing is stored for this test &mdash; it runs on
+						<em>defaults</em> that nobody chose<?php if ($type === 'reeve'): ?>, and the kingdom
+						is <strong>not</strong> opted in to the Global Question Library<?php endif; ?>.
+						Someone with permission to configure tests must save its settings to make them explicit.
+					</span>
+					<?php endif; ?>
 				</div>
 				<?php endif; ?>
 
@@ -366,6 +377,7 @@ html[data-theme="dark"] .qt-tooltip-icon:focus-visible { outline-color: #63b3ed;
 					<div class="qt-mini-stat"><strong><?= $count ?></strong> active question<?= $count !== 1 ? 's' : '' ?></div>
 				</div>
 
+				<?php if (!empty($CanConfig)): ?>
 				<form class="qt-config-form" data-kingdom="<?= $KingdomId ?>" data-type="<?= $type ?>">
 
 					<!-- Section: Scoring -->
@@ -507,6 +519,25 @@ html[data-theme="dark"] .qt-tooltip-icon:focus-visible { outline-color: #63b3ed;
 						<span class="qt-saved-msg"><i class="fas fa-check-circle"></i> Saved</span>
 					</div>
 				</form>
+				<?php else: ?>
+				<?php
+					// Questions-only manager: the pass criteria are not theirs to change, but the
+					// live version IS the thing they are writing questions against, so it stays.
+					$_roSet = ($type === 'reeve') ? ($ReeveLiveSet ?? null) : ($CorporaLiveSet ?? null);
+					$_roVer = $_roSet ? trim((string)$_roSet['RulesVersion']) : '';
+				?>
+				<div class="qt-section">
+					<div class="qt-section-header">Live Version</div>
+					<?php if ($_roSet): ?>
+						<div class="qt-derived-value"><?= htmlspecialchars($_roSet['Name']) ?></div>
+						<div class="qt-help-text">
+							<?= $_roVer !== '' ? htmlspecialchars($_roVer) : 'No version label set yet.' ?>
+						</div>
+					<?php else: ?>
+						<div class="qt-derived-value qt-derived-empty">Nothing published yet</div>
+					<?php endif; ?>
+				</div>
+				<?php endif; ?>
 
 				<div class="qt-link-row">
 					<a class="qt-link-btn qt-link-btn-primary" href="<?= UIR ?>QualTest/questions/<?= $KingdomId ?>/<?= $type ?>">
@@ -515,16 +546,19 @@ html[data-theme="dark"] .qt-tooltip-icon:focus-visible { outline-color: #63b3ed;
 					<a class="qt-link-btn qt-link-btn-ghost" href="<?= UIR ?>QualTest/question/create/<?= $KingdomId ?>/<?= $type ?>">
 						<i class="fas fa-plus"></i> Add Question
 					</a>
+					<?php if (!empty($CanConfig)): ?>
 					<button class="qt-link-btn qt-reset-retakes-btn" style="background:#e9d8fd;color:#553c9a;border:none;cursor:pointer;"
 					        data-kingdom="<?= $KingdomId ?>" data-type="<?= $type ?>">
 						<i class="fas fa-undo-alt"></i> Reset Retakes
 					</button>
+					<?php endif; ?>
 				</div>
 			</div>
 			<?php endforeach; ?>
 			</div>
 
 		<!-- Test Managers widget -->
+		<?php if (!empty($CanConfig)): ?>
 		<div class="qt-config-card" id="qt-managers-card">
 			<h3><i class="fas fa-users-cog"></i> Test Managers</h3>
 			<p style="font-size:0.82rem;color:var(--rp-text-muted);margin:0 0 12px;">
@@ -560,6 +594,7 @@ html[data-theme="dark"] .qt-tooltip-icon:focus-visible { outline-color: #63b3ed;
 				<span id="qt-manager-error" style="font-size:0.82rem;color:#e53e3e;display:none;"></span>
 			</div>
 		</div>
+		<?php endif; ?>
 
 		</div><!-- /.rp-table-area -->
 
@@ -724,6 +759,7 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 	});
 
 // ----- Test Managers -----
+<?php if (!empty($CanConfig)): ?>
 (function() {
 	var kingdomId  = <?= (int)$KingdomId ?>;
 	var ajaxBase   = '<?= UIR ?>QualTestAjax/';
@@ -892,4 +928,5 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 
 	attachRemoveHandlers();
 })();
+<?php endif; ?>
 </script>

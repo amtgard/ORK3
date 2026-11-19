@@ -16,11 +16,29 @@ $uir             = UIR;
 $prevWeekly  = is_array($PrevWeekly  ?? null) ? $PrevWeekly  : [];
 $prevMonthly = is_array($PrevMonthly ?? null) ? $PrevMonthly : [];
 
+// Admin::index() admits a true admin or a holder of any global.* capability. Each tile
+// asks for the key its destination's lib gate checks; tiles whose destination has no
+// global key (park creation, player create/move, park transfer/migrate, unit merge,
+// audit log, release utilization) stay with true admins.
+$_cpIsAdmin = !empty($IsOrkAdmin);
+$_cpCaps    = is_array($GlobalCaps ?? null) ? $GlobalCaps : [];
+$cpCan = function (?string $key) use ($_cpIsAdmin, $_cpCaps): bool {
+	return $_cpIsAdmin || ($key !== null && !empty($_cpCaps[$key]));
+};
+$_cpKingdomMgr = $cpCan('global.kingdom.manage');
+$_cpSecKingdoms = $_cpIsAdmin || $_cpKingdomMgr;
+$_cpSecPlayers  = $_cpIsAdmin || $cpCan('global.player.merge') || $cpCan('global.bonus_credit.manage');
+$_cpSecParks    = $_cpIsAdmin || $_cpKingdomMgr;
+$_cpSecUnits    = $_cpIsAdmin || $cpCan('global.admin.grant');
+
+// Guarded so the template can be rendered more than once in one process (the tests do).
+if (!function_exists('cpTrend')) {
 function cpTrend(int $cur, ?int $prev): string {
 	if ($prev === null) return '';
 	if ($cur > $prev) return ' <span class="kn-trend kn-trend-up" title="Up from ' . number_format($prev) . ' prev period">&#9650;</span>';
 	if ($cur < $prev) return ' <span class="kn-trend kn-trend-dn" title="Down from ' . number_format($prev) . ' prev period">&#9660;</span>';
 	return '';
+}
 }
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
@@ -75,6 +93,7 @@ function cpTrend(int $cur, ?int $prev): string {
      ============================================= -->
 <?php
 $_ts = is_array($TrendStats ?? null) ? $TrendStats : [];
+if (!function_exists('_cp_trend')) {
 function _cp_trend($cur, $prev, $fmt = 'number') {
 	$val = $fmt === 'number' ? number_format($cur) : $cur;
 	if ($prev == 0) return '<span class="cp-ts-val">' . $val . '</span>';
@@ -88,7 +107,9 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	}
 	return '<span class="cp-ts-val">' . $val . '</span>' . $arrow;
 }
+}
 ?>
+<?php if (!empty($_ts)): ?>
 <div class="cp-ts-row">
 	<div class="cp-ts-card">
 		<div class="cp-ts-icon"><i class="fas fa-medal"></i></div>
@@ -123,6 +144,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <!-- =============================================
      MAIN LAYOUT
@@ -134,32 +156,42 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 	     ========================================== -->
 	<div class="cp-main">
 
+		<?php if ($_cpSecKingdoms): ?>
 		<!-- Kingdoms -->
 		<div class="cp-section">
 			<div class="cp-section-title"><i class="fas fa-crown"></i> Kingdoms</div>
 			<div class="cp-action-grid">
+				<?php if ($_cpKingdomMgr): ?>
 				<button class="cp-action-card" onclick="cpOpenModal('cp-createkingdom-overlay')">
 					<div class="cp-action-icon cp-action-icon-blue"><i class="fas fa-plus-circle"></i></div>
 					<div class="cp-action-label">Create Kingdom</div>
 					<div class="cp-action-desc">Add a new kingdom or principality</div>
 				</button>
+				<?php endif; ?>
+				<?php if ($_cpIsAdmin): /* park creation is ORK-admin-only by policy */ ?>
 				<button class="cp-action-card" onclick="cpOpenModal('cp-createpark-overlay')">
 					<div class="cp-action-icon cp-action-icon-green"><i class="fas fa-tree"></i></div>
 					<div class="cp-action-label">Create Park</div>
 					<div class="cp-action-desc">Add a new park to any kingdom</div>
 				</button>
+				<?php endif; ?>
+				<?php if ($_cpKingdomMgr): ?>
 				<a class="cp-action-card" href="<?= UIR ?>Admin/inactivekingdoms" style="text-decoration:none">
 					<div class="cp-action-icon cp-action-icon-red"><i class="fas fa-ban"></i></div>
 					<div class="cp-action-label">Inactive Kingdoms</div>
 					<div class="cp-action-desc">Retired kingdoms &amp; principalities</div>
 				</a>
+				<?php endif; ?>
 			</div>
 		</div>
+		<?php endif; ?>
 
+		<?php if ($_cpSecPlayers): ?>
 		<!-- Players -->
 		<div class="cp-section">
 			<div class="cp-section-title"><i class="fas fa-user"></i> Players</div>
 			<div class="cp-action-grid">
+				<?php if ($_cpIsAdmin): ?>
 				<button class="cp-action-card" onclick="cpOpenModal('cp-createplayer-overlay')">
 					<div class="cp-action-icon cp-action-icon-green"><i class="fas fa-user-plus"></i></div>
 					<div class="cp-action-label">Create Player</div>
@@ -170,23 +202,31 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-action-label">Move Player</div>
 					<div class="cp-action-desc">Transfer a player to a different park</div>
 				</button>
+				<?php endif; ?>
+				<?php if ($cpCan('global.player.merge')): ?>
 				<button class="cp-action-card" onclick="cpOpenModal('cp-mergeplayer-overlay')">
 					<div class="cp-action-icon cp-action-icon-purple"><i class="fas fa-compress-arrows-alt"></i></div>
 					<div class="cp-action-label">Merge Players</div>
 					<div class="cp-action-desc">Combine two duplicate player records</div>
 				</button>
+				<?php endif; ?>
+				<?php if ($cpCan('global.bonus_credit.manage')): ?>
 				<button class="cp-action-card" onclick="bcOpen()">
 					<div class="cp-action-icon cp-action-icon-green"><i class="fas fa-star"></i></div>
 					<div class="cp-action-label">Bonus Credits</div>
 					<div class="cp-action-desc">Amtgard-wide credits for kingdoms to adopt</div>
 				</button>
+				<?php endif; ?>
 				</div>
 		</div>
+		<?php endif; ?>
 
+		<?php if ($_cpSecParks): ?>
 		<!-- Parks -->
 		<div class="cp-section">
 			<div class="cp-section-title"><i class="fas fa-map-marker-alt"></i> Parks</div>
 			<div class="cp-action-grid">
+				<?php if ($_cpIsAdmin): ?>
 				<button class="cp-action-card" onclick="cpOpenTransferPark()">
 					<div class="cp-action-icon cp-action-icon-blue"><i class="fas fa-map-signs"></i></div>
 					<div class="cp-action-label">Transfer Park</div>
@@ -197,30 +237,40 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 					<div class="cp-action-label">Migrate Park Members</div>
 					<div class="cp-action-desc">Move all members from one park to another</div>
 				</button>
+				<?php endif; ?>
+				<?php if ($_cpKingdomMgr): ?>
 			<a class="cp-action-card" href="<?= UIR ?>Admin/inactiveparks" style="text-decoration:none">
 				<div class="cp-action-icon cp-action-icon-red"><i class="fas fa-ban"></i></div>
 				<div class="cp-action-label">Inactive Parks</div>
 				<div class="cp-action-desc">Retired parks across all kingdoms</div>
 			</a>
+				<?php endif; ?>
 			</div>
 		</div>
+		<?php endif; ?>
 
+		<?php if ($_cpSecUnits): ?>
 		<!-- Units & Auth -->
 		<div class="cp-section">
 			<div class="cp-section-title"><i class="fas fa-users-cog"></i> Units &amp; Authorization</div>
 			<div class="cp-action-grid">
+				<?php if ($_cpIsAdmin): ?>
 				<button class="cp-action-card" onclick="cpOpenModal('cp-mergeunit-overlay')">
 					<div class="cp-action-icon cp-action-icon-purple"><i class="fas fa-layer-group"></i></div>
 					<div class="cp-action-label">Merge Units</div>
 					<div class="cp-action-desc">Combine two duplicate unit records</div>
 				</button>
+				<?php endif; ?>
+				<?php if ($cpCan('global.admin.grant')): ?>
 				<a class="cp-action-card" href="<?= UIR ?>Admin/permissions">
 					<div class="cp-action-icon cp-action-icon-red"><i class="fas fa-shield-alt"></i></div>
 					<div class="cp-action-label">Global Permissions</div>
-					<div class="cp-action-desc">Manage system admins &amp; kingdom access</div>
+					<div class="cp-action-desc"><?= $_cpIsAdmin ? 'Manage system admins &amp; kingdom access' : 'See who holds system administrator access' ?></div>
 				</a>
+				<?php endif; ?>
 				</div>
 		</div>
+		<?php endif; ?>
 
 		<!-- Kingdom Overview Table -->
 		<div class="cp-overview-wrap">
@@ -294,10 +344,16 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 				<li><a href="<?= UIR ?>Unit/unitlist"><i class="fas fa-users"></i><span>Companies &amp; Households<span class="cp-report-list-desc">All registered units</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/topparks"><i class="fas fa-trophy"></i><span>Top Parks by Attendance<span class="cp-report-list-desc">Ranked attendance report</span></span></a></li>
 				<li><a href="<?= UIR ?>Admin/new_player_attendance"><i class="fas fa-star"></i><span>New Player Attendance<span class="cp-report-list-desc">First-time attendees by kingdom</span></span></a></li>
+				<?php if ($_cpIsAdmin): ?>
 				<li><a href="<?= UIR ?>Admin/auditlog"><i class="fas fa-history"></i><span>Audit Log<span class="cp-report-list-desc">System changes &amp; admin actions</span></span></a></li>
+				<?php endif; ?>
+				<?php if ($cpCan('global.health.view')): ?>
 				<li><a href="<?= UIR ?>Admin/serverhealth"><i class="fas fa-heartbeat"></i><span>Server Health<span class="cp-report-list-desc">PHP-FPM workers, DB metrics &amp; load test</span></span></a></li>
+				<?php endif; ?>
 				<li><a href="<?= UIR ?>Admin/stateofamtgard"><i class="fas fa-globe"></i><span>State of Amtgard Report<span class="cp-report-list-desc">Annual recruitment, retention &amp; class data</span></span></a></li>
+				<?php if ($_cpIsAdmin): ?>
 				<li><a href="<?= UIR ?>Reports/release_utilization"><i class="fas fa-chart-line"></i><span>Release Feature Utilization<span class="cp-report-list-desc">Adoption metrics by release</span></span></a></li>
+				<?php endif; ?>
 			</ul>
 		</div>
 
@@ -307,7 +363,9 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 			</div>
 			<ul class="cp-report-list">
 				<li><a href="https://github.com/amtgard/ORK3" target="_blank"><i class="fab fa-github"></i><span>Source Code<span class="cp-report-list-desc">ORK3 on GitHub</span></span></a></li>
+				<?php if ($cpCan('global.admin.grant')): ?>
 				<li><a href="<?= UIR ?>Admin/permissions"><i class="fas fa-shield-alt"></i><span>Global Permissions<span class="cp-report-list-desc">System admins &amp; kingdom access</span></span></a></li>
+				<?php endif; ?>
 			</ul>
 		</div>
 

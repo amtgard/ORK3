@@ -11,6 +11,8 @@ require_once __DIR__ . '/lib/Wiring.php';
 require_once __DIR__ . '/lib/DeploymentTier.php';
 require_once __DIR__ . '/lib/MigrationClassifier.php';
 require_once __DIR__ . '/lib/SchemaIntrospection.php';
+require_once __DIR__ . '/lib/SchemaTableIndex.php';
+require_once __DIR__ . '/lib/TableReferenceScan.php';
 require_once __DIR__ . '/lib/LastRender.php';
 require_once __DIR__ . '/Validate.php';
 require_once __DIR__ . '/Init.php';

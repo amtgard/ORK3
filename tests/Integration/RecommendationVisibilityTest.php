@@ -8,6 +8,8 @@ use CourtFixture;
 use PHPUnit\Framework\TestCase;
 use RecommendationVisibility;
 
+require_once __DIR__ . '/../Support/RbacRoleFixture.php';
+
 final class RecommendationVisibilityTest extends TestCase
 {
     private CourtFixture $fx;
@@ -15,6 +17,7 @@ final class RecommendationVisibilityTest extends TestCase
     private int $k = 0;
     private int $p = 0;
     private int $otherPark = 0;
+    private ?\RbacRoleFixture $rbac = null;
 
     protected function setUp(): void
     {
@@ -33,6 +36,9 @@ final class RecommendationVisibilityTest extends TestCase
 
     protected function tearDown(): void
     {
+        if ($this->rbac !== null) {
+            $this->rbac->cleanup();
+        }
         if (isset($this->fx)) {
             $this->fx->cleanup();
         }
@@ -388,6 +394,110 @@ final class RecommendationVisibilityTest extends TestCase
         $other = (int) $this->fx->pdo()->query('SELECT kingdom_id FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id <> ' . $this->k . ' AND parent_kingdom_id <> ' . $this->k . ' ORDER BY kingdom_id LIMIT 1')->fetchColumn();
         if ($other) {
             $this->assertFalse($this->vis->isOfficerInKingdom($c['parkOfficer'], $other));
+        }
+    }
+
+    /**
+     * Officers who hold the court keys through an RBAC role ONLY (no ork_authorization
+     * row, no seat), plus a Prime Minister seat stored in the canonical form. canSee()
+     * admits them through Court::canManage; the SQL twin must find them too, or a paged
+     * reader hides what the PHP rule shows.
+     *
+     * @return array<string,int>
+     */
+    private function rbacCast(): array
+    {
+        $this->rbac = new \RbacRoleFixture($this->fx->pdo(), 'zzrecvis', $this->k);
+        $parkRole        = $this->rbac->seedRoleWith('park.court.manage', 'park');
+        $kingdomRole     = $this->rbac->seedRoleWith('kingdom.court.manage', 'kingdom');
+        $kingdomParkRole = $this->rbac->seedRoleWith('park.court.manage', 'kingdom');
+
+        $rbacPark = $this->fx->createPlayerWithToken('rbacpark', $this->k, $this->p)['mundane_id'];
+        $this->rbac->assignRole($rbacPark, $parkRole, ['park_id' => $this->p]);
+        $rbacOtherPark = $this->fx->createPlayerWithToken('rbacother', $this->k, $this->otherPark)['mundane_id'];
+        $this->rbac->assignRole($rbacOtherPark, $parkRole, ['park_id' => $this->otherPark]);
+        $rbacKingdom = $this->fx->createPlayerWithToken('rbackd', $this->k, $this->p)['mundane_id'];
+        $this->rbac->assignRole($rbacKingdom, $kingdomRole, ['kingdom_id' => $this->k]);
+        // park.court.manage held over the whole kingdom: a park officer of every park in it.
+        $rbacAllParks = $this->fx->createPlayerWithToken('rbacall', $this->k, $this->p)['mundane_id'];
+        $this->rbac->assignRole($rbacAllParks, $kingdomParkRole, ['kingdom_id' => $this->k]);
+        $pmSeat = $this->fx->createPlayerWithToken('pmseat', $this->k, $this->p)['mundane_id'];
+        $this->fx->insertOfficer($pmSeat, $this->k, 0, 'prime_minister');
+
+        return compact('rbacPark', 'rbacOtherPark', 'rbacKingdom', 'rbacAllParks', 'pmSeat');
+    }
+
+    public function testRbacRoleOnlyCourtManagersAreOfficers(): void
+    {
+        $c = $this->cast();
+        $r = $this->rbacCast();
+        $vis = new RecommendationVisibility();
+        $park    = $this->rec($c['recipient'], $c['author'], 1);
+        $kingdom = $this->rec($c['recipient'], $c['author'], 2);
+
+        $this->assertTrue($vis->canSee($r['rbacPark'], $park), 'park.court.manage role at the park sees a park-level hide');
+        $this->assertFalse($vis->canSee($r['rbacPark'], $kingdom));
+        $this->assertFalse($vis->canSee($r['rbacOtherPark'], $park), 'a role at another park confers nothing here');
+        $this->assertTrue($vis->canSee($r['rbacKingdom'], $kingdom), 'kingdom.court.manage role sees a kingdom-level hide');
+        $this->assertTrue($vis->canSee($r['rbacAllParks'], $park));
+        $this->assertFalse($vis->canSee($r['rbacAllParks'], $kingdom), 'park.court.manage over the kingdom is still park level');
+        $this->assertTrue($vis->canSee($r['pmSeat'], $kingdom), 'a canonical prime_minister seat is a kingdom officer');
+
+        $this->assertSame(1, $vis->creatorLevel($r['rbacPark'], $c['recipient']));
+        $this->assertSame(2, $vis->creatorLevel($r['rbacKingdom'], $c['recipient']));
+        $this->assertSame(1, $vis->creatorLevel($r['rbacAllParks'], $c['recipient']));
+        $this->assertSame(0, $vis->creatorLevel($r['rbacOtherPark'], $c['recipient']));
+
+        $this->assertTrue($vis->isOfficerInKingdom($r['rbacPark'], $this->k));
+        $this->assertTrue($vis->isOfficerInKingdom($r['rbacAllParks'], $this->k));
+        $this->assertTrue($vis->isOfficerInKingdom($r['rbacKingdom'], $this->k));
+        $this->assertTrue($vis->isOfficerInKingdom($r['pmSeat'], $this->k));
+    }
+
+    public function testSqlPredicateAgreesWithCanSeeForRbacRoleHolders(): void
+    {
+        $c  = $this->cast();
+        $r  = $this->rbacCast();
+        $vis = new RecommendationVisibility();
+        $ka = $this->fx->firstKingdomAwardId($this->k);
+        $all = [];
+        foreach ([[0, 0], [1, 0], [2, 0], [2, 1]] as $i => [$lvl, $passed]) {
+            $all[] = $this->fx->createRecommendation(
+                $c['recipient'],
+                (int) $ka['kingdomaward_id'],
+                (int) $ka['award_id'],
+                ['monarchy_only' => $lvl, 'passed_to_local' => $passed, 'recommended_by_id' => $c['author'], 'rank' => 1 + $i]
+            );
+        }
+        foreach ($r as $role => $viewer) {
+            $phpSees = [];
+            foreach ($all as $id) {
+                if ($vis->canSee($viewer, $vis->loadRec($id))) {
+                    $phpSees[] = $id;
+                }
+            }
+            $sqlSees = array_map('intval', $this->fx->pdo()->query(
+                'SELECT r.recommendations_id FROM ' . DB_PREFIX . 'recommendations r
+                   JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.mundane_id
+                  WHERE r.recommendations_id IN (' . implode(',', $all) . ')
+                    AND ' . $vis->sqlPredicate($viewer, 'r', 'm', [$this->k]) . '
+                  ORDER BY r.recommendations_id'
+            )->fetchAll(\PDO::FETCH_COLUMN));
+            $this->assertSame($phpSees, $sqlSees, "SQL and canSee disagree for $role");
+        }
+        // And the verdicts themselves, so an agreement in which both sides miss the role
+        // holder cannot pass.
+        $parkSet = [$all[0], $all[1], $all[3]];
+        $expect = ['rbacPark' => $parkSet, 'rbacOtherPark' => [$all[0]], 'rbacKingdom' => $all,
+            'rbacAllParks' => $parkSet, 'pmSeat' => $all];
+        foreach ($expect as $role => $ids) {
+            $sees = [];
+            foreach ($all as $id) {
+                if ($vis->canSeeRecId($r[$role], $id)) {
+                    $sees[] = $id;
+                }
+            }
+            $this->assertSame($ids, $sees, "canSee verdicts for $role");
         }
     }
 

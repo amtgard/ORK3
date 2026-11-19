@@ -2,6 +2,22 @@
   // Source for bin/ork-db extract — hardcoded mirror in wiring.json5
   "source": "mirror",
 
+  // Reference catalogs sourced FROM the mirror but COMMITTED to
+  // tools/ork-db/templates/catalogs/<table>.sql — the same directory that holds the
+  // hand-maintained fixed_embedded catalogs.
+  //
+  // They used to land in tools/ork-db/extracted/, which is .gitignored (it also holds
+  // mundane_real.json and configuration.sql, which carry real player data). That made
+  // fingerprints.json5 `catalog_hashes` compare a committed constant against a file every
+  // developer regenerated from their own mirror, so any prod reload turned drift-check red
+  // for everybody and the render was not reproducible across machines. These four carry no
+  // PII — class is 16 rows of names/colours/icons, award 150, parktitle 168, pronoun 12 —
+  // so they are checked in, and the hash now covers a file git actually tracks.
+  //
+  // `bin/ork-db extract` still refreshes them from the mirror and overwrites the committed
+  // copy in place. That is the intended way to pick up genuine prod reference-data changes:
+  // the change shows up as a reviewable `git diff`, and drift-check fails until the new
+  // hash is recorded in fingerprints.json5.
   "fixed_extract": [
     "award",
     "class",

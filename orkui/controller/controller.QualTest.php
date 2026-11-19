@@ -26,6 +26,12 @@ class Controller_QualTest extends Controller
             return;
         }
 
+        // can_manage() above is only the coarse page-ENTRY gate: a manager who may do any
+        // one of the four things still reaches this workspace. What that workspace SHOWS is
+        // decided per capability, so a questions-only expert gets the read-only overview and
+        // the question-bank links without the pass criteria, the manager roster or retakes.
+        $caps = $this->QualTest->capabilities($uid, $kingdom_id);
+
         $kingdom_name = $this->QualTest->kingdom_name($kingdom_id);
 
         $reeve_config   = $this->QualTest->config($kingdom_id, 'reeve');
@@ -37,8 +43,13 @@ class Controller_QualTest extends Controller
         $this->data['CorporaConfig'] = $corpora_config;
         $this->data['ReeveCount']    = $this->QualTest->count_active_questions($kingdom_id, 'reeve');
         $this->data['CorporaCount']  = $this->QualTest->count_active_questions($kingdom_id, 'corpora');
-        $this->data['Managers']      = $this->QualTest->managers($kingdom_id);
+        // Not merely hidden: without CAP_CONFIG the roster never enters the page source.
+        $this->data['Managers']      = $caps['Config'] ? $this->QualTest->managers($kingdom_id) : [];
         $this->data['Uid']           = $uid;
+        $this->data['CanConfig']     = $caps['Config'];
+        $this->data['CanQuestions']  = $caps['Questions'];
+        $this->data['CanPublish']    = $caps['Publish'];
+        $this->data['CanResults']    = $caps['Results'];
 
         // The rules/corpora version belongs to the published VERSION, not to these settings —
         // settings shows it read-only. Two editable copies of one fact drift, and the config
@@ -63,8 +74,8 @@ class Controller_QualTest extends Controller
             $this->data['Error'] = 'Invalid kingdom.';
             return;
         }
-        if (!$this->QualTest->can_manage($uid, $kingdom_id)) {
-            $this->data['Error'] = 'You do not have permission to manage qualification tests for this kingdom.';
+        if (!$this->QualTest->can($uid, $kingdom_id, Model_QualTest::CAP_QUESTIONS)) {
+            $this->data['Error'] = 'You do not have permission to edit question banks for this kingdom.';
             return;
         }
 
@@ -127,7 +138,7 @@ class Controller_QualTest extends Controller
                 $this->data['Error'] = 'Question not found.';
                 return;
             }
-            if (!$this->QualTest->can_manage($uid, $q['KingdomId'])) {
+            if (!$this->QualTest->can($uid, (int)$q['KingdomId'], Model_QualTest::CAP_QUESTIONS)) {
                 $this->data['Error'] = 'You do not have permission to edit this question.';
                 return;
             }
@@ -138,7 +149,7 @@ class Controller_QualTest extends Controller
             // create
             $kingdom_id = (int)preg_replace('/[^0-9]/', '', $param1 ?? '');
             $test_type  = ($param2 === 'corpora') ? 'corpora' : 'reeve';
-            if (!valid_id($kingdom_id) || !$this->QualTest->can_manage($uid, $kingdom_id)) {
+            if (!valid_id($kingdom_id) || !$this->QualTest->can($uid, $kingdom_id, Model_QualTest::CAP_QUESTIONS)) {
                 $this->data['Error'] = 'Invalid kingdom or insufficient permissions.';
                 return;
             }
@@ -281,7 +292,7 @@ class Controller_QualTest extends Controller
         // Same gate as the rest of test management, checked against the SET's own kingdom —
         // never a kingdom id from the request, or this would export any kingdom's bank
         // (answers included) to anyone who could guess a set id.
-        if (!$this->QualTest->can_manage($uid, (int)$set['KingdomId'])) {
+        if (!$this->QualTest->can($uid, (int)$set['KingdomId'], Model_QualTest::CAP_QUESTIONS)) {
             $this->data['Error'] = 'You do not have permission to export this test.';
             return;
         }

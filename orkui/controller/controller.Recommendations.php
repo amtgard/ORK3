@@ -98,6 +98,9 @@ class Controller_Recommendations extends Controller
         // Parks in the kingdom (kingdom-scope park filter + abbrev lookup); DB in lib.
         $this->data['Parks']    = $this->rmParkMap($kingdom_id);
 
+        // Which row/bulk actions this viewer may run (see rmCapabilities()).
+        $this->data['RmCan'] = $this->rmCapabilities($uid, $kingdom_id, $park_id);
+
         $this->data['KingdomId']    = $kingdom_id;
         $this->data['ParkId']       = $park_id;
         $this->data['Context']      = $context;
@@ -190,6 +193,8 @@ class Controller_Recommendations extends Controller
         $CourtMap = $this->rmCourtMap($kingdom_id, $park_id);
         $Parks    = $this->rmParkMap($kingdom_id);
         $Context  = $context;
+        // Re-rendered rows must offer exactly the actions manage() offered.
+        $RmCan    = $this->rmCapabilities($uid, $kingdom_id, $park_id);
 
         $html = '';
         foreach ($page['Groups'] as $group) {
@@ -565,6 +570,55 @@ class Controller_Recommendations extends Controller
             $status = 'forbidden';
         }
         return [$kingdom_id, $park_id, $context, $uid, $status];
+    }
+
+    /**
+     * One flag per Manager action, each the SAME key/scope/legacy role as the gate
+     * the action's endpoint or lib method enforces, so the page never offers a
+     * button the server will refuse. Computed at the page's scope: the lib checks
+     * the recipient's park, and a kingdom-scope grant satisfies every park in the
+     * kingdom (RBAC CheckPermissionCascade and legacy HasAuthority both walk
+     * park -> kingdom with the same key/role).
+     *
+     * Admission (Court::canManage) already IS the Add-to-Court gate (CourtAjax
+     * create_court/add_award re-check can_manage on the court's scope) and the
+     * Monarchy Only gate (RecommendationVisibility::officerLevel is built on
+     * canManage), so those two read the lib rather than re-spelling a check.
+     */
+    private function rmCapabilities($uid, $kingdom_id, $park_id)
+    {
+        $scope   = $park_id > 0 ? 'park' : 'kingdom';
+        $scopeId = $park_id > 0 ? (int)$park_id : (int)$kingdom_id;
+        $auth    = $this->Authorization;
+        $uid     = (int)$uid;
+
+        // Dismiss / Restore (Player::DeleteAwardRecommendation / RestoreAwardRecommendation)
+        // and the post-grant resolverecommendationcluster (Kingdom/ParkAjax): AUTH_CREATE.
+        $recManage = $auth->has_permission_or_authority($uid, 'player.recommendation.manage', $scope, $scopeId, AUTH_CREATE);
+        // Snooze / Unsnooze (Player::Snooze/UnsnoozeAwardRecommendation): AUTH_EDIT.
+        $snooze = $recManage
+            || $auth->has_permission_or_authority($uid, 'player.recommendation.manage', $scope, $scopeId, AUTH_EDIT);
+        // Grant writes through Player::AddAward (player.award.manage, AUTH_CREATE) and
+        // then resolves the cluster; without both the grant lands but the rec stays open.
+        $grant = $recManage
+            && $auth->has_permission_or_authority($uid, 'player.award.manage', $scope, $scopeId, AUTH_CREATE);
+
+        $moLevel = (int)$this->Player->monarchy_only_level($uid, $kingdom_id, $park_id);
+
+        return [
+            'Grant'        => $grant,
+            'Court'        => $this->Court->can_manage($uid, $kingdom_id, $park_id),
+            'Snooze'       => $snooze,
+            // Player::SetRecommendationPassedToLocal: kingdom AUTH_CREATE. Kingdom
+            // context only (the park Manager has nothing to pass down to).
+            'PassLocal'    => $park_id === 0 && $recManage,
+            'MonarchyOnly' => $moLevel > 0,
+            // Unhiding needs this level to reach the rec's STORED level
+            // (RecommendationVisibility::canManageHidden; ORK admins always pass).
+            'MonarchyOnlyViewerLevel' => $auth->has_authority($uid, AUTH_ADMIN, 0, AUTH_EDIT) ? 2 : $moLevel,
+            'Dismiss'      => $recManage,
+            'Restore'      => $recManage,
+        ];
     }
 
     // Court-membership map for the scope. DB lives in the lib

@@ -47,6 +47,13 @@
  * running a survey can be limited to that survey's credit. Only kingdom CREATE
  * appoints or removes one.
  *
+ * Every officer check here goes through AuthorizationGate::checkPermissionOrAuthority
+ * with the legacy role it always had, so the authority rows above keep working and RBAC
+ * roles are added beside them: global.bonus_credit.manage (Amtgard-wide credits),
+ * kingdom.bonus_credit.define (kingdom CREATE: define, appoint granters, adopt, the
+ * outside-credit setting), kingdom.bonus_credit.grant (kingdom EDIT) and
+ * park.bonus_credit.grant (park EDIT). The granter list is not a role and stays.
+ *
  * A category is granted once per player unless marked repeatable. An automated
  * source (a survey) is a category with source_type/source_id set, so "once per
  * survey" is the same rule.
@@ -79,19 +86,54 @@ class BonusCredit
     // Authority and coverage
     // -----------------------------------------------------------------------
 
-    /** A global ORK admin: an unscoped admin authorization row. */
+    /** May $uid run Amtgard-wide credits? An unscoped admin row, or global.bonus_credit.manage. */
     public function isOrkAdmin(int $uid): bool
     {
-        return $uid > 0 && (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        return $uid > 0 && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($uid, 'global.bonus_credit.manage', 'global', 0, AUTH_ADMIN);
     }
 
-    /** May $uid appoint or remove this kingdom's granters? CREATE on it (ADMIN passes, EDIT does not). Granters cannot. */
+    /**
+     * Kingdom EDIT-level grant power: kingdom EDIT, or kingdom.bonus_credit.grant on it.
+     * Granter rows are a separate question (isGranter) and callers ask it themselves.
+     */
+    private function holdsKingdomGrant(int $uid, int $kingdomId): bool
+    {
+        return valid_id($kingdomId)
+            && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($uid, 'kingdom.bonus_credit.grant', 'kingdom', $kingdomId, AUTH_EDIT);
+    }
+
+    /**
+     * Park EDIT-level grant power: park EDIT (which kingdom EDIT satisfies), or
+     * park.bonus_credit.grant on it (a kingdom assignment cascades), or
+     * kingdom.bonus_credit.grant on the park's kingdom. The last arm is RBAC only: its
+     * legacy half, kingdom EDIT, already passes the park check, but a role carrying only
+     * the kingdom key would otherwise give credits from the kingdom page and not from
+     * the parks inside it -- a split the legacy rows never had.
+     */
+    private function holdsParkGrant(int $uid, int $parkId): bool
+    {
+        if (!valid_id($parkId)) {
+            return false;
+        }
+        if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($uid, 'park.bonus_credit.grant', 'park', $parkId, AUTH_EDIT)) {
+            return true;
+        }
+        $kingdomId = $this->parkKingdom($parkId);
+        return valid_id($kingdomId)
+            && Ork3::$Lib->authorizationgate->checkPermission($uid, 'kingdom.bonus_credit.grant', 'kingdom', $kingdomId);
+    }
+
+    /**
+     * May $uid appoint or remove this kingdom's granters? CREATE on it (ADMIN passes,
+     * EDIT does not), or kingdom.bonus_credit.define. Granters cannot. Defining credits,
+     * adopting Amtgard-wide ones and the outside-credit setting all ask this too.
+     */
     public function canAppoint(int $uid, int $kingdomId): bool
     {
         if ($uid <= 0 || !valid_id($kingdomId)) {
             return false;
         }
-        return (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdomId, AUTH_CREATE);
+        return Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($uid, 'kingdom.bonus_credit.define', 'kingdom', $kingdomId, AUTH_CREATE);
     }
 
     /**
@@ -117,7 +159,7 @@ class BonusCredit
         if ($uid <= 0 || !valid_id($kingdomId)) {
             return false;
         }
-        return (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)
+        return $this->holdsKingdomGrant($uid, $kingdomId)
             || $this->isGranter($uid, $kingdomId);
     }
 
@@ -131,7 +173,7 @@ class BonusCredit
         if ($uid <= 0 || !valid_id($parkId)) {
             return false;
         }
-        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_EDIT)) {
+        if ($this->holdsParkGrant($uid, $parkId)) {
             return true;
         }
         foreach ($this->kingdomAncestry($this->parkKingdom($parkId)) as $kid) {
@@ -173,12 +215,12 @@ class BonusCredit
         if ($uid <= 0 || !valid_id($parkId)) {
             return false;
         }
-        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_EDIT)) {
+        if ($this->holdsParkGrant($uid, $parkId)) {
             return true;
         }
         $rid = (int) ($category['CategoryId'] ?? 0);
         if (($category['ScopeType'] ?? '') === 'kingdom') {
-            return (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int) $category['ScopeId'], AUTH_EDIT)
+            return $this->holdsKingdomGrant($uid, (int) $category['ScopeId'])
                 || $this->isGranter($uid, (int) $category['ScopeId'], $rid);
         }
         if (($category['ScopeType'] ?? '') === 'ork') {
@@ -205,16 +247,29 @@ class BonusCredit
             return false;
         }
         $kingdomId = (int) $category['ScopeId'];
-        return (bool) Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)
+        return $this->holdsKingdomGrant($uid, $kingdomId)
             || $this->isGranter($uid, $kingdomId, (int) ($category['CategoryId'] ?? 0))
             || $this->holdsAParkIn($uid, $this->kingdomFamily($kingdomId));
     }
 
-    /** Does $uid hold EDIT (or higher) on any park of these kingdoms? A direct park row, as a park officer has. */
+    /**
+     * Does $uid hold park grant power at any park of these kingdoms? A direct park
+     * authorization row (EDIT or higher), as a park officer has, or a park-scoped role
+     * carrying park.bonus_credit.grant. There is no single scope to hand the gate here,
+     * so the legacy arm is read directly and the RBAC arm asks the gate per assigned park.
+     */
     private function holdsAParkIn(int $uid, array $kingdomIds): bool
     {
         if ($uid <= 0 || !$kingdomIds) {
             return false;
+        }
+        $kingdomIds = array_map('intval', $kingdomIds);
+        foreach (Ork3::$Lib->rbacservice->GetUserRoles($uid) as $assignment) {
+            $pid = (int) ($assignment['ParkId'] ?? 0);
+            if ($pid > 0 && in_array($this->parkKingdom($pid), $kingdomIds, true)
+                && Ork3::$Lib->authorizationgate->checkPermission($uid, 'park.bonus_credit.grant', 'park', $pid)) {
+                return true;
+            }
         }
         $this->db->Clear();
         $r = $this->db->DataSet(
@@ -242,12 +297,12 @@ class BonusCredit
             return false;
         }
         if ($hostType === 'park') {
-            if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $hostId, AUTH_EDIT)) {
+            if ($this->holdsParkGrant($uid, $hostId)) {
                 return true;
             }
             $kingdomId = $this->parkKingdom($hostId);
         } elseif ($hostType === 'kingdom') {
-            if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $hostId, AUTH_EDIT)) {
+            if ($this->holdsKingdomGrant($uid, $hostId)) {
                 return true;
             }
             $kingdomId = $hostId;
@@ -256,7 +311,7 @@ class BonusCredit
         }
         $rid = (int) ($category['CategoryId'] ?? 0);
         if (($category['ScopeType'] ?? '') === 'kingdom' && valid_id((int) ($category['ScopeId'] ?? 0))) {
-            if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int) $category['ScopeId'], AUTH_EDIT)
+            if ($this->holdsKingdomGrant($uid, (int) $category['ScopeId'])
                 || $this->isGranter($uid, (int) $category['ScopeId'], $rid)) {
                 return true;
             }
@@ -294,7 +349,7 @@ class BonusCredit
     public function grantableCategoriesForPark(int $uid, int $parkId): array
     {
         $all = $this->categoriesForPark($parkId);
-        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $parkId, AUTH_EDIT)) {
+        if ($this->holdsParkGrant($uid, $parkId)) {
             return $all;
         }
         return array_values(array_filter($all, function ($rs) use ($uid, $parkId) {
@@ -310,7 +365,7 @@ class BonusCredit
     public function grantableCategoriesInKingdom(int $uid, int $kingdomId, bool $includeArchived = false): array
     {
         $all = $this->categoriesForKingdom($kingdomId, $includeArchived);
-        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)) {
+        if ($this->holdsKingdomGrant($uid, $kingdomId)) {
             return $all;
         }
         return array_values(array_filter($all, function ($rs) use ($uid, $kingdomId) {

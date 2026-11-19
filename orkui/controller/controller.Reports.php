@@ -18,6 +18,10 @@ class Controller_Reports extends Controller
             'attendance',
             'event_attendance',
             'suspended',
+            // Officer rolls are public, as the officer Details modal's history tab
+            // is; the edit mode reads the history-write gate itself
+            // (OfficerPosition::can_edit_history_for).
+            'officer_history',
             // Checks login itself and answers JSON status:5 (a redirect would break fetch()).
             'population_explorer_json',
             // Download: answers plain-text 401/403 itself (a redirect would be a poor download).
@@ -221,8 +225,11 @@ class Controller_Reports extends Controller
             ? (bool)(int)$_knConfigs['AwardRecsPublic']['Value']
             : true;
         $_isOrkAdmin    = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        // Seeing a private-recs kingdom's recommendations is the recommendation
+        // manager's power -- the same key/role as the Kingdom recs panel and the
+        // dismiss/resolve actions behind it (KingdomAjax).
         $_isKingdomUser = $_uid > 0 && $_scopeKingdomId > 0
-            && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $_scopeKingdomId, AUTH_CREATE);
+            && $this->Authorization->has_permission_or_authority($_uid, 'player.recommendation.manage', 'kingdom', $_scopeKingdomId, AUTH_CREATE);
         $_canAccess = $_isOrkAdmin || $_isKingdomUser || ($_recsPublic && $_uid > 0);
         if (!$_canAccess) {
             header('Location: ' . UIR);
@@ -234,7 +241,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_playerawardrecommendations.tpl';
         $this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('KingdomId' => 'Kingdom' == $type ? $id : 0, 'ParkId' => 'Park' == $type ? $id : 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder, 'Token' => $this->session->token));
         $this->data['ScopeType'] = ($type === 'Park') ? 'park' : (($type === 'Kingdom') ? 'kingdom' : '');
-        $this->data['CanDeleteRecommendation'] = $this->award_rec_can_delete($_uid);
+        $this->data['CanDeleteRecommendation'] = $this->award_rec_can_delete($_uid, $this->data['ScopeType'], (int)($id ?? 0));
         $this->data[ 'page_title' ] = "Award Recommendations";
     }
 
@@ -261,6 +268,58 @@ class Controller_Reports extends Controller
         } elseif (($type ?? null) === 'Kingdom') {
             $this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . (int)$id . '&tab=reports';
         }
+    }
+
+    /**
+     * Officer History: the officer rolls of a kingdom (KingdomId) or park (ParkId),
+     * one section per office. Public; with &edit=1 an officer holding the history
+     * permission gets the office ledgers instead.
+     *
+     * CanEditRolls is the domain's history-write gate,
+     * OfficerPosition::can_edit_history_for() -- the one AddHistoryTerm,
+     * EditHistoryTerm and DeleteHistoryTerm authorize through -- so the Edit
+     * control cannot drift from the server check.
+     */
+    public function officer_history($params = null)
+    {
+        $kingdom_id = isset($this->request->KingdomId) ? (int)$this->request->KingdomId : 0;
+        $park_id    = isset($this->request->ParkId) ? (int)$this->request->ParkId : 0;
+        if ($park_id > 0) {
+            // The park decides the kingdom; a KingdomId on the URL is only a hint.
+            $kingdom_id = (int)$this->Reports->get_park_kingdom_id($park_id);
+        }
+        $scope       = $park_id > 0 ? 'park' : 'kingdom';
+        $scope_id    = $park_id > 0 ? $park_id : $kingdom_id;
+        $scope_name  = $this->_resolve_scope_name($park_id > 0 ? 'Park' : 'Kingdom', $scope_id);
+        if (!self::officer_history_scope_found($kingdom_id, $scope_name)) {
+            header('Location: ' . UIR);
+            exit;
+        }
+
+        $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $this->load_model('OfficerPosition');
+        $this->data['CanEditRolls'] = $this->OfficerPosition->can_edit_history_for($uid, $kingdom_id, $park_id);
+        $this->data['EditMode']     = $this->data['CanEditRolls'] && !empty($this->request->edit);
+        // &edit=1 without the permission still shows the report, and says why.
+        $this->data['EditRefused']  = !empty($this->request->edit) && !$this->data['CanEditRolls'];
+
+        $this->template = '../revised-frontend/Reports_officer_history.tpl';
+        $this->data['Rolls']      = $this->OfficerPosition->rolls($kingdom_id, $park_id);
+        $this->data['ScopeType']  = $scope;
+        $this->data['ScopeId']    = $scope_id;
+        $this->data['ScopeName']  = (string)$scope_name;
+        $this->data['KingdomId']  = $kingdom_id;
+        $this->data['page_title'] = 'Officer History';
+        $this->data['menu']['reports']['url'] = UIR . ($park_id > 0 ? 'Park' : 'Kingdom') . '/profile/' . $scope_id . '&tab=reports';
+    }
+
+    /**
+     * Whether an officer_history scope exists. get_kingdom_name()/get_park_name()
+     * answer null (not '') for an unknown id, so both count as not found.
+     */
+    public static function officer_history_scope_found($kingdom_id, $scope_name): bool
+    {
+        return valid_id($kingdom_id) && trim((string)$scope_name) !== '';
     }
 
     public function courts($params = null)
@@ -573,9 +632,11 @@ class Controller_Reports extends Controller
         $this->data['roster'] = $this->Reports->player_roster($type, $this->request->id, null, 0, 0, 1);
         $this->data['page_title'] = "Player Roster";
         $_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_authType = $type === 'Kingdom' ? AUTH_KINGDOM : AUTH_PARK;
+        // Same gate as Report::GetPlayerRoster's restricted (mundane-name) view:
+        // park.report.view at the roster's scope, legacy EDIT.
+        $_scope = $type === 'Kingdom' ? 'kingdom' : 'park';
         $this->data['CanViewMundane'] = $_uid > 0 && valid_id($this->request->id)
-            && $this->Authorization->has_authority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
+            && $this->Authorization->has_permission_or_authority($_uid, 'park.report.view', $_scope, (int)$this->request->id, AUTH_EDIT);
     }
 
     public function reeve($type = null)
@@ -961,7 +1022,20 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_parkattendanceexplorer.tpl';
         $this->data['page_title'] = "Park Attendance Explorer";
 
+        // Honour an explicit scope (the kingdom admin console links here with the
+        // kingdom being administered, which is not always the viewer's own), but
+        // only for a viewer who actually holds authority over that kingdom: the
+        // report key at kingdom scope, keeping the legacy CREATE role it asked.
         $kingdom_id = $this->session->kingdom_id;
+        if (valid_id($this->request->KingdomId)) {
+            $_requested = (int)$this->request->KingdomId;
+            $_uid       = (int)$this->session->user_id;
+            if ($_requested === (int)$kingdom_id
+                || $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+                || $this->Authorization->has_permission_or_authority($_uid, 'park.report.view', 'kingdom', $_requested, AUTH_CREATE)) {
+                $kingdom_id = $_requested;
+            }
+        }
         if (!valid_id($kingdom_id)) {
             $this->data['no_kingdom'] = true;
             return;
@@ -1735,9 +1809,9 @@ class Controller_Reports extends Controller
         if ($_isOrkAdmin) {
             $can_edit = true;
         } elseif ($type === 'Park' && valid_id($this->request->id)) {
-            $can_edit = $this->Authorization->has_authority($_uid, AUTH_PARK, $this->request->id, AUTH_CREATE);
+            $can_edit = $this->Authorization->has_permission_or_authority($_uid, 'player.active_status.set', 'park', $this->request->id, AUTH_CREATE);
         } elseif ($type === 'Kingdom' && valid_id($this->request->id)) {
-            $can_edit = $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $this->request->id, AUTH_EDIT);
+            $can_edit = $this->Authorization->has_permission_or_authority($_uid, 'player.active_status.set', 'kingdom', $this->request->id, AUTH_EDIT);
         }
         $this->data['can_edit'] = $can_edit;
 
@@ -1785,22 +1859,22 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_release_utilization.tpl';
     }
 
-    private function award_rec_can_delete(int $uid): bool
+    /**
+     * The page-level Dismiss flag must ask what Player::DeleteAwardRecommendation asks:
+     * player.recommendation.manage at CREATE. The server checks each recipient's home
+     * park; this asks the report's own scope, which every row sits inside (a kingdom
+     * grant cascades to its parks), so a shown button is never refused.
+     */
+    private function award_rec_can_delete(int $uid, string $scopeType, int $scopeId): bool
     {
         if ($uid <= 0) {
             return false;
         }
-        if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
-            return true;
+        // An unscoped report spans every park; only a true admin passes the server for all of them.
+        if (!in_array($scopeType, ['park', 'kingdom'], true) || $scopeId <= 0) {
+            return $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         }
-        if (isset($this->session->park_id) && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
-            return true;
-        }
-        if (isset($this->session->kingdom_id) && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_EDIT)) {
-            return true;
-        }
-
-        return false;
+        return $this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', $scopeType, $scopeId, AUTH_CREATE);
     }
 
     private function roster_suspension_remove_auth(array $roster, ?string $scopeType, $scopeId): array
@@ -1820,11 +1894,11 @@ class Controller_Reports extends Controller
             return ['canRemoveAny' => $_canRemoveAny, 'canRemoveMap' => $_canRemoveMap];
         }
         $_scopeKingdomAuth = $scopeType === 'kingdom' && valid_id($scopeId)
-            && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$scopeId, AUTH_EDIT);
+            && $this->Authorization->has_permission_or_authority($_uid, 'player.edit', 'kingdom', (int)$scopeId, AUTH_EDIT);
         foreach ($roster as $player) {
             $mid = (int)$player['MundaneId'];
             $can = $_scopeKingdomAuth
-                || $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$player['KingdomId'], AUTH_EDIT);
+                || $this->Authorization->has_permission_or_authority($_uid, 'player.edit', 'kingdom', (int)$player['KingdomId'], AUTH_EDIT);
             $_canRemoveMap[$mid] = $can;
             if ($can) {
                 $_canRemoveAny = true;

@@ -33,6 +33,7 @@ $J = new JsonServer(array(
     'Kingdom',
     'LiveService',
     'Map',
+    'OfficerPosition',
     'Park',
     'Player',
     'Principality',

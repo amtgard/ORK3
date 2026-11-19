@@ -655,24 +655,6 @@
       "notes": "Registry expansion \u2014 template Admin/serverhealth_weather_stats"
     },
     {
-      "id": "admin-setkingdomofficers",
-      "url": "./index.php?Route=Admin/setkingdomofficers",
-      "auth": "login",
-      "waitAfterMs": 1000,
-      "readySelector": "#main, body",
-      "driftClass": "stable",
-      "notes": "Registry expansion \u2014 template Admin/setkingdomofficers"
-    },
-    {
-      "id": "admin-setparkofficers",
-      "url": "./index.php?Route=Admin/setparkofficers",
-      "auth": "login",
-      "waitAfterMs": 1000,
-      "readySelector": "#main, body",
-      "driftClass": "stable",
-      "notes": "Registry expansion \u2014 template Admin/setparkofficers"
-    },
-    {
       "id": "admin-suspendplayer",
       "url": "./index.php?Route=Admin/suspendplayer",
       "auth": "login",
@@ -743,24 +725,6 @@
       "readySelector": "#main, body",
       "driftClass": "stable",
       "notes": "Registry expansion \u2014 template Admin/unit/{id}"
-    },
-    {
-      "id": "admin-vacatekingdomofficer",
-      "url": "./index.php?Route=Admin/vacatekingdomofficer",
-      "auth": "login",
-      "waitAfterMs": 1000,
-      "readySelector": "#main, body",
-      "driftClass": "stable",
-      "notes": "Registry expansion \u2014 template Admin/vacatekingdomofficer"
-    },
-    {
-      "id": "admin-vacateparkofficer",
-      "url": "./index.php?Route=Admin/vacateparkofficer",
-      "auth": "login",
-      "waitAfterMs": 1000,
-      "readySelector": "#main, body",
-      "driftClass": "stable",
-      "notes": "Registry expansion \u2014 template Admin/vacateparkofficer"
     },
     {
       "id": "atlas-index",

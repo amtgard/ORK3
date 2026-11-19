@@ -59,10 +59,30 @@ class Model_Award extends Model
             $byLabel[$g['Label']] = $g['Items'];
         }
 
+        // Award::GetAwardOptionGroups() emits ladders as two groups -- 'Official
+        // Ladder Awards' then 'Kingdom Ladder Awards' (ork_kingdomaward.is_ladder).
+        // The Court pickers show ONE 'Ladder Awards' group (CP_AWARD_GROUPS in
+        // Court_detail.tpl), so fold both into it here, official first; without
+        // this the group is empty and no ladder award can be picked at all. A
+        // plain 'Ladder Awards' group is still honoured should the lib emit one.
+        $kingdomLadderItems = $byLabel['Kingdom Ladder Awards'] ?? [];
+        $ladderItems = array_merge(
+            $byLabel['Ladder Awards'] ?? [],
+            $byLabel['Official Ladder Awards'] ?? [],
+            $kingdomLadderItems
+        );
+        // A kingdom ladder has no official award behind it (ka.award_id is 0 or the
+        // shared "Custom Award" placeholder), so it gets the same AwardId = 0
+        // treatment below as a member of the legacy pseudo-ladder list.
+        $kingdomLadderIds = [];
+        foreach ($kingdomLadderItems as $award) {
+            $kingdomLadderIds[] = (int)($award['KingdomAwardId'] ?? 0);
+        }
+
         // Ordered groups: [label, items, isTitle, isLadderGroup]. Award-vs-Title
         // is derived from the group (isTitle flag), matching the spec.
         $groupsOrdered = [
-            ['Ladder Awards',    $byLabel['Ladder Awards'] ?? [],     false, true],
+            ['Ladder Awards',    $ladderItems,                        false, true],
             ['Custom Award',     $customAward,                        false, false],
             ['Custom Title',     $customTitle,                        true,  false],
             ['Knighthoods',      $byLabel['Knighthoods'] ?? [],       true,  false],
@@ -81,7 +101,8 @@ class Model_Award extends Model
             }
             $opts = [];
             foreach ($items as $award) {
-                $isPseudo = in_array((int)($award['KingdomAwardId'] ?? 0), $pseudoLadderIds);
+                $isPseudo = in_array((int)($award['KingdomAwardId'] ?? 0), $pseudoLadderIds)
+                    || in_array((int)($award['KingdomAwardId'] ?? 0), $kingdomLadderIds, true);
                 $awardId  = ($isLadderGroup && $isPseudo) ? 0 : (int)($award['AwardId'] ?? 0);
                 $opts[] = [
                     'KingdomAwardId' => (int)($award['KingdomAwardId'] ?? 0),

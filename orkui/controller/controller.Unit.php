@@ -47,6 +47,11 @@ class Controller_Unit extends Controller
         $action = trimlen($this->request->Action) > 0 ? $this->request->Action : '';
         if ($action && $this->data['LoggedIn']) {
             $r = null;
+            // addauth / deleteauth authorize inside Model_Unit -> AuthorizationGate,
+            // which honors unit.auth.manage and falls back to the legacy unit authority
+            // rule (KPM roster bypass included). Deliberately no pre-filter here: this
+            // controller cannot evaluate the KPM bypass, so a local check would refuse
+            // kingdom park monarchs the domain still means to allow.
             switch ($action) {
                 case 'save_details':
                     $req = array(
@@ -225,7 +230,7 @@ class Controller_Unit extends Controller
             exit;
         }
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_canEdit = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT);
+        $_canEdit = $_uid > 0 && $this->Authorization->has_permission_or_authority($_uid, 'unit.edit', 'unit', (int)$unit_id, AUTH_EDIT);
         $this->data['CanEdit'] = $_canEdit;
 
         // ── Retire / Claim / Transfer state ───────────────────────────────
@@ -273,9 +278,10 @@ class Controller_Unit extends Controller
             if ($_home_kingdom > 0) {
                 $_scope_kingdom_id = $_home_kingdom;
                 $_scope_park_id    = $_home_park > 0 ? $_home_park : null;
-                $_can_officer = $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $_home_kingdom, AUTH_EDIT)
-                    || ($_home_park > 0 && $this->Authorization->has_authority($_uid, AUTH_PARK, $_home_park, AUTH_EDIT));
             }
+            // Same rule as Unit's add-manager gate (roster scopes), so the modal is
+            // offered exactly when the server would accept it.
+            $_can_officer = $this->Authorization->has_unit_officer_authority($_uid, (int)$unit_id);
         }
         $this->data['ScopeKingdomId']   = $_scope_kingdom_id;
         $this->data['ScopeParkId']      = $_scope_park_id;

@@ -8,6 +8,15 @@ class Model_CalendarItem extends Model
         $this->CalendarItem = new APIModel('CalendarItem');
     }
 
+    /**
+     * May $uid edit or delete a calendar item in this kingdom/park? The write gate
+     * Update/DeleteCalendarItem use, so the UI's Edit control cannot disagree with it.
+     */
+    public function can_manage(int $uid, int $kingdom_id, int $park_id): bool
+    {
+        return $uid > 0 && CalendarItem::can_manage($uid, $kingdom_id, $park_id);
+    }
+
     public function create_calendar_item($token, $kingdom_id, $park_id, $name, $description, $all_day, $event_start, $event_end, $is_officer_only = 0, $is_locals_only = 0, $color = '')
     {
         return $this->CalendarItem->CreateCalendarItem([

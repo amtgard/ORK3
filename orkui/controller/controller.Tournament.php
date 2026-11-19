@@ -32,7 +32,7 @@ class Controller_Tournament extends Controller
 
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $this->load_model('Authorization');
-        if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+        if ($_uid > 0 && $this->Authorization->has_permission_or_authority($_uid, 'tournament.bracket.manage', 'park', (int)$this->session->park_id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
             $this->data['menulist']['admin'] = array(
                     array( 'url' => UIR.'Admin/tournament/'.$id, 'display' => 'tournament' ),

@@ -15,6 +15,9 @@ final class HeraldryVisualIntegrationTest extends TestCase
         if (!ork3_app_reachable()) {
             $this->markTestSkipped('ORK3 app is not reachable — start docker compose php8 stack.');
         }
+        if (!ork3_app_serving_sandbox()) {
+            $this->markTestSkipped('App is pointed at the mirror — run bin/ork-db use dev to exercise sandbox pages.');
+        }
 
         $kingdomHtml = $this->fetchAppPage('index.php?Route=Kingdom/profile/100001');
         $this->assertMatchesRegularExpression(
@@ -36,6 +39,9 @@ final class HeraldryVisualIntegrationTest extends TestCase
         }
         if (!ork3_app_reachable()) {
             $this->markTestSkipped('ORK3 app is not reachable — start docker compose php8 stack.');
+        }
+        if (!ork3_app_serving_sandbox()) {
+            $this->markTestSkipped('App is pointed at the mirror — run bin/ork-db use dev to exercise sandbox pages.');
         }
 
         $render = new Render(ORK3_ROOT . '/tools/ork-db', ORK3_ROOT);

@@ -4,6 +4,21 @@
   $backUrl = $ParkId > 0
     ? UIR . 'Park/index/' . (int)$ParkId
     : UIR . 'Kingdom/index/' . (int)$KingdomId;
+  // Action flags (Controller_Recommendations::rmCapabilities) — the same set every
+  // row is rendered with. Missing = not allowed.
+  $RmCan = isset($RmCan) && is_array($RmCan) ? $RmCan : [];
+  $rmCanPass = !empty($RmCan['PassLocal']) && ($Context ?? '') === 'kingdom';
+  // The intro names only what this viewer can actually do here.
+  $rmVerbs = array_keys(array_filter([
+      'grant'     => !empty($RmCan['Grant']),
+      'dismiss'   => !empty($RmCan['Dismiss']),
+      'snooze'    => !empty($RmCan['Snooze']),
+      'pass-down' => $rmCanPass,
+      'schedule'  => !empty($RmCan['Court']),
+  ]));
+  $rmLead = $rmVerbs
+      ? 'Review, ' . (count($rmVerbs) > 1 ? implode(', ', array_slice($rmVerbs, 0, -1)) . ', and ' . end($rmVerbs) : $rmVerbs[0])
+      : 'Review';
 ?>
 <!-- The ~676-line inline <style> that used to live here is now
      default/style/recs-manager.css (cacheable, parsed once, and visible to the
@@ -41,7 +56,7 @@
   </div>
   <div class="rp-context">
     <i class="fas fa-info-circle rp-context-icon"></i>
-    <span>Review, grant, dismiss, snooze, pass-down, and schedule award recommendations for <strong><?= htmlspecialchars($LocationName) ?></strong> &mdash; <?= (int)($Total ?? 0) ?> pending.</span>
+    <span><?= htmlspecialchars($rmLead) ?> award recommendations for <strong><?= htmlspecialchars($LocationName) ?></strong> &mdash; <?= (int)($Total ?? 0) ?> pending.</span>
   </div>
 
   <div class="rm-filterbar" id="rm-filterbar">
@@ -113,13 +128,15 @@
 
   <div class="rm-bulkbar" id="rm-bulkbar" hidden>
     <span id="rm-bulklabel">0 selected</span>
-    <button type="button" class="rm-bulk rm-bulk-court">Add to Court</button>
-    <button type="button" class="rm-bulk rm-bulk-snooze">Snooze</button>
-    <?php if (($Context ?? '') === 'kingdom') { ?><button type="button" class="rm-bulk rm-bulk-passlocal" data-tip="For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level.">Pass down</button><?php } ?>
-    <button type="button" class="rm-bulk rm-bulk-monarchy" data-tip="Hide the selected recommendations from everyone but officers.">Monarchy Only</button>
-    <button type="button" class="rm-bulk rm-bulk-unmonarchy" data-tip="Make the selected recommendations visible again.">Unhide</button>
-    <button type="button" class="rm-bulk rm-bulk-dismiss" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">Dismiss</button>
-    <button type="button" class="rm-bulk rm-bulk-undelete"><i class="fas fa-undo"></i> Restore</button>
+    <!-- Each verb only when the viewer passes its server gate; the handlers below
+         skip any button that is absent. -->
+    <?php if (!empty($RmCan['Court'])) { ?><button type="button" class="rm-bulk rm-bulk-court">Add to Court</button><?php } ?>
+    <?php if (!empty($RmCan['Snooze'])) { ?><button type="button" class="rm-bulk rm-bulk-snooze">Snooze</button><?php } ?>
+    <?php if ($rmCanPass) { ?><button type="button" class="rm-bulk rm-bulk-passlocal" data-tip="For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level.">Pass down</button><?php } ?>
+    <?php if (!empty($RmCan['MonarchyOnly'])) { ?><button type="button" class="rm-bulk rm-bulk-monarchy" data-tip="Hide the selected recommendations from everyone but officers.">Monarchy Only</button>
+    <button type="button" class="rm-bulk rm-bulk-unmonarchy" data-tip="Make the selected recommendations visible again.">Unhide</button><?php } ?>
+    <?php if (!empty($RmCan['Dismiss'])) { ?><button type="button" class="rm-bulk rm-bulk-dismiss" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">Dismiss</button><?php } ?>
+    <?php if (!empty($RmCan['Restore'])) { ?><button type="button" class="rm-bulk rm-bulk-undelete"><i class="fas fa-undo"></i> Restore</button><?php } ?>
     <button type="button" class="rm-bulk rm-bulk-clear">Clear</button>
   </div>
 
@@ -1028,7 +1045,13 @@ function rmBulkRun(action, rows, opts) {
         rmFetch(true);
     });
 }
-document.querySelector('.rm-bulk-snooze').addEventListener('click', function () {
+// Bulk buttons render only for viewers who pass their gate, so every handler
+// below binds through rmOnBulk, which skips an absent button.
+function rmOnBulk(sel, fn) {
+    var b = document.querySelector(sel);
+    if (b) b.addEventListener('click', fn);
+}
+rmOnBulk('.rm-bulk-snooze', function () {
     var rows = rmSelectedLive().filter(function (tr) { return tr.getAttribute('data-snoozed') !== '1'; });
     rmBulkRun('snooze', rows, {
         apply: function (tr) {
@@ -1078,7 +1101,7 @@ document.querySelector('.rm-bulk-snooze').addEventListener('click', function () 
         });
     });
 })();
-document.querySelector('.rm-bulk-dismiss').addEventListener('click', function () {
+rmOnBulk('.rm-bulk-dismiss', function () {
     var rows = rmSelectedLive();
     // Selected rows are clusters; the write goes to every member filing. Ten
     // rows averaging four recommenders retires forty people's recommendations,
@@ -1565,7 +1588,7 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
 });
 // Bulk Undelete — only ever runs on the dismissed half of the selection, so a
 // mixed selection restores what it can and leaves live rows alone.
-document.querySelector('.rm-bulk-undelete').addEventListener('click', function () {
+rmOnBulk('.rm-bulk-undelete', function () {
     var rows = rmSelectedDismissed();
     rmBulkRun('undelete', rows, {
         // The row rejoins the live list. serverGone=false: with "Show dismissed" on
@@ -1575,7 +1598,7 @@ document.querySelector('.rm-bulk-undelete').addEventListener('click', function (
     });
 });
 // Bulk opener.
-document.querySelector('.rm-bulk-court').addEventListener('click', function () {
+rmOnBulk('.rm-bulk-court', function () {
     var targets = rmSelectedLive().map(function (tr) {
         var rec = {}; try { rec = JSON.parse(tr.getAttribute('data-rec') || '{}'); } catch (x) {}
         rec.RecommendationsId = rec.RepRecId;

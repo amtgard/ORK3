@@ -44,9 +44,14 @@
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
 	foreach ($officerList as $o) {
-		if ($o['OfficerRole'] === 'Monarch') $monarch = $o;
-		if ($o['OfficerRole'] === 'Regent')  $regent  = $o;
+		$_ck = $o['CanonicalKey'] ?? $o['OfficerRole'] ?? '';
+		if ($_ck === 'monarch') $monarch = $o;
+		if ($_ck === 'regent')  $regent  = $o;
 	}
+
+	// Officer-history role options (canonical key => display title) are shaped by the
+	// controller from the position registry -- see Model_OfficerPosition::history_role_options().
+	$ohRoleOptions = is_array($OfficerHistoryRoleOptions ?? null) ? $OfficerHistoryRoleOptions : [];
 
 	// Players loaded via AJAX (players_json) — not available at render time
 	$knAllPlayers    = [];
@@ -198,10 +203,10 @@
 			<a class="kn-btn kn-btn-outline" href="#" onclick="knActivateTab('map');return false;">
 				<i class="fas fa-map"></i> Map
 			</a>
-			<?php if ($CanManageKingdom ?? false): ?>
-			<button class="kn-btn kn-btn-outline" onclick="knOpenAdminModal()">
+			<?php if ($CanOpenKingdomConsole ?? false): ?>
+			<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Admin/kingdom/<?= (int)($kingdom_id ?? 0) ?>">
 				<i class="fas fa-cog"></i> Admin
-			</button>
+			</a>
 			<?php endif; ?>
 		</div>
 
@@ -250,20 +255,90 @@
 	<div class="kn-sidebar">
 
 		<!-- Officers -->
+		<style>
+		/* "See more" affordance on the Officers bar. Copies the established
+		   .pna-card-more treatment (Playernew_index.tpl:260-261) rather than
+		   inventing a chevron. It is shown to EVERY viewer, and sits beside the
+		   manage pencil when the viewer can manage. Colours are --ork-* tokens,
+		   which already flip in dark mode. */
+		.kn-officers-bar-actions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+		.kn-officers-more {
+			font-weight: 600;
+			font-size: 11px;
+			color: var(--ork-link);
+			text-decoration: none;
+			text-transform: none;
+			letter-spacing: 0;
+			white-space: nowrap;
+		}
+		.kn-officers-more:hover { text-decoration: underline; }
+		.kn-officers-more:focus-visible {
+			outline: 2px solid var(--ork-blue-link);
+			outline-offset: 2px;
+			border-radius: 3px;
+			text-decoration: underline;
+		}
+		</style>
+		<?php
+			/* ---------------------------------------------------------------
+			   CROWN-ONLY sidebar.
+
+			   `Classification` is a NEW key on the officer row and is null or
+			   absent for any officer with no registry position
+			   (ork_officer.position_id = 0). Such a row is treated as CROWN and
+			   is SHOWN. Only a row we can POSITIVELY identify as 'supporting' is
+			   hidden, so a missing/unknown key can never silently empty the whole
+			   sidebar on data this dev mirror does not contain.
+
+			   The complete set -- crown + supporting, nested -- is one click away
+			   in the officer details modal.
+			   --------------------------------------------------------------- */
+			$knCrownOfficers = [];
+			foreach ($officerList as $_knOfficer) {
+				$_knClass = strtolower(trim((string)($_knOfficer['Classification'] ?? '')));
+				if ($_knClass === 'supporting') {
+					continue;
+				}
+				$knCrownOfficers[] = $_knOfficer;
+			}
+			// Card gate stays on the FULL list: a group whose officers happen to be
+			// all-supporting still needs its card, because the card carries the only
+			// route into the modal that shows them.
+		?>
 		<?php if (count($officerList) > 0 || ($CanManageKingdom ?? false)): ?>
 		<div class="kn-card">
-			<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
+			<?php
+/* The modal collapses officer rows sharing a PositionId into ONE office (an office with
+   three holders is three rows), so counting rows here would advertise a bigger number
+   than the modal lists. Count distinct offices, and fall back to "Details" rather than
+   printing "All 0" when a manager views a group with no officers on record. */
+$_ofOfficeCount = 0;
+if (!empty($officerList) && is_array($officerList)) {
+    $_ofSeen = [];
+    foreach ($officerList as $_ofRow) {
+        if (!is_array($_ofRow)) { continue; }
+        $_ofPid = (int)($_ofRow['PositionId'] ?? 0);
+        $_ofKey = $_ofPid > 0 ? 'p' . $_ofPid : 'r' . count($_ofSeen);
+        $_ofSeen[$_ofKey] = true;
+    }
+    $_ofOfficeCount = count($_ofSeen);
+}
+$_ofMoreLabel = $_ofOfficeCount > 0 ? 'All ' . $_ofOfficeCount : 'Details';
+?>
+<h4 class="kn-bare-heading" style="display:flex;align-items:center;justify-content:space-between;">
 				<span><i class="fas fa-crown"></i> Officers</span>
-				<?php if ($CanManageKingdom ?? false): ?>
-				<button onclick="knOpenEditOfficersModal()" class="kn-edit-officers-btn" data-tip="Edit officers">
-					<i class="fas fa-pencil-alt"></i>
-				</button>
-				<?php endif; ?>
+				<span class="kn-officers-bar-actions">
+					<?php /* Short data-tip on purpose: [data-tip]::after is centred on the
+					         element and nowrap, and this sits at the card's right edge, so a
+					         long tip clips at the viewport edge on a phone. */ ?>
+					<a class="kn-officers-more" href="#" data-tip="All officers"
+						onclick="if (window.ofOpenOfficerModal) { window.ofOpenOfficerModal(); } return false;"><?= $_ofMoreLabel ?> &rarr;</a>
+				</span>
 			</h4>
 			<ul class="kn-officer-list">
-				<?php foreach ($officerList as $o): ?>
+				<?php foreach ($knCrownOfficers as $o): ?>
 				<li>
-					<span class="kn-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
+					<span class="kn-officer-role"><?= htmlspecialchars($o['DisplayTitle'] ?? $o['OfficerRole']) ?></span>
 					<span class="kn-officer-name">
 						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
 							<a href="<?= UIR ?>Player/profile/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
@@ -273,8 +348,8 @@
 					</span>
 				</li>
 				<?php endforeach; ?>
-				<?php if (count($officerList) === 0): ?>
-				<li><em style="color:#a0aec0;font-size:12px">No officers on record</em></li>
+				<?php if (count($knCrownOfficers) === 0): ?>
+				<li><em style="color:#a0aec0;font-size:12px"><?= count($officerList) > 0 ? 'No crown officers on record' : 'No officers on record' ?></em></li>
 				<?php endif; ?>
 			</ul>
 		</div>
@@ -347,17 +422,15 @@
 				<li data-kntab="reports">
 					<i class="fas fa-chart-bar"></i><span class="kn-tab-label"> Reports</span>
 				</li>
+				<?php // Officer History is no longer a main-content tab -- it now lives in
+					  // the "Officer History" tab of partials/_officer_details_modal.tpl,
+					  // reached from the Officers sidebar arrow. ?>
 				<?php if ($ShowRecsTab ?? false):
 					$_recsN = (int)($AwardRecommendationsCount ?? 0);
 				?>
 				<li data-kntab="recommendations">
 					<i class="fas fa-star"></i><span class="kn-tab-label"> Recommendations</span>
 					<span class="kn-tab-count" id="kn-tab-count-recs"<?= $_recsN > 0 ? '' : ' style="display:none"' ?>><?= $_recsN > 0 ? '(' . $_recsN . ')' : '' ?></span>
-				</li>
-				<?php endif; ?>
-				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false)): ?>
-				<li data-kntab="admin">
-					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
 				</li>
 				<?php endif; ?>
 			</ul>
@@ -610,10 +683,21 @@
 			html[data-theme="dark"] .kn-sub-webcal-btn:hover{color:var(--ork-text)}
 			</style>
 			<!-- Events Tab -->
-			<div class="kn-tab-panel" id="kn-tab-events" style="display:none">
+			<div class="kn-tab-panel" id="kn-tab-events" style="display:none" data-subtab-group="kn-events">
 				<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+					<?php if ($CanManageCourt ?? false): ?>
+					<div class="ork-subtabs" role="tablist" aria-label="Events and courts">
+						<button type="button" class="ork-subtab ork-subtab-active" role="tab" data-subtab="calendar" aria-selected="true" aria-controls="kn-ev-pane-calendar" id="kn-ev-subtab-calendar"><i class="fas fa-calendar-alt"></i> Calendar</button>
+						<button type="button" class="ork-subtab" role="tab" data-subtab="courts" aria-selected="false" aria-controls="kn-ev-pane-courts" id="kn-ev-subtab-courts" tabindex="-1"><i class="fas fa-gavel"></i> Courts<?php if (count($CourtList ?? []) > 0): ?> <span class="ork-subtab-count"><?= count($CourtList ?? []) ?></span><?php endif; ?></button>
+					</div>
+					<div class="ork-subtab-tools ork-subtab-hidden" data-subtab-pane="courts">
+						<span class="ork-subtab-note"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
+						<button class="kn-btn kn-btn-primary" onclick="knCpOpenNewCourt()"><i class="fas fa-plus"></i> Plan a Court</button>
+					</div>
+					<?php else: ?>
 					<h4 class="kn-bare-heading" style="margin:0;font-size:14px;font-weight:700;"><i class="fas fa-calendar-alt" style="margin-right:6px;color:#a0aec0"></i>Events</h4>
-					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+					<?php endif; ?>
+					<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;" data-subtab-pane="calendar">
 						<button class="kn-view-btn kn-view-active" id="kn-ev-view-list" title="List view"><i class="fas fa-list"></i></button>
 						<button class="kn-view-btn" id="kn-ev-view-cal" title="Calendar view"><i class="fas fa-calendar-alt"></i></button>
 							<button class="kn-view-btn" id="kn-ev-view-map" title="Map view"><i class="fas fa-map-marked-alt"></i></button>
@@ -656,6 +740,7 @@
 						<?php endif; ?>
 					</div>
 				</div>
+				<div id="kn-ev-pane-calendar" class="ork-subtab-pane" data-subtab-pane="calendar" role="tabpanel" aria-labelledby="kn-ev-subtab-calendar">
 				<!-- Calendar view (lazy-loaded FullCalendar) -->
 				<div id="kn-events-cal-wrap" style="position:relative;display:none">
 					<div id="kn-cal-loading" style="display:none;position:absolute;inset:0;background:var(--ork-overlay-light,rgba(255,255,255,0.88));z-index:10;align-items:center;justify-content:center;min-height:120px;">
@@ -770,210 +855,12 @@
 				</div><!-- /kn-events-list-view -->
 
 				<?php /* [TOURNAMENTS HIDDEN] */ ?>
-			</div>
+				</div><!-- /kn-ev-pane-calendar -->
 
-
-			<!-- Map Tab -->
-			<div class="kn-tab-panel" id="kn-tab-map" style="display:none">
-				<?php if (count($knMapLocations) > 0): ?>
-					<div id="kn-map-loading" class="kn-map-loading">
-						<i class="fas fa-spinner fa-spin" style="font-size:22px"></i>
-						Loading map&hellip;
-					</div>
-					<div id="kn-map-container" style="display:none">
-						<div class="kn-map-layout">
-							<div class="kn-map-wrap">
-								<div id="kn-map"></div>
-							</div>
-							<div class="kn-map-sidebar-wrap">
-								<div class="kn-map-sidebar-card" id="kn-map-sidebar-card">
-									<div class="kn-map-sidebar-empty" id="kn-map-sidebar-empty">
-										<div class="kn-map-sidebar-empty-icon"><i class="fas fa-map-marker-alt"></i></div>
-										<p>Click any park pin to see details.</p>
-									</div>
-									<div id="kn-map-sidebar-park" style="display:none; flex-direction:column; flex:1;">
-										<div class="kn-park-hero" id="kn-park-hero"></div>
-										<div class="kn-park-body" id="kn-park-body"></div>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-				<?php else: ?>
-					<div class="kn-empty">No park location data available</div>
-				<?php endif; ?>
-			</div>
-
-			<!-- Reports Tab -->
-			<div class="kn-tab-panel" id="kn-tab-reports" style="display:none">
-				<?php if (!$IsLoggedIn): ?>
-				<div style="background:var(--ork-alert-info-bg,#eaf4fb);border:1px solid var(--ork-alert-info-border,#b0d4ea);border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:var(--ork-alert-info-text,#1a5276);">
-					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:var(--ork-alert-info-text,#1a5276);font-weight:600;">Log in</a> to see the full list of available reports.
-				</div>
-				<?php endif; ?>
-				<div class="pk-reports-mobile-notice">
-					<i class="fas fa-info-circle"></i>
-					<span>Some reports may not display as expected on mobile. For best results, view reports on a full screen device.</span>
-				</div>
-				<div class="kn-reports-grid">
-
-					<div class="kn-report-group">
-						<h5><i class="fas fa-users"></i> Players</h5>
-						<ul>
-							<li><a href="<?= UIR ?>Reports/roster/Kingdom&id=<?= $kingdom_id ?>">Player Roster</a></li>
-							<?php if ($IsLoggedIn): ?>
-							<li><a href="<?= UIR ?>Reports/active/Kingdom&id=<?= $kingdom_id ?>">Active Players</a></li>
-							<li><a href="<?= UIR ?>Reports/dues/Kingdom&id=<?= $kingdom_id ?>">Dues Paid</a></li>
-							<li><a href="<?= UIR ?>Reports/waivered/Kingdom&id=<?= $kingdom_id ?>">Waivered</a></li>
-							<li><a href="<?= UIR ?>Reports/unwaivered/Kingdom&id=<?= $kingdom_id ?>">Unwaivered</a></li>
-							<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kingdom_id ?>">Suspended</a></li>
-							<li><a href="<?= UIR ?>Reports/active_duespaid/Kingdom&id=<?= $kingdom_id ?>">Player Attendance</a></li>
-							<li><a href="<?= UIR ?>Reports/active_waivered_duespaid/Kingdom&id=<?= $kingdom_id ?>">Waivered Attendance</a></li>
-							<?php if ($ShowVotingEligibleLink ?? false): ?><li><a href="<?= UIR ?>Reports/voting_eligible/Kingdom&id=<?= $kingdom_id ?>">Voting Eligible</a></li><?php endif; ?>
-							<li><a href="<?= UIR ?>Reports/reeve/Kingdom&id=<?= $kingdom_id ?>">Reeve Qualified</a></li>
-							<li><a href="<?= UIR ?>Reports/corpora/Kingdom&id=<?= $kingdom_id ?>">Corpora Qualified</a></li>
-							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
-							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
-							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
-							<?php endif; ?>
-							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
-						</ul>
-					</div>
-
-					<div class="kn-report-group">
-						<h5><i class="fas fa-medal"></i> Awards</h5>
-						<ul>
-							<?php if ($IsLoggedIn && (!empty($AwardRecsPublic) || !empty($CanManageKingdom))): ?>
-							<li><a href="<?= UIR ?>Reports/player_award_recommendations&KingdomId=<?= $kingdom_id ?>">Recommendations</a></li>
-							<?php endif; ?>
-							<li><a href="<?= UIR ?>Reports/knights_and_masters&KingdomId=<?= $kingdom_id ?>">Knights &amp; Masters</a></li>
-							<?php if ($IsLoggedIn): ?>
-							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
-							<li><a href="<?= UIR ?>Reports/knights_list&KingdomId=<?= $kingdom_id ?>">Knights</a></li>
-							<li><a href="<?= UIR ?>Reports/masters_list&KingdomId=<?= $kingdom_id ?>">Masters</a></li>
-							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?>-level Awards</a></li>
-							<li><a href="<?= UIR ?>Reports/class_masters&KingdomId=<?= $kingdom_id ?>">Class Masters/Paragons</a></li>
-							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>">Ladder Award Grid</a></li>
-											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>">Custom Awards</a></li>
-							<li><a href="<?= UIR ?>Reports/beltline_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-sitemap"></i> Beltline Explorer</a></li>
-							<li><a href="<?= UIR ?>Reports/award_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-award"></i> Award Explorer</a></li>
-							<?php endif; ?>
-						</ul>
-					</div>
-
-					<div class="kn-report-group">
-						<h5><i class="fas fa-calendar-check"></i> Attendance</h5>
-						<ul>
-							<?php if ($IsLoggedIn): ?>
-							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Weeks/1">Past Week</a></li>
-							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/1">Past Month</a></li>
-							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/3">Past 3 Months</a></li>
-							<?php endif; ?>
-							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/6">Past 6 Months</a></li>
-							<?php if ($IsLoggedIn): ?>
-							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/12">Past 12 Months</a></li>
-							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/All">All Time</a></li>
-							<?php endif; ?>
-							<li><a href="<?= UIR ?>Reports/event_attendance/Kingdom/<?= $kingdom_id ?>"><i class="fas fa-calendar-alt"></i> Event Attendance</a></li>
-							<?php if ($IsLoggedIn): ?>
-							<li><a href="<?= UIR ?>Reports/park_attendance_explorer"><i class="fas fa-chart-bar"></i> Park Attendance Explorer</a></li>
-							<li><a href="<?= UIR ?>Reports/new_player_attendance"><i class="fas fa-user-plus"></i> New Player Attendance</a></li>
-							<?php endif; ?>
-						</ul>
-					</div>
-
-					<?php if ($IsLoggedIn): ?>
-					<div class="kn-report-group">
-						<h5><i class="fas fa-ellipsis-h"></i> Other</h5>
-						<ul>
-							<li><a href="<?= UIR ?>Reports/parkheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Parks</a></li>
-							<li><a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Players</a></li>
-							<li><a href="<?= UIR ?>Reports/park_distance_matrix&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-th"></i> Park Distance Matrix</a></li>
-							<?php // Test Results now live under Admin Tasks -> Tests, with the rest of the test
-							      // workspace (configure, questions, results). They are officer-only, so they were
-							      // the only gated entries in this otherwise-public group. ?>
-						</ul>
-					</div>
-					<?php endif; ?>
-
-					<div class="kn-report-group">
-						<h5><i class="fas fa-search"></i> Find</h5>
-						<ul>
-							<li><a href="<?= UIR ?>Search/kingdom/<?= $kingdom_id ?>">Players</a></li>
-							<li><a href="<?= UIR ?>Unit/unitlist&KingdomId=<?= $kingdom_id ?>">Companies &amp; Households</a></li>
-							<li><a href="<?= UIR ?>Search/event&KingdomId=<?= $kingdom_id ?>">Events</a></li>
-							<li><a href="<?= UIR ?>Unit/unitlist&KingdomId=<?= $kingdom_id ?>">Unit List</a></li>
-						</ul>
-					</div>
-
-
-
-				</div>
-			</div>
-
-		<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
-		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false)): ?>
-		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
-			<div class="kn-report-cols">
-				<?php if ($CanManageKingdom ?? false): ?>
-				<div class="kn-report-group">
-					<h5><i class="fas fa-users-cog"></i> Players</h5>
-					<ul>
-						<li><a href="#" onclick="knOpenAddPlayerModal();return false;">Create Player</a></li>
-						<li><a href="#" onclick="knOpenMovePlayerModal();return false;">Move Player</a></li>
-						<li><a href="#" onclick="knOpenMergePlayerModal();return false;">Merge Players</a></li>
-						<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kingdom_id ?>">Suspensions</a></li>
-					</ul>
-				</div>
-				<div class="kn-report-group">
-					<h5><i class="fas fa-cog"></i> Kingdom</h5>
-					<ul>
-						<li><a href="<?= UIR ?>Admin/permissions/Kingdom/<?= $kingdom_id ?>">Roles &amp; Permissions</a></li>
-						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
-					</ul>
-				</div>
-				<?php endif; ?>
-				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
-				<div class="kn-report-group">
-					<h5>
-						<i class="fas fa-clipboard-check"></i> Tests
-						<button type="button" class="kn-help-btn" data-doc="qualtests"
-						        title="How the Reeve's and Corpora tests work" aria-label="Help: qualification tests">
-							<i class="fas fa-question-circle"></i>
-						</button>
-					</h5>
-					<ul>
-						<li><a href="<?= UIR ?>QualTest/manage/<?= $kingdom_id ?>">Configure Tests</a></li>
-						<li><a href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/reeve">Reeve's Test Questions</a></li>
-						<li><a href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/corpora">Corpora Test Questions</a></li>
-						<?php // Results belong with the rest of the test workspace: whoever configures a
-						      // test and writes its questions is the same person who reads who passed it,
-						      // and they were a tab away in Reports. Same audience as this whole group
-						      // (the enclosing check is CanManageKingdom || CanManageTests), so only the
-						      // per-test "is it switched on" condition is needed here. Still listed under
-						      // Reports too, for anyone who goes looking for a report where reports live. ?>
-						<?php if (!empty($QualTestReeveEnabled)): ?>
-						<li><a href="<?= UIR ?>Reports/reeve_test_results/Kingdom&id=<?= $kingdom_id ?>">Reeve's Test Results</a></li>
-						<?php endif; ?>
-						<?php if (!empty($QualTestCorporaEnabled)): ?>
-						<li><a href="<?= UIR ?>Reports/corpora_test_results/Kingdom&id=<?= $kingdom_id ?>">Corpora Test Results</a></li>
-						<?php endif; ?>
-					</ul>
-				</div>
-				<?php endif; ?>
-			</div>
-
-			<!-- Court Planner subsection (relocated from former top-level tab) -->
-			<?php if ($CanManageCourt ?? false): ?>
-			<?php $_cpOpen = !empty($CourtList); ?>
-			<div class="kn-cp-section<?= $_cpOpen ? ' kn-cp-open' : '' ?>" id="kn-cp-section">
-				<button type="button" class="kn-cp-header" onclick="knCpToggleSection()" aria-expanded="<?= $_cpOpen ? 'true' : 'false' ?>">
-					<span class="kn-cp-header-title"><i class="fas fa-gavel"></i> Court Planner<?php if (!empty($CourtList)): ?> <span class="kn-cp-header-count">(<?= count($CourtList) ?>)</span><?php endif; ?></span>
-					<i class="fas fa-chevron-down kn-cp-chevron"></i>
-				</button>
-				<div class="kn-cp-body" id="kn-cp-body"<?= $_cpOpen ? '' : ' style="display:none"' ?>>
+				<?php if ($CanManageCourt ?? false): ?>
+				<!-- Courts sub-tab: the Court Planner. Its count and "Plan a Court" live in the header above. -->
+				<div id="kn-ev-pane-courts" class="ork-subtab-pane ork-subtab-hidden" data-subtab-pane="courts" role="tabpanel" aria-labelledby="kn-ev-subtab-courts">
 			<style>
-			.kn-cp-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
 			.kn-cp-court-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; margin-bottom:10px; display:flex; align-items:center; gap:14px; transition:box-shadow .15s; }
 			.kn-cp-court-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.1); }
 			.kn-cp-court-date { font-size:13px; color:#718096; white-space:nowrap; min-width:88px; }
@@ -987,19 +874,6 @@
 			.kn-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
 			.kn-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
 			/* .kn-rec-age-* live in revised.css: this block only renders for court managers. */
-			/* Collapsible subsection chrome (relocated court) */
-			.kn-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
-			.kn-cp-header { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; cursor:pointer; padding:10px 4px; font-size:15px; font-weight:700; color:#2d3748; text-align:left; }
-			.kn-cp-header:hover { color:#1a202c; }
-			.kn-cp-header-title i.fa-gavel { margin-right:8px; color:#4a5568; }
-			.kn-cp-header-count { font-weight:600; color:#718096; font-size:13px; }
-			.kn-cp-chevron { transition:transform .15s; color:#a0aec0; }
-			.kn-cp-section.kn-cp-open .kn-cp-chevron { transform:rotate(180deg); }
-			.kn-cp-body { padding-top:8px; }
-			html[data-theme="dark"] .kn-cp-section { border-top-color:#2d3748; }
-			html[data-theme="dark"] .kn-cp-header { color:#e2e8f0; }
-			html[data-theme="dark"] .kn-cp-header:hover { color:#fff; }
-			html[data-theme="dark"] .kn-cp-header-title i.fa-gavel { color:#a0aec0; }
 			html[data-theme="dark"] .kn-cp-court-card { background:#1a202c; border-color:#2d3748; }
 			html[data-theme="dark"] .kn-cp-court-name { color:#e2e8f0; }
 			html[data-theme="dark"] .kn-cp-court-meta { color:#a0aec0; }
@@ -1049,19 +923,13 @@
 				#kn-cp-new-court-modal .kn-modal-footer button { min-height:44px; }
 			}
 			</style>
-			<div class="kn-cp-toolbar">
-				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
-				<button class="kn-btn kn-btn-primary" onclick="knCpOpenNewCourt()">
-					<i class="fas fa-plus"></i> Plan a Court
-				</button>
-			</div>
 			<?php
 				$_cpStatusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];
 				$_cpStatusClass = ['draft' => 'kn-cp-badge-draft', 'published' => 'kn-cp-badge-published', 'complete' => 'kn-cp-badge-complete'];
 			?>
 			<?php if (empty($CourtList)): ?>
 			<div class="kn-cp-empty">
-				<i class="fas fa-gavel" style="font-size:32px;margin-bottom:12px;display:block;opacity:.3"></i>
+				<i class="fas fa-gavel" style="font-size:32px;margin:0 auto 12px;display:block;opacity:.3"></i>
 				No courts planned yet. Click <strong>Plan a Court</strong> to get started.
 			</div>
 			<?php else: ?>
@@ -1168,15 +1036,6 @@
 				var uir       = '<?= UIR ?>';
 				var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
 
-				window.knCpToggleSection = function() {
-					var sec = document.getElementById('kn-cp-section');
-					var body = document.getElementById('kn-cp-body');
-					if (!sec || !body) return;
-					var open = sec.classList.toggle('kn-cp-open');
-					body.style.display = open ? '' : 'none';
-					var hdr = sec.querySelector('.kn-cp-header');
-					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
-				};
 
 				// House date pattern: Flatpickr with a human-readable altInput; the
 				// underlying native date input keeps the Y-m-d value the controller expects.
@@ -1278,11 +1137,150 @@
 				}, true);
 			})();
 			</script>
+				</div><!-- /kn-ev-pane-courts -->
+				<?php endif; ?>
+			</div>
+
+
+			<!-- Map Tab -->
+			<div class="kn-tab-panel" id="kn-tab-map" style="display:none">
+				<?php if (count($knMapLocations) > 0): ?>
+					<div id="kn-map-loading" class="kn-map-loading">
+						<i class="fas fa-spinner fa-spin" style="font-size:22px"></i>
+						Loading map&hellip;
+					</div>
+					<div id="kn-map-container" style="display:none">
+						<div class="kn-map-layout">
+							<div class="kn-map-wrap">
+								<div id="kn-map"></div>
+							</div>
+							<div class="kn-map-sidebar-wrap">
+								<div class="kn-map-sidebar-card" id="kn-map-sidebar-card">
+									<div class="kn-map-sidebar-empty" id="kn-map-sidebar-empty">
+										<div class="kn-map-sidebar-empty-icon"><i class="fas fa-map-marker-alt"></i></div>
+										<p>Click any park pin to see details.</p>
+									</div>
+									<div id="kn-map-sidebar-park" style="display:none; flex-direction:column; flex:1;">
+										<div class="kn-park-hero" id="kn-park-hero"></div>
+										<div class="kn-park-body" id="kn-park-body"></div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				<?php else: ?>
+					<div class="kn-empty">No park location data available</div>
+				<?php endif; ?>
+			</div>
+
+			<!-- Reports Tab -->
+			<div class="kn-tab-panel" id="kn-tab-reports" style="display:none">
+				<?php if (!$IsLoggedIn): ?>
+				<div style="background:var(--ork-alert-info-bg,#eaf4fb);border:1px solid var(--ork-alert-info-border,#b0d4ea);border-radius:4px;padding:8px 14px;margin-bottom:10px;font-size:0.9em;color:var(--ork-alert-info-text,#1a5276);">
+					<i class="fas fa-info-circle"></i> <a href="<?= UIR ?>Login" style="color:var(--ork-alert-info-text,#1a5276);font-weight:600;">Log in</a> to see the full list of available reports.
+				</div>
+				<?php endif; ?>
+				<div class="pk-reports-mobile-notice">
+					<i class="fas fa-info-circle"></i>
+					<span>Some reports may not display as expected on mobile. For best results, view reports on a full screen device.</span>
+				</div>
+				<div class="kn-reports-grid">
+
+					<div class="kn-report-group">
+						<h5><i class="fas fa-users"></i> Players</h5>
+						<ul>
+							<li><a href="<?= UIR ?>Reports/roster/Kingdom&id=<?= $kingdom_id ?>">Player Roster</a></li>
+							<?php if ($IsLoggedIn): ?>
+							<li><a href="<?= UIR ?>Reports/active/Kingdom&id=<?= $kingdom_id ?>">Active Players</a></li>
+							<li><a href="<?= UIR ?>Reports/dues/Kingdom&id=<?= $kingdom_id ?>">Dues Paid</a></li>
+							<li><a href="<?= UIR ?>Reports/waivered/Kingdom&id=<?= $kingdom_id ?>">Waivered</a></li>
+							<li><a href="<?= UIR ?>Reports/unwaivered/Kingdom&id=<?= $kingdom_id ?>">Unwaivered</a></li>
+							<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kingdom_id ?>">Suspended</a></li>
+							<li><a href="<?= UIR ?>Reports/active_duespaid/Kingdom&id=<?= $kingdom_id ?>">Player Attendance</a></li>
+							<li><a href="<?= UIR ?>Reports/active_waivered_duespaid/Kingdom&id=<?= $kingdom_id ?>">Waivered Attendance</a></li>
+							<?php if ($ShowVotingEligibleLink ?? false): ?><li><a href="<?= UIR ?>Reports/voting_eligible/Kingdom&id=<?= $kingdom_id ?>">Voting Eligible</a></li><?php endif; ?>
+							<li><a href="<?= UIR ?>Reports/reeve/Kingdom&id=<?= $kingdom_id ?>">Reeve Qualified</a></li>
+							<li><a href="<?= UIR ?>Reports/corpora/Kingdom&id=<?= $kingdom_id ?>">Corpora Qualified</a></li>
+							<li><a href="<?= UIR ?>Reports/player_status_reconciliation/Kingdom&id=<?= $kingdom_id ?>">Player Status Reconciliation</a></li>
+							<li><a href="<?= UIR ?>Reports/guilds&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?> Guilds</a></li>
+							<li><a href="<?= UIR ?>Reports/population_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-users-viewfinder"></i> Population Explorer</a></li>
+							<?php endif; ?>
+							<li><a href="<?= UIR ?>Reports/kingdom_officer_directory&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-crown"></i> Park Officer Directory</a></li>
+							<li><a href="<?= UIR ?>Reports/officer_history&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-scroll"></i> Officer History</a></li>
+						</ul>
+					</div>
+
+					<div class="kn-report-group">
+						<h5><i class="fas fa-medal"></i> Awards</h5>
+						<ul>
+							<?php if ($IsLoggedIn && (!empty($AwardRecsPublic) || !empty($CanManageKingdom))): ?>
+							<li><a href="<?= UIR ?>Reports/player_award_recommendations&KingdomId=<?= $kingdom_id ?>">Recommendations</a></li>
+							<?php endif; ?>
+							<li><a href="<?= UIR ?>Reports/knights_and_masters&KingdomId=<?= $kingdom_id ?>">Knights &amp; Masters</a></li>
+							<?php if ($IsLoggedIn): ?>
+							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
+							<li><a href="<?= UIR ?>Reports/knights_list&KingdomId=<?= $kingdom_id ?>">Knights</a></li>
+							<li><a href="<?= UIR ?>Reports/masters_list&KingdomId=<?= $kingdom_id ?>">Masters</a></li>
+							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=8&KingdomId=<?= $kingdom_id ?>"><?= $entityLabel ?>-level Awards</a></li>
+							<li><a href="<?= UIR ?>Reports/class_masters&KingdomId=<?= $kingdom_id ?>">Class Masters/Paragons</a></li>
+							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>">Ladder Award Grid</a></li>
+											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>">Custom Awards</a></li>
+							<li><a href="<?= UIR ?>Reports/beltline_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-sitemap"></i> Beltline Explorer</a></li>
+							<li><a href="<?= UIR ?>Reports/award_explorer&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-award"></i> Award Explorer</a></li>
+							<?php endif; ?>
+						</ul>
+					</div>
+
+					<div class="kn-report-group">
+						<h5><i class="fas fa-calendar-check"></i> Attendance</h5>
+						<ul>
+							<?php if ($IsLoggedIn): ?>
+							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Weeks/1">Past Week</a></li>
+							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/1">Past Month</a></li>
+							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/3">Past 3 Months</a></li>
+							<?php endif; ?>
+							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/6">Past 6 Months</a></li>
+							<?php if ($IsLoggedIn): ?>
+							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/Months/12">Past 12 Months</a></li>
+							<li><a href="<?= UIR ?>Reports/attendance/Kingdom/<?= $kingdom_id ?>/All">All Time</a></li>
+							<?php endif; ?>
+							<li><a href="<?= UIR ?>Reports/event_attendance/Kingdom/<?= $kingdom_id ?>"><i class="fas fa-calendar-alt"></i> Event Attendance</a></li>
+							<?php if ($IsLoggedIn): ?>
+							<li><a href="<?= UIR ?>Reports/park_attendance_explorer"><i class="fas fa-chart-bar"></i> Park Attendance Explorer</a></li>
+							<li><a href="<?= UIR ?>Reports/new_player_attendance"><i class="fas fa-user-plus"></i> New Player Attendance</a></li>
+							<?php endif; ?>
+						</ul>
+					</div>
+
+					<?php if ($IsLoggedIn): ?>
+					<div class="kn-report-group">
+						<h5><i class="fas fa-ellipsis-h"></i> Other</h5>
+						<ul>
+							<li><a href="<?= UIR ?>Reports/parkheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Parks</a></li>
+							<li><a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Players</a></li>
+							<li><a href="<?= UIR ?>Reports/park_distance_matrix&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-th"></i> Park Distance Matrix</a></li>
+							<?php // Test Results live on the kingdom Admin page under Qualification Tests,
+							      // with the rest of the test workspace. They are capability-gated, so they
+							      // were the only non-public entries in this otherwise-public group. ?>
+						</ul>
+					</div>
+					<?php endif; ?>
+
+					<div class="kn-report-group">
+						<h5><i class="fas fa-search"></i> Find</h5>
+						<ul>
+							<li><a href="<?= UIR ?>Search/kingdom/<?= $kingdom_id ?>">Players</a></li>
+							<li><a href="<?= UIR ?>Unit/unitlist&KingdomId=<?= $kingdom_id ?>">Companies &amp; Households</a></li>
+							<li><a href="<?= UIR ?>Search/event&KingdomId=<?= $kingdom_id ?>">Events</a></li>
+							<li><a href="<?= UIR ?>Unit/unitlist&KingdomId=<?= $kingdom_id ?>">Unit List</a></li>
+						</ul>
+					</div>
+
+
+
 				</div>
 			</div>
-			<?php endif; ?>
-		</div>
-		<?php endif; ?>
+
 
 		<!-- Recommendations Tab — body is lazy-loaded via Kingdom::recommendations_panel()
 		     on first tab activation. Rendering the full list inline (1k-4k <tr> rows on a
@@ -1336,6 +1334,28 @@
 
 </div><!-- /kn-layout -->
 
+<!-- Officer History Backfill/Edit Modals removed: writes now go through the
+     officer transition console; the public modal is read-only. -->
+
+<!-- Officer Details Modal (shared with Parknew_index.tpl) -->
+<?php
+	/* Inputs for partials/_officer_details_modal.tpl -- see its docblock.
+	   $officerList is the FULL (crown + supporting) row set built at the top of
+	   this file; the modal groups it into the position tree.
+	   $ohRoleOptions / $OfficerHistoryRoleOptions and $CanEditKingdom are already
+	   in scope and the partial picks them up on its own.
+	   Included unconditionally: the arrow on the officers bar is shown to every
+	   viewer, so the modal must exist for every viewer. */
+	$ofScope   = 'kingdom';
+	$ofOrgId   = (int)$kingdom_id;
+	$ofOrgName = (string)($kingdom_name ?? '');
+	$ofKingdomId = (int)($kingdom_id ?? 0);
+	$ofCanEditRolls = !empty($CanEditOfficerHistory);
+	include __DIR__ . '/partials/_officer_details_modal.tpl';
+?>
+
+
+
 <!-- =============================================
      JavaScript
      ============================================= -->
@@ -1346,20 +1366,19 @@ var KnConfig = {
 	httpService:      '<?= HTTP_SERVICE ?>',
 	kingdomId:        <?= (int)($kingdom_id ?? 0) ?>,
 	kingdomName:      <?= json_encode($kingdom_name ?? '') ?>,
-	canEdit:          <?= !empty($CanEditKingdom)   ? 'true' : 'false' ?>,
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
+	canManageOfficers: <?= !empty($can_manage_officer_positions) ? 'true' : 'false' ?>,
 	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	viewerId:         <?= (int)($CurrentUserId ?? 0) ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	principalityIds:  <?= json_encode(array_map(function($p){ return (int)$p['KingdomId']; }, $prinzParks)) ?>,
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	isOrkAdmin:      <?= !empty($IsOrkAdmin) ? 'true' : 'false' ?>,
+	isOrkAdmin:      <?= !empty($CanManageKingdomLifecycle) ? 'true' : 'false' ?>,
 	adminInfo:       <?= json_encode($AdminInfo       ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminConfig:     <?= json_encode($AdminConfig     ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	adminParkTitles: <?= json_encode($AdminParkTitles ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1888,29 +1907,6 @@ var KnBannerConfig = {
 </div>
 <?php endif; ?>
 
-<!-- Edit Officers Modal -->
-<div id="kn-editoff-overlay">
-	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px);">
-		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-crown" style="margin-right:8px;color:#744210"></i>Edit Officers</h3>
-			<button class="kn-modal-close-btn" id="kn-editoff-close-btn" aria-label="Close">&times;</button>
-		</div>
-		<div class="kn-modal-body">
-			<div id="kn-editoff-feedback" style="display:none"></div>
-			<p class="kn-editoff-hint">Search and select a player for each role; picking someone for an occupied role replaces the current holder when you save, so there is no need to vacate first. Leave a field empty to skip that role. <strong>Vacate</strong> empties the role immediately and ends that officer's access, including your own if it is your role.</p>
-			<div id="kn-editoff-rows">
-				<!-- Built by JS from KnConfig.officerList -->
-			</div>
-		</div>
-		<div class="kn-modal-footer">
-			<button class="kn-btn-ghost" id="kn-editoff-cancel">Cancel</button>
-			<button class="kn-btn kn-btn-primary" id="kn-editoff-submit">
-				<i class="fas fa-save"></i> Save Officers
-			</button>
-		</div>
-	</div>
-</div>
-
 <!-- Kingdom Admin Overlay -->
 <div id="kn-admin-overlay">
 	<div class="kn-modal-box" style="width:700px;max-width:calc(100vw - 40px);">
@@ -1957,7 +1953,7 @@ var KnBannerConfig = {
 			</div>
 
 			<!-- ── Panel: Principality (ORK Admins only, shown only when this entity is a principality) ── -->
-		<?php if (!empty($IsOrkAdmin) && !empty($AdminInfo['IsPrincipality'])): ?>
+		<?php if (!empty($CanManageKingdomLifecycle) && !empty($AdminInfo['IsPrincipality'])): ?>
 		<div class="kn-admin-panel" id="kn-admin-panel-prinz">
 			<button class="kn-admin-panel-hdr" id="kn-admin-hdr-prinz" aria-expanded="false">
 				<span><i class="fas fa-crown" style="margin-right:6px;color:#a0aec0"></i>Principality Status</span>
@@ -2238,7 +2234,7 @@ var KnBannerConfig = {
 							<i class="fas fa-eraser"></i> Reset Waivers
 						</button>
 					</div>
-					<?php if (!empty($IsOrkAdmin)):
+					<?php if (!empty($CanManageKingdomLifecycle)):
 						$isActive = ($AdminInfo['Active'] ?? 'Active') === 'Active'; ?>
 					<div class="kn-admin-ops-row">
 						<div class="kn-admin-ops-info">
@@ -2677,12 +2673,10 @@ html[data-theme="dark"] .kn-copy-link.kn-copied::after { background: #1a202c; co
 .kn-cfe-mod-all { border-bottom: 1px solid var(--ork-divider); padding-bottom: 8px; margin-bottom: 4px; }
 .kn-cfe-mod-hint { display: block; font-size: 11px; color: #718096; margin-top: 1px; }
 
-#kn-cfe-results .kn-ac-row { display: block; padding: 8px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; }
-#kn-cfe-results .kn-ac-row:hover, #kn-cfe-results .kn-ac-row.kn-ac-active { background: #ebf8ff; }
-#kn-cfe-results .kn-ac-row:last-child { border-bottom: 0; }
-#kn-cfe-results .kn-ac-row-title { font-size: 13px; color: #2d3748; font-weight: 500; }
-#kn-cfe-results .kn-ac-row-meta { font-size: 11px; color: #718096; margin-top: 1px; }
-#kn-cfe-results .kn-ac-empty { padding: 10px; color: #a0aec0; font-style: italic; font-size: 12px; }
+/* The .kn-ac-row / -title / -meta / .kn-ac-empty rules that used to live here were
+   ID-scoped to #kn-cfe-results, so the same markup rendered into #pk-cfe-results was
+   unstyled. They now live in revised.css keyed off .kn-ac-results, which this page
+   loads, so the dropdown looks the same here and is finally styled everywhere else. */
 
 html[data-theme="dark"] .kn-cfe-wrap { background: var(--ork-bg-secondary); border-color: var(--ork-border); }
 html[data-theme="dark"] .kn-cfe-toggle { color: var(--ork-text); }
@@ -2696,11 +2690,6 @@ html[data-theme="dark"] .kn-cfe-mod-title { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .kn-cfe-mod-row { color: var(--ork-text); }
 html[data-theme="dark"] .kn-cfe-mod-hint { color: var(--ork-text-muted); }
 html[data-theme="dark"] .kn-cfe-mod-all { border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] #kn-cfe-results .kn-ac-row { border-bottom-color: var(--ork-border); }
-html[data-theme="dark"] #kn-cfe-results .kn-ac-row:hover, html[data-theme="dark"] #kn-cfe-results .kn-ac-row.kn-ac-active { background: var(--ork-bg-tertiary); }
-html[data-theme="dark"] #kn-cfe-results .kn-ac-row-title { color: var(--ork-text); }
-html[data-theme="dark"] #kn-cfe-results .kn-ac-row-meta { color: var(--ork-text-muted); }
-html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-muted); }
 
 </style>
 <div id="kn-moveplayer-overlay">
@@ -3540,6 +3529,18 @@ $(function() { window.knInitRecsTab(); });
 window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
 window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
 initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
+
+function knHtmlEsc(s) {
+    if (!s) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(s));
+    return div.innerHTML;
+}
+
+// The officer-history lazy-load hook that used to live here bound to
+// '.kn-tab-nav li[data-kntab="officerhistory"]'. That nav item is gone, so the
+// handler could never fire again. The officer details modal now lazy-loads the
+// history itself on first activation of its History tab.
 window.knUsernameCheck = initUsernameAvailabilityCheck({
 	inputId:     'kn-addplayer-username',
 	statusId:    'kn-addplayer-username-status',
@@ -3557,6 +3558,7 @@ window.knUsernameCheck = initUsernameAvailabilityCheck({
 	};
 })();
 </script>
+
 
 <?php if (!empty($IsLoggedIn)): ?>
 <script>

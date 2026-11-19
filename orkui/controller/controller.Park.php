@@ -34,7 +34,7 @@ class Controller_Park extends Controller
         $this->data[ 'page_title' ] = $this->session->park_name;
 
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_PARK, (int)$id, AUTH_EDIT)) {
+        if ($_uid > 0 && $this->Authorization->has_permission_or_authority($_uid, 'park.details.edit', 'park', (int)$id, AUTH_EDIT)) {
             $this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
             $this->data[ 'menulist' ][ 'admin' ] = [
                 [ 'url' => UIR . 'Admin/park/' . $this->session->park_id, 'display' => 'Park' ],
@@ -90,6 +90,14 @@ class Controller_Park extends Controller
             header('Location: ' . UIR);
             exit;
         }
+
+        // Officer-history role options from the position REGISTRY (all positions, including
+        // vacant and retired): history records who HELD an office, so a currently-empty
+        // seat must still be selectable. Park positions live under the park's kingdom.
+        $this->load_model('OfficerPosition');
+        $this->data['OfficerHistoryRoleOptions'] = $this->OfficerPosition->history_role_options(
+            (int)($this->data['park_info']['ParkInfo']['KingdomId'] ?? 0)
+        );
 
         // Link-preview card (text-only; image policy pending): park name plus
         // where it is — the question anyone tapping a shared park link has.
@@ -267,6 +275,13 @@ class Controller_Park extends Controller
         $pid = (int)$park_id;
         $pk_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $pk_isAdmin = ($pk_uid > 0) ? $this->Authorization->has_authority($pk_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
+        // The Details modal's "Edit the rolls" link: the history-write gate itself
+        // (OfficerPosition::can_edit_history_for, the one the writes enforce).
+        $this->data['CanEditOfficerHistory'] = $this->OfficerPosition->can_edit_history_for(
+            $pk_uid,
+            (int)($this->data['park_info']['ParkInfo']['KingdomId'] ?? 0),
+            $pid
+        );
 
         $this->load_model('ParkProfile');
         $eventBundle = $this->ParkProfile->profile_event_bundle($pid, (int)$this->session->kingdom_id, $pk_uid, $pk_isAdmin);
@@ -284,12 +299,18 @@ class Controller_Park extends Controller
         $this->data['CurrentUserId'] = $uid;
         $this->data['IsOwnPark']     = $uid > 0 && (int)($this->session->park_id ?? 0) === (int)$park_id;
         $this->data['CanManagePark'] = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$park_id, AUTH_EDIT);
+            && $this->Authorization->has_permission_or_authority($uid, 'park.details.edit', 'park', (int)$park_id, AUTH_EDIT);
         // Bonus Credits button + modal: park EDIT, or a manager of the park's kingdom.
         $this->load_model('BonusCredit');
         $this->data['CanBonusCredits'] = $uid > 0 && $this->BonusCredit->can_grant($uid, (int)$park_id);
+        // The Admin link opens Admin/park, so it asks that page's own front door.
+        $this->data['CanOpenParkConsole'] = $uid > 0 && $this->can_open_park_console(
+            $uid,
+            (int)$park_id,
+            (int)($this->data['park_info']['ParkInfo']['KingdomId'] ?? 0)
+        );
         $this->data['CanAdminPark']  = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$park_id, AUTH_CREATE);
+            && $this->Authorization->has_permission_or_authority($uid, 'park.officer.set', 'park', (int)$park_id, AUTH_CREATE);
         // Park admins can merge two players who both belong to THIS park.
         // Cross-park or cross-kingdom merges still need higher rights and are
         // performed from the kingdom profile. The server-side MergePlayer

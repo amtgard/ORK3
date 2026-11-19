@@ -31,8 +31,10 @@ class Attendance extends Ork3
 
     public function CreateClass($request)
     {
+        // The class list is shared by every park in the installation, so this is a
+        // global permission rather than anything a kingdom can hold.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.attendance_class.manage', 'global', 0, AUTH_CREATE)) {
             $this->class->clear();
             $this->class->name = $request['Name'];
             $this->class->active = $request['Active'];
@@ -47,7 +49,7 @@ class Attendance extends Ork3
     {
         $response = array();
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'global.attendance_class.manage', 'global', 0, AUTH_EDIT)) {
             $this->class->clear();
             $this->class->class_id = $request['ClassId'];
             if (valid_id($request['ClassId']) && $this->class->find()) {
@@ -288,7 +290,7 @@ class Attendance extends Ork3
                 logtrace('attendance_authority_h() - ecdid match', $detail);
                 return false;
             }
-            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $detail['CalendarEventDetails'][0]['EventId'], AUTH_EDIT)) {
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'event.attendance.manage', 'event', $detail['CalendarEventDetails'][0]['EventId'], AUTH_EDIT)) {
                 return AUTH_EVENT;
             }
             // Check event staff with can_attendance permission
@@ -298,7 +300,7 @@ class Attendance extends Ork3
                 return AUTH_EVENT;
             }
         } elseif (valid_id($request['EventId'])) {
-            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'event.attendance.manage', 'event', $request['EventId'], AUTH_EDIT)) {
                 return AUTH_EVENT;
             }
             // Check event staff with can_attendance permission (via event_id join for delete path)
@@ -308,11 +310,11 @@ class Attendance extends Ork3
                 return AUTH_EVENT;
             }
         } elseif (valid_id($request['ParkId'])) {
-            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.attendance.manage', 'park', $request['ParkId'], AUTH_EDIT)) {
                 return AUTH_PARK;
             }
         } elseif (valid_id($request['KingdomId'])) {
-            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.attendance.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
                 return AUTH_KINGDOM;
             }
         } else {
@@ -524,7 +526,12 @@ class Attendance extends Ork3
         $expires_at = null;
 
         if (valid_id($event_id)) {
-            if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+            // Minting, listing and revoking a sign-in link are all the attendance
+            // capability wearing a different hat: whoever may record attendance for this
+            // scope may run the QR flow that records it. These three methods were the
+            // last part of the attendance workflow still on the legacy-only path, which
+            // left an Attendance Clerk able to enter rows but not open the door.
+            if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'event.attendance.manage', 'event', $event_id, AUTH_EDIT)) {
                 // Allow event staff with can_attendance permission
                 $ok = false;
                 if (valid_id($event_calendardetail_id)) {
@@ -578,11 +585,11 @@ class Attendance extends Ork3
                 return InvalidParameter('This event has already ended.');
             }
         } elseif (valid_id($park_id)) {
-            if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT)) {
+            if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.attendance.manage', 'park', $park_id, AUTH_EDIT)) {
                 return NoAuthorization();
             }
         } elseif (valid_id($kingdom_id)) {
-            if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+            if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.attendance.manage', 'kingdom', $kingdom_id, AUTH_EDIT)) {
                 return NoAuthorization();
             }
         } else {
@@ -938,7 +945,7 @@ class Attendance extends Ork3
         $event_id   = (int)($request['EventId'] ?? 0);
 
         if (valid_id($event_id)) {
-            if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+            if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'event.attendance.manage', 'event', $event_id, AUTH_EDIT)) {
                 $ecdid = (int)($request['EventCalendarDetailId'] ?? 0);
                 $ok = false;
                 if (valid_id($ecdid)) {
@@ -954,7 +961,7 @@ class Attendance extends Ork3
             }
             $where = 'al.event_id = ' . $event_id;
         } elseif (valid_id($park_id)) {
-            if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT)) {
+            if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.attendance.manage', 'park', $park_id, AUTH_EDIT)) {
                 return NoAuthorization();
             }
             // Columns are aliased — both ork_attendance_link and ork_park have a
@@ -962,7 +969,7 @@ class Attendance extends Ork3
             // SELECT silently (modal showed "No active links" forever).
             $where = 'al.park_id = ' . $park_id . ' AND al.event_id IS NULL';
         } elseif (valid_id($kingdom_id)) {
-            if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+            if (!Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.attendance.manage', 'kingdom', $kingdom_id, AUTH_EDIT)) {
                 return NoAuthorization();
             }
             $where = 'al.kingdom_id = ' . $kingdom_id . ' AND (al.park_id = 0 OR al.park_id IS NULL) AND al.event_id IS NULL';
@@ -1011,7 +1018,7 @@ class Attendance extends Ork3
         $event_id   = (int)$this->attendance_link->event_id;
         $ecdid      = (int)$this->attendance_link->event_calendardetail_id;
         $authorized = false;
-        if (valid_id($event_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+        if (valid_id($event_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'event.attendance.manage', 'event', $event_id, AUTH_EDIT)) {
             $authorized = true;
         } elseif (valid_id($event_id) && valid_id($ecdid)) {
             $this->db->Clear();
@@ -1020,10 +1027,10 @@ class Attendance extends Ork3
                 $authorized = true;
             }
         }
-        if (!$authorized && valid_id($park_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT)) {
+        if (!$authorized && valid_id($park_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.attendance.manage', 'park', $park_id, AUTH_EDIT)) {
             $authorized = true;
         }
-        if (!$authorized && valid_id($kingdom_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+        if (!$authorized && valid_id($kingdom_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.attendance.manage', 'kingdom', $kingdom_id, AUTH_EDIT)) {
             $authorized = true;
         }
         if (!$authorized) {
