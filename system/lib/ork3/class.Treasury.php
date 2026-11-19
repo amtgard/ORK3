@@ -7,8 +7,451 @@ class Treasury extends Ork3 {
 		$this->split = new yapo($this->db, DB_PREFIX . 'split');
 		$this->account = new yapo($this->db, DB_PREFIX . 'account');
 		$this->transaction = new yapo($this->db, DB_PREFIX . 'transaction');
+		// Treasury module (per-org ledger) yapo objects
+		$this->entry = new yapo($this->db, DB_PREFIX . 'treasury_entry');
+		$this->recon = new yapo($this->db, DB_PREFIX . 'treasury_reconciliation');
+		$this->audit = new yapo($this->db, DB_PREFIX . 'treasury_audit');
 	}
-	
+
+	/* =========================================================================
+	 * Treasury module: per-org (Kingdom/Park) financial ledger.
+	 * Officer-only; running balance is always computed from the opening anchor.
+	 * (Coexists with the legacy double-entry methods above on the same class so
+	 *  startup.php's autoloader keeps Ork3::$Lib->treasury / APIModel('Treasury').)
+	 * ========================================================================= */
+
+	public static $CATEGORIES = array(
+		'income' => array(
+			'dues'          => 'Dues',
+			'fundraiser'    => 'Fundraiser',
+			'donation'      => 'Donation',
+			'event_revenue' => 'Event Revenue',
+			'income_other'  => 'Other Income',
+		),
+		'expense' => array(
+			'supplies'       => 'Supplies',
+			'equipment'      => 'Equipment',
+			'site_rental'    => 'Site / Rental',
+			'awards_regalia' => 'Awards / Regalia',
+			'reimbursement'  => 'Reimbursement',
+			'expense_other'  => 'Other Expense',
+		),
+	);
+
+	/** Resolve auth; returns mundane_id (>0) or 0 if unauthorized for this org. */
+	private function authFor($token, $owner_type, $owner_id) {
+		$owner_type = ($owner_type === 'park') ? 'park' : 'kingdom';
+		$authType   = ($owner_type === 'park') ? AUTH_PARK : AUTH_KINGDOM;
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($token);
+		if ($mundane_id > 0
+			&& Ork3::$Lib->authorization->HasAuthority($mundane_id, $authType, (int)$owner_id, AUTH_EDIT)) {
+			return (int)$mundane_id;
+		}
+		return 0;
+	}
+
+	private function normType($t) {
+		return ($t === 'park') ? 'park' : 'kingdom';
+	}
+
+	/** Opening baseline: array(as_of_date, actual_balance) or null if none. */
+	private function openingRecon($owner_type, $owner_id) {
+		global $DB;
+		$owner_type = $this->normType($owner_type);
+		$owner_id   = (int)$owner_id;
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT as_of_date, actual_balance FROM " . DB_PREFIX . "treasury_reconciliation
+			WHERE owner_type='$owner_type' AND owner_id=$owner_id AND is_opening=1 AND deleted_at IS NULL
+			ORDER BY id ASC LIMIT 1");
+		// $DB is YapoMysql, whose DataSet() returns the result un-advanced; Next() fetches
+		// the (only) row and populates the column properties.
+		if ($rs && $rs->Next()) {
+			return array('as_of_date' => $rs->as_of_date, 'actual_balance' => (float)$rs->actual_balance);
+		}
+		return null;
+	}
+
+	/** Running balance over non-deleted entries up to (and including) $upToDate (null = all). */
+	private function ComputeBalanceAsOf($owner_type, $owner_id, $upToDate = null) {
+		global $DB;
+		$owner_type = $this->normType($owner_type);
+		$owner_id   = (int)$owner_id;
+		$open       = $this->openingRecon($owner_type, $owner_id);
+		$base       = $open ? $open['actual_balance'] : 0.0;
+		$fromDate   = $open ? $open['as_of_date'] : null;
+
+		$where = "owner_type='$owner_type' AND owner_id=$owner_id AND deleted_at IS NULL";
+		if ($fromDate) { $where .= " AND entry_date >= '" . addslashes($fromDate) . "'"; }
+		if ($upToDate) { $where .= " AND entry_date <= '" . addslashes($upToDate) . "'"; }
+
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT
+			COALESCE(SUM(CASE WHEN direction='credit' THEN amount ELSE 0 END),0) AS credits,
+			COALESCE(SUM(CASE WHEN direction='debit'  THEN amount ELSE 0 END),0) AS debits
+			FROM " . DB_PREFIX . "treasury_entry WHERE $where");
+		$credits = 0.0; $debits = 0.0;
+		// $DB is YapoMysql: DataSet() returns un-advanced; Next() fetches the single aggregate row.
+		if ($rs && $rs->Next()) { $credits = (float)$rs->credits; $debits = (float)$rs->debits; }
+		// round to cents to avoid float drift
+		return round($base + $credits - $debits, 2);
+	}
+
+	public function HasOpeningBalance($token, $owner_type, $owner_id) {
+		if (!$this->authFor($token, $owner_type, $owner_id)) { return NoAuthorization(); }
+		return Success(array('HasOpening' => $this->openingRecon($owner_type, $owner_id) !== null));
+	}
+
+	/** Cheap change-signal for polling: a small token that changes on any insert/edit/delete
+	 *  (entries) or insert/delete (reconciliations). Two indexed COUNT/MAX queries, no full scan. */
+	public function GetRevision($token, $owner_type, $owner_id) {
+		if (!$this->authFor($token, $owner_type, $owner_id)) { return NoAuthorization(); }
+		global $DB;
+		$owner_type = $this->normType($owner_type);
+		$owner_id = (int)$owner_id;
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT COUNT(*) n, COALESCE(MAX(id),0) mx,
+			COALESCE(UNIX_TIMESTAMP(MAX(GREATEST(created_at, COALESCE(updated_at, created_at), COALESCE(deleted_at, created_at)))),0) ts
+			FROM " . DB_PREFIX . "treasury_entry WHERE owner_type='$owner_type' AND owner_id=$owner_id");
+		$en = 0; $emx = 0; $ets = 0;
+		if ($rs && $rs->Next()) { $en = (int)$rs->n; $emx = (int)$rs->mx; $ets = (int)$rs->ts; }
+		$DB->Clear();
+		$rs2 = $DB->DataSet("SELECT COUNT(*) n, COALESCE(MAX(id),0) mx
+			FROM " . DB_PREFIX . "treasury_reconciliation WHERE owner_type='$owner_type' AND owner_id=$owner_id");
+		$rn = 0; $rmx = 0;
+		if ($rs2 && $rs2->Next()) { $rn = (int)$rs2->n; $rmx = (int)$rs2->mx; }
+		return Success(array('Rev' => $en . '-' . $emx . '-' . $ets . '.' . $rn . '-' . $rmx));
+	}
+
+	/** Display name of the org (park/kingdom) by id; page is already auth-gated. */
+	public function GetOwnerName($token, $owner_type, $owner_id) {
+		if (!$this->authFor($token, $owner_type, $owner_id)) { return NoAuthorization(); }
+		global $DB;
+		$owner_type = $this->normType($owner_type);
+		$owner_id = (int)$owner_id;
+		$DB->Clear();
+		$name = '';
+		$kingdom_id = $owner_id;
+		if ($owner_type === 'park') {
+			$rs = $DB->DataSet("SELECT name, kingdom_id FROM " . DB_PREFIX . "park WHERE park_id=$owner_id LIMIT 1");
+			if ($rs && $rs->Next()) { $name = $rs->name; $kingdom_id = (int)$rs->kingdom_id; }
+		} else {
+			$rs = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "kingdom WHERE kingdom_id=$owner_id LIMIT 1");
+			if ($rs && $rs->Next()) { $name = $rs->name; }
+		}
+		return Success(array('Name' => $name, 'KingdomId' => (int)$kingdom_id));
+	}
+
+	/* ---- Treasury module: entry CRUD + audit ---- */
+
+	private static $VALID_METHODS = array('cash', 'check', 'digital');
+
+	private function validCategory($cat) {
+		return isset(self::$CATEGORIES['income'][$cat]) || isset(self::$CATEGORIES['expense'][$cat]);
+	}
+
+	private function writeAudit($entry_id, $action, $mundane_id, $before, $after) {
+		$this->audit->clear();
+		$this->audit->entry_id    = (int)$entry_id;
+		$this->audit->action      = $action;
+		$this->audit->changed_by  = (int)$mundane_id;
+		$this->audit->changed_at  = date('Y-m-d H:i:s');
+		// yapo drops null fields from INSERT; '' clears the column instead of leaving it stale.
+		$this->audit->before_json = $before === null ? '' : json_encode($before);
+		$this->audit->after_json  = $after  === null ? '' : json_encode($after);
+		$this->audit->save();
+	}
+
+	private function entryToArray() {
+		return array(
+			'id'             => $this->entry->id,
+			'owner_type'     => $this->entry->owner_type,
+			'owner_id'       => $this->entry->owner_id,
+			'entry_date'     => $this->entry->entry_date,
+			'direction'      => $this->entry->direction,
+			'amount'         => $this->entry->amount,
+			'category'       => $this->entry->category,
+			'payment_method' => $this->entry->payment_method,
+			'description'    => $this->entry->description,
+			'counterparty'   => $this->entry->counterparty,
+			'counterparty_player_id' => $this->entry->counterparty_player_id,
+			'reference_no'   => $this->entry->reference_no,
+			'deleted_at'     => $this->entry->deleted_at,
+		);
+	}
+
+	/** Create or edit. $data: owner_type, owner_id, [id], entry_date, direction, amount,
+	 *  category, payment_method, description, counterparty, reference_no. */
+	public function SaveEntry($token, $data) {
+		$mundane_id = $this->authFor($token, $data['owner_type'] ?? '', $data['owner_id'] ?? 0);
+		if (!$mundane_id) { return NoAuthorization(); }
+
+		$direction = ($data['direction'] ?? '') === 'debit' ? 'debit' : 'credit';
+		$amount    = round((float)($data['amount'] ?? 0), 2);
+		$cat       = (string)($data['category'] ?? '');
+		$method    = (string)($data['payment_method'] ?? '');
+		$entryDate = (string)($data['entry_date'] ?? '');
+
+		if ($amount <= 0) { return InvalidParameter('Amount must be greater than zero.'); }
+		if (!$this->validCategory($cat)) { return InvalidParameter('Unknown category.'); }
+		if (!in_array($method, self::$VALID_METHODS, true)) { return InvalidParameter('Payment method is required.'); }
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $entryDate)) { return InvalidParameter('Invalid date.'); }
+
+		$isEdit = !empty($data['id']);
+		$before = null;
+		$this->entry->clear();
+		if ($isEdit) {
+			$this->entry->id = (int)$data['id'];
+			if (!$this->entry->find() || $this->entry->deleted_at !== null
+				|| $this->entry->owner_type !== $this->normType($data['owner_type'])
+				|| (int)$this->entry->owner_id !== (int)$data['owner_id']) {
+				return InvalidParameter('Entry not found.');
+			}
+			$before = $this->entryToArray();
+		} else {
+			$this->entry->owner_type = $this->normType($data['owner_type']);
+			$this->entry->owner_id   = (int)$data['owner_id'];
+			$this->entry->created_by = $mundane_id;
+			$this->entry->created_at = date('Y-m-d H:i:s');
+		}
+		$this->entry->entry_date     = $entryDate;
+		$this->entry->direction      = $direction;
+		$this->entry->amount         = $amount;
+		$this->entry->category       = $cat;
+		$this->entry->payment_method = $method;
+		$this->entry->description    = (string)($data['description'] ?? '');
+		// yapo drops null fields; assign '' to clear an optional column rather than leave it stale.
+		$this->entry->counterparty   = ($data['counterparty'] ?? '') !== '' ? $data['counterparty'] : '';
+		$this->entry->reference_no   = ($data['reference_no'] ?? '') !== '' ? $data['reference_no'] : '';
+		$this->entry->counterparty_player_id = (isset($data['counterparty_player_id']) && (int)$data['counterparty_player_id'] > 0) ? (int)$data['counterparty_player_id'] : 0;
+		if ($isEdit) { $this->entry->updated_at = date('Y-m-d H:i:s'); }
+		$this->entry->save();
+
+		$id = (int)$this->entry->id;
+		$this->writeAudit($id, $isEdit ? 'edit' : 'create', $mundane_id, $before, $this->entryToArray());
+		return Success(array('Id' => $id));
+	}
+
+	public function DeleteEntry($token, $owner_type, $owner_id, $id) {
+		$mundane_id = $this->authFor($token, $owner_type, $owner_id);
+		if (!$mundane_id) { return NoAuthorization(); }
+		$this->entry->clear();
+		$this->entry->id = (int)$id;
+		if (!$this->entry->find() || $this->entry->deleted_at !== null
+			|| (int)$this->entry->owner_id !== (int)$owner_id
+			|| $this->entry->owner_type !== $this->normType($owner_type)) {
+			return InvalidParameter('Entry not found.');
+		}
+		$before = $this->entryToArray();
+		$this->entry->deleted_at = date('Y-m-d H:i:s');
+		$this->entry->save();
+		$this->writeAudit((int)$id, 'delete', $mundane_id, $before, null);
+		return Success();
+	}
+
+	/* ---- Treasury module: ledger read, reconciliation, summary, series ---- */
+
+	/** Paged ledger with running balance. $filters: from, to, category, direction, page, per. */
+	public function GetLedger($token, $owner_type, $owner_id, $filters = array()) {
+		global $DB;
+		if (!$this->authFor($token, $owner_type, $owner_id)) { return NoAuthorization(); }
+		$owner_type = $this->normType($owner_type);
+		$owner_id   = (int)$owner_id;
+
+		// Opening anchor for running balance. The running balance must always be
+		// computed from the opening across the full chronological set; date/category/
+		// direction filters only change which rows are *displayed*, never each row's
+		// true running balance.
+		$open     = $this->openingRecon($owner_type, $owner_id);
+		$base     = $open ? $open['actual_balance'] : 0.0;
+		$openDate = $open ? $open['as_of_date'] : null;
+
+		// Fetch ALL non-deleted entries (anchored at the opening date) in chronological
+		// order so each row's running balance is correct, then apply display filters.
+		$balWhere = "owner_type='$owner_type' AND owner_id=$owner_id AND deleted_at IS NULL";
+		if ($openDate) { $balWhere .= " AND entry_date >= '" . addslashes($openDate) . "'"; }
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT id, entry_date, direction, amount, category, payment_method,
+			description, counterparty, counterparty_player_id, reference_no
+			FROM " . DB_PREFIX . "treasury_entry WHERE $balWhere
+			ORDER BY entry_date ASC, id ASC");
+
+		$from = !empty($filters['from'])      ? (string)$filters['from']      : null;
+		$to   = !empty($filters['to'])        ? (string)$filters['to']        : null;
+		$cat  = !empty($filters['category'])  ? (string)$filters['category']  : null;
+		$dir  = !empty($filters['direction']) ? (string)$filters['direction'] : null;
+
+		$rows = array();
+		$bal  = $base;
+		// $DB is YapoMysql: DataSet() returns un-advanced; Next() fetches each row.
+		while ($rs && $rs->Next()) {
+			$delta = ($rs->direction === 'credit') ? (float)$rs->amount : -(float)$rs->amount;
+			$bal   = round($bal + $delta, 2);
+			// Apply display filters AFTER updating the running balance so it stays correct.
+			if ($from !== null && $rs->entry_date < $from) { continue; }
+			if ($to   !== null && $rs->entry_date > $to)   { continue; }
+			if ($cat  !== null && $rs->category  !== $cat) { continue; }
+			if ($dir  !== null && $rs->direction !== $dir) { continue; }
+			$rows[] = array(
+				'Id'             => (int)$rs->id,
+				'Date'           => $rs->entry_date,
+				'Direction'      => $rs->direction,
+				'Amount'         => (float)$rs->amount,
+				'Category'       => $rs->category,
+				'PaymentMethod'  => $rs->payment_method,
+				'Description'    => $rs->description,
+				'Counterparty'   => $rs->counterparty,
+				'CounterpartyPlayerId' => (int)$rs->counterparty_player_id,
+				'ReferenceNo'    => $rs->reference_no,
+				'RunningBalance' => $bal,
+			);
+		}
+		// Newest first for display, then page.
+		$rows  = array_reverse($rows);
+		$per   = max(1, (int)($filters['per'] ?? 25));
+		$page  = max(1, (int)($filters['page'] ?? 1));
+		$total = count($rows);
+		$paged = array_slice($rows, ($page - 1) * $per, $per);
+		return Success(array(
+			'Rows'           => $paged,
+			'Total'          => $total,
+			'Page'           => $page,
+			'Per'            => $per,
+			'CurrentBalance' => $this->ComputeBalanceAsOf($owner_type, $owner_id),
+		));
+	}
+
+	public function GetEntry($token, $owner_type, $owner_id, $id) {
+		if (!$this->authFor($token, $owner_type, $owner_id)) { return NoAuthorization(); }
+		$this->entry->clear();
+		$this->entry->id = (int)$id;
+		if (!$this->entry->find() || $this->entry->deleted_at !== null
+			|| (int)$this->entry->owner_id !== (int)$owner_id
+			|| $this->entry->owner_type !== $this->normType($owner_type)) {
+			return InvalidParameter('Entry not found.');
+		}
+		return Success($this->entryToArray());
+	}
+
+	/** Summary for a date range: current balance, period in/out, by-category totals. */
+	public function GetSummary($token, $owner_type, $owner_id, $from = null, $to = null) {
+		global $DB;
+		if (!$this->authFor($token, $owner_type, $owner_id)) { return NoAuthorization(); }
+		$owner_type = $this->normType($owner_type);
+		$owner_id   = (int)$owner_id;
+		$where = "owner_type='$owner_type' AND owner_id=$owner_id AND deleted_at IS NULL";
+		if ($from) { $where .= " AND entry_date >= '" . addslashes($from) . "'"; }
+		if ($to)   { $where .= " AND entry_date <= '" . addslashes($to) . "'"; }
+		// Anchor to the opening baseline so period totals stay consistent with CurrentBalance,
+		// which excludes pre-opening entries (mirrors ComputeBalanceAsOf/GetLedger/GetBalanceSeries).
+		$open = $this->openingRecon($owner_type, $owner_id);
+		if ($open) { $where .= " AND entry_date >= '" . addslashes($open['as_of_date']) . "'"; }
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT direction, category,
+			COALESCE(SUM(amount),0) AS total
+			FROM " . DB_PREFIX . "treasury_entry WHERE $where GROUP BY direction, category");
+		$byCat = array(); $totalIn = 0.0; $totalOut = 0.0;
+		while ($rs && $rs->Next()) {
+			$t = (float)$rs->total;
+			$byCat[$rs->category] = ($byCat[$rs->category] ?? 0) + $t;
+			if ($rs->direction === 'credit') { $totalIn += $t; } else { $totalOut += $t; }
+		}
+		return Success(array(
+			'CurrentBalance' => $this->ComputeBalanceAsOf($owner_type, $owner_id),
+			'TotalIn'        => round($totalIn, 2),
+			'TotalOut'       => round($totalOut, 2),
+			'ByCategory'     => $byCat,
+		));
+	}
+
+	/** Monthly cumulative balance points for the line chart. */
+	public function GetBalanceSeries($token, $owner_type, $owner_id) {
+		global $DB;
+		if (!$this->authFor($token, $owner_type, $owner_id)) { return NoAuthorization(); }
+		$owner_type = $this->normType($owner_type);
+		$owner_id   = (int)$owner_id;
+		$open = $this->openingRecon($owner_type, $owner_id);
+		$base = $open ? $open['actual_balance'] : 0.0;
+		$where = "owner_type='$owner_type' AND owner_id=$owner_id AND deleted_at IS NULL";
+		if ($open) { $where .= " AND entry_date >= '" . addslashes($open['as_of_date']) . "'"; }
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT DATE_FORMAT(entry_date,'%Y-%m') AS ym,
+			SUM(CASE WHEN direction='credit' THEN amount ELSE -amount END) AS net
+			FROM " . DB_PREFIX . "treasury_entry WHERE $where GROUP BY ym ORDER BY ym ASC");
+		$points = array(); $bal = $base;
+		while ($rs && $rs->Next()) {
+			$bal = round($bal + (float)$rs->net, 2);
+			$points[] = array('Month' => $rs->ym, 'Balance' => $bal);
+		}
+		return Success(array('Points' => $points));
+	}
+
+	public function GetReconciliations($token, $owner_type, $owner_id) {
+		global $DB;
+		if (!$this->authFor($token, $owner_type, $owner_id)) { return NoAuthorization(); }
+		$owner_type = $this->normType($owner_type);
+		$owner_id   = (int)$owner_id;
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT id, as_of_date, actual_balance, computed_balance, variance,
+			explanation, is_opening, created_at
+			FROM " . DB_PREFIX . "treasury_reconciliation
+			WHERE owner_type='$owner_type' AND owner_id=$owner_id AND deleted_at IS NULL
+			ORDER BY as_of_date DESC, id DESC");
+		$rows = array();
+		while ($rs && $rs->Next()) {
+			$rows[] = array(
+				'Id'              => (int)$rs->id,
+				'AsOfDate'        => $rs->as_of_date,
+				'ActualBalance'   => (float)$rs->actual_balance,
+				'ComputedBalance' => (float)$rs->computed_balance,
+				'Variance'        => (float)$rs->variance,
+				'Explanation'     => $rs->explanation,
+				'IsOpening'       => (int)$rs->is_opening,
+				'CreatedAt'       => $rs->created_at,
+			);
+		}
+		return Success(array('Rows' => $rows));
+	}
+
+	/** Add a reconciliation. If no opening exists yet, the first one is the opening (is_opening=1). */
+	public function SaveReconciliation($token, $data) {
+		$mundane_id = $this->authFor($token, $data['owner_type'] ?? '', $data['owner_id'] ?? 0);
+		if (!$mundane_id) { return NoAuthorization(); }
+		$owner_type = $this->normType($data['owner_type'] ?? '');
+		$owner_id   = (int)($data['owner_id'] ?? 0);
+		$asOf   = (string)($data['as_of_date'] ?? '');
+		$actual = round((float)($data['actual_balance'] ?? 0), 2);
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $asOf)) { return InvalidParameter('Invalid date.'); }
+
+		$isOpening   = $this->openingRecon($owner_type, $owner_id) === null;
+		$computed    = $isOpening ? 0.0 : $this->ComputeBalanceAsOf($owner_type, $owner_id, $asOf);
+		$variance    = round($actual - $computed, 2);
+		$explanation = trim((string)($data['explanation'] ?? ''));
+		if (!$isOpening && abs($variance) >= 0.01 && $explanation === '') {
+			return InvalidParameter('Explanation required when the balance does not match.');
+		}
+
+		$this->recon->clear();
+		$this->recon->owner_type       = $owner_type;
+		$this->recon->owner_id         = $owner_id;
+		$this->recon->as_of_date       = $asOf;
+		$this->recon->actual_balance   = $actual;
+		// For the opening row, store the seeded actual as computed so history reads cleanly.
+		$this->recon->computed_balance = $isOpening ? $actual : $computed;
+		$this->recon->variance         = $isOpening ? 0.0 : $variance;
+		// yapo drops null fields; assign '' to clear the optional column rather than leave it stale.
+		$this->recon->explanation      = $explanation !== '' ? $explanation : '';
+		$this->recon->is_opening       = $isOpening ? 1 : 0;
+		$this->recon->created_by       = $mundane_id;
+		$this->recon->created_at       = date('Y-m-d H:i:s');
+		$this->recon->save();
+		return Success(array(
+			'Id'        => (int)$this->recon->id,
+			'IsOpening' => $isOpening,
+			'Variance'  => $isOpening ? 0.0 : $variance,
+			'Computed'  => $isOpening ? $actual : $computed,
+		));
+	}
+
 	public function RecordTransaction($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0) {
 			$request['SplitOne']['MundaneId'] = $mundane_id;
