@@ -248,6 +248,7 @@ class KingdomProfile extends Ork3
         $evtSql = '
             SELECT e.event_id, e.name, e.park_id, e.status, e.mundane_id AS event_creator,
                    p.name AS park_name, p.abbreviation AS park_abbr,
+                   (e.kingdom_id NOT IN (' . $statsEvtKids . ')) AS is_shared, ok.name AS owning_kingdom_name,
                    cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
                    COALESCE(rsvp.rsvp_going, 0) AS rsvp_going,
                    COALESCE(rsvp.rsvp_interested, 0) AS rsvp_interested,
@@ -255,6 +256,7 @@ class KingdomProfile extends Ork3
                    ' . $myRsvpSubq . ' AS my_rsvp
             FROM ' . DB_PREFIX . 'event e
             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = e.park_id
+            LEFT JOIN ' . DB_PREFIX . 'kingdom ok ON ok.kingdom_id = e.kingdom_id
             JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_id = e.event_id
                 AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
                 AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
@@ -266,8 +268,12 @@ class KingdomProfile extends Ork3
                 GROUP BY event_calendardetail_id
             ) rsvp ON rsvp.event_calendardetail_id = cd.event_calendardetail_id
             ' . $royalJoinSql . '
-            WHERE e.kingdom_id IN (' . $statsEvtKids . ')
-              ' . $draftClause . '
+            WHERE (
+                    (e.kingdom_id IN (' . $statsEvtKids . ') ' . $draftClause . ')
+                    OR (e.kingdom_id NOT IN (' . $statsEvtKids . ')
+                        AND e.event_id IN (SELECT eks.event_id FROM ' . DB_PREFIX . 'event_kingdom_share eks WHERE eks.kingdom_id = ' . $kid . ')
+                        AND COALESCE(e.status, \'published\') = \'published\')
+                  )
             ORDER BY cd.event_start, p.name, e.name';
 
         $this->db->Clear();
@@ -297,6 +303,8 @@ class KingdomProfile extends Ork3
                 'MyRsvp' => (string) ($evtResult->my_rsvp ?? ''),
                 'Status' => $rowStatus,
                 '_IsParkEvent' => (int) $evtResult->park_id > 0,
+                'IsShared' => (int) $evtResult->is_shared === 1,
+                'OwningKingdomName' => (string) ($evtResult->owning_kingdom_name ?? ''),
             ];
         }
 
@@ -308,7 +316,13 @@ class KingdomProfile extends Ork3
         $knEventMapLocs = [];
         $knMapNoLocCount = 0;
         if ($includeMapCoords) {
-            [$knEventMapLocs, $knMapNoLocCount] = $this->buildMapLocations($eventSummary);
+            // Map tab shows only the kingdom's OWN events; events shared in from other
+            // kingdoms are Events-tab-only and must not render as unlabelled pins.
+            $ownEventsForMap = array_values(array_filter(
+                $eventSummary,
+                static fn ($e) => empty($e['IsShared'])
+            ));
+            [$knEventMapLocs, $knMapNoLocCount] = $this->buildMapLocations($ownEventsForMap);
         }
 
         $this->db->Clear();
@@ -349,14 +363,21 @@ class KingdomProfile extends Ork3
 
         $evtSql = 'SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr,
                    cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
+                   (e.kingdom_id NOT IN (' . $statsEvtKids . ')) AS is_shared, ok.name AS owning_kingdom_name,
                    (SELECT COUNT(*) FROM ' . DB_PREFIX . 'event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = \'going\') AS rsvp_going,
                    (SELECT COUNT(*) FROM ' . DB_PREFIX . 'event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = \'interested\') AS rsvp_interested
             FROM ' . DB_PREFIX . 'event e
             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = e.park_id
+            LEFT JOIN ' . DB_PREFIX . 'kingdom ok ON ok.kingdom_id = e.kingdom_id
             JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_id = e.event_id
                 AND cd.event_start >  DATE_ADD(NOW(), INTERVAL ' . $startMonths . ' MONTH)
                 AND cd.event_start <= DATE_ADD(NOW(), INTERVAL ' . $endMonths . ' MONTH)
-            WHERE e.kingdom_id IN (' . $statsEvtKids . ')
+            WHERE (
+                    e.kingdom_id IN (' . $statsEvtKids . ')
+                    OR (e.kingdom_id NOT IN (' . $statsEvtKids . ')
+                        AND e.event_id IN (SELECT eks.event_id FROM ' . DB_PREFIX . 'event_kingdom_share eks WHERE eks.kingdom_id = ' . $kid . ')
+                        AND COALESCE(e.status, \'published\') = \'published\')
+                  )
             ORDER BY cd.event_start, p.name, e.name';
 
         $this->db->Clear();
@@ -384,6 +405,8 @@ class KingdomProfile extends Ork3
                 'RsvpGoing' => (int) $evtResult->rsvp_going,
                 'RsvpInterested' => (int) $evtResult->rsvp_interested,
                 'IsParkEvent' => (int) $evtResult->park_id > 0,
+                'IsShared' => (int) $evtResult->is_shared === 1,
+                'OwningKingdomName' => (string) ($evtResult->owning_kingdom_name ?? ''),
             ];
         }
 
@@ -394,7 +417,8 @@ class KingdomProfile extends Ork3
             $_more = $this->db->DataSet(
                 'SELECT 1 FROM ' . DB_PREFIX . 'event_calendardetail cd
                  JOIN ' . DB_PREFIX . 'event e ON e.event_id = cd.event_id
-                 WHERE e.kingdom_id IN (' . $statsEvtKids . ')
+                 WHERE (e.kingdom_id IN (' . $statsEvtKids . ')
+                        OR e.event_id IN (SELECT eks.event_id FROM ' . DB_PREFIX . 'event_kingdom_share eks WHERE eks.kingdom_id = ' . $kid . '))
                    AND cd.event_start >  DATE_ADD(NOW(), INTERVAL ' . $_nextStart . ' MONTH)
                    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 120 MONTH)
                  LIMIT 1'
