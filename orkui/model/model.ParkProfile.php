@@ -7,9 +7,17 @@ class Model_ParkProfile extends Model
         return $this->_profile()->buildProfileEventBundle($parkId, $kingdomId, $mundaneId, $isAdmin);
     }
 
-    public function players_roster(int $parkId): array
+    /** Real names only for a viewer who may see them; the roster itself is public and cached. */
+    public function players_roster(int $parkId, bool $canSeeRealNames = false): array
     {
-        return $this->_profile()->GetParkPlayersRoster($parkId);
+        $players = $this->_profile()->GetParkPlayersRoster($parkId);
+        if (!$canSeeRealNames) {
+            foreach ($players as $key => $player) {
+                $players[$key]['MundaneName'] = '';
+            }
+        }
+
+        return $players;
     }
 
     public function attendance_averages(int $parkId): array

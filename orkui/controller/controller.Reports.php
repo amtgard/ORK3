@@ -402,6 +402,12 @@ class Controller_Reports extends Controller
         if (count($params) > 4 && preg_match('/^\d{4}-\d{2}-\d{2}$/', $params[4])) {
             $from_date = $params[4];
         }
+        // This report is public, but only for one kingdom, park or event at a time:
+        // without a scope it reads every attendance row on the site.
+        if (!isset($this->session->user_id) && (!in_array($type, ['Kingdom', 'Park', 'Principality', 'Event']) || !valid_id($id))) {
+            header('Location: ' . UIR . 'Login');
+            exit;
+        }
         $this->data['attendance_summary'] = $this->Reports->get_attendance_summary($type, $id, $period, $num_periods, $from_date);
         $this->data['attendance_periodical'] = $this->Reports->get_periodical_summary($type, $id, $period, $num_periods, 'week', $from_date);
         $this->data['distinct_stats'] = $this->Reports->get_distinct_player_stats($type, $id, $period, $num_periods, $from_date);

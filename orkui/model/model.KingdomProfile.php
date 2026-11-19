@@ -21,9 +21,17 @@ class Model_KingdomProfile extends Model
         return $this->_profile()->GetPaginatedKingdomEvents($kingdomId, $window);
     }
 
-    public function players_roster(int $kingdomId): array
+    /** Real names only for a viewer who may see them; the roster itself is public and cached. */
+    public function players_roster(int $kingdomId, bool $canSeeRealNames = false): array
     {
-        return $this->_profile()->GetKingdomPlayersRoster($kingdomId);
+        $payload = $this->_profile()->GetKingdomPlayersRoster($kingdomId);
+        if (!$canSeeRealNames) {
+            foreach ($payload['players'] as $key => $player) {
+                $payload['players'][$key]['mundaneName'] = '';
+            }
+        }
+
+        return $payload;
     }
 
     public function profile_event_bundle(int $kingdomId, int $mundaneId, bool $isAdmin): array

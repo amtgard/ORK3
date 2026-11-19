@@ -12,6 +12,11 @@ class Model_Search extends Model
         return $this->_search_service()->ScopedPlayerSearch($request);
     }
 
+    public function search_players(string $type, string $search, int $limit, ?int $kingdomId, ?int $parkId, ?int $waivered, string $token): array
+    {
+        return (new ApiGuard())->search_players_h($type, $search, $limit, $kingdomId, $parkId, $waivered, $token);
+    }
+
     public function universal_search(array $request): array
     {
         return $this->_search_service()->UniversalSearch($request);

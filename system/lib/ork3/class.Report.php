@@ -1943,7 +1943,7 @@ class Report extends Ork3
                     );
             }
         } else {
-            $response['Status'] = InvalidParameter('A parameter was set incorrectly: ' . $sql . "\n" . print_r($request, true));
+            $response['Status'] = InvalidParameter('A parameter was set incorrectly.');
         }
         logtrace("Report->AttendanceSummary()", array($this->db->lastSql, $request));
         return $response;
@@ -2105,7 +2105,7 @@ class Report extends Ork3
                         'Flavor' => $r->class_id == 6 ? $r->flavor : '',
                     );
             }
-            $response['Status'] = Success($sql);
+            $response['Status'] = Success();
         } else {
             $response['Status'] = InvalidParameter();
         }

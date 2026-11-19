@@ -24,6 +24,12 @@ class Model_Player extends Model
         return $this->_player()->EditNote($request);
     }
 
+    /** The player themselves, an officer over their home park, or an ORK admin. */
+    public function can_view_private($viewer_id, $mundane_id): bool
+    {
+        return (new ApiGuard())->can_view_player_h((int)$viewer_id, (int)$mundane_id);
+    }
+
     public function get_notes($id)
     {
         return $this->Player->GetNotes(array('MundaneId' => $id));
