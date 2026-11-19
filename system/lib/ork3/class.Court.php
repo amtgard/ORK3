@@ -2769,6 +2769,89 @@ class Court
         return $this->withholdHiddenRecs(array_values($awards), (int)$caller_uid);
     }
 
+    /**
+     * Planned-but-not-yet-awarded court lines for one player, for the Player Profile.
+     *
+     * Only what $caller_uid may manage: canManage() is evaluated once per distinct
+     * court, so a park officer gets neither kingdom courts nor another park's. A line
+     * backed by a Monarchy Only rec the caller cannot see is withheld entirely, by the
+     * same RecommendationVisibility rule getCourtAwards/withholdHiddenRecs use. A
+     * complete court, and a cancelled or given line, never count. A caller viewing
+     * their own profile (or a logged-out one) gets nothing, so a surprise award is not
+     * spoiled. Courts sort by date ascending, undated last.
+     *
+     * @return list<array{CourtId:int,CourtName:string,CourtDate:?string,KingdomId:int,ParkId:int,ParkName:string,CourtAwardId:int,KingdomAwardId:int,AwardName:string,Rank:int,RecommendationsId:int}>
+     */
+    public function getPlayerPlannedCourtLines(int $mundane_id, int $caller_uid): array
+    {
+        if ($mundane_id <= 0 || $caller_uid <= 0 || $caller_uid === $mundane_id) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT c.court_id, c.name AS court_name, c.court_date, c.kingdom_id, c.park_id,
+                    IFNULL(p.name, \'\') AS park_name,
+                    ca.court_award_id, ca.kingdomaward_id, ca.rank, ca.recommendations_id,
+                    IFNULL(ka.name, a.name) AS award_name,
+                    IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only
+               FROM ' . DB_PREFIX . 'court_award ca
+               JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
+               LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = c.park_id
+               LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ca.kingdomaward_id
+               LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+               LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
+              WHERE ca.mundane_id = ' . (int)$mundane_id . '
+                AND c.status != \'complete\'
+                AND ca.status NOT IN (\'cancelled\', \'given\')
+              ORDER BY (c.court_date IS NULL OR c.court_date = \'0000-00-00\'), c.court_date, c.court_id, ca.sort_order, ca.court_award_id'
+        );
+        // Read out in full first: canManage and canSeeRecId query through the same connection.
+        $rows = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $date = (string)($rs->court_date ?? '');
+                $rows[] = [
+                    'CourtId'           => (int)$rs->court_id,
+                    'CourtName'         => (string)$rs->court_name,
+                    'CourtDate'         => ($date === '' || strpos($date, '0000-00-00') === 0) ? null : substr($date, 0, 10),
+                    'KingdomId'         => (int)$rs->kingdom_id,
+                    'ParkId'            => (int)$rs->park_id,
+                    'ParkName'          => (string)$rs->park_name,
+                    'CourtAwardId'      => (int)$rs->court_award_id,
+                    'KingdomAwardId'    => (int)$rs->kingdomaward_id,
+                    'AwardName'         => (string)($rs->award_name ?? ''),
+                    'Rank'              => (int)$rs->rank,
+                    'RecommendationsId' => (int)$rs->recommendations_id,
+                    '_hidden'           => (int)$rs->rec_monarchy_only !== 0,
+                ];
+            }
+        }
+
+        $vis     = Ork3::$Lib->recommendationvisibility;
+        $manages = [];
+        $seen    = [];
+        $lines   = [];
+        foreach ($rows as $row) {
+            $cid = $row['CourtId'];
+            $manages[$cid] ??= (bool)$this->canManage($caller_uid, $row['KingdomId'], $row['ParkId']);
+            if (!$manages[$cid]) {
+                continue;
+            }
+            $hidden = $row['_hidden'];
+            unset($row['_hidden']);
+            if ($hidden) {
+                $rid = $row['RecommendationsId'];
+                $seen[$rid] ??= $vis->canSeeRecId($caller_uid, $rid);
+                if (!$seen[$rid]) {
+                    continue;
+                }
+            }
+            $lines[] = $row;
+        }
+
+        return $lines;
+    }
+
     // -----------------------------------------------------------------------
     // Pending recommendations (for the add-from-rec modal)
     // -----------------------------------------------------------------------
@@ -2782,18 +2865,7 @@ class Court
         //   - look up which recs are on THIS court vs SOME OTHER court
         //   - look up the park abbreviation (recommended_awards doesn't return it)
         //   - map the field names to what the Court Planner template expects
-        $req = ['RequestedBy' => (int)$caller_uid, 'Token' => (string)$caller_token];
-        if ($park_id > 0) {
-            $req['ParkId']    = (int)$park_id;
-            $req['KingdomId'] = 0;
-        } else {
-            $req['KingdomId'] = (int)$kingdom_id;
-            $req['ParkId']    = 0;
-        }
-        $res = Ork3::$Lib->report->PlayerAwardRecommendations($req);
-        $rawRecs = is_array($res) && isset($res['AwardRecommendations']) && is_array($res['AwardRecommendations'])
-            ? $res['AwardRecommendations']
-            : [];
+        $rawRecs = $this->scopedRecommendations($kingdom_id, $park_id, $caller_uid, $caller_token);
         if (empty($rawRecs)) {
             return [];
         }
@@ -2901,6 +2973,288 @@ class Court
             ];
         }
         return $out;
+    }
+
+    /**
+     * Uncollapsed open recs in scope that this caller may see. Report drops Monarchy
+     * Only rows by the TOKEN, so both values must be passed; a bad or empty token sees
+     * no hidden rec. $fresh reads past Report's 300-second cache, and leaves it as it is.
+     */
+    private function scopedRecommendations($kingdom_id, $park_id, $caller_uid, $caller_token, bool $fresh = false): array
+    {
+        $req = ['RequestedBy' => (int)$caller_uid, 'Token' => (string)$caller_token];
+        if ($fresh) {
+            $req['SkipCache'] = true;
+        }
+        if ($park_id > 0) {
+            $req['ParkId']    = (int)$park_id;
+            $req['KingdomId'] = 0;
+        } else {
+            $req['KingdomId'] = (int)$kingdom_id;
+            $req['ParkId']    = 0;
+        }
+        $res = Ork3::$Lib->report->PlayerAwardRecommendations($req);
+
+        return is_array($res) && isset($res['AwardRecommendations']) && is_array($res['AwardRecommendations'])
+            ? $res['AwardRecommendations']
+            : [];
+    }
+
+    // -----------------------------------------------------------------------
+    // Smart Planning Grid
+    // -----------------------------------------------------------------------
+
+    /**
+     * The order a line picks its rec in, and the only place that order is written:
+     * recs that are neither snoozed nor on another court, then most seconds, then
+     * oldest, then lowest id. Each row needs IsFallback, SecondsCount, DateRecommended
+     * and RecommendationsId.
+     */
+    public static function sortSmartGridRecs(array $recs): array
+    {
+        $rank = static fn (array $r): array => [
+            (bool)$r['IsFallback'],
+            -(int)$r['SecondsCount'],
+            (string)$r['DateRecommended'],
+            (int)$r['RecommendationsId'],
+        ];
+        usort($recs, static fn (array $a, array $b): int => $rank($a) <=> $rank($b));
+
+        return $recs;
+    }
+
+    /**
+     * Resolves ladder grid columns to this kingdom's kingdomaward rows.
+     *
+     * ColumnAwards: column key => the kingdom's lowest kingdomaward_id, the row an
+     * unlinked line is saved on. A column with no row here is absent, as with a
+     * principality's grid showing a ladder inherited from its parent.
+     * KaToColumn: each of the kingdom's kingdomaward_ids on the grid => column key.
+     *
+     * $ladderAwards is GetLadderAwardGrid's LadderAwards. Its pseudo columns are
+     * tested first, as in the grid: a pseudo row can carry a catalog award_id.
+     */
+    public function getSmartGridColumns(int $kingdom_id, array $ladderAwards): array
+    {
+        $pseudoColumn = [];
+        foreach ($ladderAwards as $key => $column) {
+            foreach ($column['KingdomAwardIds'] ?? [] as $kaId) {
+                $pseudoColumn[(int)$kaId] = (string)$key;
+            }
+        }
+
+        $columnAwards = [];
+        $kaToColumn   = [];
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT kingdomaward_id, award_id FROM ' . DB_PREFIX . 'kingdomaward
+              WHERE kingdom_id = ' . $kingdom_id . '
+              ORDER BY kingdomaward_id'
+        );
+        if ($rs) {
+            while ($rs->Next()) {
+                $kaId = (int)$rs->kingdomaward_id;
+                $key  = $pseudoColumn[$kaId] ?? (string)(int)$rs->award_id;
+                if (isset($ladderAwards[$key])) {
+                    $columnAwards[$key] ??= $kaId;
+                    $kaToColumn[$kaId]    = $key;
+                }
+            }
+        }
+
+        return ['ColumnAwards' => $columnAwards, 'KaToColumn' => $kaToColumn];
+    }
+
+    /**
+     * What Smart Court paints from. Callers must have checked court authority: the
+     * Court class is not in the JSON whitelist, and CourtAjax/smart_grid_state is the
+     * one way in. Nothing here may enter the shared grid cache.
+     *
+     * Recs: usable open recs, in sortSmartGridRecs order, carrying only the listed
+     * fields. Reason and recommender never leave the server.
+     * OtherCourtLines: live ladder lines on the kingdom's other open courts that this
+     * caller can manage, and on a park grid only for that park's players, the only rows
+     * the crown paints on. IsFallback in Recs still counts every open court.
+     * CourtLines: this court's live lines. Empty when $court_id is 0.
+     *
+     * Monarchy Only: a line can sit on a court whose managers cannot see its rec, so
+     * neither line list may say a hidden rec is behind it. An OtherCourtLines row is
+     * withheld outright, since this caller may have no authority over that court. A
+     * CourtLines row stays, the caller runs this court, but loses its rec id.
+     *
+     * $fresh applies to Recs only: lines are never cached. It is for the refresh after
+     * add_award refuses a rec, when a cached read could return that same stale rec.
+     */
+    public function getSmartGridState(int $kingdom_id, int $park_id, int $court_id, int $caller_uid, string $caller_token, bool $fresh = false): array
+    {
+        $vis    = Ork3::$Lib->recommendationvisibility;
+        $viewer = $vis->viewerFromToken($caller_token);
+        $seen   = [];
+        $canSee = static function (int $recId) use ($vis, $viewer, &$seen): bool {
+            return $seen[$recId] ??= $vis->canSeeRecId($viewer, $recId);
+        };
+
+        return [
+            'Recs'            => $this->smartGridRecs($kingdom_id, $park_id, $court_id, $caller_uid, $caller_token, $fresh),
+            'OtherCourtLines' => $this->smartGridOtherCourtLines($kingdom_id, $park_id, $court_id, $caller_uid, $canSee),
+            'CourtLines'      => $court_id > 0 ? $this->smartGridCourtLines($court_id, $caller_uid, $canSee) : [],
+        ];
+    }
+
+    /**
+     * Uncollapsed on purpose: getPendingRecommendations folds a cluster into its
+     * oldest rec, which would hide the most-seconded one.
+     */
+    private function smartGridRecs(int $kingdom_id, int $park_id, int $court_id, int $caller_uid, string $caller_token, bool $fresh): array
+    {
+        $rawRecs = $this->scopedRecommendations($kingdom_id, $park_id, $caller_uid, $caller_token, $fresh);
+        if ($rawRecs === []) {
+            return [];
+        }
+
+        $kingdomRows = [];
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT kingdomaward_id FROM ' . DB_PREFIX . 'kingdomaward WHERE kingdom_id = ' . $kingdom_id
+        );
+        if ($rs) {
+            while ($rs->Next()) {
+                $kingdomRows[(int)$rs->kingdomaward_id] = true;
+            }
+        }
+
+        $usable = [];
+        foreach ($rawRecs as $r) {
+            if ((int)$r['Rank'] > 0
+                && empty($r['AlreadyHas'])
+                && empty($r['CoveredByMaster'])
+                && isset($kingdomRows[(int)$r['KingdomAwardId']])) {
+                $usable[(int)$r['RecommendationsId']] = $r;
+            }
+        }
+        if ($usable === []) {
+            return [];
+        }
+
+        $onThisCourt  = [];
+        $onOtherCourt = [];
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ca.recommendations_id, ca.court_id, c.status AS court_status
+               FROM ' . DB_PREFIX . 'court_award ca
+               JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
+              WHERE ca.recommendations_id IN (' . implode(',', array_keys($usable)) . ')
+                AND ca.status != \'cancelled\''
+        );
+        if ($rs) {
+            while ($rs->Next()) {
+                if ((int)$rs->court_id === $court_id) {
+                    $onThisCourt[(int)$rs->recommendations_id] = true;
+                } elseif ($rs->court_status !== 'complete') {
+                    $onOtherCourt[(int)$rs->recommendations_id] = true;
+                }
+            }
+        }
+
+        $rows = [];
+        foreach ($usable as $id => $r) {
+            if (!isset($onThisCourt[$id])) {
+                $rows[] = [
+                    'RecommendationsId' => $id,
+                    'MundaneId'         => (int)$r['MundaneId'],
+                    'KingdomAwardId'    => (int)$r['KingdomAwardId'],
+                    'Rank'              => (int)$r['Rank'],
+                    'SecondsCount'      => (int)($r['SecondsCount'] ?? 0),
+                    'IsFallback'        => !empty($r['IsSnoozed']) || isset($onOtherCourt[$id]),
+                    'DateRecommended'   => $r['DateRecommended'] ?? '',
+                ];
+            }
+        }
+
+        $recs = [];
+        foreach (self::sortSmartGridRecs($rows) as $row) {
+            unset($row['DateRecommended']);
+            $recs[] = $row;
+        }
+
+        return $recs;
+    }
+
+    private function smartGridOtherCourtLines(int $kingdom_id, int $park_id, int $court_id, int $caller_uid, callable $canSee): array
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ca.mundane_id, ca.kingdomaward_id, ca.recommendations_id,
+                    IFNULL(rec.monarchy_only, 0) AS rec_monarchy_only,
+                    c.court_id, c.park_id AS court_park_id, c.name AS court_name
+               FROM ' . DB_PREFIX . 'court_award ca
+               JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
+               JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ca.kingdomaward_id
+               LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+               JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = ca.mundane_id
+               LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
+              WHERE c.kingdom_id = ' . $kingdom_id . '
+                AND c.status != \'complete\'
+                AND ca.status != \'cancelled\'
+                AND c.court_id != ' . $court_id . '
+                AND ' . self::sqlEffectiveIsLadder() . ' = 1
+                ' . ($park_id > 0 ? 'AND m.park_id = ' . $park_id : '') . '
+              ORDER BY c.court_id, ca.court_award_id'
+        );
+        // Read out in full first: canManage and $canSee query through the same connection.
+        $rows = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $rows[] = [
+                    'HiddenRecId'    => (int)$rs->rec_monarchy_only !== 0 ? (int)$rs->recommendations_id : 0,
+                    'CourtParkId'    => (int)$rs->court_park_id,
+                    'MundaneId'      => (int)$rs->mundane_id,
+                    'KingdomAwardId' => (int)$rs->kingdomaward_id,
+                    'CourtId'        => (int)$rs->court_id,
+                    'CourtName'      => $rs->court_name,
+                ];
+            }
+        }
+
+        $manages = [];
+        $lines   = [];
+        foreach ($rows as $row) {
+            $hiddenRecId = $row['HiddenRecId'];
+            $courtParkId = $row['CourtParkId'];
+            unset($row['HiddenRecId'], $row['CourtParkId']);
+            $manages[$row['CourtId']] ??= (bool)$this->canManage($caller_uid, $kingdom_id, $courtParkId);
+            if ($manages[$row['CourtId']] && ($hiddenRecId === 0 || $canSee($hiddenRecId))) {
+                $lines[] = $row;
+            }
+        }
+
+        return $lines;
+    }
+
+    private function smartGridCourtLines(int $court_id, int $caller_uid, callable $canSee): array
+    {
+        $lines = [];
+        foreach ($this->getCourtAwards($court_id, $caller_uid) as $award) {
+            if ($award['Status'] === 'cancelled') {
+                continue;
+            }
+            $recId = $award['RecommendationsId'];
+            if ($recId !== null && $award['RecMonarchyOnly'] && !$canSee($recId)) {
+                $recId = null;
+            }
+            $lines[] = [
+                'CourtAwardId'      => $award['CourtAwardId'],
+                'MundaneId'         => $award['MundaneId'],
+                'Persona'           => $award['Persona'],
+                'AwardName'         => $award['AwardName'],
+                'KingdomAwardId'    => $award['KingdomAwardId'],
+                'Rank'              => $award['Rank'],
+                'RecommendationsId' => $recId,
+                'Status'            => $award['Status'],
+            ];
+        }
+
+        return $lines;
     }
 
     // -----------------------------------------------------------------------

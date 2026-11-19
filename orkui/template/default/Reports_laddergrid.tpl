@@ -59,9 +59,68 @@ foreach ($rows as $r) {
 		if (!empty($award['IsMaster'])) { $numMasters++; break; }
 	}
 }
-// Column indices: kingdom view has Persona(0), Park(1), awards(2+)
-//                park view has Persona(0), awards(1+)
-$awardColOffset = $isKingdom ? 2 : 1;
+// Column indices: kingdom view has Persona(0), Park(1), Last Award(2), Last Sign-in(3), awards(4+)
+//                park view has Persona(0), Last Award(1), Last Sign-in(2), awards(3+)
+$awardColOffset = $isKingdom ? 4 : 3;
+
+// Date cell: sorts on YYYYMMDD through data-order; a missing date is 0 (oldest) and shows a dash.
+$renderAgeCell = function ($date, $label = '') {
+	$date  = (string)($date ?? '');
+	$text  = $date === '' ? '—' : trim($date . ' ' . $label);
+	$order = (int)str_replace('-', '', substr($date, 0, 10));
+	return '<td class="lg-col-date" data-order="' . $order . '">'
+		. '<span class="lg-age" data-date="' . htmlspecialchars($date, ENT_QUOTES) . '">' . htmlspecialchars($text) . '</span>'
+		. '</td>';
+};
+
+// One thead for both tables. $tipAttr names the award tooltip attribute: the main
+// grid keeps its existing title; New Players cells are new, so they use data-tip.
+$renderLadderThead = function ($tipAttr) use ($awardList, $isKingdom, $_groupCounts, $_groupLabels) {
+?>
+				<thead>
+					<!-- Group label row -->
+					<tr class="lg-group-header-row">
+						<th class="lg-col-player" rowspan="2">Persona</th>
+<?php if ($isKingdom) : ?>
+						<th class="lg-col-park" rowspan="2">Park</th>
+<?php endif; ?>
+						<th class="lg-col-date" rowspan="2">Last Award</th>
+						<th class="lg-col-date" rowspan="2">Last Sign-in</th>
+<?php foreach (['Battle', 'Sword', 'Crown', 'Flame', 'Serpent', ''] as $_grp) : ?>
+<?php   if (($_groupCounts[$_grp] ?? 0) > 0) : ?>
+						<th colspan="<?= $_groupCounts[$_grp] ?>" class="lg-group-header-cell<?= $_grp ? ' lg-group-' . strtolower($_grp) : '' ?>">
+							<?= $_grp ? htmlspecialchars($_groupLabels[$_grp]) : '' ?>
+						</th>
+<?php   endif; ?>
+<?php endforeach; ?>
+					</tr>
+					<!-- Individual award columns -->
+					<tr class="lg-header-row">
+<?php foreach ($awardList as $aid => $ainfo) : ?>
+<?php   $_gc = strtolower($ainfo['KnightGroup'] ?? ''); ?>
+						<th class="lg-col-award<?= $_gc ? ' lg-group-' . $_gc : '' ?>" <?= $tipAttr ?>="<?= htmlspecialchars($ainfo['Name'], ENT_QUOTES) ?>">
+							<div class="lg-th-inner"><?= htmlspecialchars($ainfo['DisplayName'] ?? $ainfo['Name']) ?></div>
+						</th>
+<?php endforeach; ?>
+					</tr>
+				</thead>
+<?php
+};
+
+// LgGrid.awardColumns: JS orders integer-like keys numerically, so a keyed object
+// cannot hold display order on its own. awardKeys below carries that order.
+$_awardColumns = [];
+foreach ($awardList as $_aid => $_ainfo) {
+	$_awardColumns[$_aid] = [
+		'Name'        => $_ainfo['Name'],
+		'DisplayName' => $_ainfo['DisplayName'] ?? $_ainfo['Name'],
+		'KnightGroup' => $_ainfo['KnightGroup'] ?? '',
+	];
+}
+$_jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+
+// Smart Court needs court authority and at least one ladder column to click.
+$_smartCourt = !empty($SmartCourt) && !empty($awardList);
 ?>
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -209,7 +268,10 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 .lg-table tbody tr:hover td.lg-col-park { background: #eef2ff !important; }
 
 /* Data cells */
-.lg-table { border-collapse: collapse; min-width: 100%; white-space: nowrap; }
+/* separate + zero spacing: collapsed borders do not travel with sticky cells */
+.lg-table { border-collapse: separate; border-spacing: 0; min-width: 100%; white-space: nowrap; }
+/* collapse merged the Last Sign-in right rule with the first award's left rule; keep one line */
+.lg-table td.lg-col-date + td.lg-col-award { border-left: 0; }
 
 .lg-table tbody tr:nth-child(even) td           { background: #f9fafb; }
 .lg-table tbody tr:nth-child(even) td.lg-col-player { background: #f4f5f7; }
@@ -389,6 +451,34 @@ td.lg-group-serpent { background: #f0fdf5 !important; }
 	vertical-align: middle;
 }
 
+/* ── Frozen header rows ────────────────────────────────────────
+   The wrapper is the scroller (both axes), capped to the viewport below the 48px
+   fixed navbar so the headers have something to stick to. Short grids stay under the
+   cap and scroll with the page as before. --lg-head1-h is the group row's rendered
+   height, set from the script. Stacking inside the scroller: body cells (auto) <
+   sticky Persona cells (2) < header cells (4) < Persona header corner (5). */
+.lg-scroll {
+	overflow: auto;
+	max-height: max(320px, calc(100vh - 64px));
+	max-height: max(320px, calc(100dvh - 64px));
+}
+/* DataTables gives sortable header cells position:relative at (0,2,4); these outrank it
+   so every header cell sticks. Sticky is also a positioned box for the sort arrows. */
+.rp-table-area table.dataTable.lg-table thead > tr > th {
+	position: sticky; top: 0; z-index: 4;
+}
+.rp-table-area table.dataTable.lg-table thead > tr.lg-header-row > th {
+	top: var(--lg-head1-h, 30px);
+}
+.rp-table-area table.dataTable.lg-table thead > tr.lg-group-header-row > th.lg-col-player {
+	left: 0; z-index: 5;
+}
+
+@media print {
+	.lg-scroll { overflow: visible; max-height: none; }
+	.rp-table-area table.dataTable.lg-table thead > tr > th { position: static !important; }
+}
+
 @media print {
 	.rp-header-actions, .lg-search-bar { display: none; }
 	.lg-table th.lg-col-award { width: 28px; min-width: 28px; max-width: 28px; }
@@ -494,10 +584,38 @@ html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }
 <?php endif; ?>
 		</div>
 		<div class="rp-header-actions">
+<?php if ($_smartCourt) : ?>
+			<button class="rp-btn-ghost lg-sc-btn" id="lg-sc-btn" type="button" aria-pressed="false"><i class="fas fa-wand-magic-sparkles"></i> <span id="lg-sc-btn-label">Smart Court</span></button>
+<?php endif; ?>
 			<button class="rp-btn-ghost" id="lg-btn-csv"><i class="fas fa-download"></i> Export CSV</button>
 			<button class="rp-btn-ghost" id="lg-btn-print"><i class="fas fa-print"></i> Print</button>
 		</div>
 	</div>
+
+<?php if ($_smartCourt) : ?>
+	<!-- ── Smart Court bar ────────────────────────────────── -->
+	<div class="lg-sc-msg lg-sc-notice" id="lg-sc-notice" role="status" hidden>
+		<span class="lg-sc-msg-text"></span>
+		<button class="lg-sc-msg-x" type="button" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+	</div>
+	<div class="lg-sc-bar" id="lg-sc-bar" hidden>
+		<span class="lg-sc-bar-court"><i class="fas fa-clipboard-list"></i> <strong id="lg-sc-bar-court"></strong></span>
+		<span class="lg-sc-bar-limit">
+			<label for="lg-sc-limit">Ladder Limit Assist:</label>
+			<select id="lg-sc-limit">
+				<option value="0">Off</option>
+<?php for ($_i = 1; $_i <= 10; $_i++) : ?>
+				<option value="<?= $_i ?>"><?= $_i ?></option>
+<?php endfor; ?>
+			</select>
+			<span class="lg-sc-q" tabindex="0" role="note" data-tip="If your park or region cannot give awards above a certain amount, set that limit here and any cell at or above that limit will gray out."><i class="fas fa-circle-question"></i></span>
+		</span>
+		<span class="lg-sc-legend">
+			<span><span class="lg-sc-r">R</span> recommended higher</span>
+			<span><i class="fas fa-hourglass-half lg-sc-glass"></i> active, overdue</span>
+		</span>
+	</div>
+<?php endif; ?>
 
 	<!-- ── Context ────────────────────────────────────────── -->
 	<div class="rp-context">
@@ -532,7 +650,7 @@ html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }
 		</div>
 	</div>
 
-<?php if (empty($rows) || empty($awardList)) : ?>
+<?php if (empty($awardList)) : ?>
 	<div class="rp-table-area" style="text-align:center; padding:40px; color:var(--rp-text-hint);">
 		<i class="fas fa-inbox" style="font-size:2rem; margin-bottom:10px; display:block;"></i>
 		No ladder award data found for this location.
@@ -547,6 +665,7 @@ html[data-theme="dark"] .lg-cell-master { color: #c4b5fd; }
 				<label for="lg-search"><i class="fas fa-search"></i> Filter players:</label>
 				<input type="text" id="lg-search" placeholder="Type a persona name…">
 				<button class="lg-pill" id="lg-btn-inactive" type="button"><i class="fas fa-eye"></i> Include Inactive</button>
+				<button class="lg-pill" id="lg-btn-new" type="button" aria-pressed="false"><i class="fas fa-user-plus"></i> Show recent players without awards?</button>
 			</div>
 			<div class="lg-rank-range">
 				<label class="lg-range-label">Rank: <strong id="lg-range-lo-val">1</strong> – <strong id="lg-range-hi-val">10+</strong></label>
@@ -579,33 +698,9 @@ foreach ($awardList as $_aid => $_ainfo) :
 			</button>
 		</div>
 
-		<div style="overflow-x:auto;">
+		<div class="lg-scroll">
 			<table class="lg-table" id="lg-grid-table">
-				<thead>
-					<!-- Group label row -->
-					<tr class="lg-group-header-row">
-						<th class="lg-col-player" rowspan="2">Persona</th>
-<?php if ($isKingdom) : ?>
-						<th class="lg-col-park" rowspan="2">Park</th>
-<?php endif; ?>
-<?php foreach (['Battle', 'Sword', 'Crown', 'Flame', 'Serpent', ''] as $_grp) : ?>
-<?php   if (($_groupCounts[$_grp] ?? 0) > 0) : ?>
-						<th colspan="<?= $_groupCounts[$_grp] ?>" class="lg-group-header-cell<?= $_grp ? ' lg-group-' . strtolower($_grp) : '' ?>">
-							<?= $_grp ? htmlspecialchars($_groupLabels[$_grp]) : '' ?>
-						</th>
-<?php   endif; ?>
-<?php endforeach; ?>
-					</tr>
-					<!-- Individual award columns -->
-					<tr class="lg-header-row">
-<?php foreach ($awardList as $aid => $ainfo) : ?>
-<?php   $_gc = strtolower($ainfo['KnightGroup'] ?? ''); ?>
-						<th class="lg-col-award<?= $_gc ? ' lg-group-' . $_gc : '' ?>" title="<?= htmlspecialchars($ainfo['Name']) ?>">
-							<div class="lg-th-inner"><?= htmlspecialchars($ainfo['DisplayName'] ?? $ainfo['Name']) ?></div>
-						</th>
-<?php endforeach; ?>
-					</tr>
-				</thead>
+<?php $renderLadderThead('title'); ?>
 				<tbody>
 <?php foreach ($rows as $row) : ?>
 <?php   $_knightGroups = $row['KnightGroups'] ?? []; ?>
@@ -627,14 +722,15 @@ foreach ($awardList as $_aid => $_ainfo) :
 		}
 	}
 ?>
-			<tr<?= !empty($row['Suspended']) ? ' class="rp-row-suspended" title="This player is currently under suspension"' : '' ?> data-recent="<?= $row['RecentSignIn'] ? '1' : '0' ?>" data-mundane-id="<?= (int)$row['MundaneId'] ?>" data-is-knight="<?= $_isKnight ?>" data-is-master="<?= $_isMaster ?>" data-max-rank="<?= $_maxRank ?>" data-awards="<?= htmlspecialchars(json_encode($_awardRanks), ENT_QUOTES) ?>">
-					<td class="lg-col-player">
+			<tr<?= !empty($row['Suspended']) ? ' class="rp-row-suspended" title="This player is currently under suspension"' : '' ?> data-recent="<?= $row['RecentSignIn'] ? '1' : '0' ?>" data-mundane-id="<?= (int)$row['MundaneId'] ?>" data-persona="<?= htmlspecialchars($row['Persona'], ENT_QUOTES) ?>" data-suspended="<?= !empty($row['Suspended']) ? '1' : '0' ?>" data-last-award="<?= htmlspecialchars((string)($row['LastAwardDate'] ?? ''), ENT_QUOTES) ?>" data-last-signin="<?= htmlspecialchars((string)($row['LastSignIn'] ?? ''), ENT_QUOTES) ?>" data-is-knight="<?= $_isKnight ?>" data-is-master="<?= $_isMaster ?>" data-max-rank="<?= $_maxRank ?>" data-awards="<?= htmlspecialchars(json_encode($_awardRanks), ENT_QUOTES) ?>">
+					<td class="lg-col-player" data-order="<?= htmlspecialchars($row['Persona'], ENT_QUOTES) ?>">
 						<a class="lg-player-link" href="<?= UIR . 'Player/profile/' . (int)$row['MundaneId'] ?>">
 							<?= htmlspecialchars($row['Persona']) ?>
 						</a>
+						<span class="lg-name-flags"></span>
 					</td>
 <?php if ($isKingdom) : ?>
-					<td class="lg-col-park">
+					<td class="lg-col-park" data-order="<?= htmlspecialchars($row['ParkName'] ?? '', ENT_QUOTES) ?>">
 <?php   if (!empty($row['ParkId'])) : ?>
 						<a class="lg-player-link" href="<?= UIR . 'Park/profile/' . (int)$row['ParkId'] ?>">
 							<?= htmlspecialchars($row['ParkName']) ?>
@@ -644,17 +740,27 @@ foreach ($awardList as $_aid => $_ainfo) :
 <?php   endif; ?>
 					</td>
 <?php endif; ?>
+					<?= $renderAgeCell($row['LastAwardDate'] ?? null, (string)($row['LastAwardLabel'] ?? '')) ?>
+					<?= $renderAgeCell($row['LastSignIn'] ?? null) ?>
 <?php foreach ($awardIds as $aid) : ?>
 <?php   $info = $row['Awards'][$aid] ?? null; ?>
 <?php   $_gc  = strtolower($awardList[$aid]['KnightGroup'] ?? ''); ?>
 <?php   $_knighted = $_gc && isset($_knightGroups[ucfirst($_gc)]); ?>
 <?php   $_tdClass = 'lg-col-award' . ($_gc ? ' lg-group-' . $_gc : '') . ($_knighted ? ' lg-cell-knight-' . $_gc : ''); ?>
+<?php   $_colAttr = 'data-col="' . htmlspecialchars((string)$aid, ENT_QUOTES) . '"'; ?>
+<?php
+	$_awardedTip = '';
+	if ($info !== null && !$info['IsMaster'] && !empty($info['Date'])) {
+		$_awDays = (int) (new DateTime(substr((string)$info['Date'], 0, 10)))->diff(new DateTime('today'))->format('%r%a');
+		$_awardedTip = ' data-tip="' . htmlspecialchars('Awarded ' . $info['Date'] . ' (' . ($_awDays <= 0 ? 'today' : $_awDays . 'd ago') . ')', ENT_QUOTES) . '"';
+	}
+?>
 <?php   if ($info !== null && $info['IsMaster']) : ?>
-				<td class="<?= $_tdClass ?>" data-order="999"><span class="lg-cell-master" title="Master">M</span></td>
+				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)($info['Rank'] ?? 0) ?>" data-master="1" data-order="999"><span class="lg-cell-master" data-tip="Master">M</span></td>
 <?php   elseif ($info !== null && $info['Rank'] !== null) : ?>
-				<td class="<?= $_tdClass ?>" data-order="<?= (int)$info['Rank'] ?>"><span class="lg-cell-rank"><?= (int)$info['Rank'] ?></span></td>
+				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="<?= (int)$info['Rank'] ?>" data-order="<?= (int)$info['Rank'] ?>"><span class="lg-cell-rank"<?= $_awardedTip ?>><?= (int)$info['Rank'] ?></span></td>
 <?php   else : ?>
-				<td class="<?= $_tdClass ?>" data-order="0"><span class="lg-cell-empty">·</span></td>
+				<td class="<?= $_tdClass ?>" <?= $_colAttr ?> data-rank="0" data-order="0"><span class="lg-cell-empty">·</span></td>
 <?php   endif; ?>
 <?php endforeach; ?>
 				</tr>
@@ -665,11 +771,106 @@ foreach ($awardList as $_aid => $_ainfo) :
 
 	</div><!-- /rp-table-area -->
 
+	<!-- ── New Players ────────────────────────────────────── -->
+	<div class="rp-table-area lg-new-box" id="lg-new-box" style="display:none;">
+		<h2 class="lg-new-title">New Players</h2>
+		<div class="lg-new-sub">Players without awards, with at least two sign-ins in the past 90 days.</div>
+		<div class="lg-new-status" id="lg-new-status" role="status"></div>
+		<div id="lg-new-wrap" class="lg-scroll" style="display:none;">
+			<table class="lg-table" id="lg-new-table">
+<?php $renderLadderThead('data-tip'); ?>
+				<tbody></tbody>
+			</table>
+		</div>
+	</div>
+
+<?php endif; ?>
+
+<?php if ($_smartCourt) : ?>
+	<!-- ── Smart Court card, FAB, and modal (moved to body by lg-smart-court.js) ── -->
+	<div class="lg-sc-card" id="lg-sc-card" hidden>
+		<div class="lg-sc-card-head">
+			<div class="lg-sc-card-title">
+				<span><i class="fas fa-clipboard-list"></i> Pending Court</span>
+				<span class="lg-sc-card-court" id="lg-sc-card-court"></span>
+			</div>
+			<button class="lg-sc-card-min-btn" id="lg-sc-minimize" type="button" aria-label="Minimize" data-tip="Minimize"><i class="fas fa-minus"></i></button>
+		</div>
+		<div class="lg-sc-msg" id="lg-sc-card-msg" role="status" hidden>
+			<span class="lg-sc-msg-text"></span>
+			<button class="lg-sc-msg-x" type="button" aria-label="Dismiss"><i class="fas fa-xmark"></i></button>
+		</div>
+		<div class="lg-sc-list" id="lg-sc-list"></div>
+		<div class="lg-sc-card-foot">
+			<button class="lg-sc-clear" id="lg-sc-clear" type="button">Clear All</button>
+			<a class="lg-sc-open" id="lg-sc-open" target="_blank" rel="noopener" aria-label="Open court in a new tab" data-tip="Open court in a new tab" hidden><i class="fas fa-up-right-from-square"></i></a>
+			<button class="lg-sc-save" id="lg-sc-save" type="button">Save to Court</button>
+		</div>
+	</div>
+	<button class="lg-sc-fab" id="lg-sc-fab" type="button" aria-label="Show pending court" hidden>
+		<i class="fas fa-clipboard"></i>
+		<span class="lg-sc-fab-count" id="lg-sc-fab-count" hidden>0</span>
+	</button>
+
+	<div class="lg-sc-scrim" id="lg-sc-scrim" hidden>
+		<div class="lg-sc-modal" id="lg-sc-modal" role="dialog" aria-modal="true" aria-labelledby="lg-sc-modal-title" data-choice="new">
+			<div class="lg-sc-modal-title" id="lg-sc-modal-title"><i class="fas fa-wand-magic-sparkles"></i> Smart Court</div>
+			<form id="lg-sc-form" novalidate>
+				<div class="lg-sc-modal-body">
+					<div class="lg-sc-choice">
+						<button type="button" id="lg-sc-pick-new">Start a new court</button>
+						<button type="button" id="lg-sc-pick-existing">Add to an existing court</button>
+					</div>
+					<div id="lg-sc-fields-new">
+						<div class="lg-sc-field">
+							<label for="lg-sc-name">Court Name</label>
+							<input type="text" id="lg-sc-name" maxlength="100" autocomplete="off">
+						</div>
+						<div class="lg-sc-field">
+							<label for="lg-sc-date">Date</label>
+							<input type="date" id="lg-sc-date">
+						</div>
+						<div class="lg-sc-field">
+							<label for="lg-sc-event">Link to Event (optional)</label>
+							<select id="lg-sc-event"></select>
+						</div>
+						<div class="lg-sc-field">
+							<span class="lg-sc-field-label">How will this court be handled?</span>
+							<div class="lg-sc-mode-opts">
+								<label class="lg-sc-mode-opt">
+									<input type="radio" name="lg-sc-mode" value="run" checked>
+									<span class="lg-sc-mode-title"><i class="fas fa-bullhorn"></i> Run at Court</span>
+									<span class="lg-sc-mode-desc">I'll grant awards live during the ceremony.</span>
+								</label>
+								<label class="lg-sc-mode-opt">
+									<input type="radio" name="lg-sc-mode" value="plan">
+									<span class="lg-sc-mode-title"><i class="fas fa-clipboard-list"></i> Lock as Plan</span>
+									<span class="lg-sc-mode-desc">I'm preparing the order of court for someone to record later.</span>
+								</label>
+							</div>
+						</div>
+					</div>
+					<div id="lg-sc-fields-existing" hidden>
+						<div class="lg-sc-field">
+							<label for="lg-sc-court">Court</label>
+							<select id="lg-sc-court"></select>
+						</div>
+					</div>
+					<div class="lg-sc-modal-error" id="lg-sc-modal-error" role="alert" hidden></div>
+				</div>
+				<div class="lg-sc-modal-foot">
+					<button class="lg-sc-clear" id="lg-sc-cancel" type="button">Cancel</button>
+					<button class="lg-sc-save" id="lg-sc-go" type="submit">Start</button>
+				</div>
+			</form>
+		</div>
+	</div>
 <?php endif; ?>
 
 </div><!-- /rp-root -->
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="<?= HTTP_TEMPLATE ?>default/script/lg-smart-court-core.js?v=<?=filemtime(__DIR__.'/script/lg-smart-court-core.js')?>"></script>
 
 <script>
 (function () {
@@ -678,6 +879,29 @@ foreach ($awardList as $_aid => $_ainfo) :
 	var rankMin = 1, rankMax = 10;
 	var selectedAwards = new Set(); // empty = all awards
 	var table;
+	var newTable = null;   // DataTable for New Players, created once its rows exist
+	var newState = 'idle'; // idle | loading | loaded
+	var isKingdom = <?= $isKingdom ? 'true' : 'false' ?>;
+	var uir = <?= json_encode(UIR, $_jsonFlags) ?>;
+	var newPlayersUrl = <?= json_encode(UIR . 'Reports/ladder_new_players&KingdomId=' . (int)($grid_kingdom_id ?? 0) . '&ParkId=' . (int)($grid_park_id ?? 0), $_jsonFlags) ?>;
+
+	// The contract lg-smart-court.js builds on.
+	window.LgGrid = {
+		table: null,
+		newTable: null,
+		awardColumns: <?= json_encode($_awardColumns, $_jsonFlags | JSON_FORCE_OBJECT) ?>,
+		awardKeys: <?= json_encode(array_map('strval', $awardIds), $_jsonFlags) ?>, // display order
+		isKingdom: isKingdom,
+		hideSuspended: false,
+		refresh: function () {
+			paintAges(table);
+			table.draw(false);
+			if (newTable) {
+				paintAges(newTable);
+				newTable.draw(false);
+			}
+		}
+	};
 
 	// Custom filters — run on every DataTables draw
 	$.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
@@ -709,28 +933,202 @@ foreach ($awardList as $_aid => $_ainfo) :
 		return true;
 	});
 
-	$(function () {
-		var isKingdom = <?= $isKingdom ? 'true' : 'false' ?>;
-		var colDefs = [
-			{ targets: '_all', type: 'num',    orderSequence: ['desc', 'asc'] },
-			{ targets: 0,      type: 'string', orderSequence: ['asc', 'desc'] }
-		];
+	// Smart Court hides suspended players from both tables
+	$.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+		if (!window.LgGrid.hideSuspended) return true;
+		var id  = settings.nTable.id;
+		var api = id === 'lg-grid-table' ? table : (id === 'lg-new-table' ? newTable : null);
+		if (!api) return true;
+		var row = api.row(dataIndex).node();
+		return !row || row.getAttribute('data-suspended') !== '1';
+	});
+
+	function localToday() {
+		var d = new Date();
+		return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+	}
+
+	// Reads row nodes, not the document: rows filtered out of the draw are detached.
+	function paintAges(dt) {
+		var today = localToday();
+		dt.rows().nodes().to$().find('.lg-age').each(function () {
+			var f = LgSmartCore.ageFraction(this.getAttribute('data-date'), today);
+			if (f !== null) this.style.setProperty('--lg-age', f);
+		});
+	}
+
+	// DataTables applies columnDefs last to first, so the first match wins: '_all'
+	// must stay last. Persona and Park sort on data-order, and html keeps the name
+	// filter from matching link markup.
+	function gridColumnDefs() {
+		var offset = <?= (int)$awardColOffset ?>;
+		var defs = [{ targets: 0, type: 'html', orderSequence: ['asc', 'desc'] }];
 		if (isKingdom) {
-			colDefs.push({ targets: 1, type: 'string', orderSequence: ['asc', 'desc'] });
+			defs.push({ targets: 1, type: 'html', orderSequence: ['asc', 'desc'] });
 		}
+		// Sortable, but the name filter must not match award names or dates
+		defs.push({ targets: [offset - 2, offset - 1], searchable: false });
+		defs.push({ targets: '_all', type: 'num', orderSequence: ['desc', 'asc'] });
+		return defs;
+	}
+
+	function defaultOrder() {
+		return isKingdom ? [[1, 'asc'], [0, 'asc']] : [[0, 'asc']];
+	}
+
+	function el(tag, className, text) {
+		var node = document.createElement(tag);
+		if (className) node.className = className;
+		if (text !== undefined) node.textContent = text;
+		return node;
+	}
+
+	function nameCell(className, text, href) {
+		var td = el('td', className);
+		td.setAttribute('data-order', text);
+		if (href) {
+			td.appendChild(el('a', 'lg-player-link', text)).href = href;
+		} else {
+			td.textContent = text;
+		}
+		return td;
+	}
+
+	function ageCell(date, label) {
+		date = date || '';
+		var td = el('td', 'lg-col-date');
+		td.setAttribute('data-order', Number(date.slice(0, 10).replace(/-/g, '')) || 0);
+		var age = el('span', 'lg-age', date ? (date + ' ' + (label || '')).trim() : '—');
+		age.setAttribute('data-date', date);
+		td.appendChild(age);
+		return td;
+	}
+
+	// DOM APIs only: names reach the page through textContent and setAttribute.
+	function buildNewRow(p) {
+		var suspended = Number(p.Suspended) ? '1' : '0';
+		var tr = el('tr', suspended === '1' ? 'rp-row-suspended' : '');
+		tr.setAttribute('data-mundane-id', Number(p.MundaneId));
+		tr.setAttribute('data-persona', p.Persona);
+		tr.setAttribute('data-suspended', suspended);
+		tr.setAttribute('data-last-award', p.LastAwardDate || '');
+		tr.setAttribute('data-last-signin', p.LastSignIn || '');
+
+		var name = nameCell('lg-col-player', p.Persona, uir + 'Player/profile/' + Number(p.MundaneId));
+		name.appendChild(document.createTextNode(' '));
+		name.appendChild(el('span', 'lg-name-flags'));
+		tr.appendChild(name);
+
+		if (isKingdom) {
+			tr.appendChild(nameCell('lg-col-park', p.ParkName, Number(p.ParkId) ? uir + 'Park/profile/' + Number(p.ParkId) : ''));
+		}
+		tr.appendChild(ageCell(p.LastAwardDate, p.LastAwardLabel));
+		tr.appendChild(ageCell(p.LastSignIn));
+
+		window.LgGrid.awardKeys.forEach(function (key) {
+			var group = window.LgGrid.awardColumns[key].KnightGroup.toLowerCase();
+			var td = el('td', 'lg-col-award' + (group ? ' lg-group-' + group : ''));
+			td.setAttribute('data-col', key);
+			td.setAttribute('data-rank', '0');
+			td.setAttribute('data-order', '0');
+			td.appendChild(el('span', 'lg-cell-empty', '·'));
+			tr.appendChild(td);
+		});
+		return tr;
+	}
+
+	function setNewStatus(text, isError) {
+		$('#lg-new-status').text(text).toggleClass('lg-new-status-error', !!isError).toggle(text !== '');
+	}
+
+	function renderNewPlayers(players) {
+		newState = 'loaded';
+		if (!players.length) {
+			setNewStatus('No recent players without awards.');
+			return;
+		}
+		setNewStatus('');
+		var rows = document.createDocumentFragment();
+		players.forEach(function (p) { rows.appendChild(buildNewRow(p)); });
+		document.querySelector('#lg-new-table tbody').appendChild(rows);
+		$('#lg-new-wrap').show();
+		syncHeadOffset();
+		newTable = $('#lg-new-table').DataTable({
+			dom       : 'rt',
+			paging    : false,
+			info      : false,
+			autoWidth : false, // the box may have been toggled off while loading
+			order     : defaultOrder(),
+			columnDefs: gridColumnDefs()
+		});
+		window.LgGrid.newTable = newTable;
+		$('#lg-new-table').on('draw.dt', syncHeadOffset);
+		syncHeadOffset();
+		paintAges(newTable);
+		// Draw again now newTable is set, so the search filters and hideSuspended apply
+		newTable.search($('#lg-search').val()).draw();
+	}
+
+	function failNewPlayers(message) {
+		newState = 'idle'; // the next toggle retries
+		setNewStatus(message, true);
+	}
+
+	function loadNewPlayers() {
+		var failed = 'New Players could not be loaded. Turn the toggle off and on to try again.';
+		newState = 'loading';
+		setNewStatus('Loading…');
+		$.getJSON(newPlayersUrl).done(function (r) {
+			if (r && r.status === 0 && Array.isArray(r.players)) {
+				renderNewPlayers(r.players);
+			} else {
+				failNewPlayers(r && r.status === 5 ? 'Your session has expired. Log in again to see New Players.' : failed);
+			}
+		}).fail(function () {
+			failNewPlayers(failed);
+		});
+	}
+
+	// Freeze the award-name row beneath the group row: its top is the group row's height.
+	function syncHeadOffset() {
+		['lg-grid-table', 'lg-new-table'].forEach(function (id) {
+			var tbl = document.getElementById(id);
+			var row = tbl && tbl.querySelector('thead tr.lg-group-header-row');
+			var box = tbl && tbl.closest('.lg-scroll');
+			var h = row ? row.getBoundingClientRect().height : 0;
+			if (box && h > 0) box.style.setProperty('--lg-head1-h', h + 'px');
+		});
+	}
+	window.addEventListener('resize', syncHeadOffset);
+
+	$(function () {
 		table = $('#lg-grid-table').DataTable({
 			dom       : 'rt',
 			paging    : false,
 			info      : false,
-			columnDefs: colDefs
+			columnDefs: gridColumnDefs(),
+			language  : { emptyTable: 'No ladder award data found for this location.' }
 		});
+		window.LgGrid.table = table;
+		$('#lg-grid-table').on('draw.dt', syncHeadOffset);
+		syncHeadOffset();
+		paintAges(table);
 
 		// Apply sort and inactive filter on load
-		table.order(isKingdom ? [[1, 'asc'], [0, 'asc']] : [[0, 'asc']]).draw();
+		table.order(defaultOrder()).draw();
 
 		// Player name search
 		$('#lg-search').on('input', function () {
 			table.search(this.value).draw();
+			if (newTable) newTable.search(this.value).draw();
+		});
+
+		// New Players toggle: fetches on first use, then only shows and hides
+		$('#lg-btn-new').on('click', function () {
+			var on = !$(this).hasClass('lg-pill-active');
+			$(this).toggleClass('lg-pill-active', on).attr('aria-pressed', on ? 'true' : 'false');
+			$('#lg-new-box').toggle(on);
+			if (on && newState === 'idle') loadNewPlayers();
 		});
 
 		// Inactive toggle
@@ -809,30 +1207,33 @@ foreach ($awardList as $_aid => $_ainfo) :
 		$('#lg-btn-csv').on('click', function () {
 			var scopeLabel = <?= json_encode($scope_name ?? $scope_label) ?>;
 			var slug = scopeLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-			var d = new Date();
-			var dateStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-			var filename = (slug || 'ladder') + '-ladder-grid-' + dateStr + '.csv';
+			var filename = (slug || 'ladder') + '-ladder-grid-' + localToday() + '.csv';
 
 			// Headers injected from PHP — avoids any DataTables DOM manipulation confusion
 			var headers = <?= json_encode(
 				array_merge(
 					['Persona'],
 					$isKingdom ? ['Park', 'Mundane ID'] : ['Mundane ID'],
+					['Last Award', 'Last Sign-in'],
 					array_values(array_map(function($a) { return $a['Name']; }, $awardList))
 				)
 			) ?>;
-			var mundaneIdInsertPos = <?= $isKingdom ? 2 : 1 ?>;
 
 			// Build rows — all rows regardless of active/search filter
 			var lines = [headers.map(csvCell).join(',')];
 			table.rows().nodes().each(function (tr) {
-				var cols = [];
-				$(tr).find('td').each(function () {
-					var text = $(this).text().trim().replace(/·/g, '');
-					cols.push(csvCell(text));
+				var cols = [tr.getAttribute('data-persona')];
+				if (isKingdom) cols.push($(tr).children('td.lg-col-park').text().trim());
+				cols.push($(tr).data('mundane-id') || '');
+				$(tr).children('td.lg-col-date').each(function () {
+					var age = this.querySelector('.lg-age');
+					cols.push(age.getAttribute('data-date') ? age.textContent.trim() : '');
 				});
-				cols.splice(mundaneIdInsertPos, 0, csvCell($(tr).data('mundane-id') || ''));
-				lines.push(cols.join(','));
+				// Only the value spans: Smart Court markers in these cells stay out of the export
+				$(tr).children('td.lg-col-award').each(function () {
+					cols.push($(this).find('.lg-cell-rank, .lg-cell-master').text().trim());
+				});
+				lines.push(cols.map(csvCell).join(','));
 			});
 
 			var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
@@ -846,5 +1247,75 @@ foreach ($awardList as $_aid => $_ainfo) :
 	function csvCell(v) {
 		return '"' + String(v).replace(/"/g, '""') + '"';
 	}
+
+	// One fixed body-level tooltip for every [data-tip] on the page. A ::after tooltip
+	// would be clipped by the grid's overflow-x wrapper. New Players headers use data-tip
+	// for every viewer, so this lives here rather than in the officer script.
+	(function initTooltip() {
+		var GAP = 6, MARGIN = 8;
+		var tip = el('div', 'lg-sc-tip');
+		tip.setAttribute('role', 'tooltip');
+		document.body.appendChild(tip);
+		var anchor = null;
+
+		function hide() {
+			anchor = null;
+			tip.style.display = 'none';
+		}
+
+		function show(target) {
+			var text = target.getAttribute('data-tip');
+			if (!text) { hide(); return; }
+			anchor = target;
+			tip.textContent = text;
+			tip.style.display = 'block';
+			var r = target.getBoundingClientRect();
+			var w = tip.offsetWidth, h = tip.offsetHeight;
+			var maxLeft = window.innerWidth - w - MARGIN, maxTop = window.innerHeight - h - MARGIN;
+			var top = r.bottom + GAP > maxTop ? r.top - h - GAP : r.bottom + GAP;
+			tip.style.left = Math.max(MARGIN, Math.min(r.left + r.width / 2 - w / 2, maxLeft)) + 'px';
+			tip.style.top  = Math.max(MARGIN, top) + 'px';
+		}
+
+		// A blocked Smart Court cell shows its block reason, which wins over a tip on a child span.
+		function tipTarget(node) {
+			if (!node || !node.closest) return null;
+			var blocked = node.closest('td.lg-sc-block[data-tip]');
+			return blocked || node.closest('[data-tip]');
+		}
+
+		function follow(e) {
+			var target = tipTarget(e.target);
+			if (target === anchor) return;
+			if (target) show(target); else hide();
+		}
+
+		document.addEventListener('mouseover', follow);
+		document.addEventListener('focusin', follow);
+		document.addEventListener('focusout', hide);
+		document.documentElement.addEventListener('mouseleave', hide);
+		window.addEventListener('scroll', hide, true);
+		// A repaint can replace the node under the tooltip, and no mouseout follows.
+		document.addEventListener('click', function () {
+			if (anchor && !document.contains(anchor)) hide();
+		});
+	})();
 })();
 </script>
+<?php if ($_smartCourt) : ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+window.LgSmartConfig = <?= json_encode([
+	'KingdomId'    => (int)$SmartCourt['KingdomId'],
+	'ParkId'       => (int)$SmartCourt['ParkId'],
+	'Uid'          => (int)$SmartCourt['Uid'],
+	'ColumnAwards' => (object)$SmartCourt['ColumnAwards'],
+	'KaToColumn'   => (object)$SmartCourt['KaToColumn'],
+	'Courts'       => array_values($SmartCourt['Courts']),
+	'Events'       => array_values($SmartCourt['Events']),
+	'Uir'          => UIR,
+], $_jsonFlags | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+</script>
+<script src="<?= HTTP_TEMPLATE ?>default/script/lg-smart-court.js?v=<?=filemtime(__DIR__.'/script/lg-smart-court.js')?>"></script>
+<?php endif; ?>

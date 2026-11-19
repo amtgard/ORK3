@@ -1051,9 +1051,12 @@
 			</style>
 			<div class="kn-cp-toolbar">
 				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
-				<button class="kn-btn kn-btn-primary" onclick="knCpOpenNewCourt()">
-					<i class="fas fa-plus"></i> Plan a Court
-				</button>
+				<span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+					<a class="kn-cp-btn-link" href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>&SmartCourt=1"><i class="fas fa-th"></i> Plan Court from Smart Grid</a>
+					<button class="kn-btn kn-btn-primary" onclick="knCpOpenNewCourt()">
+						<i class="fas fa-plus"></i> Plan a Court
+					</button>
+				</span>
 			</div>
 			<?php
 				$_cpStatusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];

@@ -72,6 +72,43 @@
 	// Auth helpers (precomputed in Controller_Player::profile)
 	$isOwnProfile  = !empty($IsOwnProfile);
 	$canEditAdmin  = !empty($canEditAdmin);
+
+	// Awards Planned on Future Courts. $PlannedCourtLines is only ever set for a logged-in viewer
+	// who is not on their own profile, already filtered to courts they manage and recs they can
+	// see (Court::getPlayerPlannedCourtLines), so an empty list means no card at all.
+	$_pnPlannedLines = (!$isOwnProfile && is_array($PlannedCourtLines ?? null)) ? $PlannedCourtLines : array();
+	$pnPlannedCourtsCard = function () use ($_pnPlannedLines) {
+		if (!$_pnPlannedLines) { return; }
+		$courts = array();   // keyed by court id; lines arrive date-ascending, undated last
+		foreach ($_pnPlannedLines as $_l) {
+			$cid = (int)$_l['CourtId'];
+			if (!isset($courts[$cid])) { $courts[$cid] = array('Line' => $_l, 'Awards' => array()); }
+			$nm = trim(preg_replace('/^Order of (the )?/i', '', (string)$_l['AwardName']));
+			$courts[$cid]['Awards'][] = $nm . ((int)$_l['Rank'] > 0 ? ' ' . (int)$_l['Rank'] : '');
+		}
+		?>
+		<details class="pn-card pn-planned-courts">
+			<summary class="pn-planned-summary"><i class="fas fa-clipboard" aria-hidden="true"></i> Awards Planned on Future Courts</summary>
+			<ul class="pn-planned-list">
+				<?php foreach ($courts as $cid => $c): $l = $c['Line']; ?>
+				<li class="pn-planned-court">
+					<a class="pn-planned-court-name" href="<?= UIR ?>Court/detail/<?= (int)$cid ?>"><?= htmlspecialchars((string)$l['CourtName']) ?></a>
+					<span class="pn-planned-meta">
+						<span class="pn-planned-date"><?= $l['CourtDate'] ? htmlspecialchars((string)$l['CourtDate']) : 'No date set' ?></span>
+						<span class="pn-planned-level"><?= (int)$l['ParkId'] > 0 ? 'Park: ' . htmlspecialchars((string)$l['ParkName']) : 'Kingdom' ?></span>
+					</span>
+					<span class="pn-planned-awards"><?= htmlspecialchars(implode(', ', $c['Awards'])) ?></span>
+				</li>
+				<?php endforeach; ?>
+			</ul>
+		</details>
+		<?php
+	};
+	// Slim copy for the Recommendations table icon (court name, date, and what each line matches on).
+	$_pnPlannedForJs = array_map(function ($l) {
+		return array('CourtId' => (int)$l['CourtId'], 'CourtName' => (string)$l['CourtName'], 'CourtDate' => $l['CourtDate'],
+			'KingdomAwardId' => (int)$l['KingdomAwardId'], 'Rank' => (int)$l['Rank'], 'RecommendationsId' => (int)$l['RecommendationsId']);
+	}, $_pnPlannedLines);
 	// Moving a player is a park CREATE power, not EDIT -- see Admin_permissions.tpl
 	// and Player::MovePlayer, which checks AUTH_CREATE over either end.
 	$canMovePlayer = !empty($canMovePlayer);
@@ -2166,6 +2203,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 
 				<!-- Awards Tab -->
 			<div class="pn-tab-panel" id="pn-tab-awards"<?= ($isOwnProfile || $_aboutIsDefault) ? ' style="display:none"' : '' ?>>
+				<?php $pnPlannedCourtsCard(); ?>
 				<?php
 					$awardsList = is_array($Details['Awards']) ? $Details['Awards'] : array();
 				?>
@@ -2508,6 +2546,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 
 			<!-- Recommendations Tab -->
 			<?php if ($_showRecs): ?><div class="pn-tab-panel" id="pn-tab-recommendations" style="display:none">
+				<?php $pnPlannedCourtsCard(); ?>
 				<?php if ($this->__session->user_id): ?>
 				<div class="pn-tab-toolbar">
 					<button class="pn-btn pn-btn-primary pn-btn-sm" onclick="pnOpenModal()"><i class="fas fa-plus"></i> Recommend an Award</button>
@@ -4148,6 +4187,7 @@ var PnConfig = {
 	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
+	plannedCourtLines: <?= json_encode(array_values($_pnPlannedForJs)) ?>,
 	recsHiddenNotice: <?= json_encode(htmlspecialchars(ork_recs_hidden_notice(isset($this->__session->user_id)))) ?>,
 	loggedInUserId: <?= isset($this->__session->user_id) ? (int)$this->__session->user_id : 0 ?>,
 	aboutPersona:   <?= json_encode($Player['AboutPersona'] ?? '') ?>,
@@ -7975,6 +8015,21 @@ $(function() {
 					+ '<span class="pk-rec-notes-full" style="display:none">' + esc(txt.substring(50)) + ' <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span>'
 					+ '</span>';
 			};
+			// Clipboard icon beside an award that sits on a planned court: by rec id, or the same
+			// award and rank. Text lives in data-tip only (no cell text, so sort/filter/CSV are untouched).
+			var plannedIcon = function(rec) {
+				var seen = {}, names = [];
+				(PnConfig.plannedCourtLines || []).forEach(function(l) {
+					var hit = (l.RecommendationsId > 0 && l.RecommendationsId === (parseInt(rec.RecommendationsId) || 0))
+						|| (l.KingdomAwardId === (parseInt(rec.KingdomAwardId) || 0) && l.Rank === (parseInt(rec.Rank) || 0));
+					if (!hit || seen[l.CourtId]) return;
+					seen[l.CourtId] = true;
+					names.push(l.CourtName + (l.CourtDate ? ' on ' + l.CourtDate : ''));
+				});
+				if (!names.length) return '';
+				var tip = attr('This award is planned for Court: ' + names.join(', '));
+				return ' <span class="pn-rec-planned" tabindex="0" role="img" data-tip="' + tip + '" aria-label="' + tip + '"><i class="fas fa-clipboard" aria-hidden="true"></i></span>';
+			};
 			var html = '<table class="pn-table display" id="pn-rec-table"><thead><tr>'
 				+ '<th>Award</th><th>Rank</th><th data-sorttype="date">Date</th><th>Sent By</th><th>Reason</th>'
 				+ (hasActions ? '<th class="pn-nosort" style="white-space:nowrap;width:1%">Actions</th>' : '')
@@ -8019,7 +8074,7 @@ $(function() {
 				}
 
 				html += '<tr data-rec-id="' + recId + '">'
-					+ '<td>' + esc(rec.AwardName) + (window.orkMonarchyOnlyBadge ? orkMonarchyOnlyBadge(rec.MonarchyOnlyLevel) : '') + '</td>'
+					+ '<td>' + esc(rec.AwardName) + plannedIcon(rec) + (window.orkMonarchyOnlyBadge ? orkMonarchyOnlyBadge(rec.MonarchyOnlyLevel) : '') + '</td>'
 					+ '<td class="pn-col-numeric">' + rank + '</td>'
 					+ '<td class="pn-col-nowrap">' + esc(rec.DateRecommended) + '</td>'
 					+ '<td><a href="' + PnConfig.uir + 'Player/profile/' + parseInt(rec.RecommendedById) + '">' + esc(rec.RecommendedByName) + '</a></td>'
