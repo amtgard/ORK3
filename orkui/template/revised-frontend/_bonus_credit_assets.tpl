@@ -21,8 +21,8 @@
  *
  * The host sets window.OrkBcCfg before including this file:
  *   { uir, scopeType: 'park'|'kingdom', scopeId, scopeName, kingdomId }
- * and offers a button that calls bcOpen(). Needs jQuery + jQuery UI autocomplete,
- * which both hosts already load for Enter Attendance / player search.
+ * and offers a button that calls bcOpen(). Needs jQuery and OrkPlayerSearch,
+ * which default.theme loads globally.
  */
 ?>
 <style>
@@ -100,7 +100,6 @@
 html[data-theme="dark"] .bc-table tr.bc-just-added td { background:#1c2f24; }
 html[data-theme="dark"] .bc-feedback.bc-ok { background:#1c2f24; border-color:#276749; color:#9ae6b4; }
 html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#9b2c2c; color:#feb2b2; }
-.ui-autocomplete.bc-ac { z-index:10200 !important; }
 @media (max-width: 600px) {
     #bc-overlay { padding:12px 8px; }
     .bc-sm, .bc-md { flex:1 1 45%; }
@@ -303,7 +302,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         Array.prototype.forEach.call(document.querySelectorAll('#bc-tabs .bc-tab'), function (t) { t.classList.toggle('bc-tab-active', t.getAttribute('data-pane') === pane); });
         Array.prototype.forEach.call(document.querySelectorAll('#bc-overlay .bc-pane'), function (p) { p.hidden = p.id !== pane; });
         feedback('');
-        try { jQuery('#bc-player, #bc-granter-search').autocomplete('close'); } catch (e) {}
+        ['bc-player', 'bc-granter-search'].forEach(function (id) { var el = gid(id); if (el && el._opsHandle) el._opsHandle.close(); });
     }
     gid('bc-tabs').addEventListener('click', function (e) {
         var t = e.target.closest ? e.target.closest('.bc-tab') : null;
@@ -327,7 +326,7 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         ov.classList.remove('bc-open');
         ov.setAttribute('aria-hidden', 'true');
         if (release) { release(); release = null; }
-        try { jQuery('#bc-player, #bc-granter-search').autocomplete('close'); } catch (e) {}
+        ['bc-player', 'bc-granter-search'].forEach(function (id) { var el = gid(id); if (el && el._opsHandle) el._opsHandle.close(); });
     }
     gid('bc-close').addEventListener('click', bcClose);
     gid('bc-done').addEventListener('click', bcClose);
@@ -556,37 +555,20 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
     // outside credits, and the server refuses the rest with a message that
     // says why. An Amtgard host searches everyone; the server still refuses a
     // player whose kingdom has not adopted the credit.
-    function searchUrl(term) {
-        if (isOrk) return Cfg.uir + 'KingdomAjax/playersearch/0&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
-        if (isKingdom) return Cfg.uir + 'KingdomAjax/playersearch/' + Cfg.kingdomId + '&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
-        return Cfg.uir + 'ParkAjax/park/' + Cfg.scopeId + '/playersearch&scope=all&prioritize=1&include_inactive=1&q=' + encodeURIComponent(term);
-    }
-    function acItems(list, withInactive) {
-        return jQuery.map(list || [], function (v) {
-            var where = (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : (v.ParkName || '');
-            return { label: v.Persona + (where ? ' — ' + where : '') + (withInactive && parseInt(v.Active, 10) === 0 ? ' (inactive)' : ''), name: v.Persona, value: v.MundaneId };
-        });
-    }
-    jQuery('#bc-player').autocomplete({
-        minLength: 2, delay: 150, classes: { 'ui-autocomplete': 'bc-ac' },
-        source: function (req, res) { jQuery.getJSON(searchUrl(req.term), function (list) { res(acItems(list, true)); }).fail(function () { res([]); }); },
-        focus: function (e) { e.preventDefault(); },
-        select: function (e, ui) {
-            e.preventDefault();
-            // The Enter that picked this name must not also Add (see keydown
-            // below). The flag lives only for the rest of this event dispatch:
-            // a mouse pick sets it too, and it must not swallow a later Enter.
-            pickedByKey = true; setTimeout(function () { pickedByKey = false; }, 0);
-            gid('bc-player').value = ui.item.name;
-            gid('bc-player-id').value = ui.item.value;
+    OrkPlayerSearch.attach(gid('bc-player'), {
+        uir: Cfg.uir,
+        parkId: Cfg.scopeType === 'park' ? Cfg.scopeId : 0,
+        kingdomId: isOrk ? 0 : (Cfg.kingdomId || 0),
+        onSelect: function (p) {
+            gid('bc-player-id').value = p.MundaneId;
             updateAdd();
             loadAllowance();
             // Picking a name only fills the field. Move on to the class if none is
             // set; otherwise stay put so the next Enter is a deliberate Add.
             if (!gid('bc-class').value) gid('bc-class').focus();
-        }
+        },
+        onClear: function () { gid('bc-player-id').value = ''; setAmountBounds(null); updateAdd(); }
     });
-    gid('bc-player').addEventListener('input', function () { gid('bc-player-id').value = ''; setAmountBounds(null); updateAdd(); });
     gid('bc-class').addEventListener('change', updateAdd);
     gid('bc-credits').addEventListener('input', updateAdd);
     function updateAdd() {
@@ -612,21 +594,14 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         }, 'json').fail(function () { btn.disabled = false; feedback('Request failed.', false); });
     });
     // Enter adds only when a player is already chosen and the suggestion list is
-    // closed. While the list is open, Enter belongs to the autocomplete (it picks
+    // closed. While the list is open, Enter belongs to the player search (it picks
     // the highlighted name); without this check the same keypress also fired Add.
-    // jQuery UI's own keydown handler was bound first, so by the time this ran
-    // it had already picked the highlighted name, closed the list and (via
-    // select -> updateAdd) enabled Add: the "list is open" test passed and the
-    // same Enter granted the credit. Three independent tells, any one of which
-    // stops that: the list is still open (capture phase runs this first in
-    // current browsers), the select handler flagged this keypress, or jQuery UI
-    // already consumed it (it preventDefaults the Enter that picks an item).
-    var pickedByKey = false;
+    // Capture phase runs this before the search's own keydown, so the list is
+    // still open (aria-expanded) on the Enter that picks a name.
     gid('bc-player').addEventListener('keydown', function (e) {
         if (e.key !== 'Enter') return;
-        var menuOpen = false;
-        try { menuOpen = jQuery('#bc-player').autocomplete('widget').is(':visible'); } catch (err) {}
-        if (menuOpen || pickedByKey || e.defaultPrevented) return;
+        var menuOpen = gid('bc-player').getAttribute('aria-expanded') === 'true';
+        if (menuOpen || e.defaultPrevented) return;
         if (!gid('bc-add').disabled) { e.preventDefault(); gid('bc-add').click(); }
     }, true);
 
@@ -786,20 +761,16 @@ html[data-theme="dark"] .bc-feedback.bc-err { background:#3b1d1d; border-color:#
         gid('bc-granters-count').textContent = granters.length ? plural(granters.length, 'granter', 'granters') : '';
         fillGranterScope();
     }
-    jQuery('#bc-granter-search').autocomplete({
-        minLength: 2, delay: 150, classes: { 'ui-autocomplete': 'bc-ac' },
-        source: function (req, res) {
-            jQuery.getJSON(Cfg.uir + 'KingdomAjax/playersearch/' + Cfg.kingdomId + '&scope=own&q=' + encodeURIComponent(req.term), function (list) { res(acItems(list, false)); }).fail(function () { res([]); });
-        },
-        focus: function (e) { e.preventDefault(); },
-        select: function (e, ui) {
-            e.preventDefault();
-            gid('bc-granter-search').value = ui.item.name;
-            gid('bc-granter-id').value = ui.item.value;
+    OrkPlayerSearch.attach(gid('bc-granter-search'), {
+        uir: Cfg.uir,
+        kingdomId: Cfg.kingdomId || 0,
+        restrictTo: 'kingdom',
+        onSelect: function (p) {
+            gid('bc-granter-id').value = p.MundaneId;
             gid('bc-granter-add').disabled = false;
-        }
+        },
+        onClear: function () { gid('bc-granter-id').value = ''; gid('bc-granter-add').disabled = true; }
     });
-    gid('bc-granter-search').addEventListener('input', function () { gid('bc-granter-id').value = ''; gid('bc-granter-add').disabled = true; });
     gid('bc-granter-add').addEventListener('click', function () {
         var btn = this, mid = gid('bc-granter-id').value, who = gid('bc-granter-search').value;
         var scopeSel = gid('bc-granter-scope'), rid = scopeSel.value, scopeText = scopeSel.options[scopeSel.selectedIndex] ? scopeSel.options[scopeSel.selectedIndex].text : 'all categories';

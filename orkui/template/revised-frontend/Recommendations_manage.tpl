@@ -1279,6 +1279,8 @@ function rmOpenGrantModal(rec, tr, courts) {
         // Escape closes an open autocomplete dropdown first; only a second
         // Escape (with no dropdown open) closes the modal itself.
         onEscape: function () {
+            var gb = rmGid('rm-grant-givenby');
+            if (gb && gb._opsHandle && document.querySelector('.ops-ac-results.ops-ac-open')) { gb._opsHandle.close(); return; }
             var open = rmGid('rm-grant-overlay').querySelectorAll('.rm-ac-results.rm-ac-open');
             if (open.length) { Array.prototype.forEach.call(open, function (n) { n.classList.remove('rm-ac-open'); }); return; }
             rmCloseGrantModal();
@@ -1442,72 +1444,21 @@ rmGid('rm-grant-rank-pills').addEventListener('click', function (e) {
     });
     document.addEventListener('click', function (e) { if (!input.contains(e.target) && !results.contains(e.target)) results.classList.remove('rm-ac-open'); });
 })();
-// Given-By player search: global giver scope (intentional), custom dropdown (not jQuery UI).
+// Given-By player search: global giver scope (intentional — no restrictTo); kingdomId only
+// ranks this kingdom's players first. Shared OrkPlayerSearch widget (aborts stale requests,
+// pages, shows Banned/Inactive badges). Officer chips above still set the same fields.
 (function () {
     var input = rmGid('rm-grant-givenby');
     var hidden = rmGid('rm-grant-givenby-id');
-    var results = rmGid('rm-grant-givenby-results');
-    if (!input || !results) return;
-    var timer = null;
-    input.addEventListener('input', function () {
-        hidden.value = ''; // typing invalidates the previous pick until one is reselected
+    if (!input || !hidden || !window.OrkPlayerSearch) return;
+    function rmClearChipSel() {
         var _chips = rmGid('rm-grant-officer-chips'); if (_chips) _chips.querySelectorAll('.rm-officer-chip').forEach(function (c) { c.classList.remove('rm-selected'); });
-        var term = input.value.trim();
-        clearTimeout(timer);
-        if (term.length < 2) { results.classList.remove('rm-ac-open'); results.innerHTML = ''; return; }
-        timer = setTimeout(function () {
-            var url = RmConfig.uir + 'KingdomAjax/playersearch/' + (RmConfig.kingdomId || 0) + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
-            fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (data) {
-                if (!data || !data.length) { results.innerHTML = '<div class="rm-ac-none">No players found</div>'; results.classList.add('rm-ac-open'); return; }
-                results.innerHTML = data.map(function (pl) {
-                    return '<div class="rm-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona || '') + '">' +
-                        rmEsc(pl.Persona || '') +
-                        ' <span style="color:var(--rm-muted);font-size:11px">(' + rmEsc(pl.KAbbr || '') + ':' + rmEsc(pl.PAbbr || '') + ')</span>' +
-                        (pl.Suspended ? ' <span style="color:var(--rm-danger);font-size:10px;font-weight:600">(Banned)</span>' : '') +
-                        '</div>';
-                }).join('');
-                results.classList.add('rm-ac-open');
-            }).catch(function () { results.classList.remove('rm-ac-open'); });
-        }, 220);
-    });
-    results.addEventListener('click', function (e) {
-        var item = e.target.closest ? e.target.closest('.rm-ac-item') : null;
-        if (!item) return;
-        input.value = decodeURIComponent(item.getAttribute('data-name'));
-        hidden.value = item.getAttribute('data-id');
-        results.classList.remove('rm-ac-open');
-    });
-    document.addEventListener('click', function (e) {
-        if (!input.contains(e.target) && !results.contains(e.target)) results.classList.remove('rm-ac-open');
-    });
-    // Keyboard navigation. This used to be `if (typeof acKeyNav === 'function')`,
-    // but acKeyNav is defined only in revised.js and this page renders under
-    // default.theme (which loads orkui.js) — so the guard was always false and
-    // arrow/Enter navigation never worked for anyone. Local handler instead.
-    function rmAcItems() { return Array.prototype.slice.call(results.querySelectorAll('.rm-ac-item')); }
-    function rmAcMove(delta) {
-        var items = rmAcItems();
-        if (!items.length) return;
-        var cur = items.findIndex(function (n) { return n.classList.contains('rm-ac-active'); });
-        var next = cur < 0 ? (delta > 0 ? 0 : items.length - 1) : (cur + delta + items.length) % items.length;
-        items.forEach(function (n) { n.classList.remove('rm-ac-active'); });
-        items[next].classList.add('rm-ac-active');
-        if (items[next].scrollIntoView) items[next].scrollIntoView({ block: 'nearest' });
     }
-    input.addEventListener('keydown', function (e) {
-        var open = results.classList.contains('rm-ac-open');
-        if (e.key === 'ArrowDown') { if (open) { e.preventDefault(); rmAcMove(1); } return; }
-        if (e.key === 'ArrowUp')   { if (open) { e.preventDefault(); rmAcMove(-1); } return; }
-        // Escape is handled by the modal's shared trap, which closes an open
-        // dropdown first and the modal only when none is open.
-        if (e.key === 'Enter' && open) {
-            var act = results.querySelector('.rm-ac-item.rm-ac-active');
-            if (act) { e.preventDefault(); act.click(); }
-        }
-    });
-    // Typing rebuilds the list, so the old highlight must not survive it.
-    input.addEventListener('input', function () {
-        rmAcItems().forEach(function (n) { n.classList.remove('rm-ac-active'); });
+    OrkPlayerSearch.attach(input, {
+        uir: RmConfig.uir,
+        kingdomId: RmConfig.kingdomId || 0,
+        onSelect: function (p) { hidden.value = p.MundaneId; rmClearChipSel(); },
+        onClear:  function ()  { hidden.value = ''; rmClearChipSel(); } // typing invalidates the previous pick
     });
 })();
 

@@ -167,7 +167,8 @@
 						type: 'all',
 						search: request.term,
 						park_id: park_id,
-						kingdom_id: kingdom_id
+						kingdom_id: kingdom_id,
+						token: '<?= htmlspecialchars((string)($this->__session->token ?? ''), ENT_QUOTES) ?>'
 					},
 					function( data ) {
 						var suggestions = [];

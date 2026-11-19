@@ -1106,6 +1106,13 @@ class Park extends Ork3
             } else {
                 $kingdomId = $request['KingdomId'];
             }
+            // Normalise the appointee id ONCE and use it everywhere below. A non-canonical
+            // value such as "32186.9" would pass an (int) comparison against the sitting
+            // officer yet be rounded to a different id by MariaDB on write.
+            $_newId = (int)$request[ 'MundaneId' ];
+            if ($_newId <= 0 || (string)$_newId !== trim((string)$request[ 'MundaneId' ])) {
+                return InvalidParameter(null, "Invalid officer.");
+            }
             // Look up the current officer first so we can suppress the audit when
             // the UI re-submits an unchanged assignment (the Bellhollow form fires
             // SetOfficer once per role on every save).
@@ -1114,12 +1121,24 @@ class Park extends Ork3
             $_priorOfficer->park_id = (int)$request[ 'ParkId' ];
             $_priorOfficer->role    = $request[ 'Role' ];
             $_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
+            // A NEW officer must belong to the park's kingdom family (mirrors
+            // Kingdom::SetOfficer). The park's kingdom is resolved server-side.
+            // Re-saves of the sitting officer are not re-checked.
+            if ($_priorMundaneId !== $_newId) {
+                $_parkKingdomId = (int)$this->GetParkKingdomId($request[ 'ParkId' ]);
+                $_newOfficer    = Ork3::$Lib->player->player_info($_newId);
+                $_familyIds     = $_parkKingdomId > 0 ? array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($_parkKingdomId)) : [ ];
+                if (!in_array((int)($_newOfficer[ 'KingdomId' ] ?? 0), $_familyIds, true)) {
+                    return InvalidParameter(null, "The new officer must be a member of this Kingdom.");
+                }
+            }
 
             $c = new Common();
-            $c->set_officer($kingdomId, $request[ 'ParkId' ], $request[ 'MundaneId' ], $request[ 'Role' ]);
+            $c->set_officer($kingdomId, $request[ 'ParkId' ], $_newId, $request[ 'Role' ]);
 
-            if ($_priorMundaneId !== (int)$request[ 'MundaneId' ]) {
+            if ($_priorMundaneId !== $_newId) {
                 $_audit_req = $request;
+                $_audit_req[ 'MundaneId' ] = $_newId;
                 unset($_audit_req[ 'Token' ]);
                 Ork3::$Lib->dangeraudit->audit(
                     __CLASS__ . '::' . __FUNCTION__,
@@ -1130,7 +1149,7 @@ class Park extends Ork3
                     [
                         'ParkId'    => (int)$request[ 'ParkId' ],
                         'KingdomId' => (int)$kingdomId,
-                        'MundaneId' => (int)$request[ 'MundaneId' ],
+                        'MundaneId' => $_newId,
                         'Role'      => $request[ 'Role' ],
                     ]
                 );

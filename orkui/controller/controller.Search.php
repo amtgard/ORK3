@@ -21,6 +21,28 @@ class Controller_Search extends Controller
 
     }
 
+    public function advanced($id = null)
+    {
+        $this->template = '../revised-frontend/Search_advanced.tpl';
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        // Same officer / banned-scope definition the search service enforces (park/kingdom
+        // grants or global admin; event and unit grants do not count).
+        $this->load_model('Search');
+        $caps = $_uid > 0 ? $this->Search->viewer_caps($this->session->token ?? null) : array('is_officer' => false, 'banned_kids' => array());
+        $this->data['CanSeeRealName'] = !empty($caps['is_officer']) ? 1 : 0;
+        $this->data['CanSeeBanned']   = ($caps['banned_kids'] === 'all' || !empty($caps['banned_kids'])) ? 1 : 0;
+        $this->data['IsLoggedIn']     = $_uid > 0 ? 1 : 0;
+        // Prefill from the inline component's "Advanced Search" hand-off (term + scope).
+        $this->data['PrefillQ']         = isset($this->request->q) ? trim((string)$this->request->q) : '';
+        $this->data['PrefillKingdomId'] = isset($this->request->kingdomId) ? (int)$this->request->kingdomId : 0;
+        $this->data['PrefillParkId']    = isset($this->request->parkId) ? (int)$this->request->parkId : 0;
+        // A park-only hand-off still needs its kingdom so the page can load the park list.
+        if ($this->data['PrefillParkId'] > 0 && $this->data['PrefillKingdomId'] <= 0) {
+            $this->load_model('Park');
+            $this->data['PrefillKingdomId'] = (int)$this->Park->get_park_kingdom_id($this->data['PrefillParkId']);
+        }
+    }
+
     public function park($id = null)
     {
         $this->template = 'Search_index.tpl';

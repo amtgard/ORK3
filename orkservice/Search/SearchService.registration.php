@@ -115,4 +115,23 @@ $server->Register(
 			)
 	);
 	
+$server->Register(
+	array(
+		'Search/Players',
+		array('SearchService', 'RankedPlayers'),
+		array(
+				array( 'q','request',false,'string',true ),
+				array( 'parkId','request',true,'int',true ),
+				array( 'kingdomId','request',true,'int',true ),
+				array( 'restrictTo','request',true,'string',true ),
+				array( 'includeInactive','request',true,'int',true ),
+				array( 'includeSuspended','request',true,'int',true ),
+				array( 'limit','request',true,'int',true ),
+				array( 'token','request',true,'string',true ),
+			array( 'excludeKingdomId','request',true,'int',true ),
+			array( 'excludeParkId','request',true,'int',true )
+			)
+		)
+	);
+
 ?>

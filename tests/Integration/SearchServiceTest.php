@@ -102,13 +102,14 @@ final class SearchServiceTest extends TestCase
         $kid = $this->fixture->firstKingdomId();
         $parkId = $this->fixture->parkIdInKingdom($kid);
         $player = $this->fixture->createPlayer($parkId, 'family');
-        $familyIds = Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid);
+        $familyIds = array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid));
 
-        $results = $this->searchService->ScopedPlayerSearch([
-            'Query'     => $player['persona'],
-            'Scope'     => 'kingdom_own',
-            'KingdomId' => $kid,
+        $results = $this->searchService->RankedPlayers([
+            'q'          => $player['persona'],
+            'kingdomId'  => $kid,
+            'restrictTo' => 'kingdom',
         ]);
+        $this->assertContains($player['mundane_id'], array_column($results, 'MundaneId'));
         foreach ($results as $row) {
             $this->assertContains((int) $row['KingdomId'], $familyIds);
         }
@@ -124,41 +125,94 @@ final class SearchServiceTest extends TestCase
         }
 
         $outside = $this->fixture->createPlayer($parkB, 'outside');
-        $results = $this->searchService->ScopedPlayerSearch([
-            'Query'  => $outside['persona'],
-            'Scope'  => 'park_exclude',
-            'ParkId' => $parkA,
+        $results = $this->searchService->RankedPlayers([
+            'q'             => $outside['persona'],
+            'excludeParkId' => $parkA,
         ]);
 
-        $parkIds = array_column($results, 'ParkId');
+        $parkIds = array_map('intval', array_column($results, 'ParkId'));
         $this->assertNotContains($parkA, $parkIds);
         $this->assertContains($outside['mundane_id'], array_column($results, 'MundaneId'));
     }
 
-    public function testEventProximityOrder(): void
+    public function testParkRingOrder(): void
     {
         $kid = $this->fixture->firstKingdomId();
         $parkA = $this->fixture->parkIdInKingdom($kid);
         $parkB = $this->fixture->secondParkIdInKingdom($kid, $parkA);
         if ($parkB <= 0) {
-            $this->markTestSkipped('Need two parks for event proximity ordering.');
+            $this->markTestSkipped('Need two parks for park ring ordering.');
         }
 
-        $event = $this->fixture->createEvent($parkA, 'prox');
-        $local = $this->fixture->createPlayer($parkA, 'evlocal');
-        $remote = $this->fixture->createPlayer($parkB, 'evremote');
-        $term = 'T11SRC ev';
+        $marker = 'Ring' . bin2hex(random_bytes(3));
+        // Remote persona sorts first alphabetically, so only the ring can put local first.
+        $remote = $this->fixture->createPlayer($parkB, 'rgremote', 'T11SRC ' . $marker . ' A');
+        $local = $this->fixture->createPlayer($parkA, 'rglocal', 'T11SRC ' . $marker . ' B');
 
-        $results = $this->searchService->ScopedPlayerSearch([
-            'Query'   => $term,
-            'Scope'   => 'event_prioritized',
-            'EventId' => $event['event_id'],
+        $results = $this->searchService->RankedPlayers([
+            'q'      => $marker,
+            'parkId' => $parkA,
         ]);
-        $this->assertGreaterThanOrEqual(2, count($results));
+        $ids = array_column($results, 'MundaneId');
+        $this->assertContains($remote['mundane_id'], $ids);
         $this->assertSame($local['mundane_id'], $results[0]['MundaneId']);
     }
 
-    public function testScopedPlayerSearchKdPrefixOrdersActiveBeforeInactive(): void
+    public function testMultiWordQueryMatchesAnyOrderAndPartialWords(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $m = bin2hex(random_bytes(3));
+        $player = $this->fixture->createPlayer($parkId, 'multiword', "Tobias{$m} Malcom{$m} Ardente{$m}");
+
+        // Every typed word must appear, in any order; a skipped middle word is fine.
+        foreach (["Tobias{$m} Ard", "ardente{$m} tob", "Malcom{$m}", "ARDENTE{$m} tobias{$m} mal"] as $q) {
+            $ids = array_column($this->searchService->RankedPlayers(['q' => $q, 'limit' => 100]), 'MundaneId');
+            $this->assertContains($player['mundane_id'], $ids, "query '{$q}' should find the player");
+        }
+        // A word that is not in the name excludes it.
+        $ids = array_column($this->searchService->RankedPlayers(['q' => "Tobias{$m} Zzqx", 'limit' => 100, 'fuzzy' => false]), 'MundaneId');
+        $this->assertNotContains($player['mundane_id'], $ids);
+    }
+
+    public function testExactPersonaRanksAboveMidWordMatch(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $m = bin2hex(random_bytes(3));
+        // "Abrin…" sorts first alphabetically, so only match quality can put the exact one first.
+        $mid = $this->fixture->createPlayer($parkId, 'rankmid', "Abrin{$m}");
+        $exact = $this->fixture->createPlayer($parkId, 'rankexact', "Brin{$m}");
+
+        $results = $this->searchService->RankedPlayers(['q' => "brin{$m}", 'parkId' => $parkId]);
+        $ids = array_column($results, 'MundaneId');
+        $this->assertContains($mid['mundane_id'], $ids);
+        $this->assertSame($exact['mundane_id'], $results[0]['MundaneId']);
+    }
+
+    public function testTypoToleranceFindsOneEditAwayAsCloseMatch(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $m = bin2hex(random_bytes(3));
+        $player = $this->fixture->createPlayer($parkId, 'typo', "Witherbloom{$m}");
+
+        // Swapped pair ("re" for "er"): no strict match, so it comes back as a close match.
+        $rows = $this->searchService->RankedPlayers(['q' => "Withrebloom{$m}", 'limit' => 16]);
+        $hit = array_values(array_filter($rows, fn ($r) => $r['MundaneId'] === $player['mundane_id']));
+        $this->assertCount(1, $hit, 'one-edit typo should surface the player');
+        $this->assertSame(1, $hit[0]['Fuzzy']);
+
+        // Two edits away is not tolerated.
+        $ids = array_column($this->searchService->RankedPlayers(['q' => "Wthrebloom{$m}", 'limit' => 16]), 'MundaneId');
+        $this->assertNotContains($player['mundane_id'], $ids);
+
+        // Fuzzy can be switched off by callers.
+        $ids = array_column($this->searchService->RankedPlayers(['q' => "Withrebloom{$m}", 'limit' => 16, 'fuzzy' => false]), 'MundaneId');
+        $this->assertNotContains($player['mundane_id'], $ids);
+    }
+
+    public function testRankedPlayersKdPrefixOrdersActiveBeforeInactive(): void
     {
         $kid = $this->fixture->firstKingdomId();
         $parkId = $this->fixture->parkIdInKingdom($kid);
@@ -166,40 +220,41 @@ final class SearchServiceTest extends TestCase
         $pAbbr = $this->fixture->parkAbbreviation($parkId);
         $marker = 'C28Sort' . bin2hex(random_bytes(3));
 
-        $active = $this->fixture->createPlayer($parkId, 'c28act', 'T11SRC ' . $marker . ' Active');
-        $inactive = $this->fixture->createPlayer($parkId, 'c28ina', 'T11SRC ' . $marker . ' Inactive');
+        // Inactive persona sorts first alphabetically, so only the tier can put active first.
+        $active = $this->fixture->createPlayer($parkId, 'c28act', 'T11SRC ' . $marker . ' Zactive');
+        $inactive = $this->fixture->createPlayer($parkId, 'c28ina', 'T11SRC ' . $marker . ' Ainactive');
         $suspended = $this->fixture->createPlayer($parkId, 'c28sus', 'T11SRC ' . $marker . ' Suspended');
         $this->pdoUpdateMundaneMembership($inactive['mundane_id'], active: 0, suspended: 0);
         $this->pdoUpdateMundaneMembership($suspended['mundane_id'], active: 1, suspended: 1);
 
-        $requestBase = [
-            'IncludeInactive'  => true,
-            'IncludeSuspended' => true,
-            'Limit'            => 50,
-        ];
+        $kdResults = $this->searchService->RankedPlayers([
+            'q'     => "{$kAbbr}: {$marker}",
+            'limit' => 50,
+        ]);
+        $this->assertRankedMembershipOrder($kdResults, $active, $inactive, $suspended);
+        foreach ($kdResults as $row) {
+            $this->assertSame($kid, (int) $row['KingdomId']);
+        }
 
-        $kdResults = $this->searchService->ScopedPlayerSearch(array_merge($requestBase, [
-            'Query' => "{$kAbbr}: {$marker}",
-        ]));
-        $this->assertScopedPlayerSearchMembershipOrder($kdResults, $active, $inactive, $suspended);
-
-        $kdpkResults = $this->searchService->ScopedPlayerSearch(array_merge($requestBase, [
-            'Query' => "{$kAbbr}:{$pAbbr} {$marker}",
-        ]));
-        $this->assertScopedPlayerSearchMembershipOrder($kdpkResults, $active, $inactive, $suspended);
+        $kdpkResults = $this->searchService->RankedPlayers([
+            'q'     => "{$kAbbr}:{$pAbbr} {$marker}",
+            'limit' => 50,
+        ]);
+        $this->assertRankedMembershipOrder($kdpkResults, $active, $inactive, $suspended);
+        foreach ($kdpkResults as $row) {
+            $this->assertSame($parkId, (int) $row['ParkId']);
+        }
     }
 
-    public function testAdminGlobalSearch(): void
+    public function testGlobalSearchRespectsLimit(): void
     {
         $kid = $this->fixture->firstKingdomId();
         $parkId = $this->fixture->parkIdInKingdom($kid);
         $player = $this->fixture->createPlayer($parkId, 'global');
 
-        $results = $this->searchService->ScopedPlayerSearch([
-            'Query'  => substr($player['persona'], -8),
-            'Scope'  => 'global',
-            'Limit'  => 20,
-            'Format' => 'admin',
+        $results = $this->searchService->RankedPlayers([
+            'q'     => $player['persona'],
+            'limit' => 20,
         ]);
         $this->assertLessThanOrEqual(20, count($results));
         $this->assertContains($player['mundane_id'], array_column($results, 'MundaneId'));
@@ -243,12 +298,15 @@ final class SearchServiceTest extends TestCase
     }
 
     /**
+     * Active (tier 0) ranks before inactive (tier 1); a suspended player is hidden from an
+     * anonymous (no-token) viewer.
+     *
      * @param list<array<string, mixed>> $results
      * @param array{mundane_id: int} $active
      * @param array{mundane_id: int} $inactive
      * @param array{mundane_id: int} $suspended
      */
-    private function assertScopedPlayerSearchMembershipOrder(
+    private function assertRankedMembershipOrder(
         array $results,
         array $active,
         array $inactive,
@@ -260,9 +318,8 @@ final class SearchServiceTest extends TestCase
         }
         $this->assertArrayHasKey($active['mundane_id'], $indexById);
         $this->assertArrayHasKey($inactive['mundane_id'], $indexById);
-        $this->assertArrayHasKey($suspended['mundane_id'], $indexById);
+        $this->assertArrayNotHasKey($suspended['mundane_id'], $indexById);
         $this->assertLessThan($indexById[$inactive['mundane_id']], $indexById[$active['mundane_id']]);
-        $this->assertLessThan($indexById[$suspended['mundane_id']], $indexById[$inactive['mundane_id']]);
     }
 
     private function pdoUpdateMundaneMembership(int $mundaneId, int $active, int $suspended): void

@@ -1759,7 +1759,8 @@ var AL_SCOPES = {
 	Player: {
 		source: function(term, cb) {
 			$.getJSON('../orkservice/Search/SearchService.php', {
-				Action: 'Search/Player', type: 'all', search: term, limit: 8
+				Action: 'Search/Player', type: 'all', search: term, limit: 8,
+				token: '<?= htmlspecialchars((string)($this->__session->token ?? ''), ENT_QUOTES) ?>'
 			}, function(data) {
 				cb($.map(data || [], function(v) {
 					return { label: v.Persona + ' (' + v.KAbbr + ':' + v.PAbbr + ')', value: v.MundaneId, display: v.Persona };
