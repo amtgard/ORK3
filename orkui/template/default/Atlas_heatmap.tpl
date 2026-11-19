@@ -1,0 +1,541 @@
+<?php
+// ── Pre-compute park + heatmap data server-side ──────────────────────────────
+require_once(DIR_LIB . 'Parsedown.php');
+if (!function_exists('at_map_markdown')) {
+	function at_map_markdown(string $text): string {
+		$clean = str_replace(['<br />', '<br/>', '<br>'], "\n", $text);
+		$html  = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true)->text($clean);
+		return preg_replace('/<img[^>]*>/i', '', $html);
+	}
+}
+
+$atParks        = [];
+$atKingdomIds   = [];
+foreach ((array)($Parks['Parks'] ?? []) as $details) {
+	$loc = @json_decode(stripslashes((string)($details['Location'] ?? '')));
+	if (!$loc) continue;
+	$latlng = isset($loc->location) ? $loc->location
+	        : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
+	if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) continue;
+	if ((int)($details['KingdomId'] ?? 0) <= 0 || empty($details['KingdomName'])) continue;
+	$dirText  = at_map_markdown($details['Directions'] ?? '');
+	$descText = at_map_markdown($details['Description'] ?? '');
+	$city     = htmlspecialchars(trim($details['City'] ?? ''));
+	$province = htmlspecialchars(trim($details['Province'] ?? ''));
+	$atParks[] = [
+		'name'     => ucwords($details['Name']),
+		'lat'      => (float)$latlng->lat,
+		'lng'      => (float)$latlng->lng,
+		'id'       => (int)$details['ParkId'],
+		'kid'      => (int)$details['KingdomId'],
+		'color'    => ltrim($details['KingdomColor'] ?? '718096', '#'),
+		'kname'    => htmlspecialchars($details['KingdomName'] ?? ''),
+		'city'     => $city,
+		'province' => $province,
+		'heraldry' => $details['HasHeraldry']
+			? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $details['ParkId']))
+			: '',
+		'dir'      => $dirText,
+		'desc'     => $descText,
+	];
+	$atKingdomIds[(int)$details['KingdomId']] = true;
+}
+
+// Merge heatmap weights into park data
+$weights = $HeatmapWeights ?? [];
+$atHmPoints = [];
+foreach ($atParks as $park) {
+	$pid = $park['id'];
+	$w   = $weights[$pid] ?? ['p' => 0, 'r' => 0];
+	$park['hw_p'] = (int)$w['p'];
+	$park['hw_r'] = (int)$w['r'];
+	$atHmPoints[] = $park;
+}
+
+$atParkCount    = count($atParks);
+$atKingdomCount = count($atKingdomIds);
+$atHmCount      = count(array_filter($atHmPoints, fn($p) => $p['hw_p'] > 0 || $p['hw_r'] > 0));
+?>
+
+<style>
+/* ── Atlas Heatmap page ── all classes prefixed at- ─────────────────────── */
+
+.at-page { display:flex; flex-direction:column; gap:12px; }
+
+/* ── Header ── */
+.at-header {
+	display:flex; align-items:center; gap:12px;
+	padding: 14px 0 6px;
+}
+.at-header-icon {
+	width:42px; height:42px; border-radius:50%;
+	background:#c53030; color:#fff;
+	display:flex; align-items:center; justify-content:center;
+	font-size:18px; flex-shrink:0;
+}
+.at-header-title {
+	font-size:22px; font-weight:700; color:#2d3748; margin:0;
+	background:transparent; border:none; padding:0; border-radius:0;
+	text-shadow:none;
+}
+.at-header-sub { font-size:13px; color:#718096; margin-top:1px; }
+.at-back-link {
+	display:inline-flex; align-items:center; gap:5px;
+	font-size:13px; color:#2b6cb0; text-decoration:none; margin-left:auto;
+	padding:6px 12px; border:1px solid #bee3f8; border-radius:6px;
+	background:#ebf4ff; transition:background .15s;
+}
+.at-back-link:hover { background:#bee3f8; color:#1a365d; text-decoration:none; }
+
+/* ── Stats bar ── */
+.at-stats-bar {
+	display:flex; gap:0;
+	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	overflow:hidden; margin-bottom:4px;
+}
+.at-stat {
+	flex:1; display:flex; flex-direction:column;
+	align-items:center; justify-content:center;
+	padding:10px 12px; gap:2px;
+	border-right:1px solid #e2e8f0;
+}
+.at-stat:last-child { border-right:none; }
+.at-stat-value { font-size:22px; font-weight:700; color:#2d3748; line-height:1; }
+.at-stat-label { font-size:11px; color:#718096; text-transform:uppercase; letter-spacing:.06em; }
+
+/* ── Controls bar ── */
+.at-controls {
+	display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	padding:10px 16px;
+}
+.at-controls-label { font-size:13px; color:#4a5568; font-weight:600; flex-shrink:0; }
+
+/* ── Heatmap mode toggle ── */
+.at-hm-pills {
+	display:flex; gap:4px;
+}
+.at-hm-pill {
+	padding:6px 14px; font-size:13px; font-weight:600;
+	border:1px solid #e2e8f0; border-radius:20px;
+	background:#f7fafc; color:#718096;
+	cursor:pointer; transition:background .15s, color .15s, border-color .15s;
+}
+.at-hm-pill:hover { background:#fed7d7; color:#c53030; border-color:#feb2b2; }
+.at-hm-pill.active { background:#fff5f5; color:#c53030; border-color:#fc8181; }
+
+/* ── Map layout ── */
+.at-map-outer { display:flex; flex-direction:column; gap:10px; }
+.at-map-loading {
+	display:flex; align-items:center; justify-content:center;
+	gap:10px; padding:60px 0; color:#718096; font-size:14px;
+}
+.at-map-layout { display:flex; gap:14px; align-items:flex-start; }
+.at-map-wrap { flex:1 1 0; min-width:0; }
+#at-map {
+	width:100%; height:72vh; min-height:400px;
+	border-radius:8px; border:1px solid #e2e8f0;
+}
+.at-sidebar-wrap { width:270px; flex-shrink:0; }
+.at-sidebar-card {
+	background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+	height:72vh; min-height:400px;
+	overflow-y:auto; box-sizing:border-box;
+	display:flex; flex-direction:column;
+}
+
+/* ── Sidebar: empty state ── */
+.at-sidebar-empty {
+	flex:1; display:flex; flex-direction:column;
+	align-items:center; justify-content:center;
+	gap:10px; padding:30px 20px; text-align:center;
+}
+.at-sidebar-empty-icon {
+	width:52px; height:52px; border-radius:50%;
+	background:#fff5f5; color:#c53030;
+	display:flex; align-items:center; justify-content:center;
+	font-size:20px;
+}
+.at-sidebar-empty p { font-size:13px; color:#a0aec0; font-style:italic; margin:0; }
+
+/* ── Sidebar: park hero ── */
+.at-park-hero {
+	border-radius:8px 8px 0 0; padding:24px 16px 16px;
+	display:flex; flex-direction:column; align-items:center;
+	gap:10px; text-align:center; flex-shrink:0;
+}
+.at-park-heraldry {
+	width:84px; height:84px; border-radius:8px; object-fit:contain;
+	background:#fff; border:2px solid rgba(255,255,255,.5);
+	box-shadow:0 2px 8px rgba(0,0,0,.18);
+}
+.at-park-heraldry-placeholder {
+	width:84px; height:84px; border-radius:8px;
+	background:rgba(255,255,255,.18); border:2px solid rgba(255,255,255,.4);
+	display:flex; align-items:center; justify-content:center;
+	font-size:28px; color:rgba(255,255,255,.7);
+}
+.at-park-hero-name {
+	font-size:16px; font-weight:700; color:#fff; margin:0;
+	background:transparent; border:none; padding:0; border-radius:0;
+	text-shadow:0 1px 3px rgba(0,0,0,.3); line-height:1.3;
+}
+.at-park-hero-location { font-size:12px; color:rgba(255,255,255,.85); display:flex; align-items:center; gap:4px; margin:0; }
+.at-park-kingdom-badge {
+	display:inline-flex; align-items:center; gap:5px;
+	background:rgba(255,255,255,.2); color:#fff;
+	border:1px solid rgba(255,255,255,.35);
+	font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; margin-top:2px;
+}
+.at-park-stat-row {
+	display:flex; gap:8px; margin-top:4px; width:100%;
+}
+.at-park-stat-pill {
+	flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+	background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
+	border-radius:8px; padding:6px 4px;
+}
+.at-park-stat-pill-val { font-size:16px; font-weight:700; color:#fff; line-height:1; }
+.at-park-stat-pill-lbl { font-size:10px; color:rgba(255,255,255,.8); text-align:center; }
+
+/* ── Sidebar: park body ── */
+.at-park-body { padding:14px 16px; flex:1; display:flex; flex-direction:column; gap:12px; }
+.at-park-section {}
+.at-park-section-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#a0aec0; margin-bottom:4px; }
+.at-park-section-text { font-size:13px; color:#4a5568; line-height:1.55; margin:0; }
+.at-park-section-text p { margin:0 0 8px; }
+.at-park-section-text p:last-child { margin-bottom:0; }
+.at-park-section-text ul, .at-park-section-text ol { margin:0 0 8px; padding-left:18px; }
+.at-park-section-text strong { font-weight:700; }
+.at-park-section-text em { font-style:italic; }
+.at-park-section-text a { color:#2b6cb0; }
+.at-park-divider { border:none; border-top:1px solid #e2e8f0; margin:0; }
+.at-park-profile-btn {
+	display:block; text-align:center;
+	background:#3182ce; color:#fff; font-size:13px; font-weight:600;
+	padding:9px 16px; border-radius:6px; text-decoration:none;
+	transition:background .15s; margin-top:auto;
+}
+.at-park-profile-btn:hover { background:#2b6cb0; color:#fff; text-decoration:none; }
+.at-park-profile-btn i { margin-right:6px; }
+
+/* ── Legend ── */
+.at-hm-legend {
+	display:flex; align-items:center; gap:10px;
+	font-size:12px; color:#718096;
+}
+.at-hm-legend-bar {
+	width:120px; height:10px; border-radius:5px;
+	background:linear-gradient(to right, rgba(0,255,255,0), rgba(0,255,0,.5), rgba(255,255,0,.8), rgba(255,0,0,1));
+	border:1px solid #e2e8f0;
+}
+
+/* ── Mobile ── */
+.at-map-hint { display:none; }
+@media (max-width:768px) {
+	.at-map-hint {
+		display:flex; align-items:center; gap:8px;
+		background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
+		padding:8px 12px; font-size:12px; color:#c53030;
+	}
+	.at-map-hint i { font-size:14px; flex-shrink:0; }
+	.at-map-layout { flex-direction:column; width:100%; }
+	.at-map-wrap { width:100%; min-width:0; }
+	.at-sidebar-wrap { width:100%; }
+	.at-sidebar-card { height:auto; min-height:120px; }
+	#at-map { width:100%; height:55vw; min-height:260px; max-height:60vh; }
+	.at-controls { flex-wrap:wrap; gap:10px; }
+	.at-page { overflow-x:hidden; }
+}
+
+/* ===================================================================
+   DARK MODE OVERRIDES — Atlas heatmap
+   Activated by: html[data-theme="dark"]
+   =================================================================== */
+
+/* Header. The red icon disc and the white-on-kingdom-color park hero are
+   already dark-safe, so only the type and the back link need remapping. */
+html[data-theme="dark"] .at-header-title { background:transparent; border:none; color:var(--ork-text); text-shadow:none; }
+html[data-theme="dark"] .at-header-sub { color:var(--ork-text-muted); }
+html[data-theme="dark"] .at-back-link { background:var(--ork-badge-blue-bg); border-color:var(--ork-badge-blue-bg); color:var(--ork-link); }
+html[data-theme="dark"] .at-back-link:hover { background:#2c5282; color:var(--ork-link-bright); }
+
+/* Stats bar */
+html[data-theme="dark"] .at-stats-bar { background:var(--ork-card-bg); border-color:var(--ork-border); }
+html[data-theme="dark"] .at-stat { border-right-color:var(--ork-border); }
+html[data-theme="dark"] .at-stat-value { color:var(--ork-text); }
+html[data-theme="dark"] .at-stat-label { color:var(--ork-text-muted); }
+
+/* Controls bar + mode pills. Light mode tints the active pill with a pale red
+   wash; dark mode inverts that to a deep red ground with light red type. */
+html[data-theme="dark"] .at-controls { background:var(--ork-card-bg); border-color:var(--ork-border); }
+html[data-theme="dark"] .at-controls-label { color:var(--ork-text-secondary); }
+html[data-theme="dark"] .at-controls-label i { color:#fc8181 !important; }
+html[data-theme="dark"] .at-hm-pill { background:var(--ork-bg-tertiary); border-color:var(--ork-border); color:var(--ork-text-secondary); }
+html[data-theme="dark"] .at-hm-pill:hover { background:var(--ork-badge-red-bg); border-color:#9b2c2c; color:var(--ork-badge-red-text); }
+html[data-theme="dark"] .at-hm-pill.active { background:var(--ork-badge-red-bg); border-color:#fc8181; color:var(--ork-badge-red-text); }
+
+/* Map + sidebar shells */
+html[data-theme="dark"] .at-map-loading { color:var(--ork-text-muted); }
+html[data-theme="dark"] #at-map { border-color:var(--ork-border); }
+html[data-theme="dark"] .at-sidebar-card { background:var(--ork-card-bg); border-color:var(--ork-border); }
+html[data-theme="dark"] .at-sidebar-empty-icon { background:var(--ork-badge-red-bg); color:var(--ork-badge-red-text); }
+html[data-theme="dark"] .at-sidebar-empty p { color:var(--ork-text-muted); }
+
+/* Sidebar park body */
+html[data-theme="dark"] .at-park-section-label { color:var(--ork-text-muted); }
+html[data-theme="dark"] .at-park-section-text { color:var(--ork-text-secondary); }
+html[data-theme="dark"] .at-park-section-text a { color:var(--ork-link); }
+html[data-theme="dark"] .at-park-divider { border-top-color:var(--ork-border); }
+html[data-theme="dark"] .at-park-profile-btn:hover { background:#4299e1; color:#fff; }
+
+/* Legend */
+html[data-theme="dark"] .at-hm-legend { color:var(--ork-text-muted); }
+html[data-theme="dark"] .at-hm-legend-bar { border-color:var(--ork-border); }
+
+@media (max-width:768px) {
+	html[data-theme="dark"] .at-map-hint {
+		background:var(--ork-badge-red-bg); border-color:#9b2c2c; color:var(--ork-badge-red-text);
+	}
+}
+</style>
+
+<div class="at-page">
+
+	<!-- Header -->
+	<div class="at-header">
+		<div class="at-header-icon"><i class="fas fa-fire-alt"></i></div>
+		<div>
+			<h1 class="at-header-title">Population Heatmap</h1>
+			<div class="at-header-sub">Active players per park &mdash; last 12 months</div>
+		</div>
+		<a href="?Route=Atlas" class="at-back-link"><i class="fas fa-arrow-left"></i> Back to Atlas</a>
+	</div>
+
+	<!-- Stats -->
+	<div class="at-stats-bar">
+		<div class="at-stat">
+			<span class="at-stat-value"><?= number_format($atParkCount) ?></span>
+			<span class="at-stat-label">Parks</span>
+		</div>
+		<div class="at-stat">
+			<span class="at-stat-value"><?= number_format($atKingdomCount) ?></span>
+			<span class="at-stat-label">Kingdoms &amp; Principalities</span>
+		</div>
+		<div class="at-stat">
+			<span class="at-stat-value"><?= number_format($atHmCount) ?></span>
+			<span class="at-stat-label">Parks With Activity</span>
+		</div>
+	</div>
+
+	<!-- Controls -->
+	<div class="at-controls">
+		<span class="at-controls-label"><i class="fas fa-layer-group" style="margin-right:4px;color:#c53030"></i>Heatmap:</span>
+		<div class="at-hm-pills">
+			<button class="at-hm-pill active" id="at-pill-p" onclick="atSetHmMode('p')">By Participation</button>
+			<button class="at-hm-pill"        id="at-pill-r" onclick="atSetHmMode('r')">By Residents</button>
+		</div>
+		<div class="at-hm-legend">
+			<span>Low</span>
+			<div class="at-hm-legend-bar"></div>
+			<span>High</span>
+		</div>
+		<button class="at-hm-pill" id="at-pill-pins" onclick="atTogglePins()" style="margin-left:auto">
+			<i class="fas fa-map-marker-alt" style="margin-right:4px"></i>Hide Pins
+		</button>
+	</div>
+
+	<!-- Map + Sidebar -->
+	<div class="at-map-outer">
+		<?php if ($atParkCount > 0): ?>
+		<div id="at-map-loading" class="at-map-loading">
+			<i class="fas fa-spinner fa-spin" style="font-size:20px"></i>
+			Loading map&hellip;
+		</div>
+		<div id="at-map-container" style="display:none">
+			<div class="at-map-layout">
+				<div class="at-map-wrap">
+					<div id="at-map"></div>
+					<div class="at-map-hint">
+						<i class="fas fa-hand-point-up"></i>
+						Pinch to zoom in and out.
+					</div>
+				</div>
+				<div class="at-sidebar-wrap">
+					<div class="at-sidebar-card" id="at-sidebar-card">
+						<div class="at-sidebar-empty" id="at-sidebar-empty">
+							<div class="at-sidebar-empty-icon"><i class="fas fa-fire-alt"></i></div>
+							<p>Click any park pin to see player activity details.</p>
+						</div>
+						<div id="at-sidebar-park" style="display:none; flex-direction:column; flex:1;">
+							<div class="at-park-hero" id="at-park-hero"></div>
+							<div class="at-park-body" id="at-park-body"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<?php else: ?>
+		<div class="at-empty">No park location data available.</div>
+		<?php endif; ?>
+	</div>
+
+</div><!-- /.at-page -->
+
+<script>
+var atHmData    = <?= json_encode(array_values($atHmPoints), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+var atHmMode    = 'p';
+var atMapObj    = null;
+var atHmLayer   = null;
+var atAllMarkers = [];
+var atPinsHidden = false;
+
+function atTogglePins() {
+	atPinsHidden = !atPinsHidden;
+	var target = atPinsHidden ? null : atMapObj;
+	atAllMarkers.forEach(function(m) { m.map = target; });
+	var btn = document.getElementById('at-pill-pins');
+	btn.classList.toggle('active', atPinsHidden);
+	btn.innerHTML = atPinsHidden
+		? '<i class="fas fa-map-marker-alt" style="margin-right:4px"></i>Show Pins'
+		: '<i class="fas fa-map-marker-alt" style="margin-right:4px"></i>Hide Pins';
+}
+
+function atColorIsLight(hex) {
+	var r = parseInt(hex.substring(0, 2), 16);
+	var g = parseInt(hex.substring(2, 4), 16);
+	var b = parseInt(hex.substring(4, 6), 16);
+	return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55;
+}
+
+function atSetHmMode(mode) {
+	atHmMode = mode;
+	document.getElementById('at-pill-p').classList.toggle('active', mode === 'p');
+	document.getElementById('at-pill-r').classList.toggle('active', mode === 'r');
+	if (!atHmLayer) return;
+	var pts = atHmData
+		.filter(function(d) { return d['hw_' + mode] > 0; })
+		.map(function(d) {
+			return { location: new google.maps.LatLng(d.lat, d.lng), weight: d['hw_' + mode] };
+		});
+	atHmLayer.setData(pts);
+}
+
+function atRenderSidebar(loc) {
+	var hex     = (loc.color && loc.color.length === 6) ? loc.color : '718096';
+	var color   = '#' + hex;
+	var isLight = atColorIsLight(hex);
+	var textColor      = isLight ? '#1a202c' : '#ffffff';
+	var textColorMuted = isLight ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.85)';
+	var badgeBg        = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.2)';
+	var badgeBorder    = isLight ? 'rgba(0,0,0,0.2)'  : 'rgba(255,255,255,0.35)';
+	var placeholderColor = isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.7)';
+	var locLine = [loc.city, loc.province].filter(Boolean).join(', ');
+
+	var heraldryHtml = loc.heraldry
+		? '<img src="' + loc.heraldry + '" class="at-park-heraldry" alt="' + loc.name + ' heraldry">'
+		: '<div class="at-park-heraldry-placeholder" style="color:' + placeholderColor + '"><i class="fas fa-shield-alt"></i></div>';
+
+	var statsHtml = '<div class="at-park-stat-row">'
+		+ '<div class="at-park-stat-pill"><span class="at-park-stat-pill-val">' + (loc.hw_p || 0) + '</span><span class="at-park-stat-pill-lbl">Visitors</span></div>'
+		+ '<div class="at-park-stat-pill"><span class="at-park-stat-pill-val">' + (loc.hw_r || 0) + '</span><span class="at-park-stat-pill-lbl">Residents</span></div>'
+		+ '</div>';
+
+	var heroHtml = heraldryHtml
+		+ '<div class="at-park-hero-name" style="color:' + textColor + ';text-shadow:' + (isLight ? 'none' : '0 1px 3px rgba(0,0,0,.3)') + '">' + loc.name + '</div>'
+		+ (locLine ? '<div class="at-park-hero-location" style="color:' + textColorMuted + '"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + locLine + '</div>' : '')
+		+ (loc.kname ? '<div class="at-park-kingdom-badge" style="background:' + badgeBg + ';border-color:' + badgeBorder + ';color:' + textColor + '"><i class="fas fa-crown" style="font-size:9px"></i>' + loc.kname + '</div>' : '')
+		+ statsHtml;
+
+	var bodyHtml = '';
+	if (loc.dir) {
+		bodyHtml += '<div class="at-park-section">'
+			+ '<div class="at-park-section-label"><i class="fas fa-directions" style="margin-right:4px"></i>Directions</div>'
+			+ '<div class="at-park-section-text">' + loc.dir + '</div>'
+			+ '</div>';
+	}
+	if (loc.desc) {
+		if (bodyHtml) bodyHtml += '<hr class="at-park-divider">';
+		bodyHtml += '<div class="at-park-section">'
+			+ '<div class="at-park-section-label"><i class="fas fa-info-circle" style="margin-right:4px"></i>About</div>'
+			+ '<div class="at-park-section-text">' + loc.desc + '</div>'
+			+ '</div>';
+	}
+	bodyHtml += '<a href="?Route=Park/profile/' + loc.id + '" class="at-park-profile-btn">'
+		+ '<i class="fas fa-external-link-alt"></i>View Park Profile</a>';
+
+	var heroEl = document.getElementById('at-park-hero');
+	heroEl.innerHTML = heroHtml;
+	heroEl.style.background = 'linear-gradient(135deg, #' + hex + 'dd, #' + hex + '99)';
+	document.getElementById('at-park-body').innerHTML = bodyHtml;
+	document.getElementById('at-sidebar-empty').style.display = 'none';
+	var parkEl = document.getElementById('at-sidebar-park');
+	parkEl.style.display = 'flex';
+}
+
+window.atInitMap = async function() {
+	var loadingEl   = document.getElementById('at-map-loading');
+	var containerEl = document.getElementById('at-map-container');
+	if (!loadingEl || !containerEl) return;
+	loadingEl.style.display   = 'none';
+	containerEl.style.display = 'block';
+
+	const { Map } = await google.maps.importLibrary("maps");
+	const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker");
+	const { HeatmapLayer } = await google.maps.importLibrary("visualization");
+
+	atMapObj = new google.maps.Map(document.getElementById('at-map'), {
+		center: { lat: 39, lng: -98 },
+		zoom: 3,
+		mapId: 'ORK3_MAP_ID'
+	});
+	google.maps.event.trigger(atMapObj, 'resize');
+	atMapObj.setCenter({ lat: 39, lng: -98 });
+
+	// Build initial heatmap data (participation)
+	var initialPts = atHmData
+		.filter(function(d) { return d.hw_p > 0; })
+		.map(function(d) {
+			return { location: new google.maps.LatLng(d.lat, d.lng), weight: d.hw_p };
+		});
+
+	atHmLayer = new HeatmapLayer({
+		data: initialPts,
+		map: atMapObj,
+		radius: 40,
+		dissipating: true
+	});
+
+	// Park pins
+	var infowindow = new google.maps.InfoWindow();
+
+	atHmData.forEach(function(loc) {
+		var color    = loc.color ? '#' + loc.color : '#718096';
+		var locLine  = [loc.city, loc.province].filter(Boolean).join(', ');
+		var pinGlyph = new PinElement({ background: color, scale: 0.7 });
+		var marker   = new google.maps.marker.AdvancedMarkerElement({
+			position: new google.maps.LatLng(loc.lat, loc.lng),
+			map: atMapObj,
+			title: loc.name,
+			content: pinGlyph.element
+		});
+		atAllMarkers.push(marker);
+
+		google.maps.event.addListener(marker, 'click', function() {
+			var tipHtml = '<b><a href="?Route=Park/profile/' + loc.id + '" style="color:#2b6cb0">' + loc.name + '</a></b>'
+				+ (locLine ? '<div style="font-size:12px;color:#718096;margin-top:3px">'
+					+ '<i class="fas fa-map-marker-alt" style="font-size:10px;margin-right:3px"></i>' + locLine + '</div>' : '');
+			infowindow.setContent(tipHtml);
+			infowindow.open(atMapObj, marker);
+			atRenderSidebar(loc);
+		});
+	});
+};
+
+(function() {
+	var s = document.createElement('script');
+	s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8&callback=atInitMap&v=weekly&libraries=marker,visualization';
+	s.async = true;
+	document.head.appendChild(s);
+})();
+</script>
