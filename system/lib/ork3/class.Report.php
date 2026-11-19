@@ -4924,6 +4924,85 @@ class Report extends Ork3
         return $response;
     }
 
+    /**
+     * Park Activity: every park in a kingdom (or everywhere) with its most recent
+     * attendance and its sign-in totals over a trailing window of whole months.
+     * Ported from the jsork "Freehold Activity" page, which pulled one
+     * AttendanceSummary per park from the browser; this is a single query.
+     *
+     * Request:
+     *   KingdomId      0 = all kingdoms, else the kingdom and its principalities
+     *   Months         trailing window, 1-120, default 24
+     *   IncludeRetired truthy = include Retired parks (default Active only)
+     *
+     * attendance.date is a DATE, so "today" is PHP's wall-clock date, not
+     * CURDATE(), which rolls over at 7 PM Central on this database.
+     */
+    public function GetParkActivity($request)
+    {
+        $kingdom_id      = valid_id($request['KingdomId'] ?? 0) ? (int)$request['KingdomId'] : 0;
+        $months          = (int)($request['Months'] ?? 24);
+        $months          = max(1, min(120, $months > 0 ? $months : 24));
+        $include_retired = !empty($request['IncludeRetired']);
+
+        $today        = date('Y-m-d');
+        $window_start = date('Y-m-d', strtotime("$today -$months month"));
+
+        $kingdom_clause = $kingdom_id
+            ? " AND p.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ")"
+            : '';
+        $active_clause = $include_retired ? '' : " AND p.active = 'Active'";
+        $window        = "a.date > '$window_start' AND a.date <= '$today'";
+
+        $sql = "
+			SELECT p.park_id, p.name AS park_name, p.active,
+			       k.kingdom_id, k.name AS kingdom_name,
+			       pt.title AS park_type,
+			       (SELECT MAX(a.date) FROM " . DB_PREFIX . "attendance a WHERE a.park_id = p.park_id) AS last_attendance,
+			       (SELECT COUNT(DISTINCT a.date) FROM " . DB_PREFIX . "attendance a WHERE a.park_id = p.park_id AND $window) AS signin_days,
+			       (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance a WHERE a.park_id = p.park_id AND $window) AS attendances,
+			       (SELECT COUNT(DISTINCT a.mundane_id) FROM " . DB_PREFIX . "attendance a WHERE a.park_id = p.park_id AND $window) AS distinct_players
+			FROM " . DB_PREFIX . "park p
+			JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+			LEFT JOIN " . DB_PREFIX . "parktitle pt ON pt.parktitle_id = p.parktitle_id
+			WHERE p.park_id > 0
+			  AND p.name != ''
+			  AND p.name NOT LIKE '%No Park%'
+			  $active_clause
+			  $kingdom_clause
+			ORDER BY k.name, p.name
+		";
+
+        $r = $this->db->query($sql);
+        $response = [
+            'Status'      => Success(),
+            'Parks'       => [],
+            'ReportDate'  => $today,
+            'WindowStart' => $window_start,
+            'Months'      => $months,
+        ];
+        if ($r !== false && $r->size() > 0) {
+            $today_ts = strtotime($today);
+            while ($r->next()) {
+                $last = $r->last_attendance ?: null;
+                $response['Parks'][] = [
+                    'ParkId'          => (int)$r->park_id,
+                    'ParkName'        => $r->park_name,
+                    'ParkType'        => $r->park_type,
+                    'Active'          => $r->active,
+                    'KingdomId'       => (int)$r->kingdom_id,
+                    'KingdomName'     => $r->kingdom_name,
+                    'LastAttendance'  => $last,
+                    'DaysInactive'    => $last ? max(0, (int)floor(($today_ts - strtotime($last)) / 86400)) : null,
+                    'SigninDays'      => (int)$r->signin_days,
+                    'Attendances'     => (int)$r->attendances,
+                    'DistinctPlayers' => (int)$r->distinct_players,
+                ];
+            }
+        }
+        return $response;
+    }
+
     /* ============================ Amtgard Week in Review ============================ */
 
     // Compute the full weekly recap payload for a given week. Server-local Mon-Sun
