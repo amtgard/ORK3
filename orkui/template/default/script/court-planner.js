@@ -135,6 +135,10 @@
         }
         clearTimeout(cpAcTimer);
         cpAcTimer = setTimeout(function () {
+            // A list removed while the search debounced or was in flight (an inline
+            // editor that closed) is never shown or bound: cpAcOpenDrop and the scroll
+            // listeners must not end up holding a detached node.
+            if (!drop.isConnected) { return; }
             var c = cfg();
             // scope=all, not the endpoint's 'own' default. Without it playersearch
             // applies "AND m.kingdom_id IN (family)" and only this kingdom's players
@@ -146,6 +150,7 @@
             fetch(c.uir + 'KingdomAjax/playersearch/' + c.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=all')
             .then(function (r) { return r.json(); })
             .then(function (data) {
+                if (!drop.isConnected) { return; }
                 drop.innerHTML = '';
                 if (!data || !data.length) {
                     drop.innerHTML = '<div class="cp-ac-item cp-ac-empty" style="color:#a0aec0;cursor:default">No players found</div>';

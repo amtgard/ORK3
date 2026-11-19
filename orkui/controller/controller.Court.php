@@ -118,7 +118,14 @@ class Controller_Court extends Controller
             return;
         }
 
+        // default.theme prints this into <title> unescaped.
+        $this->data['page_title'] = htmlspecialchars($this->Court->plan_page_title($court['Name']), ENT_QUOTES);
+
         $courtAwards  = $this->Court->get_court_awards($court_id, $uid);
+        // Per-line ScrolleryPrintable: the scroll dropdown disables Scrollery Print
+        // for an award Scrollery cannot print.
+        $this->load_model('Scrollery');
+        $courtAwards  = $this->Scrollery->flag_printable_court_lines($courtAwards, (int)$court['KingdomId']);
         // Non-award line items that share the running order with the awards.
         $courtNotes   = $this->Court->get_court_notes($court_id);
         $pendingRecs  = $this->Court->get_pending_recommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id, (string)$this->session->token);
@@ -198,13 +205,18 @@ class Controller_Court extends Controller
         // informational only, it changes no default. See Award::pseudoLadderSiblings.
         $this->data['PseudoLadderSiblings'] = (new Award())->pseudoLadderSiblings();
         $this->data['StatusFlow']   = $statusFlow;
+        $this->data['TrackingStatuses'] = $this->Court->tracking_status_definitions();
         $this->data['CanManage']    = $canManage;
+        $this->data['CanSetIssuedBy'] = $court['ParkId'] > 0
+            && $this->Court->can_manage($uid, $court['KingdomId'], 0);
         $this->data['Uid']          = $uid;
         $this->data['HeraldryUrl']  = $heraldryUrl;
         $this->data['HasHeraldry']  = $hasHeraldry;
         $this->data['GiverOptions'] = $giverOptions;
         $this->data['CourtMode']    = $courtState['mode'] ?? 'run';
         $this->data['StateVersion'] = $courtState['version'] ?? '';
+        // The planner's view tab (?view=resources). Anything else means Order of Court.
+        $this->data['CpView']       = (($_GET['view'] ?? '') === 'resources') ? 'resources' : 'order';
         $this->data['StagedCount']  = $stagedCount;
         $this->data['PrevSkipped']  = $prevSkipped;
         $this->data['UpcomingEvents'] = $upcomingEvents;

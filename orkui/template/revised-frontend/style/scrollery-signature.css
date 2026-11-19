@@ -1,0 +1,141 @@
+/* ==========================================================================
+   The signature hand — the typeface of the certificate's given-by line.
+
+   A per-PRINT choice, like the hand (scrollery-hand.js), and applied the same way:
+   an attribute on ANY ancestor of a certificate. Scrollery_render.tpl stamps
+   data-scroll-sig on <body>, the composer stamps it on its preview stage, and a bulk
+   print needs nothing more than the one stamp. The vocabulary is
+   system/lib/ork3/data/scroll-recipes.php ('signatureHands'); ScrollRecipeTest keeps
+   that list, the @font-face rules and the selectors below in agreement.
+
+   Its own stylesheet rather than scrollery.css so the certificate sheet's @font-face
+   list is not edited for a picker, and linked wherever scrollery.css is linked for a
+   certificate. `hand`, the default, has no rule at all: the given-by line stays in the
+   certificate's own text face, exactly as before.
+
+   SIZE. _text.tpl sets the line at font-size:0.7em inline, and scrollery-autofit.js
+   rewrites that same inline size, in em of the parent, to fit a long signer onto two
+   lines. A rule here that set font-size would either lose to the inline style or, with
+   !important, fight the fit. `zoom` leaves the used font-size (and so the fit's
+   arithmetic) alone and scales what is DRAWN, wrapping inside the same box: the line
+   still fits the way the fit decided, only the letters are bigger. Script faces have
+   small x-heights and enormous swashes, so one size would print some of them as a
+   whisper and others as a shout; each face's `scale` in scroll-recipes.php is the zoom,
+   set by eye on a rendered certificate against the 0.7em line it replaces.
+
+   font-display: block, as for the hands: a signature set in a fallback face and then
+   swapped is the wrong letterforms on paper, so nothing is painted until the face
+   lands, and the fit (gated on document.fonts.ready) never measures the fallback.
+   ========================================================================== */
+
+@font-face {
+    font-family: 'Great Vibes';
+    src: url('fonts/GreatVibes-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Pinyon Script';
+    src: url('fonts/PinyonScript-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Alex Brush';
+    src: url('fonts/AlexBrush-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Allura';
+    src: url('fonts/Allura-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Mrs Saint Delafield';
+    src: url('fonts/MrsSaintDelafield-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Herr Von Muellerhoff';
+    src: url('fonts/HerrVonMuellerhoff-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Monsieur La Doulaise';
+    src: url('fonts/MonsieurLaDoulaise-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+@font-face {
+    font-family: 'Cedarville Cursive';
+    src: url('fonts/CedarvilleCursive-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+[data-scroll-sig="greatvibes"] [data-scroll-text="givenBy"] {
+    font-family: 'Great Vibes', 'Averia Serif Libre', cursive;
+    font-style: normal;
+    zoom: 1.1;
+}
+
+[data-scroll-sig="pinyon"] [data-scroll-text="givenBy"] {
+    font-family: 'Pinyon Script', 'Averia Serif Libre', cursive;
+    font-style: normal;
+    zoom: 1.1;
+}
+
+[data-scroll-sig="alexbrush"] [data-scroll-text="givenBy"] {
+    font-family: 'Alex Brush', 'Averia Serif Libre', cursive;
+    font-style: normal;
+    zoom: 1.1;
+}
+
+[data-scroll-sig="allura"] [data-scroll-text="givenBy"] {
+    font-family: 'Allura', 'Averia Serif Libre', cursive;
+    font-style: normal;
+    zoom: 1.15;
+}
+
+[data-scroll-sig="saintdelafield"] [data-scroll-text="givenBy"] {
+    font-family: 'Mrs Saint Delafield', 'Averia Serif Libre', cursive;
+    font-style: normal;
+    zoom: 1.35;
+}
+
+[data-scroll-sig="muellerhoff"] [data-scroll-text="givenBy"] {
+    font-family: 'Herr Von Muellerhoff', 'Averia Serif Libre', cursive;
+    font-style: normal;
+    zoom: 1.3;
+}
+
+[data-scroll-sig="doulaise"] [data-scroll-text="givenBy"] {
+    font-family: 'Monsieur La Doulaise', 'Averia Serif Libre', cursive;
+    font-style: normal;
+    zoom: 1.2;
+}
+
+[data-scroll-sig="cedarville"] [data-scroll-text="givenBy"] {
+    font-family: 'Cedarville Cursive', 'Averia Serif Libre', cursive;
+    font-style: normal;
+    zoom: 1;
+}

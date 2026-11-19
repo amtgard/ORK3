@@ -68,6 +68,21 @@ final class ReleaseUtilizationCrownTest extends TestCase
         $this->fail("No KPI \"$label\" on feature \"$featureKey\".");
     }
 
+    private function kpiHint(string $featureKey, string $label): string
+    {
+        foreach ($this->crown()['features'] as $feature) {
+            if ($feature['key'] !== $featureKey) {
+                continue;
+            }
+            foreach ($feature['kpis'] as $kpi) {
+                if ($kpi['label'] === $label) {
+                    return (string) $kpi['hint'];
+                }
+            }
+        }
+        $this->fail("No KPI \"$label\" on feature \"$featureKey\".");
+    }
+
     private function makeRecommendation(array $columns = []): int
     {
         $ka = $this->fixture->firstKingdomAwardId($this->kingdomId);
@@ -163,6 +178,24 @@ final class ReleaseUtilizationCrownTest extends TestCase
         $this->assertSame($scrollTracked + 1, $this->kpi('court_artisans', 'Awards with scroll tracking'));
         $this->assertSame($scrollMakers + 1, $this->kpi('court_artisans', 'Awards with a scroll maker credited'));
         $this->assertSame($regaliaMakers + 1, $this->kpi('court_artisans', 'Awards with a regalia maker credited'));
+    }
+
+    public function testNotNeededTrackingIsNotInProgress(): void
+    {
+        $inProgress = function (): int {
+            preg_match('/(\d+) in progress/', $this->kpiHint('court_artisans', 'Awards with scroll tracking'), $m);
+            return (int) $m[1];
+        };
+        $before = $inProgress();
+
+        $court = $this->fixture->createCourt(['kingdom_id' => $this->kingdomId, 'status' => 'draft']);
+        $a = $this->fixture->createAward($court, $this->playerId, ['rank' => 1]);
+        $b = $this->fixture->createAward($court, $this->playerId, ['rank' => 2]);
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'court_award SET scroll_status = 1 WHERE court_award_id = ' . $a);
+        $this->fixture->pdo()->exec('UPDATE ' . DB_PREFIX . 'court_award SET scroll_status = 5 WHERE court_award_id = ' . $b);
+
+        // Assigned counts as in progress; Not Needed does not.
+        $this->assertSame($before + 1, $inProgress());
     }
 
     public function testRecommendationWorkflowCountsOnlyOpenPassedDownAndSnoozedRecs(): void

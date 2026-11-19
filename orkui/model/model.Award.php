@@ -14,6 +14,27 @@ class Model_Award extends Model
         return $this->_award()->GetAwardOptionListHtml((int) $kingdom_id, $officer_role);
     }
 
+    /**
+     * Thin wrappers over the domain rule in Award::officer_names_from() /
+     * Award::is_dangling_row_an_officer(), kept for the existing unit tests that
+     * address them through this model.
+     *
+     * @param array<int, array<string, mixed>> $awards
+     * @return array<string, true>
+     */
+    public static function officerNamesFromForTest(array $awards): array
+    {
+        return Award::officer_names_from($awards);
+    }
+
+    /**
+     * @param array<string, true> $officerNames
+     */
+    public static function isDanglingRowAnOfficer(string $name, array $officerNames): bool
+    {
+        return Award::is_dangling_row_an_officer($name, $officerNames);
+    }
+
     private function _award(): Award
     {
         return new Award();

@@ -464,6 +464,14 @@ class Controller_Player extends Controller
             || ($playerKingdomId > 0 && $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_EDIT))
             || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN));
         $this->data['canManageAwards'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
+        // CanPrintScroll arrives from Model_Player knowing only the row (art, not
+        // revoked). The View/Print buttons it drives are shown under canManageAwards
+        // — park CREATE at the recipient's HOME park — but the render route gates on
+        // where each award was GIVEN, so narrow it to what this viewer can print.
+        if ($this->data['canManageAwards'] && is_array($this->data['Details']['Awards'] ?? null)) {
+            $this->load_model('Scrollery');
+            $this->data['Details']['Awards'] = $this->Scrollery->flag_viewer_printable_awards($this->data['Details']['Awards'], $uid);
+        }
         $this->data['CanMonarchyOnlyRec'] = $uid > 0 && $this->Player->monarchy_only_level($uid, $playerKingdomId, $playerParkId) > 0;
         $knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;

@@ -310,6 +310,54 @@
     flex-shrink: 0;
 }
 
+/* 220px fits a column of filter chips. A sidebar carrying an actual FORM — paired
+   fields, a search-backed picker, a rank grid — needs room for two columns of
+   controls, or every field wraps to its own line and the page runs long. */
+.rp-sidebar-wide { width: 360px; }
+
+
+/* ── Collapsible filter card ─────────────────────────────────
+   Opt-in: a card whose header is a <button aria-expanded>. Cards without one are
+   untouched. The body is hidden with [hidden] rather than a height transition so
+   a collapsed section costs nothing to lay out and prints closed.
+   ──────────────────────────────────────────────────────────── */
+
+button.rp-filter-card-header {
+    width     : 100%;
+    border    : 0;
+    border-bottom: 1px solid var(--rp-border);
+    font-family: inherit;
+    text-align: left;
+    cursor    : pointer;
+    justify-content: space-between;
+}
+
+button.rp-filter-card-header:hover { color: var(--rp-text-body); }
+
+button.rp-filter-card-header:focus-visible {
+    outline       : 2px solid var(--rp-accent);
+    outline-offset: -2px;
+}
+
+.rp-filter-card-chevron {
+    margin-left: auto;
+    font-size  : 10px;
+    transition : transform 0.15s;
+}
+
+/* Collapsed: the divider under the header would be a rule under nothing. */
+button.rp-filter-card-header[aria-expanded="false"] {
+    border-bottom: 0;
+}
+
+button.rp-filter-card-header[aria-expanded="false"] .rp-filter-card-chevron {
+    transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rp-filter-card-chevron { transition: none; }
+}
+
 .rp-filter-card {
     background   : var(--rp-card-bg, var(--ork-card-bg));
     border       : 1px solid var(--rp-border);
@@ -615,7 +663,11 @@
     .rp-body {
         flex-direction: column;
     }
-    .rp-sidebar {
+    /* .rp-sidebar-wide is named explicitly: it sets its own width unconditionally,
+       so a page that opts into the wide sidebar would otherwise stay pinned at
+       360px once the body stacks — wider than a phone viewport. */
+    .rp-sidebar,
+    .rp-sidebar-wide {
         width: 100%;
     }
     /* Once the body stacks, max-width:100% must clamp the BORDER box or the
@@ -823,6 +875,7 @@ html[data-theme="dark"] .be-view-btn {
   border-color: #4a5568;
   color: #a0aec0;
 }
+html[data-theme="dark"] button.rp-filter-card-header:hover { color: #e2e8f0; }
 html[data-theme="dark"] .rp-col-guide-name {
   color: #e2e8f0;
 }
@@ -1349,4 +1402,29 @@ html[data-theme="dark"] .apexcharts-tooltip-y-group,
 html[data-theme="dark"] .apexcharts-tooltip-text-y-label,
 html[data-theme="dark"] .apexcharts-tooltip-text-y-value {
     color: var(--ork-text, #e2e8f0) !important;
+}
+
+/*
+ * Visually hidden, but reachable by assistive tech.
+ *
+ * Lives here rather than in a module sheet because it is a shared-shell primitive:
+ * any .rp-* tool page that announces a live region, names a control group, or carries
+ * an off-screen summary needs it, and the CRM shipped no such helper anywhere —
+ * neither revised.css nor this file had one, so each surface was inventing a local copy.
+ *
+ * Both clip and clip-path are present on purpose: clip is deprecated but is still what
+ * older engines honour, and clip-path is what current ones do. white-space: nowrap keeps
+ * a screen reader from running words together where the 1px box would otherwise wrap.
+ */
+.rp-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
 }

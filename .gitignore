@@ -69,3 +69,6 @@ htmlcov/
 .pytest_cache/
 test-results/
 ga-service-account.json
+
+# Signed legal originals stay off the repository.
+docs/licenses/*.pdf
