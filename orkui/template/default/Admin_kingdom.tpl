@@ -44,6 +44,7 @@
 			<ul>
 				<li><a href='<?=UIR ?>Reports/active/Kingdom&id=<?=$KingdomInfo['KingdomId'] ?>'>Active Players</a></li>
 				<li><a href='<?=UIR ?>Reports/park_attendance_explorer'>Park Attendance Explorer</a></li>
+				<li><a href='<?=UIR ?>Admin/parkactivity&KingdomId=<?=$KingdomInfo['KingdomId'] ?>'>Park Activity</a></li>
 			</ul>
 		</li>
 		<li>Peerage
