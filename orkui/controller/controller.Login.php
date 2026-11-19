@@ -63,8 +63,11 @@ class Controller_Login extends Controller
                 header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
                 exit;
             } else {
-                //$this->session->location = null;
-                header('Location: ' . UIR . $this->session->location);
+                // One-shot: consume the stored destination so a later, unrelated
+                // sign-in doesn't bounce back to it (e.g. re-downloading an export).
+                $_dest = $this->session->location;
+                $this->session->location = null;
+                header('Location: ' . UIR . $_dest);
                 exit;
             }
         } else {
@@ -145,6 +148,7 @@ class Controller_Login extends Controller
             $this->session->timeout = $result['Timeout'];
             if (!empty($this->session->location)) {
                 $_dest = $this->session->location;
+                $this->session->location = null;
                 header('Location: ' . UIR . $_dest);
                 exit;
             } else {

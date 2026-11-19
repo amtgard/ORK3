@@ -22,7 +22,7 @@
 		</div>
 		<div>
 			<span>Note:</span>
-			<span><input type='text' value='<?=$Tournament_create['StyleNote'] ?>' name='StyleNote' /></span>
+			<span><input type='text' value='<?=htmlspecialchars((string)($Tournament_create['StyleNote'] ?? ''), ENT_QUOTES, 'UTF-8') ?>' name='StyleNote' /></span>
 		</div>
 		<div>
 			<span>Method:</span>
@@ -33,13 +33,12 @@
 					<option value='swiss'>Swiss</option>
 					<option value='round-robin'>Round Robin</option>
 					<option value='ironman'>Ironman</option>
-					<option value='score'>Judge&apos;s Score</option>
 				</select>
 			</span>
 		</div>
 		<div>
 			<span>Rings:</span>
-			<span><input type='text' value='<?=$Tournament_create['Rings'] ?>' name='Rings' class='numeric-field' style='float: none;' /></span>
+			<span><input type='text' value='<?=htmlspecialchars((string)($Tournament_create['Rings'] ?? ''), ENT_QUOTES, 'UTF-8') ?>' name='Rings' class='numeric-field' style='float: none;' /></span>
 		</div>
 		<div>
 			<span>Competitors:</span>
@@ -55,10 +54,10 @@
 			<span>
 				<select name='Seeding'>
 					<option value='random'>Random</option>
-					<option value='glicko2'>Random &plus; Manual</option>
+					<option value='random-manual'>Random &plus; Manual</option>
 					<option value='manual'>Manual</option>
 					<option value='glicko2'>Performance Score</option>
-					<option value='glicko2'>Performance &plus; Manual</option>
+					<option value='glicko2-manual'>Performance &plus; Manual</option>
 				</select>
 			</span>
 		</div>
@@ -83,8 +82,8 @@
 <?php if (is_array($Tournaments['Tournaments'])): ?>
 <?php 	foreach ($Tournaments['Tournaments'] as $k => $tourney): ?>
 			<tr>
-				<td><a href='<?=UIR.'Tournament/worksheet/'.$tourney['TournamentId'] ?>'><?=$tourney['Name'] ?></a></td>
-				<td class='data-column'><?=$tourney['DateTime'] ?></td>
+				<td><a href='<?=UIR.'Tournament/worksheet/'.$tourney['TournamentId'] ?>'><?=htmlspecialchars((string)$tourney['Name'], ENT_QUOTES, 'UTF-8') ?></a></td>
+				<td class='data-column'><?=htmlspecialchars((string)$tourney['DateTime'], ENT_QUOTES, 'UTF-8') ?></td>
 			</tr>
 <?php 	endforeach; ?>
 <?php endif; ?>
@@ -105,8 +104,8 @@
 <?php if (is_array($Tournaments['Tournaments'])): ?>
 <?php 	foreach ($Tournaments['Tournaments'] as $k => $tourney): ?>
 			<tr>
-				<td><a href='<?=UIR.'Tournament/worksheet/'.$tourney['TournamentId'] ?>'><?=$tourney['Name'] ?></a></td>
-				<td class='data-column'><?=$tourney['DateTime'] ?></td>
+				<td><a href='<?=UIR.'Tournament/worksheet/'.$tourney['TournamentId'] ?>'><?=htmlspecialchars((string)$tourney['Name'], ENT_QUOTES, 'UTF-8') ?></a></td>
+				<td class='data-column'><?=htmlspecialchars((string)$tourney['DateTime'], ENT_QUOTES, 'UTF-8') ?></td>
 			</tr>
 <?php 	endforeach; ?>
 <?php endif; ?>
@@ -132,8 +131,8 @@
 <?php if (is_array($Tournaments['Tournaments'])): ?>
 <?php 	foreach ($Tournaments['Tournaments'] as $k => $tourney): ?>
 			<tr>
-				<td><a href='<?=UIR.'Tournament/worksheet/'.$tourney['TournamentId'] ?>'><?=$tourney['Name'] ?></a></td>
-				<td class='data-column'><?=$tourney['DateTime'] ?></td>
+				<td><a href='<?=UIR.'Tournament/worksheet/'.$tourney['TournamentId'] ?>'><?=htmlspecialchars((string)$tourney['Name'], ENT_QUOTES, 'UTF-8') ?></a></td>
+				<td class='data-column'><?=htmlspecialchars((string)$tourney['DateTime'], ENT_QUOTES, 'UTF-8') ?></td>
 			</tr>
 <?php 	endforeach; ?>
 <?php endif; ?>
@@ -150,7 +149,7 @@
 <?php if (is_array($Tournaments['Tournaments'])): ?>
 <?php 	foreach ($Tournaments['Tournaments'] as $k => $tourney): ?>
 			<tr>
-				<td class='data-column'><?=$tourney['DateTime'] ?></td>
+				<td class='data-column'><?=htmlspecialchars((string)$tourney['DateTime'], ENT_QUOTES, 'UTF-8') ?></td>
 			</tr>
 <?php 	endforeach; ?>
 <?php endif; ?>
