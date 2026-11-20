@@ -89,6 +89,19 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'staging.amtgard.com') {
 	#ork-offline-banner { display:none; position:fixed; bottom:0; left:0; right:0; z-index:99999; background:#92400e; color:#fff; text-align:center; padding:10px 16px; font-size:0.85rem; font-weight:600; box-shadow:0 -2px 8px rgba(0,0,0,0.25); }
 	html[data-theme="dark"] #ork-offline-banner { background:#78350f; }
 
+	/* Dues expiry banner (Controller::$data['DuesNotice'], class.DuesNotice.php) */
+	.ork-dues-banner { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 16px; font-size:0.9rem; line-height:1.4; background:#fffbeb; color:#744210; border-bottom:1px solid #f6e05e; }
+	.ork-dues-banner-lapsed { background:#fff5f5; color:#742a2a; border-bottom-color:#fc8181; }
+	.ork-dues-banner > i { font-size:1rem; flex:0 0 auto; }
+	.ork-dues-banner-text { flex:1 1 auto; min-width:220px; }
+	.ork-dues-banner-text strong { font-weight:600; }
+	.ork-dues-banner-link { color:inherit; font-weight:600; text-decoration:underline; white-space:nowrap; }
+	.ork-dues-banner-link:hover { color:inherit; }
+	.ork-dues-banner-close { background:none; border:0; color:inherit; font-size:1.3rem; line-height:1; cursor:pointer; padding:0 4px; opacity:0.7; flex:0 0 auto; }
+	.ork-dues-banner-close:hover { opacity:1; }
+	html[data-theme="dark"] .ork-dues-banner { background:#744210; color:#fbd38d; border-bottom-color:#975a16; }
+	html[data-theme="dark"] .ork-dues-banner-lapsed { background:#742a2a; color:#feb2b2; border-bottom-color:#9b2c2c; }
+
 	/* What's New modal */
 	.wn-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; }
 	.wn-overlay.wn-open { display:flex; }
@@ -577,6 +590,27 @@ document.addEventListener('keydown', function (e) {
 		</div>
 	</nav>
 
+<?php
+// --- Dues expiry banner ---
+// DuesNotice + DuesNoticeDismissed are set on Controller::$data for the logged-in viewer.
+$__dn = $this->__data['DuesNotice'] ?? null;
+if (is_array($__dn) && empty($this->__data['DuesNoticeDismissed'])): ?>
+	<div id="ork-dues-banner" class="ork-dues-banner<?= $__dn['State'] === 'lapsed' ? ' ork-dues-banner-lapsed' : '' ?>" role="status">
+		<i class="fas <?= $__dn['State'] === 'lapsed' ? 'fa-exclamation-circle' : 'fa-receipt' ?>"></i>
+		<span class="ork-dues-banner-text"><strong><?= htmlspecialchars($__dn['Message']) ?></strong> See your Prime Minister to renew.</span>
+		<a class="ork-dues-banner-link" href="<?= UIR ?>Player/profile/<?= (int)$this->__session->user_id ?>">View my dues</a>
+		<button type="button" class="ork-dues-banner-close" aria-label="Dismiss dues notice" onclick="orkDuesBannerDismiss(this)" data-key="<?= htmlspecialchars($__dn['Key']) ?>">&times;</button>
+	</div>
+	<script>
+	function orkDuesBannerDismiss(btn) {
+		var b = document.getElementById('ork-dues-banner');
+		if (b) b.style.display = 'none';
+		var fd = new FormData();
+		fd.append('key', btn.getAttribute('data-key') || '');
+		fetch('<?= UIR ?>DuesAjax/dismiss', { method: 'POST', body: fd, credentials: 'same-origin' }).catch(function(){});
+	}
+	</script>
+<?php endif; ?>
 
 	<script>
 	// ---- Search toggle ----

@@ -5514,6 +5514,35 @@ class Player extends Ork3
     }
 
     /**
+     * Where the player stands on dues, for the expiry notice (class.DuesNotice.php):
+     * the furthest non-revoked dues-until date and whether any non-revoked lifetime
+     * row exists. One indexed query; runs on every page for the logged-in viewer,
+     * so it deliberately does not go through GetDues (two passes plus name lookups).
+     *
+     * @return array{DuesUntil: string, DuesForLife: int}  DuesUntil '' when no dues on file
+     */
+    public function GetDuesStanding(int $mundaneId): array
+    {
+        $none = ['DuesUntil' => '', 'DuesForLife' => 0];
+        if (!valid_id($mundaneId)) {
+            return $none;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT MAX(dues_until) AS dues_until, MAX(dues_for_life) AS dues_for_life FROM ' . DB_PREFIX . 'dues'
+            . ' WHERE mundane_id = ' . (int) $mundaneId . ' AND revoked = 0'
+        );
+        if ($rs && $rs->Next()) {
+            return [
+                'DuesUntil'   => (string) ($rs->dues_until ?? ''),
+                'DuesForLife' => (int) $rs->dues_for_life,
+            ];
+        }
+
+        return $none;
+    }
+
+    /**
      * Home kingdom context for the logged-in user (T-INF-05).
      *
      * @return array{KingdomId: int, ParentKingdomId: int}
