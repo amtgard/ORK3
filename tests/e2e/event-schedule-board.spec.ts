@@ -636,7 +636,7 @@ test.describe('editing', () => {
     });
   }
 
-  test('Edit schedule is offered to an editor and not to a signed-out viewer', async ({ page, browser }) => {
+  test('Quick schedule mode is offered to an editor and not to a signed-out viewer', async ({ page, browser }) => {
     await openBoard(page, EDIT_EVENT);
     await expect(page.locator('.evb-edit-btn')).toBeVisible();
     const anonCtx = await browser.newContext();
@@ -1161,17 +1161,27 @@ test.describe('editing', () => {
     await expect(block).toHaveCount(1);
   });
 
-  test('Esc closes the help without clearing the selection', async ({ page }) => {
+  test('the help is a dialog with two tabs; Esc closes it without clearing the selection', async ({ page }) => {
     await openBoard(page, EDIT_EVENT);
     await page.locator('.evb-edit-btn').click();
     await quickAdd(page, `sun 6p ${PREFIX} help esc`);
-    await page.locator('.evb-help').click();
-    await expect(page.locator('.evb-help-pop')).toBeVisible();
     const block = page.locator('.evb-block', { hasText: `${PREFIX} help esc` });
     await block.focus();
     await expect(block).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('.evb-help').click();
+    const help = page.locator('.evb-help-dialog');
+    await expect(help).toBeVisible();
+    await expect(help.locator('#evb-help-panel-about')).toBeVisible();
+    // The second tab reads its examples through the parser.
+    await help.locator('[data-help-tab="real"]').click();
+    await expect(help.locator('#evb-help-panel-real')).toBeVisible();
+    await expect(help.locator('#evb-help-panel-about')).toBeHidden();
+    await expect(help.locator('.evb-help-ex').first()).toContainText('Opening Court');
+    await page.keyboard.press('ArrowLeft');
+    await expect(help.locator('[data-help-tab="about"]')).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('Escape');
-    await expect(page.locator('.evb-help-pop')).toBeHidden();
+    await expect(help).toHaveCount(0);
+    await expect(page.locator('.evb-help')).toBeFocused();
     await expect(block).toHaveAttribute('aria-pressed', 'true');
     await expect(block).toHaveClass(/evb-selected/);
   });
@@ -2179,14 +2189,89 @@ test.describe('editing', () => {
     await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
     await expect.poll(async () => (await serverItems(page, `${PREFIX} pasted `, { prefix: true })).length).toBe(0);
   });
-  test('the skeleton can be discarded; double-booked places are flagged', async ({ page }) => {
+  test('one quick line can add several items: "; " parts and a list of days, in one undoable step', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const SATURDAY = await dayOf(page, 'sat'), SUNDAY = await dayOf(page, 'sun');
+    const input = page.locator('.evb-quickline .evb-entry-input');
+    await input.fill(`sun 1p ${PREFIX} multi one; then 30m ${PREFIX} multi two`);
+    await expect(page.locator('.evb-quickline .evb-chip-more')).toContainText('+1 item');
+    await expect(page.locator('.evb-ghost')).toHaveCount(2);
+    await input.press('Enter');
+    await expect(input).toHaveValue('');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await input.fill(`Sat & Sun 6a ${PREFIX} multi days`);
+    await expect(page.locator('.evb-quickline .evb-chip-day')).toContainText('Sat, Sun');
+    await input.press('Enter');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    // The server holds what the board shows.
+    await expectServerMatchesBoard(page, `${PREFIX} multi `, { prefix: true, count: 4 });
+    const starts = (t: string) => page.evaluate(x => (window as any).EvBoardEdit.store.items()
+      .filter((i: any) => i.Title === x).map((i: any) => String(i.StartTime).slice(0, 16)).sort(), t);
+    expect(await starts(`${PREFIX} multi days`)).toEqual([`${SATURDAY} 06:00`, `${SUNDAY} 06:00`]);
+    expect(await starts(`${PREFIX} multi one`)).toEqual([`${SUNDAY} 13:00`]);
+    expect(await starts(`${PREFIX} multi two`)).toEqual([`${SUNDAY} 14:00`]);
+    // Each line was one step: two undos take all four away.
+    await page.locator('.evb-undo').click();
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} multi days` })).toHaveCount(0);
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} multi one` })).toHaveCount(1);
+    await page.locator('.evb-undo').click();
+    await expect(page.locator('.evb-block', { hasText: `${PREFIX} multi` })).toHaveCount(0);
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    await expect.poll(async () => (await serverItems(page, `${PREFIX} multi `, { prefix: true })).length).toBe(0);
+  });
+  test('a "; " line: chips act on the last part only, an @ lead goes to its own part, and a refused line shows no ghosts', async ({ page }) => {
+    await openBoard(page, EDIT_EVENT);
+    await page.locator('.evb-edit-btn').click();
+    const SUNDAY = await dayOf(page, 'sun');
+    const input = page.locator('.evb-quickline .evb-entry-input');
+    const start = async (t: string) => String((await storeItem(page, t)).StartTime).slice(0, 16);
+    // A ';' not before a time or a day stays in the title.
+    await input.fill(`sun 7p ${PREFIX} semi keep; bring water`);
+    await expect(page.locator('.evb-quickline .evb-chip-more')).toHaveCount(0);
+    await expect(page.locator('.evb-quickline .evb-chip[data-part="title"]')).toContainText(`${PREFIX} semi keep; bring water`);
+    await expect(page.locator('.evb-ghost')).toHaveCount(1);
+    // The time chip's x reads the last part's time as title text; the first part keeps its own.
+    await input.fill(`sun 1p ${PREFIX} semi one; 3p ${PREFIX} semi two`);
+    await expect(page.locator('.evb-ghost')).toHaveCount(2);
+    await page.locator('.evb-quickline .evb-chip-time .evb-chip-x').click();
+    await expect(page.locator('.evb-quickline .evb-chip[data-part="title"]')).toContainText(`3p ${PREFIX} semi two`);
+    await input.press('Enter');
+    await expect(input).toHaveValue('');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    expect(await start(`${PREFIX} semi one`)).toBe(`${SUNDAY} 13:00`);
+    expect(await start(`3p ${PREFIX} semi two`)).toBe(`${SUNDAY} 14:00`);
+    // An '@' picked in the first part leads that item, not the last one.
+    const first = `sun 4p ${PREFIX} semi led`;
+    await input.fill(`${first}; 5p ${PREFIX} semi unled`);
+    await input.evaluate((el: HTMLInputElement, n: number) => el.setSelectionRange(n, n), first.length);
+    await input.pressSequentially(' @E2E');
+    await expect(page.locator('.evb-entry-option').first()).toContainText('E2E Schedule Editor');
+    await input.press('Enter');
+    const leadChip = page.locator('.evb-quickline .evb-chip[data-part="lead"]', { hasText: 'E2E Schedule Editor' });
+    await expect(leadChip).toHaveAttribute('data-tip', `Leads ‘${PREFIX} semi led’`);
+    await input.press('Enter');
+    await expect(input).toHaveValue('');
+    await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
+    const hand = (it: any) => it.Leads.filter((l: any) => !l.Auto).map((l: any) => l.Persona);
+    expect(hand(await storeItem(page, `${PREFIX} semi led`))).toEqual(['E2E Schedule Editor']);
+    expect(hand(await storeItem(page, `${PREFIX} semi unled`))).toEqual([]);
+    // A line whose last part has no title is refused whole, so it previews nothing.
+    await input.fill(`sun 6p ${PREFIX} semi refused; 7p`);
+    await expect(page.locator('.evb-quickline .evb-chip-more')).toContainText('+1 item');
+    await expect(page.locator('.evb-ghost')).toHaveCount(0);
+    await input.press('Enter');
+    await expect(input).toHaveValue(`sun 6p ${PREFIX} semi refused; 7p`);
+    expect(await storeItem(page, `${PREFIX} semi refused`)).toBeNull();
+    await input.fill('');
+  });
+  test('More has no Skeleton; double-booked places are flagged', async ({ page }) => {
     await openBoard(page, EDIT_EVENT);
     await page.locator('.evb-edit-btn').click();
     await page.locator('.evb-more-btn').click();
-    await page.locator('[data-evb-more="skeleton"]').click();
-    expect(await page.locator('.evb-ghost').count()).toBeGreaterThan(5);
-    await page.locator('.evb-bulk-discard').click();
-    await expect(page.locator('.evb-ghost')).toHaveCount(0);
+    await expect(page.locator('[data-evb-more="skeleton"]')).toHaveCount(0);
+    await expect(page.locator('[data-evb-more="paste-text"]')).toBeVisible();
+    await page.keyboard.press('Escape');
     // A place no other test uses: 'Hall' would also suggest an earlier test's 'Hall #2'.
     await addViaQuickLine(page, `sun 5-6p ${PREFIX} clash a at Smithy`);
     await addViaQuickLine(page, `sun 5:30-6:30p ${PREFIX} clash b at smithy`);
@@ -2349,7 +2434,7 @@ test.describe('editing', () => {
     expect(await pasteText(page, ['Sunday', `8a ${PREFIX} second one`, `9a ${PREFIX} second two`, '10a x'].join('\n'))).toBe(true);
     await expect(notice).toContainText('Add or discard the preview first.');
     await expect(page.locator('.evb-bulkbar')).toContainText('2 items ready');
-    for (const key of ['skeleton', 'paste-text']) {
+    for (const key of ['paste-text']) {
       await page.locator('.evb-more-btn').click();
       await page.locator(`[data-evb-more="${key}"]`).click();
       await expect(page.locator('.evb-bulkbar')).toContainText('2 items ready');
@@ -3071,7 +3156,7 @@ test.describe('editing', () => {
   }
   const boardDays = (page: Page) => page.evaluate(() => (window as any).EvBoardView.board.days.map((d: any) => d.day));
 
-  test('Edit schedule in the List view opens the board in Edit mode, and the board stays after Done', async ({ page }) => {
+  test('Quick schedule mode in the List view opens the board in Edit mode, and the board stays after Done', async ({ page }) => {
     await openBoard(page, EDIT_EVENT);
     await page.locator('[data-ev-view="list"]').click();
     await expect(page.locator('#ev-schedule-container')).toBeVisible();

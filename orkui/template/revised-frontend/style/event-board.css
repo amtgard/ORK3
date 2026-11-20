@@ -335,33 +335,65 @@ html[data-theme="dark"] .evb-save[data-state="offline"] .evb-save-state { color:
 .evb-modebar .evb-help { width: 30px; padding: 0; font-size: 14px; font-weight: 700; }
 .evb-modebar .evb-help[aria-expanded="true"] { background: var(--ork-bg-secondary); border-color: var(--ork-text-muted); }
 .evb-modebar .evb-done { height: 30px; padding: 0 16px; line-height: 1; }
-.evb-help-wrap { position: relative; display: inline-flex; }
-
-.evb-help-pop {
-    position: absolute; top: calc(100% + 6px); right: 0; z-index: var(--z-dropdown, 300);
-    width: 360px; max-width: calc(100vw - 24px); box-sizing: border-box; padding: 12px 14px;
-    background: var(--ork-card-bg); color: var(--ork-text);
-    border: 1px solid var(--ork-border); border-radius: 8px;
-    box-shadow: var(--ork-shadow-dropdown, 0 8px 24px rgba(15, 23, 42, 0.14));
-    font-size: 12px; line-height: 1.45;
+/* ---- Help: a dialog with two tabs (About Schedule Entry, How to Use Real Text) ---- */
+.evb-dialog.evb-help-dialog .evb-help-box { max-width: 880px; }
+/* orkui.css styles every h3/h4 as a boxed heading: plain ones here. */
+.evb-help-dialog .ev-modal-header h3, .evb-help-dialog .evb-help-sec h4 {
+    background: none; border: none; padding: 0; box-shadow: none; text-transform: none; letter-spacing: normal;
 }
-.evb-help-pop[hidden] { display: none; }
-.evb-help-title { font-size: 12px; font-weight: 700; color: var(--ork-text); margin: 0 0 6px; }
-.evb-help-table + .evb-help-title { margin-top: 10px; }
-.evb-help-table { border-collapse: collapse; width: 100%; }
-.evb-help-table th, .evb-help-table td {
-    padding: 3px 0; border: none; background: none; vertical-align: top; text-align: left;
-    font-size: 12px; color: var(--ork-text);
+.evb-help-dialog .ev-modal-header h3 { margin: 0; font-size: 17px; font-weight: 700; color: var(--ork-text); }
+.evb-help-tabs {
+    display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--ork-border);
+    overflow-x: auto; flex-shrink: 0;
 }
-.evb-help-table th { padding-right: 10px; white-space: nowrap; font-weight: 600; color: var(--ork-text-muted); }
-.evb-help-pop code, .evb-help-pop kbd {
-    display: inline-block; padding: 0 4px; border-radius: 4px;
+.evb-help-tabs .evb-help-tab {
+    margin: 0 0 -1px; padding: 10px 14px; border: none; border-bottom: 2px solid transparent; border-radius: 0;
+    background: none; color: var(--ork-text-muted); font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.evb-help-tabs .evb-help-tab:hover { color: var(--ork-text); background: none; }
+.evb-help-tabs .evb-help-tab[aria-selected="true"] { color: var(--ork-text); border-bottom-color: var(--ork-link, #2b6cb0); }
+.evb-help-tabs .evb-help-tab:focus-visible { outline: 2px solid var(--ork-link, #2b6cb0); outline-offset: -2px; }
+.evb-help-body { font-size: 13px; line-height: 1.5; color: var(--ork-text); text-align: left; }
+.evb-help-panel:focus { outline: none; }
+.evb-help-panel[hidden] { display: none; }
+.evb-help-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.evb-help-sec {
+    padding: 12px 14px; border: 1px solid var(--ork-border); border-radius: 8px; background: var(--ork-card-bg);
+}
+.evb-help-grid .evb-help-sec:first-child { grid-row: span 2; }
+.evb-help-examples + .evb-help-examples, .evb-help-panel > .evb-help-sec + .evb-help-sec { margin-top: 12px; }
+.evb-help-body .evb-help-sec h4 {
+    margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--ork-text); line-height: 1.3;
+}
+.evb-help-sec h4 > i { margin-right: 4px; color: var(--ork-text-muted); font-size: 12px; }
+.evb-help-note, .evb-help-lede { margin: 0 0 10px; color: var(--ork-text-muted); font-size: 12.5px; }
+.evb-help-lede { margin-bottom: 14px; font-size: 13px; }
+.evb-help-list { margin: 0; }
+.evb-help-row { display: grid; grid-template-columns: minmax(84px, max-content) 1fr; gap: 10px; padding: 4px 0; }
+.evb-help-row + .evb-help-row { border-top: 1px dashed var(--ork-border); }
+.evb-help-row dt { margin: 0; font-weight: 600; color: var(--ork-text-muted); white-space: nowrap; }
+.evb-help-row dd { margin: 0; min-width: 0; }
+.evb-help-body code, .evb-help-body kbd {
+    display: inline-block; padding: 0 5px; border-radius: 4px;
     background: var(--ork-bg-secondary); color: var(--ork-text);
-    font: 600 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font: 600 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-.evb-help-pop kbd { border: 1px solid var(--ork-border); border-bottom-width: 2px; margin-right: 2px; }
-/* Dark: --ork-bg-secondary is the popover's own fill there. */
-html[data-theme="dark"] .evb-help-pop code, html[data-theme="dark"] .evb-help-pop kbd { background: #4a5568; }
+.evb-help-body kbd { border: 1px solid var(--ork-border); border-bottom-width: 2px; margin-right: 2px; }
+/* An example: what was typed, then the chips it reads as (one row per item). */
+.evb-help-ex { padding: 8px 0; }
+.evb-help-ex + .evb-help-ex { border-top: 1px solid var(--ork-border); }
+.evb-help-in code { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; }
+.evb-help-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+.evb-help-arrow { color: var(--ork-text-muted); font-size: 11px; margin-right: 2px; }
+.evb-help-chips .evb-chip-label { white-space: normal; overflow: visible; }
+html[data-theme="dark"] .evb-help-body code, html[data-theme="dark"] .evb-help-body kbd { background: #4a5568; }
+@media (max-width: 700px) {
+    .evb-help-grid { grid-template-columns: minmax(0, 1fr); }
+    .evb-help-grid .evb-help-sec:first-child { grid-row: auto; }
+    .evb-help-tabs { padding: 0 12px; }
+    .evb-help-tabs .evb-help-tab { padding: 10px 10px; font-size: 13px; }
+    .evb-help-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
 
 .evb-quickline { padding: 10px; }
 

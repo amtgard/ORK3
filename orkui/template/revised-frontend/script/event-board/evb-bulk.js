@@ -2,18 +2,18 @@
  * EvBoardBulk: the Event Schedule Board's fast starts in Edit mode.
  *
  * The bulk preview: several lines of text (pasted on the board or into the
- * quick line, typed in the "Paste lines of text" dialog, or the skeleton) are
+ * quick line, or typed in the "Paste lines of text" dialog) are
  * read with EvBoardCore.parseLines and drawn as ghosts, with the bulk bar
  * (.evb-bulkbar) under the mode bar: "N items ready", Add all and Discard, and
  * notes of the lines not read, the leads left off and the items outside the
  * event's days. Nothing is saved until Add all, which adds every item in one
  * store.batch (one save, one undo step); Discard or Esc drops them. While a
  * preview shows, the quick line is disabled and its own ghost stands down, and
- * another preview (a paste of several lines, Paste lines of text, Skeleton) or
+ * another preview (a paste of several lines, or Paste lines of text) or
  * Done is refused with "Add or discard the preview first." Done never discards.
  *
  * The More menu (.evb-more-btn, in the mode bar before Undo): Paste lines of
- * text, Skeleton, Start from a past event (.evb-copy-dialog, which copies a
+ * text, Start from a past event (.evb-copy-dialog, which copies a
  * past occurrence's schedule into this one through EventAjax/schedule_copy_into
  * and adopts the new rows as one undo step; the dialog cannot be closed while a
  * copy is on its way, and a copy that succeeds is always adopted while the same
@@ -252,7 +252,6 @@
             '<i class="fas fa-ellipsis-h" aria-hidden="true"></i><span class="evb-modebar-label">More</span></button>' +
             '<div class="evb-more-menu" id="evb-more-menu" hidden>' +
             item('paste-text', 'fa-paste', 'Paste lines of text…') +
-            item('skeleton', 'fa-stream', 'Skeleton') +
             item('past-event', 'fa-history', 'Start from a past event…') +
             item('copy-text', 'fa-copy', 'Copy schedule as text') +
             '</div>';
@@ -282,9 +281,8 @@
         if (key === 'copy-text') { copyText(it); return; }
         setMenu(false);
         if (leaving()) return;
-        if (s.preview && (key === 'skeleton' || key === 'paste-text')) { refuse(); return; }
-        if (key === 'skeleton') openPreview(C.skeletonText(s.ctx.entryContext().days), null);
-        else if (key === 'paste-text') openPasteDialog();
+        if (s.preview && key === 'paste-text') { refuse(); return; }
+        if (key === 'paste-text') openPasteDialog();
         else if (key === 'past-event') openCopyDialog();
     }
 

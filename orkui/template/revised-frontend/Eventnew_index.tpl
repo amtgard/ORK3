@@ -1177,7 +1177,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				</div>
 				<?php if ($canManageSchedule): ?>
 				<button type="button" class="ev-sched-copy-btn evb-edit-btn" data-tip="Type items straight onto the board">
-					<i class="fas fa-pencil-alt"></i> Edit schedule
+					<i class="fas fa-pencil-alt"></i> Quick schedule mode
 				</button>
 				<button type="button" class="ev-submit-btn" onclick="evOpenScheduleModal()">
 					<i class="fas fa-plus"></i> Add Schedule Item

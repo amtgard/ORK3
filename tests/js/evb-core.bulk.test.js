@@ -37,18 +37,6 @@ test('schedule text reads back through parseLines', () => {
     ['Night Quest!', '2026-11-22 00:30:00', '2026-11-22 01:30:00', 'Roleplay and Quests', '', 0],
   ]);
 });
-test('the skeleton parses on one-day and multi-day events', () => {
-  const three = C.parseLines(C.skeletonText(DAYS), { days: DAYS });
-  assert.deepEqual(three.unread, []);
-  assert.deepEqual(three.items.map(i => i.StartTime.slice(0, 10)).filter((d, n, a) => a.indexOf(d) === n), DAYS);
-  assert.ok(three.items.some(i => i.Title === 'Court' && i.Category === 'Court' && i.StartTime === '2026-11-21 20:00'));
-  assert.ok(three.items.some(i => i.Title === 'Clean Up' && i.StartTime === '2026-11-22 10:00'));
-  assert.ok(three.items.some(i => i.Title === 'Tavern Opens' && i.StartTime === '2026-11-20 13:00'));
-  assert.ok(three.items.some(i => i.Title === 'Tavern Opens' && i.StartTime === '2026-11-21 11:00'));
-  assert.ok(!three.items.some(i => i.Title === 'Lunch'));
-  const one = C.parseLines(C.skeletonText(['2026-11-21']), { days: ['2026-11-21'] });
-  assert.deepEqual(one.items.map(i => i.Title), ['Troll Opens', 'Tavern Opens', 'Feast', 'Court']);
-});
 test('conflicts name the shared lead or place on both items', () => {
   const a = { cid: 'a', Title: 'Mothman', StartTime: '2026-11-21 10:00', EndTime: '2026-11-21 11:00', Location: 'Main Field', Leads: [{ MundaneId: 2, Persona: 'Luna' }] };
   const b = { cid: 'b', Title: 'Archery', StartTime: '2026-11-21 10:30', EndTime: '2026-11-21 11:30', Location: ' main field', Leads: [{ MundaneId: 2, Persona: 'Luna' }] };
@@ -83,18 +71,6 @@ test('items are ready for the store: leads are hand-picked, every field is prese
   assert.deepEqual(r.items, [{ Title: 'feast', StartTime: '2026-11-21 17:00', EndTime: '2026-11-21 18:00', Category: 'Feast and Food',
     SecondaryCategory: '', Location: 'Hall', Description: '', Cost: 8, Leads: [{ MundaneId: 2, Persona: 'Luna Honeybadger', Auto: false }] }]);
   assert.deepEqual(r.unmatchedLeads, ['x']);
-});
-test('the skeleton heads days with M/D when two days share a weekday', () => {
-  const days = []; for (let n = 0; n < 9; n++) days.push(C.addDays('2026-11-20', n));
-  const text = C.skeletonText(days);
-  assert.equal(text.split('\n')[0], '11/20:');
-  assert.ok(text.includes('\n\n11/27:\n'));
-  const r = C.parseLines(text, { days });
-  assert.deepEqual(r.unread, []);
-  assert.deepEqual(r.items.map(i => i.StartTime.slice(0, 10)).filter((d, n, a) => a.indexOf(d) === n), days);
-  assert.equal(r.items.length, 3 + 7 * 4 + 3);
-  assert.equal(C.skeletonText(DAYS).split('\n')[0], 'Fri:');
-  assert.equal(C.skeletonText([]), '');
 });
 test('scheduleText orders by start within a board day and skips items without a time', () => {
   const t = C.scheduleText([

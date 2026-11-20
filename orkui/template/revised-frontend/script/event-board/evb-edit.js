@@ -40,6 +40,7 @@
     var PLACEHOLDER = 'Type an item: sat 9:30-10:15 bg: squatch ball at main field';
 
     var state = {
+        help: null,         // the help dialog's overlay while it shows
         editing: false,
         opening: false,
         leaving: null,      // the exit() promise while Done is in progress
@@ -245,6 +246,12 @@
         return f;
     }
 
+    // Today on this device, 'YYYY-MM-DD'.
+    function localDate() {
+        var d = new Date(), pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    }
+
     function entryContext(overrides) {
         var c = cfg();
         var f = boardFacts(), items = f.items, days = f.days.slice();
@@ -262,79 +269,309 @@
             lastEnd: t && t.day === day ? { day: t.day, min: t.end } : null,
             lastDuration: t && t.end > t.start ? t.end - t.start : 60,
             locations: f.locations.slice(),
-            canFeast: !!c.canManageFeast
+            canFeast: !!c.canManageFeast,
+            // 'after court', 'before feast' look the items up; 'today' and
+            // 'tomorrow' count from this date during the event.
+            items: items,
+            today: localDate()
         };
         return Object.assign(ctx, overrides || {});
     }
 
     // The item a parse describes, as the store and the board take it; its leads
     // are the entry's lead chips.
-    function itemFrom(r, leads) {
+    // part (C.entryParts): the day this copy of the parse is on.
+    function itemFrom(r, leads, part) {
         var it = {
-            Title: r.title, StartTime: r.start, EndTime: r.end,
+            Title: r.title, StartTime: part ? part.start : r.start, EndTime: part ? part.end : r.end,
             Category: r.category || 'Other', SecondaryCategory: r.secondaryCategory || '',
             Location: r.location || '', Description: r.description || '', Leads: leads || []
         };
-        if (r.cost != null && cfg().canManageFeast) it.Cost = r.cost;
+        if (cfg().canManageFeast) {
+            if (r.cost != null) it.Cost = r.cost;
+            if (r.dietary) it.Dietary = r.dietary;
+            if (r.allergens) it.Allergens = r.allergens;
+        }
         return it;
+    }
+
+    // Every item a parse adds: one per day of an 'every day' line, after those
+    // of the parts before it on a ';' line. The line's own part takes the
+    // entry's lead chips; an earlier part takes its typed leads and its
+    // category's leads.
+    function itemsFrom(r, leads) {
+        return C.entryParts(r).map(function (p) {
+            var own = p.r === r ? leads : C.swapAutoLeads(p.r.leads.map(function (l) {
+                return { MundaneId: l.MundaneId, Persona: l.Persona, Auto: false };
+            }), staffList(), p.r.category);
+            return itemFrom(p.r, own, p);
+        });
     }
 
     // ---- the mode bar ----
 
-    function helpHtml() {
-        var row = function (k, v) { return '<tr><th scope="row">' + k + '</th><td>' + v + '</td></tr>'; };
-        var code = function (s) { return '<code>' + esc(s) + '</code>'; };
-        var kbd = function (s) { return '<kbd>' + esc(s) + '</kbd>'; };
-        return '<div class="evb-help-title">Type an item on one line</div>' +
-            '<table class="evb-help-table"><tbody>' +
-            row('Day', code('sat') + ' ' + code('saturday') + ' ' + code('11/21') + ' first; a day alone switches the day') +
-            row('Time', code('9:30-10:15') + ' ' + code('9a-12p') + ' ' + code('3-4') + ' ' + code('10 to 1')) +
-            row('Start', code('3p') + ' ' + code('15:00') + ' ' + code('noon') + ': same length as the last item') +
-            row('Length', code('45m') + ' ' + code('1h30m') + ' ' + code('+45') + ': starts where the last item ended') +
-            row('Next', code('then') + ': right after the last item') +
-            row('Category', code('#bg') + ' ' + code('#class') + ' or ' + code('bg:') + ' first; a second ' + code('#') + ' adds a stripe') +
-            row('Place', code('at Main Field')) +
-            row('Notes', code('"Bring water"')) +
-            row('Cost', code('$8') + ' on a feast item') +
-            '</tbody></table>' +
-            '<div class="evb-help-title">Keys</div>' +
-            '<table class="evb-help-table"><tbody>' +
-            row(kbd('Enter'), 'add the item') +
-            row(kbd('Esc'), 'clear the line') +
-            row(kbd('/'), 'jump to the line') +
-            row(kbd('↑') + kbd('↓') + ' ' + kbd('Tab'), 'choose a suggestion') +
-            row(kbd(MOD + ' Z'), 'undo') +
-            row(kbd('Shift ' + MOD + ' Z'), 'redo') +
-            '</tbody></table>' +
-            '<div class="evb-help-title">On the board</div>' +
-            '<table class="evb-help-table"><tbody>' +
-            row('Click', 'an empty time to type an item there; drag for its length') +
-            row(kbd('Enter'), 'add it and start the next one after it') +
-            row(kbd('Tab'), 'add it and start one alongside') +
-            row(kbd('Esc'), 'stop') +
-            row('Drag', 'a block to move it; a selected block\'s top or bottom edge to resize it') +
-            row(kbd('↑') + kbd('↓'), 'move the selected item 15 minutes (with ' + kbd('Alt') + ', 5)') +
-            row(kbd('Shift ↑') + kbd('Shift ↓'), 'move only its end') +
-            row(kbd('←') + kbd('→'), 'move it a day') +
-            row(kbd('Shift Enter'), 'open the selected item’s Details (location, leads, description)') +
-            row(kbd('Shift') + ' click', 'add a block to the selection, or take it out') +
-            row(kbd(MOD + ' A'), 'select every block') +
-            row(kbd(MOD + ' D'), 'duplicate the selection just after it') +
-            row(kbd(MOD + ' C') + ' ' + kbd(MOD + ' V'), 'copy the selection; paste it at the cursor') +
-            row('Drag', 'the selected block\'s corner square down to repeat it through the day') +
-            '</tbody></table>' +
-            '<div class="evb-help-title">With nothing selected</div>' +
-            '<table class="evb-help-table"><tbody>' +
-            row(kbd('↑') + kbd('↓') + kbd('←') + kbd('→'), 'move the cursor (15 minutes, a day)') +
-            row('Type', 'start an item at the cursor; ' + kbd('Enter') + ' opens it empty') +
-            '</tbody></table>' +
-            '<div class="evb-help-title">Many at once</div>' +
-            '<table class="evb-help-table"><tbody>' +
-            row('Paste', 'several lines (a post, last year’s notes) on the board or in the line: they show dashed until you press Add all') +
-            row(kbd('Esc'), 'discard that preview') +
-            row('More', 'a skeleton of the usual items, a past event’s schedule, or this schedule as text') +
-            row('<i class="fas fa-exclamation-triangle evb-help-warn" aria-label="Warning"></i>', 'on a block: a lead or a place booked twice at once') +
-            '</tbody></table>';
+    // ---- help: a dialog with two tabs ----
+
+    var helpKbd = function (k) { return '<kbd>' + esc(k) + '</kbd>'; };
+    var helpCode = function (t) { return '<code>' + esc(t) + '</code>'; };
+
+    function helpSection(icon, title, rows, note) {
+        return '<section class="evb-help-sec"><h4><i class="fas ' + icon + '" aria-hidden="true"></i> ' + esc(title) + '</h4>' +
+            (note ? '<p class="evb-help-note">' + note + '</p>' : '') +
+            '<dl class="evb-help-list">' + rows.map(function (r) {
+                return '<div class="evb-help-row"><dt>' + r[0] + '</dt><dd>' + r[1] + '</dd></div>';
+            }).join('') + '</dl></section>';
+    }
+
+    // About Schedule Entry: what the line reads, and the keys.
+    function helpAboutHtml() {
+        var c = helpCode, k = helpKbd;
+        return '<div class="evb-help-grid">' +
+            helpSection('fa-keyboard', 'Type an item on one line', [
+                ['Day', c('sat') + ' ' + c('saturday') + ' ' + c('11/21') + ' first. A day on its own switches the day.'],
+                ['Time', c('9:30-10:15') + ' ' + c('9a-12p') + ' ' + c('3-4') + ' ' + c('10 to 1')],
+                ['Start', c('3p') + ' ' + c('15:00') + ' ' + c('noon') + '. Takes the last item’s length.'],
+                ['Length', c('45m') + ' ' + c('1h30m') + ' ' + c('2 hrs') + '. Starts where the last item ended.'],
+                ['Next', c('then') + ' starts right after the last item.'],
+                ['All day', c('all day') + ' is 7a–7p; ' + c('all weekend') + ' covers the event.'],
+                ['Category', c('#bg') + ' ' + c('#class') + ' or ' + c('bg:') + ' first. A second ' + c('#') + ' adds a stripe.'],
+                ['Place', c('at Main Field')],
+                ['Leads', c('@Luna') + ' or ' + c('taught by Luna')],
+                ['Notes', c('"Bring water"')],
+                ['Cost', c('$8') + ' on a feast item']
+            ], 'The chips under the line show what was read. A chip’s × keeps that part as title text.') +
+            helpSection('fa-i-cursor', 'In the line', [
+                [k('Enter'), 'Add the item'],
+                [k('Esc'), 'Clear the line'],
+                [k('/'), 'Jump to the line'],
+                [k('↑') + k('↓') + ' ' + k('Tab'), 'Choose a suggestion'],
+                [k(MOD + ' Z'), 'Undo'],
+                [k('Shift ' + MOD + ' Z'), 'Redo']
+            ]) +
+            helpSection('fa-mouse-pointer', 'On the board', [
+                ['Click', 'An empty time to type an item there; drag for its length'],
+                [k('Enter'), 'Add it and start the next one after it'],
+                [k('Tab'), 'Add it and start one alongside'],
+                [k('Esc'), 'Stop'],
+                ['Drag', 'A block to move it; a selected block’s top or bottom edge to resize it'],
+                ['Drag', 'The selected block’s corner square down to repeat it through the day']
+            ]) +
+            helpSection('fa-hand-pointer', 'With a block selected', [
+                [k('↑') + k('↓'), 'Move it 15 minutes (with ' + k('Alt') + ', 5)'],
+                [k('Shift ↑') + k('Shift ↓'), 'Move only its end'],
+                [k('←') + k('→'), 'Move it a day'],
+                [k('Shift Enter'), 'Open its Details (location, leads, description)'],
+                [k('Shift') + ' click', 'Add a block to the selection, or take it out'],
+                [k(MOD + ' A'), 'Select every block'],
+                [k(MOD + ' D'), 'Duplicate the selection just after it'],
+                [k(MOD + ' C') + ' ' + k(MOD + ' V'), 'Copy the selection; paste it at the cursor']
+            ]) +
+            helpSection('fa-crosshairs', 'With nothing selected', [
+                [k('↑') + k('↓') + k('←') + k('→'), 'Move the cursor (15 minutes, a day)'],
+                ['Type', 'Start an item at the cursor; ' + k('Enter') + ' opens it empty']
+            ]) +
+            helpSection('fa-layer-group', 'Many at once', [
+                ['Paste', 'Several lines (a post, last year’s notes) on the board or in the line. They show dashed until you press Add all.'],
+                [k('Esc'), 'Discard that preview'],
+                ['More', 'Start from a past event’s schedule, paste lines of text, or copy this schedule as text'],
+                ['<i class="fas fa-exclamation-triangle evb-help-warn" aria-label="Warning"></i>', 'On a block: a lead or a place booked twice at once']
+            ]) +
+            '</div>';
+    }
+
+    // The example context: a Friday-to-Sunday weekend with one staff member,
+    // two places and an Opening Court, so every example reads as it would live.
+    var HELP_DAYS = ['2026-11-20', '2026-11-21', '2026-11-22'];
+    function helpContext() {
+        return {
+            days: HELP_DAYS, eventDays: HELP_DAYS, day: HELP_DAYS[1], today: HELP_DAYS[0],
+            lastEnd: { day: HELP_DAYS[1], min: 600 }, lastDuration: 60,
+            locations: ['Main Field', 'Pavilion'], canFeast: true,
+            staff: [{ MundaneId: 1, Persona: 'Luna', LeadCategories: [] }],
+            items: [
+                { Title: 'Opening Court', StartTime: HELP_DAYS[1] + ' 09:00', EndTime: HELP_DAYS[1] + ' 10:30' },
+                { Title: 'Feast', StartTime: HELP_DAYS[1] + ' 18:00', EndTime: HELP_DAYS[1] + ' 20:00' }
+            ]
+        };
+    }
+
+    var HELP_EXAMPLES = [
+        ['Times the way people write them', 'Dashes, a.m./p.m., commas and words like “from” and “until” all work.', [
+            '9am—10am Opening Court',
+            'Sat. 9 a.m. Breakfast',
+            'from 9 to 5 Troll',
+            'Troll until 5p',
+            '12 noon Lunch',
+            '2p Battlegame for 90 minutes'
+        ]],
+        ['Days', 'A day can lead the line, sit next to the time, or be a date in words. Small typos are forgiven.', [
+            'Battlegame Saturday 3p',
+            'Nov 22 9a Althing',
+            'Bardic tonight at 9',
+            'Day 3 10a Closing Court',
+            'Satuday 1p Ditch'
+        ]],
+        ['One line, several days', 'Each day gets its own item.', [
+            'Fri & Sat 8a Breakfast',
+            'Troll all day every day'
+        ]],
+        ['All day and across days', '“All day” fills in 7a–7p. A range can run from one day into another.', [
+            'Troll Open all day',
+            'Merchants all weekend',
+            '9:00am Saturday to 2:00pm Sunday Quest'
+        ]],
+        ['Next to another item', 'Name an item already on the schedule with “after” or “before”.', [
+            'Battlegame after opening court',
+            'Feast prep 2 hours before the feast'
+        ]],
+        ['People, places and food', 'Leads must be event staff; places must already be on the schedule unless you use “at”. Dietary words and allergens fill in on a feast item.', [
+            'Naalbinding taught by Luna',
+            'Fighter practice in the Pavilion "Bring loaners"',
+            '6p Feast $8 vegan and GF options contains nuts'
+        ]],
+        ['Several items at once', 'Separate items with “; ” and start each with a time or a day; any other “;” stays in the title. Each one starts from the one before it.', [
+            '9a Breakfast; 10a Opening Court; then 30m Break'
+        ]]
+    ];
+
+    // One parsed item as chips, the way the line shows them.
+    function helpChips(r, cats) {
+        var chip = function (cls, icon, text, style) {
+            return '<span class="evb-chip evb-chip-' + cls + '"' + (style || '') + '><i class="fas ' + icon + '" aria-hidden="true"></i>' +
+                '<span class="evb-chip-label">' + esc(text) + '</span></span>';
+        };
+        var days = r.days && r.days.length > 1
+            ? (r.everyDay ? 'Every day' : r.days.map(function (d) { return C.dayLabel(d).slice(0, 3); }).join(', '))
+            : C.dayLabel(r.day);
+        var time = C.fmtSpan(r.day, r.startMin, r.endMin) + (r.anchor ? ' (' + r.anchor.kind + ' ' + r.anchor.title + ')' : '');
+        var def = cats[r.category] || cats.Other;
+        var h = chip('day', 'fa-calendar-day', days) + chip('time', 'fa-clock', time) +
+            chip('category', 'fa-tag', r.category, def && def.bold ? ' style="--evb-chip-fill:' + esc(def.bold) + '"' : '') +
+            chip('title', 'fa-heading', r.title);
+        if (r.location) h += chip('location', 'fa-map-marker-alt', r.location);
+        if (r.description) h += chip('description', 'fa-quote-left', r.description);
+        if (r.cost != null) h += chip('cost', 'fa-dollar-sign', '$' + Number(r.cost).toFixed(2));
+        if (r.dietary) h += chip('dietary', 'fa-leaf', r.dietary);
+        if (r.allergens) h += chip('allergens', 'fa-exclamation-triangle', r.allergens);
+        (r.leads || []).forEach(function (l) { h += chip('lead', 'fa-user', l.Persona); });
+        return h;
+    }
+
+    // How to Use Real Text: each example read by the parser itself, so what it
+    // shows is what the line does.
+    function helpRealHtml() {
+        var cats = {};
+        ((win.EvConfig && win.EvConfig.scheduleCategories) || []).forEach(function (c) { cats[c.name] = c; });
+        var h = '<p class="evb-help-lede">Type the way you would write it in a post or a group chat. ' +
+            'The line picks out the day, the time and the rest, and shows each as a chip before you press ' + helpKbd('Enter') +
+            '. Anything it does not recognise stays in the title. The examples below are read live by the same parser, ' +
+            'as if your event ran Friday to Sunday with an Opening Court on Saturday.</p>';
+        HELP_EXAMPLES.forEach(function (g) {
+            h += '<section class="evb-help-sec evb-help-examples"><h4>' + esc(g[0]) + '</h4><p class="evb-help-note">' + esc(g[1]) + '</p>';
+            g[2].forEach(function (line) {
+                var r = C.parseEntry(line, helpContext());
+                var rows = (r.before || []).concat([r]);
+                h += '<div class="evb-help-ex"><div class="evb-help-in"><code>' + esc(line) + '</code></div>' +
+                    '<div class="evb-help-out">' + rows.map(function (x) {
+                        return '<div class="evb-help-chips"><i class="fas fa-arrow-right evb-help-arrow" aria-hidden="true"></i>' + helpChips(x, cats) + '</div>';
+                    }).join('') + '</div></div>';
+            });
+            h += '</section>';
+        });
+        h += '<section class="evb-help-sec"><h4><i class="fas fa-wrench" aria-hidden="true"></i> When it reads something wrong</h4>' +
+            '<dl class="evb-help-list">' +
+            '<div class="evb-help-row"><dt>× on a chip</dt><dd>Keeps that part as title text (“Midnight Madness” stays a name).</dd></div>' +
+            '<div class="evb-help-row"><dt>' + helpCode('#tag') + '</dt><dd>Sets the category when the guess is off: ' + helpCode('#class Sword Basics') + '</dd></div>' +
+            '<div class="evb-help-row"><dt>' + helpCode('"quotes"') + '</dt><dd>Anything in quotes is the description, never read for times or places.</dd></div>' +
+            '</dl></section>';
+        return h;
+    }
+
+    function helpDialogHtml() {
+        var tab = function (key, label, on) {
+            return '<button type="button" role="tab" class="evb-help-tab" id="evb-help-tab-' + key + '" data-help-tab="' + key + '"' +
+                ' aria-controls="evb-help-panel-' + key + '" aria-selected="' + on + '" tabindex="' + (on ? '0' : '-1') + '">' + label + '</button>';
+        };
+        return '<div class="ev-modal evb-dialog-box evb-help-box" role="dialog" aria-modal="true" aria-labelledby="evb-help-heading">' +
+            '<div class="ev-modal-header"><h3 id="evb-help-heading">Schedule entry help</h3>' +
+            '<button type="button" class="ev-modal-close evb-help-close" aria-label="Close">&times;</button></div>' +
+            '<div class="evb-help-tabs" role="tablist" aria-label="Help topics">' +
+            tab('about', 'About Schedule Entry', true) + tab('real', 'How to Use Real Text', false) + '</div>' +
+            '<div class="ev-modal-body evb-help-body">' +
+            '<div class="evb-help-panel" role="tabpanel" id="evb-help-panel-about" aria-labelledby="evb-help-tab-about" tabindex="0">' + helpAboutHtml() + '</div>' +
+            '<div class="evb-help-panel" role="tabpanel" id="evb-help-panel-real" aria-labelledby="evb-help-tab-real" tabindex="0" hidden></div>' +
+            '</div></div>';
+    }
+
+    function showHelpTab(key, focus) {
+        var ov = state.help;
+        if (!ov) return;
+        Array.prototype.forEach.call(ov.querySelectorAll('.evb-help-tab'), function (b) {
+            var on = b.getAttribute('data-help-tab') === key;
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+            b.tabIndex = on ? 0 : -1;
+            if (on && focus) b.focus();
+        });
+        var real = ov.querySelector('#evb-help-panel-real');
+        // Read on first show: the examples run the parser.
+        if (key === 'real' && !real.innerHTML) real.innerHTML = helpRealHtml();
+        ov.querySelector('#evb-help-panel-about').hidden = key !== 'about';
+        real.hidden = key !== 'real';
+        ov.querySelector('.evb-help-body').scrollTop = 0;
+    }
+
+    // The page's modal overlay, so the board's keys stand down while it shows.
+    function openHelp() {
+        if (state.help) return;
+        var ov = doc.createElement('div');
+        ov.className = 'ev-modal-overlay evb-dialog evb-help-dialog ev-modal-open';
+        ov.innerHTML = helpDialogHtml();
+        doc.body.appendChild(ov);
+        state.help = ov;
+        var btn = q('.evb-help');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+        var downOnBackdrop = false;
+        ov.addEventListener('mousedown', function (e) { downOnBackdrop = e.target === ov; });
+        ov.addEventListener('click', function (e) {
+            var t = e.target.closest && e.target.closest('.evb-help-tab');
+            if (t) { showHelpTab(t.getAttribute('data-help-tab'), true); return; }
+            if ((e.target === ov && downOnBackdrop) || (e.target.closest && e.target.closest('.evb-help-close'))) closeHelp(true);
+        });
+        ov.addEventListener('keydown', onHelpKey);
+        ov.querySelector('.evb-help-tab[aria-selected="true"]').focus();
+    }
+
+    function closeHelp(restoreFocus) {
+        var ov = state.help;
+        if (!ov) return;
+        state.help = null;
+        if (ov.parentNode) ov.parentNode.removeChild(ov);
+        var btn = q('.evb-help');
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'false');
+            if (restoreFocus) btn.focus({ preventScroll: true });
+        }
+    }
+
+    // Esc closes; the arrows move between tabs; Tab stays inside.
+    function onHelpKey(e) {
+        var ov = state.help;
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeHelp(true); return; }
+        var onTab = e.target.closest && e.target.closest('.evb-help-tab');
+        if (onTab && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End')) {
+            e.preventDefault();
+            var keys = ['about', 'real'], i = keys.indexOf(onTab.getAttribute('data-help-tab'));
+            var next = e.key === 'Home' ? 0 : e.key === 'End' ? keys.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : keys.length - 1)) % keys.length;
+            showHelpTab(keys[next], true);
+            return;
+        }
+        if (e.key !== 'Tab') return;
+        var f = Array.prototype.filter.call(ov.querySelectorAll('button:not([tabindex="-1"]), [href], [tabindex="0"]'),
+            function (el) { return !el.disabled && el.getClientRects().length; });
+        if (!f.length) return;
+        var first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && doc.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && doc.activeElement === last) { e.preventDefault(); first.focus(); }
     }
 
     function headHtml() {
@@ -348,9 +585,8 @@
             '<i class="fas fa-undo" aria-hidden="true"></i><span class="evb-modebar-label">Undo</span></button>' +
             '<button type="button" class="evb-modebar-btn evb-redo" aria-label="Redo" data-tip="Redo (Shift+' + MOD + '+Z)" disabled>' +
             '<i class="fas fa-redo" aria-hidden="true"></i><span class="evb-modebar-label">Redo</span></button>' +
-            '<span class="evb-help-wrap"><button type="button" class="evb-modebar-btn evb-help" aria-label="Typing help"' +
-            ' aria-expanded="false" aria-controls="evb-help-pop">?</button>' +
-            '<div class="evb-help-pop" id="evb-help-pop" role="region" aria-label="Typing help" hidden>' + helpHtml() + '</div></span>' +
+            '<button type="button" class="evb-modebar-btn evb-help" aria-label="Schedule entry help" data-tip="Help"' +
+            ' aria-haspopup="dialog" aria-expanded="false">?</button>' +
             '<button type="button" class="ev-submit-btn evb-done">Done</button>' +
             '</span></div>' +
             '<div class="evb-quickline"></div>' +
@@ -460,13 +696,6 @@
         box.hidden = true;
     }
 
-    function setHelp(open) {
-        var pop = q('.evb-help-pop'), btn = q('.evb-help');
-        if (!pop) return;
-        pop.hidden = !open;
-        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    }
-
     // ---- store events ----
 
     function onChange() {
@@ -548,7 +777,9 @@
 
     function onParse(r) {
         if (state.committing || bulkOpen()) return;
-        V().setGhosts(r && r.ok ? [itemFrom(r, state.entry && state.entry.getLeads())] : []);
+        // Only a line Enter would add shows ghosts: a ';' line whose last part has
+        // no title is refused whole, so its earlier parts show none either.
+        V().setGhosts(r && r.ok ? itemsFrom(r, state.entry && state.entry.getLeads()) : []);
     }
 
     // Add a valid parse as an item with the given leads; the quick line's day and
@@ -557,10 +788,19 @@
     // the event's dates is added, and the notice says so.
     function addParsed(r, leads) {
         if (state.leaving) return null;
-        var cid;
+        var cid, store = state.store, items = itemsFrom(r, leads);
+        if (!items.length) return null;
         state.committing = true;
         try {
-            cid = state.store.add(itemFrom(r, leads));
+            if (items.length === 1) {
+                cid = store.add(items[0]);
+            } else {
+                // Several items (every day, or a ';' line): one save, one undo step.
+                var cids = [];
+                store.batch(function () { items.forEach(function (it) { cids.push(store.add(it)); }); });
+                cids = cids.filter(function (c) { return c && store.get(c); });
+                cid = cids.length ? cids[cids.length - 1] : null;
+            }
             if (cid) state.recent.push({ cid: cid, id: 0, span: !!r.span });
         } finally {
             state.committing = false;
@@ -651,13 +891,6 @@
     function onKeyDown(e) {
         if (!state.editing || modalOpen() || !boardShown()) return;
         var t = e.target;
-        if (e.key === 'Escape' && q('.evb-help-pop') && !q('.evb-help-pop').hidden) {
-            // This Esc closes the help and does nothing else (the selection stays).
-            e.preventDefault();
-            setHelp(false);
-            q('.evb-help').focus();
-            return;
-        }
         if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey && !isTextField(t)) {
             e.preventDefault();
             state.entry.focus();
@@ -674,11 +907,6 @@
             e.preventDefault();
             if (e.shiftKey) redo(); else undo();
         }
-    }
-
-    function onDocClick(e) {
-        var wrap = q('.evb-help-wrap');
-        if (wrap && !wrap.contains(e.target)) setHelp(false);
     }
 
     // Bound for as long as Edit mode is on. It asks while anything would be lost:
@@ -826,7 +1054,7 @@
         q('.evb-undo').addEventListener('click', undo);
         q('.evb-redo').addEventListener('click', redo);
         q('.evb-save-retry').addEventListener('click', function () { store.retry(); });
-        q('.evb-help').addEventListener('click', function () { setHelp(q('.evb-help-pop').hidden); });
+        q('.evb-help').addEventListener('click', openHelp);
         q('.evb-done').addEventListener('click', function () { exit(); });
         q('.evb-notice-close').addEventListener('click', function () { clearNotice(); state.entry.focus(); });
 
@@ -843,7 +1071,6 @@
         showHistory();
 
         doc.addEventListener('keydown', onKeyDown);
-        doc.addEventListener('click', onDocClick);
         win.addEventListener('focus', onFocus);
         doc.addEventListener('visibilitychange', onVisibility);
         state.pollTimer = win.setInterval(autoRefresh, POLL_MS);
@@ -857,7 +1084,7 @@
         state.offs.forEach(function (off) { off(); });
         state.offs = [];
         doc.removeEventListener('keydown', onKeyDown);
-        doc.removeEventListener('click', onDocClick);
+        closeHelp(false);
         win.removeEventListener('focus', onFocus);
         doc.removeEventListener('visibilitychange', onVisibility);
         if (state.pollTimer) { win.clearInterval(state.pollTimer); state.pollTimer = 0; }

@@ -467,15 +467,21 @@
     // longest staff persona after it (which may hold spaces or quotes) and any
     // punctuation (LEAD_TRAIL) right after it, else
     // { kind: 'unlead' } spanning the one word after it, else null (a bare '@').
-    function leadAt(text, i, staff) {
+    // The longest staff persona written at text[pos]: { len, staff } or null.
+    function staffAt(text, pos, staff) {
         var best = null;
         (staff || []).forEach(function (s) {
             if (!s || !s.Persona || !squash(s.Persona)) return;
             var re = personaPattern(s.Persona);
-            re.lastIndex = i + 1;
+            re.lastIndex = pos;
             var m = re.exec(text);
             if (m && (!best || m[0].length > best.len)) best = { len: m[0].length, staff: s };
         });
+        return best;
+    }
+
+    function leadAt(text, i, staff) {
+        var best = staffAt(text, i + 1, staff);
         if (best) {
             var end = i + 1 + best.len;
             // Punctuation right after the name goes with it ('@Luna, @Kai', '@Luna.').
@@ -489,11 +495,48 @@
         return { kind: 'unlead', text: text.slice(i, j), value: text.slice(i + 1, j), end: j };
     }
 
+    // A staff member named after a cue at text[i] ('taught by Luna', 'with
+    // Luna', 'run by @Luna'): a lead token spanning the cue and the name, or null.
+    // Only staff: 'Fun with Swords' stays text.
+    var LEAD_CUE_RE = /(?:(?:taught|run|hosted|led|presented|organi[sz]ed|judged)\s+by|with)\s+@?/iy;
+    function cueLeadAt(text, i, staff) {
+        LEAD_CUE_RE.lastIndex = i;
+        var m = LEAD_CUE_RE.exec(text);
+        if (!m) return null;
+        var best = staffAt(text, i + m[0].length, staff);
+        if (!best) return null;
+        var end = i + m[0].length + best.len;
+        // The name must end its word: 'with Luna's group' and 'with Luna-ish'
+        // are about something else, and stay text.
+        if (/['’‘\-‐‑]/.test(text.charAt(end))) return null;
+        while (end < text.length && LEAD_TRAIL.indexOf(text.charAt(end)) >= 0) end++;
+        return { kind: 'lead', text: text.slice(i, end), value: best.staff.Persona, end: end,
+            lead: { MundaneId: +best.staff.MundaneId, Persona: best.staff.Persona } };
+    }
+
+    // A word as the grammar reads it (its text stays as typed for the title): an
+    // em dash, minus or arrow is a range dash, 'a.m.' is 'am', ''til' is 'til',
+    // and a trailing comma, semicolon or full stop is dropped ('Sat.', '9a,').
+    function canonWord(w) {
+        var v = w.replace(/\u2014|\u2012|\u2212|->|\u2192/g, '\u2013')
+            .replace(/([ap])\.m\.?(?=$|[-\u2013,;.])/gi, '$1m')
+            .replace(/^['\u2019]til$/i, 'til');
+        var trimmed = v.replace(/[,;.]+$/, '');
+        return trimmed || v;
+    }
+
     function tokenize(text, staff) {
         var out = [], i = 0, n = text.length;
         while (i < n) {
             var ch = text.charAt(i);
             if (/\s/.test(ch)) { i++; continue; }
+            var cue = cueLeadAt(text, i, staff);
+            if (cue) {
+                i = cue.end;
+                delete cue.end;
+                out.push(cue);
+                continue;
+            }
             // '@' leads claim their whole span first: a persona may hold quotes.
             var lead = ch === '@' ? leadAt(text, i, staff) : null;
             if (lead) {
@@ -516,6 +559,7 @@
                 var m = TOKEN_KINDS[k].re.exec(word);
                 if (m) { tok.kind = TOKEN_KINDS[k].kind; tok.value = m[1]; break; }
             }
+            if (tok.kind === 'word') tok.value = canonWord(word);
             out.push(tok);
             i = j;
         }
@@ -525,13 +569,60 @@
 
     var WEEKDAY_RE = /^(sun|mon|tue|wed|thu|fri|sat)(?:day|sday|nesday|rsday|urday)?:?$/i;
 
+    // Words a near-miss of a weekday that are not one ('Sundae Bar').
+    var NOT_WEEKDAYS = ['sundae', 'sundaes', 'sundial', 'sundials', 'mondo'];
+
+    // Optimal string alignment distance (edits, with a swap of two neighbours as one).
+    function editDistance(a, b) {
+        var d = [], i, j;
+        for (i = 0; i <= a.length; i++) { d[i] = [i]; }
+        for (j = 0; j <= b.length; j++) d[0][j] = j;
+        for (i = 1; i <= a.length; i++) {
+            for (j = 1; j <= b.length; j++) {
+                var cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+                d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+                if (i > 1 && j > 1 && a.charAt(i - 1) === b.charAt(j - 2) && a.charAt(i - 2) === b.charAt(j - 1)) {
+                    d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+                }
+            }
+        }
+        return d[a.length][b.length];
+    }
+
+    // A typo keeps the name's 'day': its three letters all in the last four
+    // ('Satuday', 'Sundya', 'Firday'), or the name with one letter dropped
+    // ending 'dy' or 'ay' ('Saturdy'). Real words a letter off a weekday change
+    // the ending instead ('Sundry', 'Sunray', 'Saturnal', 'Sundae').
+    function keepsDay(w, n) {
+        var tail = w.slice(-4);
+        if (['d', 'a', 'y'].every(function (c) { return tail.indexOf(c) >= 0; })) return true;
+        return w.length < n.length && /(?:dy|ay)$/.test(w);
+    }
+
+    // A misspelt full weekday name ('Satuday', 'Thrusday', 'Firday'): one edit
+    // away (two for eight letters or more), the same first letter, the 'day'
+    // kept (keepsDay), and only one weekday that near. -1 otherwise.
+    function fuzzyWeekday(word) {
+        var w = word.replace(/:$/, '').toLowerCase();
+        if (!/^[a-z]{6,}$/.test(w) || NOT_WEEKDAYS.indexOf(w) >= 0) return -1;
+        var hit = -1, best = 3;
+        WEEKDAYS.forEach(function (name, idx) {
+            var n = name.toLowerCase();
+            if (n.charAt(0) !== w.charAt(0) || !keepsDay(w, n)) return;
+            var dist = editDistance(w, n);
+            if (dist > (w.length >= 8 ? 2 : 1)) return;
+            if (dist < best) { best = dist; hit = idx; } else if (dist === best) hit = -2;
+        });
+        return hit < 0 ? -1 : hit;
+    }
+
     function weekdayOf(word) {
         var m = WEEKDAY_RE.exec(word);
-        if (!m) return -1;
+        if (!m) return fuzzyWeekday(word);
         var idx = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(m[1].toLowerCase());
         // Accept only the three-letter form or the real full name.
         var bare = word.replace(/:$/, '').toLowerCase();
-        return bare.length === 3 || bare === WEEKDAYS[idx].toLowerCase() ? idx : -1;
+        return bare.length === 3 || bare === WEEKDAYS[idx].toLowerCase() ? idx : fuzzyWeekday(word);
     }
 
     // The board day a day word names, or null. A weekday is looked up in near
@@ -653,7 +744,8 @@
         return { start: s, end: e };
     }
 
-    var LENGTH_RE = /^(?:(\d+(?:\.\d+)?)h(?:(\d+)m)?|(\d+)m|\+(\d+))$/i;
+    var LENGTH_RE = /^(?:(\d+(?:\.\d+)?)(?:h|hrs?|hours?)(?:(\d+)(?:m|mins?|minutes?))?|(\d+)(?:m|mins?|minutes?)|\+(\d+))$/i;
+    var HOUR_UNIT = /^(?:h|hrs?|hours?)$/, MIN_UNIT = /^(?:m|mins?|minutes?)$/;
 
     // Minutes, or null. Anything over a day ('99h') is not a length but text.
     function readLength(text) {
@@ -663,10 +755,48 @@
         return len > DAY_MIN ? null : len;
     }
 
-    var RANGE_JOINERS = ['-', '\u2013', 'to'];
+    var RANGE_JOINERS = ['-', '\u2013', 'to', 'until', 'till', 'til', 'thru', 'through'];
+    // Before a lone time, these make it the end ('Troll until 5p').
+    var UNTIL_WORDS = ['until', 'till', 'til'];
     var MARKER_WORDS = ['am', 'pm'];
 
     function isWord(t) { return t && t.kind === 'word' && !t.claimed; }
+
+    function lowerAt(toks, i) { return isWord(toks[i]) ? toks[i].value.toLowerCase() : ''; }
+
+    // A length at token i, after an optional 'for': '45m', '1h30m', '+45',
+    // '2 hrs', '1.5 hours', '1 hour 30 minutes', '90 minutes', 'an hour', 'half
+    // an hour'. { len, next } or null; over a day is not a length.
+    function lengthAt(toks, i) {
+        if (!isWord(toks[i])) return null;
+        var j = lowerAt(toks, i) === 'for' ? i + 1 : i, len = null;
+        var w = lowerAt(toks, j), w1 = lowerAt(toks, j + 1), w2 = lowerAt(toks, j + 2);
+        var one = w ? readLength(toks[j].value) : null;
+        if (one !== null) {
+            len = one; j += 1;
+        } else if (/^\d+(?:\.\d+)?$/.test(w) && HOUR_UNIT.test(w1)) {
+            len = Math.round(parseFloat(w) * 60); j += 2;
+            if (/^\d+$/.test(lowerAt(toks, j)) && MIN_UNIT.test(lowerAt(toks, j + 1))) { len += +lowerAt(toks, j); j += 2; }
+        } else if (/^\d+$/.test(w) && MIN_UNIT.test(w1)) {
+            len = +w; j += 2;
+        } else if ((w === 'an' || w === 'one') && w1 === 'hour') {
+            len = 60; j += 2;
+        } else if (w === 'half' && w1 === 'an' && w2 === 'hour') {
+            len = 30; j += 3;
+        } else if ((w === 'half' && w1 === 'hour') || (w === 'a' && w1 === 'half' && w2 === 'hour')) {
+            len = 30; j += w === 'a' ? 3 : 2;
+        }
+        if (len === null || len > DAY_MIN) return null;
+        // Words, not a '45m' token: a Title-Cased unit with more title after it
+        // names the thing ('One Hour Challenge', '24 Hour Vigil'), unless 'for' leads it.
+        var start = lowerAt(toks, i) === 'for' ? i + 1 : i, words = j - start > 1;
+        if (words && start === i && isWord(toks[j])) {
+            for (var k = start; k < j; k++) {
+                if ((HOUR_UNIT.test(lowerAt(toks, k)) || MIN_UNIT.test(lowerAt(toks, k))) && /^[A-Z]/.test(toks[k].text)) return null;
+            }
+        }
+        return { len: len, next: j, words: words, lead: start > i };
+    }
 
     // A time side starting at token i, with an optional separate 'am'/'pm'
     // word after it: { side, next } or null.
@@ -678,6 +808,10 @@
         if (!side.marked && side.h >= 1 && isWord(toks[next]) && MARKER_WORDS.indexOf(toks[next].value.toLowerCase()) >= 0) {
             side = readSide(toks[i].value + toks[next].value);
             if (!side) return null;
+            next++;
+        } else if (!side.marked && side.h === 12 && side.mi === 0 && /^(?:noon|midnight)$/.test(lowerAt(toks, next))) {
+            // '12 noon', '12 midnight'.
+            side = readSide(lowerAt(toks, next));
             next++;
         }
         return { side: side, next: next };
@@ -741,6 +875,7 @@
     }
 
     function isAt(t) { return isWord(t) && t.value.toLowerCase() === 'at'; }
+    function isFrom(t) { return isWord(t) && t.value.toLowerCase() === 'from'; }
 
     // A bare hour from 1 to 12: no colon, no marker ('6' in 'Court at 6').
     function bareHourAt(toks, i) {
@@ -761,7 +896,8 @@
             return { found: { start: four.start, end: four.end, length: null, then: false }, upto: four.next };
         }
         var r = rangeAt(toks, i);
-        if (r && (!r.bare || i === firstIdx || r.next - 1 === lastIdx)) {
+        // A bare range ('9 to 5') only at an end of the line or after 'from'.
+        if (r && (!r.bare || i === firstIdx || r.next - 1 === lastIdx || isFrom(toks[i - 1]))) {
             return { found: { start: r.start, end: r.end, length: null, then: false, a: r.a, b: r.b }, upto: r.next };
         }
         var sa = sideAt(toks, i);
@@ -772,8 +908,8 @@
             if (word && !edge && !isAt(toks[i - 1])) return null;
             return { found: { start: nightShift(sideMin(sa.side)), end: null, length: null, then: false, a: sa.side }, upto: sa.next, weak: word };
         }
-        var len = readLength(toks[i].value);
-        if (len !== null) return { found: { start: null, end: null, length: len, then: false }, upto: i + 1 };
+        var ln = lengthAt(toks, i);
+        if (ln) return { found: { start: null, end: null, length: ln.len, then: false }, upto: ln.next };
         if (i === firstIdx && toks[i].value.toLowerCase() === 'then') {
             return { found: { start: null, end: null, length: null, then: true }, upto: i + 1 };
         }
@@ -786,6 +922,8 @@
     // lines only): a bare hour leading a line with a title after it is a time.
     function claimTime(toks, firstIdx, lastIdx, inBlock, leadingHour) {
         var hit = null, i;
+        // 'from 9 to 5 Troll': the line's first word is 'from', so the range after it leads the line.
+        if (isFrom(toks[firstIdx])) firstIdx++;
         for (i = 0; i < toks.length; i++) {
             if (!isWord(toks[i])) continue;
             var t = timeAt(toks, i, firstIdx, lastIdx, inBlock);
@@ -793,9 +931,32 @@
             if (!t.weak) { hit = { at: i, t: t }; break; }
             if (!hit) hit = { at: i, t: t };
         }
-        // Only when the line has no other time: 'at' plus a bare hour, 'Court at 6'.
+        // 'until 5p', 'till 5': a lone time after it is the end; the start comes
+        // from the clock, as a length's does. A bare hour counts here too.
+        var untilAt = function (k) { return isWord(toks[k - 1]) && UNTIL_WORDS.indexOf(lowerAt(toks, k - 1)) >= 0; };
+        if (hit && hit.t.found.start !== null && hit.t.found.end === null && hit.t.found.a && untilAt(hit.at)) {
+            hit.t.found = { start: null, end: null, length: null, then: false, until: hit.t.found.a };
+        }
+        // A lone start with 'until <time>' later on the line ('9a Troll until
+        // 5p'): the two read as a range, as '9a until 5p' does.
+        if (hit && hit.t.found.start !== null && hit.t.found.end === null && hit.t.found.a && !hit.t.found.until) {
+            for (i = hit.t.upto + 1; i < toks.length; i++) {
+                var ue = untilAt(i) && sideAt(toks, i);
+                if (!ue) continue;
+                var ur = resolveRange(hit.t.found.a, ue.side);
+                hit.t.found.start = ur.start; hit.t.found.end = ur.end; hit.t.found.b = ue.side;
+                for (var uk = i - 1; uk < ue.next; uk++) toks[uk].claimed = true;
+                break;
+            }
+        }
+        for (i = 1; !hit && i < toks.length; i++) {
+            var us = untilAt(i) && sideAt(toks, i);
+            if (us) hit = { at: i, t: { found: { start: null, end: null, length: null, then: false, until: us.side }, upto: us.next } };
+        }
+        if (hit && hit.t.found.until) toks[hit.at - 1].claimed = true;
+        // Only when the line has no other time: 'at' or 'from' plus a bare hour, 'Court at 6'.
         for (i = 0; !hit && i < toks.length; i++) {
-            var hour = isAt(toks[i - 1]) && bareHourAt(toks, i);
+            var hour = (isAt(toks[i - 1]) || isFrom(toks[i - 1])) && bareHourAt(toks, i);
             if (hour) hit = { at: i, t: { found: { start: nightShift(defaultMin(hour)), end: null, length: null, then: false, a: hour }, upto: i + 1 } };
         }
         // Then, in a pasted list, a bare hour leading the line: '7 Feast'. Never a
@@ -805,17 +966,34 @@
         if (!hit) return null;
         var found = hit.t.found, upto = hit.t.upto;
         for (i = hit.at; i < upto; i++) toks[i].claimed = true;
-        // 'at 6pm': the 'at' belongs to the time, not to a location.
-        if (found.start !== null && isAt(toks[hit.at - 1])) toks[hit.at - 1].claimed = true;
+        // 'at 6pm', 'from 9 to 5': the word belongs to the time, not to a location or the title.
+        if (found.start !== null && (isAt(toks[hit.at - 1]) || isFrom(toks[hit.at - 1]))) toks[hit.at - 1].claimed = true;
         // A start or 'then' may be followed by a length: '2p 45m', 'then 30m'.
-        if (found.end === null && found.length === null && isWord(toks[upto]) && readLength(toks[upto].value) !== null) {
-            found.length = readLength(toks[upto].value);
-            toks[upto].claimed = true;
-            upto++;
+        // A start may also have one elsewhere on the line: '2p Battlegame for 90
+        // minutes' (the time's own reach, upto, is unchanged by that one).
+        if (found.end === null && found.length === null && !found.until) {
+            var more = lengthAt(toks, upto), from = upto;
+            // Away from the time, a length in words must read as one: after
+            // 'for', or ending the line ('2p Court for an hour', '2p Court 1
+            // hour'), not inside the title ('2p the one hour challenge').
+            for (i = 0; !more && found.start !== null && i < toks.length; i++) {
+                if (i === upto) continue;
+                var el = lengthAt(toks, i);
+                if (el && el.words && !el.lead && toks.slice(el.next).some(isWord) && !isAt(toks[el.next])) el = null;
+                if ((more = el)) from = i;
+            }
+            if (more) {
+                found.length = more.len;
+                for (i = from; i < more.next; i++) toks[i].claimed = true;
+                if (from === upto) upto = more.next;
+            }
         }
+        found.at = hit.at;
         found.upto = upto;
         return found;
     }
+
+    var NOT_PLACES = /^(?:dusk|dawn|sunset|sundown|sunrise|nightfall|twilight|night|dark|daybreak)$/;
 
     // Location: the last free standalone 'at' and the one to six free words
     // after it, stopping at the end, a non-word token ('#', '$', a quote) or a
@@ -826,6 +1004,8 @@
             var after = sideAt(toks, i + 1);
             // Followed by a time ('at 3-4', 'at 5p') or a bare hour ('at 6'): never a location.
             if (rangeAt(toks, i + 1) || after && after.side.strong || bareHourAt(toks, i + 1)) continue;
+            // 'at dusk', 'at sunset': a time of day this board cannot place, never a location.
+            if (NOT_PLACES.test(lowerAt(toks, i + 1))) continue;
             var j = i + 1;
             while (j < toks.length && isWord(toks[j]) && !/^[#$]/.test(toks[j].value)) j++;
             var count = j - i - 1;
@@ -835,6 +1015,46 @@
             var loc = words.join(' ');
             var known = (locations || []).filter(function (l) { return squash(l) === squash(loc); });
             return known.length ? known[0] : loc;
+        }
+        return knownLocation(toks, locations);
+    }
+
+    // Without 'at', only a location the schedule already uses: after 'in' or
+    // 'on' (and an optional 'the': 'in the Pavilion'), or ending the line when
+    // it is two words or more ('Battlegame Main Field'; one word, 'Open
+    // Tavern', is too often a title). The longest wins; '' when none.
+    function knownLocation(toks, locations) {
+        var list = (locations || []).map(function (l) { return { name: l, words: squash(l).split(' ') }; })
+            .filter(function (l) { return l.words[0]; })
+            .sort(function (a, b) { return b.words.length - a.words.length; });
+        if (!list.length) return '';
+        var last = -1, i;
+        for (i = 0; i < toks.length; i++) if (isWord(toks[i])) last = i;
+        var matchAt = function (p) {
+            for (var n = 0; n < list.length; n++) {
+                var w = list[n].words, ok = true;
+                for (var k = 0; k < w.length && ok; k++) ok = isWord(toks[p + k]) && squash(toks[p + k].value) === w[k];
+                if (ok) return list[n];
+            }
+            return null;
+        };
+        for (i = 0; i < toks.length; i++) {
+            var w = lowerAt(toks, i);
+            if (w !== 'in' && w !== 'on') continue;
+            var p = lowerAt(toks, i + 1) === 'the' ? i + 2 : i + 1;
+            var hit = matchAt(p);
+            if (!hit) continue;
+            for (var k = i; k < p + hit.words.length; k++) toks[k].claimed = true;
+            return hit.name;
+        }
+        for (i = 1; i <= last; i++) {
+            var end = matchAt(i);
+            if (!end || end.words.length < 2 || i + end.words.length - 1 !== last) continue;
+            var before = false;
+            for (var b = 0; b < i && !before; b++) before = isWord(toks[b]);
+            if (!before) continue;
+            for (var c = i; c <= last; c++) toks[c].claimed = true;
+            return end.name;
         }
         return '';
     }
@@ -846,8 +1066,6 @@
     var SPAN_JOINERS = ['-', '–', 'to', 'through', 'thru', 'until', 'till', 'til'];
     var WHOLE_RE = /^(?:all|whole|entire)$/;
     var EVENT_RE = /^(?:weekend|event)$/;
-
-    function lowerAt(toks, i) { return isWord(toks[i]) ? toks[i].value.toLowerCase() : ''; }
 
     // 'all day', 'all-day' or 'allday' at token i: the index after it (and after
     // a 'long'), or -1.
@@ -950,15 +1168,332 @@
         return { day: found.day, start: found.start, end: found.end, plain: !!found.plain };
     }
 
+    // ---- More of the line: several days, relative days, anchors, feast details ----
+
+    // 'M/D' for a board day, the form resolveDayWord reads.
+    function mdOf(day) { return +day.slice(5, 7) + '/' + +day.slice(8); }
+
+    var NUMBER_WORDS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+
+    // Relative day words become day words the grammar already reads: 'today',
+    // 'tonight', 'tomorrow' (from ctx.today when it is one of the event's days,
+    // else from the selected day), 'day 2', 'first day', 'last day'. The token
+    // keeps its text; its value becomes 'M/D', and the pairs merge into one token.
+    // 'tonight' is marked (it reads an unmarked hour as the evening).
+    function relativeDays(toks, base, evDays) {
+        for (var i = 0; i < toks.length; i++) {
+            var w = lowerAt(toks, i), day = null, two = false;
+            if (!w) continue;
+            if (w === 'today' || w === 'tonight') day = base;
+            else if (w === 'tomorrow' || w === 'tmrw') day = base && addDays(base, 1);
+            else if (w === 'day' && evDays.length) {
+                var nw = lowerAt(toks, i + 1), n = /^\d+$/.test(nw) ? +nw : NUMBER_WORDS.indexOf(nw) + 1;
+                if (n >= 1 && n <= evDays.length) { day = evDays[n - 1]; two = true; }
+            } else if ((w === 'first' || w === 'last' || w === 'final') && lowerAt(toks, i + 1) === 'day' && evDays.length) {
+                day = w === 'first' ? evDays[0] : evDays[evDays.length - 1]; two = true;
+            }
+            if (!day) continue;
+            if (two) {
+                toks[i].text += ' ' + toks[i + 1].text;
+                toks.splice(i + 1, 1);
+            }
+            toks[i].value = mdOf(day);
+            toks[i].relative = true;
+            if (w === 'tonight') toks[i].tonight = true;
+        }
+    }
+
+    var EVERY_DAY_RE = /^(?:daily|everyday)$/;
+    var DAY_LIST_SEPS = ['&', 'and', '+', ',', '/'];
+
+    // Several days for one line: 'every day', 'each day', 'daily' (the event's
+    // days), or a list of two or more day words ('Fri & Sat', 'Fri, Sat and
+    // Sun', 'Fri/Sat'). Claimed; { days, every } or null.
+    function claimDays(toks, dayOf, wholeDays) {
+        for (var i = 0; i < toks.length; i++) {
+            var w = lowerAt(toks, i), w1 = lowerAt(toks, i + 1);
+            if (wholeDays.length > 1 && (EVERY_DAY_RE.test(w) || ((w === 'every' || w === 'each') && w1 === 'day'))) {
+                toks[i].claimed = true;
+                if (!EVERY_DAY_RE.test(w)) toks[i + 1].claimed = true;
+                return { days: wholeDays.slice(), every: true };
+            }
+            if (!isWord(toks[i])) continue;
+            // A fused list: 'Fri/Sat', 'Fri,Sat', 'Fri&Sat'.
+            var parts = toks[i].text.split(/[\/,&+]/).filter(function (x) { return x; });
+            if (parts.length > 1 && parts.every(function (x) { return dayOf(x); })) {
+                toks[i].claimed = true;
+                return { days: uniqueDays(parts.map(dayOf)), every: false };
+            }
+            if (!dayOf(toks[i].value)) continue;
+            var list = [dayOf(toks[i].value)], used = [i], j = i + 1;
+            while (j < toks.length) {
+                // A comma ending the day word ('Fri, Sat') joins as a separator does.
+                var comma = /,$/.test(toks[j - 1].text);
+                var sep = DAY_LIST_SEPS.indexOf(lowerAt(toks, j)) >= 0;
+                var k = sep ? j + 1 : j;
+                if (!(sep || comma) || !isWord(toks[k]) || !dayOf(toks[k].value)) break;
+                list.push(dayOf(toks[k].value));
+                for (var u = j; u <= k; u++) used.push(u);
+                j = k + 1;
+            }
+            var days = uniqueDays(list);
+            if (days.length < 2) continue;
+            used.forEach(function (u) { toks[u].claimed = true; });
+            return { days: days, every: false };
+        }
+        return null;
+    }
+
+    function uniqueDays(list) {
+        return list.filter(function (d, k) { return d && list.indexOf(d) === k; }).sort();
+    }
+
+    function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+    var ANCHOR_WORDS = ['after', 'following', 'before'];
+    var ANCHOR_SKIP = ['the'];
+
+    // An item named after 'after', 'following' or 'before' ('Battlegame after
+    // court', 'before the feast'): the longest run of up to five free words that
+    // is a schedule item's title, or a whole-word part of one. On the line's day
+    // when one matches there (the earliest), else, when no day is typed, the
+    // only match on any day. Claimed; { kind, item, sp } or null.
+    function claimAnchor(toks, items, day, dayTyped) {
+        if (!items || !items.length) return null;
+        for (var i = 0; i < toks.length; i++) {
+            var w = lowerAt(toks, i);
+            if (ANCHOR_WORDS.indexOf(w) < 0) continue;
+            var p = ANCHOR_SKIP.indexOf(lowerAt(toks, i + 1)) >= 0 ? i + 2 : i + 1, words = [];
+            for (var j = p; j < toks.length && j < p + 5 && isWord(toks[j]) && !/^[#$@]/.test(toks[j].value); j++) {
+                words.push(squash(toks[j].value));
+            }
+            for (var n = words.length; n >= 1; n--) {
+                var hit = anchorItem(items, words.slice(0, n).join(' '), day, dayTyped);
+                if (!hit) continue;
+                for (var k = i; k < p + n; k++) toks[k].claimed = true;
+                return { kind: w === 'before' ? 'before' : 'after', item: hit.item, sp: hit.sp };
+            }
+        }
+        return null;
+    }
+
+    function anchorItem(items, phrase, day, dayTyped) {
+        if (phrase.replace(/[^\p{L}\p{N}]/gu, '').length < 3) return null;
+        var re = new RegExp('(?:^| )' + escapeRe(phrase) + 's?(?= |$)');
+        var exact = [], part = [];
+        items.forEach(function (it) {
+            var sp = span(it);
+            if (!sp) return;
+            var t = squash(String(it.Title || '').replace(/[^\p{L}\p{N}&'\s]/gu, ' '));
+            if (t === phrase) exact.push({ item: it, sp: sp });
+            else if (re.test(t)) part.push({ item: it, sp: sp });
+        });
+        var pick = function (list) {
+            var onDay = list.filter(function (x) { return x.sp.day === day; });
+            var pool = onDay.length ? onDay : (!dayTyped && list.length === 1 ? list : []);
+            pool.sort(function (a, b) { return a.sp.start - b.sp.start; });
+            return pool[0] || null;
+        };
+        return pick(exact) || pick(part);
+    }
+
+    // Feast details, as the item form's checkboxes name them.
+    var DIET_WORDS = {
+        vegetarian: 'Vegetarian Option', veggie: 'Vegetarian Option', vegan: 'Vegan Option',
+        'gluten-free': 'Gluten-Free Option', glutenfree: 'Gluten-Free Option', gf: 'Gluten-Free Option',
+        kosher: 'Kosher', halal: 'Halal', keto: 'Keto', paleo: 'Paleo'
+    };
+    var ALLERGEN_WORDS = {
+        dairy: 'Dairy', milk: 'Dairy', egg: 'Eggs', eggs: 'Eggs', fish: 'Fish', shellfish: 'Shellfish',
+        shrimp: 'Shellfish', nut: 'Tree Nuts', nuts: 'Tree Nuts', peanut: 'Peanuts', peanuts: 'Peanuts',
+        wheat: 'Wheat', gluten: 'Gluten', soy: 'Soy', sesame: 'Sesame'
+    };
+    var DIET_AFTER = ['option', 'options', 'available', 'friendly', 'menu'];
+    var LIST_SEPS = ['and', '&', '/', '+'];
+
+    // A run of words naming entries of map ('vegan and GF', 'nuts, dairy'),
+    // two-word names first ('gluten free', 'tree nuts'). { names, next } or null.
+    function wordRun(toks, i, map) {
+        var names = [], j = i, more = true;
+        while (more) {
+            var w = lowerAt(toks, j), w1 = lowerAt(toks, j + 1), name = null, step = 1;
+            if (w === 'gluten' && w1 === 'free' && map === DIET_WORDS) { name = 'Gluten-Free Option'; step = 2; }
+            else if (w === 'tree' && (w1 === 'nut' || w1 === 'nuts') && map === ALLERGEN_WORDS) { name = 'Tree Nuts'; step = 2; }
+            else if (w && Object.prototype.hasOwnProperty.call(map, w)) name = map[w];
+            if (!name) break;
+            if (names.indexOf(name) < 0) names.push(name);
+            j += step;
+            more = /,$/.test(toks[j - 1].text) || (LIST_SEPS.indexOf(lowerAt(toks, j)) >= 0 && (j += 1));
+        }
+        // A trailing separator ('vegan and') is not the run's.
+        while (j > i && LIST_SEPS.indexOf(String(toks[j - 1].value).toLowerCase()) >= 0) j--;
+        return names.length ? { names: names, next: j } : null;
+    }
+
+    // Dietary options and allergens of a meal, claimed: { dietary, allergens }
+    // (comma lists, '' when none) or null. Dietary words count after the title
+    // and only when 'with' leads them, a word like 'options' follows them, or
+    // they end the line ('Feast vegan and GF options'; 'Vegan Potluck' stays a
+    // title). Allergens follow 'contains' or 'allergens'.
+    function claimFeastDetails(toks) {
+        var dietary = [], allergens = [], seenTitle = false, i, k;
+        var claim = function (a, b) { for (k = a; k < b; k++) toks[k].claimed = true; };
+        for (i = 0; i < toks.length; i++) {
+            var w = lowerAt(toks, i);
+            if (!w) continue;
+            if (/^(?:contains|allergens?):?$/.test(w)) {
+                var al = wordRun(toks, i + 1, ALLERGEN_WORDS);
+                if (al && seenTitle) { claim(i, al.next); allergens = allergens.concat(al.names); i = al.next - 1; continue; }
+            }
+            var withAt = w === 'with' ? i + 1 : i;
+            var run = seenTitle ? wordRun(toks, withAt, DIET_WORDS) : null;
+            if (run) {
+                var end = run.next;
+                if (DIET_AFTER.indexOf(lowerAt(toks, end)) >= 0) end++;
+                var rest = false;
+                for (k = end; k < toks.length && !rest; k++) rest = isWord(toks[k]);
+                if (withAt > i || end > run.next || !rest) {
+                    claim(i, end);
+                    dietary = dietary.concat(run.names);
+                    i = end - 1;
+                    continue;
+                }
+            }
+            seenTitle = true;
+        }
+        var uniq = function (l) { return l.filter(function (x, n) { return l.indexOf(x) === n; }).join(', '); };
+        return dietary.length || allergens.length ? { dietary: uniq(dietary), allergens: uniq(allergens) } : null;
+    }
+
+    // The line split at a '; ' (a semicolon with a space or the end after it:
+    // '@Luna;@Kai' is one lead list) outside quotes, each part trimmed, empty
+    // parts dropped.
+    // Only a part that starts with a time or a day is an item of its own
+    // ('9a Breakfast; 10a Court', 'Sat 9a Court; Sun 10a Feast'); any other ';'
+    // is title text ('6p Feast: roast boar; turnips', '9a Talk; bring water')
+    // or joins a lead list ('9a Talk @Luna; @Kai').
+    function splitEntry(text, ctx) {
+        var out = [], cur = '', close = null;
+        for (var i = 0; i < text.length; i++) {
+            var ch = text.charAt(i);
+            if (close) { if (ch === close) close = null; }
+            else if (QUOTE_CLOSE[ch]) close = QUOTE_CLOSE[ch];
+            else if (ch === ';' && (i === text.length - 1 || /\s/.test(text.charAt(i + 1)))) { out.push(cur); cur = ''; continue; }
+            cur += ch;
+        }
+        out.push(cur);
+        var joined = [];
+        out.forEach(function (x, n) {
+            if (n > 0 && !x.trim()) return;
+            if (n > 0 && joined.length && !startsWhen(x.trim(), ctx || {})) joined[joined.length - 1] += ';' + x;
+            else joined.push(x);
+        });
+        return joined.map(function (x) { return x.trim(); }).filter(function (x) { return x; });
+    }
+
+    // Whether a ';' part starts with a time ('10a', '9:30-10', 'noon', 'at 6',
+    // 'then', a written length such as '30m') or a day ('Sun', '11/22', 'Nov 22',
+    // 'tomorrow', 'day 2', 'every day', 'Fri/Sat', 'all day').
+    function startsWhen(text, ctx) {
+        var days = ctx.days || [], curDay = ctx.day || days[0] || null;
+        var pool = days.length ? days : (curDay ? [curDay] : []);
+        var whole = ctx.eventDays && ctx.eventDays.length ? ctx.eventDays : days;
+        if (pool.length && leadingDay(text, pool, ctx.eventDays)) return true;
+        var toks = tokenize(text, ctx.staff);
+        if (!isWord(toks[0])) return false;
+        if (pool.length) {
+            relativeDays(toks, ctx.today && whole.indexOf(ctx.today) >= 0 ? ctx.today : curDay, whole);
+            if (toks[0].relative || resolveDayWord(toks[0].value, pool, ctx.eventDays)) return true;
+            var fused = toks[0].text.split(/[\/,&+]/).filter(function (x) { return x; });
+            if (fused.length > 1 && fused.every(function (x) { return resolveDayWord(x, pool, ctx.eventDays); })) return true;
+        }
+        var w = lowerAt(toks, 0);
+        if (EVERY_DAY_RE.test(w) || ((w === 'every' || w === 'each') && lowerAt(toks, 1) === 'day')) return true;
+        if (allDayAt(toks, 0) > 0) return true;
+        var first = isAt(toks[0]) || isFrom(toks[0]) ? 1 : 0;
+        if (first && bareHourAt(toks, 1)) return true;
+        var t = timeAt(toks, first, first, toks.length - 1, false);
+        // A length counts only written with a digit ('30m', '2 hrs'), not 'an hour of Q&A'.
+        if (t && (t.found.start !== null || t.found.end !== null || t.found.then || /\d/.test(toks[first].value))) return true;
+        return !!(ctx.leadingHour && first === 0 && toks.length > 1 && bareHourAt(toks, 0));
+    }
+
+    // The items a parse adds, in order: those of the parts before it on a ';'
+    // line (r.before), then its own, one per day of r.days (else r.day).
+    // -> [{ r, day, start, end }] (naive start and end). None when the line's
+    // own (last) part is not ok: Enter refuses the whole line, so nothing of it
+    // is added or previewed.
+    function entryParts(r) {
+        var out = [];
+        if (!r || !r.ok) return out;
+        (r.before || []).concat([r]).forEach(function (x) {
+            if (!x || !x.ok || !x.day) return;
+            (x.days && x.days.length ? x.days : [x.day]).forEach(function (d) {
+                out.push({ r: x, day: d, start: toNaive(d, x.startMin), end: toNaive(d, x.endMin) });
+            });
+        });
+        return out;
+    }
+
+    // Parse a line. A line with ';' (outside quotes, not inside a block) is
+    // several items read in order, each part starting from the one before as a
+    // pasted list does: the result is the last part's, with the earlier parts'
+    // results in before (only those with a title). Each result's part is its
+    // 0-based place among the parts. ctx.ignore applies to the last part only;
+    // ctx.partIgnore[n] (an ignore object) to part n.
     function parseEntry(text, ctx) {
+        ctx = ctx || {};
+        var src = String(text == null ? '' : text);
+        var parts = ctx.fixedDay || ctx.fixedStart != null ? null : splitEntry(src, ctx);
+        var last = parts && parts.length > 1 ? parts.length - 1 : 0;
+        var ignoreOf = function (n) {
+            return Object.assign({}, ctx.partIgnore && ctx.partIgnore[n], n === last ? ctx.ignore : null);
+        };
+        if (!last) {
+            var one = parseOne(parts && parts.length === 1 ? parts[0] : src, Object.assign({}, ctx, { ignore: ignoreOf(0) }));
+            one.part = 0;
+            return one;
+        }
+        var c = Object.assign({}, ctx), before = [], r = null;
+        parts.forEach(function (part, n) {
+            c.ignore = ignoreOf(n);
+            r = parseOne(part, c);
+            r.part = n;
+            if (n === last) return;
+            if (r.setDay) { c.day = r.setDay; c.lastEnd = null; return; }
+            if (!r.ok) return;
+            before.push(r);
+            c.day = r.day;
+            c.items = (c.items || []).concat(entryParts(r).map(function (p) {
+                return { Title: r.title, StartTime: p.start, EndTime: p.end };
+            }));
+            if (setsClock(r)) {
+                c.lastEnd = { day: r.day, min: r.endMin };
+                c.lastDuration = r.endMin - r.startMin;
+            }
+        });
+        r.before = before;
+        return r;
+    }
+
+    function parseOne(text, ctx) {
         ctx = ctx || {};
         var days = ctx.days || [];
         var ign = ctx.ignore || {};
         var curDay = ctx.day || days[0] || null;
         var lastDuration = ctx.lastDuration == null ? 60 : ctx.lastDuration;
         var hasFixed = ctx.fixedStart != null && ctx.fixedEnd != null;
-        var toks = tokenize(String(text == null ? '' : text), ctx.staff);
-        var given = { day: false, time: false, category: false, location: false, description: false, cost: false, leads: false };
+        var dayPool = days.length ? days : (curDay ? [curDay] : []);
+        var dayFree = !ctx.fixedDay && !ign.day;
+        text = String(text == null ? '' : text);
+        // A date leading the line in words ('Nov 21 9a court', 'Saturday, November
+        // 21: ...') reads as the 'M/D' the grammar knows.
+        if (dayFree && dayPool.length) {
+            var ld = leadingDay(text, dayPool, ctx.eventDays);
+            if (ld && ld.date && ld.rest) text = mdOf(ld.day) + ' ' + ld.rest;
+        }
+        var toks = tokenize(text, ctx.staff);
+        var given = { day: false, time: false, category: false, location: false, description: false, cost: false, leads: false, dietary: false };
         var i;
 
         // Leads: '@Persona' for staff, '@word' for anyone else. Both leave the
@@ -977,14 +1512,26 @@
             given.leads = true;
         });
 
-        // All day, all weekend, or a span across days: it may name the day itself.
-        var dayPool = days.length ? days : (curDay ? [curDay] : []);
-        var dayOf = ctx.fixedDay || ign.day ? null : function (w) { return resolveDayWord(w, dayPool, ctx.eventDays); };
+        var dayOf = dayFree ? function (w) { return resolveDayWord(w, dayPool, ctx.eventDays); } : null;
         var wholeDays = ctx.eventDays && ctx.eventDays.length ? ctx.eventDays : days;
+        // 'today', 'tomorrow', 'day 2', 'last day' read as day words.
+        if (dayOf) relativeDays(toks, ctx.today && wholeDays.indexOf(ctx.today) >= 0 ? ctx.today : curDay, wholeDays);
+
+        // All day, all weekend, or a span across days: it may name the day itself.
         var span = ign.time ? null : claimSpan(toks, dayOf, curDay, wholeDays);
 
+        // Several days ('every day', 'Fri & Sat'): one item each, read on the first.
+        var multi = dayOf && (!span || (span.plain && !span.day)) ? claimDays(toks, dayOf, wholeDays) : null;
+        // A day word leading such a line is the line's too, not title text:
+        // with 'every day' it says nothing more ('Fri 9a Troll every day' is
+        // still every day); with a list it joins the list ('Fri 9a Troll, Sat & Sun').
+        if (multi && isWord(toks[0]) && dayOf(toks[0].value)) {
+            if (!multi.every) multi.days = uniqueDays(multi.days.concat([dayOf(toks[0].value)]));
+            toks[0].claimed = true;
+        }
+
         // Day: only the first token.
-        var typedDay = span && span.day;
+        var typedDay = (span && span.day) || (multi && multi.days[0]);
         if (typedDay) given.day = true;
         if (!typedDay && !ctx.fixedDay && !ign.day && isWord(toks[0])) {
             typedDay = resolveDayWord(toks[0].value, days.length ? days : (curDay ? [curDay] : []), ctx.eventDays);
@@ -1024,6 +1571,35 @@
             typedDay = dayOf(toks[trailIdx].value);
             toks[trailIdx].claimed = true;
             given.day = true;
+        }
+        // A full day name (or a date) right before or after the time, mid-line
+        // ('Battlegame Saturday 3p', 'Battlegame 3p Saturday at Main Field'). An
+        // abbreviation is too often a word ('9a Sun Dance'), and one after the
+        // time must end the line or come before 'at'.
+        if (!typedDay && dayOf && time && !span && time.at != null) {
+            var midDay = function (k) {
+                return isWord(toks[k]) && (/^\d/.test(toks[k].value) || toks[k].value.replace(/:$/, '').length > 3) && dayOf(toks[k].value);
+            };
+            var bi = time.at - 1, ai = time.upto;
+            if (bi >= 0 && toks[bi].claimed && /^(?:at|from)$/i.test(toks[bi].value)) bi--;
+            var afterOk = midDay(ai) && (!toks.slice(ai + 1).some(isWord) || isAt(toks[ai + 1]));
+            var near = midDay(bi) ? bi : afterOk ? ai : -1;
+            if (near >= 0) { typedDay = dayOf(toks[near].value); toks[near].claimed = true; given.day = true; }
+        }
+        // A relative day anywhere ('Bardic tonight', 'Court tomorrow 10a').
+        if (!typedDay && dayOf) {
+            for (i = 0; i < toks.length && !typedDay; i++) {
+                if (isWord(toks[i]) && toks[i].relative) { typedDay = dayOf(toks[i].value); toks[i].claimed = true; given.day = true; }
+            }
+        }
+        var tonight = toks.some(function (t) { return t.tonight && t.claimed; });
+
+        // After or before another item, when no start is written ('Battlegame
+        // after court', 'Feast prep 2h before feast'). Not inside a block.
+        var anchor = null;
+        if (!span && !ign.time && !hasFixed && (!time || (time.start === null && !time.then && !time.until))) {
+            anchor = claimAnchor(toks, ctx.items, ctx.fixedDay || typedDay || curDay, !!typedDay);
+            if (anchor) given.time = true;
         }
 
         // Description: the last quoted span with free title text before it.
@@ -1079,6 +1655,18 @@
             }
         }
 
+        // Feast details ('vegan and GF options', 'contains nuts, dairy'): like a
+        // cost, only for a meal and only for someone who may manage feasts.
+        var details = null;
+        if (ctx.canFeast && !ign.dietary) {
+            var held = toks.map(function (t) { return t.claimed; });
+            var fd = claimFeastDetails(toks);
+            var meal = fd && ((guessing ? guessCategory(titleOf()).category : category) === 'Feast and Food' ||
+                secondary === 'Feast and Food');
+            if (meal) { details = fd; given.dietary = true; }
+            else if (fd) toks.forEach(function (t, k) { t.claimed = held[k]; });
+        }
+
         // Title, then the category guess on the final title (a typed 'Name:'
         // prefix counts as given).
         var title = titleOf();
@@ -1097,7 +1685,7 @@
         // Without an order context, an unmarked start is read again with the
         // final title's words ('feast 7-9' is evening). A 'Name:' prefix or a
         // #tag is gone from the title by now, so neither sets the bias.
-        var bias = ordered ? null : timeBias(title);
+        var bias = ordered ? null : timeBias(title) || (tonight && !morningTitle ? { pmMax: 11, midnight: false } : null);
         if (time && time.a && bias) {
             if (time.b) {
                 var rb = resolveRange(time.a, time.b, bias);
@@ -1111,7 +1699,18 @@
         var day = ctx.fixedDay || typedDay || null;
         var startMin, endMin, len = hasFixed ? ctx.fixedEnd - ctx.fixedStart : lastDuration;
         var lastEnd = ctx.lastEnd || null;
-        if (!time) {
+        if (anchor) {
+            // After: from the item's end; before: ending at its start.
+            var alen = time && time.length !== null ? time.length : lastDuration;
+            day = anchor.sp.day;
+            if (anchor.kind === 'after') { startMin = anchor.sp.end; endMin = startMin + alen; }
+            else { endMin = anchor.sp.start; startMin = endMin - alen; }
+            // A start outside the anchor's board day belongs to the board day
+            // it falls in ('10 hours before' a 9a court starts the night before),
+            // as a span's start does; the outside flag below then sees that day.
+            while (startMin < BOARD_DAY_START) { day = addDays(day, -1); startMin += DAY_MIN; endMin += DAY_MIN; }
+            while (startMin >= DAY_MIN + BOARD_DAY_START) { day = addDays(day, 1); startMin -= DAY_MIN; endMin -= DAY_MIN; }
+        } else if (!time) {
             if (hasFixed) {
                 day = day || curDay; startMin = ctx.fixedStart; endMin = ctx.fixedEnd;
             } else if (lastEnd && (!day || day === lastEnd.day)) {
@@ -1125,6 +1724,13 @@
             if (lastEnd && (!day || day === lastEnd.day)) { day = lastEnd.day; startMin = lastEnd.min; }
             else { day = day || curDay; startMin = ctx.fixedStart != null ? ctx.fixedStart : 540; }
             endMin = startMin + (time.length !== null ? time.length : lastDuration);
+            if (time.until) {
+                // 'until 5p': the first such time after the start (an unmarked hour
+                // takes the half day that comes first).
+                var u = time.until, step = u.marked ? DAY_MIN : 720;
+                endMin = u.marked ? u.min : withMarker(u, 'a');
+                while (endMin <= startMin) endMin += step;
+            }
         } else {
             day = day || curDay;
             startMin = time.start;
@@ -1169,6 +1775,11 @@
             leads: leads,
             unmatchedLeads: unmatchedLeads,
             span: !!span,
+            days: multi ? multi.days : null,
+            everyDay: !!(multi && multi.every),
+            anchor: anchor ? { kind: anchor.kind, title: String(anchor.item.Title || '') } : null,
+            dietary: details ? details.dietary : '',
+            allergens: details ? details.allergens : '',
             given: given
         };
     }
@@ -1544,7 +2155,7 @@
         return rows.map(function (r) { return formatEntry(r.item, { withDay: true }); }).join('\n');
     }
 
-    // ---- Bulk text: many lines in, the schedule out as text, a skeleton, conflicts. ----
+    // ---- Bulk text: many lines in, the schedule out as text, conflicts. ----
 
     var MONTH_RE = '(' + MONTHS.map(function (m) { return m.slice(0, 3) + '(?:' + m.slice(3) + ')?'; }).join('|') + ')';
     var ORD = '(?:st|nd|rd|th)?', YEAR = '(?:,?\\s+\\d{4})?';
@@ -1593,7 +2204,7 @@
             day = mo && da ? resolveDayWord(mo + '/' + da, days) : null;
         }
         if (!day && word) day = resolveDayWord(word, days, near);
-        return day ? { day: day, rest: rest.replace(LEAD_PUNCT, '') } : null;
+        return day ? { day: day, rest: rest.replace(LEAD_PUNCT, ''), date: !!date } : null;
     }
 
     // Paste formatting off a line: markdown emphasis pairs, a '# ' heading mark,
@@ -1649,22 +2260,28 @@
             if (lead) line = +lead.day.slice(5, 7) + '/' + +lead.day.slice(8) + ' ' + lead.rest;
             var r = parseEntry(line, { days: days, day: day, lastEnd: lastEnd, lastDuration: lastDuration,
                 staff: ctx.staff, canFeast: ctx.canFeast, locations: ctx.locations, eventDays: ctx.eventDays,
-                leadingHour: true, prevStart: prior });
+                today: ctx.today, items: (ctx.items || []).concat(items), leadingHour: true, prevStart: prior });
             if (r.setDay) { day = r.setDay; return; }
             if (!r.ok || !r.day || !/[\p{L}\p{N}]/u.test(r.title)) { unread.push({ line: n + 1, text: pasted }); return; }
             r.unmatchedLeads.forEach(function (u) { if (unmatched.indexOf(u) < 0) unmatched.push(u); });
             // The same rule as parseEntry's outside.
             if (r.outside) outside.push({ line: n + 1, text: pasted, day: r.day });
-            items.push({
-                Title: r.title,
-                StartTime: r.start,
-                EndTime: r.end,
-                Category: r.category,
-                SecondaryCategory: r.secondaryCategory,
-                Location: r.location,
-                Description: r.description,
-                Cost: r.cost,
-                Leads: r.leads.map(function (l) { return { MundaneId: l.MundaneId, Persona: l.Persona, Auto: false }; })
+            // One item per day of an 'every day' line, after any ';' parts before it.
+            entryParts(r).forEach(function (p) {
+                var x = p.r, it = {
+                    Title: x.title,
+                    StartTime: p.start,
+                    EndTime: p.end,
+                    Category: x.category,
+                    SecondaryCategory: x.secondaryCategory,
+                    Location: x.location,
+                    Description: x.description,
+                    Cost: x.cost,
+                    Leads: x.leads.map(function (l) { return { MundaneId: l.MundaneId, Persona: l.Persona, Auto: false }; })
+                };
+                if (x.dietary) it.Dietary = x.dietary;
+                if (x.allergens) it.Allergens = x.allergens;
+                items.push(it);
             });
             day = r.day;
             // An all-day line or a long span across days sets no clock for the
@@ -1692,31 +2309,6 @@
         return Object.keys(byDay).sort().map(function (d) {
             var rows = byDay[d].sort(function (a, b) { return a.start - b.start; });
             return [dayLabelLong(d)].concat(rows.map(function (r) { return formatEntry(r.item); })).join('\n');
-        }).join('\n\n');
-    }
-
-    // The usual bones of an event as lines for parseLines. Days are headed
-    // 'Fri:', or 'M/D:' when two of the event's days share a weekday.
-    function skeletonText(days) {
-        days = days || [];
-        var seen = {}, shared = days.some(function (d) {
-            var w = weekdayIndex(d);
-            if (seen[w]) return true;
-            seen[w] = true;
-            return false;
-        });
-        return days.map(function (d, i) {
-            var p = dayParts(d);
-            var lines = [(shared ? p.m + '/' + p.d : dayLabel(d).slice(0, 3)) + ':'];
-            if (i === 0) {
-                lines.push('12p Troll Opens', '1p Tavern Opens', '6p Feast');
-                if (days.length === 1) lines.push('8p Court');
-            } else if (i < days.length - 1) {
-                lines.push('9a Troll Opens', '11a Tavern Opens', '6p Feast', '8p Court');
-            } else {
-                lines.push('9a Troll Opens', '10a Clean Up', '12p Site Closes');
-            }
-            return lines.join('\n');
         }).join('\n\n');
     }
 
@@ -1816,7 +2408,6 @@
         nowNext: nowNext,
         parseLines: parseLines,
         scheduleText: scheduleText,
-        skeletonText: skeletonText,
         conflicts: conflicts,
         snap: snap,
         boardPos: boardPos,
@@ -1847,6 +2438,8 @@
         guessCategory: guessCategory,
         parseEntry: parseEntry,
         formatEntry: formatEntry,
+        entryParts: entryParts,
+        splitEntry: splitEntry,
         fmtSpan: fmtSpan,
         endDayWord: endDayWord,
         setsClock: setsClock,

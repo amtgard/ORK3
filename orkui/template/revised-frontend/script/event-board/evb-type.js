@@ -230,7 +230,7 @@
         var sr = scroller.getBoundingClientRect();
         // Called every frame while open: write only when something moved.
         var key = [lr.left, lr.top, r.left, r.top, r.width, r.height, sr.top, sr.left, sr.height, sr.width,
-            win.innerHeight, s.pop.offsetHeight].join(',');
+            win.innerHeight, s.pop.offsetHeight, s.pop.offsetWidth].join(',');
         if (key === s.posKey) return;
         s.posKey = key;
         var h = Math.max(r.height, 22);
@@ -249,7 +249,12 @@
         var ps = s.pop.style;
         var shown = r.top + h > vt + V().HEAD_PX && r.top < vb;
         ps.visibility = shown ? '' : 'hidden';
-        ps.left = (r.left - lr.left) + 'px';
+        // Under the block's left edge, but kept inside the frame's right edge: the
+        // pop is wider than a narrow block, and the frame clips what passes it
+        // (a block in the last day's right lane would lose its chips' x).
+        var px = r.left, pw = s.pop.offsetWidth;
+        if (px + pw > vr) px = Math.max(vl, vr - pw);
+        ps.left = (px - lr.left) + 'px';
         var below = r.top + h + 4, ph2 = s.pop.offsetHeight;
         var flip = below + ph2 > win.innerHeight && r.top - 4 - ph2 > 56;
         ps.top = ((flip ? r.top - 4 - ph2 : below) - lr.top) + 'px';

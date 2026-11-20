@@ -16,6 +16,12 @@
  * typed in full is a lead too; an '@word' that matches no one stays title text.
  * getLeads() is the chips: [{MundaneId, Persona, Auto}].
  *
+ * A ';' line (parseEntry's result.before): the chips and their x show and act
+ * on the last part only; earlier parts keep their own reading and typed leads.
+ * A lead picked from the '@' list goes to the part it was typed in: in an
+ * earlier part it joins that part's result.before[n].leads and shows as a chip
+ * saying which item it leads; getLeads() stays the last part's.
+ *
  * Title mode (setText(text, {titleOnly: true, leads})): nothing is parsed; the
  * result is {ok, titleOnly, title} with the text as typed, and the chips are the
  * leads alone. While an '@query' is being typed it is left out of the reading;
@@ -55,12 +61,31 @@
         ['title', 'fa-heading', null],
         ['location', 'fa-map-marker-alt', 'location'],
         ['description', 'fa-quote-left', 'description'],
-        ['cost', 'fa-dollar-sign', 'cost']
+        ['cost', 'fa-dollar-sign', 'cost'],
+        ['dietary', 'fa-leaf', 'dietary'],
+        ['allergens', 'fa-exclamation-triangle', 'dietary']
     ];
     var PART_NAMES = {
         day: 'Day', time: 'Time', category: 'Category', secondary: 'Second category', title: 'Title',
-        location: 'Location', description: 'Description', cost: 'Cost'
+        location: 'Location', description: 'Description', cost: 'Cost', dietary: 'Dietary', allergens: 'Allergens'
     };
+
+    // The day chip: 'Saturday', or for several days 'Every day' or 'Fri, Sat'.
+    function dayText(r) {
+        if (r.days && r.days.length > 1) {
+            return r.everyDay ? 'Every day' : r.days.map(function (d) { return C.dayLabel(d).slice(0, 3); }).join(', ');
+        }
+        return r.day ? C.dayLabel(r.day) : '';
+    }
+
+    // The time chip: the range, and the item it hangs off ('after Opening Court').
+    function timeText(r) {
+        if (r.startMin == null) return '';
+        var t = C.fmtSpan(r.day, r.startMin, r.endMin);
+        if (!r.anchor) return t;
+        var name = r.anchor.title.length > 24 ? r.anchor.title.slice(0, 23) + '\u2026' : r.anchor.title;
+        return t + ' (' + r.anchor.kind + ' ' + name + ')';
+    }
 
     function categoryDefs() {
         var list = (win.EvConfig && win.EvConfig.scheduleCategories) || [];
@@ -74,20 +99,29 @@
     function chipsHtml(r, catDefs) {
         var g = r.given || {};
         var vals = {
-            day: r.day ? C.dayLabel(r.day) : '',
-            time: r.startMin != null ? C.fmtSpan(r.day, r.startMin, r.endMin) : '',
+            day: dayText(r),
+            time: timeText(r),
             category: r.category || '',
             secondary: r.secondaryCategory || '',
             title: r.title || '',
             location: r.location || '',
             description: r.description || '',
-            cost: r.cost == null ? '' : (r.cost === 0 ? 'Free' : '$' + Number(r.cost).toFixed(2))
+            cost: r.cost == null ? '' : (r.cost === 0 ? 'Free' : '$' + Number(r.cost).toFixed(2)),
+            dietary: r.dietary || '',
+            allergens: r.allergens || ''
         };
         var typed = {
             day: g.day, time: g.time, category: g.category, secondary: true, title: true,
-            location: true, description: true, cost: true
+            location: true, description: true, cost: true, dietary: true, allergens: true
         };
         var h = '';
+        // A ';' line: the items before the one being typed, counted.
+        var before = (r.before || []).length;
+        if (before) {
+            h += '<span class="evb-chip evb-chip-more" data-part="more" data-tip="Items before the last \u2018; \u2019 in the line">' +
+                '<i class="fas fa-layer-group" aria-hidden="true"></i>' +
+                '<span class="evb-chip-label">' + esc('+' + before + (before === 1 ? ' item' : ' items')) + '</span></span>';
+        }
         PARTS.forEach(function (p) {
             var part = p[0], val = vals[part];
             if (!val) return;
@@ -129,16 +163,19 @@
     }
 
     // Lead chips, after the others: a person icon and the persona; an auto-filled
-    // one has a dotted edge and says 'auto'.
+    // one has a dotted edge and says 'auto'. One picked for an earlier part of a
+    // ';' line (l.of: that part's title) says which item it leads.
     function leadChipsHtml(leads) {
         return leads.map(function (l) {
+            var tip = l.Auto ? 'Leads this category' : l.of != null ? 'Leads \u2018' + l.of + '\u2019' : '';
             return '<span class="evb-chip evb-chip-lead' + (l.Auto ? ' evb-chip-auto' : '') + '" data-part="lead"' +
-                ' data-mundane-id="' + (+l.MundaneId) + '"' + (l.Auto ? ' data-tip="Leads this category"' : '') + '>' +
+                ' data-mundane-id="' + (+l.MundaneId) + '"' + (tip ? ' data-tip="' + esc(tip) + '"' : '') + '>' +
                 '<i class="fas fa-user" aria-hidden="true"></i>' +
                 '<span class="evb-sr">Lead: </span>' +
                 '<span class="evb-chip-label">' + esc(l.Persona) + '</span>' +
                 (l.Auto ? '<span class="evb-chip-suffix">auto</span>' : '') +
                 '<button type="button" class="evb-chip-x" data-lead="' + (+l.MundaneId) + '"' +
+                (l.of != null ? ' data-lead-part="' + (+l.part) + '"' : '') +
                 ' aria-label="Remove lead ' + esc(l.Persona) + '" data-tip="Remove lead">&times;</button>' +
                 '</span>';
         }).join('');
@@ -205,14 +242,16 @@
         var chipsEl = el.querySelector('.evb-entry-chips');
         var catDefs = categoryDefs();
 
-        var ignore = {};
+        var ignore = {};          // the chips' x: part index -> parseEntry ignore keys
         var result = null;
         var menu = null;          // { sug, options, active } while the list is open
         var dismissedAt = null;   // the suggestion position Esc closed, until the caret leaves it
         var titleOnly = false;    // a rename: the text is the title, nothing is parsed
-        var picked = [];          // leads given (a rename's own) or picked: [{MundaneId, Persona, Auto}]
-        var removed = {};         // 'p<id>' a typed '@Persona' removed; 'a<id>|<category>' an auto lead removed
-        var leadsNow = [];        // the lead chips: picked, then typed, then the category's
+        var picked = [];          // leads given (a rename's own) or picked: [{MundaneId, Persona, Auto, part}]
+                                  // (part: the ';' part picked in; null, or the last part or past it, is the line's own)
+        var removed = {};         // 'p<part>:<id>' a typed '@Persona' removed; 'a<part>:<id>|<category>' an auto lead removed
+        var leadsNow = [];        // the lead chips of the last part: picked, then typed, then the category's
+        var leadsEarlier = [];    // the lead chips picked for an earlier part of a ';' line
         var search = null;        // { query, pending, results } of the player search
         var searchSeq = 0, searchTimer = 0;
         var seenPlayers = [];     // personas the last search found (keeps a spaced '@query' going)
@@ -221,7 +260,8 @@
 
         function context() {
             var ctx = Object.assign({}, opts.getContext ? opts.getContext() : {});
-            ctx.ignore = Object.assign({}, ctx.ignore || {}, ignore);
+            // A chip's x applies to the part it was shown for; ctx.ignore stays the last part's.
+            ctx.partIgnore = ignore;
             ctx.staff = staff();
             // An '@word' that matches no one stays in the title as typed.
             ctx.keepUnmatchedLeads = true;
@@ -251,24 +291,41 @@
             return a ? v.slice(0, a.from) + v.slice(a.from + 1 + a.query.length) : v;
         }
 
+        // The part of the parse the chips show (its last), or 0.
+        function lastPart() { return result && !titleOnly && result.part ? result.part : 0; }
+        function onLast(l) { return l.part == null || l.part >= lastPart(); }
+
+        // The last part's lead chips, and those picked for an earlier part. An
+        // earlier part's picked leads join its parsed leads (result.before[n].leads),
+        // which its item takes along with its typed ones; one picked for a part
+        // that is no longer an item is left out.
         function computeLeads() {
-            var out = [];
+            var out = [], earlier = [], part = lastPart();
             var has = function (mid) { return out.some(function (l) { return l.MundaneId === mid; }); };
             picked.forEach(function (l) {
-                if (!has(+l.MundaneId)) out.push({ MundaneId: +l.MundaneId, Persona: l.Persona, Auto: !!l.Auto, src: 'x' });
+                if (onLast(l) && !has(+l.MundaneId)) out.push({ MundaneId: +l.MundaneId, Persona: l.Persona, Auto: !!l.Auto, src: 'x' });
             });
             if (result && !titleOnly) {
                 (result.leads || []).forEach(function (l) {
-                    if (!removed['p' + l.MundaneId] && !has(l.MundaneId)) out.push({ MundaneId: l.MundaneId, Persona: l.Persona, Auto: false, src: 'p' });
+                    if (!removed['p' + part + ':' + l.MundaneId] && !has(l.MundaneId)) out.push({ MundaneId: l.MundaneId, Persona: l.Persona, Auto: false, src: 'p' });
                 });
                 var cat = result.category;
                 C.leadsForCategory(staff(), cat).forEach(function (l) {
-                    if (!removed['a' + l.MundaneId + '|' + cat] && !has(l.MundaneId)) {
+                    if (!removed['a' + part + ':' + l.MundaneId + '|' + cat] && !has(l.MundaneId)) {
                         out.push({ MundaneId: l.MundaneId, Persona: l.Persona, Auto: true, src: 'a', cat: cat });
                     }
                 });
+                (result.before || []).forEach(function (b) {
+                    picked.forEach(function (l) {
+                        if (onLast(l) || l.part !== b.part) return;
+                        var mid = +l.MundaneId;
+                        if (!b.leads.some(function (x) { return x.MundaneId === mid; })) b.leads.push({ MundaneId: mid, Persona: l.Persona });
+                        earlier.push({ MundaneId: mid, Persona: l.Persona, Auto: false, src: 'x', part: b.part, of: b.title });
+                    });
+                });
             }
             leadsNow = out;
+            leadsEarlier = earlier;
         }
 
         function parse() {
@@ -280,26 +337,43 @@
                 result = text.trim() ? C.parseEntry(text, context()) : null;
             }
             computeLeads();
-            chipsEl.innerHTML = (result && !titleOnly ? chipsHtml(result, catDefs) : '') + leadChipsHtml(leadsNow);
+            chipsEl.innerHTML = (result && !titleOnly ? chipsHtml(result, catDefs) : '') + leadChipsHtml(leadsNow.concat(leadsEarlier));
             el.classList.remove('evb-entry-invalid');
             if (opts.onParse) opts.onParse(result);
         }
 
         // ---- leads ----
-        function addLead(person) {
+        // part: the ';' part the '@' was typed in (null in a rename).
+        function addLead(person, part) {
             var mid = +person.MundaneId;
-            // One person once: picking an auto-filled lead makes it hand-picked.
-            picked = picked.filter(function (l) { return +l.MundaneId !== mid; });
-            picked.push({ MundaneId: mid, Persona: person.Persona, Auto: false });
-            delete removed['p' + mid];
+            var p = part == null ? null : part;
+            // One person once per part: picking an auto-filled lead makes it hand-picked.
+            picked = picked.filter(function (l) { return !(+l.MundaneId === mid && (l.part == null ? null : l.part) === p); });
+            picked.push({ MundaneId: mid, Persona: person.Persona, Auto: false, part: p });
+            if (p != null) delete removed['p' + p + ':' + mid];
         }
 
-        function removeLead(mid) {
+        // part: given for a chip picked for an earlier part; else a last-part chip.
+        function removeLead(mid, part) {
+            if (part != null) {
+                picked = picked.filter(function (x) { return !(+x.MundaneId === mid && x.part === part); });
+                return;
+            }
             var l = leadsNow.filter(function (x) { return x.MundaneId === mid; })[0];
             if (!l) return;
-            if (l.src === 'x') picked = picked.filter(function (x) { return +x.MundaneId !== mid; });
-            else if (l.src === 'p') removed['p' + mid] = true;
-            else removed['a' + mid + '|' + l.cat] = true;
+            var n = lastPart();
+            if (l.src === 'x') picked = picked.filter(function (x) { return !(+x.MundaneId === mid && onLast(x)); });
+            else if (l.src === 'p') removed['p' + n + ':' + mid] = true;
+            else removed['a' + n + ':' + mid + '|' + l.cat] = true;
+        }
+
+        // The ';' part of the line that text (the line up to a point) ends in.
+        function partAt(text) {
+            if (titleOnly) return null;
+            var ctx = context();
+            // Inside a block the line is one item (parseEntry does not split it).
+            if (ctx.fixedDay || ctx.fixedStart != null) return 0;
+            return Math.max(0, C.splitEntry(text, ctx).length - 1);
         }
 
         function cancelSearch() {
@@ -408,7 +482,7 @@
             if (!before || /\s$/.test(before)) rest = rest.replace(/^\s+/, '');
             input.value = before + rest;
             input.setSelectionRange(before.length, before.length);
-            addLead(o.person);
+            addLead(o.person, partAt(before));
             cancelSearch();
             closeMenu();
             parse();
@@ -571,8 +645,14 @@
         function onChipClick(e) {
             var x = e.target.closest && e.target.closest('.evb-chip-x');
             if (!x) return;
-            if (x.hasAttribute('data-lead')) removeLead(+x.getAttribute('data-lead'));
-            else ignore[x.getAttribute('data-ignore')] = true;
+            if (x.hasAttribute('data-lead')) {
+                removeLead(+x.getAttribute('data-lead'), x.hasAttribute('data-lead-part') ? +x.getAttribute('data-lead-part') : null);
+            } else {
+                // Only the part the chips show: an earlier part keeps its reading.
+                var n = lastPart();
+                ignore[n] = ignore[n] || {};
+                ignore[n][x.getAttribute('data-ignore')] = true;
+            }
             parse();
             input.focus();
         }

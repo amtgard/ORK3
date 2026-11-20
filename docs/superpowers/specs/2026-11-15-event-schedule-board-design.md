@@ -29,7 +29,7 @@ whole-weekend picture.
 4. **Direct manipulation**: drag, resize, nudge, duplicate, repeat.
 5. **Category leads**: staff can be marked lead for one or more categories and are filled in
    on new items of that category.
-6. **Starting points**: copy a past event's schedule into this one, or drop in a skeleton.
+6. **Starting points**: copy a past event's schedule into this one.
 
 **Non-goals** (agreed with the owner unless marked)
 
@@ -65,7 +65,7 @@ whole-weekend picture.
 
 ## 4. Decisions made on the owner's behalf (my calls)
 
-1. **Edit mode saves as you go.** "Edit schedule" enters the mode and "Done" leaves it. Each
+1. **Edit mode saves as you go.** "Quick schedule mode" enters the mode and "Done" leaves it. Each
    action saves immediately with undo. There is no held draft and no Publish step, since the
    owner said "no versioning" and gave the reason as not being in click-to-change mode all the
    time. The save layer is a queue, so holding changes until a Publish press could be added
@@ -82,7 +82,7 @@ whole-weekend picture.
 5. **The new category is named "Roleplay and Quests"**, matching "Arts and Sciences" and
    "Feast and Food".
 6. **"Vigil" is not guessed** into any category (lands in Other). "Ceremony" and "oath" guess Court.
-7. **The skeleton stays**, because it is only canned text fed to the multi-line preview.
+7. **The skeleton is gone** (2026-11-20, owner's call): More offers a past event's schedule, pasted lines and the schedule as text.
 8. **The list's delete uses the themed confirm** instead of the native `confirm()`.
 9. **A category prefix typed in a title is removed** ("BATTLEGAME: Mothman" is stored as
    "Mothman" in category Battlegame), since the colour and label already say it. Only a
@@ -238,7 +238,7 @@ blocks"):
     the server's window, or an end before a start, at once. A weekday the event does not
     have means the nearest such date (`thu` on a Friday-to-Sunday event is the Thursday
     before), and the person is told it is outside the event's dates.
-51. **"Edit schedule" shows in the list view too** (review item 20) and switches to the board.
+51. **"Quick schedule mode" shows in the list view too** (review item 20) and switches to the board.
 52. **Fewer queries** (review item 31): a save costs two statements per item plus a fixed
     22, down from about six per item.
 
@@ -311,7 +311,7 @@ direct entry to go deeper (edit mode, `@` leads, quoted descriptions).
 ### 7.1 View mode (everyone)
 
 ```
-[ Board | List ]   ● Battlegame ● Class ● Feast …        [Copy link] [Share as image] [Edit schedule]
+[ Board | List ]   ● Battlegame ● Class ● Feast …        [Copy link] [Share as image] [Quick schedule mode]
 
         FRIDAY                SATURDAY                              SUNDAY
  9a  ┌────────────────┐   ┌─────────┐┌─────────┐                ┌────────────┐
@@ -348,7 +348,7 @@ legend, and the event's ORK address. It always uses a white background and is dr
 
 ### 7.3 Edit mode (people who can manage the schedule)
 
-"Edit schedule" switches the board into Edit mode:
+"Quick schedule mode" switches the board into Edit mode:
 
 ```
  Editing schedule · All changes saved          [Undo] [Redo] [?]            [Done]
@@ -713,7 +713,7 @@ Each phase ships on its own and leaves the page working.
 4. **Direct manipulation.** Drag, resize, keyboard nudge, duplicate, copy and paste, fill
    handle, multi-select, slot cursor.
 5. **Starting points and bulk.** Paste lines with ghosts; Copy as text; start from a past
-   event; skeleton; conflict hints.
+   event; conflict hints.
 
 At release: a What's New entry and an in-app docs page. Not part of this build.
 
@@ -743,4 +743,3 @@ At release: a What's New entry and an in-app docs page. Not part of this build.
 - Whether the chips' dismiss state is kept per chip or as flags on the entry.
 - Canvas text wrapping and the image's exact proportions.
 - Whether the quick line highlights recognised spans in the text as well as showing chips.
-- The skeleton's exact items and times.
