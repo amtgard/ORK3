@@ -78,6 +78,17 @@
     };
     var REASON_FALLBACK = 'This survey is not available to you right now.';
 
+    /** The scope reason names who the survey is for; the generic line is the fallback. */
+    function reasonText(reason, s) {
+        var label = String((s && s.scope_label) || '').trim();
+        var type  = String((s && s.scope_type) || '');
+        if (reason === 'scope' && label) {
+            if (type === 'park')    { return 'This survey is for members of ' + label + '.'; }
+            if (type === 'kingdom') { return 'This survey is for players of ' + label + '.'; }
+        }
+        return REASONS[reason] || REASON_FALLBACK;
+    }
+
     // Fixed consent copy — spec §2. Do not reword; it is not per-survey editable.
     // The option names are the survey owner's; only the explanations name who
     // will see the answers (review #3).
@@ -1552,7 +1563,7 @@
             if (!def.eligible) {
                 // Nothing typed on a shared event laptop outlives a closed door.
                 mirrorClear();
-                renderNotice(REASONS[def.reason] || REASON_FALLBACK, 'sv-notice-warn', homeActionHtml());
+                renderNotice(reasonText(def.reason, def.survey), 'sv-notice-warn', homeActionHtml());
                 return;
             }
 

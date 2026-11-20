@@ -149,9 +149,10 @@ Set these in the **Audience** and **Schedule** sections:
 
 A player the survey can't reach is told why when they open it, for example *"This survey is open
 to players who attended the event it asks about."* or *"This survey is open to players who have
-attended recently."* A player from outside your park or kingdom (who didn't attend the event, on
-an event survey) sees *"Survey not found."* instead, so the survey isn't advertised to people it
-was never meant for.
+attended recently."* A player from outside your park or kingdom sees the survey's title and who
+it is for, *"This survey is for members of Felfrost."* or *"This survey is for players of The
+Kingdom of the Nine Blades."*, so a shared link never dead-ends on "not found". They see nothing
+else: no description, welcome copy or questions.
 
 A player can never answer the same survey twice. When they finish, the ORK keeps a note that
 "this player finished this survey". That note has no date and no link to their answers.

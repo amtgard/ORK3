@@ -678,16 +678,10 @@ class SurveyResponse
         }
 
         if (!$eligible) {
-            // A survey this player was never in the audience for — a draft, or one
-            // scoped to another org — does not exist as far as they are concerned:
-            // its title, description, welcome copy and share slug stay unpublished.
-            if ($this->hiddenFromRespondent($survey, $uid, $reason)) {
-                return ['Status' => 1, 'Error' => 'Survey not found.'];
-            }
-
-            // In-audience but unable to answer right now (closed, already done,
-            // inactive, too new, banned): the title is enough to caption the
-            // notice. Nothing about the questions or the copy leaks.
+            // Unable to answer (another org's survey, a draft, closed, already
+            // done, inactive, too new, banned): the title and who runs it are
+            // enough to caption the notice, so a shared link never dead-ends on
+            // "not found". Nothing about the questions or the copy leaks.
             return [
                 'Status'   => 0,
                 'Error'    => '',
@@ -695,6 +689,8 @@ class SurveyResponse
                     'survey_id'    => (int) $survey['survey_id'],
                     'title'        => (string) $survey['title'],
                     'accent_color' => $survey['accent_color'] ?: null,
+                    'scope_type'   => (string) $survey['scope_type'],
+                    'scope_label'  => $this->scopeLabel((string) $survey['scope_type'], (int) $survey['scope_id']),
                 ],
                 'Pages'    => [],
                 'Draft'    => null,
@@ -750,36 +746,6 @@ class SurveyResponse
             'Eligible' => true,
             'Reason'   => $reason,
         ];
-    }
-
-    /**
-     * Should this survey be denied even to the point of its existence?
-     *
-     * True for a draft (nobody outside the builder may see unpublished copy) and
-     * for a player the audience never covered — those get "Survey not found."
-     * rather than a survey they may not answer. For an event-audience survey the
-     * audience is the home scope PLUS anyone who attended the event, so a
-     * visiting attendee who already answered still gets "already completed".
-     *
-     * @param array<string, mixed> $survey raw ork_survey row
-     */
-    private function hiddenFromRespondent(array $survey, int $uid, string $reason): bool
-    {
-        if ('draft' === (string) ($survey['status'] ?? 'draft')) {
-            return true;
-        }
-        if ('scope' === $reason) {
-            return true;
-        }
-        $player = $this->player($uid);
-        if (null === $player) {
-            return true;
-        }
-        if ($this->matchesScope($survey, $player)) {
-            return false;
-        }
-        $eventId = (int) ($survey['audience_event_calendardetail_id'] ?? 0);
-        return !($eventId > 0 && $this->attendedEvent($uid, $eventId));
     }
 
     /**

@@ -77,7 +77,7 @@ class Controller_Survey extends Controller
 
     /**
      * Runner <title>: the survey title only where the respondent payload shows
-     * it (a hidden survey keeps its title unpublished), or to a manager.
+     * it (every respondent payload does, eligible or not), or to a manager.
      */
     private function setRunnerTitle(?array $definition, ?array $managedRow): void
     {

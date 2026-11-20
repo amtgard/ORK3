@@ -1630,6 +1630,27 @@ final class SurveySharingCreditTest extends TestCase
         $this->assertMatchesRegularExpression('#\s404\s#', $head . ' ', 'served over HTTP the sweep answers 404 and runs nothing');
     }
 
+    public function testOutOfScopePlayerIsToldWhoTheSurveyIsForNotNotFound(): void
+    {
+        $ps = $this->openSurvey($this->pOfficerA, 'park', $this->parkA);
+        $outsider = $this->player('outsider', $this->parkB, $this->k);
+        $def = (new SurveyResponse())->definitionForRespondent($ps, $outsider, false);
+        $this->assertSame(0, $def['Status'], 'a shared link to another park\'s survey is not a 404');
+        $this->assertFalse($def['Eligible']);
+        $this->assertSame('scope', $def['Reason']);
+        $this->assertSame('park', $def['Survey']['scope_type']);
+        $this->assertNotSame('', $def['Survey']['scope_label']);
+        $this->assertSame([], $def['Pages'], 'nothing beyond the caption leaks');
+        $this->assertArrayNotHasKey('description', $def['Survey']);
+
+        $ks = $this->openSurvey($this->kOfficer, 'kingdom', $this->k);
+        $away = $this->player('away', $this->parkOther, $this->kOther);
+        $def = (new SurveyResponse())->definitionForRespondent($ks, $away, false);
+        $this->assertSame(0, $def['Status']);
+        $this->assertSame('scope', $def['Reason']);
+        $this->assertSame('kingdom', $def['Survey']['scope_type']);
+    }
+
     public function testRunnerSeesCreditAvailableOnlyWhenCovered(): void
     {
         $ks = $this->openSurvey($this->kOfficer, 'kingdom', $this->k);
