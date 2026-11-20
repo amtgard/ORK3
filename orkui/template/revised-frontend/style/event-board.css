@@ -6,6 +6,10 @@
  * Chrome uses the --ork-* variables, which carry both themes. Block fills are a
  * category's bold colour with white text in both themes.
  */
+/* The board's focus and selection ring. On :root, not .evb: the popover, dialogs
+   and the type/select layers sit outside #evb-root. */
+:root { --evb-ring: #4299e1; }
+html[data-theme="dark"] { --evb-ring: #63b3ed; }
 .evb { margin-bottom: 16px; }
 
 /* ---- Legend ---- */
@@ -355,6 +359,7 @@ html[data-theme="dark"] .evb-save[data-state="offline"] .evb-save-state { color:
 .evb-help-tabs .evb-help-tab:focus-visible { outline: 2px solid var(--ork-link, #2b6cb0); outline-offset: -2px; }
 .evb-help-body { font-size: 13px; line-height: 1.5; color: var(--ork-text); text-align: left; }
 .evb-help-panel:focus { outline: none; }
+.evb-help-panel:focus-visible { outline: 2px solid var(--ork-link); outline-offset: -2px; }
 .evb-help-panel[hidden] { display: none; }
 .evb-help-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .evb-help-sec {
@@ -407,16 +412,15 @@ html[data-theme="dark"] .evb-help-body code, html[data-theme="dark"] .evb-help-b
 }
 .evb-entry .evb-entry-input::placeholder { color: var(--ork-text-lighter); opacity: 1; }
 .evb-entry .evb-entry-input:focus {
-    outline: none; border-color: #4299e1; background: var(--ork-card-bg);
+    outline: none; border-color: var(--evb-ring); background: var(--ork-card-bg);
     box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
 }
 .evb-entry-invalid .evb-entry-input { border-color: var(--ork-red-danger); animation: evb-shake 0.25s; }
 .evb-entry-invalid .evb-entry-input:focus { border-color: var(--ork-red-danger); }
 @keyframes evb-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 /* The site's dark input/textarea rule carries an id, so the board entry states need it too; the paste dialog sits outside #theme_container, so its rule does not. */
-html[data-theme="dark"] #theme_container .evb-entry .evb-entry-input:focus { border-color: #63b3ed; background-color: var(--ork-card-bg); }
+html[data-theme="dark"] #theme_container .evb-entry .evb-entry-input:focus { border-color: var(--evb-ring); background-color: var(--ork-card-bg); }
 html[data-theme="dark"] #theme_container .evb-entry-invalid .evb-entry-input, html[data-theme="dark"] #theme_container .evb-entry-invalid .evb-entry-input:focus { border-color: #fc8181; }
-html[data-theme="dark"] .evb-paste-dialog .evb-paste-text:focus { border-color: #63b3ed; }
 @media (prefers-reduced-motion: reduce) {
     .evb-entry-invalid .evb-entry-input, .evb-save[data-state="saving"] .evb-save-dot { animation: none; }
 }
@@ -441,8 +445,7 @@ html[data-theme="dark"] .evb-paste-dialog .evb-paste-text:focus { border-color: 
     color: inherit; opacity: 0.6; font-size: 15px; line-height: 1; cursor: pointer;
 }
 .evb-chip .evb-chip-x:hover { opacity: 1; background: none; color: inherit; }
-.evb-chip .evb-chip-x:focus-visible { opacity: 1; outline: 2px solid #4299e1; outline-offset: 0; border-radius: 4px; }
-html[data-theme="dark"] .evb-chip .evb-chip-x:focus-visible { outline-color: #63b3ed; }
+.evb-chip .evb-chip-x:focus-visible { opacity: 1; outline: 2px solid var(--evb-ring); outline-offset: 0; border-radius: 4px; }
 
 .evb-entry-menu {
     position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--z-dropdown, 300);
@@ -511,12 +514,12 @@ html[data-theme="dark"] .evb-help-warn { color: #f6e05e; }
 .evb-more-menu { min-width: 230px; }
 /* The bar under the mode bar, sticking with it, while pasted lines show as ghosts. */
 .evb-bulkbar {
-    margin: 0 10px 10px; padding: 8px 10px; border: 1px dashed #3182ce; border-radius: 6px;
+    margin: 0 10px 10px; padding: 8px 10px; border: 1px dashed var(--ork-blue-link); border-radius: 6px;
     background: rgba(66, 153, 225, 0.08); color: var(--ork-text); font-size: 13px; line-height: 1.4;
     max-height: 40vh; overflow-y: auto;
 }
 .evb-bulkbar[hidden] { display: none; }
-html[data-theme="dark"] .evb-bulkbar { border-color: #63b3ed; background: rgba(99, 179, 237, 0.1); }
+html[data-theme="dark"] .evb-bulkbar { background: rgba(99, 179, 237, 0.1); }
 .evb-bulk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .evb-bulk-count { margin-right: auto; font-weight: 700; }
 .evb-bulk-actions { display: inline-flex; gap: 8px; }
@@ -550,7 +553,7 @@ html[data-theme="dark"] .evb-bulk-leads, html[data-theme="dark"] .evb-bulk-outsi
     border: 1px solid var(--ork-input-border); border-radius: 6px; background: var(--ork-input-bg); color: var(--ork-text);
     font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-.evb-paste-dialog .evb-paste-text:focus { outline: none; border-color: #4299e1; box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2); }
+.evb-paste-dialog .evb-paste-text:focus { outline: none; border-color: var(--evb-ring); box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2); }
 .evb-paste-example { margin-top: 10px; font-size: 12px; }
 .evb-paste-example pre {
     margin: 4px 0 0; padding: 6px 10px; border-radius: 6px; white-space: pre-wrap;
@@ -568,12 +571,9 @@ html[data-theme="dark"] .evb-bulk-leads, html[data-theme="dark"] .evb-bulk-outsi
     background: var(--ork-card-bg); color: var(--ork-text); text-align: left; cursor: pointer;
 }
 .evb-copy-dialog .evb-copy-source:hover:not(:disabled),
-.evb-copy-dialog .evb-copy-source:focus-visible { border-color: #3182ce; background: var(--ork-bg-secondary); color: var(--ork-text); }
+.evb-copy-dialog .evb-copy-source:focus-visible { border-color: var(--ork-blue-link); background: var(--ork-bg-secondary); color: var(--ork-text); }
 .evb-copy-dialog .evb-copy-source:disabled { opacity: 0.6; cursor: default; }
-.evb-copy-dialog .evb-copy-source[aria-busy="true"] { opacity: 1; border-color: #3182ce; }
-html[data-theme="dark"] .evb-copy-dialog .evb-copy-source:hover:not(:disabled),
-html[data-theme="dark"] .evb-copy-dialog .evb-copy-source:focus-visible,
-html[data-theme="dark"] .evb-copy-dialog .evb-copy-source[aria-busy="true"] { border-color: #63b3ed; }
+.evb-copy-dialog .evb-copy-source[aria-busy="true"] { opacity: 1; border-color: var(--ork-blue-link); }
 .evb-copy-name { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
 .evb-copy-meta { font-size: 12px; color: var(--ork-text-muted); }
 .evb-copy-status, .evb-copy-none { margin: 0 0 8px; font-size: 13px; color: var(--ork-text-muted); }
@@ -669,17 +669,17 @@ html[data-theme="dark"] .evb-type-pop .evb-chip { box-shadow: 0 2px 6px rgba(0, 
 .evb-editing .evb-block.evb-selected,
 .evb-editing .evb-block.evb-selected:hover {
     z-index: 2;
-    box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px #4299e1, 0 3px 8px rgba(0, 0, 0, 0.28);
+    box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px var(--evb-ring), 0 3px 8px rgba(0, 0, 0, 0.28);
 }
 .evb-editing .evb-block.evb-selected.evb-block-striped {
-    box-shadow: inset -4px 0 0 var(--evb-stripe), inset 0 0 0 2px #fff, 0 0 0 2px #4299e1, 0 3px 8px rgba(0, 0, 0, 0.28);
+    box-shadow: inset -4px 0 0 var(--evb-stripe), inset 0 0 0 2px #fff, 0 0 0 2px var(--evb-ring), 0 3px 8px rgba(0, 0, 0, 0.28);
 }
 html[data-theme="dark"] .evb-editing .evb-block.evb-selected,
 html[data-theme="dark"] .evb-editing .evb-block.evb-selected:hover {
-    box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px #63b3ed, 0 3px 8px rgba(0, 0, 0, 0.6);
+    box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px var(--evb-ring), 0 3px 8px rgba(0, 0, 0, 0.6);
 }
 html[data-theme="dark"] .evb-editing .evb-block.evb-selected.evb-block-striped {
-    box-shadow: inset -4px 0 0 var(--evb-stripe), inset 0 0 0 2px #fff, 0 0 0 2px #63b3ed, 0 3px 8px rgba(0, 0, 0, 0.6);
+    box-shadow: inset -4px 0 0 var(--evb-stripe), inset 0 0 0 2px #fff, 0 0 0 2px var(--evb-ring), 0 3px 8px rgba(0, 0, 0, 0.6);
 }
 .evb-editing .evb-block.evb-selected:focus-visible { outline: none; }
 
@@ -702,7 +702,7 @@ html[data-theme="dark"] .evb-editing .evb-block.evb-selected.evb-block-striped {
 :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:hover,
 :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool[aria-expanded="true"] { background: var(--ork-bg-secondary); color: var(--ork-text); }
 :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool-danger:hover { color: var(--ork-red-danger); }
-:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:focus-visible { outline: 2px solid #4299e1; outline-offset: 0; }
+:is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:focus-visible { outline: 2px solid var(--evb-ring); outline-offset: 0; }
 .evb-tool-swatch { width: 14px; height: 14px; border-radius: 4px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15); }
 html[data-theme="dark"] :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool:hover,
 html[data-theme="dark"] :is(.evb-block-toolbar, .evb-sel-badge) .evb-block-tool[aria-expanded="true"] { background: #4a5568; }
@@ -724,9 +724,8 @@ html[data-theme="dark"] .evb-tool-swatch { box-shadow: 0 0 0 1px rgba(255, 255, 
     color: #fff; font-size: 12px; font-weight: 700; line-height: 28px; text-align: center; cursor: pointer;
 }
 .evb-cat-menu button:hover { background: var(--evb-fill); color: #fff; filter: brightness(1.12); }
-.evb-cat-menu button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px #4299e1; }
-.evb-cat-menu button:focus-visible { outline: 2px solid #4299e1; outline-offset: 1px; }
-html[data-theme="dark"] .evb-cat-menu button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px #63b3ed; }
+.evb-cat-menu button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px var(--evb-ring); }
+.evb-cat-menu button:focus-visible { outline: 2px solid var(--evb-ring); outline-offset: 1px; }
 
 /* ---- Moving and resizing blocks (evb-drag.js) ---- */
 /* The selected block's grips: 6px hit areas on its top and bottom edges, each
@@ -768,10 +767,10 @@ html[data-theme="dark"] .evb-block.evb-drag-ghost.evb-block-striped { box-shadow
    block; dragged down it repeats the item (evb-drag.js). Above the bottom grip. */
 .evb-fill-handle {
     position: absolute; right: -1px; bottom: -1px; z-index: 2; width: 10px; height: 10px; box-sizing: border-box;
-    border: 2px solid #fff; border-radius: 2px; background: #4299e1; cursor: nwse-resize;
+    border: 2px solid #fff; border-radius: 2px; background: var(--evb-ring); cursor: nwse-resize;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
 }
-html[data-theme="dark"] .evb-fill-handle { background: #63b3ed; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+html[data-theme="dark"] .evb-fill-handle { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
 /* Its "Drag to repeat" tip is data-evb-tip, floated outside the block by
    evb-bulk.js (the block clips its own overflow), not the site's [data-tip]. */
 .evb-dragging-fill, .evb-dragging-fill * { cursor: nwse-resize !important; }
