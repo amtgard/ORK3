@@ -2071,13 +2071,21 @@ class EventPlanning extends Ork3
     private function bustEventScopeCaches(int $eventId): void
     {
         Ork3::$Lib->ghettocache->bust_event_search($eventId);
+        foreach ($this->eventScopeCacheKeys($eventId) as $k) {
+            Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', (string) $k);
+        }
+    }
 
+    /** The Event.GetActiveEventsAtScope keys an event's upcoming occurrences sit under. */
+    private function eventScopeCacheKeys(int $eventId): array
+    {
+        $keys = [];
         $this->db->Clear();
         $evRow = $this->db->DataSet(
             'SELECT park_id, kingdom_id FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $eventId . ' LIMIT 1'
         );
         if (!$evRow || !$evRow->Next()) {
-            return;
+            return $keys;
         }
 
         $parkId = (int) $evRow->park_id;
@@ -2090,14 +2098,13 @@ class EventPlanning extends Ork3
         while ($dates && $dates->Next()) {
             $d = (string) $dates->d;
             if ($parkId > 0) {
-                $k = Ork3::$Lib->ghettocache->key(['Scope' => 'park', 'ScopeId' => $parkId, 'Date' => $d]);
-                Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', $k);
+                $keys[] = Ork3::$Lib->ghettocache->key(['Scope' => 'park', 'ScopeId' => $parkId, 'Date' => $d]);
             }
             if ($kingdomId > 0) {
-                $k = Ork3::$Lib->ghettocache->key(['Scope' => 'kingdom', 'ScopeId' => $kingdomId, 'Date' => $d]);
-                Ork3::$Lib->ghettocache->bust('Event.GetActiveEventsAtScope', $k);
+                $keys[] = Ork3::$Lib->ghettocache->key(['Scope' => 'kingdom', 'ScopeId' => $kingdomId, 'Date' => $d]);
             }
         }
+        return $keys;
     }
 
     private function sq(string $s): string
