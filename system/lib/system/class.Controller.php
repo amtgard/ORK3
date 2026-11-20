@@ -124,6 +124,7 @@ class Controller
             'Controller_PlayerAjax',
             'Controller_AdminAjax',
             'Controller_WnAjax',
+            'Controller_DuesAjax',
         ]);
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
             $_uid_check = (int)$this->session->user_id;
@@ -153,6 +154,13 @@ class Controller
         $this->data['ViewerDyslexiaFonts'] = 0;
         $this->data['ShowWhatsNew']        = false;
         $this->data['WhatsNewRelease']     = null;
+        // Dues expiry notice (class.DuesNotice.php): null, or the classified
+        // notice plus its Message and dismiss Key. default.theme renders it as
+        // the site banner on every page; the player's own profile renders it
+        // as an alert. Dismissing hides only the banner, for this session and
+        // this Key, so a renewal or the slide from expiring to lapsed shows again.
+        $this->data['DuesNotice']          = null;
+        $this->data['DuesNoticeDismissed'] = false;
         if ($_uid > 0) {
             $this->load_model('Player');
             $prefs = $this->Player->get_viewer_preferences($_uid);
@@ -168,6 +176,15 @@ class Controller
             }
             if ($this->data['WhatsNewRelease'] !== null) {
                 $this->data['ShowWhatsNew'] = !$this->Player->get_whats_new_seen($_uid, WHATS_NEW_VERSION);
+            }
+
+            $_standing = $this->Player->get_dues_standing($_uid);
+            $_notice   = DuesNotice::classify($_standing['DuesUntil'], (bool) $_standing['DuesForLife']);
+            if ($_notice !== null) {
+                $_notice['Message'] = DuesNotice::message($_notice);
+                $_notice['Key']     = DuesNotice::dismissKey($_notice);
+                $this->data['DuesNotice']          = $_notice;
+                $this->data['DuesNoticeDismissed'] = (string) ($this->session->dues_notice_dismissed ?? '') === $_notice['Key'];
             }
         }
 
