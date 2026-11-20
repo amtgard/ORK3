@@ -15,8 +15,8 @@ const saturday = [
 ];
 const day = (b, d) => b.days.find(x => x.day === d);
 
-test('ONGOING_MIN is four hours', () => {
-  assert.equal(C.ONGOING_MIN, 240);
+test('ONGOING_MIN is six hours', () => {
+  assert.equal(C.ONGOING_MIN, 360);
 });
 
 test('Troll and Tavern become rails and no longer squeeze the battlegames', () => {
@@ -38,16 +38,17 @@ test('days without rails carry an empty list', () => {
   assert.deepEqual([day(b, '2026-11-20').rails, day(b, '2026-11-20').railCount], [[], 0]);
 });
 
-test('not ongoing: under four hours, the wrong primary category, a secondary category alone', () => {
-  assert.equal(C.isOngoing(it('Gate', 'Administrative', sat('09'), sat('12', '59'))), false, '239 minutes');
-  assert.equal(C.isOngoing(it('Gate', 'Administrative', sat('09'), sat('13'))), true, '240 minutes');
+test('not ongoing: under six hours, the wrong primary category, a secondary category alone', () => {
+  assert.equal(C.isOngoing(it('Gate', 'Administrative', sat('09'), sat('14', '59'))), false, '359 minutes');
+  assert.equal(C.isOngoing(it('Gate', 'Administrative', sat('09'), sat('15'))), true, '360 minutes');
   assert.equal(C.isOngoing(it('War', 'Battlegame', sat('09'), sat('14'))), false, 'a five-hour battlegame');
   assert.equal(C.isOngoing(it('Quest', 'Roleplay and Quests', sat('09'), sat('17'), { SecondaryCategory: 'Administrative' })), false);
-  assert.equal(C.isOngoing(it('Lunch', 'Feast and Food', sat('11'), sat('15'))), true);
+  assert.equal(C.isOngoing(it('Lunch', 'Feast and Food', sat('11'), sat('15'))), false, 'a four-hour meal stays a block');
+  assert.equal(C.isOngoing(it('Lunch', 'Feast and Food', sat('11'), sat('17'))), true);
   assert.equal(C.isOngoing(it('Bad', 'Administrative', 'nope', 'nope')), false);
   // None of the three is drawn as a rail.
   const b = C.buildBoard([
-    it('Gate', 'Administrative', sat('09'), sat('12', '59')),
+    it('Gate', 'Administrative', sat('09'), sat('14', '59')),
     it('War', 'Battlegame', sat('09'), sat('14')),
     it('Quest', 'Roleplay and Quests', sat('09'), sat('17'), { SecondaryCategory: 'Administrative' })
   ], opts);

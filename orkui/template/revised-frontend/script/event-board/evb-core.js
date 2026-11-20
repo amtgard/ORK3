@@ -100,6 +100,25 @@
         return fmtTime(startMin) + '–' + fmtTime(endMin);
     }
 
+    // The word for the board day an end in day's minutes falls on, or null when
+    // it falls on day itself: the weekday ('Sun', or 'sun' when lower), or 'M/D'
+    // when a week or more on. fmtSpan and formatEntry both name it this way.
+    function endDayWord(day, endMin, lower) {
+        if (endMin <= DAY_MIN + BOARD_DAY_START) return null;
+        var endDay = addDays(day, Math.floor(endMin / DAY_MIN));
+        if (diffDays(day, endDay) >= 7) return +endDay.slice(5, 7) + '/' + +endDay.slice(8);
+        var wd = dayLabel(endDay).slice(0, 3);
+        return lower ? wd.toLowerCase() : wd;
+    }
+
+    // A range from a board day's minutes. One that ends on a later board day
+    // names the end's day: '9a–Sun 2p'.
+    function fmtSpan(day, startMin, endMin) {
+        var word = day ? endDayWord(day, endMin) : null;
+        if (!word) return fmtRange(startMin, endMin);
+        return fmtTime(startMin) + '–' + word + ' ' + fmtTime(endMin);
+    }
+
     // Split an item into one segment per board day. A board day runs from 5am to
     // 5am, so minutes are measured from the board day's own 00:00 and lie in
     // [300, 1740].
@@ -200,7 +219,7 @@
     // Always-open facilities (Troll, Tavern): an item whose primary category is
     // one of ONGOING_CATS and that lasts ONGOING_MIN minutes or more. The board
     // draws it as a narrow rail at the left of its day instead of in a lane.
-    var ONGOING_MIN = 240;
+    var ONGOING_MIN = 360; // six hours: a four-hour tournament or feast stays a block
     var ONGOING_CATS = ['Administrative', 'Feast and Food'];
 
     function isOngoing(item) {
@@ -430,6 +449,10 @@
         { kind: 'tag', re: /^#(\S+)$/ },
         { kind: 'cost', re: /^\$(\d+(?:\.\d{1,2})?)$/ }
     ];
+
+    // The largest cost the schedule's DECIMAL(8,2) column holds; a '$' token
+    // above it is not claimed as a cost and stays in the title.
+    var COST_MAX = 999999.99;
 
     // A staff persona as a pattern that matches it ignoring case and the width
     // of its spaces, and only up to the end of a word ('@Luna' not in '@Lunatic').
@@ -788,7 +811,9 @@
         if (found.end === null && found.length === null && isWord(toks[upto]) && readLength(toks[upto].value) !== null) {
             found.length = readLength(toks[upto].value);
             toks[upto].claimed = true;
+            upto++;
         }
+        found.upto = upto;
         return found;
     }
 
@@ -812,6 +837,117 @@
             return known.length ? known[0] : loc;
         }
         return '';
+    }
+
+    // ---- All-day shorthand and spans across days ----
+    // 'all day' is only a shorthand for 7am to 7pm; nothing is stored as all-day.
+    var ALL_DAY_START = 420;
+    var ALL_DAY_END = 1140;
+    var SPAN_JOINERS = ['-', '–', 'to', 'through', 'thru', 'until', 'till', 'til'];
+    var WHOLE_RE = /^(?:all|whole|entire)$/;
+    var EVENT_RE = /^(?:weekend|event)$/;
+
+    function lowerAt(toks, i) { return isWord(toks[i]) ? toks[i].value.toLowerCase() : ''; }
+
+    // 'all day', 'all-day' or 'allday' at token i: the index after it (and after
+    // a 'long'), or -1.
+    function allDayAt(toks, i) {
+        var w = lowerAt(toks, i), next = -1;
+        if (/^all-?day$/.test(w)) next = i + 1;
+        else if (w === 'all' && lowerAt(toks, i + 1) === 'day') next = i + 2;
+        return next >= 0 && lowerAt(toks, next) === 'long' ? next + 1 : next;
+    }
+
+    // One end of a span at token i: a day and a time in either order, or one of
+    // them: { day, side, next, dayAfter } (day or side may be null; dayAfter when
+    // the day is written after the time, '2p Sun'), or null.
+    function spanEndAt(toks, i, dayOf) {
+        if (!isWord(toks[i])) return null;
+        var day = dayOf(toks[i].value), j = day ? i + 1 : i, side = null, after = false;
+        var sa = sideAt(toks, j);
+        if (sa) { side = sa.side; j = sa.next; }
+        if (!day && side && isWord(toks[j])) { day = dayOf(toks[j].value); if (day) { j++; after = true; } }
+        return day || side ? { day: day, side: side, next: j, dayAfter: after } : null;
+    }
+
+    // A span's board day and minutes: an end without a time is 7pm, a start
+    // without one 7am. Null unless it ends after it starts.
+    function spanTimes(aDay, aSide, bDay, bSide) {
+        var s = aSide ? sideMin(aSide) : ALL_DAY_START, e = bSide ? sideMin(bSide) : ALL_DAY_END, day = aDay;
+        if (s < BOARD_DAY_START) { day = addDays(day, -1); s += DAY_MIN; }
+        var end = diffDays(day, bDay) * DAY_MIN + e;
+        return end > s ? { day: day, start: s, end: end } : null;
+    }
+
+    // A range across days at token i ('9am Saturday to 2pm Sunday', 'Sat 9a -
+    // Sun 2p', 'Saturday through Sunday', 'Sat-Sun', '9a to sun 2p'). The end
+    // must name its day; a start without one is on leadDay (a day word leading
+    // the line: 'Sat Tournament 9a to Sun 2p'), else on defDay. A day written
+    // after the end's time ('9a to 5p Saturday') is a span's end only when the
+    // start names a day too: alone it is the day of a same-day range.
+    // { day, start, end, from, upto, usedLead } or null.
+    function crossDayAt(toks, i, dayOf, defDay, leadDay) {
+        if (!isWord(toks[i])) return null;
+        var fused = /^([^-–]+)[-–]([^-–]+)$/.exec(toks[i].value);
+        if (fused && dayOf(fused[1]) && dayOf(fused[2])) {
+            var f = spanTimes(dayOf(fused[1]), null, dayOf(fused[2]), null);
+            return f && { day: f.day, start: f.start, end: f.end, from: i, upto: i + 1 };
+        }
+        var a = spanEndAt(toks, i, dayOf);
+        if (!a || SPAN_JOINERS.indexOf(lowerAt(toks, a.next)) < 0) return null;
+        var b = spanEndAt(toks, a.next + 1, dayOf);
+        if (!b || !b.day) return null;
+        var startDay = a.day || leadDay || defDay;
+        if (!startDay || b.dayAfter && !a.day && !leadDay) return null;
+        var t = spanTimes(startDay, a.side, b.day, b.side);
+        return t && { day: t.day, start: t.start, end: t.end, from: i, upto: b.next, usedLead: !a.day && !!leadDay };
+    }
+
+    // The all-day shorthand or a span across days, claimed: { day, start, end,
+    // plain } (day null for a plain 'all day', which keeps the line's own day;
+    // plain for that shorthand, which an explicit time on the line overrides),
+    // or null. dayOf is null when the day is fixed or dismissed: then only a
+    // plain 'all day' counts.
+    function claimSpan(toks, dayOf, defDay, wholeDays) {
+        var found = null, i;
+        // A day word leading the line is a span's start day when the start names none.
+        var leadDay = dayOf && isWord(toks[0]) ? dayOf(toks[0].value) : null;
+        for (i = 0; i < toks.length && !found; i++) {
+            if (!isWord(toks[i])) continue;
+            var ad = allDayAt(toks, i), w = lowerAt(toks, i);
+            if (dayOf) {
+                // 'all day Saturday through Sunday' and 'Saturday through Sunday'.
+                var x = (ad > 0 && crossDayAt(toks, ad, dayOf, defDay, i > 0 ? leadDay : null)) ||
+                    crossDayAt(toks, i, dayOf, defDay, i > 0 ? leadDay : null);
+                if (x) {
+                    found = x; found.from = i;
+                    if (x.usedLead) toks[0].claimed = true;
+                    break;
+                }
+                // 'all weekend', 'whole event': the event's first day to its last.
+                if (WHOLE_RE.test(w) && EVENT_RE.test(lowerAt(toks, i + 1)) && wholeDays.length) {
+                    var j = i + 2;
+                    if (lowerAt(toks, j) === 'long') j++;
+                    var wt = spanTimes(wholeDays[0], null, wholeDays[wholeDays.length - 1], null);
+                    if (wt) { found = { day: wt.day, start: wt.start, end: wt.end, from: i, upto: j }; break; }
+                }
+                // 'all Saturday', 'all Saturday long'.
+                if (w === 'all' && ad < 0 && isWord(toks[i + 1]) && dayOf(toks[i + 1].value)) {
+                    var k = lowerAt(toks, i + 2) === 'long' ? i + 3 : i + 2;
+                    found = { day: dayOf(toks[i + 1].value), start: ALL_DAY_START, end: ALL_DAY_END, from: i, upto: k };
+                    break;
+                }
+            }
+            if (ad > 0) {
+                // 'all day', with a day word right before or after it taken as the day.
+                found = { day: null, start: ALL_DAY_START, end: ALL_DAY_END, from: i, upto: ad, plain: true };
+                if (dayOf && isWord(toks[ad]) && dayOf(toks[ad].value)) { found.day = dayOf(toks[ad].value); found.upto++; }
+                else if (dayOf && isWord(toks[i - 1]) && dayOf(toks[i - 1].value)) { found.day = dayOf(toks[i - 1].value); found.from--; }
+            }
+        }
+        if (!found) return null;
+        for (i = found.from; i < found.upto; i++) toks[i].claimed = true;
+        return { day: found.day, start: found.start, end: found.end, plain: !!found.plain };
     }
 
     function parseEntry(text, ctx) {
@@ -841,9 +977,16 @@
             given.leads = true;
         });
 
+        // All day, all weekend, or a span across days: it may name the day itself.
+        var dayPool = days.length ? days : (curDay ? [curDay] : []);
+        var dayOf = ctx.fixedDay || ign.day ? null : function (w) { return resolveDayWord(w, dayPool, ctx.eventDays); };
+        var wholeDays = ctx.eventDays && ctx.eventDays.length ? ctx.eventDays : days;
+        var span = ign.time ? null : claimSpan(toks, dayOf, curDay, wholeDays);
+
         // Day: only the first token.
-        var typedDay = null;
-        if (!ctx.fixedDay && !ign.day && isWord(toks[0])) {
+        var typedDay = span && span.day;
+        if (typedDay) given.day = true;
+        if (!typedDay && !ctx.fixedDay && !ign.day && isWord(toks[0])) {
             typedDay = resolveDayWord(toks[0].value, days.length ? days : (curDay ? [curDay] : []), ctx.eventDays);
             if (typedDay) { toks[0].claimed = true; given.day = true; }
         }
@@ -851,14 +994,37 @@
         var setDay = typedDay && toks.length === 1 && weekdayOf(toks[0].value) >= 0 ? typedDay : null;
 
         // Time.
-        var firstIdx = -1, lastIdx = -1;
+        var firstIdx = -1, lastIdx = -1, trailIdx = -1;
         for (i = 0; i < toks.length; i++) {
             if (toks[i].claimed || toks[i].kind === 'quote') continue;
             if (firstIdx < 0 && toks[i].kind === 'word') firstIdx = i;
             lastIdx = i;
         }
-        var time = ign.time ? null : claimTime(toks, firstIdx, lastIdx, ctx.fixedStart != null, ctx.leadingHour);
+        // A day word ending the line, when no day is typed: the day of a time
+        // just before it ('Tournament 9a to 5p Saturday'). The time then ends the line.
+        if (!typedDay && dayOf && lastIdx > firstIdx && isWord(toks[lastIdx]) && dayOf(toks[lastIdx].value)) {
+            trailIdx = lastIdx;
+            for (lastIdx--; lastIdx >= 0 && (toks[lastIdx].claimed || toks[lastIdx].kind === 'quote'); lastIdx--);
+        }
+        var time = null;
+        if (span && span.plain && !ign.time) {
+            // 'all day' with an explicit time on the line: the time wins, and
+            // anything else claimTime would take (a length, 'then') stays text.
+            var was = toks.map(function (t) { return t.claimed; });
+            time = claimTime(toks, firstIdx, lastIdx, ctx.fixedStart != null, ctx.leadingHour);
+            if (time && time.start !== null) span = null;
+            else { toks.forEach(function (t, k) { t.claimed = was[k]; }); time = null; }
+        }
+        if (!time) {
+            time = span ? { start: span.start, end: span.end, length: null, then: false }
+                : ign.time ? null : claimTime(toks, firstIdx, lastIdx, ctx.fixedStart != null, ctx.leadingHour);
+        }
         given.time = !!time;
+        if (trailIdx >= 0 && time && !span && time.start !== null && time.upto === trailIdx) {
+            typedDay = dayOf(toks[trailIdx].value);
+            toks[trailIdx].claimed = true;
+            given.day = true;
+        }
 
         // Description: the last quoted span with free title text before it.
         if (!ign.description) {
@@ -905,7 +1071,7 @@
         if (costTok) {
             var pre = guessing ? guessCategory(titleOf()).category : category;
             var feast = pre === 'Feast and Food' || secondary === 'Feast and Food';
-            if (ctx.canFeast && !ign.cost && feast) {
+            if (ctx.canFeast && !ign.cost && feast && parseFloat(costTok.value) <= COST_MAX) {
                 cost = parseFloat(costTok.value);
                 given.cost = true;
             } else {
@@ -1002,6 +1168,7 @@
             cost: cost,
             leads: leads,
             unmatchedLeads: unmatchedLeads,
+            span: !!span,
             given: given
         };
     }
@@ -1018,6 +1185,9 @@
         if (endMin < startMin) endMin = startMin;
         // A zero-length item reads back as one through an explicit '0m'.
         var out = endMin === startMin ? fmtTime(startMin) + ' 0m' : fmtRange(startMin, endMin);
+        // Ending on a later board day: '9a to sun 2p' (a date when a week or more on).
+        var endWord = endDayWord(boardDay, endMin, true);
+        if (endWord) out = fmtTime(startMin) + ' to ' + endWord + ' ' + fmtTime(endMin);
         if (opts.withDay) out = dayLabel(boardDay).slice(0, 3).toLowerCase() + ' ' + out;
         var title = String(item.Title || '');
         var cat = item.Category && CATEGORY_TAGS[item.Category] ? item.Category : 'Other';
@@ -1440,6 +1610,13 @@
         return t.trim();
     }
 
+    // Whether an added item sets the clock for the next line (its end and its
+    // length): not an all-day line or a long span across days (12 hours or
+    // more); an overnight '10p to sat 2a' does. r: { span, startMin, endMin }.
+    function setsClock(r) {
+        return !(r && r.span && r.endMin - r.startMin >= 720);
+    }
+
     // Lines of text to items, in order. Each item carries the day and the clock
     // to the next line; a heading line sets the day and starts it afresh (9:00,
     // the caller's default length). A line whose title has no letter or digit is
@@ -1490,6 +1667,13 @@
                 Leads: r.leads.map(function (l) { return { MundaneId: l.MundaneId, Persona: l.Persona, Auto: false }; })
             });
             day = r.day;
+            // An all-day line or a long span across days sets no clock for the
+            // lines after it (an overnight '10p to sat 2a' does); on a new day
+            // the next untimed line starts that day afresh, as after a heading.
+            if (!setsClock(r)) {
+                if (lastEnd && lastEnd.day !== r.day) { lastEnd = null; lastDuration = baseDuration; }
+                return;
+            }
             if (r.given.time) prevStart = { day: r.day, min: r.startMin };
             lastEnd = { day: r.day, min: r.endMin };
             lastDuration = r.endMin - r.startMin;
@@ -1663,6 +1847,9 @@
         guessCategory: guessCategory,
         parseEntry: parseEntry,
         formatEntry: formatEntry,
+        fmtSpan: fmtSpan,
+        endDayWord: endDayWord,
+        setsClock: setsClock,
         leadsForCategory: leadsForCategory,
         swapAutoLeads: swapAutoLeads,
         slotLine: slotLine,

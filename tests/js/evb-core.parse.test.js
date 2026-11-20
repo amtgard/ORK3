@@ -100,6 +100,11 @@ test('tags, prefixes, location, description and cost', () => {
   assert.deepEqual([r.title, r.cost, r.location, r.category], ['feast', 8.5, 'Hall', 'Feast and Food']);
   assert.equal(p('5-6 mothman $8', { canFeast: true }).cost, null);
 });
+test('a cost above the DECIMAL(8,2) column is not claimed', () => {
+  assert.equal(p('5-6 feast $999999.99', { canFeast: true }).cost, 999999.99);
+  const r = p('5-6 feast $1000000', { canFeast: true });
+  assert.deepEqual([r.title, r.cost, r.given.cost, r.category], ['feast $1000000', null, false, 'Feast and Food']);
+});
 test('guessCategory follows the owner’s rulings', () => {
   const g = t => C.guessCategory(t).category;
   assert.equal(g('Ditch'), 'Battlegame');
@@ -275,4 +280,96 @@ test('punctuation right after a matched lead goes with it', () => {
   assert.deepEqual([r.title, r.leads.map(l => l.MundaneId)], ['Class with', [2]]);
   r = p('9a Talk @Luna;@Kai: bring water', { staff });
   assert.deepEqual([r.title, r.leads.map(l => l.MundaneId)], ['Talk bring water', [2, 3]]);
+});
+test('all day is 7a to 7p, and spans across days read from the line', () => {
+  const t = (s, more) => { const r = p(s, Object.assign({ eventDays: DAYS }, more)); return [r.start, r.end, r.title, r.given.day, r.given.time]; };
+  assert.deepEqual(t('Troll Open all day'), ['2026-11-21 07:00', '2026-11-21 19:00', 'Troll Open', false, true]);
+  assert.deepEqual(t('All-day Troll'), ['2026-11-21 07:00', '2026-11-21 19:00', 'Troll', false, true]);
+  assert.deepEqual(t('sun troll all day long'), ['2026-11-22 07:00', '2026-11-22 19:00', 'troll', true, true]);
+  assert.deepEqual(t('Troll Open Friday all day'), ['2026-11-20 07:00', '2026-11-20 19:00', 'Troll Open', true, true]);
+  assert.deepEqual(t('All Saturday Troll'), ['2026-11-21 07:00', '2026-11-21 19:00', 'Troll', true, true]);
+  assert.deepEqual(t('Troll all weekend'), ['2026-11-20 07:00', '2026-11-22 19:00', 'Troll', true, true]);
+  assert.deepEqual(t('Troll Open whole event long'), ['2026-11-20 07:00', '2026-11-22 19:00', 'Troll Open', true, true]);
+  assert.deepEqual(t('Saturday through Sunday Troll'), ['2026-11-21 07:00', '2026-11-22 19:00', 'Troll', true, true]);
+  assert.deepEqual(t('Sat-Sun Troll'), ['2026-11-21 07:00', '2026-11-22 19:00', 'Troll', true, true]);
+  assert.deepEqual(t('all day sat thru sun troll'), ['2026-11-21 07:00', '2026-11-22 19:00', 'troll', true, true]);
+  assert.deepEqual(t('9:00am Saturday to 2:00pm Sunday Troll'), ['2026-11-21 09:00', '2026-11-22 14:00', 'Troll', true, true]);
+  assert.deepEqual(t('Sat 9a - Sun 2p Troll'), ['2026-11-21 09:00', '2026-11-22 14:00', 'Troll', true, true]);
+  assert.deepEqual(t('9a to sun 2p troll'), ['2026-11-21 09:00', '2026-11-22 14:00', 'troll', true, true]);
+  assert.deepEqual(t('fri 10p to sat 2a night watch'), ['2026-11-20 22:00', '2026-11-21 02:00', 'night watch', true, true]);
+  // An end before the start is not a span; the rest of the line is title text.
+  assert.equal(p('Sun 2p to Sat 9a x').end, '2026-11-22 15:00');
+  // Ordinary ranges are untouched.
+  assert.deepEqual(t('sat 9 - 10 rp').slice(0, 3), ['2026-11-21 09:00', '2026-11-21 10:00', 'rp']);
+  assert.deepEqual(t('10 to 1 x').slice(0, 2), ['2026-11-21 10:00', '2026-11-21 13:00']);
+  // A dismissed time or day; a fixed block day keeps a plain 'all day' only.
+  assert.equal(p('Troll all day', { ignore: { time: true } }).title, 'Troll all day');
+  assert.deepEqual(pick(p('All Saturday Troll', { ignore: { day: true } }), ['title']), ['All Saturday Troll']);
+  const blk = { fixedDay: '2026-11-20', fixedStart: 720, fixedEnd: 765 };
+  assert.deepEqual(pick(p('Troll all day', blk), ['day', 'startMin', 'endMin', 'title']), ['2026-11-20', 420, 1140, 'Troll']);
+});
+test('the time chip and formatEntry name the end day of a span', () => {
+  assert.equal(C.fmtSpan('2026-11-21', 540, 1440 + 840), '9a–Sun 2p');
+  assert.equal(C.fmtSpan('2026-11-20', 1320, 1440 + 120), '10p–2a');
+  const it = { Title: 'Troll Open', Category: 'Administrative', StartTime: '2026-11-21 09:00', EndTime: '2026-11-22 14:00' };
+  assert.equal(C.formatEntry(it, { withDay: true }), 'sat 9a to sun 2p Troll Open');
+  const back = p(C.formatEntry(it));
+  assert.deepEqual([back.start, back.end, back.title], [it.StartTime, it.EndTime, 'Troll Open']);
+  const pl = C.parseLines(C.scheduleText([it]), ctx({ eventDays: DAYS }));
+  assert.deepEqual(pl.items.map(i => [i.StartTime, i.EndTime]), [[it.StartTime, it.EndTime]]);
+});
+test('a pasted all-day line sets no clock for the lines after it', () => {
+  const r = C.parseLines('Saturday\nTroll all day\nOpening Court 10a\nBattlegame', ctx({ eventDays: DAYS }));
+  assert.deepEqual(r.items.map(i => [i.Title, i.StartTime, i.EndTime]), [
+    ['Troll', '2026-11-21 07:00', '2026-11-21 19:00'],
+    ['Opening Court', '2026-11-21 10:00', '2026-11-21 11:00'],
+    ['Battlegame', '2026-11-21 11:00', '2026-11-21 12:00']]);
+});
+// Review fixes for the all-day and across-days shorthand. A Friday board day.
+const fri = s => { const r = p(s, { day: '2026-11-20', eventDays: DAYS }); return [r.start, r.end, r.title, r.span]; };
+test('a day leading the line is the start day of a span whose start names none', () => {
+  assert.deepEqual(fri('Sat Tournament 9a to Sun 2p'), ['2026-11-21 09:00', '2026-11-22 14:00', 'Tournament', true]);
+  const pl = C.parseLines('Sat Tournament 9a to Sun 2p', ctx({ day: '2026-11-20', eventDays: DAYS }));
+  assert.deepEqual(pl.items.map(i => [i.Title, i.StartTime, i.EndTime]), [['Tournament', '2026-11-21 09:00', '2026-11-22 14:00']]);
+});
+test('a range then a day is that range on that day, not a span to it', () => {
+  assert.deepEqual(fri('Tournament 9a to 5p Saturday'), ['2026-11-21 09:00', '2026-11-21 17:00', 'Tournament', false]);
+  // Past midnight on Sunday's board day.
+  assert.deepEqual(fri('Tavern 10a to 2a Sun'), ['2026-11-22 10:00', '2026-11-23 02:00', 'Tavern', false]);
+  // The evening words still bias a bare range.
+  assert.deepEqual(fri('Feast 7 to 9 Saturday'), ['2026-11-21 19:00', '2026-11-21 21:00', 'Feast', false]);
+  // A day with its own time at the end, or days on both ends, is a span.
+  assert.deepEqual(fri('9a Sat to 2p Sun x'), ['2026-11-21 09:00', '2026-11-22 14:00', 'x', true]);
+  assert.deepEqual(fri('Sat 9a - Sun 2p x'), ['2026-11-21 09:00', '2026-11-22 14:00', 'x', true]);
+  assert.deepEqual(fri('9a to Sun 2p x'), ['2026-11-20 09:00', '2026-11-22 14:00', 'x', true]);
+  assert.deepEqual(fri('Saturday through Sunday x'), ['2026-11-21 07:00', '2026-11-22 19:00', 'x', true]);
+  // A day word mid-title is not taken.
+  assert.deepEqual(fri('9a Sun Dance').slice(0, 3), ['2026-11-20 09:00', '2026-11-20 10:00', 'Sun Dance']);
+});
+test('an explicit time beats all day', () => {
+  assert.deepEqual(fri('Troll open all day 8a-6p'), ['2026-11-20 08:00', '2026-11-20 18:00', 'Troll open', false]);
+  assert.deepEqual(fri('Troll Saturday all day 8a-6p'), ['2026-11-21 08:00', '2026-11-21 18:00', 'Troll', false]);
+  // A length is not a time of day: all day stands and the length stays text.
+  assert.deepEqual(fri('Troll all day 30m'), ['2026-11-20 07:00', '2026-11-20 19:00', 'Troll 30m', true]);
+});
+test('a pasted long span on a new day leaves no clock from the day before', () => {
+  const r = C.parseLines('Fri\nOpening 6p-7p\nSat all day Merchants\nBreakfast', ctx({ day: '2026-11-20', eventDays: DAYS }));
+  assert.deepEqual(r.items.map(i => [i.Title, i.StartTime, i.EndTime]), [
+    ['Opening', '2026-11-20 18:00', '2026-11-20 19:00'],
+    ['Merchants', '2026-11-21 07:00', '2026-11-21 19:00'],
+    ['Breakfast', '2026-11-21 09:00', '2026-11-21 10:00']]);
+});
+test('setsClock: only a long span drops the clock, as the quick line and a paste both use', () => {
+  assert.equal(C.setsClock({ span: true, startMin: 420, endMin: 1140 }), false);
+  assert.equal(C.setsClock({ span: true, startMin: 1320, endMin: 1560 }), true, 'an overnight span');
+  assert.equal(C.setsClock({ span: false, startMin: 480, endMin: 1260 }), true, 'a long typed range');
+});
+test('fmtSpan and formatEntry name a span’s end day the same way', () => {
+  assert.equal(C.endDayWord('2026-11-21', 1000), null);
+  assert.equal(C.endDayWord('2026-11-21', 1440 + 840), 'Sun');
+  assert.equal(C.endDayWord('2026-11-21', 1440 + 840, true), 'sun');
+  assert.equal(C.endDayWord('2026-11-21', 7 * 1440 + 840), '11/28');
+  assert.equal(C.fmtSpan('2026-11-21', 540, 7 * 1440 + 840), '9a–11/28 2p');
+  const it = { Title: 'Long', Category: 'Administrative', StartTime: '2026-11-21 09:00', EndTime: '2026-11-28 14:00' };
+  assert.equal(C.formatEntry(it), '9a to 11/28 2p #admin Long');
 });

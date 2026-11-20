@@ -51,6 +51,9 @@ class EventPlanning extends Ork3
     /** Fields a feast-capable caller may write; everyone else's are ignored. */
     private const SCHEDULE_MEAL_FIELDS = ['Menu' => 'menu', 'Cost' => 'cost', 'Dietary' => 'dietary', 'Allergens' => 'allergens'];
 
+    /** Largest Cost event_schedule.cost (DECIMAL(8,2)) holds. */
+    private const SCHEDULE_COST_MAX = 999999.99;
+
     /** Most leads one schedule item may have. */
     private const SCHEDULE_LEADS_MAX = 20;
 
@@ -131,7 +134,29 @@ class EventPlanning extends Ork3
         return InvalidParameter('A schedule can hold at most ' . $this->scheduleMaxItems() . ' items.');
     }
 
-    /** The occurrence's item count, or null when the read failed. */
+    /**
+     * Locks the occurrence's row (FOR UPDATE) to the end of the caller's transaction,
+     * so adders that count against the ceiling run one at a time: each counts only
+     * after the one before it has committed its items. Taken as the transaction's
+     * first statement: a request-token claim or an item insert first takes a shared
+     * lock on this row (their foreign key), and two adders each holding that shared
+     * lock while waiting to upgrade it would deadlock. False when the read failed.
+     */
+    private function lockScheduleDetail(int $detailId): bool
+    {
+        $this->db->Clear();
+        $row = @$this->db->DataSet(
+            'SELECT event_calendardetail_id FROM ' . DB_PREFIX . 'event_calendardetail
+             WHERE event_calendardetail_id = ' . $detailId . ' FOR UPDATE'
+        );
+
+        return $this->resultSucceeded($row) && $row->Next();
+    }
+
+    /**
+     * The occurrence's item count, or null when the read failed. A caller that adds
+     * against the ceiling holds lockScheduleDetail first, in the same transaction.
+     */
     private function countScheduleItems(int $detailId): ?int
     {
         $this->db->Clear();
@@ -153,6 +178,14 @@ class EventPlanning extends Ork3
 
     /** @var array<int, bool> */
     private array $mundaneEligibleCache = [];
+
+    /**
+     * categoryLeadMap's results while one ApplyScheduleOps call runs (occurrence id =>
+     * map); null outside a batch, where every call reads afresh.
+     *
+     * @var array<int, array<string, list<int>>>|null
+     */
+    private ?array $batchCategoryLeads = null;
 
     /**
      * Centralized staff delegation check (T-EVA-02, 04, 07–11).
@@ -1555,7 +1588,7 @@ class EventPlanning extends Ork3
      * $categories and which has no lead at all, adds $mundaneId as an auto-filled lead.
      * Each item filled has its `modified` advanced, as a batch op's write would.
      *
-     * Lock order, as in a batch: the item rows first (the `modified` bump), then
+     * Lock order, as in a batch: the item rows first (a locking read), then
      * their lead rows. The opposite order deadlocks against a batch, which locks
      * the item (FOR UPDATE) before it rewrites the leads. Once the items are locked
      * they are read again, so the fill acts on them as they are now, not as they
@@ -1572,10 +1605,18 @@ class EventPlanning extends Ork3
         if ($candidates === []) {
             return 0;
         }
-        if (!$this->bumpScheduleModified($candidates)) {
+        if (!$this->lockScheduleItems($candidates)) {
             return null;
         }
+        // Only the items still unled now that they are locked are filled and bumped: one
+        // that gained a lead meanwhile keeps its version.
         $fill = $this->unledItemIds($detailId, $categories, $candidates);
+        if ($fill === []) {
+            return 0;
+        }
+        if (!$this->bumpScheduleModified($fill)) {
+            return null;
+        }
         $rows = array_map(static fn (int $scheduleId): array => [$scheduleId, $mundaneId, 1], $fill);
         // A plain INSERT (not IGNORE): it either adds every row or fails, so the count is count($fill).
         if (!$this->insertScheduleLeadRows($rows, false)) {
@@ -1583,6 +1624,27 @@ class EventPlanning extends Ork3
         }
 
         return count($fill);
+    }
+
+    /**
+     * Locks the given item rows (FOR UPDATE) to the end of the caller's transaction,
+     * without changing them. False when the read failed.
+     *
+     * @param list<int> $scheduleIds
+     */
+    private function lockScheduleItems(array $scheduleIds): bool
+    {
+        $scheduleIds = array_values(array_unique(array_filter(array_map('intval', $scheduleIds), 'valid_id')));
+        if ($scheduleIds === []) {
+            return true;
+        }
+        $this->db->Clear();
+        $rows = @$this->db->DataSet(
+            'SELECT event_schedule_id FROM ' . DB_PREFIX . 'event_schedule
+             WHERE event_schedule_id IN (' . implode(',', $scheduleIds) . ') FOR UPDATE'
+        );
+
+        return $this->resultSucceeded($rows);
     }
 
     /**
@@ -1625,7 +1687,9 @@ class EventPlanning extends Ork3
      * whose primary category is one of $categories. A category the same person still
      * leads through another staff row of this occurrence is left alone. Hand-picked
      * leads (is_auto = 0) are never touched. Each item that loses a lead has its
-     * `modified` advanced, as a batch op's write would.
+     * `modified` advanced, as a batch op's write would. An item left with no lead at
+     * all gets the category's remaining leads as auto-filled leads (the fill rule);
+     * the count returned is of deleted rows only.
      *
      * Lock order, as in a batch: the item rows first (the `modified` bump), then
      * their lead rows. The opposite order deadlocks against a batch, which locks
@@ -1653,6 +1717,7 @@ class EventPlanning extends Ork3
         $stillLed = array_merge([], ...array_values($this->fetchStaffLeadCategories($otherIds)));
 
         $removed = 0;
+        $leadMap = null;
         foreach (array_diff($categories, $stillLed) as $category) {
             [, $scheduleIds] = $this->autoLeadRows($detailId, $mundaneId, $category, null);
             if ($scheduleIds === []) {
@@ -1673,6 +1738,23 @@ class EventPlanning extends Ork3
                 return null;
             }
             $removed += count($leadIds);
+
+            // The fill rule again, for the items this left with no lead at all: they get
+            // the category's other leads (this person excluded: on a staff removal their
+            // row is still there) as auto-filled leads. Those items are already locked
+            // and bumped above.
+            $leadMap ??= $this->categoryLeadMap($detailId);
+            $others = array_values(array_diff($leadMap[$category] ?? [], [$mundaneId]));
+            $refill = $others === [] ? [] : $this->unledItemIds($detailId, [$category], $scheduleIds);
+            $rows = [];
+            foreach ($refill as $scheduleId) {
+                foreach ($others as $leadId) {
+                    $rows[] = [$scheduleId, $leadId, 1];
+                }
+            }
+            if (!$this->insertScheduleLeadRows($rows, true)) {
+                return null;
+            }
         }
 
         return $removed;
@@ -1822,6 +1904,19 @@ class EventPlanning extends Ork3
      */
     public function ApplyScheduleOps(array $request): array
     {
+        // The occurrence's category leads are read once for the whole batch, not per op;
+        // the memo lives only for this call, so a later staff change is never missed.
+        $this->batchCategoryLeads = [];
+        try {
+            return $this->applyScheduleBatch($request);
+        } finally {
+            $this->batchCategoryLeads = null;
+        }
+    }
+
+    /** ApplyScheduleOps's work, with the batch's category-lead memo in place. */
+    private function applyScheduleBatch(array $request): array
+    {
         $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
         $eventId = (int) ($request['EventId'] ?? 0);
         $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
@@ -1877,6 +1972,11 @@ class EventPlanning extends Ork3
         $pending = [];
         $this->beginReadCommittedTrans();
         try {
+            // A batch that adds holds the occurrence for its ceiling count (see lockScheduleDetail).
+            if ($hasAdd && !$this->lockScheduleDetail($detailId)) {
+                $this->db->RollbackTrans();
+                return ['Status' => ProcessingError('Could not save the schedule.'), 'FailedIndex' => -1];
+            }
             if ($batchToken !== null && !$this->claimScheduleRequestToken($detailId, $batchToken, 'batch')) {
                 $this->db->RollbackTrans();
                 // Another request with this token got there first: answer with what it stored.
@@ -1885,7 +1985,7 @@ class EventPlanning extends Ork3
                     ? ['Status' => Success(), 'Results' => $stored]
                     : ['Status' => ProcessingError('Could not save the schedule.'), 'FailedIndex' => -1];
             }
-            // The ceiling: the items now on the occurrence, kept up to date through the batch.
+            // The ceiling: the items now on the occurrence, counted once under the lock above.
             $itemCount = $hasAdd ? $this->countScheduleItems($detailId) : 0;
             if ($itemCount === null) {
                 $this->db->RollbackTrans();
@@ -1934,11 +2034,6 @@ class EventPlanning extends Ork3
                 }
             }
             foreach ($ops as $index => $op) {
-                $kind = is_array($op) ? ($op['op'] ?? null) : null;
-                if ($kind === 'add' && $itemCount >= $this->scheduleMaxItems()) {
-                    $this->db->RollbackTrans();
-                    return ['Status' => $this->scheduleFullError(), 'FailedIndex' => $index];
-                }
                 [$error, $result, $readLater] = $this->applyScheduleOp(
                     is_array($op) ? $op : [],
                     $detailId,
@@ -1958,11 +2053,6 @@ class EventPlanning extends Ork3
                     $pending[count($results)] = $readLater;
                 }
                 $results[] = $result;
-                if ($kind === 'add') {
-                    $itemCount++;
-                } elseif ($kind === 'remove' && empty($result['gone'])) {
-                    $itemCount--;
-                }
             }
             if ($pending !== []) {
                 // One read for every result row left to the end. Nothing else can have
@@ -2262,6 +2352,10 @@ class EventPlanning extends Ork3
         $mod = ['schedule' => true, 'feast' => $caps['can_feast'], 'meals' => $caps['can_feast']];
         $this->db->BeginTrans();
         try {
+            // Held for the ceiling count, as a batch that adds holds it (see lockScheduleDetail).
+            if (!$this->lockScheduleDetail($detailId)) {
+                throw new \RuntimeException('Could not lock the occurrence.');
+            }
             if ($requestToken !== null && !$this->claimScheduleRequestToken($detailId, $requestToken, 'copy')) {
                 $this->db->RollbackTrans();
                 // Another request with this token got there first: answer with what it stored.
@@ -2657,9 +2751,10 @@ class EventPlanning extends Ork3
             $this->copyDetailFeesAndLinks($srcDetailId, $newDetailId);
         }
 
+        $newScheduleIds = [];
         if ($mod['schedule'] || $mod['feast']) {
             try {
-                $this->copyScheduleModules($srcDetailId, $newDetailId, $mod, 0, $deltaSeconds);
+                $newScheduleIds = $this->copyScheduleModules($srcDetailId, $newDetailId, $mod, 0, $deltaSeconds) ?? [];
             } catch (\RuntimeException $e) {
                 $this->rollbackCopiedEvent($newEventId);
                 return ProcessingError('Failed to copy the schedule.');
@@ -2668,6 +2763,15 @@ class EventPlanning extends Ork3
 
         if ($mod['staff']) {
             $this->copyStaffModule($srcDetailId, $newDetailId);
+        }
+
+        // As CopyScheduleInto: a copied auto lead stays auto only for someone who leads
+        // that category here, so after the staff (and their categories) are copied.
+        try {
+            $this->demoteForeignAutoLeads($newDetailId, $newScheduleIds);
+        } catch (\RuntimeException $e) {
+            $this->rollbackCopiedEvent($newEventId);
+            return ProcessingError('Failed to copy the schedule.');
         }
 
         $warnings = [];
@@ -2726,9 +2830,6 @@ class EventPlanning extends Ork3
         }
 
         $caps = $this->staffScheduleCaps($mundaneId, $eventId, $detailId);
-        if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
-            $caps = ['can_schedule' => true, 'can_feast' => true];
-        }
         $feastEditor = !$caps['can_schedule'];
         $postedFeast = $this->isFeastItem(
             $this->coerceScheduleCategory($this->scheduleText($request['Category'] ?? 'Other')),
@@ -2815,7 +2916,8 @@ class EventPlanning extends Ork3
             }
         }
         if ($op['op'] === 'add') {
-            $itemCount = $this->countScheduleItems($detailId);
+            // The add's first statement: held for the ceiling count (see lockScheduleDetail).
+            $itemCount = $this->lockScheduleDetail($detailId) ? $this->countScheduleItems($detailId) : null;
             if ($itemCount === null) {
                 return [ProcessingError('Could not save the schedule.'), null];
             }
@@ -2944,7 +3046,7 @@ class EventPlanning extends Ork3
      */
     private function insertScheduleItem(int $detailId, array $item, bool $canFeast): array
     {
-        $tooLong = $this->scheduleTextLimitError($item, $canFeast);
+        $tooLong = $this->scheduleTextLimitError($item, $canFeast) ?? $this->scheduleCostError($item, $canFeast);
         if ($tooLong !== null) {
             return [$tooLong, 0];
         }
@@ -3009,11 +3111,11 @@ class EventPlanning extends Ork3
      * primary category swaps the item's auto-filled leads for the new category's
      * leads and keeps the hand-picked ones. Any change advances the row's `modified`.
      *
-     * @param array{start_time: string, end_time: string, category: string, modified: string} $stored
+     * @param array{start_time: string, end_time: string, category: string, cost: ?float, modified: string} $stored
      */
     private function updateScheduleItem(int $scheduleId, int $detailId, array $fields, array $stored, bool $canFeast): ?array
     {
-        $tooLong = $this->scheduleTextLimitError($fields, $canFeast);
+        $tooLong = $this->scheduleTextLimitError($fields, $canFeast) ?? $this->scheduleCostError($fields, $canFeast, $stored);
         if ($tooLong !== null) {
             return $tooLong;
         }
@@ -3261,6 +3363,9 @@ class EventPlanning extends Ork3
      */
     private function categoryLeadMap(int $detailId): array
     {
+        if (isset($this->batchCategoryLeads[$detailId])) {
+            return $this->batchCategoryLeads[$detailId];
+        }
         $this->db->Clear();
         $rows = $this->db->DataSet(
             'SELECT st.mundane_id, sc.category FROM ' . DB_PREFIX . 'event_staff st
@@ -3275,6 +3380,9 @@ class EventPlanning extends Ork3
             if (!in_array($leadId, $map[$category] ?? [], true)) {
                 $map[$category][] = $leadId;
             }
+        }
+        if ($this->batchCategoryLeads !== null) {
+            $this->batchCategoryLeads[$detailId] = $map;
         }
 
         return $map;
@@ -3365,7 +3473,7 @@ class EventPlanning extends Ork3
         // @: a failure is read from the result's SQLSTATE below; PDO's warning would
         // only be printed into the response.
         $row = @$this->db->DataSet(
-            'SELECT start_time, end_time, category, secondary_category,
+            'SELECT start_time, end_time, category, secondary_category, cost,
                     DATE_FORMAT(modified, \'%Y-%m-%d %H:%i:%s\') AS modified_at
              FROM ' . DB_PREFIX . 'event_schedule
              WHERE event_schedule_id = ' . $scheduleId . ' AND event_calendardetail_id = ' . $detailId . ' LIMIT 1
@@ -3383,6 +3491,7 @@ class EventPlanning extends Ork3
             'end_time' => (string) $row->end_time,
             'category' => (string) $row->category,
             'secondary_category' => (string) ($row->secondary_category ?? ''),
+            'cost' => ($row->cost ?? null) === null ? null : round((float) $row->cost, 2),
             'modified' => (string) ($row->modified_at ?? ''),
         ];
     }
@@ -3428,6 +3537,32 @@ class EventPlanning extends Ork3
             if (mb_strlen($this->scheduleText($src[$key])) > $max) {
                 return InvalidParameter('The ' . $name . ' is longer than ' . $max . ' characters.');
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * A refusal of a Cost the column (DECIMAL(8,2)) cannot hold: below zero or above
+     * SCHEDULE_COST_MAX once rounded as it is stored. Null otherwise, and when the
+     * cost would not be written (no feast rights) or is empty or not a number (stored as null).
+     * With $stored (an update), a cost equal to the stored one is not refused: the form
+     * re-sends every meal field, and a row saved before the range check may hold a value
+     * outside it.
+     *
+     * @param array{cost?: ?float}|null $stored
+     */
+    private function scheduleCostError(array $src, bool $canFeast, ?array $stored = null): ?array
+    {
+        if (!$canFeast || !array_key_exists('Cost', $src)) {
+            return null;
+        }
+        $cost = $this->normalizeMealField('Cost', $src['Cost']);
+        if ($cost !== null && ($cost < 0 || $cost > self::SCHEDULE_COST_MAX)) {
+            if ($stored !== null && ($stored['cost'] ?? null) !== null && abs((float) $stored['cost'] - $cost) < 0.005) {
+                return null;
+            }
+            return InvalidParameter('The cost must be between 0 and ' . number_format(self::SCHEDULE_COST_MAX, 2, '.', '') . '.');
         }
 
         return null;
@@ -3836,7 +3971,7 @@ class EventPlanning extends Ork3
         // ceiling writes nothing.
         $planned = [];
         foreach ($sourceRows as $row) {
-            $isFeast = ($row['category'] === 'Feast and Food' || $row['secondary_category'] === 'Feast and Food');
+            $isFeast = $this->isFeastItem($row['category'], $row['secondary_category']);
             if (!($isFeast ? !empty($mod['feast']) : !empty($mod['schedule']))) {
                 if ($isFeast) {
                     $skippedFeast++;

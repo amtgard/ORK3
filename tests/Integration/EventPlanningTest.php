@@ -1799,9 +1799,10 @@ final class EventPlanningTest extends TestCase
         $friend = $this->fixture->createPlayer('race-staff-fill-f');
         $id = $this->fixture->insertSchedule($ctx['detail_id'], 'Mothman', 'Battlegame');
 
+        // The fill locks the item with a locking read before it bumps anything.
         $other = $this->fixture->beginConcurrentWrite(
             ['SELECT event_schedule_id FROM ' . DB_PREFIX . "event_schedule WHERE event_schedule_id = $id FOR UPDATE"],
-            $this->staffBumpPattern(),
+            null,
             [
                 'INSERT INTO ' . DB_PREFIX . "event_schedule_lead (event_schedule_id, mundane_id, is_auto) VALUES ($id, $friend, 0)",
                 'UPDATE ' . DB_PREFIX . "event_schedule SET modified = GREATEST(NOW(), modified + INTERVAL 1 SECOND)
@@ -1818,6 +1819,123 @@ final class EventPlanningTest extends TestCase
         // The item had a lead by the time the fill could lock it: it is not filled.
         $this->assertSame(0, $r['LeadsAdded']);
         $this->assertSame([['mundane_id' => $friend, 'is_auto' => 0]], $this->fixture->fetchScheduleLeads($id));
+    }
+
+    public function testAStaffFillLeavesTheVersionOfAnItemThatGainedALeadMeanwhile(): void
+    {
+        [$ctx, $token] = $this->batchContext('race-fill-ver');
+        $warcrat = $this->fixture->createPlayer('race-fill-ver-w');
+        $friend = $this->fixture->createPlayer('race-fill-ver-f');
+        $id = $this->fixture->insertSchedule($ctx['detail_id'], 'Mothman', 'Battlegame');
+        $filled = $this->fixture->insertSchedule($ctx['detail_id'], 'Jersey Devil', 'Battlegame');
+        $before = $this->fixture->fetchScheduleModified($id);
+
+        // Another save gives the item a lead without touching the item row itself, once
+        // the fill is waiting on the item: the fill must not give it a new version.
+        $other = $this->fixture->beginConcurrentWrite(
+            ['SELECT event_schedule_id FROM ' . DB_PREFIX . "event_schedule WHERE event_schedule_id = $id FOR UPDATE"],
+            null,
+            ['INSERT INTO ' . DB_PREFIX . "event_schedule_lead (event_schedule_id, mundane_id, is_auto) VALUES ($id, $friend, 0)"]
+        );
+        try {
+            $r = $this->saveStaff($ctx, $token, $warcrat, ['Battlegame']);
+        } finally {
+            $otherError = $this->fixture->endConcurrentWrite($other);
+        }
+        $this->assertNull($otherError);
+        $this->assertSame(0, $r['Status']['Status'], json_encode($r['Status']));
+        $this->assertSame(1, $r['LeadsAdded']);
+        $this->assertSame($before, $this->fixture->fetchScheduleModified($id));
+        $this->assertSame([['mundane_id' => $friend, 'is_auto' => 0]], $this->fixture->fetchScheduleLeads($id));
+        $this->assertSame([['mundane_id' => $warcrat, 'is_auto' => 1]], $this->fixture->fetchScheduleLeads($filled));
+    }
+
+    public function testDroppingACategoryLeadHandsItsItemsToTheCategorysOtherLeads(): void
+    {
+        [$ctx, $token] = $this->batchContext('lead-handover');
+        $first = $this->fixture->createPlayer('lead-handover-a');
+        $second = $this->fixture->createPlayer('lead-handover-b');
+        $hand = $this->fixture->createPlayer('lead-handover-h');
+        $auto = $this->fixture->insertSchedule($ctx['detail_id'], 'Mothman', 'Battlegame');
+        $staffId = (int) $this->saveStaff($ctx, $token, $first, ['Battlegame'])['Staff']['EventStaffId'];
+        // The second lead fills nothing: the item already has a lead.
+        $this->assertSame(0, $this->saveStaff($ctx, $token, $second, ['Battlegame'])['LeadsAdded']);
+        $mixed = $this->fixture->insertSchedule($ctx['detail_id'], 'Her Own Game', 'Battlegame');
+        $this->fixture->insertScheduleLead($mixed, $first, true);
+        $this->fixture->insertScheduleLead($mixed, $hand);
+        // Left unled on purpose after both leads were set: not the removal's to fill.
+        $unled = $this->fixture->insertSchedule($ctx['detail_id'], 'Bare', 'Battlegame');
+
+        $r = $this->saveStaff($ctx, $token, $first, [], $staffId);
+        $this->assertSame(0, $r['Status']['Status'], json_encode($r['Status']));
+        $this->assertSame(2, $r['LeadsRemoved']);
+        $this->assertSame([['mundane_id' => $second, 'is_auto' => 1]], $this->fixture->fetchScheduleLeads($auto));
+        $this->assertSame([['mundane_id' => $hand, 'is_auto' => 0]], $this->fixture->fetchScheduleLeads($mixed));
+        $this->assertSame([], $this->fixture->fetchScheduleLeads($unled));
+    }
+
+    public function testRemovingAStaffLeadHandsItsItemsToTheCategorysOtherLeads(): void
+    {
+        [$ctx, $token] = $this->batchContext('lead-handover-rm');
+        $first = $this->fixture->createPlayer('lead-handover-rm-a');
+        $second = $this->fixture->createPlayer('lead-handover-rm-b');
+        $item = $this->fixture->insertSchedule($ctx['detail_id'], 'Mothman', 'Battlegame');
+        $staffId = (int) $this->saveStaff($ctx, $token, $first, ['Battlegame'])['Staff']['EventStaffId'];
+        $this->saveStaff($ctx, $token, $second, ['Battlegame']);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $r = $this->planning->RemoveEventStaff([
+            'Token' => $token, 'EventId' => $ctx['event_id'], 'EventCalendarDetailId' => $ctx['detail_id'], 'StaffId' => $staffId,
+        ]);
+        $this->assertSame(0, $r['Status']['Status'], json_encode($r['Status']));
+        $this->assertSame(1, $r['LeadsRemoved']);
+        // The person removed is not among the leads handed the item, though their row was still there.
+        $this->assertSame([['mundane_id' => $second, 'is_auto' => 1]], $this->fixture->fetchScheduleLeads($item));
+    }
+
+    public function testACostTheColumnCannotHoldIsRefusedAtItsIndex(): void
+    {
+        [$ctx, $token] = $this->batchContext('cost-range');
+        $d = $this->batchDay();
+        foreach (['1000000', '-1', '1e9', '999999.996'] as $cost) {
+            $r = $this->batch($ctx, $token, [
+                $this->addOp('c0', 'Fine', "$d 09:00", "$d 10:00"),
+                $this->addOp('c1', 'Feast', "$d 18:00", "$d 20:00", ['Category' => 'Feast and Food', 'Cost' => $cost]),
+            ]);
+            $this->assertSame(ServiceErrorIds::InvalidParameter, $r['Status']['Status'], $cost . ' ' . json_encode($r));
+            $this->assertSame(1, $r['FailedIndex'], $cost);
+            $this->assertSame(0, $this->fixture->countSchedule($ctx['detail_id']), $cost);
+        }
+
+        $ok = $this->batch($ctx, $token, [
+            $this->addOp('c1', 'Feast', "$d 18:00", "$d 20:00", ['Category' => 'Feast and Food', 'Cost' => '999999.99']),
+        ]);
+        $this->assertSame(0, $ok['Status']['Status'], json_encode($ok['Status']));
+        $this->assertEquals(999999.99, $ok['Results'][0]['schedule']['Cost']);
+        $id = (int) $ok['Results'][0]['id'];
+
+        $update = $this->batch($ctx, $token, [['op' => 'update', 'id' => $id, 'fields' => ['Cost' => '12345678']]]);
+        $this->assertSame(ServiceErrorIds::InvalidParameter, $update['Status']['Status'], json_encode($update));
+        $this->assertSame(0, $update['FailedIndex']);
+    }
+
+    public function testAStoredCostOutsideTheRangeStaysSavableWhileItIsNotChanged(): void
+    {
+        [$ctx, $token] = $this->batchContext('cost-legacy');
+        $item = $this->fixture->insertSchedule($ctx['detail_id'], 'Old feast', 'Feast and Food');
+        $this->fixture->setScheduleMeal($item, 'Stew', -5.50);
+
+        $same = $this->batch($ctx, $token, [['op' => 'update', 'id' => $item, 'fields' => ['Title' => 'Renamed', 'Menu' => 'Stew', 'Cost' => '-5.5']]]);
+        $this->assertSame(0, $same['Status']['Status'], json_encode($same));
+        $row = $this->fixture->fetchScheduleRow($item);
+        $this->assertSame('Renamed', $row['title']);
+        $this->assertEquals(-5.5, $row['cost']);
+
+        foreach (['-7', '1000000'] as $cost) {
+            $r = $this->batch($ctx, $token, [['op' => 'update', 'id' => $item, 'fields' => ['Title' => 'Again', 'Cost' => $cost]]]);
+            $this->assertSame(ServiceErrorIds::InvalidParameter, $r['Status']['Status'], $cost . ' ' . json_encode($r));
+        }
+        $this->assertSame('Renamed', $this->fixture->fetchScheduleRow($item)['title']);
     }
 
     public function testAFailedLockingReadFailsTheBatchInsteadOfReportingTheItemGone(): void
@@ -2125,6 +2243,34 @@ final class EventPlanningTest extends TestCase
                 return $this->max;
             }
         };
+    }
+
+    public function testConcurrentAddersCountTheCeilingOneAtATime(): void
+    {
+        [$ctx, $token] = $this->batchContext('ceiling-race');
+        $d = $this->batchDay();
+        $detailId = (int) $ctx['detail_id'];
+        $this->planning = $this->planningWithCeiling(1);
+
+        // Another adder holds the occurrence and adds the last free item; it commits once
+        // this batch is waiting on the occurrence, so the batch must count after it.
+        $other = $this->fixture->beginConcurrentWrite(
+            [
+                'SELECT event_calendardetail_id FROM ' . DB_PREFIX . "event_calendardetail WHERE event_calendardetail_id = $detailId FOR UPDATE",
+                'INSERT INTO ' . DB_PREFIX . "event_schedule (event_calendardetail_id, title, start_time, end_time, location, description, category)
+                     VALUES ($detailId, 'Theirs', '$d 08:00:00', '$d 09:00:00', '', '', 'Other')",
+            ],
+            '%' . DB_PREFIX . 'event_calendardetail%FOR UPDATE%'
+        );
+        try {
+            $r = $this->batch($ctx, $token, [$this->addOp('c1', 'Mine', "$d 09:00", "$d 10:00")]);
+        } finally {
+            $otherError = $this->fixture->endConcurrentWrite($other);
+        }
+        $this->assertNull($otherError);
+        $this->assertSame('A schedule can hold at most 1 items.', $r['Status']['Detail'] ?? null, json_encode($r));
+        $this->assertSame(0, $r['FailedIndex']);
+        $this->assertSame(1, $this->fixture->countSchedule($detailId));
     }
 
     public function testTheScheduleCeilingIsFiveHundredItems(): void

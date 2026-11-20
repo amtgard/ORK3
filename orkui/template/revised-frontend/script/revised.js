@@ -10517,8 +10517,9 @@ $(document).ready(function() {
                     // In Edit mode the board's store takes the saved row now, so an edit made
                     // before the re-read below is checked against this save, not the one before.
                     if (window.EvBoardEdit && typeof window.EvBoardEdit.noteSaved === 'function') window.EvBoardEdit.noteSaved(s);
-                    // Keep the board in sync with this list mutation.
-                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
+                    // Keep the board in sync with this list mutation: the reply's row is the
+                    // item as saved (leads, auto leads and Modified included), so no re-read.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid({ saved: s });
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
                     errEl.style.display = 'block';
@@ -10672,7 +10673,7 @@ $(document).ready(function() {
                         window.evSyncFeastCard({ EventScheduleId: scheduleId, Category: '', SecondaryCategory: '' });
                     }
                     // Keep the board in sync with this removal.
-                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid({ removed: scheduleId });
                 } else {
                     evScheduleRowError(btn, data.error || 'Could not remove schedule item.');
                 }

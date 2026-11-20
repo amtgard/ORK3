@@ -194,7 +194,8 @@
     }
 
     // The latest quick-line add still in the schedule (an undone add falls back
-    // to the one before). A refresh renames cids, so ids are remembered too.
+    // to the one before), with .span set when its line was an all-day or
+    // across-days span. A refresh renames cids, so ids are remembered too.
     function lastAdded(items) {
         for (var i = state.recent.length - 1; i >= 0; i--) {
             var r = state.recent[i], hit = null;
@@ -203,7 +204,7 @@
             }
             if (hit) {
                 if (+hit.EventScheduleId) r.id = +hit.EventScheduleId;
-                return hit;
+                return { item: hit, span: !!r.span };
             }
         }
         return null;
@@ -247,7 +248,10 @@
     function entryContext(overrides) {
         var c = cfg();
         var f = boardFacts(), items = f.items, days = f.days.slice();
-        var last = lastAdded(items), t = last && timing(last);
+        var last = lastAdded(items), t = last && timing(last.item);
+        // An all-day line or a long span sets no clock: the next line does not
+        // start at its end or take its length (the same rule as a pasted list).
+        if (t && !C.setsClock({ span: last.span, startMin: t.start, endMin: t.end })) t = null;
         var day = state.day && days.indexOf(state.day) >= 0 ? state.day : (days[0] || null);
         var ctx = {
             days: days,
@@ -557,7 +561,7 @@
         state.committing = true;
         try {
             cid = state.store.add(itemFrom(r, leads));
-            if (cid) state.recent.push({ cid: cid, id: 0 });
+            if (cid) state.recent.push({ cid: cid, id: 0, span: !!r.span });
         } finally {
             state.committing = false;
         }
@@ -1020,6 +1024,9 @@
     api.isMac = function () { return IS_MAC; };
     api.entryContext = entryContext;
     api.refresh = refresh;
+    // The schedule_list read (reply checks, READ_MS limit): the board's re-read
+    // outside Edit mode uses it too (EvBoardView refreshFromServer).
+    api.fetchList = fetchList;
     // The Details form saved this row (its reply's schedule): the store takes it at
     // once, so an edit made before the next read sends this row's Modified as `seen`.
     api.noteSaved = function (row) {

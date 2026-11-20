@@ -3633,7 +3633,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 					}
 					if (typeof window.evBuildScheduleFilters === 'function') window.evBuildScheduleFilters();
 				}
-				if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
+				if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid({ removed: scheduleId });
 			})
 			.catch(function(err) {
 				btn.disabled = false;

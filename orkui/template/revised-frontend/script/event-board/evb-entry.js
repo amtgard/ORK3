@@ -75,7 +75,7 @@
         var g = r.given || {};
         var vals = {
             day: r.day ? C.dayLabel(r.day) : '',
-            time: r.startMin != null ? C.fmtRange(r.startMin, r.endMin) : '',
+            time: r.startMin != null ? C.fmtSpan(r.day, r.startMin, r.endMin) : '',
             category: r.category || '',
             secondary: r.secondaryCategory || '',
             title: r.title || '',

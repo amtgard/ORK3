@@ -381,6 +381,141 @@
         return hidden ? 'show' : null;
     }
 
+    // A schedule row from EventAjax (a save's reply, schedule_list) in the shape
+    // the page's #evb-schedule-data gives the board: the same fields, text as
+    // strings, leads with their Auto flag. null when it has no id.
+    function pageRow(row) {
+        var id = row ? parseInt(row.EventScheduleId, 10) || 0 : 0;
+        if (id <= 0) return null;
+        var str = function (v) { return v == null ? '' : String(v); };
+        return {
+            EventScheduleId: id,
+            Title: str(row.Title),
+            StartTime: str(row.StartTime),
+            EndTime: str(row.EndTime),
+            Location: str(row.Location),
+            Description: str(row.Description),
+            Category: str(row.Category),
+            SecondaryCategory: str(row.SecondaryCategory),
+            Leads: (Array.isArray(row.Leads) ? row.Leads : []).map(function (l) {
+                return { MundaneId: parseInt(l && l.MundaneId, 10) || 0, Persona: str(l && l.Persona), Auto: !!(l && l.Auto) };
+            }),
+            Menu: str(row.Menu),
+            Cost: row.Cost == null || row.Cost === '' ? null : row.Cost,
+            Dietary: str(row.Dietary),
+            Allergens: str(row.Allergens),
+            Modified: str(row.Modified)
+        };
+    }
+
+    // items with one change applied, as a new list in the server's order (by start
+    // time): {saved: row} replaces the item with row's id or adds it; {removed: id}
+    // drops that item. null when the change is neither (the caller re-reads).
+    function withChange(items, change) {
+        var list = Array.isArray(items) ? items : [];
+        var idOf = function (it) { return parseInt(it && it.EventScheduleId, 10) || 0; };
+        if (change && change.saved) {
+            var row = pageRow(change.saved);
+            if (!row) return null;
+            var out = list.filter(function (it) { return idOf(it) !== row.EventScheduleId; });
+            out.push(row);
+            // Stable: items that start together keep the order they had.
+            return out.map(function (it, i) { return { it: it, i: i }; }).sort(function (a, b) {
+                var x = String(a.it.StartTime || ''), y = String(b.it.StartTime || '');
+                return x < y ? -1 : x > y ? 1 : a.i - b.i;
+            }).map(function (e) { return e.it; });
+        }
+        var gone = change ? parseInt(change.removed, 10) || 0 : 0;
+        if (gone > 0) return list.filter(function (it) { return idOf(it) !== gone; });
+        return null;
+    }
+
+    // Keeps the board's schedule and the List in step with the person's own
+    // changes and the reads that follow them, whatever order replies come back in.
+    // env (the browser wiring is in init; tests pass fakes):
+    //   readPage()      -> Promise of the event page's HTML
+    //   parsePage(html) -> {items, swap()} (swap puts the List and Feast tabs and
+    //                      their counts in place) or null when it is not the page
+    //   readList()      -> Promise of {schedule} (EvBoardEdit.fetchList: reply
+    //                      checks and a time limit) or null where there is none
+    //   take(items)     the board's schedule; items() the one shown now
+    //   editing() / editRefresh()  Edit mode's store re-reads for itself
+    // Returns {page(), change(change)}; each returns a promise that settles when
+    // its work is done (tests wait on it).
+    //
+    // Every read and local merge gets a tick. A merge sends no request and
+    // invalidates no read: a read still on its way when a merge lands has the
+    // merge laid over its result (unless the read's copy of that row is the newer
+    // one by Modified). A page read that saw no later merge swaps the List too;
+    // one that did gives the board its data and reads the page again for the
+    // List, since revised.js already put the merged row in the List itself. A
+    // read is dropped only once a read sent after it has been taken.
+    function refresher(env) {
+        var tick = 0, dataAt = 0, swapAt = 0, flying = 0, merges = [];
+        var idOf = function (it) { return parseInt(it && it.EventScheduleId, 10) || 0; };
+        function settle() { if (--flying <= 0) { flying = 0; merges = []; } }
+        // fn's promise, its request sent now; a throw becomes a rejection.
+        function attempt(fn) { try { return Promise.resolve(fn()); } catch (e) { return Promise.reject(e); } }
+        function after(at) { return merges.filter(function (m) { return m.at > at; }); }
+        function overlay(items, ms) {
+            return ms.reduce(function (list, m) {
+                var row = m.change.saved ? pageRow(m.change.saved) : null;
+                if (row) {
+                    var theirs = list.filter(function (it) { return idOf(it) === row.EventScheduleId; })[0];
+                    if (theirs && String(theirs.Modified || '') > row.Modified) return list;
+                }
+                return withChange(list, m.change) || list;
+            }, items);
+        }
+        function takeData(at, items) {
+            if (at < dataAt) return;
+            dataAt = at;
+            env.take(overlay(items, after(at)));
+        }
+        function page() {
+            var at = ++tick;
+            flying++;
+            return attempt(env.readPage).then(function (html) {
+                if (at < swapAt) return;
+                var fresh = env.parsePage(html);
+                if (!fresh) return;
+                var follow = after(at).length > 0;
+                if (!follow) { swapAt = at; fresh.swap(); }
+                takeData(at, fresh.items);
+                if (follow) return page();
+                if (env.editing()) env.editRefresh();
+            }).catch(function () { /* the page stays as it is */ }).then(settle);
+        }
+        function read() {
+            var at = ++tick;
+            flying++;
+            return attempt(function () {
+                var list = env.readList();
+                if (!list) throw new Error('no list read');
+                return list;
+            }).then(function (data) {
+                takeData(at, data.schedule.map(pageRow).filter(Boolean));
+            }).catch(function () {
+                // Refused, timed out or not on offer (a feast-only editor): the page.
+                if (at < dataAt) return;
+                return attempt(env.readPage).then(function (html) {
+                    var fresh = env.parsePage(html);
+                    if (fresh) takeData(at, fresh.items);
+                });
+            }).catch(function () { /* the board stays as it is; the List is already right */ }).then(settle);
+        }
+        function change(ch) {
+            if (env.editing()) { env.editRefresh(); return Promise.resolve(); }
+            var merged = withChange(env.items(), ch);
+            if (!merged) return read();
+            var at = ++tick;
+            if (flying > 0) merges.push({ at: at, change: ch });
+            env.take(merged);
+            return Promise.resolve();
+        }
+        return { page: page, change: change };
+    }
+
     // ---- DOM state (browser only) ----
     var state = {
         rootEl: null,
@@ -424,6 +559,9 @@
         filterStatus: filterStatus,
         keptFilter: keptFilter,
         filterAccess: filterAccess,
+        pageRow: pageRow,
+        withChange: withChange,
+        refresher: refresher,
         board: null
     };
 
@@ -876,74 +1014,84 @@
         el.focus({ preventScroll: true });
     }
 
-    // Re-fetch the page and take the fresh schedule from its JSON data script, so
-    // schedule add/edit/delete (handled in revised.js) reach the board. Each
-    // refresh is numbered; a response to one that is no longer the latest is
-    // dropped, so a slow earlier fetch cannot overwrite a newer schedule.
-    var refreshSeq = 0;
+    // A fresh copy of the event page: {items, swap()}, where swap puts its List
+    // and Feast tabs and their counts in place; null when the copy is not the
+    // event page.
+    function parsePage(html) {
+        var doc = win.document;
+        var fresh = new win.DOMParser().parseFromString(html, 'text/html');
+        var data = fresh.getElementById('evb-schedule-data');
+        if (!data || !fresh.getElementById('ev-schedule-container')) return null;
+        var items = JSON.parse(data.textContent || '[]');
+        return {
+            items: items,
+            swap: function () {
+                ['ev-schedule-container', 'ev-meal-list'].forEach(function (id) {
+                    var mine = doc.getElementById(id), theirs = fresh.getElementById(id);
+                    if (mine && theirs) mine.innerHTML = theirs.innerHTML;
+                });
+                ['ev-schedule-empty', 'ev-meal-empty'].forEach(function (id) {
+                    var mine = doc.getElementById(id), theirs = fresh.getElementById(id);
+                    if (mine && theirs) mine.style.display = theirs.style.display;
+                });
+                ['ev-tab-schedule', 'ev-tab-feast'].forEach(function (tab) {
+                    var sel = '[data-tab="' + tab + '"] .ev-tab-count';
+                    var mine = doc.querySelector(sel), theirs = fresh.querySelector(sel);
+                    if (mine && theirs) mine.textContent = theirs.textContent;
+                });
+                if (typeof win.evBuildScheduleFilters === 'function') win.evBuildScheduleFilters();
+            }
+        };
+    }
     // Swap in the List and Feast tabs, their counts and the board's schedule
     // from a fresh copy of the page. Returns the schedule, or false when the copy
     // is not the event page.
     function swapFromPage(html) {
-        var doc = win.document;
-        var fresh = new win.DOMParser().parseFromString(html, 'text/html');
-        var data = fresh.getElementById('evb-schedule-data');
-        if (!data || !fresh.getElementById('ev-schedule-container')) return false;
-        var items = JSON.parse(data.textContent || '[]');
-        ['ev-schedule-container', 'ev-meal-list'].forEach(function (id) {
-            var mine = doc.getElementById(id), theirs = fresh.getElementById(id);
-            if (mine && theirs) mine.innerHTML = theirs.innerHTML;
-        });
-        ['ev-schedule-empty', 'ev-meal-empty'].forEach(function (id) {
-            var mine = doc.getElementById(id), theirs = fresh.getElementById(id);
-            if (mine && theirs) mine.style.display = theirs.style.display;
-        });
-        ['ev-tab-schedule', 'ev-tab-feast'].forEach(function (tab) {
-            var sel = '[data-tab="' + tab + '"] .ev-tab-count';
-            var mine = doc.querySelector(sel), theirs = fresh.querySelector(sel);
-            if (mine && theirs) mine.textContent = theirs.textContent;
-        });
-        if (win.EvConfig) win.EvConfig.schedule = items;
-        if (typeof win.evBuildScheduleFilters === 'function') win.evBuildScheduleFilters();
-        return items;
+        var fresh = parsePage(html);
+        if (!fresh) return false;
+        fresh.swap();
+        if (win.EvConfig) win.EvConfig.schedule = fresh.items;
+        return fresh.items;
     }
 
-    // After a staff change: the List's server-rendered rows (their Leads) and the
-    // board both re-read the page; in Edit mode the store re-reads the schedule.
-    function refreshPage() {
-        var seq = ++refreshSeq;
-        win.fetch(win.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
-            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-            .then(function (html) {
-                if (seq !== refreshSeq) return;
-                var items = swapFromPage(html);
-                if (!items) return;
-                // The person's own staff change: the store merges without a "changed by someone else" notice.
-                if (state.editing) { if (win.EvBoardEdit && win.EvBoardEdit.refresh) win.EvBoardEdit.refresh({ own: true }); }
-                else setItems(items);
-            })
-            .catch(function () { /* the page stays as it is */ });
-    }
-
-    function refreshFromServer() {
-        // In Edit mode the store owns the board, so it re-reads the schedule instead.
-        // Only the person's own save through the schedule form comes here, so the
-        // store merges it without a "changed by someone else" notice.
-        if (state.editing && win.EvBoardEdit && win.EvBoardEdit.refresh) { win.EvBoardEdit.refresh({ own: true }); return; }
-        var seq = ++refreshSeq;
-        win.fetch(win.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
-            .then(function (r) { return r.text(); })
-            .then(function (html) {
-                if (seq !== refreshSeq) return;
-                var doc = new win.DOMParser().parseFromString(html, 'text/html');
-                var data = doc.getElementById('evb-schedule-data');
-                if (!data) return;
-                var items = JSON.parse(data.textContent || '[]');
+    // The board's schedule after the person's own changes (refresher above):
+    //   refreshPage()          after a staff change (evOnStaffChanged): the List's
+    //                          server-rendered rows (their Leads) and the board
+    //                          re-read the page; in Edit mode the store re-reads.
+    //   refreshFromServer(ch)  after the schedule form or a List/Feast remove
+    //                          (revised.js and the template call
+    //                          evRefreshScheduleGrid): {saved: row} (the save's
+    //                          reply row, in the page data's shape) or {removed:
+    //                          id} merge in place with no request; anything else
+    //                          re-reads schedule_list (EvBoardEdit.fetchList, only
+    //                          loaded for schedule managers), else the page.
+    var refreshes = null; // built on first use, when EvConfig and EvBoardEdit are in place
+    function refreshing() {
+        if (refreshes) return refreshes;
+        var readPage = function () {
+            return win.fetch(win.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+                .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+        };
+        refreshes = refresher({
+            readPage: readPage,
+            parsePage: parsePage,
+            readList: function () {
+                var E = win.EvBoardEdit;
+                return E && typeof E.fetchList === 'function' ? E.fetchList() : null;
+            },
+            take: function (items) {
                 if (win.EvConfig) win.EvConfig.schedule = items;
                 if (!state.editing) setItems(items);
-            })
-            .catch(function () { /* leave the board as it is; the list is already correct */ });
+            },
+            items: function () { return state.items; },
+            editing: function () { return state.editing && !!(win.EvBoardEdit && win.EvBoardEdit.refresh); },
+            // The person's own change: the store merges without a "changed by someone else" notice.
+            editRefresh: function () { win.EvBoardEdit.refresh({ own: true }); }
+        });
+        return refreshes;
     }
+    function refreshPage() { refreshing().page(); }
+    function refreshFromServer(change) { refreshing().change(change); }
 
     function init() {
         var doc = win.document;

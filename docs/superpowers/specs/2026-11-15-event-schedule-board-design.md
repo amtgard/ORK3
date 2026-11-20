@@ -226,9 +226,10 @@ blocks"):
     past-event copy. The limit is not locked against two saves arriving together, so it can
     be passed by a few items in a race.
 48. **Long Administrative and Feast items are rails** (review item 36): an item whose primary
-    category is Administrative or Feast and Food and that lasts four hours or more is drawn
+    category is Administrative or Feast and Food and that lasts six hours or more is drawn
     as a narrow labelled strip down the left of its day, outside the lanes, on the board and
-    in the picture. There is no per-item switch; a four-hour "Feast prep" is a rail too.
+    in the picture. There is no per-item switch; a six-hour "Feast prep" is a rail too
+    (raised from four hours so four-hour tournaments and meals stay full blocks).
 49. **"Now and next"** (review item 18): during the event, above both the list and the
     board, a strip of what is on now (up to four) and what starts next that day (up to
     three). Never in Edit mode.

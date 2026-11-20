@@ -274,21 +274,109 @@ test.describe('viewer', () => {
     await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
     const titles = await page.evaluate(async () => {
       const w = window as any;
-      const pageFor = (title: string) => '<script type="application/json" id="evb-schedule-data">' + JSON.stringify([
-        { EventScheduleId: 1, Title: title, Category: 'Other', StartTime: '2026-11-21 10:00:00', EndTime: '2026-11-21 11:00:00', Leads: [] }
-      ]) + '</script>';
+      const row = (title: string) => ({ EventScheduleId: 1, Title: title, Category: 'Other', StartTime: '2026-11-21 10:00:00', EndTime: '2026-11-21 11:00:00', Leads: [] });
+      // A signed-out viewer has no EvBoardEdit (no schedule_list read), so a re-read is the page.
+      const pageFor = (title: string) => ({ ok: true, text: () => Promise.resolve('<div id="ev-schedule-container"></div>'
+        + '<script type="application/json" id="evb-schedule-data">' + JSON.stringify([row(title)]) + '</script>') });
       const pending: Array<(v: any) => void> = [];
       w.fetch = () => new Promise(res => pending.push(res));
       w.evRefreshScheduleGrid();
       w.evRefreshScheduleGrid();
+      await new Promise(r => setTimeout(r, 0));
       // The newer answer arrives first, then the older one.
-      pending[1]({ text: () => Promise.resolve(pageFor('Newer')) });
+      pending[1](pageFor('Newer'));
       await new Promise(r => setTimeout(r, 50));
-      pending[0]({ text: () => Promise.resolve(pageFor('Older')) });
+      pending[0](pageFor('Older'));
       await new Promise(r => setTimeout(r, 50));
-      return w.EvBoardView.getItems().map((it: any) => it.Title);
+      const fromPage = w.EvBoardView.getItems().map((it: any) => it.Title);
+      // A schedule manager's re-read goes through EvBoardEdit.fetchList, with the same rule.
+      const lists: Array<(v: any) => void> = [];
+      w.EvBoardEdit = { fetchList: () => new Promise(res => lists.push(res)) };
+      w.evRefreshScheduleGrid();
+      w.evRefreshScheduleGrid();
+      lists[1]({ schedule: [row('Newer list')] });
+      await new Promise(r => setTimeout(r, 50));
+      lists[0]({ schedule: [row('Older list')] });
+      await new Promise(r => setTimeout(r, 50));
+      return { fromPage, fromList: w.EvBoardView.getItems().map((it: any) => it.Title), pageReads: pending.length };
     });
-    expect(titles).toEqual(['Newer']);
+    expect(titles).toEqual({ fromPage: ['Newer'], fromList: ['Newer list'], pageReads: 2 });
+  });
+
+  test('a schedule form save or remove updates the board from its reply, with no re-read', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const out = await page.evaluate(async () => {
+      const w = window as any;
+      let reads = 0;
+      w.fetch = () => { reads++; return new Promise(() => {}); };
+      w.EvBoardView.setItems([{ EventScheduleId: 1, Title: 'Old', Category: 'Other', StartTime: '2026-11-21 10:00:00', EndTime: '2026-11-21 11:00:00', Leads: [] }]);
+      w.evRefreshScheduleGrid({ saved: { EventScheduleId: 2, Title: 'Feast', Category: 'Feast and Food', StartTime: '2026-11-21 09:00:00',
+        EndTime: '2026-11-21 10:00:00', Menu: null, Cost: 8, Modified: '2026-11-20 10:00:00', Leads: [{ MundaneId: 3, Persona: 'Luna', Auto: true }] } });
+      const afterSave = w.EvBoardView.getItems().map((it: any) => [it.EventScheduleId, it.Title, it.Leads.length]);
+      w.evRefreshScheduleGrid({ removed: 1 });
+      const afterRemove = w.EvBoardView.getItems().map((it: any) => it.EventScheduleId);
+      return { reads, afterSave, afterRemove, config: w.EvConfig.schedule.length };
+    });
+    expect(out).toEqual({ reads: 0, afterSave: [[2, 'Feast', 1], [1, 'Old', 0]], afterRemove: [2], config: 1 });
+  });
+
+  test('a re-read that schedule_list refuses or times out falls back to the page', async ({ page }) => {
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const out = await page.evaluate(async () => {
+      const w = window as any;
+      const html = '<div id="ev-schedule-container"></div><script type="application/json" id="evb-schedule-data">' + JSON.stringify([
+        { EventScheduleId: 1, Title: 'From page', Category: 'Other', StartTime: '2026-11-21 10:00:00', EndTime: '2026-11-21 11:00:00', Leads: [] }
+      ]) + '</script>';
+      const urls: string[] = [];
+      w.fetch = (url: string) => { urls.push(url); return Promise.resolve({ ok: true, text: () => Promise.resolve(html) }); };
+      // fetchList rejects on a refusal and on its 30-second limit alike.
+      w.EvBoardEdit = { fetchList: () => Promise.reject(new Error('no answer')) };
+      w.evRefreshScheduleGrid();
+      await new Promise(r => setTimeout(r, 50));
+      return { titles: w.EvBoardView.getItems().map((it: any) => it.Title), listReads: urls.filter(u => /schedule_list/.test(u)).length, pageReads: urls.length };
+    });
+    expect(out).toEqual({ titles: ['From page'], listReads: 0, pageReads: 1 });
+  });
+
+  test('a form save while a staff change re-reads the page: new leads arrive and the save is kept', async ({ page }) => {
+    // Catch the board's evOnStaffChanged registration so the test can fire it.
+    await page.addInitScript(() => {
+      const w = window as any;
+      w.__staffFns = [];
+      let real: any = null;
+      Object.defineProperty(w, 'evOnStaffChanged', {
+        configurable: true,
+        get: () => (fn: any) => { w.__staffFns.push(fn); if (real) real(fn); },
+        set: (fn: any) => { real = fn; },
+      });
+    });
+    await page.goto(`index.php?Route=Event/detail/${EVENT}#ev-tab-schedule?view=board`);
+    const out = await page.evaluate(async () => {
+      const w = window as any;
+      const row = (id: number, title: string, mod: string, leads: any[]) => ({ EventScheduleId: id, Title: title, Category: 'Other',
+        StartTime: '2026-11-21 1' + id + ':00:00', EndTime: '2026-11-21 1' + id + ':30:00', Modified: mod, Leads: leads });
+      const luna = [{ MundaneId: 3, Persona: 'Luna', Auto: true }];
+      const pageFor = (items: any[], list: string) => ({ ok: true, text: () => Promise.resolve('<div id="ev-schedule-container">' + list + '</div>'
+        + '<script type="application/json" id="evb-schedule-data">' + JSON.stringify(items) + '</script>') });
+      const pending: Array<(v: any) => void> = [];
+      w.fetch = () => new Promise(res => pending.push(res));
+      w.EvBoardView.setItems([row(1, 'Lead me', 'a', []), row(2, 'Edit me', 'a', [])]);
+      w.__staffFns.forEach((fn: any) => fn([]));     // staff saved: the page is read
+      // The schedule form saves item 2 before that read answers.
+      w.evRefreshScheduleGrid({ saved: row(2, 'Saved', 'b', []) });
+      // The page was read before the save: item 1's new auto lead, item 2's old copy.
+      pending[0](pageFor([row(1, 'Lead me', 'a', luna), row(2, 'Edit me', 'a', [])], 'stale list'));
+      await new Promise(r => setTimeout(r, 50));
+      const board = w.EvBoardView.getItems().map((it: any) => [it.Title, it.Leads.length]);
+      const listAfterStale = document.getElementById('ev-schedule-container')!.textContent;
+      // The List is read again rather than swapped for the stale copy.
+      pending[1](pageFor([row(1, 'Lead me', 'a', luna), row(2, 'Saved', 'b', [])], 'fresh list'));
+      await new Promise(r => setTimeout(r, 50));
+      return { board, listAfterStale: listAfterStale === 'stale list', list: document.getElementById('ev-schedule-container')!.textContent,
+        reads: pending.length, final: w.EvBoardView.getItems().map((it: any) => [it.Title, it.Leads.length]) };
+    });
+    expect(out).toEqual({ board: [['Lead me', 1], ['Saved', 0]], listAfterStale: false, list: 'fresh list', reads: 2,
+      final: [['Lead me', 1], ['Saved', 0]] });
   });
 
   test('the now line is redrawn when the tab becomes visible', async ({ page }) => {
@@ -3100,7 +3188,7 @@ test.describe('editing', () => {
     await expect(page.locator('.evb-save-state')).toHaveText('All changes saved');
     await expect.poll(() => serverTimes(page, title)).toEqual([`${SUNDAY} 09:15`, `${SUNDAY} 17:15`, 'Administrative']);
 
-    // The bottom grip up 300 minutes: under four hours the preview leaves the rails.
+    // The bottom grip up 300 minutes: under six hours the preview leaves the rails.
     const moved = page.locator(`.evb-block.evb-block-rail[data-day="${SUNDAY}"]`, { hasText: title });
     await moved.evaluate(el => el.scrollIntoView({ block: 'end' }));
     await moved.click();
@@ -3145,7 +3233,7 @@ test.describe('editing', () => {
     expect(await serverItem(page, `${PREFIX} far away`)).toBeNull();
   });
 
-  test('rails: four hours or more of Administrative is a 22px rail labelled like any block, and lanes ignore rails', async ({ page }) => {
+  test('rails: six hours or more of Administrative is a 22px rail labelled like any block, and lanes ignore rails', async ({ page }) => {
     await openBoard(page, EDIT_EVENT);
     const SUNDAY = await dayOf(page, 'sun');
     const t = (s: string) => `${PREFIX} ${s}`;
@@ -3153,9 +3241,9 @@ test.describe('editing', () => {
       EndTime: `${SUNDAY} ${end}`, Category: cat, SecondaryCategory: '', Location: '', Description: '', Leads: [] });
     const lanes = ['lane a', 'lane b', 'lane c', 'lane d'];
     const ids = await addViaBatch(page, [
-      item(t('rail gate'), 'Administrative', '06:00', '10:00'),
-      item(t('rail troll'), 'Administrative', '06:00', '11:00'),
-      item(t('almost rail'), 'Administrative', '12:00', '15:59'),
+      item(t('rail gate'), 'Administrative', '06:00', '12:00'),
+      item(t('rail troll'), 'Administrative', '06:00', '13:00'),
+      item(t('almost rail'), 'Administrative', '13:00', '18:59'),
       item(t(lanes[0]), 'Other', '06:15', '07:15'),
       item(t(lanes[1]), 'Other', '06:30', '07:30'),
       item(t(lanes[2]), 'Other', '06:45', '07:45'),
@@ -3170,10 +3258,10 @@ test.describe('editing', () => {
       await expect(page.locator(`.evb-block[data-id="${troll}"]`)).toHaveClass(/evb-block-rail/);
       expect(Math.round((await gateEl.boundingBox())!.width)).toBe(22);
       // The same label form as an ordinary block: title, category, day and time.
-      await expect(gateEl).toHaveAttribute('aria-label', `${t('rail gate')}, Administrative, Sunday 6–10a`);
+      await expect(gateEl).toHaveAttribute('aria-label', `${t('rail gate')}, Administrative, Sunday 6a–12p`);
       await expect(gateEl).toHaveAttribute('role', 'button');
       await expect(page.locator(`.evb-block[data-id="${laneA}"]`)).toHaveAttribute('aria-label', `${t(lanes[0])}, Other, Sunday 6:15–7:15a`);
-      // 3h59m is not a rail.
+      // 5h59m is not a rail.
       const almostEl = page.locator(`.evb-block[data-id="${almost}"]`);
       await expect(almostEl).not.toHaveClass(/evb-block-rail/);
       expect((await almostEl.boundingBox())!.width).toBeGreaterThan(22);
