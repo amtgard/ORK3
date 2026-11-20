@@ -111,6 +111,8 @@
     "2026-10-04-qual-report-comment.sql": { "class": "S", "render": "full", "notes": "Free-text comment on a qual question report; ADD COLUMN IF NOT EXISTS, idempotent" },
     "2026-10-14-bonus-credits.sql": { "class": "S", "render": "full", "notes": "Non-attendance class credits (ork_bonus_credit ledger); CREATE TABLE IF NOT EXISTS, idempotent" },
     "2026-10-15-recommendation-monarchy-only.sql": { "class": "S", "render": "full", "notes": "Monarchy Only visibility level on recommendations; ADD COLUMN/INDEX IF NOT EXISTS, idempotent" },
-    "2026-10-27-bonus-credit-accept-outside.sql": { "class": "S", "render": "full", "notes": "Per-kingdom yes/no: may other kingdoms' bonus credits reach its players; CREATE TABLE IF NOT EXISTS, idempotent" }
+    "2026-10-27-bonus-credit-accept-outside.sql": { "class": "S", "render": "full", "notes": "Per-kingdom yes/no: may other kingdoms' bonus credits reach its players; CREATE TABLE IF NOT EXISTS, idempotent" },
+    "2026-11-15-event-staff-category-leads.sql": { "class": "S", "render": "full", "notes": "Category leads on event staff; auto-filled flag on schedule leads. Idempotent." },
+    "2026-11-16-event-schedule-batch-tokens.sql": { "class": "S", "render": "full", "notes": "Request tokens for schedule batches and copies, so a retried request applies once; CREATE TABLE IF NOT EXISTS, idempotent" }
   }
 }

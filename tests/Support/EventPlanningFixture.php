@@ -133,6 +133,30 @@ final class EventPlanningFixture
     }
 
     /**
+     * A published event at the first park whose occurrence runs from 09:00 on
+     * $startDate (Y-m-d) to 16:00 two days later.
+     *
+     * @return array{event_id: int, detail_id: int, kingdom_id: int, park_id: int, mundane_id: int}
+     */
+    public function createPublishedEventOn(string $suffix, string $startDate, string $status = 'published'): array
+    {
+        $kingdomId = $this->firstKingdomId();
+        $parkId = $this->firstParkId();
+        $ownerId = $this->insertMundane($suffix . '-owner', $parkId, $kingdomId);
+        $eventId = $this->insertEvent($kingdomId, $parkId, $ownerId, $suffix, $status);
+        $endDate = (new \DateTimeImmutable($startDate))->modify('+2 days')->format('Y-m-d');
+        $detailId = $this->insertDetail($eventId, $startDate . ' 09:00:00', $endDate . ' 16:00:00');
+
+        return [
+            'event_id' => $eventId,
+            'detail_id' => $detailId,
+            'kingdom_id' => $kingdomId,
+            'park_id' => $parkId,
+            'mundane_id' => $ownerId,
+        ];
+    }
+
+    /**
      * @return array{event_id: int, detail_id: int}
      */
     public function createPastPublishedEventAtPark(int $parkId, int $kingdomId, string $suffix = 'past'): array
@@ -200,11 +224,192 @@ final class EventPlanningFixture
         return $id;
     }
 
-    public function insertScheduleLead(int $scheduleId, int $mundaneId): void
+    /** A schedule item at explicit naive 'Y-m-d H:i:s' times. */
+    public function insertScheduleAt(int $detailId, string $title, string $category, string $start, string $end): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'event_schedule
+             (event_calendardetail_id, title, start_time, end_time, location, description, category)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([$detailId, $title, $start, $end, 'Main', self::MARKER, $category]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->scheduleIds[] = $id;
+
+        return $id;
+    }
+
+    public function setScheduleMeal(int $scheduleId, string $menu, float $cost): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'event_schedule SET menu = ?, cost = ? WHERE event_schedule_id = ?')
+            ->execute([$menu, $cost, $scheduleId]);
+    }
+
+    public function insertScheduleLead(int $scheduleId, int $mundaneId, bool $isAuto = false): void
     {
         $this->pdo->prepare(
-            'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id) VALUES (?, ?)'
-        )->execute([$scheduleId, $mundaneId]);
+            'INSERT IGNORE INTO ' . DB_PREFIX . 'event_schedule_lead (event_schedule_id, mundane_id, is_auto)
+             VALUES (?, ?, ?)'
+        )->execute([$scheduleId, $mundaneId, $isAuto ? 1 : 0]);
+    }
+
+    /** @return list<string> the staff row's lead categories, sorted by name */
+    public function fetchStaffCategories(int $staffId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT category FROM ' . DB_PREFIX . 'event_staff_category WHERE event_staff_id = ? ORDER BY category'
+        );
+        $stmt->execute([$staffId]);
+
+        return array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    /** @return list<array{mundane_id: int, is_auto: int}> ordered by mundane id */
+    public function fetchScheduleLeads(int $scheduleId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT mundane_id, is_auto FROM ' . DB_PREFIX . 'event_schedule_lead
+             WHERE event_schedule_id = ? ORDER BY mundane_id'
+        );
+        $stmt->execute([$scheduleId]);
+        $rows = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rows[] = ['mundane_id' => (int) $row['mundane_id'], 'is_auto' => (int) $row['is_auto']];
+        }
+
+        return $rows;
+    }
+
+    /** The item's `modified` as 'Y-m-d H:i:s' (the Modified the schedule rows carry). */
+    public function fetchScheduleModified(int $scheduleId): string
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT DATE_FORMAT(modified, '%Y-%m-%d %H:%i:%s') FROM " . DB_PREFIX . 'event_schedule WHERE event_schedule_id = ?'
+        );
+        $stmt->execute([$scheduleId]);
+
+        return (string) $stmt->fetchColumn();
+    }
+
+    /** Deletes a schedule item behind the domain's back (another organiser's removal). */
+    public function deleteSchedule(int $scheduleId): void
+    {
+        $this->pdo->prepare('DELETE FROM ' . DB_PREFIX . 'event_schedule_lead WHERE event_schedule_id = ?')->execute([$scheduleId]);
+        $this->pdo->prepare('DELETE FROM ' . DB_PREFIX . 'event_schedule WHERE event_schedule_id = ?')->execute([$scheduleId]);
+    }
+
+    /** Sets an occurrence's raw event_end (old occurrences carry zero dates and ends before their starts). */
+    public function setDetailEnd(int $detailId, string $end): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'event_calendardetail SET event_end = ? WHERE event_calendardetail_id = ?')
+            ->execute([$end, $detailId]);
+    }
+
+    /**
+     * Another organiser's save, made on a second connection while the domain works.
+     * Runs $statements in an open transaction, so their row locks are held, then
+     * (without blocking this process) commits as soon as another connection of this
+     * user is running a locking read (FOR UPDATE) of the schedule, that is, waiting
+     * for those locks. No timing is involved: the commit follows the observed wait.
+     * It gives up waiting after 10 seconds and commits anyway, so code that never
+     * waits fails its assertions instead of hanging. Finish with endConcurrentWrite().
+     *
+     * $waitingFor is the LIKE pattern of the other connection's statement to wait for
+     * (by default a locking read of the schedule); $afterWait runs once that statement
+     * is seen, before the commit, so this connection can go on to lock more rows the
+     * way a real save would.
+     *
+     * @param list<string> $statements
+     * @param list<string> $afterWait
+     */
+    public function beginConcurrentWrite(array $statements, ?string $waitingFor = null, array $afterWait = []): \mysqli
+    {
+        $other = new \mysqli(DB_HOSTNAME, DB_USERNAME, DB_PASSWORD, DB_DATABASE, DB_PORT);
+        $other->query('START TRANSACTION');
+        foreach ($statements as $sql) {
+            $other->query($sql);
+        }
+        $pattern = $other->real_escape_string($waitingFor ?? '%' . DB_PREFIX . 'event_schedule%FOR UPDATE%');
+        $then = implode('', array_map(static fn (string $sql): string => $sql . ";\n", $afterWait));
+        $other->query(
+            "BEGIN NOT ATOMIC
+               DECLARE waiting INT DEFAULT 0;
+               DECLARE give_up DATETIME(6) DEFAULT SYSDATE(6) + INTERVAL 10 SECOND;
+               WHILE waiting = 0 AND SYSDATE(6) < give_up DO
+                 SELECT COUNT(*) INTO waiting FROM information_schema.PROCESSLIST
+                  WHERE ID <> CONNECTION_ID() AND DB = DATABASE() AND INFO LIKE '" . $pattern . "';
+               END WHILE;
+               " . $then . "COMMIT;
+             END",
+            MYSQLI_ASYNC
+        );
+
+        return $other;
+    }
+
+    /**
+     * Waits for beginConcurrentWrite()'s commit to finish and closes its connection.
+     * Returns that connection's error (a deadlock, say), or null when it committed.
+     */
+    public function endConcurrentWrite(\mysqli $other): ?string
+    {
+        try {
+            $ok = $other->reap_async_query();
+            $error = ($ok === false || $other->errno !== 0) ? $other->errno . ' ' . $other->error : null;
+        } catch (\mysqli_sql_exception $e) {
+            $error = $e->getCode() . ' ' . $e->getMessage();
+        }
+        $other->close();
+
+        return $error;
+    }
+
+    /**
+     * A second connection that holds row locks: $statements run in an open
+     * transaction that stays open until releaseRowLocks().
+     *
+     * @param list<string> $statements
+     */
+    public function holdRowLocks(array $statements): \mysqli
+    {
+        $other = new \mysqli(DB_HOSTNAME, DB_USERNAME, DB_PASSWORD, DB_DATABASE, DB_PORT);
+        $other->query('START TRANSACTION');
+        foreach ($statements as $sql) {
+            $other->query($sql);
+        }
+
+        return $other;
+    }
+
+    /** Rolls back holdRowLocks()'s transaction and closes its connection. */
+    public function releaseRowLocks(\mysqli $other): void
+    {
+        $other->query('ROLLBACK');
+        $other->close();
+    }
+
+    public function setPlayerActive(int $mundaneId, bool $active): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET active = ? WHERE mundane_id = ?')
+            ->execute([$active ? 1 : 0, $mundaneId]);
+    }
+
+    /** Suspends a player with no end date, or lifts the suspension. */
+    public function setPlayerSuspended(int $mundaneId, bool $suspended): void
+    {
+        $this->pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET suspended = ?, suspended_until = NULL WHERE mundane_id = ?')
+            ->execute([$suspended ? 1 : 0, $mundaneId]);
+    }
+
+    /** Stored request tokens of the occurrence (ork_event_schedule_batch rows). */
+    public function countScheduleRequestTokens(int $detailId): int
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'event_schedule_batch WHERE event_calendardetail_id = ?'
+        );
+        $stmt->execute([$detailId]);
+
+        return (int) $stmt->fetchColumn();
     }
 
     public function insertRsvp(int $detailId, int $mundaneId, string $status): void
@@ -358,6 +563,29 @@ final class EventPlanningFixture
         return (bool) $stmt->fetchColumn();
     }
 
+    public function fetchScheduleRow(int $scheduleId): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT title, start_time, end_time, location, description, category, secondary_category,
+                    menu, cost, dietary, allergens, event_calendardetail_id
+             FROM ' . DB_PREFIX . 'event_schedule WHERE event_schedule_id = ?'
+        );
+        $stmt->execute([$scheduleId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ?: null;
+    }
+
+    public function countSchedule(int $detailId): int
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ?'
+        );
+        $stmt->execute([$detailId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
     public function countScheduleLeads(int $scheduleId): int
     {
         $stmt = $this->pdo->prepare(
@@ -439,6 +667,7 @@ final class EventPlanningFixture
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_rsvp WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ' . (int) $id);
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_schedule_batch WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int) $id);
         }
 

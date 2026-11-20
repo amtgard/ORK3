@@ -16,47 +16,37 @@
  * again after injecting new .ork-schedule nodes (e.g. in a single-page app).
  */
 (function () {
-	'use strict';
+    'use strict';
 
-	// Capture the executing <script> now — document.currentScript is only valid
-	// during initial synchronous execution.
-	var ME = document.currentScript;
-	var STYLE_ID = 'ork-sched-styles';
+    // Capture the executing <script> now — document.currentScript is only valid
+    // during initial synchronous execution.
+    var ME = document.currentScript;
+    var STYLE_ID = 'ork-sched-styles';
 
-	// Left-accent colour per schedule category, matching the ORK event page.
-	var CAT_COLORS = {
-		'Administrative':    '#546e7a',
-		'Tournament':        '#b8860b',
-		'Battlegame':        '#c0392b',
-		'Arts and Sciences': '#7b1fa2',
-		'Class':             '#1565c0',
-		'Feast and Food':    '#e65100',
-		'Court':             '#4e342e',
-		'Meeting':           '#276749',
-		'Other':             '#757575'
-	};
+    // Left accent for a category the response gives no colour for.
+    var UNKNOWN_CAT_COLOR = '#616161';
 
-	function esc(s) {
-		return String(s == null ? '' : s)
-			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;');
-	}
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
 
-	// Work out the ORK base URL (…/orkui/) from an explicit override or this
-	// script's own src, then build the JSON endpoint under it.
-	function apiEndpoint(container) {
-		var base = container.getAttribute('data-base') || '';
-		if (!base) {
-			var src = (ME && ME.src) || '';
-			base = src.replace(/template\/embed\/ork-schedule\.js.*$/i, '');
-		}
-		if (base && base.charAt(base.length - 1) !== '/') base += '/';
-		return base + 'index.php?Route=EventEmbed/schedule/';
-	}
+    // Work out the ORK base URL (…/orkui/) from an explicit override or this
+    // script's own src, then build the JSON endpoint under it.
+    function apiEndpoint(container) {
+        var base = container.getAttribute('data-base') || '';
+        if (!base) {
+            var src = (ME && ME.src) || '';
+            base = src.replace(/template\/embed\/ork-schedule\.js.*$/i, '');
+        }
+        if (base && base.charAt(base.length - 1) !== '/') base += '/';
+        return base + 'index.php?Route=EventEmbed/schedule/';
+    }
 
-	function injectStyles() {
-		if (document.getElementById(STYLE_ID)) return;
-		var css =
+    function injectStyles() {
+        if (document.getElementById(STYLE_ID)) return;
+        var css =
 '.ork-sched{max-width:560px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;' +
 'color:#2d3748;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;box-sizing:border-box;' +
 'box-shadow:0 1px 3px rgba(0,0,0,.06);line-height:1.4}' +
@@ -81,98 +71,104 @@
 '.ork-sched-item{border-left-color:#4a5568}.ork-sched-time{color:#cbd5e0}' +
 '.ork-sched-item-title{color:#edf2f7}.ork-sched-loc,.ork-sched-leads,.ork-sched-empty,.ork-sched-msg{color:#a0aec0}' +
 '.ork-sched-more{color:#63b3ed}}';
-		var el = document.createElement('style');
-		el.id = STYLE_ID;
-		el.textContent = css;
-		(document.head || document.documentElement).appendChild(el);
-	}
+        var el = document.createElement('style');
+        el.id = STYLE_ID;
+        el.textContent = css;
+        (document.head || document.documentElement).appendChild(el);
+    }
 
-	function renderItem(item) {
-		var accent = CAT_COLORS[item.category] || '#cbd5e0';
-		var parts = [];
-		parts.push('<li class="ork-sched-item" style="border-left-color:' + accent + '">');
-		parts.push('<span class="ork-sched-time">' + esc(item.time_label) + '</span>');
-		parts.push('<span class="ork-sched-body">');
-		parts.push('<span class="ork-sched-item-title">' + esc(item.title) + '</span>');
-		if (item.location) parts.push('<span class="ork-sched-loc">' + esc(item.location) + '</span>');
-		if (item.leads && item.leads.length) {
-			parts.push('<span class="ork-sched-leads">' + esc(item.leads.join(', ')) + '</span>');
-		}
-		parts.push('</span></li>');
-		return parts.join('');
-	}
+    // A colour from the response's category_colors, used only if it is a plain #hex.
+    function accentFor(colors, category) {
+        var c = colors && Object.prototype.hasOwnProperty.call(colors, category) ? colors[category] : '';
+        return /^#[0-9a-f]{3,8}$/i.test(String(c)) ? c : UNKNOWN_CAT_COLOR;
+    }
 
-	function renderData(container, data) {
-		var html = ['<div class="ork-sched" role="region" aria-label="Event schedule">'];
-		html.push('<a class="ork-sched-title" href="' + esc(data.detail_url) + '" target="_blank" rel="noopener">' + esc(data.name) + '</a>');
-		var sub = data.date_label || '';
-		if (data.park_name) sub += (sub ? ' · ' : '') + data.park_name;
-		if (sub) html.push('<div class="ork-sched-date">' + esc(sub) + '</div>');
+    function renderItem(item, colors) {
+        var accent = accentFor(colors, item.category);
+        var parts = [];
+        parts.push('<li class="ork-sched-item" style="border-left-color:' + accent + '">');
+        parts.push('<span class="ork-sched-time">' + esc(item.time_label) + '</span>');
+        parts.push('<span class="ork-sched-body">');
+        parts.push('<span class="ork-sched-item-title">' + esc(item.title) + '</span>');
+        if (item.location) parts.push('<span class="ork-sched-loc">' + esc(item.location) + '</span>');
+        if (item.leads && item.leads.length) {
+            parts.push('<span class="ork-sched-leads">' + esc(item.leads.join(', ')) + '</span>');
+        }
+        parts.push('</span></li>');
+        return parts.join('');
+    }
 
-		var days = data.days || [];
-		var total = days.reduce(function (n, d) { return n + (d.items ? d.items.length : 0); }, 0);
-		if (!total) {
-			html.push('<div class="ork-sched-empty">No schedule posted yet.</div>');
-		} else {
-			days.forEach(function (day) {
-				if (!day.items || !day.items.length) return;
-				html.push('<div class="ork-sched-day">');
-				if (days.length > 1 || day.day_label) {
-					html.push('<div class="ork-sched-day-label">' + esc(day.day_label) + '</div>');
-				}
-				html.push('<ul class="ork-sched-list">');
-				day.items.forEach(function (it) { html.push(renderItem(it)); });
-				html.push('</ul></div>');
-			});
-		}
-		var moreUrl = data.grid_url || data.schedule_url || data.detail_url;
-		html.push('<a class="ork-sched-more" href="' + esc(moreUrl) + '" target="_blank" rel="noopener">See full schedule →</a>');
-		html.push('</div>');
-		container.innerHTML = html.join('');
-	}
+    function renderData(container, data) {
+        var html = ['<div class="ork-sched" role="region" aria-label="Event schedule">'];
+        html.push('<a class="ork-sched-title" href="' + esc(data.detail_url) + '" target="_blank" rel="noopener">' + esc(data.name) + '</a>');
+        var sub = data.date_label || '';
+        if (data.park_name) sub += (sub ? ' · ' : '') + data.park_name;
+        if (sub) html.push('<div class="ork-sched-date">' + esc(sub) + '</div>');
 
-	function renderMessage(container, msg) {
-		container.innerHTML = '<div class="ork-sched"><div class="ork-sched-msg">' + esc(msg) + '</div></div>';
-	}
+        var days = data.days || [];
+        var total = days.reduce(function (n, d) { return n + (d.items ? d.items.length : 0); }, 0);
+        if (!total) {
+            html.push('<div class="ork-sched-empty">No schedule posted yet.</div>');
+        } else {
+            days.forEach(function (day) {
+                if (!day.items || !day.items.length) return;
+                html.push('<div class="ork-sched-day">');
+                if (days.length > 1 || day.day_label) {
+                    html.push('<div class="ork-sched-day-label">' + esc(day.day_label) + '</div>');
+                }
+                html.push('<ul class="ork-sched-list">');
+                day.items.forEach(function (it) { html.push(renderItem(it, data.category_colors)); });
+                html.push('</ul></div>');
+            });
+        }
+        var moreUrl = data.grid_url || data.schedule_url || data.detail_url;
+        html.push('<a class="ork-sched-more" href="' + esc(moreUrl) + '" target="_blank" rel="noopener">See full schedule →</a>');
+        html.push('</div>');
+        container.innerHTML = html.join('');
+    }
 
-	function load(container) {
-		if (container.getAttribute('data-ork-loaded') === '1') return;
-		container.setAttribute('data-ork-loaded', '1');
+    function renderMessage(container, msg) {
+        container.innerHTML = '<div class="ork-sched"><div class="ork-sched-msg">' + esc(msg) + '</div></div>';
+    }
 
-		var eventId  = container.getAttribute('data-event');
-		var detailId = container.getAttribute('data-detail') || '';
-		if (!eventId) { renderMessage(container, 'Missing data-event id.'); return; }
+    function load(container) {
+        if (container.getAttribute('data-ork-loaded') === '1') return;
+        container.setAttribute('data-ork-loaded', '1');
 
-		renderMessage(container, 'Loading schedule…');
-		var url = apiEndpoint(container) + encodeURIComponent(eventId) + '/' + encodeURIComponent(detailId);
+        var eventId  = container.getAttribute('data-event');
+        var detailId = container.getAttribute('data-detail') || '';
+        if (!eventId) { renderMessage(container, 'Missing data-event id.'); return; }
 
-		fetch(url, { credentials: 'omit' })
-			.then(function (r) { return r.json(); })
-			.then(function (data) {
-				if (!data || !data.ok) {
-					renderMessage(container, (data && data.error) || 'Schedule unavailable.');
-					return;
-				}
-				renderData(container, data);
-			})
-			.catch(function () {
-				container.removeAttribute('data-ork-loaded'); // let a later render() retry
-				renderMessage(container, 'Could not load schedule.');
-			});
-	}
+        renderMessage(container, 'Loading schedule…');
+        var url = apiEndpoint(container) + encodeURIComponent(eventId) + '/' + encodeURIComponent(detailId);
 
-	function render(root) {
-		injectStyles();
-		var scope = root || document;
-		var nodes = scope.querySelectorAll('.ork-schedule');
-		Array.prototype.forEach.call(nodes, load);
-	}
+        fetch(url, { credentials: 'omit' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.ok) {
+                    renderMessage(container, (data && data.error) || 'Schedule unavailable.');
+                    return;
+                }
+                renderData(container, data);
+            })
+            .catch(function () {
+                container.removeAttribute('data-ork-loaded'); // let a later render() retry
+                renderMessage(container, 'Could not load schedule.');
+            });
+    }
 
-	window.OrkSchedule = { render: render };
+    function render(root) {
+        injectStyles();
+        var scope = root || document;
+        var nodes = scope.querySelectorAll('.ork-schedule');
+        Array.prototype.forEach.call(nodes, load);
+    }
 
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', function () { render(); });
-	} else {
-		render();
-	}
+    window.OrkSchedule = { render: render };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { render(); });
+    } else {
+        render();
+    }
 })();
