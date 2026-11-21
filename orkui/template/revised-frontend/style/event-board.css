@@ -439,6 +439,10 @@ html[data-theme="dark"] #theme_container .evb-entry-invalid .evb-entry-input, ht
 .evb-chip-category > i, .evb-chip-secondary > i { color: #fff; opacity: 0.85; }
 /* A guess: the same chip, dimmer, with a dotted edge. */
 .evb-chip-guess { opacity: 0.62; border-style: dotted; border-color: var(--ork-text-muted); }
+/* The quick line's refusal note (Enter on a line with no title). */
+.evb-chip-note { border-color: var(--ork-red-danger); color: var(--ork-red-danger); background: transparent; }
+.evb-chip-note > i { color: var(--ork-red-danger); }
+html[data-theme="dark"] #theme_container .evb-chip-note, html[data-theme="dark"] #theme_container .evb-chip-note > i { color: #fc8181; border-color: #fc8181; }
 .evb-chip-category.evb-chip-guess { border-color: var(--ork-text); }
 .evb-chip .evb-chip-x {
     min-height: 0; margin: 0 -5px 0 1px; padding: 0 3px; border: none; background: none; box-shadow: none;

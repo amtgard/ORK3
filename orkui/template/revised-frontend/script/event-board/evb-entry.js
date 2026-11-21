@@ -581,11 +581,20 @@
             // An '@query' still open is committed as the text it is.
             settleQuery();
             if (!result || !(result.ok || result.setDay)) {
-                // A line with no title cannot be added: say so on the field.
+                // A line with no title cannot be added: say so on the field, in words
+                // as well as the shake (a line of day, time and category chips with
+                // nothing left over looks complete). parse() rebuilds the chips on the
+                // next keystroke, which clears the note.
                 if (input.value.trim()) {
                     el.classList.remove('evb-entry-invalid');
                     void el.offsetWidth; // restart the shake
                     el.classList.add('evb-entry-invalid');
+                    if (!chipsEl.querySelector('.evb-chip-note')) {
+                        chipsEl.insertAdjacentHTML('beforeend',
+                            '<span class="evb-chip evb-chip-note" role="status">' +
+                            '<i class="fas fa-exclamation-circle" aria-hidden="true"></i>' +
+                            '<span class="evb-chip-label">Add a title, then press Enter</span></span>');
+                    }
                 }
                 return;
             }
