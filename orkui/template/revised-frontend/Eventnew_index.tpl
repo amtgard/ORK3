@@ -377,6 +377,10 @@
 .ev-modal-footer .ev-btn-outline { background: var(--ork-card-bg); color: var(--ork-text); border-color: var(--ork-input-border); }
 .ev-img-modal .ev-btn-outline:hover,
 .ev-modal-footer .ev-btn-outline:hover { background: var(--ork-bg-inset); }
+.ev-modal-footer .ev-sched-delete-btn { color: #c53030; border-color: #c53030; margin-right: 8px; }
+.ev-modal-footer .ev-sched-delete-btn:hover { background: rgba(197, 48, 48, .08); }
+html[data-theme="dark"] .ev-modal-footer .ev-sched-delete-btn { color: #fc8181; border-color: #fc8181; }
+html[data-theme="dark"] .ev-modal-footer .ev-sched-delete-btn:hover { background: rgba(252, 129, 129, .12); }
 .ev-img-modal .ev-btn-white { background: #2b6cb0; color: #fff; border: 1px solid #2b6cb0; }
 .ev-img-modal .ev-btn-white:hover { background: #2c5282; border-color: #2c5282; }
 html[data-theme="dark"] .ev-img-modal .ev-btn-outline,
@@ -1274,7 +1278,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 									}
 								}
 							?></td>
-							<td style="white-space:nowrap"><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" data-tip="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" data-tip="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?><?php if (($evCat === 'Feast and Food' || $evSecCat === 'Feast and Food') && !empty($item['Menu'])): ?> <i class="fas fa-scroll" style="color:#e65100;font-size:10px;margin-left:4px;vertical-align:middle" data-tip="Has menu"></i><?php endif; ?></td>
+							<td><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" data-tip="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" data-tip="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?><?php if (($evCat === 'Feast and Food' || $evSecCat === 'Feast and Food') && !empty($item['Menu'])): ?> <i class="fas fa-scroll" style="color:#e65100;font-size:10px;margin-left:4px;vertical-align:middle" data-tip="Has menu"></i><?php endif; ?></td>
 							<td><?= htmlspecialchars($item['Location']) ?></td>
 							<td><?php foreach ($item['Leads'] ?? [] as $li => $lead) { if ($li > 0) echo ', '; echo '<a href="' . UIR . 'Player/profile/' . (int)$lead['MundaneId'] . '">' . htmlspecialchars($lead['Persona']) . '</a>'; } ?></td>
 							<td class="ev-sched-desc"><?= ev_autolink($item['Description']) ?></td>
@@ -2813,6 +2817,9 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 			<div class="ev-modal-error" id="ev-sched-error" style="display:none"></div>
 		</div>
 		<div class="ev-modal-footer">
+			<!-- Shown in edit mode only (evShowScheduleSaveButtons): the same remove as the
+			     List view's trash icon, so the board's popover → Edit path has a way out too. -->
+			<button class="ev-btn ev-btn-outline ev-sched-delete-btn" type="button" id="ev-sched-delete-btn" onclick="evDeleteScheduleFromModal()" style="display:none"><i class="fas fa-trash-alt"></i> Delete</button>
 			<button class="ev-btn ev-btn-outline" type="button" onclick="evCloseScheduleModal()" style="margin-right:auto">Close</button>
 			<input type="hidden" id="ev-sched-mode" value="add">
 			<input type="hidden" id="ev-sched-id" value="">

@@ -3005,7 +3005,9 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.5);
-    z-index: 1200;
+    /* Above every modal (--z-modal 10100): a confirm raised from inside one, e.g.
+       the schedule form's Delete, was opening behind it at the old 1200. */
+    z-index: var(--z-modal-top, 10200);
     align-items: center;
     justify-content: center;
     padding: 20px;

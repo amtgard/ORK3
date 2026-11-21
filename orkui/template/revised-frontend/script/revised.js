@@ -9856,6 +9856,9 @@ $(document).ready(function() {
         window.evShowScheduleSaveButtons = function(mode) {
             var secondaries = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-secondary');
             secondaries.forEach(function(b) { b.style.display = (mode === 'add') ? '' : 'none'; });
+            // Delete exists only for an item that is already saved.
+            var del = gid('ev-sched-delete-btn');
+            if (del) del.style.display = (mode === 'edit') ? '' : 'none';
         };
 
         window.evRemoveStaff = function(btn, staffId) {
@@ -10623,7 +10626,31 @@ $(document).ready(function() {
                 { title: 'Remove item', okLabel: 'Remove', danger: true });
         };
 
-        function evRemoveScheduleNow(btn, scheduleId) {
+        // The edit form's Delete button: the same remove as the list row's trash icon.
+        // Errors show in the form (which stays open); on success the form closes and
+        // the list, the board and the tab count update as they do for the row's icon.
+        window.evDeleteScheduleFromModal = function() {
+            var scheduleId = parseInt(gid('ev-sched-id') ? gid('ev-sched-id').value : '', 10);
+            if (!scheduleId) return;
+            orkConfirm('Remove this schedule item?', function() {
+                var rowBtn = document.querySelector('tr[data-schedule-id="' + scheduleId + '"] .ev-del-link');
+                evRemoveScheduleNow(rowBtn, scheduleId, {
+                    onDone: function() { if (typeof window.evCloseScheduleModal === 'function') window.evCloseScheduleModal(true); },
+                    onError: function(message) {
+                        var errEl = gid('ev-sched-error');
+                        if (!errEl) return;
+                        errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i>' + message;
+                        errEl.style.display = 'block';
+                    }
+                });
+            }, { title: 'Remove item', okLabel: 'Remove', danger: true });
+        };
+
+        // cb (optional): { onDone, onError(message) }; without onError a failure is
+        // written under the row's buttons.
+        function evRemoveScheduleNow(btn, scheduleId, cb) {
+            cb = cb || {};
+            var fail = function(message) { if (cb.onError) cb.onError(message); else evScheduleRowError(btn, message); };
             var old = btn && btn.closest('td') && btn.closest('td').querySelector('.evb-row-error');
             if (old) old.remove();
             var fd = new FormData();
@@ -10674,11 +10701,12 @@ $(document).ready(function() {
                     }
                     // Keep the board in sync with this removal.
                     if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid({ removed: scheduleId });
+                    if (cb.onDone) cb.onDone();
                 } else {
-                    evScheduleRowError(btn, data.error || 'Could not remove schedule item.');
+                    fail(data.error || 'Could not remove schedule item.');
                 }
             })
-            .catch(function(err) { evScheduleRowError(btn, 'Request failed: ' + err.message); });
+            .catch(function(err) { fail('Request failed: ' + err.message); });
         }
         // Initialize schedule filters on page load
         evBuildScheduleFilters();
