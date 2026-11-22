@@ -401,6 +401,14 @@ html[data-theme="dark"] .kn-md-help-btn[data-tip]:hover::after {
 	width: max-content; max-width: 200px;
 }
 
+/* Suspended members: same light-red row treatment as the reports
+   (reports.css .rp-row-suspended), restated here because this page does
+   not load that stylesheet. */
+#un-roster-table tbody tr.un-row-suspended > td { background-color: #fff5f5; color: #742a2a; }
+#un-roster-table tbody tr.un-row-suspended:hover > td { background-color: #fed7d7; }
+html[data-theme="dark"] #un-roster-table tbody tr.un-row-suspended > td { background-color: #3b1515; color: #feb2b2; }
+html[data-theme="dark"] #un-roster-table tbody tr.un-row-suspended:hover > td { background-color: #4a1e1e; }
+
 /* Roster search box: wide enough to show its whole placeholder
    ("Persona, or park (3+ letters)"). DataTables' default is ~10em. */
 #un-roster-table_filter input { width: 17em; max-width: 100%; box-sizing: border-box; }
@@ -716,8 +724,9 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 	$_persona_js  = addslashes($_persona);
 	$_last_signin = $_m['LastSignIn'] ?? '';
 	$_is_active   = !empty($_last_signin) && $_last_signin >= $_cutoff;
+	$_is_susp     = !empty($_m['Suspended']);
 ?>
-				<tr>
+				<tr<?=$_is_susp ? ' class="un-row-suspended" title="This player is currently under suspension"' : ''?>>
 					<td data-persona="<?=htmlspecialchars($_persona, ENT_QUOTES)?>">
 						<a href="<?=UIR?>Player/profile/<?=(int)$_m['MundaneId']?>"
 							style="color:var(--ork-link);text-decoration:none;font-weight:500;">
