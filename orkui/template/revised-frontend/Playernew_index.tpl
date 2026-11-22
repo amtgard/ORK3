@@ -371,7 +371,13 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-ev-park{color:var(--ork-text-muted);font-size:11px;font-weight:500;margin-left:2px}
 .pna-spark-months{display:flex;gap:3px;margin-top:2px}
 .pna-spark-month-lbl{flex:1;font-size:9px;color:var(--ork-text-hint);text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
-@media(max-width:700px){
+/* Profile tab layouts switch on the TAB PANEL's width, not the viewport: a
+   4:3 foldable or small tablet keeps the profile's 300px sidebar beside the
+   tabs, leaving a ~480px panel that a viewport query still split in two
+   (2026-11-22, Galaxy Z Fold inner screen). The panel is the container
+   (the rule right below). */
+.pn-tab-panel{container:pn-tab / inline-size}
+@container pn-tab (max-width:560px){
 .pna-layout{flex-direction:column;align-items:stretch}
 .pna-sidebar{flex:none;width:100%}
 .pna-ev-cols{flex-direction:column}
@@ -578,7 +584,7 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-icons-option-body{flex:1;min-width:0}
 .pn-icons-option-title{font-size:13px;font-weight:600;color:#2d3748;margin-bottom:2px}
 .pn-icons-option-desc{font-size:11px;color:#718096;line-height:1.35}
-@media(max-width:700px){.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}}
+@container pn-tab (max-width:560px){.pn-about-layout{flex-direction:column}.pn-about-main{width:100%}.pn-about-sidebar{flex:none;width:100%}}
 /* ===== Milestones Timeline ===== */
 .pn-timeline-section{margin-top:32px;padding-top:24px;border-top:1px solid var(--ork-divider)}
 .pn-timeline-heading{font-size:18px;font-weight:700;color:#2d3748;margin:0 0 20px;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none;display:flex;align-items:center;gap:8px}
@@ -599,7 +605,7 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-tl-item:nth-child(even) .pn-tl-right{order:1;text-align:right;padding-right:16px;padding-left:0}
 .pn-tl-item:nth-child(even) .pn-tl-node{order:2}
 .pn-tl-empty{text-align:center;padding:24px 16px;color:#a0aec0;font-size:13px}
-@media(max-width:700px){
+@container pn-tab (max-width:560px){
 .pn-timeline::before{left:18px}
 .pn-tl-item{flex-wrap:nowrap}
 .pn-tl-node{position:relative;left:auto;top:auto;transform:none;flex-shrink:0;order:1!important;width:32px;height:32px;font-size:12px}
@@ -609,7 +615,7 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
 .pn-tl-item:nth-child(even) .pn-tl-right{order:2!important;text-align:left!important;padding-left:12px!important;padding-right:0!important}
 .pn-tl-date-mobile{display:block;font-size:11px;color:var(--pn-accent,#4299e1);margin-top:2px;opacity:.8}
 }
-@media(min-width:701px){.pn-tl-date-mobile{display:none}}
+@container pn-tab (min-width:561px){.pn-tl-date-mobile{display:none}}
 /* ===== Milestones Config (Design Modal) ===== */
 .pn-ms-toggle-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .pn-ms-toggle{display:flex;align-items:center;gap:10px;font-size:13px;color:#4a5568}
