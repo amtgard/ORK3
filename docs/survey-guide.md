@@ -219,26 +219,26 @@ managers.
 
 A survey can give everyone who answers it and links their answers to their profile a **bonus
 credit**: one class credit toward their levels, dated the day they answered. It is not attendance.
-It counts for class levels only — not toward park or Kingdom attendance, not toward voting
+It counts for class levels only — not toward park or kingdom attendance, not toward voting
 eligibility — and it never creates an event.
 
 **Who can turn it on.** The survey's own officers, and officers of any kingdom or park the survey
 reaches — for an Amtgard-wide survey, any kingdom in its audience (a park may follow once its
-Kingdom has); for a kingdom survey, the kingdom, its principalities, or any park in them; for a park
+kingdom has); for a kingdom survey, the kingdom, its principalities, or any park in them; for a park
 survey, that park only. Each org switches its own credit on from the **Credits** action on the
 survey list, or the survey's own officers from the **Bonus credit** card in the builder.
 
 **The category.** The first time any org switches credit on, the ORK creates a bonus-credit
 category for the survey, named **Survey Bonus – {survey title}**, worth 1 credit per player. A
-kingdom or park survey's category belongs to the owning Kingdom; an Amtgard-wide survey's is
-Amtgard-wide, and a Kingdom switching credit on adopts it. The category appears under **Bonus
+kingdom or park survey's category belongs to the owning kingdom; an Amtgard-wide survey's is
+Amtgard-wide, and a kingdom switching credit on adopts it. The category appears under **Bonus
 Credits** on the Kingdom page like any other, grouped with other survey credits, so officers can
 also grant or remove it by hand. It follows the survey's title if that changes, and is archived
 when the survey is archived.
 
 **Who is covered.** A park's switch covers its own members. A kingdom's switch covers the kingdom
 and its principalities. The survey owner's switch covers everyone who answered, visitors included —
-a visitor's own Kingdom decides whether another Kingdom's credit may reach them (**Bonus Credits →
+a visitor's own kingdom decides whether another kingdom's credit may reach them (**Bonus Credits →
 Settings**, on by default).
 
 **Only Any ORK Data earns a credit.** A respondent who chooses My Kingdom and How Long I've Been

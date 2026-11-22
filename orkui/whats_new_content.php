@@ -8,19 +8,31 @@
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
 if (!defined('WHATS_NEW_VERSION')) {
-    define('WHATS_NEW_VERSION', '2026-11-04');
+    define('WHATS_NEW_VERSION', '2026-11-22');
 }
 
 // Application version — shown in the site footer. Change this if you change the above date.
 if (!defined('ORK_VERSION')) {
-    define('ORK_VERSION', '3.5.6 Survey');
+    define('ORK_VERSION', '3.5.7 Garber');
 }
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
-    ['version' => '3.5.6 Survey', 'date' => '2026-11-04', 'items' => [
-        ['icon' => 'fas fa-square-poll-vertical', 'title' => 'Surveys', 'body' => 'Kingdoms and parks can now build their own mobile-friendly surveys, right down to a welcome screen, branching pages, and a results dashboard with filters and CSV export. A pairwise question type ranks a long list two options at a time, with a progress bar that tells respondents when they\'ve done enough. Every survey ends with a data gate letting the respondent choose how much of their identity is attached to their answers, and reporting always respects that choice. Kingdoms and parks see surveys from every level, and a survey\'s owner can share its results with them for their own players, either as responses come in or 24 hours after the survey ends. Reward respondents with a bonus credit toward their class levels, which counts for levels only and can be switched off later.'],
+    ['version' => '3.5.7 Garber', 'date' => '2026-11-22', 'items' => [
+        ['icon' => 'fas fa-square-poll-vertical', 'title' => 'Surveys Come to the ORK', 'body' => 'Amtgard, a kingdom or a park can now ask its players a question and hear back. Build a phone-friendly survey in the ORK, open it, and eligible players answer it from My Amtgard. Every survey ends with the respondent choosing how much of their identity travels with their answers.'],
+        ['icon' => 'fas fa-award', 'title' => 'Bonus Credit for Answering', 'body' => 'A kingdom or park can reward everyone who completes a survey and links it to their profile with bonus credit(s) toward class levels.'],
+        ['icon' => 'fas fa-bullhorn', 'title' => 'Finding Your Surveys', 'body' => 'Open surveys appear in a banner at the top of the site, on My Amtgard, and on your kingdom and park pages. Officers also get a share link that unfurls as a proper card when posted in Discord or Facebook.'],
+
+        // ----- Items flagged notes_only appear on the Release Notes page but NOT in the
+        // What's New modal. Order here is the order both surfaces render in. -----
+        ['icon' => 'fas fa-globe-americas', 'title' => 'Three Scopes, One Tool', 'notes_only' => true, 'body' => 'An ORK admin can run an Amtgard-wide survey, for every kingdom or just the ones they tick. A kingdom survey reaches the kingdom and its principalities; a park survey reaches the park\'s own members. Within that scope you can narrow the audience to players who attended a particular event (visitors included, which suits Coronation or event feedback), who have signed in recently, who have played for a minimum number of months, or who are not retired. Opening and closing dates do the rest.'],
+        ['icon' => 'fas fa-pen-ruler', 'title' => 'A Builder That Saves as You Go', 'notes_only' => true, 'body' => 'Twelve question types plus sections and images, arranged across pages with skip logic, shuffling and answer limits, between a welcome screen and a thank-you screen. Everything saves itself. Once a survey has opened its structure locks so every answer is comparable, while wording, audience, schedule and promotion stay editable. Clone a survey to run it again or somewhere else.'],
+        ['icon' => 'fas fa-balance-scale', 'title' => 'Ranking a Long List, Two at a Time', 'notes_only' => true, 'body' => 'The pairwise question shows respondents two options at a time and builds a ranking from their picks. A progress bar tells them when they have done enough, so a list of thirty candidates does not need thirty decisions from everyone.'],
+        ['icon' => 'fas fa-user-shield', 'title' => 'Respondents Choose What You See', 'notes_only' => true, 'body' => 'The last screen of every survey is a data gate. A respondent decides whether their answers are linked to their ORK profile, kept to their kingdom without a name, or fully anonymous, and reporting honours that choice everywhere. Groups of fewer than five respondents are never broken out, so nobody can be picked out of a small park.'],
+        ['icon' => 'fas fa-chart-column', 'title' => 'Results, Filters and Sharing', 'notes_only' => true, 'body' => 'Each question gets a chart shaped to its type, with filters, cross-tabs by another question, a responses table for linked answers and CSV export. An Amtgard-wide survey can share results with each kingdom, and a kingdom survey with each park, either as responses arrive or 24 hours after the survey closes. A shared view shows charts and counts only, never names or the responses table.'],
+        ['icon' => 'fas fa-award', 'title' => 'How Bonus Credit Works', 'notes_only' => true, 'body' => 'Credit is switched on by a kingdom or park, not by the survey\'s author. For an Amtgard-wide survey a kingdom adopts it for its players and a park can follow; for a kingdom or park survey the org itself turns it on. The credit is granted the moment a respondent submits with their profile linked, lands in a Survey Bonus category on their profile, counts toward class levels only, and can be switched off later without clawing anything back.'],
+        ['icon' => 'fas fa-bullhorn', 'title' => 'Discovery, in Detail', 'notes_only' => true, 'body' => 'New surveys promote themselves with a dismissible site banner, on by default and switched off under Promotion in the builder. An Available Surveys card lists every open survey a player can answer on My Amtgard, and the same card appears on kingdom and park pages for that org\'s surveys. A share link opened while logged out shows the survey\'s title, who it is for, the credit and the closing date, with a login button, and the same details form the card Discord and Facebook show when the link is posted. A player outside the survey\'s scope is told who it is for instead of seeing a dead end.'],
     ]],
     ['version' => '3.5.6 Crown', 'date' => '2026-10-09', 'items' => [
         ['icon' => 'fas fa-gavel', 'title' => 'Plan Your Court in the ORK', 'body' => 'Monarchs, Regents, Prime Ministers and kingdom or park editors can now plan a court before it is held. Open Court Planner under Admin Tasks on your kingdom or park page, pull awards from pending recommendations or add them by hand, and drag them into running order.'],
