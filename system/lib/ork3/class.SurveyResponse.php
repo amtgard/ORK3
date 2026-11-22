@@ -1734,6 +1734,8 @@ class SurveyResponse
             'slug'        => (string) $survey['slug'],
             'title'       => (string) $survey['title'],
             'description' => (string) ($survey['description'] ?? ''),
+            'scope_type'  => (string) $survey['scope_type'],
+            'scope_id'    => (int) $survey['scope_id'],
             'scope_label' => $scopeLabel ?? $this->scopeLabel((string) $survey['scope_type'], (int) $survey['scope_id']),
             'close_at'    => $survey['close_at'] ?: null,
             'in_progress' => !empty($survey['allow_resume']) && ($hasDraft ?? $this->hasDraft((int) $survey['survey_id'], $uid)),

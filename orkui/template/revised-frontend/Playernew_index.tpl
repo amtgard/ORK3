@@ -1640,26 +1640,10 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 					<!-- Sidebar -->
 					<div class="pna-sidebar">
 
-						<div id="pna-surveys-body"><?php if ($isOwnProfile && !empty($SurveyAvailable)): /* rendered server-side from the page shell's memoised survey entry: no fetch, no layout shift */ ?>
-							<div class="pna-card"><div class="pna-card-title"><i class="fas fa-poll"></i> Available Surveys</div>
-							<?php foreach ($SurveyAvailable as $_sv):
-								$_svScope = htmlspecialchars((string) ($_sv['scope_label'] ?? ''));
-								$_svCloseTs = !empty($_sv['close_at']) ? strtotime((string) $_sv['close_at']) : false;
-								$_svClose = $_svCloseTs ? 'closes ' . date('M j', $_svCloseTs) : '';
-								$_svCta = !empty($_sv['in_progress']) ? 'Continue' : 'Take survey';
-							?>
-								<div class="pna-feed-row pna-survey-row">
-									<span class="pna-feed-label"><?= htmlspecialchars((string) $_sv['title']) ?></span>
-									<?php if (!empty($_sv['credit_available'])): ?><span class="pna-survey-credit"><i class="fas fa-award" aria-hidden="true"></i> Earns a bonus credit</span><?php endif; ?>
-									<span class="pna-survey-meta">
-										<?php if ($_svScope !== ''): ?><span class="pna-feed-sub pna-survey-scope"><?= $_svScope ?></span><?php endif; ?>
-										<?php if ($_svClose !== ''): ?><span class="pna-feed-sub pna-survey-close"><?= $_svScope !== '' ? '&middot; ' : '' ?><?= $_svClose ?></span><?php endif; ?>
-										<a class="pna-survey-cta" aria-label="<?= htmlspecialchars($_svCta . ': ' . (string) $_sv['title']) ?>" href="<?= UIR ?>Survey/take/<?= (int) $_sv['survey_id'] ?>"><?= $_svCta ?></a>
-									</span>
-								</div>
-							<?php endforeach; ?>
-							</div>
-						<?php endif; ?></div>
+						<div id="pna-surveys-body"><?php if ($isOwnProfile && !empty($SurveyAvailable)): /* shared card, see _survey_available_card.tpl */
+							$_svcRows = $SurveyAvailable; $_svcWrap = 'pna-card'; $_svcHead = 'pna';
+							include __DIR__ . '/_survey_available_card.tpl';
+						endif; ?></div>
 
 						<!-- Tenure -->
 						<?php $_maFirstDate = (!empty($Player['PlayerSinceDate']) && $Player['PlayerSinceDate'] !== '0000-00-00' && $Player['PlayerSinceDate'] !== '1970-01-01') ? $Player['PlayerSinceDate'] : null; ?>
