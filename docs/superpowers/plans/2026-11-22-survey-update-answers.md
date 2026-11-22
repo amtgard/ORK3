@@ -4,7 +4,7 @@
 
 **Goal:** Let respondents reopen and change a submitted response while an `allow_edit` survey is open, and give very large pairwise sets lower encouragement thresholds.
 
-**Architecture:** A per-survey `allow_edit` flag. At submit (when on) the response row stores an HMAC of (survey, player) as `edit_key`, a random `edit_uuid`, and the submitted answers JSON as `edit_answers_json`; all three are wiped at close. The runner loads those answers in "edit" mode and resubmits, which replaces the response's answers in place. Pairwise bands move to tenths-of-a-percent integers so 0.5% and 0.1% are exact.
+**Architecture:** A per-survey `allow_edit` flag. At submit (when on) the response row stores an HMAC of (survey, player) as `edit_key`, a random `edit_uuid`, and the submitted answers JSON as `edit_answers_json`; all three are wiped at close. The runner loads those answers in "edit" mode and resubmits, which replaces the response's answers in place. Pairwise bands move to hundredths-of-a-percent integers so 0.5% and 0.25% are exact.
 
 **Tech Stack:** PHP 8 / MariaDB (raw SQL in `system/lib/ork3`), vanilla JS runner/builder in `orkui/template/default/script/`, PHPUnit (`tests/Unit`, `tests/Integration`), node harnesses under `tests/Unit/js/`.
 
@@ -41,19 +41,19 @@
 - Test: `tests/Unit/SurveyTypesTest.php`, `tests/Unit/SurveyPairwisePlanScriptTest.php` (+ harness `tests/Unit/js/survey-pairwise-harness.js` if its range needs widening)
 
 **Interfaces:**
-- Produces: `PAIRWISE_BANDS` entries are `[upperBound|null, [t1,t2,t3,t4]]` in TENTHS of a percent. `pairwisePlan()` keeps its keys; `band_pcts` stays in percent (int when whole, float like `0.5` otherwise — `t/10`), tiers = `intdiv(t * possible + 999, 1000)`.
+- Produces: `PAIRWISE_BANDS` entries are `[upperBound|null, [t1,t2,t3,t4]]` in HUNDREDTHS of a percent. `pairwisePlan()` keeps its keys; `band_pcts` stays in percent (int when whole, float like `0.5` otherwise — `t/100`), tiers = `intdiv(t * possible + 9999, 10000)`.
 
-Bands (tenths of a percent):
+Bands (hundredths of a percent):
 ```
-[105,   [300, 400, 500, 600]],
-[200,   [200, 300, 400, 500]],
-[300,   [100, 200, 300, 400]],
-[500,   [100, 150, 200, 250]],
-[1000,  [50, 100, 150, 200]],
-[2000,  [20, 40, 60, 80]],
-[5000,  [10, 20, 30, 40]],
-[10000, [5, 10, 15, 20]],
-[null,  [1, 2, 3, 4]],
+[105,   [3000, 4000, 5000, 6000]],
+[200,   [2000, 3000, 4000, 5000]],
+[300,   [1000, 2000, 3000, 4000]],
+[500,   [1000, 1500, 2000, 2500]],
+[1000,  [500, 1000, 1500, 2000]],
+[2000,  [200, 400, 600, 800]],
+[5000,  [100, 200, 300, 400]],
+[10000, [50, 100, 150, 200]],
+[null,  [25, 50, 75, 100]],
 ```
 
 - [ ] **Step 1: Failing tests** in `SurveyTypesTest`: `testPairwiseBandsForLargeSets` asserting, by option count → possible:
@@ -62,12 +62,12 @@ Bands (tenths of a percent):
   - n=46 (1035): `band_pcts [2,4,6,8]`, gate 21
   - n=64 (2016): `band_pcts [1,2,3,4]`, gate 21
   - n=101 (5050): `band_pcts [0.5,1,1.5,2]`, gate 26
-  - n=142 (10011): `band_pcts [0.1,0.2,0.3,0.4]`, gate 11
+  - n=142 (10011): `band_pcts [0.25,0.5,0.75,1]`, gate 26
   - existing small-band expectations unchanged.
   Extend the JS/PHP parity test to also compare n ∈ {32,33,45,46,63,64,100,101,141,142,150}.
 - [ ] **Step 2:** Run `vendor/bin/phpunit tests/Unit/SurveyTypesTest.php tests/Unit/SurveyPairwisePlanScriptTest.php` — expect FAIL.
-- [ ] **Step 3:** Implement in PHP and the JS mirror. JS: `band_pcts` = `t/10` (JS numbers make `5` and `0.5` naturally); PHP: `$t % 10 === 0 ? intdiv($t, 10) : $t / 10`. Note JSON parity: PHP float `2.0` must not appear — whole values are ints.
-- [ ] **Step 4:** Helper modal: percent cells and the sentence render `0.5%`, `1.5%`, `0.1%` (no `0.50`); the "here" row highlighting works for the new rows; row labels use `toLocaleString()` for 1,001–2,000 etc. Update the guide table to the nine rows above (in percent).
+- [ ] **Step 3:** Implement in PHP and the JS mirror. JS: `band_pcts` = `t/100` (JS numbers make `5` and `0.5` naturally); PHP: `$t % 100 === 0 ? intdiv($t, 100) : $t / 100`. Note JSON parity: PHP float `2.0` must not appear — whole values are ints.
+- [ ] **Step 4:** Helper modal: percent cells and the sentence render `0.5%`, `1.5%`, `0.25%` (no `0.50`); the "here" row highlighting works for the new rows; row labels use `toLocaleString()` for 1,001–2,000 etc. Update the guide table to the nine rows above (in percent).
 - [ ] **Step 5:** Tests pass. Commit `Survey pairwise: lower encouragement bands for very large sets`.
 
 ---

@@ -1994,7 +1994,7 @@
             var here = n >= 3 && !plan.small && plan.possible >= lo && (hi === null || plan.possible <= hi);
             rows += '<tr' + (here ? ' class="svb-pw-here"' : '') + '><th scope="row">' +
                     (hi === null ? lo.toLocaleString() + ' or more' : lo.toLocaleString() + '–' + hi.toLocaleString()) + '</th>' +
-                    bands[i][1].map(function (t) { return '<td>' + (t / 10) + '%</td>'; }).join('') + '</tr>';
+                    bands[i][1].map(function (t) { return '<td>' + (t / 100) + '%</td>'; }).join('') + '</tr>';
             lo = (hi || 0) + 1;
         }
 

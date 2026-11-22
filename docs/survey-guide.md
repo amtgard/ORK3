@@ -99,7 +99,7 @@ your question's own numbers.
 | 1,001–2,000 | 2% | 4% | 6% | 8% |
 | 2,001–5,000 | 1% | 2% | 3% | 4% |
 | 5,001–10,000 | 0.5% | 1% | 1.5% | 2% |
-| 10,001 or more | 0.1% | 0.2% | 0.3% | 0.4% |
+| 10,001 or more | 0.25% | 0.5% | 0.75% | 1% |
 
 - **Required or optional.** A required pairwise question won't let the player move on until they reach
   "Can continue". An optional one can be skipped, and whatever matchups the player did still count.

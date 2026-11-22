@@ -58,8 +58,8 @@ text says this.
 ## Part 2: Pairwise bands for very large sets
 
 Extend `SurveyTypes::PAIRWISE_BANDS` (and its JS mirror `PW_BANDS`, pinned by
-`SurveyPairwisePlanScriptTest`). Percentages move to tenths of a percent so 0.5 and
-0.1 are exact; tier counts stay integer ceilings.
+`SurveyPairwisePlanScriptTest`). Percentages move to hundredths of a percent so 0.5 and
+0.25 are exact; tier counts stay integer ceilings.
 
 | Matchups | Tiers (%) |
 |---|---|
@@ -71,7 +71,7 @@ Extend `SurveyTypes::PAIRWISE_BANDS` (and its JS mirror `PW_BANDS`, pinned by
 | ≤ 2000 | 2, 4, 6, 8 |
 | ≤ 5000 | 1, 2, 3, 4 |
 | ≤ 10000 | 0.5, 1, 1.5, 2 |
-| > 10000 | 0.1, 0.2, 0.3, 0.4 |
+| > 10000 | 0.25, 0.5, 0.75, 1 |
 
 "Over 500" means more than 500 matchups. Plans are computed at read time from option
 count, so a live survey picks up the new bands on deploy. Gates only go down, so no

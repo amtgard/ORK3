@@ -298,18 +298,18 @@
     /* Pairwise (pairwise spec §2): mirrors SurveyTypes::PAIRWISE_SMALL_MAX and
        PAIRWISE_BANDS the way OTHER_MAX mirrors OTHER_MAX_LENGTH.
        SurveyPairwisePlanScriptTest pins this copy to the PHP. */
-    // Band values are TENTHS of a percent; band_pcts in the plan are percent (t / 10).
+    // Band values are HUNDREDTHS of a percent; band_pcts in the plan are percent (t / 100).
     var PW_SMALL_MAX = 30;
     var PW_BANDS = [
-        [105,   [300, 400, 500, 600]],
-        [200,   [200, 300, 400, 500]],
-        [300,   [100, 200, 300, 400]],
-        [500,   [100, 150, 200, 250]],
-        [1000,  [50, 100, 150, 200]],
-        [2000,  [20, 40, 60, 80]],
-        [5000,  [10, 20, 30, 40]],
-        [10000, [5, 10, 15, 20]],
-        [null,  [1, 2, 3, 4]]
+        [105,   [3000, 4000, 5000, 6000]],
+        [200,   [2000, 3000, 4000, 5000]],
+        [300,   [1000, 2000, 3000, 4000]],
+        [500,   [1000, 1500, 2000, 2500]],
+        [1000,  [500, 1000, 1500, 2000]],
+        [2000,  [200, 400, 600, 800]],
+        [5000,  [100, 200, 300, 400]],
+        [10000, [50, 100, 150, 200]],
+        [null,  [25, 50, 75, 100]]
     ];
     var PW_TIER_MESSAGES = [
         'This is a great start. You can move on, but you can make our survey better by doing a few more matchups!',
@@ -485,20 +485,20 @@
 
     // ---------------------------------------------------------- pairwise core
 
-    /** SurveyTypes::pairwisePlan(), key for key (integer ceilings, never floats). */
+    /** SurveyTypes::pairwisePlan(), key for key (tiers are integer ceilings; band_pcts may be fractional). */
     function pairwisePlan(optionCount) {
         var n = Math.max(0, parseInt(optionCount, 10) || 0);
         var possible = n < 2 ? 0 : n * (n - 1) / 2;
-        var pcts = [], tiers = [], tenths = [], i;
+        var pcts = [], tiers = [], hundredths = [], i;
         if (possible <= PW_SMALL_MAX) {
             return { possible: possible, small: true, band_pcts: [], tiers: [], gate: possible };
         }
         for (i = 0; i < PW_BANDS.length; i++) {
-            if (PW_BANDS[i][0] === null || possible <= PW_BANDS[i][0]) { tenths = PW_BANDS[i][1]; break; }
+            if (PW_BANDS[i][0] === null || possible <= PW_BANDS[i][0]) { hundredths = PW_BANDS[i][1]; break; }
         }
-        for (i = 0; i < tenths.length; i++) {
-            pcts.push(tenths[i] / 10);
-            tiers.push(Math.floor((tenths[i] * possible + 999) / 1000));
+        for (i = 0; i < hundredths.length; i++) {
+            pcts.push(hundredths[i] / 100);
+            tiers.push(Math.floor((hundredths[i] * possible + 9999) / 10000));
         }
         return { possible: possible, small: false, band_pcts: pcts, tiers: tiers, gate: tiers[0] };
     }
