@@ -2309,7 +2309,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 							<th data-sorttype="text">Given At</th>
 							<th data-sorttype="text">Note</th>
 							<th data-sorttype="text">Entered By</th>
-							<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
+							<th class="pn-nosort" style="width:52px;min-width:52px" aria-label="Actions"></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -2327,8 +2327,8 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<td><?php if (valid_id($detail['EventId'])) echo $detail['EventName']; elseif (trimlen($detail['ParkName']) > 0) echo $detail['ParkName'] . (trimlen($detail['KingdomName']) > 0 ? ', ' . $detail['KingdomName'] : ''); else echo $detail['KingdomName']; ?></td>
 								<td><?= $detail['Note'] ?></td>
 								<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
-								<?php if ($canManageAwards): ?>
 								<td class="pn-award-actions-cell">
+									<?php if ($canManageAwards): ?>
 									<?php $awardData = json_encode([
 										'AwardsId'      => (int)$detail['AwardsId'],
 										'displayName'   => ($detail['CustomAwardName'] !== '' ? $detail['CustomAwardName'] : $detail['KingdomAwardName']),
@@ -2389,8 +2389,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 									   target="_blank" rel="noopener"
 									   data-tip="Print certificate"><i class="fas fa-print"></i></a>
 									<?php endif; ?>
+									<?php endif; ?>
+									<button type="button" class="pn-award-action-btn pn-award-info-btn"
+									        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
+									        data-award-name="<?= htmlspecialchars($displayName, ENT_QUOTES) ?>"
+									        aria-label="Award details" data-tip="Award details"><i class="fas fa-info-circle"></i></button>
 								</td>
-								<?php endif; ?>
 							</tr>
 						<?php endforeach; ?>
 					</tbody>
@@ -2457,7 +2461,7 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 								<th data-sorttype="text">Given At</th>
 								<th data-sorttype="text">Note</th>
 								<th data-sorttype="text">Entered By</th>
-								<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
+								<th class="pn-nosort" style="width:52px;min-width:52px" aria-label="Actions"></th>
 							</tr>
 						</thead>
 						<tbody>
@@ -2502,8 +2506,8 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 									</td>
 									<td><?= $detail['Note'] ?></td>
 									<td><a href="<?= UIR ?>Player/profile/<?= $detail['EnteredById'] ?>"><?= $detail['EnteredBy'] ?></a></td>
-									<?php if ($canManageAwards): ?>
 									<td class="pn-award-actions-cell">
+										<?php if ($canManageAwards): ?>
 										<?php $titleData = json_encode([
 											'AwardsId'       => (int)$detail['AwardsId'],
 											'displayName'    => ($detail['CustomAwardName'] !== '' ? $detail['CustomAwardName'] : $detail['KingdomAwardName']),
@@ -2559,8 +2563,12 @@ html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 										   target="_blank" rel="noopener"
 										   data-tip="Print certificate"><i class="fas fa-print"></i></a>
 										<?php endif; ?>
+										<?php endif; ?>
+										<button type="button" class="pn-award-action-btn pn-award-info-btn"
+										        data-awards-id="<?= (int)$detail['AwardsId'] ?>"
+										        data-award-name="<?= htmlspecialchars($displayName, ENT_QUOTES) ?>"
+										        aria-label="Title details" data-tip="Title details"><i class="fas fa-info-circle"></i></button>
 									</td>
-									<?php endif; ?>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>
@@ -3147,6 +3155,23 @@ html[data-theme="dark"] #pn-qual-overlay input[type="date"] { accent-color: #63b
 	</div>
 </div>
 <?php endif; ?>
+
+<!-- =============================================
+     Award Info Modal — the (i) button at the end of every Awards/Titles row.
+     Every viewer; filled lazily from PlayerAjax/award_info (revised.js).
+     ============================================= -->
+<div class="pn-overlay" id="pn-award-info-overlay" role="dialog" aria-modal="true" aria-labelledby="pn-award-info-title" aria-hidden="true">
+	<div class="pn-modal-box pn-ai-box">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title" id="pn-award-info-title"><i class="fas fa-info-circle pn-modal-title-icon"></i><span id="pn-award-info-name">Award Details</span></h3>
+			<button type="button" class="pn-modal-close-btn" id="pn-award-info-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body pn-ai-body" id="pn-award-info-body"></div>
+		<div class="pn-modal-footer">
+			<button type="button" class="pn-btn pn-btn-secondary" id="pn-award-info-done">Close</button>
+		</div>
+	</div>
+</div>
 
 <!-- =============================================
      Add Award / Add Title Modal

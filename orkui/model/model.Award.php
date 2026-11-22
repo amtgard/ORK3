@@ -117,4 +117,14 @@ class Model_Award extends Model
 
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cacheKey, $result);
     }
+
+    /**
+     * The (i) award-info modal on the player profile: granted recommendations and
+     * the court line behind one award, filtered for $viewer (0 = anonymous) by
+     * AwardProvenance itself. Null when the award is missing or revoked.
+     */
+    public function award_provenance($awards_id, $viewer)
+    {
+        return Ork3::$Lib->awardprovenance->award_provenance((int)$awards_id, (int)$viewer);
+    }
 }

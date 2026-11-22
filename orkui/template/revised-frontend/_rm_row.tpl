@@ -16,6 +16,9 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl';
         // A cluster is dismissed only when every member recommendation is; live
         // clusters never carry this even with the Show-dismissed filter on.
         $dismissed = !empty($group['IsDismissed']) ? 1 : 0;
+        // A closed cluster is either granted (the award was given) or dismissed.
+        // Granted rows are history, not a mistake to undo: no Restore, no selection.
+        $granted   = $dismissed && !empty($group['IsGranted']) ? 1 : 0;
         $pid     = (int)$group['ParkId'];
         $abbrev  = $Parks[$pid]['Abbrev'] ?? '';
         $memberIds = $group['MemberRecIds'];
@@ -69,14 +72,14 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl';
         $rowParts    = array_filter([trim((string)($group['Persona'] ?? '')), trim((string)($group['AwardName'] ?? ''))], 'strlen');
         $rowLabelEsc = htmlspecialchars(implode(' — ', $rowParts), ENT_QUOTES);
     ?>
-      <tr class="rm-row" data-rec-cluster="<?= (int)$group['MundaneId'] ?>:<?= (int)$group['KingdomAwardId'] ?>:<?= (int)$group['Rank'] ?>" data-snoozed="<?= $snoozed ?>" data-dismissed="<?= $dismissed ?>"
+      <tr class="rm-row" data-rec-cluster="<?= (int)$group['MundaneId'] ?>:<?= (int)$group['KingdomAwardId'] ?>:<?= (int)$group['Rank'] ?>" data-snoozed="<?= $snoozed ?>" data-dismissed="<?= $dismissed ?>" data-granted="<?= $granted ?>"
           data-passlocal="<?= !empty($group['PassedToLocal']) ? 1 : 0 ?>"
           data-monarchy="<?= (int)($group['MonarchyOnlyLevel'] ?? 0) ?>" data-monarchyall="<?= !empty($group['MonarchyOnlyAll']) ? 1 : 0 ?>"
           data-courts='<?= $courtJson ?>'
           data-rec='<?= $gpayload ?>'
           data-members='<?= $membersJson ?>'
           data-membersfull='<?= $membersFullJson ?>'>
-        <td class="rm-col-sel"><label><input type="checkbox" class="rm-rowsel" aria-label="Select <?= $rowLabelEsc ?>"></label></td>
+        <td class="rm-col-sel"><?php if ($granted) { ?><label data-tip="Granted &mdash; nothing to act on"><input type="checkbox" class="rm-rowsel" disabled aria-label="<?= $rowLabelEsc ?> was granted"></label><?php } else { ?><label><input type="checkbox" class="rm-rowsel" aria-label="Select <?= $rowLabelEsc ?>"></label><?php } ?></td>
         <td class="rm-col-recip">
           <a href="<?= UIR ?>Player/profile/<?= $gMid ?>"><?= htmlspecialchars($group['Persona'] ?? '') ?></a>
         </td>
@@ -100,13 +103,15 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl';
           <?php if (!empty($group['IsRetired'])) { ?><span class="rm-badge rm-badge-retired" data-tip="This recipient is retired or deceased in the ORK. Memorial honors are legitimate &mdash; just confirm before granting or staging this on a live court.">retired</span><?php } ?>
           <?php if ($dismissed) {
               // Keep the badge the size of its siblings and put the provenance in the
-              // tooltip — who retired it and when is detail, not a label.
+              // tooltip — who closed it and when is detail, not a label.
               $dBy  = trim((string)($group['DismissedByPersona'] ?? ''));
               $dAt  = rmNiceDate($group['DismissedAt'] ?? '');
               $dWho = $dBy !== '' ? ' by ' . $dBy : '';
               $dWhen = $dAt !== '' ? ' on ' . $dAt : '';
-              $dTip = 'Dismissed' . $dWho . $dWhen . '. Dismissed recommendations are kept, not deleted — Restore returns this to the pending list.';
-          ?><span class="rm-badge rm-badge-dismissed" data-tip="<?= htmlspecialchars($dTip) ?>">dismissed</span><?php } ?>
+              $dTip = $granted
+                  ? 'Granted' . $dWho . $dWhen . '. The award was given, so this recommendation is closed. To undo a grant, revoke or delete the award on the player\'s profile.'
+                  : 'Dismissed' . $dWho . $dWhen . '. Dismissed recommendations are kept, not deleted — Restore returns this to the pending list.';
+          ?><span class="rm-badge <?= $granted ? 'rm-badge-granted' : 'rm-badge-dismissed' ?>" data-tip="<?= htmlspecialchars($dTip) ?>"><?= $granted ? 'granted' : 'dismissed' ?></span><?php } ?>
         </td>
         <td class="rm-col-rank">
           <?php if ($isLad) { ?><span class="ladder-rank" data-lvl="<?= min($gRank, 10) ?>"><?= $gRank ?></span><?php } else { ?><span class="rm-rank rm-nonladder">non-ladder</span><?php } ?>
@@ -135,7 +140,9 @@ include_once __DIR__ . '/_monarchy_only_badge.tpl';
           <?php } else { ?><span class="rm-empty">&mdash;</span><?php } ?>
         </td>
         <td class="rm-col-act">
-          <?php if ($dismissed) { ?>
+          <?php if ($granted) { ?>
+          <span class="rm-empty" data-tip="Granted recommendations cannot be restored. To undo a grant, revoke or delete the award on the player's profile.">&mdash;</span>
+          <?php } elseif ($dismissed) { ?>
           <button type="button" class="rm-act rm-act-undelete" data-tip="Restore &mdash; return this recommendation to the pending list" aria-label="Restore recommendation"><i class="fas fa-undo"></i></button>
           <?php } else { ?>
           <button type="button" class="rm-act rm-act-grant"  data-tip="Grant now" aria-label="Grant this award now">&#9889;</button>

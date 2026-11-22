@@ -178,7 +178,37 @@ class Controller_PlayerAjax extends Controller
                 $awards_id = (int)($r['AwardsId'] ?? 0);
                 $this->load_model('Scrollery');
                 $printable = $awards_id > 0 && $this->Scrollery->award_is_printable($awards_id, (int)$this->session->user_id);
-                echo json_encode(['status' => 0, 'awardsId' => $awards_id, 'printable' => $printable]);
+                $out = ['status' => 0, 'awardsId' => $awards_id, 'printable' => $printable];
+                // Opened from a recommendation ("Give from rec"): the award is recorded,
+                // so close that rec as GRANTED through the same token-authorized path
+                // the Kingdom/Park "Give from rec" uses. Only a rec about THIS player;
+                // a failure here never undoes the award — it is reported for the modal.
+                $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+                if ($rec_id > 0) {
+                    $recError = '';
+                    try {
+                        if ($this->Player->recommendation_recipient($rec_id) !== $player_id) {
+                            $recError = 'not about this player';
+                        } else {
+                            $dr = $this->Player->delete_player_recommendation([
+                                'Token'             => $this->session->token,
+                                'RecommendationsId' => $rec_id,
+                                'Granted'           => 1,
+                            ]);
+                            if ((int)($dr['Status'] ?? 1) !== 0) {
+                                $recError = rtrim(($dr['Error'] ?? 'Error') . ': ' . ($dr['Detail'] ?? ''), ': ');
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        error_log('PlayerAjax::addaward rec close failed (rec ' . $rec_id . '): ' . $e->getMessage());
+                        $recError = 'server error';
+                    }
+                    $out['recClosed'] = $recError === '';
+                    if ($recError !== '') {
+                        $out['recError'] = 'The award was recorded, but its recommendation could not be closed (' . $recError . '). Close it from the Recommendations tab.';
+                    }
+                }
+                echo json_encode($out);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
@@ -796,6 +826,29 @@ class Controller_PlayerAjax extends Controller
         $this->load_model('Player');
         $notes = $this->Player->get_notes($mundane_id);
         echo json_encode(['status' => 0, 'notes' => is_array($notes) ? $notes : []]);
+        exit;
+    }
+
+    // GET PlayerAjax/award_info/{awards_id} — the profile's (i) award-info modal.
+    // Open to every viewer, anonymous included: AwardProvenance filters for the
+    // session user (recs need a login and the profile's own recs gate; court data
+    // mirrors the login-free court report). The viewer is never taken from input.
+    public function award_info($p = null)
+    {
+        header('Content-Type: application/json');
+        $awards_id = (int)preg_replace('/[^0-9]/', '', (string)($p ?? ''));
+        if (!valid_id($awards_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid award']);
+            exit;
+        }
+        $viewer = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $this->load_model('Award');
+        $info = $this->Award->award_provenance($awards_id, $viewer);
+        if ($info === null) {
+            echo json_encode(['status' => 1, 'error' => 'Award not found']);
+            exit;
+        }
+        echo json_encode(['status' => 0, 'info' => $info]);
         exit;
     }
 

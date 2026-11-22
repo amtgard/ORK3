@@ -162,6 +162,10 @@ class Controller_Recommendations extends Controller
             'PassLocal'   => !empty($_GET['passlocal']),
             // Opt-in: fold dismissed (soft-deleted) recommendations into the list.
             'IncludeDismissed' => !empty($_GET['dismissed']),
+            // Rank-range filter (Rank header popover): 1..10, 11 = Master; the lib clamps.
+            'RankMin'     => (int)($_GET['rmin'] ?? 1),
+            'RankMax'     => (int)($_GET['rmax'] ?? 11),
+            'IncludeNonLadder' => (string)($_GET['nl'] ?? '1') !== '0',
             'SortKey'     => (string)($_GET['sort'] ?? 'date'),
             'SortDir'     => (string)($_GET['dir'] ?? 'desc'),
             'Limit'       => 500,
@@ -381,6 +385,10 @@ class Controller_Recommendations extends Controller
             'PassLocal'   => !empty($_GET['passlocal']),
             // Opt-in: fold dismissed (soft-deleted) recommendations into the list.
             'IncludeDismissed' => !empty($_GET['dismissed']),
+            // Rank-range filter (Rank header popover): 1..10, 11 = Master; the lib clamps.
+            'RankMin'     => (int)($_GET['rmin'] ?? 1),
+            'RankMax'     => (int)($_GET['rmax'] ?? 11),
+            'IncludeNonLadder' => (string)($_GET['nl'] ?? '1') !== '0',
             'SortKey'     => (string)($_GET['sort'] ?? 'date'),
             'SortDir'     => (string)($_GET['dir'] ?? 'desc'),
             'Limit'       => 500,
@@ -416,6 +424,7 @@ class Controller_Recommendations extends Controller
         fputcsv($out, [
             'Recipient', 'Park', 'Award', 'Rank', 'Recommended By', 'Date', 'Age (days)',
             'Support', 'Already Has', 'Retired', 'Snoozed', 'Passed To Local', 'Monarchy Only', 'On Court', 'Reason',
+            'Status',
         ]);
 
         // Headers, BOM and the header row are already on the wire, so a failure
@@ -515,6 +524,9 @@ class Controller_Recommendations extends Controller
                 $this->monarchyOnlyLabel((int)($g['MonarchyOnlyLevel'] ?? 0)),
                 $this->csvSafe(implode('; ', array_keys($courtNames))),
                 $this->csvSafe($g['Members'][0]['Reason'] ?? ''),
+                // Only differs from "Pending" with "Show granted & dismissed" on.
+                // Last column so existing spreadsheets keyed on positions still line up.
+                empty($g['IsDismissed']) ? 'Pending' : (!empty($g['IsGranted']) ? 'Granted' : 'Dismissed'),
             ]);
         }
     }

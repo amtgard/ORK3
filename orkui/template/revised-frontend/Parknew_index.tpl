@@ -1885,12 +1885,18 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 				<div class="pk-deleted-recs" id="pk-deleted-recs" data-loaded="0">
 					<button type="button" class="pk-deleted-recs-toggle" id="pk-deleted-recs-toggle" aria-expanded="false">
 						<span class="pk-deleted-recs-caret">&#9654;</span>
-						<span class="pk-deleted-recs-toggle-label">Show Dismissed Recommendations</span>
+						<span class="pk-deleted-recs-toggle-label">Show Granted &amp; Dismissed Recommendations</span>
 						<span class="pk-deleted-recs-count" id="pk-deleted-recs-count" style="display:none">0</span>
 					</button>
 					<div class="pk-deleted-recs-body" id="pk-deleted-recs-body" style="display:none">
 						<div class="pk-deleted-recs-loading" id="pk-deleted-recs-loading">Loading&hellip;</div>
-						<div class="pk-deleted-recs-empty" id="pk-deleted-recs-empty" style="display:none">No dismissed recommendations.</div>
+						<div class="pk-deleted-recs-empty" id="pk-deleted-recs-empty" style="display:none">No granted or dismissed recommendations yet.</div>
+						<div class="pk-deleted-recs-msg" role="alert" style="display:none"></div>
+						<div class="pk-closed-filter" role="group" aria-label="Show" style="display:none">
+							<button type="button" class="pk-closed-filter-btn pk-closed-filter-on" data-filter="all" aria-pressed="true">All <span class="pk-closed-filter-n" data-n="all"></span></button>
+							<button type="button" class="pk-closed-filter-btn" data-filter="granted" aria-pressed="false">Granted <span class="pk-closed-filter-n" data-n="granted"></span></button>
+							<button type="button" class="pk-closed-filter-btn" data-filter="dismissed" aria-pressed="false">Dismissed <span class="pk-closed-filter-n" data-n="dismissed"></span></button>
+						</div>
 						<div class="pk-deleted-recs-table-wrap" id="pk-deleted-recs-table-wrap" style="display:none">
 							<table class="pk-deleted-recs-table">
 								<thead>
@@ -1901,8 +1907,9 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 										<th>Notes</th>
 										<th>Date Rec.</th>
 										<th>Recommended By</th>
-										<th>Dismissed At</th>
-										<th>Dismissed By</th>
+										<th>Status</th>
+										<th>Closed</th>
+										<th>Closed By</th>
 										<th class="no-export"></th>
 									</tr>
 								</thead>

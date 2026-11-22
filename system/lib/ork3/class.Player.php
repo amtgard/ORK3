@@ -2,6 +2,11 @@
 
 class Player extends Ork3
 {
+    // ork_recommendations.resolution: how a closed (soft-deleted) rec was closed.
+    // NULL = live. Written by soft_dismiss_recommendation, cleared by Restore.
+    public const REC_RESOLUTION_GRANTED   = 'granted';
+    public const REC_RESOLUTION_DISMISSED = 'dismissed';
+
     public function __construct()
     {
         parent::__construct();
@@ -4880,14 +4885,25 @@ class Player extends Ork3
             return InvalidParameter('Only the giver, recipient, or Admin may dismiss a recommendation.');
         }
 
+        // Already closed: leave it as it was closed. Re-stamping would let a stale
+        // Dismiss (a tab opened before the grant) relabel a granted rec as dismissed,
+        // and a repeated grant would re-send the Granted notification.
+        if ((int)$awardRec->deleted_by > 0) {
+            return Success('Already closed');
+        }
+
         $this->soft_dismiss_recommendation($awardRec, $mundane_id, !empty($request['Granted']), $request, __FUNCTION__);
         return Success('Recommendation Removed!');
     }
 
     /**
-     * The dismissal itself, shared by DeleteAwardRecommendation (after its own
+     * The close itself, shared by DeleteAwardRecommendation (after its own
      * authorization) and resolve_court_line_recommendation: Granted notification
      * first, then the soft delete, audit, seconds cascade and cache bust.
+     *
+     * A grant and a dismissal are both soft deletes; `resolution` is what tells them
+     * apart ('granted' / 'dismissed'), so the closed-recs views can label a granted
+     * rec as granted and refuse to Restore it (see RestoreAwardRecommendation).
      */
     private function soft_dismiss_recommendation($awardRec, int $actor, bool $granted, array $request, string $fn)
     {
@@ -4914,6 +4930,7 @@ class Player extends Ork3
         }
         $awardRec->deleted_by = $actor;
         $awardRec->deleted_at = $cascade_at;
+        $awardRec->resolution = $granted ? self::REC_RESOLUTION_GRANTED : self::REC_RESOLUTION_DISMISSED;
         $awardRec->save();
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . $fn, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
         // Cascade soft-delete to any active seconds on this recommendation.
@@ -5051,6 +5068,14 @@ class Player extends Ork3
             return Success('Already Active');
         }
 
+        // A granted rec is closed because the award was given. Reopening it would put
+        // a live Grant button back on an honor the player already holds (a double
+        // grant). A grant given in error is undone on the award itself (revoke or
+        // delete), not here.
+        if ((string)$awardRec->resolution === self::REC_RESOLUTION_GRANTED) {
+            return InvalidParameter('This recommendation was granted, so it cannot be restored. To undo the grant, revoke or delete the award on the player\'s profile.');
+        }
+
         $prior_rec = [
             'recommendations_id' => (int)$awardRec->recommendations_id,
             'mundane_id'         => (int)$awardRec->mundane_id,
@@ -5062,6 +5087,7 @@ class Player extends Ork3
             'reason'             => $awardRec->reason,
             'deleted_at'         => $awardRec->deleted_at,
             'deleted_by'         => (int)$awardRec->deleted_by,
+            'resolution'         => (string)$awardRec->resolution,
         ];
         $priorDeletedAt = $awardRec->deleted_at;
         $priorDeletedBy = (int)$awardRec->deleted_by;
@@ -5069,7 +5095,7 @@ class Player extends Ork3
         // Yapo's null-binding doesn't reliably emit SQL NULL on TIMESTAMP columns; use a raw UPDATE.
         $this->db->Clear();
         $this->db->Execute(
-            "UPDATE " . DB_PREFIX . "recommendations SET deleted_at = NULL, deleted_by = NULL WHERE recommendations_id = " . (int)$awardRec->recommendations_id
+            "UPDATE " . DB_PREFIX . "recommendations SET deleted_at = NULL, deleted_by = NULL, resolution = NULL WHERE recommendations_id = " . (int)$awardRec->recommendations_id
         );
 
         Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);

@@ -2142,6 +2142,138 @@ if (PnConfig.recError) {
         });
     })();
 
+    // ---- Award Info Modal: the (i) at the end of every Awards/Titles row ----
+    // Every viewer. Lazily fetches PlayerAjax/award_info/{AwardsId} (filtered for the
+    // session user server-side) and caches each answer for the page's life.
+    (function() {
+        if (typeof PnConfig === 'undefined' || !PnConfig.playerId) return;
+        var cache = {};
+        var lastTrigger = null;
+        function gid(id) { return document.getElementById(id); }
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        function fmtDate(s) {
+            if (!s || /^0000/.test(s)) return '';
+            var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+            if (!m) return esc(s);
+            var d = new Date(+m[1], +m[2] - 1, +m[3]);
+            return esc(d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }));
+        }
+        function person(id, name) {
+            if (!name) return '';
+            return id > 0
+                ? '<a href="' + PnConfig.uir + 'Player/profile/' + (+id) + '">' + esc(name) + '</a>'
+                : esc(name);
+        }
+        function section(icon, title, inner) {
+            return '<section class="pn-ai-section"><h4 class="pn-ai-h"><i class="fas ' + icon + '"></i> ' + title + '</h4>' + inner + '</section>';
+        }
+        function empty(text) { return '<p class="pn-ai-empty">' + text + '</p>'; }
+
+        function renderRecs(info) {
+            if (!info.RecsShown) {
+                return section('fa-thumbs-up', 'Recommendations', empty(info.RecsWithheld === 'login'
+                    ? 'Sign in to see the recommendations behind this award.'
+                    : 'This kingdom keeps its recommendations private.'));
+            }
+            var recs = info.Recommendations || [];
+            if (!recs.length) return section('fa-thumbs-up', 'Recommendations', empty('No recommendations on record for this award.'));
+            var html = '<ul class="pn-ai-recs">';
+            recs.forEach(function(r) {
+                var who = r.IsAnonymous ? '<span class="pn-ai-anon">Anonymous</span>' : (person(r.RecommendedById, r.RecommendedBy) || '<span class="pn-ai-anon">Unknown</span>');
+                var seconds = r.Seconds > 0
+                    ? '<span class="pn-ai-seconds" data-tip="Players who seconded this recommendation"><i class="fas fa-user-plus"></i> ' + (+r.Seconds) + '</span>'
+                    : '';
+                html += '<li class="pn-ai-rec">'
+                    + '<div class="pn-ai-rec-head"><span class="pn-ai-rec-who">' + who + '</span>'
+                    + '<span class="pn-ai-rec-meta">' + fmtDate(r.DateRecommended) + seconds + '</span></div>'
+                    + (r.Reason ? '<div class="pn-ai-rec-reason">' + esc(r.Reason) + '</div>' : '')
+                    + '</li>';
+            });
+            return section('fa-thumbs-up', 'Recommendations', html + '</ul>');
+        }
+
+        function row(label, value) {
+            return value ? '<div class="pn-ai-row"><span class="pn-ai-label">' + label + '</span><span class="pn-ai-value">' + value + '</span></div>' : '';
+        }
+        function renderCourt(info) {
+            var c = info.Court;
+            if (!c) return section('fa-gavel', 'Court', empty('No court record for this award.'));
+            var where = c.EventName || c.ParkName || c.KingdomName || '';
+            var courtLink = '<a href="' + PnConfig.uir + 'Reports/court&CourtId=' + (+c.CourtId) + '">' + esc(c.CourtName || 'Court') + '</a>';
+            var html = '<div class="pn-ai-rows">'
+                + row('Court', courtLink)
+                + row('Date', fmtDate(c.CourtDate))
+                + row('Where', esc(where))
+                + row('Given by', person(c.GivenById, c.GivenBy));
+            if (c.Scroll && c.Scroll.Maker) html += row('Scroll', person(c.Scroll.MakerId, c.Scroll.Maker));
+            if (c.Regalia && c.Regalia.Maker) html += row('Regalia', person(c.Regalia.MakerId, c.Regalia.Maker));
+            (c.Artisans || []).forEach(function(a) {
+                html += row(esc(a.Contribution || 'Artisan'), person(a.MundaneId, a.Persona));
+            });
+            html += '</div>';
+            if (c.PrintedWithScrollery) {
+                html += '<p class="pn-ai-note"><i class="fas fa-print"></i> Certificate printed with Scrollery</p>';
+            }
+            if (c.Citation) {
+                html += '<blockquote class="pn-ai-citation">' + esc(c.Citation) + '</blockquote>';
+            }
+            return section('fa-gavel', 'Court', html);
+        }
+
+        function render(info) {
+            gid('pn-award-info-body').innerHTML = renderRecs(info) + renderCourt(info);
+        }
+        function open(btn) {
+            var id = parseInt(btn.getAttribute('data-awards-id'), 10);
+            if (!id) return;
+            lastTrigger = btn;
+            gid('pn-award-info-name').textContent = btn.getAttribute('data-award-name') || 'Award Details';
+            var body = gid('pn-award-info-body');
+            var ov = gid('pn-award-info-overlay');
+            ov.classList.add('pn-open');
+            ov.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            gid('pn-award-info-close-btn').focus();
+            if (cache[id]) { render(cache[id]); return; }
+            body.innerHTML = '<p class="pn-ai-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</p>';
+            fetch(PnConfig.uir + 'PlayerAjax/award_info/' + id, { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (!d || d.status !== 0 || !d.info) throw new Error((d && d.error) || 'Could not load details');
+                    cache[id] = d.info;
+                    if (d.info.IsLadder && d.info.Rank > 0) {
+                        gid('pn-award-info-name').textContent = (btn.getAttribute('data-award-name') || d.info.AwardName) + ' · Rank ' + d.info.Rank;
+                    }
+                    if (ov.classList.contains('pn-open')) render(d.info);
+                })
+                .catch(function(err) {
+                    body.innerHTML = '<p class="pn-ai-empty pn-ai-error">' + esc(err.message || 'Could not load details') + '</p>';
+                });
+        }
+        function close() {
+            var ov = gid('pn-award-info-overlay');
+            if (!ov || !ov.classList.contains('pn-open')) return;
+            ov.classList.remove('pn-open');
+            ov.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            if (lastTrigger && document.body.contains(lastTrigger)) lastTrigger.focus();
+        }
+        if (!gid('pn-award-info-overlay')) return;
+        $(document).on('click', '.pn-award-info-btn', function(e) { e.preventDefault(); open(this); });
+        gid('pn-award-info-close-btn').addEventListener('click', close);
+        gid('pn-award-info-done').addEventListener('click', close);
+        var downOnSelf = false;
+        gid('pn-award-info-overlay').addEventListener('mousedown', function(e) { downOnSelf = (e.target === this); });
+        gid('pn-award-info-overlay').addEventListener('click', function(e) { if (downOnSelf && e.target === this) close(); });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) close();
+        });
+    })();
+
     // ---- Edit Qualifications Modal ----
     (function() {
         if (!PnConfig.canEditAdmin) return;
@@ -2754,6 +2886,12 @@ if (PnConfig.recError) {
                     }
                     pnActiveRecId = null;
                     onSuccess(data);
+                    // Opened from a rec: the server closes it as granted after the
+                    // award saves. If that part failed, say so inline (the award stands).
+                    if (data.recError) {
+                        errEl.textContent = data.recError;
+                        errEl.style.display = 'block';
+                    }
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
@@ -4018,6 +4156,9 @@ $(document).ready(function() {
         knActiveRecId = rec.RecommendationsId || null;
     };
 
+    // Runs only after the award from "Give from rec" saved: the rec closes as
+    // GRANTED (Granted=1), never as a dismissal, so the closed-recs panel labels it
+    // "Granted" and offers no Restore.
     function knAutoDismissRec() {
         var id = knActiveRecId;
         knActiveRecId = null;
@@ -4025,6 +4166,7 @@ $(document).ready(function() {
         var row = document.querySelector('#kn-recs-tbody .pk-rec-row[data-rec-id="' + id + '"]');
         var fd = new FormData();
         fd.append('RecommendationsId', id);
+        fd.append('Granted', '1');
         fetch(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/dismissrecommendation', { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(d) {
@@ -8156,6 +8298,9 @@ $(document).ready(function() {
         pkActiveRecId = rec.RecommendationsId || null;
     };
 
+    // Runs only after the award from "Give from rec" saved: the rec closes as
+    // GRANTED (Granted=1), never as a dismissal, so the closed-recs panel labels it
+    // "Granted" and offers no Restore.
     function pkAutoDismissRec() {
         var id = pkActiveRecId;
         pkActiveRecId = null;
@@ -8163,6 +8308,7 @@ $(document).ready(function() {
         var row = document.querySelector('#pk-recs-tbody .pk-rec-row[data-rec-id="' + id + '"]');
         var fd = new FormData();
         fd.append('RecommendationsId', id);
+        fd.append('Granted', '1');
         fetch(PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/dismissrecommendation', { method: 'POST', body: fd })
             .then(function(r) { return r.json(); })
             .then(function(d) {
@@ -17440,7 +17586,10 @@ window.initUsernameAvailabilityCheck = function(opts) {
 };
 
 /* ===========================================================
- * Deleted Recommendations panel (Park + Kingdom Recs tabs)
+ * Closed (granted + dismissed) Recommendations panel
+ * (Park + Kingdom Recs tabs). A granted rec and a dismissed rec are both
+ * soft deletes; r.Resolution says which. Granted rows are history (the award
+ * was given) and never offer Restore; the server refuses it too.
  * =========================================================== */
 (function () {
     function escHtml(s) {
@@ -17457,33 +17606,90 @@ window.initUsernameAvailabilityCheck = function(opts) {
         if (typeof KnConfig !== 'undefined' && KnConfig.uir) return KnConfig.uir;
         return '/orkui/';
     }
+    // Column index of the Status cell; the filter searches it by data-search.
+    var STATUS_COL = 6;
+    var RESTORE_HTML = '<i class="fas fa-undo"></i> Restore';
 
     function renderRows(tbody, recs) {
         var html = '';
         for (var i = 0; i < recs.length; i++) {
             var r = recs[i];
             var rid = parseInt(r.RecommendationsId, 10) || 0;
+            var granted = r.Resolution === 'granted';
             var rank = parseInt(r.Rank, 10) > 0 ? parseInt(r.Rank, 10) : '&mdash;';
             var notes = r.Reason ? escHtml(r.Reason) : '&mdash;';
             var recBy = r.RecommendedById
                 ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.RecommendedById, 10) + '">' + escHtml(r.RecommendedByName || '') + '</a>'
                 : '&mdash;';
-            var delBy = r.DeletedById
-                ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.DeletedById, 10) + '">' + escHtml(r.DeletedByName || '') + '</a>'
+            var verb = granted ? 'Granted' : 'Dismissed';
+            var closedBy = r.DeletedById
+                ? '<span class="pk-closed-verb">' + verb + ' by</span> <a href="' + uirBase() + 'Player/profile/' + parseInt(r.DeletedById, 10) + '">' + escHtml(r.DeletedByName || '') + '</a>'
                 : '&mdash;';
-            html += '<tr data-rec-id="' + rid + '">'
+            var status = '<span class="pk-closed-pill pk-closed-pill-' + (granted ? 'granted' : 'dismissed') + '">' + verb + '</span>';
+            var action = granted
+                ? '<span class="pk-closed-noaction" data-tip="The award was given. To undo a grant, revoke or delete the award on the player\'s profile.">&mdash;</span>'
+                : '<button type="button" class="pk-deleted-restore-btn" data-rec-id="' + rid + '">' + RESTORE_HTML + '</button>';
+            html += '<tr data-rec-id="' + rid + '" data-resolution="' + (granted ? 'granted' : 'dismissed') + '">'
                 + '<td><a href="' + uirBase() + 'Player/profile/' + parseInt(r.MundaneId, 10) + '">' + escHtml(r.Persona || '') + '</a></td>'
                 + '<td>' + escHtml(r.AwardName || '') + '</td>'
                 + '<td data-order="' + (parseInt(r.Rank, 10) || 0) + '">' + rank + '</td>'
                 + '<td>' + notes + '</td>'
                 + '<td data-order="' + (Date.parse(r.DateRecommended) || 0) + '">' + escHtml(r.DateRecommended || '') + '</td>'
                 + '<td>' + recBy + '</td>'
+                + '<td data-search="' + (granted ? 'granted' : 'dismissed') + '">' + status + '</td>'
                 + '<td data-order="' + (Date.parse(r.DeletedAt) || 0) + '">' + escHtml(fmtDt(r.DeletedAt)) + '</td>'
-                + '<td>' + delBy + '</td>'
-                + '<td style="text-align:right;white-space:nowrap"><button type="button" class="pk-deleted-restore-btn" data-rec-id="' + rid + '"><i class="fas fa-undo"></i> Restore</button></td>'
+                + '<td>' + closedBy + '</td>'
+                + '<td style="text-align:right;white-space:nowrap">' + action + '</td>'
                 + '</tr>';
         }
         tbody.innerHTML = html;
+    }
+
+    function showMsg(panel, text) {
+        var el = panel.querySelector('.pk-deleted-recs-msg');
+        if (!el) return;
+        el.textContent = text || '';
+        el.style.display = text ? '' : 'none';
+    }
+
+    // Header badge + filter counts, from the rows the table holds right now.
+    function updateCounts(panel) {
+        var n = { all: 0, granted: 0, dismissed: 0 };
+        if (panel.__dt) {
+            panel.__dt.rows().every(function () {
+                var res = this.node().getAttribute('data-resolution');
+                n.all++;
+                if (n[res] !== undefined) n[res]++;
+            });
+        }
+        var countEl = panel.querySelector('.pk-deleted-recs-count');
+        if (countEl) {
+            countEl.textContent = n.all;
+            countEl.style.display = n.all > 0 ? '' : 'none';
+        }
+        panel.querySelectorAll('.pk-closed-filter-n').forEach(function (el) {
+            el.textContent = n[el.getAttribute('data-n')] || 0;
+        });
+        var filter = panel.querySelector('.pk-closed-filter');
+        if (filter) filter.style.display = n.all > 0 ? '' : 'none';
+        if (n.all === 0) {
+            var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
+            var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
+            if (wrap)    wrap.style.display = 'none';
+            if (emptyEl) emptyEl.style.display = '';
+        }
+    }
+
+    function applyFilter(panel, which) {
+        panel.querySelectorAll('.pk-closed-filter-btn').forEach(function (b) {
+            var on = b.getAttribute('data-filter') === which;
+            b.classList.toggle('pk-closed-filter-on', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (!panel.__dt) return;
+        panel.__dt.column(STATUS_COL)
+            .search(which === 'all' ? '' : '^' + which + '$', true, false)
+            .draw();
     }
 
     function loadDeleted(panel, fetchUrl, onRendered) {
@@ -17491,11 +17697,11 @@ window.initUsernameAvailabilityCheck = function(opts) {
         var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
         var wrap    = panel.querySelector('.pk-deleted-recs-table-wrap');
         var tbody   = panel.querySelector('tbody');
-        var countEl = panel.querySelector('.pk-deleted-recs-count');
 
         if (loading) loading.style.display = '';
         if (emptyEl) emptyEl.style.display = 'none';
         if (wrap)    wrap.style.display = 'none';
+        showMsg(panel, '');
 
         fetch(fetchUrl, { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
@@ -17506,23 +17712,20 @@ window.initUsernameAvailabilityCheck = function(opts) {
                     return;
                 }
                 var recs = Array.isArray(d.recommendations) ? d.recommendations : [];
-                if (countEl) {
-                    countEl.textContent = recs.length;
-                    countEl.style.display = recs.length > 0 ? '' : 'none';
-                }
                 if (recs.length === 0) {
-                    if (emptyEl) emptyEl.style.display = '';
+                    updateCounts(panel);
                     return;
                 }
                 renderRows(tbody, recs);
                 if (wrap) wrap.style.display = '';
                 var $delTable = $(panel).find('.pk-deleted-recs-table');
                 panel.__dt = window.orkInitDataTable($delTable, {
-                    order: [[6, 'desc']],   // Deleted At, newest first
-                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Dismissed Recommendations',
-                    columnDefs: [{ targets: 8, orderable: false, searchable: false }]
+                    order: [[7, 'desc']],   // Closed, newest first
+                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Granted and Dismissed Recommendations',
+                    columnDefs: [{ targets: 9, orderable: false, searchable: false }]
                 });
                 window.orkAdjustDataTables($(panel));
+                updateCounts(panel);
                 panel.dataset.loaded = '1';
                 if (onRendered) onRendered();
             })
@@ -17530,6 +17733,13 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 if (loading) loading.style.display = 'none';
                 if (emptyEl) { emptyEl.textContent = 'Network error.'; emptyEl.style.display = ''; }
             });
+    }
+
+    function resetRestoreBtn(btn) {
+        btn.disabled = false;
+        btn.dataset.confirm = '';
+        btn.innerHTML = RESTORE_HTML;
+        btn.classList.remove('pk-deleted-restore-confirm');
     }
 
     function wirePanel(panelId, listUrl, restoreUrl) {
@@ -17549,7 +17759,7 @@ window.initUsernameAvailabilityCheck = function(opts) {
             var open = panel.classList.toggle('pk-deleted-open');
             toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
             var lbl = toggle.querySelector('.pk-deleted-recs-toggle-label');
-            if (lbl) lbl.textContent = open ? 'Hide Dismissed Recommendations' : 'Show Dismissed Recommendations';
+            if (lbl) lbl.textContent = open ? 'Hide Granted & Dismissed Recommendations' : 'Show Granted & Dismissed Recommendations';
             body.style.display = open ? '' : 'none';
             if (open && panel.dataset.loaded !== '1') {
                 loadDeleted(panel, listUrl);
@@ -17557,24 +17767,24 @@ window.initUsernameAvailabilityCheck = function(opts) {
         });
 
         panel.addEventListener('click', function (e) {
+            var fbtn = e.target.closest ? e.target.closest('.pk-closed-filter-btn') : null;
+            if (fbtn && panel.contains(fbtn)) {
+                applyFilter(panel, fbtn.getAttribute('data-filter') || 'all');
+                return;
+            }
             var btn = e.target.closest ? e.target.closest('.pk-deleted-restore-btn') : null;
             if (!btn || !panel.contains(btn)) return;
             if (!btn.dataset.confirm) {
                 btn.dataset.confirm = '1';
-                var origHtml = btn.innerHTML;
-                btn._origHtml = origHtml;
                 btn.innerHTML = 'Click again to confirm';
                 btn.classList.add('pk-deleted-restore-confirm');
-                btn._confirmTimer = setTimeout(function () {
-                    btn.dataset.confirm = '';
-                    btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
-                    btn.classList.remove('pk-deleted-restore-confirm');
-                }, 4000);
+                btn._confirmTimer = setTimeout(function () { resetRestoreBtn(btn); }, 4000);
                 return;
             }
             clearTimeout(btn._confirmTimer);
             btn.dataset.confirm = '';
             btn.disabled = true;
+            showMsg(panel, '');
             var recId = btn.getAttribute('data-rec-id');
             var fd = new FormData();
             fd.append('RecommendationsId', recId);
@@ -17582,40 +17792,24 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
                     if (d.status !== 0) {
-                        alert(d.error || 'Failed to restore.');
-                        btn.disabled = false;
-                        btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
-                        btn.classList.remove('pk-deleted-restore-confirm');
+                        showMsg(panel, d.error || 'Failed to restore.');
+                        resetRestoreBtn(btn);
                         return;
                     }
                     var row = btn.closest('tr');
                     if (row) row.classList.add('pk-deleted-restored');
-                    var recIdDone = btn.getAttribute('data-rec-id');
                     setTimeout(function () {
                         if (panel.__dt) {
                             panel.__dt.rows(function (i, data, node) {
-                                return node.getAttribute('data-rec-id') === recIdDone;
+                                return node.getAttribute('data-rec-id') === recId;
                             }).remove().draw(false);
                         }
-                        var remaining = panel.__dt ? panel.__dt.rows().count() : 0;
-                        var countEl = panel.querySelector('.pk-deleted-recs-count');
-                        if (countEl) {
-                            countEl.textContent = remaining;
-                            countEl.style.display = remaining > 0 ? '' : 'none';
-                        }
-                        if (remaining === 0) {
-                            var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
-                            var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
-                            if (wrap)    wrap.style.display = 'none';
-                            if (emptyEl) emptyEl.style.display = '';
-                        }
+                        updateCounts(panel);
                     }, 500);
                 })
                 .catch(function () {
-                    alert('Network error.');
-                    btn.disabled = false;
-                    btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
-                    btn.classList.remove('pk-deleted-restore-confirm');
+                    showMsg(panel, 'Network error. The recommendation was not restored.');
+                    resetRestoreBtn(btn);
                 });
         });
     }

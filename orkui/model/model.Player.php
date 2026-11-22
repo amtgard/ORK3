@@ -295,6 +295,15 @@ class Model_Player extends Model
         return Ork3::$Lib->recommendationvisibility->publishable_text_for_rec((string)$note, (int)$rec_id, (int)$recipient_id);
     }
 
+    // The recipient of rec $rec_id (0 when it does not exist), so a caller acting on a
+    // client-supplied rec id can confirm it is about the player it is working on.
+    public function recommendation_recipient($rec_id)
+    {
+        $rec = Ork3::$Lib->recommendationvisibility->loadRec((int)$rec_id);
+
+        return $rec === null ? 0 : (int)$rec['MundaneId'];
+    }
+
     public function delete_player_recommendation($request)
     {
         return $this->Player->DeleteAwardRecommendation($request);

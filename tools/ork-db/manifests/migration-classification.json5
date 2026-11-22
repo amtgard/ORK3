@@ -123,5 +123,7 @@
     "2026-11-03-survey-option-exclusive.sql": { "class": "S", "render": "full", "notes": "Survey options: adds ork_survey_option.is_exclusive (TINYINT NOT NULL DEFAULT 0) for exclusive checkbox choices; DDL only, no data; idempotent" },
     "2026-11-15-event-staff-category-leads.sql": { "class": "S", "render": "full", "notes": "Category leads on event staff; auto-filled flag on schedule leads. Idempotent." },
     "2026-11-16-event-schedule-batch-tokens.sql": { "class": "S", "render": "full", "notes": "Request tokens for schedule batches and copies, so a retried request applies once; CREATE TABLE IF NOT EXISTS, idempotent" },
+    "2026-11-22-recommendation-resolution.sql": { "class": "S", "render": "full", "notes": "ork_recommendations.resolution ENUM granted|dismissed, NULL = live; how a closed rec was closed; ADD COLUMN IF NOT EXISTS, DDL only, idempotent" },
+    "2026-11-22-recommendation-resolution-backfill.sql": { "class": "PB", "render": "skip", "notes": "Classifies historic closed recs as granted (court-linked or a matching held award) or dismissed; only touches resolution IS NULL, re-runnable" }
   }
 }
