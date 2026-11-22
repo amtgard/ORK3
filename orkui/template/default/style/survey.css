@@ -1817,3 +1817,30 @@ html[data-theme="dark"] .flatpickr-time .flatpickr-am-pm:focus { background: var
 
 html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowUp:after { border-bottom-color: var(--ork-text-secondary); }
 html[data-theme="dark"] .flatpickr-time .numInputWrapper span.arrowDown:after { border-top-color: var(--ork-text-secondary); }
+
+/* ---- Full-width screens: a roomier runner ----
+   The 720px phone-first column read small on a desktop monitor. From 900px
+   up the RUNNER (.sv-root only — builder previews and results keep the
+   compact scale) is 20% wider and every type step grows with it. The two
+   type tokens are re-declared on .sv-root so every var() inside it scales;
+   the handful of literal px sizes are raised beside them. */
+@media (min-width: 900px) {
+    .sv-root {
+        max-width: 864px;
+        --ork-font-size-base: 15px;
+        --ork-font-size-sm:   14px;
+    }
+
+    .sv-root .sv-title          { font-size: 26px; }
+    .sv-root .sv-progress-text,
+    .sv-root .sv-scale-ends,
+    .sv-root .sv-matrix-col     { font-size: 14px; }
+    .sv-root .sv-q-prompt,
+    .sv-root .sv-block-title,
+    .sv-root .sv-page-title,
+    .sv-root .sv-md h2          { font-size: 17px; }
+    .sv-root .sv-scale-face     { font-size: 16px; }
+    .sv-root .sv-scale-star .sv-scale-face { font-size: 24px; }
+    .sv-root .sv-card-title,
+    .sv-root .sv-md h1          { font-size: 22px; }
+}

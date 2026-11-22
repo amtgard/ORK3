@@ -220,6 +220,21 @@
             ]
         },
         {
+            title: 'Feedback',
+            presets: [
+                {
+                    key: 'satisfaction', icon: 'fa-face-smile', title: 'Satisfaction',
+                    blurb: 'A five-point satisfaction scale, from Very satisfied to Very dissatisfied.',
+                    question: {
+                        prompt: 'How satisfied are you with [fill this in or reword]?',
+                        type: 'single',
+                        options: ['Very satisfied', 'Satisfied', 'Neither satisfied nor dissatisfied',
+                                  'Dissatisfied', 'Very dissatisfied']
+                    }
+                }
+            ]
+        },
+        {
             title: 'Demographics',
             lede: 'These options are taken from widely respected sources such as the American Community Survey, ' +
                   'the National Academies, Pew Research, and GLSEN. We strongly recommend making these questions ' +
@@ -3216,6 +3231,52 @@
     var confirmAction = null;
     var confirmOpener = null;
     var confirmCancel = null;
+    var confirmAnchor = null;   // node / function: the strip pops out beside it
+
+    /* With opts.anchor the strip becomes a popout pinned under that control
+       (the Type picker), so the warning lands where the author is looking
+       instead of in a strip at the top of the page. It follows the anchor on
+       scroll and resize, and drops back to the sticky strip when the anchor is
+       gone or scrolled out of view. */
+    function anchorNode() {
+        var a = typeof confirmAnchor === 'function' ? confirmAnchor() : confirmAnchor;
+        return a && document.contains(a) ? (a.closest('.svb-typepick') || a) : null;
+    }
+
+    function placeConfirm() {
+        var bar = $('svb-confirm');
+        var a   = anchorNode();
+        var r, vw, vh, w, left, top, gap = 10;
+        if (!bar || bar.hidden) { return; }
+        if (a) {
+            r = a.getBoundingClientRect();
+            vh = window.innerHeight || document.documentElement.clientHeight;
+            if (r.bottom < 56 || r.top > vh) { a = null; }
+        }
+        if (!a) {
+            bar.classList.remove('svb-confirm-pop', 'svb-confirm-pop-above');
+            bar.style.left = bar.style.top = '';
+            return;
+        }
+        bar.classList.add('svb-confirm-pop');
+        vw   = document.documentElement.clientWidth;
+        w    = bar.offsetWidth;
+        // Right edges line up (the picker sits at the card's top right),
+        // clamped inside a 16px gutter.
+        left = Math.max(16, Math.min(r.right - w, vw - w - 16));
+        top  = r.bottom + gap;
+        if (top + bar.offsetHeight > vh - 8 && r.top - gap - bar.offsetHeight > 56) {
+            top = r.top - gap - bar.offsetHeight;
+            bar.classList.add('svb-confirm-pop-above');
+        } else {
+            bar.classList.remove('svb-confirm-pop-above');
+        }
+        bar.style.left = Math.round(left) + 'px';
+        bar.style.top  = Math.round(top) + 'px';
+        bar.style.setProperty('--svb-pop-arrow', Math.round(Math.min(Math.max(r.left + r.width / 2 - left, 18), w - 18)) + 'px');
+    }
+
+    function onConfirmViewport() { if (confirmAnchor) { placeConfirm(); } }
 
     function confirmOpen() {
         var bar = $('svb-confirm');
@@ -3227,6 +3288,7 @@
      * opts.opener is where focus goes back to when the focused element is not
      * the opener — a strip raised from a blur, where activeElement is <body>.
      * It may be a function, resolved on close, so a repainted field is found.
+     * opts.anchor (node or function) pops the strip out beside that control.
      */
     function askConfirm(text, buttonLabel, danger, action, opts) {
         var bar  = $('svb-confirm');
@@ -3240,7 +3302,15 @@
         copy.textContent = text;
         yes.textContent = buttonLabel;
         yes.className = 'sv-btn ' + (danger ? 'svb-danger' : 'sv-btn-primary');
+        confirmAnchor = (opts && opts.anchor) || null;
+        bar.classList.remove('svb-confirm-pop', 'svb-confirm-pop-above');
+        bar.style.left = bar.style.top = '';
+        // Popout mode goes on BEFORE the strip shows: shown as an in-flow
+        // sticky strip first, it would push the canvas (and the anchor) down
+        // for the measurement, then leave the popout floating below it.
+        if (anchorNode()) { bar.classList.add('svb-confirm-pop'); }
         bar.hidden = false;
+        placeConfirm();
         yes.focus({ preventScroll: true });
     }
 
@@ -3252,7 +3322,12 @@
         confirmAction = null;
         confirmOpener = null;
         confirmCancel = null;
-        if (bar) { bar.hidden = true; }
+        confirmAnchor = null;
+        if (bar) {
+            bar.hidden = true;
+            bar.classList.remove('svb-confirm-pop', 'svb-confirm-pop-above');
+            bar.style.left = bar.style.top = '';
+        }
         if (cancelled && cancel) { cancel(); }
         if (typeof opener === 'function') { opener = opener(); }
         if (opener && opener.focus && document.contains(opener) && opener !== document.body) {
@@ -4080,11 +4155,15 @@
         loss = retypeLoss(q, next);
         if (!loss) { retype(q, next); return; }
         retypeAsk = { qid: parseInt(q.question_id, 10), type: next };
-        askConfirm(loss, 'Switch type', true, function () {
+        askConfirm(loss + ' Switch anyway?', 'Switch type', true, function () {
             retypeAsk = null;
             retype(q, next);
         }, {
             opener: opener || null,
+            anchor: function () {
+                var card = cardEl(q.question_id);
+                return card ? el('.svb-typesel', card) : null;
+            },
             onCancel: function () {
                 var pick = cardEl(q.question_id) ? el('.svb-typesel', cardEl(q.question_id)) : null;
                 retypeAsk = null;
@@ -5290,6 +5369,8 @@
             if (action) { action(); }
         });
         on($('svb-confirm-no'), 'click', function (e) { e.preventDefault(); hideConfirm(true); });
+        window.addEventListener('scroll', onConfirmViewport, { passive: true, capture: true });
+        window.addEventListener('resize', onConfirmViewport);
 
         on($('svb-file'), 'change', onFileChosen);
 

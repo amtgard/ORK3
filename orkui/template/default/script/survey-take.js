@@ -599,16 +599,22 @@
         return 'Almost done';
     }
 
-    /* The bar uses the SAME numbers as the caption (#22): welcome 0%, the final
-       screen 100%, and question page k of n at k/n in between — so "Page 1 of 3"
-       never sits over a 25% bar. */
+    /* The bar counts the screens BEHIND the respondent, not the one they are
+       on: the welcome screen is step 1, each question page a step after it,
+       and only the final screen (or submitting) fills it. So welcome + one
+       page reads 0% → 50% → 100%, and welcome + three pages 0 / 25 / 50 / 75
+       / 100 — the only page of a survey no longer opens on a full bar. */
     function progressPct() {
         var scr = screens[idx];
-        var pos;
-        if (!scr || scr.kind === 'welcome') { return 0; }
-        if (scr.kind !== 'page') { return 100; }
-        pos = pagePosition();
-        return pos.pageScreens > 0 ? Math.round((pos.pageNo / pos.pageScreens) * 100) : 0;
+        var steps = 0, done = 0, i;
+        if (!scr) { return 0; }
+        if (scr.kind !== 'page' && scr.kind !== 'welcome') { return 100; }
+        for (i = 0; i < screens.length; i++) {
+            if (screens[i].kind !== 'page' && screens[i].kind !== 'welcome') { continue; }
+            steps++;
+            if (i < idx) { done++; }
+        }
+        return steps > 0 ? Math.round((done / steps) * 100) : 0;
     }
 
     /** "September 30, 2026" (+ " at 5:00 PM" unless it closes at the end of the day). */
