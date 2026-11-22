@@ -70,6 +70,36 @@ class Model_EventPlanning extends Model
         ]);
     }
 
+    /** @param array{Token: string, EventId: int, EventCalendarDetailId: int, Ops: array, BatchToken?: string} $request */
+    public function schedule_batch(array $request): array
+    {
+        return $this->_planning()->ApplyScheduleOps($request);
+    }
+
+    public function schedule_list_for_manage(string $token, int $eventId, int $detailId): array
+    {
+        return $this->_planning()->GetScheduleForManage([
+            'Token' => $token,
+            'EventId' => $eventId,
+            'EventCalendarDetailId' => $detailId,
+        ]);
+    }
+
+    public function schedule_copy_sources(string $token, int $eventId, int $detailId): array
+    {
+        return $this->_planning()->ListScheduleCopySources([
+            'Token' => $token,
+            'EventId' => $eventId,
+            'EventCalendarDetailId' => $detailId,
+        ]);
+    }
+
+    /** @param array{Token: string, EventId: int, EventCalendarDetailId: int, SourceDetailId: int, RequestToken?: string} $request */
+    public function schedule_copy_into(array $request): array
+    {
+        return $this->_planning()->CopyScheduleInto($request);
+    }
+
     public function copy_source_list(int $kingdomId, int $parkId, string $query, int $excludeEventId = 0): array
     {
         return $this->_planning()->ListCopySourceEvents([
@@ -142,27 +172,42 @@ class Model_EventPlanning extends Model
 
     public function emit_json(array $response, int $authDeniedStatus = 3): void
     {
+        $error = $this->json_error($response, $authDeniedStatus);
+        if ($error === null) {
+            return;
+        }
+
+        echo json_encode($error);
+        exit;
+    }
+
+    /**
+     * The `{"status":N,"error":…}` body for a failed domain response, or null on success.
+     *
+     * @return array{status: int, error: string}|null
+     */
+    public function json_error(array $response, int $authDeniedStatus = 3): ?array
+    {
         $status = (int)($response['Status'] ?? $response['Status']['Status'] ?? 1);
         if (is_array($response['Status'] ?? null)) {
             $status = (int)$response['Status']['Status'];
         }
 
         if ($status === ServiceErrorIds::Success) {
-            return;
+            return null;
         }
 
         $detail = (string)($response['Detail'] ?? '');
         if (is_array($response['Status'] ?? null)) {
             $detail = (string)($response['Status']['Detail'] ?? $detail);
         }
-        $error = $detail !== '' ? $detail : (string)($response['Error'] ?? 'Error');
+        $error = $detail !== '' ? $detail : (string)($response['Error'] ?? $response['Status']['Error'] ?? 'Error');
         $jsonStatus = match ($status) {
             ServiceErrorIds::NoAuthorization => $authDeniedStatus,
             ServiceErrorIds::SecureTokenFailure => 5,
             default => 1,
         };
 
-        echo json_encode(['status' => $jsonStatus, 'error' => $error]);
-        exit;
+        return ['status' => $jsonStatus, 'error' => $error];
     }
 }
