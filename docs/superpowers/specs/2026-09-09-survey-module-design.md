@@ -15,7 +15,7 @@ The ORK has no way to ask its players anything. Kingdom and park leadership fall
 A survey tool inside the ORK that:
 
 1. Lets ORK admins and org officers with CREATE or ADMIN authority build surveys from a professional set of question types, with formatted text, images, welcome and thank-you screens, page breaks, and simple skip logic.
-2. Presents surveys to eligible players in the My Amtgard tab (Available Surveys widget) and, optionally, as a dismissable site banner.
+2. Presents surveys to eligible players in the My Amtgard tab (Available Surveys widget), on the kingdom and park pages (the same widget, filtered to that org plus Amtgard-wide), and as a dismissable site banner (on by default for new surveys, opt-out in Promotion). A share link opened while logged out shows a login-gated preview with an OpenGraph card (`SurveyLinkPreview`), so a posted link unfurls in Discord/Facebook.
 3. Ends every survey with a **data gate**: the respondent chooses *Any ORK Data*, *My Kingdom and How Long I've Been Playing*, or *Anonymous Only*, and storage is scrubbed to match.
 4. Is mobile-friendly out of the box.
 5. Reports each question with a chart suited to its type (Highcharts), supports filters and one cross-tab, exposes row-level data, and exports CSV. Reporting respects the data gate.

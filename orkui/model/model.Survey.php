@@ -289,6 +289,20 @@ class Model_Survey extends Model
         return $this->_response()->availableAndBannerFor($uid);
     }
 
+    /** Is any org's bonus-credit switch on for this survey (viewer-independent; for the link card)? */
+    public function credit_offered(int $surveyId): bool
+    {
+        return $this->_credit()->hasConfigs($surveyId);
+    }
+
+    /** The logged-out face of a survey link; see SurveyLinkPreview::build(). */
+    public function link_preview(?array $surveyRow, string $url): array
+    {
+        $label  = $surveyRow ? $this->scope_name((string) $surveyRow['scope_type'], (int) $surveyRow['scope_id']) : '';
+        $credit = $surveyRow ? $this->credit_offered((int) $surveyRow['survey_id']) : false;
+        return SurveyLinkPreview::build($surveyRow, $label, $credit, $url);
+    }
+
     public function dismiss_banner(int $surveyId, int $uid): void
     {
         $this->_response()->dismissBanner($surveyId, $uid);

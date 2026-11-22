@@ -181,20 +181,24 @@ class Controller_Survey extends Controller
         $this->sendRunnerImageCsp();
         $this->setPageTitle('Survey');
         $uid = $this->uid();
-        if ($uid <= 0) {
-            $this->no_authorization('Survey/take/' . ltrim((string) $p, '/'));
-            return;
-        }
 
         $parts    = explode('/', trim((string) $p, '/'));
         $surveyId = (int) preg_replace('/[^0-9]/', '', $parts[0] ?? '');
         $preview  = isset($parts[1]) && $parts[1] === 'preview';
 
         $row = $this->Survey->get_row($surveyId);
+        // Logged out: the link's own face (card for crawlers, lines for the
+        // person) instead of a bare bounce to Login; see require_login().
+        if (!$this->require_login('Survey/take/' . ltrim((string) $p, '/'), function () use ($row, $surveyId) {
+            return $this->Survey->link_preview($row, UIR . 'Survey/take/' . $surveyId);
+        })) {
+            return;
+        }
         if ($row === null) {
             $this->data['Error'] = 'Survey not found.';
             return;
         }
+        $this->data['og'] = $this->Survey->link_preview($row, UIR . 'Survey/take/' . $surveyId)['og'];
         $canManage = $this->Survey->can_manage($uid, $row);
         if ($preview && !$canManage) {
             $this->no_authorization('', 'You do not have permission to preview this survey.');
@@ -218,20 +222,28 @@ class Controller_Survey extends Controller
     {
         $this->sendRunnerImageCsp();
         $this->setPageTitle('Survey');
-        $uid = $this->uid();
-        if ($uid <= 0) {
-            $this->no_authorization('Survey/s/' . ltrim((string) $slug, '/'));
+        $uid  = $this->uid();
+        $slug = ltrim((string) $slug, '/');
+        $url  = UIR . 'Survey/s/' . $slug;
+
+        $row = $this->Survey->get_by_slug($slug);
+        // Logged out: the link's own face (card for crawlers, lines for the
+        // person) instead of a bare bounce to Login; see require_login().
+        if (!$this->require_login('Survey/s/' . $slug, function () use ($row, $url) {
+            return $this->Survey->link_preview($row, $url);
+        })) {
             return;
         }
 
-        // Set before the lookup: the default template for this action
+        // Set after the login gate (which picks its own template) and before
+        // the lookup result is used: the default template for this action
         // (Survey_s.tpl) does not exist, so the not-found notice needs it too.
         $this->template = 'Survey_take.tpl';
-        $row = $this->Survey->get_by_slug((string) $slug);
         if ($row === null) {
             $this->data['Error'] = 'Survey not found.';
             return;
         }
+        $this->data['og'] = $this->Survey->link_preview($row, $url)['og'];
 
         $this->data['SurveyId']  = (int) $row['survey_id'];
         $this->data['IsPreview'] = false;

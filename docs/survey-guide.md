@@ -1,7 +1,8 @@
 # Surveys — How to Use
 
 The ORK can build and run surveys of its own players. Kingdom and park officers put a survey
-together from a set of question types. Players answer it from **My Amtgard** (or a share link).
+together from a set of question types. Players find it on **My Amtgard**, on their kingdom and park
+pages, in the site banner, or through a share link.
 Results come back as charts, a table of responses and a downloadable spreadsheet, all without
 leaving the ORK and without asking anyone to type their kingdom or how long they've played.
 
@@ -35,7 +36,8 @@ The builder has two parts:
   question below the last one on a page.
 - **Survey settings** (left) are collapsible sections: Basics, Screens (welcome and thank-you),
   Audience, Schedule, Privacy (the data gate), Promotion (site banner and share link) and
-  Experience (progress bar, resume, accent colour).
+  Experience (progress bar, resume, accent colour). The site banner is **on** for every new survey;
+  untick it in Promotion if you'd rather reach players only by share link.
 
 Everything saves as you go. The pill in the header says **Saved**, **Saving…** or **Not saved**
 (a field was left blank where it can't be, or the change was refused; fix the field and it saves). If
@@ -112,8 +114,8 @@ A survey can't be opened until it has at least one question that records an answ
 Image alone won't do) and every question's settings are valid.
 
 **Clone** copies a survey's full definition, images included, into a new draft. The copy starts
-with no open/close dates, no event audience and the banner off, so set its schedule before opening
-it. **Delete** (a row action on the survey list) only works on a draft that has never collected a
+with no open/close dates and no event audience, so set its schedule before opening it. Its banner
+is on, like any new survey's. **Delete** (a row action on the survey list) only works on a draft that has never collected a
 response. Once responses exist, close or archive the survey instead.
 
 ---
